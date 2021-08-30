@@ -91,12 +91,6 @@
         (check-node-type (cdr binding) env))
       (check-node-type (typed-node-let-subexpr node) env))
 
-    #+ignore
-    (unless (type-scheme= (typed-node-type (typed-node-let-subexpr node))
-                          (typed-node-type node))
-      (error 'invalid-typed-node-type
-             :node node
-             :inferred-type (typed-node-type (typed-node-let-subexpr node))))
     (typed-node-type node))
 
   (:method ((node typed-node-match) env)
@@ -110,7 +104,19 @@
           (error 'invalid-typed-node-type
                  :node (typed-node-type node)
                  :inferred-type branch-type))))
-    (typed-node-type node)))
+    (typed-node-type node))
+
+  (:method ((node typed-node-seq) env)
+    (let ((last-node (car (last (typed-node-seq-subnodes node)))))
+      (unless (sub-ty-scheme-p (typed-node-type node)
+			       (typed-node-type last-node)
+			       env)
+	(error 'invalid-typed-node-type
+	       :node (typed-node-type node)
+	       :inferred-type (typed-node-type last-node)))
+
+      (dolist (sub-node (typed-node-seq-subnodes node))
+	(check-node-type sub-node env)))))
 
 (defun check-application-node-type (rator rands node env)
   (declare (type typed-node rator node)
