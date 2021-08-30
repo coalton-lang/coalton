@@ -98,7 +98,9 @@
                #:fiasco
                #:quil-coalton/tests
                #:thih-coalton/tests)
-  :perform (asdf:test-op (o s) nil)
+  :perform (asdf:test-op (o s)
+                         (unless (symbol-call :coalton-tests :run-coalton-tests)
+                           (error "Tests failed")))
   :pathname "tests/"
   :serial t
   :components ((:file "package")
