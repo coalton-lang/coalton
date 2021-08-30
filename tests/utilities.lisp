@@ -3,7 +3,8 @@
 (defun run-coalton-tests ()
   (run-package-tests
    :packages '(:coalton-tests
-               :quil-coalton-tests)
+               :quil-coalton-tests
+               :thih-coalton-tests)
    :interactive t))
 
 (defun set-equalp (set1 set2)

@@ -30,5 +30,5 @@
                    (Forall
                     (make-list Star)
                     (Qual Nil
-                          (mkFn (TGen 1)
-                                (TGen 1)))))))))
+                          (mkFn (TGen 0)
+                                (TGen 0)))))))))
