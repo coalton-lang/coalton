@@ -1,0 +1,109 @@
+;;;; coalton.asd
+
+(asdf:defsystem #:coalton
+  :description "A dialect of ML in Common Lisp."
+  :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
+  :license "MIT"
+  :depends-on (#:alexandria
+               #:global-vars
+	       #:trivia
+	       #:serapeum
+	       #:fset)
+  :in-order-to ((asdf:test-op (asdf:test-op #:coalton/tests)))
+  :around-compile (lambda (compile)
+                    (let (#+sbcl (sb-ext:*derive-function-types* t))
+                      (funcall compile)))
+  :pathname "src/"
+  :serial t
+  :components ((:file "package")
+               (:file "utilities")
+               (:file "global-lexical")
+               (:file "lisp-object")
+               (:module "algorithm"
+                :serial t
+                :components ((:file "tarjan-scc")
+			     (:file "shadow-realm")
+			     (:file "shadow-list")))
+               (:module "ast"
+                :serial t
+                :components ((:file "pattern")
+			     (:file "node")
+                             (:file "parse-error")
+                             (:file "parse-form")
+                             (:file "free-variables")))
+               (:module "typechecker"
+                :serial t
+                :components ((:file "kinds")
+                             (:file "types")
+                             (:file "pretty-printing")
+                             (:file "substitutions")
+                             (:file "predicate")
+                             (:file "scheme")
+                             (:file "typed-node")
+			     (:file "type-errors")
+                             (:file "unify")
+			     (:file "equality")
+                             (:file "environment")
+                             (:file "context-reduction")
+                             (:file "type-parse-error")
+                             (:file "parse-type")
+                             (:file "parse-type-definition")
+                             (:file "parse-class-definition")
+                             (:file "parse-instance-definition")
+                             (:file "derive-type")
+                             (:file "check-types")
+			     (:file "check-variables")
+			     (:file "debug")))
+               (:module "codegen"
+                :serial t
+                :components ((:file "lisp-types")
+                             (:file "function-entry")
+			     (:file "optimizer")
+			     (:file "direct-application")
+			     (:file "match-constructor-lift")
+			     (:file "compile-pattern")
+			     (:file "compile-typeclass-dicts")
+                             (:file "compile-expression")
+			     (:file "compile-type-definition")
+			     (:file "program")))
+               (:file "toplevel-define-type")
+               (:file "toplevel-declare")
+               (:file "toplevel-define")
+               (:file "toplevel-define-class")
+               (:file "toplevel-define-instance")
+               (:file "coalton")
+               (:file "debug")
+               (:file "faux-macros")
+               (:module "library"
+                :serial t
+                :components ((:file "macros")
+                             (:file "types")
+                             (:file "classes")
+                             (:file "boolean")
+                             (:file "builtin")
+                             (:file "string")
+                             (:file "optional")
+                             (:file "list")
+                             (:file "tuple")
+                             (:file "result")
+                             (:file "functions")
+                             (:file "multiparam")))
+               (:file "toplevel-environment")))
+
+(asdf:defsystem #:coalton/tests
+  :description "Tests for COALTON."
+  :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
+  :license "MIT"
+  :depends-on (#:coalton
+               #:fiasco
+               #:quil-coalton/tests)
+  :perform (asdf:test-op (o s) nil)
+  :pathname "tests/"
+  :serial t
+  :components ((:file "package")
+               (:file "utilities")
+               (:file "free-variables-tests")
+               (:file "tarjan-scc-tests")
+	       (:file "type-inference-tests")
+	       (:file "direct-application-tests")
+               (:file "environment-persist-tests")))

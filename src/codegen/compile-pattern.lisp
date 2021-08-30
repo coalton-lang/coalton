@@ -1,0 +1,30 @@
+(in-package #:coalton-impl/codegen)
+
+(defgeneric compile-pattern (pattern env)
+  (:method ((pattern pattern-var) env)
+    (declare (type coalton-impl/typechecker::environment env))
+    (let* ((var-name (pattern-var-id pattern))
+	   (constructor (lookup-constructor env var-name :no-error t)))
+
+      (when constructor
+	(warn "Pattern variable ~S matches name of known constructor. If you meant to match against the constructor then use (~S)" var-name var-name))
+
+      var-name))
+  (:method ((pattern pattern-wildcard) env)
+    (declare (type coalton-impl/typechecker::environment env))
+    '_)
+  (:method ((pattern pattern-literal) env)
+    (declare (type coalton-impl/typechecker::environment env))
+    (node-literal-value (pattern-literal-value pattern)))
+  (:method ((pattern pattern-constructor) env)
+    (declare (type coalton-impl/typechecker::environment env))
+    (let* ((name (pattern-constructor-name pattern))
+	   (entry (lookup-constructor env name))
+	   (class-name (constructor-entry-classname entry))
+	   (package (symbol-package name))
+	   (fields (loop :for field :in (pattern-constructor-patterns pattern)
+		         :for i :from 0
+		         :for subpattern := (compile-pattern field env)
+		         :for accessor := (alexandria:format-symbol package "_~D" i)
+		         :collect `(,accessor ,subpattern))))
+      `(cl:structure ,class-name ,@fields))))
