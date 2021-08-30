@@ -417,105 +417,126 @@
 (uiop:define-package #:coalton-user
   (:documentation "User package for Coalton.")
   (:use #:coalton)
-  ;; Arithmetic
+  ;; Macros
   (:export
-   #:+ #:- #:* #:/
-   #:< #:> #:<= #:>=
-   #:== #:/=
-   #:expt #:mod
-   )
-  ;; Tuples
+   #:if
+   #:cond
+   #:make-list
+   #:to-boolean
+   #:do
+   #:progn)
+  ;; Types
   (:export
+   #:Unit
+   #:Boolean #:True #:False
+   #:not
+   #:or
+   #:and
+   #:xor
+   #:List #:Cons #:Nil
    #:Tuple
-   #:fst #:snd
+   #:Optional #:Some #:None
+   #:undefined
    )
+  ;; Classes
+  (:export
+   #:Show
+   #:Eq #:== #:/=
+   #:Ord #:LT #:EQ #:GT
+   #:<=> #:> #:< #:>= #:<=
+   #:max
+   #:min
+   #:Num #:+ #:- #:* #:fromInt
+   #:Semigroup #:<>
+   #:Monoid #:mempty
+   #:Functor #:map
+   #:Applicative #:pure #:liftA2
+   #:Monad #:>>= #:>>
+   #:MonadFail #:fail
+   #:Applicative #:alt #:empty)
+  ;; Builtin
+  (:export
+   #:expt
+   #:mod
+   #:even
+   #:odd
+   #:gcd
+   #:lcm)
+  ;; String
+  (:export
+   #:concat-string
+   #:unpack-string
+   #:pack-string
+   #:parse-int)
   ;; Optional
   (:export
-   #:Optional #:Some #:None
-   )
-  ;; Result
-  (:export
-   #:Result #:Err #:Ok
-   )
+   #:fromSome
+   #:isSome
+   #:isNone)
   ;; List
   (:export
-   #:List #:Cons #:Nil
-   #:head #:tail
+   #:head
+   #:tail
    #:null
    #:singleton
    #:reverse
    #:find
-   #:map
-   #:fold #:foldr #:foldl
+   #:fold
+   #:foldr
    #:filter
-   #:length #:index
+   #:length
+   #:index
    #:range
    #:append
    #:concat
    #:concatMap
-   #:lookup
    #:member
-   #:union #:intersection
+   #:union
+   #:intersection
+   #:lookup
    #:remove-duplicates
-   #:zip #:zipWith
-   #:intersperse #:intercalate
+   #:delete
+   #:list-difference
+   #:zipWith
+   #:zip
+   #:intersperse
+   #:intercalate
    #:transpose
    #:partition
-   #:list-difference
-   )
-  ;; Boolean
+   #:maximum
+   #:minimum
+   #:sum
+   #:product
+   #:all
+   #:any)
+  ;; Tuple
   (:export
-   #:Boolean #:True #:False
-   #:not #:or #:and #:xor
-   #:if
-   #:all #:any
-   )
-  ;; Chars
+   #:fst
+   #:snd)
+  ;; Result
   (:export
-   #:char= #:char< #:char> #:char<= #:char>=
-   )
-  ;; Strings
-  (:export
-   #:concat-string
-   #:unpack-string #:pack-string
-   #:parse-int
-   )
+   #:Result #:Err #:Ok
+   #:isOk
+   #:isErr
+   #:mapErr)
   ;; Functions
   (:export
-   #:fix #:id #:const
+   #:error
+   #:fix
+   #:id
+   #:const
    #:flip
-   #:error)
-  ;; Macros
-  (:export
-   #:make-list)
-  (:export
-   #:show
-   #:Eq
-   
-   #:Functor
-   #:map
-   
-   #:Applicative
-   #:liftA2
-   #:pure
-   
-   #:Monad
-   #:>>=
-   #:>>
-   
-   #:MonadFail
-   #:fail
-
-   #:Alternative
-   #:empty
-   #:aplus
-   #:asum
-
    #:traverse
-   #:sequence
    #:mapM
    #:liftM
-   #:liftM2))
+   #:liftM2
+   #:sequence
+   #:mconcat
+   #:asum)
+  ;; Multiparam
+  (:export
+   #:Into)
+  )
 
 (uiop:define-package #:coalton-global-symbols
   (:documentation "A place that global value names are stashed. We don't use uninterned symbols so that they can be reified through the compilation process.")

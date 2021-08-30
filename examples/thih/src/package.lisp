@@ -4,7 +4,7 @@
   (:documentation "Public interface to THIH-COALTON.")
   (:use #:coalton
         #:coalton-user)
-  (:shadow #:id #:find #:const
+  (:shadow #:id #:find #:const #:alt
            #:type)
   (:export
    #:Id
