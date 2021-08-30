@@ -17,6 +17,7 @@
 
   ;; Ensure that the node is valid
   (coalton-impl/typechecker::check-node-type node (optimizer-env optimizer))
+  #+ignore
   (coalton-impl/typechecker::check-variables
    node
    (coalton-impl/typechecker::type-variables node))
@@ -28,6 +29,7 @@
     ;; Ensure that the node is still valid after transformations are
     ;; applied
     (coalton-impl/typechecker::check-node-type node (optimizer-env optimizer))
+    #+ignore
     (coalton-impl/typechecker::check-variables
      node
      (coalton-impl/typechecker::type-variables node))
