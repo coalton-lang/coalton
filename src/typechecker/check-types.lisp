@@ -63,28 +63,23 @@
                                      (fresh-inst (cdr b)))
                                    (typed-node-abstraction-vars node)))
            (arg-types (mapcar #'qualified-ty-type arg-qual-types))
-           (arg-preds (mapcan #'qualified-ty-predicates arg-qual-types))
-           
+
            (ret-qual-type (fresh-inst (typed-node-type (typed-node-abstraction-subexpr node))))
            (ret-type (qualified-ty-type ret-qual-type))
-           (ret-preds (qualified-ty-predicates ret-qual-type))
            
-           (function-type (make-function-type* arg-types ret-type)))
-      ;; TODO: This will probably fail on tyvars in the enclosing env
+           (function-type (make-function-type* arg-types ret-type))
+
+           (local-vars (type-variables function-type))
+           (expected-type (quantify local-vars
+                                    (qualify (remove-if-not (lambda (x) (member x local-vars))
+                                                            (collect-type-predicates node))
+                                             function-type))))
       (unless (sub-ty-scheme-p (typed-node-type node)
-                               (quantify
-                                (type-variables function-type)
-                                (qualify
-                                 (collect-type-predicates node)
-                                 function-type))
+                               expected-type
                                env)
         (error 'invalid-typed-node-type
                :node node
-               :inferred-type (quantify
-                               (type-variables function-type)
-                               (qualify
-                                (reduce-context env (append arg-preds ret-preds))
-                                function-type)))))
+               :inferred-type expected-type)))
     (typed-node-type node))
 
   (:method ((node typed-node-let) env)
@@ -140,7 +135,7 @@
               preds (apply-substitution subs preds))))
 
     (let* ((inferred-type (quantify (type-variables rator-type)
-                                    (qualify (collect-type-predicates node) rator-type))))
+                                    (qualify nil rator-type))))
       (unless (sub-ty-scheme-p (typed-node-type node)
                                inferred-type
                                env)
