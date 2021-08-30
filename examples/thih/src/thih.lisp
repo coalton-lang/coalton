@@ -367,7 +367,7 @@
   ;; Class Environments
 
   (define-type ClassEnv
-    (ClassEnv (MonadFail :m => (Id -> (:m Class))) (List Type)))
+    (ClassEnv (Id -> (Optional Class)) (List Type)))
 
   (declare classes (ClassEnv -> (Id -> (Optional Class))))
   (define (classes env)
@@ -620,7 +620,7 @@
                   (member e vs))
                 (tv qt)))
           (ks (map kind vs_))
-          (gens (map TGen (range (length vs_))))
+          (gens (map TGen (range 0 (- (length vs_) 1))))
           (s (Subst (zip vs_ gens))))
       (Forall ks (apply s qt))))
 

@@ -96,7 +96,8 @@
   :license "MIT"
   :depends-on (#:coalton
                #:fiasco
-               #:quil-coalton/tests)
+               #:quil-coalton/tests
+               #:thih-coalton/tests)
   :perform (asdf:test-op (o s) nil)
   :pathname "tests/"
   :serial t
