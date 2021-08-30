@@ -390,4 +390,9 @@
     (remove-duplicates
      (append (collect-type-predicates (typed-match-branch-subexpr node))
              (mapcan #'collect-type-predicates (mapcar #'cdr (typed-match-branch-bindings node))))
+     :test #'equalp))
+
+  (:method ((node typed-node-seq))
+    (remove-duplicates
+     (mapcan #'collect-type-predicates (typed-node-seq-subnodes node))
      :test #'equalp)))
