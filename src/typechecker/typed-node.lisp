@@ -396,3 +396,44 @@
     (remove-duplicates
      (mapcan #'collect-type-predicates (typed-node-seq-subnodes node))
      :test #'equalp)))
+
+(defun collect-variable-namespace (node)
+  "Returns the name of every variable that will be referenced in the variable namespace in the generated code."
+  (declare (type typed-node node)
+	   (values symbol-list))
+  (remove-duplicates (collect-variable-namespace-g node) :test #'equalp))
+
+(defgeneric collect-variable-namespace-g (node)
+  (:method ((node typed-node-literal))
+    nil)
+
+  (:method ((node typed-node-variable))
+    (list (typed-node-variable-name node)))
+
+  (:method ((node typed-node-application))
+    (append
+     (collect-variable-namespace-g (typed-node-application-rator node))
+     (mapcan #'collect-variable-namespace-g (typed-node-application-rands node))))
+
+  (:method ((node typed-node-direct-application))
+    (mapcan #'collect-variable-namespace-g (typed-node-direct-application-rands node)))
+
+  (:method ((node typed-node-abstraction))
+    (collect-variable-namespace-g (typed-node-abstraction-subexpr node)))
+
+  (:method ((node typed-node-let))
+    (append
+     (loop :for (name . node) :in (typed-node-let-bindings node)
+	   :append (collect-variable-namespace-g node))
+     (collect-variable-namespace-g (typed-node-let-subexpr node))))
+
+  (:method ((node typed-node-lisp))
+    nil)
+
+  (:method ((node typed-node-match))
+    (append
+     (collect-variable-namespace-g (typed-node-match-expr node))
+     (mapcan #'collect-variable-namespace-g (typed-node-match-branches node))))
+
+  (:method ((branch typed-match-branch))
+    (collect-variable-namespace-g (typed-match-branch-subexpr branch))))

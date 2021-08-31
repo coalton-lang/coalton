@@ -67,7 +67,7 @@
   ;; Check that explicit declerations can reduce the type of a definition
   (check-coalton-types
    '((coalton:declare f Int)
-     (coalton:define f f))
+     (coalton:define f (coalton-user:undefined "hello")))
    '((f . Int)))
 
   ;; Declerations cannot be less specefic than their associated definition
@@ -79,16 +79,11 @@
   ;; Implicitly typed functions should only infer types from the declared type signature of an explicitly typed functions
   ;; http://jeremymikkola.com/posts/2019_01_12_type_inference_for_haskell_part_12.html
   (check-coalton-types
-   '((coalton:define-type (ConsList :a))
-     (coalton:declare singleton (:a -> (ConsList :a)))
-     (coalton:define singleton singleton)
-     (coalton:declare append ((ConsList :a) -> ((ConsList :a) -> (ConsList :a))))
-     (coalton:define append append)
-     (coalton:declare lst (ConsList Int))
-     (coalton:define lst lst)
+   '((coalton:declare lst (coalton-user:List Int))
+     (coalton:define lst (coalton-user:make-list 1 2 3))
 
      (coalton:define (a x)
-       (singleton (b x)))
+       (coalton-user:singleton (b x)))
 
      (coalton:declare b (:a -> :a))
      (coalton:define (b y)
@@ -96,9 +91,9 @@
 	 y))
 
      (coalton:define (c z)
-       (append lst (a z))))
+       (coalton-user:append lst (a z))))
 
-   '((a . (:a -> (ConsList :a))))))
+   '((a . (:a -> (coalton-user:List :a))))))
 
 (deftest test-type-definitions ()
   ;; Test recursive type definitions
