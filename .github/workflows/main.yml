@@ -48,11 +48,9 @@ jobs:
           echo .qlot/bin >> $GITHUB_PATH
         if: steps.cache.outputs.cache-hit == 'true'
       - uses: 40ants/setup-lisp@v1
-        if: steps.cache.outputs.cache-hit != 'true'
-  
-      - uses: 40ants/setup-lisp@v1
         with:
           asdf-system: coalton
+        if: steps.cache.outputs.cache-hit != 'true'
 
       - uses: 40ants/run-tests@v2
         with:
