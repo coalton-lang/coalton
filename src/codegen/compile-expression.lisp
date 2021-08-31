@@ -70,9 +70,17 @@
                           env))
 
   (:method ((expr typed-node-lisp) ctx env)
-    (if *emit-type-annotations*
-        `(the (values ,(lisp-type expr) &optional) ,(typed-node-lisp-form expr))
-        (typed-node-lisp-form expr)))
+    (let ((inner
+	    (if *emit-type-annotations*
+		`(the (values ,(lisp-type expr) &optional) ,(typed-node-lisp-form expr))
+		(typed-node-lisp-form expr))))
+      (if (typed-node-lisp-variables expr)
+	  `(let ,(mapcar
+		  (lambda (vars)
+		    (list (car vars) (cdr vars)))
+		  (typed-node-lisp-variables expr))
+	     ,inner)
+	  inner)))
 
   (:method ((expr typed-node-match) ctx env)
     (let ((subexpr (compile-expression (typed-node-match-expr expr) ctx env))
@@ -86,8 +94,7 @@
          ;; information. The pattern exhastiveness checks should
          ;; make it so this should never be hit and this allows us
          ;; to avoid bloat with error allocations.
-	 ,@branches (_ (error "Pattern match not exaustive error")))
-      ))
+	 ,@branches (_ (error "Pattern match not exaustive error")))))
 
   (:method ((expr typed-node-seq) ctx env)
     `(progn ,@(mapcar (lambda (subnode)

@@ -10,7 +10,8 @@
     (Parser
      (fn (str)
        (match (next-char str)
-         ((Some (Tuple read-char _)) (Err (Error (lisp String (cl:format cl:nil "Unexpected character '~A' expected EOF" read-char)))))
+         ((Some (Tuple read-char _)) (Err (Error (lisp String (read-char)
+						   (cl:format cl:nil "Unexpected character '~A' expected EOF" read-char)))))
          ((None) (Ok (Tuple Unit str)))))))
 
   (declare take (Parser Char))
@@ -31,7 +32,7 @@
           (let ((read-char (fst t_)))
             (if (== c read-char)
                 (Ok t_)
-                (Err (Error (lisp String (cl:format cl:nil "Unexpected character '~A' expected '~A'" read-char c)))))))
+                (Err (Error (lisp String (read-char c) (cl:format cl:nil "Unexpected character '~A' expected '~A'" read-char c)))))))
          ((None) (Err parse-error-eof))))))
 
   (declare not-char (Char -> (Parser Char)))
@@ -42,7 +43,7 @@
          ((Some t_)
           (let ((read-char (fst t_)))
             (if (== c read-char)
-                (Err (Error (lisp String (cl:format cl:nil "Unexpected character '~A' expected not '~A'" read-char c))))
+                (Err (Error (lisp String (read-char c) (cl:format cl:nil "Unexpected character '~A' expected not '~A'" read-char c))))
                 (Ok t_))))
          ((None) (Err parse-error-eof))))))
 

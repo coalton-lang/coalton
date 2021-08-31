@@ -6,7 +6,7 @@
   ;; Unit
   ;;
 
-  (define Unit (lisp Unit 'Unit))
+  (define Unit (lisp Unit () 'Unit))
   
   (define-type Boolean
     True
@@ -48,4 +48,4 @@
     None)
 
   (define (undefined x)
-    (lisp :a (cl:error "Undefined"))))
+    (lisp :a ()  (cl:error "Undefined"))))

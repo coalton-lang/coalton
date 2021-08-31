@@ -11,14 +11,14 @@
 
   (declare isOk ((Result :a :b) -> Boolean))
   (define (isOk x)
-    (lisp Boolean
+    (lisp Boolean (x)
       (cl:etypecase x
 	(Result/Ok True)
 	(Result/Err False))))
 
   (declare isErr ((Result :a :b) -> Boolean))
   (define (isErr x)
-    (lisp Boolean
+    (lisp Boolean (x)
       (cl:etypecase x
 	(Result/Err True)
 	(Result/Ok False))))

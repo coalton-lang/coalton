@@ -99,8 +99,9 @@
 (serapeum:defstruct-read-only
     (node-lisp
      (:include node)
-     (:constructor node-lisp (unparsed type form)))
+     (:constructor node-lisp (unparsed type variables form)))
   (type :type t)
+  (variables :type list)
   (form :type t))
 
 #+sbcl

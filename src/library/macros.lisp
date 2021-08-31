@@ -11,7 +11,7 @@
                 (cl:if (cl:null (cl:cdr exprs))
                        `(coalton:if ,(cl:caar exprs)
                                     ,(cl:cadar exprs)
-                                    (lisp :a (cl:error "Non-exhaustive COND")))
+                                    (lisp :a ()  (cl:error "Non-exhaustive COND")))
                        `(coalton:if ,(cl:caar exprs)
                                     ,(cl:cadar exprs)
                                     ,(build-calls (cl:cdr exprs))))))

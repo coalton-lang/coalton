@@ -11,18 +11,18 @@
   
   (define-instance (Show Int)
     (define (show x)
-      (lisp String (cl:write-to-string x))))
+      (lisp String (x) (cl:write-to-string x))))
 
   (define-instance (Eq Int)
     (define (== a b)
-      (lisp Boolean
+      (lisp Boolean (a b)
         (to-boolean (cl:= a b))))
     (define (/= a b)
       (not (== a b))))
 
   (define-instance (Ord Int)
       (define (<=> a b)
-        (lisp Ord
+        (lisp Ord (a b)
           (cl:cond
             ((cl:< a b)
              LT)
@@ -33,36 +33,36 @@
 
   (define-instance (Num Int)
     (define (+ a b)
-      (lisp Int (cl:+ a b)))
+      (lisp Int (a b) (cl:+ a b)))
     (define (- a b)
-      (lisp Int (cl:- a b)))
+      (lisp Int (a b) (cl:- a b)))
     (define (* a b)
-      (lisp Int (cl:* a b)))
+      (lisp Int (a b) (cl:* a b)))
     (define (fromInt x) x))
 
   (declare expt (Int -> Int -> Int))
   (define (expt base power)
-    (lisp Int (cl:expt base power)))
+    (lisp Int (base power) (cl:expt base power)))
 
   (declare mod (Int -> Int -> Int))
   (define (mod num base)
-    (lisp Int (cl:mod num base)))
+    (lisp Int (num base) (cl:mod num base)))
 
   (declare even (Int ->  Boolean))
   (define (even n)
-    (lisp Boolean (to-boolean (cl:evenp n))))
+    (lisp Boolean (n) (to-boolean (cl:evenp n))))
 
   (declare odd (Int -> Boolean))
   (define (odd n)
-    (lisp Boolean (to-boolean (cl:oddp n))))
+    (lisp Boolean (n) (to-boolean (cl:oddp n))))
 
   (declare gcd (Int -> Int -> Int))
   (define (gcd a b)
-    (lisp Int (cl:gcd a b)))
+    (lisp Int (a b) (cl:gcd a b)))
 
   (declare lcm (Int -> Int -> Int))
   (define (lcm a b)
-    (lisp Int (cl:lcm a b)))
+    (lisp Int (a b) (cl:lcm a b)))
 
 
   ;;
@@ -71,7 +71,7 @@
 
   (define-instance (Eq Char)
     (define (== x y)
-      (lisp Boolean (to-boolean (cl:char= x y))))
+      (lisp Boolean (x y) (to-boolean (cl:char= x y))))
     (define (/= x y)
       (not (== x y))))
 
@@ -79,7 +79,7 @@
     (define (<=> x y)
       (if (== x y)
           EQ
-          (if (lisp Boolean (to-boolean (cl:char> x y)))
+          (if (lisp Boolean (x y) (to-boolean (cl:char> x y)))
               GT
               LT))))
 
@@ -90,7 +90,6 @@
 
   (define-instance (Eq String)
     (define (== s1 s2)
-      (lisp Boolean (to-boolean (cl:string= s1 s2))))
+      (lisp Boolean (s1 s2) (to-boolean (cl:string= s1 s2))))
     (define (/= s1 s2)
-      (not (== s1 s2))))
-  )
+      (not (== s1 s2)))))
