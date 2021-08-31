@@ -46,9 +46,8 @@ NOTE: Just because a variable shows up in the list does *NOT* mean all occurrenc
                                (union bv (pattern-variables
                                           (match-branch-pattern branch)))))))
 		 (node-seq
-		  (mapcan (lambda (node)
-			    (analyze node bv))
-			  (node-seq-subnodes expr))))))
+                  (dolist (subnode (node-seq-subnodes expr))
+                    (analyze subnode bv))))))
       (analyze value nil)
       fv)))
 
