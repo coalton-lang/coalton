@@ -52,7 +52,6 @@
                              (:file "parse-instance-definition")
                              (:file "derive-type")
                              (:file "check-types")
-			     (:file "check-variables")
 			     (:file "debug")))
                (:module "codegen"
                 :serial t
