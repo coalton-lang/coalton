@@ -48,7 +48,7 @@ jobs:
             ~/.roswell
             /usr/local/etc/roswell
             .qlot
-          key: "${{ steps.current-month.outputs.value }}-${{ env.cache-name }}-${{ runner.os }}-${{ hashFiles('qlfile.lock') }}"
+          key: "${{ steps.current-month.outputs.value }}-${{ env.cache-name }}-${{ runner.os }}-${{ matrix.lisp }}-${{ hashFiles('qlfile.lock') }}"
       - name: Restore Path To Cached Files
         run: |
           echo $HOME/.roswell/bin >> $GITHUB_PATH
