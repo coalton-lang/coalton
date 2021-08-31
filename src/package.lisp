@@ -54,6 +54,7 @@
    #:node-lisp				; STRUCT
    #:node-lisp-type			; ACCESSOR
    #:node-lisp-form			; ACCESSOR
+   #:node-lisp-variables		; ACCESSOR
    #:node-match                         ; STRUCT
    #:node-match-expr                    ; ACCESSOR
    #:node-match-branches                ; ACCESSOR
@@ -146,6 +147,7 @@
    #:typed-node-lisp                          ; STRUCT
    #:typed-node-lisp-type                     ; ACCESSOR
    #:typed-node-lisp-form                     ; ACCESSOR
+   #:typed-node-lisp-variables		      ; ACCESSOR
    #:typed-node-match                         ; STRUCT
    #:typed-node-match-expr                    ; ACCESSOR
    #:typed-node-match-branches                ; ACCESSOR

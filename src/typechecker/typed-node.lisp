@@ -122,7 +122,11 @@
 (serapeum:defstruct-read-only
     (typed-node-lisp
      (:include typed-node)
-     (:constructor typed-node-lisp (type unparsed form)))
+     (:constructor typed-node-lisp (type unparsed variables form)))
+  ;; Local variables used in the lisp block
+  (variables :type list)
+
+  ;; The lisp block
   (form :type t))
 
 #+sbcl
@@ -250,6 +254,7 @@
   (typed-node-lisp
    (apply-substitution subs (typed-node-type node))
    (typed-node-unparsed node)
+   (typed-node-lisp-variables node)
    (typed-node-lisp-form node)))
 
 (defmethod apply-substitution (subs (node typed-node-match))
@@ -302,6 +307,13 @@
      (typed-node-abstraction-vars node)
      (typed-node-abstraction-subexpr node)
      (typed-node-abstraction-name-map node)))
+
+  (:method ((node typed-node-lisp) new-type)
+    (typed-node-lisp
+     new-type
+     (typed-node-unparsed node)
+     (typed-node-lisp-variables node)
+     (typed-node-lisp-form node)))
 
   (:method ((node typed-node-application) new-type)
     (typed-node-application
@@ -371,6 +383,9 @@
      (append (collect-type-predicates (typed-node-type node))
              (collect-type-predicates (typed-node-abstraction-subexpr node)))
      :test #'equalp))
+
+  (:method ((node typed-node-lisp))
+    (collect-type-predicates (typed-node-type node)))
 
   (:method ((node typed-node-let))
     (remove-duplicates

@@ -25,14 +25,15 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
        ((coalton:let bindings subexpr)
         (parse-let expr bindings subexpr sr package))
        ;; Lisp
-       ((coalton:lisp type lisp-expr)
-        (parse-lisp expr type lisp-expr sr))
+       ((coalton:lisp type variables lisp-expr)
+        (parse-lisp expr type variables lisp-expr sr))
        ;; Match
        ((coalton:match expr_ &rest patterns)
         (parse-match expr expr_ patterns sr package))
        ;; Seq
        ((coalton:seq &rest subnodes)
 	(parse-seq expr subnodes sr package))
+       ;; Application
        ((t &rest rands)
         (parse-application expr (first expr) rands sr package))))
     (t (error-parsing expr "The expression is not a valid value expression."))))
@@ -96,31 +97,18 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
      (parse-form subexpr new-sr package)
      (invert-alist binding-local-names))))
 
-(defun rewrite-symbols (val sr)
+(defun parse-lisp (unparsed type variables lisp-expr sr)
   (declare (type shadow-realm sr))
-  (cond
-    ((null val)
-     nil)
-
-    ((listp val)
-     (mapcar
-      (lambda (val)
-	(rewrite-symbols val sr))
-      val))
-
-    ((symbolp val)
-     (progn
-       (lookup-or-key sr val)))
-
-    ((typep val 'literal-value)
-     val)
-
-    (t (coalton-impl::coalton-bug "Invalid structure in lisp node ~A~%" val))))
-
-(defun parse-lisp (unparsed type lisp-expr sr)
-  (declare (type shadow-realm sr))
-  ;; Do *NOT* parse LISP-EXPR!
-  (node-lisp unparsed type (rewrite-symbols lisp-expr sr)))
+  (node-lisp
+   unparsed
+   type
+   (loop :for var :in variables
+	 :collect (cons
+		   var
+		   (or (shadow-realm-lookup sr var)
+		       (coalton-impl::coalton-bug "Missing var ~A." var))))
+   ;; Do *NOT* parse LISP-EXPR!
+   lisp-expr))
 
 (defun parse-application (unparsed rator rands sr package)
   (declare (type shadow-realm sr)

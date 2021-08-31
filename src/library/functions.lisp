@@ -4,7 +4,7 @@
 
   (declare error (String -> :a))
   (define (error str)
-    (lisp :a (cl:error str)))
+    (lisp :a (str) (cl:error str)))
   
   ;;
   ;; Function combinators

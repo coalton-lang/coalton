@@ -11,18 +11,18 @@
   (define (fromSome str opt)
     (match opt
       ((Some x) x)
-      ((None) (lisp :a (cl:error str)))))
+      ((None) (lisp :a (str) (cl:error str)))))
 
   (declare isSome ((Optional :a) -> Boolean))
   (define (isSome x)
-    (lisp Boolean
+    (lisp Boolean (x)
       (cl:etypecase x
         (Optional/Some True)
 	(Optional/None False))))
 
   (declare isNone ((Optional :a) -> Boolean))
   (define (isNone x)
-    (lisp Boolean
+    (lisp Boolean (x)
       (cl:etypecase x
 	(Optional/None True)
 	(Optional/Some False))))

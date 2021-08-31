@@ -43,6 +43,7 @@ Returns (VALUES type predicate-list typed-node subs)")
               (typed-node-lisp
 	       (to-scheme qual-type)
 	       (node-unparsed value)
+	       (node-lisp-variables value)
 	       (node-lisp-form value))
               substs)))
 

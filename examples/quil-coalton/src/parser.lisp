@@ -9,7 +9,7 @@
 
   (declare incomplete-parse-error (String -> ParseError))
   (define (incomplete-parse-error str)
-    (Error (lisp String (cl:format cl:nil "Parser did not complete: ~A" str))))
+    (Error (lisp String (str) (cl:format cl:nil "Parser did not complete: ~A" str))))
 
   (define-type (Parser :a)
     (Parser (StringView -> (Result ParseError (Tuple :a StringView)))))
