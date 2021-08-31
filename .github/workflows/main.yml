@@ -21,6 +21,7 @@ jobs:
     env:
       # Tell ASDF to look through our repo recursively
       CL_SOURCE_REGISTRY: "/home/runner/work/coalton/coalton//"
+      LISP: ${{ matrix.lisp }}
 
     steps:
       - uses: actions/checkout@v2
