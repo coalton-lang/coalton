@@ -18,8 +18,7 @@
             :reader coalton-parse-error-context
             :type string)
    (suberror :initarg :suberror
-             :reader coalton-parse-error-suberror
-             :type coalton-parse-error))
+             :reader coalton-parse-error-suberror))
   (:documentation "A coalton parse error with additional context")
   (:report
    (lambda (c s)
