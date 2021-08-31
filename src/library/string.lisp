@@ -50,13 +50,19 @@
   (define-instance (Ord String)
     (define (<=> a b)
       (lisp Ord
-	 (cl:cond
-	   ((cl:string> a b) GT)
-	   ((cl:string< a b) LT)
-	   (cl:t EQ)))))
+	(cl:cond
+	  ((cl:string> a b) GT)
+	  ((cl:string< a b) LT)
+	  (cl:t EQ)))))
 
   (define-instance (Semigroup String)
     (define (<> a b) (concat-string a b)))
 
   (define-instance (Monoid String)
-    (define mempty "")))
+    (define mempty ""))
+
+  (define-instance (Into String (List Char))
+    (define into unpack-string))
+
+  (define-instance (Into (List Char) String)
+    (define into pack-string)))
