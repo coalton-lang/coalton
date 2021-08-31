@@ -370,3 +370,12 @@
      (coalton:define ys (fmap print-int xs)))
 
    '((ys . (coalton-user:List String)))))
+
+(deftest test-seq ()
+  (check-coalton-types
+   '((coalton:define (f x)
+       (coalton:seq
+	(coalton-user:Ok "hello")
+	(coalton-user:map (coalton-user:+ 1) (coalton-user:make-list 1 2 3 4))
+	(coalton-user:show x))))
+   '((f . (coalton-user:Show :a => (:a -> String))))))
