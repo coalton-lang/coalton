@@ -264,8 +264,19 @@
           :reader weak-context-error-preds))
   (:report
    (lambda (c s)
-     (let ((*print-circle* nil))
+     (let ((*print-circle* nil) ; Prevent printing using reader macros
+	   )
        (format s "Explicit type of ~A for binding ~A missing inferred predicates ~{~A~^, ~}"
                (weak-context-error-declared-type c)
                (weak-context-error-name c)
                (weak-context-error-preds c))))))
+
+(define-condition self-recursive-variable-definition (coalton-type-error)
+    ((name :initarg :name
+	   :reader self-recursive-variable-definition-name))
+  (:report
+   (lambda (c s)
+     (let ((*print-circle* nil) ; Prevent printing using reader macros
+	   )
+       (format s "Variable ~A cannot be defined recursively."
+	       (self-recursive-variable-definition-name c))))))

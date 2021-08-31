@@ -262,7 +262,18 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
           (push typed-expl-binding typed-bindings)
           (setf preds (append preds expl-preds))))
 
+      (validate-bindings-for-codegen typed-bindings)
+
       (values typed-bindings preds env subs sccs))))
+
+(defun validate-bindings-for-codegen (bindings)
+  "Some coalton forms can be typechecked but cannot currently be codegened into valid lisp."
+  (declare (type typed-binding-list bindings))
+
+  (loop :for (name . node) :in bindings :do
+    (unless (typed-node-abstraction-p node)
+      (when (member name (collect-variable-namespace node) :test #'equalp)
+	(error 'self-recursive-variable-definition :name name)))))
 
 (defun derive-binding-type-seq (names tvars exprs env subs name-map)
   (declare (type tvar-list tvars)
