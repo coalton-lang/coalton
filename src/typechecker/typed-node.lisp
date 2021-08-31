@@ -278,7 +278,7 @@
   (declare (type substitution-list subs)
 	   (values typed-node-seq))
   (typed-node-seq
-   (typed-node-type node)
+   (apply-substitution subs (typed-node-type node))
    (typed-node-unparsed node)
    (apply-substitution subs (typed-node-seq-subnodes node))))
 
