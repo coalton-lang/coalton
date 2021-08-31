@@ -77,7 +77,6 @@
     (* (:a -> :a -> :a))
     (fromInt (Int -> :a)))
 
-
   ;;
   ;; Haskell
   ;;
@@ -104,6 +103,16 @@
 
   (define-class (Applicative :f => (Alternative :f))
     (alt ((:f :a) -> (:f :a) -> (:f :a)))
-    (empty (:f :a))))
+    (empty (:f :a)))
+
+  ;;
+  ;; Conversions
+  ;;
+
+  (define-class (Into :a :b)
+    (into (:a -> :b)))
+
+  (define-instance (Into :a :a)
+    (define (into x) x)))
 
 
