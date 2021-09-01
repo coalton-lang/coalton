@@ -65,4 +65,6 @@
     (define into unpack-string))
 
   (define-instance (Into (List Char) String)
-    (define into pack-string)))
+    (define into pack-string))
+
+  (define-instance (Iso (List Char) String)))
