@@ -102,7 +102,8 @@ Returns new environment, binding list of declared nodes, a DAG of dependencies, 
       (multiple-value-bind (typed-bindings preds new-env subs)
 	  (coalton-impl/typechecker::derive-bindings-type
 	   impl-bindings expl-bindings declared-types env nil nil)
-	(declare (ignore preds))
+        (when preds
+          (error "Preds not expected. ~A" preds))
 
 	(setf typed-bindings
 	      (mapcar (lambda (binding)
@@ -115,15 +116,6 @@ Returns new environment, binding list of declared nodes, a DAG of dependencies, 
 
 	(loop :for (name . node) :in typed-bindings :do
 	  (setf env (set-name env name (make-name-entry :name name :type :value))))
-
-	(loop :for (name . node) :in typed-bindings :do
-	  (let ((inferred-type (lookup-value-type env name)))
-	    (unless (coalton-impl/typechecker::type-scheme= (typed-node-type node)
-							    inferred-type)
-	      (coalton-impl::coalton-bug "Infered type and node type of definition ~S do not match.~%    INFERRED: ~A~%    NODE: ~A"
-					 name
-					 inferred-type 
-					 (typed-node-type node)))))
 
 	(values
 	 env

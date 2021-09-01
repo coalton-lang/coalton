@@ -108,8 +108,8 @@
 
   (:method ((node typed-node-seq) env)
     (let ((last-node (car (last (typed-node-seq-subnodes node)))))
-      (unless (sub-ty-scheme-p (typed-node-type node)
-			       (typed-node-type last-node)
+      (unless (sub-ty-scheme-p (typed-node-type last-node)
+                               (typed-node-type node)
 			       env)
 	(error 'invalid-typed-node-type
 	       :node (typed-node-type node)
@@ -153,26 +153,6 @@
     (check-node-type rator env)
     (dolist (rand rands)
       (check-node-type rand env))
-
-    ;; Ensure that if there are predicates then the rator must be a variable
-    #+ignore
-    (unless (null (qualified-ty-predicates
-                   (fresh-inst (typed-node-type node))))
-      (unless (typed-node-variable-p rator)
-        (coalton-impl::coalton-bug "Predicate appears in non-variable application")))
-
-    ;; And we have the same number of predicates
-    ;; NOTE: This should be updated to perform a unificaiton on predicates
-    (when (typed-node-variable-p rator)
-      (unless (= (length (qualified-ty-predicates
-                          (fresh-inst (lookup-value-type
-                                       env
-                                       (typed-node-variable-name
-                                        (typed-node-application-rator node))))))
-                 (length (qualified-ty-predicates
-                          
-                          (fresh-inst (typed-node-type (typed-node-application-rator node))))))
-        (coalton-impl::coalton-bug "Number of predicates not equal in application of variable")))
       
     (typed-node-type node)))
 

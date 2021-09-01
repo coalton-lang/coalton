@@ -92,7 +92,7 @@ Returns (VALUES type predicate-list typed-node subs)")
               (values ret-ty
                       preds
                       (typed-node-application
-		       (to-scheme (qualify nil ret-ty))
+		       (to-scheme (qualify (reduce-context env preds) ret-ty))
 		       (node-unparsed value)
 		       typed-rator
 		       (reverse typed-rands))
@@ -119,7 +119,7 @@ Returns (VALUES type predicate-list typed-node subs)")
             (values ret-ty
                     ret-preds
                     (typed-node-abstraction
-                     (to-scheme (qualify (reduce-context new-env (apply-substitution new-substs ret-preds)) ret-ty))
+                     (to-scheme (qualified-ty (apply-substitution new-substs ret-preds) ret-ty))
 		     (node-unparsed value)
                      (mapcar (lambda (var)
                                (cons var (lookup-value-type new-env var)))
@@ -252,7 +252,7 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
       ;; check the explicit ones.
       (dolist (binding expl-bindings)
         ;; Derive the type of the binding
-        (multiple-value-bind (typed-expl-binding expl-preds new-env new-subs)
+        (multiple-value-bind (ty-scheme typed-expl-binding expl-preds new-env new-subs)
             (derive-expl-type binding
                               (gethash (car binding) expl-declarations)
                               env subs name-map)
@@ -395,7 +395,7 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
            (type environment env)
            (type substitution-list subs)
 	   (type list name-map)
-           (values cons ty-predicate-list environment substitution-list))
+           (values ty-scheme cons ty-predicate-list environment substitution-list))
   (let* (;; Generate fresh instance of declared type
          (fresh-qual-type (fresh-inst declared-ty))
          (fresh-type (qualified-ty-type fresh-qual-type))
@@ -439,10 +439,25 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                    :name (car binding)
                    :declared-type declared-ty
                    :preds retained-preds))
-          (values (cons (car binding)
+
+          (values output-scheme
+                  (cons (car binding)
                         (replace-node-type (apply-substitution local-subs typed-node)
-                                           (to-scheme output-qual-type)))
-                  deferred-preds env local-subs))))))
+                                           (to-scheme (qualified-ty
+                                                       (append
+                                                        (remove-if-not (lambda (p)
+                                                                         (member p expr-preds :test #'equalp))
+                                                                       (apply-substitution local-subs preds))
+                                                        (remove-if-not (lambda (p)
+                                                                         (not (super-entail env expr-preds p)))
+                                                                       (apply-substitution local-subs preds))
+                                                        (remove-if-not (lambda (p)
+                                                                         (not (super-entail env (apply-substitution local-subs preds) p)))
+                                                                       expr-preds))
+                                                       
+                                                       expr-type))))
+                  deferred-preds env local-subs
+                  output-qual-type))))))
 
 (defun derive-binding-type (name type expr env subs name-map)
   (declare (type ty type)

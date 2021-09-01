@@ -74,7 +74,8 @@
 	   (type environment env))
   (let* ((var-names (mapcar #'car vars))
 
-	 (preds (remove-if #'static-predicate-p (scheme-predicates type)))
+	 (preds (remove-duplicates (remove-if #'static-predicate-p (scheme-predicates type))
+                                   :test #'equalp))
 
 	 (dict-context (mapcar (lambda (pred) (cons pred (gensym))) preds))
 
@@ -120,7 +121,7 @@
 		)
 	   ;; Variables
 	   (let* ((b (first scc-typed-bindings))
-                  (preds (scheme-predicates (typed-node-type (cdr b)))))
+                  (preds (reduce-context env (scheme-predicates (typed-node-type (cdr b))))))
              (if (not (every #'static-predicate-p  preds))
                  `((let ((,(car b) ,(construct-function-entry `(lambda () (error "")) 1))) 
                      ,@(compile-function (car b) nil (typed-node-type (cdr b)) (typed-node-type (cdr b)) (cdr b) env)))
