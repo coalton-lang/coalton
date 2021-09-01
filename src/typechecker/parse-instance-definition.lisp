@@ -50,21 +50,21 @@
 
         ;; Check the instance environment to make sure the context is resolvable
         (labels ((find-instance-entry (instance-predicate instance-context)
-		     (let* ((pred-class (ty-predicate-class instance-predicate))
-			    (instances (lookup-class-instances env pred-class :no-error t)))
-		       (fset:do-seq (instance instances)
-			 (handler-case
-			     (let ((subs (predicate-match (ty-class-instance-predicate instance) instance-predicate)))
-			       ;; Ensure that the context matches using the substitution
-			       (unless (null (set-exclusive-or
-					      instance-context
-					      (apply-substitution subs (ty-class-instance-constraints instance))
-					      :test #'equalp))
-				 (coalton-impl::coalton-bug "Incompatible context with environment for instance during method parsing for ~S ~A ~A ~A" pred-class (apply-substitution subs instance-context) (ty-class-instance-constraints instance) subs))                    
-			       (return-from find-instance-entry instance))
-			   (predicate-unification-error () nil)))
-		       ;; If we didn't find anything then signal an error
-		       (coalton-impl::coalton-bug "Instance unknown in environment during method parsing for ~S" pred-class))))
+		   (let* ((pred-class (ty-predicate-class instance-predicate))
+			  (instances (lookup-class-instances env pred-class :no-error t)))
+		     (fset:do-seq (instance instances)
+		       (handler-case
+			   (let ((subs (predicate-match (ty-class-instance-predicate instance) instance-predicate)))
+			     ;; Ensure that the context matches using the substitution
+			     (unless (null (set-exclusive-or
+					    instance-context
+					    (apply-substitution subs (ty-class-instance-constraints instance))
+					    :test #'equalp))
+			       (coalton-impl::coalton-bug "Incompatible context with environment for instance during method parsing for ~S ~A ~A ~A" pred-class (apply-substitution subs instance-context) (ty-class-instance-constraints instance) subs))                    
+			     (return-from find-instance-entry instance))
+			 (predicate-unification-error () nil)))
+		     ;; If we didn't find anything then signal an error
+		     (coalton-impl::coalton-bug "Instance unknown in environment during method parsing for ~S" pred-class))))
 
 	  ;; Lookup and verify the instance in the env
 	  (let ((instance-entry (find-instance-entry instance-predicate instance-context)))
@@ -108,7 +108,7 @@
 					(quantify (type-variables
 						   (apply-substitution instance-subs instance-method-qual-type))
 						  (apply-substitution instance-subs instance-method-qual-type))))
-				 (multiple-value-bind (binding preds env subs)
+				 (multiple-value-bind (scheme binding preds env subs qual-type)
                                      (derive-expl-type (cons method-name parsed-method-form)
                                                        instance-method-type
                                                        env
@@ -124,7 +124,7 @@
                                    ;; type variables match those in
                                    ;; the context
                                    (loop :for context-pred :in instance-method-context
-                                         :for node-pred :in (scheme-predicates (typed-node-type (cdr binding)))
+                                         :for node-pred :in (qualified-ty-predicates qual-type)
                                          :do
                                             (setf subs
                                                   (compose-substitution-lists (predicate-match node-pred context-pred) subs)))

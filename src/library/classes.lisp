@@ -7,7 +7,7 @@
   ;;
 
   (define-class (Show :a)
-      (show (:a -> String)))
+    (show (:a -> String)))
 
 
   ;;
@@ -88,7 +88,7 @@
     (mempty (:a)))
 
   (define-class (Functor :f)
-      (map ((:a -> :b) -> (:f :a) -> (:f :b))))
+    (map ((:a -> :b) -> (:f :a) -> (:f :b))))
 
   (define-class (Functor :f => (Applicative :f))
     (pure (:a -> (:f :a)))

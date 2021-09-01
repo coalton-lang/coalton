@@ -9,16 +9,27 @@
     (typed-node-literal-value expr))
 
   (:method ((expr typed-node-variable) ctx env)
-    (let* ((preds (coalton-impl/typechecker::qualified-ty-predicates (coalton-impl/typechecker::fresh-inst (typed-node-type expr))))
+    (let* ((preds (remove-duplicates
+                   (scheme-predicates (typed-node-type expr))
+                   :test #'equalp))
 	   (function-application (gethash (length preds) *function-application-functions*)))
       (if preds
-	  `(,function-application ,(typed-node-variable-name expr) ,@(compile-typeclass-dicts preds ctx env))
+	  `(,function-application ,(typed-node-variable-name expr)
+                                  ,@(compile-typeclass-dicts preds ctx env))
 	  (typed-node-variable-name expr))))
 
   (:method ((expr typed-node-application) ctx env)
     (let* ((arity (length (typed-node-application-rands expr)))
-	   (num-preds (length (coalton-impl/typechecker::qualified-ty-predicates
-			       (coalton-impl/typechecker::ty-scheme-type (typed-node-type (typed-node-application-rator expr))))))
+           ;; NOTE: We will not apply predicates to the rator if it is
+           ;;       an application because we can assume it will
+           ;;       already apply the arguments.
+           (preds (and (not (coalton-impl/typechecker::typed-node-application-p
+                             (typed-node-application-rator expr)))
+                       (remove-duplicates
+                        (scheme-predicates
+                         (typed-node-type (typed-node-application-rator expr)))
+                        :test #'equalp)))
+	   (num-preds (length preds))
            (function-application (gethash (+ arity num-preds) *function-application-functions*))
            (rator (typed-node-application-rator expr)))
       (unless function-application
@@ -28,8 +39,7 @@
         ,(if (coalton-impl/typechecker::typed-node-variable-p rator)
              (typed-node-variable-name rator)
              (compile-expression rator ctx env))
-	,@(compile-typeclass-dicts (scheme-predicates
-                                    (typed-node-type (typed-node-application-rator expr)))
+	,@(compile-typeclass-dicts preds
                                    ctx env)
         ,@(mapcar (lambda (expr) (compile-expression expr ctx env))
                   (typed-node-application-rands expr)))))
@@ -45,11 +55,11 @@
 
   (:method ((expr typed-node-abstraction) ctx env)
     (let* ((lambda-expr `(lambda ,(mapcar #'car (typed-node-abstraction-vars expr))
-                           (declare (ignorable ,@(mapcar #'car (typed-node-abstraction-vars expr)))
-                                    ,@(when *emit-type-annotations*
-                                        `(,@(mapcar (lambda (var) `(type ,(lisp-type (cdr var)) ,(car var)))
-                                                    (typed-node-abstraction-vars expr))
-                                          (values ,(lisp-type (typed-node-abstraction-subexpr expr)) &optional))))
+                            (declare (ignorable ,@(mapcar #'car (typed-node-abstraction-vars expr)))
+                                     ,@(when *emit-type-annotations*
+                                         `(,@(mapcar (lambda (var) `(type ,(lisp-type (cdr var)) ,(car var)))
+                                                     (typed-node-abstraction-vars expr))
+                                           (values ,(lisp-type (typed-node-abstraction-subexpr expr)) &optional))))
                            ,(compile-expression (typed-node-abstraction-subexpr expr) ctx env)))
            (arity (length (typed-node-abstraction-vars expr))))
       (cond
@@ -145,8 +155,10 @@
 				     (unless (null local-dynamic-extent-bindings)
 				       (coalton-impl::coalton-bug "Functions should not be declared dynamic extent."))
 				     (let* ((type (typed-node-type (cdr b)))
-					    (preds (scheme-predicates type))
-					    (dict-context (mapcar (lambda (pred) (cons pred (gensym))) preds))
+					    (preds (remove-duplicates (remove-if #'static-predicate-p (scheme-predicates type))
+                                                                      :test #'equalp))
+					    (dict-context (mapcar (lambda (pred) (cons pred (gensym)))
+                                                                  preds))
 					    (dict-types (mapcar (lambda (dict-context)
 								  (cons
 								   (ty-class-codegen-sym
@@ -172,10 +184,13 @@
 					   (append dict-context ctx) env))))
                                    scc-typed-bindings)
                            (setf ,@(mapcan (lambda (b)
-                                             `(,(car b) ,(construct-function-entry
-                                                          `#',(car b)
-                                                          (+ (length (typed-node-abstraction-vars (cdr b)))
-							     (length (scheme-predicates (typed-node-type (cdr b))))))))
+                                             (let* ((type (typed-node-type (cdr b)))
+					            (preds (remove-duplicates (remove-if #'static-predicate-p (scheme-predicates type))
+                                                                              :test #'equalp)))
+                                               `(,(car b) ,(construct-function-entry
+                                                            `#',(car b)
+                                                            (+ (length (typed-node-abstraction-vars (cdr b)))
+							       (length preds))))))
                                            scc-typed-bindings))
 
                            ,(compile-sccs (cdr sccs)))))
@@ -189,8 +204,11 @@
 			     (node (cdr binding))
 			     (type (typed-node-type node))
 			     (preds (scheme-predicates type))
-			     (dict-context (mapcar (lambda (pred) (cons pred (gensym))) preds)))
-			(if (not (= 0 (length preds)))
+			     (dict-context (mapcar (lambda (pred) (cons pred (gensym)))
+                                                   (reduce-context env preds)
+                                                   ;(set-difference preds (mapcar #'car ctx) :test #'equalp)
+                                                   )))
+			(if (not (= 0 (length dict-context)))
 			    ;; TODO: improve codegen here
 			    ;; TODO: this should be a function entry not a lambda
 			    (progn

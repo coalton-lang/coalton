@@ -43,6 +43,14 @@ Returns (PREDS FOUNDP)"
              (and found
                   (every (lambda (p) (entail env preds p)) inst-preds))))))
 
+(defun super-entail (env preds pred)
+  "Does PRED hold if and only if all of PREDS hold, only checking superclass relations?"
+  (declare (type environment env)
+	   (type ty-predicate-list preds)
+	   (type ty-predicate pred)
+	   (values boolean))
+  (true (member pred (mapcan (lambda (p) (by-super env p)) preds) :test #'equalp)))
+
 (defun hnf-p (pred)
   "Is PRED in head-normal form?"
   (labels ((hnf (ty)
