@@ -5,6 +5,18 @@
   (declare error (String -> :a))
   (define (error str)
     (lisp :a (str) (cl:error str)))
+
+  (declare trace (String -> Unit))
+  (define (trace str)
+    (progn
+      (lisp :a (str) (cl:format cl:t"~A~%" str))
+      Unit))
+
+  (declare traceObject (String -> :a -> Unit))
+  (define (traceObject str item)
+    (progn
+      (lisp :a (str item) (cl:format cl:t "~A: ~A~%" str item))
+      Unit))
   
   ;;
   ;; Function combinators
