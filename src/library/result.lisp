@@ -87,4 +87,12 @@
     (define (into res)
       (match res
 	((Ok x) (Some x))
-	((Err _) None)))))
+	((Err _) None))))
+
+  (define-instance (Into (Optional :b) (Result Unit :b))
+    (define (into opt)
+      (match opt
+	((Some x) (Ok x))
+	((None) (Err Unit)))))
+
+  (define-instance (Iso (Result Unit :a) (Optional :a))))

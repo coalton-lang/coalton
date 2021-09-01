@@ -112,7 +112,14 @@
   (define-class (Into :a :b)
     (into (:a -> :b)))
 
+
+  ;; Opting into this marker typeclass imples that the instances for
+  ;; (Into :a :b) and (Into :b :a) form an isomorphism
+  (define-class ((Into :a :b) (Into :b :a) => (Iso :a :b)))
+
   (define-instance (Into :a :a)
-    (define (into x) x)))
+    (define (into x) x))
+
+  (define-instance (Iso :a :a)))
 
 
