@@ -136,6 +136,29 @@
     (define (fromInt x)
       (lisp Double-Float (x) (cl:coerce x 'cl:double-float))))
 
+  (define-instance (Into Int Integer)
+    (define (into x) (fromInt x)))
+
+  (define-instance (Into Integer Int)
+    (define (into x)
+      (lisp Int (x) (cl:coerce x '(cl:signed-byte 32)))))
+
+  (define-instance (Into Int Single-Float)
+    (define (into x) (fromInt x)))
+
+  (define-instance (Into Single-Float Int)
+    (define (into x)
+      (lisp Int (x)
+	(cl:coerce (cl:truncate x) '(cl:signed-byte 32)))))
+
+  (define-instance (Into Int Double-Float)
+    (define (into x) (fromInt x)))
+
+  (define-instance (Into Double-Float Int)
+    (define (into x)
+      (lisp Int (x)
+	(cl:coerce (cl:truncate x) '(cl:signed-byte 32)))))
+
   (declare expt (Int -> Int -> Int))
   (define (expt base power)
     (lisp Int (base power) (cl:expt base power)))
