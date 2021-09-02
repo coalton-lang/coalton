@@ -5,9 +5,7 @@
   ;; Result
   ;;
 
-  (define-type (Result :a :b)
-    (Err :a)
-    (Ok :b))
+  ;; Result is defined in types.lisp
 
   (declare isOk ((Result :a :b) -> Boolean))
   (define (isOk x)

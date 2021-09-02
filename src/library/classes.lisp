@@ -120,6 +120,9 @@
   (define-instance (Into :a :a)
     (define (into x) x))
 
+  (define-class (TryInto :a :b :c)
+    (tryInto (:a -> (Result :b :c))))
+
   (define-instance (Iso :a :a))
 
   (define-class (WithDefault :f)
