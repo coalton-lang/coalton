@@ -93,7 +93,9 @@
 			       (setf env (set-name env (car method)
 						   (make-name-entry
 						    :name (car method)
-						    :type :method)))
+						    :type :method
+                                                    :docstring nil
+                                                    :location (or *compile-file-pathname* *load-truename*))))
 
 			       (if (function-type-p (qualified-ty-type (fresh-inst (cdr method))))
 				 (let ((arity (function-type-arity

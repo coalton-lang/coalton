@@ -43,7 +43,9 @@
 	  ;; Register the constructor in the name environment
 	  (setf env (set-name env (constructor-entry-name ctor)
 			      (make-name-entry :name (constructor-entry-name ctor)
-					       :type :constructor)))
+					       :type :constructor
+                                               :docstring nil
+                                               :location (or *compile-file-pathname* *load-truename*))))
 
 	  ;; If the constructor takes paramaters then add it to the function environment
 	  (if (not (= (constructor-entry-arity ctor) 0))

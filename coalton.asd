@@ -73,6 +73,9 @@
                (:file "toplevel-define-instance")
                (:file "coalton")
                (:file "debug")
+               (:module "doc"
+                :serial t
+                :components ((:file "generate-documentation")))
                (:file "faux-macros")
                (:module "library"
                 :serial t

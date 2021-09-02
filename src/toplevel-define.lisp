@@ -115,7 +115,10 @@ Returns new environment, binding list of declared nodes, a DAG of dependencies, 
 	(setf env (coalton-impl/typechecker::apply-substitution subs new-env))
 
 	(loop :for (name . node) :in typed-bindings :do
-	  (setf env (set-name env name (make-name-entry :name name :type :value))))
+	  (setf env (set-name env name (make-name-entry :name name
+                                                        :type :value
+                                                        :docstring (second (find name docstrings :key #'car))
+                                                        :location (or *compile-file-pathname* *load-truename*)))))
 
 	(values
 	 env
