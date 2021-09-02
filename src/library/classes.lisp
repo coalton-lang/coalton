@@ -120,6 +120,9 @@
   (define-instance (Into :a :a)
     (define (into x) x))
 
-  (define-instance (Iso :a :a)))
+  (define-instance (Iso :a :a))
+
+  (define-class (WithDefault :f)
+    (withDefault (:a -> (:f :a) -> (:a)))))
 
 

@@ -104,4 +104,10 @@
     (define (alt x y)
       (match x
         ((Some _) x)
-        (_ y)))))
+        (_ y))))
+
+  (define-instance (WithDefault Optional)
+    (define (withDefault default opt)
+      (match opt
+	((Some x) x)
+	((None) default)))))

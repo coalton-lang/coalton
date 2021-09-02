@@ -11,6 +11,7 @@
 
   (declare isOk ((Result :a :b) -> Boolean))
   (define (isOk x)
+    "Returns TRUE if X is ERR"
     (lisp Boolean (x)
       (cl:etypecase x
 	(Result/Ok True)
@@ -18,6 +19,7 @@
 
   (declare isErr ((Result :a :b) -> Boolean))
   (define (isErr x)
+    "Returns TRUE if X is ERR"
     (lisp Boolean (x)
       (cl:etypecase x
 	(Result/Err True)
@@ -25,9 +27,16 @@
 
   (declare mapErr ((:a -> :b) -> (Result :a :c) -> (Result :b :c)))
   (define (mapErr f x)
+    "Map over the ERR case"
     (match x
       ((Err x) (Err (f x)))
       ((Ok x) (Ok x))))
+
+  (declare flattenResult ((Result :a :a) -> :a))
+  (define (flattenResult x)
+    (match x
+      ((Ok x) x)
+      ((Err x) x)))
 
   ;;
   ;; Result instances
@@ -95,4 +104,10 @@
 	((Some x) (Ok x))
 	((None) (Err Unit)))))
 
-  (define-instance (Iso (Result Unit :a) (Optional :a))))
+  (define-instance (Iso (Result Unit :a) (Optional :a)))
+
+  (define-instance (WithDefault (Result :a))
+    (define (withDefault default result)
+      (match result
+	((Ok x) x)
+	((Err _) default)))))
