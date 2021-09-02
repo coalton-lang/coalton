@@ -375,6 +375,7 @@
    #:define-type
    #:define-class
    #:define-instance)
+  ;; Early Types
   (:export
    #:-> #:→
    #:=> #:⇒
@@ -382,6 +383,9 @@
    #:Unit
    #:Char
    #:Int
+   #:Integer
+   #:Single-Float
+   #:Double-Float
    #:String
    ;; #:Lisp-Object                      ; See below.
    #:Arrow
