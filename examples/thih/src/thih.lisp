@@ -548,7 +548,7 @@
 
   (declare toHnfs (MonadFail :m => (ClassEnv -> (List Pred) -> (:m (List Pred)))))
   (define (toHnfs ce ps)
-    (>>= (mapM (toHnf ce) ps)
+    (>>= (traverse (toHnf ce) ps)
          (fn (pss)
            (pure (foldr append Nil pss)))))
 
@@ -674,13 +674,21 @@
 
   (define-instance (Functor TI)
       (define (map f x)
-        (liftM f x)))
+        (>>= x
+	     (fn (x)
+	       (pure (f x))))))
+
   (define-instance (Applicative TI)
       (define (pure x)
         (TI (fn (s n)
               (Tuple3 s n x))))
     (define (liftA2 f m1 m2)
-      (liftM2 f m1 m2)))
+      (>>= m1
+	   (fn (a)
+	     (>>= m2
+		  (fn (b)
+		    (pure (f a b))))))))
+
   (define-instance (Monad TI)
       (define (>>= f g)
         (TI (fn (s n)
@@ -726,7 +734,7 @@
   (define (freshInst s)
     (match s
       ((Forall ks qt)
-       (do (ts <- (mapM newTVar ks))
+       (do (ts <- (traverse newTVar ks))
            (pure (inst ts qt))))))
 
   
@@ -832,7 +840,7 @@
  
   (declare tiPats ((List Pat) -> (TI (Tuple3 (List Pred) (List Assump) (List Type)))))
   (define (tiPats pats)
-    (do (psasts <- (mapM tiPat pats))
+    (do (psasts <- (traverse tiPat pats))
         (pure (foldr
                (fn (xyz acc)
                  (match (Tuple acc xyz)
@@ -906,8 +914,8 @@
 
   (declare tiAlts (ClassEnv -> (List Assump) -> (List Alt) -> Type -> (TI (List Pred))))
   (define (tiAlts ce as alts t)
-    (do (psts <- (mapM (tiAlt ce as) alts))
-        (mapM (unify t) (map snd psts))
+    (do (psts <- (traverse (tiAlt ce as) alts))
+        (traverse (unify t) (map snd psts))
       (pure (concat (map fst psts)))))
 
   ;; From Types to Type Schemes
@@ -1048,7 +1056,7 @@
 
   (declare tiImpls (ClassEnv -> (List Assump) -> (List Impl) -> (TI (Tuple (List Pred) (List Assump)))))
   (define (tiImpls ce as bs)
-    (do (ts <- (mapM (fn (_) (newTVar Star)) bs))
+    (do (ts <- (traverse (fn (_) (newTVar Star)) bs))
         (let is    = (map (fn (b)
                             (match b
                               ((Impl i _) i)))
@@ -1105,7 +1113,7 @@
            (tiI <- (tiSeq tiImpls ce (append as_ as) iss))
            (match tiI
              ((Tuple ps as__)
-              (do (qss <- (mapM (tiExpl ce (append as__ (append as_ as))) es))
+              (do (qss <- (traverse (tiExpl ce (append as__ (append as_ as))) es))
                   (pure (Tuple (append ps (concat qss))
                                (append as__ as_))))))))))
 
