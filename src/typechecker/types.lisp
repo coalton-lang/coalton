@@ -197,6 +197,13 @@
       (+ 1 (function-type-arity (function-type-to ty)))
       0))
 
+(defun function-type-arguments (ty)
+  (if (function-type-p ty)
+      (cons (function-type-from ty)
+            (function-type-arguments
+             (function-type-to ty)))
+      nil))
+
 ;;;
 ;;; Pretty printing
 ;;;
