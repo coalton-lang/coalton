@@ -34,9 +34,10 @@
 (cl:defmacro coalton:do (cl:&rest forms)
   (cl:labels ((process (forms)
                 (cl:let ((form (cl:car forms)))
-                  (cl:unless (cl:listp form)
-                    (cl:error "Invalid DO notation form ~A. Did you forget parenthesis?" form))
-                  (cl:cond (;; If we are on the last one then just emit the form
+                  (cl:cond ((cl:not (cl:listp form))
+                            ;; If it is not a list then simply emit the form
+                            form)
+                           (;; If we are on the last one then just emit the form
                             (cl:null (cl:cdr forms))
 
                             (cl:when (cl:member 'coalton:<- form)
