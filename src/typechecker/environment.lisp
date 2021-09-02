@@ -30,11 +30,18 @@
 (defun make-default-type-environment ()
   "Create a TYPE-ENVIRONMENT containing early types"
   (make-type-environment
-   :data (fset:map 
+   :data (fset:map
+          ;; Early Types
 	  ('coalton:Unit tUnit)
 	  ('coalton:Char tChar)
+
 	  ('coalton:Int tInt)
+          ('coalton:Integer tInteger)
+          ('coalton:Single-Float tSingle-Float)
+          ('coalton:Double-Float tDouble-Float)
+          
 	  ('coalton:String tString)
+
           ('coalton:Lisp-Object tLisp-Object)
 	  ('coalton:Arrow tArrow))))
 

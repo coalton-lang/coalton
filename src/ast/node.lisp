@@ -40,7 +40,7 @@
 
 (deftype literal-value ()
   "Allowed literal values as Lisp objects."
-  '(or integer string character))
+  '(or integer single-float double-float string character))
 
 #+sbcl
 (declaim (sb-ext:freeze-type literal-value))

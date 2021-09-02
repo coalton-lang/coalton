@@ -15,11 +15,17 @@
     ;; Here, we will (for now) make a mapping from early types to lisp types.
     (let ((tcon-name (coalton-impl/typechecker::tycon-name (coalton-impl/typechecker::tcon-tycon ty))))
       (cond
-        ((eql tcon-name 'coalton:Void)   'nil)
-        ((eql tcon-name 'coalton:Unit)   't)
-        ((eql tcon-name 'coalton:Char)   'character)
-        ((eql tcon-name 'coalton:Int)    '(signed-byte 32))
-        ((eql tcon-name 'coalton:String) 'simple-string)
+        ((eql tcon-name 'coalton:Void)         'nil)
+        ((eql tcon-name 'coalton:Unit)         '(member coalton:unit))
+        ((eql tcon-name 'coalton:Char)         'character)
+        ((eql tcon-name 'coalton:Int)          '(signed-byte 32))
+        ((eql tcon-name 'coalton:Integer)      'integer)
+        ((eql tcon-name 'coalton:Single-Float) 'single-float)
+        ((eql tcon-name 'coalton:Double-Float) 'double-float)
+        
+        ((eql tcon-name 'coalton:String)       'simple-string)
+
+        ;; LISP-OBJECT maps with this last case.
         (t tcon-name))))
 
   (:method ((ty coalton-impl/typechecker::tapp))

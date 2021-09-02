@@ -130,6 +130,11 @@
 (defvar tUnit    (%make-tcon (%make-tycon :name 'coalton:Unit        :kind kstar)))
 (defvar tChar    (%make-tcon (%make-tycon :name 'coalton:Char        :kind kstar)))
 (defvar tInt     (%make-tcon (%make-tycon :name 'coalton:Int         :kind kstar)))
+(defvar tInteger (%make-tcon (%make-tycon :name 'coalton:Integer     :kind kstar)))
+(defvar tSingle-Float
+  (%make-tcon (%make-tycon :name 'coalton:Single-Float :kind kstar)))
+(defvar tDouble-Float
+  (%make-tcon (%make-tycon :name 'coalton:Double-Float :kind kstar)))
 (defvar tString  (%make-tcon (%make-tycon :name 'coalton:String      :kind kstar)))
 (defvar tLisp-Object
   (%make-tcon (%make-tycon :name 'coalton:Lisp-Object :kind kstar)))
