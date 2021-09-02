@@ -4,14 +4,26 @@
   ;;
   ;; Built-in type instances
   ;;
-  
+
   ;;
   ;; Int
   ;;
-  
+
   (define-instance (Show Int)
     (define (show x)
-      (lisp String (x) (cl:write-to-string x))))
+      (lisp String (x) (cl:prin1-to-string x))))
+
+  (define-instance (Show Integer)
+    (define (show x)
+      (lisp String (x) (cl:prin1-to-string x))))
+
+  (define-instance (Show Single-Float)
+    (define (show x)
+      (lisp String (x) (cl:prin1-to-string x))))
+
+  (define-instance (Show Double-Float)
+    (define (show x)
+      (lisp String (x) (cl:prin1-to-string x))))
 
   (define-instance (Eq Int)
     (define (== a b)
@@ -20,16 +32,70 @@
     (define (/= a b)
       (not (== a b))))
 
+  (define-instance (Eq Integer)
+    (define (== a b)
+      (lisp Boolean (a b)
+        (to-boolean (cl:= a b))))
+    (define (/= a b)
+      (not (== a b))))
+
+  (define-instance (Eq Single-Float)
+    (define (== a b)
+      (lisp Boolean (a b)
+        (to-boolean (cl:= a b))))
+    (define (/= a b)
+      (not (== a b))))
+
+  (define-instance (Eq Double-Float)
+    (define (== a b)
+      (lisp Boolean (a b)
+        (to-boolean (cl:= a b))))
+    (define (/= a b)
+      (not (== a b))))
+
   (define-instance (Ord Int)
-      (define (<=> a b)
-        (lisp Ord (a b)
-          (cl:cond
-            ((cl:< a b)
-             LT)
-            ((cl:> a b)
-             GT)
-            (cl:t
-             EQ)))))
+    (define (<=> a b)
+      (lisp Ord (a b)
+        (cl:cond
+          ((cl:< a b)
+           LT)
+          ((cl:> a b)
+           GT)
+          (cl:t
+           EQ)))))
+
+  (define-instance (Ord Integer)
+    (define (<=> a b)
+      (lisp Ord (a b)
+        (cl:cond
+          ((cl:< a b)
+           LT)
+          ((cl:> a b)
+           GT)
+          (cl:t
+           EQ)))))
+
+  (define-instance (Ord Single-Float)
+    (define (<=> a b)
+      (lisp Ord (a b)
+        (cl:cond
+          ((cl:< a b)
+           LT)
+          ((cl:> a b)
+           GT)
+          (cl:t
+           EQ)))))
+
+  (define-instance (Ord Double-Float)
+    (define (<=> a b)
+      (lisp Ord (a b)
+        (cl:cond
+          ((cl:< a b)
+           LT)
+          ((cl:> a b)
+           GT)
+          (cl:t
+           EQ)))))
 
   (define-instance (Num Int)
     (define (+ a b)
@@ -39,6 +105,36 @@
     (define (* a b)
       (lisp Int (a b) (cl:* a b)))
     (define (fromInt x) x))
+
+  (define-instance (Num Integer)
+    (define (+ a b)
+      (lisp Integer (a b) (cl:+ a b)))
+    (define (- a b)
+      (lisp Integer (a b) (cl:- a b)))
+    (define (* a b)
+      (lisp Integer (a b) (cl:* a b)))
+    (define (fromInt x)
+      (lisp Integer (x) x)))            ; Magic Coalton cast
+
+  (define-instance (Num Single-Float)
+    (define (+ a b)
+      (lisp Single-Float (a b) (cl:+ a b)))
+    (define (- a b)
+      (lisp Single-Float (a b) (cl:- a b)))
+    (define (* a b)
+      (lisp Single-Float (a b) (cl:* a b)))
+    (define (fromInt x)
+      (lisp Single-Float (x) (cl:coerce x 'cl:single-float))))
+
+  (define-instance (Num Double-Float)
+    (define (+ a b)
+      (lisp Double-Float (a b) (cl:+ a b)))
+    (define (- a b)
+      (lisp Double-Float (a b) (cl:- a b)))
+    (define (* a b)
+      (lisp Double-Float (a b) (cl:* a b)))
+    (define (fromInt x)
+      (lisp Double-Float (x) (cl:coerce x 'cl:double-float))))
 
   (declare expt (Int -> Int -> Int))
   (define (expt base power)
