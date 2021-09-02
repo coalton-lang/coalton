@@ -34,6 +34,13 @@
     "Returns a single element list containg only X."
     (Cons x Nil))
 
+  (declare repeat (Int -> :a -> (List :a)))
+  (define (repeat n x)
+    "Returns a list with X repeated N times."
+    (if (== 0 n)
+        Nil
+        (Cons x (repeat (- n 1) x))))
+
   (declare reverse ((List :a) -> (List :a)))
   (define (reverse xs)
     "Returns a new list containing the same elements in reverse order."
@@ -98,6 +105,22 @@
        (if (== 0 i)
            (Some x)
            (index xs (- i 1))))))
+
+  (declare elemIndex (Eq :a => (:a -> (List :a) -> (Optional Int))))
+  (define (elemIndex x xs)
+    (findIndex (== x) xs))
+
+  (declare findIndex ((:a -> Boolean) -> (List :a) -> (Optional Int)))
+  (define (findIndex f xs)
+    (let ((find (fn (xs n)
+                  (match xs
+                    ((Nil)
+                     None)
+                    ((Cons x xs)
+                     (if (f x)
+                         (Some n)
+                         (find xs (+ n 1))))))))
+      (find xs 0)))
 
   (declare range (Int -> Int -> (List Int)))
   (define (range start end)
@@ -211,6 +234,36 @@
     "Builds a list of tuples with the elements of XS and YS."
     (zipWith Tuple xs ys))
 
+  (declare insert (Ord :a => (:a -> (List :a) -> (List :a))))
+  (define (insert e ls)
+    "Inserts an element into a list at the first place it is less than or equal to the next element."
+    (insertBy <=> e ls))
+
+  (declare insertBy ((:a -> :a -> Ord) -> :a -> (List :a) -> (List :a)))
+  (define (insertBy cmp x ys)
+    "Generic version of insert"
+    (match ys
+      ((Nil)
+       (make-list x))
+      ((Cons y ys_)
+       (match (cmp x y)
+         ((GT)
+          (Cons y (insertBy cmp x ys_)))
+         (_
+          (Cons x ys))))))
+
+  (declare sort (Ord :a => ((List :a) -> (List :a))))
+  (define (sort xs)
+    "Performs a stable sort of XS."
+    (sortBy <=> xs))
+
+  ;; NOTE: This is a very inefficient implementation and can be
+  ;;       replaced with a faster stable sorting algorithm.
+  (declare sortBy ((:a -> :a -> Ord) -> (List :a) -> (List :a)))
+  (define (sortBy cmp xs)
+    "Generic version of sort"
+    (foldr (insertBy cmp) Nil xs))
+
   (declare intersperse (:a -> (List :a) -> (List :a)))
   (define (intersperse e xs)
     "Returns a new list where every other element is E."
@@ -317,15 +370,15 @@
     (define (== a b)
       (match a
         ((Cons x xs)
-          (match b
-            ((Cons y ys)
-	      (and (== x y)
-                   (== xs ys)))
-            (_ False)))
+         (match b
+           ((Cons y ys)
+	    (and (== x y)
+                 (== xs ys)))
+           (_ False)))
         ((Nil)
-          (match b
-            ((Nil) True)
-             (_ False)))))
+         (match b
+           ((Nil) True)
+           (_ False)))))
     (define (/= a b)
       (not (== a b))))
     
@@ -336,12 +389,12 @@
     (define mempty Nil))
 
   (define-instance (Functor List)
-      (define (map f l)
-        (match l
-          ((Cons x xs) (Cons (f x) (map f xs)))
-          ((Nil) Nil))))
+    (define (map f l)
+      (match l
+        ((Cons x xs) (Cons (f x) (map f xs)))
+        ((Nil) Nil))))
 
- (define-instance (Applicative List)
+  (define-instance (Applicative List)
     (define (pure x) (Cons x Nil))
     (define (liftA2 f as bs)
       (concatMap (fn (a)

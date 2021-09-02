@@ -485,6 +485,7 @@
    #:tail
    #:null
    #:singleton
+   #:repeat
    #:reverse
    #:find
    #:fold
@@ -492,6 +493,8 @@
    #:filter
    #:length
    #:index
+   #:elemIndex
+   #:findIndex
    #:range
    #:append
    #:concat
@@ -505,6 +508,10 @@
    #:list-difference
    #:zipWith
    #:zip
+   #:insert
+   #:insertBy
+   #:sort
+   #:sortBy
    #:intersperse
    #:intercalate
    #:transpose
