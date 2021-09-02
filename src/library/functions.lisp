@@ -53,6 +53,14 @@
     "FLIP reverses the arguments to F"
     (f y x))
 
+  ;; We don't write (COMPOSE F G X) even though it's OK so that the
+  ;; most common case of using compose---as a binary function---is
+  ;; considered to be "saturated".
+  (declare compose ((:b -> :c) -> (:a -> :b) -> (:a -> :c)))
+  (define (compose f g)
+    (fn (x)
+      (f (g x))))
+
   ;;
   ;; Monadic operators
   ;;

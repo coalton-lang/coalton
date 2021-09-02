@@ -429,6 +429,8 @@
    #:unless
    #:when
    #:cond
+   #:nest
+   #:pipe
    #:make-list
    #:to-boolean
    #:do
@@ -541,6 +543,7 @@
    #:id
    #:const
    #:flip
+   #:compose
    #:traverse
    #:mapM
    #:liftM

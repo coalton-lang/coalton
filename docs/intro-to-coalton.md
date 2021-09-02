@@ -40,6 +40,28 @@ Coalton is a statically typed language that compiles to common lisp.
   (map (+ 2) nums)) ;; 4 5 6 7
 ```
 
+There are convenient **syntaxes** for composing functions with the
+`pipe` and `nest` macros:
+
+```lisp
+(nest f g ... h x)
+
+;; is equivalent to
+
+(f (g (... (h x))))
+
+;; is equivalent to
+
+(pipe x h ... g f)
+```
+
+These are useful to make code less noisy.
+
+Note that since these are macros (indicated by their variadic
+arguments), they cannot be used as high-order functions. Consider
+either curring or the `compose` function if you're thinking in that
+direction.
+
 ## Data Types
 
 ```lisp
