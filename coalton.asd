@@ -8,7 +8,8 @@
                #:global-vars
 	       #:trivia
 	       #:serapeum
-	       #:fset)
+	       #:fset
+	       #:float-features)
   :in-order-to ((asdf:test-op (asdf:test-op #:coalton/tests)))
   :around-compile (lambda (compile)
                     (let (#+sbcl (sb-ext:*derive-function-types* t))

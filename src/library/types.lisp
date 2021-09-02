@@ -47,5 +47,9 @@
     (Some :a)
     None)
 
+   (define-type (Result :a :b)
+    (Err :a)
+    (Ok :b))
+
   (define (undefined x)
     (lisp :a ()  (cl:error "Undefined"))))
