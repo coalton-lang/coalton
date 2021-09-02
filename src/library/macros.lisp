@@ -31,6 +31,32 @@
                                     ,(build-calls (cl:cdr exprs))))))
     (build-calls exprs)))
 
+(cl:defmacro nest (cl:&rest items)
+  "A syntactic convenience for function application. Transform
+
+    (NEST f g h x)
+
+to
+
+    (f (g (h x)))."
+  (cl:assert (cl:<= 2 (cl:list-length items)))
+  (cl:let ((last (cl:last items))
+           (butlast (cl:butlast items)))
+    (cl:reduce (cl:lambda (x acc)
+                 (cl:list x acc))
+               butlast :from-end cl:t :initial-value (cl:first last))))
+
+(cl:defmacro pipe (cl:&rest items)
+  "A syntactic convenience for function application, sometimes called a \"threading macro\". Transform
+
+    (PIPE x h g f)
+
+to
+
+    (f (g (h x)))."
+  (cl:assert (cl:<= 2 (cl:list-length items)))
+  `(nest ,@(cl:reverse items)))
+
 (cl:defmacro make-list (cl:&rest forms)
   (cl:labels
       ((list-helper (forms)
