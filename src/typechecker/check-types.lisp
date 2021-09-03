@@ -116,7 +116,8 @@
 	       :inferred-type (typed-node-type last-node)))
 
       (dolist (sub-node (typed-node-seq-subnodes node))
-	(check-node-type sub-node env)))))
+	(check-node-type sub-node env))
+      (typed-node-type node))))
 
 (defun check-application-node-type (rator rands node env)
   (declare (type typed-node rator node)

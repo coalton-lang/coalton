@@ -46,7 +46,7 @@
     "Returns a new list containing the same elements in reverse order."
     (let ((inner (fn (as bs)
 		   (match as
-		     ((Nil) Nil)
+		     ((Nil) bs)
 		     ((Cons a as) (inner as (Cons a bs)))))))
       (inner xs Nil)))
 
