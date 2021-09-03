@@ -9,7 +9,6 @@
   (define-class (Show :a)
     (show (:a -> String)))
 
-
   ;;
   ;; Eq
   ;;
@@ -18,7 +17,6 @@
     (== (:a -> :a -> Boolean))
     (/= (:a -> :a -> Boolean)))
 
-  
   ;;
   ;; Ord
   ;;

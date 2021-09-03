@@ -86,7 +86,8 @@
                              (:file "list")
                              (:file "tuple")
                              (:file "result")
-                             (:file "functions")))
+                             (:file "functions")
+			     (:file "vector")))
                (:file "toplevel-environment")))
 
 (asdf:defsystem #:coalton/tests

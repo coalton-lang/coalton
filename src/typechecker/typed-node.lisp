@@ -451,4 +451,7 @@
      (mapcan #'collect-variable-namespace-g (typed-node-match-branches node))))
 
   (:method ((branch typed-match-branch))
-    (collect-variable-namespace-g (typed-match-branch-subexpr branch))))
+    (collect-variable-namespace-g (typed-match-branch-subexpr branch)))
+
+  (:method ((node typed-node-seq))
+    (mapcan #'collect-variable-namespace-g (typed-node-seq-subnodes node))))

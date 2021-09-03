@@ -181,6 +181,15 @@ Several If expressions can be combined with a cond
       (True (show n)))))
 ```
 
+Coalton also has `unless` and `when` which work similary to their definitions in lisp.
+
+```
+(coalton-toplevel
+  (define (f x)
+    (when (== x 5)
+      (error "I only want the number 5"))))
+```
+
 ### Progn
 
 Coalton has a progn construct similar to lisp.

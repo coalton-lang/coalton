@@ -394,7 +394,7 @@
    #:fn #:λ
    #:match
    #:let #:=
-   #:if #:cond
+   #:if #:unless #:when #:cond
    #:lisp
    #:do #:<-
    #:_
@@ -426,6 +426,8 @@
   ;; Macros
   (:export
    #:if
+   #:unless
+   #:when
    #:cond
    #:make-list
    #:to-boolean
@@ -548,8 +550,7 @@
    #:asum)
   ;; Multiparam
   (:export
-   #:Into)
-  )
+   #:Into))
 
 (uiop:define-package #:coalton-global-symbols
   (:documentation "A place that global value names are stashed. We don't use uninterned symbols so that they can be reified through the compilation process.")

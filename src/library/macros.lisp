@@ -6,6 +6,20 @@
      ((True) ,then)
      ((False) ,else)))
 
+(cl:defmacro coalton:when (expr then)
+  `(if ,expr
+       (seq
+	,then
+	Unit)
+       Unit))
+
+(cl:defmacro coalton:unless (expr then)
+  `(if ,expr
+       Unit
+       (seq
+	,then
+	Unit)))
+
 (cl:defmacro coalton:cond (cl:&rest exprs)
   (cl:labels ((build-calls (exprs)
                 (cl:if (cl:null (cl:cdr exprs))
