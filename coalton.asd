@@ -88,7 +88,8 @@
                              (:file "result")
                              (:file "functions")
 			     (:file "cell")
-			     (:file "vector")))
+			     (:file "vector")
+			     (:file "graph")))
                (:file "toplevel-environment")))
 
 (asdf:defsystem #:coalton/tests

@@ -161,6 +161,20 @@
 		  Nil
 		  (Cons (vector-index-unsafe index v) (inner v (+ 1 index)))))))
       (inner v 0)))
+
+  (declare vector-swap-remove (Int -> (Vector :a) -> (Optional :a)))
+  (define (vector-swap-remove idx vec)
+    (if (>= idx (vector-length vec))
+	None
+	(Some (vector-swap-remove-unsafe idx vec))))
+
+  (declare vector-swap-remove-unsafe (Int -> (Vector :a) -> :a))
+  (define (vector-swap-remove-unsafe idx vec)
+    (progn
+      (let out = (vector-index-unsafe idx vec))
+      (vector-set idx (vector-pop-unsafe vec) vec)
+      out))
+
   ;;
   ;; Vector Instances
   ;;
