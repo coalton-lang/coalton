@@ -9,9 +9,7 @@
     (typed-node-literal-value expr))
 
   (:method ((expr typed-node-variable) ctx env)
-    (let* ((preds (remove-duplicates
-                   (scheme-predicates (typed-node-type expr))
-                   :test #'equalp))
+    (let* ((preds (remove-duplicates (scheme-predicates (typed-node-type expr)) :test #'equalp))
 	   (function-application (gethash (length preds) *function-application-functions*)))
       (if preds
 	  `(,function-application ,(typed-node-variable-name expr)
@@ -55,11 +53,11 @@
 
   (:method ((expr typed-node-abstraction) ctx env)
     (let* ((lambda-expr `(lambda ,(mapcar #'car (typed-node-abstraction-vars expr))
-                            (declare (ignorable ,@(mapcar #'car (typed-node-abstraction-vars expr)))
-                                     ,@(when *emit-type-annotations*
-                                         `(,@(mapcar (lambda (var) `(type ,(lisp-type (cdr var)) ,(car var)))
-                                                     (typed-node-abstraction-vars expr))
-                                           (values ,(lisp-type (typed-node-abstraction-subexpr expr)) &optional))))
+                           (declare (ignorable ,@(mapcar #'car (typed-node-abstraction-vars expr)))
+                                    ,@(when *emit-type-annotations*
+                                        `(,@(mapcar (lambda (var) `(type ,(lisp-type (cdr var)) ,(car var)))
+                                                    (typed-node-abstraction-vars expr))
+                                          (values ,(lisp-type (typed-node-abstraction-subexpr expr)) &optional))))
                            ,(compile-expression (typed-node-abstraction-subexpr expr) ctx env)))
            (arity (length (typed-node-abstraction-vars expr))))
       (cond
@@ -69,7 +67,7 @@
          (let ((function-constructor (gethash arity *function-constructor-functions*)))
            (unless function-constructor
              (coalton-impl::coalton-bug "Unable to construct function of arity ~A" arity))
-           `(funcall #',function-constructor ,lambda-expr))))))
+           `(,function-constructor ,lambda-expr))))))
 
   (:method ((expr typed-node-let) ctx env)
     (compile-binding-list (typed-node-let-bindings expr)
@@ -110,6 +108,9 @@
     `(progn ,@(mapcar (lambda (subnode)
 			(compile-expression subnode ctx env))
 		      (typed-node-seq-subnodes expr)))))
+
+(defun reduce-preds-for-codegen (preds env)
+  (reduce-context env (remove-duplicates preds :test #'equalp)))
 
 (defun compile-binding-list (typed-bindings sorted-bindings subform dynamic-extent-bindings ctx env)
   "Compiles a binding list to nested LET and LABELS based on topological sorting of the bindings."
@@ -155,8 +156,7 @@
 				     (unless (null local-dynamic-extent-bindings)
 				       (coalton-impl::coalton-bug "Functions should not be declared dynamic extent."))
 				     (let* ((type (typed-node-type (cdr b)))
-					    (preds (remove-duplicates (remove-if #'static-predicate-p (scheme-predicates type))
-                                                                      :test #'equalp))
+					    (preds (reduce-preds-for-codegen (scheme-predicates type) env))
 					    (dict-context (mapcar (lambda (pred) (cons pred (gensym)))
                                                                   preds))
 					    (dict-types (mapcar (lambda (dict-context)
@@ -185,8 +185,7 @@
                                    scc-typed-bindings)
                            (setf ,@(mapcan (lambda (b)
                                              (let* ((type (typed-node-type (cdr b)))
-					            (preds (remove-duplicates (remove-if #'static-predicate-p (scheme-predicates type))
-                                                                              :test #'equalp)))
+					            (preds (reduce-preds-for-codegen (scheme-predicates type) env)))
                                                `(,(car b) ,(construct-function-entry
                                                             `#',(car b)
                                                             (+ (length (typed-node-abstraction-vars (cdr b)))
@@ -203,20 +202,19 @@
 			     (name (car binding))
 			     (node (cdr binding))
 			     (type (typed-node-type node))
-			     (preds (scheme-predicates type))
-			     (dict-context (mapcar (lambda (pred) (cons pred (gensym)))
-                                                   (reduce-context env preds)
-                                                   ;(set-difference preds (mapcar #'car ctx) :test #'equalp)
-                                                   )))
+
+			     (preds (reduce-preds-for-codegen (scheme-predicates type) env))
+
+			     (dict-context (mapcar (lambda (pred) (cons pred (gensym))) preds)))
+
 			(if (not (= 0 (length dict-context)))
-			    ;; TODO: improve codegen here
-			    ;; TODO: this should be a function entry not a lambda
-			    (progn
-			      (unless (null local-dynamic-extent-bindings)
-				(coalton-impl::coalton-bug "Functions should not be declared dynamic extent."))
-			      `(let ((,name (lambda ,(mapcar #'cdr dict-context)
-					      ,(compile-expression node (append dict-context ctx) env))))
-				 ,(compile-sccs (cdr sccs))))
+			    (let ((function-constructor (gethash (length dict-context) *function-constructor-functions*)))
+			      (progn
+				(unless (null local-dynamic-extent-bindings)
+				  (coalton-impl::coalton-bug "Functions should not be declared dynamic extent."))
+				`(let ((,name (,function-constructor (lambda ,(mapcar #'cdr dict-context)
+						  ,(compile-expression node (append dict-context ctx) env)))))
+				   ,(compile-sccs (cdr sccs)))))
 
 
 			    `(let ,(mapcar (lambda (b)
