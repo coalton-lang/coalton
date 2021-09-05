@@ -74,8 +74,10 @@
 	   (type environment env))
   (let* ((var-names (mapcar #'car vars))
 
-	 (preds (remove-duplicates (remove-if #'static-predicate-p (scheme-predicates type))
-                                   :test #'equalp))
+	 (preds (reduce-context
+		 env
+		 (remove-duplicates (remove-if #'static-predicate-p (scheme-predicates type))
+				    :test #'equalp)))
 
 	 (dict-context (mapcar (lambda (pred) (cons pred (gensym))) preds))
 
@@ -85,7 +87,7 @@
 				(cdr dict-context)))
 			     dict-context))
 
-    (params (append (mapcar #'cdr dict-context) var-names)))
+	 (params (append (mapcar #'cdr dict-context) var-names)))
     `((defun ,name ,params
 	(declare (ignorable ,@params)
 		 ,@(when *emit-type-annotations*
