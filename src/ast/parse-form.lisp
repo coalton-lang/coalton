@@ -35,6 +35,8 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
 	(parse-seq expr subnodes sr package))
        ;; Application
        ((t &rest rands)
+        (when (= 0 (length rands))
+          (error-parsing expr "Unable to call nullary function."))
         (parse-application expr (first expr) rands sr package))))
     (t (error-parsing expr "The expression is not a valid value expression."))))
 
