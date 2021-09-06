@@ -115,6 +115,18 @@
 	     :do (coalton-impl/codegen::A1 f elem))
 	  Unit))))
 
+  (declare vector-foreach-index ((Int -> :a -> :b) -> (Vector :a) -> Unit))
+  (define (vector-foreach-index f v)
+    "Call the function F once for each item in V with its index"
+    (lisp Unit (f v)
+      (cl:let ((v_ (unveil (cl:slot-value v '_0))))
+	(cl:progn
+	  (cl:loop
+	     :for elem :across v_
+	     :for i :from 0
+	     :do (coalton-impl/codegen::A2 f i elem))
+	  Unit))))
+
   (declare vector-foreach2 ((:a -> :a -> :b) -> (Vector :a) -> (Vector :a) -> Unit))
   (define (vector-foreach2 f v1 v2)
     "Like vector-foreach but twice as good"
@@ -141,6 +153,14 @@
       (vector-foreach f v2)
       out))
 
+  (declare vector-to-list ((Vector :a) -> (List :a)))
+  (define (vector-to-list v)
+    (let ((inner
+	    (fn (v index)
+	      (if (>= index (vector-length v))
+		  Nil
+		  (Cons (vector-index-unsafe index v) (inner v (+ 1 index)))))))
+      (inner v 0)))
   ;;
   ;; Vector Instances
   ;;
@@ -193,11 +213,6 @@
 
   (define-instance (Into (Vector :a) (List :a))
     (define (into v)
-      (let ((inner
-	      (fn (v index)
-		(if (>= index (vector-length v))
-		    Nil
-		    (Cons (vector-index-unsafe index v) (inner v (+ 1 index)))))))
-	(inner v 0))))
+      (vector-to-list v)))
 
   (define-instance (Iso (Vector :a) (List :a))))
