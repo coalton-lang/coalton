@@ -155,6 +155,7 @@
 
   (declare vector-to-list ((Vector :a) -> (List :a)))
   (define (vector-to-list v)
+    "Create a list containing the same elements in the same order as V"
     (let ((inner
 	    (fn (v index)
 	      (if (>= index (vector-length v))
@@ -164,12 +165,14 @@
 
   (declare vector-swap-remove (Int -> (Vector :a) -> (Optional :a)))
   (define (vector-swap-remove idx vec)
+    "Remove the element IDX from VEC and replace it with the last element in VEC. Then return the removed element."
     (if (>= idx (vector-length vec))
 	None
 	(Some (vector-swap-remove-unsafe idx vec))))
 
   (declare vector-swap-remove-unsafe (Int -> (Vector :a) -> :a))
   (define (vector-swap-remove-unsafe idx vec)
+    "Remove the element IDX from VEC and replace it with the last element in VEC without bounds checking. Then return the removed element."
     (progn
       (let out = (vector-index-unsafe idx vec))
       (vector-set idx (vector-pop-unsafe vec) vec)

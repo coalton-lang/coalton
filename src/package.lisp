@@ -463,7 +463,9 @@
    #:Applicative #:pure #:liftA2
    #:Monad #:>>= #:>>
    #:MonadFail #:fail
-   #:Applicative #:alt #:empty)
+   #:Applicative #:alt #:empty
+   #:Into
+   #:TryInto)
   ;; Builtin
   (:export
    #:expt
@@ -551,9 +553,25 @@
    #:sequence
    #:mconcat
    #:asum)
-  ;; Multiparam
+  ;; Graph
   (:export
-   #:Into))
+   #:NodeIndex
+   #:EdgeIndex
+   #:GraphType #:Undirected #:Directed
+   #:Graph
+   #:make-graph
+   #:make-digraph
+   #:graph-nodes
+   #:graph-edges
+   #:graph-number-count
+   #:graph-edge-count
+   #:graph-lookup-node
+   #:graph-lookup-edge
+   #:graph-add-node
+   #:graph-remove-node
+   #:graph-add-edge
+   #:graph-remove-edge
+   #:graph-viz))
 
 (uiop:define-package #:coalton-global-symbols
   (:documentation "A place that global value names are stashed. We don't use uninterned symbols so that they can be reified through the compilation process.")
