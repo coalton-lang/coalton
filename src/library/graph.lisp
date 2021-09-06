@@ -1,11 +1,11 @@
-(in-package #:coalton-user)
+(cl:in-package #:coalton-user)
 
 ;;
 ;; Library module for graphs and graph algorithms
 ;;
 
 
-;; The graph data representation and operations in this file is
+;; The graph data representation and operations in this file are
 ;; adapted from
 ;;
 ;;    https://github.com/petgraph/petgraph
@@ -39,6 +39,9 @@
 ;; IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 ;; DEALINGS IN THE SOFTWARE.
 
+;; TODO: check functinality for undirected graphs including graphviz output
+;; TODO: check license and attribution in this file with @stylewarning
+
 (coalton-toplevel
 
   ;;
@@ -58,7 +61,6 @@
   (define (index-pair-outgoing p)
     (match p
       ((IndexPair x _) x)))
-
 
   (define-type EdgeIndex
     (EdgeIndex Int))
@@ -82,6 +84,10 @@
     (define (/= a b)
       (not (== a b))))
 
+  (define-instance (Show EdgeIndex)
+    (define (show x)
+      (match x
+	((EdgeIndex x) (show x)))))
 
   (define-type NodeIndex
     (NodeIndex Int))
@@ -110,7 +116,6 @@
     (define (/= a b)
       (not (== a b))))
 
-
   ;;
   ;; Node and edge types
   ;;
@@ -128,7 +133,6 @@
     "Gets the IndexPair of the first incoming and outgoing edge for the node."
     (match node
       ((Node _ x) x)))
-
 
   (define-type (Edge :data)
     (Edge :data (IndexPair (Optional EdgeIndex)) (IndexPair NodeIndex)))
@@ -181,44 +185,57 @@
 
   (declare make-graph (Unit -> (Graph :node-data :edge-data)))
   (define (make-graph _)
+    "Create a new empty undirected graph"
     (Graph Undirected
 	   (make-vector Unit)
 	   (make-vector Unit)))
 
   (declare make-digraph (Unit -> (Graph :node-data :edge-data)))
   (define (make-digraph _)
+    "Create a new directed graph"
     (Graph Undirected
 	   (make-vector Unit)
 	   (make-vector Unit)))
 
-
   (declare graph-nodes ((Graph :node-data :edge-data) -> (Vector (Node :node-data))))
   (define (graph-nodes graph)
+    "Returns the nodes in a graph"
     (match graph
       ((Graph _ nodes _) nodes)))
 
   (declare graph-edges ((Graph :node-data :edge-data) -> (Vector (Edge :edge-data))))
   (define (graph-edges graph)
+    "Returns the edges in a graph"
     (match graph
       ((Graph _ _ edges) edges)))
+
+  (declare graph-is-directed ((Graph :node-data :edge-data) -> Boolean))
+  (define (graph-is-directed graph)
+    (match graph
+      ((Graph (Directed) _ _) True)
+      ((Graph (Undirected) _ _) False)))
 
 
   (declare graph-node-count ((Graph :node-data :edge-data) -> Int))
   (define (graph-node-count graph)
+    "Returns the number of nodes in a graph"
     (vector-length (graph-nodes graph)))
 
   (declare graph-edge-count ((Graph :node-data :edge-data) -> Int))
   (define (graph-edge-count graph)
+    "Returns the number of edges in a graph"
     (vector-length (graph-edges graph)))
 
 
   (declare graph-lookup-node (NodeIndex -> (Graph :node-data :edge-data) -> (Optional (Node :node-data))))
-  (define (graph-lookup-node index graph)
-    (vector-index (into index) (graph-nodes graph)))
+  (define (graph-lookup-node idx g)
+    "Lookup a node with index IDX in graph G"
+    (vector-index (into idx) (graph-nodes g)))
 
   (declare graph-lookup-edge (EdgeIndex -> (Graph :node-data :edge-data) -> (Optional (Edge :edge-data))))
-  (define (graph-lookup-edge index graph)
-    (vector-index (into index) (graph-edges graph)))
+  (define (graph-lookup-edge idx g)
+    "Lookup a node with index IDX in graph G"
+    (vector-index (into idx) (graph-edges g)))
 
 
   (declare graph-add-node (:node-data -> (Graph :node-data :edge-data) -> NodeIndex))
@@ -232,6 +249,7 @@
 
   (declare graph-remove-node (NodeIndex -> (Graph :node-data :edge-data) -> (Optional :node-data)))
   (define (graph-remove-node index graph)
+    "Remove a node and all edges connecting to it from GRAPH"
     (let ((remove-edges
             (fn (idx accessor)
               (do (node_ <- (vector-index idx (graph-nodes graph)))
@@ -300,7 +318,6 @@
                  (Some (node-data node_)))))))))
 
 
-  ;; TODO: Do we want to have a safe and unsafe version?
   (declare graph-add-edge (:edge-data -> NodeIndex -> NodeIndex -> (Graph :node-data :edge-data) -> EdgeIndex))
   (define (graph-add-edge edge-data from to graph)
     "Add an edge with associated data from node FROM to node TO in the graph."
@@ -359,6 +376,7 @@
 
   (declare graph-remove-edge (EdgeIndex -> (Graph :node-data :edge-data) -> (Optional :edge-data)))
   (define (graph-remove-edge index graph)
+    "Remove an edge from GRAPH"
     (do (edge <- (vector-index (into index) (graph-edges graph)))
         (let _ = (change-edge-links (edge-node-pair edge) index (edge-next-pair edge) graph))
         (remove-edge-adjust-indices index graph)))
@@ -440,7 +458,9 @@
   (define (graph-viz graph_)
     (progn
       (let elements = (make-vector Unit))
-      (vector-push "digraph {" elements)
+      (if (graph-is-directed graph_)
+	  (vector-push "digraph {" elements)
+	  (vector-push "graph {" elements))
       (vector-foreach-index
        (fn (i node)
 	(vector-push
@@ -458,7 +478,9 @@
 	  (msum
 	  (make-list 
 	    (show (edge-from-index edge))
-	    " -> "
+	    (if (graph-is-directed graph_)
+		" -> "
+		" -- ")
 	    (show (edge-to-index edge))))
 	  elements))
        (graph-edges graph_))

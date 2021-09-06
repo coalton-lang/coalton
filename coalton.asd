@@ -111,4 +111,5 @@
                (:file "tarjan-scc-tests")
 	       (:file "type-inference-tests")
 	       (:file "direct-application-tests")
-               (:file "environment-persist-tests")))
+               (:file "environment-persist-tests")
+	       (:file "graph-tests")))
