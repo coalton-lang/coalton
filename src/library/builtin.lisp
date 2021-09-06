@@ -5,9 +5,13 @@
   ;; Built-in type instances
   ;;
 
-  ;;
-  ;; Int
-  ;;
+  (define-instance (Show String)
+    (define (show x) x))
+
+  (define-instance (Show Char)
+    (define (show x)
+      (lisp String (x)
+        (cl:string x))))
 
   (define-instance (Show Int)
     (define (show x)
@@ -149,18 +153,18 @@
   (define-instance (TryInto Single-Float Single-Float Int)
     (define (tryInto x)
       (lisp (Result Single-Float Int) (x)
-	(cl:if (cl:or (float-features:float-infinity-p x)
-		      (float-features:float-nan-p x))
-	       (Err x)
-	       (Ok (cl:coerce (cl:truncate x) '(cl:signed-byte 32)))))))
+        (cl:if (cl:or (float-features:float-infinity-p x)
+                      (float-features:float-nan-p x))
+               (Err x)
+               (Ok (cl:coerce (cl:truncate x) '(cl:signed-byte 32)))))))
 
   (define-instance (TryInto Double-Float Double-Float Int)
     (define (tryInto x)
       (lisp (Result Double-Float Int) (x)
-	(cl:if (cl:or (float-features:float-infinity-p x)
-		      (float-features:float-nan-p x))
-	       (Err x)
-	       (Ok (cl:coerce (cl:truncate x) '(cl:signed-byte 32)))))))
+        (cl:if (cl:or (float-features:float-infinity-p x)
+                      (float-features:float-nan-p x))
+               (Err x)
+               (Ok (cl:coerce (cl:truncate x) '(cl:signed-byte 32)))))))
 
   (define-instance (Into Int Double-Float)
     (define (into x) (fromInt x)))
@@ -189,11 +193,6 @@
   (define (lcm a b)
     (lisp Int (a b) (cl:lcm a b)))
 
-
-  ;;
-  ;; Char
-  ;;
-
   (define-instance (Eq Char)
     (define (== x y)
       (lisp Boolean (x y) (to-boolean (cl:char= x y))))
@@ -207,11 +206,6 @@
           (if (lisp Boolean (x y) (to-boolean (cl:char> x y)))
               GT
               LT))))
-
-
-  ;;
-  ;; String
-  ;;
 
   (define-instance (Eq String)
     (define (== s1 s2)

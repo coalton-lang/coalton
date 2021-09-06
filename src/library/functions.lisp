@@ -79,7 +79,7 @@
   (declare msum (Monoid :a => ((List :a) -> :a)))
   (define (msum xs)
     "Fold over a list using <>"
-    (fold <> mempty xs))
+    (foldr <> mempty xs))
 
   (declare asum (Alternative :f => ((List (:f :a)) -> (:f :a))))
   (define (asum xs)
