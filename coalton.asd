@@ -87,6 +87,7 @@
                              (:file "tuple")
                              (:file "result")
                              (:file "functions")
+			     (:file "cell")
 			     (:file "vector")))
                (:file "toplevel-environment")))
 
