@@ -7,19 +7,28 @@
          (component-path (asdf:component-pathname component))
          (*package* (find-package package))
          (value-info (get-doc-value-info env package))
-         (type-info (get-doc-type-info env package)))
+         (type-info (get-doc-type-info env package))
+         (class-info (get-doc-class-info env package)))
     (format stream "# Reference for ~A~%~%" package)
 
     
     (let ((type-info-by-file (make-hash-table :test #'equalp))
-          (value-info-by-file (make-hash-table :test #'equalp)))
-      ;; Sort the types by file
-      (loop :for entry :in value-info :do
-        (push entry (gethash (enough-namestring (fourth entry) component-path) value-info-by-file)))
+          (value-info-by-file (make-hash-table :test #'equalp))
+          (class-info-by-file (make-hash-table :test #'equalp)))
       
       ;; Sort the functions by file
+      (loop :for entry :in value-info :do
+        (push entry (gethash (enough-namestring (fourth entry) component-path) value-info-by-file)))
+
+      ;; Sort the types by file
       (loop :for entry :in type-info :do
         (push entry (gethash (enough-namestring (fifth entry) component-path) type-info-by-file)))
+
+      ;; Sort the classes by file
+      (loop :for entry :in class-info :do
+        (push entry (gethash (enough-namestring (coalton-impl/typechecker::ty-class-location entry) component-path)
+                             class-info-by-file)))
+
 
       (let ((filenames (mapcar (lambda (file)
                                  (file-namestring (asdf:component-relative-pathname file)))
@@ -59,7 +68,7 @@
                       
                       (format stream "Constructors:~%")
                       (loop :for (ctor-name . entry) :in ctors :do
-                        (format stream "`~A :: ~A`~%"
+                        (format stream "- `~A :: ~A`~%"
                                 ctor-name
                                 (coalton-impl/typechecker::instantiate type-vars
                                                                        (coalton-impl/typechecker::ty-scheme-type
@@ -75,8 +84,25 @@
                                  (ty-class-instance-constraints instance)
                                  (ty-class-instance-predicate instance))))))
 
-                  (format stream "~%")
+                  (format stream "***~%")
                   (format stream "~%")))
+
+              (when class-info
+                (format stream "### Classes~%~%")
+                (loop :for class :in class-info :do
+                  (let ((name (ty-class-name class))
+                        (context (ty-class-superclasses class))
+                        (pred (ty-class-predicate class))
+                        (methods (ty-class-unqualified-methods class)))
+                    (format stream "#### `~A`~%" name)
+                    (with-pprint-variable-context ()
+                      (format stream "~A~%~%"
+                              (write-predicate-to-markdown context pred))
+                      (format stream "Methods:~%")
+                      (loop :for (name . type) :in methods :do
+                        (format stream "- `~A :: ~A`~%" name type))))
+                  (format stream "~%***~%~%"))
+                (format stream "~%"))
               
               (when value-info
                 (format stream "### Functions~%~%")
@@ -85,7 +111,7 @@
                     (format stream "#### `~A`~%`~A`~%" name type)
                     (when docstring
                       (format stream "~%~A~%~%" docstring))
-                    (format stream "~%")))
+                    (format stream "~%***~%~%")))
                 (format stream "~%")))))))))
 
 (defun write-predicate-to-markdown (ctx pred)
@@ -131,6 +157,21 @@
       (lambda (x)
         (eql :value (name-entry-type (cdr x))))
       values))))
+
+(defun get-doc-class-info (env package)
+  (let ((values nil)
+        (package (find-package package)))
+    ;; Sort the entires by package
+    (fset:do-map (sym entry (shadow-realm-data (coalton-impl/typechecker::environment-class-environment env)))
+      ;; Only include exported symbols from our package
+      (when (and (equalp (symbol-package sym) package)
+                 (multiple-value-bind (symbol status)
+                     (find-symbol (symbol-name sym) package)
+                   (declare (ignore symbol))
+                   (eql :external status)))
+        (push entry values)))
+
+    values))
 
 (defun get-doc-type-info (env package)
   (let ((types nil)

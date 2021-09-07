@@ -82,7 +82,7 @@
 
 (serapeum:defstruct-read-only
     (ty-class
-     (:constructor ty-class (name predicate superclasses unqualified-methods codegen-sym superclass-dict)))
+     (:constructor ty-class (name predicate superclasses unqualified-methods codegen-sym superclass-dict location)))
   (name :type symbol)
   (predicate :type ty-predicate)
   (superclasses :type ty-predicate-list)
@@ -90,7 +90,8 @@
   ;; use in pretty printing
   (unqualified-methods :type scheme-binding-list)
   (codegen-sym :type symbol)
-  (superclass-dict :type list))
+  (superclass-dict :type list)
+  (location :type t))
 
 #+sbcl
 (declaim (sb-ext:freeze-type ty-class))
@@ -119,7 +120,8 @@
             (mapcar (lambda (entry)
                       (cons (apply-substitution subst-list (car entry))
                             (cdr entry)))
-                    (ty-class-superclass-dict class))))
+                    (ty-class-superclass-dict class))
+            (ty-class-location class)))
 
 (serapeum:defstruct-read-only (class-environment (:include shadow-realm)))
 
