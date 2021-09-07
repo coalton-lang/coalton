@@ -1,8 +1,27 @@
 # Intro to Coalton
 
-Coalton is a statically typed language that compiles to common lisp.
+Coalton is a statically typed language that is embedded in and
+compiles to Common Lisp.
 
-## Basics
+This document is aimed toward individuals with familiarity with
+strongly typed functional programming languages already.
+
+## Basics: Variables and Functions
+
+To start, we recommend changing your package to the `COALTON-USER`
+package like so:
+
+```lisp
+(in-package #:coalton-user)
+```
+
+This package does *not* `:use` the `COMMON-LISP` package, so you must
+prepend Common Lisp symbols with `cl:` if you need them.
+
+All Coalton code sits in a toplevel-form called `coalton-toplevel`. In
+this form, you can put definitions.
+
+Here are some variable definitions.
 
 ```lisp
 (coalton-toplevel
@@ -10,6 +29,7 @@ Coalton is a statically typed language that compiles to common lisp.
   (define x 5)
   (define y 6)
   (define z (+ x y))
+  (define p (Tuple 1.0 2.0))
 
   ;; Coalton supports integers, strings, booleans, and unit as primitive types
   (define name "Alyssa P. Hacker")
@@ -17,7 +37,9 @@ Coalton is a statically typed language that compiles to common lisp.
   (define data Unit))
 ```
 
-## Functions
+Functions are defined similarly. Unlike Common Lisp, Coalton functions
+occupy the same namespace as variables. This makes high-order
+functional programming easier.
 
 ```lisp
 (coalton-toplevel
@@ -31,6 +53,46 @@ Coalton is a statically typed language that compiles to common lisp.
   (define x (addTwo 3)))
 ```
 
+*All* functions in Coalton take *exactly* one input, and produce
+ *exactly* one output. Consider this function:
+
+```lisp
+(coalton-toplevel
+  (define (fma a b c)
+    (+ c (* a b))))
+```
+
+Truth be known, `fma` actually technically takes *one argument*:
+`a`. To a Common Lisper, this function is roughly equivalent to:
+
+```lisp
+(defun fma (a)
+  (lambda (b)
+    (lambda (c)
+      (+ c (* a b)))))
+```
+
+However, Coalton hides this reality from you unless you need it:
+
+```lisp
+(coalton-toplevel
+  (define fma1 (fma 2))      ; equiv: b -> (c -> (c + 2*b))
+  (define fma2 (fma 2 3))    ; equiv: c -> (c + 6)
+  (define fma3 (fma 2 3 4))) ; equiv: 10
+```
+
+We can see that we can call `fma` as if it's a three argument
+function, but that's merely convenient syntax. We can also call it
+with fewer arguments. Sometimes this property is called *curried
+functions*.
+
+Coalton does work to optimize these functions to reduce as much
+closure allocation as possible. In fact, `(fma x y z)` will get
+compiled as a simple add and multiply, without any closure
+allocations.
+
+Here is an example of using a curried function to transform a list.
+
 ```lisp
 (coalton-toplevel
   ;; Lists can be created with the make-list macro
@@ -40,7 +102,7 @@ Coalton is a statically typed language that compiles to common lisp.
   (map (+ 2) nums)) ;; 4 5 6 7
 ```
 
-There are convenient **syntaxes** for composing functions with the
+There are convenient *syntaxes* for composing functions with the
 `pipe` and `nest` macros:
 
 ```lisp
@@ -59,15 +121,17 @@ These are useful to make code less noisy.
 
 Note that since these are macros (indicated by their variadic
 arguments), they cannot be used as high-order functions. Consider
-either curring or the `compose` function if you're thinking in that
+either currying or the `compose` function if you're thinking in that
 direction.
 
 ## Data Types
 
+Coalton allows the definition of parametric algebraic data types.
+
 ```lisp
 (coalton-toplevel
-  ;; New types are created with the define-type keyword
-  (define-type Point3D (Pont3D Int Int Int))
+  ;; New types are created with the DEFINE-TYPE operator
+  (define-type Point3D (Point3D Int Int Int))
 
   ;; Coalton supports sum types
   (define-type Color
@@ -75,31 +139,54 @@ direction.
     Blue
     Green)
 
-  ;; Coalton supports generic types
+  ;; Coalton supports generic type variables
+  ;;
   ;; Type paramaters are defined using keyword arguments
   (define-type (Tree :a)
     (Branch (Tree :a) :a (Tree :a))
     (Leaf :a)))
 ```
 
+We'll see how to unpack these types using `match` below.
+
+
 ## Lists
 
-Coalton has a list defined as
+Coalton has a list data type defined as
 
 ```lisp
 (coalton-toplevel
  (define-type (List :a)
-   (Cons :a)
+   (Cons :a (List :a))
    Nil))
 ```
 
-Coalton also has a shorthand for constructing lists called `make-list`.
+Coalton lists are not Lisp lists.
+
+
+Coalton also has a syntactic shorthand for constructing lists called `make-list`.
 
 ```lisp
 (coalton-toplevel
   (define x (make-list 1 2 3))
   (define y (make-list "a" "b" "c")))
 ```
+
+
+Lists must be homogeneous. This means the following produces a type error.
+
+```
+COALTON-USER> (coalton-toplevel
+                (define wut (make-list 1 2 3.0)))
+
+Failed to unify types SINGLE-FLOAT and INTEGER
+in unification of types (INTEGER → (LIST SINGLE-FLOAT) → :A) and (:B → (LIST :B) → (LIST :B))
+in definition of WUT
+in COALTON-TOPLEVEL
+   [Condition of type COALTON-IMPL/TYPECHECKER::COALTON-TYPE-ERROR-CONTEXT]
+```
+
+
 
 ## Static Typing
 
@@ -129,7 +216,8 @@ Type annotations can always be added manually
 
 ## Match expressions
 
-Match expressions can be used to pattern match types
+Match expressions can be used to pattern-match and deconstruct
+algebraic data types:
 
 ```lisp
 (coalton-toplevel
@@ -145,8 +233,6 @@ Match expressions can be used to pattern match types
       ((Red) "Red")
       ((Blue) "Blue")
       ((Green) "Green")))
-
-  (define-type (Optional :a) (Some :a) None)
 
   ;; Variables are not wrapped in parenthesies
   (declare map-optional ((:a -> :b) -> (Optional :a) -> (Optional :b)))
@@ -164,7 +250,6 @@ Match expressions can be used to pattern match types
 
 
   ;; Literal values can also be matched on
-
   (define (is-5-or-7 x)
     (match x
       (5 True)
@@ -172,22 +257,23 @@ Match expressions can be used to pattern match types
       (_ False))))
 ```
 
-If can be used as a shorthand when matching on booleans
+The operator `coalton:if` can be used as a shorthand when matching on
+booleans
 
 ```lisp
 (coalton-toplevel
   (define (is-even x)
     (if (== 0 x)
-      True
-      (is-odd (- x 1))))
+        True
+        (is-odd (- x 1))))
 
   (define (is-odd x)
     (if (== 0 x)
-      False
-      (is-even (- x 1)))))
+        False
+        (is-even (- x 1)))))
 ```
 
-Several If expressions can be combined with a cond
+Several `if` expressions can be combined with a `coalton:cond`:
 
 ```lisp
 (coalton-toplevel
@@ -203,7 +289,9 @@ Several If expressions can be combined with a cond
       (True (show n)))))
 ```
 
-Coalton also has `unless` and `when` which work similary to their definitions in lisp.
+Coalton also has `coalton:unless` and `coalton:when` which work
+similary to their definitions in Lisp. We recommend only using these
+operators for conditionalizing stateful operations.
 
 ```
 (coalton-toplevel
@@ -212,9 +300,9 @@ Coalton also has `unless` and `when` which work similary to their definitions in
       (error "I only want the number 5"))))
 ```
 
-### Progn
+### `COALTON:PROGN`
 
-Coalton has a progn construct similar to lisp.
+Coalton has a `coalton:progn` construct similar to lisp.
 
 ```lisp
 (coalton-toplevel
@@ -226,7 +314,7 @@ Coalton has a progn construct similar to lisp.
       (Tuple x y))))
 ```
 
-Coalton's progn can have let forms.
+Coalton's `progn` can have flattened `let` syntax.
 
 ```lisp
 (coalton-toplevel
@@ -240,6 +328,9 @@ Coalton's progn can have let forms.
 ## Typeclasses
 
 Coalton supports typeclasses.
+
+Currently, *all* member functions must be defined for each typeclass
+instance.
 
 ```lisp
 (coalton-toplevel
@@ -297,7 +388,8 @@ Coalton supports typeclasses.
 
 ## Do Notation
 
-Coalton has a do notation macro that works similary to do notation in Haskell.
+Coalton has a do-notation macro that works similary to do notation in
+Haskell.
 
 ```lisp
 (coalton-toplevel
