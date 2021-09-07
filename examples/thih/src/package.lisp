@@ -5,7 +5,7 @@
   (:use #:coalton
         #:coalton-user)
   (:shadow #:id #:find #:const #:alt
-           #:type)
+           #:type #:compose)
   (:export
    #:Id
    
