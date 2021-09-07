@@ -73,6 +73,10 @@ Returns (VALUES type predicate-list typed-node subs)")
            (rands (node-application-rands value))
            (ret-ty (make-variable))
            (typed-rands nil))
+
+      (when (null rands)
+	(coalton-impl::coalton-bug "Invalid application with 0 arguments ~A." rator))
+
       (multiple-value-bind (fun-ty fun-preds typed-rator substs)
           (derive-expression-type rator env substs)
         (unless (or (tvar-p fun-ty)
