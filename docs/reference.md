@@ -4,7 +4,7 @@
 
 ### Types
 
-#### `LIST :A`<a name="LIST"></a>
+#### `LIST :A` <sup><sub>[TYPE]</sub></sup><a name="LIST"></a>
 - `(CONS :A (LIST :A))`
 - `NIL`
 
@@ -33,7 +33,7 @@ Constructors:
 
 ***
 
-#### `TUPLE :A :B`<a name="TUPLE"></a>
+#### `TUPLE :A :B` <sup><sub>[TYPE]</sub></sup><a name="TUPLE"></a>
 - `(TUPLE :A :B)`
 
 Constructors:
@@ -51,7 +51,7 @@ Constructors:
 
 ***
 
-#### `RESULT :A :B`<a name="RESULT"></a>
+#### `RESULT :A :B` <sup><sub>[TYPE]</sub></sup><a name="RESULT"></a>
 - `(ERR :A)`
 - `(OK :B)`
 
@@ -78,7 +78,7 @@ Constructors:
 
 ***
 
-#### `BOOLEAN`
+#### `BOOLEAN`<sup><sub>[TYPE]</sub></sup><a name="BOOLEAN"></a>
 - `FALSE`
 - `TRUE`
 
@@ -97,7 +97,7 @@ Constructors:
 
 ***
 
-#### `OPTIONAL :A`<a name="OPTIONAL"></a>
+#### `OPTIONAL :A` <sup><sub>[TYPE]</sub></sup><a name="OPTIONAL"></a>
 - `(SOME :A)`
 - `NONE`
 
@@ -129,7 +129,7 @@ Constructors:
 
 ### Classes
 
-#### `APPLICATIVE`
+#### `APPLICATIVE` <sup><sub>[CLASS]</sub></sup><a name="APPLICATIVE"></a>
 [`FUNCTOR :A`](#FUNCTOR) `=>` [`APPLICATIVE`](#APPLICATIVE) [`:A`](#:A)
 
 Methods:
@@ -138,7 +138,7 @@ Methods:
 
 ***
 
-#### `SEMIGROUP`
+#### `SEMIGROUP` <sup><sub>[CLASS]</sub></sup><a name="SEMIGROUP"></a>
 [`SEMIGROUP`](#SEMIGROUP) [`:A`](#:A)
 
 Methods:
@@ -146,7 +146,7 @@ Methods:
 
 ***
 
-#### `MONADFAIL`
+#### `MONADFAIL` <sup><sub>[CLASS]</sub></sup><a name="MONADFAIL"></a>
 [`MONAD :A`](#MONAD) `=>` [`MONADFAIL`](#MONADFAIL) [`:A`](#:A)
 
 Methods:
@@ -154,7 +154,7 @@ Methods:
 
 ***
 
-#### `TRYINTO`
+#### `TRYINTO` <sup><sub>[CLASS]</sub></sup><a name="TRYINTO"></a>
 [`TRYINTO`](#TRYINTO) [`:A`](#:A) [`:B`](#:B) [`:C`](#:C)
 
 Methods:
@@ -162,7 +162,7 @@ Methods:
 
 ***
 
-#### `FUNCTOR`
+#### `FUNCTOR` <sup><sub>[CLASS]</sub></sup><a name="FUNCTOR"></a>
 [`FUNCTOR`](#FUNCTOR) [`:A`](#:A)
 
 Methods:
@@ -170,7 +170,7 @@ Methods:
 
 ***
 
-#### `MONOID`
+#### `MONOID` <sup><sub>[CLASS]</sub></sup><a name="MONOID"></a>
 [`SEMIGROUP :A`](#SEMIGROUP) `=>` [`MONOID`](#MONOID) [`:A`](#:A)
 
 Methods:
@@ -178,7 +178,7 @@ Methods:
 
 ***
 
-#### `MONAD`
+#### `MONAD` <sup><sub>[CLASS]</sub></sup><a name="MONAD"></a>
 [`APPLICATIVE :A`](#APPLICATIVE) `=>` [`MONAD`](#MONAD) [`:A`](#:A)
 
 Methods:
@@ -187,7 +187,7 @@ Methods:
 
 ***
 
-#### `SHOW`
+#### `SHOW` <sup><sub>[CLASS]</sub></sup><a name="SHOW"></a>
 [`SHOW`](#SHOW) [`:A`](#:A)
 
 Methods:
@@ -195,7 +195,7 @@ Methods:
 
 ***
 
-#### `INTO`
+#### `INTO` <sup><sub>[CLASS]</sub></sup><a name="INTO"></a>
 [`INTO`](#INTO) [`:A`](#:A) [`:B`](#:B)
 
 Methods:
@@ -203,7 +203,7 @@ Methods:
 
 ***
 
-#### `ORD`
+#### `ORD` <sup><sub>[CLASS]</sub></sup><a name="ORD"></a>
 [`EQ :A`](#EQ) `=>` [`ORD`](#ORD) [`:A`](#:A)
 
 Methods:
@@ -211,7 +211,7 @@ Methods:
 
 ***
 
-#### `NUM`
+#### `NUM` <sup><sub>[CLASS]</sub></sup><a name="NUM"></a>
 [`EQ :A`](#EQ) [`SHOW :A`](#SHOW) `=>` [`NUM`](#NUM) [`:A`](#:A)
 
 Methods:
@@ -222,7 +222,7 @@ Methods:
 
 ***
 
-#### `EQ`
+#### `EQ` <sup><sub>[CLASS]</sub></sup><a name="EQ"></a>
 [`EQ`](#EQ) [`:A`](#:A)
 
 Methods:
@@ -234,27 +234,27 @@ Methods:
 
 ### Functions
 
-#### `OR`
+#### `OR` <sup><sub>[FUNCTION]</sub></sup><a name="OR"></a>
 `(BOOLEAN → BOOLEAN → BOOLEAN)`
 
 ***
 
-#### `AND`
+#### `AND` <sup><sub>[FUNCTION]</sub></sup><a name="AND"></a>
 `(BOOLEAN → BOOLEAN → BOOLEAN)`
 
 ***
 
-#### `NOT`
+#### `NOT` <sup><sub>[FUNCTION]</sub></sup><a name="NOT"></a>
 `(BOOLEAN → BOOLEAN)`
 
 ***
 
-#### `XOR`
+#### `XOR` <sup><sub>[FUNCTION]</sub></sup><a name="XOR"></a>
 `(BOOLEAN → BOOLEAN → BOOLEAN)`
 
 ***
 
-#### `UNDEFINED`
+#### `UNDEFINED` <sup><sub>[FUNCTION]</sub></sup><a name="UNDEFINED"></a>
 `∀ :A :B. (:A → :B)`
 
 ***
@@ -264,7 +264,7 @@ Methods:
 
 ### Types
 
-#### `ORD`
+#### `ORD`<sup><sub>[TYPE]</sub></sup><a name="ORD"></a>
 - `LT`
 - `GT`
 - `EQ`
@@ -278,7 +278,7 @@ Constructors:
 
 ### Classes
 
-#### `APPLICATIVE`
+#### `APPLICATIVE` <sup><sub>[CLASS]</sub></sup><a name="APPLICATIVE"></a>
 [`FUNCTOR :A`](#FUNCTOR) `=>` [`APPLICATIVE`](#APPLICATIVE) [`:A`](#:A)
 
 Methods:
@@ -287,7 +287,7 @@ Methods:
 
 ***
 
-#### `SEMIGROUP`
+#### `SEMIGROUP` <sup><sub>[CLASS]</sub></sup><a name="SEMIGROUP"></a>
 [`SEMIGROUP`](#SEMIGROUP) [`:A`](#:A)
 
 Methods:
@@ -295,7 +295,7 @@ Methods:
 
 ***
 
-#### `MONADFAIL`
+#### `MONADFAIL` <sup><sub>[CLASS]</sub></sup><a name="MONADFAIL"></a>
 [`MONAD :A`](#MONAD) `=>` [`MONADFAIL`](#MONADFAIL) [`:A`](#:A)
 
 Methods:
@@ -303,7 +303,7 @@ Methods:
 
 ***
 
-#### `TRYINTO`
+#### `TRYINTO` <sup><sub>[CLASS]</sub></sup><a name="TRYINTO"></a>
 [`TRYINTO`](#TRYINTO) [`:A`](#:A) [`:B`](#:B) [`:C`](#:C)
 
 Methods:
@@ -311,7 +311,7 @@ Methods:
 
 ***
 
-#### `FUNCTOR`
+#### `FUNCTOR` <sup><sub>[CLASS]</sub></sup><a name="FUNCTOR"></a>
 [`FUNCTOR`](#FUNCTOR) [`:A`](#:A)
 
 Methods:
@@ -319,7 +319,7 @@ Methods:
 
 ***
 
-#### `MONOID`
+#### `MONOID` <sup><sub>[CLASS]</sub></sup><a name="MONOID"></a>
 [`SEMIGROUP :A`](#SEMIGROUP) `=>` [`MONOID`](#MONOID) [`:A`](#:A)
 
 Methods:
@@ -327,7 +327,7 @@ Methods:
 
 ***
 
-#### `MONAD`
+#### `MONAD` <sup><sub>[CLASS]</sub></sup><a name="MONAD"></a>
 [`APPLICATIVE :A`](#APPLICATIVE) `=>` [`MONAD`](#MONAD) [`:A`](#:A)
 
 Methods:
@@ -336,7 +336,7 @@ Methods:
 
 ***
 
-#### `SHOW`
+#### `SHOW` <sup><sub>[CLASS]</sub></sup><a name="SHOW"></a>
 [`SHOW`](#SHOW) [`:A`](#:A)
 
 Methods:
@@ -344,7 +344,7 @@ Methods:
 
 ***
 
-#### `INTO`
+#### `INTO` <sup><sub>[CLASS]</sub></sup><a name="INTO"></a>
 [`INTO`](#INTO) [`:A`](#:A) [`:B`](#:B)
 
 Methods:
@@ -352,7 +352,7 @@ Methods:
 
 ***
 
-#### `ORD`
+#### `ORD` <sup><sub>[CLASS]</sub></sup><a name="ORD"></a>
 [`EQ :A`](#EQ) `=>` [`ORD`](#ORD) [`:A`](#:A)
 
 Methods:
@@ -360,7 +360,7 @@ Methods:
 
 ***
 
-#### `NUM`
+#### `NUM` <sup><sub>[CLASS]</sub></sup><a name="NUM"></a>
 [`EQ :A`](#EQ) [`SHOW :A`](#SHOW) `=>` [`NUM`](#NUM) [`:A`](#:A)
 
 Methods:
@@ -371,7 +371,7 @@ Methods:
 
 ***
 
-#### `EQ`
+#### `EQ` <sup><sub>[CLASS]</sub></sup><a name="EQ"></a>
 [`EQ`](#EQ) [`:A`](#:A)
 
 Methods:
@@ -383,32 +383,32 @@ Methods:
 
 ### Functions
 
-#### `<`
+#### `<` <sup><sub>[FUNCTION]</sub></sup><a name="<"></a>
 `∀ :A. ORD :A ⇒ (:A → :A → BOOLEAN)`
 
 ***
 
-#### `>`
+#### `>` <sup><sub>[FUNCTION]</sub></sup><a name=">"></a>
 `∀ :A. ORD :A ⇒ (:A → :A → BOOLEAN)`
 
 ***
 
-#### `<=`
+#### `<=` <sup><sub>[FUNCTION]</sub></sup><a name="<="></a>
 `∀ :A. ORD :A ⇒ (:A → :A → BOOLEAN)`
 
 ***
 
-#### `>=`
+#### `>=` <sup><sub>[FUNCTION]</sub></sup><a name=">="></a>
 `∀ :A. ORD :A ⇒ (:A → :A → BOOLEAN)`
 
 ***
 
-#### `MAX`
+#### `MAX` <sup><sub>[FUNCTION]</sub></sup><a name="MAX"></a>
 `∀ :A. ORD :A ⇒ (:A → :A → :A)`
 
 ***
 
-#### `MIN`
+#### `MIN` <sup><sub>[FUNCTION]</sub></sup><a name="MIN"></a>
 `∀ :A. ORD :A ⇒ (:A → :A → :A)`
 
 ***
@@ -418,7 +418,7 @@ Methods:
 
 ### Classes
 
-#### `APPLICATIVE`
+#### `APPLICATIVE` <sup><sub>[CLASS]</sub></sup><a name="APPLICATIVE"></a>
 [`FUNCTOR :A`](#FUNCTOR) `=>` [`APPLICATIVE`](#APPLICATIVE) [`:A`](#:A)
 
 Methods:
@@ -427,7 +427,7 @@ Methods:
 
 ***
 
-#### `SEMIGROUP`
+#### `SEMIGROUP` <sup><sub>[CLASS]</sub></sup><a name="SEMIGROUP"></a>
 [`SEMIGROUP`](#SEMIGROUP) [`:A`](#:A)
 
 Methods:
@@ -435,7 +435,7 @@ Methods:
 
 ***
 
-#### `MONADFAIL`
+#### `MONADFAIL` <sup><sub>[CLASS]</sub></sup><a name="MONADFAIL"></a>
 [`MONAD :A`](#MONAD) `=>` [`MONADFAIL`](#MONADFAIL) [`:A`](#:A)
 
 Methods:
@@ -443,7 +443,7 @@ Methods:
 
 ***
 
-#### `TRYINTO`
+#### `TRYINTO` <sup><sub>[CLASS]</sub></sup><a name="TRYINTO"></a>
 [`TRYINTO`](#TRYINTO) [`:A`](#:A) [`:B`](#:B) [`:C`](#:C)
 
 Methods:
@@ -451,7 +451,7 @@ Methods:
 
 ***
 
-#### `FUNCTOR`
+#### `FUNCTOR` <sup><sub>[CLASS]</sub></sup><a name="FUNCTOR"></a>
 [`FUNCTOR`](#FUNCTOR) [`:A`](#:A)
 
 Methods:
@@ -459,7 +459,7 @@ Methods:
 
 ***
 
-#### `MONOID`
+#### `MONOID` <sup><sub>[CLASS]</sub></sup><a name="MONOID"></a>
 [`SEMIGROUP :A`](#SEMIGROUP) `=>` [`MONOID`](#MONOID) [`:A`](#:A)
 
 Methods:
@@ -467,7 +467,7 @@ Methods:
 
 ***
 
-#### `MONAD`
+#### `MONAD` <sup><sub>[CLASS]</sub></sup><a name="MONAD"></a>
 [`APPLICATIVE :A`](#APPLICATIVE) `=>` [`MONAD`](#MONAD) [`:A`](#:A)
 
 Methods:
@@ -476,7 +476,7 @@ Methods:
 
 ***
 
-#### `SHOW`
+#### `SHOW` <sup><sub>[CLASS]</sub></sup><a name="SHOW"></a>
 [`SHOW`](#SHOW) [`:A`](#:A)
 
 Methods:
@@ -484,7 +484,7 @@ Methods:
 
 ***
 
-#### `INTO`
+#### `INTO` <sup><sub>[CLASS]</sub></sup><a name="INTO"></a>
 [`INTO`](#INTO) [`:A`](#:A) [`:B`](#:B)
 
 Methods:
@@ -492,7 +492,7 @@ Methods:
 
 ***
 
-#### `ORD`
+#### `ORD` <sup><sub>[CLASS]</sub></sup><a name="ORD"></a>
 [`EQ :A`](#EQ) `=>` [`ORD`](#ORD) [`:A`](#:A)
 
 Methods:
@@ -500,7 +500,7 @@ Methods:
 
 ***
 
-#### `NUM`
+#### `NUM` <sup><sub>[CLASS]</sub></sup><a name="NUM"></a>
 [`EQ :A`](#EQ) [`SHOW :A`](#SHOW) `=>` [`NUM`](#NUM) [`:A`](#:A)
 
 Methods:
@@ -511,7 +511,7 @@ Methods:
 
 ***
 
-#### `EQ`
+#### `EQ` <sup><sub>[CLASS]</sub></sup><a name="EQ"></a>
 [`EQ`](#EQ) [`:A`](#:A)
 
 Methods:
@@ -523,32 +523,32 @@ Methods:
 
 ### Functions
 
-#### `GCD`
+#### `GCD` <sup><sub>[FUNCTION]</sub></sup><a name="GCD"></a>
 `(INT → INT → INT)`
 
 ***
 
-#### `LCM`
+#### `LCM` <sup><sub>[FUNCTION]</sub></sup><a name="LCM"></a>
 `(INT → INT → INT)`
 
 ***
 
-#### `MOD`
+#### `MOD` <sup><sub>[FUNCTION]</sub></sup><a name="MOD"></a>
 `(INT → INT → INT)`
 
 ***
 
-#### `ODD`
+#### `ODD` <sup><sub>[FUNCTION]</sub></sup><a name="ODD"></a>
 `(INT → BOOLEAN)`
 
 ***
 
-#### `EVEN`
+#### `EVEN` <sup><sub>[FUNCTION]</sub></sup><a name="EVEN"></a>
 `(INT → BOOLEAN)`
 
 ***
 
-#### `EXPT`
+#### `EXPT` <sup><sub>[FUNCTION]</sub></sup><a name="EXPT"></a>
 `(INT → INT → INT)`
 
 ***
@@ -558,7 +558,7 @@ Methods:
 
 ### Classes
 
-#### `APPLICATIVE`
+#### `APPLICATIVE` <sup><sub>[CLASS]</sub></sup><a name="APPLICATIVE"></a>
 [`FUNCTOR :A`](#FUNCTOR) `=>` [`APPLICATIVE`](#APPLICATIVE) [`:A`](#:A)
 
 Methods:
@@ -567,7 +567,7 @@ Methods:
 
 ***
 
-#### `SEMIGROUP`
+#### `SEMIGROUP` <sup><sub>[CLASS]</sub></sup><a name="SEMIGROUP"></a>
 [`SEMIGROUP`](#SEMIGROUP) [`:A`](#:A)
 
 Methods:
@@ -575,7 +575,7 @@ Methods:
 
 ***
 
-#### `MONADFAIL`
+#### `MONADFAIL` <sup><sub>[CLASS]</sub></sup><a name="MONADFAIL"></a>
 [`MONAD :A`](#MONAD) `=>` [`MONADFAIL`](#MONADFAIL) [`:A`](#:A)
 
 Methods:
@@ -583,7 +583,7 @@ Methods:
 
 ***
 
-#### `TRYINTO`
+#### `TRYINTO` <sup><sub>[CLASS]</sub></sup><a name="TRYINTO"></a>
 [`TRYINTO`](#TRYINTO) [`:A`](#:A) [`:B`](#:B) [`:C`](#:C)
 
 Methods:
@@ -591,7 +591,7 @@ Methods:
 
 ***
 
-#### `FUNCTOR`
+#### `FUNCTOR` <sup><sub>[CLASS]</sub></sup><a name="FUNCTOR"></a>
 [`FUNCTOR`](#FUNCTOR) [`:A`](#:A)
 
 Methods:
@@ -599,7 +599,7 @@ Methods:
 
 ***
 
-#### `MONOID`
+#### `MONOID` <sup><sub>[CLASS]</sub></sup><a name="MONOID"></a>
 [`SEMIGROUP :A`](#SEMIGROUP) `=>` [`MONOID`](#MONOID) [`:A`](#:A)
 
 Methods:
@@ -607,7 +607,7 @@ Methods:
 
 ***
 
-#### `MONAD`
+#### `MONAD` <sup><sub>[CLASS]</sub></sup><a name="MONAD"></a>
 [`APPLICATIVE :A`](#APPLICATIVE) `=>` [`MONAD`](#MONAD) [`:A`](#:A)
 
 Methods:
@@ -616,7 +616,7 @@ Methods:
 
 ***
 
-#### `SHOW`
+#### `SHOW` <sup><sub>[CLASS]</sub></sup><a name="SHOW"></a>
 [`SHOW`](#SHOW) [`:A`](#:A)
 
 Methods:
@@ -624,7 +624,7 @@ Methods:
 
 ***
 
-#### `INTO`
+#### `INTO` <sup><sub>[CLASS]</sub></sup><a name="INTO"></a>
 [`INTO`](#INTO) [`:A`](#:A) [`:B`](#:B)
 
 Methods:
@@ -632,7 +632,7 @@ Methods:
 
 ***
 
-#### `ORD`
+#### `ORD` <sup><sub>[CLASS]</sub></sup><a name="ORD"></a>
 [`EQ :A`](#EQ) `=>` [`ORD`](#ORD) [`:A`](#:A)
 
 Methods:
@@ -640,7 +640,7 @@ Methods:
 
 ***
 
-#### `NUM`
+#### `NUM` <sup><sub>[CLASS]</sub></sup><a name="NUM"></a>
 [`EQ :A`](#EQ) [`SHOW :A`](#SHOW) `=>` [`NUM`](#NUM) [`:A`](#:A)
 
 Methods:
@@ -651,7 +651,7 @@ Methods:
 
 ***
 
-#### `EQ`
+#### `EQ` <sup><sub>[CLASS]</sub></sup><a name="EQ"></a>
 [`EQ`](#EQ) [`:A`](#:A)
 
 Methods:
@@ -663,22 +663,22 @@ Methods:
 
 ### Functions
 
-#### `PARSE-INT`
+#### `PARSE-INT` <sup><sub>[FUNCTION]</sub></sup><a name="PARSE-INT"></a>
 `(STRING → (OPTIONAL INT))`
 
 ***
 
-#### `PACK-STRING`
+#### `PACK-STRING` <sup><sub>[FUNCTION]</sub></sup><a name="PACK-STRING"></a>
 `((LIST CHAR) → STRING)`
 
 ***
 
-#### `CONCAT-STRING`
+#### `CONCAT-STRING` <sup><sub>[FUNCTION]</sub></sup><a name="CONCAT-STRING"></a>
 `(STRING → STRING → STRING)`
 
 ***
 
-#### `UNPACK-STRING`
+#### `UNPACK-STRING` <sup><sub>[FUNCTION]</sub></sup><a name="UNPACK-STRING"></a>
 `(STRING → (LIST CHAR))`
 
 ***
@@ -688,7 +688,7 @@ Methods:
 
 ### Classes
 
-#### `APPLICATIVE`
+#### `APPLICATIVE` <sup><sub>[CLASS]</sub></sup><a name="APPLICATIVE"></a>
 [`FUNCTOR :A`](#FUNCTOR) `=>` [`APPLICATIVE`](#APPLICATIVE) [`:A`](#:A)
 
 Methods:
@@ -697,7 +697,7 @@ Methods:
 
 ***
 
-#### `SEMIGROUP`
+#### `SEMIGROUP` <sup><sub>[CLASS]</sub></sup><a name="SEMIGROUP"></a>
 [`SEMIGROUP`](#SEMIGROUP) [`:A`](#:A)
 
 Methods:
@@ -705,7 +705,7 @@ Methods:
 
 ***
 
-#### `MONADFAIL`
+#### `MONADFAIL` <sup><sub>[CLASS]</sub></sup><a name="MONADFAIL"></a>
 [`MONAD :A`](#MONAD) `=>` [`MONADFAIL`](#MONADFAIL) [`:A`](#:A)
 
 Methods:
@@ -713,7 +713,7 @@ Methods:
 
 ***
 
-#### `TRYINTO`
+#### `TRYINTO` <sup><sub>[CLASS]</sub></sup><a name="TRYINTO"></a>
 [`TRYINTO`](#TRYINTO) [`:A`](#:A) [`:B`](#:B) [`:C`](#:C)
 
 Methods:
@@ -721,7 +721,7 @@ Methods:
 
 ***
 
-#### `FUNCTOR`
+#### `FUNCTOR` <sup><sub>[CLASS]</sub></sup><a name="FUNCTOR"></a>
 [`FUNCTOR`](#FUNCTOR) [`:A`](#:A)
 
 Methods:
@@ -729,7 +729,7 @@ Methods:
 
 ***
 
-#### `MONOID`
+#### `MONOID` <sup><sub>[CLASS]</sub></sup><a name="MONOID"></a>
 [`SEMIGROUP :A`](#SEMIGROUP) `=>` [`MONOID`](#MONOID) [`:A`](#:A)
 
 Methods:
@@ -737,7 +737,7 @@ Methods:
 
 ***
 
-#### `MONAD`
+#### `MONAD` <sup><sub>[CLASS]</sub></sup><a name="MONAD"></a>
 [`APPLICATIVE :A`](#APPLICATIVE) `=>` [`MONAD`](#MONAD) [`:A`](#:A)
 
 Methods:
@@ -746,7 +746,7 @@ Methods:
 
 ***
 
-#### `SHOW`
+#### `SHOW` <sup><sub>[CLASS]</sub></sup><a name="SHOW"></a>
 [`SHOW`](#SHOW) [`:A`](#:A)
 
 Methods:
@@ -754,7 +754,7 @@ Methods:
 
 ***
 
-#### `INTO`
+#### `INTO` <sup><sub>[CLASS]</sub></sup><a name="INTO"></a>
 [`INTO`](#INTO) [`:A`](#:A) [`:B`](#:B)
 
 Methods:
@@ -762,7 +762,7 @@ Methods:
 
 ***
 
-#### `ORD`
+#### `ORD` <sup><sub>[CLASS]</sub></sup><a name="ORD"></a>
 [`EQ :A`](#EQ) `=>` [`ORD`](#ORD) [`:A`](#:A)
 
 Methods:
@@ -770,7 +770,7 @@ Methods:
 
 ***
 
-#### `NUM`
+#### `NUM` <sup><sub>[CLASS]</sub></sup><a name="NUM"></a>
 [`EQ :A`](#EQ) [`SHOW :A`](#SHOW) `=>` [`NUM`](#NUM) [`:A`](#:A)
 
 Methods:
@@ -781,7 +781,7 @@ Methods:
 
 ***
 
-#### `EQ`
+#### `EQ` <sup><sub>[CLASS]</sub></sup><a name="EQ"></a>
 [`EQ`](#EQ) [`:A`](#:A)
 
 Methods:
@@ -793,17 +793,17 @@ Methods:
 
 ### Functions
 
-#### `ISNONE`
+#### `ISNONE` <sup><sub>[FUNCTION]</sub></sup><a name="ISNONE"></a>
 `∀ :A. ((OPTIONAL :A) → BOOLEAN)`
 
 ***
 
-#### `ISSOME`
+#### `ISSOME` <sup><sub>[FUNCTION]</sub></sup><a name="ISSOME"></a>
 `∀ :A. ((OPTIONAL :A) → BOOLEAN)`
 
 ***
 
-#### `FROMSOME`
+#### `FROMSOME` <sup><sub>[FUNCTION]</sub></sup><a name="FROMSOME"></a>
 `∀ :A. (STRING → (OPTIONAL :A) → :A)`
 
 ***
@@ -813,7 +813,7 @@ Methods:
 
 ### Classes
 
-#### `APPLICATIVE`
+#### `APPLICATIVE` <sup><sub>[CLASS]</sub></sup><a name="APPLICATIVE"></a>
 [`FUNCTOR :A`](#FUNCTOR) `=>` [`APPLICATIVE`](#APPLICATIVE) [`:A`](#:A)
 
 Methods:
@@ -822,7 +822,7 @@ Methods:
 
 ***
 
-#### `SEMIGROUP`
+#### `SEMIGROUP` <sup><sub>[CLASS]</sub></sup><a name="SEMIGROUP"></a>
 [`SEMIGROUP`](#SEMIGROUP) [`:A`](#:A)
 
 Methods:
@@ -830,7 +830,7 @@ Methods:
 
 ***
 
-#### `MONADFAIL`
+#### `MONADFAIL` <sup><sub>[CLASS]</sub></sup><a name="MONADFAIL"></a>
 [`MONAD :A`](#MONAD) `=>` [`MONADFAIL`](#MONADFAIL) [`:A`](#:A)
 
 Methods:
@@ -838,7 +838,7 @@ Methods:
 
 ***
 
-#### `TRYINTO`
+#### `TRYINTO` <sup><sub>[CLASS]</sub></sup><a name="TRYINTO"></a>
 [`TRYINTO`](#TRYINTO) [`:A`](#:A) [`:B`](#:B) [`:C`](#:C)
 
 Methods:
@@ -846,7 +846,7 @@ Methods:
 
 ***
 
-#### `FUNCTOR`
+#### `FUNCTOR` <sup><sub>[CLASS]</sub></sup><a name="FUNCTOR"></a>
 [`FUNCTOR`](#FUNCTOR) [`:A`](#:A)
 
 Methods:
@@ -854,7 +854,7 @@ Methods:
 
 ***
 
-#### `MONOID`
+#### `MONOID` <sup><sub>[CLASS]</sub></sup><a name="MONOID"></a>
 [`SEMIGROUP :A`](#SEMIGROUP) `=>` [`MONOID`](#MONOID) [`:A`](#:A)
 
 Methods:
@@ -862,7 +862,7 @@ Methods:
 
 ***
 
-#### `MONAD`
+#### `MONAD` <sup><sub>[CLASS]</sub></sup><a name="MONAD"></a>
 [`APPLICATIVE :A`](#APPLICATIVE) `=>` [`MONAD`](#MONAD) [`:A`](#:A)
 
 Methods:
@@ -871,7 +871,7 @@ Methods:
 
 ***
 
-#### `SHOW`
+#### `SHOW` <sup><sub>[CLASS]</sub></sup><a name="SHOW"></a>
 [`SHOW`](#SHOW) [`:A`](#:A)
 
 Methods:
@@ -879,7 +879,7 @@ Methods:
 
 ***
 
-#### `INTO`
+#### `INTO` <sup><sub>[CLASS]</sub></sup><a name="INTO"></a>
 [`INTO`](#INTO) [`:A`](#:A) [`:B`](#:B)
 
 Methods:
@@ -887,7 +887,7 @@ Methods:
 
 ***
 
-#### `ORD`
+#### `ORD` <sup><sub>[CLASS]</sub></sup><a name="ORD"></a>
 [`EQ :A`](#EQ) `=>` [`ORD`](#ORD) [`:A`](#:A)
 
 Methods:
@@ -895,7 +895,7 @@ Methods:
 
 ***
 
-#### `NUM`
+#### `NUM` <sup><sub>[CLASS]</sub></sup><a name="NUM"></a>
 [`EQ :A`](#EQ) [`SHOW :A`](#SHOW) `=>` [`NUM`](#NUM) [`:A`](#:A)
 
 Methods:
@@ -906,7 +906,7 @@ Methods:
 
 ***
 
-#### `EQ`
+#### `EQ` <sup><sub>[CLASS]</sub></sup><a name="EQ"></a>
 [`EQ`](#EQ) [`:A`](#:A)
 
 Methods:
@@ -918,7 +918,7 @@ Methods:
 
 ### Functions
 
-#### `ALL`
+#### `ALL` <sup><sub>[FUNCTION]</sub></sup><a name="ALL"></a>
 `∀ :A. ((:A → BOOLEAN) → (LIST :A) → BOOLEAN)`
 
 Returns TRUE if every element in XS matches F.
@@ -926,7 +926,7 @@ Returns TRUE if every element in XS matches F.
 
 ***
 
-#### `ANY`
+#### `ANY` <sup><sub>[FUNCTION]</sub></sup><a name="ANY"></a>
 `∀ :A. ((:A → BOOLEAN) → (LIST :A) → BOOLEAN)`
 
 Returns TRUE if at least one element in XS matches F.
@@ -934,7 +934,7 @@ Returns TRUE if at least one element in XS matches F.
 
 ***
 
-#### `SUM`
+#### `SUM` <sup><sub>[FUNCTION]</sub></sup><a name="SUM"></a>
 `∀ :A. NUM :A ⇒ ((LIST :A) → :A)`
 
 Returns the sum of XS
@@ -942,7 +942,7 @@ Returns the sum of XS
 
 ***
 
-#### `ZIP`
+#### `ZIP` <sup><sub>[FUNCTION]</sub></sup><a name="ZIP"></a>
 `∀ :A :B. ((LIST :A) → (LIST :B) → (LIST (TUPLE :A :B)))`
 
 Builds a list of tuples with the elements of XS and YS.
@@ -950,7 +950,7 @@ Builds a list of tuples with the elements of XS and YS.
 
 ***
 
-#### `FIND`
+#### `FIND` <sup><sub>[FUNCTION]</sub></sup><a name="FIND"></a>
 `∀ :A. ((:A → BOOLEAN) → (LIST :A) → (OPTIONAL :A))`
 
 Returns the first element in a list matching the predicate function F.
@@ -958,7 +958,7 @@ Returns the first element in a list matching the predicate function F.
 
 ***
 
-#### `FOLD`
+#### `FOLD` <sup><sub>[FUNCTION]</sub></sup><a name="FOLD"></a>
 `∀ :A :B. ((:A → :B → :B) → :B → (LIST :A) → :B)`
 
 Tail recursive left fold on lists.
@@ -966,7 +966,7 @@ Tail recursive left fold on lists.
 
 ***
 
-#### `HEAD`
+#### `HEAD` <sup><sub>[FUNCTION]</sub></sup><a name="HEAD"></a>
 `∀ :A. ((LIST :A) → (OPTIONAL :A))`
 
 Returns the first element of a list.
@@ -974,7 +974,7 @@ Returns the first element of a list.
 
 ***
 
-#### `NULL`
+#### `NULL` <sup><sub>[FUNCTION]</sub></sup><a name="NULL"></a>
 `∀ :A. ((LIST :A) → BOOLEAN)`
 
 Returns TRUE if XS is an empty list.
@@ -982,7 +982,7 @@ Returns TRUE if XS is an empty list.
 
 ***
 
-#### `SORT`
+#### `SORT` <sup><sub>[FUNCTION]</sub></sup><a name="SORT"></a>
 `∀ :A. ORD :A ⇒ ((LIST :A) → (LIST :A))`
 
 Performs a stable sort of XS.
@@ -990,7 +990,7 @@ Performs a stable sort of XS.
 
 ***
 
-#### `TAIL`
+#### `TAIL` <sup><sub>[FUNCTION]</sub></sup><a name="TAIL"></a>
 `∀ :A. ((LIST :A) → (OPTIONAL (LIST :A)))`
 
 Returns every element but the first in a list.
@@ -998,7 +998,7 @@ Returns every element but the first in a list.
 
 ***
 
-#### `FOLDR`
+#### `FOLDR` <sup><sub>[FUNCTION]</sub></sup><a name="FOLDR"></a>
 `∀ :A :B. ((:A → :B → :B) → :B → (LIST :A) → :B)`
 
 Right fold on lists. Is short circuiting but is not tail recursive.
@@ -1006,7 +1006,7 @@ Right fold on lists. Is short circuiting but is not tail recursive.
 
 ***
 
-#### `INDEX`
+#### `INDEX` <sup><sub>[FUNCTION]</sub></sup><a name="INDEX"></a>
 `∀ :A. ((LIST :A) → INT → (OPTIONAL :A))`
 
 Returns the Ith element of XS.
@@ -1014,7 +1014,7 @@ Returns the Ith element of XS.
 
 ***
 
-#### `RANGE`
+#### `RANGE` <sup><sub>[FUNCTION]</sub></sup><a name="RANGE"></a>
 `(INT → INT → (LIST INT))`
 
 Returns a list containing the numbers from START to END inclusive.
@@ -1022,7 +1022,7 @@ Returns a list containing the numbers from START to END inclusive.
 
 ***
 
-#### `UNION`
+#### `UNION` <sup><sub>[FUNCTION]</sub></sup><a name="UNION"></a>
 `∀ :A. EQ :A ⇒ ((LIST :A) → (LIST :A) → (LIST :A))`
 
 Returns a new list with the elements from both XS and YS and without duplicates.
@@ -1030,7 +1030,7 @@ Returns a new list with the elements from both XS and YS and without duplicates.
 
 ***
 
-#### `APPEND`
+#### `APPEND` <sup><sub>[FUNCTION]</sub></sup><a name="APPEND"></a>
 `∀ :A. ((LIST :A) → (LIST :A) → (LIST :A))`
 
 Appends two lists together and returns a new list.
@@ -1038,7 +1038,7 @@ Appends two lists together and returns a new list.
 
 ***
 
-#### `CONCAT`
+#### `CONCAT` <sup><sub>[FUNCTION]</sub></sup><a name="CONCAT"></a>
 `∀ :A. ((LIST (LIST :A)) → (LIST :A))`
 
 Appends a list of lists together into a single new list.
@@ -1046,7 +1046,7 @@ Appends a list of lists together into a single new list.
 
 ***
 
-#### `DELETE`
+#### `DELETE` <sup><sub>[FUNCTION]</sub></sup><a name="DELETE"></a>
 `∀ :A. EQ :A ⇒ (:A → (LIST :A) → (LIST :A))`
 
 Return a new list with the first element equal to X removed.
@@ -1054,7 +1054,7 @@ Return a new list with the first element equal to X removed.
 
 ***
 
-#### `FILTER`
+#### `FILTER` <sup><sub>[FUNCTION]</sub></sup><a name="FILTER"></a>
 `∀ :A. ((:A → BOOLEAN) → (LIST :A) → (LIST :A))`
 
 Returns a new list containing every element of XS that matches the predicate function F in the same order.
@@ -1062,7 +1062,7 @@ Returns a new list containing every element of XS that matches the predicate fun
 
 ***
 
-#### `INSERT`
+#### `INSERT` <sup><sub>[FUNCTION]</sub></sup><a name="INSERT"></a>
 `∀ :A. ORD :A ⇒ (:A → (LIST :A) → (LIST :A))`
 
 Inserts an element into a list at the first place it is less than or equal to the next element.
@@ -1070,7 +1070,7 @@ Inserts an element into a list at the first place it is less than or equal to th
 
 ***
 
-#### `LENGTH`
+#### `LENGTH` <sup><sub>[FUNCTION]</sub></sup><a name="LENGTH"></a>
 `∀ :A. ((LIST :A) → INT)`
 
 Returns the length of a list.
@@ -1078,7 +1078,7 @@ Returns the length of a list.
 
 ***
 
-#### `LOOKUP`
+#### `LOOKUP` <sup><sub>[FUNCTION]</sub></sup><a name="LOOKUP"></a>
 `∀ :A :B. EQ :A ⇒ (:A → (LIST (TUPLE :A :B)) → (OPTIONAL :B))`
 
 Returns the value of the first (key, value) tuple in XS where the key matches E.
@@ -1086,7 +1086,7 @@ Returns the value of the first (key, value) tuple in XS where the key matches E.
 
 ***
 
-#### `MEMBER`
+#### `MEMBER` <sup><sub>[FUNCTION]</sub></sup><a name="MEMBER"></a>
 `∀ :A. EQ :A ⇒ (:A → (LIST :A) → BOOLEAN)`
 
 Returns true if any element of XS is equal to E.
@@ -1094,7 +1094,7 @@ Returns true if any element of XS is equal to E.
 
 ***
 
-#### `REPEAT`
+#### `REPEAT` <sup><sub>[FUNCTION]</sub></sup><a name="REPEAT"></a>
 `∀ :A. (INT → :A → (LIST :A))`
 
 Returns a list with X repeated N times.
@@ -1102,7 +1102,7 @@ Returns a list with X repeated N times.
 
 ***
 
-#### `SORTBY`
+#### `SORTBY` <sup><sub>[FUNCTION]</sub></sup><a name="SORTBY"></a>
 `∀ :A. ((:A → :A → ORD) → (LIST :A) → (LIST :A))`
 
 Generic version of sort
@@ -1110,7 +1110,7 @@ Generic version of sort
 
 ***
 
-#### `MAXIMUM`
+#### `MAXIMUM` <sup><sub>[FUNCTION]</sub></sup><a name="MAXIMUM"></a>
 `∀ :A. ORD :A ⇒ ((LIST :A) → (OPTIONAL :A))`
 
 Returns the greatest element in XS.
@@ -1118,7 +1118,7 @@ Returns the greatest element in XS.
 
 ***
 
-#### `MINIMUM`
+#### `MINIMUM` <sup><sub>[FUNCTION]</sub></sup><a name="MINIMUM"></a>
 `∀ :A. ORD :A ⇒ ((LIST :A) → (OPTIONAL :A))`
 
 Returns the least element in XS.
@@ -1126,7 +1126,7 @@ Returns the least element in XS.
 
 ***
 
-#### `PRODUCT`
+#### `PRODUCT` <sup><sub>[FUNCTION]</sub></sup><a name="PRODUCT"></a>
 `∀ :A. NUM :A ⇒ ((LIST :A) → :A)`
 
 Returns the product of XS
@@ -1134,7 +1134,7 @@ Returns the product of XS
 
 ***
 
-#### `REVERSE`
+#### `REVERSE` <sup><sub>[FUNCTION]</sub></sup><a name="REVERSE"></a>
 `∀ :A. ((LIST :A) → (LIST :A))`
 
 Returns a new list containing the same elements in reverse order.
@@ -1142,7 +1142,7 @@ Returns a new list containing the same elements in reverse order.
 
 ***
 
-#### `ZIPWITH`
+#### `ZIPWITH` <sup><sub>[FUNCTION]</sub></sup><a name="ZIPWITH"></a>
 `∀ :A :B :C. ((:A → :B → :C) → (LIST :A) → (LIST :B) → (LIST :C))`
 
 Builds a new list by calling F with elements of XS and YS.
@@ -1150,7 +1150,7 @@ Builds a new list by calling F with elements of XS and YS.
 
 ***
 
-#### `INSERTBY`
+#### `INSERTBY` <sup><sub>[FUNCTION]</sub></sup><a name="INSERTBY"></a>
 `∀ :A. ((:A → :A → ORD) → :A → (LIST :A) → (LIST :A))`
 
 Generic version of insert
@@ -1158,7 +1158,7 @@ Generic version of insert
 
 ***
 
-#### `CONCATMAP`
+#### `CONCATMAP` <sup><sub>[FUNCTION]</sub></sup><a name="CONCATMAP"></a>
 `∀ :A :B. ((:A → (LIST :B)) → (LIST :A) → (LIST :B))`
 
 Apply F to each element in XS and concatenate the results.
@@ -1166,17 +1166,17 @@ Apply F to each element in XS and concatenate the results.
 
 ***
 
-#### `ELEMINDEX`
+#### `ELEMINDEX` <sup><sub>[FUNCTION]</sub></sup><a name="ELEMINDEX"></a>
 `∀ :A. EQ :A ⇒ (:A → (LIST :A) → (OPTIONAL INT))`
 
 ***
 
-#### `FINDINDEX`
+#### `FINDINDEX` <sup><sub>[FUNCTION]</sub></sup><a name="FINDINDEX"></a>
 `∀ :A. ((:A → BOOLEAN) → (LIST :A) → (OPTIONAL INT))`
 
 ***
 
-#### `PARTITION`
+#### `PARTITION` <sup><sub>[FUNCTION]</sub></sup><a name="PARTITION"></a>
 `∀ :A. ((:A → BOOLEAN) → (LIST :A) → (TUPLE (LIST :A) (LIST :A)))`
 
 Splits a list into two new lists. The first list contains elements matching predicate F.
@@ -1184,7 +1184,7 @@ Splits a list into two new lists. The first list contains elements matching pred
 
 ***
 
-#### `SINGLETON`
+#### `SINGLETON` <sup><sub>[FUNCTION]</sub></sup><a name="SINGLETON"></a>
 `∀ :A. (:A → (LIST :A))`
 
 Returns a single element list containg only X.
@@ -1192,7 +1192,7 @@ Returns a single element list containg only X.
 
 ***
 
-#### `TRANSPOSE`
+#### `TRANSPOSE` <sup><sub>[FUNCTION]</sub></sup><a name="TRANSPOSE"></a>
 `∀ :A. ((LIST (LIST :A)) → (LIST (LIST :A)))`
 
 Transposes a matrix represented by a list of lists.
@@ -1200,7 +1200,7 @@ Transposes a matrix represented by a list of lists.
 
 ***
 
-#### `INTERCALATE`
+#### `INTERCALATE` <sup><sub>[FUNCTION]</sub></sup><a name="INTERCALATE"></a>
 `∀ :A. ((LIST :A) → (LIST (LIST :A)) → (LIST :A))`
 
 Intersperses XS into XSS and then concatenates the result.
@@ -1208,7 +1208,7 @@ Intersperses XS into XSS and then concatenates the result.
 
 ***
 
-#### `INTERSPERSE`
+#### `INTERSPERSE` <sup><sub>[FUNCTION]</sub></sup><a name="INTERSPERSE"></a>
 `∀ :A. (:A → (LIST :A) → (LIST :A))`
 
 Returns a new list where every other element is E.
@@ -1216,7 +1216,7 @@ Returns a new list where every other element is E.
 
 ***
 
-#### `INTERSECTION`
+#### `INTERSECTION` <sup><sub>[FUNCTION]</sub></sup><a name="INTERSECTION"></a>
 `∀ :A. EQ :A ⇒ ((LIST :A) → (LIST :A) → (LIST :A))`
 
 Returns elements which occur in both lists. Does not return duplicates and does not guarantee order.
@@ -1224,7 +1224,7 @@ Returns elements which occur in both lists. Does not return duplicates and does 
 
 ***
 
-#### `LIST-DIFFERENCE`
+#### `LIST-DIFFERENCE` <sup><sub>[FUNCTION]</sub></sup><a name="LIST-DIFFERENCE"></a>
 `∀ :A. EQ :A ⇒ ((LIST :A) → (LIST :A) → (LIST :A))`
 
 Returns a new list with the first occurence of each element in YS deleted from XS.
@@ -1232,7 +1232,7 @@ Returns a new list with the first occurence of each element in YS deleted from X
 
 ***
 
-#### `REMOVE-DUPLICATES`
+#### `REMOVE-DUPLICATES` <sup><sub>[FUNCTION]</sub></sup><a name="REMOVE-DUPLICATES"></a>
 `∀ :A. EQ :A ⇒ ((LIST :A) → (LIST :A))`
 
 Returns a new list without duplicate elements.
@@ -1245,7 +1245,7 @@ Returns a new list without duplicate elements.
 
 ### Classes
 
-#### `APPLICATIVE`
+#### `APPLICATIVE` <sup><sub>[CLASS]</sub></sup><a name="APPLICATIVE"></a>
 [`FUNCTOR :A`](#FUNCTOR) `=>` [`APPLICATIVE`](#APPLICATIVE) [`:A`](#:A)
 
 Methods:
@@ -1254,7 +1254,7 @@ Methods:
 
 ***
 
-#### `SEMIGROUP`
+#### `SEMIGROUP` <sup><sub>[CLASS]</sub></sup><a name="SEMIGROUP"></a>
 [`SEMIGROUP`](#SEMIGROUP) [`:A`](#:A)
 
 Methods:
@@ -1262,7 +1262,7 @@ Methods:
 
 ***
 
-#### `MONADFAIL`
+#### `MONADFAIL` <sup><sub>[CLASS]</sub></sup><a name="MONADFAIL"></a>
 [`MONAD :A`](#MONAD) `=>` [`MONADFAIL`](#MONADFAIL) [`:A`](#:A)
 
 Methods:
@@ -1270,7 +1270,7 @@ Methods:
 
 ***
 
-#### `TRYINTO`
+#### `TRYINTO` <sup><sub>[CLASS]</sub></sup><a name="TRYINTO"></a>
 [`TRYINTO`](#TRYINTO) [`:A`](#:A) [`:B`](#:B) [`:C`](#:C)
 
 Methods:
@@ -1278,7 +1278,7 @@ Methods:
 
 ***
 
-#### `FUNCTOR`
+#### `FUNCTOR` <sup><sub>[CLASS]</sub></sup><a name="FUNCTOR"></a>
 [`FUNCTOR`](#FUNCTOR) [`:A`](#:A)
 
 Methods:
@@ -1286,7 +1286,7 @@ Methods:
 
 ***
 
-#### `MONOID`
+#### `MONOID` <sup><sub>[CLASS]</sub></sup><a name="MONOID"></a>
 [`SEMIGROUP :A`](#SEMIGROUP) `=>` [`MONOID`](#MONOID) [`:A`](#:A)
 
 Methods:
@@ -1294,7 +1294,7 @@ Methods:
 
 ***
 
-#### `MONAD`
+#### `MONAD` <sup><sub>[CLASS]</sub></sup><a name="MONAD"></a>
 [`APPLICATIVE :A`](#APPLICATIVE) `=>` [`MONAD`](#MONAD) [`:A`](#:A)
 
 Methods:
@@ -1303,7 +1303,7 @@ Methods:
 
 ***
 
-#### `SHOW`
+#### `SHOW` <sup><sub>[CLASS]</sub></sup><a name="SHOW"></a>
 [`SHOW`](#SHOW) [`:A`](#:A)
 
 Methods:
@@ -1311,7 +1311,7 @@ Methods:
 
 ***
 
-#### `INTO`
+#### `INTO` <sup><sub>[CLASS]</sub></sup><a name="INTO"></a>
 [`INTO`](#INTO) [`:A`](#:A) [`:B`](#:B)
 
 Methods:
@@ -1319,7 +1319,7 @@ Methods:
 
 ***
 
-#### `ORD`
+#### `ORD` <sup><sub>[CLASS]</sub></sup><a name="ORD"></a>
 [`EQ :A`](#EQ) `=>` [`ORD`](#ORD) [`:A`](#:A)
 
 Methods:
@@ -1327,7 +1327,7 @@ Methods:
 
 ***
 
-#### `NUM`
+#### `NUM` <sup><sub>[CLASS]</sub></sup><a name="NUM"></a>
 [`EQ :A`](#EQ) [`SHOW :A`](#SHOW) `=>` [`NUM`](#NUM) [`:A`](#:A)
 
 Methods:
@@ -1338,7 +1338,7 @@ Methods:
 
 ***
 
-#### `EQ`
+#### `EQ` <sup><sub>[CLASS]</sub></sup><a name="EQ"></a>
 [`EQ`](#EQ) [`:A`](#:A)
 
 Methods:
@@ -1350,12 +1350,12 @@ Methods:
 
 ### Functions
 
-#### `FST`
+#### `FST` <sup><sub>[FUNCTION]</sub></sup><a name="FST"></a>
 `∀ :A :B. ((TUPLE :A :B) → :A)`
 
 ***
 
-#### `SND`
+#### `SND` <sup><sub>[FUNCTION]</sub></sup><a name="SND"></a>
 `∀ :A :B. ((TUPLE :A :B) → :B)`
 
 ***
@@ -1365,7 +1365,7 @@ Methods:
 
 ### Classes
 
-#### `APPLICATIVE`
+#### `APPLICATIVE` <sup><sub>[CLASS]</sub></sup><a name="APPLICATIVE"></a>
 [`FUNCTOR :A`](#FUNCTOR) `=>` [`APPLICATIVE`](#APPLICATIVE) [`:A`](#:A)
 
 Methods:
@@ -1374,7 +1374,7 @@ Methods:
 
 ***
 
-#### `SEMIGROUP`
+#### `SEMIGROUP` <sup><sub>[CLASS]</sub></sup><a name="SEMIGROUP"></a>
 [`SEMIGROUP`](#SEMIGROUP) [`:A`](#:A)
 
 Methods:
@@ -1382,7 +1382,7 @@ Methods:
 
 ***
 
-#### `MONADFAIL`
+#### `MONADFAIL` <sup><sub>[CLASS]</sub></sup><a name="MONADFAIL"></a>
 [`MONAD :A`](#MONAD) `=>` [`MONADFAIL`](#MONADFAIL) [`:A`](#:A)
 
 Methods:
@@ -1390,7 +1390,7 @@ Methods:
 
 ***
 
-#### `TRYINTO`
+#### `TRYINTO` <sup><sub>[CLASS]</sub></sup><a name="TRYINTO"></a>
 [`TRYINTO`](#TRYINTO) [`:A`](#:A) [`:B`](#:B) [`:C`](#:C)
 
 Methods:
@@ -1398,7 +1398,7 @@ Methods:
 
 ***
 
-#### `FUNCTOR`
+#### `FUNCTOR` <sup><sub>[CLASS]</sub></sup><a name="FUNCTOR"></a>
 [`FUNCTOR`](#FUNCTOR) [`:A`](#:A)
 
 Methods:
@@ -1406,7 +1406,7 @@ Methods:
 
 ***
 
-#### `MONOID`
+#### `MONOID` <sup><sub>[CLASS]</sub></sup><a name="MONOID"></a>
 [`SEMIGROUP :A`](#SEMIGROUP) `=>` [`MONOID`](#MONOID) [`:A`](#:A)
 
 Methods:
@@ -1414,7 +1414,7 @@ Methods:
 
 ***
 
-#### `MONAD`
+#### `MONAD` <sup><sub>[CLASS]</sub></sup><a name="MONAD"></a>
 [`APPLICATIVE :A`](#APPLICATIVE) `=>` [`MONAD`](#MONAD) [`:A`](#:A)
 
 Methods:
@@ -1423,7 +1423,7 @@ Methods:
 
 ***
 
-#### `SHOW`
+#### `SHOW` <sup><sub>[CLASS]</sub></sup><a name="SHOW"></a>
 [`SHOW`](#SHOW) [`:A`](#:A)
 
 Methods:
@@ -1431,7 +1431,7 @@ Methods:
 
 ***
 
-#### `INTO`
+#### `INTO` <sup><sub>[CLASS]</sub></sup><a name="INTO"></a>
 [`INTO`](#INTO) [`:A`](#:A) [`:B`](#:B)
 
 Methods:
@@ -1439,7 +1439,7 @@ Methods:
 
 ***
 
-#### `ORD`
+#### `ORD` <sup><sub>[CLASS]</sub></sup><a name="ORD"></a>
 [`EQ :A`](#EQ) `=>` [`ORD`](#ORD) [`:A`](#:A)
 
 Methods:
@@ -1447,7 +1447,7 @@ Methods:
 
 ***
 
-#### `NUM`
+#### `NUM` <sup><sub>[CLASS]</sub></sup><a name="NUM"></a>
 [`EQ :A`](#EQ) [`SHOW :A`](#SHOW) `=>` [`NUM`](#NUM) [`:A`](#:A)
 
 Methods:
@@ -1458,7 +1458,7 @@ Methods:
 
 ***
 
-#### `EQ`
+#### `EQ` <sup><sub>[CLASS]</sub></sup><a name="EQ"></a>
 [`EQ`](#EQ) [`:A`](#:A)
 
 Methods:
@@ -1470,7 +1470,7 @@ Methods:
 
 ### Functions
 
-#### `ISOK`
+#### `ISOK` <sup><sub>[FUNCTION]</sub></sup><a name="ISOK"></a>
 `∀ :A :B. ((RESULT :A :B) → BOOLEAN)`
 
 Returns TRUE if X is ERR
@@ -1478,7 +1478,7 @@ Returns TRUE if X is ERR
 
 ***
 
-#### `ISERR`
+#### `ISERR` <sup><sub>[FUNCTION]</sub></sup><a name="ISERR"></a>
 `∀ :A :B. ((RESULT :A :B) → BOOLEAN)`
 
 Returns TRUE if X is ERR
@@ -1486,7 +1486,7 @@ Returns TRUE if X is ERR
 
 ***
 
-#### `MAPERR`
+#### `MAPERR` <sup><sub>[FUNCTION]</sub></sup><a name="MAPERR"></a>
 `∀ :A :B :C. ((:A → :B) → (RESULT :A :C) → (RESULT :B :C))`
 
 Map over the ERR case
@@ -1499,7 +1499,7 @@ Map over the ERR case
 
 ### Classes
 
-#### `APPLICATIVE`
+#### `APPLICATIVE` <sup><sub>[CLASS]</sub></sup><a name="APPLICATIVE"></a>
 [`FUNCTOR :A`](#FUNCTOR) `=>` [`APPLICATIVE`](#APPLICATIVE) [`:A`](#:A)
 
 Methods:
@@ -1508,7 +1508,7 @@ Methods:
 
 ***
 
-#### `SEMIGROUP`
+#### `SEMIGROUP` <sup><sub>[CLASS]</sub></sup><a name="SEMIGROUP"></a>
 [`SEMIGROUP`](#SEMIGROUP) [`:A`](#:A)
 
 Methods:
@@ -1516,7 +1516,7 @@ Methods:
 
 ***
 
-#### `MONADFAIL`
+#### `MONADFAIL` <sup><sub>[CLASS]</sub></sup><a name="MONADFAIL"></a>
 [`MONAD :A`](#MONAD) `=>` [`MONADFAIL`](#MONADFAIL) [`:A`](#:A)
 
 Methods:
@@ -1524,7 +1524,7 @@ Methods:
 
 ***
 
-#### `TRYINTO`
+#### `TRYINTO` <sup><sub>[CLASS]</sub></sup><a name="TRYINTO"></a>
 [`TRYINTO`](#TRYINTO) [`:A`](#:A) [`:B`](#:B) [`:C`](#:C)
 
 Methods:
@@ -1532,7 +1532,7 @@ Methods:
 
 ***
 
-#### `FUNCTOR`
+#### `FUNCTOR` <sup><sub>[CLASS]</sub></sup><a name="FUNCTOR"></a>
 [`FUNCTOR`](#FUNCTOR) [`:A`](#:A)
 
 Methods:
@@ -1540,7 +1540,7 @@ Methods:
 
 ***
 
-#### `MONOID`
+#### `MONOID` <sup><sub>[CLASS]</sub></sup><a name="MONOID"></a>
 [`SEMIGROUP :A`](#SEMIGROUP) `=>` [`MONOID`](#MONOID) [`:A`](#:A)
 
 Methods:
@@ -1548,7 +1548,7 @@ Methods:
 
 ***
 
-#### `MONAD`
+#### `MONAD` <sup><sub>[CLASS]</sub></sup><a name="MONAD"></a>
 [`APPLICATIVE :A`](#APPLICATIVE) `=>` [`MONAD`](#MONAD) [`:A`](#:A)
 
 Methods:
@@ -1557,7 +1557,7 @@ Methods:
 
 ***
 
-#### `SHOW`
+#### `SHOW` <sup><sub>[CLASS]</sub></sup><a name="SHOW"></a>
 [`SHOW`](#SHOW) [`:A`](#:A)
 
 Methods:
@@ -1565,7 +1565,7 @@ Methods:
 
 ***
 
-#### `INTO`
+#### `INTO` <sup><sub>[CLASS]</sub></sup><a name="INTO"></a>
 [`INTO`](#INTO) [`:A`](#:A) [`:B`](#:B)
 
 Methods:
@@ -1573,7 +1573,7 @@ Methods:
 
 ***
 
-#### `ORD`
+#### `ORD` <sup><sub>[CLASS]</sub></sup><a name="ORD"></a>
 [`EQ :A`](#EQ) `=>` [`ORD`](#ORD) [`:A`](#:A)
 
 Methods:
@@ -1581,7 +1581,7 @@ Methods:
 
 ***
 
-#### `NUM`
+#### `NUM` <sup><sub>[CLASS]</sub></sup><a name="NUM"></a>
 [`EQ :A`](#EQ) [`SHOW :A`](#SHOW) `=>` [`NUM`](#NUM) [`:A`](#:A)
 
 Methods:
@@ -1592,7 +1592,7 @@ Methods:
 
 ***
 
-#### `EQ`
+#### `EQ` <sup><sub>[CLASS]</sub></sup><a name="EQ"></a>
 [`EQ`](#EQ) [`:A`](#:A)
 
 Methods:
@@ -1604,7 +1604,7 @@ Methods:
 
 ### Functions
 
-#### `ID`
+#### `ID` <sup><sub>[FUNCTION]</sub></sup><a name="ID"></a>
 `∀ :A. (:A → :A)`
 
 A function that always returns its argument
@@ -1612,7 +1612,7 @@ A function that always returns its argument
 
 ***
 
-#### `FIX`
+#### `FIX` <sup><sub>[FUNCTION]</sub></sup><a name="FIX"></a>
 `∀ :A :B. (((:A → :B) → :A → :B) → :A → :B)`
 
 The factorial function can be written
@@ -1628,7 +1628,7 @@ The factorial function can be written
 
 ***
 
-#### `ASUM`
+#### `ASUM` <sup><sub>[FUNCTION]</sub></sup><a name="ASUM"></a>
 `∀ :A :B. ALTERNATIVE :A ⇒ ((LIST (:A :B)) → (:A :B))`
 
 Fold over a list using alt
@@ -1636,7 +1636,7 @@ Fold over a list using alt
 
 ***
 
-#### `FLIP`
+#### `FLIP` <sup><sub>[FUNCTION]</sub></sup><a name="FLIP"></a>
 `∀ :A :B :C. ((:A → :B → :C) → :B → :A → :C)`
 
 FLIP reverses the arguments to F
@@ -1644,7 +1644,7 @@ FLIP reverses the arguments to F
 
 ***
 
-#### `CONST`
+#### `CONST` <sup><sub>[FUNCTION]</sub></sup><a name="CONST"></a>
 `∀ :A :B. (:A → :B → :A)`
 
 A function that always returns its first argument
@@ -1652,7 +1652,7 @@ A function that always returns its first argument
 
 ***
 
-#### `ERROR`
+#### `ERROR` <sup><sub>[FUNCTION]</sub></sup><a name="ERROR"></a>
 `∀ :A. (STRING → :A)`
 
 Signal an error by calling CL:ERROR
@@ -1660,17 +1660,17 @@ Signal an error by calling CL:ERROR
 
 ***
 
-#### `COMPOSE`
+#### `COMPOSE` <sup><sub>[FUNCTION]</sub></sup><a name="COMPOSE"></a>
 `∀ :A :B :C. ((:A → :B) → (:C → :A) → :C → :B)`
 
 ***
 
-#### `SEQUENCE`
+#### `SEQUENCE` <sup><sub>[FUNCTION]</sub></sup><a name="SEQUENCE"></a>
 `∀ :A :B. APPLICATIVE :A ⇒ ((LIST (:A :B)) → (:A (LIST :B)))`
 
 ***
 
-#### `TRAVERSE`
+#### `TRAVERSE` <sup><sub>[FUNCTION]</sub></sup><a name="TRAVERSE"></a>
 `∀ :A :B :C. APPLICATIVE :B ⇒ ((:A → (:B :C)) → (LIST :A) → (:B (LIST :C)))`
 
 Map the elements of XS with F then collect the results.
@@ -1683,7 +1683,7 @@ Map the elements of XS with F then collect the results.
 
 ### Types
 
-#### `GRAPH :A :B`<a name="GRAPH"></a>
+#### `GRAPH :A :B` <sup><sub>[TYPE]</sub></sup><a name="GRAPH"></a>
 - `(GRAPH GRAPHTYPE (VECTOR (NODE :A)) (VECTOR (EDGE :B)))`
 
 A graph using adjacency list representation
@@ -1693,7 +1693,7 @@ Constructors:
 
 ***
 
-#### `EDGEINDEX`
+#### `EDGEINDEX`<sup><sub>[TYPE]</sub></sup><a name="EDGEINDEX"></a>
 - `(EDGEINDEX INT)`
 
 Constructors:
@@ -1710,7 +1710,7 @@ Constructors:
 
 ***
 
-#### `GRAPHTYPE`
+#### `GRAPHTYPE`<sup><sub>[TYPE]</sub></sup><a name="GRAPHTYPE"></a>
 - `UNDIRECTED`
 - `DIRECTED`
 
@@ -1720,7 +1720,7 @@ Constructors:
 
 ***
 
-#### `NODEINDEX`
+#### `NODEINDEX`<sup><sub>[TYPE]</sub></sup><a name="NODEINDEX"></a>
 - `(NODEINDEX INT)`
 
 Constructors:
@@ -1739,7 +1739,7 @@ Constructors:
 
 ### Classes
 
-#### `APPLICATIVE`
+#### `APPLICATIVE` <sup><sub>[CLASS]</sub></sup><a name="APPLICATIVE"></a>
 [`FUNCTOR :A`](#FUNCTOR) `=>` [`APPLICATIVE`](#APPLICATIVE) [`:A`](#:A)
 
 Methods:
@@ -1748,7 +1748,7 @@ Methods:
 
 ***
 
-#### `SEMIGROUP`
+#### `SEMIGROUP` <sup><sub>[CLASS]</sub></sup><a name="SEMIGROUP"></a>
 [`SEMIGROUP`](#SEMIGROUP) [`:A`](#:A)
 
 Methods:
@@ -1756,7 +1756,7 @@ Methods:
 
 ***
 
-#### `MONADFAIL`
+#### `MONADFAIL` <sup><sub>[CLASS]</sub></sup><a name="MONADFAIL"></a>
 [`MONAD :A`](#MONAD) `=>` [`MONADFAIL`](#MONADFAIL) [`:A`](#:A)
 
 Methods:
@@ -1764,7 +1764,7 @@ Methods:
 
 ***
 
-#### `TRYINTO`
+#### `TRYINTO` <sup><sub>[CLASS]</sub></sup><a name="TRYINTO"></a>
 [`TRYINTO`](#TRYINTO) [`:A`](#:A) [`:B`](#:B) [`:C`](#:C)
 
 Methods:
@@ -1772,7 +1772,7 @@ Methods:
 
 ***
 
-#### `FUNCTOR`
+#### `FUNCTOR` <sup><sub>[CLASS]</sub></sup><a name="FUNCTOR"></a>
 [`FUNCTOR`](#FUNCTOR) [`:A`](#:A)
 
 Methods:
@@ -1780,7 +1780,7 @@ Methods:
 
 ***
 
-#### `MONOID`
+#### `MONOID` <sup><sub>[CLASS]</sub></sup><a name="MONOID"></a>
 [`SEMIGROUP :A`](#SEMIGROUP) `=>` [`MONOID`](#MONOID) [`:A`](#:A)
 
 Methods:
@@ -1788,7 +1788,7 @@ Methods:
 
 ***
 
-#### `MONAD`
+#### `MONAD` <sup><sub>[CLASS]</sub></sup><a name="MONAD"></a>
 [`APPLICATIVE :A`](#APPLICATIVE) `=>` [`MONAD`](#MONAD) [`:A`](#:A)
 
 Methods:
@@ -1797,7 +1797,7 @@ Methods:
 
 ***
 
-#### `SHOW`
+#### `SHOW` <sup><sub>[CLASS]</sub></sup><a name="SHOW"></a>
 [`SHOW`](#SHOW) [`:A`](#:A)
 
 Methods:
@@ -1805,7 +1805,7 @@ Methods:
 
 ***
 
-#### `INTO`
+#### `INTO` <sup><sub>[CLASS]</sub></sup><a name="INTO"></a>
 [`INTO`](#INTO) [`:A`](#:A) [`:B`](#:B)
 
 Methods:
@@ -1813,7 +1813,7 @@ Methods:
 
 ***
 
-#### `ORD`
+#### `ORD` <sup><sub>[CLASS]</sub></sup><a name="ORD"></a>
 [`EQ :A`](#EQ) `=>` [`ORD`](#ORD) [`:A`](#:A)
 
 Methods:
@@ -1821,7 +1821,7 @@ Methods:
 
 ***
 
-#### `NUM`
+#### `NUM` <sup><sub>[CLASS]</sub></sup><a name="NUM"></a>
 [`EQ :A`](#EQ) [`SHOW :A`](#SHOW) `=>` [`NUM`](#NUM) [`:A`](#:A)
 
 Methods:
@@ -1832,7 +1832,7 @@ Methods:
 
 ***
 
-#### `EQ`
+#### `EQ` <sup><sub>[CLASS]</sub></sup><a name="EQ"></a>
 [`EQ`](#EQ) [`:A`](#:A)
 
 Methods:
@@ -1844,12 +1844,12 @@ Methods:
 
 ### Functions
 
-#### `GRAPH-VIZ`
+#### `GRAPH-VIZ` <sup><sub>[FUNCTION]</sub></sup><a name="GRAPH-VIZ"></a>
 `∀ :A :B. SHOW :A ⇒ ((GRAPH :A :B) → STRING)`
 
 ***
 
-#### `MAKE-GRAPH`
+#### `MAKE-GRAPH` <sup><sub>[FUNCTION]</sub></sup><a name="MAKE-GRAPH"></a>
 `∀ :A :B. (UNIT → (GRAPH :A :B))`
 
 Create a new empty undirected graph
@@ -1857,7 +1857,7 @@ Create a new empty undirected graph
 
 ***
 
-#### `GRAPH-EDGES`
+#### `GRAPH-EDGES` <sup><sub>[FUNCTION]</sub></sup><a name="GRAPH-EDGES"></a>
 `∀ :A :B. ((GRAPH :A :B) → (VECTOR (EDGE :B)))`
 
 Returns the edges in a graph
@@ -1865,7 +1865,7 @@ Returns the edges in a graph
 
 ***
 
-#### `GRAPH-NODES`
+#### `GRAPH-NODES` <sup><sub>[FUNCTION]</sub></sup><a name="GRAPH-NODES"></a>
 `∀ :A :B. ((GRAPH :A :B) → (VECTOR (NODE :A)))`
 
 Returns the nodes in a graph
@@ -1873,7 +1873,7 @@ Returns the nodes in a graph
 
 ***
 
-#### `MAKE-DIGRAPH`
+#### `MAKE-DIGRAPH` <sup><sub>[FUNCTION]</sub></sup><a name="MAKE-DIGRAPH"></a>
 `∀ :A :B. (UNIT → (GRAPH :A :B))`
 
 Create a new directed graph
@@ -1881,7 +1881,7 @@ Create a new directed graph
 
 ***
 
-#### `GRAPH-ADD-EDGE`
+#### `GRAPH-ADD-EDGE` <sup><sub>[FUNCTION]</sub></sup><a name="GRAPH-ADD-EDGE"></a>
 `∀ :A :B. (:A → NODEINDEX → NODEINDEX → (GRAPH :B :A) → EDGEINDEX)`
 
 Add an edge with associated data from node FROM to node TO in the graph.
@@ -1889,7 +1889,7 @@ Add an edge with associated data from node FROM to node TO in the graph.
 
 ***
 
-#### `GRAPH-ADD-NODE`
+#### `GRAPH-ADD-NODE` <sup><sub>[FUNCTION]</sub></sup><a name="GRAPH-ADD-NODE"></a>
 `∀ :A :B. (:A → (GRAPH :A :B) → NODEINDEX)`
 
 Add a node with associated data to the graph, returning the index of the new node.
@@ -1897,7 +1897,7 @@ Add a node with associated data to the graph, returning the index of the new nod
 
 ***
 
-#### `GRAPH-EDGE-COUNT`
+#### `GRAPH-EDGE-COUNT` <sup><sub>[FUNCTION]</sub></sup><a name="GRAPH-EDGE-COUNT"></a>
 `∀ :A :B. ((GRAPH :A :B) → INT)`
 
 Returns the number of edges in a graph
@@ -1905,7 +1905,7 @@ Returns the number of edges in a graph
 
 ***
 
-#### `GRAPH-LOOKUP-EDGE`
+#### `GRAPH-LOOKUP-EDGE` <sup><sub>[FUNCTION]</sub></sup><a name="GRAPH-LOOKUP-EDGE"></a>
 `∀ :A :B. (EDGEINDEX → (GRAPH :A :B) → (OPTIONAL (EDGE :B)))`
 
 Lookup a node with index IDX in graph G
@@ -1913,7 +1913,7 @@ Lookup a node with index IDX in graph G
 
 ***
 
-#### `GRAPH-LOOKUP-NODE`
+#### `GRAPH-LOOKUP-NODE` <sup><sub>[FUNCTION]</sub></sup><a name="GRAPH-LOOKUP-NODE"></a>
 `∀ :A :B. (NODEINDEX → (GRAPH :A :B) → (OPTIONAL (NODE :A)))`
 
 Lookup a node with index IDX in graph G
@@ -1921,7 +1921,7 @@ Lookup a node with index IDX in graph G
 
 ***
 
-#### `GRAPH-REMOVE-EDGE`
+#### `GRAPH-REMOVE-EDGE` <sup><sub>[FUNCTION]</sub></sup><a name="GRAPH-REMOVE-EDGE"></a>
 `∀ :A :B. (EDGEINDEX → (GRAPH :A :B) → (OPTIONAL :B))`
 
 Remove an edge from GRAPH
@@ -1929,7 +1929,7 @@ Remove an edge from GRAPH
 
 ***
 
-#### `GRAPH-REMOVE-NODE`
+#### `GRAPH-REMOVE-NODE` <sup><sub>[FUNCTION]</sub></sup><a name="GRAPH-REMOVE-NODE"></a>
 `∀ :A :B. (NODEINDEX → (GRAPH :A :B) → (OPTIONAL :A))`
 
 Remove a node and all edges connecting to it from GRAPH

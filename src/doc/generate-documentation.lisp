@@ -48,8 +48,8 @@
                     (let ((type-vars (loop :for i :below (coalton-impl/typechecker::kind-arity (coalton-impl/typechecker::kind-of type))
                                            :collect (coalton-impl/typechecker::make-variable))))
                       (if type-vars
-                          (format stream "#### `~A~{ ~A~}`<a name=\"~A\"></a>~%" name type-vars name)
-                          (format stream "#### `~A`~%" name))
+                          (format stream "#### `~A~{ ~A~}` <sup><sub>[TYPE]</sub></sup><a name=\"~A\"></a>~%" name type-vars name)
+                          (format stream "#### `~A`<sup><sub>[TYPE]</sub></sup><a name=\"~A\"></a>~%" name name))
 
                       (loop :for (ctor-name . entry) :in ctors :do
                         (let ((args (coalton-impl/typechecker::function-type-arguments
@@ -96,7 +96,7 @@
                         (context (ty-class-superclasses class))
                         (pred (ty-class-predicate class))
                         (methods (ty-class-unqualified-methods class)))
-                    (format stream "#### `~A`~%" name)
+                    (format stream "#### `~A` <sup><sub>[CLASS]</sub></sup><a name=\"~A\"></a>~%" name name)
                     (with-pprint-variable-context ()
                       (format stream "~A~%~%"
                               (write-predicate-to-markdown context pred))
@@ -110,7 +110,8 @@
                 (format stream "### Functions~%~%")
                 (loop :for (name type docstring location) :in value-info :do
                   (progn
-                    (format stream "#### `~A`~%`~A`~%" name type)
+                    (format stream "#### `~A` <sup><sub>[FUNCTION]</sub></sup><a name=\"~A\"></a>~%" name name)
+                    (format stream "`~A`~%" type)
                     (when docstring
                       (format stream "~%~A~%~%" docstring))
                     (format stream "~%***~%~%")))
@@ -173,6 +174,11 @@
                    (eql :external status)))
         (push entry values)))
 
+    (let ((instance-list
+            (fset:convert 'list
+                          (coalton-impl/typechecker::instance-environment-data
+                           (coalton-impl/typechecker::environment-instance-environment env)))))
+      )
     values))
 
 (defun get-doc-type-info (env package)
