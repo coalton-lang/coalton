@@ -1,4 +1,4 @@
-<img src="docs/assets/coalton-logo.png" style="zoom:50%;" />
+<img src="docs/assets/coalton-logotype-gray.svg" style="zoom:50%;" />
 
 [![Tests Status Badge](https://github.com/coalton-lang/coalton/actions/workflows/main.yml/badge.svg)](https://github.com/coalton-lang/coalton/actions/workflows/main.yml)
 
