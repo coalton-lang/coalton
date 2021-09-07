@@ -34,7 +34,7 @@
     "Returns a single element list containg only X."
     (Cons x Nil))
 
-  (declare repeat (Int -> :a -> (List :a)))
+  (declare repeat (Integer -> :a -> (List :a)))
   (define (repeat n x)
     "Returns a list with X repeated N times."
     (if (== 0 n)
@@ -87,7 +87,7 @@
                         (fun xs ys)))))))
       (fun xs Nil)))
  
-  (declare length ((List :a) -> Int))
+  (declare length ((List :a) -> Integer))
   (define (length l)
     "Returns the length of a list."
     (fold (fn (a b)
@@ -95,7 +95,7 @@
           0
           l))
 
-  (declare index ((List :a) -> Int -> (Optional :a)))
+  (declare index ((List :a) -> Integer -> (Optional :a)))
   (define (index xs i)
     "Returns the Ith element of XS."
     (match xs
@@ -106,11 +106,11 @@
            (Some x)
            (index xs (- i 1))))))
 
-  (declare elemIndex (Eq :a => (:a -> (List :a) -> (Optional Int))))
+  (declare elemIndex (Eq :a => (:a -> (List :a) -> (Optional Integer))))
   (define (elemIndex x xs)
     (findIndex (== x) xs))
 
-  (declare findIndex ((:a -> Boolean) -> (List :a) -> (Optional Int)))
+  (declare findIndex ((:a -> Boolean) -> (List :a) -> (Optional Integer)))
   (define (findIndex f xs)
     (let ((find (fn (xs n)
                   (match xs
@@ -122,7 +122,7 @@
                          (find xs (+ n 1))))))))
       (find xs 0)))
 
-  (declare range (Int -> Int -> (List Int)))
+  (declare range (Integer -> Integer -> (List Integer)))
   (define (range start end)
     "Returns a list containing the numbers from START to END inclusive."
     (let ((inner (fn (x)

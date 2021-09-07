@@ -1,25 +1,20 @@
 # Intro to Coalton
 
-Coalton is a statically typed language that is embedded in and
-compiles to Common Lisp.
+Coalton is a statically typed language that is embedded in and compiles to Common Lisp.
 
-This document is aimed toward individuals with familiarity with
-strongly typed functional programming languages already.
+This document is aimed toward individuals with familiarity with strongly typed functional programming languages already.
 
 ## Basics: Variables and Functions
 
-To start, we recommend changing your package to the `COALTON-USER`
-package like so:
+To start, we recommend changing your package to the `COALTON-USER` package like so:
 
 ```lisp
 (in-package #:coalton-user)
 ```
 
-This package does *not* `:use` the `COMMON-LISP` package, so you must
-prepend Common Lisp symbols with `cl:` if you need them.
+This package does *not* `:use` the `COMMON-LISP` package, so you must prepend Common Lisp symbols with `cl:` if you need them.
 
-All Coalton code sits in a toplevel-form called `coalton-toplevel`. In
-this form, you can put definitions.
+All Coalton code sits in a toplevel-form called `coalton-toplevel`. In this form, you can put definitions.
 
 Here are some variable definitions.
 
@@ -37,9 +32,7 @@ Here are some variable definitions.
   (define data Unit))
 ```
 
-Functions are defined similarly. Unlike Common Lisp, Coalton functions
-occupy the same namespace as variables. This makes high-order
-functional programming easier.
+Functions are defined similarly. Unlike Common Lisp, Coalton functions occupy the same namespace as variables. This makes high-order functional programming easier.
 
 ```lisp
 (coalton-toplevel
@@ -53,8 +46,7 @@ functional programming easier.
   (define x (addTwo 3)))
 ```
 
-*All* functions in Coalton take *exactly* one input, and produce
- *exactly* one output. Consider this function:
+*All* functions in Coalton take *exactly* one input, and produce *exactly* one output. Consider this function:
 
 ```lisp
 (coalton-toplevel
@@ -62,8 +54,7 @@ functional programming easier.
     (+ c (* a b))))
 ```
 
-Truth be known, `fma` actually technically takes *one argument*:
-`a`. To a Common Lisper, this function is roughly equivalent to:
+Truth be known, `fma` actually technically takes *one argument*: `a`. To a Common Lisper, this function is roughly equivalent to:
 
 ```lisp
 (defun fma (a)
@@ -81,15 +72,9 @@ However, Coalton hides this reality from you unless you need it:
   (define fma3 (fma 2 3 4))) ; equiv: 10
 ```
 
-We can see that we can call `fma` as if it's a three argument
-function, but that's merely convenient syntax. We can also call it
-with fewer arguments. Sometimes this property is called *curried
-functions*.
+We can see that we can call `fma` as if it's a three argument function, but that's merely convenient syntax. We can also call it with fewer arguments. Sometimes this property is called *curried functions*.
 
-Coalton does work to optimize these functions to reduce as much
-closure allocation as possible. In fact, `(fma x y z)` will get
-compiled as a simple add and multiply, without any closure
-allocations.
+Coalton does work to optimize these functions to reduce as much closure allocation as possible. In fact, `(fma x y z)` will get compiled as a simple add and multiply, without any closure allocations.
 
 Here is an example of using a curried function to transform a list.
 
@@ -119,10 +104,7 @@ There are convenient *syntaxes* for composing functions with the
 
 These are useful to make code less noisy.
 
-Note that since these are macros (indicated by their variadic
-arguments), they cannot be used as high-order functions. Consider
-either currying or the `compose` function if you're thinking in that
-direction.
+Note that since these are macros (indicated by their variadic arguments), they cannot be used as high-order functions. Consider either currying or the `compose` function if you're thinking in that direction.
 
 ## Data Types
 
@@ -147,7 +129,22 @@ Coalton allows the definition of parametric algebraic data types.
     (Leaf :a)))
 ```
 
-We'll see how to unpack these types using `match` below.
+We'll see how to unpack these types using `match` later in this document.
+
+## Numbers
+
+Coalton supports a few numeric types. The main ones are `Integer`, `Single-Float`, and `Double-Float`.
+
+```lisp
+(coalton-toplevel
+  (define num-int 5)
+  (define num-sf  5.0f0)
+  (define num-df  5.0d0))
+```
+
+One can leave off the suffix and just write `5.0`, which will be resolved depending on `cl:*read-default-float-format*`, which is typically `cl:single-float` (meaning unadorned floats will be single-precision).
+
+Numbers implement the `Num` typeclass, which has methods `+`, `-`, `*`, and `fromInt`.
 
 
 ## Lists
@@ -216,8 +213,7 @@ Type annotations can always be added manually
 
 ## Match expressions
 
-Match expressions can be used to pattern-match and deconstruct
-algebraic data types:
+Match expressions can be used to pattern-match and deconstruct algebraic data types:
 
 ```lisp
 (coalton-toplevel
@@ -257,8 +253,7 @@ algebraic data types:
       (_ False))))
 ```
 
-The operator `coalton:if` can be used as a shorthand when matching on
-booleans
+The operator `coalton:if` can be used as a shorthand when matching on booleans
 
 ```lisp
 (coalton-toplevel
@@ -289,9 +284,7 @@ Several `if` expressions can be combined with a `coalton:cond`:
       (True (show n)))))
 ```
 
-Coalton also has `coalton:unless` and `coalton:when` which work
-similary to their definitions in Lisp. We recommend only using these
-operators for conditionalizing stateful operations.
+Coalton also has `coalton:unless` and `coalton:when` which work similary to their definitions in Lisp. We recommend only using these operators for conditionalizing stateful operations.
 
 ```
 (coalton-toplevel
@@ -388,8 +381,7 @@ instance.
 
 ## Do Notation
 
-Coalton has a do-notation macro that works similary to do notation in
-Haskell.
+Coalton has a do-notation macro that works similary to do notation in Haskell.
 
 ```lisp
 (coalton-toplevel

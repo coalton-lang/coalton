@@ -110,14 +110,6 @@
    #:function-type-to                   ; FUNCTION
    #:scheme-predicates                  ; FUNCTION
    )
-  (:export   
-   #:Unit				; SYMBOL
-   #:Char				; SYMBOL
-   #:Int				; SYMBOL
-   #:String				; SYMBOL
-   #:Lisp-Object                        ; SYMBOL
-   #:ConsList                           ; SYMBOL
-   )
   (:export
    #:typed-node                               ; STRUCT
    #:typed-binding-list                       ; TYPE
@@ -349,13 +341,6 @@
    #:non-terminating-unification-error-containing-type
                                         ; READER
    )
-  (:export
-   #:Unit
-   #:Char
-   #:Int
-   #:String
-   #:ConsList
-   #:Arrow)
   ;; LISP-OBJECT
   (:export
    #:lisp-object
@@ -396,7 +381,11 @@
    #:∀
    #:Unit
    #:Char
-   #:Int
+   #:I32
+   #:I64
+   #:U8
+   #:U32
+   #:U64
    #:Integer
    #:Single-Float
    #:Double-Float
@@ -459,7 +448,9 @@
    #:xor
    #:List #:Cons #:Nil
    #:Tuple
+   #:Result #:Err #:Ok
    #:Optional #:Some #:None
+   #:Fraction
    #:undefined
    )
   ;; Classes
@@ -471,6 +462,7 @@
    #:max
    #:min
    #:Num #:+ #:- #:* #:fromInt
+   #:Dividable #:unsafe-/
    #:Semigroup #:<>
    #:Monoid #:mempty
    #:Functor #:map
@@ -482,12 +474,24 @@
    #:TryInto)
   ;; Builtin
   (:export
+   #:single-float->integer
+   #:double-float->integer
+   #:integer->single-float
+   #:integer->double-float
+   #:negate
+   #:abs
+   #:sign
    #:expt
    #:mod
    #:even
    #:odd
    #:gcd
-   #:lcm)
+   #:lcm
+   #:/)
+  ;; Fraction
+  (:export
+   #:numerator
+   #:denominator)
   ;; String
   (:export
    #:concat-string
@@ -548,7 +552,6 @@
    #:snd)
   ;; Result
   (:export
-   #:Result #:Err #:Ok
    #:isOk
    #:isErr
    #:mapErr)
@@ -615,4 +618,3 @@
 (uiop:define-package #:coalton-user
   (:documentation "A default user package for Coalton.")
   (:use #:coalton #:coalton-library))
-

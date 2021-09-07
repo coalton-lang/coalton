@@ -62,15 +62,15 @@
       ((IndexPair x _) x)))
 
   (define-type EdgeIndex
-    (EdgeIndex Int))
+    (EdgeIndex Integer))
 
-  (declare edge-index-value (EdgeIndex -> Int))
+  (declare edge-index-value (EdgeIndex -> Integer))
   (define (edge-index-value idx)
     (match idx
       ((EdgeIndex idx)
        idx)))
 
-  (define-instance (Into EdgeIndex Int)
+  (define-instance (Into EdgeIndex Integer)
     (define (into x)
       (match x
 	((EdgeIndex x) x))))
@@ -89,20 +89,20 @@
 	((EdgeIndex x) (show x)))))
 
   (define-type NodeIndex
-    (NodeIndex Int))
+    (NodeIndex Integer))
 
   (define-instance (Show NodeIndex)
     (define (show x)
       (match x
 	((NodeIndex x) (show x)))))
 
-  (declare node-index-value (NodeIndex -> Int))
+  (declare node-index-value (NodeIndex -> Integer))
   (define (node-index-value idx)
     (match idx
       ((NodeIndex idx)
        idx)))
 
-  (define-instance (Into NodeIndex Int)
+  (define-instance (Into NodeIndex Integer)
     (define (into x)
       (match x
 	((NodeIndex x) x))))
@@ -215,12 +215,12 @@
       ((Graph (Undirected) _ _) False)))
 
 
-  (declare graph-node-count ((Graph :node-data :edge-data) -> Int))
+  (declare graph-node-count ((Graph :node-data :edge-data) -> Integer))
   (define (graph-node-count graph)
     "Returns the number of nodes in a graph"
     (vector-length (graph-nodes graph)))
 
-  (declare graph-edge-count ((Graph :node-data :edge-data) -> Int))
+  (declare graph-edge-count ((Graph :node-data :edge-data) -> Integer))
   (define (graph-edge-count graph)
     "Returns the number of edges in a graph"
     (vector-length (graph-edges graph)))
@@ -493,15 +493,15 @@
   ;;
 
   (define-type TarjanNode
-    (TarjanNode (Optional Int) Int Boolean))
+    (TarjanNode (Optional Integer) Integer Boolean))
 
-  (declare tarjan-node-index (TarjanNode -> (Optional Int)))
+  (declare tarjan-node-index (TarjanNode -> (Optional Integer)))
   (define (tarjan-node-index node)
     (match node
       ((TarjanNode index _ _)
        index)))
 
-  (declare tarjan-node-low-link (TarjanNode -> Int))
+  (declare tarjan-node-low-link (TarjanNode -> Integer))
   (define (tarjan-node-low-link node)
     (match node
       ((TarjanNode _ low-link _)

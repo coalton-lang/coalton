@@ -26,7 +26,7 @@
     (match x
       ((Id str) str)))
 
-  (declare enumId (Int -> Id))
+  (declare enumId (Integer -> Id))
   (define (enumId n)
     (Id (concat-string "v" (show n))))
 
@@ -59,7 +59,7 @@
     (TVar Tyvar)
     (TCon Tycon)
     (TAp Type Type)
-    (TGen Int))
+    (TGen Integer))
 
   (define-instance (Eq Type)
       (define (== t1 t2)
@@ -665,9 +665,9 @@
     (Tuple3 :a :b :c))
 
   (define-type (TI :a)
-    (TI (Subst -> Int -> (Tuple3 Subst Int :a))))
+    (TI (Subst -> Integer -> (Tuple3 Subst Integer :a))))
 
-  (declare get-ti ((TI :a) -> (Subst -> Int -> (Tuple3 Subst Int :a))))
+  (declare get-ti ((TI :a) -> (Subst -> Integer -> (Tuple3 Subst Integer :a))))
   (define (get-ti x)
     (match x
       ((TI y) y)))
@@ -773,7 +773,7 @@
   ;; Literals
   
   (define-type Literal
-    (LitInt Int)
+    (LitInt Integer)
     (LitChar Char)
     ;; NOTE: Rationals are ignored because coalton does not have support
     (LitStr String))
@@ -793,7 +793,7 @@
     PWildcard
     (PAs Id Pat)
     (PLit Literal)
-    (PNpk Id Int)
+    (PNpk Id Integer)
     (PCon Assump (List Pat)))
 
   (declare tiPat (Pat -> (TI (Tuple3 (List Pred) (List Assump) Type))))
