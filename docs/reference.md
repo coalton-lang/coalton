@@ -12,7 +12,9 @@ Constructors:
 - `CONS :: (:A → (LIST :A) → (LIST :A))`
 - `NIL :: (LIST :A)`
 
-Instances:
+<details>
+<summary>Instances</summary>
+
 - [`EQ :A`](#EQ) `=>` [`EQ`](#EQ) [`(LIST :A)`](#LIST)
 - [`ISO`](#ISO) [`(VECTOR :A)`](#VECTOR) [`(LIST :A)`](#LIST)
 - [`ISO`](#ISO) [`(LIST CHAR)`](#LIST) [`STRING`](#STRING)
@@ -26,6 +28,9 @@ Instances:
 - [`SEMIGROUP`](#SEMIGROUP) [`(LIST :A)`](#LIST)
 - [`ALTERNATIVE`](#ALTERNATIVE) [`LIST`](#LIST)
 - [`APPLICATIVE`](#APPLICATIVE) [`LIST`](#LIST)
+
+</details>
+
 ***
 
 #### `TUPLE :A :B`<a name="TUPLE"></a>
@@ -34,11 +39,16 @@ Instances:
 Constructors:
 - `TUPLE :: (:A → :B → (TUPLE :A :B))`
 
-Instances:
+<details>
+<summary>Instances</summary>
+
 - [`EQ :A`](#EQ) [`EQ :B`](#EQ) `=>` [`EQ`](#EQ) [`(TUPLE :A :B)`](#TUPLE)
 - [`ISO`](#ISO) [`(TUPLE :A :B)`](#TUPLE) [`(TUPLE :B :A)`](#TUPLE)
 - [`ORD :A`](#ORD) [`ORD :B`](#ORD) `=>` [`ORD`](#ORD) [`(TUPLE :A :B)`](#TUPLE)
 - [`INTO`](#INTO) [`(TUPLE :A :B)`](#TUPLE) [`(TUPLE :B :A)`](#TUPLE)
+
+</details>
+
 ***
 
 #### `RESULT :A :B`<a name="RESULT"></a>
@@ -49,7 +59,9 @@ Constructors:
 - `ERR :: (:A → (RESULT :A :B))`
 - `OK :: (:B → (RESULT :A :B))`
 
-Instances:
+<details>
+<summary>Instances</summary>
+
 - [`EQ :A`](#EQ) [`EQ :B`](#EQ) `=>` [`EQ`](#EQ) [`(RESULT :A :B)`](#RESULT)
 - [`ISO`](#ISO) [`(RESULT UNIT :A)`](#RESULT) [`(OPTIONAL :A)`](#OPTIONAL)
 - [`ORD :A`](#ORD) [`ORD :B`](#ORD) `=>` [`ORD`](#ORD) [`(RESULT :A :B)`](#RESULT)
@@ -61,6 +73,9 @@ Instances:
 - [`SEMIGROUP :A`](#SEMIGROUP) `=>` [`SEMIGROUP`](#SEMIGROUP) [`(RESULT :B :A)`](#RESULT)
 - [`APPLICATIVE`](#APPLICATIVE) [`(RESULT :A)`](#RESULT)
 - [`WITHDEFAULT`](#WITHDEFAULT) [`(RESULT :A)`](#RESULT)
+
+</details>
+
 ***
 
 #### `BOOLEAN`
@@ -71,10 +86,15 @@ Constructors:
 - `FALSE :: BOOLEAN`
 - `TRUE :: BOOLEAN`
 
-Instances:
+<details>
+<summary>Instances</summary>
+
 - [`EQ`](#EQ) [`BOOLEAN`](#BOOLEAN)
 - [`ORD`](#ORD) [`BOOLEAN`](#BOOLEAN)
 - [`SHOW`](#SHOW) [`BOOLEAN`](#BOOLEAN)
+
+</details>
+
 ***
 
 #### `OPTIONAL :A`<a name="OPTIONAL"></a>
@@ -85,7 +105,9 @@ Constructors:
 - `SOME :: (:A → (OPTIONAL :A))`
 - `NONE :: (OPTIONAL :A)`
 
-Instances:
+<details>
+<summary>Instances</summary>
+
 - [`EQ :A`](#EQ) `=>` [`EQ`](#EQ) [`(OPTIONAL :A)`](#OPTIONAL)
 - [`ISO`](#ISO) [`(RESULT UNIT :A)`](#RESULT) [`(OPTIONAL :A)`](#OPTIONAL)
 - [`ORD :A`](#ORD) `=>` [`ORD`](#ORD) [`(OPTIONAL :A)`](#OPTIONAL)
@@ -100,6 +122,9 @@ Instances:
 - [`ALTERNATIVE`](#ALTERNATIVE) [`OPTIONAL`](#OPTIONAL)
 - [`APPLICATIVE`](#APPLICATIVE) [`OPTIONAL`](#OPTIONAL)
 - [`WITHDEFAULT`](#WITHDEFAULT) [`OPTIONAL`](#OPTIONAL)
+
+</details>
+
 ***
 
 ### Classes
@@ -1674,10 +1699,15 @@ Constructors:
 Constructors:
 - `EDGEINDEX :: (INT → EDGEINDEX)`
 
-Instances:
+<details>
+<summary>Instances</summary>
+
 - [`EQ`](#EQ) [`EDGEINDEX`](#EDGEINDEX)
 - [`INTO`](#INTO) [`EDGEINDEX`](#EDGEINDEX) [`INT`](#INT)
 - [`SHOW`](#SHOW) [`EDGEINDEX`](#EDGEINDEX)
+
+</details>
+
 ***
 
 #### `GRAPHTYPE`
@@ -1696,10 +1726,15 @@ Constructors:
 Constructors:
 - `NODEINDEX :: (INT → NODEINDEX)`
 
-Instances:
+<details>
+<summary>Instances</summary>
+
 - [`EQ`](#EQ) [`NODEINDEX`](#NODEINDEX)
 - [`INTO`](#INTO) [`NODEINDEX`](#NODEINDEX) [`INT`](#INT)
 - [`SHOW`](#SHOW) [`NODEINDEX`](#NODEINDEX)
+
+</details>
+
 ***
 
 ### Classes

@@ -76,13 +76,15 @@
                       (format stream "~%")))
 
                   (when instances
-                    (format stream "Instances:~%")
+                    (format stream "<details>~%")
+                    (format stream "<summary>Instances</summary>~%~%")
                     (loop :for instance :in instances :do
                       (with-pprint-variable-context ()
                         (format stream "- ~A~%"
                                 (write-predicate-to-markdown
                                  (ty-class-instance-constraints instance)
-                                 (ty-class-instance-predicate instance))))))
+                                 (ty-class-instance-predicate instance)))))
+                    (format stream "~%</details>~%~%"))
 
                   (format stream "***~%")
                   (format stream "~%")))
