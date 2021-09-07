@@ -1,7 +1,7 @@
 ;;;; coalton.asd
 
 (asdf:defsystem #:coalton
-  :description "A dialect of ML in Common Lisp."
+  :description "An efficient, statically typed functional programming language that supercharges Common Lisp. "
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
   :license "MIT"
   :depends-on (#:alexandria
