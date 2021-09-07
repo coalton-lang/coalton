@@ -26,16 +26,18 @@
 
       ;; Sort the classes by file
       (loop :for entry :in class-info :do
-        (push entry (gethash (enough-namestring (coalton-impl/typechecker::ty-class-location entry) component-path)
+        (push entry (gethash (enough-namestring (coalton-impl/typechecker::ty-class-location (car entry)) component-path)
                              class-info-by-file)))
 
 
       (let ((filenames (mapcar (lambda (file)
                                  (file-namestring (asdf:component-relative-pathname file)))
                                (asdf:component-children component))))
+       
         (dolist (file filenames)
           (let ((value-info (gethash file value-info-by-file))
-                (type-info (gethash file type-info-by-file)))
+                (type-info (gethash file type-info-by-file))
+                (class-info (gethash file class-info-by-file)))
 
             (when (or type-info value-info)
               (format stream "## File: [~A](~A)~%~%" file (concatenate 'string file-prefix file))
@@ -49,7 +51,7 @@
                                            :collect (coalton-impl/typechecker::make-variable))))
                       (if type-vars
                           (format stream "#### `~A~{ ~A~}` <sup><sub>[TYPE]</sub></sup><a name=\"~A\"></a>~%" name type-vars name)
-                          (format stream "#### `~A`<sup><sub>[TYPE]</sub></sup><a name=\"~A\"></a>~%" name name))
+                          (format stream "#### `~A` <sup><sub>[TYPE]</sub></sup><a name=\"~A\"></a>~%" name name))
 
                       (loop :for (ctor-name . entry) :in ctors :do
                         (let ((args (coalton-impl/typechecker::function-type-arguments
@@ -91,7 +93,7 @@
 
               (when class-info
                 (format stream "### Classes~%~%")
-                (loop :for class :in class-info :do
+                (loop :for (class instances) :in class-info :do
                   (let ((name (ty-class-name class))
                         (context (ty-class-superclasses class))
                         (pred (ty-class-predicate class))
@@ -102,7 +104,18 @@
                               (write-predicate-to-markdown context pred))
                       (format stream "Methods:~%")
                       (loop :for (name . type) :in methods :do
-                        (format stream "- `~A :: ~A`~%" name type))))
+                        (format stream "- `~A :: ~A`~%" name type)))
+
+                    (when instances
+                      (format stream "~%<details>~%")
+                      (format stream "<summary>Instances</summary>~%~%")
+                      (loop :for instance :in instances :do
+                        (with-pprint-variable-context ()
+                          (format stream "- ~A~%"
+                                  (write-predicate-to-markdown
+                                   (ty-class-instance-constraints instance)
+                                   (ty-class-instance-predicate instance)))))
+                      (format stream "~%</details>~%~%")))
                   (format stream "~%***~%~%"))
                 (format stream "~%"))
               
@@ -174,12 +187,10 @@
                    (eql :external status)))
         (push entry values)))
 
-    (let ((instance-list
-            (fset:convert 'list
-                          (coalton-impl/typechecker::instance-environment-data
-                           (coalton-impl/typechecker::environment-instance-environment env)))))
-      )
-    values))
+    (mapcar (lambda (e)
+              (list e
+                    (fset:convert 'list (lookup-class-instances env (ty-class-name e)))))
+            values)))
 
 (defun get-doc-type-info (env package)
   (let ((types nil)

@@ -78,7 +78,7 @@ Constructors:
 
 ***
 
-#### `BOOLEAN`<sup><sub>[TYPE]</sub></sup><a name="BOOLEAN"></a>
+#### `BOOLEAN` <sup><sub>[TYPE]</sub></sup><a name="BOOLEAN"></a>
 - `FALSE`
 - `TRUE`
 
@@ -127,111 +127,6 @@ Constructors:
 
 ***
 
-### Classes
-
-#### `APPLICATIVE` <sup><sub>[CLASS]</sub></sup><a name="APPLICATIVE"></a>
-[`FUNCTOR :A`](#FUNCTOR) `=>` [`APPLICATIVE`](#APPLICATIVE) [`:A`](#:A)
-
-Methods:
-- `PURE :: ∀ :B. (:B → (:A :B))`
-- `LIFTA2 :: ∀ :B :C :D. ((:B → :C → :D) → (:A :B) → (:A :C) → (:A :D))`
-
-***
-
-#### `SEMIGROUP` <sup><sub>[CLASS]</sub></sup><a name="SEMIGROUP"></a>
-[`SEMIGROUP`](#SEMIGROUP) [`:A`](#:A)
-
-Methods:
-- `<> :: (:A → :A → :A)`
-
-***
-
-#### `MONADFAIL` <sup><sub>[CLASS]</sub></sup><a name="MONADFAIL"></a>
-[`MONAD :A`](#MONAD) `=>` [`MONADFAIL`](#MONADFAIL) [`:A`](#:A)
-
-Methods:
-- `FAIL :: ∀ :B. (STRING → (:A :B))`
-
-***
-
-#### `TRYINTO` <sup><sub>[CLASS]</sub></sup><a name="TRYINTO"></a>
-[`TRYINTO`](#TRYINTO) [`:A`](#:A) [`:B`](#:B) [`:C`](#:C)
-
-Methods:
-- `TRYINTO :: (:A → (RESULT :B :C))`
-
-***
-
-#### `FUNCTOR` <sup><sub>[CLASS]</sub></sup><a name="FUNCTOR"></a>
-[`FUNCTOR`](#FUNCTOR) [`:A`](#:A)
-
-Methods:
-- `MAP :: ∀ :B :C. ((:B → :C) → (:A :B) → (:A :C))`
-
-***
-
-#### `MONOID` <sup><sub>[CLASS]</sub></sup><a name="MONOID"></a>
-[`SEMIGROUP :A`](#SEMIGROUP) `=>` [`MONOID`](#MONOID) [`:A`](#:A)
-
-Methods:
-- `MEMPTY :: :A`
-
-***
-
-#### `MONAD` <sup><sub>[CLASS]</sub></sup><a name="MONAD"></a>
-[`APPLICATIVE :A`](#APPLICATIVE) `=>` [`MONAD`](#MONAD) [`:A`](#:A)
-
-Methods:
-- `>>= :: ∀ :B :C. ((:A :B) → (:B → (:A :C)) → (:A :C))`
-- `>> :: ∀ :B :C. ((:A :B) → (:A :C) → (:A :C))`
-
-***
-
-#### `SHOW` <sup><sub>[CLASS]</sub></sup><a name="SHOW"></a>
-[`SHOW`](#SHOW) [`:A`](#:A)
-
-Methods:
-- `SHOW :: (:A → STRING)`
-
-***
-
-#### `INTO` <sup><sub>[CLASS]</sub></sup><a name="INTO"></a>
-[`INTO`](#INTO) [`:A`](#:A) [`:B`](#:B)
-
-Methods:
-- `INTO :: (:A → :B)`
-
-***
-
-#### `ORD` <sup><sub>[CLASS]</sub></sup><a name="ORD"></a>
-[`EQ :A`](#EQ) `=>` [`ORD`](#ORD) [`:A`](#:A)
-
-Methods:
-- `<=> :: (:A → :A → ORD)`
-
-***
-
-#### `NUM` <sup><sub>[CLASS]</sub></sup><a name="NUM"></a>
-[`EQ :A`](#EQ) [`SHOW :A`](#SHOW) `=>` [`NUM`](#NUM) [`:A`](#:A)
-
-Methods:
-- `+ :: (:A → :A → :A)`
-- `- :: (:A → :A → :A)`
-- `* :: (:A → :A → :A)`
-- `FROMINT :: (INT → :A)`
-
-***
-
-#### `EQ` <sup><sub>[CLASS]</sub></sup><a name="EQ"></a>
-[`EQ`](#EQ) [`:A`](#:A)
-
-Methods:
-- `== :: (:A → :A → BOOLEAN)`
-- `/= :: (:A → :A → BOOLEAN)`
-
-***
-
-
 ### Functions
 
 #### `OR` <sup><sub>[FUNCTION]</sub></sup><a name="OR"></a>
@@ -264,7 +159,7 @@ Methods:
 
 ### Types
 
-#### `ORD`<sup><sub>[TYPE]</sub></sup><a name="ORD"></a>
+#### `ORD` <sup><sub>[TYPE]</sub></sup><a name="ORD"></a>
 - `LT`
 - `GT`
 - `EQ`
@@ -278,85 +173,34 @@ Constructors:
 
 ### Classes
 
-#### `APPLICATIVE` <sup><sub>[CLASS]</sub></sup><a name="APPLICATIVE"></a>
-[`FUNCTOR :A`](#FUNCTOR) `=>` [`APPLICATIVE`](#APPLICATIVE) [`:A`](#:A)
+#### `EQ` <sup><sub>[CLASS]</sub></sup><a name="EQ"></a>
+[`EQ`](#EQ) [`:A`](#:A)
 
 Methods:
-- `PURE :: ∀ :B. (:B → (:A :B))`
-- `LIFTA2 :: ∀ :B :C :D. ((:B → :C → :D) → (:A :B) → (:A :C) → (:A :D))`
+- `== :: (:A → :A → BOOLEAN)`
+- `/= :: (:A → :A → BOOLEAN)`
 
-***
+<details>
+<summary>Instances</summary>
 
-#### `SEMIGROUP` <sup><sub>[CLASS]</sub></sup><a name="SEMIGROUP"></a>
-[`SEMIGROUP`](#SEMIGROUP) [`:A`](#:A)
+- [`EQ`](#EQ) [`NODEINDEX`](#NODEINDEX)
+- [`EQ`](#EQ) [`EDGEINDEX`](#EDGEINDEX)
+- [`EQ :A`](#EQ) `=>` [`EQ`](#EQ) [`(VECTOR :A)`](#VECTOR)
+- [`EQ :A`](#EQ) `=>` [`EQ`](#EQ) [`(CELL :A)`](#CELL)
+- [`EQ :A`](#EQ) [`EQ :B`](#EQ) `=>` [`EQ`](#EQ) [`(RESULT :A :B)`](#RESULT)
+- [`EQ :A`](#EQ) [`EQ :B`](#EQ) `=>` [`EQ`](#EQ) [`(TUPLE :A :B)`](#TUPLE)
+- [`EQ :A`](#EQ) `=>` [`EQ`](#EQ) [`(LIST :A)`](#LIST)
+- [`EQ :A`](#EQ) `=>` [`EQ`](#EQ) [`(OPTIONAL :A)`](#OPTIONAL)
+- [`EQ`](#EQ) [`STRING`](#STRING)
+- [`EQ`](#EQ) [`CHAR`](#CHAR)
+- [`EQ`](#EQ) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
+- [`EQ`](#EQ) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
+- [`EQ`](#EQ) [`INTEGER`](#INTEGER)
+- [`EQ`](#EQ) [`INT`](#INT)
+- [`EQ`](#EQ) [`BOOLEAN`](#BOOLEAN)
 
-Methods:
-- `<> :: (:A → :A → :A)`
+</details>
 
-***
-
-#### `MONADFAIL` <sup><sub>[CLASS]</sub></sup><a name="MONADFAIL"></a>
-[`MONAD :A`](#MONAD) `=>` [`MONADFAIL`](#MONADFAIL) [`:A`](#:A)
-
-Methods:
-- `FAIL :: ∀ :B. (STRING → (:A :B))`
-
-***
-
-#### `TRYINTO` <sup><sub>[CLASS]</sub></sup><a name="TRYINTO"></a>
-[`TRYINTO`](#TRYINTO) [`:A`](#:A) [`:B`](#:B) [`:C`](#:C)
-
-Methods:
-- `TRYINTO :: (:A → (RESULT :B :C))`
-
-***
-
-#### `FUNCTOR` <sup><sub>[CLASS]</sub></sup><a name="FUNCTOR"></a>
-[`FUNCTOR`](#FUNCTOR) [`:A`](#:A)
-
-Methods:
-- `MAP :: ∀ :B :C. ((:B → :C) → (:A :B) → (:A :C))`
-
-***
-
-#### `MONOID` <sup><sub>[CLASS]</sub></sup><a name="MONOID"></a>
-[`SEMIGROUP :A`](#SEMIGROUP) `=>` [`MONOID`](#MONOID) [`:A`](#:A)
-
-Methods:
-- `MEMPTY :: :A`
-
-***
-
-#### `MONAD` <sup><sub>[CLASS]</sub></sup><a name="MONAD"></a>
-[`APPLICATIVE :A`](#APPLICATIVE) `=>` [`MONAD`](#MONAD) [`:A`](#:A)
-
-Methods:
-- `>>= :: ∀ :B :C. ((:A :B) → (:B → (:A :C)) → (:A :C))`
-- `>> :: ∀ :B :C. ((:A :B) → (:A :C) → (:A :C))`
-
-***
-
-#### `SHOW` <sup><sub>[CLASS]</sub></sup><a name="SHOW"></a>
-[`SHOW`](#SHOW) [`:A`](#:A)
-
-Methods:
-- `SHOW :: (:A → STRING)`
-
-***
-
-#### `INTO` <sup><sub>[CLASS]</sub></sup><a name="INTO"></a>
-[`INTO`](#INTO) [`:A`](#:A) [`:B`](#:B)
-
-Methods:
-- `INTO :: (:A → :B)`
-
-***
-
-#### `ORD` <sup><sub>[CLASS]</sub></sup><a name="ORD"></a>
-[`EQ :A`](#EQ) `=>` [`ORD`](#ORD) [`:A`](#:A)
-
-Methods:
-- `<=> :: (:A → :A → ORD)`
 
 ***
 
@@ -369,14 +213,229 @@ Methods:
 - `* :: (:A → :A → :A)`
 - `FROMINT :: (INT → :A)`
 
+<details>
+<summary>Instances</summary>
+
+- [`NUM :A`](#NUM) `=>` [`NUM`](#NUM) [`(CELL :A)`](#CELL)
+- [`NUM`](#NUM) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
+- [`NUM`](#NUM) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
+- [`NUM`](#NUM) [`INTEGER`](#INTEGER)
+- [`NUM`](#NUM) [`INT`](#INT)
+
+</details>
+
+
 ***
 
-#### `EQ` <sup><sub>[CLASS]</sub></sup><a name="EQ"></a>
-[`EQ`](#EQ) [`:A`](#:A)
+#### `ORD` <sup><sub>[CLASS]</sub></sup><a name="ORD"></a>
+[`EQ :A`](#EQ) `=>` [`ORD`](#ORD) [`:A`](#:A)
 
 Methods:
-- `== :: (:A → :A → BOOLEAN)`
-- `/= :: (:A → :A → BOOLEAN)`
+- `<=> :: (:A → :A → ORD)`
+
+<details>
+<summary>Instances</summary>
+
+- [`ORD :A`](#ORD) [`ORD :B`](#ORD) `=>` [`ORD`](#ORD) [`(RESULT :A :B)`](#RESULT)
+- [`ORD :A`](#ORD) [`ORD :B`](#ORD) `=>` [`ORD`](#ORD) [`(TUPLE :A :B)`](#TUPLE)
+- [`ORD :A`](#ORD) `=>` [`ORD`](#ORD) [`(OPTIONAL :A)`](#OPTIONAL)
+- [`ORD`](#ORD) [`STRING`](#STRING)
+- [`ORD`](#ORD) [`CHAR`](#CHAR)
+- [`ORD`](#ORD) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
+- [`ORD`](#ORD) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
+- [`ORD`](#ORD) [`INTEGER`](#INTEGER)
+- [`ORD`](#ORD) [`INT`](#INT)
+- [`ORD`](#ORD) [`BOOLEAN`](#BOOLEAN)
+
+</details>
+
+
+***
+
+#### `INTO` <sup><sub>[CLASS]</sub></sup><a name="INTO"></a>
+[`INTO`](#INTO) [`:A`](#:A) [`:B`](#:B)
+
+Methods:
+- `INTO :: (:A → :B)`
+
+<details>
+<summary>Instances</summary>
+
+- [`INTO`](#INTO) [`NODEINDEX`](#NODEINDEX) [`INT`](#INT)
+- [`INTO`](#INTO) [`EDGEINDEX`](#EDGEINDEX) [`INT`](#INT)
+- [`INTO`](#INTO) [`(VECTOR :A)`](#VECTOR) [`(LIST :A)`](#LIST)
+- [`INTO`](#INTO) [`(LIST :A)`](#LIST) [`(VECTOR :A)`](#VECTOR)
+- [`INTO`](#INTO) [`(OPTIONAL :A)`](#OPTIONAL) [`(RESULT UNIT :A)`](#RESULT)
+- [`INTO`](#INTO) [`(RESULT :A :B)`](#RESULT) [`(OPTIONAL :B)`](#OPTIONAL)
+- [`INTO`](#INTO) [`(TUPLE :A :B)`](#TUPLE) [`(TUPLE :B :A)`](#TUPLE)
+- [`INTO`](#INTO) [`(LIST CHAR)`](#LIST) [`STRING`](#STRING)
+- [`INTO`](#INTO) [`STRING`](#STRING) [`(LIST CHAR)`](#LIST)
+- [`INTO`](#INTO) [`INT`](#INT) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
+- [`INTO`](#INTO) [`INT`](#INT) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
+- [`INTO`](#INTO) [`INTEGER`](#INTEGER) [`INT`](#INT)
+- [`INTO`](#INTO) [`INT`](#INT) [`INTEGER`](#INTEGER)
+- [`INTO`](#INTO) [`:A`](#:A) [`:A`](#:A)
+
+</details>
+
+
+***
+
+#### `SHOW` <sup><sub>[CLASS]</sub></sup><a name="SHOW"></a>
+[`SHOW`](#SHOW) [`:A`](#:A)
+
+Methods:
+- `SHOW :: (:A → STRING)`
+
+<details>
+<summary>Instances</summary>
+
+- [`SHOW`](#SHOW) [`NODEINDEX`](#NODEINDEX)
+- [`SHOW`](#SHOW) [`EDGEINDEX`](#EDGEINDEX)
+- [`SHOW :A`](#SHOW) `=>` [`SHOW`](#SHOW) [`(CELL :A)`](#CELL)
+- [`SHOW :A`](#SHOW) `=>` [`SHOW`](#SHOW) [`(OPTIONAL :A)`](#OPTIONAL)
+- [`SHOW`](#SHOW) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
+- [`SHOW`](#SHOW) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
+- [`SHOW`](#SHOW) [`INTEGER`](#INTEGER)
+- [`SHOW`](#SHOW) [`INT`](#INT)
+- [`SHOW`](#SHOW) [`CHAR`](#CHAR)
+- [`SHOW`](#SHOW) [`STRING`](#STRING)
+- [`SHOW`](#SHOW) [`BOOLEAN`](#BOOLEAN)
+
+</details>
+
+
+***
+
+#### `MONAD` <sup><sub>[CLASS]</sub></sup><a name="MONAD"></a>
+[`APPLICATIVE :A`](#APPLICATIVE) `=>` [`MONAD`](#MONAD) [`:A`](#:A)
+
+Methods:
+- `>>= :: ∀ :B :C. ((:A :B) → (:B → (:A :C)) → (:A :C))`
+- `>> :: ∀ :B :C. ((:A :B) → (:A :C) → (:A :C))`
+
+<details>
+<summary>Instances</summary>
+
+- [`MONAD`](#MONAD) [`(RESULT :A)`](#RESULT)
+- [`MONAD`](#MONAD) [`LIST`](#LIST)
+- [`MONAD`](#MONAD) [`OPTIONAL`](#OPTIONAL)
+
+</details>
+
+
+***
+
+#### `MONOID` <sup><sub>[CLASS]</sub></sup><a name="MONOID"></a>
+[`SEMIGROUP :A`](#SEMIGROUP) `=>` [`MONOID`](#MONOID) [`:A`](#:A)
+
+Methods:
+- `MEMPTY :: :A`
+
+<details>
+<summary>Instances</summary>
+
+- [`MONOID :A`](#MONOID) `=>` [`MONOID`](#MONOID) [`(RESULT :B :A)`](#RESULT)
+- [`MONOID`](#MONOID) [`(LIST :A)`](#LIST)
+- [`MONOID :A`](#MONOID) `=>` [`MONOID`](#MONOID) [`(OPTIONAL :A)`](#OPTIONAL)
+- [`MONOID`](#MONOID) [`STRING`](#STRING)
+
+</details>
+
+
+***
+
+#### `FUNCTOR` <sup><sub>[CLASS]</sub></sup><a name="FUNCTOR"></a>
+[`FUNCTOR`](#FUNCTOR) [`:A`](#:A)
+
+Methods:
+- `MAP :: ∀ :B :C. ((:B → :C) → (:A :B) → (:A :C))`
+
+<details>
+<summary>Instances</summary>
+
+- [`FUNCTOR`](#FUNCTOR) [`VECTOR`](#VECTOR)
+- [`FUNCTOR`](#FUNCTOR) [`CELL`](#CELL)
+- [`FUNCTOR`](#FUNCTOR) [`(RESULT :A)`](#RESULT)
+- [`FUNCTOR`](#FUNCTOR) [`LIST`](#LIST)
+- [`FUNCTOR`](#FUNCTOR) [`OPTIONAL`](#OPTIONAL)
+
+</details>
+
+
+***
+
+#### `TRYINTO` <sup><sub>[CLASS]</sub></sup><a name="TRYINTO"></a>
+[`TRYINTO`](#TRYINTO) [`:A`](#:A) [`:B`](#:B) [`:C`](#:C)
+
+Methods:
+- `TRYINTO :: (:A → (RESULT :B :C))`
+
+<details>
+<summary>Instances</summary>
+
+- [`TRYINTO`](#TRYINTO) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT) [`INT`](#INT)
+- [`TRYINTO`](#TRYINTO) [`SINGLE-FLOAT`](#SINGLE-FLOAT) [`SINGLE-FLOAT`](#SINGLE-FLOAT) [`INT`](#INT)
+
+</details>
+
+
+***
+
+#### `MONADFAIL` <sup><sub>[CLASS]</sub></sup><a name="MONADFAIL"></a>
+[`MONAD :A`](#MONAD) `=>` [`MONADFAIL`](#MONADFAIL) [`:A`](#:A)
+
+Methods:
+- `FAIL :: ∀ :B. (STRING → (:A :B))`
+
+<details>
+<summary>Instances</summary>
+
+- [`MONADFAIL`](#MONADFAIL) [`OPTIONAL`](#OPTIONAL)
+
+</details>
+
+
+***
+
+#### `SEMIGROUP` <sup><sub>[CLASS]</sub></sup><a name="SEMIGROUP"></a>
+[`SEMIGROUP`](#SEMIGROUP) [`:A`](#:A)
+
+Methods:
+- `<> :: (:A → :A → :A)`
+
+<details>
+<summary>Instances</summary>
+
+- [`SEMIGROUP`](#SEMIGROUP) [`(VECTOR :A)`](#VECTOR)
+- [`SEMIGROUP :A`](#SEMIGROUP) `=>` [`SEMIGROUP`](#SEMIGROUP) [`(CELL :A)`](#CELL)
+- [`SEMIGROUP :A`](#SEMIGROUP) `=>` [`SEMIGROUP`](#SEMIGROUP) [`(RESULT :B :A)`](#RESULT)
+- [`SEMIGROUP`](#SEMIGROUP) [`(LIST :A)`](#LIST)
+- [`SEMIGROUP :A`](#SEMIGROUP) `=>` [`SEMIGROUP`](#SEMIGROUP) [`(OPTIONAL :A)`](#OPTIONAL)
+- [`SEMIGROUP`](#SEMIGROUP) [`STRING`](#STRING)
+
+</details>
+
+
+***
+
+#### `APPLICATIVE` <sup><sub>[CLASS]</sub></sup><a name="APPLICATIVE"></a>
+[`FUNCTOR :A`](#FUNCTOR) `=>` [`APPLICATIVE`](#APPLICATIVE) [`:A`](#:A)
+
+Methods:
+- `PURE :: ∀ :B. (:B → (:A :B))`
+- `LIFTA2 :: ∀ :B :C :D. ((:B → :C → :D) → (:A :B) → (:A :C) → (:A :D))`
+
+<details>
+<summary>Instances</summary>
+
+- [`APPLICATIVE`](#APPLICATIVE) [`CELL`](#CELL)
+- [`APPLICATIVE`](#APPLICATIVE) [`(RESULT :A)`](#RESULT)
+- [`APPLICATIVE`](#APPLICATIVE) [`LIST`](#LIST)
+- [`APPLICATIVE`](#APPLICATIVE) [`OPTIONAL`](#OPTIONAL)
+
+</details>
+
 
 ***
 
@@ -416,111 +475,6 @@ Methods:
 
 ## File: [builtin.lisp](../src/library/builtin.lisp)
 
-### Classes
-
-#### `APPLICATIVE` <sup><sub>[CLASS]</sub></sup><a name="APPLICATIVE"></a>
-[`FUNCTOR :A`](#FUNCTOR) `=>` [`APPLICATIVE`](#APPLICATIVE) [`:A`](#:A)
-
-Methods:
-- `PURE :: ∀ :B. (:B → (:A :B))`
-- `LIFTA2 :: ∀ :B :C :D. ((:B → :C → :D) → (:A :B) → (:A :C) → (:A :D))`
-
-***
-
-#### `SEMIGROUP` <sup><sub>[CLASS]</sub></sup><a name="SEMIGROUP"></a>
-[`SEMIGROUP`](#SEMIGROUP) [`:A`](#:A)
-
-Methods:
-- `<> :: (:A → :A → :A)`
-
-***
-
-#### `MONADFAIL` <sup><sub>[CLASS]</sub></sup><a name="MONADFAIL"></a>
-[`MONAD :A`](#MONAD) `=>` [`MONADFAIL`](#MONADFAIL) [`:A`](#:A)
-
-Methods:
-- `FAIL :: ∀ :B. (STRING → (:A :B))`
-
-***
-
-#### `TRYINTO` <sup><sub>[CLASS]</sub></sup><a name="TRYINTO"></a>
-[`TRYINTO`](#TRYINTO) [`:A`](#:A) [`:B`](#:B) [`:C`](#:C)
-
-Methods:
-- `TRYINTO :: (:A → (RESULT :B :C))`
-
-***
-
-#### `FUNCTOR` <sup><sub>[CLASS]</sub></sup><a name="FUNCTOR"></a>
-[`FUNCTOR`](#FUNCTOR) [`:A`](#:A)
-
-Methods:
-- `MAP :: ∀ :B :C. ((:B → :C) → (:A :B) → (:A :C))`
-
-***
-
-#### `MONOID` <sup><sub>[CLASS]</sub></sup><a name="MONOID"></a>
-[`SEMIGROUP :A`](#SEMIGROUP) `=>` [`MONOID`](#MONOID) [`:A`](#:A)
-
-Methods:
-- `MEMPTY :: :A`
-
-***
-
-#### `MONAD` <sup><sub>[CLASS]</sub></sup><a name="MONAD"></a>
-[`APPLICATIVE :A`](#APPLICATIVE) `=>` [`MONAD`](#MONAD) [`:A`](#:A)
-
-Methods:
-- `>>= :: ∀ :B :C. ((:A :B) → (:B → (:A :C)) → (:A :C))`
-- `>> :: ∀ :B :C. ((:A :B) → (:A :C) → (:A :C))`
-
-***
-
-#### `SHOW` <sup><sub>[CLASS]</sub></sup><a name="SHOW"></a>
-[`SHOW`](#SHOW) [`:A`](#:A)
-
-Methods:
-- `SHOW :: (:A → STRING)`
-
-***
-
-#### `INTO` <sup><sub>[CLASS]</sub></sup><a name="INTO"></a>
-[`INTO`](#INTO) [`:A`](#:A) [`:B`](#:B)
-
-Methods:
-- `INTO :: (:A → :B)`
-
-***
-
-#### `ORD` <sup><sub>[CLASS]</sub></sup><a name="ORD"></a>
-[`EQ :A`](#EQ) `=>` [`ORD`](#ORD) [`:A`](#:A)
-
-Methods:
-- `<=> :: (:A → :A → ORD)`
-
-***
-
-#### `NUM` <sup><sub>[CLASS]</sub></sup><a name="NUM"></a>
-[`EQ :A`](#EQ) [`SHOW :A`](#SHOW) `=>` [`NUM`](#NUM) [`:A`](#:A)
-
-Methods:
-- `+ :: (:A → :A → :A)`
-- `- :: (:A → :A → :A)`
-- `* :: (:A → :A → :A)`
-- `FROMINT :: (INT → :A)`
-
-***
-
-#### `EQ` <sup><sub>[CLASS]</sub></sup><a name="EQ"></a>
-[`EQ`](#EQ) [`:A`](#:A)
-
-Methods:
-- `== :: (:A → :A → BOOLEAN)`
-- `/= :: (:A → :A → BOOLEAN)`
-
-***
-
-
 ### Functions
 
 #### `GCD` <sup><sub>[FUNCTION]</sub></sup><a name="GCD"></a>
@@ -556,111 +510,6 @@ Methods:
 
 ## File: [string.lisp](../src/library/string.lisp)
 
-### Classes
-
-#### `APPLICATIVE` <sup><sub>[CLASS]</sub></sup><a name="APPLICATIVE"></a>
-[`FUNCTOR :A`](#FUNCTOR) `=>` [`APPLICATIVE`](#APPLICATIVE) [`:A`](#:A)
-
-Methods:
-- `PURE :: ∀ :B. (:B → (:A :B))`
-- `LIFTA2 :: ∀ :B :C :D. ((:B → :C → :D) → (:A :B) → (:A :C) → (:A :D))`
-
-***
-
-#### `SEMIGROUP` <sup><sub>[CLASS]</sub></sup><a name="SEMIGROUP"></a>
-[`SEMIGROUP`](#SEMIGROUP) [`:A`](#:A)
-
-Methods:
-- `<> :: (:A → :A → :A)`
-
-***
-
-#### `MONADFAIL` <sup><sub>[CLASS]</sub></sup><a name="MONADFAIL"></a>
-[`MONAD :A`](#MONAD) `=>` [`MONADFAIL`](#MONADFAIL) [`:A`](#:A)
-
-Methods:
-- `FAIL :: ∀ :B. (STRING → (:A :B))`
-
-***
-
-#### `TRYINTO` <sup><sub>[CLASS]</sub></sup><a name="TRYINTO"></a>
-[`TRYINTO`](#TRYINTO) [`:A`](#:A) [`:B`](#:B) [`:C`](#:C)
-
-Methods:
-- `TRYINTO :: (:A → (RESULT :B :C))`
-
-***
-
-#### `FUNCTOR` <sup><sub>[CLASS]</sub></sup><a name="FUNCTOR"></a>
-[`FUNCTOR`](#FUNCTOR) [`:A`](#:A)
-
-Methods:
-- `MAP :: ∀ :B :C. ((:B → :C) → (:A :B) → (:A :C))`
-
-***
-
-#### `MONOID` <sup><sub>[CLASS]</sub></sup><a name="MONOID"></a>
-[`SEMIGROUP :A`](#SEMIGROUP) `=>` [`MONOID`](#MONOID) [`:A`](#:A)
-
-Methods:
-- `MEMPTY :: :A`
-
-***
-
-#### `MONAD` <sup><sub>[CLASS]</sub></sup><a name="MONAD"></a>
-[`APPLICATIVE :A`](#APPLICATIVE) `=>` [`MONAD`](#MONAD) [`:A`](#:A)
-
-Methods:
-- `>>= :: ∀ :B :C. ((:A :B) → (:B → (:A :C)) → (:A :C))`
-- `>> :: ∀ :B :C. ((:A :B) → (:A :C) → (:A :C))`
-
-***
-
-#### `SHOW` <sup><sub>[CLASS]</sub></sup><a name="SHOW"></a>
-[`SHOW`](#SHOW) [`:A`](#:A)
-
-Methods:
-- `SHOW :: (:A → STRING)`
-
-***
-
-#### `INTO` <sup><sub>[CLASS]</sub></sup><a name="INTO"></a>
-[`INTO`](#INTO) [`:A`](#:A) [`:B`](#:B)
-
-Methods:
-- `INTO :: (:A → :B)`
-
-***
-
-#### `ORD` <sup><sub>[CLASS]</sub></sup><a name="ORD"></a>
-[`EQ :A`](#EQ) `=>` [`ORD`](#ORD) [`:A`](#:A)
-
-Methods:
-- `<=> :: (:A → :A → ORD)`
-
-***
-
-#### `NUM` <sup><sub>[CLASS]</sub></sup><a name="NUM"></a>
-[`EQ :A`](#EQ) [`SHOW :A`](#SHOW) `=>` [`NUM`](#NUM) [`:A`](#:A)
-
-Methods:
-- `+ :: (:A → :A → :A)`
-- `- :: (:A → :A → :A)`
-- `* :: (:A → :A → :A)`
-- `FROMINT :: (INT → :A)`
-
-***
-
-#### `EQ` <sup><sub>[CLASS]</sub></sup><a name="EQ"></a>
-[`EQ`](#EQ) [`:A`](#:A)
-
-Methods:
-- `== :: (:A → :A → BOOLEAN)`
-- `/= :: (:A → :A → BOOLEAN)`
-
-***
-
-
 ### Functions
 
 #### `PARSE-INT` <sup><sub>[FUNCTION]</sub></sup><a name="PARSE-INT"></a>
@@ -686,111 +535,6 @@ Methods:
 
 ## File: [optional.lisp](../src/library/optional.lisp)
 
-### Classes
-
-#### `APPLICATIVE` <sup><sub>[CLASS]</sub></sup><a name="APPLICATIVE"></a>
-[`FUNCTOR :A`](#FUNCTOR) `=>` [`APPLICATIVE`](#APPLICATIVE) [`:A`](#:A)
-
-Methods:
-- `PURE :: ∀ :B. (:B → (:A :B))`
-- `LIFTA2 :: ∀ :B :C :D. ((:B → :C → :D) → (:A :B) → (:A :C) → (:A :D))`
-
-***
-
-#### `SEMIGROUP` <sup><sub>[CLASS]</sub></sup><a name="SEMIGROUP"></a>
-[`SEMIGROUP`](#SEMIGROUP) [`:A`](#:A)
-
-Methods:
-- `<> :: (:A → :A → :A)`
-
-***
-
-#### `MONADFAIL` <sup><sub>[CLASS]</sub></sup><a name="MONADFAIL"></a>
-[`MONAD :A`](#MONAD) `=>` [`MONADFAIL`](#MONADFAIL) [`:A`](#:A)
-
-Methods:
-- `FAIL :: ∀ :B. (STRING → (:A :B))`
-
-***
-
-#### `TRYINTO` <sup><sub>[CLASS]</sub></sup><a name="TRYINTO"></a>
-[`TRYINTO`](#TRYINTO) [`:A`](#:A) [`:B`](#:B) [`:C`](#:C)
-
-Methods:
-- `TRYINTO :: (:A → (RESULT :B :C))`
-
-***
-
-#### `FUNCTOR` <sup><sub>[CLASS]</sub></sup><a name="FUNCTOR"></a>
-[`FUNCTOR`](#FUNCTOR) [`:A`](#:A)
-
-Methods:
-- `MAP :: ∀ :B :C. ((:B → :C) → (:A :B) → (:A :C))`
-
-***
-
-#### `MONOID` <sup><sub>[CLASS]</sub></sup><a name="MONOID"></a>
-[`SEMIGROUP :A`](#SEMIGROUP) `=>` [`MONOID`](#MONOID) [`:A`](#:A)
-
-Methods:
-- `MEMPTY :: :A`
-
-***
-
-#### `MONAD` <sup><sub>[CLASS]</sub></sup><a name="MONAD"></a>
-[`APPLICATIVE :A`](#APPLICATIVE) `=>` [`MONAD`](#MONAD) [`:A`](#:A)
-
-Methods:
-- `>>= :: ∀ :B :C. ((:A :B) → (:B → (:A :C)) → (:A :C))`
-- `>> :: ∀ :B :C. ((:A :B) → (:A :C) → (:A :C))`
-
-***
-
-#### `SHOW` <sup><sub>[CLASS]</sub></sup><a name="SHOW"></a>
-[`SHOW`](#SHOW) [`:A`](#:A)
-
-Methods:
-- `SHOW :: (:A → STRING)`
-
-***
-
-#### `INTO` <sup><sub>[CLASS]</sub></sup><a name="INTO"></a>
-[`INTO`](#INTO) [`:A`](#:A) [`:B`](#:B)
-
-Methods:
-- `INTO :: (:A → :B)`
-
-***
-
-#### `ORD` <sup><sub>[CLASS]</sub></sup><a name="ORD"></a>
-[`EQ :A`](#EQ) `=>` [`ORD`](#ORD) [`:A`](#:A)
-
-Methods:
-- `<=> :: (:A → :A → ORD)`
-
-***
-
-#### `NUM` <sup><sub>[CLASS]</sub></sup><a name="NUM"></a>
-[`EQ :A`](#EQ) [`SHOW :A`](#SHOW) `=>` [`NUM`](#NUM) [`:A`](#:A)
-
-Methods:
-- `+ :: (:A → :A → :A)`
-- `- :: (:A → :A → :A)`
-- `* :: (:A → :A → :A)`
-- `FROMINT :: (INT → :A)`
-
-***
-
-#### `EQ` <sup><sub>[CLASS]</sub></sup><a name="EQ"></a>
-[`EQ`](#EQ) [`:A`](#:A)
-
-Methods:
-- `== :: (:A → :A → BOOLEAN)`
-- `/= :: (:A → :A → BOOLEAN)`
-
-***
-
-
 ### Functions
 
 #### `ISNONE` <sup><sub>[FUNCTION]</sub></sup><a name="ISNONE"></a>
@@ -810,111 +554,6 @@ Methods:
 
 
 ## File: [list.lisp](../src/library/list.lisp)
-
-### Classes
-
-#### `APPLICATIVE` <sup><sub>[CLASS]</sub></sup><a name="APPLICATIVE"></a>
-[`FUNCTOR :A`](#FUNCTOR) `=>` [`APPLICATIVE`](#APPLICATIVE) [`:A`](#:A)
-
-Methods:
-- `PURE :: ∀ :B. (:B → (:A :B))`
-- `LIFTA2 :: ∀ :B :C :D. ((:B → :C → :D) → (:A :B) → (:A :C) → (:A :D))`
-
-***
-
-#### `SEMIGROUP` <sup><sub>[CLASS]</sub></sup><a name="SEMIGROUP"></a>
-[`SEMIGROUP`](#SEMIGROUP) [`:A`](#:A)
-
-Methods:
-- `<> :: (:A → :A → :A)`
-
-***
-
-#### `MONADFAIL` <sup><sub>[CLASS]</sub></sup><a name="MONADFAIL"></a>
-[`MONAD :A`](#MONAD) `=>` [`MONADFAIL`](#MONADFAIL) [`:A`](#:A)
-
-Methods:
-- `FAIL :: ∀ :B. (STRING → (:A :B))`
-
-***
-
-#### `TRYINTO` <sup><sub>[CLASS]</sub></sup><a name="TRYINTO"></a>
-[`TRYINTO`](#TRYINTO) [`:A`](#:A) [`:B`](#:B) [`:C`](#:C)
-
-Methods:
-- `TRYINTO :: (:A → (RESULT :B :C))`
-
-***
-
-#### `FUNCTOR` <sup><sub>[CLASS]</sub></sup><a name="FUNCTOR"></a>
-[`FUNCTOR`](#FUNCTOR) [`:A`](#:A)
-
-Methods:
-- `MAP :: ∀ :B :C. ((:B → :C) → (:A :B) → (:A :C))`
-
-***
-
-#### `MONOID` <sup><sub>[CLASS]</sub></sup><a name="MONOID"></a>
-[`SEMIGROUP :A`](#SEMIGROUP) `=>` [`MONOID`](#MONOID) [`:A`](#:A)
-
-Methods:
-- `MEMPTY :: :A`
-
-***
-
-#### `MONAD` <sup><sub>[CLASS]</sub></sup><a name="MONAD"></a>
-[`APPLICATIVE :A`](#APPLICATIVE) `=>` [`MONAD`](#MONAD) [`:A`](#:A)
-
-Methods:
-- `>>= :: ∀ :B :C. ((:A :B) → (:B → (:A :C)) → (:A :C))`
-- `>> :: ∀ :B :C. ((:A :B) → (:A :C) → (:A :C))`
-
-***
-
-#### `SHOW` <sup><sub>[CLASS]</sub></sup><a name="SHOW"></a>
-[`SHOW`](#SHOW) [`:A`](#:A)
-
-Methods:
-- `SHOW :: (:A → STRING)`
-
-***
-
-#### `INTO` <sup><sub>[CLASS]</sub></sup><a name="INTO"></a>
-[`INTO`](#INTO) [`:A`](#:A) [`:B`](#:B)
-
-Methods:
-- `INTO :: (:A → :B)`
-
-***
-
-#### `ORD` <sup><sub>[CLASS]</sub></sup><a name="ORD"></a>
-[`EQ :A`](#EQ) `=>` [`ORD`](#ORD) [`:A`](#:A)
-
-Methods:
-- `<=> :: (:A → :A → ORD)`
-
-***
-
-#### `NUM` <sup><sub>[CLASS]</sub></sup><a name="NUM"></a>
-[`EQ :A`](#EQ) [`SHOW :A`](#SHOW) `=>` [`NUM`](#NUM) [`:A`](#:A)
-
-Methods:
-- `+ :: (:A → :A → :A)`
-- `- :: (:A → :A → :A)`
-- `* :: (:A → :A → :A)`
-- `FROMINT :: (INT → :A)`
-
-***
-
-#### `EQ` <sup><sub>[CLASS]</sub></sup><a name="EQ"></a>
-[`EQ`](#EQ) [`:A`](#:A)
-
-Methods:
-- `== :: (:A → :A → BOOLEAN)`
-- `/= :: (:A → :A → BOOLEAN)`
-
-***
-
 
 ### Functions
 
@@ -1243,111 +882,6 @@ Returns a new list without duplicate elements.
 
 ## File: [tuple.lisp](../src/library/tuple.lisp)
 
-### Classes
-
-#### `APPLICATIVE` <sup><sub>[CLASS]</sub></sup><a name="APPLICATIVE"></a>
-[`FUNCTOR :A`](#FUNCTOR) `=>` [`APPLICATIVE`](#APPLICATIVE) [`:A`](#:A)
-
-Methods:
-- `PURE :: ∀ :B. (:B → (:A :B))`
-- `LIFTA2 :: ∀ :B :C :D. ((:B → :C → :D) → (:A :B) → (:A :C) → (:A :D))`
-
-***
-
-#### `SEMIGROUP` <sup><sub>[CLASS]</sub></sup><a name="SEMIGROUP"></a>
-[`SEMIGROUP`](#SEMIGROUP) [`:A`](#:A)
-
-Methods:
-- `<> :: (:A → :A → :A)`
-
-***
-
-#### `MONADFAIL` <sup><sub>[CLASS]</sub></sup><a name="MONADFAIL"></a>
-[`MONAD :A`](#MONAD) `=>` [`MONADFAIL`](#MONADFAIL) [`:A`](#:A)
-
-Methods:
-- `FAIL :: ∀ :B. (STRING → (:A :B))`
-
-***
-
-#### `TRYINTO` <sup><sub>[CLASS]</sub></sup><a name="TRYINTO"></a>
-[`TRYINTO`](#TRYINTO) [`:A`](#:A) [`:B`](#:B) [`:C`](#:C)
-
-Methods:
-- `TRYINTO :: (:A → (RESULT :B :C))`
-
-***
-
-#### `FUNCTOR` <sup><sub>[CLASS]</sub></sup><a name="FUNCTOR"></a>
-[`FUNCTOR`](#FUNCTOR) [`:A`](#:A)
-
-Methods:
-- `MAP :: ∀ :B :C. ((:B → :C) → (:A :B) → (:A :C))`
-
-***
-
-#### `MONOID` <sup><sub>[CLASS]</sub></sup><a name="MONOID"></a>
-[`SEMIGROUP :A`](#SEMIGROUP) `=>` [`MONOID`](#MONOID) [`:A`](#:A)
-
-Methods:
-- `MEMPTY :: :A`
-
-***
-
-#### `MONAD` <sup><sub>[CLASS]</sub></sup><a name="MONAD"></a>
-[`APPLICATIVE :A`](#APPLICATIVE) `=>` [`MONAD`](#MONAD) [`:A`](#:A)
-
-Methods:
-- `>>= :: ∀ :B :C. ((:A :B) → (:B → (:A :C)) → (:A :C))`
-- `>> :: ∀ :B :C. ((:A :B) → (:A :C) → (:A :C))`
-
-***
-
-#### `SHOW` <sup><sub>[CLASS]</sub></sup><a name="SHOW"></a>
-[`SHOW`](#SHOW) [`:A`](#:A)
-
-Methods:
-- `SHOW :: (:A → STRING)`
-
-***
-
-#### `INTO` <sup><sub>[CLASS]</sub></sup><a name="INTO"></a>
-[`INTO`](#INTO) [`:A`](#:A) [`:B`](#:B)
-
-Methods:
-- `INTO :: (:A → :B)`
-
-***
-
-#### `ORD` <sup><sub>[CLASS]</sub></sup><a name="ORD"></a>
-[`EQ :A`](#EQ) `=>` [`ORD`](#ORD) [`:A`](#:A)
-
-Methods:
-- `<=> :: (:A → :A → ORD)`
-
-***
-
-#### `NUM` <sup><sub>[CLASS]</sub></sup><a name="NUM"></a>
-[`EQ :A`](#EQ) [`SHOW :A`](#SHOW) `=>` [`NUM`](#NUM) [`:A`](#:A)
-
-Methods:
-- `+ :: (:A → :A → :A)`
-- `- :: (:A → :A → :A)`
-- `* :: (:A → :A → :A)`
-- `FROMINT :: (INT → :A)`
-
-***
-
-#### `EQ` <sup><sub>[CLASS]</sub></sup><a name="EQ"></a>
-[`EQ`](#EQ) [`:A`](#:A)
-
-Methods:
-- `== :: (:A → :A → BOOLEAN)`
-- `/= :: (:A → :A → BOOLEAN)`
-
-***
-
-
 ### Functions
 
 #### `FST` <sup><sub>[FUNCTION]</sub></sup><a name="FST"></a>
@@ -1362,111 +896,6 @@ Methods:
 
 
 ## File: [result.lisp](../src/library/result.lisp)
-
-### Classes
-
-#### `APPLICATIVE` <sup><sub>[CLASS]</sub></sup><a name="APPLICATIVE"></a>
-[`FUNCTOR :A`](#FUNCTOR) `=>` [`APPLICATIVE`](#APPLICATIVE) [`:A`](#:A)
-
-Methods:
-- `PURE :: ∀ :B. (:B → (:A :B))`
-- `LIFTA2 :: ∀ :B :C :D. ((:B → :C → :D) → (:A :B) → (:A :C) → (:A :D))`
-
-***
-
-#### `SEMIGROUP` <sup><sub>[CLASS]</sub></sup><a name="SEMIGROUP"></a>
-[`SEMIGROUP`](#SEMIGROUP) [`:A`](#:A)
-
-Methods:
-- `<> :: (:A → :A → :A)`
-
-***
-
-#### `MONADFAIL` <sup><sub>[CLASS]</sub></sup><a name="MONADFAIL"></a>
-[`MONAD :A`](#MONAD) `=>` [`MONADFAIL`](#MONADFAIL) [`:A`](#:A)
-
-Methods:
-- `FAIL :: ∀ :B. (STRING → (:A :B))`
-
-***
-
-#### `TRYINTO` <sup><sub>[CLASS]</sub></sup><a name="TRYINTO"></a>
-[`TRYINTO`](#TRYINTO) [`:A`](#:A) [`:B`](#:B) [`:C`](#:C)
-
-Methods:
-- `TRYINTO :: (:A → (RESULT :B :C))`
-
-***
-
-#### `FUNCTOR` <sup><sub>[CLASS]</sub></sup><a name="FUNCTOR"></a>
-[`FUNCTOR`](#FUNCTOR) [`:A`](#:A)
-
-Methods:
-- `MAP :: ∀ :B :C. ((:B → :C) → (:A :B) → (:A :C))`
-
-***
-
-#### `MONOID` <sup><sub>[CLASS]</sub></sup><a name="MONOID"></a>
-[`SEMIGROUP :A`](#SEMIGROUP) `=>` [`MONOID`](#MONOID) [`:A`](#:A)
-
-Methods:
-- `MEMPTY :: :A`
-
-***
-
-#### `MONAD` <sup><sub>[CLASS]</sub></sup><a name="MONAD"></a>
-[`APPLICATIVE :A`](#APPLICATIVE) `=>` [`MONAD`](#MONAD) [`:A`](#:A)
-
-Methods:
-- `>>= :: ∀ :B :C. ((:A :B) → (:B → (:A :C)) → (:A :C))`
-- `>> :: ∀ :B :C. ((:A :B) → (:A :C) → (:A :C))`
-
-***
-
-#### `SHOW` <sup><sub>[CLASS]</sub></sup><a name="SHOW"></a>
-[`SHOW`](#SHOW) [`:A`](#:A)
-
-Methods:
-- `SHOW :: (:A → STRING)`
-
-***
-
-#### `INTO` <sup><sub>[CLASS]</sub></sup><a name="INTO"></a>
-[`INTO`](#INTO) [`:A`](#:A) [`:B`](#:B)
-
-Methods:
-- `INTO :: (:A → :B)`
-
-***
-
-#### `ORD` <sup><sub>[CLASS]</sub></sup><a name="ORD"></a>
-[`EQ :A`](#EQ) `=>` [`ORD`](#ORD) [`:A`](#:A)
-
-Methods:
-- `<=> :: (:A → :A → ORD)`
-
-***
-
-#### `NUM` <sup><sub>[CLASS]</sub></sup><a name="NUM"></a>
-[`EQ :A`](#EQ) [`SHOW :A`](#SHOW) `=>` [`NUM`](#NUM) [`:A`](#:A)
-
-Methods:
-- `+ :: (:A → :A → :A)`
-- `- :: (:A → :A → :A)`
-- `* :: (:A → :A → :A)`
-- `FROMINT :: (INT → :A)`
-
-***
-
-#### `EQ` <sup><sub>[CLASS]</sub></sup><a name="EQ"></a>
-[`EQ`](#EQ) [`:A`](#:A)
-
-Methods:
-- `== :: (:A → :A → BOOLEAN)`
-- `/= :: (:A → :A → BOOLEAN)`
-
-***
-
 
 ### Functions
 
@@ -1496,111 +925,6 @@ Map over the ERR case
 
 
 ## File: [functions.lisp](../src/library/functions.lisp)
-
-### Classes
-
-#### `APPLICATIVE` <sup><sub>[CLASS]</sub></sup><a name="APPLICATIVE"></a>
-[`FUNCTOR :A`](#FUNCTOR) `=>` [`APPLICATIVE`](#APPLICATIVE) [`:A`](#:A)
-
-Methods:
-- `PURE :: ∀ :B. (:B → (:A :B))`
-- `LIFTA2 :: ∀ :B :C :D. ((:B → :C → :D) → (:A :B) → (:A :C) → (:A :D))`
-
-***
-
-#### `SEMIGROUP` <sup><sub>[CLASS]</sub></sup><a name="SEMIGROUP"></a>
-[`SEMIGROUP`](#SEMIGROUP) [`:A`](#:A)
-
-Methods:
-- `<> :: (:A → :A → :A)`
-
-***
-
-#### `MONADFAIL` <sup><sub>[CLASS]</sub></sup><a name="MONADFAIL"></a>
-[`MONAD :A`](#MONAD) `=>` [`MONADFAIL`](#MONADFAIL) [`:A`](#:A)
-
-Methods:
-- `FAIL :: ∀ :B. (STRING → (:A :B))`
-
-***
-
-#### `TRYINTO` <sup><sub>[CLASS]</sub></sup><a name="TRYINTO"></a>
-[`TRYINTO`](#TRYINTO) [`:A`](#:A) [`:B`](#:B) [`:C`](#:C)
-
-Methods:
-- `TRYINTO :: (:A → (RESULT :B :C))`
-
-***
-
-#### `FUNCTOR` <sup><sub>[CLASS]</sub></sup><a name="FUNCTOR"></a>
-[`FUNCTOR`](#FUNCTOR) [`:A`](#:A)
-
-Methods:
-- `MAP :: ∀ :B :C. ((:B → :C) → (:A :B) → (:A :C))`
-
-***
-
-#### `MONOID` <sup><sub>[CLASS]</sub></sup><a name="MONOID"></a>
-[`SEMIGROUP :A`](#SEMIGROUP) `=>` [`MONOID`](#MONOID) [`:A`](#:A)
-
-Methods:
-- `MEMPTY :: :A`
-
-***
-
-#### `MONAD` <sup><sub>[CLASS]</sub></sup><a name="MONAD"></a>
-[`APPLICATIVE :A`](#APPLICATIVE) `=>` [`MONAD`](#MONAD) [`:A`](#:A)
-
-Methods:
-- `>>= :: ∀ :B :C. ((:A :B) → (:B → (:A :C)) → (:A :C))`
-- `>> :: ∀ :B :C. ((:A :B) → (:A :C) → (:A :C))`
-
-***
-
-#### `SHOW` <sup><sub>[CLASS]</sub></sup><a name="SHOW"></a>
-[`SHOW`](#SHOW) [`:A`](#:A)
-
-Methods:
-- `SHOW :: (:A → STRING)`
-
-***
-
-#### `INTO` <sup><sub>[CLASS]</sub></sup><a name="INTO"></a>
-[`INTO`](#INTO) [`:A`](#:A) [`:B`](#:B)
-
-Methods:
-- `INTO :: (:A → :B)`
-
-***
-
-#### `ORD` <sup><sub>[CLASS]</sub></sup><a name="ORD"></a>
-[`EQ :A`](#EQ) `=>` [`ORD`](#ORD) [`:A`](#:A)
-
-Methods:
-- `<=> :: (:A → :A → ORD)`
-
-***
-
-#### `NUM` <sup><sub>[CLASS]</sub></sup><a name="NUM"></a>
-[`EQ :A`](#EQ) [`SHOW :A`](#SHOW) `=>` [`NUM`](#NUM) [`:A`](#:A)
-
-Methods:
-- `+ :: (:A → :A → :A)`
-- `- :: (:A → :A → :A)`
-- `* :: (:A → :A → :A)`
-- `FROMINT :: (INT → :A)`
-
-***
-
-#### `EQ` <sup><sub>[CLASS]</sub></sup><a name="EQ"></a>
-[`EQ`](#EQ) [`:A`](#:A)
-
-Methods:
-- `== :: (:A → :A → BOOLEAN)`
-- `/= :: (:A → :A → BOOLEAN)`
-
-***
-
 
 ### Functions
 
@@ -1693,7 +1017,7 @@ Constructors:
 
 ***
 
-#### `EDGEINDEX`<sup><sub>[TYPE]</sub></sup><a name="EDGEINDEX"></a>
+#### `EDGEINDEX` <sup><sub>[TYPE]</sub></sup><a name="EDGEINDEX"></a>
 - `(EDGEINDEX INT)`
 
 Constructors:
@@ -1710,7 +1034,7 @@ Constructors:
 
 ***
 
-#### `GRAPHTYPE`<sup><sub>[TYPE]</sub></sup><a name="GRAPHTYPE"></a>
+#### `GRAPHTYPE` <sup><sub>[TYPE]</sub></sup><a name="GRAPHTYPE"></a>
 - `UNDIRECTED`
 - `DIRECTED`
 
@@ -1720,7 +1044,7 @@ Constructors:
 
 ***
 
-#### `NODEINDEX`<sup><sub>[TYPE]</sub></sup><a name="NODEINDEX"></a>
+#### `NODEINDEX` <sup><sub>[TYPE]</sub></sup><a name="NODEINDEX"></a>
 - `(NODEINDEX INT)`
 
 Constructors:
@@ -1736,111 +1060,6 @@ Constructors:
 </details>
 
 ***
-
-### Classes
-
-#### `APPLICATIVE` <sup><sub>[CLASS]</sub></sup><a name="APPLICATIVE"></a>
-[`FUNCTOR :A`](#FUNCTOR) `=>` [`APPLICATIVE`](#APPLICATIVE) [`:A`](#:A)
-
-Methods:
-- `PURE :: ∀ :B. (:B → (:A :B))`
-- `LIFTA2 :: ∀ :B :C :D. ((:B → :C → :D) → (:A :B) → (:A :C) → (:A :D))`
-
-***
-
-#### `SEMIGROUP` <sup><sub>[CLASS]</sub></sup><a name="SEMIGROUP"></a>
-[`SEMIGROUP`](#SEMIGROUP) [`:A`](#:A)
-
-Methods:
-- `<> :: (:A → :A → :A)`
-
-***
-
-#### `MONADFAIL` <sup><sub>[CLASS]</sub></sup><a name="MONADFAIL"></a>
-[`MONAD :A`](#MONAD) `=>` [`MONADFAIL`](#MONADFAIL) [`:A`](#:A)
-
-Methods:
-- `FAIL :: ∀ :B. (STRING → (:A :B))`
-
-***
-
-#### `TRYINTO` <sup><sub>[CLASS]</sub></sup><a name="TRYINTO"></a>
-[`TRYINTO`](#TRYINTO) [`:A`](#:A) [`:B`](#:B) [`:C`](#:C)
-
-Methods:
-- `TRYINTO :: (:A → (RESULT :B :C))`
-
-***
-
-#### `FUNCTOR` <sup><sub>[CLASS]</sub></sup><a name="FUNCTOR"></a>
-[`FUNCTOR`](#FUNCTOR) [`:A`](#:A)
-
-Methods:
-- `MAP :: ∀ :B :C. ((:B → :C) → (:A :B) → (:A :C))`
-
-***
-
-#### `MONOID` <sup><sub>[CLASS]</sub></sup><a name="MONOID"></a>
-[`SEMIGROUP :A`](#SEMIGROUP) `=>` [`MONOID`](#MONOID) [`:A`](#:A)
-
-Methods:
-- `MEMPTY :: :A`
-
-***
-
-#### `MONAD` <sup><sub>[CLASS]</sub></sup><a name="MONAD"></a>
-[`APPLICATIVE :A`](#APPLICATIVE) `=>` [`MONAD`](#MONAD) [`:A`](#:A)
-
-Methods:
-- `>>= :: ∀ :B :C. ((:A :B) → (:B → (:A :C)) → (:A :C))`
-- `>> :: ∀ :B :C. ((:A :B) → (:A :C) → (:A :C))`
-
-***
-
-#### `SHOW` <sup><sub>[CLASS]</sub></sup><a name="SHOW"></a>
-[`SHOW`](#SHOW) [`:A`](#:A)
-
-Methods:
-- `SHOW :: (:A → STRING)`
-
-***
-
-#### `INTO` <sup><sub>[CLASS]</sub></sup><a name="INTO"></a>
-[`INTO`](#INTO) [`:A`](#:A) [`:B`](#:B)
-
-Methods:
-- `INTO :: (:A → :B)`
-
-***
-
-#### `ORD` <sup><sub>[CLASS]</sub></sup><a name="ORD"></a>
-[`EQ :A`](#EQ) `=>` [`ORD`](#ORD) [`:A`](#:A)
-
-Methods:
-- `<=> :: (:A → :A → ORD)`
-
-***
-
-#### `NUM` <sup><sub>[CLASS]</sub></sup><a name="NUM"></a>
-[`EQ :A`](#EQ) [`SHOW :A`](#SHOW) `=>` [`NUM`](#NUM) [`:A`](#:A)
-
-Methods:
-- `+ :: (:A → :A → :A)`
-- `- :: (:A → :A → :A)`
-- `* :: (:A → :A → :A)`
-- `FROMINT :: (INT → :A)`
-
-***
-
-#### `EQ` <sup><sub>[CLASS]</sub></sup><a name="EQ"></a>
-[`EQ`](#EQ) [`:A`](#:A)
-
-Methods:
-- `== :: (:A → :A → BOOLEAN)`
-- `/= :: (:A → :A → BOOLEAN)`
-
-***
-
 
 ### Functions
 
