@@ -35,7 +35,11 @@
 	  ('coalton:Unit tUnit)
 	  ('coalton:Char tChar)
 
-	  ('coalton:Int tInt)
+	  ('coalton:I32 tI32)
+          ('coalton:I64 tI64)
+          ('coalton:U8  tU8)
+          ('coalton:U32 tU32)
+          ('coalton:U64 tU64)
           ('coalton:Integer tInteger)
           ('coalton:Single-Float tSingle-Float)
           ('coalton:Double-Float tDouble-Float)

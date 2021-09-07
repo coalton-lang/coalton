@@ -55,6 +55,8 @@ Constructors:
 - `(ERR :A)`
 - `(OK :B)`
 
+Represents something that may have failed.
+
 Constructors:
 - `ERR :: (:A → (RESULT :A :B))`
 - `OK :: (:B → (RESULT :A :B))`
@@ -97,6 +99,27 @@ Constructors:
 
 ***
 
+#### `FRACTION` <sup><sub>[TYPE]</sub></sup><a name="FRACTION"></a>
+- `(%FRACTION INTEGER INTEGER)`
+
+A ratio of integers always in reduced form.
+
+Constructors:
+- `%FRACTION :: (INTEGER → INTEGER → FRACTION)`
+
+<details>
+<summary>Instances</summary>
+
+- [`EQ`](#EQ) [`FRACTION`](#FRACTION)
+- [`NUM`](#NUM) [`FRACTION`](#FRACTION)
+- [`ORD`](#ORD) [`FRACTION`](#FRACTION)
+- [`SHOW`](#SHOW) [`FRACTION`](#FRACTION)
+- [`DIVIDABLE`](#DIVIDABLE) [`INTEGER`](#INTEGER) [`FRACTION`](#FRACTION)
+
+</details>
+
+***
+
 #### `OPTIONAL :A` <sup><sub>[TYPE]</sub></sup><a name="OPTIONAL"></a>
 - `(SOME :A)`
 - `NONE`
@@ -126,34 +149,6 @@ Constructors:
 </details>
 
 ***
-
-### Functions
-
-#### `OR` <sup><sub>[FUNCTION]</sub></sup><a name="OR"></a>
-`(BOOLEAN → BOOLEAN → BOOLEAN)`
-
-***
-
-#### `AND` <sup><sub>[FUNCTION]</sub></sup><a name="AND"></a>
-`(BOOLEAN → BOOLEAN → BOOLEAN)`
-
-***
-
-#### `NOT` <sup><sub>[FUNCTION]</sub></sup><a name="NOT"></a>
-`(BOOLEAN → BOOLEAN)`
-
-***
-
-#### `XOR` <sup><sub>[FUNCTION]</sub></sup><a name="XOR"></a>
-`(BOOLEAN → BOOLEAN → BOOLEAN)`
-
-***
-
-#### `UNDEFINED` <sup><sub>[FUNCTION]</sub></sup><a name="UNDEFINED"></a>
-`∀ :A :B. (:A → :B)`
-
-***
-
 
 ## File: [classes.lisp](../src/library/classes.lisp)
 
@@ -193,10 +188,15 @@ Methods:
 - [`EQ :A`](#EQ) `=>` [`EQ`](#EQ) [`(OPTIONAL :A)`](#OPTIONAL)
 - [`EQ`](#EQ) [`STRING`](#STRING)
 - [`EQ`](#EQ) [`CHAR`](#CHAR)
+- [`EQ`](#EQ) [`FRACTION`](#FRACTION)
 - [`EQ`](#EQ) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
 - [`EQ`](#EQ) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
 - [`EQ`](#EQ) [`INTEGER`](#INTEGER)
-- [`EQ`](#EQ) [`INT`](#INT)
+- [`EQ`](#EQ) [`U64`](#U64)
+- [`EQ`](#EQ) [`U32`](#U32)
+- [`EQ`](#EQ) [`U8`](#U8)
+- [`EQ`](#EQ) [`I64`](#I64)
+- [`EQ`](#EQ) [`I32`](#I32)
 - [`EQ`](#EQ) [`BOOLEAN`](#BOOLEAN)
 
 </details>
@@ -211,16 +211,21 @@ Methods:
 - `+ :: (:A → :A → :A)`
 - `- :: (:A → :A → :A)`
 - `* :: (:A → :A → :A)`
-- `FROMINT :: (INT → :A)`
+- `FROMINT :: (INTEGER → :A)`
 
 <details>
 <summary>Instances</summary>
 
 - [`NUM :A`](#NUM) `=>` [`NUM`](#NUM) [`(CELL :A)`](#CELL)
+- [`NUM`](#NUM) [`FRACTION`](#FRACTION)
 - [`NUM`](#NUM) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
 - [`NUM`](#NUM) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
 - [`NUM`](#NUM) [`INTEGER`](#INTEGER)
-- [`NUM`](#NUM) [`INT`](#INT)
+- [`NUM`](#NUM) [`U64`](#U64)
+- [`NUM`](#NUM) [`U32`](#U32)
+- [`NUM`](#NUM) [`U8`](#U8)
+- [`NUM`](#NUM) [`I64`](#I64)
+- [`NUM`](#NUM) [`I32`](#I32)
 
 </details>
 
@@ -241,10 +246,15 @@ Methods:
 - [`ORD :A`](#ORD) `=>` [`ORD`](#ORD) [`(OPTIONAL :A)`](#OPTIONAL)
 - [`ORD`](#ORD) [`STRING`](#STRING)
 - [`ORD`](#ORD) [`CHAR`](#CHAR)
+- [`ORD`](#ORD) [`FRACTION`](#FRACTION)
 - [`ORD`](#ORD) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
 - [`ORD`](#ORD) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
 - [`ORD`](#ORD) [`INTEGER`](#INTEGER)
-- [`ORD`](#ORD) [`INT`](#INT)
+- [`ORD`](#ORD) [`U64`](#U64)
+- [`ORD`](#ORD) [`U32`](#U32)
+- [`ORD`](#ORD) [`U8`](#U8)
+- [`ORD`](#ORD) [`I64`](#I64)
+- [`ORD`](#ORD) [`I32`](#I32)
 - [`ORD`](#ORD) [`BOOLEAN`](#BOOLEAN)
 
 </details>
@@ -255,14 +265,16 @@ Methods:
 #### `INTO` <sup><sub>[CLASS]</sub></sup><a name="INTO"></a>
 [`INTO`](#INTO) [`:A`](#:A) [`:B`](#:B)
 
+INTO imples *every* element of :FROM can be represented by an element of :TO. This conversion might not be injective (i.e., there may be elements in :TO that don't correspond to any in :FROM).
+
 Methods:
 - `INTO :: (:A → :B)`
 
 <details>
 <summary>Instances</summary>
 
-- [`INTO`](#INTO) [`NODEINDEX`](#NODEINDEX) [`INT`](#INT)
-- [`INTO`](#INTO) [`EDGEINDEX`](#EDGEINDEX) [`INT`](#INT)
+- [`INTO`](#INTO) [`NODEINDEX`](#NODEINDEX) [`INTEGER`](#INTEGER)
+- [`INTO`](#INTO) [`EDGEINDEX`](#EDGEINDEX) [`INTEGER`](#INTEGER)
 - [`INTO`](#INTO) [`(VECTOR :A)`](#VECTOR) [`(LIST :A)`](#LIST)
 - [`INTO`](#INTO) [`(LIST :A)`](#LIST) [`(VECTOR :A)`](#VECTOR)
 - [`INTO`](#INTO) [`:A`](#:A) [`(CELL :A)`](#CELL)
@@ -271,10 +283,23 @@ Methods:
 - [`INTO`](#INTO) [`(TUPLE :A :B)`](#TUPLE) [`(TUPLE :B :A)`](#TUPLE)
 - [`INTO`](#INTO) [`(LIST CHAR)`](#LIST) [`STRING`](#STRING)
 - [`INTO`](#INTO) [`STRING`](#STRING) [`(LIST CHAR)`](#LIST)
-- [`INTO`](#INTO) [`INT`](#INT) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
-- [`INTO`](#INTO) [`INT`](#INT) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
-- [`INTO`](#INTO) [`INTEGER`](#INTEGER) [`INT`](#INT)
-- [`INTO`](#INTO) [`INT`](#INT) [`INTEGER`](#INTEGER)
+- [`INTO`](#INTO) [`INTEGER`](#INTEGER) [`STRING`](#STRING)
+- [`INTO`](#INTO) [`U64`](#U64) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
+- [`INTO`](#INTO) [`U64`](#U64) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
+- [`INTO`](#INTO) [`U64`](#U64) [`INTEGER`](#INTEGER)
+- [`INTO`](#INTO) [`INTEGER`](#INTEGER) [`U64`](#U64)
+- [`INTO`](#INTO) [`U32`](#U32) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
+- [`INTO`](#INTO) [`U32`](#U32) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
+- [`INTO`](#INTO) [`U32`](#U32) [`INTEGER`](#INTEGER)
+- [`INTO`](#INTO) [`INTEGER`](#INTEGER) [`U32`](#U32)
+- [`INTO`](#INTO) [`U8`](#U8) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
+- [`INTO`](#INTO) [`U8`](#U8) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
+- [`INTO`](#INTO) [`U8`](#U8) [`INTEGER`](#INTEGER)
+- [`INTO`](#INTO) [`INTEGER`](#INTEGER) [`U8`](#U8)
+- [`INTO`](#INTO) [`I64`](#I64) [`INTEGER`](#INTEGER)
+- [`INTO`](#INTO) [`INTEGER`](#INTEGER) [`I64`](#I64)
+- [`INTO`](#INTO) [`I32`](#I32) [`INTEGER`](#INTEGER)
+- [`INTO`](#INTO) [`INTEGER`](#INTEGER) [`I32`](#I32)
 - [`INTO`](#INTO) [`:A`](#:A) [`:A`](#:A)
 
 </details>
@@ -295,12 +320,17 @@ Methods:
 - [`SHOW`](#SHOW) [`EDGEINDEX`](#EDGEINDEX)
 - [`SHOW :A`](#SHOW) `=>` [`SHOW`](#SHOW) [`(CELL :A)`](#CELL)
 - [`SHOW :A`](#SHOW) `=>` [`SHOW`](#SHOW) [`(OPTIONAL :A)`](#OPTIONAL)
+- [`SHOW`](#SHOW) [`STRING`](#STRING)
+- [`SHOW`](#SHOW) [`CHAR`](#CHAR)
 - [`SHOW`](#SHOW) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
 - [`SHOW`](#SHOW) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
 - [`SHOW`](#SHOW) [`INTEGER`](#INTEGER)
-- [`SHOW`](#SHOW) [`INT`](#INT)
-- [`SHOW`](#SHOW) [`CHAR`](#CHAR)
-- [`SHOW`](#SHOW) [`STRING`](#STRING)
+- [`SHOW`](#SHOW) [`U64`](#U64)
+- [`SHOW`](#SHOW) [`U32`](#U32)
+- [`SHOW`](#SHOW) [`U8`](#U8)
+- [`SHOW`](#SHOW) [`I64`](#I64)
+- [`SHOW`](#SHOW) [`I32`](#I32)
+- [`SHOW`](#SHOW) [`FRACTION`](#FRACTION)
 - [`SHOW`](#SHOW) [`BOOLEAN`](#BOOLEAN)
 
 </details>
@@ -367,16 +397,54 @@ Methods:
 ***
 
 #### `TRYINTO` <sup><sub>[CLASS]</sub></sup><a name="TRYINTO"></a>
-[`TRYINTO`](#TRYINTO) [`:A`](#:A) [`:B`](#:B) [`:C`](#:C)
+[`TRYINTO`](#TRYINTO) [`:A`](#:A) [`:B`](#:B)
+
+TRY-INTO implies *most* elements of :FROM can be represented exactly by an element of :TO, but sometimes not. If not, an error string is returned.
 
 Methods:
-- `TRYINTO :: (:A → (RESULT :B :C))`
+- `TRYINTO :: (:A → (RESULT STRING :B))`
 
 <details>
 <summary>Instances</summary>
 
-- [`TRYINTO`](#TRYINTO) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT) [`INT`](#INT)
-- [`TRYINTO`](#TRYINTO) [`SINGLE-FLOAT`](#SINGLE-FLOAT) [`SINGLE-FLOAT`](#SINGLE-FLOAT) [`INT`](#INT)
+- [`TRYINTO`](#TRYINTO) [`STRING`](#STRING) [`INTEGER`](#INTEGER)
+
+</details>
+
+
+***
+
+#### `DIVIDABLE` <sup><sub>[CLASS]</sub></sup><a name="DIVIDABLE"></a>
+[`NUM :A`](#NUM) [`NUM :B`](#NUM) `=>` [`DIVIDABLE`](#DIVIDABLE) [`:A`](#:A) [`:B`](#:B)
+
+The representation of a type such that division within that type possibly results in another type. For instance,
+
+
+    (Dividable Integer Fraction)
+
+
+establishes that division of two `Integer`s can result in a `Fraction`, whereas
+
+
+    (Dividable Single-Float Single-Float)
+
+
+establishes that division of two `Single-Float`s can result in a `Single-Float`.
+
+Note that `Dividable` does *not* establish a default result type; you must constrain the result type yourself.
+
+See also: `/`
+
+
+Methods:
+- `UNSAFE-/ :: (:A → :A → :B)`
+
+<details>
+<summary>Instances</summary>
+
+- [`DIVIDABLE`](#DIVIDABLE) [`INTEGER`](#INTEGER) [`FRACTION`](#FRACTION)
+- [`DIVIDABLE`](#DIVIDABLE) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
+- [`DIVIDABLE`](#DIVIDABLE) [`SINGLE-FLOAT`](#SINGLE-FLOAT) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
 
 </details>
 
@@ -474,37 +542,139 @@ Methods:
 ***
 
 
+## File: [boolean.lisp](../src/library/boolean.lisp)
+
+### Functions
+
+#### `OR` <sup><sub>[FUNCTION]</sub></sup><a name="OR"></a>
+`(BOOLEAN → BOOLEAN → BOOLEAN)`
+
+***
+
+#### `AND` <sup><sub>[FUNCTION]</sub></sup><a name="AND"></a>
+`(BOOLEAN → BOOLEAN → BOOLEAN)`
+
+***
+
+#### `NOT` <sup><sub>[FUNCTION]</sub></sup><a name="NOT"></a>
+`(BOOLEAN → BOOLEAN)`
+
+***
+
+#### `XOR` <sup><sub>[FUNCTION]</sub></sup><a name="XOR"></a>
+`(BOOLEAN → BOOLEAN → BOOLEAN)`
+
+***
+
+
 ## File: [builtin.lisp](../src/library/builtin.lisp)
 
 ### Functions
 
+#### `UNDEFINED` <sup><sub>[FUNCTION]</sub></sup><a name="UNDEFINED"></a>
+`∀ :A :B. (:A → :B)`
+
+***
+
+
+## File: [fraction.lisp](../src/library/fraction.lisp)
+
+### Functions
+
+#### `NUMERATOR` <sup><sub>[FUNCTION]</sub></sup><a name="NUMERATOR"></a>
+`(FRACTION → INTEGER)`
+
+The numerator of a fraction Q.
+
+
+***
+
+#### `DENOMINATOR` <sup><sub>[FUNCTION]</sub></sup><a name="DENOMINATOR"></a>
+`(FRACTION → INTEGER)`
+
+The denominator of a fraction Q.
+
+
+***
+
+
+## File: [arith.lisp](../src/library/arith.lisp)
+
+### Functions
+
+#### `/` <sup><sub>[FUNCTION]</sub></sup><a name="/"></a>
+`∀ :A :B. DIVIDABLE :A :B ⇒ (:A → :A → (OPTIONAL :B))`
+
+***
+
+#### `ABS` <sup><sub>[FUNCTION]</sub></sup><a name="ABS"></a>
+`∀ :A. (NUM :A) (ORD :A) ⇒ (:A → :A)`
+
+***
+
 #### `GCD` <sup><sub>[FUNCTION]</sub></sup><a name="GCD"></a>
-`(INT → INT → INT)`
+`(INTEGER → INTEGER → INTEGER)`
 
 ***
 
 #### `LCM` <sup><sub>[FUNCTION]</sub></sup><a name="LCM"></a>
-`(INT → INT → INT)`
+`(INTEGER → INTEGER → INTEGER)`
 
 ***
 
 #### `MOD` <sup><sub>[FUNCTION]</sub></sup><a name="MOD"></a>
-`(INT → INT → INT)`
+`(INTEGER → INTEGER → INTEGER)`
 
 ***
 
 #### `ODD` <sup><sub>[FUNCTION]</sub></sup><a name="ODD"></a>
-`(INT → BOOLEAN)`
+`(INTEGER → BOOLEAN)`
 
 ***
 
 #### `EVEN` <sup><sub>[FUNCTION]</sub></sup><a name="EVEN"></a>
-`(INT → BOOLEAN)`
+`(INTEGER → BOOLEAN)`
 
 ***
 
 #### `EXPT` <sup><sub>[FUNCTION]</sub></sup><a name="EXPT"></a>
-`(INT → INT → INT)`
+`(INTEGER → INTEGER → INTEGER)`
+
+***
+
+#### `SIGN` <sup><sub>[FUNCTION]</sub></sup><a name="SIGN"></a>
+`∀ :A. (NUM :A) (ORD :A) ⇒ (:A → INTEGER)`
+
+***
+
+#### `NEGATE` <sup><sub>[FUNCTION]</sub></sup><a name="NEGATE"></a>
+`∀ :A. NUM :A ⇒ (:A → :A)`
+
+***
+
+#### `DOUBLE-FLOAT->INTEGER` <sup><sub>[FUNCTION]</sub></sup><a name="DOUBLE-FLOAT->INTEGER"></a>
+`(DOUBLE-FLOAT → (OPTIONAL INTEGER))`
+
+Round a Double-Float to the nearest Integer.
+
+
+***
+
+#### `INTEGER->DOUBLE-FLOAT` <sup><sub>[FUNCTION]</sub></sup><a name="INTEGER->DOUBLE-FLOAT"></a>
+`(INTEGER → DOUBLE-FLOAT)`
+
+***
+
+#### `INTEGER->SINGLE-FLOAT` <sup><sub>[FUNCTION]</sub></sup><a name="INTEGER->SINGLE-FLOAT"></a>
+`(INTEGER → SINGLE-FLOAT)`
+
+***
+
+#### `SINGLE-FLOAT->INTEGER` <sup><sub>[FUNCTION]</sub></sup><a name="SINGLE-FLOAT->INTEGER"></a>
+`(SINGLE-FLOAT → (OPTIONAL INTEGER))`
+
+Round a Single-Float to the nearest Integer.
+
 
 ***
 
@@ -514,7 +684,7 @@ Methods:
 ### Functions
 
 #### `PARSE-INT` <sup><sub>[FUNCTION]</sub></sup><a name="PARSE-INT"></a>
-`(STRING → (OPTIONAL INT))`
+`(STRING → (OPTIONAL INTEGER))`
 
 ***
 
@@ -647,7 +817,7 @@ Right fold on lists. Is short circuiting but is not tail recursive.
 ***
 
 #### `INDEX` <sup><sub>[FUNCTION]</sub></sup><a name="INDEX"></a>
-`∀ :A. ((LIST :A) → INT → (OPTIONAL :A))`
+`∀ :A. ((LIST :A) → INTEGER → (OPTIONAL :A))`
 
 Returns the Ith element of XS.
 
@@ -655,7 +825,7 @@ Returns the Ith element of XS.
 ***
 
 #### `RANGE` <sup><sub>[FUNCTION]</sub></sup><a name="RANGE"></a>
-`(INT → INT → (LIST INT))`
+`(INTEGER → INTEGER → (LIST INTEGER))`
 
 Returns a list containing the numbers from START to END inclusive.
 
@@ -711,7 +881,7 @@ Inserts an element into a list at the first place it is less than or equal to th
 ***
 
 #### `LENGTH` <sup><sub>[FUNCTION]</sub></sup><a name="LENGTH"></a>
-`∀ :A. ((LIST :A) → INT)`
+`∀ :A. ((LIST :A) → INTEGER)`
 
 Returns the length of a list.
 
@@ -735,7 +905,7 @@ Returns true if any element of XS is equal to E.
 ***
 
 #### `REPEAT` <sup><sub>[FUNCTION]</sub></sup><a name="REPEAT"></a>
-`∀ :A. (INT → :A → (LIST :A))`
+`∀ :A. (INTEGER → :A → (LIST :A))`
 
 Returns a list with X repeated N times.
 
@@ -807,12 +977,12 @@ Apply F to each element in XS and concatenate the results.
 ***
 
 #### `ELEMINDEX` <sup><sub>[FUNCTION]</sub></sup><a name="ELEMINDEX"></a>
-`∀ :A. EQ :A ⇒ (:A → (LIST :A) → (OPTIONAL INT))`
+`∀ :A. EQ :A ⇒ (:A → (LIST :A) → (OPTIONAL INTEGER))`
 
 ***
 
 #### `FINDINDEX` <sup><sub>[FUNCTION]</sub></sup><a name="FINDINDEX"></a>
-`∀ :A. ((:A → BOOLEAN) → (LIST :A) → (OPTIONAL INT))`
+`∀ :A. ((:A → BOOLEAN) → (LIST :A) → (OPTIONAL INTEGER))`
 
 ***
 
@@ -1039,7 +1209,7 @@ Remove and return the first item of V
 ***
 
 #### `VECTOR-SET` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-SET"></a>
-`∀ :A. (INT → :A → (VECTOR :A) → UNIT)`
+`∀ :A. (INTEGER → :A → (VECTOR :A) → UNIT)`
 
 Set the INDEXth element of V to ITEM. This function left intentionally unsafe because it does not have a return value to check.
 
@@ -1087,7 +1257,7 @@ Returns TRUE if V is empty
 ***
 
 #### `VECTOR-INDEX` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-INDEX"></a>
-`∀ :A. (INT → (VECTOR :A) → (OPTIONAL :A))`
+`∀ :A. (INTEGER → (VECTOR :A) → (OPTIONAL :A))`
 
 Return the INDEXth element of V
 
@@ -1103,7 +1273,7 @@ Create a new VECTOR containing the elements of v1 followed by the elements of v2
 ***
 
 #### `VECTOR-LENGTH` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-LENGTH"></a>
-`∀ :A. ((VECTOR :A) → INT)`
+`∀ :A. ((VECTOR :A) → INTEGER)`
 
 Returns the length of V
 
@@ -1127,7 +1297,7 @@ Create a list containing the same elements in the same order as V
 ***
 
 #### `VECTOR-CAPACITY` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-CAPACITY"></a>
-`∀ :A. ((VECTOR :A) → INT)`
+`∀ :A. ((VECTOR :A) → INTEGER)`
 
 Returns the number of elements that V can store without resizing
 
@@ -1167,7 +1337,7 @@ Return the last element of V without first checking if V is empty
 ***
 
 #### `VECTOR-SWAP-REMOVE` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-SWAP-REMOVE"></a>
-`∀ :A. (INT → (VECTOR :A) → (OPTIONAL :A))`
+`∀ :A. (INTEGER → (VECTOR :A) → (OPTIONAL :A))`
 
 Remove the element IDX from VEC and replace it with the last element in VEC. Then return the removed element.
 
@@ -1175,7 +1345,7 @@ Remove the element IDX from VEC and replace it with the last element in VEC. The
 ***
 
 #### `VECTOR-INDEX-UNSAFE` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-INDEX-UNSAFE"></a>
-`∀ :A. (INT → (VECTOR :A) → :A)`
+`∀ :A. (INTEGER → (VECTOR :A) → :A)`
 
 Return the INDEXth element of V without checking if the element exists
 
@@ -1183,7 +1353,7 @@ Return the INDEXth element of V without checking if the element exists
 ***
 
 #### `MAKE-VECTOR-CAPACITY` <sup><sub>[FUNCTION]</sub></sup><a name="MAKE-VECTOR-CAPACITY"></a>
-`∀ :A. (INT → (VECTOR :A))`
+`∀ :A. (INTEGER → (VECTOR :A))`
 
 Create a new vector with N elements preallocated
 
@@ -1191,7 +1361,7 @@ Create a new vector with N elements preallocated
 ***
 
 #### `VECTOR-FOREACH-INDEX` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-FOREACH-INDEX"></a>
-`∀ :A :B. ((INT → :A → :B) → (VECTOR :A) → UNIT)`
+`∀ :A :B. ((INTEGER → :A → :B) → (VECTOR :A) → UNIT)`
 
 Call the function F once for each item in V with its index
 
@@ -1199,7 +1369,7 @@ Call the function F once for each item in V with its index
 ***
 
 #### `VECTOR-SWAP-REMOVE-UNSAFE` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-SWAP-REMOVE-UNSAFE"></a>
-`∀ :A. (INT → (VECTOR :A) → :A)`
+`∀ :A. (INTEGER → (VECTOR :A) → :A)`
 
 Remove the element IDX from VEC and replace it with the last element in VEC without bounds checking. Then return the removed element.
 
@@ -1222,16 +1392,16 @@ Constructors:
 ***
 
 #### `EDGEINDEX` <sup><sub>[TYPE]</sub></sup><a name="EDGEINDEX"></a>
-- `(EDGEINDEX INT)`
+- `(EDGEINDEX INTEGER)`
 
 Constructors:
-- `EDGEINDEX :: (INT → EDGEINDEX)`
+- `EDGEINDEX :: (INTEGER → EDGEINDEX)`
 
 <details>
 <summary>Instances</summary>
 
 - [`EQ`](#EQ) [`EDGEINDEX`](#EDGEINDEX)
-- [`INTO`](#INTO) [`EDGEINDEX`](#EDGEINDEX) [`INT`](#INT)
+- [`INTO`](#INTO) [`EDGEINDEX`](#EDGEINDEX) [`INTEGER`](#INTEGER)
 - [`SHOW`](#SHOW) [`EDGEINDEX`](#EDGEINDEX)
 
 </details>
@@ -1249,16 +1419,16 @@ Constructors:
 ***
 
 #### `NODEINDEX` <sup><sub>[TYPE]</sub></sup><a name="NODEINDEX"></a>
-- `(NODEINDEX INT)`
+- `(NODEINDEX INTEGER)`
 
 Constructors:
-- `NODEINDEX :: (INT → NODEINDEX)`
+- `NODEINDEX :: (INTEGER → NODEINDEX)`
 
 <details>
 <summary>Instances</summary>
 
 - [`EQ`](#EQ) [`NODEINDEX`](#NODEINDEX)
-- [`INTO`](#INTO) [`NODEINDEX`](#NODEINDEX) [`INT`](#INT)
+- [`INTO`](#INTO) [`NODEINDEX`](#NODEINDEX) [`INTEGER`](#INTEGER)
 - [`SHOW`](#SHOW) [`NODEINDEX`](#NODEINDEX)
 
 </details>
@@ -1321,7 +1491,7 @@ Add a node with associated data to the graph, returning the index of the new nod
 ***
 
 #### `GRAPH-EDGE-COUNT` <sup><sub>[FUNCTION]</sub></sup><a name="GRAPH-EDGE-COUNT"></a>
-`∀ :A :B. ((GRAPH :A :B) → INT)`
+`∀ :A :B. ((GRAPH :A :B) → INTEGER)`
 
 Returns the number of edges in a graph
 

@@ -14,23 +14,23 @@
     "Create a new empty vector"
     (make-vector-capacity 0))
 
-  (declare make-vector-capacity (Int -> (Vector :a)))
+  (declare make-vector-capacity (Integer -> (Vector :a)))
   (define (make-vector-capacity n)
     "Create a new vector with N elements preallocated"
     (lisp (Vector :a) (n)
       (Vector (veil (cl:make-array n :fill-pointer 0 :adjustable cl:t)))))
 
-  (declare vector-length ((Vector :a) -> Int))
+  (declare vector-length ((Vector :a) -> Integer))
   (define (vector-length v)
     "Returns the length of V"
-    (lisp Int (v)
+    (lisp Integer (v)
       (cl:let ((v_ (unveil (cl:slot-value v '_0))))
 	(cl:fill-pointer v_))))
 
-  (declare vector-capacity ((Vector :a) -> Int))
+  (declare vector-capacity ((Vector :a) -> Integer))
   (define (vector-capacity v)
     "Returns the number of elements that V can store without resizing"
-    (lisp Int (v)
+    (lisp Integer (v)
       (cl:let ((v_ (unveil (cl:slot-value v '_0))))
 	(cl:array-dimension v_ 0))))
 
@@ -62,21 +62,21 @@
       (cl:let ((v_ (unveil (cl:slot-value v '_0))))
 	(cl:vector-pop v_))))
 
-  (declare vector-index (Int -> (Vector :a) -> (Optional :a)))
+  (declare vector-index (Integer -> (Vector :a) -> (Optional :a)))
   (define (vector-index index v)
     "Return the INDEXth element of V"
     (if (>= index (vector-length v))
 	None
 	(Some (vector-index-unsafe index v))))
 
-  (declare vector-index-unsafe (Int -> (Vector :a) -> :a))
+  (declare vector-index-unsafe (Integer -> (Vector :a) -> :a))
   (define (vector-index-unsafe index v) 
     "Return the INDEXth element of V without checking if the element exists"
     (lisp :a (index v)
       (cl:let ((v_ (unveil (cl:slot-value v '_0))))
 	(cl:aref v_ index))))
 
-  (declare vector-set (Int -> :a -> (Vector :a) -> Unit))
+  (declare vector-set (Integer -> :a -> (Vector :a) -> Unit))
   (define (vector-set index item v)
     "Set the INDEXth element of V to ITEM. This function left intentionally unsafe because it does not have a return value to check."
     (lisp Unit (index item v)
@@ -115,7 +115,7 @@
 	     :do (coalton-impl/codegen::A1 f elem))
 	  Unit))))
 
-  (declare vector-foreach-index ((Int -> :a -> :b) -> (Vector :a) -> Unit))
+  (declare vector-foreach-index ((Integer -> :a -> :b) -> (Vector :a) -> Unit))
   (define (vector-foreach-index f v)
     "Call the function F once for each item in V with its index"
     (lisp Unit (f v)
@@ -163,14 +163,14 @@
 		  (Cons (vector-index-unsafe index v) (inner v (+ 1 index)))))))
       (inner v 0)))
 
-  (declare vector-swap-remove (Int -> (Vector :a) -> (Optional :a)))
+  (declare vector-swap-remove (Integer -> (Vector :a) -> (Optional :a)))
   (define (vector-swap-remove idx vec)
     "Remove the element IDX from VEC and replace it with the last element in VEC. Then return the removed element."
     (if (>= idx (vector-length vec))
 	None
 	(Some (vector-swap-remove-unsafe idx vec))))
 
-  (declare vector-swap-remove-unsafe (Int -> (Vector :a) -> :a))
+  (declare vector-swap-remove-unsafe (Integer -> (Vector :a) -> :a))
   (define (vector-swap-remove-unsafe idx vec)
     "Remove the element IDX from VEC and replace it with the last element in VEC without bounds checking. Then return the removed element."
     (progn

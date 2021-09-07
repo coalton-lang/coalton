@@ -25,7 +25,7 @@ Coalton can be written in files:
 
   (define-type Expr
     "A symbolic expression of basic arithmetic."
-    (EConst Int)
+    (EConst Integer)
     (EVar   Symbol)
     (E+     Expr Expr)
     (E*     Expr Expr))

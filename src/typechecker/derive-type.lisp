@@ -7,7 +7,7 @@
 (defun derive-literal-type (value)
   (declare (values ty ty-predicate-list))
   (etypecase value
-    (integer      (values tInt          nil))
+    (integer      (values tInteger      nil))
     (single-float (values tSingle-Float nil))
     (double-float (values tDouble-Float nil))
     (string       (values tString       nil))

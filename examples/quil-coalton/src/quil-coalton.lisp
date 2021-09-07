@@ -41,7 +41,7 @@
             (verify f (many0 alphanumeric_-))))))))
 
   (define-type Qubit
-    (Qubit Int))
+    (Qubit Integer))
 
   (declare parse-quil-qubit (Parser Qubit))
   (define parse-quil-qubit
@@ -134,7 +134,7 @@
   ;;
 
   (define-type ClassicalMem
-    (ClassicalMem Name (Optional Int)))
+    (ClassicalMem Name (Optional Integer)))
 
   (declare parse-quil-classical-mem (Parser ClassicalMem))
   (define parse-quil-classical-mem

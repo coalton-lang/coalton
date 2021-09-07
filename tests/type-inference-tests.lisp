@@ -5,18 +5,18 @@
 (deftest test-type-inference ()
   (check-coalton-types
    '((coalton:define f 5))
-   '((f . Int)))
+   '((f . Integer)))
   (check-coalton-types
    '((coalton:define f (fn (x) x))
      (coalton:define g (f 5)))
    '((f . (:a -> :a))
-     (g . Int)))
+     (g . Integer)))
   (check-coalton-types
    '((coalton:define f (fn (x y) x))
      (coalton:define g (f 5 "str"))
      (coalton:define h (f "str" 5)))
    '((f . (:a -> (:b -> :a)))
-     (g . Int)
+     (g . Integer)
      (h . String)))
 
    ;; Check that identity qualifies
@@ -25,7 +25,7 @@
       (coalton:define x (id 3))
       (coalton:define y (id "three")))
     '((id . (:a -> :a))
-      (x . Int)
+      (x . Integer)
       (y . String)))
 
   ;; Check that let bindings are polymorphic over kinds
@@ -33,7 +33,7 @@
    '((coalton:define x
        (coalton:let ((id (fn (a) a)))
 	 ((id id) 5))))
-   '((x . Int)))
+   '((x . Integer)))
 
   ;; Check that you can only call callable things
   (signals coalton-impl::coalton-type-error
@@ -61,14 +61,14 @@
   (check-coalton-types
    '((coalton:define f
        (fn (a) (f 5))))
-   '((f . (Int -> :a)))))
+   '((f . (Integer -> :a)))))
 
 (deftest test-explicit-type-declerations ()
   ;; Check that explicit declerations can reduce the type of a definition
   (check-coalton-types
-   '((coalton:declare f Int)
+   '((coalton:declare f Integer)
      (coalton:define f (coalton-library:undefined "hello")))
-   '((f . Int)))
+   '((f . Integer)))
 
   ;; Declerations cannot be less specefic than their associated definition
   (signals coalton-impl::coalton-type-error
@@ -79,7 +79,7 @@
   ;; Implicitly typed functions should only infer types from the declared type signature of an explicitly typed functions
   ;; http://jeremymikkola.com/posts/2019_01_12_type_inference_for_haskell_part_12.html
   (check-coalton-types
-   '((coalton:declare lst (coalton-library:List Int))
+   '((coalton:declare lst (coalton-library:List Integer))
      (coalton:define lst (coalton-library:make-list 1 2 3))
 
      (coalton:define (a x)
@@ -130,7 +130,7 @@
   ;; Check that types of kind * cannot be applied to
   (signals coalton-impl::coalton-parse-error
     (run-coalton-typechecker
-     '((coalton:declare x (Int Int))
+     '((coalton:declare x (Integer Integer))
        (coalton:define x x))
      ))
 
@@ -303,15 +303,15 @@
    '((coalton:define-class (Eq_ :a)
       (== (:a -> :a -> coalton-library:Boolean)))
 
-     (coalton:define-instance (Eq_ :a => (Eq_ (coalton-library:Tuple :a Int)))
+     (coalton:define-instance (Eq_ :a => (Eq_ (coalton-library:Tuple :a Integer)))
       (coalton:define (== a b) coalton-library::False))
 
-     (coalton:define-instance (Eq_ Int)
+     (coalton:define-instance (Eq_ Integer)
       (coalton:define (== a b) coalton-library::False))
      
      (coalton:declare f
-      ((coalton-library:Tuple Int Int) ->
-       (coalton-library:Tuple Int Int) ->
+      ((coalton-library:Tuple Integer Integer) ->
+       (coalton-library:Tuple Integer Integer) ->
        coalton-library:Boolean))
      (coalton:define (f a b)
        (== a b)))))
@@ -323,7 +323,7 @@
      '((coalton:define-class (Eq_ :a)
 	(== (:a -> :a -> coalton-library:Boolean)))
 
-       (coalton:define-instance (Eq_ :a => (Eq_ (coalton-library:Tuple :a Int)))
+       (coalton:define-instance (Eq_ :a => (Eq_ (coalton-library:Tuple :a Integer)))
         (coalton:define (== a b) coalton-library::False))
 
        (coalton:define-instance (Eq_ :a => (Eq_ (coalton-library:Tuple String :a)))
@@ -358,7 +358,7 @@
 
      (coalton:define xs (coalton-library:make-list 1 2 3))
 
-     (coalton:declare print-int (Int -> String))
+     (coalton:declare print-int (Integer -> String))
      (coalton:define (print-int x)
        "")
 

@@ -2,39 +2,12 @@
 
 (coalton-toplevel
 
-  ;;
-  ;; Unit
-  ;;
-
+  ;; Type is already known in COALTON-IMPL.
   (define Unit (lisp Unit () 'Unit))
   
   (define-type Boolean
     True
     False)
-
-  (declare not (Boolean -> Boolean))
-  (define (not x)
-    (match x
-      ((True) False)
-      ((False) True)))
-
-  (declare or (Boolean -> Boolean -> Boolean))
-  (define (or x y)
-    (match x
-      ((True) True)
-      ((False) y)))
-
-  (declare and (Boolean -> Boolean -> Boolean))
-  (define (and x y)
-    (match x
-      ((True) y)
-      ((False) False)))
-
-  (declare xor (Boolean -> Boolean -> Boolean))
-  (define (xor x y)
-    (match x
-      ((True) (not y))
-      ((False) y)))
 
   (define-type (List :a)
     (Cons :a (List :a))
@@ -47,9 +20,21 @@
     (Some :a)
     None)
 
-   (define-type (Result :a :b)
-    (Err :a)
-    (Ok :b))
+  (define-type (Result :bad :good)
+    "Represents something that may have failed."
+    ;; We write (Result :bad :good) instead of (Result :good :bad)
+    ;; because of the limitations of how we deal with higher-kinded
+    ;; types; we want to implement Functor on this.
+    (Ok :good)
+    (Err :bad))
 
-  (define (undefined x)
-    (lisp :a ()  (cl:error "Undefined"))))
+  (define-type Fraction
+    "A ratio of integers always in reduced form."
+    ;; We avoid "Rational" or "Ratio" since those might be a more
+    ;; generic concept than a humble fraction of integers. This
+    ;; fraction is always assumed to be in reduced terms.
+    ;;
+    ;; This shouldn't be pattern matched against with user code.
+    ;;
+    ;; See fraction.lisp for more info.
+    (%Fraction Integer Integer)))

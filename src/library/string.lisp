@@ -1,10 +1,20 @@
 (in-package #:coalton-library)
 
-(coalton-toplevel
-  ;;
-  ;; String
-  ;;
+;;;
+;;; String
+;;;
 
+(coalton-toplevel
+  (define-instance (Show String)
+    (define (show x) x))
+
+  (define-instance (Eq String)
+    (define (== s1 s2)
+      (lisp Boolean (s1 s2) (to-boolean (cl:string= s1 s2))))
+    (define (/= s1 s2)
+      (not (== s1 s2)))))
+
+(coalton-toplevel
   (declare concat-string (String -> String -> String))
   (define (concat-string str1 str2)
     (lisp String (str1 str2)
@@ -30,9 +40,9 @@
 			      'cl:string (cl:string element) (f rest))))))
         (f xs))))
 
-  (declare parse-int (String -> (Optional Int)))
+  (declare parse-int (String -> (Optional Integer)))
   (define (parse-int str)
-    (lisp (Optional Int) (str)
+    (lisp (Optional Integer) (str)
       (cl:let ((x (cl:parse-integer str :junk-allowed cl:t)))
 	(cl:if x
 	       (Some x)

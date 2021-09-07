@@ -95,7 +95,7 @@
   (declare alphanumeric (Parser Char))
   (define alphanumeric (alt alpha digit))
 
-  (declare natural (Parser Int))
+  (declare natural (Parser Integer))
   (define natural
     (with-context "While parsing natural number"
       (and-then

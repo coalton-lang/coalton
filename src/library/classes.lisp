@@ -73,7 +73,40 @@
     (+ (:a -> :a -> :a))
     (- (:a -> :a -> :a))
     (* (:a -> :a -> :a))
-    (fromInt (Int -> :a)))
+    (fromInt (Integer -> :a)))
+
+  ;;
+  ;; Dividable
+  ;;
+
+  (define-class ((Num :arg-type)
+                 (Num :res-type)
+                 => (Dividable :arg-type :res-type))
+    "The representation of a type such that division within that type possibly results in another type. For instance,
+
+
+    (Dividable Integer Fraction)
+
+
+establishes that division of two `Integer`s can result in a `Fraction`, whereas
+
+
+    (Dividable Single-Float Single-Float)
+
+
+establishes that division of two `Single-Float`s can result in a `Single-Float`.
+
+Note that `Dividable` does *not* establish a default result type; you must constrain the result type yourself.
+
+See also: `/`
+"
+    ;; This is a type that is more pragmatic and less mathematical in
+    ;; nature. It expresses a division relationship between one input
+    ;; type and one output type.
+    ;;
+    ;; UNSAFE-/ does the division unsafely. This may mean that an
+    ;; error is signaled or that undefined results may occur.
+    (unsafe-/ (:arg-type -> :arg-type -> :res-type)))
 
   ;;
   ;; Haskell
@@ -107,23 +140,26 @@
   ;; Conversions
   ;;
 
-  (define-class (Into :a :b)
-    (into (:a -> :b)))
+  (define-class (Into :from :to)
+    "INTO imples *every* element of :FROM can be represented by an element of :TO. This conversion might not be injective (i.e., there may be elements in :TO that don't correspond to any in :FROM)."
+    (into (:from -> :to)))
 
 
   ;; Opting into this marker typeclass imples that the instances for
-  ;; (Into :a :b) and (Into :b :a) form an isomorphism
+  ;; (Into :a :b) and (Into :b :a) form a bijection.
   (define-class ((Into :a :b) (Into :b :a) => (Iso :a :b)))
 
   (define-instance (Into :a :a)
     (define (into x) x))
 
-  (define-class (TryInto :a :b :c)
-    (tryInto (:a -> (Result :b :c))))
+  (define-class (TryInto :from :to)
+    "TRY-INTO implies *most* elements of :FROM can be represented exactly by an element of :TO, but sometimes not. If not, an error string is returned."
+    ;; Ideally we'd have an associated-type here instead of locking in
+    ;; on String.
+    (tryInto (:from -> (Result String :to))))
 
   (define-instance (Iso :a :a))
 
   (define-class (WithDefault :f)
-    (withDefault (:a -> (:f :a) -> (:a)))))
-
-
+    (withDefault (:a -> (:f :a) -> (:a))))
+  )
