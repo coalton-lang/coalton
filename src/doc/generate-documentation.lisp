@@ -1,6 +1,6 @@
 (in-package #:coalton-impl/doc)
 
-(defun write-library-documentation-to-markdown (&optional (env coalton-impl::*global-environment*) (stream t))
+(defun write-library-documentation-to-markdown (&optional (env coalton-impl::*global-environment*) (stream t) (file-prefix ""))
   (let* ((package 'coalton-user)
          (system 'coalton)
          (component (asdf:find-component system 'library))
@@ -29,7 +29,7 @@
                 (type-info (gethash file type-info-by-file)))
 
             (when (or type-info value-info)
-              (format stream "## File: [~A](~A)~%~%" file file)
+              (format stream "## File: [~A](~A)~%~%" file (concatenate 'string file-prefix file))
               
               (when type-info
                 (format stream "### Types~%~%")
@@ -113,7 +113,12 @@
         (package (find-package package)))
     ;; Sort the entires by package
     (fset:do-map (sym entry (shadow-realm-data (coalton-impl/typechecker::environment-name-environment env)))
-      (when (equalp (symbol-package sym) package)
+      ;; Only include exported symbols from our package
+      (when (and (equalp (symbol-package sym) package)
+                 (multiple-value-bind (symbol status)
+                     (find-symbol (symbol-name sym) package)
+                   (declare (ignore symbol))
+                   (eql :external status)))
         (push (cons sym entry) values)))
 
     (mapcar
@@ -133,13 +138,17 @@
         (package (find-package package)))
     ;; Sort the entires by package
     (fset:do-map (sym entry (shadow-realm-data (coalton-impl/typechecker::environment-type-environment env)))
-      (when (equalp (symbol-package sym) package)
+      ;; Only include exported symbols from our package
+      (when (and (equalp (symbol-package sym) package)
+                 (multiple-value-bind (symbol status)
+                     (find-symbol (symbol-name sym) package)
+                   (declare (ignore symbol))
+                   (eql :external status)))
         (push (cons sym entry) types)))
     (fset:do-map (sym entry (shadow-realm-data (coalton-impl/typechecker::environment-constructor-environment env)))
       (when (equalp (symbol-package sym) package)
         (push (cons sym entry) ctors)))
 
-    ;; TODO: We need to grab all instances that mention this type
     (let ((instance-list
             (fset:convert 'list
                           (coalton-impl/typechecker::instance-environment-data
@@ -155,7 +164,6 @@
                               :append
                               (loop :for instance :in (fset:convert 'list instances)
                                     :append
-                                    ;; TODO: We should check if the type is applied to anything too
                                     (when (some
                                            (lambda (pred-type)
                                              (labels ((check (pred)
