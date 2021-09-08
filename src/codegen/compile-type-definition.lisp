@@ -13,15 +13,14 @@
           :for slot-types := (mapcar #'coalton-impl/typechecker::fresh-inst (constructor-entry-arguments constructor))
           :for slot-names := (ctor-make-slot-names (length slot-types) package)
 	  :append 
-	  `((defstruct (,classname
+	  `((declaim (inline ,(constructor-entry-name constructor)))
+            (defstruct (,classname
 			(:include ,(type-definition-name def))
 			(:constructor ,(constructor-entry-name constructor) ,slot-names)
 			(:predicate nil)
 			(:copier nil))
 	      ,@(ctor-make-slots slot-names slot-types))
-	    #+sbcl
-	    (declaim (sb-ext:freeze-type ,classname)
-		     (inline ,(constructor-entry-name constructor))))
+	    #+sbcl (declaim (sb-ext:freeze-type ,classname)))
           :collect (cond
 	             ((= 0 (constructor-entry-arity constructor))
                       `(defmethod print-object ((self ,classname) stream)
@@ -44,10 +43,9 @@
 	            ((= 0 (constructor-entry-arity constructor))
 		     (let
 			 ((sym (gensym)))
-		       `((let ((,sym (,(constructor-entry-name constructor))))
-			   (coalton-impl::define-global-lexical
-			       ,(constructor-entry-name constructor)
-                             ,sym)))))
+		       `((coalton-impl::define-global-lexical
+			     ,(constructor-entry-name constructor)
+                             (,(constructor-entry-name constructor))))))
 	            (t
 		     (let* ((arity (length slot-names))
 			    (entry (construct-function-entry

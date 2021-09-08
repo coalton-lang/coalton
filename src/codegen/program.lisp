@@ -1,5 +1,77 @@
 (in-package #:coalton-impl/codegen)
 
+(defun reshuffle-definitions (things)
+  ;; This is an extremely gross function that just makes Lisp compilation order
+  ;; nicer. In particular, it puts:
+  ;;
+  ;;    - First, all inline decls (they need to be caught early so the
+  ;;      compiler can save them)
+  ;;
+  ;;    - Second, structure definitions
+  ;;
+  ;;    - Third, any other declaims (probably FREEZE-TYPEs)
+  ;;
+  ;;    - Fourth, stub definitions
+  ;;
+  ;;    - Fifth, anything that doesn't fit in the aforementioned
+  ;;      categories.
+  ;;
+  ;;    - Sixth and finally, any SETFs of LOAD-TIME-VALUE definitions.
+  ;;
+  ;; This function is pretty brittle. If we change codegen details,
+  ;; this has to change.
+  ;;
+  ;; Of important note, this function DOES NOT change the relative
+  ;; ordering of things within each group.
+  (labels ((sub-struct-p (thing)
+             (and (eq 'cl:defstruct (car thing))
+                  (find ':INCLUDE (cdadr thing) :key #'car :test #'eq)))
+           (setf-ltv-p (thing)
+             (and (or (eq 'cl:setf (car thing))
+                      (eq 'cl:setq (car thing)))
+                  (= 3 (length thing))
+                  (typep (caddr thing) '(cons (member load-time-value))))))
+    (loop :for thing :in things
+          ;; (DEFSTRUCT (FOO ... (:INCLUDE ...
+          :if (and (typep thing '(cons (member cl:defstruct)))
+                   (sub-struct-p thing))
+            :collect thing :into defsubstructs
+          ;; (DEFSTRUCT FOO ...
+          :else :if (and (typep thing '(cons (member cl:defstruct)))
+                         (not (sub-struct-p thing)))
+                  :collect thing :into defstructs
+          ;; (DECLAIM (INLINE ...
+          :else :if (typep thing '(cons
+                                   (member cl:declaim)
+                                   (cons
+                                    (cons (member cl:inline cl:notinline)))))
+                  :collect thing :into declaims-inline
+          ;; (DECLAIM ...
+          :else :if (typep thing '(cons (member cl:declaim)))
+                  :collect thing :into declaims-other
+          ;; (DEFINE-* FOO ':|@@unbound@@|)
+          :else :if (or (member ':|@@unbound@@| thing)
+                        (member '':|@@unbound@@| thing :test 'equal))
+                  :collect thing :into deflex-stubs
+          :else :if (setf-ltv-p thing)
+                  :collect thing :into setfs-ltv
+          ;; Other things
+          :else :collect thing :into others
+          :finally (return (append
+                            declaims-inline
+                            (unless (null defstructs)
+                              (list
+                               `(eval-when (:compile-toplevel :load-toplevel :execute)
+                                  ,@defstructs)))
+                            (unless (null defsubstructs)
+                              (list
+                               `(eval-when (:compile-toplevel :load-toplevel :execute)
+                                  ,@defsubstructs)))
+                            declaims-other
+                            deflex-stubs
+                            others
+                            setfs-ltv)))))
+
 (defun codegen-program (types bindings sccs classes instance-definitions docstrings env)
   (declare (type type-definition-list types)
 	   (type typed-binding-list bindings)
@@ -13,18 +85,18 @@
     (multiple-value-bind (instance-forms instance-pre-declare)
 	(compile-instance-definitions instance-definitions optimizer)
 
-      `(eval-when (:compile-toplevel :execute :load-toplevel)
+      `(progn
 	 ;; Define types
-	 ,@(mapcan #'compile-type-definition types)
+         ,@(reshuffle-definitions (mapcan #'compile-type-definition types))
 
 	 ;; Define typeclasses
-	 ,@(compile-class-definitions classes env)
+	 ,@(reshuffle-definitions (compile-class-definitions classes env))
 
 	 ;; Predeclare instance structs
 	 ,@instance-pre-declare
 
 	 ;; Define functions and variables
-	 ,@(compile-toplevel-sccs bindings sccs env)
+	 ,@(reshuffle-definitions (compile-toplevel-sccs bindings sccs env))
 
 	 ;; Define instance structs
 	 ,@instance-forms
@@ -88,15 +160,15 @@
 			     dict-context))
 
 	 (params (append (mapcar #'cdr dict-context) var-names)))
-    `((defun ,name ,params
+    `((coalton-impl::define-global-lexical ,name ':|@@unbound@@|)
+      (defun ,name ,params
 	(declare (ignorable ,@params)
 		 ,@(when *emit-type-annotations*
 		     `(,@(mapcar (lambda (var) `(type ,(lisp-type (cdr var)) ,(car var))) vars)
 		       ,@(mapcar (lambda (dict) `(type ,(car  dict) ,(cdr dict))) dict-types)
 		       (values ,(lisp-type return-type) &optional))))                       
 	,(compile-expression node dict-context env))
-      (setf ,name ,(construct-function-entry `#',name (+ (length vars) (length preds))))
-      (coalton-impl::define-global-lexical ,name ,name))))
+      (setf ,name (load-time-value ,(construct-function-entry `#',name (+ (length vars) (length preds))))))))
 
 (defun compile-toplevel-sccs (toplevel-bindings sccs env)
   (loop :for scc :in sccs
@@ -109,14 +181,12 @@
 	(cond
 	  ((every #'coalton-impl/typechecker::typed-node-abstraction-p (mapcar #'cdr scc-typed-bindings))
 	   ;; Functions
-
-           `((let ,(mapcar (lambda (v) `(,(car v) ,(construct-function-entry `(lambda () (error "")) 1))) scc-typed-bindings)
-               ,@(loop :for (name . node) :in scc-typed-bindings
-		       :for vars := (typed-node-abstraction-vars node)
-		       :for type := (typed-node-type node)
-		       :for subexpr := (typed-node-abstraction-subexpr node)
-		       :for return-type := (typed-node-type (typed-node-abstraction-subexpr node))
-		       :append (compile-function name vars type return-type subexpr env)))))
+           `(,@(loop :for (name . node) :in scc-typed-bindings
+		     :for vars := (typed-node-abstraction-vars node)
+		     :for type := (typed-node-type node)
+		     :for subexpr := (typed-node-abstraction-subexpr node)
+		     :for return-type := (typed-node-type (typed-node-abstraction-subexpr node))
+		     :append (compile-function name vars type return-type subexpr env))))
 
 	  ((and (= 1 (length scc-typed-bindings))
 		t ;; TODO: We need to check that the variable is non-self-recursive using free-variables
@@ -125,9 +195,10 @@
 	   (let* ((b (first scc-typed-bindings))
                   (preds (reduce-context env (scheme-predicates (typed-node-type (cdr b))))))
              (if (not (every #'static-predicate-p  preds))
-                 `((let ((,(car b) ,(construct-function-entry `(lambda () (error "")) 1))) 
-                     ,@(compile-function (car b) nil (typed-node-type (cdr b)) (typed-node-type (cdr b)) (cdr b) env)))
-	         `((coalton-impl::define-global-lexical ,(car b) ,(compile-expression (cdr b) nil env))))))
+                 `(,@(compile-function (car b) nil (typed-node-type (cdr b)) (typed-node-type (cdr b)) (cdr b) env))
+	         `((coalton-impl::define-global-lexical ,(car b) ':|@@unbound@@|)
+                   (setf ,(car b) (load-time-value
+                                   ,(compile-expression (cdr b) nil env)))))))
 	  (t (error "")))))
 
 
@@ -180,15 +251,15 @@
     ;; TODO: add type annotations
     `((declaim (inline ,(car m)))
       (defun ,(car m) (dict ,@params)
-        ,(if (= 0 (length params))
+        ,(if (null params)
              `(,method-accessor dict)
              (apply #'apply-function-entry `(,method-accessor dict) params)))
       ;; Generate the wrapper functions
-      (let ((entry ,(construct-function-entry
+      (coalton-impl::define-global-lexical ,(car m)
+          ,(construct-function-entry
             `#',(car m)
             (+ arity 1) ; We need a function of the arity + 1 to account for DICT
-            )))
-        (coalton-impl::define-global-lexical ,(car m) entry)))))
+            )))))
 
 (defun compile-instance-definitions (instance-definitions optimizer)
   (declare (type instance-definition-list instance-definitions)
@@ -248,16 +319,17 @@
 			,(lookup-dict (coalton-impl/typechecker::apply-substitution pred-subs superclass-pred)
 				      context-dict env)))
 
-           :do (push `(cl:defvar ,codegen-sym) instance-dict-names)
+           :do (push `(global-vars:define-global-var ,codegen-sym ':|@@unbound@@|) instance-dict-names)
 	   ;:do (push `(coalton-impl::define-global-lexical ,codegen-sym '@@stub@@) instance-dict-names)
 
 	   :collect
 	   (if (null context)
 	       `(cl:setf
 		 ,codegen-sym
-		 (,class-codegen-sym
-		  ,@codegen-methods
-		  ,@codegen-superclasses))
+		 (load-time-value
+                  (,class-codegen-sym
+                   ,@codegen-methods
+                   ,@codegen-superclasses)))
 	       `(cl:defun ,codegen-sym ,context-params
 		  (declare
 		   (ignorable ,@context-params)
