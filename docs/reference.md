@@ -1,4 +1,4 @@
-# Reference for COALTON-USER
+# Reference for COALTON-LIBRARY
 
 ## File: [types.lisp](../src/library/types.lisp)
 
@@ -265,6 +265,7 @@ Methods:
 - [`INTO`](#INTO) [`EDGEINDEX`](#EDGEINDEX) [`INT`](#INT)
 - [`INTO`](#INTO) [`(VECTOR :A)`](#VECTOR) [`(LIST :A)`](#LIST)
 - [`INTO`](#INTO) [`(LIST :A)`](#LIST) [`(VECTOR :A)`](#VECTOR)
+- [`INTO`](#INTO) [`:A`](#:A) [`(CELL :A)`](#CELL)
 - [`INTO`](#INTO) [`(OPTIONAL :A)`](#OPTIONAL) [`(RESULT UNIT :A)`](#RESULT)
 - [`INTO`](#INTO) [`(RESULT :A :B)`](#RESULT) [`(OPTIONAL :B)`](#OPTIONAL)
 - [`INTO`](#INTO) [`(TUPLE :A :B)`](#TUPLE) [`(TUPLE :B :A)`](#TUPLE)
@@ -998,6 +999,209 @@ Signal an error by calling CL:ERROR
 `∀ :A :B :C. APPLICATIVE :B ⇒ ((:A → (:B :C)) → (LIST :A) → (:B (LIST :C)))`
 
 Map the elements of XS with F then collect the results.
+
+
+***
+
+
+## File: [vector.lisp](../src/library/vector.lisp)
+
+### Types
+
+#### `VECTOR :A` <sup><sub>[TYPE]</sub></sup><a name="VECTOR"></a>
+- `(VECTOR LISP-OBJECT)`
+
+Constructors:
+- `VECTOR :: (LISP-OBJECT → (VECTOR :A))`
+
+<details>
+<summary>Instances</summary>
+
+- [`EQ :A`](#EQ) `=>` [`EQ`](#EQ) [`(VECTOR :A)`](#VECTOR)
+- [`ISO`](#ISO) [`(VECTOR :A)`](#VECTOR) [`(LIST :A)`](#LIST)
+- [`INTO`](#INTO) [`(VECTOR :A)`](#VECTOR) [`(LIST :A)`](#LIST)
+- [`INTO`](#INTO) [`(LIST :A)`](#LIST) [`(VECTOR :A)`](#VECTOR)
+- [`FUNCTOR`](#FUNCTOR) [`VECTOR`](#VECTOR)
+- [`SEMIGROUP`](#SEMIGROUP) [`(VECTOR :A)`](#VECTOR)
+
+</details>
+
+***
+
+### Functions
+
+#### `VECTOR-POP` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-POP"></a>
+`∀ :A. ((VECTOR :A) → (OPTIONAL :A))`
+
+Remove and return the first item of V
+
+
+***
+
+#### `VECTOR-SET` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-SET"></a>
+`∀ :A. (INT → :A → (VECTOR :A) → UNIT)`
+
+Set the INDEXth element of V to ITEM. This function left intentionally unsafe because it does not have a return value to check.
+
+
+***
+
+#### `MAKE-VECTOR` <sup><sub>[FUNCTION]</sub></sup><a name="MAKE-VECTOR"></a>
+`∀ :A. (UNIT → (VECTOR :A))`
+
+Create a new empty vector
+
+
+***
+
+#### `VECTOR-HEAD` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-HEAD"></a>
+`∀ :A. ((VECTOR :A) → (OPTIONAL :A))`
+
+Return the first item of V
+
+
+***
+
+#### `VECTOR-LAST` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-LAST"></a>
+`∀ :A. ((VECTOR :A) → (OPTIONAL :A))`
+
+Return the last element of V
+
+
+***
+
+#### `VECTOR-PUSH` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-PUSH"></a>
+`∀ :A. (:A → (VECTOR :A) → UNIT)`
+
+Append ITEM to V and resize V if necessary
+
+
+***
+
+#### `VECTOR-EMPTY` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-EMPTY"></a>
+`∀ :A. ((VECTOR :A) → BOOLEAN)`
+
+Returns TRUE if V is empty
+
+
+***
+
+#### `VECTOR-INDEX` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-INDEX"></a>
+`∀ :A. (INT → (VECTOR :A) → (OPTIONAL :A))`
+
+Return the INDEXth element of V
+
+
+***
+
+#### `VECTOR-APPEND` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-APPEND"></a>
+`∀ :A. ((VECTOR :A) → (VECTOR :A) → (VECTOR :A))`
+
+Create a new VECTOR containing the elements of v1 followed by the elements of v2
+
+
+***
+
+#### `VECTOR-LENGTH` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-LENGTH"></a>
+`∀ :A. ((VECTOR :A) → INT)`
+
+Returns the length of V
+
+
+***
+
+#### `VECTOR-FOREACH` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-FOREACH"></a>
+`∀ :A :B. ((:A → :B) → (VECTOR :A) → UNIT)`
+
+Call the function F once for each item in V
+
+
+***
+
+#### `VECTOR-TO-LIST` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-TO-LIST"></a>
+`∀ :A. ((VECTOR :A) → (LIST :A))`
+
+Create a list containing the same elements in the same order as V
+
+
+***
+
+#### `VECTOR-CAPACITY` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-CAPACITY"></a>
+`∀ :A. ((VECTOR :A) → INT)`
+
+Returns the number of elements that V can store without resizing
+
+
+***
+
+#### `VECTOR-FOREACH2` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-FOREACH2"></a>
+`∀ :A :B. ((:A → :A → :B) → (VECTOR :A) → (VECTOR :A) → UNIT)`
+
+Like vector-foreach but twice as good
+
+
+***
+
+#### `VECTOR-POP-UNSAFE` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-POP-UNSAFE"></a>
+`∀ :A. ((VECTOR :A) → :A)`
+
+Remove and return the first item of V without checking if the vector is empty
+
+
+***
+
+#### `VECTOR-HEAD-UNSAFE` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-HEAD-UNSAFE"></a>
+`∀ :A. ((VECTOR :A) → :A)`
+
+Return the first item of V without first checking if V is empty
+
+
+***
+
+#### `VECTOR-LAST-UNSAFE` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-LAST-UNSAFE"></a>
+`∀ :A. ((VECTOR :A) → :A)`
+
+Return the last element of V without first checking if V is empty
+
+
+***
+
+#### `VECTOR-SWAP-REMOVE` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-SWAP-REMOVE"></a>
+`∀ :A. (INT → (VECTOR :A) → (OPTIONAL :A))`
+
+Remove the element IDX from VEC and replace it with the last element in VEC. Then return the removed element.
+
+
+***
+
+#### `VECTOR-INDEX-UNSAFE` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-INDEX-UNSAFE"></a>
+`∀ :A. (INT → (VECTOR :A) → :A)`
+
+Return the INDEXth element of V without checking if the element exists
+
+
+***
+
+#### `MAKE-VECTOR-CAPACITY` <sup><sub>[FUNCTION]</sub></sup><a name="MAKE-VECTOR-CAPACITY"></a>
+`∀ :A. (INT → (VECTOR :A))`
+
+Create a new vector with N elements preallocated
+
+
+***
+
+#### `VECTOR-FOREACH-INDEX` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-FOREACH-INDEX"></a>
+`∀ :A :B. ((INT → :A → :B) → (VECTOR :A) → UNIT)`
+
+Call the function F once for each item in V with its index
+
+
+***
+
+#### `VECTOR-SWAP-REMOVE-UNSAFE` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-SWAP-REMOVE-UNSAFE"></a>
+`∀ :A. (INT → (VECTOR :A) → :A)`
+
+Remove the element IDX from VEC and replace it with the last element in VEC without bounds checking. Then return the removed element.
 
 
 ***

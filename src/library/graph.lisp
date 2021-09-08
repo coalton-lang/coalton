@@ -39,8 +39,7 @@
 ;; IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 ;; DEALINGS IN THE SOFTWARE.
 
-;; TODO: check functinality for undirected graphs including graphviz output
-;; TODO: check license and attribution in this file with @stylewarning
+;; NOTE: This library is still under active development
 
 (coalton-toplevel
 
