@@ -581,9 +581,24 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
 	   (type environment env)
 	   (type substitution-list subs)
 	   (values ty ty-predicate-list typed-match-branch substitution-list))
+
+  ;; Before deriving the type of the match branch first see if any of
+  ;; its variables overlap with the names of constructors
+  (loop :for (_ . var) :in name-map :do
+    (when (lookup-constructor env var :no-error t)
+      (warn "Pattern variable ~S matches name of known constructor. If
+      you meant to match against the constructor then use (~S)" var
+      var)))
+
+
   (multiple-value-bind (var pat-preds bindings new-subs)
       (derive-pattern-type pattern env subs)
-    (let* ((bindings-schemes (mapcar (lambda (b) (cons (car b) (to-scheme (qualify nil (cdr b))))) bindings))
+    (let* ((bindings-schemes
+             (mapcar (lambda (b)
+                       (cons
+                        (car b)
+                        (to-scheme (qualify nil (cdr b)))))
+                     bindings))
            (new-env (push-value-environment env bindings-schemes)))
       (multiple-value-bind (expr-type expr-preds typed-subexpr new-subs)
           (derive-expression-type expr new-env new-subs)

@@ -2,14 +2,9 @@
 
 (defgeneric compile-pattern (pattern env)
   (:method ((pattern pattern-var) env)
-    (declare (type coalton-impl/typechecker::environment env))
-    (let* ((var-name (pattern-var-id pattern))
-	   (constructor (lookup-constructor env var-name :no-error t)))
-
-      (when constructor
-	(warn "Pattern variable ~S matches name of known constructor. If you meant to match against the constructor then use (~S)" var-name var-name))
-
-      var-name))
+    (declare (type coalton-impl/typechecker::environment env)
+             (ignore env))
+    (pattern-var-id pattern))
   (:method ((pattern pattern-wildcard) env)
     (declare (type coalton-impl/typechecker::environment env))
     '_)
