@@ -67,4 +67,8 @@
   (define-instance (Applicative Cell)
     (define (pure x) (make-cell x))
     (define (liftA2 f c1 c2)
-      (make-cell (f (cell-read c1) (cell-read c2))))))
+      (make-cell (f (cell-read c1) (cell-read c2)))))
+
+  (define-instance (Into :a (Cell :a))
+    (define (into x)
+      (make-cell x))))
