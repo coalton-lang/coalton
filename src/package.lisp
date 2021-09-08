@@ -567,6 +567,31 @@
    #:sequence
    #:mconcat
    #:asum)
+  ;; Vector
+  (:export
+   #:Vector
+   #:make-vector
+   #:make-vector-capacity
+   #:vector-length
+   #:vector-capacity
+   #:vector-empty
+   #:vector-push
+   #:vector-pop
+   #:vector-pop-unsafe
+   #:vector-index
+   #:vector-index-unsafe
+   #:vector-set
+   #:vector-head
+   #:vector-head-unsafe
+   #:vector-last
+   #:vector-last-unsafe
+   #:vector-foreach
+   #:vector-foreach-index
+   #:vector-foreach2
+   #:vector-append
+   #:vector-to-list
+   #:vector-swap-remove
+   #:vector-swap-remove-unsafe)
   ;; Graph
   (:export
    #:NodeIndex
