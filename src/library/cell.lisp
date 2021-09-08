@@ -1,4 +1,4 @@
-(in-package #:coalton-user)
+(in-package #:coalton-library)
 
 (cl:defstruct cell-internal
   (inner (cl:error "") :type cl:t))

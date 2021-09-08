@@ -1,4 +1,4 @@
-(in-package #:coalton-user)
+(in-package #:coalton-library)
 
 (coalton-toplevel
   ;;
@@ -23,8 +23,8 @@
       (cl:labels ((f (xs)
                     (cl:if (cl:typep xs 'List/Nil)
                            ""
-                           (cl:let ((element (cl:slot-value xs 'coalton-user::|_0|))
-                                    (rest (cl:slot-value xs 'coalton-user::|_1|)))
+                           (cl:let ((element (cl:slot-value xs 'coalton-library::|_0|))
+                                    (rest (cl:slot-value xs 'coalton-library::|_1|)))
                              (cl:declare (cl:type cl:character element))
                              (cl:concatenate
 			      'cl:string (cl:string element) (f rest))))))

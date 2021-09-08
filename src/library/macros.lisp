@@ -1,4 +1,4 @@
-(in-package #:coalton-user)
+(in-package #:coalton-library)
 
 ;; Define IF as a macro to prevent branches from eagerly being evaluated
 (cl:defmacro coalton:if (expr then else)
@@ -61,8 +61,8 @@ to
   (cl:labels
       ((list-helper (forms)
 	 (cl:if (cl:endp forms)
-		`coalton-user:Nil
-		`(coalton-user:Cons ,(cl:car forms) ,(list-helper (cl:cdr forms))))))
+		`coalton-library:Nil
+		`(coalton-library:Cons ,(cl:car forms) ,(list-helper (cl:cdr forms))))))
     (list-helper forms)))
 
 (cl:defmacro to-boolean (expr)

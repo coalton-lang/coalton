@@ -1,270 +1,270 @@
 (in-package #:coalton-tests)
 
 (deftest test-graph-basic ()
-  (let ((g (coalton-user::make-graph coalton-user::Unit)))
-    (coalton-user::graph-add-node "a" g)
-    (coalton-user::graph-add-node "b" g)
-    (coalton-user::graph-add-node "c" g)
-    (is (equal (coalton-user::graph-node-count g)
+  (let ((g (coalton-library::make-graph coalton-library::Unit)))
+    (coalton-library::graph-add-node "a" g)
+    (coalton-library::graph-add-node "b" g)
+    (coalton-library::graph-add-node "c" g)
+    (is (equal (coalton-library::graph-node-count g)
 	       3))
-    (coalton-user::graph-add-edge
-     coalton-user::Unit
-     (coalton-user::NodeIndex 0)
-     (coalton-user::NodeIndex 1)
+    (coalton-library::graph-add-edge
+     coalton-library::Unit
+     (coalton-library::NodeIndex 0)
+     (coalton-library::NodeIndex 1)
      g)
 
-    (coalton-user::graph-add-edge
-     coalton-user::Unit
-     (coalton-user::NodeIndex 1)
-     (coalton-user::NodeIndex 0)
+    (coalton-library::graph-add-edge
+     coalton-library::Unit
+     (coalton-library::NodeIndex 1)
+     (coalton-library::NodeIndex 0)
      g)
 
-    (coalton-user::graph-add-edge
-     coalton-user::Unit
-     (coalton-user::NodeIndex 0)
-     (coalton-user::NodeIndex 2)
+    (coalton-library::graph-add-edge
+     coalton-library::Unit
+     (coalton-library::NodeIndex 0)
+     (coalton-library::NodeIndex 2)
      g)
 
-    (is (equal (coalton-user::graph-edge-count g)
+    (is (equal (coalton-library::graph-edge-count g)
 	       3))
 
-    (coalton-user::graph-remove-node (coalton-user::NodeIndex 1) g)
+    (coalton-library::graph-remove-node (coalton-library::NodeIndex 1) g)
 
-    (is (equal (coalton-user::graph-edge-count g)
+    (is (equal (coalton-library::graph-edge-count g)
 	       1))
 
-    (is (equal (coalton-user::graph-node-count g)
+    (is (equal (coalton-library::graph-node-count g)
 	       2))))
 
 (deftest test-tarjan-scc-2 ()
-  (let ((g (coalton-user::make-digraph coalton-user::Unit)))
-    (coalton-user::graph-add-node "a" g)
-    (coalton-user::graph-add-node "b" g)
-    (coalton-user::graph-add-node "c" g)
+  (let ((g (coalton-library::make-digraph coalton-library::Unit)))
+    (coalton-library::graph-add-node "a" g)
+    (coalton-library::graph-add-node "b" g)
+    (coalton-library::graph-add-node "c" g)
 
-    (coalton-user::graph-add-edge
-     coalton-user::Unit
-     (coalton-user::NodeIndex 0)
-     (coalton-user::NodeIndex 1)
+    (coalton-library::graph-add-edge
+     coalton-library::Unit
+     (coalton-library::NodeIndex 0)
+     (coalton-library::NodeIndex 1)
      g)
 
-    (coalton-user::graph-add-edge
-     coalton-user::Unit
-     (coalton-user::NodeIndex 1)
-     (coalton-user::NodeIndex 2)
+    (coalton-library::graph-add-edge
+     coalton-library::Unit
+     (coalton-library::NodeIndex 1)
+     (coalton-library::NodeIndex 2)
      g)
 
-    (coalton-user::graph-add-edge
-     coalton-user::Unit
-     (coalton-user::NodeIndex 2)
-     (coalton-user::NodeIndex 0)
+    (coalton-library::graph-add-edge
+     coalton-library::Unit
+     (coalton-library::NodeIndex 2)
+     (coalton-library::NodeIndex 0)
      g)
 
-    (is (equalp (coalton-user::tarjan-scc g)
-		(coalton-user::make-list
-		 (coalton-user::make-list
-		  (coalton-user::NodeIndex 0)
-		  (coalton-user::NodeIndex 1)
-		  (coalton-user::NodeIndex 2))))))
+    (is (equalp (coalton-library::tarjan-scc g)
+		(coalton-library::make-list
+		 (coalton-library::make-list
+		  (coalton-library::NodeIndex 0)
+		  (coalton-library::NodeIndex 1)
+		  (coalton-library::NodeIndex 2))))))
 
-  (let ((g (coalton-user::make-digraph coalton-user::Unit)))
-    (coalton-user::graph-add-node "a" g)
-    (coalton-user::graph-add-node "b" g)
-    (coalton-user::graph-add-node "c" g)
+  (let ((g (coalton-library::make-digraph coalton-library::Unit)))
+    (coalton-library::graph-add-node "a" g)
+    (coalton-library::graph-add-node "b" g)
+    (coalton-library::graph-add-node "c" g)
 
-    (coalton-user::graph-add-edge
-     coalton-user::Unit
-     (coalton-user::NodeIndex 0)
-     (coalton-user::NodeIndex 0)
+    (coalton-library::graph-add-edge
+     coalton-library::Unit
+     (coalton-library::NodeIndex 0)
+     (coalton-library::NodeIndex 0)
      g)
 
-    (coalton-user::graph-add-edge
-     coalton-user::Unit
-     (coalton-user::NodeIndex 1)
-     (coalton-user::NodeIndex 2)
+    (coalton-library::graph-add-edge
+     coalton-library::Unit
+     (coalton-library::NodeIndex 1)
+     (coalton-library::NodeIndex 2)
      g)
 
-    (coalton-user::graph-add-edge
-     coalton-user::Unit
-     (coalton-user::NodeIndex 2)
-     (coalton-user::NodeIndex 1)
+    (coalton-library::graph-add-edge
+     coalton-library::Unit
+     (coalton-library::NodeIndex 2)
+     (coalton-library::NodeIndex 1)
      g)
 
-    (is (equalp (coalton-user::tarjan-scc g)
-		(coalton-user::make-list
-		 (coalton-user::make-list
-		  (coalton-user::NodeIndex 0))
-		 (coalton-user::make-list 
-		  (coalton-user::NodeIndex 1)
-		  (coalton-user::NodeIndex 2))))))
+    (is (equalp (coalton-library::tarjan-scc g)
+		(coalton-library::make-list
+		 (coalton-library::make-list
+		  (coalton-library::NodeIndex 0))
+		 (coalton-library::make-list 
+		  (coalton-library::NodeIndex 1)
+		  (coalton-library::NodeIndex 2))))))
 
-  (let ((g (coalton-user::make-digraph coalton-user::Unit)))
-    (let  ((a (coalton-user::graph-add-node "a" g))
-	   (b (coalton-user::graph-add-node "b" g))
-	   (c (coalton-user::graph-add-node "c" g))
-	   (d (coalton-user::graph-add-node "d" g))
-	   (e (coalton-user::graph-add-node "e" g)))
+  (let ((g (coalton-library::make-digraph coalton-library::Unit)))
+    (let  ((a (coalton-library::graph-add-node "a" g))
+	   (b (coalton-library::graph-add-node "b" g))
+	   (c (coalton-library::graph-add-node "c" g))
+	   (d (coalton-library::graph-add-node "d" g))
+	   (e (coalton-library::graph-add-node "e" g)))
 
-      (coalton-user::graph-add-edge
-       coalton-user::Unit
+      (coalton-library::graph-add-edge
+       coalton-library::Unit
        a 
        b 
        g)
 
-      (coalton-user::graph-add-edge
-       coalton-user::Unit
+      (coalton-library::graph-add-edge
+       coalton-library::Unit
        b 
        c 
        g)
 
-      (coalton-user::graph-add-edge
-       coalton-user::Unit
+      (coalton-library::graph-add-edge
+       coalton-library::Unit
        b 
        e 
        g)
 
-      (coalton-user::graph-add-edge
-       coalton-user::Unit
+      (coalton-library::graph-add-edge
+       coalton-library::Unit
        c 
        a 
        g)
 
-      (coalton-user::graph-add-edge
-       coalton-user::Unit
+      (coalton-library::graph-add-edge
+       coalton-library::Unit
        c 
        d 
        g)
        
-      (coalton-user::graph-add-edge
-       coalton-user::Unit
+      (coalton-library::graph-add-edge
+       coalton-library::Unit
        d 
        e 
        g)
        
-      (coalton-user::graph-add-edge
-       coalton-user::Unit
+      (coalton-library::graph-add-edge
+       coalton-library::Unit
        e 
        d 
        g)
        
-      (is (equalp (coalton-user::tarjan-scc g)
-		  (coalton-user::make-list
-		   (coalton-user::make-list
-		    (coalton-user::NodeIndex 4)
-		    (coalton-user::NodeIndex 3))
-		   (coalton-user::make-list
-		    (coalton-user::NodeIndex 0)
-		    (coalton-user::NodeIndex 1)
-		    (coalton-user::NodeIndex 2)))))))
+      (is (equalp (coalton-library::tarjan-scc g)
+		  (coalton-library::make-list
+		   (coalton-library::make-list
+		    (coalton-library::NodeIndex 4)
+		    (coalton-library::NodeIndex 3))
+		   (coalton-library::make-list
+		    (coalton-library::NodeIndex 0)
+		    (coalton-library::NodeIndex 1)
+		    (coalton-library::NodeIndex 2)))))))
 
-  (let* ((graph_ (coalton-user::make-digraph coalton-user::Unit))
-	 (a (coalton-user::graph-add-node "a" graph_))
-	 (b (coalton-user::graph-add-node "b" graph_))
-	 (c (coalton-user::graph-add-node "c" graph_))
-	 (d (coalton-user::graph-add-node "d" graph_))
-	 (e (coalton-user::graph-add-node "e" graph_))
-	 (f (coalton-user::graph-add-node "f" graph_))
-	 (g (coalton-user::graph-add-node "g" graph_))
-	 (h (coalton-user::graph-add-node "h" graph_)))
+  (let* ((graph_ (coalton-library::make-digraph coalton-library::Unit))
+	 (a (coalton-library::graph-add-node "a" graph_))
+	 (b (coalton-library::graph-add-node "b" graph_))
+	 (c (coalton-library::graph-add-node "c" graph_))
+	 (d (coalton-library::graph-add-node "d" graph_))
+	 (e (coalton-library::graph-add-node "e" graph_))
+	 (f (coalton-library::graph-add-node "f" graph_))
+	 (g (coalton-library::graph-add-node "g" graph_))
+	 (h (coalton-library::graph-add-node "h" graph_)))
 
-    (coalton-user::graph-add-edge coalton-user::Unit a b graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit a b graph_)
 
-    (coalton-user::graph-add-edge coalton-user::Unit b c graph_)
-    (coalton-user::graph-add-edge coalton-user::Unit b e graph_)
-    (coalton-user::graph-add-edge coalton-user::Unit b f graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit b c graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit b e graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit b f graph_)
 
-    (coalton-user::graph-add-edge coalton-user::Unit c d graph_)
-    (coalton-user::graph-add-edge coalton-user::Unit c g graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit c d graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit c g graph_)
 
-    (coalton-user::graph-add-edge coalton-user::Unit d c graph_)
-    (coalton-user::graph-add-edge coalton-user::Unit d h graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit d c graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit d h graph_)
 
-    (coalton-user::graph-add-edge coalton-user::Unit e a graph_)
-    (coalton-user::graph-add-edge coalton-user::Unit e f graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit e a graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit e f graph_)
 
-    (coalton-user::graph-add-edge coalton-user::Unit e a graph_)
-    (coalton-user::graph-add-edge coalton-user::Unit e f graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit e a graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit e f graph_)
 
-    (coalton-user::graph-add-edge coalton-user::Unit f g graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit f g graph_)
 
-    (coalton-user::graph-add-edge coalton-user::Unit g f graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit g f graph_)
 
-    (coalton-user::graph-add-edge coalton-user::Unit h d graph_)
-    (coalton-user::graph-add-edge coalton-user::Unit h g graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit h d graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit h g graph_)
 
-    (is (equalp (coalton-user::tarjan-scc graph_)
-		(coalton-user::make-list
-		 (coalton-user::make-list f g)
-		 (coalton-user::make-list c d h)
-		 (coalton-user::make-list a b e)))))
+    (is (equalp (coalton-library::tarjan-scc graph_)
+		(coalton-library::make-list
+		 (coalton-library::make-list f g)
+		 (coalton-library::make-list c d h)
+		 (coalton-library::make-list a b e)))))
 
-  (let* ((graph_ (coalton-user::make-digraph coalton-user::Unit))
-	 (a (coalton-user::graph-add-node "a" graph_))
-	 (b (coalton-user::graph-add-node "b" graph_))
-	 (c (coalton-user::graph-add-node "c" graph_))
-	 (d (coalton-user::graph-add-node "d" graph_))
-	 (e (coalton-user::graph-add-node "e" graph_))
-	 (f (coalton-user::graph-add-node "f" graph_))
-	 (g (coalton-user::graph-add-node "g" graph_))
-	 (h (coalton-user::graph-add-node "h" graph_))
-	 (i (coalton-user::graph-add-node "i" graph_))
-	 (j (coalton-user::graph-add-node "j" graph_))
-	 (k (coalton-user::graph-add-node "k" graph_))
-	 (l (coalton-user::graph-add-node "l" graph_))
-	 (m (coalton-user::graph-add-node "m" graph_))
-	 (n (coalton-user::graph-add-node "n" graph_))
-	 (o (coalton-user::graph-add-node "o" graph_))
-	 (p (coalton-user::graph-add-node "p" graph_)))
+  (let* ((graph_ (coalton-library::make-digraph coalton-library::Unit))
+	 (a (coalton-library::graph-add-node "a" graph_))
+	 (b (coalton-library::graph-add-node "b" graph_))
+	 (c (coalton-library::graph-add-node "c" graph_))
+	 (d (coalton-library::graph-add-node "d" graph_))
+	 (e (coalton-library::graph-add-node "e" graph_))
+	 (f (coalton-library::graph-add-node "f" graph_))
+	 (g (coalton-library::graph-add-node "g" graph_))
+	 (h (coalton-library::graph-add-node "h" graph_))
+	 (i (coalton-library::graph-add-node "i" graph_))
+	 (j (coalton-library::graph-add-node "j" graph_))
+	 (k (coalton-library::graph-add-node "k" graph_))
+	 (l (coalton-library::graph-add-node "l" graph_))
+	 (m (coalton-library::graph-add-node "m" graph_))
+	 (n (coalton-library::graph-add-node "n" graph_))
+	 (o (coalton-library::graph-add-node "o" graph_))
+	 (p (coalton-library::graph-add-node "p" graph_)))
 
-    (coalton-user::graph-add-edge coalton-user::Unit a c graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit a c graph_)
 
-    (coalton-user::graph-add-edge coalton-user::Unit b a graph_)
-    (coalton-user::graph-add-edge coalton-user::Unit b f graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit b a graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit b f graph_)
 
-    (coalton-user::graph-add-edge coalton-user::Unit c b graph_)
-    (coalton-user::graph-add-edge coalton-user::Unit c e graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit c b graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit c e graph_)
 
-    (coalton-user::graph-add-edge coalton-user::Unit d c graph_)
-    (coalton-user::graph-add-edge coalton-user::Unit d m graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit d c graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit d m graph_)
 
-    (coalton-user::graph-add-edge coalton-user::Unit e d graph_)
-    (coalton-user::graph-add-edge coalton-user::Unit e f graph_)
-    (coalton-user::graph-add-edge coalton-user::Unit e n graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit e d graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit e f graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit e n graph_)
 
-    (coalton-user::graph-add-edge coalton-user::Unit f g graph_)
-    (coalton-user::graph-add-edge coalton-user::Unit f i graph_)
-    (coalton-user::graph-add-edge coalton-user::Unit f k graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit f g graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit f i graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit f k graph_)
 
-    (coalton-user::graph-add-edge coalton-user::Unit g h graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit g h graph_)
 
-    (coalton-user::graph-add-edge coalton-user::Unit h i graph_)
-    (coalton-user::graph-add-edge coalton-user::Unit h j graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit h i graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit h j graph_)
 
-    (coalton-user::graph-add-edge coalton-user::Unit i g graph_)
-    (coalton-user::graph-add-edge coalton-user::Unit i j graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit i g graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit i j graph_)
 
-    (coalton-user::graph-add-edge coalton-user::Unit k j graph_)
-    (coalton-user::graph-add-edge coalton-user::Unit k l graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit k j graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit k l graph_)
 
-    (coalton-user::graph-add-edge coalton-user::Unit l k graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit l k graph_)
 
-    (coalton-user::graph-add-edge coalton-user::Unit m n graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit m n graph_)
 
-    (coalton-user::graph-add-edge coalton-user::Unit n o graph_)
-    (coalton-user::graph-add-edge coalton-user::Unit n p graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit n o graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit n p graph_)
 
-    (coalton-user::graph-add-edge coalton-user::Unit o m graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit o m graph_)
 
-    (coalton-user::graph-add-edge coalton-user::Unit p o graph_)
-    (coalton-user::graph-add-edge coalton-user::Unit p k graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit p o graph_)
+    (coalton-library::graph-add-edge coalton-library::Unit p k graph_)
 
     ;; TODO: enable this test when debugging is improved
     #+ignore
-    (is (equalp (coalton-user::tarjan-scc graph_)
-		(coalton-user::make-list
-		 (coalton-user::make-list j)
-		 (coalton-user::make-list k l)
-		 (coalton-user::make-list g h i)
-		 (coalton-user::make-list m n o p)
-		 (coalton-user::make-list f)
-		 (coalton-user::make-list a b c d e))))))
+    (is (equalp (coalton-library::tarjan-scc graph_)
+		(coalton-library::make-list
+		 (coalton-library::make-list j)
+		 (coalton-library::make-list k l)
+		 (coalton-library::make-list g h i)
+		 (coalton-library::make-list m n o p)
+		 (coalton-library::make-list f)
+		 (coalton-library::make-list a b c d e))))))

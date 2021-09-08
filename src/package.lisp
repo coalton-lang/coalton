@@ -4,6 +4,10 @@
 ;;; Internal packages
 ;;;
 
+(uiop:define-package #:coalton-global-symbols
+  (:documentation "A place that global value stores are stashed. We don't use uninterned symbols so that they can be reified through the compilation process.")
+  (:use))
+
 (uiop:define-package #:coalton-impl/algorithm
   (:documentation "Implementation of generic algorithms used by COALTON. This is a package private to the COALTON system and is not intended for public use.")
   (:use #:cl)
@@ -430,10 +434,10 @@
    #:veil
    #:unveil))
 
-(uiop:define-package #:coalton-user
-  (:documentation "User package for Coalton.")
+(uiop:define-package #:coalton-library
+  (:documentation "The Coalton standard library.")
   (:use #:coalton)
-  ;; Macros
+    ;; Macros
   (:export
    #:if
    #:unless
@@ -583,6 +587,7 @@
    #:graph-remove-edge
    #:graph-viz))
 
-(uiop:define-package #:coalton-global-symbols
-  (:documentation "A place that global value names are stashed. We don't use uninterned symbols so that they can be reified through the compilation process.")
-  (:use))
+(uiop:define-package #:coalton-user
+  (:documentation "A default user package for Coalton.")
+  (:use #:coalton #:coalton-library))
+
