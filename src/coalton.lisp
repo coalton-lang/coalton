@@ -103,6 +103,20 @@
       (setf *emit-type-annotations* old)
       form)))
 
+(defmacro coalton:coalton (form)
+  (let ((parsed-form (parse-form form (make-shadow-realm) *package*)))
+    (multiple-value-bind (type preds typed-node substs)
+        (derive-expression-type parsed-form *global-environment* nil)
+      (declare (ignore type))
+      (let* ((env (coalton-impl/typechecker::apply-substitution substs *global-environment*))
+             (preds (coalton-impl/typechecker::apply-substitution substs preds))
+             (preds (coalton-impl/typechecker::reduce-context env preds))
+             (typed-node (coalton-impl/typechecker::apply-substitution substs typed-node)))
+
+        (assert (null preds))
+        (setf *global-environment* env)
+        (coalton-impl/codegen::compile-expression typed-node nil *global-environment*)))))
+
 (defun process-coalton-toplevel (toplevel-forms &optional (env *global-environment*))
   "Top-level definitions for use within Coalton."
 
