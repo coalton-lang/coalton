@@ -81,28 +81,23 @@
 	   (type environment env))
   (let* ((optimizer (make-optimizer env))
 	 (bindings (optimize-bindings optimizer bindings)))
+    `(progn
+       ;; Define types
+       ,@(reshuffle-definitions (mapcan #'compile-type-definition types))
 
-    (multiple-value-bind (instance-forms instance-pre-declare)
-	(compile-instance-definitions instance-definitions optimizer)
+       ;; Define typeclasses
+       ,@(reshuffle-definitions (compile-class-definitions classes env))
 
-      `(progn
-	 ;; Define types
-         ,@(reshuffle-definitions (mapcan #'compile-type-definition types))
 
-	 ;; Define typeclasses
-	 ,@(reshuffle-definitions (compile-class-definitions classes env))
+       ;; Define ...
+       ,@(reshuffle-definitions (append
+                                 ;; ... instance structs
+                                 (compile-instance-definitions instance-definitions optimizer)
+                                 ;; ... functions and variables
+                                 (compile-toplevel-sccs bindings sccs env)))
 
-	 ;; Predeclare instance structs
-	 ,@instance-pre-declare
-
-	 ;; Define functions and variables
-	 ,@(reshuffle-definitions (compile-toplevel-sccs bindings sccs env))
-
-	 ;; Define instance structs
-	 ,@instance-forms
-
-         ;; Emit documentation
-         ,@(compile-docstring-forms docstrings)))))
+       ;; Emit documentation
+       ,@(compile-docstring-forms docstrings))))
 
 (defun compile-docstring-forms (docstrings)
   (loop :for (name docstring type) :in docstrings
@@ -265,79 +260,76 @@
   (declare (type instance-definition-list instance-definitions)
 	   (type optimizer optimizer)
 	   (values list))
-  (let ((env (optimizer-env optimizer))
-	(instance-dict-names nil))
-    (values
-     (loop :for instance :in instance-definitions
-	   :for class-name := (instance-definition-class-name instance)
-	   :for predicate := (instance-definition-predicate instance)
-	   :for methods := (instance-definition-methods instance)
-	   :for codegen-sym := (instance-definition-codegen-sym instance)
+  (loop :with env := (optimizer-env optimizer)
+        :for instance :in instance-definitions
+        :for class-name := (instance-definition-class-name instance)
+        :for predicate := (instance-definition-predicate instance)
+        :for methods := (instance-definition-methods instance)
+        :for codegen-sym := (instance-definition-codegen-sym instance)
 
-	   :for class := (lookup-class env class-name)
-	   :for class-codegen-sym := (ty-class-codegen-sym class)
+        :for class := (lookup-class env class-name)
+        :for class-codegen-sym := (ty-class-codegen-sym class)
 
-	   :for context := (instance-definition-context instance)
-	   :for context-dict := (mapcar (lambda (pred)
-					  (cons pred (gensym)))
-					context)
-	   :for context-params := (mapcar #'cdr context-dict)
-	   :for dict-types := (mapcar (lambda (dict-context)
-					(cons
-					 (ty-class-codegen-sym (lookup-class env (ty-predicate-class (car dict-context))))
-					 (cdr dict-context)))
-				      context-dict)
+        :for context := (instance-definition-context instance)
+        :for context-dict := (mapcar (lambda (pred)
+                                       (cons pred (gensym)))
+                                     context)
+        :for context-params := (mapcar #'cdr context-dict)
+        :for dict-types := (mapcar (lambda (dict-context)
+                                     (cons
+                                      (ty-class-codegen-sym (lookup-class env (ty-predicate-class (car dict-context))))
+                                      (cdr dict-context)))
+                                   context-dict)
 
-          
-	   :for codegen-methods
-	     := (mapcan
-	         (lambda (m)
-		   (let ((method-body (optimize-node optimizer (cdr m))))
-                    
-		     `(,(intern (symbol-name (car m)) keyword-package)
-		       ,(if (coalton-impl/typechecker::typed-node-abstraction-p method-body)
-			    (let ((vars (mapcar #'car (typed-node-abstraction-vars method-body)))
-				  (subexpr (typed-node-abstraction-subexpr method-body)))
-			      (construct-function-entry
-                               `(lambda ,vars
-				  (declare
-				   (ignorable ,@vars)
-				   ,@(when *emit-type-annotations*
-				       (mapcar (lambda (v) `(type ,(lisp-type (cdr v)) ,(car v) ))
-					       (typed-node-abstraction-vars method-body))))
-			          ,(compile-expression subexpr context-dict env))
-                               (length vars)))
-			    (compile-expression (cdr m) context-dict env)))))
-	         methods)
+        
+        :for codegen-methods
+          := (mapcan
+              (lambda (m)
+                (let ((method-body (optimize-node optimizer (cdr m))))
+                  
+                  `(,(intern (symbol-name (car m)) keyword-package)
+                    ,(if (coalton-impl/typechecker::typed-node-abstraction-p method-body)
+                         (let ((vars (mapcar #'car (typed-node-abstraction-vars method-body)))
+                               (subexpr (typed-node-abstraction-subexpr method-body)))
+                           (construct-function-entry
+                            `(lambda ,vars
+                               (declare
+                                (ignorable ,@vars)
+                                ,@(when *emit-type-annotations*
+                                    (mapcar (lambda (v) `(type ,(lisp-type (cdr v)) ,(car v) ))
+                                            (typed-node-abstraction-vars method-body))))
+                               ,(compile-expression subexpr context-dict env))
+                            (length vars)))
+                         (compile-expression (cdr m) context-dict env)))))
+              methods)
 
-	   :for pred-subs := (coalton-impl/typechecker::predicate-match (ty-class-predicate class) predicate)
-	   :for codegen-superclasses
-	     := (loop :for (superclass-pred . field-name) :in (ty-class-superclass-dict class)
-		      :for superclass := (lookup-class env (ty-predicate-class superclass-pred))
-		      :append
-		      `(,(intern (symbol-name field-name) keyword-package)
-			,(lookup-dict (coalton-impl/typechecker::apply-substitution pred-subs superclass-pred)
-				      context-dict env)))
+        :for pred-subs := (coalton-impl/typechecker::predicate-match (ty-class-predicate class) predicate)
+        :for codegen-superclasses
+          := (loop :for (superclass-pred . field-name) :in (ty-class-superclass-dict class)
+                   :for superclass := (lookup-class env (ty-predicate-class superclass-pred))
+                   :append
+                   `(,(intern (symbol-name field-name) keyword-package)
+                     ,(lookup-dict (coalton-impl/typechecker::apply-substitution pred-subs superclass-pred)
+                                   context-dict env)))
 
-           :do (push `(global-vars:define-global-var ,codegen-sym ':|@@unbound@@|) instance-dict-names)
-	   ;:do (push `(coalton-impl::define-global-lexical ,codegen-sym '@@stub@@) instance-dict-names)
-
-	   :collect
-	   (if (null context)
-	       `(cl:setf
-		 ,codegen-sym
-		 (load-time-value
-                  (,class-codegen-sym
-                   ,@codegen-methods
-                   ,@codegen-superclasses)))
-	       `(cl:defun ,codegen-sym ,context-params
-		  (declare
-		   (ignorable ,@context-params)
-		   ,@(when *emit-type-annotations*
-		       (mapcar (lambda (dict-ctx) `(type ,(car dict-ctx) ,(cdr dict-ctx)))
-			       dict-types)))
-		  (,class-codegen-sym
-		   ,@codegen-methods
-		   ,@codegen-superclasses))))
-     instance-dict-names)))
+        :collect
+        `(global-vars:define-global-var ,codegen-sym ':|@@unbound@@|)
+        :collect
+        (if (null context)
+            `(cl:setf
+              ,codegen-sym
+              (load-time-value
+               (,class-codegen-sym
+                ,@codegen-methods
+                ,@codegen-superclasses)))
+            `(cl:defun ,codegen-sym ,context-params
+               (declare
+                (ignorable ,@context-params)
+                ,@(when *emit-type-annotations*
+                    (mapcar (lambda (dict-ctx) `(type ,(car dict-ctx) ,(cdr dict-ctx)))
+                            dict-types)))
+               (,class-codegen-sym
+                ,@codegen-methods
+                ,@codegen-superclasses))))
+  )
  
