@@ -1,4 +1,4 @@
-(in-package #:coalton-user)
+(in-package #:coalton-library)
 
 (coalton-toplevel
   ;;

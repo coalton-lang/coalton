@@ -1,4 +1,4 @@
-(cl:in-package #:coalton-user)
+(cl:in-package #:coalton-library)
 
 ;;
 ;; Library module for graphs and graph algorithms

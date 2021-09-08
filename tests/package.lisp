@@ -21,3 +21,7 @@
 		          #:Unit)
   (:export
    #:run-coalton-tests))
+
+(uiop:define-package #:coalton-test-user
+  (:documentation "A copy-cat package to COALTON-USER for testing.")
+  (:use #:coalton #:coalton-library))

@@ -3,6 +3,6 @@
 (defpackage #:quil-coalton
   (:documentation "Public interface to QUIL-COALTON.")
   (:use #:coalton
-        #:coalton-user)
+        #:coalton-library)
   (:shadow #:error #:alt)
   (:export #:run-quil-parser))

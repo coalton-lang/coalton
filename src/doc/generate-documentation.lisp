@@ -1,8 +1,8 @@
 (in-package #:coalton-impl/doc)
 
 (defun write-library-documentation-to-markdown (&optional (env coalton-impl::*global-environment*) (stream t) (file-prefix ""))
-  (let* ((package 'coalton-user)
-         (system 'coalton)
+  (let* ((package "COALTON-LIBRARY")
+         (system ':COALTON)
          (component (asdf:find-component system 'library))
          (component-path (asdf:component-pathname component))
          (*package* (find-package package))

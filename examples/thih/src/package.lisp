@@ -3,7 +3,7 @@
 (defpackage #:thih-coalton
   (:documentation "Public interface to THIH-COALTON.")
   (:use #:coalton
-        #:coalton-user)
+        #:coalton-library)
   (:shadow #:id #:find #:const #:alt
            #:type #:compose)
   (:export
