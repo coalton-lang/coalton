@@ -36,6 +36,17 @@
          :reason-control reason-control
          :reason-args reason-args))
 
+(defun sexp-fmt (stream object &optional colon-modifier at-modifier)
+  "A formatter for qualified S-expressions. Use like
+
+    (format t \"~/coalton-impl::sexp-fmt/\" '(:x y 5))
+
+and it will print a flat S-expression with all symbols qualified."
+  (declare (ignore colon-modifier at-modifier))
+  (let ((*print-pretty* nil)
+        (*package* (find-package "KEYWORD")))
+    (prin1 object stream)))
+
 (defmacro include-if (condition &body body)
   `(when ,condition
      (list ,@ (remove nil body))))
