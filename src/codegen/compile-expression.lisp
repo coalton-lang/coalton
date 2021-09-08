@@ -72,7 +72,7 @@
   (:method ((expr typed-node-let) ctx env)
     (compile-binding-list (typed-node-let-bindings expr)
                           (typed-node-let-sorted-bindings expr)
-			  (compile-expression (typed-node-let-subexpr expr) ctx env)
+			  (typed-node-let-subexpr expr)
 			  (typed-node-let-dynamic-extent-bindings expr)
                           ctx
                           env))
@@ -112,11 +112,11 @@
 (defun reduce-preds-for-codegen (preds env)
   (reduce-context env (remove-duplicates preds :test #'equalp)))
 
-(defun compile-binding-list (typed-bindings sorted-bindings subform dynamic-extent-bindings ctx env)
+(defun compile-binding-list (typed-bindings sorted-bindings subnode dynamic-extent-bindings ctx env)
   "Compiles a binding list to nested LET and LABELS based on topological sorting of the bindings."
   (declare (type typed-binding-list typed-bindings)
 	   (type list sorted-bindings)
-	   (type t subform)
+	   (type typed-node subnode)
 	   (type symbol-list dynamic-extent-bindings)
 	   (type list ctx)
 	   (type environment env)
@@ -124,7 +124,7 @@
 
   (labels ((compile-sccs (sccs)
              (if (null sccs)
-		 subform
+		 (compile-expression subnode ctx env)
 
                  (let* ((scc (car sccs))
                         (scc-typed-bindings
@@ -147,52 +147,68 @@
                    (cond
                      ;; Either everything is a function
                      ((every #'coalton-impl/typechecker::typed-node-abstraction-p (mapcar #'cdr scc-typed-bindings))
-                      `(let ,(mapcar (lambda (v) `(,(car v) ,(construct-function-entry `(lambda () (error "")) 1))) scc-typed-bindings)
-			 (declare (ignorable ,@(mapcar #'car scc-typed-bindings))
-				  ,@(when (not (null local-dynamic-extent-bindings))
-				      `((dynamic-extent ,@local-dynamic-extent-bindings))))
-                         (labels ,(mapcar
-                                   (lambda (b)
-				     (unless (null local-dynamic-extent-bindings)
-				       (coalton-impl::coalton-bug "Functions should not be declared dynamic extent."))
-				     (let* ((type (typed-node-type (cdr b)))
-					    (preds (reduce-preds-for-codegen (scheme-predicates type) env))
-					    (dict-context (mapcar (lambda (pred) (cons pred (gensym)))
-                                                                  preds))
-					    (dict-types (mapcar (lambda (dict-context)
-								  (cons
-								   (ty-class-codegen-sym
-								    (lookup-class env (ty-predicate-class (car dict-context))))
-								   (cdr dict-context)))
-								dict-context)))
-                                       `(,(car b)
-					 (,@(mapcar #'cdr dict-context)
-					  ,@(mapcar #'car (typed-node-abstraction-vars (cdr b))))
-					 
-					 (declare (ignorable
-						   ,@(mapcar #'cdr dict-context)
-						   ,@(mapcar #'car (typed-node-abstraction-vars (cdr b))))
-                                                  ,@(when *emit-type-annotations*
-                                                      `(,@(mapcar (lambda (var) `(type ,(lisp-type (cdr var)) ,(car var)))
-                                                                  (typed-node-abstraction-vars (cdr b)))
-							,@(mapcar (lambda (dict) `(type ,(car dict) ,(cdr dict))) dict-types)
-							(values
-							 ,(lisp-type
-							   (typed-node-type (typed-node-abstraction-subexpr (cdr b)))) &optional))))
-					 ,(compile-expression
-					   (typed-node-abstraction-subexpr (cdr b))
-					   (append dict-context ctx) env))))
-                                   scc-typed-bindings)
-                           (setf ,@(mapcan (lambda (b)
-                                             (let* ((type (typed-node-type (cdr b)))
-					            (preds (reduce-preds-for-codegen (scheme-predicates type) env)))
-                                               `(,(car b) ,(construct-function-entry
-                                                            `#',(car b)
-                                                            (+ (length (typed-node-abstraction-vars (cdr b)))
-							       (length preds))))))
-                                           scc-typed-bindings))
+                      (let* ((function-names (mapcar #'car scc-typed-bindings))
+                             (variable-namespace (append
+                                                  (coalton-impl/typechecker::collect-variable-namespace subnode)
+                                                  (mapcan #'coalton-impl/typechecker::collect-variable-namespace (mapcar #'cdr typed-bindings))))
+ 
+                             ;; If the functions are referenced in the
+                             ;; variable namespace then genenerate the
+                             ;; scaffolding to declare them in both
+                             ;; namespaces. Otherwise only declare
+                             ;; them in the function namespace
+                             (generate-function-scaffold (subsetp function-names variable-namespace :test #'equalp))
 
-                           ,(compile-sccs (cdr sccs)))))
+                             (labels_ `(labels ,(mapcar
+                                                 (lambda (b)
+				                   (unless (null local-dynamic-extent-bindings)
+				                     (coalton-impl::coalton-bug "Functions should not be declared dynamic extent."))
+				                   (let* ((type (typed-node-type (cdr b)))
+					                  (preds (reduce-preds-for-codegen (scheme-predicates type) env))
+					                  (dict-context (mapcar (lambda (pred) (cons pred (gensym)))
+                                                                                preds))
+					                  (dict-types (mapcar (lambda (dict-context)
+								                (cons
+								                 (ty-class-codegen-sym
+								                  (lookup-class env (ty-predicate-class (car dict-context))))
+								                 (cdr dict-context)))
+								              dict-context)))
+                                                     `(,(car b)
+					               (,@(mapcar #'cdr dict-context)
+					                ,@(mapcar #'car (typed-node-abstraction-vars (cdr b))))
+					   
+					               (declare (ignorable
+						                 ,@(mapcar #'cdr dict-context)
+						                 ,@(mapcar #'car (typed-node-abstraction-vars (cdr b))))
+                                                                ,@(when *emit-type-annotations*
+                                                                    `(,@(mapcar (lambda (var) `(type ,(lisp-type (cdr var)) ,(car var)))
+                                                                                (typed-node-abstraction-vars (cdr b)))
+							              ,@(mapcar (lambda (dict) `(type ,(car dict) ,(cdr dict))) dict-types)
+							              (values
+							               ,(lisp-type
+							                 (typed-node-type (typed-node-abstraction-subexpr (cdr b)))) &optional))))
+					               ,(compile-expression
+					                 (typed-node-abstraction-subexpr (cdr b))
+					                 (append dict-context ctx) env))))
+                                                 scc-typed-bindings)
+                                         ,@(when generate-function-scaffold
+                                            `((setf ,@(mapcan (lambda (b)
+                                                                 (let* ((type (typed-node-type (cdr b)))
+					                                (preds (reduce-preds-for-codegen (scheme-predicates type) env)))
+                                                                   `(,(car b) ,(construct-function-entry
+                                                                                `#',(car b)
+                                                                                (+ (length (typed-node-abstraction-vars (cdr b)))
+							                           (length preds))))))
+                                                               scc-typed-bindings))))
+
+                                         ,(compile-sccs (cdr sccs)))))
+                        (if generate-function-scaffold
+                            `(let ,(mapcar (lambda (v) `(,(car v) ,(construct-function-entry `(lambda () (error "")) 1))) scc-typed-bindings)
+			       (declare (ignorable ,@(mapcar #'car scc-typed-bindings))
+				        ,@(when (not (null local-dynamic-extent-bindings))
+				            `((dynamic-extent ,@local-dynamic-extent-bindings))))
+                               ,labels_)
+                            labels_)))
 
                      ;; Or we have a single non-recursive variable
                      ((and (= 1 (length scc-typed-bindings))
@@ -213,7 +229,7 @@
 				(unless (null local-dynamic-extent-bindings)
 				  (coalton-impl::coalton-bug "Functions should not be declared dynamic extent."))
 				`(let ((,name (,function-constructor (lambda ,(mapcar #'cdr dict-context)
-						  ,(compile-expression node (append dict-context ctx) env)))))
+						                       ,(compile-expression node (append dict-context ctx) env)))))
 				   ,(compile-sccs (cdr sccs)))))
 
 
