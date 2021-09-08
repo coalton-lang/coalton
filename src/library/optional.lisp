@@ -55,7 +55,7 @@
            ((None) GT)))
         ((None)
          (match y
-           ((Some b) LT)
+           ((Some _) LT)
            ((None) EQ))))))
 
   (define-instance (Semigroup :a => (Semigroup (Optional :a)))
