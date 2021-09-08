@@ -11,9 +11,15 @@ Requires acyclic superclasses"
   (declare (type environment env)
 	   (type ty-predicate pred)
 	   (values ty-predicate-list))
-  (let ((pred-ty (ty-predicate-types pred)))
-    (cons pred (loop :for super-class-pred :in (ty-class-superclasses (lookup-class env (ty-predicate-class pred)))
-                     :append (by-super env (ty-predicate (ty-predicate-class super-class-pred) pred-ty))))))
+  (let* ((class (lookup-class env (ty-predicate-class pred)))
+         (subs (predicate-match (ty-class-predicate class) pred)))
+    (cons
+     pred
+     (loop
+       :for super-class-pred :in (ty-class-superclasses class)
+       :append (by-super
+                env
+                (apply-substitution subs super-class-pred))))))
 
 (defun by-inst (env pred)
   "Find the first instance that matches PRED and return resulting predicate constraints
@@ -37,11 +43,14 @@ Returns (PREDS FOUNDP)"
 	   (type ty-predicate-list preds)
 	   (type ty-predicate pred)
 	   (values boolean))
-  (or (true (member pred (mapcan (lambda (p) (by-super env p)) preds) :test #'equalp))
-      (true (multiple-value-bind (inst-preds found)
-               (by-inst env pred)
-             (and found
-                  (every (lambda (p) (entail env preds p)) inst-preds))))))
+  (let* ((super (mapcan (lambda (p) (by-super env p)) preds))
+        (value 
+          (or (true (member pred super :test #'equalp))
+              (true (multiple-value-bind (inst-preds found)
+                        (by-inst env pred)
+                      (and found
+                           (every (lambda (p) (entail env preds p)) inst-preds)))))))
+    value))
 
 (defun super-entail (env preds pred)
   "Does PRED hold if and only if all of PREDS hold, only checking superclass relations?"
