@@ -113,7 +113,7 @@
                                                        instance-method-type
                                                        env
                                                        instance-subs nil)
-				   (declare (ignore env))
+				   (declare (ignore scheme env))
 				   ;; TODO: Is this actually valid?
 				   (unless (null preds)
                                      (coalton-impl::coalton-bug "Instance definition predicates should be nil"))

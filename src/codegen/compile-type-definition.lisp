@@ -41,11 +41,9 @@
 	  
           :append (cond
 	            ((= 0 (constructor-entry-arity constructor))
-		     (let
-			 ((sym (gensym)))
-		       `((coalton-impl::define-global-lexical
-			     ,(constructor-entry-name constructor)
-                             (,(constructor-entry-name constructor))))))
+		     `((coalton-impl::define-global-lexical
+                           ,(constructor-entry-name constructor)
+                           (,(constructor-entry-name constructor)))))
 	            (t
 		     (let* ((arity (length slot-names))
 			    (entry (construct-function-entry

@@ -262,6 +262,7 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
             (derive-expl-type binding
                               (gethash (car binding) expl-declarations)
                               env subs name-map)
+          (declare (ignore ty-scheme))
           ;; Update the current environment and substitutions
           (setf env new-env
                 subs new-subs)
