@@ -587,9 +587,10 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
   ;; its variables overlap with the names of constructors
   (loop :for (_ . var) :in name-map :do
     (when (lookup-constructor env var :no-error t)
-      (alexandria:simple-style-warning "Pattern variable ~S matches name of known constructor. If
-      you meant to match against the constructor then use (~S)" var
-      var)))
+      (alexandria:simple-style-warning
+       "Pattern variable ~/coalton-impl::sexp-fmt/ matches name of known ~
+        constructor. If you meant to match against the constructor then ~
+        use ~/coalton-impl::sexp-fmt/ instead." var (list var))))
 
 
   (multiple-value-bind (var pat-preds bindings new-subs)
