@@ -255,9 +255,9 @@
                   (match (accessor (node-edge-pair node_))
                     ((None)
                      None)
-                    ((Some edge)
+                    ((Some edge_)
                      (progn
-                       (fromSome "Internal bug" (graph-remove-edge edge graph))
+                       (fromSome "Internal bug" (graph-remove-edge edge_ graph))
                        (remove-edges idx accessor))))))))
       (do (node_ <- (vector-index (into index) (graph-nodes graph)))
           (remove-edges (into index) index-pair-incoming)
@@ -296,8 +296,8 @@
              (progn
                (match (index-pair-incoming swap-edges)
                  ((None) None)
-                 ((Some edge)
-                  (adjust-edges edge
+                 ((Some edge_)
+                  (adjust-edges edge_
                                 index-pair-incoming
                                 index-pair-incoming
                                 (fn (pair val)
@@ -306,8 +306,8 @@
 
                (match (index-pair-outgoing swap-edges)
                  ((None) None)
-                 ((Some edge)
-                  (adjust-edges edge
+                 ((Some edge_)
+                  (adjust-edges edge_
                                 index-pair-outgoing
                                 index-pair-outgoing
                                 (fn (pair val)
