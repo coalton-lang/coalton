@@ -97,7 +97,11 @@
                                  (compile-toplevel-sccs bindings sccs env)))
 
        ;; Emit documentation
-       ,@(compile-docstring-forms docstrings))))
+       ,@(compile-docstring-forms docstrings)
+
+       ;; Emit a dummy value at the end so that REPL return values
+       ;; don't look strange.
+       (values))))
 
 (defun compile-docstring-forms (docstrings)
   (loop :for (name docstring type) :in docstrings
