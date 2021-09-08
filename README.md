@@ -41,14 +41,11 @@ Coalton is an efficient, statically typed functional programming language that s
            (E* a          (diff x b)))))))
 ```
 
-Unlike similar languages, which may force mutability or purity, Coalton embraces the spirit of Common Lisp and adapts to your programming style.
-
 ## What's Here?
 
 This repository contains the source code to:
 
-- the [type checker](src/typechecker/),
-- the [compiler](src/codegen/), and
+- the [coalton compiler](src/),
 - the [standard library](src/library/).
 
 It also contains a few example programs, such as:
@@ -65,7 +62,7 @@ Lastly and importantly, we maintain a collection of documentation about Coalton 
 
 **Use**: Either run `(ql:quickload :coalton)`, or add `#:coalton` to your ASD's `:depends-on` list.
 
-**Learn**: We recommend starting with the [*Intro to Coalton*](docs/intro-to-coalton.md), and then taking a look at some of the example programs in the [examples directory](examples/). 
+**Learn**: We recommend starting with the [*Intro to Coalton*](docs/intro-to-coalton.md), and then taking a look at some of the example programs in the [examples directory](examples/).
 
 ## Contributing
 
@@ -74,6 +71,3 @@ We welcome contributions of all forms, especially as we stabilize toward a 1.0 r
 - bug reports (filed as issues)
 - bug fixes and typo corrections (filed as pull requests)
 - user experience troubles and reports.
-
-
-
