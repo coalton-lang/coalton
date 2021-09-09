@@ -9,12 +9,14 @@
 
   (declare fromSome (String -> (Optional :a) -> :a))
   (define (fromSome str opt)
+    "Get the value of OPT, erroring with the provided string if it is None."
     (match opt
       ((Some x) x)
       ((None) (lisp :a (str) (cl:error str)))))
 
   (declare isSome ((Optional :a) -> Boolean))
   (define (isSome x)
+    "Is X Some?"
     (lisp Boolean (x)
       (cl:etypecase x
         (Optional/Some True)
@@ -22,6 +24,7 @@
 
   (declare isNone ((Optional :a) -> Boolean))
   (define (isNone x)
+    "Is X None?"
     (lisp Boolean (x)
       (cl:etypecase x
 	(Optional/None True)
