@@ -4,6 +4,7 @@
   :description "An efficient, statically typed functional programming language that supercharges Common Lisp. "
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
   :license "MIT"
+  :version (:read-file-form "VERSION.txt")
   :depends-on (#:alexandria
                #:global-vars
                #:trivia
