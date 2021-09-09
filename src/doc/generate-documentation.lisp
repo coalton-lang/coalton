@@ -193,7 +193,7 @@
 
     (mapcar (lambda (e)
               (list e
-                    (fset:convert 'list (lookup-class-instances env (ty-class-name e)))
+                    (fset:convert 'list (lookup-class-instances env (ty-class-name e) :no-error t))
                     (coalton-impl/typechecker::ty-class-docstring e)))
             values)))
 
