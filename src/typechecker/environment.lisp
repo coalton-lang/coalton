@@ -82,7 +82,7 @@
 
 (serapeum:defstruct-read-only
     (ty-class
-     (:constructor ty-class (name predicate superclasses unqualified-methods codegen-sym superclass-dict location)))
+     (:constructor ty-class (name predicate superclasses unqualified-methods codegen-sym superclass-dict docstring location)))
   (name :type symbol)
   (predicate :type ty-predicate)
   (superclasses :type ty-predicate-list)
@@ -91,6 +91,7 @@
   (unqualified-methods :type scheme-binding-list)
   (codegen-sym :type symbol)
   (superclass-dict :type list)
+  (docstring :type (or null string))
   (location :type t))
 
 #+sbcl
@@ -121,6 +122,7 @@
                       (cons (apply-substitution subst-list (car entry))
                             (cdr entry)))
                     (ty-class-superclass-dict class))
+            (ty-class-docstring class)
             (ty-class-location class)))
 
 (serapeum:defstruct-read-only (class-environment (:include shadow-realm)))
