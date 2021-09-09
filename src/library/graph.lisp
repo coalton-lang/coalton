@@ -73,20 +73,20 @@
   (define-instance (Into EdgeIndex Integer)
     (define (into x)
       (match x
-	((EdgeIndex x) x))))
+        ((EdgeIndex x) x))))
 
   (define-instance (Eq EdgeIndex)
     (define (== a b)
       (match (Tuple a b)
-	((Tuple (EdgeIndex a) (EdgeIndex b))
-	 (== a b))))
+        ((Tuple (EdgeIndex a) (EdgeIndex b))
+         (== a b))))
     (define (/= a b)
       (not (== a b))))
 
   (define-instance (Show EdgeIndex)
     (define (show x)
       (match x
-	((EdgeIndex x) (show x)))))
+        ((EdgeIndex x) (show x)))))
 
   (define-type NodeIndex
     (NodeIndex Integer))
@@ -94,7 +94,7 @@
   (define-instance (Show NodeIndex)
     (define (show x)
       (match x
-	((NodeIndex x) (show x)))))
+        ((NodeIndex x) (show x)))))
 
   (declare node-index-value (NodeIndex -> Integer))
   (define (node-index-value idx)
@@ -105,13 +105,13 @@
   (define-instance (Into NodeIndex Integer)
     (define (into x)
       (match x
-	((NodeIndex x) x))))
+        ((NodeIndex x) x))))
 
   (define-instance (Eq NodeIndex)
     (define (== a b)
       (match (Tuple a b)
-	((Tuple (NodeIndex a) (NodeIndex b))
-	 (== a b))))
+        ((Tuple (NodeIndex a) (NodeIndex b))
+         (== a b))))
     (define (/= a b)
       (not (== a b))))
 
@@ -178,16 +178,16 @@
   (define-type (Graph :node-data :edge-data)
     "A graph using adjacency list representation"
     (Graph GraphType
-	   (Vector (Node :node-data))
-	   (Vector (Edge :edge-data))))
+           (Vector (Node :node-data))
+           (Vector (Edge :edge-data))))
 
 
   (declare make-graph (Unit -> (Graph :node-data :edge-data)))
   (define (make-graph _)
     "Create a new empty undirected graph"
     (Graph Undirected
-	   (make-vector Unit)
-	   (make-vector Unit)))
+           (make-vector Unit)
+           (make-vector Unit)))
 
   (declare make-digraph (Unit -> (Graph :node-data :edge-data)))
   (define (make-digraph _)

@@ -20,16 +20,16 @@
     (lisp Boolean (x)
       (cl:etypecase x
         (Optional/Some True)
-	(Optional/None False))))
+        (Optional/None False))))
 
   (declare isNone ((Optional :a) -> Boolean))
   (define (isNone x)
     "Is X None?"
     (lisp Boolean (x)
       (cl:etypecase x
-	(Optional/None True)
-	(Optional/Some False))))
-  
+        (Optional/None True)
+        (Optional/Some False))))
+
   ;;
   ;; Optional instances
   ;;
@@ -44,8 +44,8 @@
     (define (== x y)
       (match (Tuple x y)
         ((Tuple (Some x) (Some y)) (== x y))
-	((Tuple (None) (None)) True)
-	(_ False)))
+        ((Tuple (None) (None)) True)
+        (_ False)))
     (define (/= x y)
       (not (== x y))))
 
@@ -64,12 +64,12 @@
   (define-instance (Semigroup :a => (Semigroup (Optional :a)))
     (define (<> a b)
       (match (Tuple a b)
-	((Tuple (Some a) (Some b)) (Some (<> a b)))
-	(_ None))))
+        ((Tuple (Some a) (Some b)) (Some (<> a b)))
+        (_ None))))
 
   (define-instance (Monoid :a => (Monoid (Optional :a)))
     (define mempty (Some mempty)))
-  
+
   (define-instance (Functor Optional)
     (define (map f x)
       (match x
@@ -112,5 +112,5 @@
   (define-instance (WithDefault Optional)
     (define (withDefault default opt)
       (match opt
-	((Some x) x)
-	((None) default)))))
+        ((Some x) x)
+        ((None) default)))))

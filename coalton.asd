@@ -69,7 +69,6 @@
                (:file "toplevel-define-type")
                (:file "toplevel-declare")
                (:file "toplevel-define")
-               (:file "toplevel-define-class")
                (:file "toplevel-define-instance")
                (:file "coalton")
                (:file "debug")

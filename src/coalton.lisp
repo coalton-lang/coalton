@@ -33,8 +33,8 @@
     5. All DEFINE-INSTANCE forms
 "
   (let ((deftypes nil)
-	(declares nil)
-	(defines nil)
+        (declares nil)
+        (defines nil)
         (defclasses nil)
         (definstances nil))
     (labels ((flatten (forms)
@@ -42,45 +42,45 @@
                      :append (cond
                                ((atom form) (list form))
                                ((member (first form) **toplevel-operators**)
-				(flatten (rest form)))
+                                (flatten (rest form)))
                                (t (list form)))))
              (walk (forms)
                (let ((next-form (first forms)))
                  (cond
-		   ((endp forms)
-		    (values
-		     (nreverse deftypes)
-		     (nreverse declares)
-		     (nreverse defines)
+                   ((endp forms)
+                    (values
+                     (nreverse deftypes)
+                     (nreverse declares)
+                     (nreverse defines)
                      (nreverse defclasses)
                      (nreverse definstances)))
 
                    ((or (atom next-form)
                         (not (member (first next-form) **special-operators**)))
-		    (error-parsing next-form "This can't show up at the top-level."))
+                    (error-parsing next-form "This can't show up at the top-level."))
 
                    ((eql 'coalton:define-type (first next-form))
-		    (push next-form deftypes)
-		    (walk (rest forms)))
+                    (push next-form deftypes)
+                    (walk (rest forms)))
 
                    ((eql 'coalton:declare (first next-form))
-		    (push next-form declares)
-		    (walk (rest forms)))
+                    (push next-form declares)
+                    (walk (rest forms)))
 
                    ((eql 'coalton:define (first next-form))
-		    (push next-form defines)
-		    (walk (rest forms)))
+                    (push next-form defines)
+                    (walk (rest forms)))
 
                    ((eql 'coalton:define-class (first next-form))
-		    (push next-form defclasses)
-		    (walk (rest forms)))
+                    (push next-form defclasses)
+                    (walk (rest forms)))
 
                    ((eql 'coalton:define-instance (first next-form))
-		    (push next-form definstances)
-		    (walk (rest forms)))
+                    (push next-form definstances)
+                    (walk (rest forms)))
 
                    (t
-		    (assert nil () "Unreachable."))))))
+                    (assert nil () "Unreachable."))))))
       (walk (flatten forms)))))
 
 (defparameter *global-environment* (make-default-environment))
@@ -125,45 +125,45 @@
       (collect-toplevel-forms toplevel-forms)
 
     (multiple-value-bind (defined-types env type-docstrings)
-	(process-toplevel-type-definitions type-defines env)
+        (process-toplevel-type-definitions type-defines env)
 
       ;; Class definitions must be checked after types are defined
       ;; but before values are typechecked.
 
       (multiple-value-bind (classes env)
-	  (process-toplevel-class-definitions class-defines env)
+          (parse-class-definitions class-defines env)
 
-	;; Methods need to be added to the environment before we can
-	;; check value types.
-	(setf env (predeclare-toplevel-instance-definitions instance-defines env))
+        ;; Methods need to be added to the environment before we can
+        ;; check value types.
+        (setf env (predeclare-toplevel-instance-definitions instance-defines env))
 
-	(let ((declared-types (process-toplevel-declarations declares env)))
-	  (multiple-value-bind (env toplevel-bindings dag value-docstrings)
-	      (process-toplevel-value-definitions defines declared-types env)
+        (let ((declared-types (process-toplevel-declarations declares env)))
+          (multiple-value-bind (env toplevel-bindings dag value-docstrings)
+              (process-toplevel-value-definitions defines declared-types env)
 
             ;; Methods must be typechecker after the types of values
             ;; are determined since instances may reference them.
-	    (let ((instance-definitions (process-toplevel-instance-definitions instance-defines env)))
+            (let ((instance-definitions (process-toplevel-instance-definitions instance-defines env)))
 
               (let* ((env-diff (environment-diff env *global-environment*))
-		     (env (update-function-env toplevel-bindings env))
-		     (update (generate-environment-update
-			      env-diff
-			      '*global-environment*))
-		     (program (codegen-program
-			       defined-types
-			       toplevel-bindings
-			       dag
-			       classes
-			       instance-definitions
+                     (env (update-function-env toplevel-bindings env))
+                     (update (generate-environment-update
+                              env-diff
+                              '*global-environment*))
+                     (program (codegen-program
+                               defined-types
+                               toplevel-bindings
+                               dag
+                               classes
+                               instance-definitions
                                (append type-docstrings
                                        value-docstrings)
-			       env)))
-		(values
-		 ;; Only generate an update block if there are environment updates
-		 (if (not (equalp update `(eval-when (:load-toplevel))))
-		     `(progn
-			,update
-			,program)
-		     program)
-		 env)))))))))
+                               env)))
+                (values
+                 ;; Only generate an update block if there are environment updates
+                 (if (not (equalp update `(eval-when (:load-toplevel))))
+                     `(progn
+                        ,update
+                        ,program)
+                     program)
+                 env)))))))))

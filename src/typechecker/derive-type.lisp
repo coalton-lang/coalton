@@ -174,7 +174,7 @@ Returns (VALUES type predicate-list typed-node subs)")
 	    (let ((preds (append preds match-preds)))
 	      (values
 	       tvar
-	       preds 
+	       preds
 	       (typed-node-match
 		(to-scheme (qualify nil tvar))
 		(node-unparsed value)
@@ -323,7 +323,7 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
     ;; Derive the type of each binding
     (multiple-value-bind (typed-bindings local-preds local-subs)
 	(derive-binding-type-seq (mapcar #'car bindings) tvars exprs local-env subs name-map)
-      
+
       (let* ((expr-types (apply-substitution local-subs tvars)) ; ts'
              (expr-preds (apply-substitution local-subs local-preds)) ; ps'
 
@@ -416,7 +416,7 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
          fresh-type
          (cdr binding)
          env subs name-map)
-      
+
       (let* ((expr-type (apply-substitution local-subs fresh-type))
              (expr-preds (apply-substitution local-subs fresh-preds))
 
@@ -432,7 +432,7 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
 
         (multiple-value-bind (deferred-preds retained-preds)
             (split-context env env-tvars reduced-preds)
-          
+
           ;; Make sure the declared scheme is not too general
           (when (not (equalp output-scheme declared-ty))
             (error 'type-declaration-too-general-error
@@ -461,7 +461,7 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                                                         (remove-if-not (lambda (p)
                                                                          (not (super-entail env (apply-substitution local-subs preds) p)))
                                                                        expr-preds))
-                                                       
+
                                                        expr-type))))
                   deferred-preds env local-subs
                   output-qual-type))))))

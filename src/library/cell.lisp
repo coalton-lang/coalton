@@ -25,9 +25,9 @@
     "Replace the value of a mutable cell with a new value, then return the old value"
     (lisp :a (data cell)
       (cl:let* ((inner (unveil (cl:slot-value cell '_0)))
-	       (old (cell-internal-inner inner)))
-	(cl:setf (cell-internal-inner inner) data)
-	old)))
+               (old (cell-internal-inner inner)))
+        (cl:setf (cell-internal-inner inner) data)
+        old)))
 
   (declare cell-write (:a -> (Cell :a) -> Unit))
   (define (cell-write data cell)
@@ -67,8 +67,4 @@
   (define-instance (Applicative Cell)
     (define (pure x) (make-cell x))
     (define (liftA2 f c1 c2)
-      (make-cell (f (cell-read c1) (cell-read c2)))))
-
-  (define-instance (Into :a (Cell :a))
-    (define (into x)
-      (make-cell x))))
+      (make-cell (f (cell-read c1) (cell-read c2))))))

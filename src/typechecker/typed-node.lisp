@@ -189,7 +189,7 @@
 
 (defmethod apply-substitution (subs (node typed-node-literal))
   (declare (type substitution-list subs)
-	   (values typed-node-literal))
+           (values typed-node-literal))
   (typed-node-literal
    (apply-substitution subs (typed-node-type node))
    (typed-node-unparsed node)
@@ -197,7 +197,7 @@
 
 (defmethod apply-substitution (subs (node typed-node-variable))
   (declare (type substitution-list subs)
-	   (values typed-node-variable))
+           (values typed-node-variable))
   (typed-node-variable
    (apply-substitution subs (typed-node-type node))
    (typed-node-unparsed node)
@@ -205,7 +205,7 @@
 
 (defmethod apply-substitution (subs (node typed-node-application))
   (declare (type substitution-list subs)
-	   (values typed-node-application))
+           (values typed-node-application))
   (typed-node-application
    (apply-substitution subs (typed-node-type node))
    (typed-node-unparsed node)
@@ -214,7 +214,7 @@
 
 (defmethod apply-substitution (subs (node typed-node-direct-application))
   (declare (type substitution-list subs)
-	   (values typed-node-direct-application))
+           (values typed-node-direct-application))
   (typed-node-direct-application
    (apply-substitution subs (typed-node-type node))
    (typed-node-unparsed node)
@@ -224,7 +224,7 @@
 
 (defmethod apply-substitution (subs (node typed-node-abstraction))
   (declare (type substitution-list subs)
-	   (values typed-node-abstraction))
+           (values typed-node-abstraction))
   (typed-node-abstraction
    (apply-substitution subs (typed-node-type node))
    (typed-node-unparsed node)
@@ -236,7 +236,7 @@
 
 (defmethod apply-substitution (subs (node typed-node-let))
   (declare (type substitution-list subs)
-	   (values typed-node-let))
+           (values typed-node-let))
   (typed-node-let
    (apply-substitution subs (typed-node-type node))
    (typed-node-unparsed node)
@@ -250,7 +250,7 @@
 
 (defmethod apply-substitution (subs (node typed-node-lisp))
   (declare (type substitution-list subs)
-	   (values typed-node-lisp))
+           (values typed-node-lisp))
   (typed-node-lisp
    (apply-substitution subs (typed-node-type node))
    (typed-node-unparsed node)
@@ -259,7 +259,7 @@
 
 (defmethod apply-substitution (subs (node typed-node-match))
   (declare (type substitution-list subs)
-	   (values typed-node-match))
+           (values typed-node-match))
   (typed-node-match
    (apply-substitution subs (typed-node-type node))
    (typed-node-unparsed node)
@@ -268,7 +268,7 @@
 
 (defmethod apply-substitution (subs (node typed-match-branch))
   (declare (type substitution-list subs)
-	   (values typed-match-branch))
+           (values typed-match-branch))
   (typed-match-branch
    (typed-match-branch-unparsed node)
    (typed-match-branch-pattern node)
@@ -281,7 +281,7 @@
 
 (defmethod apply-substitution (subs (node typed-node-seq))
   (declare (type substitution-list subs)
-	   (values typed-node-seq))
+           (values typed-node-seq))
   (typed-node-seq
    (apply-substitution subs (typed-node-type node))
    (typed-node-unparsed node)
@@ -350,20 +350,20 @@
 (defgeneric collect-type-predicates (node)
   (:method ((type qualified-ty))
     (qualified-ty-predicates type))
-  
+
   (:method ((type ty-scheme))
     (collect-type-predicates (fresh-inst type)))
 
 
   (:method ((node typed-node-literal))
     (collect-type-predicates (typed-node-type node)))
-  
+
   (:method ((node typed-node-variable))
     (collect-type-predicates (typed-node-type node)))
 
   (:method ((node typed-node-lisp))
     (collect-type-predicates (typed-node-type node)))
-  
+
   (:method ((node typed-node-application))
     (remove-duplicates
      (append (collect-type-predicates (typed-node-type node))
@@ -415,7 +415,7 @@
 (defun collect-variable-namespace (node)
   "Returns the name of every variable that will be referenced in the variable namespace in the generated code."
   (declare (type typed-node node)
-	   (values symbol-list))
+           (values symbol-list))
   (remove-duplicates (collect-variable-namespace-g node) :test #'equalp))
 
 (defgeneric collect-variable-namespace-g (node)
@@ -439,7 +439,7 @@
   (:method ((node typed-node-let))
     (append
      (loop :for (name . node) :in (typed-node-let-bindings node)
-	   :append (collect-variable-namespace-g node))
+           :append (collect-variable-namespace-g node))
      (collect-variable-namespace-g (typed-node-let-subexpr node))))
 
   (:method ((node typed-node-lisp))

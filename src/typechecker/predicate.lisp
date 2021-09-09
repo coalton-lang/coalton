@@ -107,7 +107,7 @@
   (cond
     ((= 0 (length (qualified-ty-predicates qualified-ty)))
      (format stream "~A" (qualified-ty-type qualified-ty)))
-    
+
     ((= 1 (length (qualified-ty-predicates qualified-ty)))
      (format stream "~A" (first (qualified-ty-predicates qualified-ty)))
      (write-string (if *coalton-print-unicode*

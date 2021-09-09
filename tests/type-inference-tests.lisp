@@ -32,7 +32,7 @@
   (check-coalton-types
    '((coalton:define x
        (coalton:let ((id (fn (a) a)))
-	 ((id id) 5))))
+         ((id id) 5))))
    '((x . Integer)))
 
   ;; Check that you can only call callable things
@@ -88,7 +88,7 @@
      (coalton:declare b (:a -> :a))
      (coalton:define (b y)
        (coalton:let ((foo (c 5)))
-	 y))
+         y))
 
      (coalton:define (c z)
        (coalton-library:append lst (a z))))
@@ -121,10 +121,10 @@
   (signals coalton-impl::coalton-type-error
     (run-coalton-typechecker
      '((coalton:define-type (Tree :a)
-	 (Leaf :a) (Branch (Tree :a) (Tree :a)))
+         (Leaf :a) (Branch (Tree :a) (Tree :a)))
 
        (coalton:define x
-	 (Branch (Leaf 5) (Leaf "string")))))))
+         (Branch (Leaf 5) (Leaf "string")))))))
 
 (deftest test-kind-system ()
   ;; Check that types of kind * cannot be applied to
@@ -138,8 +138,8 @@
   (signals coalton-impl::coalton-type-error
     (run-coalton-typechecker
      '((coalton:define-type (Maybe :a)
-	 (Just :a)
-	 (Nothing))
+         (Just :a)
+         (Nothing))
        (coalton:declare x Maybe)
        (coalton:define x x)))))
 
@@ -148,25 +148,25 @@
   (signals coalton-impl::coalton-type-error
     (run-coalton-typechecker
      '((coalton:define-type (Maybe :a)
-	 (Just :a)
-	 (Nothing))
+         (Just :a)
+         (Nothing))
 
        (coalton:define (f x)
-	 (coalton:match x
-	   ((Just 5) 5)
-	   ((Just 6) "hello"))))))
+         (coalton:match x
+           ((Just 5) 5)
+           ((Just 6) "hello"))))))
 
   ;; Match branches must match the same type
   (signals coalton-impl::coalton-type-error
     (run-coalton-typechecker
      '((coalton:define-type (Maybe :a)
-	 (Just :a)
-	 (Nothing))
+         (Just :a)
+         (Nothing))
 
        (coalton:define (f x)
-	 (coalton:match x
-	   ((Just 5) Nothing)
-	   ((Just "hello") Nothing))))))
+         (coalton:match x
+           ((Just 5) Nothing)
+           ((Just "hello") Nothing))))))
 
   ;; Match branches must match on constructors
   (signals coalton-impl/typechecker::coalton-type-error
@@ -174,15 +174,15 @@
      '((coalton:define (g x) x)
 
        (coalton:define (f x)
-	 (coalton:match x
-	   ((g a) 5))))))
+         (coalton:match x
+           ((g a) 5))))))
 
   ;; Constructors in match branches must be fully applied
   (signals coalton-impl::coalton-type-error
     (run-coalton-typechecker
      '((coalton:define (g x)
-	 (coalton:match x
-	   ((coalton-library:Cons x) x)))))))
+         (coalton:match x
+           ((coalton-library:Cons x) x)))))))
 
 (deftest test-monomorphism-restriction ()
   ;; Check that functions defined as a lambda are not subject to the
@@ -234,11 +234,11 @@
      (g . (Eq_ :a => ((coalton-library:List :a) -> :a -> coalton-library:Boolean)))
      (h . (Eq_ :a => (:a -> :a -> coalton-library:Boolean)))))
 
-  
+
   (signals coalton-impl::coalton-type-error
     (run-coalton-typechecker
      '((coalton:define-class (Eq_ :a)
-	(== (:a -> :a -> coalton-library:Boolean)))
+        (== (:a -> :a -> coalton-library:Boolean)))
 
        (coalton:define-instance (Eq_ :a => (Eq_ (coalton-library:List :a)))
         (coalton:define (== a b) coalton-library::False))
@@ -247,7 +247,7 @@
 
        (coalton:declare f ((coalton-library:List Color) -> coalton-library:Boolean))
        (coalton:define (f a b)
-	 (== a b))))))
+         (== a b))))))
 
 (deftest test-typeclass-polymorphic-recursion ()
   ;; Check that polymorphic recursion is possible
@@ -261,27 +261,27 @@
      (coalton:declare f (Eq_ :a => (:a -> :a -> coalton-library:Boolean)))
      (coalton:define (f a b)
        (coalton:match (== a b)
-	 ((coalton-library:True) coalton-library:True)
-	 ((coalton-library:False)
-	  (f (coalton-library:singleton a)
-	     (coalton-library:singleton b))))))
+         ((coalton-library:True) coalton-library:True)
+         ((coalton-library:False)
+          (f (coalton-library:singleton a)
+             (coalton-library:singleton b))))))
    '((f . (Eq_ :a => (:a -> :a -> coalton-library:Boolean)))))
 
   ;; Check that polymorphic recursion is not possible without an explicit binding
   (signals coalton-impl::coalton-type-error
     (run-coalton-typechecker
      '((coalton:define-class (Eq_ :a)
-	(== (:a -> :a -> coalton-library:Boolean)))
+        (== (:a -> :a -> coalton-library:Boolean)))
 
        (coalton:define-instance (Eq_ :a => (Eq_ (coalton-library:List :a)))
         (coalton:define (== a b) coalton-library::False))
 
        (coalton:define (f a b)
-	 (coalton:match (== a b)
-	   ((coalton-library:True) coalton-library:True)
-	   ((coalton-library:False)
-	    (f (coalton-library:singleton a)
-	       (coalton-library:singleton b)))))))))
+         (coalton:match (== a b)
+           ((coalton-library:True) coalton-library:True)
+           ((coalton-library:False)
+            (f (coalton-library:singleton a)
+               (coalton-library:singleton b)))))))))
 
 (deftest test-typeclass-definition-constraints ()
   ;; Check that typeclasses cannot have additional constrains defined in a method
@@ -308,7 +308,7 @@
 
      (coalton:define-instance (Eq_ Integer)
       (coalton:define (== a b) coalton-library::False))
-     
+
      (coalton:declare f
       ((coalton-library:Tuple Integer Integer) ->
        (coalton-library:Tuple Integer Integer) ->
@@ -321,7 +321,7 @@
   (signals coalton-impl::overlapping-instance-error
     (run-coalton-typechecker
      '((coalton:define-class (Eq_ :a)
-	(== (:a -> :a -> coalton-library:Boolean)))
+        (== (:a -> :a -> coalton-library:Boolean)))
 
        (coalton:define-instance (Eq_ :a => (Eq_ (coalton-library:Tuple :a Integer)))
         (coalton:define (== a b) coalton-library::False))
@@ -370,7 +370,7 @@
   (check-coalton-types
    '((coalton:define (f x)
        (coalton:seq
-	(coalton-library:Ok "hello")
-	(coalton-library:map (coalton-library:+ 1) (coalton-library:make-list 1 2 3 4))
-	(coalton-library:show x))))
+        (coalton-library:Ok "hello")
+        (coalton-library:map (coalton-library:+ 1) (coalton-library:make-list 1 2 3 4))
+        (coalton-library:show x))))
    '((f . (coalton-library:Show :a => (:a -> String))))))

@@ -151,7 +151,7 @@
                              (variable-namespace (append
                                                   (coalton-impl/typechecker::collect-variable-namespace subnode)
                                                   (mapcan #'coalton-impl/typechecker::collect-variable-namespace (mapcar #'cdr typed-bindings))))
- 
+
                              ;; If the functions are referenced in the
                              ;; variable namespace then genenerate the
                              ;; scaffolding to declare them in both
@@ -176,7 +176,7 @@
                                                      `(,(car b)
 					               (,@(mapcar #'cdr dict-context)
 					                ,@(mapcar #'car (typed-node-abstraction-vars (cdr b))))
-					   
+
 					               (declare (ignorable
 						                 ,@(mapcar #'cdr dict-context)
 						                 ,@(mapcar #'car (typed-node-abstraction-vars (cdr b))))
@@ -236,7 +236,7 @@
 			    `(let ,(mapcar (lambda (b)
 					     `(,(car b) ,(compile-expression (cdr b) ctx env)))
 				    scc-typed-bindings)
-			       (declare 
+			       (declare
 				(ignorable ,@(mapcar #'car scc-typed-bindings))
 
 				,@(when *emit-type-annotations*
@@ -249,7 +249,7 @@
 
                      (t
                       (coalton-impl::coalton-bug "Invalid SCC detected in codegen.")))))))
-    
+
     ;; Verify that each binding is contained in one and only one scc
     (let ((a (mapcan (lambda (x) (copy-list x)) sorted-bindings))
 	  (b (mapcar #'car typed-bindings)))
@@ -257,5 +257,5 @@
 		   (subsetp b a :test #'equalp)
 		   (= (length a) (length b)))
 	(coalton-impl::coalton-bug "Invalid scc in typed-node-let:~%SCC: ~A~%BINDINGS: ~A~%" sorted-bindings b)))
-	     
+
     (compile-sccs sorted-bindings)))

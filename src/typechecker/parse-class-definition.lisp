@@ -8,11 +8,11 @@
   (declare (type list forms)
            (type environment env)
            (values ty-class-list environment))
-  
+
   ;; Parse out class definitions and sort them by superclass dependencies
   (let ((class-deps nil) ; DAG as list of (CLASS SUPERCLASS*) for topological sorting
         (class-forms nil)               ; List of (CLASS FORM)
-        ) 
+        )
     (dolist (form forms)
       (unless (and (listp form)
                    (<= 2 (length form))
@@ -84,7 +84,7 @@
 			   :collect
                            (multiple-value-bind (class methods docstring)
 			       (parse-class-definition form env)
-                             
+
 
 			     ;; Add class to environment
 			     (setf env (set-class env (ty-class-name class) class))
@@ -172,7 +172,7 @@
 
                ;; Create a ENV with our new class defined so that reduce-context will work
                (env (set-class env class-name class))
-               
+
 	       (method-context (append (list class-predicate) class-context))
 	       (qualified-methods
 		 (loop :for (method-name . unqualified-method-type) :in (ty-class-unqualified-methods class)

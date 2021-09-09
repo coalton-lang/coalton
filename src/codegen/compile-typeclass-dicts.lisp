@@ -6,19 +6,16 @@
            (type list context)
            (type environment env)
            (values list))
-  
+
   (loop :for pred :in preds
-	:collect
+        :collect
         (let ((context-pred (find pred context
                                   :key #'car
                                   :test #'equalp ; Test that we have the same type variables
                                   )))
           (cond
-	    ((not (null context-pred))
+            ((not (null context-pred))
              (cdr context-pred))
-            #+ignore
-            ((static-predicate-p pred)
-	     (static-lookup-dict pred env))
             (t
              (lookup-dict pred context env))))))
 
@@ -28,7 +25,7 @@
   (declare (type ty-predicate-list preds)
            (type list context)
            (values list))
-  
+
   (loop :for pred :in preds
         :collect
         (let ((context-pred (find pred context
@@ -43,8 +40,8 @@
             (t
              (or (lookup-dict pred context env)
                  (coalton-impl::coalton-bug "Invalid state. Unable to find dict for pred: ~A context: ~A~%"
-					    pred
-					    context)))))))
+                                            pred
+                                            context)))))))
 
 (defun static-predicate-p (pred)
   "Is PRED a static predicate (no type variables)"
@@ -105,6 +102,6 @@
                            (list (car args)
                                  (build-call (cdr args))))))
               (return-from lookup-in-context (build-call (reverse super))))))))
-    
+
     ;; If we don't find anything then return nil
     nil))

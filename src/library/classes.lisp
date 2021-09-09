@@ -13,7 +13,7 @@
   ;;
   ;; Eq
   ;;
-  
+
   (define-class (Eq :a)
     "Types which have equality defined."
     (== (:a -> :a -> Boolean))
@@ -22,7 +22,7 @@
   ;;
   ;; Ord
   ;;
-  
+
   (define-type Ord
     LT
     EQ
@@ -38,21 +38,21 @@
     (match (<=> x y)
       ((GT) True)
       (_ False)))
-  
+
   (declare < (Ord :a => (:a -> :a -> Boolean)))
   (define (< x y)
     "Is X less than Y?"
     (match (<=> x y)
       ((LT) True)
       (_ False)))
-  
+
   (declare >= (Ord :a => (:a -> :a -> Boolean)))
   (define (>= x y)
     "Is X greater than or equal to Y?"
     (match (<=> x y)
       ((LT) False)
       (_ True)))
-  
+
   (declare <= (Ord :a => (:a -> :a -> Boolean)))
   (define (<= x y)
     "Is X less than or equal to Y?"
@@ -64,20 +64,20 @@
   (define (max x y)
     "Returns the greater element of X and Y."
     (if (> x y)
-	x
-	y))
+        x
+        y))
 
   (declare min (Ord :a => (:a -> :a -> :a)))
   (define (min x y)
     "Returns the lesser element of X and Y."
     (if (< x y)
-	x
-	y))
+        x
+        y))
 
   ;;
   ;; Num
   ;;
-  
+
   (define-class ((Eq :a) (Show :a) => (Num :a))
     "Types which have numeric operations defined."
     (+ (:a -> :a -> :a))

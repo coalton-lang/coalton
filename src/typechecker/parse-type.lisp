@@ -219,7 +219,7 @@ Optional ALLOW-UNKNOWN-CLASSES allows classes to appear in the type expression t
                        (type (multiple-value-bind (type new-type-vars new-subs)
                                  (parse-type-expr env (first (second subseqs)) type-vars subs)
                                (setf type-vars new-type-vars
-                                     subs new-subs)                               
+                                     subs new-subs)
                                type)))
 
                    ;; Ensure predicates can only constrain type variables in the type

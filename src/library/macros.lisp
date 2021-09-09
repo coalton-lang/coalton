@@ -100,10 +100,10 @@ to
                             (cl:and
                              (cl:= 3 (cl:length form))
                              (cl:eql 'coalton:<- (cl:second form)))
-                            
+
                             (cl:let ((binding-name (cl:first form))
                                      (binding-value (cl:third form)))
-                              
+
                               `(>>= ,binding-value
                                     (fn (,binding-name)
                                       ,(process (cl:cdr forms))))))

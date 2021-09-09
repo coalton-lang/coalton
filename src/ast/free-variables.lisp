@@ -5,7 +5,7 @@
 
 NOTE: Just because a variable shows up in the list does *NOT* mean all occurrences of that variable are free in the expression."
   (declare (type node value)
-	   (values list))
+           (values list))
   (let ((fv nil))
     (labels ((analyze (expr bv)
                (etypecase expr
@@ -45,7 +45,7 @@ NOTE: Just because a variable shows up in the list does *NOT* mean all occurrenc
                       (analyze (match-branch-subexpr branch)
                                (union bv (pattern-variables
                                           (match-branch-pattern branch)))))))
-		 (node-seq
+                 (node-seq
                   (dolist (subnode (node-seq-subnodes expr))
                     (analyze subnode bv))))))
       (analyze value nil)

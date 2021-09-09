@@ -4,15 +4,15 @@
 ;;; Value type environments
 ;;;
 
-(serapeum:defstruct-read-only (value-environment (:include shadow-realm))) 
+(serapeum:defstruct-read-only (value-environment (:include shadow-realm)))
 
 #+sbcl
 (declaim (sb-ext:freeze-type value-environment))
 
 (defmethod apply-substitution (subst-list (env value-environment))
   (make-value-environment :data (fset:image (lambda (key value)
-		  (values key (apply-substitution subst-list value)))
-		(shadow-realm-data env))))
+                  (values key (apply-substitution subst-list value)))
+                (shadow-realm-data env))))
 
 (defmethod type-variables ((env value-environment))
   (remove-duplicates (mapcan #'type-variables (fset:convert 'list (fset:range (shadow-realm-data env)))) :test #'equalp))
@@ -25,17 +25,17 @@
 
 #+sbcl
 (declaim (sb-ext:freeze-type type-environment))
- 
+
 
 (defun make-default-type-environment ()
   "Create a TYPE-ENVIRONMENT containing early types"
   (make-type-environment
    :data (fset:map
           ;; Early Types
-	  ('coalton:Unit tUnit)
-	  ('coalton:Char tChar)
+          ('coalton:Unit tUnit)
+          ('coalton:Char tChar)
 
-	  ('coalton:I32 tI32)
+          ('coalton:I32 tI32)
           ('coalton:I64 tI64)
           ('coalton:U8  tU8)
           ('coalton:U32 tU32)
@@ -43,11 +43,11 @@
           ('coalton:Integer tInteger)
           ('coalton:Single-Float tSingle-Float)
           ('coalton:Double-Float tDouble-Float)
-          
-	  ('coalton:String tString)
+
+          ('coalton:String tString)
 
           ('coalton:Lisp-Object tLisp-Object)
-	  ('coalton:Arrow tArrow))))
+          ('coalton:Arrow tArrow))))
 
 ;;;
 ;;; Constructor environment
@@ -113,7 +113,7 @@
 
 (defmethod apply-substitution (subst-list (class ty-class))
   (declare (type substitution-list subst-list)
-	   (values ty-class &optional))
+           (values ty-class &optional))
   (ty-class (ty-class-name class)
             (apply-substitution subst-list (ty-class-predicate class))
             (apply-substitution subst-list (ty-class-superclasses class))
@@ -160,7 +160,7 @@
 
 (defmethod apply-substitution (subst-list (instance ty-class-instance))
   (declare (type substitution-list subst-list)
-	   (values ty-class-instance &optional))
+           (values ty-class-instance &optional))
   (ty-class-instance
    (apply-substitution subst-list (ty-class-instance-constraints instance))
    (apply-substitution subst-list (ty-class-instance-predicate instance))
@@ -226,9 +226,9 @@
           type-environment
           constructor-environment
           class-environment
-	  instance-environment
-	  function-environment
-	  name-environment)))
+          instance-environment
+          function-environment
+          name-environment)))
   (value-environment       :type value-environment)
   (type-environment        :type type-environment)
   (constructor-environment :type constructor-environment)
@@ -251,22 +251,22 @@
    (make-name-environment)))
 
 (defun update-environment (env
-			   &key
-			     (value-environment (environment-value-environment env))
-			     (type-environment (environment-type-environment env))
-			     (constructor-environment (environment-constructor-environment env))
-			     (class-environment (environment-class-environment env))
-			     (instance-environment (environment-instance-environment env))
-			     (function-environment (environment-function-environment env))
-			     (name-environment (environment-name-environment env)))
+                           &key
+                             (value-environment (environment-value-environment env))
+                             (type-environment (environment-type-environment env))
+                             (constructor-environment (environment-constructor-environment env))
+                             (class-environment (environment-class-environment env))
+                             (instance-environment (environment-instance-environment env))
+                             (function-environment (environment-function-environment env))
+                             (name-environment (environment-name-environment env)))
   (declare (type environment env)
-	   (type value-environment value-environment)
-	   (type constructor-environment constructor-environment)
-	   (type class-environment class-environment)
-	   (type instance-environment instance-environment)
-	   (type function-environment function-environment)
-	   (type name-environment name-environment)
-	   (values environment))
+           (type value-environment value-environment)
+           (type constructor-environment constructor-environment)
+           (type class-environment class-environment)
+           (type instance-environment instance-environment)
+           (type function-environment function-environment)
+           (type name-environment name-environment)
+           (values environment))
   (make-environment
    value-environment
    type-environment
@@ -278,8 +278,8 @@
 
 (defun environment-diff (env old-env)
   (declare (type environment env)
-	   (type environment old-env)
-	   (values environment))
+           (type environment old-env)
+           (values environment))
   (make-environment
    (shadow-realm-diff (environment-value-environment env)
                       (environment-value-environment old-env)
@@ -297,11 +297,11 @@
                      (environment-instance-environment old-env)
                      #'make-instance-environment)
    (shadow-realm-diff (environment-function-environment env)
-		      (environment-function-environment old-env)
-		      #'make-function-environment)
+                      (environment-function-environment old-env)
+                      #'make-function-environment)
    (shadow-realm-diff (environment-name-environment env)
-		      (environment-name-environment old-env)
-		      #'make-name-environment)))
+                      (environment-name-environment old-env)
+                      #'make-name-environment)))
 
 ;;;
 ;;; Methods
@@ -309,13 +309,13 @@
 
 (defmethod apply-substitution (subst-list (env environment))
   (declare (type substitution-list subst-list)
-	   (type environment env)
-	   (values environment &optional))
+           (type environment env)
+           (values environment &optional))
   (update-environment env
-		      :value-environment
-		      (apply-substitution
-		       subst-list
-		       (environment-value-environment env))))
+                      :value-environment
+                      (apply-substitution
+                       subst-list
+                       (environment-value-environment env))))
 
 (defmethod type-variables ((env environment))
   (type-variables (environment-value-environment env)))
@@ -327,7 +327,7 @@
 
 (defun lookup-value-type (env symbol &key no-error)
   (declare (type environment env)
-	   (type symbol symbol))
+           (type symbol symbol))
   (or (shadow-realm-lookup (environment-value-environment env) symbol)
       (unless no-error
         (let* ((sym-name (symbol-name symbol))
@@ -337,20 +337,20 @@
 
 (defun set-value-type (env symbol value)
   (declare (type environment env)
-	   (type symbol symbol)
-	   (type ty-scheme value)
-	   (values environment &optional))
+           (type symbol symbol)
+           (type ty-scheme value)
+           (values environment &optional))
   (update-environment
    env
    :value-environment (shadow-realm-set
-		       (environment-value-environment env)
-		       symbol
-		       value
-		       #'make-value-environment)))
+                       (environment-value-environment env)
+                       symbol
+                       value
+                       #'make-value-environment)))
 
 (defun lookup-type (env symbol &key no-error)
   (declare (type environment env)
-	   (type symbol symbol))
+           (type symbol symbol))
   (or (shadow-realm-lookup (environment-type-environment env) symbol)
       (unless no-error
         (let* ((sym-name (symbol-name symbol))
@@ -366,119 +366,119 @@
 
 (defun set-type (env symbol value)
   (declare (type environment env)
-	   (type symbol symbol)
-	   (type ty value)
-	   (values environment &optional))
+           (type symbol symbol)
+           (type ty value)
+           (values environment &optional))
   (update-environment
    env
    :type-environment (shadow-realm-set
-		       (environment-type-environment env)
-		       symbol
-		       value
-		       #'make-type-environment)))
+                       (environment-type-environment env)
+                       symbol
+                       value
+                       #'make-type-environment)))
 
 (defun lookup-constructor (env symbol &key no-error)
   (declare (type environment env)
-	   (type symbol symbol))
+           (type symbol symbol))
   (or (shadow-realm-lookup (environment-constructor-environment env) symbol)
       (unless no-error
         (error "Unknown constructor ~S." symbol))))
 
 (defun set-constructor (env symbol value)
   (declare (type environment env)
-	   (type symbol symbol)
-	   (type constructor-entry value)
-	   (values environment &optional))
+           (type symbol symbol)
+           (type constructor-entry value)
+           (values environment &optional))
   (update-environment
    env
    :constructor-environment (shadow-realm-set
-			     (environment-constructor-environment env)
-			     symbol
-			     value
-			     #'make-constructor-environment)))
+                             (environment-constructor-environment env)
+                             symbol
+                             value
+                             #'make-constructor-environment)))
 
 (defun lookup-class (env symbol &key no-error)
   (declare (type environment env)
-	   (type symbol symbol))
+           (type symbol symbol))
   (or (shadow-realm-lookup (environment-class-environment env) symbol)
       (unless no-error
         (error "Unknown class ~S." symbol))))
 
 (defun set-class (env symbol value)
   (declare (type environment env)
-	   (type symbol symbol)
-	   (type ty-class value)
-	   (values environment &optional))
+           (type symbol symbol)
+           (type ty-class value)
+           (values environment &optional))
   (update-environment
    env
    :class-environment (shadow-realm-set
-		       (environment-class-environment env)
-		       symbol
-		       value
-		       #'make-class-environment)))
+                       (environment-class-environment env)
+                       symbol
+                       value
+                       #'make-class-environment)))
 
 (defun lookup-function (env symbol &key no-error)
   (declare (type environment env)
-	   (type symbol symbol))
+           (type symbol symbol))
   (or (shadow-realm-lookup (environment-function-environment env) symbol)
       (unless no-error
-	(error "Unknown function ~S." symbol))))
+        (error "Unknown function ~S." symbol))))
 
 (defun set-function (env symbol value)
   (declare (type environment env)
-	   (type symbol symbol)
-	   (type function-env-entry value)
-	   (values environment &optional))
+           (type symbol symbol)
+           (type function-env-entry value)
+           (values environment &optional))
   (update-environment
    env
    :function-environment (shadow-realm-set
-			  (environment-function-environment env)
-			  symbol
-			  value
-			  #'make-function-environment)))
+                          (environment-function-environment env)
+                          symbol
+                          value
+                          #'make-function-environment)))
 
 (defun unset-function (env symbol)
   (declare (type environment env)
-	   (type symbol symbol))
+           (type symbol symbol))
   (update-environment
    env
    :function-environment (shadow-realm-remove
-			  (environment-function-environment env)
-			  symbol
-			  #'make-function-environment)))
+                          (environment-function-environment env)
+                          symbol
+                          #'make-function-environment)))
 
 (defun lookup-name (env symbol &key no-error)
   (declare (type environment env)
-	   (type symbol symbol))
+           (type symbol symbol))
   (or (shadow-realm-lookup (environment-name-environment env) symbol)
       (unless no-error
-	(error "Unknown name ~S." symbol))))
+        (error "Unknown name ~S." symbol))))
 
 (defun set-name (env symbol value)
   (declare (type environment env)
-	   (type symbol symbol)
-	   (type name-entry value)
-	   (values environment &optional))
+           (type symbol symbol)
+           (type name-entry value)
+           (values environment &optional))
   (let ((old-value (lookup-name env symbol :no-error t)))
     (when (and old-value (not (equalp (name-entry-type old-value) (name-entry-type value))))
       (error "Unable to change the type of name ~S from ~A to ~A."
-	     symbol
-	     (name-entry-type old-value)
-	     (name-entry-type value)))
+             symbol
+             (name-entry-type old-value)
+             (name-entry-type value)))
     (if old-value
-	env
-	(update-environment
-	 env
-	 :name-environment (shadow-realm-set
-			    (environment-name-environment env)
-			    symbol
-			    value
-			    #'make-name-environment)))))
+        env
+        (update-environment
+         env
+         :name-environment (shadow-realm-set
+                            (environment-name-environment env)
+                            symbol
+                            value
+                            #'make-name-environment)))))
 
 (defun lookup-class-instances (env class &key no-error)
   (declare (type environment env)
-	   (type symbol class)
-	   (values fset:seq &optional))
+           (type symbol class)
+           (values fset:seq &optional))
   (shadow-list-lookup (environment-instance-environment env) class :no-error no-error))
 
 (defun lookup-class-instance (env pred &key no-error)
@@ -636,7 +636,7 @@
     ;; Names
     (fset:do-map (k v name-table)
       (push `(setf ,env (set-name ,env ',k ,v)) forms))
-    
+
     `(eval-when (:load-toplevel)
        ,@(reverse forms))))
 

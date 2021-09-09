@@ -40,7 +40,7 @@
                                     (rest (cl:slot-value xs 'coalton-library::|_1|)))
                              (cl:declare (cl:type cl:character element))
                              (cl:concatenate
-			      'cl:string (cl:string element) (f rest))))))
+                              'cl:string (cl:string element) (f rest))))))
         (f xs))))
 
   (declare parse-int (String -> (Optional Integer)))
@@ -48,9 +48,9 @@
     "Parse the integer in string STR."
     (lisp (Optional Integer) (str)
       (cl:let ((x (cl:parse-integer str :junk-allowed cl:t)))
-	(cl:if x
-	       (Some x)
-	       None))))
+        (cl:if x
+               (Some x)
+               None))))
   ;;
   ;; String Instances
   ;;
@@ -64,10 +64,10 @@
   (define-instance (Ord String)
     (define (<=> a b)
       (lisp Ord (a b)
-	 (cl:cond
-	   ((cl:string> a b) GT)
-	   ((cl:string< a b) LT)
-	   (cl:t EQ)))))
+         (cl:cond
+           ((cl:string> a b) GT)
+           ((cl:string< a b) LT)
+           (cl:t EQ)))))
 
   (define-instance (Semigroup String)
     (define (<> a b) (concat-string a b)))
