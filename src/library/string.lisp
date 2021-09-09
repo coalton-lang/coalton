@@ -17,11 +17,13 @@
 (coalton-toplevel
   (declare concat-string (String -> String -> String))
   (define (concat-string str1 str2)
+    "Concatenate STR1 and STR2 together, returning a new string."
     (lisp String (str1 str2)
       (cl:concatenate 'cl:string str1 str2)))
 
   (declare unpack-string (String -> (List Char)))
   (define (unpack-string str)
+    "Unpack a string into a list of characters."
     (lisp (List Char) (str)
       (cl:reduce
        (cl:lambda (x xs) (Cons x xs))
@@ -29,6 +31,7 @@
 
   (declare pack-string ((List Char) -> String))
   (define (pack-string xs)
+    "Pack a list of charactes into a string."
     (lisp String (xs)
       (cl:labels ((f (xs)
                     (cl:if (cl:typep xs 'List/Nil)
@@ -42,6 +45,7 @@
 
   (declare parse-int (String -> (Optional Integer)))
   (define (parse-int str)
+    "Parse the integer in string STR."
     (lisp (Optional Integer) (str)
       (cl:let ((x (cl:parse-integer str :junk-allowed cl:t)))
 	(cl:if x

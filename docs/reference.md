@@ -8,6 +8,8 @@
 - `(CONS :A (LIST :A))`
 - `NIL`
 
+A list in singly-linked representation.
+
 Constructors:
 - `CONS :: (:A → (LIST :A) → (LIST :A))`
 - `NIL :: (LIST :A)`
@@ -35,6 +37,8 @@ Constructors:
 
 #### `TUPLE :A :B` <sup><sub>[TYPE]</sub></sup><a name="TUPLE"></a>
 - `(TUPLE :A :B)`
+
+A heterogeneous collection of items.
 
 Constructors:
 - `TUPLE :: (:A → :B → (TUPLE :A :B))`
@@ -124,6 +128,8 @@ Constructors:
 - `(SOME :A)`
 - `NONE`
 
+Represents something that may not have a value.
+
 Constructors:
 - `SOME :: (:A → (OPTIONAL :A))`
 - `NONE :: (OPTIONAL :A)`
@@ -171,6 +177,8 @@ Constructors:
 #### `EQ` <sup><sub>[CLASS]</sub></sup><a name="EQ"></a>
 [`EQ`](#EQ) [`:A`](#:A)
 
+Types which have equality defined.
+
 Methods:
 - `== :: (:A → :A → BOOLEAN)`
 - `/= :: (:A → :A → BOOLEAN)`
@@ -207,6 +215,8 @@ Methods:
 #### `NUM` <sup><sub>[CLASS]</sub></sup><a name="NUM"></a>
 [`EQ :A`](#EQ) [`SHOW :A`](#SHOW) `=>` [`NUM`](#NUM) [`:A`](#:A)
 
+Types which have numeric operations defined.
+
 Methods:
 - `+ :: (:A → :A → :A)`
 - `- :: (:A → :A → :A)`
@@ -234,6 +244,8 @@ Methods:
 
 #### `ORD` <sup><sub>[CLASS]</sub></sup><a name="ORD"></a>
 [`EQ :A`](#EQ) `=>` [`ORD`](#ORD) [`:A`](#:A)
+
+Types whose values can be ordered.
 
 Methods:
 - `<=> :: (:A → :A → ORD)`
@@ -310,6 +322,8 @@ Methods:
 #### `SHOW` <sup><sub>[CLASS]</sub></sup><a name="SHOW"></a>
 [`SHOW`](#SHOW) [`:A`](#:A)
 
+Types which can be shown in string representation.
+
 Methods:
 - `SHOW :: (:A → STRING)`
 
@@ -341,6 +355,8 @@ Methods:
 #### `MONAD` <sup><sub>[CLASS]</sub></sup><a name="MONAD"></a>
 [`APPLICATIVE :A`](#APPLICATIVE) `=>` [`MONAD`](#MONAD) [`:A`](#:A)
 
+Types which are monads as defined in Haskell. See https://wiki.haskell.org/Monad for more information.
+
 Methods:
 - `>>= :: ∀ :B :C. ((:A :B) → (:B → (:A :C)) → (:A :C))`
 - `>> :: ∀ :B :C. ((:A :B) → (:A :C) → (:A :C))`
@@ -360,6 +376,8 @@ Methods:
 #### `MONOID` <sup><sub>[CLASS]</sub></sup><a name="MONOID"></a>
 [`SEMIGROUP :A`](#SEMIGROUP) `=>` [`MONOID`](#MONOID) [`:A`](#:A)
 
+Types with an associative binary operation and identity defined.
+
 Methods:
 - `MEMPTY :: :A`
 
@@ -378,6 +396,8 @@ Methods:
 
 #### `FUNCTOR` <sup><sub>[CLASS]</sub></sup><a name="FUNCTOR"></a>
 [`FUNCTOR`](#FUNCTOR) [`:A`](#:A)
+
+Types which can map an inner type where the mapping adheres to the identity and composition laws.
 
 Methods:
 - `MAP :: ∀ :B :C. ((:B → :C) → (:A :B) → (:A :C))`
@@ -470,6 +490,8 @@ Methods:
 #### `SEMIGROUP` <sup><sub>[CLASS]</sub></sup><a name="SEMIGROUP"></a>
 [`SEMIGROUP`](#SEMIGROUP) [`:A`](#:A)
 
+Types with an associative binary operation defined.
+
 Methods:
 - `<> :: (:A → :A → :A)`
 
@@ -490,6 +512,8 @@ Methods:
 
 #### `APPLICATIVE` <sup><sub>[CLASS]</sub></sup><a name="APPLICATIVE"></a>
 [`FUNCTOR :A`](#FUNCTOR) `=>` [`APPLICATIVE`](#APPLICATIVE) [`:A`](#:A)
+
+Types which are a functor which can embed pure expressions and sequence operations.
 
 Methods:
 - `PURE :: ∀ :B. (:B → (:A :B))`
@@ -514,30 +538,48 @@ Methods:
 #### `<` <sup><sub>[FUNCTION]</sub></sup><a name="<"></a>
 `∀ :A. ORD :A ⇒ (:A → :A → BOOLEAN)`
 
+Is X less than Y?
+
+
 ***
 
 #### `>` <sup><sub>[FUNCTION]</sub></sup><a name=">"></a>
 `∀ :A. ORD :A ⇒ (:A → :A → BOOLEAN)`
+
+Is X greater than Y?
+
 
 ***
 
 #### `<=` <sup><sub>[FUNCTION]</sub></sup><a name="<="></a>
 `∀ :A. ORD :A ⇒ (:A → :A → BOOLEAN)`
 
+Is X less than or equal to Y?
+
+
 ***
 
 #### `>=` <sup><sub>[FUNCTION]</sub></sup><a name=">="></a>
 `∀ :A. ORD :A ⇒ (:A → :A → BOOLEAN)`
+
+Is X greater than or equal to Y?
+
 
 ***
 
 #### `MAX` <sup><sub>[FUNCTION]</sub></sup><a name="MAX"></a>
 `∀ :A. ORD :A ⇒ (:A → :A → :A)`
 
+Returns the greater element of X and Y.
+
+
 ***
 
 #### `MIN` <sup><sub>[FUNCTION]</sub></sup><a name="MIN"></a>
 `∀ :A. ORD :A ⇒ (:A → :A → :A)`
+
+Returns the lesser element of X and Y.
+
 
 ***
 
@@ -549,20 +591,32 @@ Methods:
 #### `OR` <sup><sub>[FUNCTION]</sub></sup><a name="OR"></a>
 `(BOOLEAN → BOOLEAN → BOOLEAN)`
 
+Is X or Y True?
+
+
 ***
 
 #### `AND` <sup><sub>[FUNCTION]</sub></sup><a name="AND"></a>
 `(BOOLEAN → BOOLEAN → BOOLEAN)`
+
+Are X and Y True?
+
 
 ***
 
 #### `NOT` <sup><sub>[FUNCTION]</sub></sup><a name="NOT"></a>
 `(BOOLEAN → BOOLEAN)`
 
+Is X False?
+
+
 ***
 
 #### `XOR` <sup><sub>[FUNCTION]</sub></sup><a name="XOR"></a>
 `(BOOLEAN → BOOLEAN → BOOLEAN)`
+
+Are X or Y True, but not both?
+
 
 ***
 
@@ -573,6 +627,9 @@ Methods:
 
 #### `UNDEFINED` <sup><sub>[FUNCTION]</sub></sup><a name="UNDEFINED"></a>
 `∀ :A :B. (:A → :B)`
+
+A function which can be used in place of any value, throwing an error at runtime.
+
 
 ***
 
@@ -605,45 +662,72 @@ The denominator of a fraction Q.
 #### `/` <sup><sub>[FUNCTION]</sub></sup><a name="/"></a>
 `∀ :A :B. DIVIDABLE :A :B ⇒ (:A → :A → (OPTIONAL :B))`
 
+Divide X by Y, returning None if Y is zero.
+
+
 ***
 
 #### `ABS` <sup><sub>[FUNCTION]</sub></sup><a name="ABS"></a>
 `∀ :A. (NUM :A) (ORD :A) ⇒ (:A → :A)`
+
+Absolute value of X.
+
 
 ***
 
 #### `GCD` <sup><sub>[FUNCTION]</sub></sup><a name="GCD"></a>
 `(INTEGER → INTEGER → INTEGER)`
 
+Compute the greatest common divisor of A and B.
+
+
 ***
 
 #### `LCM` <sup><sub>[FUNCTION]</sub></sup><a name="LCM"></a>
 `(INTEGER → INTEGER → INTEGER)`
+
+Compute the least common multiple of A and B.
+
 
 ***
 
 #### `MOD` <sup><sub>[FUNCTION]</sub></sup><a name="MOD"></a>
 `(INTEGER → INTEGER → INTEGER)`
 
+Compute NUM modulo BASE.
+
+
 ***
 
 #### `ODD` <sup><sub>[FUNCTION]</sub></sup><a name="ODD"></a>
 `(INTEGER → BOOLEAN)`
+
+Is N odd?
+
 
 ***
 
 #### `EVEN` <sup><sub>[FUNCTION]</sub></sup><a name="EVEN"></a>
 `(INTEGER → BOOLEAN)`
 
+Is N even?
+
+
 ***
 
 #### `EXPT` <sup><sub>[FUNCTION]</sub></sup><a name="EXPT"></a>
 `(INTEGER → INTEGER → INTEGER)`
 
+Exponentiate BASE to the POWER.
+
+
 ***
 
 #### `SIGN` <sup><sub>[FUNCTION]</sub></sup><a name="SIGN"></a>
 `∀ :A. (NUM :A) (ORD :A) ⇒ (:A → INTEGER)`
+
+The sign of X.
+
 
 ***
 
@@ -686,20 +770,32 @@ Round a Single-Float to the nearest Integer.
 #### `PARSE-INT` <sup><sub>[FUNCTION]</sub></sup><a name="PARSE-INT"></a>
 `(STRING → (OPTIONAL INTEGER))`
 
+Parse the integer in string STR.
+
+
 ***
 
 #### `PACK-STRING` <sup><sub>[FUNCTION]</sub></sup><a name="PACK-STRING"></a>
 `((LIST CHAR) → STRING)`
+
+Pack a list of charactes into a string.
+
 
 ***
 
 #### `CONCAT-STRING` <sup><sub>[FUNCTION]</sub></sup><a name="CONCAT-STRING"></a>
 `(STRING → STRING → STRING)`
 
+Concatenate STR1 and STR2 together, returning a new string.
+
+
 ***
 
 #### `UNPACK-STRING` <sup><sub>[FUNCTION]</sub></sup><a name="UNPACK-STRING"></a>
 `(STRING → (LIST CHAR))`
+
+Unpack a string into a list of characters.
+
 
 ***
 
@@ -711,15 +807,24 @@ Round a Single-Float to the nearest Integer.
 #### `ISNONE` <sup><sub>[FUNCTION]</sub></sup><a name="ISNONE"></a>
 `∀ :A. ((OPTIONAL :A) → BOOLEAN)`
 
+Is X None?
+
+
 ***
 
 #### `ISSOME` <sup><sub>[FUNCTION]</sub></sup><a name="ISSOME"></a>
 `∀ :A. ((OPTIONAL :A) → BOOLEAN)`
 
+Is X Some?
+
+
 ***
 
 #### `FROMSOME` <sup><sub>[FUNCTION]</sub></sup><a name="FROMSOME"></a>
 `∀ :A. (STRING → (OPTIONAL :A) → :A)`
+
+Get the value of OPT, erroring with the provided string if it is None.
+
 
 ***
 
@@ -1058,10 +1163,16 @@ Returns a new list without duplicate elements.
 #### `FST` <sup><sub>[FUNCTION]</sub></sup><a name="FST"></a>
 `∀ :A :B. ((TUPLE :A :B) → :A)`
 
+Get the first element of a tuple.
+
+
 ***
 
 #### `SND` <sup><sub>[FUNCTION]</sub></sup><a name="SND"></a>
 `∀ :A :B. ((TUPLE :A :B) → :B)`
+
+Get the second element of a tuple.
+
 
 ***
 

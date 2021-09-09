@@ -8,11 +8,13 @@
   
   (declare fst ((Tuple :a :b) -> :a))
   (define (fst t)
+    "Get the first element of a tuple."
     (match t
       ((Tuple a _) a)))
   
   (declare snd ((Tuple :a :b) -> :b))
   (define (snd t)
+    "Get the second element of a tuple."
     (match t
       ((Tuple _ b) b)))
 

@@ -10,13 +10,16 @@
     False)
 
   (define-type (List :a)
+    "A list in singly-linked representation."
     (Cons :a (List :a))
     Nil)
 
   (define-type (Tuple :a :b)
+    "A heterogeneous collection of items."
     (Tuple :a :b))
   
   (define-type (Optional :a)
+    "Represents something that may not have a value."
     (Some :a)
     None)
 

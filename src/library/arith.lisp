@@ -223,41 +223,51 @@
 
   (declare abs ((Ord :a) (Num :a) => (:a -> :a)))
   (define (abs x)
+    "Absolute value of X."
     (if (< x (fromInt 0))
         (negate x)
         x))
 
   (declare sign ((Ord :a) (Num :a) => (:a -> Integer)))
   (define (sign x)
+    "The sign of X."
     (if (< x (fromInt 0))
         -1
         1))
 
   (declare expt (Integer -> Integer -> Integer))
   (define (expt base power)
+    "Exponentiate BASE to the POWER."
     (lisp Integer (base power) (cl:expt base power)))
 
   (declare mod (Integer -> Integer -> Integer))
   (define (mod num base)
+    "Compute NUM modulo BASE."
     (lisp Integer (num base) (cl:values (cl:mod num base))))
 
   (declare even (Integer ->  Boolean))
   (define (even n)
+    "Is N even?"
     (lisp Boolean (n) (to-boolean (cl:evenp n))))
 
   (declare odd (Integer -> Boolean))
   (define (odd n)
+    "Is N odd?"
     (lisp Boolean (n) (to-boolean (cl:oddp n))))
 
   (declare gcd (Integer -> Integer -> Integer))
   (define (gcd a b)
+    "Compute the greatest common divisor of A and B."
     (lisp Integer (a b) (cl:gcd a b)))
 
   (declare lcm (Integer -> Integer -> Integer))
   (define (lcm a b)
+    "Compute the least common multiple of A and B."
     (lisp Integer (a b) (cl:lcm a b)))
 
+  (declare / ((Dividable :a :b) => (:a -> :a -> (Optional :b))))
   (define (/ x y)
+    "Divide X by Y, returning None if Y is zero."
     (if (== y (fromInt 0))
         None
         (Some (unsafe-/ x y))))
