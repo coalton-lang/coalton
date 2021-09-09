@@ -30,6 +30,7 @@
 
         (let* ((class-name (ty-predicate-class class-predicate))
                (superclass-names (mapcar #'ty-predicate-class class-context))
+               (docstring? (stringp (third form)))
                ;; Also parse out constraints of all methods
                (class-method-deps
                  (mapcan (lambda (form)
@@ -39,7 +40,9 @@
                              (error "Malformed DEFINE-CLASS method form ~A" form))
                            (qualified-ty-predicates
                             (parse-qualified-type-expr env (second form) class-tyvars subs :allow-unknown-classes t)))
-                         (cddr form)))
+                         (if docstring?
+                             (cdddr form)
+                             (cddr form))))
                (class-method-dep-names (mapcar #'ty-predicate-class class-method-deps)))
           ;; Add the dependency group to the DAG
           (push (append (list class-name) superclass-names class-method-dep-names)
@@ -79,7 +82,7 @@
       ;; Now we can go through and re-parse and add classes to the environment
       (let ((classes (loop :for (class-name . form) :in sorted-forms
 			   :collect
-                           (multiple-value-bind (class methods)
+                           (multiple-value-bind (class methods docstring)
 			       (parse-class-definition form env)
                              
 
@@ -129,6 +132,8 @@
 	     (class-codegen-sym (alexandria:format-symbol (symbol-package class-name) "CLASS/~A" class-name)))
 
 	(let* ((disallowed-type-vars (mapcar #'cadr class-tyvars))
+               (docstring (and (stringp (third form))
+                               (third form)))
 	       (class-methods (mapcar (lambda (form)
 					(unless (and (listp form)
 						     (= 2 (length form))
@@ -144,7 +149,9 @@
 									       (lambda (x) (member x (type-variables (apply-substitution subs disallowed-type-vars)) :test #'equalp))
 									       (type-variables (mapcar #'cadr class-tyvars)))
 									      parsed)))))
-				      (cddr form)))
+				      (if docstring
+                                          (cdddr form)
+                                          (cddr form))))
 	       (class-predicate (apply-substitution subs class-predicate))
 	       (class-context (apply-substitution subs class-context))
                (superclass-dict (loop :for super :in class-context
@@ -160,6 +167,7 @@
 		       class-methods
 		       class-codegen-sym
                        superclass-dict
+                       docstring
                        (or *compile-file-pathname* *load-truename*)))
 
                ;; Create a ENV with our new class defined so that reduce-context will work

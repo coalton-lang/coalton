@@ -11,11 +11,11 @@
          (class-info (get-doc-class-info env package)))
     (format stream "# Reference for ~A~%~%" package)
 
-    
+
     (let ((type-info-by-file (make-hash-table :test #'equalp))
           (value-info-by-file (make-hash-table :test #'equalp))
           (class-info-by-file (make-hash-table :test #'equalp)))
-      
+
       ;; Sort the functions by file
       (loop :for entry :in value-info :do
         (push entry (gethash (enough-namestring (fourth entry) component-path) value-info-by-file)))
@@ -33,7 +33,7 @@
       (let ((filenames (mapcar (lambda (file)
                                  (file-namestring (asdf:component-relative-pathname file)))
                                (asdf:component-children component))))
-       
+
         (dolist (file filenames)
           (let ((value-info (gethash file value-info-by-file))
                 (type-info (gethash file type-info-by-file))
@@ -41,10 +41,10 @@
 
             (when (or type-info value-info)
               (format stream "## File: [~A](~A)~%~%" file (concatenate 'string file-prefix file))
-              
+
               (when type-info
                 (format stream "### Types~%~%")
-                
+
                 (loop :for (name type ctors instances location) :in type-info :do
                   (with-pprint-variable-context ()
                     (let ((type-vars (loop :for i :below (coalton-impl/typechecker::kind-arity (coalton-impl/typechecker::kind-of type))
@@ -67,7 +67,7 @@
                         (when docs
                           (format stream "~%~A~%" docs)))
                       (format stream "~%")
-                      
+
                       (format stream "Constructors:~%")
                       (loop :for (ctor-name . entry) :in ctors :do
                         (format stream "- `~A :: ~A`~%"
@@ -93,7 +93,7 @@
 
               (when class-info
                 (format stream "### Classes~%~%")
-                (loop :for (class instances) :in class-info :do
+                (loop :for (class instances docs) :in class-info :do
                   (let ((name (ty-class-name class))
                         (context (ty-class-superclasses class))
                         (pred (ty-class-predicate class))
@@ -102,6 +102,10 @@
                     (with-pprint-variable-context ()
                       (format stream "~A~%~%"
                               (write-predicate-to-markdown context pred))
+
+                      (when docs
+                        (format stream "~A~%~%" docs))
+
                       (format stream "Methods:~%")
                       (loop :for (name . type) :in methods :do
                         (format stream "- `~A :: ~A`~%" name type)))
@@ -118,7 +122,7 @@
                       (format stream "~%</details>~%~%")))
                   (format stream "~%***~%~%"))
                 (format stream "~%"))
-              
+
               (when value-info
                 (format stream "### Functions~%~%")
                 (loop :for (name type docstring location) :in value-info :do
@@ -189,7 +193,8 @@
 
     (mapcar (lambda (e)
               (list e
-                    (fset:convert 'list (lookup-class-instances env (ty-class-name e)))))
+                    (fset:convert 'list (lookup-class-instances env (ty-class-name e)))
+                    (coalton-impl/typechecker::ty-class-docstring e)))
             values)))
 
 (defun get-doc-type-info (env package)
