@@ -563,8 +563,8 @@
     (error "Class ~S does not exist." class))
 
   (fset:do-seq (inst (lookup-class-instances env class :no-error t) :index index)
-    (when (handler-case (or (predicate-mgu (ty-class-instance-predicate inst)
-                                           (ty-class-instance-predicate value))
+    (when (handler-case (or (predicate-mgu (ty-class-instance-predicate value)
+                                           (ty-class-instance-predicate inst))
                             t)
 	    (predicate-unification-error () nil))
 
