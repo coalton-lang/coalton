@@ -52,7 +52,7 @@
 
 (defmethod apply-substitution (subst-list (type ty-predicate))
   (declare (type substitution-list subst-list)
-	   (values ty-predicate))
+           (values ty-predicate))
   (ty-predicate (ty-predicate-class type)
                       (apply-substitution subst-list (ty-predicate-types type))))
 
@@ -89,10 +89,10 @@
 
 (defun pprint-predicate (stream predicate &optional colon-p at-sign-p)
   (declare (type stream stream)
-	   (type ty-predicate predicate)
-	   (ignore colon-p)
+           (type ty-predicate predicate)
+           (ignore colon-p)
            (ignore at-sign-p)
-	   (values ty-predicate))
+           (values ty-predicate))
   (format stream "~S ~{~A~^ ~}"
           (ty-predicate-class predicate)
           (ty-predicate-types predicate))

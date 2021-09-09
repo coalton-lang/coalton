@@ -11,9 +11,9 @@
 (defun shadow-list-lookup (sl key &key no-error)
   "Lookup key in SL"
   (declare (type shadow-list sl)
-	   (type symbol key)
-	   (type boolean no-error)
-	   (values fset:seq))
+           (type symbol key)
+           (type boolean no-error)
+           (values fset:seq))
   (multiple-value-bind (value present-p)
       (fset:lookup (shadow-list-data sl) key)
     (unless (or present-p no-error)
@@ -23,8 +23,8 @@
 (defun shadow-list-push (sl key value &optional (constructor #'make-shadow-list))
   "Push value to the list at KEY in SL"
   (declare (type shadow-list sl)
-	   (type symbol key)
-	   (values shadow-list &optional))
+           (type symbol key)
+           (values shadow-list &optional))
 
   (let ((map (shadow-list-data sl)))
     (funcall constructor :data (fset:with map key (fset:with-first (fset:lookup map key) value)))))
@@ -32,9 +32,9 @@
 (defun shadow-list-replace (sl key index value &optional (constructor #'make-shadow-list))
   "Replace value at INDEX with VALUE in the map at KEY in SL."
   (declare (type shadow-list sl)
-	   (type symbol key)
-	   (type fixnum index)
-	   (values shadow-list &optional))
+           (type symbol key)
+           (type fixnum index)
+           (values shadow-list &optional))
   (let ((map (shadow-list-data sl)))
     (funcall constructor :data (fset:with map key (fset:with (fset:lookup map key) index value)))))
 

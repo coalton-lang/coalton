@@ -85,10 +85,10 @@
 
 (defun pprint-scheme (stream scheme &optional colon-p at-sign-p)
   (declare (type stream stream)
-	   (type ty-scheme scheme)
-	   (ignore colon-p)
+           (type ty-scheme scheme)
+           (ignore colon-p)
            (ignore at-sign-p)
-	   (values ty-scheme))
+           (values ty-scheme))
   (cond
     ((null (ty-scheme-kinds scheme))
      (format stream "~A" (ty-scheme-type scheme)))

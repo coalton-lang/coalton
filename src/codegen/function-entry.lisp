@@ -49,7 +49,7 @@
                         (function-entry
                          (if (= (the fixnum (function-entry-arity ,applied-function-sym)) ,arity)
                              (funcall (function-entry-function ,applied-function-sym)
-				      ,@arg-syms)
+                                      ,@arg-syms)
                              ,(build-curried-function-call `(function-entry-curried ,applied-function-sym) (reverse arg-syms))))))
                     (setf (gethash ,arity *function-application-functions*) ',application-sym)
 
@@ -83,9 +83,9 @@ NOTE: There is no FUNCTION-ENTRY for arity 1 and the function will be returned"
       ((= 1 arity) function)
       (t
        (let ((function-constructor (gethash arity *function-constructor-functions*)))
-	 (unless function-constructor
-	   (error "Unable to construct function of arity ~A" arity))
-	 `(,function-constructor ,function)))))
+         (unless function-constructor
+           (error "Unable to construct function of arity ~A" arity))
+         `(,function-constructor ,function)))))
 
 (defun apply-function-entry (function &rest args)
   "Apply a function (OR FUNCTION-ENTRY FUNCTION) constructed by coalton"

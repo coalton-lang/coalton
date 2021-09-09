@@ -74,7 +74,7 @@
     (define (/= t1 t2)
       (not (== t1 t2))))
 
-  
+
   (define-type Tyvar
     (Tyvar Id Kind))
 
@@ -130,7 +130,7 @@
 
   (define-class (HasKind :t)
       (kind (:t -> Kind)))
-  
+
   (define-instance (HasKind Tyvar)
       (define (kind t)
         (match t
@@ -173,7 +173,7 @@
   (define-class (Types :t)
       (apply (Subst -> :t -> :t))
     (tv (:t -> (List Tyvar))))
-  
+
   (define-instance (Types Type)
       (define (apply s t)
         (match t
@@ -208,7 +208,7 @@
                   (Tuple u (apply s1 t)))))
              (get-subst s2))
             (get-subst s1))))
-  
+
   (declare merge (MonadFail :m => (Subst -> Subst -> (:m Subst))))
   (define (merge s1 s2)
     (let ((agree (all (fn (v)
@@ -245,7 +245,7 @@
            (fail "Type constructors do not unify")))
       ((Tuple _ _)
        (fail "Types do not unify"))))
-  
+
   (declare varBind (MonadFail :m => (Tyvar -> Type -> (:m Subst))))
   (define (varBind u t_)
     (if (== t_ (TVar u))
@@ -260,7 +260,7 @@
   (declare matchType (MonadFail :m => (Type -> Type -> (:m Subst))))
   (define (matchType t1 t2)
     (match (Tuple t1 t2)
-      
+
       ((Tuple (TAp l r) (TAp l_ r_))
        (>>= (matchType l l_)
             (fn (sl)
@@ -306,7 +306,7 @@
       (match q
         ((Qual ps t)
          (union (tv ps) (tv t))))))
-  
+
 
   (define-type (Pred)
     (IsIn Id Type))
@@ -419,7 +419,7 @@
       ((None) None)
       ((Some ce_) (g ce_))))
 
-  
+
   (declare addClass (Id -> (List Id) -> (ClassEnv -> (Optional ClassEnv))))
   (define (addClass i is ce)
     (cond
@@ -445,7 +445,7 @@
             (addClass (Id "Enum") Nil)
             (addClass (Id "Functor") Nil)
             (addClass (Id "Monad") Nil))))
-  
+
   (define addNumClasses
     (foldr compose
            Some
@@ -675,8 +675,8 @@
   (define-instance (Functor TI)
       (define (map f x)
         (>>= x
-	     (fn (x)
-	       (pure (f x))))))
+             (fn (x)
+               (pure (f x))))))
 
   (define-instance (Applicative TI)
       (define (pure x)
@@ -684,10 +684,10 @@
               (Tuple3 s n x))))
     (define (liftA2 f m1 m2)
       (>>= m1
-	   (fn (a)
-	     (>>= m2
-		  (fn (b)
-		    (pure (f a b))))))))
+           (fn (a)
+             (>>= m2
+                  (fn (b)
+                    (pure (f a b))))))))
 
   (define-instance (Monad TI)
       (define (>>= f g)
@@ -712,7 +712,7 @@
   (declare getSubst (TI Subst))
   (define getSubst (TI (fn (s n)
                          (Tuple3 s n s))))
-  
+
   (declare unify (Type -> Type -> (TI Unit)))
   (define (unify t1 t2)
     (do (s <- getSubst)
@@ -737,7 +737,7 @@
        (do (ts <- (traverse newTVar ks))
            (pure (inst ts qt))))))
 
-  
+
   (define-class (Instantiate :t)
       (inst ((List Type) -> :t -> :t)))
 
@@ -771,7 +771,7 @@
   ;; (define-type-alias (Infer :e :t) (ClassEnv -> (List Assump) -> :e -> (TI (Tuple (List Pred) :t))))
 
   ;; Literals
-  
+
   (define-type Literal
     (LitInt Integer)
     (LitChar Char)
@@ -837,7 +837,7 @@
                 (pure (Tuple3 (append ps qs)
                               as
                               t_)))))))))
- 
+
   (declare tiPats ((List Pat) -> (TI (Tuple3 (List Pred) (List Assump) (List Type)))))
   (define (tiPats pats)
     (do (psasts <- (traverse tiPat pats))
@@ -899,7 +899,7 @@
 
   (define-type Alt
     (Alt (List Pat) Expr))
-  
+
   (declare tiAlt (ClassEnv -> (List Assump) -> Alt -> (TI (Tuple (List Pred) Type))))
   (define (tiAlt ce as alt_)
     (match alt_
@@ -919,7 +919,7 @@
       (pure (concat (map fst psts)))))
 
   ;; From Types to Type Schemes
-  
+
   (declare split (MonadFail :m => (ClassEnv -> (List Tyvar) -> (List Tyvar) -> (List Pred) -> (:m (Tuple (List Pred) (List Pred))))))
   (define (split ce fs gs ps)
     (do (ps_ <- (reduce ce ps))
@@ -928,7 +928,7 @@
         ((Tuple ds rs)
          (do (rs_ <- (defaultedPreds ce (append fs gs) rs))
              (pure (Tuple ds (list-difference rs rs_))))))))
-  
+
   (define-type Ambiguity
     (Ambiguity Tyvar (List Pred)))
 

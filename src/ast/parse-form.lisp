@@ -5,8 +5,8 @@
 
 This does not attempt to do any sort of analysis whatsoever. It is suitable for parsing expressions irrespective of environment."
   (declare (type shadow-realm sr)
-	   (values node &optional)
-	   (type package package))
+           (values node &optional)
+           (type package package))
   (cond
     ((atom expr)
      (etypecase expr
@@ -32,47 +32,47 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
         (parse-match expr expr_ patterns sr package))
        ;; Seq
        ((coalton:seq &rest subnodes)
-	(parse-seq expr subnodes sr package))
+        (parse-seq expr subnodes sr package))
        ;; Application
        ((t &rest rands)
-        (if (null rands) 
-	    (parse-application expr (first expr) `(coalton::Unit) sr package)
+        (if (null rands)
+            (parse-application expr (first expr) `(coalton::Unit) sr package)
             (parse-application expr (first expr) rands sr package)))))
     (t (error-parsing expr "The expression is not a valid value expression."))))
 
 (defun invert-alist (alist)
   (loop :for (key . value) :in alist
-	:collect (cons value key)))
+        :collect (cons value key)))
 
 (defun lookup-or-key (sr key)
   (declare (type shadow-realm sr)
-	   (type symbol key))
+           (type symbol key))
   (or (shadow-realm-lookup sr key)
       key))
 
 (defun parse-variable (var sr)
   (declare (type symbol var)
-	   (type shadow-realm sr)
-	   (values node-variable))
+           (type shadow-realm sr)
+           (values node-variable))
   (node-variable var (lookup-or-key sr var)))
 
 (defun make-local-vars (vars package)
   (declare (type symbol-list vars)
-	   (type package package))
+           (type package package))
   (loop :for var :in vars
-	:collect
-	(cons
-	 var
-	 (alexandria:ensure-symbol (gensym (concatenate 'string (symbol-name var) "-")) package))))
+        :collect
+        (cons
+         var
+         (alexandria:ensure-symbol (gensym (concatenate 'string (symbol-name var) "-")) package))))
 
 (defun parse-abstraction (unparsed vars subexpr sr package)
   (declare (type t unparsed)
-	   (type symbol-list vars)
-	   (type t subexpr)
-	   (type shadow-realm sr)
-	   (type package package))
+           (type symbol-list vars)
+           (type t subexpr)
+           (type shadow-realm sr)
+           (type package package))
   (let* ((binding-local-names (make-local-vars vars package))
-	 (new-sr (shadow-realm-push-frame sr binding-local-names)))
+         (new-sr (shadow-realm-push-frame sr binding-local-names)))
     (node-abstraction
      unparsed
      (mapcar #'cdr binding-local-names)
@@ -81,21 +81,21 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
 
 (defun parse-let (unparsed bindings subexpr sr package)
   (declare (type t unparsed)
-	   (type list bindings)
-	   (type t subexpr)
-	   (type shadow-realm sr)
-	   (type package package)
-	   (values node-let))
+           (type list bindings)
+           (type t subexpr)
+           (type shadow-realm sr)
+           (type package package)
+           (values node-let))
   (let* ((binding-names (mapcar #'car bindings))
-	 (binding-local-names (make-local-vars binding-names package))
-	 (new-sr (shadow-realm-push-frame sr binding-local-names)))
+         (binding-local-names (make-local-vars binding-names package))
+         (new-sr (shadow-realm-push-frame sr binding-local-names)))
 
     (node-let
      unparsed
      (loop :for (bind-var bind-val) :in bindings
            :collect (cons
-		     (lookup-or-key new-sr bind-var)
-		     (parse-form bind-val new-sr package)))
+                     (lookup-or-key new-sr bind-var)
+                     (parse-form bind-val new-sr package)))
      (parse-form subexpr new-sr package)
      (invert-alist binding-local-names))))
 
@@ -105,16 +105,16 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
    unparsed
    type
    (loop :for var :in variables
-	 :collect (cons
-		   var
-		   (or (shadow-realm-lookup sr var)
-		       (coalton-impl::coalton-bug "Missing var ~A." var))))
+         :collect (cons
+                   var
+                   (or (shadow-realm-lookup sr var)
+                       (coalton-impl::coalton-bug "Missing var ~A." var))))
    ;; Do *NOT* parse LISP-EXPR!
    lisp-expr))
 
 (defun parse-application (unparsed rator rands sr package)
   (declare (type shadow-realm sr)
-	   (type package package))
+           (type package package))
   (cond
     ((and (symbolp rator) (macro-function rator))
      (let ((expansion (funcall (macro-function rator) (cons rator rands) nil)))
@@ -125,19 +125,19 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
       (parse-form rator sr package)
       (mapcar
        (lambda (rand)
-	 (parse-form rand sr package))
+         (parse-form rand sr package))
        rands)))))
 
 (defun parse-match-branch (branch sr package)
   (declare (type shadow-realm sr)
-	   (type package package))
+           (type package package))
   (assert (= 2 (length branch))
           () "Malformed match branch ~A" branch)
   (let* ((parsed-pattern (parse-pattern (first branch)))
-	 (pattern-vars (pattern-variables parsed-pattern))
-	 (local-vars (make-local-vars pattern-vars package))
-	 (new-sr (shadow-realm-push-frame sr local-vars))
-	 (parsed-pattern (rewrite-pattern-vars parsed-pattern new-sr))
+         (pattern-vars (pattern-variables parsed-pattern))
+         (local-vars (make-local-vars pattern-vars package))
+         (new-sr (shadow-realm-push-frame sr local-vars))
+         (parsed-pattern (rewrite-pattern-vars parsed-pattern new-sr))
          (parsed-expr (parse-form (second branch) new-sr package)))
     (make-match-branch
      :unparsed branch
@@ -147,13 +147,13 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
 
 (defun parse-match (unparsed expr branches sr package)
   (declare (type shadow-realm sr)
-	   (type package package))
+           (type package package))
   (let ((parsed-expr (parse-form expr sr package))
         (parsed-branches
-	  (mapcar
-	   (lambda (branch)
-	     (parse-match-branch branch sr package))
-	   branches)))
+          (mapcar
+           (lambda (branch)
+             (parse-match-branch branch sr package))
+           branches)))
     (node-match unparsed parsed-expr parsed-branches)))
 
 (defun parse-pattern (pattern)
@@ -175,13 +175,13 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
 
 (defun parse-seq (expr subnodes sr package)
   (declare (type t expr)
-	   (type list subnodes)
-	   (type shadow-realm sr)
-	   (type package package))
+           (type list subnodes)
+           (type shadow-realm sr)
+           (type package package))
   (assert (< 0 (length subnodes))
-	  ()  "Seq form must have at least one node")
+          ()  "Seq form must have at least one node")
   (node-seq
    expr
    (mapcar (lambda (node)
-	     (parse-form node sr package))
-	   subnodes)))
+             (parse-form node sr package))
+           subnodes)))

@@ -9,8 +9,8 @@
 
 Requires acyclic superclasses"
   (declare (type environment env)
-	   (type ty-predicate pred)
-	   (values ty-predicate-list))
+           (type ty-predicate pred)
+           (values ty-predicate-list))
   (let* ((class (lookup-class env (ty-predicate-class pred)))
          (subs (predicate-match (ty-class-predicate class) pred)))
     (cons
@@ -26,8 +26,8 @@ Requires acyclic superclasses"
 
 Returns (PREDS FOUNDP)"
   (declare (type environment env)
-	   (type ty-predicate pred)
-	   (values ty-predicate-list boolean))
+           (type ty-predicate pred)
+           (values ty-predicate-list boolean))
   (fset:do-seq (inst (lookup-class-instances env (ty-predicate-class pred) :no-error t))
     (handler-case
         (let* ((subs (predicate-match (ty-class-instance-predicate inst) pred))
@@ -40,9 +40,9 @@ Returns (PREDS FOUNDP)"
 (defun entail (env preds pred)
   "Does PRED hold if and only if all of PREDS hold?"
   (declare (type environment env)
-	   (type ty-predicate-list preds)
-	   (type ty-predicate pred)
-	   (values boolean))
+           (type ty-predicate-list preds)
+           (type ty-predicate pred)
+           (values boolean))
   (let* ((super (mapcan (lambda (p) (by-super env p)) preds))
         (value
           (or (true (member pred super :test #'equalp))
@@ -55,9 +55,9 @@ Returns (PREDS FOUNDP)"
 (defun super-entail (env preds pred)
   "Does PRED hold if and only if all of PREDS hold, only checking superclass relations?"
   (declare (type environment env)
-	   (type ty-predicate-list preds)
-	   (type ty-predicate pred)
-	   (values boolean))
+           (type ty-predicate-list preds)
+           (type ty-predicate pred)
+           (values boolean))
   (true (member pred (mapcan (lambda (p) (by-super env p)) preds) :test #'equalp)))
 
 (defun hnf-p (pred)

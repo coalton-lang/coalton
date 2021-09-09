@@ -6,10 +6,10 @@
   :license "MIT"
   :depends-on (#:alexandria
                #:global-vars
-	       #:trivia
-	       #:serapeum
-	       #:fset
-	       #:float-features)
+               #:trivia
+               #:serapeum
+               #:fset
+               #:float-features)
   :in-order-to ((asdf:test-op (asdf:test-op #:coalton/tests)))
   :around-compile (lambda (compile)
                     (let (#+sbcl (sb-ext:*derive-function-types* t))
@@ -23,12 +23,12 @@
                (:module "algorithm"
                 :serial t
                 :components ((:file "tarjan-scc")
-			     (:file "shadow-realm")
-			     (:file "shadow-list")))
+                             (:file "shadow-realm")
+                             (:file "shadow-list")))
                (:module "ast"
                 :serial t
                 :components ((:file "pattern")
-			     (:file "node")
+                             (:file "node")
                              (:file "parse-error")
                              (:file "parse-form")
                              (:file "free-variables")))
@@ -41,9 +41,9 @@
                              (:file "predicate")
                              (:file "scheme")
                              (:file "typed-node")
-			     (:file "type-errors")
+                             (:file "type-errors")
                              (:file "unify")
-			     (:file "equality")
+                             (:file "equality")
                              (:file "environment")
                              (:file "context-reduction")
                              (:file "type-parse-error")
@@ -53,19 +53,19 @@
                              (:file "parse-instance-definition")
                              (:file "derive-type")
                              (:file "check-types")
-			     (:file "debug")))
+                             (:file "debug")))
                (:module "codegen"
                 :serial t
                 :components ((:file "lisp-types")
                              (:file "function-entry")
-			     (:file "optimizer")
-			     (:file "direct-application")
-			     (:file "match-constructor-lift")
-			     (:file "compile-pattern")
-			     (:file "compile-typeclass-dicts")
+                             (:file "optimizer")
+                             (:file "direct-application")
+                             (:file "match-constructor-lift")
+                             (:file "compile-pattern")
+                             (:file "compile-typeclass-dicts")
                              (:file "compile-expression")
-			     (:file "compile-type-definition")
-			     (:file "program")))
+                             (:file "compile-type-definition")
+                             (:file "program")))
                (:file "toplevel-define-type")
                (:file "toplevel-declare")
                (:file "toplevel-define")
@@ -92,9 +92,9 @@
                              (:file "tuple")
                              (:file "result")
                              (:file "functions")
-			     (:file "cell")
-			     (:file "vector")
-			     (:file "graph")))
+                             (:file "cell")
+                             (:file "vector")
+                             (:file "graph")))
                (:file "toplevel-environment")))
 
 (asdf:defsystem #:coalton/tests
@@ -114,7 +114,7 @@
                (:file "utilities")
                (:file "free-variables-tests")
                (:file "tarjan-scc-tests")
-	       (:file "type-inference-tests")
-	       (:file "direct-application-tests")
+               (:file "type-inference-tests")
+               (:file "direct-application-tests")
                (:file "environment-persist-tests")
-	       (:file "graph-tests")))
+               (:file "graph-tests")))

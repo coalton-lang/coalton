@@ -3,9 +3,9 @@
 (defun check-direct-application (initial toplevel-functions expected)
   (is (equalp
        (direct-application
-	initial
-	toplevel-functions
-	(make-default-environment))
+        initial
+        toplevel-functions
+        (make-default-environment))
        expected)))
 
 (alexandria:define-constant unit-type (coalton-impl/typechecker::to-scheme (coalton-impl/typechecker::qualify nil coalton-impl/typechecker::tUnit)) :test #'equalp)
@@ -23,7 +23,7 @@
     (list (typed-node-literal unit-type nil 5)))
 
    '((f . 1))
-	
+
    (typed-node-direct-application
     unit-type
     nil
@@ -43,7 +43,7 @@
     (list (typed-node-literal unit-type nil 5)))
 
    '((g . 2))
-   
+
    (typed-node-application
     unit-type
     nil
@@ -95,18 +95,18 @@
     nil
     (list
      (cons 'x
-	   (typed-node-application
-	    unit-type
-	    nil
-	    (typed-node-variable unit-type nil 'f)
-	    (list (typed-node-literal unit-type nil 5))))
+           (typed-node-application
+            unit-type
+            nil
+            (typed-node-variable unit-type nil 'f)
+            (list (typed-node-literal unit-type nil 5))))
      (cons 'f
-	   (typed-node-abstraction
-	    unit-type
-	    nil
-	    (list (cons 'x unit-type))
-	    (typed-node-literal unit-type nil 6)
-	    nil)))
+           (typed-node-abstraction
+            unit-type
+            nil
+            (list (cons 'x unit-type))
+            (typed-node-literal unit-type nil 6)
+            nil)))
     (typed-node-application
      unit-type
      nil
@@ -123,19 +123,19 @@
     nil
     (list
      (cons 'x
-	   (typed-node-direct-application
-	    unit-type
-	    nil
+           (typed-node-direct-application
             unit-type
-	    'f
-	    (list (typed-node-literal unit-type nil 5))))
+            nil
+            unit-type
+            'f
+            (list (typed-node-literal unit-type nil 5))))
      (cons 'f
-	   (typed-node-abstraction
-	    unit-type
-	    nil
-	    (list (cons 'x unit-type))
-	    (typed-node-literal unit-type nil 6)
-	    nil)))
+           (typed-node-abstraction
+            unit-type
+            nil
+            (list (cons 'x unit-type))
+            (typed-node-literal unit-type nil 6)
+            nil)))
     (typed-node-direct-application
      unit-type
      nil

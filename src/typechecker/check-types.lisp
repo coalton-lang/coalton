@@ -110,19 +110,19 @@
     (let ((last-node (car (last (typed-node-seq-subnodes node)))))
       (unless (sub-ty-scheme-p (typed-node-type last-node)
                                (typed-node-type node)
-			       env)
-	(error 'invalid-typed-node-type
-	       :node (typed-node-type node)
-	       :inferred-type (typed-node-type last-node)))
+                               env)
+        (error 'invalid-typed-node-type
+               :node (typed-node-type node)
+               :inferred-type (typed-node-type last-node)))
 
       (dolist (sub-node (typed-node-seq-subnodes node))
-	(check-node-type sub-node env))
+        (check-node-type sub-node env))
       (typed-node-type node))))
 
 (defun check-application-node-type (rator rands node env)
   (declare (type typed-node rator node)
-	   (type typed-node-list rands)
-	   (type environment env))
+           (type typed-node-list rands)
+           (type environment env))
   (let* ((rator-qual-type (fresh-inst (typed-node-type rator)))
          (rator-type (qualified-ty-type rator-qual-type))
          (rator-preds (qualified-ty-predicates rator-qual-type))

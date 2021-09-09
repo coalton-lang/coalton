@@ -276,7 +276,7 @@ Several `if` expressions can be combined with a `coalton:cond`:
     (cond
       ((and (== 0 (mod n 5))
             (== 0 (mod n 3)))
-	    "Fizzbuzz")
+            "Fizzbuzz")
       ((== 0 (mod n 3))
         "Fizz")
       ((== 0 (mod n 5))
@@ -342,9 +342,9 @@ instance.
     (define (== a b)
       (match (Tuple a b)
         ((Tuple (Red) (Red)) True)
-	((Tuple (Blue) (Blue)) True)
-	((Tuple (Green) (Green)) True)
-	(_ False)))
+        ((Tuple (Blue) (Blue)) True)
+        ((Tuple (Green) (Green)) True)
+        (_ False)))
     (define (/= a b) (not (== a b))))
 
 
@@ -373,7 +373,7 @@ instance.
 * `Semigroup` - defined on types which support an associative binary operation
 * `Monoid` - defined on types that are semigroups and have an identiy element
 
-* `Functor`  
+* `Functor`
 * `Applicative`
 * `Monad`
 * `MonadFail`

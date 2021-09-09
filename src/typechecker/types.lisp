@@ -148,8 +148,8 @@
 
 (defun apply-type-argument (tcon arg)
   (declare (type (or tcon tapp tvar) tcon)
-	   (type ty arg)
-	   (values tapp))
+           (type ty arg)
+           (values tapp))
   (unless (kfun-p (kind-of tcon))
     (error 'type-application-error :type tcon :argument arg))
   (unless (equalp (kfun-from (kind-of tcon)) (kind-of arg))
@@ -222,10 +222,10 @@ This requires a valid PPRINT-VARIABLE-CONTEXT")
 
 (defun pprint-ty (stream ty &optional colon-p at-sign-p)
   (declare (type stream stream)
-	   (type ty ty)
-	   (ignore colon-p)
-	   (ignore at-sign-p)
-	   (values ty))
+           (type ty ty)
+           (ignore colon-p)
+           (ignore at-sign-p)
+           (values ty))
   (etypecase ty
     (tvar
      (if *coalton-pretty-print-tyvars*

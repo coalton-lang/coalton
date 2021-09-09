@@ -10,31 +10,31 @@
   (let ((var-table nil))
     (labels ((%type= (type1 type2)
       (cond
-	;; Type variables
-	((and (tvar-p type1)  (tvar-p type2))
-	 (let* ((pair1 (find type1 var-table :key #'car :test #'equalp))
-		(pair2 (find type2 var-table :key #'car :test #'equalp)))
-	   (cond
-	     ((and (null pair1) (null pair2))
-		 (pushnew (cons type1 type2) var-table :key #'car :test #'equalp)
-		 (pushnew (cons type2 type1) var-table :key #'car :test #'equalp)
-		 t)
-	     ((or (null pair1) (null pair2))
-	      nil)
-	     (t
-	      (and (eql (car pair1) (cdr pair2))
-		   (eql (cdr pair1) (car pair2)))))))
+        ;; Type variables
+        ((and (tvar-p type1)  (tvar-p type2))
+         (let* ((pair1 (find type1 var-table :key #'car :test #'equalp))
+                (pair2 (find type2 var-table :key #'car :test #'equalp)))
+           (cond
+             ((and (null pair1) (null pair2))
+                 (pushnew (cons type1 type2) var-table :key #'car :test #'equalp)
+                 (pushnew (cons type2 type1) var-table :key #'car :test #'equalp)
+                 t)
+             ((or (null pair1) (null pair2))
+              nil)
+             (t
+              (and (eql (car pair1) (cdr pair2))
+                   (eql (cdr pair1) (car pair2)))))))
 
 
-	;; Type constants
-	((and (tcon-p type1) (tcon-p type2)) (equalp type1 type2))
+        ;; Type constants
+        ((and (tcon-p type1) (tcon-p type2)) (equalp type1 type2))
 
-	;; Type application
-	((and (tapp-p type1) (tapp-p type2))
-	 (and (%type= (tapp-from type1) (tapp-from type2))
-	      (%type= (tapp-to type1) (tapp-to type2))))
+        ;; Type application
+        ((and (tapp-p type1) (tapp-p type2))
+         (and (%type= (tapp-from type1) (tapp-from type2))
+              (%type= (tapp-to type1) (tapp-to type2))))
 
-	(t nil))))
+        (t nil))))
       (let ((ret (%type= type1 type2)))
         (values ret var-table)))))
 

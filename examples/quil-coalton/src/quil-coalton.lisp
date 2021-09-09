@@ -35,9 +35,9 @@
           (map1 (fn (x) (Cons x Nil)) alpha_)
           (let ((f (fn (xs)
                      (match xs
-		       ((Cons x (Nil)) (not (== x #\-)))
-		       ((Cons _ xs) (f xs))
-		       ((Nil) True)))))
+                       ((Cons x (Nil)) (not (== x #\-)))
+                       ((Cons _ xs) (f xs))
+                       ((Nil) True)))))
             (verify f (many0 alphanumeric_-))))))))
 
   (define-type Qubit
@@ -60,8 +60,8 @@
     (map2 SimpleGate
           parse-quil-name
           (many1 (map2 (fn (_ x) x)
-		       whitespace
-		       parse-quil-qubit))))
+                       whitespace
+                       parse-quil-qubit))))
 
   (define-type Expression
     (Expression String))
@@ -109,24 +109,24 @@
     (Parser
      (fix
       (fn (f str)
-	(let ((parser_
-		(alt*
-		 (make-list
-		  (map3 (fn (_ __ g) (Controlled g))
-			(parse-string (make-string-view "CONTROLLED"))
+        (let ((parser_
+                (alt*
+                 (make-list
+                  (map3 (fn (_ __ g) (Controlled g))
+                        (parse-string (make-string-view "CONTROLLED"))
                         (many1 non-newline-whitespace)
-			(Parser f))
-		  (map3 (fn (_ __ g) (Dagger g))
-			(parse-string (make-string-view "DAGGER"))
+                        (Parser f))
+                  (map3 (fn (_ __ g) (Dagger g))
+                        (parse-string (make-string-view "DAGGER"))
                         (many1 non-newline-whitespace)
-			(Parser f))
-		  (map3 (fn (_ __ g) (Forked g))
-			(parse-string (make-string-view "FORKED"))
+                        (Parser f))
+                  (map3 (fn (_ __ g) (Forked g))
+                        (parse-string (make-string-view "FORKED"))
                         (many1 non-newline-whitespace)
-			(Parser f))
-		  (map1 Parametric parse-parametric-gate)
-		  (map1 Simple parse-quil-simple-gate)))))
-	  ((get-parser parser_) str))))))
+                        (Parser f))
+                  (map1 Parametric parse-parametric-gate)
+                  (map1 Simple parse-quil-simple-gate)))))
+          ((get-parser parser_) str))))))
 
 
   ;;
@@ -253,11 +253,11 @@
       (map1 QuilControl parse-quil-control)
       (map1 QuilLabel parse-quil-label)
       (map1 QuilGate parse-quil-gate))))
-  
+
   ;;
   ;; Comments
   ;;
-  
+
   (declare parse-quil-comment (Parser Unit))
   (define parse-quil-comment
     (map3 (fn (a b c) Unit)
