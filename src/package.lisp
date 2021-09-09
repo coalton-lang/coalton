@@ -12,21 +12,21 @@
   (:documentation "Implementation of generic algorithms used by COALTON. This is a package private to the COALTON system and is not intended for public use.")
   (:use #:cl)
   (:export
-   #:tarjan-scc				; FUNCTION
-   #:shadow-realm			; STRUCT
-   #:shadow-realm-data			; ACCESSOR
-   #:shadow-realm-parent		; ACCESSOR
-   #:make-shadow-realm			; FUNCTION
-   #:shadow-realm-set			; FUNCTION
-   #:shadow-realm-push-frame 		; FUNCTION
-   #:shadow-realm-lookup		; FUNCTION
+   #:tarjan-scc                         ; FUNCTION
+   #:shadow-realm                       ; STRUCT
+   #:shadow-realm-data                  ; ACCESSOR
+   #:shadow-realm-parent                ; ACCESSOR
+   #:make-shadow-realm                  ; FUNCTION
+   #:shadow-realm-set                   ; FUNCTION
+   #:shadow-realm-push-frame            ; FUNCTION
+   #:shadow-realm-lookup                ; FUNCTION
    #:shadow-realm-diff                  ; FUNCTION
-   #:shadow-realm-remove		; FUNCTION
-   #:shadow-list			; STRUCT
+   #:shadow-realm-remove                ; FUNCTION
+   #:shadow-list                        ; STRUCT
    #:shadow-list-data                   ; ACCESSOR
-   #:shadow-list-lookup			; FUNCTION
-   #:shadow-list-push			; FUNCTION
-   #:shadow-list-replace		; FUNCTION
+   #:shadow-list-lookup                 ; FUNCTION
+   #:shadow-list-push                   ; FUNCTION
+   #:shadow-list-replace                ; FUNCTION
    #:shadow-list-diff                   ; FUNCTION
    ))
 
@@ -34,52 +34,52 @@
     (:documentation "Implementation of the abstract syntax tree used by COALTON. This is a package private to the COALTON system and is not intended for public use.")
   (:use #:cl #:coalton-impl/algorithm)
   (:export
-   #:literal-value			; TYPE
-   #:node				; STRUCT
+   #:literal-value                      ; TYPE
+   #:node                               ; STRUCT
    #:node-list                          ; TYPE
-   #:node-unparsed			; ACCESSOR
+   #:node-unparsed                      ; ACCESSOR
    #:symbol-list                        ; TYPE
    #:binding-list                       ; TYPE
-   #:node-literal			; STRUCT
-   #:node-literal-value			; ACCESSOR
-   #:node-variable			; STRUCT
-   #:node-variable-name			; ACCESSOR
-   #:node-application			; STRUCT
-   #:node-application-rator		; ACCESSOR
-   #:node-application-rands		; ACCESSOR
-   #:node-abstraction			; STRUCT
-   #:node-abstraction-vars		; ACCESSOR
-   #:node-abstraction-subexpr		; ACCESSOR
-   #:node-abstraction-name-map		; ACCESSOR
-   #:node-let				; STRUCT
-   #:node-let-bindings			; ACCESSOR
-   #:node-let-subexpr			; ACCESSOR
-   #:node-let-name-map			; ACCESSOR
-   #:node-lisp				; STRUCT
-   #:node-lisp-type			; ACCESSOR
-   #:node-lisp-form			; ACCESSOR
-   #:node-lisp-variables		; ACCESSOR
+   #:node-literal                       ; STRUCT
+   #:node-literal-value                 ; ACCESSOR
+   #:node-variable                      ; STRUCT
+   #:node-variable-name                 ; ACCESSOR
+   #:node-application                   ; STRUCT
+   #:node-application-rator             ; ACCESSOR
+   #:node-application-rands             ; ACCESSOR
+   #:node-abstraction                   ; STRUCT
+   #:node-abstraction-vars              ; ACCESSOR
+   #:node-abstraction-subexpr           ; ACCESSOR
+   #:node-abstraction-name-map          ; ACCESSOR
+   #:node-let                           ; STRUCT
+   #:node-let-bindings                  ; ACCESSOR
+   #:node-let-subexpr                   ; ACCESSOR
+   #:node-let-name-map                  ; ACCESSOR
+   #:node-lisp                          ; STRUCT
+   #:node-lisp-type                     ; ACCESSOR
+   #:node-lisp-form                     ; ACCESSOR
+   #:node-lisp-variables                ; ACCESSOR
    #:node-match                         ; STRUCT
    #:node-match-expr                    ; ACCESSOR
    #:node-match-branches                ; ACCESSOR
    #:node-branch                        ; STRUCT
    #:node-branch-pattern                ; ACCESSOR
    #:node-branch-subexpr                ; ACCESSOR
-   #:node-seq				; STRUCT
-   #:node-seq-subnodes			; ACCESSOR
-   #:match-branch-pattern		; ACCESSOR
-   #:match-branch-subexpr		; ACCESSOR
-   #:match-branch-unparsed		; ACCESOR
-   #:match-branch-name-map		; ACCESSOR
-   #:pattern				; STRUCT
-   #:pattern-var			; STRUCT
-   #:pattern-var-id			; ACCESSOR
-   #:pattern-wildcard			; STRUCT
-   #:pattern-literal			; STRUCT
-   #:pattern-literal-value		; ACCESSOR
-   #:pattern-constructor		; STRUCT
-   #:pattern-constructor-name		; ACCESSOR
-   #:pattern-constructor-patterns	; ACCESSOR
+   #:node-seq                           ; STRUCT
+   #:node-seq-subnodes                  ; ACCESSOR
+   #:match-branch-pattern               ; ACCESSOR
+   #:match-branch-subexpr               ; ACCESSOR
+   #:match-branch-unparsed              ; ACCESOR
+   #:match-branch-name-map              ; ACCESSOR
+   #:pattern                            ; STRUCT
+   #:pattern-var                        ; STRUCT
+   #:pattern-var-id                     ; ACCESSOR
+   #:pattern-wildcard                   ; STRUCT
+   #:pattern-literal                    ; STRUCT
+   #:pattern-literal-value              ; ACCESSOR
+   #:pattern-constructor                ; STRUCT
+   #:pattern-constructor-name           ; ACCESSOR
+   #:pattern-constructor-patterns       ; ACCESSOR
    #:pattern-variables                  ; FUNCTION
    )
   (:export
@@ -91,7 +91,7 @@
    #:with-parsing-context               ; MACRO
    )
   (:export
-   #:bindings-to-dag			; FUNCTION
+   #:bindings-to-dag                    ; FUNCTION
    ))
 
 (uiop:define-package #:coalton-impl/typechecker
@@ -100,9 +100,9 @@
         #:coalton-impl/algorithm
         #:coalton-impl/ast)
   (:import-from #:serapeum
-		#:true)
+                #:true)
   (:export
-   #:ty					; STRUCT
+   #:ty                                 ; STRUCT
    #:ty-scheme                          ; STRUCT
    #:qualified-ty                       ; STRUCT
    #:function-type-p                    ; FUNCTION

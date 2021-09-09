@@ -74,7 +74,7 @@
 
 (defun pprint-substution (stream sub &optional colon-p at-sign-p)
   (declare (ignore colon-p)
-	   (ignore at-sign-p))
+           (ignore at-sign-p))
   (format stream "#T~a" (tyvar-id (substitution-from sub)))
   (format stream " +-> ")
   (format stream "~a" (substitution-to sub))

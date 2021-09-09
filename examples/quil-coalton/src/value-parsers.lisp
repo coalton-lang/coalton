@@ -11,7 +11,7 @@
      (fn (str)
        (match (next-char str)
          ((Some (Tuple read-char _)) (Err (Error (lisp String (read-char)
-						   (cl:format cl:nil "Unexpected character '~A' expected EOF" read-char)))))
+                                                   (cl:format cl:nil "Unexpected character '~A' expected EOF" read-char)))))
          ((None) (Ok (Tuple Unit str)))))))
 
   (declare take (Parser Char))
@@ -50,7 +50,7 @@
   (declare parse-string (StringView -> (Parser StringView)))
   (define (parse-string str)
     (let ((f (fn (s)
-	       (match (next-char s)
+               (match (next-char s)
                  ((Some (Tuple c s))
                   (and-then (fn (_) (f s)) (char c)))
                  ((None) (const-value str))))))
@@ -60,7 +60,7 @@
   (define whitespace
     (map1 (fn (_) Unit)
           (alt (char #\Space)
-	       (char #\Return))))
+               (char #\Return))))
 
   (declare digit (Parser Char))
   (define digit

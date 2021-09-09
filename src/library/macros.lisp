@@ -9,16 +9,16 @@
 (cl:defmacro coalton:when (expr then)
   `(if ,expr
        (seq
-	,then
-	Unit)
+        ,then
+        Unit)
        Unit))
 
 (cl:defmacro coalton:unless (expr then)
   `(if ,expr
        Unit
        (seq
-	,then
-	Unit)))
+        ,then
+        Unit)))
 
 (cl:defmacro coalton:cond (cl:&rest exprs)
   (cl:labels ((build-calls (exprs)
@@ -60,9 +60,9 @@ to
 (cl:defmacro make-list (cl:&rest forms)
   (cl:labels
       ((list-helper (forms)
-	 (cl:if (cl:endp forms)
-		`coalton-library:Nil
-		`(coalton-library:Cons ,(cl:car forms) ,(list-helper (cl:cdr forms))))))
+         (cl:if (cl:endp forms)
+                `coalton-library:Nil
+                `(coalton-library:Cons ,(cl:car forms) ,(list-helper (cl:cdr forms))))))
     (list-helper forms)))
 
 (cl:defmacro to-boolean (expr)
@@ -84,17 +84,17 @@ to
                               (cl:error "Last element of DO block cannot be a binding"))
 
                             form)
-			   (;; If the form is a let binding
-			    (cl:and
-			     (cl:= 4 (cl:length form))
-			     (cl:eql 'coalton:let (cl:first form))
-			     (cl:symbolp (cl:second form))
-			     (cl:eql 'coalton:= (cl:third form)))
-			    `(let ((,(cl:second form) ,(cl:fourth form)))
-			       ,(process (cl:cdr forms))))
+                           (;; If the form is a let binding
+                            (cl:and
+                             (cl:= 4 (cl:length form))
+                             (cl:eql 'coalton:let (cl:first form))
+                             (cl:symbolp (cl:second form))
+                             (cl:eql 'coalton:= (cl:third form)))
+                            `(let ((,(cl:second form) ,(cl:fourth form)))
+                               ,(process (cl:cdr forms))))
 
-			   ((cl:eql 'coalton:let (cl:first form))
-			    (cl:error "Invalid let form in do expression"))
+                           ((cl:eql 'coalton:let (cl:first form))
+                            (cl:error "Invalid let form in do expression"))
 
                            (;; Otherwise if we are a binding we can use >>=
                             (cl:and
@@ -120,37 +120,37 @@ to
 (cl:defmacro coalton:progn (cl:&rest forms)
   (cl:assert (cl:< 0 (cl:length forms)) () "Malformed progn block.")
   (cl:labels ((process (forms)
-		(cl:if (cl:= 1 (cl:length forms))
-		       (cl:car forms)
-		       (cl:let ((before-let cl:nil))
-			 (cl:loop :for form :in forms :do
-			   (cl:progn
+                (cl:if (cl:= 1 (cl:length forms))
+                       (cl:car forms)
+                       (cl:let ((before-let cl:nil))
+                         (cl:loop :for form :in forms :do
+                           (cl:progn
 
-			     (cl:cond
-			       ((cl:and
-				 (cl:listp form)
-				 (cl:eql 'coalton:let (cl:first form))
-				 (cl:eql 'coalton:= (cl:third form))
-				 (cl:symbolp (cl:second form)))
-				(cl:progn
-				  (cl:assert
-				   (cl:< (cl:+ 1 (cl:length before-let)) (cl:length forms)) ()  "Progn cannot be terminated by let")
-				  (cl:return-from process
-				    `(coalton:seq
-				      ,@(cl:reverse before-let)
-				      (coalton:let ((,(cl:second form) ,(cl:fourth form)))
-					,(process (cl:nthcdr (cl:+ 1 (cl:length before-let)) forms)))))))
+                             (cl:cond
+                               ((cl:and
+                                 (cl:listp form)
+                                 (cl:eql 'coalton:let (cl:first form))
+                                 (cl:eql 'coalton:= (cl:third form))
+                                 (cl:symbolp (cl:second form)))
+                                (cl:progn
+                                  (cl:assert
+                                   (cl:< (cl:+ 1 (cl:length before-let)) (cl:length forms)) ()  "Progn cannot be terminated by let")
+                                  (cl:return-from process
+                                    `(coalton:seq
+                                      ,@(cl:reverse before-let)
+                                      (coalton:let ((,(cl:second form) ,(cl:fourth form)))
+                                        ,(process (cl:nthcdr (cl:+ 1 (cl:length before-let)) forms)))))))
 
-			       ((cl:and
-				 (cl:listp form)
-				 (cl:eql 'coalton:let (cl:first form)))
-				(cl:error "Invalid let form in progn expression"))
+                               ((cl:and
+                                 (cl:listp form)
+                                 (cl:eql 'coalton:let (cl:first form)))
+                                (cl:error "Invalid let form in progn expression"))
 
-			       (cl:t (cl:push form before-let)))
-			     ))
+                               (cl:t (cl:push form before-let)))
+                             ))
 
-			 ;; There was never a let generate a simple seq
-			 `(coalton:seq
-			   ,@forms)
-			 ))))
+                         ;; There was never a let generate a simple seq
+                         `(coalton:seq
+                           ,@forms)
+                         ))))
     (process forms)))

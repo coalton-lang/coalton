@@ -4,12 +4,12 @@
   ;;
   ;; Parser combinators
   ;;
- 
+
   (declare many0 ((Parser :a) -> (Parser (List :a))))
   (define (many0 p_)
     (let ((p (get-parser p_))
           (f (fn (str)
-	       (match (p str)
+               (match (p str)
                  ((Err _) (Tuple Nil str))
                  ((Ok (Tuple a str))
                   (match (f str)
@@ -43,7 +43,7 @@
             (match (p2 str)
               ((Err e) (Err e))
               ((Ok (Tuple b str))
-	       (Ok (Tuple b str))))))))))
+               (Ok (Tuple b str))))))))))
 
   (declare alt* ((List (Parser :a)) -> (Parser :a)))
   (define (alt* ps)
@@ -51,7 +51,7 @@
       ((Cons x (Nil)) x)
       ((Cons x xs) (alt x (alt* xs)))
       ((Nil) (pfail "Input did not match any pattern in alt*"))))
- 
+
   (declare verify ((:a -> Boolean) -> ((Parser :a) -> (Parser :a))))
   (define (verify f p)
     (and-then
@@ -97,7 +97,7 @@
             (match (p2 str)
               ((Err e) (Err e))
               ((Ok (Tuple b str))
-	       (Ok (Tuple (f a b) str))))))))))
+               (Ok (Tuple (f a b) str))))))))))
 
   (declare map3 ((:a -> (:b -> (:c -> :d))) -> ((Parser :a) -> ((Parser :b) -> ((Parser :c) -> (Parser :d))))))
   (define (map3 f p1_ p2_ p3_)
@@ -112,7 +112,7 @@
             (match (p2 str)
               ((Err e) (Err e))
               ((Ok (Tuple b str))
-	       (match (p3 str)
+               (match (p3 str)
                  ((Err e) (Err e))
                  ((Ok (Tuple c str))
                   (Ok (Tuple (f a b c) str))))))))))))
@@ -131,7 +131,7 @@
             (match (p2 str)
               ((Err e) (Err e))
               ((Ok (Tuple b str))
-	       (match (p3 str)
+               (match (p3 str)
                  ((Err e) (Err e))
                  ((Ok (Tuple c str))
                   (match (p4 str)
@@ -154,13 +154,13 @@
             (match (p2 str)
               ((Err e) (Err e))
               ((Ok (Tuple b str))
-	       (match (p3 str)
+               (match (p3 str)
                  ((Err e) (Err e))
                  ((Ok (Tuple c str))
                   (match (p4 str)
                     ((Err e) (Err e))
                     ((Ok (Tuple d str))
                      (match (p5 str)
-		       ((Err e) (Err e))
-		       ((Ok (Tuple e str))
+                       ((Err e) (Err e))
+                       ((Ok (Tuple e str))
                         (Ok (Tuple (f a b c d e) str)))))))))))))))))

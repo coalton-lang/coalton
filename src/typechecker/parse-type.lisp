@@ -109,8 +109,8 @@ Optional ADDITIONAL-PREDICATES specifys additional predicates to qualify the res
                  (cond
                    ;; Type variable
                    ((equalp (symbol-package expr)
-		            keyword-package)
-	            (or (car (cdr (find-tyvar-entry expr)))
+                            keyword-package)
+                    (or (car (cdr (find-tyvar-entry expr)))
                         (let* ((var (make-variable))
                                ;; Create a type variable with unknown
                                ;; arity to be determined on usage
@@ -119,11 +119,11 @@ Optional ADDITIONAL-PREDICATES specifys additional predicates to qualify the res
                           var)))
                    ;; Type constructor in current scope
                    (t
-	            (lookup-type env expr))))
+                    (lookup-type env expr))))
                 (list
                  (cond
                    ((some #'coalton-arrow-p expr)
-	            (unless (oddp (length expr))
+                    (unless (oddp (length expr))
                       (error-parsing-type expr "Malformed function type"))
 
                     (let ((arg-types nil)
@@ -156,7 +156,7 @@ Optional ADDITIONAL-PREDICATES specifys additional predicates to qualify the res
                     (unless (symbolp (first expr))
                       (error-parsing-type expr "Invalid type constructor ~S" (first expr)))
 
-	            (let* ((ty-con-arity (if output-kind
+                    (let* ((ty-con-arity (if output-kind
                                              (+ (length (rest expr)) (kind-arity output-kind))
                                              (length (rest expr))))
                            (ty-con-kind (make-kind-of-arity ty-con-arity))
@@ -165,14 +165,14 @@ Optional ADDITIONAL-PREDICATES specifys additional predicates to qualify the res
                                      (setf type-vars new-type-vars
                                            subs new-subs)
                                      (resolve-type-variables tcon ty-con-kind)))
-	                   (arg-tys
+                           (arg-tys
                              (loop :for e :in (rest expr)
                                    :collect (multiple-value-bind (arg-type new-type-vars new-subs)
                                                 (parse-type-expr env e type-vars subs)
                                               (setf type-vars new-type-vars
                                                     subs new-subs)
                                               arg-type))))
-	              (apply-type-argument-list ty-con arg-tys))))))))
+                      (apply-type-argument-list ty-con arg-tys))))))))
         (let ((output-type (apply-substitution subs type)))
           (values output-type type-vars subs))))))
 

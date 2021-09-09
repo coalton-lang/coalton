@@ -497,53 +497,53 @@
 
 (defun push-value-environment (env value-types)
   (declare (type environment env)
-	   (type scheme-binding-list value-types)
-	   (values environment &optional))
+           (type scheme-binding-list value-types)
+           (values environment &optional))
   (update-environment
    env
    :value-environment (shadow-realm-push-frame
-		       (environment-value-environment env)
-		       value-types
-		       #'make-value-environment)))
+                       (environment-value-environment env)
+                       value-types
+                       #'make-value-environment)))
 
 (defun push-type-environment (env types)
   (declare (type environment env)
-	   (type list types)
-	   (values environment &optional))
+           (type list types)
+           (values environment &optional))
   (update-environment
    env
    :type-environment (shadow-realm-push-frame
-		      (environment-type-environment env)
-		      types
-		      #'make-type-environment)))
+                      (environment-type-environment env)
+                      types
+                      #'make-type-environment)))
 
 (defun push-constructor-environment (env constructors)
   (declare (type environment env)
-	   (type constructor-entry-list constructors)
-	   (values environment &optional))
+           (type constructor-entry-list constructors)
+           (values environment &optional))
   (update-environment
    env
    :constructor-environment (shadow-realm-push-frame
-			     (environment-constructor-environment env)
-			     constructors
-			     #'make-constructor-environment)))
+                             (environment-constructor-environment env)
+                             constructors
+                             #'make-constructor-environment)))
 
 (defun push-function-environment (env functions)
   (declare (type environment env)
-	   (type function-env-entry-list functions)
-	   (values environment &optional))
+           (type function-env-entry-list functions)
+           (values environment &optional))
   (update-environment
    env
    :function-environment (shadow-realm-push-frame
-			  (environment-function-environment env)
-			  functions
-			  #'make-function-environment)))
+                          (environment-function-environment env)
+                          functions
+                          #'make-function-environment)))
 
 (defun add-class (env symbol value)
   (declare (type environment env)
-	   (type symbol symbol)
-	   (type ty-class value)
-	   (values environment &optional))
+           (type symbol symbol)
+           (type ty-class value)
+           (values environment &optional))
   ;; Ensure this class does not already exist
   (when (lookup-class env symbol :no-error t)
     (error "Class ~S already exists." symbol))
@@ -555,9 +555,9 @@
 
 (defun add-instance (env class value)
   (declare (type environment env)
-	   (type symbol class)
-	   (type ty-class-instance value)
-	   (values environment &optional))
+           (type symbol class)
+           (type ty-class-instance value)
+           (values environment &optional))
   ;; Ensure the class is defined
   (unless (lookup-class env class)
     (error "Class ~S does not exist." class))
@@ -566,31 +566,31 @@
     (when (handler-case (or (predicate-mgu (ty-class-instance-predicate value)
                                            (ty-class-instance-predicate inst))
                             t)
-	    (predicate-unification-error () nil))
+            (predicate-unification-error () nil))
 
       ;; If we have the same instance then simply overwrite the old one
       (if (type-predicate= (ty-class-instance-predicate value)
-			   (ty-class-instance-predicate inst))
-	  (return-from add-instance
-	    (update-environment
-	     env
-	     :instance-environment (shadow-list-replace
-				    (environment-instance-environment env)
-				    class
-				    index
-				    value
-				    #'make-instance-environment)))
+                           (ty-class-instance-predicate inst))
+          (return-from add-instance
+            (update-environment
+             env
+             :instance-environment (shadow-list-replace
+                                    (environment-instance-environment env)
+                                    class
+                                    index
+                                    value
+                                    #'make-instance-environment)))
           (error 'overlapping-instance-error
-		 :inst1 (ty-class-instance-predicate value)
-		 :inst2 (ty-class-instance-predicate inst)))))
+                 :inst1 (ty-class-instance-predicate value)
+                 :inst2 (ty-class-instance-predicate inst)))))
 
   (update-environment
    env
    :instance-environment (shadow-list-push
-			  (environment-instance-environment env)
-			  class
-			  value
-			  #'make-instance-environment)))
+                          (environment-instance-environment env)
+                          class
+                          value
+                          #'make-instance-environment)))
 ;;;
 ;;; Directly applicable functions
 ;;;
@@ -609,9 +609,9 @@
         (value-table (shadow-realm-data (environment-value-environment env-diff)))
         (constructor-table (shadow-realm-data (environment-constructor-environment env-diff)))
         (class-table (shadow-realm-data (environment-class-environment env-diff)))
-	(function-table (shadow-realm-data (environment-function-environment env-diff)))
+        (function-table (shadow-realm-data (environment-function-environment env-diff)))
         (instance-table (shadow-list-data (environment-instance-environment env-diff)))
-	(name-table (shadow-realm-data (environment-name-environment env-diff)))
+        (name-table (shadow-realm-data (environment-name-environment env-diff)))
         (forms nil))
 
     ;; Tell the world about our types
@@ -648,10 +648,10 @@
 ;; it is too big
 (defun pprint-env (stream env &optional colon-p at-sign-p)
   (declare (type stream stream)
-	   (type environment env)
-	   (ignore colon-p)
-	   (ignore at-sign-p)
-	   (values environment))
+           (type environment env)
+           (ignore colon-p)
+           (ignore at-sign-p)
+           (values environment))
   (print-unreadable-object (env stream :type t :identity t))
   env)
 

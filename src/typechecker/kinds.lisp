@@ -59,10 +59,10 @@
 
 (defun pprint-kind (stream kind &optional colon-p at-sign-p)
   (declare (type stream stream)
-	   (type kind kind)
-	   (ignore colon-p)
+           (type kind kind)
+           (ignore colon-p)
            (ignore at-sign-p)
-	   (values kind))
+           (values kind))
   (etypecase kind
     (kstar
      (format stream "*"))

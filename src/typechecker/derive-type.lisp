@@ -27,46 +27,46 @@ Returns (VALUES type predicate-list typed-node subs)")
          type
          preds
          (typed-node-literal
-	  (to-scheme (qualify nil type))
-	  (node-unparsed value)
-	  literal-value)
+          (to-scheme (qualify nil type))
+          (node-unparsed value)
+          literal-value)
          substs))))
 
   (:method ((value node-lisp) env substs)
     (declare (type environment env)
-	     (type substitution-list substs)
+             (type substitution-list substs)
              (values ty ty-predicate-list typed-node substitution-list &optional))
     (let* ((scheme (parse-and-resolve-type env (node-lisp-type value)))
-	   (qual-type (fresh-inst scheme))
+           (qual-type (fresh-inst scheme))
            (type (qualified-ty-type qual-type))
            (preds (qualified-ty-predicates qual-type)))
       (values type
               preds
               (typed-node-lisp
-	       (to-scheme qual-type)
-	       (node-unparsed value)
-	       (node-lisp-variables value)
-	       (node-lisp-form value))
+               (to-scheme qual-type)
+               (node-unparsed value)
+               (node-lisp-variables value)
+               (node-lisp-form value))
               substs)))
 
   (:method ((value node-variable) env substs)
     (declare (type substitution-list substs)
              (values ty ty-predicate-list typed-node substitution-list &optional))
     (let* ((scheme (lookup-value-type env (node-variable-name value)))
-	   (qual-type (fresh-inst scheme))
+           (qual-type (fresh-inst scheme))
            (type (qualified-ty-type qual-type))
            (preds (qualified-ty-predicates qual-type)))
       (values type
               preds
               (typed-node-variable
-	       (to-scheme qual-type)
-	       (node-unparsed value)
-	       (node-variable-name value))
+               (to-scheme qual-type)
+               (node-unparsed value)
+               (node-variable-name value))
               substs)))
 
   (:method ((value node-application) env substs)
     (declare (type environment env)
-	     (type substitution-list substs)
+             (type substitution-list substs)
              (values ty ty-predicate-list typed-node substitution-list &optional))
 
     (let* ((rator (node-application-rator value))
@@ -75,7 +75,7 @@ Returns (VALUES type predicate-list typed-node subs)")
            (typed-rands nil))
 
       (when (null rands)
-	(coalton-impl::coalton-bug "Invalid application with 0 arguments ~A." rator))
+        (coalton-impl::coalton-bug "Invalid application with 0 arguments ~A." rator))
 
       (multiple-value-bind (fun-ty fun-preds typed-rator substs)
           (derive-expression-type rator env substs)
@@ -93,24 +93,24 @@ Returns (VALUES type predicate-list typed-node subs)")
                            (setf substs new-substs-arg)
                            (make-function-type arg-ty (build-function (cdr args)))))))
             (let* ((ftype (build-function rands))
-		   (preds (append fun-preds arg-preds))
+                   (preds (append fun-preds arg-preds))
                    (substs (unify substs ftype fun-ty)))
               (values ret-ty
                       preds
                       (typed-node-application
-		       (to-scheme (qualify (reduce-context env preds) ret-ty))
-		       (node-unparsed value)
-		       typed-rator
-		       (reverse typed-rands))
+                       (to-scheme (qualify (reduce-context env preds) ret-ty))
+                       (node-unparsed value)
+                       typed-rator
+                       (reverse typed-rands))
                       substs)))))))
 
   (:method ((value node-abstraction) env substs)
     (declare (type environment env)
-	     (type substitution-list substs)
+             (type substitution-list substs)
              (values ty ty-predicate-list typed-node substitution-list &optional))
     (let* ((subexpr (node-abstraction-subexpr value))
-	   (vars (node-abstraction-vars value))
-	   (new-env (push-value-environment
+           (vars (node-abstraction-vars value))
+           (new-env (push-value-environment
                      env
                      (mapcar (lambda (var) (cons var (to-scheme (qualify nil (make-variable)))))
                              vars))))
@@ -126,92 +126,92 @@ Returns (VALUES type predicate-list typed-node subs)")
                     ret-preds
                     (typed-node-abstraction
                      (to-scheme (qualified-ty (apply-substitution new-substs ret-preds) ret-ty))
-		     (node-unparsed value)
+                     (node-unparsed value)
                      (mapcar (lambda (var)
                                (cons var (lookup-value-type new-env var)))
                              vars)
                      typed-subexpr
-		     (node-abstraction-name-map value))
+                     (node-abstraction-name-map value))
                     new-substs))))))
 
   (:method ((value node-let) env subs)
     (declare (type environment env)
-	     (type substitution-list subs)
+             (type substitution-list subs)
              (values ty ty-predicate-list typed-node substitution-list &optional))
     (let ((bindings (node-let-bindings value)))
       (multiple-value-bind (typed-bindings bindings-preds env subs sccs)
           ;; NOTE: If we wanted explicit types in let bindings this
           ;;       would be the place to do it.
-	  (derive-bindings-type bindings nil nil env subs (node-let-name-map value))
-	(multiple-value-bind (type ret-preds typed-subexpr new-subs)
+          (derive-bindings-type bindings nil nil env subs (node-let-name-map value))
+        (multiple-value-bind (type ret-preds typed-subexpr new-subs)
             (derive-expression-type (node-let-subexpr value) env subs)
-	  (let ((preds (append ret-preds bindings-preds)))
+          (let ((preds (append ret-preds bindings-preds)))
             (values type
                     preds
                     (typed-node-let
-		     (to-scheme (qualify nil type))
-		     (node-unparsed value)
-		     typed-bindings
-		     typed-subexpr sccs
-		     nil
-		     (node-let-name-map value))
+                     (to-scheme (qualify nil type))
+                     (node-unparsed value)
+                     typed-bindings
+                     typed-subexpr sccs
+                     nil
+                     (node-let-name-map value))
                     new-subs))))))
 
   (:method ((value node-match) env subs)
     (declare (type environment env)
-	     (type substitution-list subs)
+             (type substitution-list subs)
              (values ty ty-predicate-list typed-node substitution-list &optional))
     (let ((tvar (make-variable)))
       (multiple-value-bind (ty preds typed-expr new-subs)
-	  (derive-expression-type (node-match-expr value) env subs)
+          (derive-expression-type (node-match-expr value) env subs)
         (with-type-context ("match on ~A" (node-unparsed (node-match-expr value)))
           (multiple-value-bind (typed-branches match-preds new-subs)
               (derive-match-branches-type
-	       (make-function-type ty tvar)
-	       (node-match-branches value)
-	       env
-	       new-subs)
-	    (let ((preds (append preds match-preds)))
-	      (values
-	       tvar
-	       preds
-	       (typed-node-match
-		(to-scheme (qualify nil tvar))
-		(node-unparsed value)
-		typed-expr
-		typed-branches)
-	       new-subs)))))))
+               (make-function-type ty tvar)
+               (node-match-branches value)
+               env
+               new-subs)
+            (let ((preds (append preds match-preds)))
+              (values
+               tvar
+               preds
+               (typed-node-match
+                (to-scheme (qualify nil tvar))
+                (node-unparsed value)
+                typed-expr
+                typed-branches)
+               new-subs)))))))
 
   (:method ((value node-seq) env subs)
     (declare (type environment env)
-	     (type substitution-list subs)
-	     (values ty ty-predicate-list typed-node substitution-list &optional))
+             (type substitution-list subs)
+             (values ty ty-predicate-list typed-node substitution-list &optional))
     (let* ((initial-elements (butlast (node-seq-subnodes value)))
-	   (last-element (car (last (node-seq-subnodes value))))
-	   (preds nil)
-	   (nodes nil))
+           (last-element (car (last (node-seq-subnodes value))))
+           (preds nil)
+           (nodes nil))
 
 
       (loop :for elem :in initial-elements :do
-	(multiple-value-bind (tyvar preds_ node subs_)
-	    (derive-expression-type elem env subs)
-	  (declare (ignore tyvar))
-	  (setf subs subs_)
-	  (setf preds (append preds preds_))
-	  (push node nodes)))
+        (multiple-value-bind (tyvar preds_ node subs_)
+            (derive-expression-type elem env subs)
+          (declare (ignore tyvar))
+          (setf subs subs_)
+          (setf preds (append preds preds_))
+          (push node nodes)))
 
       (multiple-value-bind (tyvar preds_ node subs)
-	  (derive-expression-type last-element env subs)
-	(setf preds (append preds preds_))
-	(push node nodes)
-	(values
-	 tyvar
-	 preds
-	 (typed-node-seq
-	  (to-scheme (qualify nil tyvar))
-	  (node-unparsed value)
-	  (reverse nodes))
-	 subs))))
+          (derive-expression-type last-element env subs)
+        (setf preds (append preds preds_))
+        (push node nodes)
+        (values
+         tyvar
+         preds
+         (typed-node-seq
+          (to-scheme (qualify nil tyvar))
+          (node-unparsed value)
+          (reverse nodes))
+         subs))))
 
   (:method (value env subs)
     (error "Unable to derive type of expression ~A" value)))
@@ -224,8 +224,8 @@ Returns (VALUES type predicate-list typed-node subs)")
   "IMPL-BINDINGS and EXPL-BINDIGNS are of form (SYMBOL . EXPR)
 EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
   (declare (type environment env)
-	   (type substitution-list subs)
-	   (type list name-map)
+           (type substitution-list subs)
+           (type list name-map)
            (values typed-binding-list ty-predicate-list environment substitution-list list &optional))
 
   ;; Push all the explicit type declarations on to the environment
@@ -281,21 +281,21 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
   (loop :for (name . node) :in bindings :do
     (unless (typed-node-abstraction-p node)
       (when (member name (collect-variable-namespace node) :test #'equalp)
-	(error 'self-recursive-variable-definition :name name)))))
+        (error 'self-recursive-variable-definition :name name)))))
 
 (defun derive-binding-type-seq (names tvars exprs env subs name-map)
   (declare (type tvar-list tvars)
            (type node-list exprs)
            (type environment env)
            (type substitution-list subs)
-	   (type list name-map)
+           (type list name-map)
            (values typed-node-list ty-predicate-list substitution-list))
   (let* ((preds nil)
          (typed-nodes
            (loop :for name :in names
                  :for tvar :in tvars
-	         :for expr :in exprs
-	         :collect
+                 :for expr :in exprs
+                 :collect
                  (multiple-value-bind (typed-node binding-preds new-subs)
                      (derive-binding-type name tvar expr env subs name-map)
                    (setf subs new-subs)
@@ -307,22 +307,22 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
   (declare (type binding-list bindings)
            (type environment env)
            (type substitution-list subs)
-	   (type list name-map)
+           (type list name-map)
            (values typed-binding-list ty-predicate-list environment substitution-list))
   (let* (;; Generate fresh tvars and schemes for each binding
-	 (tvars (mapcar (lambda (_)
-			  (declare (ignore _))
-			  (make-variable))
-			bindings))
-	 (schemes (mapcar (lambda (b) (to-scheme (qualify nil b))) tvars))
+         (tvars (mapcar (lambda (_)
+                          (declare (ignore _))
+                          (make-variable))
+                        bindings))
+         (schemes (mapcar (lambda (b) (to-scheme (qualify nil b))) tvars))
 
-	 (new-bindings (mapcar (lambda (b sch) (cons (first b) sch)) bindings schemes))
-	 (local-env (push-value-environment env new-bindings))
+         (new-bindings (mapcar (lambda (b sch) (cons (first b) sch)) bindings schemes))
+         (local-env (push-value-environment env new-bindings))
          (exprs (mapcar #'cdr bindings)))
 
     ;; Derive the type of each binding
     (multiple-value-bind (typed-bindings local-preds local-subs)
-	(derive-binding-type-seq (mapcar #'car bindings) tvars exprs local-env subs name-map)
+        (derive-binding-type-seq (mapcar #'car bindings) tvars exprs local-env subs name-map)
 
       (let* ((expr-types (apply-substitution local-subs tvars)) ; ts'
              (expr-preds (apply-substitution local-subs local-preds)) ; ps'
@@ -330,8 +330,8 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
              ;; Extract local type variables
              (env-tvars (type-variables (apply-substitution local-subs env))) ; fs
              (expr-tvars (reduce (lambda (&optional a b) (remove-duplicates (append a b) :test #'equalp :from-end t))
-				 expr-types
-				 :key #'type-variables)) ; vss
+                                 expr-types
+                                 :key #'type-variables)) ; vss
              (local-tvars (set-difference expr-tvars
                                           env-tvars)) ; gs
              )
@@ -342,14 +342,14 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                            bindings)))
 
 
-	    ;; NOTE: This is where the monomorphism restriction happens
+            ;; NOTE: This is where the monomorphism restriction happens
 
             (if (restricted bindings)
                 (let* ((allowed-tvars (set-difference local-tvars (type-variables retained-preds)))
                        ;; Quantify local type variables
                        (output-schemes (mapcar (lambda (type)
-			                         (quantify allowed-tvars (qualified-ty nil type)))
-			                       expr-types))
+                                                 (quantify allowed-tvars (qualified-ty nil type)))
+                                               expr-types))
 
                        ;; Build new env
                        (output-env (push-value-environment
@@ -367,8 +367,8 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                                                  ;; Here we need to manually qualify the
                                                  ;; type (without calling QUALIFY) since the
                                                  ;; substitutions have not been fully applied yet.
-			                         (quantify local-tvars (qualified-ty retained-preds type)))
-			                       expr-types))
+                                                 (quantify local-tvars (qualified-ty retained-preds type)))
+                                               expr-types))
 
                        ;; Build new env
                        (output-env (push-value-environment
@@ -401,7 +401,7 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
            (type ty-scheme declared-ty)
            (type environment env)
            (type substitution-list subs)
-	   (type list name-map)
+           (type list name-map)
            (values ty-scheme cons ty-predicate-list environment substitution-list))
   (let* (;; Generate fresh instance of declared type
          (fresh-qual-type (fresh-inst declared-ty))
@@ -468,18 +468,18 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
 
 (defun derive-binding-type (name type expr env subs name-map)
   (declare (type ty type)
-	   (type node expr)
-	   (type environment env)
-	   (type substitution-list subs)
-	   (values typed-node ty-predicate-list substitution-list &optional))
+           (type node expr)
+           (type environment env)
+           (type substitution-list subs)
+           (values typed-node ty-predicate-list substitution-list &optional))
   (let ((name (if name-map
-		  (or (cdr (find name name-map :key #'car :test #'equalp))
-		      (coalton-impl::coalton-bug "Invalid state. Unable to find name in name map"))
-		  name)))
+                  (or (cdr (find name name-map :key #'car :test #'equalp))
+                      (coalton-impl::coalton-bug "Invalid state. Unable to find name in name map"))
+                  name)))
     (with-type-context ("definition of ~A" name)
       (multiple-value-bind (new-type preds typed-node new-subs)
           (derive-expression-type expr env subs)
-	(values typed-node preds (unify new-subs type new-type))))))
+        (values typed-node preds (unify new-subs type new-type))))))
 
 
 ;;;
@@ -490,10 +490,10 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
   (:documentation "derive the type and bindings of pattern PAT")
   (:method ((pat pattern-var) env subs)
     (declare (type environment env)
-	     (type substitution-list subs)
-	     (values ty ty-predicate-list list substitution-list))
+             (type substitution-list subs)
+             (values ty ty-predicate-list list substitution-list))
     (let ((var-name (pattern-var-id pat))
-	  (var (make-variable)))
+          (var (make-variable)))
       (values
        var
        nil
@@ -501,8 +501,8 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
        subs)))
   (:method ((pat pattern-wildcard) env subs)
     (declare (type environment env)
-	     (type substitution-list subs)
-	     (values ty ty-predicate-list list substitution-list))
+             (type substitution-list subs)
+             (values ty ty-predicate-list list substitution-list))
     (let ((var (make-variable)))
       (values
        var
@@ -511,8 +511,8 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
        subs)))
   (:method ((pat pattern-literal) env subs)
     (declare (type environment env)
-	     (type substitution-list subs)
-	     (values ty ty-predicate-list list substitution-list))
+             (type substitution-list subs)
+             (values ty ty-predicate-list list substitution-list))
     (multiple-value-bind (type preds)
         (derive-literal-type (node-literal-value (pattern-literal-value pat)))
       (values
@@ -523,32 +523,32 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
 
   (:method ((pat pattern-constructor) env subs)
     (declare (type environment env)
-	     (type substitution-list subs)
-	     (values ty ty-predicate-list list substitution-list))
+             (type substitution-list subs)
+             (values ty ty-predicate-list list substitution-list))
     (multiple-value-bind (tvars preds bindings subs)
-	(derive-patterns-type (pattern-constructor-patterns pat) env subs)
+        (derive-patterns-type (pattern-constructor-patterns pat) env subs)
 
       ;; Check that the constructor is known and fully applied
       (let ((constructor (lookup-constructor env (pattern-constructor-name pat) :no-error t)))
-	(unless constructor
-	    (error 'unknown-constructor :symbol (pattern-constructor-name pat)))
-	(unless (= (constructor-entry-arity constructor) (length tvars))
-	  (error 'invalid-constructor-arguments
-		 :constructor (pattern-constructor-name pat)
-		 :expected (constructor-entry-arity constructor)
-		 :received (length tvars))))
+        (unless constructor
+            (error 'unknown-constructor :symbol (pattern-constructor-name pat)))
+        (unless (= (constructor-entry-arity constructor) (length tvars))
+          (error 'invalid-constructor-arguments
+                 :constructor (pattern-constructor-name pat)
+                 :expected (constructor-entry-arity constructor)
+                 :received (length tvars))))
 
       (let* ((var (make-variable))
-	     (constructor (lookup-value-type env (pattern-constructor-name pat)))
+             (constructor (lookup-value-type env (pattern-constructor-name pat)))
              (scm (fresh-inst constructor))
-	     (scm-type (qualified-ty-type scm))
+             (scm-type (qualified-ty-type scm))
              (scm-preds (qualified-ty-predicates scm))
-	     (sub-patterns (make-function-type* tvars var)))
-	(values
-	 var
+             (sub-patterns (make-function-type* tvars var)))
+        (values
+         var
          (append preds scm-preds)
-	 bindings
-	 (unify subs scm-type sub-patterns))))))
+         bindings
+         (unify subs scm-type sub-patterns))))))
 
 (defun derive-patterns-type (patterns env subs)
   (declare (type list patterns)
@@ -557,14 +557,14 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
            (values list ty-predicate-list list substitution-list))
   (let ((bindings nil)
         (preds nil)
-	(type-vars nil))
+        (type-vars nil))
     (dolist (pat patterns)
       (multiple-value-bind (tvars pat-preds new-bindings new-subs)
-	  (derive-pattern-type pat env subs)
-	(setf type-vars (append type-vars (list tvars)))
+          (derive-pattern-type pat env subs)
+        (setf type-vars (append type-vars (list tvars)))
         (setf preds (append preds pat-preds))
-	(setf bindings (append bindings new-bindings))
-	(setf subs new-subs)))
+        (setf bindings (append bindings new-bindings))
+        (setf subs new-subs)))
     (values
      type-vars
      preds
@@ -577,11 +577,11 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
 
 (defun derive-match-branch-type (unparsed pattern expr name-map env subs)
   (declare (type t unparsed)
-	   (type pattern pattern)
-	   (type node expr)
-	   (type environment env)
-	   (type substitution-list subs)
-	   (values ty ty-predicate-list typed-match-branch substitution-list))
+           (type pattern pattern)
+           (type node expr)
+           (type environment env)
+           (type substitution-list subs)
+           (values ty ty-predicate-list typed-match-branch substitution-list))
 
   ;; Before deriving the type of the match branch first see if any of
   ;; its variables overlap with the names of constructors
@@ -608,19 +608,19 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
          (make-function-type var expr-type)
          (append pat-preds expr-preds)
          (typed-match-branch
-	  unparsed
-	  pattern
-	  typed-subexpr
-	  bindings-schemes
-	  name-map)
+          unparsed
+          pattern
+          typed-subexpr
+          bindings-schemes
+          name-map)
          new-subs)))))
 
 (defun derive-match-branches-type (t_ alts env subs)
   (declare (type ty t_)
-	   (type list alts)
-	   (type environment env)
-	   (type substitution-list subs)
-	   (values typed-match-branch-list ty-predicate-list substitution-list))
+           (type list alts)
+           (type environment env)
+           (type substitution-list subs)
+           (values typed-match-branch-list ty-predicate-list substitution-list))
   (let ((types nil)
         (preds nil)
         (typed-branches nil))
@@ -628,15 +628,15 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
 
       ;; Rewrite variables in the pattern to their original names for error messages
       (let* ((pattern (match-branch-pattern alt))
-	     (name-map (match-branch-name-map alt))
-	     (sr (shadow-realm-push-frame (make-shadow-realm) name-map))
-	     (pattern (coalton-impl/ast::rewrite-pattern-vars pattern sr)))
+             (name-map (match-branch-name-map alt))
+             (sr (shadow-realm-push-frame (make-shadow-realm) name-map))
+             (pattern (coalton-impl/ast::rewrite-pattern-vars pattern sr)))
 
-	(with-type-context ("branch ~A" pattern)
+        (with-type-context ("branch ~A" pattern)
           (multiple-value-bind (ty branch-preds typed-branch new-subs)
-	      (derive-match-branch-type (match-branch-unparsed alt) (match-branch-pattern alt) (match-branch-subexpr alt) (match-branch-name-map alt) env subs)
-	    (setf subs new-subs)
-	    (setf types (append types (list ty)))
+              (derive-match-branch-type (match-branch-unparsed alt) (match-branch-pattern alt) (match-branch-subexpr alt) (match-branch-name-map alt) env subs)
+            (setf subs new-subs)
+            (setf types (append types (list ty)))
             (setf preds (append preds branch-preds))
             (setf typed-branches (append typed-branches (list typed-branch)))))))
     (dolist (typ types)

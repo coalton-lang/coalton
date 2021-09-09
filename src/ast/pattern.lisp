@@ -60,8 +60,8 @@
   ;; This is used when canonicalizing variable names in the parser.
   ;; It is then used to reverse canonicalization when printing error messages.
   (declare (type pattern pattern)
-	   (type shadow-realm sr)
-	   (values pattern))
+           (type shadow-realm sr)
+           (values pattern))
   (etypecase pattern
     (pattern-literal pattern)
 
@@ -72,13 +72,13 @@
       (pattern-constructor-name pattern)
       (mapcar
        (lambda (pattern)
-	 (rewrite-pattern-vars pattern sr))
+         (rewrite-pattern-vars pattern sr))
        (pattern-constructor-patterns pattern))))
 
     (pattern-var
      (pattern-var
       (or (shadow-realm-lookup sr (pattern-var-id pattern))
-	  (coalton-impl::coalton-bug "Invalid state reached in rewrite-pattern-vars"))))))
+          (coalton-impl::coalton-bug "Invalid state reached in rewrite-pattern-vars"))))))
 
 
 (defun pattern-variables (pattern)
@@ -93,16 +93,16 @@
 
 (defun pprint-pattern (stream pattern &optional colon-p at-sign-p)
   (declare (type stream stream)
-	   (type pattern pattern)
-	   (ignore colon-p at-sign-p)
-	   (values pattern))
+           (type pattern pattern)
+           (ignore colon-p at-sign-p)
+           (values pattern))
   (etypecase pattern
     (pattern-var (format stream "~A" (string (pattern-var-id pattern))))
     (pattern-wildcard (format stream "-"))
     (pattern-literal (format stream "~A" (pattern-literal-value pattern)))
     (pattern-constructor (format stream "(~A~{ ~A~})"
-				 (pattern-constructor-name pattern)
-				 (pattern-constructor-patterns pattern))))
+                                 (pattern-constructor-name pattern)
+                                 (pattern-constructor-patterns pattern))))
   pattern)
 
 (set-pprint-dispatch 'pattern 'pprint-pattern)
