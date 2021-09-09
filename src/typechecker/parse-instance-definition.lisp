@@ -20,7 +20,7 @@
 
 (defun parse-instance-definition (form env)
   (declare (type list form)
-	   (type environment env)
+           (type environment env)
            (values instance-definition))
   (unless (and (listp form)
                (<= 2 (length form))
@@ -50,29 +50,29 @@
 
         ;; Check the instance environment to make sure the context is resolvable
         (labels ((find-instance-entry (instance-predicate instance-context)
-		   (let* ((pred-class (ty-predicate-class instance-predicate))
-			  (instances (lookup-class-instances env pred-class :no-error t)))
-		     (fset:do-seq (instance instances)
-		       (handler-case
-			   (let ((subs (predicate-match (ty-class-instance-predicate instance) instance-predicate)))
-			     ;; Ensure that the context matches using the substitution
-			     (unless (null (set-exclusive-or
-					    instance-context
-					    (apply-substitution subs (ty-class-instance-constraints instance))
-					    :test #'equalp))
-			       (coalton-impl::coalton-bug "Incompatible context with environment for instance during method parsing for ~S ~A ~A ~A" pred-class (apply-substitution subs instance-context) (ty-class-instance-constraints instance) subs))                    
-			     (return-from find-instance-entry instance))
-			 (predicate-unification-error () nil)))
-		     ;; If we didn't find anything then signal an error
-		     (coalton-impl::coalton-bug "Instance unknown in environment during method parsing for ~S" pred-class))))
+                   (let* ((pred-class (ty-predicate-class instance-predicate))
+                          (instances (lookup-class-instances env pred-class :no-error t)))
+                     (fset:do-seq (instance instances)
+                       (handler-case
+                           (let ((subs (predicate-match (ty-class-instance-predicate instance) instance-predicate)))
+                             ;; Ensure that the context matches using the substitution
+                             (unless (null (set-exclusive-or
+                                            instance-context
+                                            (apply-substitution subs (ty-class-instance-constraints instance))
+                                            :test #'equalp))
+                               (coalton-impl::coalton-bug "Incompatible context with environment for instance during method parsing for ~S ~A ~A ~A" pred-class (apply-substitution subs instance-context) (ty-class-instance-constraints instance) subs))
+                             (return-from find-instance-entry instance))
+                         (predicate-unification-error () nil)))
+                     ;; If we didn't find anything then signal an error
+                     (coalton-impl::coalton-bug "Instance unknown in environment during method parsing for ~S" pred-class))))
 
-	  ;; Lookup and verify the instance in the env
-	  (let ((instance-entry (find-instance-entry instance-predicate instance-context)))
+          ;; Lookup and verify the instance in the env
+          (let ((instance-entry (find-instance-entry instance-predicate instance-context)))
 
             ;; Ensure that all predicates in the context have been declared
             (dolist (pred (ty-class-superclasses class-entry))
               (unless (lookup-class-instance env (apply-substitution instance-subs pred) :no-error t)
-		(error "Missing instance definition for ~A in definition of ~A"
+                (error "Missing instance definition for ~A in definition of ~A"
                        (apply-substitution instance-subs pred)
                        instance-predicate)))
 
@@ -81,21 +81,21 @@
               (loop :for method-definiton :in instance-method-defintions
                     :do
                        (push (multiple-value-bind (method-name parsed-method-form)
-				 (coalton-impl::parse-define-form method-definiton)
+                                 (coalton-impl::parse-define-form method-definiton)
 
                                ;; Disallow duplicate method definitions
                                (when (member method-name method-bindings :key #'car)
-				 (error "Duplicate method definition for method ~S" method-name))
-                               
-                               (let* (;; 
+                                 (error "Duplicate method definition for method ~S" method-name))
+
+                               (let* (;;
                                       (class-method-scheme
-					(cdr (or (find-if (lambda (method)
+                                        (cdr (or (find-if (lambda (method)
                                                             (eql method-name (car method)))
-							  (ty-class-unqualified-methods class-entry))
-						 (error "Unknown method ~A in instance definition of class ~A for ~A"
-							method-name
-							class-name
-							instance-predicate))))
+                                                          (ty-class-unqualified-methods class-entry))
+                                                 (error "Unknown method ~A in instance definition of class ~A for ~A"
+                                                        method-name
+                                                        class-name
+                                                        instance-predicate))))
 
                                       (fresh-class-method-scheme (fresh-inst class-method-scheme))
                                       (class-method-constraints (qualified-ty-predicates fresh-class-method-scheme))
@@ -103,19 +103,19 @@
 
                                       (instance-method-context (append instance-context class-method-constraints))
                                       (instance-method-qual-type (qualify instance-method-context
-									  class-method-type))
+                                                                          class-method-type))
                                       (instance-method-type
-					(quantify (type-variables
-						   (apply-substitution instance-subs instance-method-qual-type))
-						  (apply-substitution instance-subs instance-method-qual-type))))
-				 (multiple-value-bind (scheme binding preds env subs qual-type)
+                                        (quantify (type-variables
+                                                   (apply-substitution instance-subs instance-method-qual-type))
+                                                  (apply-substitution instance-subs instance-method-qual-type))))
+                                 (multiple-value-bind (scheme binding preds env subs qual-type)
                                      (derive-expl-type (cons method-name parsed-method-form)
                                                        instance-method-type
                                                        env
                                                        instance-subs nil)
-				   (declare (ignore scheme env))
-				   ;; TODO: Is this actually valid?
-				   (unless (null preds)
+                                   (declare (ignore scheme env))
+                                   ;; TODO: Is this actually valid?
+                                   (unless (null preds)
                                      (coalton-impl::coalton-bug "Instance definition predicates should be nil"))
 
                                    ;; Unify the resulting typed node
@@ -128,19 +128,19 @@
                                          :do
                                             (setf subs
                                                   (compose-substitution-lists (predicate-match node-pred context-pred) subs)))
-				   ;; Return the typed method
-				   (cons (car binding)
-					 (apply-substitution subs (cdr binding))))))
+                                   ;; Return the typed method
+                                   (cons (car binding)
+                                         (apply-substitution subs (cdr binding))))))
                              method-bindings))
               (let ((missing-methods (set-difference (ty-class-unqualified-methods class-entry)
                                                      method-bindings
                                                      :key #'car)))
-		(unless (null missing-methods)
-		  (coalton-impl/ast::error-parsing form "Incomplete instance definition for instance ~A. Missing methods ~S" instance-predicate (mapcar #'car missing-methods))))
+                (unless (null missing-methods)
+                  (coalton-impl/ast::error-parsing form "Incomplete instance definition for instance ~A. Missing methods ~S" instance-predicate (mapcar #'car missing-methods))))
 
               (make-instance-definition
                :class-name class-name
                :predicate instance-predicate
                :context instance-context
                :methods method-bindings
-	       :codegen-sym (ty-class-instance-codegen-sym instance-entry)))))))))
+               :codegen-sym (ty-class-instance-codegen-sym instance-entry)))))))))

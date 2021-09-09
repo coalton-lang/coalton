@@ -13,7 +13,7 @@
                  :type string)
    (context-args :initarg :context-args
                  :reader coalton-type-error-context-args
-                 :type list)   
+                 :type list)
    (suberror :initarg :suberror
              :reader coalton-type-error-suberror
              :type coalton-type-error))

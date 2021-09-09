@@ -29,7 +29,7 @@ Returns (PREDS FOUNDP)"
 	   (type ty-predicate pred)
 	   (values ty-predicate-list boolean))
   (fset:do-seq (inst (lookup-class-instances env (ty-predicate-class pred) :no-error t))
-    (handler-case 
+    (handler-case
         (let* ((subs (predicate-match (ty-class-instance-predicate inst) pred))
                (resulting-preds (mapcar (lambda (p) (apply-substitution subs p))
                                          (ty-class-instance-constraints inst))))
@@ -44,7 +44,7 @@ Returns (PREDS FOUNDP)"
 	   (type ty-predicate pred)
 	   (values boolean))
   (let* ((super (mapcan (lambda (p) (by-super env p)) preds))
-        (value 
+        (value
           (or (true (member pred super :test #'equalp))
               (true (multiple-value-bind (inst-preds found)
                         (by-inst env pred)

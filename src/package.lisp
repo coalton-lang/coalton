@@ -114,7 +114,7 @@
    #:typed-node                               ; STRUCT
    #:typed-binding-list                       ; TYPE
    #:typed-node-type                          ; ACCESSOR
-   #:typed-node-unparsed		      ; ACCESSOR
+   #:typed-node-unparsed                      ; ACCESSOR
    #:typed-node-list                          ; TYPE
    #:typed-node-literal                       ; STRUCT
    #:typed-node-literal-value                 ; ACCESSOR
@@ -130,7 +130,7 @@
    #:typed-node-abstraction                   ; STRUCT
    #:typed-node-abstraction-vars              ; ACCESSOR
    #:typed-node-abstraction-subexpr           ; ACCESSOR
-   #:typed-node-abstraction-name-map	      ; ACCESSOR
+   #:typed-node-abstraction-name-map          ; ACCESSOR
    #:typed-node-bound-abstraction             ; STRUCT
    #:typed-node-bound-abstraction-vars        ; ACCESSOR
    #:typed-node-bound-abstraction-subexpr     ; ACCESSSOR
@@ -139,11 +139,11 @@
    #:typed-node-let-subexpr                   ; ACCESSOR
    #:typed-node-let-sorted-bindings           ; ACCESSOR
    #:typed-node-let-dynamic-extent-bindings   ; ACCESSOR
-   #:typed-node-let-name-map		      ; ACCESSOR
+   #:typed-node-let-name-map                  ; ACCESSOR
    #:typed-node-lisp                          ; STRUCT
    #:typed-node-lisp-type                     ; ACCESSOR
    #:typed-node-lisp-form                     ; ACCESSOR
-   #:typed-node-lisp-variables		      ; ACCESSOR
+   #:typed-node-lisp-variables                ; ACCESSOR
    #:typed-node-match                         ; STRUCT
    #:typed-node-match-expr                    ; ACCESSOR
    #:typed-node-match-branches                ; ACCESSOR
@@ -151,54 +151,54 @@
    #:typed-match-branch-pattern               ; ACCESSOR
    #:typed-match-branch-subexpr               ; ACCESSOR
    #:typed-match-branch-bindings              ; ACCESSOR
-   #:typed-match-branch-unparsed	      ; ACCESSOR
-   #:typed-match-branch-name-map	      ; ACCESSOR
-   #:typed-node-seq			      ; STRUCT
-   #:typed-node-seq-subnodes		      ; ACCESSOR
+   #:typed-match-branch-unparsed              ; ACCESSOR
+   #:typed-match-branch-name-map              ; ACCESSOR
+   #:typed-node-seq                           ; STRUCT
+   #:typed-node-seq-subnodes                  ; ACCESSOR
    )
   (:export
-   #:environment			; STRUCT
-   #:make-default-environment		; FUNCTION
+   #:environment                        ; STRUCT
+   #:make-default-environment           ; FUNCTION
    #:environment-diff                   ; FUNCTION
-   #:environment-shadow			; FUNCTION
+   #:environment-shadow                 ; FUNCTION
    #:generate-environment-update        ; FUNCTION
-   #:set-value-type			; FUNCTION
+   #:set-value-type                     ; FUNCTION
    #:set-type                           ; FUNCTION
-   #:set-function			; FUNCTION
-   #:unset-function			; FUNCTION
+   #:set-function                       ; FUNCTION
+   #:unset-function                     ; FUNCTION
    #:set-constructor                    ; FUNCTION
-   #:set-name				; FUNCTION
-   #:lookup-value-type			; FUNCTION
-   #:lookup-type			; FUNCTION
+   #:set-name                           ; FUNCTION
+   #:lookup-value-type                  ; FUNCTION
+   #:lookup-type                        ; FUNCTION
    #:lookup-class                       ; FUNCTION
    #:lookup-constructor                 ; FUNCTION
-   #:lookup-function			; FUNCTION
+   #:lookup-function                    ; FUNCTION
    #:lookup-class-instances             ; FUNCTION
    #:lookup-class-instance              ; FUNCTION
-   #:lookup-name			; FUNCTION
+   #:lookup-name                        ; FUNCTION
    #:constructor-entry                  ; STRUCT
-   #:constructor-entry-name		; ACCESSOR
+   #:constructor-entry-name             ; ACCESSOR
    #:constructor-entry-arity            ; ACCESSOR
-   #:constructor-entry-constructs	; ACCESSOR
-   #:constructor-entry-scheme		; ACCESSOR
-   #:constructor-entry-arguments	; ACCESSOR
-   #:constructor-entry-classname	; ACCESSOR
+   #:constructor-entry-constructs       ; ACCESSOR
+   #:constructor-entry-scheme           ; ACCESSOR
+   #:constructor-entry-arguments        ; ACCESSOR
+   #:constructor-entry-classname        ; ACCESSOR
    #:make-constructor-entry             ; CONSTRUCTOR
    #:constructor-entry-list             ; TYPE
-   #:function-env-entry			; STRUCT
-   #:function-env-entry-name		; ACCESSOR
-   #:function-env-entry-arity		; ACCESSOR
-   #:function-env-entry-list		; TYPE
-   #:make-function-env-entry		; CONSTRUCTOR
-   #:name-entry				; STRUCT
-   #:name-entry-name			; ACCESSOR
-   #:name-entry-type			; ACCESSOR
-   #:make-name-entry			; CONSTRUCTOR
-   #:directly-applicable-functions	; FUNCTION
+   #:function-env-entry                 ; STRUCT
+   #:function-env-entry-name            ; ACCESSOR
+   #:function-env-entry-arity           ; ACCESSOR
+   #:function-env-entry-list            ; TYPE
+   #:make-function-env-entry            ; CONSTRUCTOR
+   #:name-entry                         ; STRUCT
+   #:name-entry-name                    ; ACCESSOR
+   #:name-entry-type                    ; ACCESSOR
+   #:make-name-entry                    ; CONSTRUCTOR
+   #:directly-applicable-functions      ; FUNCTION
    )
   (:export
    #:derive-expression-type             ; FUNCTION
-   #:derive-bindings-type		; FUNCTION
+   #:derive-bindings-type               ; FUNCTION
    #:type=                              ; FUNCTION
    #:parse-and-resolve-type             ; FUNCTION
    #:parse-type-definitons              ; FUNCTION
@@ -207,71 +207,71 @@
    #:parse-instance-definition          ; FUNCTION
    )
   (:export
-   #:type-definition			; STRUCT
-   #:type-definition-name		; ACCESSOR
-   #:type-definition-type		; ACCESSOR
-   #:type-definition-constructors	; ACCESSOR
-   #:type-definition-list		; TYPE
+   #:type-definition                    ; STRUCT
+   #:type-definition-name               ; ACCESSOR
+   #:type-definition-type               ; ACCESSOR
+   #:type-definition-constructors       ; ACCESSOR
+   #:type-definition-list               ; TYPE
    )
   (:export
    #:coalton-type-error                 ; SIGNAL
-   #:unification-error			; SIGNAL
-   #:type-application-error		; SIGNAL
-   #:type-construction-error		; SIGNAL
-   #:overlapping-instance-error		; SIGNAL
+   #:unification-error                  ; SIGNAL
+   #:type-application-error             ; SIGNAL
+   #:type-construction-error            ; SIGNAL
+   #:overlapping-instance-error         ; SIGNAL
    #:cyclic-class-definitions-error     ; SIGNAL
    )
   (:export
    #:process-toplevel-definitions       ; FUNCTION
    )
   (:export
-   #:ty-predicate			; STRUCT
+   #:ty-predicate                       ; STRUCT
    #:ty-predicate-class                 ; ACCESSOR
    #:ty-predicate-types                 ; ACCESSOR
    #:ty-predicate-list                  ; TYPE
-   #:ty-class				; STRUCT
-   #:ty-class-name			; ACCESSOR
+   #:ty-class                           ; STRUCT
+   #:ty-class-name                      ; ACCESSOR
    #:ty-class-predicate                 ; ACCESSOR
-   #:ty-class-superclasses		; ACCESSOR
+   #:ty-class-superclasses              ; ACCESSOR
    #:ty-class-unqualified-methods       ; ACCESSOR
-   #:ty-class-codegen-sym		; ACCESSOR
+   #:ty-class-codegen-sym               ; ACCESSOR
    #:ty-class-superclass-dict           ; ACCESSOR
-   #:ty-class-list			; TYPE
-   #:ty-class-instance			; STRUCT
-   #:ty-class-instance-predicate	; ACCESSOR
-   #:ty-class-instance-constraints	; ACCESSOR
+   #:ty-class-list                      ; TYPE
+   #:ty-class-instance                  ; STRUCT
+   #:ty-class-instance-predicate        ; ACCESSOR
+   #:ty-class-instance-constraints      ; ACCESSOR
    #:ty-class-instance-codegen-sym      ; ACCESSOR
-   #:ty-class-instance-list		; TYPE
+   #:ty-class-instance-list             ; TYPE
    )
   (:export
-   #:by-super				; FUNCTION
-   #:by-inst				; FUNCTION
-   #:entail				; FUNCTION
-   #:hnf-p				; FUNCTION
-   #:to-hnf				; FUNCTION
-   #:simplify-context			; FUNCTION
-   #:reduce-context			; FUNCTION
-   #:split-context			; FUNCTION
-   #:apply-type-argument		; FUNCTION
+   #:by-super                           ; FUNCTION
+   #:by-inst                            ; FUNCTION
+   #:entail                             ; FUNCTION
+   #:hnf-p                              ; FUNCTION
+   #:to-hnf                             ; FUNCTION
+   #:simplify-context                   ; FUNCTION
+   #:reduce-context                     ; FUNCTION
+   #:split-context                      ; FUNCTION
+   #:apply-type-argument                ; FUNCTION
    #:set-class
    #:add-class
    #:add-instance
    )
   (:export
-   #:instance-definition		; STRUCT
-   #:make-instance-definition		; CONSTRUCTOR
-   #:instance-definition-class-name	; ACCESSOR
-   #:instance-definition-predicate	; ACCESSOR
-   #:instance-definition-context	; ACCESSOR
-   #:instance-definition-methods	; ACCESSOR
-   #:instance-definition-codegen-sym	; ACCESSOR
-   #:instance-definition-list		; TYPE
+   #:instance-definition                ; STRUCT
+   #:make-instance-definition           ; CONSTRUCTOR
+   #:instance-definition-class-name     ; ACCESSOR
+   #:instance-definition-predicate      ; ACCESSOR
+   #:instance-definition-context        ; ACCESSOR
+   #:instance-definition-methods        ; ACCESSOR
+   #:instance-definition-codegen-sym    ; ACCESSOR
+   #:instance-definition-list           ; TYPE
    )
   ;; Pretty printers
   (:export
    #:with-pprint-variable-context       ; MACRO
    #:with-pprint-variable-scope         ; MACRO
-   #:pprint-predicate			; FUNCTION
+   #:pprint-predicate                   ; FUNCTION
    )
   (:export
    #:*coalton-print-unicode*
@@ -290,12 +290,12 @@
    #:update-function-env
    )
   (:export
-   #:toplevel-value-definition		; STRUCT
+   #:toplevel-value-definition          ; STRUCT
    #:make-toplevel-value-definition     ; FUNCTION
-   #:toplevel-value-definition-name	; ACCESSOR
-   #:toplevel-value-definition-type	; ACCESSOR
-   #:toplevel-value-definition-node	; ACCESSOR
-   #:toplevel-value-definition-list	; TYPE
+   #:toplevel-value-definition-name     ; ACCESSOR
+   #:toplevel-value-definition-type     ; ACCESSOR
+   #:toplevel-value-definition-node     ; ACCESSOR
+   #:toplevel-value-definition-list     ; TYPE
    )
   (:export
    #:*emit-type-annotations*

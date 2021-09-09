@@ -83,7 +83,7 @@
     ;; Sort the entires by package
     (fset:do-map (sym entry (shadow-realm-data (environment-class-environment env)))
       (push (cons entry (lookup-class-instances env sym :no-error t))
-            (gethash (symbol-package sym) sorted-by-package))) 
+            (gethash (symbol-package sym) sorted-by-package)))
 
     ;; Print out the entries for each package
 
@@ -98,8 +98,8 @@
 			   (let* ((class-pred (ty-class-predicate entry)))
 			     (format t "  [~S (~A :: ~A)]~%"
 				     (ty-predicate-class class-pred)
-				     (ty-predicate-types class-pred)
-				     (mapcar #'kind-of (ty-predicate-types class-pred)))))
+		                     (ty-predicate-types class-pred)
+                		     (mapcar #'kind-of (ty-predicate-types class-pred)))))
 
 			 (fset:do-seq (instance instances)
 			   (format t "    ")

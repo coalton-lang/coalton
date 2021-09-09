@@ -26,7 +26,7 @@
         ((eql tcon-name 'coalton:Integer)      'integer)
         ((eql tcon-name 'coalton:Single-Float) 'single-float)
         ((eql tcon-name 'coalton:Double-Float) 'double-float)
-        
+
         ((eql tcon-name 'coalton:String)       'simple-string)
 
         ;; LISP-OBJECT maps with this last case.

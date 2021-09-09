@@ -23,8 +23,8 @@
 
 Returns (TYPE-DEFINITIONS DOCSTRINGS)"
   (declare (type list forms)
-	   (type environment env)
-	   (values type-definition-list list))
+           (type environment env)
+           (values type-definition-list list))
 
   ;; Pull out and verify DEFINE-TYPE and type
   (let ((parsed-tcons nil)
@@ -49,7 +49,7 @@ Returns (TYPE-DEFINITIONS DOCSTRINGS)"
                   () "Malformed DEFINE-TYPE type ~A" type)
           (assert (every (lambda (var)
                            (equalp (symbol-package var)
-			           keyword-package))
+                                   keyword-package))
                          tyvar-names)
                   () "Type variables must be in the KEYWORD package. In type ~A" form)
 
@@ -63,7 +63,7 @@ Returns (TYPE-DEFINITIONS DOCSTRINGS)"
             (when (stringp (car ctors))
               (push (list tycon-name (car ctors) :type) parsed-docstrings)
               (setf ctors (cdr ctors)))
-            
+
             ;; Save this for later
             (push (list tycon-name tycon-type ctors type-vars tyvar-names) parsed-tcons)))))
 
@@ -90,22 +90,22 @@ Returns (TYPE-DEFINITIONS DOCSTRINGS)"
                                                                    (kind-arity (kind-of tvar))))))
                                   ;; Parse out the ctors
                                   (let ((parsed-ctors
-		                          (loop :for ctor in ctors
-			                        :collect
-			                        (parse-type-ctor ctor applied-tycon type-vars-alist tycon-name new-env))))
-		                    (make-type-definition
-		                     :name tycon-name
-		                     :type tcon
-		                     :constructors parsed-ctors)))))))
+                                          (loop :for ctor in ctors
+                                                :collect
+                                                (parse-type-ctor ctor applied-tycon type-vars-alist tycon-name new-env))))
+                                    (make-type-definition
+                                     :name tycon-name
+                                     :type tcon
+                                     :constructors parsed-ctors)))))))
       (values parsed-defs parsed-docstrings))))
 
 (defun parse-type-ctor (form applied-tycon type-vars constructs env)
   (declare (type t form)
-	   (type ty applied-tycon)
-	   (type list type-vars)
-	   (type environment env)
-	   (type symbol constructs)
-	   (values constructor-entry))
+           (type ty applied-tycon)
+           (type list type-vars)
+           (type environment env)
+           (type symbol constructs)
+           (values constructor-entry))
   ;; Make sure we have a list we can destructure
   (setf form (alexandria:ensure-list form))
   (destructuring-bind (ctor-name &rest tyarg-names) form
@@ -140,18 +140,18 @@ Returns (TYPE-DEFINITIONS DOCSTRINGS)"
                                        :for id :from 0
                                        :collect (%make-substitution var (%make-tgen id)))))
                      (%make-ty-scheme kinds (apply-substitution subst type)))))
-	  (make-constructor-entry
-	   :name ctor-name
-	   :arity (length tyarg-names)
-	   :arguments (mapcar (lambda (arg)
+          (make-constructor-entry
+           :name ctor-name
+           :arity (length tyarg-names)
+           :arguments (mapcar (lambda (arg)
                                 (quantify tyvars (qualify nil arg)))
                               tyargs)
-	   :constructs constructs
-	   :scheme (quantify-using-tvar-order tyvars
+           :constructs constructs
+           :scheme (quantify-using-tvar-order tyvars
                                               (qualify nil (build-function tyargs)))
-	   :classname (alexandria:format-symbol
-		       (symbol-package constructs)
-		       "~A/~A" constructs ctor-name)))))))
+           :classname (alexandria:format-symbol
+                       (symbol-package constructs)
+                       "~A/~A" constructs ctor-name)))))))
 
 (defun tvar-count-to-kind (tvar-count)
   "Create a KIND from the number of type variables"

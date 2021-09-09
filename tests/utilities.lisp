@@ -15,13 +15,13 @@
   (set-equalp dag1 dag2))
 
 (defun check-coalton-types (toplevel expected-types)
-  
+
   (multiple-value-bind (form env)
       (coalton-impl::process-coalton-toplevel toplevel coalton-impl::*initial-environment*)
     (declare (ignore form))
 
     (loop :for (symbol . type) :in expected-types
-	  :do (is (coalton-impl/typechecker::type-scheme=
+          :do (is (coalton-impl/typechecker::type-scheme=
                    (coalton-impl::lookup-value-type env symbol)
                    (coalton-impl/typechecker::parse-and-resolve-type env type))))))
 

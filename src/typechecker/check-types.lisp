@@ -10,7 +10,7 @@
 
 (defgeneric check-node-type (node env)
   (:documentation "Check the type of a typed node erroring on invalid node types")
-  
+
   (:method ((node typed-node-literal) env)
     (let ((literal-value (typed-node-literal-value node)))
       (multiple-value-bind (type preds)
@@ -66,7 +66,7 @@
 
            (ret-qual-type (fresh-inst (typed-node-type (typed-node-abstraction-subexpr node))))
            (ret-type (qualified-ty-type ret-qual-type))
-           
+
            (function-type (make-function-type* arg-types ret-type))
 
            (local-vars (type-variables function-type))
@@ -126,7 +126,7 @@
   (let* ((rator-qual-type (fresh-inst (typed-node-type rator)))
          (rator-type (qualified-ty-type rator-qual-type))
          (rator-preds (qualified-ty-predicates rator-qual-type))
-         
+
          (rands-qual-types (mapcar (lambda (r) (fresh-inst (typed-node-type r))) rands))
          (rands-types (mapcar (lambda (r) (qualified-ty-type r)) rands-qual-types))
          (rands-preds (mapcan (lambda (r) (qualified-ty-predicates r)) rands-qual-types))
@@ -135,7 +135,7 @@
     (loop :for rand-type :in rands-types :do
       (unless (function-type-p rator-type)
         (coalton-impl::coalton-bug "Typed node application rator is not of type function"))
-        
+
       (let* ((param-type (function-type-from rator-type))
              (subs (unify nil rand-type param-type)))
         (setf rator-type (apply-substitution subs (function-type-to rator-type))
@@ -154,7 +154,7 @@
     (check-node-type rator env)
     (dolist (rand rands)
       (check-node-type rand env))
-      
+
     (typed-node-type node)))
 
 (defun sub-ty-scheme-p (scheme1 scheme2 env)

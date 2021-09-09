@@ -5,13 +5,13 @@
   ;;
   ;; Tuple
   ;;
-  
+
   (declare fst ((Tuple :a :b) -> :a))
   (define (fst t)
     "Get the first element of a tuple."
     (match t
       ((Tuple a _) a)))
-  
+
   (declare snd ((Tuple :a :b) -> :b))
   (define (snd t)
     "Get the second element of a tuple."
@@ -29,13 +29,13 @@
            (== (snd a) (snd b))))
     (define (/= a b)
       (not (== a b))))
-  
+
   (define-instance ((Ord :a) (Ord :b) => (Ord (Tuple :a :b)))
     (define <=> undefined))
 
   (define-instance (Into (Tuple :a :b) (Tuple :b :a))
     (define (into t)
       (match t
-	((Tuple a b) (Tuple b a)))))
+        ((Tuple a b) (Tuple b a)))))
 
   (define-instance (Iso (Tuple :a :b) (Tuple :b :a))))

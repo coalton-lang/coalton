@@ -25,14 +25,14 @@
     "Returns the length of V"
     (lisp Integer (v)
       (cl:let ((v_ (unveil (cl:slot-value v '_0))))
-	(cl:fill-pointer v_))))
+        (cl:fill-pointer v_))))
 
   (declare vector-capacity ((Vector :a) -> Integer))
   (define (vector-capacity v)
     "Returns the number of elements that V can store without resizing"
     (lisp Integer (v)
       (cl:let ((v_ (unveil (cl:slot-value v '_0))))
-	(cl:array-dimension v_ 0))))
+        (cl:array-dimension v_ 0))))
 
   (declare vector-empty ((Vector :a) -> Boolean))
   (define (vector-empty v)
@@ -44,46 +44,46 @@
     "Append ITEM to V and resize V if necessary"
     (lisp Unit (item v)
       (cl:let ((v_ (unveil (cl:slot-value v '_0))))
-	(cl:progn
-	  (cl:vector-push-extend item v_)
-	  Unit))))
+        (cl:progn
+          (cl:vector-push-extend item v_)
+          Unit))))
 
   (declare vector-pop ((Vector :a) -> (Optional :a)))
   (define (vector-pop v)
     "Remove and return the first item of V"
     (if (== 0 (vector-length v))
-	None
-	(Some (vector-pop-unsafe v)))) 
+        None
+        (Some (vector-pop-unsafe v))))
 
   (declare vector-pop-unsafe ((Vector :a) -> :a))
   (define (vector-pop-unsafe v)
     "Remove and return the first item of V without checking if the vector is empty"
     (lisp :a (v)
       (cl:let ((v_ (unveil (cl:slot-value v '_0))))
-	(cl:vector-pop v_))))
+        (cl:vector-pop v_))))
 
   (declare vector-index (Integer -> (Vector :a) -> (Optional :a)))
   (define (vector-index index v)
     "Return the INDEXth element of V"
     (if (>= index (vector-length v))
-	None
-	(Some (vector-index-unsafe index v))))
+        None
+        (Some (vector-index-unsafe index v))))
 
   (declare vector-index-unsafe (Integer -> (Vector :a) -> :a))
-  (define (vector-index-unsafe index v) 
+  (define (vector-index-unsafe index v)
     "Return the INDEXth element of V without checking if the element exists"
     (lisp :a (index v)
       (cl:let ((v_ (unveil (cl:slot-value v '_0))))
-	(cl:aref v_ index))))
+        (cl:aref v_ index))))
 
   (declare vector-set (Integer -> :a -> (Vector :a) -> Unit))
   (define (vector-set index item v)
     "Set the INDEXth element of V to ITEM. This function left intentionally unsafe because it does not have a return value to check."
     (lisp Unit (index item v)
       (cl:let ((v_ (unveil (cl:slot-value v '_0))))
-	(cl:progn
-	  (cl:setf (cl:aref v_ index) item)
-	  Unit))))
+        (cl:progn
+          (cl:setf (cl:aref v_ index) item)
+          Unit))))
 
   (declare vector-head ((Vector :a) -> (Optional :a)))
   (define (vector-head v)
@@ -110,35 +110,35 @@
     "Call the function F once for each item in V"
     (lisp Unit (f v)
       (cl:let ((v_ (unveil (cl:slot-value v '_0))))
-	(cl:progn
-	  (cl:loop :for elem :across v_
-	     :do (coalton-impl/codegen::A1 f elem))
-	  Unit))))
+        (cl:progn
+          (cl:loop :for elem :across v_
+             :do (coalton-impl/codegen::A1 f elem))
+          Unit))))
 
   (declare vector-foreach-index ((Integer -> :a -> :b) -> (Vector :a) -> Unit))
   (define (vector-foreach-index f v)
     "Call the function F once for each item in V with its index"
     (lisp Unit (f v)
       (cl:let ((v_ (unveil (cl:slot-value v '_0))))
-	(cl:progn
-	  (cl:loop
-	     :for elem :across v_
-	     :for i :from 0
-	     :do (coalton-impl/codegen::A2 f i elem))
-	  Unit))))
+        (cl:progn
+          (cl:loop
+             :for elem :across v_
+             :for i :from 0
+             :do (coalton-impl/codegen::A2 f i elem))
+          Unit))))
 
   (declare vector-foreach2 ((:a -> :a -> :b) -> (Vector :a) -> (Vector :a) -> Unit))
   (define (vector-foreach2 f v1 v2)
     "Like vector-foreach but twice as good"
     (lisp Unit (f v1 v2)
       (cl:let ((v1_ (unveil (cl:slot-value v1 '_0)))
-	       (v2_ (unveil (cl:slot-value v2 '_0))))
-	(cl:progn
-	  (cl:loop
-	     :for e1 :across v1_
-	     :for e2 :across v2_
-	     :do (coalton-impl/codegen::A2 f e1 e2))
-	  Unit))))
+               (v2_ (unveil (cl:slot-value v2 '_0))))
+        (cl:progn
+          (cl:loop
+             :for e1 :across v1_
+             :for e2 :across v2_
+             :do (coalton-impl/codegen::A2 f e1 e2))
+          Unit))))
 
   (declare vector-append ((Vector :a) -> (Vector :a) -> (Vector :a)))
   (define (vector-append v1 v2)
@@ -146,9 +146,9 @@
     (progn
       (let out = (make-vector-capacity (+ (vector-length v1) (vector-length v2))))
       (let f =
-	(fn (item)
-	  (vector-push item out)))
-      
+        (fn (item)
+          (vector-push item out)))
+
       (vector-foreach f v1)
       (vector-foreach f v2)
       out))
@@ -157,18 +157,18 @@
   (define (vector-to-list v)
     "Create a list containing the same elements in the same order as V"
     (let ((inner
-	    (fn (v index)
-	      (if (>= index (vector-length v))
-		  Nil
-		  (Cons (vector-index-unsafe index v) (inner v (+ 1 index)))))))
+            (fn (v index)
+              (if (>= index (vector-length v))
+                  Nil
+                  (Cons (vector-index-unsafe index v) (inner v (+ 1 index)))))))
       (inner v 0)))
 
   (declare vector-swap-remove (Integer -> (Vector :a) -> (Optional :a)))
   (define (vector-swap-remove idx vec)
     "Remove the element IDX from VEC and replace it with the last element in VEC. Then return the removed element."
     (if (>= idx (vector-length vec))
-	None
-	(Some (vector-swap-remove-unsafe idx vec))))
+        None
+        (Some (vector-swap-remove-unsafe idx vec))))
 
   (declare vector-swap-remove-unsafe (Integer -> (Vector :a) -> :a))
   (define (vector-swap-remove-unsafe idx vec)
@@ -185,17 +185,17 @@
   (define-instance (Eq :a => (Eq (Vector :a)))
     (define (== v1 v2)
       (if (/= (vector-length v1) (vector-length v2))
-	  False
-	  (progn
-	    ;; Currently singleton vectors are the only way to have mutability in coalton
-	    (let out = (make-vector-capacity 1))
-	    (vector-set 0 True out)
-	    (vector-foreach2
-	     (fn (e1 e2)
-	       (unless (== e1 e2)
-		 (vector-set 0 False out)))
-	     v1 v2)
-	    (vector-index-unsafe 0 out))))
+          False
+          (progn
+            ;; Currently singleton vectors are the only way to have mutability in coalton
+            (let out = (make-vector-capacity 1))
+            (vector-set 0 True out)
+            (vector-foreach2
+             (fn (e1 e2)
+               (unless (== e1 e2)
+                 (vector-set 0 False out)))
+             v1 v2)
+            (vector-index-unsafe 0 out))))
     (define (/= v1 v2)
       (not (== v1 v2))))
 
@@ -206,27 +206,27 @@
   (define-instance (Functor Vector)
     (define (map f v)
       (progn
-	(let out = (make-vector-capacity (vector-length v)))
-	(vector-foreach
-	 (fn (item)
-	   (vector-push (f item) out))
-	 v)
-	out)))
+        (let out = (make-vector-capacity (vector-length v)))
+        (vector-foreach
+         (fn (item)
+           (vector-push (f item) out))
+         v)
+        out)))
 
   (define-instance (Into (List :a) (Vector :a))
     (define (into lst)
       (progn
-	(let out = (make-vector-capacity (length lst)))
-	(let inner =
-	  (fn (lst)
-	    (match lst
-	      ((Cons x xs)
-	       (progn
-		 (vector-push x out)
-		 (inner xs)))
-	      ((Nil) Unit))))
-	(inner lst)
-	out)))
+        (let out = (make-vector-capacity (length lst)))
+        (let inner =
+          (fn (lst)
+            (match lst
+              ((Cons x xs)
+               (progn
+                 (vector-push x out)
+                 (inner xs)))
+              ((Nil) Unit))))
+        (inner lst)
+        out)))
 
   (define-instance (Into (Vector :a) (List :a))
     (define (into v)

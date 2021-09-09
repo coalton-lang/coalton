@@ -2,7 +2,7 @@
 
 (defun match-constructor-lift-transform (node optimizer)
   (declare (type typed-node node)
-	   (type optimizer optimizer))
+           (type optimizer optimizer))
   (match-constructor-lift node (optimizer-env optimizer)))
 
 (defgeneric match-constructor-lift (node env)
@@ -11,12 +11,12 @@
 
   (:method ((node typed-node-literal) env)
     (declare (type environment env)
-	     (ignore env))
+             (ignore env))
     node)
 
   (:method ((node typed-node-variable) env)
     (declare (type environment env)
-	     (ignore env))
+             (ignore env))
     node)
 
   (:method ((node typed-node-application) env)
@@ -27,7 +27,7 @@
      (match-constructor-lift (typed-node-application-rator node) env)
      (mapcar
       (lambda (rand)
-	(match-constructor-lift rand env))
+        (match-constructor-lift rand env))
       (typed-node-application-rands node))))
 
   (:method ((node typed-node-direct-application) env)
@@ -38,7 +38,7 @@
      (typed-node-direct-application-rator node)
      (mapcar
       (lambda (rand)
-	(match-constructor-lift rand env))
+        (match-constructor-lift rand env))
       (typed-node-direct-application-rands node))))
 
   (:method ((node typed-node-abstraction) env)
@@ -57,8 +57,8 @@
      (typed-node-unparsed node)
      (mapcar
       (lambda (b)
-	(cons (car b)
-	      (match-constructor-lift (cdr b) env)))
+        (cons (car b)
+              (match-constructor-lift (cdr b) env)))
       (typed-node-let-bindings node))
      (match-constructor-lift (typed-node-let-subexpr node) env)
      (typed-node-let-sorted-bindings node)
@@ -67,7 +67,7 @@
 
   (:method ((node typed-node-lisp) env)
     (declare (type environment env)
-	     (ignore env))
+             (ignore env))
     node)
 
   (:method ((branch typed-match-branch) env)
@@ -84,27 +84,27 @@
     (let ((expr (typed-node-match-expr node)))
 
       (if (and
-	   ;; The function is fully applied
-	   (coalton-impl/typechecker::typed-node-direct-application-p expr)
+           ;; The function is fully applied
+           (coalton-impl/typechecker::typed-node-direct-application-p expr)
 
-	   ;; The function is a constructor
-	   (lookup-constructor env (typed-node-direct-application-rator expr) :no-error t)
+           ;; The function is a constructor
+           (lookup-constructor env (typed-node-direct-application-rator expr) :no-error t)
 
-	   ;; The constructed value is not captured by a variable pattern
-	   (notany
-	    #'coalton-impl/ast::pattern-var-p
-	    (mapcar #'typed-match-branch-pattern
-		    (typed-node-match-branches node))))
-	  (generate-lifted-constructor node)
+           ;; The constructed value is not captured by a variable pattern
+           (notany
+            #'coalton-impl/ast::pattern-var-p
+            (mapcar #'typed-match-branch-pattern
+                    (typed-node-match-branches node))))
+          (generate-lifted-constructor node)
 
-	  (typed-node-match
-	   (typed-node-type node)
-	   (typed-node-unparsed node)
-	   (match-constructor-lift expr env)
-	   (mapcar
-	    (lambda (b)
-	      (match-constructor-lift b env))
-	    (typed-node-match-branches node))))))
+          (typed-node-match
+           (typed-node-type node)
+           (typed-node-unparsed node)
+           (match-constructor-lift expr env)
+           (mapcar
+            (lambda (b)
+              (match-constructor-lift b env))
+            (typed-node-match-branches node))))))
 
   (:method ((node typed-node-seq) env)
     (declare (type environment env))
@@ -113,14 +113,14 @@
      (typed-node-unparsed node)
      (mapcar
       (lambda (subnode)
-	(match-constructor-lift subnode env))
+        (match-constructor-lift subnode env))
       (typed-node-seq-subnodes node)))))
 
 
 (defun generate-lifted-constructor (node)
   (declare (type typed-node-match node))
   (let ((sym (gensym))
-	(expr (typed-node-match-expr node)))
+        (expr (typed-node-match-expr node)))
     (typed-node-let
      (typed-node-type node)
      '@@SOURCE-UNKNOWN@@
@@ -133,4 +133,3 @@
      (list (list sym))
      (list sym)
      nil)))
-

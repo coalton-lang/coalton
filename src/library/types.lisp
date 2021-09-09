@@ -4,7 +4,7 @@
 
   ;; Type is already known in COALTON-IMPL.
   (define Unit (lisp Unit () 'Unit))
-  
+
   (define-type Boolean
     True
     False)
@@ -17,7 +17,7 @@
   (define-type (Tuple :a :b)
     "A heterogeneous collection of items."
     (Tuple :a :b))
-  
+
   (define-type (Optional :a)
     "Represents something that may not have a value."
     (Some :a)

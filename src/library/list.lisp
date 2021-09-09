@@ -45,20 +45,20 @@
   (define (reverse xs)
     "Returns a new list containing the same elements in reverse order."
     (let ((inner (fn (as bs)
-		   (match as
-		     ((Nil) bs)
-		     ((Cons a as) (inner as (Cons a bs)))))))
+                   (match as
+                     ((Nil) bs)
+                     ((Cons a as) (inner as (Cons a bs)))))))
       (inner xs Nil)))
 
   (declare find ((:a -> Boolean) -> (List :a) -> (Optional :a)))
   (define (find f xs)
     "Returns the first element in a list matching the predicate function F."
     (fold (fn (a b)
-	    (match b
-	      ((Some _) b)
-	      (_
-	       (if (f a) (Some a) None))))
-	  None xs))
+            (match b
+              ((Some _) b)
+              (_
+               (if (f a) (Some a) None))))
+          None xs))
 
   (declare fold ((:a -> :b -> :b) -> :b -> (List :a) -> :b))
   (define (fold f y xs)
@@ -86,7 +86,7 @@
                         (fun xs (Cons x ys))
                         (fun xs ys)))))))
       (fun xs Nil)))
- 
+
   (declare length ((List :a) -> Integer))
   (define (length l)
     "Returns the length of a list."
@@ -126,9 +126,9 @@
   (define (range start end)
     "Returns a list containing the numbers from START to END inclusive."
     (let ((inner (fn (x)
-		   (if (> x end)
-		       Nil
-		       (Cons x (inner (+ 1 x)))))))
+                   (if (> x end)
+                       Nil
+                       (Cons x (inner (+ 1 x)))))))
       (inner start)))
 
   (declare append ((List :a) -> (List :a) -> (List :a)))
@@ -158,7 +158,7 @@
            (member e xs)))
       ((Nil)
        False)))
-  
+
   (declare union (Eq :a => ((List :a) -> (List :a) -> (List :a))))
   (define (union xs ys)
     "Returns a new list with the elements from both XS and YS and without duplicates."
@@ -174,12 +174,12 @@
   (define (intersection xs ys)
     "Returns elements which occur in both lists. Does not return duplicates and does not guarantee order."
     (let ((inner (fn (xs ys)
-		   (match xs
-		     ((Cons x xs)
-		      (if (member x ys)
-			  (Cons x (intersection xs ys))
-			  (intersection xs ys)))
-		     ((Nil) Nil)))))
+                   (match xs
+                     ((Cons x xs)
+                      (if (member x ys)
+                          (Cons x (intersection xs ys))
+                          (intersection xs ys)))
+                     ((Nil) Nil)))))
       (inner (remove-duplicates xs) (remove-duplicates ys))))
 
   (declare lookup (Eq :a => (:a -> (List (Tuple :a :b)) -> (Optional :b))))
@@ -200,8 +200,8 @@
     (match xs
       ((Cons x xs)
        (if (member x xs)
-	   (remove-duplicates xs)
-	   (Cons x (remove-duplicates xs))))
+           (remove-duplicates xs)
+           (Cons x (remove-duplicates xs))))
       ((Nil) Nil)))
 
   (declare delete (Eq :a => (:a -> (List :a) -> (List :a))))
@@ -300,37 +300,37 @@
   (define (partition f xs)
     "Splits a list into two new lists. The first list contains elements matching predicate F."
     (let ((inner (fn (xs as bs)
-		   (match xs
-		     ((Nil) (Tuple as bs))
-		     ((Cons x xs)
-		      (if (f x)
-			  (inner xs (Cons x as) bs)
-			  (inner xs as (Cons x bs))))))))
+                   (match xs
+                     ((Nil) (Tuple as bs))
+                     ((Cons x xs)
+                      (if (f x)
+                          (inner xs (Cons x as) bs)
+                          (inner xs as (Cons x bs))))))))
       (inner xs Nil Nil)))
 
   (declare maximum (Ord :a => ((List :a) -> (Optional :a))))
   (define (maximum xs)
     "Returns the greatest element in XS."
     (fold (fn (a b)
-	    (match (Tuple a b)
-	      ((Tuple _ (Some b_))
-	       (if (> a b_)
-		   (Some a)
-		   b))
-	      (_ (Some a))))
-	  None xs))
+            (match (Tuple a b)
+              ((Tuple _ (Some b_))
+               (if (> a b_)
+                   (Some a)
+                   b))
+              (_ (Some a))))
+          None xs))
 
   (declare minimum (Ord :a => ((List :a) -> (Optional :a))))
   (define (minimum xs)
     "Returns the least element in XS."
     (fold (fn (a b)
-	    (match (Tuple a b)
-	      ((Tuple _ (Some b_))
-	       (if (< a b_)
-		   (Some a)
-		   b))
-	      (_ (Some a))))
-	  None xs))
+            (match (Tuple a b)
+              ((Tuple _ (Some b_))
+               (if (< a b_)
+                   (Some a)
+                   b))
+              (_ (Some a))))
+          None xs))
 
   (declare sum (Num :a => ((List :a) -> :a)))
   (define (sum xs)
@@ -372,7 +372,7 @@
         ((Cons x xs)
          (match b
            ((Cons y ys)
-	    (and (== x y)
+            (and (== x y)
                  (== xs ys)))
            (_ False)))
         ((Nil)
@@ -381,7 +381,7 @@
            (_ False)))))
     (define (/= a b)
       (not (== a b))))
-    
+
   (define-instance (Semigroup (List :a))
     (define (<> a b) (append a b)))
 
@@ -398,8 +398,8 @@
     (define (pure x) (Cons x Nil))
     (define (liftA2 f as bs)
       (concatMap (fn (a)
-		   (map (f a) bs))
-		 as)))
+                   (map (f a) bs))
+                 as)))
 
   (define-instance (Alternative List)
     (define (alt a b)

@@ -20,7 +20,7 @@
     (progn
       (lisp :a (str item) (cl:format cl:t "~A: ~A~%" str item))
       Unit))
-  
+
   ;;
   ;; Function combinators
   ;;
@@ -30,11 +30,11 @@
     "The factorial function can be written
     ```
     (define fact
-      (fix 
+      (fix
         (fn (f n)
           (if (== n 0)
             1
-            (* n (f (- n 1)))))))    
+            (* n (f (- n 1)))))))
     ```"
     (f (fix f) n))
 
