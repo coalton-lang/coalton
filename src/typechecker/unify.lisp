@@ -76,10 +76,15 @@ apply s type1 == type2")
                (ty-predicate-class pred2))
     (error 'predicate-unification-error :pred1 pred1 :pred2 pred2))
   (handler-case
-      (reduce #'merge-substitution-lists
-              (loop :for pred-type1 :in (ty-predicate-types pred1)
-                    :for pred-type2 :in (ty-predicate-types pred2)
-                    :collect (mgu pred-type1 pred-type2)))
+      (let ((subs nil))
+        (reduce #'merge-substitution-lists
+                (loop :for pred-type1 :in (ty-predicate-types pred1)
+                      :for pred-type2 :in (ty-predicate-types pred2)
+                      :collect (setf subs
+                                     (compose-substitution-lists
+                                      (mgu (apply-substitution subs pred-type1)
+                                           (apply-substitution subs pred-type2))
+                                      subs)))))
     (coalton-type-error ()
       (error 'predicate-unification-error :pred1 pred1 :pred2 pred2))))
 
@@ -90,9 +95,14 @@ apply s type1 == type2")
                (ty-predicate-class pred2))
     (error 'predicate-unification-error :pred1 pred1 :pred2 pred2))
   (handler-case
-      (reduce #'merge-substitution-lists
-              (loop :for pred-type1 :in (ty-predicate-types pred1)
-                    :for pred-type2 :in (ty-predicate-types pred2)
-                    :collect (match pred-type1 pred-type2)))
+      (let ((subs nil))
+        (reduce #'merge-substitution-lists
+                (loop :for pred-type1 :in (ty-predicate-types pred1)
+                      :for pred-type2 :in (ty-predicate-types pred2)
+                      :collect (setf subs
+                                     (compose-substitution-lists
+                                      (match (apply-substitution subs pred-type1)
+                                           (apply-substitution subs pred-type2))
+                                      subs)))))
     (coalton-type-error ()
       (error 'predicate-unification-error :pred1 pred1 :pred2 pred2))))
