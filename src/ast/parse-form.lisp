@@ -35,7 +35,7 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
        ;; Lisp
        ((coalton:lisp &rest args)
         (unless (= 3 (length args))
-          (error-parsing expr "Invalid let expression."))
+          (error-parsing expr "Invalid lisp expression."))
         (parse-lisp expr (first args) (second args) (third args) sr))
 
        ;; Match
