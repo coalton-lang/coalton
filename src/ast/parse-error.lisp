@@ -8,10 +8,11 @@
    (reason-args :initarg :reason-args
                 :reader coalton-parse-error-reason-args))
   (:report (lambda (c s)
-             (format s "Failed to parse ~S because: ~?"
-                     (coalton-parse-error-form c)
-                     (coalton-parse-error-reason-control c)
-                     (coalton-parse-error-reason-args c)))))
+             (let ((*print-pretty* nil))
+               (format s "Failed to parse ~S~%    ~?"
+                       (coalton-parse-error-form c)
+                       (coalton-parse-error-reason-control c)
+                       (coalton-parse-error-reason-args c))))))
 
 (define-condition coalton-parse-error-context (coalton-parse-error)
   ((context :initarg :context

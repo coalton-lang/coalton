@@ -17,25 +17,41 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
     ((alexandria:proper-list-p expr)
      (alexandria:destructuring-case expr
        ;; Abstraction
-       ((coalton:fn vars subexpr)
-        (parse-abstraction expr vars subexpr sr package))
-       ((coalton:λ vars subexpr)
-        (parse-abstraction expr vars subexpr sr package))
+       ((coalton:fn &rest args)
+        (unless (= 2 (length args))
+          (error-parsing expr "Invalid fn expression.."))
+        (parse-abstraction expr (first args) (second args) sr package))
+       ((coalton:λ &rest args)
+        (unless (= 2 (length args))
+          (error-parsing expr "Invalid fn expression.."))
+        (parse-abstraction expr (first args) (second args) sr package))
+
        ;; Let
-       ((coalton:let bindings subexpr)
-        (parse-let expr bindings subexpr sr package))
+       ((coalton:let &rest args)
+        (unless (= 2 (length args))
+          (error-parsing expr "Invalid let expression."))
+        (parse-let expr (first args) (second args) sr package))
+
        ;; Lisp
-       ((coalton:lisp type variables lisp-expr)
-        (parse-lisp expr type variables lisp-expr sr))
+       ((coalton:lisp &rest args)
+        (unless (= 3 (length args))
+          (error-parsing expr "Invalid let expression."))
+        (parse-lisp expr (first args) (second args) (third args) sr))
+
        ;; Match
        ((coalton:match expr_ &rest patterns)
         (parse-match expr expr_ patterns sr package))
+
        ;; Seq
        ((coalton:seq &rest subnodes)
         (parse-seq expr subnodes sr package))
+
        ;; The
-       ((coalton:the type form)
-        (parse-the expr type form sr package))
+       ((coalton:the  &rest args)
+        (unless (= 2 (length args))
+          (error-parsing expr "Invalid the exprssion."))
+        (parse-the expr (first args) (second args) sr package))
+
        ;; Application
        ((t &rest rands)
         (if (null rands)
