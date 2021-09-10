@@ -374,3 +374,22 @@
         (coalton-library:map (coalton-library:+ 1) (coalton-library:make-list 1 2 3 4))
         (coalton-library:show x))))
    '((f . (coalton-library:Show :a => (:a -> String))))))
+
+
+(deftest test-the ()
+  (check-coalton-types
+   '((coalton:define (f a b)
+       ((coalton:the (coalton:Integer -> coalton:Integer -> coalton-library:Boolean) coalton-library:==)
+        a b)))
+   '((f . (coalton:Integer -> coalton:Integer -> coalton-library:Boolean))))
+
+  (check-coalton-types
+   '((coalton:define (f a b)
+       ((coalton:the ((coalton-library:Eq :a) => (:a -> :a -> coalton-library:Boolean)) coalton-library:==)
+        a b)))
+   '((f . ((coalton-library:Eq :a) => (:a -> :a -> coalton-library:Boolean)))))
+
+  (check-coalton-types
+   '((coalton:define x (coalton:the coalton:U32 (coalton-library:+ (coalton-library:fromInt 1)
+                                                                   (coalton-library:fromInt 2)))))
+   '((x . coalton:U32))))

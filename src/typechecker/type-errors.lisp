@@ -280,3 +280,30 @@
            )
        (format s "Variable ~A cannot be defined recursively."
                (self-recursive-variable-definition-name c))))))
+
+
+(define-condition declared-type-missing-predicates (coalton-type-error)
+  ((preds :initarg :preds
+          :reader declared-type-missing-predicates-preds)
+   (type :initarg :type
+         :reader declared-type-missing-predicates-type))
+  (:report
+   (lambda (c s)
+     (let ((*print-circle* nil) ; Prevent printing using reader macros
+           )
+       (format s "Declared type ~A has missing predicates~{ ~A~}."
+               (declared-type-missing-predicates-type c)
+               (declared-type-missing-predicates-preds c))))))
+
+(define-condition declared-type-additional-predicates (coalton-type-error)
+  ((preds :initarg :preds
+          :reader declared-type-additional-predicates-preds)
+   (type :initarg :type
+         :reader declared-type-additional-predicates-type))
+  (:report
+   (lambda (c s)
+     (let ((*print-circle* nil) ; Prevent printing using reader macros
+           )
+       (format s "Declared type ~A has extra predicates~{ ~A~}."
+               (declared-type-additional-predicates-type c)
+               (declared-type-additional-predicates-preds c))))))

@@ -135,5 +135,15 @@
 #+sbcl
 (declaim (sb-ext:freeze-type node-seq))
 
+(serapeum:defstruct-read-only
+    (node-the
+     (:include node)
+     (:constructor node-the (unparsed type subnode)))
+  (type :type t)
+  (subnode :type node))
+
+#+sbcl
+(declaim (sb-ext:freeze-type node-the))
+
 #+sbcl
 (declaim (sb-ext:freeze-type node))

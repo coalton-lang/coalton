@@ -47,7 +47,10 @@ NOTE: Just because a variable shows up in the list does *NOT* mean all occurrenc
                                           (match-branch-pattern branch)))))))
                  (node-seq
                   (dolist (subnode (node-seq-subnodes expr))
-                    (analyze subnode bv))))))
+                    (analyze subnode bv)))
+
+                 (node-the
+                  (analyze (node-the-subnode expr) bv)))))
       (analyze value nil)
       fv)))
 

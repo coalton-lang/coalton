@@ -395,3 +395,12 @@ Coalton has a do-notation macro that works similary to do notation in Haskell.
     ;; [6+3, 5+3, 5+3, 6+2, 5+2, 4+2, 6+1, 5+1, 4+1]
    (define xs (f (make-list 1 2 3) (make-list 4 5 6))))
 ```
+
+## Inline Type Annotations
+
+Inline type annotations can be added to resolve ambiguities when using type classes.
+
+```lisp
+(coalton-toplevel
+  (define f (the U32 (+ (fromInt 5) (fromInt 7)))))
+```

@@ -33,6 +33,9 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
        ;; Seq
        ((coalton:seq &rest subnodes)
         (parse-seq expr subnodes sr package))
+       ;; The
+       ((coalton:the type form)
+        (parse-the expr type form sr package))
        ;; Application
        ((t &rest rands)
         (if (null rands)
@@ -185,3 +188,14 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
    (mapcar (lambda (node)
              (parse-form node sr package))
            subnodes)))
+
+(defun parse-the (expr type form sr package)
+  (declare (type t expr)
+           (type t type)
+           (type t form)
+           (type shadow-realm sr)
+           (type package package))
+  (node-the
+   expr
+   type
+   (parse-form form sr package)))
