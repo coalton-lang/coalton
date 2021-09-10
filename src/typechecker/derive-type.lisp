@@ -213,6 +213,39 @@ Returns (VALUES type predicate-list typed-node subs)")
           (reverse nodes))
          subs))))
 
+  (:method ((value node-the) env subs)
+    (declare (type environment env)
+             (type substitution-list subs)
+             (values ty ty-predicate-list typed-node substitution-list &optional))
+
+    (let* ((declared-scheme (parse-and-resolve-type env (node-the-type value)))
+           (declared-qualified (fresh-inst declared-scheme))
+           (declared-type (qualified-ty-type declared-qualified))
+           (declared-preds (qualified-ty-predicates declared-qualified)))
+
+      (multiple-value-bind (type preds node subs)
+          (derive-expression-type (node-the-subnode value) env subs)
+
+        (let* ((subs_ (match (apply-substitution subs type) declared-type))
+               (subs (compose-substitution-lists subs_ subs))
+               (preds_ (reduce-context env (apply-substitution subs preds))))
+
+          (unless (subsetp preds_ declared-preds :test #'equalp)
+            (error 'declared-type-missing-predicates
+                   :preds (set-difference preds_ declared-preds :test #'equalp)
+                   :type declared-scheme))
+
+          (unless (subsetp declared-preds preds_ :test #'equalp)
+            (error 'declared-type-additional-predicates
+                   :preds (set-difference declared-preds preds_ :test #'equalp)
+                   :type declared-scheme))
+
+          (values
+           type
+           preds
+           node
+           subs)))))
+
   (:method (value env subs)
     (error "Unable to derive type of expression ~A" value)))
 

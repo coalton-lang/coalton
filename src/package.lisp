@@ -67,6 +67,9 @@
    #:node-branch-subexpr                ; ACCESSOR
    #:node-seq                           ; STRUCT
    #:node-seq-subnodes                  ; ACCESSOR
+   #:node-the                           ; STRUCT
+   #:node-the-type                      ; ACCESSOR
+   #:node-the-subnode                   ; ACCESSOR
    #:match-branch-pattern               ; ACCESSOR
    #:match-branch-subexpr               ; ACCESSOR
    #:match-branch-unparsed              ; ACCESOR
@@ -402,7 +405,8 @@
    #:do #:<-
    #:_
    #:seq
-   #:progn)
+   #:progn
+   #:the)
   (:import-from
    #:coalton-impl
    #:print-value-db
