@@ -165,7 +165,10 @@
          (type1 (qualified-ty-type qual1))
          (type2 (qualified-ty-type qual2))
 
-         (subs (match type2 type1)))
+         (subs (handler-case
+                   (match type2 type1)
+                 (coalton-type-error ()
+                   (return-from sub-ty-scheme-p nil)))))
     (loop :for pred :in (qualified-ty-predicates qual2) :do
         (unless (entail env
                         (qualified-ty-predicates qual1)

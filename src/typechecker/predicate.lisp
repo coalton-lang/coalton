@@ -82,6 +82,11 @@
 (defmethod kind-of ((type qualified-ty))
   (kind-of (qualified-ty-type type)))
 
+(defmethod function-type-p ((type qualified-ty))
+  (function-type-p (qualified-ty-type type)))
+
+(defmethod function-return-type ((type qualified-ty))
+  (qualify nil (function-return-type (qualified-ty-type type))))
 
 ;;;
 ;;; Pretty printing
