@@ -79,6 +79,12 @@
 (defmethod kind-of ((type ty-scheme))
   (kind-of (fresh-inst type)))
 
+(defmethod function-type-p ((type ty-scheme))
+  (function-type-p (fresh-inst type)))
+
+(defmethod function-return-type ((type ty-scheme))
+  (to-scheme (function-return-type (fresh-inst type))))
+
 ;;;
 ;;; Pretty printing
 ;;;

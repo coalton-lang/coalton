@@ -182,11 +182,12 @@
       (make-function-type (car args)
                           (make-function-type* (cdr args) to))))
 
-(defun function-type-p (ty)
-  (declare (type ty ty))
-  (and (tapp-p ty)
-       (tapp-p (tapp-from ty))
-       (equalp tArrow (tapp-from (tapp-from ty)))))
+(defgeneric function-type-p (ty)
+  (:method ((ty ty))
+    (declare (type ty ty))
+    (and (tapp-p ty)
+         (tapp-p (tapp-from ty))
+         (equalp tArrow (tapp-from (tapp-from ty))))))
 
 (defun function-type-from (ty)
   (declare (type tapp ty))
@@ -207,6 +208,12 @@
             (function-type-arguments
              (function-type-to ty)))
       nil))
+
+(defgeneric function-return-type (ty)
+  (:method ((ty ty))
+    (if (function-type-p ty)
+        (function-return-type (tapp-to ty))
+        ty)))
 
 ;;;
 ;;; Pretty printing

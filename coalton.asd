@@ -62,6 +62,7 @@
                              (:file "optimizer")
                              (:file "direct-application")
                              (:file "match-constructor-lift")
+                             (:file "pointfree-transform")
                              (:file "compile-pattern")
                              (:file "compile-typeclass-dicts")
                              (:file "compile-expression")
