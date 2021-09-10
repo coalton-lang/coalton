@@ -195,10 +195,14 @@ Returns (VALUES type predicate-list typed-node subs)")
       (loop :for elem :in initial-elements :do
         (multiple-value-bind (tyvar preds_ node subs_)
             (derive-expression-type elem env subs)
-          (declare (ignore tyvar))
+
           (setf subs subs_)
           (setf preds (append preds preds_))
-          (push node nodes)))
+          (push node nodes)
+
+          (when (function-type-p (apply-substitution subs tyvar))
+            (alexandria:simple-style-warning "Expression ~A in progn evaluates to a function. This may be intentional, but is also a common mistake in the event a function is accidentally curried."
+                                             (node-unparsed elem)))))
 
       (multiple-value-bind (tyvar preds_ node subs)
           (derive-expression-type last-element env subs)
