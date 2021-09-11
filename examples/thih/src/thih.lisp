@@ -694,7 +694,7 @@
         (TI (fn (s n)
               (match ((get-ti f) s n)
                 ((Tuple3 s_ m x)
-                 (let ((gx (get-ti (g x))))
+                 (let ((gx (fn (a b) (get-ti (g x) a b))))
                    (gx s_ m)))))))
     (define (>> m k)
       (>>= m
