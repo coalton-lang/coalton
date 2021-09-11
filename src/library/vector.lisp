@@ -39,14 +39,14 @@
     "Returns TRUE if V is empty"
     (== 0 (vector-length v)))
 
-  (declare vector-push (:a -> (Vector :a) -> Unit))
+  (declare vector-push (:a -> (Vector :a) -> Integer))
   (define (vector-push item v)
     "Append ITEM to V and resize V if necessary"
-    (lisp Unit (item v)
+    (lisp Integer (item v)
       (cl:let ((v_ (unveil (cl:slot-value v '_0))))
-        (cl:progn
-          (cl:vector-push-extend item v_)
-          Unit))))
+	(cl:progn
+	  (cl:vector-push-extend item v_)
+	  (cl:1- (cl:fill-pointer v_))))))
 
   (declare vector-pop ((Vector :a) -> (Optional :a)))
   (define (vector-pop v)
@@ -104,6 +104,23 @@
   (define (vector-last-unsafe v)
     "Return the last element of V without first checking if V is empty"
     (vector-index-unsafe (- (vector-length v) 1) v))
+
+  (declare vector-find-elem (Eq :a => (:a -> (Vector :a) -> (Optional Integer))))
+  (define (vector-find-elem e v)
+    "Find the index of element E in V"
+    (let ((test (fn (elem)
+                  (== elem e))))
+
+      (progn
+        (lisp (Optional Integer) (v test)
+          (cl:let* ((v_ (unveil (cl:slot-value v '_0)))
+                    (pos (cl:position-if
+                          #'(cl:lambda (x)
+                              (cl:equalp True (coalton-impl/codegen::A1 test x)))
+                          v_)))
+            (cl:if pos
+                   (Some pos)
+                   None))))))
 
   (declare vector-foreach ((:a -> :b) -> (Vector :a) -> Unit))
   (define (vector-foreach f v)
@@ -173,10 +190,12 @@
   (declare vector-swap-remove-unsafe (Integer -> (Vector :a) -> :a))
   (define (vector-swap-remove-unsafe idx vec)
     "Remove the element IDX from VEC and replace it with the last element in VEC without bounds checking. Then return the removed element."
-    (progn
-      (let out = (vector-index-unsafe idx vec))
-      (vector-set idx (vector-pop-unsafe vec) vec)
-      out))
+    (if (== (+ 1 idx) (vector-length vec))
+        (vector-pop-unsafe vec)
+        (progn
+          (let out = (vector-index-unsafe idx vec))
+          (vector-set idx (vector-pop-unsafe vec) vec)
+          out)))
 
   ;;
   ;; Vector Instances
