@@ -18,7 +18,10 @@
   ;; Ensure that the node is valid
   (coalton-impl/typechecker::check-node-type node (optimizer-env optimizer))
 
-  (let* ((node (pointfree-transform node optimizer))
+  ;; Run direct application twice so that options for direct
+  ;; application are not removed by the pointfree transform
+  (let* ((node (direct-application-transform node optimizer))
+         (node (pointfree-transform node optimizer))
          (node (direct-application-transform node optimizer))
          (node (match-constructor-lift-transform node optimizer)))
 

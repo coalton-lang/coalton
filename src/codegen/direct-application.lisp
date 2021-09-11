@@ -59,10 +59,16 @@
 
   (:method ((node typed-node-direct-application) inlineable-functions env)
     (declare (type list inlineable-functions)
-             (type environment env)
-             (ignore inlineable-functions env))
-
-    (coalton-impl::coalton-bug "Direct application nodes should not appear in DIRECT-APPLICATION transformation"))
+             (type environment env))
+    (typed-node-direct-application
+     (typed-node-type node)
+     (typed-node-unparsed node)
+     (typed-node-direct-application-rator-type node)
+     (typed-node-direct-application-rator node)
+     (mapcar
+      (lambda (node)
+        (direct-application node inlineable-functions env))
+      (typed-node-direct-application-rands node))))
 
   (:method ((node typed-node-abstraction) inlineable-functions env)
     (declare (type list inlineable-functions)

@@ -85,6 +85,9 @@
 (defmethod function-return-type ((type ty-scheme))
   (to-scheme (function-return-type (fresh-inst type))))
 
+(defmethod function-type-arguments ((type ty-scheme))
+  (function-type-arguments (fresh-inst type)))
+
 ;;;
 ;;; Pretty printing
 ;;;

@@ -88,6 +88,9 @@
 (defmethod function-return-type ((type qualified-ty))
   (qualify nil (function-return-type (qualified-ty-type type))))
 
+(defmethod function-type-arguments ((type qualified-ty))
+  (function-type-arguments (qualified-ty-type type)))
+
 ;;;
 ;;; Pretty printing
 ;;;
