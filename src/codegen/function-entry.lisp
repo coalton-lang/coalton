@@ -17,6 +17,7 @@
              (declare (type fixnum arity))
              (let ((constructor-sym (alexandria:format-symbol t "F~D" arity))
                    (application-sym (alexandria:format-symbol t "A~D" arity))
+                   (sub-application-sym (alexandria:format-symbol t "A~D" (1- arity)))
                    (function-sym (alexandria:make-gensym "F"))
                    (applied-function-sym (alexandria:make-gensym "F"))
                    (arg-syms (alexandria:make-gensym-list arity)))
@@ -25,14 +26,10 @@
                           (if (null (car args))
                               `(funcall ,function-sym ,@arg-syms)
                               `(lambda (,(car args)) ,(build-curried-function (cdr args)))))
-                        (build-curried-function-type (arity)
-                          (if (= 0 arity)
-                              't
-                              `(function (t) ,(build-curried-function-type (1- arity)))))
                         (build-curried-function-call (fun args)
-                          (if (null (car args))
-                              `(the ,(build-curried-function-type arity) ,fun)
-                              `(funcall ,(build-curried-function-call fun (cdr args)) ,(car args)))))
+                          (if (= 1 arity)
+                              `(funcall ,fun ,(car args))
+                              `(,sub-application-sym (funcall ,fun ,(car args)) ,@(cdr args)))))
 
                  ;; NOTE: Since we are only calling these functions
                  ;; from already typechecked coalton, we can use the
@@ -45,12 +42,12 @@
                                (values t))
                       (etypecase ,applied-function-sym
                         (function
-                         ,(build-curried-function-call applied-function-sym (reverse arg-syms)))
+                         ,(build-curried-function-call applied-function-sym arg-syms))
                         (function-entry
                          (if (= (the fixnum (function-entry-arity ,applied-function-sym)) ,arity)
                              (funcall (function-entry-function ,applied-function-sym)
                                       ,@arg-syms)
-                             ,(build-curried-function-call `(function-entry-curried ,applied-function-sym) (reverse arg-syms))))))
+                             ,(build-curried-function-call `(function-entry-curried ,applied-function-sym) arg-syms)))))
                     (setf (gethash ,arity *function-application-functions*) ',application-sym)
 
                     (declaim (inline ,constructor-sym))
