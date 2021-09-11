@@ -36,6 +36,10 @@
       (cell-swap data cell)
       Unit))
 
+  (declare cell-update ((:a -> :a) -> (Cell :a) -> Unit))
+  (define (cell-update f cell)
+    (cell-write (f (cell-read cell)) cell))
+
   (define-instance (Show :a => (Show (Cell :a)))
     (define (show x)
       (concat-string (concat-string "Cell<" (show (cell-read x))) ">")))

@@ -573,7 +573,17 @@
    #:liftM2
    #:sequence
    #:mconcat
-   #:asum)
+   #:asum
+   #:trace
+   #:traceObject)
+  ;; Cell
+  (:export
+   #:Cell
+   #:make-cell
+   #:cell-read
+   #:cell-swap
+   #:cell-write
+   #:cell-update)
   ;; Vector
   (:export
    #:Vector
