@@ -1,3 +1,8 @@
+.PHONY: test
+test:
+	sbcl --non-interactive \
+	     --eval "(asdf:test-system :coalton)"
+
 .PHONY: docs
 docs:
 	sbcl --non-interactive \
