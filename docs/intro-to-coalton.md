@@ -293,7 +293,7 @@ Coalton also has `coalton:unless` and `coalton:when` which work similary to thei
       (error "I only want the number 5"))))
 ```
 
-### `COALTON:PROGN`
+## `COALTON:PROGN`
 
 Coalton has a `coalton:progn` construct similar to lisp.
 
@@ -317,6 +317,7 @@ Coalton's `progn` can have flattened `let` syntax.
       (let x_ = (show x))
       (let y_ = (show y))
       (concat-string x_ y_))))
+```      
 
 ## Typeclasses
 
