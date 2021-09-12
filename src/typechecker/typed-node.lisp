@@ -443,7 +443,7 @@
      (collect-variable-namespace-g (typed-node-let-subexpr node))))
 
   (:method ((node typed-node-lisp))
-    nil)
+    (mapcar #'cdr (typed-node-lisp-variables node)))
 
   (:method ((node typed-node-match))
     (append
