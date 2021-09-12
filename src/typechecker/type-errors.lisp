@@ -307,3 +307,21 @@
        (format s "Declared type ~A has extra predicates~{ ~A~}."
                (declared-type-additional-predicates-type c)
                (declared-type-additional-predicates-preds c))))))
+
+(define-condition toplevel-monomorphism-restriction (coalton-type-error)
+  ((name :initarg :name
+         :reader toplevel-monomorphism-restriction-name)
+   (type :initarg :type
+         :reader toplevel-monomorphism-restriction-type))
+  (:report
+   (lambda (c s)
+     (let* ((*print-circle* nil) ; Prevent printing using reader macros
+            (name (toplevel-monomorphism-restriction-name c))
+            (type (toplevel-monomorphism-restriction-type c))
+            (preds (qualified-ty-predicates type)))
+       (format s "Unable to resolve ambiguous constraint~p~{ ~A~} in definition of ~A~%   with type ~A~%~%This can be resolved by giving ~A an explicit type declaration.~%"
+               (length preds)
+               preds
+               name
+               type
+               name)))))

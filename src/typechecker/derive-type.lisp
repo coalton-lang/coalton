@@ -257,7 +257,7 @@ Returns (VALUES type predicate-list typed-node subs)")
 ;;; Let Bindings
 ;;;
 
-(defun derive-bindings-type (impl-bindings expl-bindings expl-declarations env subs name-map)
+(defun derive-bindings-type (impl-bindings expl-bindings expl-declarations env subs name-map &key (disable-monomorphism-restriction nil))
   "IMPL-BINDINGS and EXPL-BINDIGNS are of form (SYMBOL . EXPR)
 EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
   (declare (type environment env)
@@ -283,7 +283,8 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
         (let ((scc-bindings (mapcar (lambda (b) (find b impl-bindings :key #'car)) scc)))
           ;; Derive the type of all parts of the scc together
           (multiple-value-bind (typed-impl-bindings impl-preds new-env new-subs)
-              (derive-impls-type scc-bindings env subs name-map)
+              (derive-impls-type scc-bindings env subs name-map
+                                 :disable-monomorphism-restriction disable-monomorphism-restriction)
             ;; Update the current environment and substitutions
             (setf env new-env
                   subs new-subs)
@@ -340,7 +341,7 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                    typed-node))))
     (values typed-nodes preds subs)))
 
-(defun derive-impls-type (bindings env subs name-map)
+(defun derive-impls-type (bindings env subs name-map &key (disable-monomorphism-restriction nil))
   (declare (type binding-list bindings)
            (type environment env)
            (type substitution-list subs)
@@ -381,7 +382,7 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
 
             ;; NOTE: This is where the monomorphism restriction happens
 
-            (if (restricted bindings)
+            (if (and (not disable-monomorphism-restriction) (restricted bindings))
                 (let* ((allowed-tvars (set-difference local-tvars (type-variables retained-preds)))
                        ;; Quantify local type variables
                        (output-schemes (mapcar (lambda (type)
