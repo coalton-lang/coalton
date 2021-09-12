@@ -101,10 +101,12 @@ Returns new environment, binding list of declared nodes, a DAG of dependencies, 
     (coalton-impl/typechecker::with-type-context ("COALTON-TOPLEVEL")
       (multiple-value-bind (typed-bindings preds new-env subs)
           (coalton-impl/typechecker::derive-bindings-type
-           impl-bindings expl-bindings declared-types env nil nil)
+           impl-bindings expl-bindings declared-types env nil nil
+           :disable-monomorphism-restriction t)
         (when preds
-          (error "Preds not expected. ~A" preds))
+          (coalton-bug "Preds not expected. ~A" preds))
 
+        ;; Apply output substitutions
         (setf typed-bindings
               (mapcar (lambda (binding)
                         (cons
@@ -112,7 +114,20 @@ Returns new environment, binding list of declared nodes, a DAG of dependencies, 
                          (coalton-impl/typechecker::apply-substitution subs (cdr binding))))
                       typed-bindings))
 
+        ;; Update the current environment with any updated types
         (setf env (coalton-impl/typechecker::apply-substitution subs new-env))
+
+        ;; Checks for monomorphism restriction for top level bindings
+        (dolist (b typed-bindings)
+          (let* ((type (coalton-impl/typechecker::fresh-inst (lookup-value-type env (car b))))
+
+                 (preds (reduce-context env (coalton-impl/typechecker::qualified-ty-predicates type))))
+            (when (and (not (gethash (car b) declared-types))
+                       (not (coalton-impl/typechecker::typed-node-abstraction-p (cdr b)))
+                       (not (null preds)))
+              (error 'toplevel-monomorphism-restriction
+                     :type type
+                     :name (car b)))))
 
         (loop :for (name . node) :in typed-bindings :do
           (setf env (set-name env name (make-name-entry :name name
