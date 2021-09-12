@@ -81,7 +81,7 @@ Lastly and importantly, we maintain a collection of documentation about Coalton 
 
 **Test**: Run `(asdf:test-system :coalton)`.
 
-**Learn**: We recommend starting with the [*Intro to Coalton*](docs/intro-to-coalton.md), and then taking a peek in the [examples directory](examples/).
+**Learn**: We recommend starting with the [*Intro to Coalton*](docs/intro-to-coalton.md) document, and then taking a peek in the [examples directory](examples/). It may also be helpful to check out the [Introducing Coalton Blog Post](https://coalton-lang.github.io/20211010-introducing-coalton/) (external).
 
 ## Contributing
 
