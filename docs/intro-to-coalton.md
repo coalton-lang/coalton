@@ -14,7 +14,7 @@ To start, we recommend changing your package to the `COALTON-USER` package like 
 
 This package does *not* `:use` the `COMMON-LISP` package, so you must prepend Common Lisp symbols with `cl:` if you need them.
 
-All Coalton code sits in a toplevel-form called `coalton-toplevel`. In this form, you can put definitions.
+There are two primary entry points for Coalton code. Definitions and the like sit in a toplevel-form called `coalton-toplevel`. 
 
 Here are some variable definitions.
 
@@ -32,7 +32,16 @@ Here are some variable definitions.
   (define data Unit))
 ```
 
-Functions are defined similarly. Unlike Common Lisp, Coalton functions occupy the same namespace as variables. This makes high-order functional programming easier.
+Whereas `coalton-toplevel` expects one or more toplevel definitions or declarations, the `coalton` form takes a single expression, evaluates it relative to the current environment, and returns its (underlying) Lisp value. This can be useful for working with Coalton from a Lisp REPL. 
+
+For example, the following gets the first element of the tuple `p` defined above.
+```lisp
+(coalton (fst p))
+```
+
+**Note**: It may be tempting to elide the `coalton` form and simply evaluate `(fst p)` directly in a Lisp REPL, but such behavior should not be relied upon!
+
+Functions are defined similarly to variables. Unlike Common Lisp, Coalton functions occupy the same namespace as variables. This makes high-order functional programming easier.
 
 ```lisp
 (coalton-toplevel
@@ -81,8 +90,9 @@ Here is an example of using a curried function to transform a list.
 ```lisp
 (coalton-toplevel
   ;; Lists can be created with the make-list macro
-  (define nums (make-list 2 3 4 5))
+  (define nums (make-list 2 3 4 5)))
 
+(coalton
   ;; Functions in coalton are curried
   (map (+ 2) nums)) ;; 4 5 6 7
 ```
@@ -113,7 +123,7 @@ Coalton allows the definition of parametric algebraic data types.
 ```lisp
 (coalton-toplevel
   ;; New types are created with the DEFINE-TYPE operator
-  (define-type Point3D (Point3D Int Int Int))
+  (define-type Point3D (Point3D Integer Integer Integer))
 
   ;; Coalton supports sum types
   (define-type Color
@@ -123,10 +133,18 @@ Coalton allows the definition of parametric algebraic data types.
 
   ;; Coalton supports generic type variables
   ;;
-  ;; Type paramaters are defined using keyword arguments
+  ;; Type parameters are defined using keyword arguments
   (define-type (Tree :a)
     (Branch (Tree :a) :a (Tree :a))
     (Leaf :a)))
+```
+
+Type definitions introduce type constructors. For example, we may construct a somewhat festive tree as follows
+```lisp
+(coalton
+  (Branch (Leaf Red)
+          Green
+          (Branch (Leaf Red) Green (Leaf Red))))
 ```
 
 We'll see how to unpack these types using `match` later in this document.
@@ -206,7 +224,7 @@ Type annotations can always be added manually
 
 ```lisp
 (coalton-toplevel
-  (declare fun (String -> (Optional Int)))
+  (declare fun (String -> (Optional Integer)))
   (define (fun x)
     (map (+ 2) (parse-int x))))
 ```
@@ -299,7 +317,7 @@ Coalton has a `coalton:progn` construct similar to lisp.
 
 ```lisp
 (coalton-toplevel
-  (declare f (Int -> Int -> (Tuple Int Int)))
+  (declare f (Integer -> Integer -> (Tuple Integer Integer)))
   (define (f x y)
     (progn
       (+ x y)
@@ -311,7 +329,7 @@ Coalton's `progn` can have flattened `let` syntax.
 
 ```lisp
 (coalton-toplevel
- (declare f (Int -> Int -> String))
+ (declare f (Integer -> Integer -> String))
   (define (f x y)
     (progn
       (let x_ = (show x))
