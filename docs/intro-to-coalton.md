@@ -14,7 +14,7 @@ To start, we recommend changing your package to the `COALTON-USER` package like 
 
 This package does *not* `:use` the `COMMON-LISP` package, so you must prepend Common Lisp symbols with `cl:` if you need them.
 
-There are two primary entry points for Coalton code. Definitions and the like sit in a toplevel-form called `coalton-toplevel`. 
+There are two primary entry points for Coalton code. Definitions and the like sit in a toplevel-form called `coalton-toplevel`.
 
 Here are some variable definitions.
 
@@ -32,7 +32,7 @@ Here are some variable definitions.
   (define data Unit))
 ```
 
-Whereas `coalton-toplevel` expects one or more toplevel definitions or declarations, the `coalton` form takes a single expression, evaluates it relative to the current environment, and returns its (underlying) Lisp value. This can be useful for working with Coalton from a Lisp REPL. 
+Whereas `coalton-toplevel` expects one or more toplevel definitions or declarations, the `coalton` form takes a single expression, evaluates it relative to the current environment, and returns its (underlying) Lisp value. This can be useful for working with Coalton from a Lisp REPL.
 
 For example, the following gets the first element of the tuple `p` defined above.
 ```lisp
@@ -335,7 +335,7 @@ Coalton's `progn` can have flattened `let` syntax.
       (let x_ = (show x))
       (let y_ = (show y))
       (concat-string x_ y_))))
-```      
+```
 
 ## Typeclasses
 
@@ -383,7 +383,9 @@ instance.
 ```
 
 
-## Builtin Typeclasses
+## Builtin Type Classes
+
+The following are the main type classes defined in the standard library.
 
 * `Eq` - defined on types that are comparable
 * `Ord` - defined on types that are orderable
@@ -392,11 +394,20 @@ instance.
 * `Semigroup` - defined on types which support an associative binary operation
 * `Monoid` - defined on types that are semigroups and have an identiy element
 
-* `Functor`
+
+The following type classes are similar to the typeclasses with the same name in Haskell with a few differences.
+
+* `Functor` - `fmap` is just `map` in Coalton
 * `Applicative`
-* `Monad`
-* `MonadFail`
-* `Alternative`
+* `Monad` - monad does not have `return`, use `pure` from applicative instead
+* `Alternative` - `<|>` is called `alt` in Coalton
+
+
+
+* `Into` - total conversions between one type and another
+* `TryInto` - non total conversions between one type and another
+
+
 
 ## Do Notation
 
@@ -423,3 +434,27 @@ Inline type annotations can be added to resolve ambiguities when using type clas
 (coalton-toplevel
   (define f (the U32 (+ (fromInt 5) (fromInt 7)))))
 ```
+
+## Shorthand Function Call Syntax
+
+Coalton does not have nullary functions. However `(make-vector)` is a shorthand for `(make-vector Unit)`.
+
+## Inspecting the Coalton System
+
+The `coalton` package defines several debugging functions.
+
+
+Type-of and kind-of can be used to inspect the types and kinds of definitions.
+```
+COALTON-USER> (type-of 'map)
+∀ :A :B :C. FUNCTOR :C ⇒ ((:A → :B) → (:C :A) → (:C :B))
+COALTON-USER> (kind-of 'Result)
+* -> (* -> *)
+```
+
+The following functions all take an optional package parameter 
+
+* `print-type-db` - Print every known type
+* `print-value-db` - Print the type of every toplevel value
+* `print-class-db` - Print every class and their methods
+* `print-instance-db` - Print the instances of every class
