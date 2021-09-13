@@ -84,13 +84,14 @@ Lastly and importantly, we maintain a collection of documentation about Coalton 
 
 **Learn**: We recommend starting with the [*Intro to Coalton*](docs/intro-to-coalton.md) document, and then taking a peek in the [examples directory](examples/). It may also be helpful to check out the [introductory blog post](https://coalton-lang.github.io/20211010-introducing-coalton/).
 
-## Contributing
+## Get Involved
 
-Coalton is [MIT licensed](LICENSE.txt). We welcome contributions of all forms, especially as we stabilize toward a 1.0 release. We would be grateful to receive:
+Want to ask a question about Coalton, propose a feature, or share a cool program you wrote? Try posting in the [GitHub Discussions](https://github.com/coalton-lang/coalton/discussions) page!
+
+We welcome contributions of all forms, especially as we stabilize toward a 1.0 release. We would be grateful to receive:
 
 - bug reports (filed as issues),
 - bug fixes and typo corrections (filed as pull requests),
 - small [example programs](examples/small-coalton-programs/), and
-- user experience troubles and reports.
+- user experience troubles.
 
-We also welcome discussions, proposals, and questions!
