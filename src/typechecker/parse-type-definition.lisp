@@ -8,7 +8,12 @@
 (serapeum:defstruct-read-only type-definition
   (name :type symbol)
   (type :type ty)
+  (runtime-type :type t)
+  (compressed-type :type t)
   (constructors :type constructor-entry-list))
+
+#+sbcl
+(declaim (sb-ext:freeze-type type-definition))
 
 (defun type-definition-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -76,7 +81,8 @@ Returns (TYPE-DEFINITIONS DOCSTRINGS)"
                  (type-entry
                   :name (first parsed)
                   :runtime-type (first parsed)
-                  :type (second parsed))))
+                  :type (second parsed)
+                  :compressed-type nil)))
               parsed-tcons))
            (new-env (push-type-environment env new-bindings))
            (parsed-defs (loop :for parsed :in parsed-tcons
@@ -98,15 +104,42 @@ Returns (TYPE-DEFINITIONS DOCSTRINGS)"
                                                              (cons tvar
                                                                    (kind-arity (kind-of tvar))))))
                                   ;; Parse out the ctors
-                                  (let ((parsed-ctors
+                                  (let* ((parsed-ctors
                                           (loop :for ctor in ctors
                                                 :collect
-                                                (parse-type-ctor ctor applied-tycon type-vars-alist tycon-name new-env))))
-                                    (make-type-definition
-                                     :name tycon-name
-                                     :type tcon
-                                     :constructors parsed-ctors)))))))
+                                                (parse-type-ctor ctor applied-tycon type-vars-alist tycon-name new-env)))
+                                         (enum-type (every (lambda (ctor)
+                                                             (= 0 (constructor-entry-arity ctor)))
+                                                           parsed-ctors)))
+                                    (cond
+                                      (enum-type
+                                       (let ((parsed-ctors (mapcar #'rewrite-ctor parsed-ctors)))
+                                         (make-type-definition
+                                          :name tycon-name
+                                          :type tcon
+                                          :runtime-type `(member ,@(mapcar #'constructor-entry-compressed-repr parsed-ctors))
+                                          :compressed-type t
+                                          :constructors parsed-ctors)))
+
+                                      (t
+                                       (make-type-definition
+                                        :name tycon-name
+                                        :type tcon
+                                        :runtime-type tycon-name
+                                        :compressed-type nil
+                                        :constructors parsed-ctors)))))))))
       (values parsed-defs parsed-docstrings))))
+
+(defun rewrite-ctor (ctor)
+  (assert (= 0 (constructor-entry-arity ctor)))
+  (make-constructor-entry
+   :name (constructor-entry-name ctor)
+   :arity (constructor-entry-arity ctor)
+   :constructs (constructor-entry-constructs ctor)
+   :scheme (constructor-entry-scheme ctor)
+   :arguments (constructor-entry-arguments ctor)
+   :classname (constructor-entry-classname ctor)
+   :compressed-repr (constructor-entry-classname ctor)))
 
 (defun parse-type-ctor (form applied-tycon type-vars constructs env)
   (declare (type t form)
@@ -160,7 +193,8 @@ Returns (TYPE-DEFINITIONS DOCSTRINGS)"
                                               (qualify nil (build-function tyargs)))
            :classname (alexandria:format-symbol
                        (symbol-package constructs)
-                       "~A/~A" constructs ctor-name)))))))
+                       "~A/~A" constructs ctor-name)
+           :compressed-repr nil))))))
 
 (defun tvar-count-to-kind (tvar-count)
   "Create a KIND from the number of type variables"

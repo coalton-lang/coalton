@@ -24,7 +24,14 @@
 (serapeum:defstruct-read-only (type-entry (:constructor type-entry))
   (name :type symbol)
   (runtime-type :type t)
-  (type :type ty))
+  (type :type ty)
+
+  ;; If this is true then the type is compiled to a more effecient
+  ;; enum representation at runtime
+  (compressed-type :type boolean))
+
+#+sbcl
+(declaim (sb-ext:freeze-type type-entry))
 
 (serapeum:defstruct-read-only (type-environment (:include shadow-realm)))
 
@@ -41,73 +48,85 @@
            (type-entry
             :name 'Char
             :runtime-type 'character
-            :type tChar))
+            :type tChar
+            :compressed-type nil))
 
           ('coalton:I32
            (type-entry
             :name 'I32
             :runtime-type '(signed-byte 32)
-            :type tI32))
+            :type tI32
+            :compressed-type nil))
 
           ('coalton:I64
            (type-entry
             :name 'I64
             :runtime-type '(signed-byte 64)
-            :type tI64))
+            :type tI64
+            :compressed-type nil))
 
           ('coalton:U8
            (type-entry
             :name 'U8
             :runtime-type '(unsigned-byte 8)
-            :type tU8))
+            :type tU8
+            :compressed-type nil))
 
           ('coalton:U32
            (type-entry
             :name 'U32
             :runtime-type '(unsigned-byte 32)
-            :type tU32))
+            :type tU32
+            :compressed-type nil))
 
           ('coalton:U64
            (type-entry
             :name 'U64
             :runtime-type '(unsigned-byte 64)
-            :type tU64))
+            :type tU64
+            :compressed-type nil))
 
           ('coalton:Integer
            (type-entry
             :name 'Integer
             :runtime-type 'integer
-            :type tInteger))
+            :type tInteger
+            :compressed-type nil))
 
           ('coalton:Single-Float
            (type-entry
             :name 'Single-Float
             :runtime-type 'single-float
-            :type tSingle-Float))
+            :type tSingle-Float
+            :compressed-type nil))
 
           ('coalton:Double-Float
            (type-entry
             :name 'Double-Float
             :runtime-type 'double-float
-            :type tDouble-Float))
+            :type tDouble-Float
+            :compressed-type nil))
 
           ('coalton:String
            (type-entry
             :name 'String
             :runtime-type 'simple-string
-            :type tString))
+            :type tString
+            :compressed-type nil))
 
           ('coalton:Lisp-Object
            (type-entry
             :name 'lisp-object
             :runtime-type 'coalton-impl::lisp-object
-            :type tLisp-Object))
+            :type tLisp-Object
+            :compressed-type nil))
 
           ('coalton:Arrow
            (type-entry
             :name 'Arrow
             :runtime-type nil
-            :type tArrow)))))
+            :type tArrow
+            :compressed-type nil)))))
 
 ;;;
 ;;; Constructor environment
@@ -119,7 +138,11 @@
   (constructs  :type symbol)
   (scheme :type ty-scheme)
   (arguments :type scheme-list)
-  (classname :type symbol))
+  (classname :type symbol)
+
+  ;; If this constructor constructs a compressed-repr type then
+  ;; compressed-repr is the runtime value of this nullary constructor
+  (compressed-repr :type t))
 
 #+sbcl
 (declaim (sb-ext:freeze-type constructor-entry))
