@@ -4,9 +4,9 @@
 
   (define-type Unit Unit)
 
-  (define-type Boolean
-    True
-    False)
+  ;; Boolean is an early type
+  (define True (lisp Boolean ()  cl:t))
+  (define False (lisp Boolean ()  cl:nil))
 
   (define-type (List :a)
     "A list in singly-linked representation."

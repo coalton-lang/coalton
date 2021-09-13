@@ -392,6 +392,7 @@
    #:=> #:⇒
    #:∀
    #:Unit
+   #:Boolean #:True #:False
    #:Char
    #:I32
    #:I64

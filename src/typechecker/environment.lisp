@@ -44,6 +44,13 @@
   (make-type-environment
    :data (fset:map
           ;; Early Types
+          ('coalton:Boolean
+           (type-entry
+            :name 'Boolean
+            :runtime-type 'boolean
+            :type tBoolean
+            :compressed-type t))
+
           ('coalton:Char
            (type-entry
             :name 'Char
@@ -159,6 +166,31 @@
 
 
 (serapeum:defstruct-read-only (constructor-environment (:include shadow-realm)))
+
+(defun make-default-constructor-environment ()
+  "Create a TYPE-ENVIRONMENT containing early constructors"
+  (make-constructor-environment
+   :data (fset:map
+          ;; Early Constructors
+          ('coalton:True
+           (make-constructor-entry
+            :name 'coalton:True
+            :arity 0
+            :constructs 'coalton:Boolean
+            :scheme (to-scheme (qualify nil tBoolean))
+            :arguments nil
+            :classname 'coalton::Boolean/True
+            :compressed-repr t))
+
+          ('coalton:False
+           (make-constructor-entry
+            :name 'coalton:False
+            :arity 0
+            :constructs 'coalton:Boolean
+            :scheme (to-scheme (qualify nil tBoolean))
+            :arguments nil
+            :classname 'coalton::Boolean/False
+            :compressed-repr nil)))))
 
 #+sbcl
 (declaim (sb-ext:freeze-type constructor-environment))
@@ -327,7 +359,7 @@
   (make-environment
    (make-value-environment)
    (make-default-type-environment)
-   (make-constructor-environment)
+   (make-default-constructor-environment)
    (make-class-environment)
    (make-instance-environment)
    (make-function-environment)
