@@ -55,3 +55,6 @@ jobs:
       - uses: 40ants/run-tests@v2
         with:
           asdf-system: coalton
+          run-tests: |
+            (ql:quickload :coalton/tests)   ; get deps
+            (asdf:test-system :coalton)
