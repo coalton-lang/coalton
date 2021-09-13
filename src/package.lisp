@@ -400,13 +400,12 @@
   (:export
    #:fn #:λ
    #:match
-   #:let #:=
-   #:if #:unless #:when #:cond
+   #:let
+   #:=                                  ; Syntax
    #:lisp
-   #:do #:<-
+   #:<-                                 ; Syntax
    #:_
    #:seq
-   #:progn
    #:the)
   (:import-from
    #:coalton-impl
@@ -436,6 +435,8 @@
    #:if
    #:unless
    #:when
+   #:and
+   #:or
    #:cond
    #:nest
    #:pipe
@@ -447,10 +448,10 @@
   (:export
    #:Unit
    #:Boolean #:True #:False
-   #:not
-   #:or
-   #:and
-   #:xor
+   #:boolean-not #:not
+   #:boolean-or
+   #:boolean-and
+   #:boolean-xor #:xor
    #:List #:Cons #:Nil
    #:Tuple
    #:Result #:Err #:Ok
