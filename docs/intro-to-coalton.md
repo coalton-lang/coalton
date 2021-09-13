@@ -271,7 +271,7 @@ Match expressions can be used to pattern-match and deconstruct algebraic data ty
       (_ False))))
 ```
 
-The operator `coalton:if` can be used as a shorthand when matching on booleans
+The operator `coalton-library:if` can be used as a shorthand when matching on booleans
 
 ```lisp
 (coalton-toplevel
@@ -286,7 +286,7 @@ The operator `coalton:if` can be used as a shorthand when matching on booleans
         (is-even (- x 1)))))
 ```
 
-Several `if` expressions can be combined with a `coalton:cond`:
+Several `if` expressions can be combined with a `cond`:
 
 ```lisp
 (coalton-toplevel
@@ -302,18 +302,27 @@ Several `if` expressions can be combined with a `coalton:cond`:
       (True (show n)))))
 ```
 
-Coalton also has `coalton:unless` and `coalton:when` which work similary to their definitions in Lisp. We recommend only using these operators for conditionalizing stateful operations.
+The boolean operators `and` and `or` (of `coalton-library`) are actually variadic macros that short-circuit. Their functional counterparts are `boolean-and` and `boolean-or`.
 
+```lisp
+(coalton
+  (or (cheap 5) True (really-expensive (expt 2 1000000))))
 ```
+
+In this case, `really-expensive` will never get called due to short-circuiting. Also note that both `and` and `or` can take any number of arguments, including zero.
+
+Coalton also has `unless` and `when` (of `coalton-library`) which work similary to their definitions in Lisp. We recommend only using these operators for conditionalizing stateful operations.
+
+```lisp
 (coalton-toplevel
   (define (f x)
     (when (== x 5)
       (error "I only want the number 5"))))
 ```
 
-## `COALTON:PROGN`
+## `COALTON-LIBRARY:PROGN`
 
-Coalton has a `coalton:progn` construct similar to lisp.
+Coalton has a `coalton-library:progn` construct similar to lisp.
 
 ```lisp
 (coalton-toplevel

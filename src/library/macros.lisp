@@ -1,34 +1,59 @@
 (in-package #:coalton-library)
 
-;; Define IF as a macro to prevent branches from eagerly being evaluated
-(cl:defmacro coalton:if (expr then else)
+(cl:defmacro if (expr then else)
   `(match ,expr
      ((True) ,then)
      ((False) ,else)))
 
-(cl:defmacro coalton:when (expr then)
+(cl:defmacro when (expr then)
   `(if ,expr
        (seq
         ,then
         Unit)
        Unit))
 
-(cl:defmacro coalton:unless (expr then)
+(cl:defmacro unless (expr then)
   `(if ,expr
        Unit
        (seq
         ,then
         Unit)))
 
-(cl:defmacro coalton:cond (cl:&rest exprs)
+(cl:defmacro and (cl:&rest exprs)
+  "A short-circuiting AND operator."
+  (cl:cond
+    ((cl:null exprs) `True)
+    ((cl:null (cl:cdr exprs)) (cl:car exprs))
+    (cl:t
+     (cl:reduce (cl:lambda (x acc)
+                  `(coalton:match ,x
+                     ((True) ,acc)
+                     ((False) False)))
+                exprs
+                :from-end cl:t))))
+
+(cl:defmacro or (cl:&rest exprs)
+  "A short-circuiting OR operator."
+  (cl:cond
+    ((cl:null exprs) `False)
+    ((cl:null (cl:cdr exprs)) (cl:car exprs))
+    (cl:t
+     (cl:reduce (cl:lambda (x acc)
+                  `(coalton:match ,x
+                     ((True) True)
+                     ((False) ,acc)))
+                exprs
+                :from-end cl:t))))
+
+(cl:defmacro cond (cl:&rest exprs)
   (cl:labels ((build-calls (exprs)
                 (cl:if (cl:null (cl:cdr exprs))
-                       `(coalton:if ,(cl:caar exprs)
-                                    ,(cl:cadar exprs)
-                                    (lisp :a ()  (cl:error "Non-exhaustive COND")))
-                       `(coalton:if ,(cl:caar exprs)
-                                    ,(cl:cadar exprs)
-                                    ,(build-calls (cl:cdr exprs))))))
+                       `(coalton-library:if ,(cl:caar exprs)
+                                            ,(cl:cadar exprs)
+                                            (lisp :a ()  (cl:error "Non-exhaustive COND")))
+                       `(coalton-library:if ,(cl:caar exprs)
+                                            ,(cl:cadar exprs)
+                                            ,(build-calls (cl:cdr exprs))))))
     (build-calls exprs)))
 
 (cl:defmacro nest (cl:&rest items)
@@ -71,7 +96,7 @@ to
           True
           False))
 
-(cl:defmacro coalton:do (cl:&rest forms)
+(cl:defmacro do (cl:&rest forms)
   (cl:labels ((process (forms)
                 (cl:let ((form (cl:car forms)))
                   (cl:cond ((cl:not (cl:listp form))
@@ -117,7 +142,7 @@ to
                                  ,(process (cl:cdr forms))))))))
     (process forms)))
 
-(cl:defmacro coalton:progn (cl:&rest forms)
+(cl:defmacro progn (cl:&rest forms)
   (cl:assert (cl:< 0 (cl:length forms)) () "Malformed progn block.")
   (cl:labels ((process (forms)
                 (cl:if (cl:= 1 (cl:length forms))
@@ -151,6 +176,5 @@ to
 
                          ;; There was never a let generate a simple seq
                          `(coalton:seq
-                           ,@forms)
-                         ))))
+                           ,@forms)))))
     (process forms)))
