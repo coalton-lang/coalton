@@ -2,8 +2,7 @@
 
 (coalton-toplevel
 
-  ;; Type is already known in COALTON-IMPL.
-  (define Unit (lisp Unit () 'Unit))
+  (define-type Unit Unit)
 
   (define-type Boolean
     True

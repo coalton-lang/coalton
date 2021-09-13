@@ -32,7 +32,6 @@
   (make-type-environment
    :data (fset:map
           ;; Early Types
-          ('coalton:Unit tUnit)
           ('coalton:Char tChar)
 
           ('coalton:I32 tI32)
