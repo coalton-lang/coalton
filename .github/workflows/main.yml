@@ -41,7 +41,7 @@ jobs:
             ~/.roswell
             /usr/local/etc/roswell
             .qlot
-          key: "${{ steps.current-month.outputs.value }}-${{ env.cache-name }}-${{ runner.os }}-${{ hashFiles('qlfile.lock') }}"
+          key: "${{ steps.current-month.outputs.value }}-${{ env.cache-name }}-${{ runner.os }}-${{ hashFiles('qlfile.lock') }}-1"
       - name: Restore Path To Cached Files
         run: |
           echo $HOME/.roswell/bin >> $GITHUB_PATH
@@ -55,6 +55,5 @@ jobs:
       - uses: 40ants/run-tests@v2
         with:
           asdf-system: coalton
-          run-tests: |
-            (ql:quickload :coalton/tests)   ; get deps
+          run-tests:
             (asdf:test-system :coalton)
