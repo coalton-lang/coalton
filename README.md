@@ -68,6 +68,7 @@ This repository contains the source code to the [Coalton compiler](src/), and th
 It also contains a few example programs, such as:
 
 - Some [simple pedagogical programs](examples/small-coalton-programs/),
+- A [JSON parser](examples/coalton-quil) piggybacking on a native Common Lisp library.
 - An [implementation](examples/thih/) of Jones's *Typing Haskell in Haskell*, and
 - An [implementation](examples/quil-coalton/) of a simple [Quil](https://en.wikipedia.org/wiki/Quil_(instruction_set_architecture)) parser.
 
@@ -81,7 +82,7 @@ Lastly and importantly, we maintain a collection of documentation about Coalton 
 
 **Test**: Run `(asdf:test-system :coalton)`.
 
-**Learn**: We recommend starting with the [*Intro to Coalton*](docs/intro-to-coalton.md) document, and then taking a peek in the [examples directory](examples/). It may also be helpful to check out the [Introducing Coalton Blog Post](https://coalton-lang.github.io/20211010-introducing-coalton/) (external).
+**Learn**: We recommend starting with the [*Intro to Coalton*](docs/intro-to-coalton.md) document, and then taking a peek in the [examples directory](examples/). It may also be helpful to check out the [introductory blog post](https://coalton-lang.github.io/20211010-introducing-coalton/).
 
 ## Contributing
 

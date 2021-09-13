@@ -4,7 +4,8 @@
   (run-package-tests
    :packages '(:coalton-tests
                :quil-coalton-tests
-               :thih-coalton-tests)
+               :thih-coalton-tests
+               :coalton-json-tests)
    :interactive t))
 
 (defun set-equalp (set1 set2)
@@ -15,7 +16,6 @@
   (set-equalp dag1 dag2))
 
 (defun check-coalton-types (toplevel expected-types)
-
   (multiple-value-bind (form env)
       (coalton-impl::process-coalton-toplevel toplevel coalton-impl::*initial-environment*)
     (declare (ignore form))
@@ -26,4 +26,4 @@
                    (coalton-impl/typechecker::parse-and-resolve-type env type))))))
 
 (defun run-coalton-typechecker (toplevel)
-    (coalton-impl::process-coalton-toplevel toplevel coalton-impl::*initial-environment*))
+  (coalton-impl::process-coalton-toplevel toplevel coalton-impl::*initial-environment*))
