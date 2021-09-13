@@ -105,6 +105,7 @@
   :license "MIT"
   :depends-on (#:coalton
                #:fiasco
+               #:coalton-json/tests
                #:quil-coalton/tests
                #:thih-coalton/tests)
   :perform (asdf:test-op (o s)
