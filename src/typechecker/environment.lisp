@@ -32,7 +32,8 @@
   (make-type-environment
    :data (fset:map
           ;; Early Types
-          ('coalton:Unit tUnit)
+          ('coalton-library:Unit    tUnit)
+          ('coalton-library:Boolean tBoolean)
           ('coalton:Char tChar)
 
           ('coalton:I32 tI32)
@@ -59,7 +60,11 @@
   (constructs  :type symbol)
   (scheme :type ty-scheme)
   (arguments :type scheme-list)
-  (classname :type symbol))
+  ;; CLASSNAME is either a structure class name (a symbol), or the
+  ;; list (:TYPE <cl-type>) for a given Common Lisp type <cl-type>.
+  ;;
+  ;; The :TYPE form is only valid if ARITY = 0.
+  (classname :type (or symbol (cons (member :type)))))
 
 #+sbcl
 (declaim (sb-ext:freeze-type constructor-entry))
@@ -79,6 +84,34 @@
 
 #+sbcl
 (declaim (sb-ext:freeze-type constructor-environment))
+
+(defun make-default-constructor-environment ()
+  (make-constructor-environment
+   :data (fset:map
+          ('coalton-library:Unit (make-constructor-entry
+                                  :name 'coalton-library:Unit
+                                  :arity 0
+                                  :constructs 'coalton-library:Unit
+                                  :scheme (to-scheme
+                                           (qualify '() tUnit))
+                                  :arguments '()
+                                  :classname '(:type (member coalton-library:Unit))))
+          ('coalton-library:False (make-constructor-entry
+                                   :name 'coalton-library:False
+                                   :arity 0
+                                   :constructs 'coalton-library:Boolean
+                                   :scheme (to-scheme
+                                            (qualify '() tBoolean))
+                                   :arguments '()
+                                   :classname '(:type (member cl:nil))))
+          ('coalton-library:True (make-constructor-entry
+                                  :name 'coalton-library:True
+                                  :arity 0
+                                  :constructs 'coalton-library:Boolean
+                                  :scheme (to-scheme
+                                           (qualify '() tBoolean))
+                                  :arguments '()
+                                  :classname '(:type (member cl:t)))))))
 
 ;;;
 ;;; Class environment
@@ -244,7 +277,7 @@
   (make-environment
    (make-value-environment)
    (make-default-type-environment)
-   (make-constructor-environment)
+   (make-default-constructor-environment)
    (make-class-environment)
    (make-instance-environment)
    (make-function-environment)

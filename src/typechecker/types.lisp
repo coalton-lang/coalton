@@ -127,7 +127,10 @@
 ;;; Early types
 ;;;
 
-(defvar tUnit    (%make-tcon (%make-tycon :name 'coalton:Unit        :kind kstar)))
+(defvar tUnit
+  (%make-tcon (%make-tycon :name 'coalton-library:Unit :kind kstar)))
+(defvar tBoolean
+  (%make-tcon (%make-tycon :name 'coalton-library:Boolean :kind kstar)))
 (defvar tChar    (%make-tcon (%make-tycon :name 'coalton:Char        :kind kstar)))
 (defvar tI32     (%make-tcon (%make-tycon :name 'coalton:I32         :kind kstar)))
 (defvar tI64     (%make-tcon (%make-tycon :name 'coalton:I64         :kind kstar)))

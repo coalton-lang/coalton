@@ -22,4 +22,14 @@
                          :for subpattern := (compile-pattern field env)
                          :for accessor := (alexandria:format-symbol package "_~D" i)
                          :collect `(,accessor ,subpattern))))
-      `(cl:structure ,class-name ,@fields))))
+      (etypecase class-name
+        (symbol
+         `(cl:structure ,class-name ,@fields))
+        ;; This case handles odd pre-defined constructors that have
+        ;; specialized Lisp representations.
+        ((cons (member :type))
+         (unless (null fields)
+           (coalton-impl::coalton-bug
+            "Coalton bug: encountered :TYPE in a pattern compilation ~
+             of a constructor with fields."))
+         `(cl:type ,(second class-name)))))))

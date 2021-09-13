@@ -2,12 +2,12 @@
 
 (coalton-toplevel
 
-  ;; Type is already known in COALTON-IMPL.
+  ;; UNIT is already known in COALTON-IMPL.
   (define Unit (lisp Unit () 'Unit))
 
-  (define-type Boolean
-    True
-    False)
+  ;; BOOLEAN is already known in COALTON-IMPL.
+  (define True  (lisp Boolean () 'cl:t))
+  (define False (lisp Boolean () 'cl:nil))
 
   (define-type (List :a)
     "A list in singly-linked representation."

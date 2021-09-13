@@ -13,21 +13,23 @@
 
   (:method ((ty coalton-impl/typechecker::tcon))
     ;; Here, we will (for now) make a mapping from early types to lisp types.
-    (let ((tcon-name (coalton-impl/typechecker::tycon-name (coalton-impl/typechecker::tcon-tycon ty))))
+    (let ((tcon-name (coalton-impl/typechecker::tycon-name
+                      (coalton-impl/typechecker::tcon-tycon ty))))
       (cond
-        ((eql tcon-name 'coalton:Void)         'nil)
-        ((eql tcon-name 'coalton:Unit)         '(member coalton:unit))
-        ((eql tcon-name 'coalton:Char)         'character)
-        ((eql tcon-name 'coalton:I32)          '(signed-byte 32))
-        ((eql tcon-name 'coalton:I64)          '(signed-byte 64))
-        ((eql tcon-name 'coalton:U8)           '(unsigned-byte 8))
-        ((eql tcon-name 'coalton:U32)          '(unsigned-byte 32))
-        ((eql tcon-name 'coalton:U64)          '(unsigned-byte 64))
-        ((eql tcon-name 'coalton:Integer)      'integer)
-        ((eql tcon-name 'coalton:Single-Float) 'single-float)
-        ((eql tcon-name 'coalton:Double-Float) 'double-float)
+        ((eql tcon-name 'coalton:Void)            'nil)
+        ((eql tcon-name 'coalton-library:Unit)    '(member coalton-library:Unit))
+        ((eql tcon-name 'coalton-library:Boolean) 'boolean)
+        ((eql tcon-name 'coalton:Char)            'character)
+        ((eql tcon-name 'coalton:I32)             '(signed-byte 32))
+        ((eql tcon-name 'coalton:I64)             '(signed-byte 64))
+        ((eql tcon-name 'coalton:U8)              '(unsigned-byte 8))
+        ((eql tcon-name 'coalton:U32)             '(unsigned-byte 32))
+        ((eql tcon-name 'coalton:U64)             '(unsigned-byte 64))
+        ((eql tcon-name 'coalton:Integer)         'integer)
+        ((eql tcon-name 'coalton:Single-Float)    'single-float)
+        ((eql tcon-name 'coalton:Double-Float)    'double-float)
 
-        ((eql tcon-name 'coalton:String)       'simple-string)
+        ((eql tcon-name 'coalton:String)          'simple-string)
 
         ;; LISP-OBJECT maps with this last case.
         (t tcon-name))))
