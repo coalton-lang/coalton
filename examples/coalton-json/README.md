@@ -1,6 +1,6 @@
 # coalton-json
 
-This library is an example of a real-world binding to a Common Lisp (non-Coalton) library. It's intended to be simple but non-trivial. We bind to the [`JSON-STREAMS`)(https://github.com/rotatef/json-streams) library.
+This library is an example of a real-world binding to a Common Lisp (non-Coalton) library. It's intended to be simple but non-trivial. We bind to the [`JSON-STREAMS`](https://github.com/rotatef/json-streams) library.
 
 The way we do this is as follows:
 
