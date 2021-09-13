@@ -551,7 +551,9 @@
    #:sum
    #:product
    #:all
-   #:any)
+   #:any
+   #:cl-list-to-coalton
+   #:coalton-to-cl-list)
   ;; Tuple
   (:export
    #:fst
