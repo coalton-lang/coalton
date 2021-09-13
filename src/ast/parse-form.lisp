@@ -55,7 +55,7 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
        ;; Application
        ((t &rest rands)
         (if (null rands)
-            (parse-application expr (first expr) `(coalton::Unit) sr package)
+            (parse-application expr (first expr) `(coalton-library:Unit) sr package)
             (parse-application expr (first expr) rands sr package)))))
     (t (error-parsing expr "The expression is not a valid value expression."))))
 

@@ -16,7 +16,6 @@
     (let ((tcon-name (coalton-impl/typechecker::tycon-name (coalton-impl/typechecker::tcon-tycon ty))))
       (cond
         ((eql tcon-name 'coalton:Void)         'nil)
-        ((eql tcon-name 'coalton:Unit)         '(member coalton-library:Unit))
         ((eql tcon-name 'coalton:Char)         'character)
         ((eql tcon-name 'coalton:I32)          '(signed-byte 32))
         ((eql tcon-name 'coalton:I64)          '(signed-byte 64))
