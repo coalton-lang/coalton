@@ -240,6 +240,11 @@
     "Exponentiate BASE to the POWER."
     (lisp Integer (base power) (cl:expt base power)))
 
+  (declare ash (Integer -> Integer -> Integer))
+  (define (ash x n)
+    "Compute the \"arithmetic shift\" of X by N. "
+    (lisp Integer (x n) (cl:ash x n)))
+
   (declare mod (Integer -> Integer -> Integer))
   (define (mod num base)
     "Compute NUM modulo BASE."

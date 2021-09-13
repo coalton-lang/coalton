@@ -486,6 +486,7 @@
    #:integer->double-float
    #:negate
    #:abs
+   #:ash
    #:sign
    #:expt
    #:mod
