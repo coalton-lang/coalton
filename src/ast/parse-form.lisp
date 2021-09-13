@@ -127,7 +127,7 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
          :collect (cons
                    var
                    (or (shadow-realm-lookup sr var)
-                       (coalton-impl::coalton-bug "Missing var ~A." var))))
+                       (error-parsing unparsed "Unknown variable ~A in lisp node~%" var))))
    ;; Do *NOT* parse LISP-EXPR!
    lisp-expr))
 
