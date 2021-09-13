@@ -180,9 +180,10 @@
    #:lookup-class-instance              ; FUNCTION
    #:lookup-name                        ; FUNCTION
    #:type-entry
-   #:type-entry-name
-   #:type-entry-runtime-type
-   #:type-entry-type
+   #:type-entry-name                    ; STRUCT
+   #:type-entry-runtime-type            ; ACCESSOR
+   #:type-entry-type                    ; ACCESSOR
+   #:type-entry-compressed-type         ; ACCESSOR
    #:constructor-entry                  ; STRUCT
    #:constructor-entry-name             ; ACCESSOR
    #:constructor-entry-arity            ; ACCESSOR
@@ -190,6 +191,7 @@
    #:constructor-entry-scheme           ; ACCESSOR
    #:constructor-entry-arguments        ; ACCESSOR
    #:constructor-entry-classname        ; ACCESSOR
+   #:constructor-entry-compressed-repr  ; ACCESSOR
    #:make-constructor-entry             ; CONSTRUCTOR
    #:constructor-entry-list             ; TYPE
    #:function-env-entry                 ; STRUCT
@@ -219,6 +221,8 @@
    #:type-definition-type               ; ACCESSOR
    #:type-definition-constructors       ; ACCESSOR
    #:type-definition-list               ; TYPE
+   #:type-definition-runtime-type       ; ACCESSOR
+   #:type-definition-compressed-type    ; ACCESSOR
    )
   (:export
    #:coalton-type-error                 ; SIGNAL
