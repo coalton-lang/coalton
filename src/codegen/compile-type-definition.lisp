@@ -1,6 +1,6 @@
 (in-package #:coalton-impl/codegen)
 
-(defun compile-type-definition (def)
+(defun compile-type-definition (def env)
   (let ((package (symbol-package (type-definition-name def))))
     `((defstruct (,(type-definition-name def)
                   (:constructor nil)
@@ -19,7 +19,7 @@
                         (:constructor ,(constructor-entry-name constructor) ,slot-names)
                         (:predicate nil)
                         (:copier nil))
-              ,@(ctor-make-slots slot-names slot-types))
+              ,@(ctor-make-slots slot-names slot-types env))
             #+sbcl (declaim (sb-ext:freeze-type ,classname)))
           :collect (cond
                      ((= 0 (constructor-entry-arity constructor))
@@ -59,10 +59,10 @@
   (loop :for i :below count
         :collect (alexandria:format-symbol package "_~D" i)))
 
-(defun ctor-make-slot (name type)
-  `(,name (error "") :type ,(lisp-type type) :read-only t))
+(defun ctor-make-slot (name type env)
+  `(,name (error "") :type ,(lisp-type type env) :read-only t))
 
-(defun ctor-make-slots (slot-names slot-types)
+(defun ctor-make-slots (slot-names slot-types env)
   (loop :for slot-name :in slot-names
         :for slot-type :in slot-types
-        :collect (ctor-make-slot slot-name slot-type)))
+        :collect (ctor-make-slot slot-name slot-type env)))

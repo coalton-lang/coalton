@@ -179,6 +179,10 @@
    #:lookup-class-instances             ; FUNCTION
    #:lookup-class-instance              ; FUNCTION
    #:lookup-name                        ; FUNCTION
+   #:type-entry
+   #:type-entry-name
+   #:type-entry-runtime-type
+   #:type-entry-type
    #:constructor-entry                  ; STRUCT
    #:constructor-entry-name             ; ACCESSOR
    #:constructor-entry-arity            ; ACCESSOR

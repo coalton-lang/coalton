@@ -55,9 +55,9 @@
     (let* ((lambda-expr `(lambda ,(mapcar #'car (typed-node-abstraction-vars expr))
                            (declare (ignorable ,@(mapcar #'car (typed-node-abstraction-vars expr)))
                                     ,@(when *emit-type-annotations*
-                                        `(,@(mapcar (lambda (var) `(type ,(lisp-type (cdr var)) ,(car var)))
+                                        `(,@(mapcar (lambda (var) `(type ,(lisp-type (cdr var) env) ,(car var)))
                                                     (typed-node-abstraction-vars expr))
-                                          (values ,(lisp-type (typed-node-abstraction-subexpr expr)) &optional))))
+                                          (values ,(lisp-type (typed-node-abstraction-subexpr expr) env) &optional))))
                            ,(compile-expression (typed-node-abstraction-subexpr expr) ctx env)))
            (arity (length (typed-node-abstraction-vars expr))))
       (cond
@@ -80,7 +80,7 @@
   (:method ((expr typed-node-lisp) ctx env)
     (let ((inner
             (if *emit-type-annotations*
-                `(the (values ,(lisp-type expr) &optional) ,(typed-node-lisp-form expr))
+                `(the (values ,(lisp-type expr env) &optional) ,(typed-node-lisp-form expr))
                 (typed-node-lisp-form expr))))
       (if (typed-node-lisp-variables expr)
           `(let ,(mapcar
@@ -97,7 +97,7 @@
                                 ,(compile-expression (typed-match-branch-subexpr b) ctx env)))
                             (typed-node-match-branches expr))))
 
-      `(trivia:match (the ,(lisp-type (typed-node-match-expr expr)) ,subexpr)
+      `(trivia:match (the ,(lisp-type (typed-node-match-expr expr) env) ,subexpr)
          ;; NOTE: This error intentionally has no helpful
          ;; information. The pattern exhastiveness checks should
          ;; make it so this should never be hit and this allows us
@@ -181,12 +181,12 @@
                                                                  ,@(mapcar #'cdr dict-context)
                                                                  ,@(mapcar #'car (typed-node-abstraction-vars (cdr b))))
                                                                 ,@(when *emit-type-annotations*
-                                                                    `(,@(mapcar (lambda (var) `(type ,(lisp-type (cdr var)) ,(car var)))
+                                                                    `(,@(mapcar (lambda (var) `(type ,(lisp-type (cdr var) env) ,(car var)))
                                                                                 (typed-node-abstraction-vars (cdr b)))
                                                                       ,@(mapcar (lambda (dict) `(type ,(car dict) ,(cdr dict))) dict-types)
                                                                       (values
                                                                        ,(lisp-type
-                                                                         (typed-node-type (typed-node-abstraction-subexpr (cdr b)))) &optional))))
+                                                                         (typed-node-type (typed-node-abstraction-subexpr (cdr b))) env) &optional))))
                                                        ,(compile-expression
                                                          (typed-node-abstraction-subexpr (cdr b))
                                                          (append dict-context ctx) env))))
@@ -240,7 +240,7 @@
                                 (ignorable ,@(mapcar #'car scc-typed-bindings))
 
                                 ,@(when *emit-type-annotations*
-                                    `(,@(mapcar (lambda (var) `(type ,(lisp-type (cdr var)) ,(car var)))
+                                    `(,@(mapcar (lambda (var) `(type ,(lisp-type (cdr var) env) ,(car var)))
                                                 scc-typed-bindings)))
 
                                 ,@(when (not (null local-dynamic-extent-bindings))

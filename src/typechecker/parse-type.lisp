@@ -119,7 +119,7 @@ Optional ADDITIONAL-PREDICATES specifys additional predicates to qualify the res
                           var)))
                    ;; Type constructor in current scope
                    (t
-                    (lookup-type env expr))))
+                    (type-entry-type (lookup-type env expr)))))
                 (list
                  (cond
                    ((some #'coalton-arrow-p expr)
