@@ -19,7 +19,7 @@
       (not (== a b))))
   
   (define-type Expr
-    (EConst Int)
+    (EConst Integer)
     (EVar   Symbol)
     (E+     Expr Expr)
     (E*     Expr Expr))
