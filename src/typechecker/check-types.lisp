@@ -27,10 +27,9 @@
   (:method ((node typed-node-variable) env)
     (let ((env-type (fresh-inst (lookup-value-type env (typed-node-variable-name node))))
           (node-type (fresh-inst (typed-node-type node))))
-      ;; TODO: Match predicates
       (let ((subs (match (qualified-ty-type env-type)
                     (qualified-ty-type node-type))))
-        (loop :for env-pred :in (qualified-ty-predicates env-type)
+        (loop :for env-pred :in (remove-duplicates (qualified-ty-predicates env-type))
               :for node-pred :in (qualified-ty-predicates node-type) :do
                 (unless (type-predicate=
                          (apply-substitution subs env-pred)
