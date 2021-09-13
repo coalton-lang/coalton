@@ -3,4 +3,5 @@
   :pathname "src/"
   :serial t
   :components ((:file "package")
-               (:file "diff")))
+               (:file "diff")
+               (:file "microbench1")))
