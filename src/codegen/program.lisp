@@ -83,7 +83,9 @@
          (bindings (optimize-bindings optimizer bindings)))
     `(progn
        ;; Define types
-       ,@(reshuffle-definitions (mapcan #'compile-type-definition types))
+       ,@(reshuffle-definitions
+          (loop :for type :in types
+                :append (compile-type-definition type env)))
 
        ;; Define typeclasses
        ,@(reshuffle-definitions (compile-class-definitions classes env))
@@ -163,9 +165,9 @@
       (defun ,name ,params
         (declare (ignorable ,@params)
                  ,@(when *emit-type-annotations*
-                     `(,@(mapcar (lambda (var) `(type ,(lisp-type (cdr var)) ,(car var))) vars)
+                     `(,@(mapcar (lambda (var) `(type ,(lisp-type (cdr var) env) ,(car var))) vars)
                        ,@(mapcar (lambda (dict) `(type ,(car  dict) ,(cdr dict))) dict-types)
-                       (values ,(lisp-type return-type) &optional))))
+                       (values ,(lisp-type return-type env) &optional))))
         ,(compile-expression node dict-context env))
       (setf ,name (load-time-value ,(construct-function-entry `#',name (+ (length vars) (length preds))))))))
 
@@ -300,7 +302,7 @@
                                (declare
                                 (ignorable ,@vars)
                                 ,@(when *emit-type-annotations*
-                                    (mapcar (lambda (v) `(type ,(lisp-type (cdr v)) ,(car v) ))
+                                    (mapcar (lambda (v) `(type ,(lisp-type (cdr v) env) ,(car v) ))
                                             (typed-node-abstraction-vars method-body))))
                                ,(compile-expression subexpr context-dict env))
                             (length vars)))

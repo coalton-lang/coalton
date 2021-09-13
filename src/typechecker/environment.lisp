@@ -21,6 +21,11 @@
 ;;; Type environments
 ;;;
 
+(serapeum:defstruct-read-only (type-entry (:constructor type-entry))
+  (name :type symbol)
+  (runtime-type :type t)
+  (type :type ty))
+
 (serapeum:defstruct-read-only (type-environment (:include shadow-realm)))
 
 #+sbcl
@@ -32,21 +37,77 @@
   (make-type-environment
    :data (fset:map
           ;; Early Types
-          ('coalton:Char tChar)
+          ('coalton:Char
+           (type-entry
+            :name 'Char
+            :runtime-type 'character
+            :type tChar))
 
-          ('coalton:I32 tI32)
-          ('coalton:I64 tI64)
-          ('coalton:U8  tU8)
-          ('coalton:U32 tU32)
-          ('coalton:U64 tU64)
-          ('coalton:Integer tInteger)
-          ('coalton:Single-Float tSingle-Float)
-          ('coalton:Double-Float tDouble-Float)
+          ('coalton:I32
+           (type-entry
+            :name 'I32
+            :runtime-type '(signed-byte 32)
+            :type tI32))
 
-          ('coalton:String tString)
+          ('coalton:I64
+           (type-entry
+            :name 'I64
+            :runtime-type '(signed-byte 64)
+            :type tI64))
 
-          ('coalton:Lisp-Object tLisp-Object)
-          ('coalton:Arrow tArrow))))
+          ('coalton:U8
+           (type-entry
+            :name 'U8
+            :runtime-type '(unsigned-byte 8)
+            :type tU8))
+
+          ('coalton:U32
+           (type-entry
+            :name 'U32
+            :runtime-type '(unsigned-byte 32)
+            :type tU32))
+
+          ('coalton:U64
+           (type-entry
+            :name 'U64
+            :runtime-type '(unsigned-byte 64)
+            :type tU64))
+
+          ('coalton:Integer
+           (type-entry
+            :name 'Integer
+            :runtime-type 'integer
+            :type tInteger))
+
+          ('coalton:Single-Float
+           (type-entry
+            :name 'Single-Float
+            :runtime-type 'single-float
+            :type tSingle-Float))
+
+          ('coalton:Double-Float
+           (type-entry
+            :name 'Double-Float
+            :runtime-type 'double-float
+            :type tDouble-Float))
+
+          ('coalton:String
+           (type-entry
+            :name 'String
+            :runtime-type 'simple-string
+            :type tString))
+
+          ('coalton:Lisp-Object
+           (type-entry
+            :name 'lisp-object
+            :runtime-type 'coalton-impl::lisp-object
+            :type tLisp-Object))
+
+          ('coalton:Arrow
+           (type-entry
+            :name 'Arrow
+            :runtime-type nil
+            :type tArrow)))))
 
 ;;;
 ;;; Constructor environment
@@ -366,7 +427,7 @@
 (defun set-type (env symbol value)
   (declare (type environment env)
            (type symbol symbol)
-           (type ty value)
+           (type type-entry value)
            (values environment &optional))
   (update-environment
    env

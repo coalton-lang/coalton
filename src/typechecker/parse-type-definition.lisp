@@ -68,7 +68,16 @@ Returns (TYPE-DEFINITIONS DOCSTRINGS)"
             (push (list tycon-name tycon-type ctors type-vars tyvar-names) parsed-tcons)))))
 
     ;; Then, re-parse all of the type definitions and ctors using the environment
-    (let* ((new-bindings (mapcar (lambda (parsed) (cons (first parsed) (second parsed))) parsed-tcons))
+    (let* ((new-bindings
+             (mapcar
+              (lambda (parsed)
+                (cons
+                 (first parsed)
+                 (type-entry
+                  :name (first parsed)
+                  :runtime-type (first parsed)
+                  :type (second parsed))))
+              parsed-tcons))
            (new-env (push-type-environment env new-bindings))
            (parsed-defs (loop :for parsed :in parsed-tcons
                               :collect
