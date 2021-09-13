@@ -69,7 +69,7 @@
 
   (declare foldr ((:a -> :b -> :b) -> :b -> (List :a) -> :b))
   (define (foldr f y xs)
-    "Right fold on lists. Is short circuiting but is not tail recursive."
+    "Right fold on lists. Is not tail recursive."
     (match xs
       ((Cons x xs) (f x (foldr f y xs)))
       ((Nil) y)))
@@ -411,3 +411,14 @@
       (concatMap f m))
     (define (>> a b)
       (>>= a (fn (_) b)))))
+
+(cl:defun cl-list-to-coalton (list)
+  (cl:if (cl:null list)
+        Nil
+        (Cons (cl:car list) (cl-list-to-coalton (cl:cdr list)))))
+
+(cl:defun coalton-to-cl-list (list)
+  (cl:loop
+      :for xs := list :then (cl:slot-value xs '_1)
+      :until (cl:typep xs 'List/Nil)
+      :collect (cl:slot-value xs '_0)))
