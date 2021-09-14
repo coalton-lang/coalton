@@ -18,20 +18,20 @@
   (define (make-vector-capacity n)
     "Create a new vector with N elements preallocated"
     (lisp (Vector :a) (n)
-      (Vector (veil (cl:make-array n :fill-pointer 0 :adjustable cl:t)))))
+      (Vector (cl:make-array n :fill-pointer 0 :adjustable cl:t))))
 
   (declare vector-length ((Vector :a) -> Integer))
   (define (vector-length v)
     "Returns the length of V"
     (lisp Integer (v)
-      (cl:let ((v_ (unveil (cl:slot-value v '_0))))
+      (cl:let ((v_ (cl:slot-value v '_0)))
         (cl:fill-pointer v_))))
 
   (declare vector-capacity ((Vector :a) -> Integer))
   (define (vector-capacity v)
     "Returns the number of elements that V can store without resizing"
     (lisp Integer (v)
-      (cl:let ((v_ (unveil (cl:slot-value v '_0))))
+      (cl:let ((v_ (cl:slot-value v '_0)))
         (cl:array-dimension v_ 0))))
 
   (declare vector-empty ((Vector :a) -> Boolean))
@@ -43,7 +43,7 @@
   (define (vector-push item v)
     "Append ITEM to V and resize V if necessary"
     (lisp Integer (item v)
-      (cl:let ((v_ (unveil (cl:slot-value v '_0))))
+      (cl:let ((v_ (cl:slot-value v '_0)))
 	(cl:progn
 	  (cl:vector-push-extend item v_)
 	  (cl:1- (cl:fill-pointer v_))))))
@@ -59,7 +59,7 @@
   (define (vector-pop-unsafe v)
     "Remove and return the first item of V without checking if the vector is empty"
     (lisp :a (v)
-      (cl:let ((v_ (unveil (cl:slot-value v '_0))))
+      (cl:let ((v_ (cl:slot-value v '_0)))
         (cl:vector-pop v_))))
 
   (declare vector-index (Integer -> (Vector :a) -> (Optional :a)))
@@ -73,14 +73,14 @@
   (define (vector-index-unsafe index v)
     "Return the INDEXth element of V without checking if the element exists"
     (lisp :a (index v)
-      (cl:let ((v_ (unveil (cl:slot-value v '_0))))
+      (cl:let ((v_ (cl:slot-value v '_0)))
         (cl:aref v_ index))))
 
   (declare vector-set (Integer -> :a -> (Vector :a) -> Unit))
   (define (vector-set index item v)
     "Set the INDEXth element of V to ITEM. This function left intentionally unsafe because it does not have a return value to check."
     (lisp Unit (index item v)
-      (cl:let ((v_ (unveil (cl:slot-value v '_0))))
+      (cl:let ((v_ (cl:slot-value v '_0)))
         (cl:progn
           (cl:setf (cl:aref v_ index) item)
           Unit))))
@@ -113,7 +113,7 @@
 
       (progn
         (lisp (Optional Integer) (v test)
-          (cl:let* ((v_ (unveil (cl:slot-value v '_0)))
+          (cl:let* ((v_ (cl:slot-value v '_0))
                     (pos (cl:position-if
                           #'(cl:lambda (x)
                               (cl:equalp True (coalton-impl/codegen::A1 test x)))
@@ -126,7 +126,7 @@
   (define (vector-foreach f v)
     "Call the function F once for each item in V"
     (lisp Unit (f v)
-      (cl:let ((v_ (unveil (cl:slot-value v '_0))))
+      (cl:let ((v_ (cl:slot-value v '_0)))
         (cl:progn
           (cl:loop :for elem :across v_
              :do (coalton-impl/codegen::A1 f elem))
@@ -136,7 +136,7 @@
   (define (vector-foreach-index f v)
     "Call the function F once for each item in V with its index"
     (lisp Unit (f v)
-      (cl:let ((v_ (unveil (cl:slot-value v '_0))))
+      (cl:let ((v_ (cl:slot-value v '_0)))
         (cl:progn
           (cl:loop
              :for elem :across v_
@@ -148,8 +148,8 @@
   (define (vector-foreach2 f v1 v2)
     "Like vector-foreach but twice as good"
     (lisp Unit (f v1 v2)
-      (cl:let ((v1_ (unveil (cl:slot-value v1 '_0)))
-               (v2_ (unveil (cl:slot-value v2 '_0))))
+      (cl:let ((v1_ (cl:slot-value v1 '_0))
+               (v2_ (cl:slot-value v2 '_0)))
         (cl:progn
           (cl:loop
              :for e1 :across v1_
