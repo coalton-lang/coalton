@@ -50,7 +50,13 @@ NOTE: Just because a variable shows up in the list does *NOT* mean all occurrenc
                     (analyze subnode bv)))
 
                  (node-the
-                  (analyze (node-the-subnode expr) bv)))))
+                  (analyze (node-the-subnode expr) bv))
+
+                 (node-if
+                  (progn
+                    (analyze (node-if-predicate expr) bv)
+                    (analyze (node-if-true expr) bv)
+                    (analyze (node-if-false expr) bv))))))
       (analyze value nil)
       fv)))
 

@@ -176,5 +176,4 @@ See also: `/`
 
   (define-class (WithDefault :f)
     "Types which might be able to be unwrapped, otherwise returning a default value."
-    (withDefault (:a -> (:f :a) -> :a)))
-  )
+    (withDefault (:a -> (:f :a) -> :a))))

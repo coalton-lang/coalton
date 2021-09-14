@@ -107,7 +107,12 @@
   (:method ((expr typed-node-seq) ctx env)
     `(progn ,@(mapcar (lambda (subnode)
                         (compile-expression subnode ctx env))
-                      (typed-node-seq-subnodes expr)))))
+                      (typed-node-seq-subnodes expr))))
+
+  (:method ((expr typed-node-if) ctx env)
+    `(if ,(compile-expression (typed-node-if-predicate expr) ctx env)
+         ,(compile-expression (typed-node-if-true expr) ctx env)
+         ,(compile-expression (typed-node-if-false expr) ctx env))))
 
 (defun reduce-preds-for-codegen (preds env)
   (reduce-context env (remove-duplicates preds :test #'equalp)))

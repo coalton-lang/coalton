@@ -161,6 +161,18 @@
     (pointfree-traverse node env)))
 
 (defgeneric pointfree-traverse (node env)
+  (:method ((node typed-node-literal) env)
+    (declare (ignore env))
+    node)
+
+  (:method ((node typed-node-variable) env)
+    (declare (ignore env))
+    node)
+
+  (:method ((node typed-node-lisp) env)
+    (declare (ignore env))
+    node)
+
   (:method ((node typed-node-application) env)
     (typed-node-application
      (typed-node-type node)
@@ -228,7 +240,11 @@
         (pointfree-traverse node env))
       (typed-node-seq-subnodes node))))
 
-  (:method ((node typed-node) env)
-    (declare (ignore env))
-    node))
+  (:method ((node typed-node-if) env)
+    (typed-node-if
+     (typed-node-type node)
+     (typed-node-unparsed node)
+     (pointfree-traverse (typed-node-if-predicate node) env)
+     (pointfree-traverse (typed-node-if-true node) env)
+     (pointfree-traverse (typed-node-if-false node) env))))
 

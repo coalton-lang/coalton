@@ -70,6 +70,10 @@
    #:node-the                           ; STRUCT
    #:node-the-type                      ; ACCESSOR
    #:node-the-subnode                   ; ACCESSOR
+   #:node-if                            ; STRUCT
+   #:node-if-predicate                  ; ACCESSOR
+   #:node-if-true                       ; ACCESSOR
+   #:node-if-false                      ; ACCESSOR
    #:match-branch-pattern               ; ACCESSOR
    #:match-branch-subexpr               ; ACCESSOR
    #:match-branch-unparsed              ; ACCESOR
@@ -158,6 +162,10 @@
    #:typed-match-branch-name-map              ; ACCESSOR
    #:typed-node-seq                           ; STRUCT
    #:typed-node-seq-subnodes                  ; ACCESSOR
+   #:typed-node-if                            ; STUCT
+   #:typed-node-if-predicate                  ; ACCESSOR
+   #:typed-node-if-true                       ; ACCESSOR
+   #:typed-node-if-false                      ; ACCESSOR
    )
   (:export
    #:environment                        ; STRUCT
@@ -415,7 +423,8 @@
    #:<-                                 ; Syntax
    #:_
    #:seq
-   #:the)
+   #:the
+   #:if)
   (:import-from
    #:coalton-impl
    #:print-value-db
@@ -441,7 +450,6 @@
   (:use #:coalton)
     ;; Macros
   (:export
-   #:if
    #:unless
    #:when
    #:and

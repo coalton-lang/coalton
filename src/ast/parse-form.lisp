@@ -52,6 +52,12 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
           (error-parsing expr "Invalid the exprssion."))
         (parse-the expr (first args) (second args) sr package))
 
+       ;; If
+       ((coalton:if &rest args)
+        (unless (= 3 (length args))
+          (error-parsing expr "Invalid if expression."))
+        (parse-if expr (first args) (second args) (third args) sr package))
+
        ;; Application
        ((t &rest rands)
         (if (null rands)
@@ -215,3 +221,16 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
    expr
    type
    (parse-form form sr package)))
+
+(defun parse-if (expr predicate true false sr package)
+  (declare (type t expr)
+           (type t predicate)
+           (type t true)
+           (type t false)
+           (type shadow-realm sr)
+           (type package package))
+  (node-if
+   expr
+   (parse-form predicate sr package)
+   (parse-form true sr package)
+   (parse-form false sr package)))

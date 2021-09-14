@@ -114,7 +114,16 @@
      (mapcar
       (lambda (subnode)
         (match-constructor-lift subnode env))
-      (typed-node-seq-subnodes node)))))
+      (typed-node-seq-subnodes node))))
+
+  (:method ((node typed-node-if) env)
+    (declare (type environment env))
+    (typed-node-if
+     (typed-node-type node)
+     (typed-node-unparsed node)
+     (match-constructor-lift (typed-node-if-predicate node) env)
+     (match-constructor-lift (typed-node-if-true node) env)
+     (match-constructor-lift (typed-node-if-false node) env))))
 
 
 (defun generate-lifted-constructor (node)

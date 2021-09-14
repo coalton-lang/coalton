@@ -152,7 +152,17 @@
      (mapcar
       (lambda (subnode)
         (direct-application subnode inlineable-functions env))
-      (typed-node-seq-subnodes node)))))
+      (typed-node-seq-subnodes node))))
+
+  (:method ((node typed-node-if) inlineable-functions env)
+    (declare (type list inlineable-functions)
+             (type environment env))
+    (typed-node-if
+     (typed-node-type node)
+     (typed-node-unparsed node)
+     (direct-application (typed-node-if-predicate node) inlineable-functions env)
+     (direct-application (typed-node-if-true node) inlineable-functions env)
+     (direct-application (typed-node-if-false node) inlineable-functions env))))
 
 
 (defun update-inlineable-functions (inlineable-functions let-node)

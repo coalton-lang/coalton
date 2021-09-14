@@ -116,7 +116,38 @@
 
       (dolist (sub-node (typed-node-seq-subnodes node))
         (check-node-type sub-node env))
-      (typed-node-type node))))
+      (typed-node-type node)))
+
+  (:method ((node typed-node-if) env)
+
+    ;; Check that the node matches it's true branch
+    (unless (sub-ty-scheme-p (typed-node-type (typed-node-if-true node))
+                             (typed-node-type node)
+                             env)
+      (error 'invalid-typed-node-type
+             :node (typed-node-type node)
+             :inferred-type (typed-node-type (typed-node-if-true node))))
+
+    ;; Check that the node matches it's false branch
+    (unless (sub-ty-scheme-p (typed-node-type (typed-node-if-false node))
+                             (typed-node-type node)
+                             env)
+      (error 'invalid-typed-node-type
+             :node (typed-node-type node)
+             :inferred-type (typed-node-type (typed-node-if-false node))))
+
+    ;; Check that the node's predicate is a Boolean
+    (unless (sub-ty-scheme-p  (typed-node-type (typed-node-if-predicate node))
+                              (to-scheme (qualify nil tBoolean))
+                              env)
+      (error 'invalid-typed-node-type
+             :node (typed-node-type (typed-node-if-predicate node))
+             :inferred-type (to-scheme (qualify nil tBoolean))))
+
+    (check-node-type (typed-node-if-true node) env)
+    (check-node-type (typed-node-if-false node) env)
+
+    (typed-node-type node)))
 
 (defun check-application-node-type (rator rands node env)
   (declare (type typed-node rator node)

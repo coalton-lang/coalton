@@ -145,5 +145,16 @@
 #+sbcl
 (declaim (sb-ext:freeze-type node-the))
 
+(serapeum:defstruct-read-only
+    (node-if
+     (:include node)
+     (:constructor node-if (unparsed predicate true false)))
+  (predicate :type node)
+  (true :type node)
+  (false :type node))
+
+#+sbcl
+(declaim (sb-ext:freeze-type node-if))
+
 #+sbcl
 (declaim (sb-ext:freeze-type node))

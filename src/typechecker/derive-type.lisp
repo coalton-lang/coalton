@@ -250,6 +250,36 @@ Returns (VALUES type predicate-list typed-node subs)")
            node
            subs)))))
 
+  (:method ((value node-if) env subs)
+    (declare (type environment env)
+             (type substitution-list subs)
+             (values ty ty-predicate-list typed-node substitution-list &optional))
+    (let ((preds nil))
+          (multiple-value-bind (pred-type preds_ pred-node subs)
+              (derive-expression-type (node-if-predicate value) env subs)
+            (let ((subs (unify subs pred-type tBoolean)))
+             (setf preds (append preds_ preds)) 
+
+              (multiple-value-bind (true-type preds_ true-node subs)
+                  (derive-expression-type (node-if-true value) env subs)
+                (setf preds (append preds_ preds))
+
+                (multiple-value-bind (false-type preds_ false-node subs)
+                    (derive-expression-type (node-if-false value) env subs)
+                  (setf preds (append preds_ preds))
+                  (let ((subs (unify subs true-type false-type)))
+
+                    (values
+                     true-type
+                     preds
+                     (typed-node-if
+                      (to-scheme (qualify nil true-type))
+                      (node-unparsed value)
+                      pred-node 
+                      true-node
+                      false-node)
+                     subs))))))))
+
   (:method (value env subs)
     (error "Unable to derive type of expression ~A" value)))
 

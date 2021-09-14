@@ -173,6 +173,17 @@
 #+sbcl
 (declaim (sb-ext:freeze-type typed-node-seq))
 
+(serapeum:defstruct-read-only
+    (typed-node-if
+     (:include typed-node)
+     (:constructor typed-node-if (type unparsed predicate true false)))
+  (predicate :type typed-node)
+  (true :type typed-node)
+  (false :type typed-node))
+
+#+sbcl
+(declaim (sb-ext:freeze-type typed-node-if))
+
 #+sbcl
 (declaim (sb-ext:freeze-type typed-node))
 
@@ -287,6 +298,14 @@
    (typed-node-unparsed node)
    (apply-substitution subs (typed-node-seq-subnodes node))))
 
+(defmethod apply-substitution (subs (node typed-node-if))
+  (typed-node-if
+   (apply-substitution subs (typed-node-type node))
+   (typed-node-unparsed node)
+   (apply-substitution subs (typed-node-if-predicate node))
+   (apply-substitution subs (typed-node-if-true node))
+   (apply-substitution subs (typed-node-if-false node))))
+
 (defgeneric replace-node-type (node new-type)
   (:method ((node typed-node-literal) new-type)
     (typed-node-literal
@@ -345,7 +364,15 @@
      new-type
      (typed-node-unparsed node)
      (typed-node-match-expr node)
-     (typed-node-match-branches node))))
+     (typed-node-match-branches node)))
+
+  (:method ((node typed-node-if) new-type)
+    (typed-node-if
+     new-type
+     (typed-node-unparsed node)
+     (typed-node-if-predicate node)
+     (typed-node-if-true node)
+     (typed-node-if-false node))))
 
 (defgeneric collect-type-predicates (node)
   (:method ((type qualified-ty))
@@ -353,7 +380,6 @@
 
   (:method ((type ty-scheme))
     (collect-type-predicates (fresh-inst type)))
-
 
   (:method ((node typed-node-literal))
     (collect-type-predicates (typed-node-type node)))
@@ -409,7 +435,18 @@
 
   (:method ((node typed-node-seq))
     (remove-duplicates
-     (mapcan #'collect-type-predicates (typed-node-seq-subnodes node))
+     (append
+      (collect-type-predicates (typed-node-type node))
+      (mapcan #'collect-type-predicates (typed-node-seq-subnodes node)))
+     :test #'equalp))
+
+  (:method ((node typed-node-if))
+    (remove-duplicates
+     (append
+      (collect-type-predicates (typed-node-type node))
+      (collect-type-predicates (typed-node-if-predicate node))
+      (collect-type-predicates (typed-node-if-true node))
+      (collect-type-predicates (typed-node-if-false node)))
      :test #'equalp)))
 
 (defun collect-variable-namespace (node)
@@ -454,4 +491,10 @@
     (collect-variable-namespace-g (typed-match-branch-subexpr branch)))
 
   (:method ((node typed-node-seq))
-    (mapcan #'collect-variable-namespace-g (typed-node-seq-subnodes node))))
+    (mapcan #'collect-variable-namespace-g (typed-node-seq-subnodes node)))
+
+  (:method ((node typed-node-if))
+    (append
+     (collect-variable-namespace-g (typed-node-if-predicate node))
+     (collect-variable-namespace-g (typed-node-if-true node))
+     (collect-variable-namespace-g (typed-node-if-false node)))))

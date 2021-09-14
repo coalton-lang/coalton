@@ -1,19 +1,14 @@
 (in-package #:coalton-library)
 
-(cl:defmacro if (expr then else)
-  `(match ,expr
-     ((True) ,then)
-     ((False) ,else)))
-
 (cl:defmacro when (expr then)
-  `(if ,expr
+  `(coalton:if ,expr
        (seq
         ,then
         Unit)
        Unit))
 
 (cl:defmacro unless (expr then)
-  `(if ,expr
+  `(coalton:if ,expr
        Unit
        (seq
         ,then
@@ -48,10 +43,10 @@
 (cl:defmacro cond (cl:&rest exprs)
   (cl:labels ((build-calls (exprs)
                 (cl:if (cl:null (cl:cdr exprs))
-                       `(coalton-library:if ,(cl:caar exprs)
+                       `(coalton:if ,(cl:caar exprs)
                                             ,(cl:cadar exprs)
                                             (lisp :a ()  (cl:error "Non-exhaustive COND")))
-                       `(coalton-library:if ,(cl:caar exprs)
+                       `(coalton:if ,(cl:caar exprs)
                                             ,(cl:cadar exprs)
                                             ,(build-calls (cl:cdr exprs))))))
     (build-calls exprs)))
