@@ -18,7 +18,11 @@
            (coalton-impl/typechecker::tycon-name
             (coalton-impl/typechecker::tcon-tycon ty)))
          (type-entry (coalton-impl/typechecker::lookup-type env tcon-name)))
-      (type-entry-runtime-type type-entry)))
+
+      ;; If the type is a newtype then resolve the type runtime type
+      (if (type-entry-newtype type-entry)
+          (lisp-type (type-entry-runtime-type type-entry) env)
+          (type-entry-runtime-type type-entry))))
 
   (:method ((ty coalton-impl/typechecker::tapp) env)
     (cond

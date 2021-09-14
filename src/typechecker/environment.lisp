@@ -28,7 +28,22 @@
 
   ;; If this is true then the type is compiled to a more effecient
   ;; enum representation at runtime
-  (compressed-type :type boolean))
+  (compressed-type :type boolean)
+
+  ;; If this is true then the type does not exist at runtime
+  ;; See https://wiki.haskell.org/Newtype
+  ;;
+  ;; Because Haskell is a lazy language there is an observable
+  ;; difference between a boxed wrapper type and a newtype. Because
+  ;; Coalton is strict there is no observable difference in Coalton
+  ;; code between the two.
+  ;;
+  ;; A type cannot be both a compressed-type and a newtype
+  ;;
+  ;; A type that is a newtype has another Coalton type as it's
+  ;; runtime-type instead of a lisp type. This is to avoid issues with
+  ;; recursive newtypes.
+  (newtype :type boolean))
 
 #+sbcl
 (declaim (sb-ext:freeze-type type-entry))
@@ -46,94 +61,107 @@
           ;; Early Types
           ('coalton:Boolean
            (type-entry
-            :name 'Boolean
-            :runtime-type 'boolean
+            :name 'coalton:Boolean
+            :runtime-type 'cl:boolean
             :type tBoolean
-            :compressed-type t))
+            :compressed-type t
+            :newtype nil))
 
           ('coalton:Char
            (type-entry
-            :name 'Char
-            :runtime-type 'character
+            :name 'coalton:Char
+            :runtime-type 'cl:character
             :type tChar
-            :compressed-type nil))
+            :compressed-type nil
+            :newtype nil))
 
           ('coalton:I32
            (type-entry
-            :name 'I32
-            :runtime-type '(signed-byte 32)
+            :name 'coalton:I32
+            :runtime-type '(cl:signed-byte 32)
             :type tI32
-            :compressed-type nil))
+            :compressed-type nil
+            :newtype nil))
 
           ('coalton:I64
            (type-entry
-            :name 'I64
-            :runtime-type '(signed-byte 64)
+            :name 'coalton:I64
+            :runtime-type '(cl:signed-byte 64)
             :type tI64
-            :compressed-type nil))
+            :compressed-type nil
+            :newtype nil))
 
           ('coalton:U8
            (type-entry
-            :name 'U8
-            :runtime-type '(unsigned-byte 8)
+            :name 'coalton:U8
+            :runtime-type '(cl:unsigned-byte 8)
             :type tU8
-            :compressed-type nil))
+            :compressed-type nil
+            :newtype nil))
 
           ('coalton:U32
            (type-entry
-            :name 'U32
-            :runtime-type '(unsigned-byte 32)
+            :name 'coalton:U32
+            :runtime-type '(cl:unsigned-byte 32)
             :type tU32
-            :compressed-type nil))
+            :compressed-type nil
+            :newtype nil))
 
           ('coalton:U64
            (type-entry
-            :name 'U64
-            :runtime-type '(unsigned-byte 64)
+            :name 'coalton:U64
+            :runtime-type '(cl:unsigned-byte 64)
             :type tU64
-            :compressed-type nil))
+            :compressed-type nil
+            :newtype nil))
 
           ('coalton:Integer
            (type-entry
-            :name 'Integer
-            :runtime-type 'integer
+            :name 'coalton:Integer
+            :runtime-type 'cl:integer
             :type tInteger
-            :compressed-type nil))
+            :compressed-type nil
+            :newtype nil))
 
           ('coalton:Single-Float
            (type-entry
-            :name 'Single-Float
-            :runtime-type 'single-float
+            :name 'coalton:Single-Float
+            :runtime-type 'cl:single-float
             :type tSingle-Float
-            :compressed-type nil))
+            :compressed-type nil
+            :newtype nil))
 
           ('coalton:Double-Float
            (type-entry
-            :name 'Double-Float
-            :runtime-type 'double-float
+            :name 'coalton:Double-Float
+            :runtime-type 'cl:double-float
             :type tDouble-Float
-            :compressed-type nil))
+            :compressed-type nil
+            :newtype nil))
 
           ('coalton:String
            (type-entry
-            :name 'String
-            :runtime-type 'simple-string
+            :name 'coalton:String
+            :runtime-type 'cl:simple-string
             :type tString
-            :compressed-type nil))
+            :compressed-type nil
+            :newtype nil))
 
           ('coalton:Lisp-Object
            (type-entry
-            :name 'lisp-object
-            :runtime-type t
+            :name 'coalton:Lisp-Object
+            :runtime-type 't
             :type tLisp-Object
-            :compressed-type nil))
+            :compressed-type nil
+            :newtype nil))
 
           ('coalton:Arrow
            (type-entry
-            :name 'Arrow
+            :name 'coalton:Arrow
             :runtime-type nil
             :type tArrow
-            :compressed-type nil)))))
+            :compressed-type nil
+            :newtype nil)))))
 
 ;;;
 ;;; Constructor environment
@@ -180,7 +208,7 @@
             :scheme (to-scheme (qualify nil tBoolean))
             :arguments nil
             :classname 'coalton::Boolean/True
-            :compressed-repr t))
+            :compressed-repr 't))
 
           ('coalton:False
            (make-constructor-entry
@@ -190,7 +218,7 @@
             :scheme (to-scheme (qualify nil tBoolean))
             :arguments nil
             :classname 'coalton::Boolean/False
-            :compressed-repr nil)))))
+            :compressed-repr 'nil)))))
 
 #+sbcl
 (declaim (sb-ext:freeze-type constructor-environment))

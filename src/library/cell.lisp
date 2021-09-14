@@ -18,15 +18,14 @@
   (define (cell-read cell)
     "Read the value of a mutable cell"
     (lisp :a (cell)
-      (cl:slot-value (cl:slot-value cell '_0) 'inner)))
+      (cell-internal-inner cell)))
 
   (declare cell-swap (:a -> (Cell :a) -> :a))
   (define (cell-swap data cell)
     "Replace the value of a mutable cell with a new value, then return the old value"
     (lisp :a (data cell)
-      (cl:let* ((inner (cl:slot-value cell '_0))
-               (old (cell-internal-inner inner)))
-        (cl:setf (cell-internal-inner inner) data)
+      (cl:let* ((old (cell-internal-inner cell)))
+        (cl:setf (cell-internal-inner cell) data)
         old)))
 
   (declare cell-write (:a -> (Cell :a) -> Unit))

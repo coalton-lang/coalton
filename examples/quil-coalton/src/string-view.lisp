@@ -17,7 +17,7 @@
   (declare next-char (StringView -> (Optional (Tuple Char StringView))))
   (define (next-char str)
     (lisp (Optional (Tuple Char StringView)) (str)
-      (cl:let* ((arr (cl:slot-value str '_0)))
+      (cl:let* ((arr str))
         (cl:declare (cl:type (cl:vector cl:character) arr)
                     ;; Muffle sbcl wanting to optimize aref. This cannot be optimized.
                     #+sbcl (sb-ext:muffle-conditions sb-ext:compiler-note))
@@ -42,12 +42,12 @@
   ;; due to pointer aliasing issues
   (declare string-view-get (StringView -> String))
   (define (string-view-get str)
-    (lisp String (str) (cl:slot-value str '_0)))
+    (lisp String (str) str))
 
   (declare string-view-empty-p (StringView -> Boolean))
   (define (string-view-empty-p str)
     (lisp Boolean (str)
-      (cl:let* ((arr (cl:slot-value str '_0)))
+      (cl:let* ((arr str))
         (cl:declare (cl:type (cl:vector cl:character) arr))
         (cl:if (cl:= 0 (cl:length arr))
                True

@@ -24,15 +24,13 @@
   (define (vector-length v)
     "Returns the length of V"
     (lisp Integer (v)
-      (cl:let ((v_ (cl:slot-value v '_0)))
-        (cl:fill-pointer v_))))
+      (cl:fill-pointer v)))
 
   (declare vector-capacity ((Vector :a) -> Integer))
   (define (vector-capacity v)
     "Returns the number of elements that V can store without resizing"
     (lisp Integer (v)
-      (cl:let ((v_ (cl:slot-value v '_0)))
-        (cl:array-dimension v_ 0))))
+      (cl:array-dimension v 0)))
 
   (declare vector-empty ((Vector :a) -> Boolean))
   (define (vector-empty v)
@@ -43,10 +41,9 @@
   (define (vector-push item v)
     "Append ITEM to V and resize V if necessary"
     (lisp Integer (item v)
-      (cl:let ((v_ (cl:slot-value v '_0)))
-	(cl:progn
-	  (cl:vector-push-extend item v_)
-	  (cl:1- (cl:fill-pointer v_))))))
+      (cl:progn
+	(cl:vector-push-extend item v)
+	(cl:1- (cl:fill-pointer v)))))
 
   (declare vector-pop ((Vector :a) -> (Optional :a)))
   (define (vector-pop v)
@@ -59,8 +56,7 @@
   (define (vector-pop-unsafe v)
     "Remove and return the first item of V without checking if the vector is empty"
     (lisp :a (v)
-      (cl:let ((v_ (cl:slot-value v '_0)))
-        (cl:vector-pop v_))))
+      (cl:vector-pop v)))
 
   (declare vector-index (Integer -> (Vector :a) -> (Optional :a)))
   (define (vector-index index v)
@@ -73,17 +69,15 @@
   (define (vector-index-unsafe index v)
     "Return the INDEXth element of V without checking if the element exists"
     (lisp :a (index v)
-      (cl:let ((v_ (cl:slot-value v '_0)))
-        (cl:aref v_ index))))
+      (cl:aref v index)))
 
   (declare vector-set (Integer -> :a -> (Vector :a) -> Unit))
   (define (vector-set index item v)
     "Set the INDEXth element of V to ITEM. This function left intentionally unsafe because it does not have a return value to check."
     (lisp Unit (index item v)
-      (cl:let ((v_ (cl:slot-value v '_0)))
-        (cl:progn
-          (cl:setf (cl:aref v_ index) item)
-          Unit))))
+      (cl:progn
+        (cl:setf (cl:aref v index) item)
+        Unit)))
 
   (declare vector-head ((Vector :a) -> (Optional :a)))
   (define (vector-head v)
@@ -113,11 +107,10 @@
 
       (progn
         (lisp (Optional Integer) (v test)
-          (cl:let* ((v_ (cl:slot-value v '_0))
-                    (pos (cl:position-if
-                          #'(cl:lambda (x)
-                              (cl:equalp True (coalton-impl/codegen::A1 test x)))
-                          v_)))
+          (cl:let ((pos (cl:position-if
+                         #'(cl:lambda (x)
+                             (cl:equalp True (coalton-impl/codegen::A1 test x)))
+                         v)))
             (cl:if pos
                    (Some pos)
                    None))))))
@@ -126,36 +119,32 @@
   (define (vector-foreach f v)
     "Call the function F once for each item in V"
     (lisp Unit (f v)
-      (cl:let ((v_ (cl:slot-value v '_0)))
-        (cl:progn
-          (cl:loop :for elem :across v_
-             :do (coalton-impl/codegen::A1 f elem))
-          Unit))))
+      (cl:progn
+        (cl:loop :for elem :across v
+           :do (coalton-impl/codegen::A1 f elem))
+        Unit)))
 
   (declare vector-foreach-index ((Integer -> :a -> :b) -> (Vector :a) -> Unit))
   (define (vector-foreach-index f v)
     "Call the function F once for each item in V with its index"
     (lisp Unit (f v)
-      (cl:let ((v_ (cl:slot-value v '_0)))
-        (cl:progn
-          (cl:loop
-             :for elem :across v_
-             :for i :from 0
-             :do (coalton-impl/codegen::A2 f i elem))
-          Unit))))
+      (cl:progn
+        (cl:loop
+           :for elem :across v
+           :for i :from 0
+           :do (coalton-impl/codegen::A2 f i elem))
+        Unit)))
 
   (declare vector-foreach2 ((:a -> :a -> :b) -> (Vector :a) -> (Vector :a) -> Unit))
   (define (vector-foreach2 f v1 v2)
     "Like vector-foreach but twice as good"
     (lisp Unit (f v1 v2)
-      (cl:let ((v1_ (cl:slot-value v1 '_0))
-               (v2_ (cl:slot-value v2 '_0)))
-        (cl:progn
-          (cl:loop
-             :for e1 :across v1_
-             :for e2 :across v2_
-             :do (coalton-impl/codegen::A2 f e1 e2))
-          Unit))))
+      (cl:progn
+        (cl:loop
+           :for e1 :across v1
+           :for e2 :across v2
+           :do (coalton-impl/codegen::A2 f e1 e2))
+        Unit)))
 
   (declare vector-append ((Vector :a) -> (Vector :a) -> (Vector :a)))
   (define (vector-append v1 v2)
