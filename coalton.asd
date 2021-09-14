@@ -20,7 +20,6 @@
   :components ((:file "package")
                (:file "utilities")
                (:file "global-lexical")
-               (:file "lisp-object")
                (:module "algorithm"
                 :serial t
                 :components ((:file "tarjan-scc")

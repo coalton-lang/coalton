@@ -353,11 +353,6 @@
    #:non-terminating-unification-error-containing-type
                                         ; READER
    )
-  ;; LISP-OBJECT
-  (:export
-   #:lisp-object
-   #:veil
-   #:unveil)
   (:export
    #:print-value-db
    #:print-type-db
@@ -403,9 +398,9 @@
    #:Single-Float
    #:Double-Float
    #:String
-   ;; #:Lisp-Object                      ; See below.
    #:Arrow
-   #:Void)
+   #:Void
+   #:Lisp-Object)
   (:export
    #:fn #:λ
    #:match
@@ -421,20 +416,14 @@
    #:print-value-db
    #:print-type-db
    #:print-class-db
-   #:print-instance-db
-   #:lisp-object
-   #:veil
-   #:unveil)
+   #:print-instance-db)
   (:export
    #:print-value-db
    #:print-type-db
    #:print-class-db
    #:print-instance-db
    #:type-of
-   #:kind-of
-   #:lisp-object
-   #:veil
-   #:unveil))
+   #:kind-of))
 
 (uiop:define-package #:coalton-library
   (:documentation "The Coalton standard library.")

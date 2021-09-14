@@ -124,7 +124,7 @@
           ('coalton:Lisp-Object
            (type-entry
             :name 'lisp-object
-            :runtime-type 'coalton-impl::lisp-object
+            :runtime-type t
             :type tLisp-Object
             :compressed-type nil))
 

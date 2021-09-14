@@ -12,19 +12,19 @@
   (define (make-cell data)
     "Create a new mutable cell"
     (lisp (Cell :a) (data)
-      (Cell (veil (make-cell-internal :inner data)))))
+      (Cell (make-cell-internal :inner data))))
 
   (declare cell-read ((Cell :a) -> :a))
   (define (cell-read cell)
     "Read the value of a mutable cell"
     (lisp :a (cell)
-      (cl:slot-value (unveil (cl:slot-value cell '_0)) 'inner)))
+      (cl:slot-value (cl:slot-value cell '_0) 'inner)))
 
   (declare cell-swap (:a -> (Cell :a) -> :a))
   (define (cell-swap data cell)
     "Replace the value of a mutable cell with a new value, then return the old value"
     (lisp :a (data cell)
-      (cl:let* ((inner (unveil (cl:slot-value cell '_0)))
+      (cl:let* ((inner (cl:slot-value cell '_0))
                (old (cell-internal-inner inner)))
         (cl:setf (cell-internal-inner inner) data)
         old)))
