@@ -9,7 +9,11 @@
   (name :type symbol)
   (type :type ty)
   (runtime-type :type t)
-  (compressed-type :type t)
+
+  ;; See the fields with the same name on type-entry
+  (compressed-type :type boolean)
+  (newtype :type boolean)
+
   (constructors :type constructor-entry-list))
 
 #+sbcl
@@ -82,7 +86,8 @@ Returns (TYPE-DEFINITIONS DOCSTRINGS)"
                   :name (first parsed)
                   :runtime-type (first parsed)
                   :type (second parsed)
-                  :compressed-type nil)))
+                  :compressed-type nil
+                  :newtype nil)))
               parsed-tcons))
            (new-env (push-type-environment env new-bindings))
            (parsed-defs (loop :for parsed :in parsed-tcons
@@ -108,9 +113,15 @@ Returns (TYPE-DEFINITIONS DOCSTRINGS)"
                                           (loop :for ctor in ctors
                                                 :collect
                                                 (parse-type-ctor ctor applied-tycon type-vars-alist tycon-name new-env)))
+
+                                         ;; If every constructor entry has an arity of 0 then this type can be compiled as an enum
                                          (enum-type (every (lambda (ctor)
                                                              (= 0 (constructor-entry-arity ctor)))
-                                                           parsed-ctors)))
+                                                           parsed-ctors))
+
+                                         ;; If there is a single constructor with a single field then this type can be compiled as a newtype 
+                                         (newtype (and (= 1 (length parsed-ctors))
+                                                       (= 1 (constructor-entry-arity (first parsed-ctors))))))
                                     (cond
                                       (enum-type
                                        (let ((parsed-ctors (mapcar #'rewrite-ctor parsed-ctors)))
@@ -119,6 +130,18 @@ Returns (TYPE-DEFINITIONS DOCSTRINGS)"
                                           :type tcon
                                           :runtime-type `(member ,@(mapcar #'constructor-entry-compressed-repr parsed-ctors))
                                           :compressed-type t
+                                          :newtype nil
+                                          :constructors parsed-ctors)))
+
+                                      (newtype
+                                       (let ( ;; The runtime type of a newtype is the runtime type of it's only constructor's only argument
+                                             (runtime-type (qualified-ty-type (fresh-inst (first (constructor-entry-arguments (first parsed-ctors)))))))
+                                         (make-type-definition
+                                          :name tycon-name
+                                          :type tcon
+                                          :runtime-type runtime-type
+                                          :compressed-type nil
+                                          :newtype t
                                           :constructors parsed-ctors)))
 
                                       (t
@@ -127,6 +150,7 @@ Returns (TYPE-DEFINITIONS DOCSTRINGS)"
                                         :type tcon
                                         :runtime-type tycon-name
                                         :compressed-type nil
+                                        :newtype nil
                                         :constructors parsed-ctors)))))))))
       (values parsed-defs parsed-docstrings))))
 

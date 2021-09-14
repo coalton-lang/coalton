@@ -31,12 +31,17 @@
              (ctors (type-definition-constructors parsed-deftype)))
 
         ;; Add the type to the type environment
-        (setf env (set-type env type-name
-                            (type-entry
-                             :name type-name
-                             :runtime-type (type-definition-runtime-type parsed-deftype)
-                             :type tycon
-                             :compressed-type (type-definition-compressed-type parsed-deftype))))
+        (setf
+         env
+         (set-type
+          env
+          type-name
+          (type-entry
+           :name type-name
+           :runtime-type (type-definition-runtime-type parsed-deftype)
+           :type tycon
+           :compressed-type (type-definition-compressed-type parsed-deftype)
+           :newtype (type-definition-newtype parsed-deftype))))
 
         (dolist (ctor ctors)
           ;; Add the constructors to the constructor environment

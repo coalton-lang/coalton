@@ -18,12 +18,22 @@
            (entry (lookup-constructor env name))
            (type (lookup-type env (constructor-entry-constructs entry)))
            (class-name (constructor-entry-classname entry))
-           (package (symbol-package name))
-           (fields (loop :for field :in (pattern-constructor-patterns pattern)
-                         :for i :from 0
-                         :for subpattern := (compile-pattern field env)
-                         :for accessor := (alexandria:format-symbol package "_~D" i)
-                         :collect `(,accessor ,subpattern))))
-      (if (type-entry-compressed-type type)
-          `',(constructor-entry-compressed-repr entry)
-          `(cl:structure ,class-name ,@fields)))))
+           (package (symbol-package name)))
+
+      (cond
+        ((type-entry-compressed-type type)
+         `',(constructor-entry-compressed-repr entry))
+
+        ((type-entry-newtype type)
+         (progn
+           (unless (= 1 (length (pattern-constructor-patterns pattern)))
+             (coalton-impl::coalton-bug "Unexpected number of fields in newtype pattern.~%    Expected: 1~%    Received: ~A~%"
+                                        (length (pattern-constructor-patterns pattern))))
+           (compile-pattern (first (pattern-constructor-patterns pattern)) env)))
+        (t
+         (let ((fields (loop :for field :in (pattern-constructor-patterns pattern)
+                             :for i :from 0
+                             :for subpattern := (compile-pattern field env)
+                             :for accessor := (alexandria:format-symbol package "_~D" i)
+                             :collect `(,accessor ,subpattern))))
+           `(cl:structure ,class-name ,@fields)))))))
