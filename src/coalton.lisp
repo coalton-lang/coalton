@@ -15,7 +15,8 @@
                                            coalton:define-type
                                            coalton:declare
                                            coalton:define-class
-                                           coalton:define-instance))
+                                           coalton:define-instance
+                                           coalton:repr))
 
 ;;; Entry Point
 
@@ -36,7 +37,8 @@
         (declares nil)
         (defines nil)
         (defclasses nil)
-        (definstances nil))
+        (definstances nil)
+        (repr-table (make-hash-table)))
     (labels ((flatten (forms)
                (loop :for form :in forms
                      :append (cond
@@ -53,7 +55,8 @@
                      (nreverse declares)
                      (nreverse defines)
                      (nreverse defclasses)
-                     (nreverse definstances)))
+                     (nreverse definstances)
+                     repr-table))
 
                    ((or (atom next-form)
                         (not (member (first next-form) **special-operators**)))
@@ -78,6 +81,23 @@
                    ((eql 'coalton:define-instance (first next-form))
                     (push next-form definstances)
                     (walk (rest forms)))
+
+                   ((eql 'coalton:repr (first next-form))
+                    ;; Repr must immediatly precede a type definition
+                    (unless (eql 'coalton:define-type (first (second forms)))
+                      (error-parsing next-form "Orphan repr instance."))
+
+                    ;; Repr must have only two parts
+                    (unless (= 2 (length next-form))
+                      (error-parsing next-form "Invalid repr form."))
+
+                    (let ((repr-dec (second next-form)))
+
+                      (unless (eql :lisp repr-dec)
+                        (error-parsing next-form "Unknown repr ~A." repr-dec))
+
+                      (setf (gethash (second (second forms)) repr-table) repr-dec)
+                      (walk (rest forms))))
 
                    (t
                     (assert nil () "Unreachable."))))))
@@ -121,11 +141,11 @@
 (defun process-coalton-toplevel (toplevel-forms &optional (env *global-environment*))
   "Top-level definitions for use within Coalton."
 
-  (multiple-value-bind (type-defines declares defines class-defines instance-defines)
+  (multiple-value-bind (type-defines declares defines class-defines instance-defines repr-table)
       (collect-toplevel-forms toplevel-forms)
 
     (multiple-value-bind (defined-types env type-docstrings)
-        (process-toplevel-type-definitions type-defines env)
+        (process-toplevel-type-definitions type-defines repr-table env)
 
       ;; Class definitions must be checked after types are defined
       ;; but before values are typechecked.

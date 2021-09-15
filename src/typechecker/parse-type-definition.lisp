@@ -27,7 +27,7 @@
   '(satisfies type-definition-list-p))
 
 
-(defun parse-type-definitions (forms env)
+(defun parse-type-definitions (forms repr-table env)
   "Parse the type defintion FORM in the ENVironment
 
 Returns (TYPE-DEFINITIONS DOCSTRINGS)"
@@ -110,9 +110,9 @@ Returns (TYPE-DEFINITIONS DOCSTRINGS)"
                                                                    (kind-arity (kind-of tvar))))))
                                   ;; Parse out the ctors
                                   (let* ((parsed-ctors
-                                          (loop :for ctor in ctors
-                                                :collect
-                                                (parse-type-ctor ctor applied-tycon type-vars-alist tycon-name new-env)))
+                                           (loop :for ctor in ctors
+                                                 :collect
+                                                 (parse-type-ctor ctor applied-tycon type-vars-alist tycon-name new-env)))
 
                                          ;; If every constructor entry has an arity of 0 then this type can be compiled as an enum
                                          (enum-type (every (lambda (ctor)
@@ -121,8 +121,22 @@ Returns (TYPE-DEFINITIONS DOCSTRINGS)"
 
                                          ;; If there is a single constructor with a single field then this type can be compiled as a newtype 
                                          (newtype (and (= 1 (length parsed-ctors))
-                                                       (= 1 (constructor-entry-arity (first parsed-ctors))))))
+                                                       (= 1 (constructor-entry-arity (first parsed-ctors)))))
+
+                                         (repr (gethash tycon-name repr-table)))
                                     (cond
+                                      ;; If the type is repr lisp then
+                                      ;; do *not* attempt to generate
+                                      ;; an optimized implementation
+                                      ((eql repr :lisp)
+                                       (make-type-definition
+                                        :name tycon-name
+                                        :type tcon
+                                        :runtime-type tycon-name
+                                        :compressed-type nil
+                                        :newtype nil
+                                        :constructors parsed-ctors))
+
                                       (enum-type
                                        (let ((parsed-ctors (mapcar #'rewrite-ctor parsed-ctors)))
                                          (make-type-definition
@@ -134,7 +148,7 @@ Returns (TYPE-DEFINITIONS DOCSTRINGS)"
                                           :constructors parsed-ctors)))
 
                                       (newtype
-                                       (let ( ;; The runtime type of a newtype is the runtime type of it's only constructor's only argument
+                                       (let (;; The runtime type of a newtype is the runtime type of it's only constructor's only argument
                                              (runtime-type (qualified-ty-type (fresh-inst (first (constructor-entry-arguments (first parsed-ctors)))))))
                                          (make-type-definition
                                           :name tycon-name
