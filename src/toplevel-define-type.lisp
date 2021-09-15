@@ -15,7 +15,7 @@
 ;;     UNIT)
 ;;
 
-(defun process-toplevel-type-definitions (deftype-forms env)
+(defun process-toplevel-type-definitions (deftype-forms repr-table env)
   (declare (type list deftype-forms)
            (type environment env))
   ;; Create a naive set of tcons to allow mutual recursion. If these
@@ -24,7 +24,7 @@
            (values type-definition-list))
 
   (multiple-value-bind (parsed-deftypes parsed-docstrings)
-      (coalton-impl/typechecker::parse-type-definitions deftype-forms env)
+      (coalton-impl/typechecker::parse-type-definitions deftype-forms repr-table env)
     (dolist (parsed-deftype parsed-deftypes)
       (let* ((type-name (type-definition-name parsed-deftype))
              (tycon (type-definition-type parsed-deftype))

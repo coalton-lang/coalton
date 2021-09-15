@@ -382,7 +382,8 @@
    #:define
    #:define-type
    #:define-class
-   #:define-instance)
+   #:define-instance
+   #:repr)
   ;; Early Types
   (:export
    #:-> #:→
