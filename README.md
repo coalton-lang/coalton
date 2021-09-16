@@ -1,6 +1,7 @@
 <img src="docs/assets/coalton-logotype-gray.svg" style="zoom:50%;" />
 
-[![Tests Status Badge](https://github.com/coalton-lang/coalton/actions/workflows/main.yml/badge.svg)](https://github.com/coalton-lang/coalton/actions/workflows/main.yml)
+[![GitHub Workflow Status](https://img.shields.io/github/workflow/status/coalton-lang/coalton/CI?logo=github)](https://github.com/coalton-lang/coalton/actions/workflows/main.yml)
+[![Discord](https://img.shields.io/discord/888196168067199046?logo=discord)](https://discord.gg/cPb6Bc4xAH)
 
 Coalton is an efficient, statically typed functional programming language that supercharges Common Lisp.
 
