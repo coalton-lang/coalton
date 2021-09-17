@@ -7,28 +7,28 @@
                                                           initialEnv)))
 
 (deftest test-type-inference ()
-  (is (cl:equalp (tiProgram
-                  *initial-env*
-                  Nil
-                  (Program
-                   (make-list
-                    (BindGroup
-                     Nil
-                     (make-list
-                      (make-list
-                       (Impl
-                        (Id "f")
-                        (make-list
-                         (Alt
-                          (make-list
-                           (PVar (Id "x")))
-                          (Var (Id "x")))))))))))
+  (is (thih-coalton::assumption-list-equal (tiProgram
+                                            *initial-env*
+                                            Nil
+                                            (Program
+                                             (make-list
+                                              (BindGroup
+                                               Nil
+                                               (make-list
+                                                (make-list
+                                                 (Impl
+                                                  (Id "f")
+                                                  (make-list
+                                                   (Alt
+                                                    (make-list
+                                                     (PVar (Id "x")))
+                                                    (Var (Id "x")))))))))))
               
-                 (make-list
-                  (Assump
-                   (Id "f")
-                   (Forall
-                    (make-list Star)
-                    (Qual Nil
-                          (mkFn (TGen 0)
-                                (TGen 0)))))))))
+                                           (make-list
+                                            (Assump
+                                             (Id "f")
+                                             (Forall
+                                              (make-list Star)
+                                              (Qual Nil
+                                                    (mkFn (TGen 0)
+                                                          (TGen 0)))))))))

@@ -137,7 +137,8 @@ Returns (TYPE-DEFINITIONS DOCSTRINGS)"
                                         :newtype nil
                                         :constructors parsed-ctors))
 
-                                      (enum-type
+                                      ((and enum-type
+                                            (eql coalton-impl:*interaction-mode* ':release))
                                        (let ((parsed-ctors (mapcar #'rewrite-ctor parsed-ctors)))
                                          (make-type-definition
                                           :name tycon-name
@@ -147,7 +148,8 @@ Returns (TYPE-DEFINITIONS DOCSTRINGS)"
                                           :newtype nil
                                           :constructors parsed-ctors)))
 
-                                      (newtype
+                                      ((and newtype
+                                            (eql coalton-impl:*interaction-mode* ':release))
                                        (let (;; The runtime type of a newtype is the runtime type of it's only constructor's only argument
                                              (runtime-type (qualified-ty-type (fresh-inst (first (constructor-entry-arguments (first parsed-ctors)))))))
                                          (make-type-definition
