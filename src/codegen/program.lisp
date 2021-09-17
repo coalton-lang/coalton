@@ -40,6 +40,14 @@
           :else :if (and (typep thing '(cons (member cl:defstruct)))
                          (not (sub-struct-p thing)))
                   :collect thing :into defstructs
+          ;; (DEFCLASS FOO (...) ...
+          :else :if (and (typep thing '(cons (member cl:defclass)))
+                         (not (null (third thing))))
+                  :collect thing :into defsubstructs
+          ;; (DEFCLASS FOO ...
+          :else :if (and (typep thing '(cons (member cl:defclass)))
+                         (null (third thing)))
+                  :collect thing :into defstructs
           ;; (DECLAIM (INLINE ...
           :else :if (typep thing '(cons
                                    (member cl:declaim)
@@ -89,7 +97,6 @@
 
        ;; Define typeclasses
        ,@(reshuffle-definitions (compile-class-definitions classes env))
-
 
        ;; Define ...
        ,@(reshuffle-definitions (append
@@ -189,9 +196,7 @@
                      :for return-type := (typed-node-type (typed-node-abstraction-subexpr node))
                      :append (compile-function name vars type return-type subexpr env))))
 
-          ((and (= 1 (length scc-typed-bindings))
-                t ;; TODO: We need to check that the variable is non-self-recursive using free-variables
-                )
+          ((= 1 (length scc-typed-bindings))
            ;; Variables
            (let* ((b (first scc-typed-bindings))
                   (preds (reduce-context env (scheme-predicates (typed-node-type (cdr b))))))
@@ -203,42 +208,41 @@
           (t (error "")))))
 
 
-(alexandria:define-constant keyword-package
-  (find-package "KEYWORD") :test #'equalp)
-
 (defun compile-class-definitions (classes env)
   (declare (type ty-class-list classes)
            (type environment env)
            (values list))
   (loop :for class :in classes
         :for name := (ty-class-name class)
-        :for method-decs
-          := (mapcar (lambda (m)
-                       `(,(car m)
-                         (error ,(format nil "Required method ~S" (car m)))
-                         :type t
-                         :read-only t))
-                     (ty-class-unqualified-methods class))
-        :for superclass-decs := (loop :for (superclass-pred . field-name) :in (ty-class-superclass-dict class)
-                                      :for superclass := (lookup-class env (ty-predicate-class superclass-pred))
-                                      :collect `(,field-name
-                                                 (error ,(format nil "Required superclass ~S" field-name))
-                                                 :type ,(ty-class-codegen-sym superclass)
-                                                 :read-only t))
-        :for package := (symbol-package name)
         :for codegen-name := (ty-class-codegen-sym class)
-        :for method-funs := (mapcan (lambda (m)
-                                      (make-method-fun m package class))
-                                    (ty-class-unqualified-methods class))
+        :for package := (symbol-package name)
 
-        :append
-        `((cl:defstruct
-              (,codegen-name (:constructor ,codegen-name))
-            ,@method-decs
-            ,@superclass-decs)
-          ,@method-funs
-          #+sbcl
-          (declaim (sb-ext:freeze-type ,codegen-name)))))
+        :for fields
+          := (append
+              (loop :for (superclass-pred . field-name) :in (ty-class-superclass-dict class)
+                    :for superclass := (lookup-class env (ty-predicate-class superclass-pred))
+                    :collect (make-struct-or-class-field
+                              :name field-name
+                              :type (ty-class-codegen-sym superclass)))
+
+              (loop :for method :in (ty-class-unqualified-methods class)
+                    :collect (make-struct-or-class-field
+                              :name (car method)
+                              :type (lisp-type (cdr method) env))))
+
+        :append (struct-or-class
+                  :classname codegen-name
+                  :constructor codegen-name
+                  :fields fields
+                  :mode (if (eql coalton-impl::*interaction-mode* :release)
+                            :struct
+                            :class))
+
+
+
+        :append (mapcan (lambda (m)
+                          (make-method-fun m package class))
+                        (ty-class-unqualified-methods class))))
 
 (defun make-method-fun (m package class)
   (let* ((arity (coalton-impl/typechecker::function-type-arity
@@ -259,7 +263,7 @@
       (coalton-impl::define-global-lexical ,(car m)
           ,(construct-function-entry
             `#',(car m)
-            (+ arity 1) ; We need a function of the arity + 1 to account for DICT
+            (+ arity 1) ; We need a function of arity + 1 to account for DICT
             )))))
 
 (defun compile-instance-definitions (instance-definitions optimizer)
@@ -270,10 +274,11 @@
         :for instance :in instance-definitions
         :for class-name := (instance-definition-class-name instance)
         :for predicate := (instance-definition-predicate instance)
-        :for methods := (instance-definition-methods instance)
+        :for unsorted-methods := (instance-definition-methods instance)
         :for codegen-sym := (instance-definition-codegen-sym instance)
 
         :for class := (lookup-class env class-name)
+        :for class-methods := (mapcar #'car (ty-class-unqualified-methods class))
         :for class-codegen-sym := (ty-class-codegen-sym class)
 
         :for context := (instance-definition-context instance)
@@ -288,35 +293,40 @@
                                    context-dict)
 
 
+        ;; Order method definitions so that they match the order in
+        ;; which they were declared in the class definition.
+        :for methods
+          := (mapcar
+              (lambda (method-name)
+                (find method-name unsorted-methods :test #'eql :key #'car))
+              class-methods)
+
         :for codegen-methods
-          := (mapcan
+          := (mapcar
               (lambda (m)
                 (let ((method-body (optimize-node optimizer (cdr m))))
-
-                  `(,(intern (symbol-name (car m)) keyword-package)
-                    ,(if (coalton-impl/typechecker::typed-node-abstraction-p method-body)
-                         (let ((vars (mapcar #'car (typed-node-abstraction-vars method-body)))
-                               (subexpr (typed-node-abstraction-subexpr method-body)))
-                           (construct-function-entry
-                            `(lambda ,vars
-                               (declare
-                                (ignorable ,@vars)
-                                ,@(when *emit-type-annotations*
-                                    (mapcar (lambda (v) `(type ,(lisp-type (cdr v) env) ,(car v) ))
-                                            (typed-node-abstraction-vars method-body))))
-                               ,(compile-expression subexpr context-dict env))
-                            (length vars)))
-                         (compile-expression (cdr m) context-dict env)))))
+                  (if (coalton-impl/typechecker::typed-node-abstraction-p method-body)
+                      (let ((vars (mapcar #'car (typed-node-abstraction-vars method-body)))
+                            (subexpr (typed-node-abstraction-subexpr method-body)))
+                        (construct-function-entry
+                         `(lambda ,vars
+                            (declare
+                             (ignorable ,@vars)
+                             ,@(when *emit-type-annotations*
+                                 (mapcar (lambda (v) `(type ,(lisp-type (cdr v) env) ,(car v) ))
+                                         (typed-node-abstraction-vars method-body))))
+                            ,(compile-expression subexpr context-dict env))
+                         (length vars)))
+                      (compile-expression (cdr m) context-dict env))))
               methods)
 
         :for pred-subs := (coalton-impl/typechecker::predicate-match (ty-class-predicate class) predicate)
         :for codegen-superclasses
           := (loop :for (superclass-pred . field-name) :in (ty-class-superclass-dict class)
                    :for superclass := (lookup-class env (ty-predicate-class superclass-pred))
-                   :append
-                   `(,(intern (symbol-name field-name) keyword-package)
-                     ,(lookup-dict (coalton-impl/typechecker::apply-substitution pred-subs superclass-pred)
-                                   context-dict env)))
+                   :collect
+                   (lookup-dict (coalton-impl/typechecker::apply-substitution pred-subs superclass-pred)
+                                context-dict env))
 
         :collect
         `(global-vars:define-global-var ,codegen-sym ':|@@unbound@@|)
@@ -326,8 +336,8 @@
               ,codegen-sym
               (load-time-value
                (,class-codegen-sym
-                ,@codegen-methods
-                ,@codegen-superclasses)))
+                ,@codegen-superclasses
+                ,@codegen-methods)))
             `(cl:defun ,codegen-sym ,context-params
                (declare
                 (ignorable ,@context-params)
@@ -335,5 +345,5 @@
                     (mapcar (lambda (dict-ctx) `(type ,(car dict-ctx) ,(cdr dict-ctx)))
                             dict-types)))
                (,class-codegen-sym
-                ,@codegen-methods
-                ,@codegen-superclasses)))))
+                ,@codegen-superclasses
+                ,@codegen-methods)))))

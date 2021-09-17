@@ -20,6 +20,7 @@
   :components ((:file "package")
                (:file "utilities")
                (:file "global-lexical")
+               (:file "settings")
                (:module "algorithm"
                 :serial t
                 :components ((:file "tarjan-scc")
@@ -56,7 +57,8 @@
                              (:file "debug")))
                (:module "codegen"
                 :serial t
-                :components ((:file "lisp-types")
+                :components ((:file "utilities")
+                             (:file "lisp-types")
                              (:file "function-entry")
                              (:file "optimizer")
                              (:file "direct-application")

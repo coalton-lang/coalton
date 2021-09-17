@@ -636,6 +636,15 @@
   (define-type Assump
     (Assump Id Scheme))
 
+  (define-instance (Eq Assump)
+    (define (== a b)
+      (match (Tuple a b)
+        ((Tuple (Assump id-a scheme-a) (Assump id-b scheme-b))
+         (and (== id-a id-b)
+              (== scheme-a scheme-b)))))
+    (define (/= a b)
+      (not (== a b))))
+
   (define-instance (Types Assump)
       (define (apply s a)
         (match a
@@ -1148,4 +1157,8 @@
                (do (s  <- getSubst)
                    (rs <- (reduce ce (apply s ps)))
                  (s_ <- (defaultSubst ce Nil rs))
-                 (pure (apply (@@ s_ s) as_)))))))))))
+                 (pure (apply (@@ s_ s) as_))))))))))
+
+  (declare assumption-list-equal ((List Assump) -> (List Assump) -> Boolean))
+  (define (assumption-list-equal a b)
+    (== a b)))

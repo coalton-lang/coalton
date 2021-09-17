@@ -12,6 +12,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    strategy:
+      matrix:
+        COALTON_ENV: ["release", "development"]
+
     env:
       # Tell ASDF to look through our repo recursively
       CL_SOURCE_REGISTRY: "/home/runner/work/coalton/coalton//"
@@ -41,7 +45,7 @@ jobs:
             ~/.roswell
             /usr/local/etc/roswell
             .qlot
-          key: "${{ steps.current-month.outputs.value }}-${{ env.cache-name }}-${{ runner.os }}-${{ hashFiles('qlfile.lock') }}-1"
+          key: "${{ steps.current-month.outputs.value }}-${{ env.cache-name }}-${{ runner.os }}-${{ hashFiles('qlfile.lock') }}-${{ matrix.COALTON_ENV }}-3"
       - name: Restore Path To Cached Files
         run: |
           echo $HOME/.roswell/bin >> $GITHUB_PATH
@@ -53,6 +57,8 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
 
       - uses: 40ants/run-tests@v2
+        env:
+          COALTON_ENV: ${{ matrix.COALTON_ENV }}
         with:
           asdf-system: coalton
           run-tests:

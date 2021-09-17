@@ -313,7 +313,6 @@
    )
   (:export
    #:*emit-type-annotations*
-   #:*freeze-emitted-types*
    ))
 
 (uiop:define-package #:coalton-impl/doc
@@ -336,6 +335,10 @@
   (:import-from #:global-vars
                 #:define-global-var
                 #:define-global-var*)
+  ;; settings
+  (:export
+   #:*interaction-mode*)
+
   (:export
    #:coalton-parse-error                ; CONDITION
    #:coalton-parse-error-form           ; READER

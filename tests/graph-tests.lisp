@@ -60,12 +60,13 @@
      (coalton-library::NodeIndex 0)
      g)
 
-    (is (equalp (coalton-library::tarjan-scc g)
-                (coalton-library::make-list
-                 (coalton-library::make-list
-                  (coalton-library::NodeIndex 0)
-                  (coalton-library::NodeIndex 1)
-                  (coalton-library::NodeIndex 2))))))
+    (is (coalton-library::tarjan-output-equal
+         (coalton-library::tarjan-scc g)
+         (coalton-library::make-list
+          (coalton-library::make-list
+           (coalton-library::NodeIndex 0)
+           (coalton-library::NodeIndex 1)
+           (coalton-library::NodeIndex 2))))))
 
   (let ((g (coalton-library::make-digraph coalton-library::Unit)))
     (coalton-library::graph-add-node "a" g)
@@ -90,13 +91,14 @@
      (coalton-library::NodeIndex 1)
      g)
 
-    (is (equalp (coalton-library::tarjan-scc g)
-                (coalton-library::make-list
-                 (coalton-library::make-list
-                  (coalton-library::NodeIndex 0))
-                 (coalton-library::make-list
-                  (coalton-library::NodeIndex 1)
-                  (coalton-library::NodeIndex 2))))))
+    (is (coalton-library::tarjan-output-equal
+         (coalton-library::tarjan-scc g)
+         (coalton-library::make-list
+          (coalton-library::make-list
+           (coalton-library::NodeIndex 0))
+          (coalton-library::make-list
+           (coalton-library::NodeIndex 1)
+           (coalton-library::NodeIndex 2))))))
 
   (let ((g (coalton-library::make-digraph coalton-library::Unit)))
     (let  ((a (coalton-library::graph-add-node "a" g))
@@ -147,15 +149,16 @@
        d
        g)
 
-      (is (equalp (coalton-library::tarjan-scc g)
-                  (coalton-library::make-list
-                   (coalton-library::make-list
-                    (coalton-library::NodeIndex 4)
-                    (coalton-library::NodeIndex 3))
-                   (coalton-library::make-list
-                    (coalton-library::NodeIndex 0)
-                    (coalton-library::NodeIndex 1)
-                    (coalton-library::NodeIndex 2)))))))
+      (is (coalton-library::tarjan-output-equal
+           (coalton-library::tarjan-scc g)
+           (coalton-library::make-list
+            (coalton-library::make-list
+             (coalton-library::NodeIndex 4)
+             (coalton-library::NodeIndex 3))
+            (coalton-library::make-list
+             (coalton-library::NodeIndex 0)
+             (coalton-library::NodeIndex 1)
+             (coalton-library::NodeIndex 2)))))))
 
   (let* ((graph_ (coalton-library::make-digraph coalton-library::Unit))
          (a (coalton-library::graph-add-node "a" graph_))
@@ -192,11 +195,12 @@
     (coalton-library::graph-add-edge coalton-library::Unit h d graph_)
     (coalton-library::graph-add-edge coalton-library::Unit h g graph_)
 
-    (is (equalp (coalton-library::tarjan-scc graph_)
-                (coalton-library::make-list
-                 (coalton-library::make-list f g)
-                 (coalton-library::make-list c d h)
-                 (coalton-library::make-list a b e)))))
+    (is (coalton-library::tarjan-output-equal
+         (coalton-library::tarjan-scc graph_)
+         (coalton-library::make-list
+          (coalton-library::make-list f g)
+          (coalton-library::make-list c d h)
+          (coalton-library::make-list a b e)))))
 
   (let* ((graph_ (coalton-library::make-digraph coalton-library::Unit))
          (a (coalton-library::graph-add-node "a" graph_))

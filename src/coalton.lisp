@@ -18,6 +18,7 @@
                                            coalton:define-instance
                                            coalton:repr))
 
+
 ;;; Entry Point
 
 (defun collect-toplevel-forms (forms)
