@@ -9,25 +9,26 @@
   (:use))
 
 (uiop:define-package #:coalton-impl/algorithm
-  (:documentation "Implementation of generic algorithms used by COALTON. This is a package private to the COALTON system and is not intended for public use.")
+    (:documentation "Implementation of generic algorithms used by COALTON. This is a package private to the COALTON system and is not intended for public use.")
   (:use #:cl)
   (:export
    #:tarjan-scc                         ; FUNCTION
-   #:shadow-realm                       ; STRUCT
-   #:shadow-realm-data                  ; ACCESSOR
-   #:shadow-realm-parent                ; ACCESSOR
-   #:make-shadow-realm                  ; FUNCTION
-   #:shadow-realm-set                   ; FUNCTION
-   #:shadow-realm-push-frame            ; FUNCTION
-   #:shadow-realm-lookup                ; FUNCTION
-   #:shadow-realm-diff                  ; FUNCTION
-   #:shadow-realm-remove                ; FUNCTION
-   #:shadow-list                        ; STRUCT
-   #:shadow-list-data                   ; ACCESSOR
-   #:shadow-list-lookup                 ; FUNCTION
-   #:shadow-list-push                   ; FUNCTION
-   #:shadow-list-replace                ; FUNCTION
-   #:shadow-list-diff                   ; FUNCTION
+   #:immutable-map                      ; STRUCT
+   #:immutable-map-data                 ; ACCESSOR
+   #:immutable-map-parent               ; ACCESSOR
+   #:make-immutable-map                 ; FUNCTION
+   #:immutable-map-set                  ; FUNCTION
+   #:immutable-map-set-multiple         ; FUNCTION
+   #:immutable-map-lookup               ; FUNCTION
+   #:immutable-map-diff                 ; FUNCTION
+   #:immutable-map-remove               ; FUNCTION
+   #:immutable-listmap                  ; STRUCT
+   #:make-immutable-listmap             ; CONSTRUCTOR
+   #:immutable-listmap-data             ; ACCESSOR
+   #:immutable-listmap-lookup           ; FUNCTION
+   #:immutable-listmap-push             ; FUNCTION
+   #:immutable-listmap-replace          ; FUNCTION
+   #:immutable-listmap-diff             ; FUNCTION
    ))
 
 (uiop:define-package #:coalton-impl/ast

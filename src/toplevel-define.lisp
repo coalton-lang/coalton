@@ -52,7 +52,7 @@
   ;; The (DEFINE <var> <val>) case.
   ;; XXX: Should this be LETREC too? Probably for something like F = x => ... F.
   (values var
-          (parse-form val (make-shadow-realm) (symbol-package var))
+          (parse-form val (make-immutable-map) (symbol-package var))
           ':variable
           nil
           docstring))
@@ -64,7 +64,7 @@
            (values symbol node symbol list (or null string)))
   ;; The (DEFINE (<fvar> . <args>) <val>) case.
   (values fvar
-          (parse-form `(coalton:fn ,args ,val) (make-shadow-realm) (symbol-package fvar))
+          (parse-form `(coalton:fn ,args ,val) (make-immutable-map) (symbol-package fvar))
           ':function
           args
           docstring))

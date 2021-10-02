@@ -158,7 +158,7 @@
   (let ((values nil)
         (package (find-package package)))
     ;; Sort the entires by package
-    (fset:do-map (sym entry (shadow-realm-data (coalton-impl/typechecker::environment-name-environment env)))
+    (fset:do-map (sym entry (immutable-map-data (coalton-impl/typechecker::environment-name-environment env)))
       ;; Only include exported symbols from our package
       (when (and (equalp (symbol-package sym) package)
                  (multiple-value-bind (symbol status)
@@ -182,7 +182,7 @@
   (let ((values nil)
         (package (find-package package)))
     ;; Sort the entires by package
-    (fset:do-map (sym entry (shadow-realm-data (coalton-impl/typechecker::environment-class-environment env)))
+    (fset:do-map (sym entry (immutable-map-data (coalton-impl/typechecker::environment-class-environment env)))
       ;; Only include exported symbols from our package
       (when (and (equalp (symbol-package sym) package)
                  (multiple-value-bind (symbol status)
@@ -202,7 +202,7 @@
         (ctors nil)
         (package (find-package package)))
     ;; Sort the entires by package
-    (fset:do-map (sym entry (shadow-realm-data (coalton-impl/typechecker::environment-type-environment env)))
+    (fset:do-map (sym entry (immutable-map-data (coalton-impl/typechecker::environment-type-environment env)))
       ;; Only include exported symbols from our package
       (when (and (equalp (symbol-package sym) package)
                  (multiple-value-bind (symbol status)
@@ -210,7 +210,7 @@
                    (declare (ignore symbol))
                    (eql :external status)))
         (push (cons sym entry) types)))
-    (fset:do-map (sym entry (shadow-realm-data (coalton-impl/typechecker::environment-constructor-environment env)))
+    (fset:do-map (sym entry (immutable-map-data (coalton-impl/typechecker::environment-constructor-environment env)))
       (when (equalp (symbol-package sym) package)
         (push (cons sym entry) ctors)))
 
