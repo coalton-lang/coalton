@@ -4,7 +4,7 @@
   (let ((package (symbol-package (type-definition-name def))))
 
     (cond
-      ((type-definition-compressed-type def)
+      ((type-definition-enum-repr def)
        (loop :for constructor :in (type-definition-constructors def)
              :append
              (list `(coalton-impl::define-global-lexical

@@ -21,7 +21,7 @@
            (package (symbol-package name)))
 
       (cond
-        ((type-entry-compressed-type type)
+        ((type-entry-enum-repr type)
          `',(constructor-entry-compressed-repr entry))
 
         ((type-entry-newtype type)

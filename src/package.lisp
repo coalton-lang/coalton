@@ -183,7 +183,7 @@
    #:type-entry-name                    ; STRUCT
    #:type-entry-runtime-type            ; ACCESSOR
    #:type-entry-type                    ; ACCESSOR
-   #:type-entry-compressed-type         ; ACCESSOR
+   #:type-entry-enum-repr               ; ACCESSOR
    #:type-entry-newtype                 ; ACCESSOR
    #:constructor-entry                  ; STRUCT
    #:constructor-entry-name             ; ACCESSOR
@@ -223,7 +223,7 @@
    #:type-definition-constructors       ; ACCESSOR
    #:type-definition-list               ; TYPE
    #:type-definition-runtime-type       ; ACCESSOR
-   #:type-definition-compressed-type    ; ACCESSOR
+   #:type-definition-enum-repr          ; ACCESSOR
    #:type-definition-newtype            ; ACCESSOR
    )
   (:export

@@ -40,7 +40,7 @@
            :name type-name
            :runtime-type (type-definition-runtime-type parsed-deftype)
            :type tycon
-           :compressed-type (type-definition-compressed-type parsed-deftype)
+           :enum-repr (type-definition-enum-repr parsed-deftype)
            :newtype (type-definition-newtype parsed-deftype))))
 
         (dolist (ctor ctors)
