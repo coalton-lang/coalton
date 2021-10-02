@@ -125,7 +125,7 @@
       form)))
 
 (defmacro coalton:coalton (form)
-  (let ((parsed-form (parse-form form (make-shadow-realm) *package*)))
+  (let ((parsed-form (parse-form form (make-immutable-map) *package*)))
     (coalton-impl/typechecker::with-type-context ("COALTON")
       (multiple-value-bind (type preds typed-node substs)
           (derive-expression-type parsed-form *global-environment* nil)

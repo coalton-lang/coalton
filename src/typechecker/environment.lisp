@@ -4,7 +4,7 @@
 ;;; Value type environments
 ;;;
 
-(serapeum:defstruct-read-only (value-environment (:include shadow-realm)))
+(serapeum:defstruct-read-only (value-environment (:include immutable-map)))
 
 #+sbcl
 (declaim (sb-ext:freeze-type value-environment))
@@ -12,10 +12,10 @@
 (defmethod apply-substitution (subst-list (env value-environment))
   (make-value-environment :data (fset:image (lambda (key value)
                   (values key (apply-substitution subst-list value)))
-                (shadow-realm-data env))))
+                (immutable-map-data env))))
 
 (defmethod type-variables ((env value-environment))
-  (remove-duplicates (mapcan #'type-variables (fset:convert 'list (fset:range (shadow-realm-data env)))) :test #'equalp))
+  (remove-duplicates (mapcan #'type-variables (fset:convert 'list (fset:range (immutable-map-data env)))) :test #'equalp))
 
 ;;;
 ;;; Type environments
@@ -48,7 +48,7 @@
 #+sbcl
 (declaim (sb-ext:freeze-type type-entry))
 
-(serapeum:defstruct-read-only (type-environment (:include shadow-realm)))
+(serapeum:defstruct-read-only (type-environment (:include immutable-map)))
 
 #+sbcl
 (declaim (sb-ext:freeze-type type-environment))
@@ -193,7 +193,7 @@
 (declaim (sb-ext:freeze-type constructor-entry-list))
 
 
-(serapeum:defstruct-read-only (constructor-environment (:include shadow-realm)))
+(serapeum:defstruct-read-only (constructor-environment (:include immutable-map)))
 
 (defun make-default-constructor-environment ()
   "Create a TYPE-ENVIRONMENT containing early constructors"
@@ -272,7 +272,7 @@
             (ty-class-docstring class)
             (ty-class-location class)))
 
-(serapeum:defstruct-read-only (class-environment (:include shadow-realm)))
+(serapeum:defstruct-read-only (class-environment (:include immutable-map)))
 
 #+sbcl
 (declaim (sb-ext:freeze-type class-environment))
@@ -309,7 +309,7 @@
    (apply-substitution subst-list (ty-class-instance-predicate instance))
    (ty-class-instance-codegen-sym instance)))
 
-(serapeum:defstruct-read-only (instance-environment (:include shadow-list)))
+(serapeum:defstruct-read-only (instance-environment (:include immutable-listmap)))
 
 #+sbcl
 (declaim (sb-ext:freeze-type instance-environment))
@@ -335,7 +335,7 @@
 #+sbcl
 (declaim (sb-ext:freeze-type function-env-entry-list))
 
-(serapeum:defstruct-read-only (function-environment (:include shadow-realm)))
+(serapeum:defstruct-read-only (function-environment (:include immutable-map)))
 
 #+sbcl
 (declaim (sb-ext:freeze-type function-environment))
@@ -353,7 +353,7 @@
 #+sbcl
 (declaim (sb-ext:freeze-type name-entry))
 
-(serapeum:defstruct-read-only (name-environment (:include shadow-realm)))
+(serapeum:defstruct-read-only (name-environment (:include immutable-map)))
 
 #+sbcl
 (declaim (sb-ext:freeze-type name-environment))
@@ -424,25 +424,25 @@
            (type environment old-env)
            (values environment))
   (make-environment
-   (shadow-realm-diff (environment-value-environment env)
+   (immutable-map-diff (environment-value-environment env)
                       (environment-value-environment old-env)
                       #'make-value-environment)
-   (shadow-realm-diff (environment-type-environment env)
+   (immutable-map-diff (environment-type-environment env)
                       (environment-type-environment old-env)
                       #'make-type-environment)
-   (shadow-realm-diff (environment-constructor-environment env)
+   (immutable-map-diff (environment-constructor-environment env)
                       (environment-constructor-environment old-env)
                       #'make-constructor-environment)
-   (shadow-realm-diff (environment-class-environment env)
+   (immutable-map-diff (environment-class-environment env)
                       (environment-class-environment old-env)
                       #'make-class-environment)
-   (shadow-list-diff (environment-instance-environment env)
+   (immutable-listmap-diff (environment-instance-environment env)
                      (environment-instance-environment old-env)
                      #'make-instance-environment)
-   (shadow-realm-diff (environment-function-environment env)
+   (immutable-map-diff (environment-function-environment env)
                       (environment-function-environment old-env)
                       #'make-function-environment)
-   (shadow-realm-diff (environment-name-environment env)
+   (immutable-map-diff (environment-name-environment env)
                       (environment-name-environment old-env)
                       #'make-name-environment)))
 
@@ -471,10 +471,10 @@
 (defun lookup-value-type (env symbol &key no-error)
   (declare (type environment env)
            (type symbol symbol))
-  (or (shadow-realm-lookup (environment-value-environment env) symbol)
+  (or (immutable-map-lookup (environment-value-environment env) symbol)
       (unless no-error
         (let* ((sym-name (symbol-name symbol))
-               (valid-bindings (coalton-impl/algorithm::shadow-realm-keys (environment-value-environment env)))
+               (valid-bindings (coalton-impl/algorithm::immutable-map-keys (environment-value-environment env)))
                (matches (remove-if-not (lambda (s) (string= (symbol-name s) sym-name)) valid-bindings)))
           (error 'unknown-binding-error :symbol symbol :alternatives matches)))))
 
@@ -485,7 +485,7 @@
            (values environment &optional))
   (update-environment
    env
-   :value-environment (shadow-realm-set
+   :value-environment (immutable-map-set
                        (environment-value-environment env)
                        symbol
                        value
@@ -494,10 +494,10 @@
 (defun lookup-type (env symbol &key no-error)
   (declare (type environment env)
            (type symbol symbol))
-  (or (shadow-realm-lookup (environment-type-environment env) symbol)
+  (or (immutable-map-lookup (environment-type-environment env) symbol)
       (unless no-error
         (let* ((sym-name (symbol-name symbol))
-               (valid-types (coalton-impl/algorithm::shadow-realm-keys (environment-type-environment env)))
+               (valid-types (coalton-impl/algorithm::immutable-map-keys (environment-type-environment env)))
                (matches (remove-if-not (lambda (s) (string= (symbol-name s) sym-name)) valid-types)))
           (cond
             ((= 1 (length sym-name))
@@ -514,7 +514,7 @@
            (values environment &optional))
   (update-environment
    env
-   :type-environment (shadow-realm-set
+   :type-environment (immutable-map-set
                        (environment-type-environment env)
                        symbol
                        value
@@ -523,7 +523,7 @@
 (defun lookup-constructor (env symbol &key no-error)
   (declare (type environment env)
            (type symbol symbol))
-  (or (shadow-realm-lookup (environment-constructor-environment env) symbol)
+  (or (immutable-map-lookup (environment-constructor-environment env) symbol)
       (unless no-error
         (error "Unknown constructor ~S." symbol))))
 
@@ -534,7 +534,7 @@
            (values environment &optional))
   (update-environment
    env
-   :constructor-environment (shadow-realm-set
+   :constructor-environment (immutable-map-set
                              (environment-constructor-environment env)
                              symbol
                              value
@@ -543,7 +543,7 @@
 (defun lookup-class (env symbol &key no-error)
   (declare (type environment env)
            (type symbol symbol))
-  (or (shadow-realm-lookup (environment-class-environment env) symbol)
+  (or (immutable-map-lookup (environment-class-environment env) symbol)
       (unless no-error
         (error "Unknown class ~S." symbol))))
 
@@ -554,7 +554,7 @@
            (values environment &optional))
   (update-environment
    env
-   :class-environment (shadow-realm-set
+   :class-environment (immutable-map-set
                        (environment-class-environment env)
                        symbol
                        value
@@ -563,7 +563,7 @@
 (defun lookup-function (env symbol &key no-error)
   (declare (type environment env)
            (type symbol symbol))
-  (or (shadow-realm-lookup (environment-function-environment env) symbol)
+  (or (immutable-map-lookup (environment-function-environment env) symbol)
       (unless no-error
         (error "Unknown function ~S." symbol))))
 
@@ -574,7 +574,7 @@
            (values environment &optional))
   (update-environment
    env
-   :function-environment (shadow-realm-set
+   :function-environment (immutable-map-set
                           (environment-function-environment env)
                           symbol
                           value
@@ -585,7 +585,7 @@
            (type symbol symbol))
   (update-environment
    env
-   :function-environment (shadow-realm-remove
+   :function-environment (immutable-map-remove
                           (environment-function-environment env)
                           symbol
                           #'make-function-environment)))
@@ -593,7 +593,7 @@
 (defun lookup-name (env symbol &key no-error)
   (declare (type environment env)
            (type symbol symbol))
-  (or (shadow-realm-lookup (environment-name-environment env) symbol)
+  (or (immutable-map-lookup (environment-name-environment env) symbol)
       (unless no-error
         (error "Unknown name ~S." symbol))))
 
@@ -612,7 +612,7 @@
         env
         (update-environment
          env
-         :name-environment (shadow-realm-set
+         :name-environment (immutable-map-set
                             (environment-name-environment env)
                             symbol
                             value
@@ -622,7 +622,7 @@
   (declare (type environment env)
            (type symbol class)
            (values fset:seq &optional))
-  (shadow-list-lookup (environment-instance-environment env) class :no-error no-error))
+  (immutable-listmap-lookup (environment-instance-environment env) class :no-error no-error))
 
 (defun lookup-class-instance (env pred &key no-error)
   (declare (type environment env))
@@ -644,7 +644,7 @@
            (values environment &optional))
   (update-environment
    env
-   :value-environment (shadow-realm-push-frame
+   :value-environment (immutable-map-set-multiple
                        (environment-value-environment env)
                        value-types
                        #'make-value-environment)))
@@ -655,7 +655,7 @@
            (values environment &optional))
   (update-environment
    env
-   :type-environment (shadow-realm-push-frame
+   :type-environment (immutable-map-set-multiple
                       (environment-type-environment env)
                       types
                       #'make-type-environment)))
@@ -666,7 +666,7 @@
            (values environment &optional))
   (update-environment
    env
-   :constructor-environment (shadow-realm-push-frame
+   :constructor-environment (immutable-map-set-multiple
                              (environment-constructor-environment env)
                              constructors
                              #'make-constructor-environment)))
@@ -677,7 +677,7 @@
            (values environment &optional))
   (update-environment
    env
-   :function-environment (shadow-realm-push-frame
+   :function-environment (immutable-map-set-multiple
                           (environment-function-environment env)
                           functions
                           #'make-function-environment)))
@@ -717,7 +717,7 @@
           (return-from add-instance
             (update-environment
              env
-             :instance-environment (shadow-list-replace
+             :instance-environment (immutable-listmap-replace
                                     (environment-instance-environment env)
                                     class
                                     index
@@ -729,7 +729,7 @@
 
   (update-environment
    env
-   :instance-environment (shadow-list-push
+   :instance-environment (immutable-listmap-push
                           (environment-instance-environment env)
                           class
                           value
@@ -741,20 +741,20 @@
 (defun directly-applicable-functions (env)
   (mapcar
    (lambda (f) (cons (function-env-entry-name f) (function-env-entry-arity f)))
-   (fset:convert 'list (fset:range (shadow-realm-data (environment-function-environment env))))))
+   (fset:convert 'list (fset:range (immutable-map-data (environment-function-environment env))))))
 
 ;;;
 ;;; Generating environment update code
 ;;;
 
 (defun generate-environment-update (env-diff env)
-  (let ((type-table (shadow-realm-data (environment-type-environment env-diff)))
-        (value-table (shadow-realm-data (environment-value-environment env-diff)))
-        (constructor-table (shadow-realm-data (environment-constructor-environment env-diff)))
-        (class-table (shadow-realm-data (environment-class-environment env-diff)))
-        (function-table (shadow-realm-data (environment-function-environment env-diff)))
-        (instance-table (shadow-list-data (environment-instance-environment env-diff)))
-        (name-table (shadow-realm-data (environment-name-environment env-diff)))
+  (let ((type-table (immutable-map-data (environment-type-environment env-diff)))
+        (value-table (immutable-map-data (environment-value-environment env-diff)))
+        (constructor-table (immutable-map-data (environment-constructor-environment env-diff)))
+        (class-table (immutable-map-data (environment-class-environment env-diff)))
+        (function-table (immutable-map-data (environment-function-environment env-diff)))
+        (instance-table (immutable-listmap-data (environment-instance-environment env-diff)))
+        (name-table (immutable-map-data (environment-name-environment env-diff)))
         (forms nil))
 
     ;; Tell the world about our types

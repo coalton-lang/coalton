@@ -4,7 +4,7 @@
   (check-type env environment)
   (let ((sorted-by-package (make-hash-table)))
     ;; Sort the entires by package
-    (fset:do-map (sym entry (shadow-realm-data (environment-value-environment env)))
+    (fset:do-map (sym entry (immutable-map-data (environment-value-environment env)))
       (push (cons sym entry) (gethash (symbol-package sym) sorted-by-package)))
 
     ;; Print out the entries for each package
@@ -28,7 +28,7 @@
   (check-type env environment)
   (let ((sorted-by-package (make-hash-table)))
     ;; Sort the entires by package
-    (fset:do-map (sym entry (shadow-realm-data (environment-type-environment env)))
+    (fset:do-map (sym entry (immutable-map-data (environment-type-environment env)))
       (push (cons sym entry) (gethash (symbol-package sym) sorted-by-package)))
 
     ;; Print out the entries for each package
@@ -51,7 +51,7 @@
   (check-type env environment)
   (let ((sorted-by-package (make-hash-table)))
     ;; Sort the entires by package
-    (fset:do-map (sym entry (shadow-realm-data (environment-class-environment env)))
+    (fset:do-map (sym entry (immutable-map-data (environment-class-environment env)))
       (push (cons sym entry) (gethash (symbol-package sym) sorted-by-package)))
 
     ;; Print out the entries for each package
@@ -81,7 +81,7 @@
   (check-type env environment)
   (let ((sorted-by-package (make-hash-table)))
     ;; Sort the entires by package
-    (fset:do-map (sym entry (shadow-realm-data (environment-class-environment env)))
+    (fset:do-map (sym entry (immutable-map-data (environment-class-environment env)))
       (push (cons entry (lookup-class-instances env sym :no-error t))
             (gethash (symbol-package sym) sorted-by-package)))
 

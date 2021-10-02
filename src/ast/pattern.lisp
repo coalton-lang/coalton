@@ -55,12 +55,12 @@
 #+sbcl
 (declaim (sb-ext:freeze-type pattern))
 
-(defun rewrite-pattern-vars (pattern sr)
-  "Rewrite the variables in PATTERN according to the mapping defined in SR."
+(defun rewrite-pattern-vars (pattern m)
+  "Rewrite the variables in PATTERN according to the mapping defined in M."
   ;; This is used when canonicalizing variable names in the parser.
   ;; It is then used to reverse canonicalization when printing error messages.
   (declare (type pattern pattern)
-           (type shadow-realm sr)
+           (type immutable-map m)
            (values pattern))
   (etypecase pattern
     (pattern-literal pattern)
@@ -72,12 +72,12 @@
       (pattern-constructor-name pattern)
       (mapcar
        (lambda (pattern)
-         (rewrite-pattern-vars pattern sr))
+         (rewrite-pattern-vars pattern m))
        (pattern-constructor-patterns pattern))))
 
     (pattern-var
      (pattern-var
-      (or (shadow-realm-lookup sr (pattern-var-id pattern))
+      (or (immutable-map-lookup m (pattern-var-id pattern))
           (coalton-impl::coalton-bug "Invalid state reached in rewrite-pattern-vars"))))))
 
 

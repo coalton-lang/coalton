@@ -24,8 +24,8 @@
                (:module "algorithm"
                 :serial t
                 :components ((:file "tarjan-scc")
-                             (:file "shadow-realm")
-                             (:file "shadow-list")))
+                             (:file "immutable-map")
+                             (:file "immutable-listmap")))
                (:module "ast"
                 :serial t
                 :components ((:file "pattern")

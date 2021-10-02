@@ -667,8 +667,8 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
       ;; Rewrite variables in the pattern to their original names for error messages
       (let* ((pattern (match-branch-pattern alt))
              (name-map (match-branch-name-map alt))
-             (sr (shadow-realm-push-frame (make-shadow-realm) name-map))
-             (pattern (coalton-impl/ast::rewrite-pattern-vars pattern sr)))
+             (m (immutable-map-set-multiple (make-immutable-map) name-map))
+             (pattern (coalton-impl/ast::rewrite-pattern-vars pattern m)))
 
         (with-type-context ("branch ~A" pattern)
           (multiple-value-bind (ty branch-preds typed-branch new-subs)
