@@ -11,7 +11,7 @@
   (runtime-type :type t)
 
   ;; See the fields with the same name on type-entry
-  (compressed-type :type boolean)
+  (enum-repr :type boolean)
   (newtype :type boolean)
 
   (constructors :type constructor-entry-list))
@@ -86,7 +86,7 @@ Returns (TYPE-DEFINITIONS DOCSTRINGS)"
                   :name (first parsed)
                   :runtime-type (first parsed)
                   :type (second parsed)
-                  :compressed-type nil
+                  :enum-repr nil
                   :newtype nil)))
               parsed-tcons))
            (new-env (push-type-environment env new-bindings))
@@ -133,7 +133,7 @@ Returns (TYPE-DEFINITIONS DOCSTRINGS)"
                                         :name tycon-name
                                         :type tcon
                                         :runtime-type tycon-name
-                                        :compressed-type nil
+                                        :enum-repr nil
                                         :newtype nil
                                         :constructors parsed-ctors))
 
@@ -144,7 +144,7 @@ Returns (TYPE-DEFINITIONS DOCSTRINGS)"
                                           :name tycon-name
                                           :type tcon
                                           :runtime-type `(member ,@(mapcar #'constructor-entry-compressed-repr parsed-ctors))
-                                          :compressed-type t
+                                          :enum-repr t
                                           :newtype nil
                                           :constructors parsed-ctors)))
 
@@ -156,7 +156,7 @@ Returns (TYPE-DEFINITIONS DOCSTRINGS)"
                                           :name tycon-name
                                           :type tcon
                                           :runtime-type runtime-type
-                                          :compressed-type nil
+                                          :enum-repr nil
                                           :newtype t
                                           :constructors parsed-ctors)))
 
@@ -165,7 +165,7 @@ Returns (TYPE-DEFINITIONS DOCSTRINGS)"
                                         :name tycon-name
                                         :type tcon
                                         :runtime-type tycon-name
-                                        :compressed-type nil
+                                        :enum-repr nil
                                         :newtype nil
                                         :constructors parsed-ctors)))))))))
       (values parsed-defs parsed-docstrings))))
