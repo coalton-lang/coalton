@@ -77,11 +77,11 @@ Lastly and importantly, we maintain a collection of documentation about Coalton 
 
 ## Getting Started
 
-**Install**: Clone this repository into a place your Lisp can see. (Coalton is not yet on Quicklisp.)
+**Install**: Clone this repository into a place your Lisp can see (e.g., `~/quicklisp/local-projects/`). (Coalton is not yet on Quicklisp.)
 
 **Use**: Either run `(ql:quickload :coalton)`, or add `#:coalton` to your ASD's `:depends-on` list.
 
-**Test**: Run `(asdf:test-system :coalton)`.
+**Test**: Run `(ql:quickload :coalton/tests)` to download the dependencies, then run `(asdf:test-system :coalton)`.
 
 **Learn**: We recommend starting with the [*Intro to Coalton*](docs/intro-to-coalton.md) document, and then taking a peek in the [examples directory](examples/). It may also be helpful to check out the [introductory blog post](https://coalton-lang.github.io/20211010-introducing-coalton/).
 
@@ -95,4 +95,3 @@ We welcome contributions of all forms, especially as we stabilize toward a 1.0 r
 - bug fixes and typo corrections (filed as pull requests),
 - small [example programs](examples/small-coalton-programs/), and
 - user experience troubles.
-
