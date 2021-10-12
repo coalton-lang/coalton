@@ -345,7 +345,13 @@
      new-type
      (typed-node-unparsed node)
      (typed-node-match-expr node)
-     (typed-node-match-branches node))))
+     (typed-node-match-branches node)))
+
+  (:method ((node typed-node-seq) new-type)
+    (typed-node-seq
+     new-type
+     (typed-node-unparsed node)
+     (typed-node-seq-subnodes node))))
 
 (defgeneric collect-type-predicates (node)
   (:method ((type qualified-ty))
