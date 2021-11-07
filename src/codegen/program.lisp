@@ -100,10 +100,13 @@
 
        ;; Define ...
        ,@(reshuffle-definitions (append
-                                 ;; ... instance structs
-                                 (compile-instance-definitions instance-definitions optimizer)
                                  ;; ... functions and variables
-                                 (compile-toplevel-sccs bindings sccs env)))
+                                 (compile-toplevel-sccs bindings sccs env)
+                                 ;; ... instance structs
+                                 ;; unlike other definitions, instances may read eagerly
+                                 ;; from variables. so initialize them last, after all
+                                 ;; the variables have been defined.
+                                 (compile-instance-definitions instance-definitions optimizer)))
 
        ;; Emit documentation
        ,@(compile-docstring-forms docstrings)
