@@ -1,6 +1,11 @@
-.PHONY: test
+.PHONY: test test-safe
 test:
 	sbcl --non-interactive \
+	     --eval "(asdf:test-system :coalton)"
+
+test-safe:
+	sbcl --non-interactive \
+	     --eval "(sb-ext:restrict-compiler-policy 'safety 3)" \
 	     --eval "(asdf:test-system :coalton)"
 
 .PHONY: docs
