@@ -15,4 +15,12 @@ From coalton-lang/coalton issue #199"
         "TestLetrecOrder")
 
       (define-instance (Into TestLetrecOrder String)
-        (define into testLetrecOrderToString)))))
+        (define into testLetrecOrderToString)))
+
+    (coalton-toplevel
+      (declare getTestLetrecString (Unit -> String))
+      (define (getTestLetrecString unit)
+        (into TestLetRecOrder))))
+
+  (is (equal "TestLetrecOrder"
+             (coalton-test-user::getTestLetrecString Unit))))
