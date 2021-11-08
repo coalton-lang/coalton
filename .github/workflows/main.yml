@@ -13,8 +13,10 @@ jobs:
     runs-on: ubuntu-latest
 
     strategy:
+      fail-fast: false
       matrix:
         COALTON_ENV: ["release", "development"]
+        SAFETY: ["1", "3"]
 
     env:
       # Tell ASDF to look through our repo recursively
@@ -23,12 +25,13 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: 40ants/setup-lisp@v1
-        with:
-          asdf-system: coalton
-      - uses: 40ants/run-tests@v2
+      - name: Run Tests
         env:
           COALTON_ENV: ${{ matrix.COALTON_ENV }}
-        with:
-          asdf-system: coalton
-          run-tests:
-            (asdf:test-system :coalton)
+        run: |
+          cat <<EOF > run-tests.lisp
+          (sb-ext:restrict-compiler-policy 'safety ${{ matrix.SAFETY }})
+          (defun main (&rest args)
+            (asdf:test-system :coalton))
+          EOF
+          qlot exec ros -- run-tests.lisp
