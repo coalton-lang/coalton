@@ -1,6 +1,6 @@
 (in-package #:coalton-tests)
 
-(deftest test-letrec-order ()
+(deftest test-def-before-instance ()
   "Test that bindings are initialized in a correct order so that constructing instance structs never reads an uninitialized variable.
 
 From coalton-lang/coalton issue #199"
@@ -24,3 +24,29 @@ From coalton-lang/coalton issue #199"
 
   (is (equal "TestLetrecOrder"
              (coalton-test-user::getTestLetrecString Unit))))
+
+(deftest interleaved-instances ()
+  (with-toplevel-compilation ()
+    (coalton-toplevel
+      (define-type InterleavedInstancesT InterleavedInstancesT)
+
+      (define-type (InterleavedInstancesT2 :a)
+        (InterleavedInstancesT2 :a))
+
+      (define-instance (Semigroup InterleavedInstancesT)
+        (define (<> a b) InterleavedInstancesT))
+
+      (define-instance (Monoid InterleavedInstancesT)
+        (define mempty InterleavedInstancesT))
+
+      (define-instance (Semigroup :a => (Semigroup (InterleavedInstancesT2 :a)))
+        (define (<> a b)
+          (match (Tuple a b)
+            ((Tuple (InterleavedInstancesT2 a) (InterleavedInstancesT2 b)) (InterleavedInstancesT2 (<> a b))))))
+
+      (define-instance (Monoid :a => (Monoid (InterleavedInstancesT2 :a)))
+        (define mempty (InterleavedInstancesT2 mempty)))
+
+      (declare x (InterleavedInstancesT2 InterleavedInstancesT))
+      (define x mempty)))
+  (is (equalp (coalton-test-user::x) (coalton-test-user::x))))
