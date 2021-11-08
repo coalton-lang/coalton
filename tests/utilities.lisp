@@ -30,6 +30,7 @@
 
 (defun reintern (form package)
   (typecase form
+    (keyword form)
     (symbol (intern (symbol-name form) package))
     (list (mapcar (lambda (subform) (reintern subform package))
                   form))
@@ -47,7 +48,8 @@
       :close-stream
       (uiop:with-temporary-file (:pathname compiled-file
                                  :type "fasl")
-        (handler-bind ((style-warning #'muffle-warning))
+        (handler-bind ((style-warning #'muffle-warning)
+                       #+sbcl (sb-ext:compiler-note #'muffle-warning))
           (compile-file source-file
                         :output-file compiled-file
                         :print nil
@@ -56,5 +58,3 @@
 
 (defmacro with-toplevel-compilation ((&key (package :coalton-test-user)) &body body)
   `(compile-and-load-tempfile ',package ',body))
-
-
