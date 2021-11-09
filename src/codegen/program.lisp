@@ -100,10 +100,10 @@
 
        ;; Define ...
        ,@(reshuffle-definitions (append
-                                 ;; ... instance structs
-                                 (compile-instance-definitions instance-definitions optimizer)
                                  ;; ... functions and variables
-                                 (compile-toplevel-sccs bindings sccs env)))
+                                 (compile-toplevel-sccs bindings sccs env)
+                                 ;; ... instance structs
+                                 (compile-instance-definitions instance-definitions optimizer)))
 
        ;; Emit documentation
        ,@(compile-docstring-forms docstrings)
