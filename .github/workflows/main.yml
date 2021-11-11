@@ -16,7 +16,7 @@ jobs:
       fail-fast: false
       matrix:
         COALTON_ENV: ["release", "development"]
-        SAFETY: ["1", "3"]
+        SAFETY: ["0", "3"]
 
     env:
       # Tell ASDF to look through our repo recursively
