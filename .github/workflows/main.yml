@@ -32,6 +32,11 @@ jobs:
           cat <<EOF > run-tests.lisp
           (sb-ext:restrict-compiler-policy 'safety ${{ matrix.SAFETY }})
           (defun main (&rest args)
-            (asdf:test-system :coalton))
+            (let ((conditions '()))
+              (handler-bind ((undefined-function (lambda (c) (push c conditions))))
+                (asdf:test-system :coalton))
+              (when conditions
+                (format t "Failing build due to:~%~{~A~%~}")
+                (sb-ext:exit :code 1))))
           EOF
           qlot exec ros -- run-tests.lisp
