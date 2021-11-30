@@ -41,6 +41,15 @@
     "Returns TRUE if V is empty"
     (== 0 (vector-length v)))
 
+  (declare vector-copy ((Vector :a) -> (Vector :a)))
+  (define (vector-copy v)
+    "Return a new vector containing the same elements as V"
+    (match v
+      ((Vector v)
+       (Vector
+        (lisp Lisp-Object (v)
+          (cl:copy-seq v))))))
+
   (declare vector-push (:a -> (Vector :a) -> Integer))
   (define (vector-push item v)
     "Append ITEM to V and resize V if necessary"
@@ -195,6 +204,25 @@
           (let out = (vector-index-unsafe idx vec))
           (vector-set idx (vector-pop-unsafe vec) vec)
           out)))
+
+  (declare vector-sort-by ((:a -> :a -> Boolean) -> (Vector :a) -> Unit))
+  (define (vector-sort-by f v)
+    "Sort a vector with predicate function F"
+    (match v
+      ((Vector v)
+       (progn
+         (lisp :a (v f)
+           (cl:sort
+            v
+            (cl:lambda (a b)
+              (coalton-impl/codegen::A2 f a b))))
+         Unit))))
+
+  (declare vector-sort (Ord :a => ((Vector :a) -> Unit)))
+  (define (vector-sort v)
+    "Sort a vector inplace"
+    (vector-sort-by < v))
+
 
   ;;
   ;; Vector Instances
