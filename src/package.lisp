@@ -603,6 +603,7 @@
    #:vector-length
    #:vector-capacity
    #:vector-empty
+   #:vector-copy
    #:vector-push
    #:vector-pop
    #:vector-pop-unsafe
@@ -613,6 +614,8 @@
    #:vector-head-unsafe
    #:vector-last
    #:vector-last-unsafe
+   #:vector-sort-by
+   #:vector-sort
    #:vector-foreach
    #:vector-foreach-index
    #:vector-foreach2
