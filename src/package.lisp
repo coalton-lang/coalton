@@ -88,6 +88,7 @@
    )
   (:export
    #:parse-form                         ; FUNCTION
+   #:error-parsing                      ; FUNCTION
    #:coalton-parse-error                ; CONDITION
    #:coalton-parse-error-form           ; READER
    #:coalton-parse-error-reason-control ; READER
