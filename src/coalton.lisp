@@ -142,6 +142,9 @@
 (defun process-coalton-toplevel (toplevel-forms &optional (env *global-environment*))
   "Top-level definitions for use within Coalton."
 
+  (when nil
+    (f 1 2 3))
+
   (multiple-value-bind (type-defines declares defines class-defines instance-defines repr-table)
       (collect-toplevel-forms toplevel-forms)
 
