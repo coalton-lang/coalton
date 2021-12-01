@@ -623,6 +623,19 @@
    #:vector-to-list
    #:vector-swap-remove
    #:vector-swap-remove-unsafe)
+  ;; Hashtable
+  (:export
+   #:Hashtable
+   #:make-hashtable
+   #:make-hashtable-capacity
+   #:hashtable-get
+   #:hashtable-set
+   #:hashtable-remove
+   #:hashtable-count
+   #:hashtable-foreach
+   #:hashtable-keys
+   #:hashtable-values
+   #:hashtable-entries)
   ;; Graph
   (:export
    #:NodeIndex
