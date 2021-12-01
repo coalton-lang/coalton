@@ -80,7 +80,7 @@
     (let ((fun (fn (xs ys)
                  (match xs
                    ((Nil)
-                    ys)
+                    (reverse ys))
                    ((Cons x xs)
                     (if (f x)
                         (fun xs (Cons x ys))
