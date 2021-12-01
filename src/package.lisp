@@ -528,6 +528,8 @@
    #:singleton
    #:repeat
    #:reverse
+   #:drop
+   #:take
    #:find
    #:fold
    #:foldr

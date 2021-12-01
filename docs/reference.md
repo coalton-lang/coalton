@@ -919,6 +919,14 @@ Builds a list of tuples with the elements of XS and YS.
 
 ***
 
+#### `DROP` <sup><sub>[FUNCTION]</sub></sup><a name="DROP"></a>
+`∀ :A. (INTEGER → (LIST :A) → (LIST :A))`
+
+Returns a list with the first N elements of XS removed
+
+
+***
+
 #### `FIND` <sup><sub>[FUNCTION]</sub></sup><a name="FIND"></a>
 `∀ :A. ((:A → BOOLEAN) → (LIST :A) → (OPTIONAL :A))`
 
@@ -963,6 +971,14 @@ Performs a stable sort of XS.
 `∀ :A. ((LIST :A) → (OPTIONAL (LIST :A)))`
 
 Returns every element but the first in a list.
+
+
+***
+
+#### `TAKE` <sup><sub>[FUNCTION]</sub></sup><a name="TAKE"></a>
+`∀ :A. (INTEGER → (LIST :A) → (LIST :A))`
+
+Returns the first N elements of XS
 
 
 ***
