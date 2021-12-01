@@ -46,9 +46,8 @@
     "Return a new vector containing the same elements as V"
     (match v
       ((Vector v)
-       (Vector
-        (lisp Lisp-Object (v)
-          (cl:copy-seq v))))))
+        (lisp (Vector :a) (v)
+          (Vector (alexandria:copy-array v))))))
 
   (declare vector-push (:a -> (Vector :a) -> Integer))
   (define (vector-push item v)
@@ -162,7 +161,7 @@
               :do (coalton-impl/codegen::A2 f i elem))
            Unit)))))
 
-  (declare vector-foreach2 ((:a -> :a -> :b) -> (Vector :a) -> (Vector :a) -> Unit))
+  (declare vector-foreach2 ((:a -> :b -> :c) -> (Vector :a) -> (Vector :b) -> Unit))
   (define (vector-foreach2 f v1 v2)
     "Like vector-foreach but twice as good"
     (match (Tuple v1 v2)
@@ -233,7 +232,6 @@
       (if (/= (vector-length v1) (vector-length v2))
           False
           (progn
-            ;; Currently singleton vectors are the only way to have mutability in coalton
             (let out = (make-cell True))
             (vector-foreach2
              (fn (e1 e2)
