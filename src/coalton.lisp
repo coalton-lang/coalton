@@ -118,11 +118,13 @@
 
 (defmacro coalton:coalton-codegen (&body toplevel-forms)
   "Returns the lisp code generated from coalton code. Intended for debugging."
-  `(let ((old ,*emit-type-annotations*))
-    (setf *emit-type-annotations* nil)
-    (let ((form (process-coalton-toplevel ',toplevel-forms *global-environment*)))
-      (setf *emit-type-annotations* old)
-      form)))
+  `(let ((*emit-type-annotations* nil))
+     (process-coalton-toplevel ',toplevel-forms *global-environment*)))
+
+(defmacro coalton:coalton-codegen-types (&body toplevel-forms)
+  "Returns the lisp code generated from coalton code with lisp type annotations. Intended for debugging."
+  `(let ((*emit-type-annotations* t))
+     (process-coalton-toplevel ',toplevel-forms *global-environment*)))
 
 (defmacro coalton:coalton (form)
   (let ((parsed-form (parse-form form (make-immutable-map) *package*)))
