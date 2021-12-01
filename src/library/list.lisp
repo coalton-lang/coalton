@@ -229,6 +229,39 @@
        (Cons (f x y) (zipWith f xs ys)))
       (_ Nil)))
 
+  (declare zipWith3 ((:a -> :b -> :c -> :d) -> (List :a) -> (List :b) -> (List :c) -> (List :d)))
+  (define (zipWith3 f xs ys zs)
+    "Build a new list by calling F with elements of XS, YS and ZS"
+    (match (Tuple3 xs ys zs)
+      ((Tuple3 (Cons x xs)
+               (Cons y ys)
+               (Cons z zs))
+       (Cons (f x y z) (zipWith3 f xs ys zs)))
+      (_ Nil)))
+
+  (declare zipWith4 ((:a -> :b -> :c -> :d -> :e) -> (List :a) -> (List :b) -> (List :c) -> (List :d) -> (List :e)))
+  (define (zipWith4 f as bs cs ds)
+    "Build a new list by calling F with elements of AS, BS, CS and DS"
+    (match (Tuple4 as bs cs ds)
+      ((Tuple4 (Cons a as)
+               (Cons b bs)
+               (Cons c cs)
+               (Cons d ds))
+       (Cons (f a b c d) (zipWith4 f as bs cs ds)))
+      (_ Nil)))
+
+  (declare zipWith5 ((:a -> :b -> :c -> :d -> :e -> :f) -> (List :a) -> (List :b) -> (List :c) -> (List :d) -> (List :e) -> (List :f)))
+  (define (zipWith5 f as bs cs ds es)
+    "Build a new list by calling F with elements of AS, BS, CS, DS and ES"
+    (match (Tuple5 as bs cs ds es)
+      ((Tuple5 (Cons a as)
+               (Cons b bs)
+               (Cons c cs)
+               (Cons d ds)
+               (Cons e es))
+       (Cons (f a b c d e) (zipWith5 f as bs cs ds es)))
+      (_ Nil)))
+
   (declare zip ((List :a) -> (List :b) -> (List (Tuple :a :b))))
   (define (zip xs ys)
     "Builds a list of tuples with the elements of XS and YS."

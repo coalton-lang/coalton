@@ -461,6 +461,9 @@
    #:boolean-xor #:xor
    #:List #:Cons #:Nil
    #:Tuple
+   #:Tuple3
+   #:Tuple4
+   #:Tuple5
    #:Result #:Err #:Ok
    #:Optional #:Some #:None
    #:Fraction
@@ -545,6 +548,9 @@
    #:delete
    #:list-difference
    #:zipWith
+   #:zipWith3
+   #:zipWith4
+   #:zipWith5
    #:zip
    #:insert
    #:insertBy
