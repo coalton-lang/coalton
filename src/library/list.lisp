@@ -50,6 +50,26 @@
                      ((Cons a as) (inner as (Cons a bs)))))))
       (inner xs Nil)))
 
+  (declare drop (Integer -> (List :a) -> (List :a)))
+  (define (drop n xs)
+    "Returns a list with the first N elements of XS removed"
+    (if (== n 0)
+        xs
+        (match xs
+          ((Cons _ xs)
+           (drop (- n 1) xs))
+          ((Nil) Nil))))
+
+  (declare take (Integer -> (List :a) -> (List :a)))
+  (define (take n xs)
+    "Returns the first N elements of XS"
+    (if (== n 0)
+        Nil
+        (match xs
+          ((Cons x xs)
+           (Cons x (take (- n 1) xs)))
+          ((Nil) Nil))))
+
   (declare find ((:a -> Boolean) -> (List :a) -> (Optional :a)))
   (define (find f xs)
     "Returns the first element in a list matching the predicate function F."
