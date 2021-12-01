@@ -71,8 +71,8 @@ Constructors:
 - [`EQ :A`](#EQ) [`EQ :B`](#EQ) `=>` [`EQ`](#EQ) [`(RESULT :A :B)`](#RESULT)
 - [`ISO`](#ISO) [`(RESULT UNIT :A)`](#RESULT) [`(OPTIONAL :A)`](#OPTIONAL)
 - [`ORD :A`](#ORD) [`ORD :B`](#ORD) `=>` [`ORD`](#ORD) [`(RESULT :A :B)`](#RESULT)
-- [`INTO`](#INTO) [`(OPTIONAL :A)`](#OPTIONAL) [`(RESULT UNIT :A)`](#RESULT)
 - [`INTO`](#INTO) [`(RESULT :A :B)`](#RESULT) [`(OPTIONAL :B)`](#OPTIONAL)
+- [`INTO`](#INTO) [`(OPTIONAL :A)`](#OPTIONAL) [`(RESULT UNIT :A)`](#RESULT)
 - [`MONAD`](#MONAD) [`(RESULT :A)`](#RESULT)
 - [`MONOID :A`](#MONOID) `=>` [`MONOID`](#MONOID) [`(RESULT :B :A)`](#RESULT)
 - [`FUNCTOR`](#FUNCTOR) [`(RESULT :A)`](#RESULT)
@@ -166,8 +166,8 @@ Constructors:
 - [`EQ :A`](#EQ) `=>` [`EQ`](#EQ) [`(OPTIONAL :A)`](#OPTIONAL)
 - [`ISO`](#ISO) [`(RESULT UNIT :A)`](#RESULT) [`(OPTIONAL :A)`](#OPTIONAL)
 - [`ORD :A`](#ORD) `=>` [`ORD`](#ORD) [`(OPTIONAL :A)`](#OPTIONAL)
-- [`INTO`](#INTO) [`(OPTIONAL :A)`](#OPTIONAL) [`(RESULT UNIT :A)`](#RESULT)
 - [`INTO`](#INTO) [`(RESULT :A :B)`](#RESULT) [`(OPTIONAL :B)`](#OPTIONAL)
+- [`INTO`](#INTO) [`(OPTIONAL :A)`](#OPTIONAL) [`(RESULT UNIT :A)`](#RESULT)
 - [`SHOW :A`](#SHOW) `=>` [`SHOW`](#SHOW) [`(OPTIONAL :A)`](#OPTIONAL)
 - [`MONAD`](#MONAD) [`OPTIONAL`](#OPTIONAL)
 - [`MONOID :A`](#MONOID) `=>` [`MONOID`](#MONOID) [`(OPTIONAL :A)`](#OPTIONAL)
@@ -214,6 +214,7 @@ Methods:
 
 - [`EQ`](#EQ) [`NODEINDEX`](#NODEINDEX)
 - [`EQ`](#EQ) [`EDGEINDEX`](#EDGEINDEX)
+- [`EQ :A`](#EQ) `=>` [`EQ`](#EQ) [`(SLICE :A)`](#SLICE)
 - [`EQ :A`](#EQ) `=>` [`EQ`](#EQ) [`(VECTOR :A)`](#VECTOR)
 - [`EQ :A`](#EQ) `=>` [`EQ`](#EQ) [`(CELL :A)`](#CELL)
 - [`EQ :A`](#EQ) [`EQ :B`](#EQ) `=>` [`EQ`](#EQ) [`(RESULT :A :B)`](#RESULT)
@@ -257,14 +258,14 @@ Methods:
 
 - [`NUM :A`](#NUM) `=>` [`NUM`](#NUM) [`(CELL :A)`](#CELL)
 - [`NUM`](#NUM) [`FRACTION`](#FRACTION)
+- [`NUM`](#NUM) [`INTEGER`](#INTEGER)
 - [`NUM`](#NUM) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
 - [`NUM`](#NUM) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
-- [`NUM`](#NUM) [`INTEGER`](#INTEGER)
 - [`NUM`](#NUM) [`U64`](#U64)
 - [`NUM`](#NUM) [`U32`](#U32)
 - [`NUM`](#NUM) [`U8`](#U8)
-- [`NUM`](#NUM) [`I64`](#I64)
 - [`NUM`](#NUM) [`I32`](#I32)
+- [`NUM`](#NUM) [`I64`](#I64)
 
 </details>
 
@@ -316,28 +317,30 @@ Methods:
 
 - [`INTO`](#INTO) [`NODEINDEX`](#NODEINDEX) [`INTEGER`](#INTEGER)
 - [`INTO`](#INTO) [`EDGEINDEX`](#EDGEINDEX) [`INTEGER`](#INTEGER)
+- [`INTO`](#INTO) [`(VECTOR :A)`](#VECTOR) [`(SLICE :A)`](#SLICE)
+- [`INTO`](#INTO) [`(SLICE :A)`](#SLICE) [`(VECTOR :A)`](#VECTOR)
 - [`INTO`](#INTO) [`(VECTOR :A)`](#VECTOR) [`(LIST :A)`](#LIST)
 - [`INTO`](#INTO) [`(LIST :A)`](#LIST) [`(VECTOR :A)`](#VECTOR)
 - [`INTO`](#INTO) [`(CELL :A)`](#CELL) [`:A`](#:A)
 - [`INTO`](#INTO) [`:A`](#:A) [`(CELL :A)`](#CELL)
-- [`INTO`](#INTO) [`(OPTIONAL :A)`](#OPTIONAL) [`(RESULT UNIT :A)`](#RESULT)
 - [`INTO`](#INTO) [`(RESULT :A :B)`](#RESULT) [`(OPTIONAL :B)`](#OPTIONAL)
+- [`INTO`](#INTO) [`(OPTIONAL :A)`](#OPTIONAL) [`(RESULT UNIT :A)`](#RESULT)
 - [`INTO`](#INTO) [`(TUPLE :A :B)`](#TUPLE) [`(TUPLE :B :A)`](#TUPLE)
 - [`INTO`](#INTO) [`(LIST CHAR)`](#LIST) [`STRING`](#STRING)
 - [`INTO`](#INTO) [`STRING`](#STRING) [`(LIST CHAR)`](#LIST)
 - [`INTO`](#INTO) [`INTEGER`](#INTEGER) [`STRING`](#STRING)
-- [`INTO`](#INTO) [`U64`](#U64) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
-- [`INTO`](#INTO) [`U64`](#U64) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
 - [`INTO`](#INTO) [`U64`](#U64) [`INTEGER`](#INTEGER)
+- [`INTO`](#INTO) [`U64`](#U64) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
 - [`INTO`](#INTO) [`INTEGER`](#INTEGER) [`U64`](#U64)
+- [`INTO`](#INTO) [`U64`](#U64) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
+- [`INTO`](#INTO) [`INTEGER`](#INTEGER) [`U32`](#U32)
+- [`INTO`](#INTO) [`U32`](#U32) [`INTEGER`](#INTEGER)
 - [`INTO`](#INTO) [`U32`](#U32) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
 - [`INTO`](#INTO) [`U32`](#U32) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
-- [`INTO`](#INTO) [`U32`](#U32) [`INTEGER`](#INTEGER)
-- [`INTO`](#INTO) [`INTEGER`](#INTEGER) [`U32`](#U32)
 - [`INTO`](#INTO) [`U8`](#U8) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
+- [`INTO`](#INTO) [`INTEGER`](#INTEGER) [`U8`](#U8)
 - [`INTO`](#INTO) [`U8`](#U8) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
 - [`INTO`](#INTO) [`U8`](#U8) [`INTEGER`](#INTEGER)
-- [`INTO`](#INTO) [`INTEGER`](#INTEGER) [`U8`](#U8)
 - [`INTO`](#INTO) [`I64`](#I64) [`INTEGER`](#INTEGER)
 - [`INTO`](#INTO) [`INTEGER`](#INTEGER) [`I64`](#I64)
 - [`INTO`](#INTO) [`I32`](#I32) [`INTEGER`](#INTEGER)
@@ -492,9 +495,9 @@ Methods:
 <details>
 <summary>Instances</summary>
 
-- [`DIVIDABLE`](#DIVIDABLE) [`INTEGER`](#INTEGER) [`FRACTION`](#FRACTION)
-- [`DIVIDABLE`](#DIVIDABLE) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
 - [`DIVIDABLE`](#DIVIDABLE) [`SINGLE-FLOAT`](#SINGLE-FLOAT) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
+- [`DIVIDABLE`](#DIVIDABLE) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
+- [`DIVIDABLE`](#DIVIDABLE) [`INTEGER`](#INTEGER) [`FRACTION`](#FRACTION)
 
 </details>
 
@@ -1477,7 +1480,10 @@ Constructors:
 <summary>Instances</summary>
 
 - [`EQ :A`](#EQ) `=>` [`EQ`](#EQ) [`(VECTOR :A)`](#VECTOR)
+- [`ISO`](#ISO) [`(SLICE :A)`](#SLICE) [`(VECTOR :A)`](#VECTOR)
 - [`ISO`](#ISO) [`(VECTOR :A)`](#VECTOR) [`(LIST :A)`](#LIST)
+- [`INTO`](#INTO) [`(VECTOR :A)`](#VECTOR) [`(SLICE :A)`](#SLICE)
+- [`INTO`](#INTO) [`(SLICE :A)`](#SLICE) [`(VECTOR :A)`](#VECTOR)
 - [`INTO`](#INTO) [`(VECTOR :A)`](#VECTOR) [`(LIST :A)`](#LIST)
 - [`INTO`](#INTO) [`(LIST :A)`](#LIST) [`(VECTOR :A)`](#VECTOR)
 - [`FUNCTOR`](#FUNCTOR) [`VECTOR`](#VECTOR)
@@ -1610,7 +1616,7 @@ Returns the number of elements that V can store without resizing
 ***
 
 #### `VECTOR-FOREACH2` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-FOREACH2"></a>
-`∀ :A :B. ((:A → :A → :B) → (VECTOR :A) → (VECTOR :A) → UNIT)`
+`∀ :A :B :C. ((:A → :B → :C) → (VECTOR :A) → (VECTOR :B) → UNIT)`
 
 Like vector-foreach but twice as good
 
@@ -1677,6 +1683,116 @@ Call the function F once for each item in V with its index
 `∀ :A. (INTEGER → (VECTOR :A) → :A)`
 
 Remove the element IDX from VEC and replace it with the last element in VEC without bounds checking. Then return the removed element.
+
+
+***
+
+
+## File: [slice.lisp](../src/library/slice.lisp)
+
+### Types
+
+#### `SLICE :A` <sup><sub>[TYPE]</sub></sup><a name="SLICE"></a>
+- `(SLICE LISP-OBJECT)`
+
+Constructors:
+- `SLICE :: (LISP-OBJECT → (SLICE :A))`
+
+<details>
+<summary>Instances</summary>
+
+- [`EQ :A`](#EQ) `=>` [`EQ`](#EQ) [`(SLICE :A)`](#SLICE)
+- [`ISO`](#ISO) [`(SLICE :A)`](#SLICE) [`(VECTOR :A)`](#VECTOR)
+- [`INTO`](#INTO) [`(VECTOR :A)`](#VECTOR) [`(SLICE :A)`](#SLICE)
+- [`INTO`](#INTO) [`(SLICE :A)`](#SLICE) [`(VECTOR :A)`](#VECTOR)
+
+</details>
+
+***
+
+### Functions
+
+#### `SLICE-SET` <sup><sub>[FUNCTION]</sub></sup><a name="SLICE-SET"></a>
+`∀ :A. (INTEGER → :A → (SLICE :A) → UNIT)`
+
+Set the element at INDEX in S to ITEM
+
+
+***
+
+#### `MAKE-SLICE` <sup><sub>[FUNCTION]</sub></sup><a name="MAKE-SLICE"></a>
+`∀ :A. (INTEGER → INTEGER → (VECTOR :A) → (SLICE :A))`
+
+***
+
+#### `SLICE-COPY` <sup><sub>[FUNCTION]</sub></sup><a name="SLICE-COPY"></a>
+`∀ :A. ((SLICE :A) → (SLICE :A))`
+
+Returns a new slice containg the same elements as S
+
+
+***
+
+#### `SLICE-INDEX` <sup><sub>[FUNCTION]</sub></sup><a name="SLICE-INDEX"></a>
+`∀ :A. (INTEGER → (SLICE :A) → (OPTIONAL :A))`
+
+Lookup the element at INDEX in S
+
+
+***
+
+#### `SLICE-LENGTH` <sup><sub>[FUNCTION]</sub></sup><a name="SLICE-LENGTH"></a>
+`∀ :A. ((SLICE :A) → INTEGER)`
+
+Returns the length of S
+
+
+***
+
+#### `SLICE-FOREACH` <sup><sub>[FUNCTION]</sub></sup><a name="SLICE-FOREACH"></a>
+`∀ :A :B. ((:A → :B) → (SLICE :A) → UNIT)`
+
+Call the function F once for each item in S
+
+
+***
+
+#### `SLICE-FOREACH2` <sup><sub>[FUNCTION]</sub></sup><a name="SLICE-FOREACH2"></a>
+`∀ :A :B :C. ((:A → :B → :C) → (SLICE :A) → (SLICE :B) → UNIT)`
+
+Iterate over S1 and S2 calling F once on each iteration
+
+
+***
+
+#### `VECTOR-CHUNKED` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-CHUNKED"></a>
+`∀ :A :B. (((SLICE :A) → :B) → INTEGER → (VECTOR :A) → UNIT)`
+
+Chunked iteration over a vector. Ignores elements at the end if the vector does not evenly divide by the chunk size.
+
+
+***
+
+#### `VECTOR-SLIDING` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-SLIDING"></a>
+`∀ :A :B. (((SLICE :A) → :B) → INTEGER → (VECTOR :A) → UNIT)`
+
+Sliding iteration over a vector
+
+
+***
+
+#### `SLICE-INDEX-UNSAFE` <sup><sub>[FUNCTION]</sub></sup><a name="SLICE-INDEX-UNSAFE"></a>
+`∀ :A. (INTEGER → (SLICE :A) → :A)`
+
+Lookup the element at INDEX in S without bounds checking
+
+
+***
+
+#### `SLICE-FOREACH-INDEX` <sup><sub>[FUNCTION]</sub></sup><a name="SLICE-FOREACH-INDEX"></a>
+`∀ :A :B. ((INTEGER → :A → :B) → (SLICE :A) → UNIT)`
+
+Call the function F once for each item in S with its index
 
 
 ***

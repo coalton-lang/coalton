@@ -632,6 +632,20 @@
    #:vector-to-list
    #:vector-swap-remove
    #:vector-swap-remove-unsafe)
+  ;; Slice
+  (:export
+   #:Slice
+   #:make-slice
+   #:slice-length
+   #:slice-copy
+   #:slice-set
+   #:slice-index
+   #:slice-index-unsafe
+   #:slice-foreach
+   #:slice-foreach-index
+   #:slice-foreach2
+   #:vector-sliding
+   #:vector-chunked)
   ;; Hashtable
   (:export
    #:Hashtable

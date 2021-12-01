@@ -97,6 +97,7 @@
                              (:file "functions")
                              (:file "cell")
                              (:file "vector")
+                             (:file "slice")
                              (:file "hashtable")
                              (:file "graph")))
                (:file "toplevel-environment")))
