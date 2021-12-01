@@ -84,6 +84,51 @@ Constructors:
 
 ***
 
+#### `TUPLE3 :A :B :C` <sup><sub>[TYPE]</sub></sup><a name="TUPLE3"></a>
+- `(TUPLE3 :A :B :C)`
+
+Constructors:
+- `TUPLE3 :: (:A → :B → :C → (TUPLE3 :A :B :C))`
+
+<details>
+<summary>Instances</summary>
+
+- [`EQ :A`](#EQ) [`EQ :B`](#EQ) [`EQ :C`](#EQ) `=>` [`EQ`](#EQ) [`(TUPLE3 :A :B :C)`](#TUPLE3)
+
+</details>
+
+***
+
+#### `TUPLE4 :A :B :C :D` <sup><sub>[TYPE]</sub></sup><a name="TUPLE4"></a>
+- `(TUPLE4 :A :B :C :D)`
+
+Constructors:
+- `TUPLE4 :: (:A → :B → :C → :D → (TUPLE4 :A :B :C :D))`
+
+<details>
+<summary>Instances</summary>
+
+- [`EQ :A`](#EQ) [`EQ :B`](#EQ) [`EQ :C`](#EQ) [`EQ :D`](#EQ) `=>` [`EQ`](#EQ) [`(TUPLE4 :A :B :C :D)`](#TUPLE4)
+
+</details>
+
+***
+
+#### `TUPLE5 :A :B :C :D :E` <sup><sub>[TYPE]</sub></sup><a name="TUPLE5"></a>
+- `(TUPLE5 :A :B :C :D :E)`
+
+Constructors:
+- `TUPLE5 :: (:A → :B → :C → :D → :E → (TUPLE5 :A :B :C :D :E))`
+
+<details>
+<summary>Instances</summary>
+
+- [`EQ :A`](#EQ) [`EQ :B`](#EQ) [`EQ :C`](#EQ) [`EQ :D`](#EQ) [`EQ :E`](#EQ) `=>` [`EQ`](#EQ) [`(TUPLE5 :A :B :C :D :E)`](#TUPLE5)
+
+</details>
+
+***
+
 #### `FRACTION` <sup><sub>[TYPE]</sub></sup><a name="FRACTION"></a>
 - `(%FRACTION INTEGER INTEGER)`
 
@@ -172,6 +217,9 @@ Methods:
 - [`EQ :A`](#EQ) `=>` [`EQ`](#EQ) [`(VECTOR :A)`](#VECTOR)
 - [`EQ :A`](#EQ) `=>` [`EQ`](#EQ) [`(CELL :A)`](#CELL)
 - [`EQ :A`](#EQ) [`EQ :B`](#EQ) `=>` [`EQ`](#EQ) [`(RESULT :A :B)`](#RESULT)
+- [`EQ :A`](#EQ) [`EQ :B`](#EQ) [`EQ :C`](#EQ) [`EQ :D`](#EQ) [`EQ :E`](#EQ) `=>` [`EQ`](#EQ) [`(TUPLE5 :A :B :C :D :E)`](#TUPLE5)
+- [`EQ :A`](#EQ) [`EQ :B`](#EQ) [`EQ :C`](#EQ) [`EQ :D`](#EQ) `=>` [`EQ`](#EQ) [`(TUPLE4 :A :B :C :D)`](#TUPLE4)
+- [`EQ :A`](#EQ) [`EQ :B`](#EQ) [`EQ :C`](#EQ) `=>` [`EQ`](#EQ) [`(TUPLE3 :A :B :C)`](#TUPLE3)
 - [`EQ :A`](#EQ) [`EQ :B`](#EQ) `=>` [`EQ`](#EQ) [`(TUPLE :A :B)`](#TUPLE)
 - [`EQ :A`](#EQ) `=>` [`EQ`](#EQ) [`(LIST :A)`](#LIST)
 - [`EQ :A`](#EQ) `=>` [`EQ`](#EQ) [`(OPTIONAL :A)`](#OPTIONAL)
@@ -1075,6 +1123,30 @@ Builds a new list by calling F with elements of XS and YS.
 `∀ :A. ((:A → :A → ORD) → :A → (LIST :A) → (LIST :A))`
 
 Generic version of insert
+
+
+***
+
+#### `ZIPWITH3` <sup><sub>[FUNCTION]</sub></sup><a name="ZIPWITH3"></a>
+`∀ :A :B :C :D. ((:A → :B → :C → :D) → (LIST :A) → (LIST :B) → (LIST :C) → (LIST :D))`
+
+Build a new list by calling F with elements of XS, YS and ZS
+
+
+***
+
+#### `ZIPWITH4` <sup><sub>[FUNCTION]</sub></sup><a name="ZIPWITH4"></a>
+`∀ :A :B :C :D :E. ((:A → :B → :C → :D → :E) → (LIST :A) → (LIST :B) → (LIST :C) → (LIST :D) → (LIST :E))`
+
+Build a new list by calling F with elements of AS, BS, CS and DS
+
+
+***
+
+#### `ZIPWITH5` <sup><sub>[FUNCTION]</sub></sup><a name="ZIPWITH5"></a>
+`∀ :A :B :C :D :E :F. ((:A → :B → :C → :D → :E → :F) → (LIST :A) → (LIST :B) → (LIST :C) → (LIST :D) → (LIST :E) → (LIST :F))`
+
+Build a new list by calling F with elements of AS, BS, CS, DS and ES
 
 
 ***
