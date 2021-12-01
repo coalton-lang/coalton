@@ -84,25 +84,6 @@ Constructors:
 
 ***
 
-#### `BOOLEAN` <sup><sub>[TYPE]</sub></sup><a name="BOOLEAN"></a>
-- `FALSE`
-- `TRUE`
-
-Constructors:
-- `FALSE :: BOOLEAN`
-- `TRUE :: BOOLEAN`
-
-<details>
-<summary>Instances</summary>
-
-- [`EQ`](#EQ) [`BOOLEAN`](#BOOLEAN)
-- [`ORD`](#ORD) [`BOOLEAN`](#BOOLEAN)
-- [`SHOW`](#SHOW) [`BOOLEAN`](#BOOLEAN)
-
-</details>
-
-***
-
 #### `FRACTION` <sup><sub>[TYPE]</sub></sup><a name="FRACTION"></a>
 - `(%FRACTION INTEGER INTEGER)`
 
@@ -289,6 +270,7 @@ Methods:
 - [`INTO`](#INTO) [`EDGEINDEX`](#EDGEINDEX) [`INTEGER`](#INTEGER)
 - [`INTO`](#INTO) [`(VECTOR :A)`](#VECTOR) [`(LIST :A)`](#LIST)
 - [`INTO`](#INTO) [`(LIST :A)`](#LIST) [`(VECTOR :A)`](#VECTOR)
+- [`INTO`](#INTO) [`(CELL :A)`](#CELL) [`:A`](#:A)
 - [`INTO`](#INTO) [`:A`](#:A) [`(CELL :A)`](#CELL)
 - [`INTO`](#INTO) [`(OPTIONAL :A)`](#OPTIONAL) [`(RESULT UNIT :A)`](#RESULT)
 - [`INTO`](#INTO) [`(RESULT :A :B)`](#RESULT) [`(OPTIONAL :B)`](#OPTIONAL)
@@ -588,23 +570,39 @@ Returns the lesser element of X and Y.
 
 ### Functions
 
-#### `OR` <sup><sub>[FUNCTION]</sub></sup><a name="OR"></a>
-`(BOOLEAN → BOOLEAN → BOOLEAN)`
-
-Is X or Y True?
-
-
-***
-
-#### `AND` <sup><sub>[FUNCTION]</sub></sup><a name="AND"></a>
-`(BOOLEAN → BOOLEAN → BOOLEAN)`
-
-Are X and Y True?
-
-
-***
-
 #### `NOT` <sup><sub>[FUNCTION]</sub></sup><a name="NOT"></a>
+`(BOOLEAN → BOOLEAN)`
+
+Synonym for BOOLEAN-NOT.
+
+
+***
+
+#### `XOR` <sup><sub>[FUNCTION]</sub></sup><a name="XOR"></a>
+`(BOOLEAN → BOOLEAN → BOOLEAN)`
+
+Synonym for BOOLEAN-XOR.
+
+
+***
+
+#### `BOOLEAN-OR` <sup><sub>[FUNCTION]</sub></sup><a name="BOOLEAN-OR"></a>
+`(BOOLEAN → BOOLEAN → BOOLEAN)`
+
+Is X or Y True? Note that this is a *function* which means both X and Y will be evaluated. Use the OR macro for short-circuiting behavior.
+
+
+***
+
+#### `BOOLEAN-AND` <sup><sub>[FUNCTION]</sub></sup><a name="BOOLEAN-AND"></a>
+`(BOOLEAN → BOOLEAN → BOOLEAN)`
+
+Are X and Y True? Note that this is a *function* which means both X and Y will be evaluated. Use the AND macro for short-circuiting behavior.
+
+
+***
+
+#### `BOOLEAN-NOT` <sup><sub>[FUNCTION]</sub></sup><a name="BOOLEAN-NOT"></a>
 `(BOOLEAN → BOOLEAN)`
 
 Is X False?
@@ -612,7 +610,7 @@ Is X False?
 
 ***
 
-#### `XOR` <sup><sub>[FUNCTION]</sub></sup><a name="XOR"></a>
+#### `BOOLEAN-XOR` <sup><sub>[FUNCTION]</sub></sup><a name="BOOLEAN-XOR"></a>
 `(BOOLEAN → BOOLEAN → BOOLEAN)`
 
 Are X or Y True, but not both?
@@ -671,6 +669,14 @@ Divide X by Y, returning None if Y is zero.
 `∀ :A. (NUM :A) (ORD :A) ⇒ (:A → :A)`
 
 Absolute value of X.
+
+
+***
+
+#### `ASH` <sup><sub>[FUNCTION]</sub></sup><a name="ASH"></a>
+`(INTEGER → INTEGER → INTEGER)`
+
+Compute the "arithmetic shift" of X by N. 
 
 
 ***
@@ -916,7 +922,7 @@ Returns every element but the first in a list.
 #### `FOLDR` <sup><sub>[FUNCTION]</sub></sup><a name="FOLDR"></a>
 `∀ :A :B. ((:A → :B → :B) → :B → (LIST :A) → :B)`
 
-Right fold on lists. Is short circuiting but is not tail recursive.
+Right fold on lists. Is not tail recursive.
 
 
 ***
@@ -1224,11 +1230,11 @@ A function that always returns its argument
 The factorial function can be written
     ```
     (define fact
-      (fix 
+      (fix
         (fn (f n)
           (if (== n 0)
             1
-            (* n (f (- n 1)))))))    
+            (* n (f (- n 1)))))))
     ```
 
 
@@ -1266,6 +1272,14 @@ Signal an error by calling CL:ERROR
 
 ***
 
+#### `TRACE` <sup><sub>[FUNCTION]</sub></sup><a name="TRACE"></a>
+`(STRING → UNIT)`
+
+Print a line to *STANDARD-OUTPUT*
+
+
+***
+
 #### `COMPOSE` <sup><sub>[FUNCTION]</sub></sup><a name="COMPOSE"></a>
 `∀ :A :B :C. ((:A → :B) → (:C → :A) → :C → :B)`
 
@@ -1281,6 +1295,82 @@ Signal an error by calling CL:ERROR
 
 Map the elements of XS with F then collect the results.
 
+
+***
+
+#### `TRACEOBJECT` <sup><sub>[FUNCTION]</sub></sup><a name="TRACEOBJECT"></a>
+`∀ :A. (STRING → :A → UNIT)`
+
+Print a line to *STANDARD-OUTPUT* in the form "{STR}: {ITEM}"
+
+
+***
+
+
+## File: [cell.lisp](../src/library/cell.lisp)
+
+### Types
+
+#### `CELL :A` <sup><sub>[TYPE]</sub></sup><a name="CELL"></a>
+- `(CELL LISP-OBJECT)`
+
+Internally mutable cell
+
+Constructors:
+- `CELL :: (LISP-OBJECT → (CELL :A))`
+
+<details>
+<summary>Instances</summary>
+
+- [`EQ :A`](#EQ) `=>` [`EQ`](#EQ) [`(CELL :A)`](#CELL)
+- [`NUM :A`](#NUM) `=>` [`NUM`](#NUM) [`(CELL :A)`](#CELL)
+- [`INTO`](#INTO) [`(CELL :A)`](#CELL) [`:A`](#:A)
+- [`INTO`](#INTO) [`:A`](#:A) [`(CELL :A)`](#CELL)
+- [`SHOW :A`](#SHOW) `=>` [`SHOW`](#SHOW) [`(CELL :A)`](#CELL)
+- [`FUNCTOR`](#FUNCTOR) [`CELL`](#CELL)
+- [`SEMIGROUP :A`](#SEMIGROUP) `=>` [`SEMIGROUP`](#SEMIGROUP) [`(CELL :A)`](#CELL)
+- [`APPLICATIVE`](#APPLICATIVE) [`CELL`](#CELL)
+
+</details>
+
+***
+
+### Functions
+
+#### `CELL-READ` <sup><sub>[FUNCTION]</sub></sup><a name="CELL-READ"></a>
+`∀ :A. ((CELL :A) → :A)`
+
+Read the value of a mutable cell
+
+
+***
+
+#### `CELL-SWAP` <sup><sub>[FUNCTION]</sub></sup><a name="CELL-SWAP"></a>
+`∀ :A. (:A → (CELL :A) → :A)`
+
+Replace the value of a mutable cell with a new value, then return the old value
+
+
+***
+
+#### `MAKE-CELL` <sup><sub>[FUNCTION]</sub></sup><a name="MAKE-CELL"></a>
+`∀ :A. (:A → (CELL :A))`
+
+Create a new mutable cell
+
+
+***
+
+#### `CELL-WRITE` <sup><sub>[FUNCTION]</sub></sup><a name="CELL-WRITE"></a>
+`∀ :A. (:A → (CELL :A) → UNIT)`
+
+Set the value of a mutable cell
+
+
+***
+
+#### `CELL-UPDATE` <sup><sub>[FUNCTION]</sub></sup><a name="CELL-UPDATE"></a>
+`∀ :A. ((:A → :A) → (CELL :A) → UNIT)`
 
 ***
 
@@ -1335,6 +1425,14 @@ Create a new empty vector
 
 ***
 
+#### `VECTOR-COPY` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-COPY"></a>
+`∀ :A. ((VECTOR :A) → (VECTOR :A))`
+
+Return a new vector containing the same elements as V
+
+
+***
+
 #### `VECTOR-HEAD` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-HEAD"></a>
 `∀ :A. ((VECTOR :A) → (OPTIONAL :A))`
 
@@ -1352,9 +1450,17 @@ Return the last element of V
 ***
 
 #### `VECTOR-PUSH` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-PUSH"></a>
-`∀ :A. (:A → (VECTOR :A) → UNIT)`
+`∀ :A. (:A → (VECTOR :A) → INTEGER)`
 
 Append ITEM to V and resize V if necessary
+
+
+***
+
+#### `VECTOR-SORT` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-SORT"></a>
+`∀ :A. ORD :A ⇒ ((VECTOR :A) → UNIT)`
+
+Sort a vector inplace
 
 
 ***
@@ -1399,10 +1505,10 @@ Call the function F once for each item in V
 
 ***
 
-#### `VECTOR-TO-LIST` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-TO-LIST"></a>
-`∀ :A. ((VECTOR :A) → (LIST :A))`
+#### `VECTOR-SORT-BY` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-SORT-BY"></a>
+`∀ :A. ((:A → :A → BOOLEAN) → (VECTOR :A) → UNIT)`
 
-Create a list containing the same elements in the same order as V
+Sort a vector with predicate function F
 
 
 ***
@@ -1483,6 +1589,101 @@ Call the function F once for each item in V with its index
 `∀ :A. (INTEGER → (VECTOR :A) → :A)`
 
 Remove the element IDX from VEC and replace it with the last element in VEC without bounds checking. Then return the removed element.
+
+
+***
+
+
+## File: [hashtable.lisp](../src/library/hashtable.lisp)
+
+### Types
+
+#### `HASHTABLE :A :B` <sup><sub>[TYPE]</sub></sup><a name="HASHTABLE"></a>
+- `(HASHTABLE LISP-OBJECT)`
+
+Constructors:
+- `HASHTABLE :: (LISP-OBJECT → (HASHTABLE :A :B))`
+
+***
+
+### Functions
+
+#### `HASHTABLE-GET` <sup><sub>[FUNCTION]</sub></sup><a name="HASHTABLE-GET"></a>
+`∀ :A :B. (:A → (HASHTABLE :A :B) → (OPTIONAL :B))`
+
+Lookup KEY in TABLE
+
+
+***
+
+#### `HASHTABLE-SET` <sup><sub>[FUNCTION]</sub></sup><a name="HASHTABLE-SET"></a>
+`∀ :A :B. (:A → :B → (HASHTABLE :A :B) → UNIT)`
+
+Set KEY to VALUE in TABLE
+
+
+***
+
+#### `HASHTABLE-KEYS` <sup><sub>[FUNCTION]</sub></sup><a name="HASHTABLE-KEYS"></a>
+`∀ :A :B. ((HASHTABLE :A :B) → (VECTOR :A))`
+
+Returns the keys in TABLE as a vector
+
+
+***
+
+#### `MAKE-HASHTABLE` <sup><sub>[FUNCTION]</sub></sup><a name="MAKE-HASHTABLE"></a>
+`∀ :A :B. (UNIT → (HASHTABLE :A :B))`
+
+Create a new empty hashtable
+
+
+***
+
+#### `HASHTABLE-COUNT` <sup><sub>[FUNCTION]</sub></sup><a name="HASHTABLE-COUNT"></a>
+`∀ :A :B. ((HASHTABLE :A :B) → INTEGER)`
+
+Returns the number of entries in TABLE
+
+
+***
+
+#### `HASHTABLE-REMOVE` <sup><sub>[FUNCTION]</sub></sup><a name="HASHTABLE-REMOVE"></a>
+`∀ :A :B. (:A → (HASHTABLE :A :B) → UNIT)`
+
+Remove the entry at KEY from TABLE
+
+
+***
+
+#### `HASHTABLE-VALUES` <sup><sub>[FUNCTION]</sub></sup><a name="HASHTABLE-VALUES"></a>
+`∀ :A :B. ((HASHTABLE :A :B) → (VECTOR :B))`
+
+Returns the values in TABLE as a vector
+
+
+***
+
+#### `HASHTABLE-ENTRIES` <sup><sub>[FUNCTION]</sub></sup><a name="HASHTABLE-ENTRIES"></a>
+`∀ :A :B. ((HASHTABLE :A :B) → (VECTOR (TUPLE :A :B)))`
+
+Returns the keys and values in TABLE as a vector
+
+
+***
+
+#### `HASHTABLE-FOREACH` <sup><sub>[FUNCTION]</sub></sup><a name="HASHTABLE-FOREACH"></a>
+`∀ :A :B :C. ((:A → :B → :C) → (HASHTABLE :A :B) → UNIT)`
+
+Call F once for each key value pair in TABLE
+
+
+***
+
+#### `MAKE-HASHTABLE-CAPACITY` <sup><sub>[FUNCTION]</sub></sup><a name="MAKE-HASHTABLE-CAPACITY"></a>
+`∀ :A :B. (INTEGER → (HASHTABLE :A :B))`
+
+Crate a new empty hashtable with a given capacity
 
 
 ***
