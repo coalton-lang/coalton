@@ -98,7 +98,7 @@
            (values pattern))
   (etypecase pattern
     (pattern-var (format stream "~A" (string (pattern-var-id pattern))))
-    (pattern-wildcard (format stream "-"))
+    (pattern-wildcard (format stream "_"))
     (pattern-literal (format stream "~A" (pattern-literal-value pattern)))
     (pattern-constructor (format stream "(~A~{ ~A~})"
                                  (pattern-constructor-name pattern)
