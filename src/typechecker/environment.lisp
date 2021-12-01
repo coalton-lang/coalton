@@ -45,6 +45,9 @@
   ;; recursive newtypes.
   (newtype :type boolean))
 
+(defmethod coalton-impl/typechecker::kind-of ((entry type-entry))
+  (coalton-impl/typechecker::kind-of (type-entry-type entry)))
+
 #+sbcl
 (declaim (sb-ext:freeze-type type-entry))
 
