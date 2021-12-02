@@ -38,10 +38,6 @@
                                                                    :displaced-to arr
                                                                    :displaced-index-offset (cl:1+ displaced-index-offset)))))))))))))
 
-  ;; NOTE: Strings in Coalton are declared as simple-string which
-  ;; should not be a displaced array. StringViews use displaced
-  ;; arrays, on high optimization levels this may miscompile (in sbcl)
-  ;; due to pointer aliasing issues
   (declare string-view-get (StringView -> String))
   (define (string-view-get str)
     (match str
