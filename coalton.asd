@@ -122,4 +122,5 @@
                (:file "tarjan-scc-tests")
                (:file "type-inference-tests")
                (:file "environment-persist-tests")
+               (:file "slice-tests")
                (:file "graph-tests")))
