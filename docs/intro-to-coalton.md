@@ -73,7 +73,10 @@ Functions are defined similarly to variables. Unlike Common Lisp, Coalton functi
   ;; Functions exist in the same namespace as variables
   (define addTwo add2)
 
-  (define x (addTwo 3)))
+  (define x (addTwo 3))
+
+  ;; Anonymous functions can be defined with fn
+  (define z (map (fn (x) (+ 2 x)) (make-list 1 2 3 4))))
 ```
 
 *All* functions in Coalton take *exactly* one input, and produce *exactly* one output. Consider this function:
