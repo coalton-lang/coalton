@@ -310,7 +310,128 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
 
       (validate-bindings-for-codegen typed-bindings)
 
-      (values typed-bindings preds env subs sccs))))
+      (values
+       (loop :for (name . node) :in typed-bindings
+             :collect (cons name (rewrite-recursive-call
+                                  (apply-substitution subs node)
+                                  name
+                                  (lookup-value-type env name))))
+       preds
+       env
+       subs
+       sccs))))
+
+(defgeneric rewrite-recursive-call (node name type)
+  (:method ((node typed-node-literal) name type)
+    (declare (type typed-node node)
+             (type symbol name)
+             (type ty-scheme type)
+             (ignore name type))
+    node)
+
+  (:method ((node typed-node-variable) name type)
+    (declare (type typed-node node)
+             (type symbol name)
+             (type ty-scheme type))
+    (if (not (equalp name (typed-node-variable-name node)))
+        node
+        (progn
+          (let* ((node-type (qualified-ty-type (fresh-inst (typed-node-type node))))
+                 (new-type (fresh-inst type))
+                 (new-type-unqualified (qualified-ty-type new-type))
+                 (subs (match new-type-unqualified node-type))
+                 (new-type (to-scheme (apply-substitution subs new-type))))
+            (replace-node-type node new-type)))))
+
+  (:method ((node typed-node-application) name type)
+    (declare (type typed-node node)
+             (type symbol name)
+             (type ty-scheme type))
+    (typed-node-application
+     (typed-node-type node)
+     (typed-node-unparsed node)
+     (rewrite-recursive-call
+      (typed-node-application-rator node)
+      name
+      type)
+     (mapcar
+      (lambda (node)
+        (rewrite-recursive-call node name type))
+      (typed-node-application-rands node))))
+
+  (:method ((node typed-node-abstraction) name type)
+    (declare (type typed-node node)
+             (type symbol name)
+             (type ty-scheme type))
+    (typed-node-abstraction
+     (typed-node-type node)
+     (typed-node-unparsed node)
+     (typed-node-abstraction-vars node)
+     (rewrite-recursive-call (typed-node-abstraction-subexpr node) name type)
+     (typed-node-abstraction-name-map node)))
+
+  (:method ((node typed-node-let) name type)
+    (declare (type typed-node node)
+             (type symbol name)
+             (type ty-scheme type))
+
+    (typed-node-let
+     (typed-node-type node)
+     (typed-node-unparsed node)
+     (loop :for (name_ . node) :in (typed-node-let-bindings node)
+           :collect (cons
+                     name_
+                     (rewrite-recursive-call node name type)))
+     (rewrite-recursive-call (typed-node-let-subexpr node) name type)
+     (typed-node-let-sorted-bindings node)
+     (typed-node-let-dynamic-extent-bindings node)
+     (typed-node-let-name-map node)))
+
+  (:method ((node typed-node-lisp) name type)
+    (declare (type typed-node node)
+             (type symbol name)
+             (type ty-scheme type)
+             (ignore name type))
+    node)
+
+  (:method ((branch typed-match-branch) name type)
+    (declare (type typed-match-branch branch)
+             (type symbol name)
+             (type ty-scheme type))
+    (typed-match-branch
+     (typed-match-branch-unparsed branch)
+     (typed-match-branch-pattern branch)
+     (rewrite-recursive-call
+      (typed-match-branch-subexpr branch)
+      name
+      type)
+     (typed-match-branch-bindings branch)
+     (typed-match-branch-name-map branch)))
+
+  (:method ((node typed-node-match) name type)
+    (declare (type typed-node node)
+             (type symbol name)
+             (type ty-scheme type))
+    (typed-node-match
+     (typed-node-type node)
+     (typed-node-unparsed node)
+     (rewrite-recursive-call (typed-node-match-expr node) name type)
+     (mapcar
+      (lambda (branch)
+        (rewrite-recursive-call branch name type))
+      (typed-node-match-branches node))))
+
+  (:method ((node typed-node-seq) name type)
+    (declare (type typed-node node)
+             (type symbol name)
+             (type ty-scheme type))
+    (typed-node-seq
+     (typed-node-type node)
+     (typed-node-unparsed node)
+     (mapcar
+      (lambda (node)
+        (rewrite-recursive-call node name type))
+      (typed-node-seq-subnodes node)))))
 
 (defun validate-bindings-for-codegen (bindings)
   "Some coalton forms can be typechecked but cannot currently be codegened into valid lisp."
