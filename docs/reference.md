@@ -182,6 +182,57 @@ Constructors:
 
 ***
 
+### Functions
+
+#### `NOT` <sup><sub>[FUNCTION]</sub></sup><a name="NOT"></a>
+`(BOOLEAN → BOOLEAN)`
+
+Synonym for BOOLEAN-NOT.
+
+
+***
+
+#### `XOR` <sup><sub>[FUNCTION]</sub></sup><a name="XOR"></a>
+`(BOOLEAN → BOOLEAN → BOOLEAN)`
+
+Synonym for BOOLEAN-XOR.
+
+
+***
+
+#### `BOOLEAN-OR` <sup><sub>[FUNCTION]</sub></sup><a name="BOOLEAN-OR"></a>
+`(BOOLEAN → BOOLEAN → BOOLEAN)`
+
+Is X or Y True? Note that this is a *function* which means both X and Y will be evaluated. Use the OR macro for short-circuiting behavior.
+
+
+***
+
+#### `BOOLEAN-AND` <sup><sub>[FUNCTION]</sub></sup><a name="BOOLEAN-AND"></a>
+`(BOOLEAN → BOOLEAN → BOOLEAN)`
+
+Are X and Y True? Note that this is a *function* which means both X and Y will be evaluated. Use the AND macro for short-circuiting behavior.
+
+
+***
+
+#### `BOOLEAN-NOT` <sup><sub>[FUNCTION]</sub></sup><a name="BOOLEAN-NOT"></a>
+`(BOOLEAN → BOOLEAN)`
+
+Is X False?
+
+
+***
+
+#### `BOOLEAN-XOR` <sup><sub>[FUNCTION]</sub></sup><a name="BOOLEAN-XOR"></a>
+`(BOOLEAN → BOOLEAN → BOOLEAN)`
+
+Are X or Y True, but not both?
+
+
+***
+
+
 ## File: [classes.lisp](../src/library/classes.lisp)
 
 ### Types
@@ -207,7 +258,6 @@ Types which have equality defined.
 
 Methods:
 - `== :: (:A → :A → BOOLEAN)`
-- `/= :: (:A → :A → BOOLEAN)`
 
 <details>
 <summary>Instances</summary>
@@ -218,8 +268,8 @@ Methods:
 - [`EQ :A`](#EQ) `=>` [`EQ`](#EQ) [`(VECTOR :A)`](#VECTOR)
 - [`EQ :A`](#EQ) `=>` [`EQ`](#EQ) [`(CELL :A)`](#CELL)
 - [`EQ :A`](#EQ) [`EQ :B`](#EQ) `=>` [`EQ`](#EQ) [`(RESULT :A :B)`](#RESULT)
-- [`EQ :A`](#EQ) [`EQ :B`](#EQ) [`EQ :C`](#EQ) [`EQ :D`](#EQ) [`EQ :E`](#EQ) `=>` [`EQ`](#EQ) [`(TUPLE5 :A :B :C :D :E)`](#TUPLE5)
 - [`EQ :A`](#EQ) [`EQ :B`](#EQ) [`EQ :C`](#EQ) [`EQ :D`](#EQ) `=>` [`EQ`](#EQ) [`(TUPLE4 :A :B :C :D)`](#TUPLE4)
+- [`EQ :A`](#EQ) [`EQ :B`](#EQ) [`EQ :C`](#EQ) [`EQ :D`](#EQ) [`EQ :E`](#EQ) `=>` [`EQ`](#EQ) [`(TUPLE5 :A :B :C :D :E)`](#TUPLE5)
 - [`EQ :A`](#EQ) [`EQ :B`](#EQ) [`EQ :C`](#EQ) `=>` [`EQ`](#EQ) [`(TUPLE3 :A :B :C)`](#TUPLE3)
 - [`EQ :A`](#EQ) [`EQ :B`](#EQ) `=>` [`EQ`](#EQ) [`(TUPLE :A :B)`](#TUPLE)
 - [`EQ :A`](#EQ) `=>` [`EQ`](#EQ) [`(LIST :A)`](#LIST)
@@ -367,7 +417,6 @@ Methods:
 - [`SHOW`](#SHOW) [`EDGEINDEX`](#EDGEINDEX)
 - [`SHOW :A`](#SHOW) `=>` [`SHOW`](#SHOW) [`(CELL :A)`](#CELL)
 - [`SHOW :A`](#SHOW) `=>` [`SHOW`](#SHOW) [`(OPTIONAL :A)`](#OPTIONAL)
-- [`SHOW`](#SHOW) [`STRING`](#STRING)
 - [`SHOW`](#SHOW) [`CHAR`](#CHAR)
 - [`SHOW`](#SHOW) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
 - [`SHOW`](#SHOW) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
@@ -584,6 +633,11 @@ Is X greater than Y?
 
 ***
 
+#### `/=` <sup><sub>[FUNCTION]</sub></sup><a name="/="></a>
+`∀ :A. EQ :A ⇒ (:A → :A → BOOLEAN)`
+
+***
+
 #### `<=` <sup><sub>[FUNCTION]</sub></sup><a name="<="></a>
 `∀ :A. ORD :A ⇒ (:A → :A → BOOLEAN)`
 
@@ -612,59 +666,6 @@ Returns the greater element of X and Y.
 `∀ :A. ORD :A ⇒ (:A → :A → :A)`
 
 Returns the lesser element of X and Y.
-
-
-***
-
-
-## File: [boolean.lisp](../src/library/boolean.lisp)
-
-### Functions
-
-#### `NOT` <sup><sub>[FUNCTION]</sub></sup><a name="NOT"></a>
-`(BOOLEAN → BOOLEAN)`
-
-Synonym for BOOLEAN-NOT.
-
-
-***
-
-#### `XOR` <sup><sub>[FUNCTION]</sub></sup><a name="XOR"></a>
-`(BOOLEAN → BOOLEAN → BOOLEAN)`
-
-Synonym for BOOLEAN-XOR.
-
-
-***
-
-#### `BOOLEAN-OR` <sup><sub>[FUNCTION]</sub></sup><a name="BOOLEAN-OR"></a>
-`(BOOLEAN → BOOLEAN → BOOLEAN)`
-
-Is X or Y True? Note that this is a *function* which means both X and Y will be evaluated. Use the OR macro for short-circuiting behavior.
-
-
-***
-
-#### `BOOLEAN-AND` <sup><sub>[FUNCTION]</sub></sup><a name="BOOLEAN-AND"></a>
-`(BOOLEAN → BOOLEAN → BOOLEAN)`
-
-Are X and Y True? Note that this is a *function* which means both X and Y will be evaluated. Use the AND macro for short-circuiting behavior.
-
-
-***
-
-#### `BOOLEAN-NOT` <sup><sub>[FUNCTION]</sub></sup><a name="BOOLEAN-NOT"></a>
-`(BOOLEAN → BOOLEAN)`
-
-Is X False?
-
-
-***
-
-#### `BOOLEAN-XOR` <sup><sub>[FUNCTION]</sub></sup><a name="BOOLEAN-XOR"></a>
-`(BOOLEAN → BOOLEAN → BOOLEAN)`
-
-Are X or Y True, but not both?
 
 
 ***

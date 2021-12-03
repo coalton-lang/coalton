@@ -16,8 +16,11 @@
 
   (define-class (Eq :a)
     "Types which have equality defined."
-    (== (:a -> :a -> Boolean))
-    (/= (:a -> :a -> Boolean)))
+    (== (:a -> :a -> Boolean)))
+
+  (declare /= (Eq :a => (:a -> :a -> Boolean)))
+  (define (/= a b)
+    (boolean-not (== a b)))
 
   ;;
   ;; Ord

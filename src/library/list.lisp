@@ -431,9 +431,7 @@
         ((Nil)
          (match b
            ((Nil) True)
-           (_ False)))))
-    (define (/= a b)
-      (not (== a b))))
+           (_ False))))))
 
   (define-instance (Semigroup (List :a))
     (define (<> a b) (append a b)))

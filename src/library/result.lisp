@@ -45,8 +45,7 @@
       (match (Tuple a b)
         ((Tuple (Ok a) (Ok b)) (== a b))
         ((Tuple (Err a) (Err b)) (== a b))
-        (_ False)))
-    (define (/= a b) (not (== a b))))
+        (_ False))))
 
   (define-instance ((Ord :a) (Ord :b) => (Ord (Result :a :b)))
     (define (<=> a b)

@@ -5,16 +5,6 @@
 ;;;
 
 (coalton-toplevel
-  (define-instance (Show String)
-    (define (show x) x))
-
-  (define-instance (Eq String)
-    (define (== s1 s2)
-      (lisp Boolean (s1 s2) (to-boolean (cl:string= s1 s2))))
-    (define (/= s1 s2)
-      (not (== s1 s2)))))
-
-(coalton-toplevel
   (declare concat-string (String -> String -> String))
   (define (concat-string str1 str2)
     "Concatenate STR1 and STR2 together, returning a new string."
@@ -57,9 +47,7 @@
 
   (define-instance (Eq String)
     (define (== a b)
-      (lisp Boolean (a b) (to-boolean (cl:string= a b))))
-    (define (/= a b)
-      (not (== a b))))
+      (lisp Boolean (a b) (to-boolean (cl:string= a b)))))
 
   (define-instance (Ord String)
     (define (<=> a b)

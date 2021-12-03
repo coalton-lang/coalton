@@ -54,9 +54,7 @@
 
   (define-instance (Eq :a => (Eq (Cell :a)))
     (define (== c1 c2)
-      (== (cell-read c1) (cell-read c2)))
-    (define (/= c1 c2)
-      (not (== c1 c2))))
+      (== (cell-read c1) (cell-read c2))))
 
   (define-instance (Num :a => (Num (Cell :a)))
     (define (+ c1 c2)
