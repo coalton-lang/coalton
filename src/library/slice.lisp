@@ -152,9 +152,7 @@
                (unless (== e1 e2)
                  (cell-write False out)))
              s1 s2)
-            (cell-read out))))
-    (define (/= s1 s2)
-      (not (== s1 s2))))
+            (cell-read out)))))
 
   (define-instance (Into (Slice :a) (Vector :a))
     (define (into s)

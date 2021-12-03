@@ -45,9 +45,7 @@
       (match (Tuple x y)
         ((Tuple (Some x) (Some y)) (== x y))
         ((Tuple (None) (None)) True)
-        (_ False)))
-    (define (/= x y)
-      (not (== x y))))
+        (_ False))))
 
   (define-instance (Ord :a => (Ord (Optional :a)))
     (define (<=> x y)

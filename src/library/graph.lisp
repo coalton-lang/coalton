@@ -79,9 +79,7 @@
     (define (== a b)
       (match (Tuple a b)
         ((Tuple (EdgeIndex a) (EdgeIndex b))
-         (== a b))))
-    (define (/= a b)
-      (not (== a b))))
+         (== a b)))))
 
   (define-instance (Show EdgeIndex)
     (define (show x)
@@ -111,9 +109,7 @@
     (define (== a b)
       (match (Tuple a b)
         ((Tuple (NodeIndex a) (NodeIndex b))
-         (== a b))))
-    (define (/= a b)
-      (not (== a b))))
+         (== a b)))))
 
   ;;
   ;; Node and edge types

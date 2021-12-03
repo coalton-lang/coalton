@@ -29,9 +29,7 @@
      (define-instance (Eq ,coalton-type)
        (define (== a b)
          (lisp Boolean (a b)
-           (to-boolean (cl:= a b))))
-       (define (/= a b)
-         (not (== a b))))
+           (to-boolean (cl:= a b)))))
 
      (define-instance (Ord ,coalton-type)
        (define (<=> a b)
@@ -178,9 +176,7 @@
   (define-instance (Eq Fraction)
     (define (== p q)
       (and (== (numerator p) (numerator q))
-           (== (denominator p) (denominator q))))
-    (define (/= p q)
-      (not (== p q))))
+           (== (denominator p) (denominator q)))))
 
   (define-instance (Ord Fraction)
     (define (<=> p q)
