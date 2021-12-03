@@ -88,6 +88,7 @@
    )
   (:export
    #:parse-form                         ; FUNCTION
+   #:error-parsing                      ; FUNCTION
    #:coalton-parse-error                ; CONDITION
    #:coalton-parse-error-form           ; READER
    #:coalton-parse-error-reason-control ; READER
@@ -381,6 +382,7 @@
   (:export
    #:coalton-toplevel
    #:coalton-codegen
+   #:coalton-codegen-types
    #:coalton
    #:declare
    #:define
@@ -459,6 +461,9 @@
    #:boolean-xor #:xor
    #:List #:Cons #:Nil
    #:Tuple
+   #:Tuple3
+   #:Tuple4
+   #:Tuple5
    #:Result #:Err #:Ok
    #:Optional #:Some #:None
    #:Fraction
@@ -523,6 +528,8 @@
    #:singleton
    #:repeat
    #:reverse
+   #:drop
+   #:take
    #:find
    #:fold
    #:foldr
@@ -543,6 +550,9 @@
    #:delete
    #:list-difference
    #:zipWith
+   #:zipWith3
+   #:zipWith4
+   #:zipWith5
    #:zip
    #:insert
    #:insertBy
@@ -602,6 +612,7 @@
    #:vector-length
    #:vector-capacity
    #:vector-empty
+   #:vector-copy
    #:vector-push
    #:vector-pop
    #:vector-pop-unsafe
@@ -612,6 +623,8 @@
    #:vector-head-unsafe
    #:vector-last
    #:vector-last-unsafe
+   #:vector-sort-by
+   #:vector-sort
    #:vector-foreach
    #:vector-foreach-index
    #:vector-foreach2
@@ -619,6 +632,33 @@
    #:vector-to-list
    #:vector-swap-remove
    #:vector-swap-remove-unsafe)
+  ;; Slice
+  (:export
+   #:Slice
+   #:make-slice
+   #:slice-length
+   #:slice-copy
+   #:slice-set
+   #:slice-index
+   #:slice-index-unsafe
+   #:slice-foreach
+   #:slice-foreach-index
+   #:slice-foreach2
+   #:vector-sliding
+   #:vector-chunked)
+  ;; Hashtable
+  (:export
+   #:Hashtable
+   #:make-hashtable
+   #:make-hashtable-capacity
+   #:hashtable-get
+   #:hashtable-set
+   #:hashtable-remove
+   #:hashtable-count
+   #:hashtable-foreach
+   #:hashtable-keys
+   #:hashtable-values
+   #:hashtable-entries)
   ;; Graph
   (:export
    #:NodeIndex

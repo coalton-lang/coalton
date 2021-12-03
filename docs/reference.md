@@ -71,8 +71,8 @@ Constructors:
 - [`EQ :A`](#EQ) [`EQ :B`](#EQ) `=>` [`EQ`](#EQ) [`(RESULT :A :B)`](#RESULT)
 - [`ISO`](#ISO) [`(RESULT UNIT :A)`](#RESULT) [`(OPTIONAL :A)`](#OPTIONAL)
 - [`ORD :A`](#ORD) [`ORD :B`](#ORD) `=>` [`ORD`](#ORD) [`(RESULT :A :B)`](#RESULT)
-- [`INTO`](#INTO) [`(OPTIONAL :A)`](#OPTIONAL) [`(RESULT UNIT :A)`](#RESULT)
 - [`INTO`](#INTO) [`(RESULT :A :B)`](#RESULT) [`(OPTIONAL :B)`](#OPTIONAL)
+- [`INTO`](#INTO) [`(OPTIONAL :A)`](#OPTIONAL) [`(RESULT UNIT :A)`](#RESULT)
 - [`MONAD`](#MONAD) [`(RESULT :A)`](#RESULT)
 - [`MONOID :A`](#MONOID) `=>` [`MONOID`](#MONOID) [`(RESULT :B :A)`](#RESULT)
 - [`FUNCTOR`](#FUNCTOR) [`(RESULT :A)`](#RESULT)
@@ -84,20 +84,46 @@ Constructors:
 
 ***
 
-#### `BOOLEAN` <sup><sub>[TYPE]</sub></sup><a name="BOOLEAN"></a>
-- `FALSE`
-- `TRUE`
+#### `TUPLE3 :A :B :C` <sup><sub>[TYPE]</sub></sup><a name="TUPLE3"></a>
+- `(TUPLE3 :A :B :C)`
 
 Constructors:
-- `FALSE :: BOOLEAN`
-- `TRUE :: BOOLEAN`
+- `TUPLE3 :: (:A → :B → :C → (TUPLE3 :A :B :C))`
 
 <details>
 <summary>Instances</summary>
 
-- [`EQ`](#EQ) [`BOOLEAN`](#BOOLEAN)
-- [`ORD`](#ORD) [`BOOLEAN`](#BOOLEAN)
-- [`SHOW`](#SHOW) [`BOOLEAN`](#BOOLEAN)
+- [`EQ :A`](#EQ) [`EQ :B`](#EQ) [`EQ :C`](#EQ) `=>` [`EQ`](#EQ) [`(TUPLE3 :A :B :C)`](#TUPLE3)
+
+</details>
+
+***
+
+#### `TUPLE4 :A :B :C :D` <sup><sub>[TYPE]</sub></sup><a name="TUPLE4"></a>
+- `(TUPLE4 :A :B :C :D)`
+
+Constructors:
+- `TUPLE4 :: (:A → :B → :C → :D → (TUPLE4 :A :B :C :D))`
+
+<details>
+<summary>Instances</summary>
+
+- [`EQ :A`](#EQ) [`EQ :B`](#EQ) [`EQ :C`](#EQ) [`EQ :D`](#EQ) `=>` [`EQ`](#EQ) [`(TUPLE4 :A :B :C :D)`](#TUPLE4)
+
+</details>
+
+***
+
+#### `TUPLE5 :A :B :C :D :E` <sup><sub>[TYPE]</sub></sup><a name="TUPLE5"></a>
+- `(TUPLE5 :A :B :C :D :E)`
+
+Constructors:
+- `TUPLE5 :: (:A → :B → :C → :D → :E → (TUPLE5 :A :B :C :D :E))`
+
+<details>
+<summary>Instances</summary>
+
+- [`EQ :A`](#EQ) [`EQ :B`](#EQ) [`EQ :C`](#EQ) [`EQ :D`](#EQ) [`EQ :E`](#EQ) `=>` [`EQ`](#EQ) [`(TUPLE5 :A :B :C :D :E)`](#TUPLE5)
 
 </details>
 
@@ -140,8 +166,8 @@ Constructors:
 - [`EQ :A`](#EQ) `=>` [`EQ`](#EQ) [`(OPTIONAL :A)`](#OPTIONAL)
 - [`ISO`](#ISO) [`(RESULT UNIT :A)`](#RESULT) [`(OPTIONAL :A)`](#OPTIONAL)
 - [`ORD :A`](#ORD) `=>` [`ORD`](#ORD) [`(OPTIONAL :A)`](#OPTIONAL)
-- [`INTO`](#INTO) [`(OPTIONAL :A)`](#OPTIONAL) [`(RESULT UNIT :A)`](#RESULT)
 - [`INTO`](#INTO) [`(RESULT :A :B)`](#RESULT) [`(OPTIONAL :B)`](#OPTIONAL)
+- [`INTO`](#INTO) [`(OPTIONAL :A)`](#OPTIONAL) [`(RESULT UNIT :A)`](#RESULT)
 - [`SHOW :A`](#SHOW) `=>` [`SHOW`](#SHOW) [`(OPTIONAL :A)`](#OPTIONAL)
 - [`MONAD`](#MONAD) [`OPTIONAL`](#OPTIONAL)
 - [`MONOID :A`](#MONOID) `=>` [`MONOID`](#MONOID) [`(OPTIONAL :A)`](#OPTIONAL)
@@ -188,9 +214,13 @@ Methods:
 
 - [`EQ`](#EQ) [`NODEINDEX`](#NODEINDEX)
 - [`EQ`](#EQ) [`EDGEINDEX`](#EDGEINDEX)
+- [`EQ :A`](#EQ) `=>` [`EQ`](#EQ) [`(SLICE :A)`](#SLICE)
 - [`EQ :A`](#EQ) `=>` [`EQ`](#EQ) [`(VECTOR :A)`](#VECTOR)
 - [`EQ :A`](#EQ) `=>` [`EQ`](#EQ) [`(CELL :A)`](#CELL)
 - [`EQ :A`](#EQ) [`EQ :B`](#EQ) `=>` [`EQ`](#EQ) [`(RESULT :A :B)`](#RESULT)
+- [`EQ :A`](#EQ) [`EQ :B`](#EQ) [`EQ :C`](#EQ) [`EQ :D`](#EQ) [`EQ :E`](#EQ) `=>` [`EQ`](#EQ) [`(TUPLE5 :A :B :C :D :E)`](#TUPLE5)
+- [`EQ :A`](#EQ) [`EQ :B`](#EQ) [`EQ :C`](#EQ) [`EQ :D`](#EQ) `=>` [`EQ`](#EQ) [`(TUPLE4 :A :B :C :D)`](#TUPLE4)
+- [`EQ :A`](#EQ) [`EQ :B`](#EQ) [`EQ :C`](#EQ) `=>` [`EQ`](#EQ) [`(TUPLE3 :A :B :C)`](#TUPLE3)
 - [`EQ :A`](#EQ) [`EQ :B`](#EQ) `=>` [`EQ`](#EQ) [`(TUPLE :A :B)`](#TUPLE)
 - [`EQ :A`](#EQ) `=>` [`EQ`](#EQ) [`(LIST :A)`](#LIST)
 - [`EQ :A`](#EQ) `=>` [`EQ`](#EQ) [`(OPTIONAL :A)`](#OPTIONAL)
@@ -228,14 +258,14 @@ Methods:
 
 - [`NUM :A`](#NUM) `=>` [`NUM`](#NUM) [`(CELL :A)`](#CELL)
 - [`NUM`](#NUM) [`FRACTION`](#FRACTION)
+- [`NUM`](#NUM) [`INTEGER`](#INTEGER)
 - [`NUM`](#NUM) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
 - [`NUM`](#NUM) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
-- [`NUM`](#NUM) [`INTEGER`](#INTEGER)
 - [`NUM`](#NUM) [`U64`](#U64)
 - [`NUM`](#NUM) [`U32`](#U32)
 - [`NUM`](#NUM) [`U8`](#U8)
-- [`NUM`](#NUM) [`I64`](#I64)
 - [`NUM`](#NUM) [`I32`](#I32)
+- [`NUM`](#NUM) [`I64`](#I64)
 
 </details>
 
@@ -287,27 +317,30 @@ Methods:
 
 - [`INTO`](#INTO) [`NODEINDEX`](#NODEINDEX) [`INTEGER`](#INTEGER)
 - [`INTO`](#INTO) [`EDGEINDEX`](#EDGEINDEX) [`INTEGER`](#INTEGER)
+- [`INTO`](#INTO) [`(VECTOR :A)`](#VECTOR) [`(SLICE :A)`](#SLICE)
+- [`INTO`](#INTO) [`(SLICE :A)`](#SLICE) [`(VECTOR :A)`](#VECTOR)
 - [`INTO`](#INTO) [`(VECTOR :A)`](#VECTOR) [`(LIST :A)`](#LIST)
 - [`INTO`](#INTO) [`(LIST :A)`](#LIST) [`(VECTOR :A)`](#VECTOR)
+- [`INTO`](#INTO) [`(CELL :A)`](#CELL) [`:A`](#:A)
 - [`INTO`](#INTO) [`:A`](#:A) [`(CELL :A)`](#CELL)
-- [`INTO`](#INTO) [`(OPTIONAL :A)`](#OPTIONAL) [`(RESULT UNIT :A)`](#RESULT)
 - [`INTO`](#INTO) [`(RESULT :A :B)`](#RESULT) [`(OPTIONAL :B)`](#OPTIONAL)
+- [`INTO`](#INTO) [`(OPTIONAL :A)`](#OPTIONAL) [`(RESULT UNIT :A)`](#RESULT)
 - [`INTO`](#INTO) [`(TUPLE :A :B)`](#TUPLE) [`(TUPLE :B :A)`](#TUPLE)
 - [`INTO`](#INTO) [`(LIST CHAR)`](#LIST) [`STRING`](#STRING)
 - [`INTO`](#INTO) [`STRING`](#STRING) [`(LIST CHAR)`](#LIST)
 - [`INTO`](#INTO) [`INTEGER`](#INTEGER) [`STRING`](#STRING)
-- [`INTO`](#INTO) [`U64`](#U64) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
-- [`INTO`](#INTO) [`U64`](#U64) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
 - [`INTO`](#INTO) [`U64`](#U64) [`INTEGER`](#INTEGER)
+- [`INTO`](#INTO) [`U64`](#U64) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
 - [`INTO`](#INTO) [`INTEGER`](#INTEGER) [`U64`](#U64)
+- [`INTO`](#INTO) [`U64`](#U64) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
+- [`INTO`](#INTO) [`INTEGER`](#INTEGER) [`U32`](#U32)
+- [`INTO`](#INTO) [`U32`](#U32) [`INTEGER`](#INTEGER)
 - [`INTO`](#INTO) [`U32`](#U32) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
 - [`INTO`](#INTO) [`U32`](#U32) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
-- [`INTO`](#INTO) [`U32`](#U32) [`INTEGER`](#INTEGER)
-- [`INTO`](#INTO) [`INTEGER`](#INTEGER) [`U32`](#U32)
 - [`INTO`](#INTO) [`U8`](#U8) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
+- [`INTO`](#INTO) [`INTEGER`](#INTEGER) [`U8`](#U8)
 - [`INTO`](#INTO) [`U8`](#U8) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
 - [`INTO`](#INTO) [`U8`](#U8) [`INTEGER`](#INTEGER)
-- [`INTO`](#INTO) [`INTEGER`](#INTEGER) [`U8`](#U8)
 - [`INTO`](#INTO) [`I64`](#I64) [`INTEGER`](#INTEGER)
 - [`INTO`](#INTO) [`INTEGER`](#INTEGER) [`I64`](#I64)
 - [`INTO`](#INTO) [`I32`](#I32) [`INTEGER`](#INTEGER)
@@ -462,9 +495,9 @@ Methods:
 <details>
 <summary>Instances</summary>
 
-- [`DIVIDABLE`](#DIVIDABLE) [`INTEGER`](#INTEGER) [`FRACTION`](#FRACTION)
-- [`DIVIDABLE`](#DIVIDABLE) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
 - [`DIVIDABLE`](#DIVIDABLE) [`SINGLE-FLOAT`](#SINGLE-FLOAT) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
+- [`DIVIDABLE`](#DIVIDABLE) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
+- [`DIVIDABLE`](#DIVIDABLE) [`INTEGER`](#INTEGER) [`FRACTION`](#FRACTION)
 
 </details>
 
@@ -588,23 +621,39 @@ Returns the lesser element of X and Y.
 
 ### Functions
 
-#### `OR` <sup><sub>[FUNCTION]</sub></sup><a name="OR"></a>
-`(BOOLEAN → BOOLEAN → BOOLEAN)`
-
-Is X or Y True?
-
-
-***
-
-#### `AND` <sup><sub>[FUNCTION]</sub></sup><a name="AND"></a>
-`(BOOLEAN → BOOLEAN → BOOLEAN)`
-
-Are X and Y True?
-
-
-***
-
 #### `NOT` <sup><sub>[FUNCTION]</sub></sup><a name="NOT"></a>
+`(BOOLEAN → BOOLEAN)`
+
+Synonym for BOOLEAN-NOT.
+
+
+***
+
+#### `XOR` <sup><sub>[FUNCTION]</sub></sup><a name="XOR"></a>
+`(BOOLEAN → BOOLEAN → BOOLEAN)`
+
+Synonym for BOOLEAN-XOR.
+
+
+***
+
+#### `BOOLEAN-OR` <sup><sub>[FUNCTION]</sub></sup><a name="BOOLEAN-OR"></a>
+`(BOOLEAN → BOOLEAN → BOOLEAN)`
+
+Is X or Y True? Note that this is a *function* which means both X and Y will be evaluated. Use the OR macro for short-circuiting behavior.
+
+
+***
+
+#### `BOOLEAN-AND` <sup><sub>[FUNCTION]</sub></sup><a name="BOOLEAN-AND"></a>
+`(BOOLEAN → BOOLEAN → BOOLEAN)`
+
+Are X and Y True? Note that this is a *function* which means both X and Y will be evaluated. Use the AND macro for short-circuiting behavior.
+
+
+***
+
+#### `BOOLEAN-NOT` <sup><sub>[FUNCTION]</sub></sup><a name="BOOLEAN-NOT"></a>
 `(BOOLEAN → BOOLEAN)`
 
 Is X False?
@@ -612,7 +661,7 @@ Is X False?
 
 ***
 
-#### `XOR` <sup><sub>[FUNCTION]</sub></sup><a name="XOR"></a>
+#### `BOOLEAN-XOR` <sup><sub>[FUNCTION]</sub></sup><a name="BOOLEAN-XOR"></a>
 `(BOOLEAN → BOOLEAN → BOOLEAN)`
 
 Are X or Y True, but not both?
@@ -671,6 +720,14 @@ Divide X by Y, returning None if Y is zero.
 `∀ :A. (NUM :A) (ORD :A) ⇒ (:A → :A)`
 
 Absolute value of X.
+
+
+***
+
+#### `ASH` <sup><sub>[FUNCTION]</sub></sup><a name="ASH"></a>
+`(INTEGER → INTEGER → INTEGER)`
+
+Compute the "arithmetic shift" of X by N. 
 
 
 ***
@@ -865,6 +922,14 @@ Builds a list of tuples with the elements of XS and YS.
 
 ***
 
+#### `DROP` <sup><sub>[FUNCTION]</sub></sup><a name="DROP"></a>
+`∀ :A. (INTEGER → (LIST :A) → (LIST :A))`
+
+Returns a list with the first N elements of XS removed
+
+
+***
+
 #### `FIND` <sup><sub>[FUNCTION]</sub></sup><a name="FIND"></a>
 `∀ :A. ((:A → BOOLEAN) → (LIST :A) → (OPTIONAL :A))`
 
@@ -913,10 +978,18 @@ Returns every element but the first in a list.
 
 ***
 
+#### `TAKE` <sup><sub>[FUNCTION]</sub></sup><a name="TAKE"></a>
+`∀ :A. (INTEGER → (LIST :A) → (LIST :A))`
+
+Returns the first N elements of XS
+
+
+***
+
 #### `FOLDR` <sup><sub>[FUNCTION]</sub></sup><a name="FOLDR"></a>
 `∀ :A :B. ((:A → :B → :B) → :B → (LIST :A) → :B)`
 
-Right fold on lists. Is short circuiting but is not tail recursive.
+Right fold on lists. Is not tail recursive.
 
 
 ***
@@ -1073,6 +1146,30 @@ Generic version of insert
 
 ***
 
+#### `ZIPWITH3` <sup><sub>[FUNCTION]</sub></sup><a name="ZIPWITH3"></a>
+`∀ :A :B :C :D. ((:A → :B → :C → :D) → (LIST :A) → (LIST :B) → (LIST :C) → (LIST :D))`
+
+Build a new list by calling F with elements of XS, YS and ZS
+
+
+***
+
+#### `ZIPWITH4` <sup><sub>[FUNCTION]</sub></sup><a name="ZIPWITH4"></a>
+`∀ :A :B :C :D :E. ((:A → :B → :C → :D → :E) → (LIST :A) → (LIST :B) → (LIST :C) → (LIST :D) → (LIST :E))`
+
+Build a new list by calling F with elements of AS, BS, CS and DS
+
+
+***
+
+#### `ZIPWITH5` <sup><sub>[FUNCTION]</sub></sup><a name="ZIPWITH5"></a>
+`∀ :A :B :C :D :E :F. ((:A → :B → :C → :D → :E → :F) → (LIST :A) → (LIST :B) → (LIST :C) → (LIST :D) → (LIST :E) → (LIST :F))`
+
+Build a new list by calling F with elements of AS, BS, CS, DS and ES
+
+
+***
+
 #### `CONCATMAP` <sup><sub>[FUNCTION]</sub></sup><a name="CONCATMAP"></a>
 `∀ :A :B. ((:A → (LIST :B)) → (LIST :A) → (LIST :B))`
 
@@ -1224,11 +1321,11 @@ A function that always returns its argument
 The factorial function can be written
     ```
     (define fact
-      (fix 
+      (fix
         (fn (f n)
           (if (== n 0)
             1
-            (* n (f (- n 1)))))))    
+            (* n (f (- n 1)))))))
     ```
 
 
@@ -1266,6 +1363,14 @@ Signal an error by calling CL:ERROR
 
 ***
 
+#### `TRACE` <sup><sub>[FUNCTION]</sub></sup><a name="TRACE"></a>
+`(STRING → UNIT)`
+
+Print a line to *STANDARD-OUTPUT*
+
+
+***
+
 #### `COMPOSE` <sup><sub>[FUNCTION]</sub></sup><a name="COMPOSE"></a>
 `∀ :A :B :C. ((:A → :B) → (:C → :A) → :C → :B)`
 
@@ -1284,6 +1389,82 @@ Map the elements of XS with F then collect the results.
 
 ***
 
+#### `TRACEOBJECT` <sup><sub>[FUNCTION]</sub></sup><a name="TRACEOBJECT"></a>
+`∀ :A. (STRING → :A → UNIT)`
+
+Print a line to *STANDARD-OUTPUT* in the form "{STR}: {ITEM}"
+
+
+***
+
+
+## File: [cell.lisp](../src/library/cell.lisp)
+
+### Types
+
+#### `CELL :A` <sup><sub>[TYPE]</sub></sup><a name="CELL"></a>
+- `(CELL LISP-OBJECT)`
+
+Internally mutable cell
+
+Constructors:
+- `CELL :: (LISP-OBJECT → (CELL :A))`
+
+<details>
+<summary>Instances</summary>
+
+- [`EQ :A`](#EQ) `=>` [`EQ`](#EQ) [`(CELL :A)`](#CELL)
+- [`NUM :A`](#NUM) `=>` [`NUM`](#NUM) [`(CELL :A)`](#CELL)
+- [`INTO`](#INTO) [`(CELL :A)`](#CELL) [`:A`](#:A)
+- [`INTO`](#INTO) [`:A`](#:A) [`(CELL :A)`](#CELL)
+- [`SHOW :A`](#SHOW) `=>` [`SHOW`](#SHOW) [`(CELL :A)`](#CELL)
+- [`FUNCTOR`](#FUNCTOR) [`CELL`](#CELL)
+- [`SEMIGROUP :A`](#SEMIGROUP) `=>` [`SEMIGROUP`](#SEMIGROUP) [`(CELL :A)`](#CELL)
+- [`APPLICATIVE`](#APPLICATIVE) [`CELL`](#CELL)
+
+</details>
+
+***
+
+### Functions
+
+#### `CELL-READ` <sup><sub>[FUNCTION]</sub></sup><a name="CELL-READ"></a>
+`∀ :A. ((CELL :A) → :A)`
+
+Read the value of a mutable cell
+
+
+***
+
+#### `CELL-SWAP` <sup><sub>[FUNCTION]</sub></sup><a name="CELL-SWAP"></a>
+`∀ :A. (:A → (CELL :A) → :A)`
+
+Replace the value of a mutable cell with a new value, then return the old value
+
+
+***
+
+#### `MAKE-CELL` <sup><sub>[FUNCTION]</sub></sup><a name="MAKE-CELL"></a>
+`∀ :A. (:A → (CELL :A))`
+
+Create a new mutable cell
+
+
+***
+
+#### `CELL-WRITE` <sup><sub>[FUNCTION]</sub></sup><a name="CELL-WRITE"></a>
+`∀ :A. (:A → (CELL :A) → UNIT)`
+
+Set the value of a mutable cell
+
+
+***
+
+#### `CELL-UPDATE` <sup><sub>[FUNCTION]</sub></sup><a name="CELL-UPDATE"></a>
+`∀ :A. ((:A → :A) → (CELL :A) → UNIT)`
+
+***
+
 
 ## File: [vector.lisp](../src/library/vector.lisp)
 
@@ -1299,7 +1480,10 @@ Constructors:
 <summary>Instances</summary>
 
 - [`EQ :A`](#EQ) `=>` [`EQ`](#EQ) [`(VECTOR :A)`](#VECTOR)
+- [`ISO`](#ISO) [`(SLICE :A)`](#SLICE) [`(VECTOR :A)`](#VECTOR)
 - [`ISO`](#ISO) [`(VECTOR :A)`](#VECTOR) [`(LIST :A)`](#LIST)
+- [`INTO`](#INTO) [`(VECTOR :A)`](#VECTOR) [`(SLICE :A)`](#SLICE)
+- [`INTO`](#INTO) [`(SLICE :A)`](#SLICE) [`(VECTOR :A)`](#VECTOR)
 - [`INTO`](#INTO) [`(VECTOR :A)`](#VECTOR) [`(LIST :A)`](#LIST)
 - [`INTO`](#INTO) [`(LIST :A)`](#LIST) [`(VECTOR :A)`](#VECTOR)
 - [`FUNCTOR`](#FUNCTOR) [`VECTOR`](#VECTOR)
@@ -1335,6 +1519,14 @@ Create a new empty vector
 
 ***
 
+#### `VECTOR-COPY` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-COPY"></a>
+`∀ :A. ((VECTOR :A) → (VECTOR :A))`
+
+Return a new vector containing the same elements as V
+
+
+***
+
 #### `VECTOR-HEAD` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-HEAD"></a>
 `∀ :A. ((VECTOR :A) → (OPTIONAL :A))`
 
@@ -1352,9 +1544,17 @@ Return the last element of V
 ***
 
 #### `VECTOR-PUSH` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-PUSH"></a>
-`∀ :A. (:A → (VECTOR :A) → UNIT)`
+`∀ :A. (:A → (VECTOR :A) → INTEGER)`
 
 Append ITEM to V and resize V if necessary
+
+
+***
+
+#### `VECTOR-SORT` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-SORT"></a>
+`∀ :A. ORD :A ⇒ ((VECTOR :A) → UNIT)`
+
+Sort a vector inplace
 
 
 ***
@@ -1399,10 +1599,10 @@ Call the function F once for each item in V
 
 ***
 
-#### `VECTOR-TO-LIST` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-TO-LIST"></a>
-`∀ :A. ((VECTOR :A) → (LIST :A))`
+#### `VECTOR-SORT-BY` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-SORT-BY"></a>
+`∀ :A. ((:A → :A → BOOLEAN) → (VECTOR :A) → UNIT)`
 
-Create a list containing the same elements in the same order as V
+Sort a vector with predicate function F
 
 
 ***
@@ -1416,7 +1616,7 @@ Returns the number of elements that V can store without resizing
 ***
 
 #### `VECTOR-FOREACH2` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-FOREACH2"></a>
-`∀ :A :B. ((:A → :A → :B) → (VECTOR :A) → (VECTOR :A) → UNIT)`
+`∀ :A :B :C. ((:A → :B → :C) → (VECTOR :A) → (VECTOR :B) → UNIT)`
 
 Like vector-foreach but twice as good
 
@@ -1483,6 +1683,211 @@ Call the function F once for each item in V with its index
 `∀ :A. (INTEGER → (VECTOR :A) → :A)`
 
 Remove the element IDX from VEC and replace it with the last element in VEC without bounds checking. Then return the removed element.
+
+
+***
+
+
+## File: [slice.lisp](../src/library/slice.lisp)
+
+### Types
+
+#### `SLICE :A` <sup><sub>[TYPE]</sub></sup><a name="SLICE"></a>
+- `(SLICE LISP-OBJECT)`
+
+Constructors:
+- `SLICE :: (LISP-OBJECT → (SLICE :A))`
+
+<details>
+<summary>Instances</summary>
+
+- [`EQ :A`](#EQ) `=>` [`EQ`](#EQ) [`(SLICE :A)`](#SLICE)
+- [`ISO`](#ISO) [`(SLICE :A)`](#SLICE) [`(VECTOR :A)`](#VECTOR)
+- [`INTO`](#INTO) [`(VECTOR :A)`](#VECTOR) [`(SLICE :A)`](#SLICE)
+- [`INTO`](#INTO) [`(SLICE :A)`](#SLICE) [`(VECTOR :A)`](#VECTOR)
+
+</details>
+
+***
+
+### Functions
+
+#### `SLICE-SET` <sup><sub>[FUNCTION]</sub></sup><a name="SLICE-SET"></a>
+`∀ :A. (INTEGER → :A → (SLICE :A) → UNIT)`
+
+Set the element at INDEX in S to ITEM
+
+
+***
+
+#### `MAKE-SLICE` <sup><sub>[FUNCTION]</sub></sup><a name="MAKE-SLICE"></a>
+`∀ :A. (INTEGER → INTEGER → (VECTOR :A) → (SLICE :A))`
+
+***
+
+#### `SLICE-COPY` <sup><sub>[FUNCTION]</sub></sup><a name="SLICE-COPY"></a>
+`∀ :A. ((SLICE :A) → (SLICE :A))`
+
+Returns a new slice containg the same elements as S
+
+
+***
+
+#### `SLICE-INDEX` <sup><sub>[FUNCTION]</sub></sup><a name="SLICE-INDEX"></a>
+`∀ :A. (INTEGER → (SLICE :A) → (OPTIONAL :A))`
+
+Lookup the element at INDEX in S
+
+
+***
+
+#### `SLICE-LENGTH` <sup><sub>[FUNCTION]</sub></sup><a name="SLICE-LENGTH"></a>
+`∀ :A. ((SLICE :A) → INTEGER)`
+
+Returns the length of S
+
+
+***
+
+#### `SLICE-FOREACH` <sup><sub>[FUNCTION]</sub></sup><a name="SLICE-FOREACH"></a>
+`∀ :A :B. ((:A → :B) → (SLICE :A) → UNIT)`
+
+Call the function F once for each item in S
+
+
+***
+
+#### `SLICE-FOREACH2` <sup><sub>[FUNCTION]</sub></sup><a name="SLICE-FOREACH2"></a>
+`∀ :A :B :C. ((:A → :B → :C) → (SLICE :A) → (SLICE :B) → UNIT)`
+
+Iterate over S1 and S2 calling F once on each iteration
+
+
+***
+
+#### `VECTOR-CHUNKED` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-CHUNKED"></a>
+`∀ :A :B. (((SLICE :A) → :B) → INTEGER → (VECTOR :A) → UNIT)`
+
+Chunked iteration over a vector. Ignores elements at the end if the vector does not evenly divide by the chunk size.
+
+
+***
+
+#### `VECTOR-SLIDING` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-SLIDING"></a>
+`∀ :A :B. (((SLICE :A) → :B) → INTEGER → (VECTOR :A) → UNIT)`
+
+Sliding iteration over a vector
+
+
+***
+
+#### `SLICE-INDEX-UNSAFE` <sup><sub>[FUNCTION]</sub></sup><a name="SLICE-INDEX-UNSAFE"></a>
+`∀ :A. (INTEGER → (SLICE :A) → :A)`
+
+Lookup the element at INDEX in S without bounds checking
+
+
+***
+
+#### `SLICE-FOREACH-INDEX` <sup><sub>[FUNCTION]</sub></sup><a name="SLICE-FOREACH-INDEX"></a>
+`∀ :A :B. ((INTEGER → :A → :B) → (SLICE :A) → UNIT)`
+
+Call the function F once for each item in S with its index
+
+
+***
+
+
+## File: [hashtable.lisp](../src/library/hashtable.lisp)
+
+### Types
+
+#### `HASHTABLE :A :B` <sup><sub>[TYPE]</sub></sup><a name="HASHTABLE"></a>
+- `(HASHTABLE LISP-OBJECT)`
+
+Constructors:
+- `HASHTABLE :: (LISP-OBJECT → (HASHTABLE :A :B))`
+
+***
+
+### Functions
+
+#### `HASHTABLE-GET` <sup><sub>[FUNCTION]</sub></sup><a name="HASHTABLE-GET"></a>
+`∀ :A :B. (:A → (HASHTABLE :A :B) → (OPTIONAL :B))`
+
+Lookup KEY in TABLE
+
+
+***
+
+#### `HASHTABLE-SET` <sup><sub>[FUNCTION]</sub></sup><a name="HASHTABLE-SET"></a>
+`∀ :A :B. (:A → :B → (HASHTABLE :A :B) → UNIT)`
+
+Set KEY to VALUE in TABLE
+
+
+***
+
+#### `HASHTABLE-KEYS` <sup><sub>[FUNCTION]</sub></sup><a name="HASHTABLE-KEYS"></a>
+`∀ :A :B. ((HASHTABLE :A :B) → (VECTOR :A))`
+
+Returns the keys in TABLE as a vector
+
+
+***
+
+#### `MAKE-HASHTABLE` <sup><sub>[FUNCTION]</sub></sup><a name="MAKE-HASHTABLE"></a>
+`∀ :A :B. (UNIT → (HASHTABLE :A :B))`
+
+Create a new empty hashtable
+
+
+***
+
+#### `HASHTABLE-COUNT` <sup><sub>[FUNCTION]</sub></sup><a name="HASHTABLE-COUNT"></a>
+`∀ :A :B. ((HASHTABLE :A :B) → INTEGER)`
+
+Returns the number of entries in TABLE
+
+
+***
+
+#### `HASHTABLE-REMOVE` <sup><sub>[FUNCTION]</sub></sup><a name="HASHTABLE-REMOVE"></a>
+`∀ :A :B. (:A → (HASHTABLE :A :B) → UNIT)`
+
+Remove the entry at KEY from TABLE
+
+
+***
+
+#### `HASHTABLE-VALUES` <sup><sub>[FUNCTION]</sub></sup><a name="HASHTABLE-VALUES"></a>
+`∀ :A :B. ((HASHTABLE :A :B) → (VECTOR :B))`
+
+Returns the values in TABLE as a vector
+
+
+***
+
+#### `HASHTABLE-ENTRIES` <sup><sub>[FUNCTION]</sub></sup><a name="HASHTABLE-ENTRIES"></a>
+`∀ :A :B. ((HASHTABLE :A :B) → (VECTOR (TUPLE :A :B)))`
+
+Returns the keys and values in TABLE as a vector
+
+
+***
+
+#### `HASHTABLE-FOREACH` <sup><sub>[FUNCTION]</sub></sup><a name="HASHTABLE-FOREACH"></a>
+`∀ :A :B :C. ((:A → :B → :C) → (HASHTABLE :A :B) → UNIT)`
+
+Call F once for each key value pair in TABLE
+
+
+***
+
+#### `MAKE-HASHTABLE-CAPACITY` <sup><sub>[FUNCTION]</sub></sup><a name="MAKE-HASHTABLE-CAPACITY"></a>
+`∀ :A :B. (INTEGER → (HASHTABLE :A :B))`
+
+Crate a new empty hashtable with a given capacity
 
 
 ***

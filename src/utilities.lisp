@@ -17,25 +17,6 @@
          :reason reason
          :args args))
 
-(define-condition coalton-parse-error (error)
-  ((form :initarg :form
-         :reader coalton-parse-error-form)
-   (reason-control :initarg :reason-control
-                   :reader coalton-parse-error-reason-control)
-   (reason-args :initarg :reason-args
-                :reader coalton-parse-error-reason-args))
-  (:report (lambda (c s)
-             (format s "Failed to parse ~S because: ~?"
-                     (coalton-parse-error-form c)
-                     (coalton-parse-error-reason-control c)
-                     (coalton-parse-error-reason-args c)))))
-
-(defun error-parsing (form reason-control &rest reason-args)
-  (error 'coalton-parse-error
-         :form form
-         :reason-control reason-control
-         :reason-args reason-args))
-
 (defun sexp-fmt (stream object &optional colon-modifier at-modifier)
   "A formatter for qualified S-expressions. Use like
 

@@ -13,8 +13,10 @@ jobs:
     runs-on: ubuntu-latest
 
     strategy:
+      fail-fast: false
       matrix:
         COALTON_ENV: ["release", "development"]
+        SAFETY: ["0", "3"]
 
     env:
       # Tell ASDF to look through our repo recursively
@@ -22,44 +24,14 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
-
-      - name: Grant All Perms to Make Cache Restoring Possible
-        run: |
-          sudo mkdir -p /usr/local/etc/roswell
-          sudo chown "${USER}" /usr/local/etc/roswell
-          # Here the ros binary will be restored:
-          sudo chown "${USER}" /usr/local/bin
-      - name: Get Current Month
-        id: current-month
-        run: |
-          echo "::set-output name=value::$(date -u "+%Y-%m")"
-      - name: Cache Roswell Setup
-        id: cache
-        uses: actions/cache@v2
-        env:
-          cache-name: cache-roswell
-        with:
-          path: |
-            /usr/local/bin/ros
-            ~/.cache/common-lisp/
-            ~/.roswell
-            /usr/local/etc/roswell
-            .qlot
-          key: "${{ steps.current-month.outputs.value }}-${{ env.cache-name }}-${{ runner.os }}-${{ hashFiles('qlfile.lock') }}-${{ matrix.COALTON_ENV }}-3"
-      - name: Restore Path To Cached Files
-        run: |
-          echo $HOME/.roswell/bin >> $GITHUB_PATH
-          echo .qlot/bin >> $GITHUB_PATH
-        if: steps.cache.outputs.cache-hit == 'true'
       - uses: 40ants/setup-lisp@v1
-        with:
-          asdf-system: coalton
-        if: steps.cache.outputs.cache-hit != 'true'
-
-      - uses: 40ants/run-tests@v2
+      - name: Run Tests
         env:
           COALTON_ENV: ${{ matrix.COALTON_ENV }}
-        with:
-          asdf-system: coalton
-          run-tests:
-            (asdf:test-system :coalton)
+        run: |
+          cat <<EOF > run-tests.lisp
+          (sb-ext:restrict-compiler-policy 'safety ${{ matrix.SAFETY }})
+          (defun main (&rest args)
+            (asdf:test-system :coalton))
+          EOF
+          qlot exec ros -- run-tests.lisp

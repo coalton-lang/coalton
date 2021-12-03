@@ -50,6 +50,26 @@
                      ((Cons a as) (inner as (Cons a bs)))))))
       (inner xs Nil)))
 
+  (declare drop (Integer -> (List :a) -> (List :a)))
+  (define (drop n xs)
+    "Returns a list with the first N elements of XS removed"
+    (if (== n 0)
+        xs
+        (match xs
+          ((Cons _ xs)
+           (drop (- n 1) xs))
+          ((Nil) Nil))))
+
+  (declare take (Integer -> (List :a) -> (List :a)))
+  (define (take n xs)
+    "Returns the first N elements of XS"
+    (if (== n 0)
+        Nil
+        (match xs
+          ((Cons x xs)
+           (Cons x (take (- n 1) xs)))
+          ((Nil) Nil))))
+
   (declare find ((:a -> Boolean) -> (List :a) -> (Optional :a)))
   (define (find f xs)
     "Returns the first element in a list matching the predicate function F."
@@ -80,7 +100,7 @@
     (let ((fun (fn (xs ys)
                  (match xs
                    ((Nil)
-                    ys)
+                    (reverse ys))
                    ((Cons x xs)
                     (if (f x)
                         (fun xs (Cons x ys))
@@ -227,6 +247,39 @@
       ((Tuple (Cons x xs)
               (Cons y ys))
        (Cons (f x y) (zipWith f xs ys)))
+      (_ Nil)))
+
+  (declare zipWith3 ((:a -> :b -> :c -> :d) -> (List :a) -> (List :b) -> (List :c) -> (List :d)))
+  (define (zipWith3 f xs ys zs)
+    "Build a new list by calling F with elements of XS, YS and ZS"
+    (match (Tuple3 xs ys zs)
+      ((Tuple3 (Cons x xs)
+               (Cons y ys)
+               (Cons z zs))
+       (Cons (f x y z) (zipWith3 f xs ys zs)))
+      (_ Nil)))
+
+  (declare zipWith4 ((:a -> :b -> :c -> :d -> :e) -> (List :a) -> (List :b) -> (List :c) -> (List :d) -> (List :e)))
+  (define (zipWith4 f as bs cs ds)
+    "Build a new list by calling F with elements of AS, BS, CS and DS"
+    (match (Tuple4 as bs cs ds)
+      ((Tuple4 (Cons a as)
+               (Cons b bs)
+               (Cons c cs)
+               (Cons d ds))
+       (Cons (f a b c d) (zipWith4 f as bs cs ds)))
+      (_ Nil)))
+
+  (declare zipWith5 ((:a -> :b -> :c -> :d -> :e -> :f) -> (List :a) -> (List :b) -> (List :c) -> (List :d) -> (List :e) -> (List :f)))
+  (define (zipWith5 f as bs cs ds es)
+    "Build a new list by calling F with elements of AS, BS, CS, DS and ES"
+    (match (Tuple5 as bs cs ds es)
+      ((Tuple5 (Cons a as)
+               (Cons b bs)
+               (Cons c cs)
+               (Cons d ds)
+               (Cons e es))
+       (Cons (f a b c d e) (zipWith5 f as bs cs ds es)))
       (_ Nil)))
 
   (declare zip ((List :a) -> (List :b) -> (List (Tuple :a :b))))

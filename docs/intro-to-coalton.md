@@ -1,10 +1,10 @@
-# Intro to Coalton
+# Whirlwind Tour of Coalton
 
 Coalton is a statically typed language that is embedded in and compiles to Common Lisp.
 
 This document is aimed toward individuals with familiarity with strongly typed functional programming languages already.
 
-## Basics: Variables and Functions
+## Program Structure
 
 To start, we recommend changing your package to the `COALTON-USER` package like so:
 
@@ -14,9 +14,32 @@ To start, we recommend changing your package to the `COALTON-USER` package like 
 
 This package does *not* `:use` the `COMMON-LISP` package, so you must prepend Common Lisp symbols with `cl:` if you need them.
 
-There are two primary entry points for Coalton code. Definitions and the like sit in a toplevel-form called `coalton-toplevel`.
+The first primary entry points for Coalton code. Definitions and the like sit in a toplevel-form called `coalton-toplevel`.
 
-Here are some variable definitions.
+```lisp
+(coalton-toplevel
+  ;; <Coalton definition forms>
+  )
+```
+
+Currently, in SLIME/SLY, there's no way to `C-c-c` in any finer-grained way than a whole `coalton-toplevel` form.
+
+The second primary entry point is calling Coalton from Lisp. In this case, one uses the `coalton` operator:
+
+```lisp
+;; Lisp code
+;; ...
+     (coalton #|coalton expression|#)
+;; ...
+```
+
+Note that one _cannot_ make new definitions in a `coalton` form, only evaluate expressions.
+
+Whereas `coalton-toplevel` expects one or more toplevel definitions or declarations, the `coalton` form takes a single expression, evaluates it relative to the current environment, and returns its (underlying) Lisp value. This can be useful for working with Coalton from a Lisp REPL.
+
+## Variables and Functions
+
+Variables and functions are defined with `define`. Here are some variable definitions.
 
 ```lisp
 (coalton-toplevel
@@ -32,9 +55,7 @@ Here are some variable definitions.
   (define data Unit))
 ```
 
-Whereas `coalton-toplevel` expects one or more toplevel definitions or declarations, the `coalton` form takes a single expression, evaluates it relative to the current environment, and returns its (underlying) Lisp value. This can be useful for working with Coalton from a Lisp REPL.
-
-For example, the following gets the first element of the tuple `p` defined above.
+One can get the first element of the tuple `p` defined above from the REPL using the `coalton` operator:
 ```lisp
 (coalton (fst p))
 ```
@@ -52,7 +73,10 @@ Functions are defined similarly to variables. Unlike Common Lisp, Coalton functi
   ;; Functions exist in the same namespace as variables
   (define addTwo add2)
 
-  (define x (addTwo 3)))
+  (define x (addTwo 3))
+
+  ;; Anonymous functions can be defined with fn
+  (define z (map (fn (x) (+ 2 x)) (make-list 1 2 3 4))))
 ```
 
 *All* functions in Coalton take *exactly* one input, and produce *exactly* one output. Consider this function:
@@ -171,9 +195,9 @@ Coalton has a list data type defined as
 
 ```lisp
 (coalton-toplevel
- (define-type (List :a)
-   (Cons :a (List :a))
-   Nil))
+  (define-type (List :a)
+    (Cons :a (List :a))
+    Nil))
 ```
 
 Coalton lists are not Lisp lists.
@@ -200,8 +224,6 @@ in definition of WUT
 in COALTON-TOPLEVEL
    [Condition of type COALTON-IMPL/TYPECHECKER::COALTON-TYPE-ERROR-CONTEXT]
 ```
-
-
 
 ## Static Typing
 
@@ -271,7 +293,7 @@ Match expressions can be used to pattern-match and deconstruct algebraic data ty
       (_ False))))
 ```
 
-The operator `coalton-library:if` can be used as a shorthand when matching on booleans
+The operator `coalton-library:if` can be used as a shorthand when matching on Booleans:
 
 ```lisp
 (coalton-toplevel
@@ -302,7 +324,7 @@ Several `if` expressions can be combined with a `cond`:
       (True (show n)))))
 ```
 
-The boolean operators `and` and `or` (of `coalton-library`) are actually variadic macros that short-circuit. Their functional counterparts are `boolean-and` and `boolean-or`.
+The Boolean operators `and` and `or` (of `coalton-library`) are actually variadic macros that short-circuit. Their functional counterparts are `boolean-and` and `boolean-or`.
 
 ```lisp
 (coalton
@@ -350,8 +372,7 @@ Coalton's `progn` can have flattened `let` syntax.
 
 Coalton supports typeclasses.
 
-Currently, *all* member functions must be defined for each typeclass
-instance.
+Currently, *all* member functions must be defined for each typeclass instance.
 
 ```lisp
 (coalton-toplevel
@@ -411,12 +432,10 @@ The following type classes are similar to the typeclasses with the same name in 
 * `Monad` - monad does not have `return`, use `pure` from applicative instead
 * `Alternative` - `<|>` is called `alt` in Coalton
 
-
+These type classes are inspired by traits of the same name in Rust:
 
 * `Into` - total conversions between one type and another
 * `TryInto` - non total conversions between one type and another
-
-
 
 ## Do Notation
 
@@ -446,7 +465,7 @@ Inline type annotations can be added to resolve ambiguities when using type clas
 
 ## Shorthand Function Call Syntax
 
-Coalton does not have nullary functions. However `(make-vector)` is a shorthand for `(make-vector Unit)`.
+Coalton does not have nullary functions. However, a function with the type signature `Unit -> *` can be called in Coalton without explicitly passing `Unit`. For instance, the Coalton form `(make-vector)` is a shorthand for `(make-vector Unit)`.
 
 ## Inspecting the Coalton System
 

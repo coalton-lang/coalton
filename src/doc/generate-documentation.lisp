@@ -236,7 +236,7 @@
                                                           (coalton-impl/typechecker::tapp
                                                            (check (coalton-impl/typechecker::tapp-from pred)))
                                                           (t
-                                                           (equalp (cdr e) pred)))))
+                                                             (equalp (type-entry-type (cdr e)) pred)))))
                                                (check pred-type)))
                                            (ty-predicate-types (ty-class-instance-predicate instance)))
                                       (list instance))))))

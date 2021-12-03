@@ -85,6 +85,7 @@
                            (multiple-value-bind (class methods docstring)
                                (parse-class-definition form env)
 
+                             (declare (ignore docstring))
 
                              ;; Add class to environment
                              (setf env (set-class env (ty-class-name class) class))
@@ -101,13 +102,13 @@
                                                     :location (or *compile-file-pathname* *load-truename*))))
 
                                (if (function-type-p (qualified-ty-type (fresh-inst (cdr method))))
-                                 (let ((arity (function-type-arity
-                                               (qualified-ty-type (fresh-inst (cdr method))))))
-                                   (setf env (set-function env (car method)
-                                                           (make-function-env-entry
-                                                            :name (car method)
-                                                            :arity arity))))
-                                 (setf env (unset-function env (car method)))))
+                                   (let ((arity (function-type-arity
+                                                 (qualified-ty-type (fresh-inst (cdr method))))))
+                                     (setf env (set-function env (car method)
+                                                             (make-function-env-entry
+                                                              :name (car method)
+                                                              :arity arity))))
+                                   (setf env (unset-function env (car method)))))
 
                              class))))
 

@@ -1,4 +1,4 @@
-(in-package #:small-coalton-programs)
+(cl:in-package #:small-coalton-programs)
 
 ;;;; This program computes symbolic derivatives of simple
 ;;;; expressions. It uses a new Symbol data type for demonstration

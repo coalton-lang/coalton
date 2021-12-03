@@ -29,7 +29,7 @@
   (let ((map (immutable-listmap-data m)))
     (funcall constructor :data (fset:with map key (fset:with-first (fset:lookup map key) value)))))
 
-(defun immutable-listmap-replace (m key index value &optional (constructor #'immutable-listmap))
+(defun immutable-listmap-replace (m key index value &optional (constructor #'make-immutable-listmap))
   "Replace value at INDEX with VALUE in the map at KEY in M."
   (declare (type immutable-listmap m)
            (type symbol key)

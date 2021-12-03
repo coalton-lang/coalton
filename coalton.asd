@@ -97,6 +97,8 @@
                              (:file "functions")
                              (:file "cell")
                              (:file "vector")
+                             (:file "slice")
+                             (:file "hashtable")
                              (:file "graph")))
                (:file "toplevel-environment")))
 
@@ -119,5 +121,7 @@
                (:file "free-variables-tests")
                (:file "tarjan-scc-tests")
                (:file "type-inference-tests")
+               (:file "runtime-tests")
                (:file "environment-persist-tests")
+               (:file "slice-tests")
                (:file "graph-tests")))

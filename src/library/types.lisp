@@ -17,6 +17,15 @@
     "A heterogeneous collection of items."
     (Tuple :a :b))
 
+  (define-type (Tuple3 :a :b :c)
+    (Tuple3 :a :b :c))
+
+  (define-type (Tuple4 :a :b :c :d)
+    (Tuple4 :a :b :c :d))
+
+  (define-type (Tuple5 :a :b :c :d :e)
+    (Tuple5 :a :b :c :d :e))
+
   (define-type (Optional :a)
     "Represents something that may not have a value."
     (Some :a)
