@@ -9,10 +9,9 @@
   (define-type Id
     (Id String))
 
-  (define-instance (Show Id)
-      (define (show i)
-        (match i
-          ((Id str) str))))
+  (define (id->string id)
+    (match id
+      ((Id s) s)))
 
   (define-instance (Eq Id)
       (define (== x y)
@@ -26,7 +25,7 @@
 
   (declare enumId (Integer -> Id))
   (define (enumId n)
-    (Id (concat-string "v" (show n))))
+    (Id (concat-string "v" (integer->string n))))
 
 
   ;;
@@ -641,7 +640,7 @@
   (define (find i xs)
     (match xs
       ((Nil)
-       (fail (concat-string "Unbound identifier: " (show i))))
+       (fail (concat-string "Unbound identifier: " (id->string i))))
       ((Cons (Assump i_ sc) as)
        (if (== i i_)
            (pure sc)

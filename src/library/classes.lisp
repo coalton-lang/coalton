@@ -3,14 +3,6 @@
 (coalton-toplevel
 
   ;;
-  ;; Show
-  ;;
-
-  (define-class (Show :a)
-    "Types which can be shown in string representation."
-    (show (:a -> String)))
-
-  ;;
   ;; Eq
   ;;
 
@@ -81,7 +73,7 @@
   ;; Num
   ;;
 
-  (define-class ((Eq :a) (Show :a) => (Num :a))
+  (define-class ((Eq :a) => (Num :a))
     "Types which have numeric operations defined."
     (+ (:a -> :a -> :a))
     (- (:a -> :a -> :a))

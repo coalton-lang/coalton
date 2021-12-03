@@ -81,18 +81,8 @@
         ((Tuple (EdgeIndex a) (EdgeIndex b))
          (== a b)))))
 
-  (define-instance (Show EdgeIndex)
-    (define (show x)
-      (match x
-        ((EdgeIndex x) (show x)))))
-
   (define-type NodeIndex
     (NodeIndex Integer))
-
-  (define-instance (Show NodeIndex)
-    (define (show x)
-      (match x
-        ((NodeIndex x) (show x)))))
 
   (declare node-index-value (NodeIndex -> Integer))
   (define (node-index-value idx)
@@ -448,41 +438,6 @@
              (progn
                (change-edge-links swap swapped-edge (IndexPair (Some index) (Some index)) graph)
                (Some (edge-data edge_))))))))
-
-  ;; TODO: add function to output graphviz where subgraphs are sccs
-  (declare graph-viz (Show :node-data => ((Graph :node-data :edge-data) -> String)))
-  (define (graph-viz graph_)
-    (progn
-      (let elements = (make-vector Unit))
-      (if (graph-is-directed graph_)
-          (vector-push "digraph {" elements)
-          (vector-push "graph {" elements))
-      (vector-foreach-index
-       (fn (i node)
-         (vector-push
-          (msum
-           (make-list
-            (show i)
-            " [label=\""
-            (show (node-data node))
-            "\"]"))
-          elements))
-       (graph-nodes graph_))
-      (vector-foreach
-       (fn (edge)
-         (vector-push
-          (msum
-           (make-list
-            (show (edge-from-index edge))
-            (if (graph-is-directed graph_)
-                " -> "
-                " -- ")
-            (show (edge-to-index edge))))
-          elements))
-       (graph-edges graph_))
-      (vector-push "}" elements)
-      (msum (intersperse (show #\NEWLINE) (into (the (Vector String) elements))))))
-
 
   ;;
   ;; Tarjan strongly connected components algorithm

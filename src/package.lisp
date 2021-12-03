@@ -490,10 +490,14 @@
    #:TryInto)
   ;; Builtin
   (:export
+   #:undefined
+   #:error)
+  (:export
    #:single-float->integer
    #:double-float->integer
    #:integer->single-float
    #:integer->double-float
+   #:integer->string
    #:negate
    #:abs
    #:ash

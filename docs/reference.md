@@ -143,7 +143,6 @@ Constructors:
 - [`EQ`](#EQ) [`FRACTION`](#FRACTION)
 - [`NUM`](#NUM) [`FRACTION`](#FRACTION)
 - [`ORD`](#ORD) [`FRACTION`](#FRACTION)
-- [`SHOW`](#SHOW) [`FRACTION`](#FRACTION)
 - [`DIVIDABLE`](#DIVIDABLE) [`INTEGER`](#INTEGER) [`FRACTION`](#FRACTION)
 
 </details>
@@ -168,7 +167,6 @@ Constructors:
 - [`ORD :A`](#ORD) `=>` [`ORD`](#ORD) [`(OPTIONAL :A)`](#OPTIONAL)
 - [`INTO`](#INTO) [`(RESULT :A :B)`](#RESULT) [`(OPTIONAL :B)`](#OPTIONAL)
 - [`INTO`](#INTO) [`(OPTIONAL :A)`](#OPTIONAL) [`(RESULT UNIT :A)`](#RESULT)
-- [`SHOW :A`](#SHOW) `=>` [`SHOW`](#SHOW) [`(OPTIONAL :A)`](#OPTIONAL)
 - [`MONAD`](#MONAD) [`OPTIONAL`](#OPTIONAL)
 - [`MONOID :A`](#MONOID) `=>` [`MONOID`](#MONOID) [`(OPTIONAL :A)`](#OPTIONAL)
 - [`FUNCTOR`](#FUNCTOR) [`OPTIONAL`](#OPTIONAL)
@@ -293,7 +291,7 @@ Methods:
 ***
 
 #### `NUM` <sup><sub>[CLASS]</sub></sup><a name="NUM"></a>
-[`EQ :A`](#EQ) [`SHOW :A`](#SHOW) `=>` [`NUM`](#NUM) [`:A`](#:A)
+[`EQ :A`](#EQ) `=>` [`NUM`](#NUM) [`:A`](#:A)
 
 Types which have numeric operations defined.
 
@@ -396,38 +394,6 @@ Methods:
 - [`INTO`](#INTO) [`I32`](#I32) [`INTEGER`](#INTEGER)
 - [`INTO`](#INTO) [`INTEGER`](#INTEGER) [`I32`](#I32)
 - [`INTO`](#INTO) [`:A`](#:A) [`:A`](#:A)
-
-</details>
-
-
-***
-
-#### `SHOW` <sup><sub>[CLASS]</sub></sup><a name="SHOW"></a>
-[`SHOW`](#SHOW) [`:A`](#:A)
-
-Types which can be shown in string representation.
-
-Methods:
-- `SHOW :: (:A → STRING)`
-
-<details>
-<summary>Instances</summary>
-
-- [`SHOW`](#SHOW) [`NODEINDEX`](#NODEINDEX)
-- [`SHOW`](#SHOW) [`EDGEINDEX`](#EDGEINDEX)
-- [`SHOW :A`](#SHOW) `=>` [`SHOW`](#SHOW) [`(CELL :A)`](#CELL)
-- [`SHOW :A`](#SHOW) `=>` [`SHOW`](#SHOW) [`(OPTIONAL :A)`](#OPTIONAL)
-- [`SHOW`](#SHOW) [`CHAR`](#CHAR)
-- [`SHOW`](#SHOW) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
-- [`SHOW`](#SHOW) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
-- [`SHOW`](#SHOW) [`INTEGER`](#INTEGER)
-- [`SHOW`](#SHOW) [`U64`](#U64)
-- [`SHOW`](#SHOW) [`U32`](#U32)
-- [`SHOW`](#SHOW) [`U8`](#U8)
-- [`SHOW`](#SHOW) [`I64`](#I64)
-- [`SHOW`](#SHOW) [`I32`](#I32)
-- [`SHOW`](#SHOW) [`FRACTION`](#FRACTION)
-- [`SHOW`](#SHOW) [`BOOLEAN`](#BOOLEAN)
 
 </details>
 
@@ -675,6 +641,14 @@ Returns the lesser element of X and Y.
 
 ### Functions
 
+#### `ERROR` <sup><sub>[FUNCTION]</sub></sup><a name="ERROR"></a>
+`∀ :A. (STRING → :A)`
+
+Signal an error by calling CL:ERROR
+
+
+***
+
 #### `UNDEFINED` <sup><sub>[FUNCTION]</sub></sup><a name="UNDEFINED"></a>
 `∀ :A :B. (:A → :B)`
 
@@ -791,6 +765,11 @@ The sign of X.
 
 #### `NEGATE` <sup><sub>[FUNCTION]</sub></sup><a name="NEGATE"></a>
 `∀ :A. NUM :A ⇒ (:A → :A)`
+
+***
+
+#### `INTEGER->STRING` <sup><sub>[FUNCTION]</sub></sup><a name="INTEGER->STRING"></a>
+`(INTEGER → STRING)`
 
 ***
 
@@ -1356,14 +1335,6 @@ A function that always returns its first argument
 
 ***
 
-#### `ERROR` <sup><sub>[FUNCTION]</sub></sup><a name="ERROR"></a>
-`∀ :A. (STRING → :A)`
-
-Signal an error by calling CL:ERROR
-
-
-***
-
 #### `TRACE` <sup><sub>[FUNCTION]</sub></sup><a name="TRACE"></a>
 `(STRING → UNIT)`
 
@@ -1418,7 +1389,6 @@ Constructors:
 - [`NUM :A`](#NUM) `=>` [`NUM`](#NUM) [`(CELL :A)`](#CELL)
 - [`INTO`](#INTO) [`(CELL :A)`](#CELL) [`:A`](#:A)
 - [`INTO`](#INTO) [`:A`](#:A) [`(CELL :A)`](#CELL)
-- [`SHOW :A`](#SHOW) `=>` [`SHOW`](#SHOW) [`(CELL :A)`](#CELL)
 - [`FUNCTOR`](#FUNCTOR) [`CELL`](#CELL)
 - [`SEMIGROUP :A`](#SEMIGROUP) `=>` [`SEMIGROUP`](#SEMIGROUP) [`(CELL :A)`](#CELL)
 - [`APPLICATIVE`](#APPLICATIVE) [`CELL`](#CELL)
@@ -1919,7 +1889,6 @@ Constructors:
 
 - [`EQ`](#EQ) [`EDGEINDEX`](#EDGEINDEX)
 - [`INTO`](#INTO) [`EDGEINDEX`](#EDGEINDEX) [`INTEGER`](#INTEGER)
-- [`SHOW`](#SHOW) [`EDGEINDEX`](#EDGEINDEX)
 
 </details>
 
@@ -1946,18 +1915,12 @@ Constructors:
 
 - [`EQ`](#EQ) [`NODEINDEX`](#NODEINDEX)
 - [`INTO`](#INTO) [`NODEINDEX`](#NODEINDEX) [`INTEGER`](#INTEGER)
-- [`SHOW`](#SHOW) [`NODEINDEX`](#NODEINDEX)
 
 </details>
 
 ***
 
 ### Functions
-
-#### `GRAPH-VIZ` <sup><sub>[FUNCTION]</sub></sup><a name="GRAPH-VIZ"></a>
-`∀ :A :B. SHOW :A ⇒ ((GRAPH :A :B) → STRING)`
-
-***
 
 #### `MAKE-GRAPH` <sup><sub>[FUNCTION]</sub></sup><a name="MAKE-GRAPH"></a>
 `∀ :A :B. (UNIT → (GRAPH :A :B))`

@@ -48,10 +48,6 @@
   (define (cell-update f cell)
     (cell-write (f (cell-read cell)) cell))
 
-  (define-instance (Show :a => (Show (Cell :a)))
-    (define (show x)
-      (concat-string (concat-string "Cell<" (show (cell-read x))) ">")))
-
   (define-instance (Eq :a => (Eq (Cell :a)))
     (define (== c1 c2)
       (== (cell-read c1) (cell-read c2))))
