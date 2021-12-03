@@ -1,11 +1,6 @@
 (in-package #:coalton-library)
 
 (coalton-toplevel
-  (define-instance (Show Char)
-    (define (show x)
-      (lisp String (x)
-        (cl:string x))))
-
   (define-instance (Eq Char)
     (define (== x y)
       (lisp Boolean (x y) (to-boolean (cl:char= x y)))))

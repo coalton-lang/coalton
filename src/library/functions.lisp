@@ -2,10 +2,6 @@
 
 (coalton-toplevel
 
-  (declare error (String -> :a))
-  (define (error str)
-    "Signal an error by calling CL:ERROR"
-    (lisp :a (str) (cl:error str)))
 
   (declare trace (String -> Unit))
   (define (trace str)

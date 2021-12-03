@@ -368,12 +368,17 @@
 
 (deftest test-seq ()
   (check-coalton-types
-   '((coalton:define (f x)
+   '((coalton:define-class (Show :a))
+
+     (coalton:declare show (Show :a => (:a -> String)))
+     (coalton:define (show x) "not impl")
+
+     (coalton:define (f x)
        (coalton:seq
         (coalton-library:Ok "hello")
         (coalton-library:map (coalton-library:+ 1) (coalton-library:make-list 1 2 3 4))
-        (coalton-library:show x))))
-   '((f . (coalton-library:Show :a => (:a -> String))))))
+        (show x))))
+   '((f . (Show :a => (:a -> String))))))
 
 
 (deftest test-the ()

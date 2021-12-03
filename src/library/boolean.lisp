@@ -11,12 +11,6 @@
   ;; Boolean instances
   ;;
 
-  (define-instance (Show Boolean)
-    (define (show x)
-      (match x
-        ((True) "True")
-        ((False) "False"))))
-
   (define-instance (Eq Boolean)
     (define (== x y)
       (not (/= x y))))
