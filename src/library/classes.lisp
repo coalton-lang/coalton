@@ -23,6 +23,14 @@
     EQ
     GT)
 
+  (define-instance (Eq Ord)
+    (define (== a b)
+     (match (Tuple a b)
+       ((Tuple (LT) (LT)) True)
+       ((Tuple (EQ) (EQ)) True)
+       ((Tuple (GT) (GT)) True)
+       (_                 False))))
+
   (define-class ((Eq :a) => (Ord :a))
     "Types whose values can be ordered."
     (<=> (:a -> :a -> Ord)))
