@@ -588,6 +588,7 @@
    #:zipWith4
    #:zipWith5
    #:zip
+   #:countBy
    #:insert
    #:insertBy
    #:sort

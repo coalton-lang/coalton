@@ -301,6 +301,16 @@
     "Builds a list of tuples with the elements of XS and YS."
     (zipWith Tuple xs ys))
 
+  (declare countBy ((:a -> Boolean) -> (List :a) -> Integer))
+  (define (countBy f things)
+    "Count the number of items in THINGS that satisfy the predicate F."
+    (fold (fn (x sum)
+            (if (f x)
+                (+ 1 sum)
+                sum))
+          0
+          things))
+
   (declare insert (Ord :a => (:a -> (List :a) -> (List :a))))
   (define (insert e ls)
     "Inserts an element into a list at the first place it is less than or equal to the next element."
