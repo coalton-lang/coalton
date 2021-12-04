@@ -310,127 +310,128 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
 
       (validate-bindings-for-codegen typed-bindings)
 
-      (values
-       (loop :for (name . node) :in typed-bindings
-             :collect (cons name (rewrite-recursive-call
-                                  (apply-substitution subs node)
-                                  name
-                                  (lookup-value-type env name))))
-       preds
-       env
-       subs
-       sccs))))
+      ;;
+      ;; Binding groups are typechecked before predicates are
+      ;; resolved. Once substitutions are applied the typed nodes in
+      ;; an scc will have the correct type minus predicates. The
+      ;; following rewrite pass will update the typed-nodes in a
+      ;; binding group with those missing predicates.
+      ;;
+      (let ((bindings (mapcar
+                       (lambda (binding)
+                         (cons (car binding) (lookup-value-type env (car binding))))
+                       typed-bindings)))
+        (values
+         (loop :for (name . node) :in typed-bindings
+               :collect (cons name
+                              (rewrite-recursive-calls
+                               (apply-substitution subs node)
+                               bindings))) 
+         preds
+         env
+         subs
+         sccs)))))
 
-(defgeneric rewrite-recursive-call (node name type)
-  (:method ((node typed-node-literal) name type)
+(defgeneric rewrite-recursive-calls (node bindings)
+  (:method ((node typed-node-literal) bindings)
     (declare (type typed-node node)
-             (type symbol name)
-             (type ty-scheme type)
-             (ignore name type))
+             (type scheme-binding-list bindings)
+             (ignore bindings))
     node)
 
-  (:method ((node typed-node-variable) name type)
+  (:method ((node typed-node-variable) bindings)
     (declare (type typed-node node)
-             (type symbol name)
-             (type ty-scheme type))
-    (if (not (equalp name (typed-node-variable-name node)))
-        node
-        (progn
-          (let* ((node-type (qualified-ty-type (fresh-inst (typed-node-type node))))
-                 (new-type (fresh-inst type))
-                 (new-type-unqualified (qualified-ty-type new-type))
-                 (subs (match new-type-unqualified node-type))
-                 (new-type (to-scheme (apply-substitution subs new-type))))
-            (replace-node-type node new-type)))))
+             (type scheme-binding-list bindings))
+    (let* ((name (typed-node-variable-name node))
+           (binding (find name bindings :key #'car)))
+      (unless binding
+        (return-from rewrite-recursive-calls node))
+      (let* ((node-type (qualified-ty-type (fresh-inst (typed-node-type node))))
+             (new-type (fresh-inst (cdr binding)))
+             (new-type-unqualified (qualified-ty-type new-type))
+             (subs (match new-type-unqualified node-type))
+             (new-type (to-scheme (apply-substitution subs new-type))))
+        (replace-node-type node new-type))))
 
-  (:method ((node typed-node-application) name type)
+  (:method ((node typed-node-application) bindings)
     (declare (type typed-node node)
-             (type symbol name)
-             (type ty-scheme type))
+             (type scheme-binding-list bindings))
     (typed-node-application
      (typed-node-type node)
      (typed-node-unparsed node)
-     (rewrite-recursive-call
+     (rewrite-recursive-calls
       (typed-node-application-rator node)
-      name
-      type)
+      bindings)
      (mapcar
       (lambda (node)
-        (rewrite-recursive-call node name type))
+        (rewrite-recursive-calls node bindings))
       (typed-node-application-rands node))))
 
-  (:method ((node typed-node-abstraction) name type)
+  (:method ((node typed-node-abstraction) bindings)
     (declare (type typed-node node)
-             (type symbol name)
-             (type ty-scheme type))
+             (type scheme-binding-list bindings))
     (typed-node-abstraction
      (typed-node-type node)
      (typed-node-unparsed node)
      (typed-node-abstraction-vars node)
-     (rewrite-recursive-call (typed-node-abstraction-subexpr node) name type)
+     (rewrite-recursive-calls (typed-node-abstraction-subexpr node) bindings)
      (typed-node-abstraction-name-map node)))
 
-  (:method ((node typed-node-let) name type)
+  (:method ((node typed-node-let) bindings)
     (declare (type typed-node node)
-             (type symbol name)
-             (type ty-scheme type))
+             (type scheme-binding-list bindings))
 
     (typed-node-let
      (typed-node-type node)
      (typed-node-unparsed node)
-     (loop :for (name_ . node) :in (typed-node-let-bindings node)
+     (loop :for (name . node) :in (typed-node-let-bindings node)
            :collect (cons
-                     name_
-                     (rewrite-recursive-call node name type)))
-     (rewrite-recursive-call (typed-node-let-subexpr node) name type)
+                     name
+                     (rewrite-recursive-calls node bindings)))
+     (rewrite-recursive-calls (typed-node-let-subexpr node) bindings)
      (typed-node-let-sorted-bindings node)
      (typed-node-let-dynamic-extent-bindings node)
      (typed-node-let-name-map node)))
 
-  (:method ((node typed-node-lisp) name type)
+  (:method ((node typed-node-lisp) bindings)
     (declare (type typed-node node)
-             (type symbol name)
-             (type ty-scheme type)
-             (ignore name type))
+             (type scheme-binding-list bindings)
+             (ignore bindings))
     node)
 
-  (:method ((branch typed-match-branch) name type)
+  (:method ((branch typed-match-branch) bindings)
     (declare (type typed-match-branch branch)
-             (type symbol name)
-             (type ty-scheme type))
+             (type scheme-binding-list bindings))
     (typed-match-branch
      (typed-match-branch-unparsed branch)
      (typed-match-branch-pattern branch)
-     (rewrite-recursive-call
+     (rewrite-recursive-calls
       (typed-match-branch-subexpr branch)
-      name
-      type)
+      bindings)
      (typed-match-branch-bindings branch)
      (typed-match-branch-name-map branch)))
 
-  (:method ((node typed-node-match) name type)
+  (:method ((node typed-node-match) bindings)
     (declare (type typed-node node)
-             (type symbol name)
-             (type ty-scheme type))
+             (type scheme-binding-list bindings))
     (typed-node-match
      (typed-node-type node)
      (typed-node-unparsed node)
-     (rewrite-recursive-call (typed-node-match-expr node) name type)
+     (rewrite-recursive-calls (typed-node-match-expr node) bindings)
      (mapcar
       (lambda (branch)
-        (rewrite-recursive-call branch name type))
+        (rewrite-recursive-calls branch bindings))
       (typed-node-match-branches node))))
 
-  (:method ((node typed-node-seq) name type)
+  (:method ((node typed-node-seq) bindings)
     (declare (type typed-node node)
-             (type symbol name)
-             (type ty-scheme type))
+             (type scheme-binding-list bindings))
     (typed-node-seq
      (typed-node-type node)
      (typed-node-unparsed node)
      (mapcar
       (lambda (node)
-        (rewrite-recursive-call node name type))
+        (rewrite-recursive-calls node bindings))
       (typed-node-seq-subnodes node)))))
 
 (defun validate-bindings-for-codegen (bindings)
@@ -459,8 +460,15 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                      (derive-binding-type name tvar expr env subs name-map)
                    (setf subs new-subs)
                    (setf preds (append preds binding-preds))
-                   typed-node))))
-    (values typed-nodes preds subs)))
+                   typed-node)))
+         (bindings (mapcar
+                    (lambda (name)
+                      (cons name (lookup-value-type env name)))
+                    names)))
+    (values
+     typed-nodes
+     preds
+     subs)))
 
 (defun derive-impls-type (bindings env subs name-map &key (disable-monomorphism-restriction nil))
   (declare (type binding-list bindings)
