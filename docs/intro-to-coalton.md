@@ -333,14 +333,6 @@ The Boolean operators `and` and `or` (of `coalton-library`) are actually variadi
 
 In this case, `really-expensive` will never get called due to short-circuiting. Also note that both `and` and `or` can take any number of arguments, including zero.
 
-Coalton also has `unless` and `when` (of `coalton-library`) which work similary to their definitions in Lisp. We recommend only using these operators for conditionalizing stateful operations.
-
-```lisp
-(coalton-toplevel
-  (define (f x)
-    (when (== x 5)
-      (error "I only want the number 5"))))
-```
 
 ## `COALTON-LIBRARY:PROGN`
 
@@ -366,6 +358,28 @@ Coalton's `progn` can have flattened `let` syntax.
       (let x_ = (show x))
       (let y_ = (show y))
       (concat-string x_ y_))))
+```
+
+## Unless and When
+
+Coalton also has `unless` and `when` (of `coalton-library`) which work similary to their definitions in Lisp. We recommend only using these operators for conditionalizing stateful operations.
+
+```lisp
+(coalton-toplevel
+  (define (f x)
+    (when (== x 5)
+      (error "I only want the number 5"))))
+```
+
+Unless and when both form implicit progn blocks.
+
+```lisp
+(coalton-toplevel
+  (define (f b)
+    (when b
+      (let x = 5)
+      (let y = 7)
+      (traceObject "sum" (+ x y)))))
 ```
 
 ## Typeclasses
