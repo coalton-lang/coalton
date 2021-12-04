@@ -486,3 +486,9 @@ The following functions all take an optional package parameter
 * `print-value-db` - Print the type of every toplevel value
 * `print-class-db` - Print every class and their methods
 * `print-instance-db` - Print the instances of every class
+
+
+## Coalton quirks
+
+- Coalton uses `True` (not `t`).
+- For testing equality, Coalton uses double-equals, `==`.
