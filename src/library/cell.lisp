@@ -5,6 +5,10 @@
 (cl:defstruct cell-internal
   (inner (cl:error "") :type cl:t))
 
+(cl:defmethod cl:print-object ((self cell-internal) stream)
+  (cl:format stream "~A" (cell-internal-inner self))
+  self)
+
 #+sbcl
 (cl:declaim (sb-ext:freeze-type cell-internal))
 
