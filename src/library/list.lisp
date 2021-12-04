@@ -415,6 +415,13 @@
            (any f xs)))
       ((Nil) False)))
 
+  (declare split (Char -> String -> (List String)))
+  (define (split c str)
+    (lisp (List String) (c str)
+      (cl:let ((split-chars (cl:list c)))
+        (cl:declare (cl:dynamic-extent split-chars))
+        (uiop:split-string str :separator split-chars))))
+
   ;;
   ;; List instances
   ;;

@@ -572,7 +572,8 @@
    #:sum
    #:product
    #:all
-   #:any)
+   #:any
+   #:split)
   ;; Tuple
   (:export
    #:fst
