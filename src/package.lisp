@@ -524,6 +524,8 @@
   (:export
    #:head
    #:tail
+   #:last
+   #:init
    #:null
    #:singleton
    #:repeat

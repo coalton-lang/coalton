@@ -22,7 +22,18 @@
       ((Cons _ xs) xs)
       ((Nil) Nil)))
 
+  (declare last ((List :a) -> (Optional :a)))
+  (define (last l)
+    "Returns the last element of a list."
+    (match l
+      ((Cons x (Nil)) (Some x))
+      ((Cons _ xs) (last xs))
       ((Nil) None)))
+
+  (declare init ((List :a) -> (List :a)))
+  (define (init l)
+    "Returns every element except the last in a list."
+    (reverse (tail (reverse l))))
 
   (declare null ((List :a) -> Boolean))
   (define (null xs)
