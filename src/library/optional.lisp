@@ -101,8 +101,12 @@
         ((Some _) x)
         (_ y))))
 
-  (define-instance (WithDefault Optional)
+  (define-instance (Unwrappable Optional)
     (define (withDefault default opt)
       (match opt
         ((Some x) x)
-        ((None) default)))))
+        ((None) default)))
+    (define (unwrap opt)
+      (match opt
+        ((Some x) x)
+        ((None) (error "unexpected None in unwrap"))))))
