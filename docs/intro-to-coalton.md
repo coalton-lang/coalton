@@ -500,7 +500,11 @@ The following functions all take an optional package parameter
 * `print-instance-db` - Print the instances of every class
 
 
-## Coalton quirks
+## Quirks and Differences from Common Lisp
 
-- Coalton uses `True` (not `t`).
-- For testing equality, Coalton uses double-equals, `==`.
+* Coalton uses `True` (not `t`).  As such, `t` may be used as an ordinary variable name.
+* For testing equality, Coalton uses double-equals, `==`.
+* Lists in Coalton must be homogeneous.
+* To denote anonymous functions, Coalton uses `fn` (*not* `lambda`).
+* Numerical operators like `+` only take 2 arguments.
+* Negation is done with `negate`.  The form `(- x)` is a curried function equivalent to `(fn (z) (- x z))`.
