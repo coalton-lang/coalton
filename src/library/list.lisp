@@ -161,12 +161,12 @@
   (declare concat ((List (List :a)) -> (List :a)))
   (define (concat xs)
     "Appends a list of lists together into a single new list."
-    (fold append Nil xs))
+    (concatMap (fn (x) x) xs))
 
   (declare concatMap ((:a -> (List :b)) -> (List :a) -> (List :b)))
   (define (concatMap f xs)
     "Apply F to each element in XS and concatenate the results."
-    (fold (fn (a b) (append (f a) b)) Nil xs))
+    (fold (fn (a b) (append b (f a))) Nil xs))
 
   (declare member (Eq :a => (:a -> (List :a) -> Boolean)))
   (define (member e xs)
