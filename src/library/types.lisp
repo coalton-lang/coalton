@@ -4,14 +4,57 @@
 
   (define-type Unit Unit)
 
+  (declare boolean-not (Boolean -> Boolean))
+  (define (boolean-not x)
+    "Is X False?"
+    (match x
+      ((True) False)
+      ((False) True)))
+
+  (declare boolean-or (Boolean -> Boolean -> Boolean))
+  (define (boolean-or x y)
+    "Is X or Y True? Note that this is a *function* which means both X and Y will be evaluated. Use the OR macro for short-circuiting behavior."
+    (match x
+      ((True) True)
+      ((False) y)))
+
+  (declare boolean-and (Boolean -> Boolean -> Boolean))
+  (define (boolean-and x y)
+    "Are X and Y True? Note that this is a *function* which means both X and Y will be evaluated. Use the AND macro for short-circuiting behavior."
+    (match x
+      ((True) y)
+      ((False) False)))
+
+  (declare boolean-xor (Boolean -> Boolean -> Boolean))
+  (define (boolean-xor x y)
+    "Are X or Y True, but not both?"
+    (match x
+      ((True) (boolean-not y))
+      ((False) y)))
+
+  (define not
+    "Synonym for BOOLEAN-NOT."
+    boolean-not)
+
+  (define xor
+    "Synonym for BOOLEAN-XOR."
+    boolean-xor)
+
   ;; Boolean is an early type
   (define True (lisp Boolean ()  cl:t))
   (define False (lisp Boolean ()  cl:nil))
 
-  (define-type (List :a)
-    "A list in singly-linked representation."
-    (Cons :a (List :a))
-    Nil)
+
+  ;; List is an early type
+  (declare Cons (:a -> (List :a) -> (List :a)))
+  (define (Cons x xs)
+    (lisp (List :a) (x xs)
+      (cl:cons x xs)))
+
+  (declare Nil (List :a))
+  (define Nil
+    (lisp (List :a) ()
+      cl:nil))
 
   (define-type (Tuple :a :b)
     "A heterogeneous collection of items."

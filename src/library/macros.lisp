@@ -5,18 +5,18 @@
      ((True) ,then)
      ((False) ,else)))
 
-(cl:defmacro when (expr then)
+(cl:defmacro when (expr cl:&rest then)
   `(if ,expr
-       (seq
-        ,then
+       (progn
+        ,@then
         Unit)
        Unit))
 
-(cl:defmacro unless (expr then)
+(cl:defmacro unless (expr cl:&rest then)
   `(if ,expr
        Unit
-       (seq
-        ,then
+       (progn
+        ,@then
         Unit)))
 
 (cl:defmacro and (cl:&rest exprs)
@@ -118,9 +118,6 @@ to
                             `(let ((,(cl:second form) ,(cl:fourth form)))
                                ,(process (cl:cdr forms))))
 
-                           ((cl:eql 'coalton:let (cl:first form))
-                            (cl:error "Invalid let form in do expression"))
-
                            (;; Otherwise if we are a binding we can use >>=
                             (cl:and
                              (cl:= 3 (cl:length form))
@@ -166,13 +163,7 @@ to
                                       (coalton:let ((,(cl:second form) ,(cl:fourth form)))
                                         ,(process (cl:nthcdr (cl:+ 1 (cl:length before-let)) forms)))))))
 
-                               ((cl:and
-                                 (cl:listp form)
-                                 (cl:eql 'coalton:let (cl:first form)))
-                                (cl:error "Invalid let form in progn expression"))
-
-                               (cl:t (cl:push form before-let)))
-                             ))
+                               (cl:t (cl:push form before-let)))))
 
                          ;; There was never a let generate a simple seq
                          `(coalton:seq

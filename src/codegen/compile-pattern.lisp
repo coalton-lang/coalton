@@ -30,6 +30,16 @@
              (coalton-impl::coalton-bug "Unexpected number of fields in newtype pattern.~%    Expected: 1~%    Received: ~A~%"
                                         (length (pattern-constructor-patterns pattern))))
            (compile-pattern (first (pattern-constructor-patterns pattern)) env)))
+
+        ((eql (pattern-constructor-name pattern) 'coalton:Cons)
+         `(cl:cons
+           ,(compile-pattern (first (pattern-constructor-patterns pattern)) env)
+           ,(compile-pattern (second (pattern-constructor-patterns pattern)) env)))
+
+        ((eql (pattern-constructor-name pattern) 'coalton:Nil)
+         'cl:nil)
+
+
         (t
          (let ((fields (loop :for field :in (pattern-constructor-patterns pattern)
                              :for i :from 0

@@ -4,37 +4,6 @@
 
 ### Types
 
-#### `LIST :A` <sup><sub>[TYPE]</sub></sup><a name="LIST"></a>
-- `(CONS :A (LIST :A))`
-- `NIL`
-
-A list in singly-linked representation.
-
-Constructors:
-- `CONS :: (:A → (LIST :A) → (LIST :A))`
-- `NIL :: (LIST :A)`
-
-<details>
-<summary>Instances</summary>
-
-- [`EQ :A`](#EQ) `=>` [`EQ`](#EQ) [`(LIST :A)`](#LIST)
-- [`ISO`](#ISO) [`(VECTOR :A)`](#VECTOR) [`(LIST :A)`](#LIST)
-- [`ISO`](#ISO) [`(LIST CHAR)`](#LIST) [`STRING`](#STRING)
-- [`INTO`](#INTO) [`(VECTOR :A)`](#VECTOR) [`(LIST :A)`](#LIST)
-- [`INTO`](#INTO) [`(LIST :A)`](#LIST) [`(VECTOR :A)`](#VECTOR)
-- [`INTO`](#INTO) [`(LIST CHAR)`](#LIST) [`STRING`](#STRING)
-- [`INTO`](#INTO) [`STRING`](#STRING) [`(LIST CHAR)`](#LIST)
-- [`MONAD`](#MONAD) [`LIST`](#LIST)
-- [`MONOID`](#MONOID) [`(LIST :A)`](#LIST)
-- [`FUNCTOR`](#FUNCTOR) [`LIST`](#LIST)
-- [`SEMIGROUP`](#SEMIGROUP) [`(LIST :A)`](#LIST)
-- [`ALTERNATIVE`](#ALTERNATIVE) [`LIST`](#LIST)
-- [`APPLICATIVE`](#APPLICATIVE) [`LIST`](#LIST)
-
-</details>
-
-***
-
 #### `TUPLE :A :B` <sup><sub>[TYPE]</sub></sup><a name="TUPLE"></a>
 - `(TUPLE :A :B)`
 
@@ -71,8 +40,8 @@ Constructors:
 - [`EQ :A`](#EQ) [`EQ :B`](#EQ) `=>` [`EQ`](#EQ) [`(RESULT :A :B)`](#RESULT)
 - [`ISO`](#ISO) [`(RESULT UNIT :A)`](#RESULT) [`(OPTIONAL :A)`](#OPTIONAL)
 - [`ORD :A`](#ORD) [`ORD :B`](#ORD) `=>` [`ORD`](#ORD) [`(RESULT :A :B)`](#RESULT)
-- [`INTO`](#INTO) [`(RESULT :A :B)`](#RESULT) [`(OPTIONAL :B)`](#OPTIONAL)
 - [`INTO`](#INTO) [`(OPTIONAL :A)`](#OPTIONAL) [`(RESULT UNIT :A)`](#RESULT)
+- [`INTO`](#INTO) [`(RESULT :A :B)`](#RESULT) [`(OPTIONAL :B)`](#OPTIONAL)
 - [`MONAD`](#MONAD) [`(RESULT :A)`](#RESULT)
 - [`MONOID :A`](#MONOID) `=>` [`MONOID`](#MONOID) [`(RESULT :B :A)`](#RESULT)
 - [`FUNCTOR`](#FUNCTOR) [`(RESULT :A)`](#RESULT)
@@ -143,7 +112,6 @@ Constructors:
 - [`EQ`](#EQ) [`FRACTION`](#FRACTION)
 - [`NUM`](#NUM) [`FRACTION`](#FRACTION)
 - [`ORD`](#ORD) [`FRACTION`](#FRACTION)
-- [`SHOW`](#SHOW) [`FRACTION`](#FRACTION)
 - [`DIVIDABLE`](#DIVIDABLE) [`INTEGER`](#INTEGER) [`FRACTION`](#FRACTION)
 
 </details>
@@ -166,9 +134,8 @@ Constructors:
 - [`EQ :A`](#EQ) `=>` [`EQ`](#EQ) [`(OPTIONAL :A)`](#OPTIONAL)
 - [`ISO`](#ISO) [`(RESULT UNIT :A)`](#RESULT) [`(OPTIONAL :A)`](#OPTIONAL)
 - [`ORD :A`](#ORD) `=>` [`ORD`](#ORD) [`(OPTIONAL :A)`](#OPTIONAL)
-- [`INTO`](#INTO) [`(RESULT :A :B)`](#RESULT) [`(OPTIONAL :B)`](#OPTIONAL)
 - [`INTO`](#INTO) [`(OPTIONAL :A)`](#OPTIONAL) [`(RESULT UNIT :A)`](#RESULT)
-- [`SHOW :A`](#SHOW) `=>` [`SHOW`](#SHOW) [`(OPTIONAL :A)`](#OPTIONAL)
+- [`INTO`](#INTO) [`(RESULT :A :B)`](#RESULT) [`(OPTIONAL :B)`](#OPTIONAL)
 - [`MONAD`](#MONAD) [`OPTIONAL`](#OPTIONAL)
 - [`MONOID :A`](#MONOID) `=>` [`MONOID`](#MONOID) [`(OPTIONAL :A)`](#OPTIONAL)
 - [`FUNCTOR`](#FUNCTOR) [`OPTIONAL`](#OPTIONAL)
@@ -181,6 +148,57 @@ Constructors:
 </details>
 
 ***
+
+### Functions
+
+#### `NOT` <sup><sub>[FUNCTION]</sub></sup><a name="NOT"></a>
+`(BOOLEAN → BOOLEAN)`
+
+Synonym for BOOLEAN-NOT.
+
+
+***
+
+#### `XOR` <sup><sub>[FUNCTION]</sub></sup><a name="XOR"></a>
+`(BOOLEAN → BOOLEAN → BOOLEAN)`
+
+Synonym for BOOLEAN-XOR.
+
+
+***
+
+#### `BOOLEAN-OR` <sup><sub>[FUNCTION]</sub></sup><a name="BOOLEAN-OR"></a>
+`(BOOLEAN → BOOLEAN → BOOLEAN)`
+
+Is X or Y True? Note that this is a *function* which means both X and Y will be evaluated. Use the OR macro for short-circuiting behavior.
+
+
+***
+
+#### `BOOLEAN-AND` <sup><sub>[FUNCTION]</sub></sup><a name="BOOLEAN-AND"></a>
+`(BOOLEAN → BOOLEAN → BOOLEAN)`
+
+Are X and Y True? Note that this is a *function* which means both X and Y will be evaluated. Use the AND macro for short-circuiting behavior.
+
+
+***
+
+#### `BOOLEAN-NOT` <sup><sub>[FUNCTION]</sub></sup><a name="BOOLEAN-NOT"></a>
+`(BOOLEAN → BOOLEAN)`
+
+Is X False?
+
+
+***
+
+#### `BOOLEAN-XOR` <sup><sub>[FUNCTION]</sub></sup><a name="BOOLEAN-XOR"></a>
+`(BOOLEAN → BOOLEAN → BOOLEAN)`
+
+Are X or Y True, but not both?
+
+
+***
+
 
 ## File: [classes.lisp](../src/library/classes.lisp)
 
@@ -207,7 +225,6 @@ Types which have equality defined.
 
 Methods:
 - `== :: (:A → :A → BOOLEAN)`
-- `/= :: (:A → :A → BOOLEAN)`
 
 <details>
 <summary>Instances</summary>
@@ -243,7 +260,7 @@ Methods:
 ***
 
 #### `NUM` <sup><sub>[CLASS]</sub></sup><a name="NUM"></a>
-[`EQ :A`](#EQ) [`SHOW :A`](#SHOW) `=>` [`NUM`](#NUM) [`:A`](#:A)
+[`EQ :A`](#EQ) `=>` [`NUM`](#NUM) [`:A`](#:A)
 
 Types which have numeric operations defined.
 
@@ -258,14 +275,14 @@ Methods:
 
 - [`NUM :A`](#NUM) `=>` [`NUM`](#NUM) [`(CELL :A)`](#CELL)
 - [`NUM`](#NUM) [`FRACTION`](#FRACTION)
-- [`NUM`](#NUM) [`INTEGER`](#INTEGER)
 - [`NUM`](#NUM) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
 - [`NUM`](#NUM) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
+- [`NUM`](#NUM) [`INTEGER`](#INTEGER)
 - [`NUM`](#NUM) [`U64`](#U64)
 - [`NUM`](#NUM) [`U32`](#U32)
 - [`NUM`](#NUM) [`U8`](#U8)
-- [`NUM`](#NUM) [`I32`](#I32)
 - [`NUM`](#NUM) [`I64`](#I64)
+- [`NUM`](#NUM) [`I32`](#I32)
 
 </details>
 
@@ -323,62 +340,29 @@ Methods:
 - [`INTO`](#INTO) [`(LIST :A)`](#LIST) [`(VECTOR :A)`](#VECTOR)
 - [`INTO`](#INTO) [`(CELL :A)`](#CELL) [`:A`](#:A)
 - [`INTO`](#INTO) [`:A`](#:A) [`(CELL :A)`](#CELL)
-- [`INTO`](#INTO) [`(RESULT :A :B)`](#RESULT) [`(OPTIONAL :B)`](#OPTIONAL)
 - [`INTO`](#INTO) [`(OPTIONAL :A)`](#OPTIONAL) [`(RESULT UNIT :A)`](#RESULT)
+- [`INTO`](#INTO) [`(RESULT :A :B)`](#RESULT) [`(OPTIONAL :B)`](#OPTIONAL)
 - [`INTO`](#INTO) [`(TUPLE :A :B)`](#TUPLE) [`(TUPLE :B :A)`](#TUPLE)
 - [`INTO`](#INTO) [`(LIST CHAR)`](#LIST) [`STRING`](#STRING)
 - [`INTO`](#INTO) [`STRING`](#STRING) [`(LIST CHAR)`](#LIST)
 - [`INTO`](#INTO) [`INTEGER`](#INTEGER) [`STRING`](#STRING)
-- [`INTO`](#INTO) [`U64`](#U64) [`INTEGER`](#INTEGER)
-- [`INTO`](#INTO) [`U64`](#U64) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
-- [`INTO`](#INTO) [`INTEGER`](#INTEGER) [`U64`](#U64)
 - [`INTO`](#INTO) [`U64`](#U64) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
-- [`INTO`](#INTO) [`INTEGER`](#INTEGER) [`U32`](#U32)
-- [`INTO`](#INTO) [`U32`](#U32) [`INTEGER`](#INTEGER)
+- [`INTO`](#INTO) [`U64`](#U64) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
+- [`INTO`](#INTO) [`U64`](#U64) [`INTEGER`](#INTEGER)
+- [`INTO`](#INTO) [`INTEGER`](#INTEGER) [`U64`](#U64)
 - [`INTO`](#INTO) [`U32`](#U32) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
 - [`INTO`](#INTO) [`U32`](#U32) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
+- [`INTO`](#INTO) [`U32`](#U32) [`INTEGER`](#INTEGER)
+- [`INTO`](#INTO) [`INTEGER`](#INTEGER) [`U32`](#U32)
 - [`INTO`](#INTO) [`U8`](#U8) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
-- [`INTO`](#INTO) [`INTEGER`](#INTEGER) [`U8`](#U8)
 - [`INTO`](#INTO) [`U8`](#U8) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
 - [`INTO`](#INTO) [`U8`](#U8) [`INTEGER`](#INTEGER)
+- [`INTO`](#INTO) [`INTEGER`](#INTEGER) [`U8`](#U8)
 - [`INTO`](#INTO) [`I64`](#I64) [`INTEGER`](#INTEGER)
 - [`INTO`](#INTO) [`INTEGER`](#INTEGER) [`I64`](#I64)
 - [`INTO`](#INTO) [`I32`](#I32) [`INTEGER`](#INTEGER)
 - [`INTO`](#INTO) [`INTEGER`](#INTEGER) [`I32`](#I32)
 - [`INTO`](#INTO) [`:A`](#:A) [`:A`](#:A)
-
-</details>
-
-
-***
-
-#### `SHOW` <sup><sub>[CLASS]</sub></sup><a name="SHOW"></a>
-[`SHOW`](#SHOW) [`:A`](#:A)
-
-Types which can be shown in string representation.
-
-Methods:
-- `SHOW :: (:A → STRING)`
-
-<details>
-<summary>Instances</summary>
-
-- [`SHOW`](#SHOW) [`NODEINDEX`](#NODEINDEX)
-- [`SHOW`](#SHOW) [`EDGEINDEX`](#EDGEINDEX)
-- [`SHOW :A`](#SHOW) `=>` [`SHOW`](#SHOW) [`(CELL :A)`](#CELL)
-- [`SHOW :A`](#SHOW) `=>` [`SHOW`](#SHOW) [`(OPTIONAL :A)`](#OPTIONAL)
-- [`SHOW`](#SHOW) [`STRING`](#STRING)
-- [`SHOW`](#SHOW) [`CHAR`](#CHAR)
-- [`SHOW`](#SHOW) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
-- [`SHOW`](#SHOW) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
-- [`SHOW`](#SHOW) [`INTEGER`](#INTEGER)
-- [`SHOW`](#SHOW) [`U64`](#U64)
-- [`SHOW`](#SHOW) [`U32`](#U32)
-- [`SHOW`](#SHOW) [`U8`](#U8)
-- [`SHOW`](#SHOW) [`I64`](#I64)
-- [`SHOW`](#SHOW) [`I32`](#I32)
-- [`SHOW`](#SHOW) [`FRACTION`](#FRACTION)
-- [`SHOW`](#SHOW) [`BOOLEAN`](#BOOLEAN)
 
 </details>
 
@@ -495,9 +479,9 @@ Methods:
 <details>
 <summary>Instances</summary>
 
-- [`DIVIDABLE`](#DIVIDABLE) [`SINGLE-FLOAT`](#SINGLE-FLOAT) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
-- [`DIVIDABLE`](#DIVIDABLE) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
 - [`DIVIDABLE`](#DIVIDABLE) [`INTEGER`](#INTEGER) [`FRACTION`](#FRACTION)
+- [`DIVIDABLE`](#DIVIDABLE) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
+- [`DIVIDABLE`](#DIVIDABLE) [`SINGLE-FLOAT`](#SINGLE-FLOAT) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
 
 </details>
 
@@ -584,6 +568,11 @@ Is X greater than Y?
 
 ***
 
+#### `/=` <sup><sub>[FUNCTION]</sub></sup><a name="/="></a>
+`∀ :A. EQ :A ⇒ (:A → :A → BOOLEAN)`
+
+***
+
 #### `<=` <sup><sub>[FUNCTION]</sub></sup><a name="<="></a>
 `∀ :A. ORD :A ⇒ (:A → :A → BOOLEAN)`
 
@@ -617,62 +606,17 @@ Returns the lesser element of X and Y.
 ***
 
 
-## File: [boolean.lisp](../src/library/boolean.lisp)
-
-### Functions
-
-#### `NOT` <sup><sub>[FUNCTION]</sub></sup><a name="NOT"></a>
-`(BOOLEAN → BOOLEAN)`
-
-Synonym for BOOLEAN-NOT.
-
-
-***
-
-#### `XOR` <sup><sub>[FUNCTION]</sub></sup><a name="XOR"></a>
-`(BOOLEAN → BOOLEAN → BOOLEAN)`
-
-Synonym for BOOLEAN-XOR.
-
-
-***
-
-#### `BOOLEAN-OR` <sup><sub>[FUNCTION]</sub></sup><a name="BOOLEAN-OR"></a>
-`(BOOLEAN → BOOLEAN → BOOLEAN)`
-
-Is X or Y True? Note that this is a *function* which means both X and Y will be evaluated. Use the OR macro for short-circuiting behavior.
-
-
-***
-
-#### `BOOLEAN-AND` <sup><sub>[FUNCTION]</sub></sup><a name="BOOLEAN-AND"></a>
-`(BOOLEAN → BOOLEAN → BOOLEAN)`
-
-Are X and Y True? Note that this is a *function* which means both X and Y will be evaluated. Use the AND macro for short-circuiting behavior.
-
-
-***
-
-#### `BOOLEAN-NOT` <sup><sub>[FUNCTION]</sub></sup><a name="BOOLEAN-NOT"></a>
-`(BOOLEAN → BOOLEAN)`
-
-Is X False?
-
-
-***
-
-#### `BOOLEAN-XOR` <sup><sub>[FUNCTION]</sub></sup><a name="BOOLEAN-XOR"></a>
-`(BOOLEAN → BOOLEAN → BOOLEAN)`
-
-Are X or Y True, but not both?
-
-
-***
-
-
 ## File: [builtin.lisp](../src/library/builtin.lisp)
 
 ### Functions
+
+#### `ERROR` <sup><sub>[FUNCTION]</sub></sup><a name="ERROR"></a>
+`∀ :A. (STRING → :A)`
+
+Signal an error by calling CL:ERROR
+
+
+***
 
 #### `UNDEFINED` <sup><sub>[FUNCTION]</sub></sup><a name="UNDEFINED"></a>
 `∀ :A :B. (:A → :B)`
@@ -790,6 +734,11 @@ The sign of X.
 
 #### `NEGATE` <sup><sub>[FUNCTION]</sub></sup><a name="NEGATE"></a>
 `∀ :A. NUM :A ⇒ (:A → :A)`
+
+***
+
+#### `INTEGER->STRING` <sup><sub>[FUNCTION]</sub></sup><a name="INTEGER->STRING"></a>
+`(INTEGER → STRING)`
 
 ***
 
@@ -1355,14 +1304,6 @@ A function that always returns its first argument
 
 ***
 
-#### `ERROR` <sup><sub>[FUNCTION]</sub></sup><a name="ERROR"></a>
-`∀ :A. (STRING → :A)`
-
-Signal an error by calling CL:ERROR
-
-
-***
-
 #### `TRACE` <sup><sub>[FUNCTION]</sub></sup><a name="TRACE"></a>
 `(STRING → UNIT)`
 
@@ -1417,7 +1358,6 @@ Constructors:
 - [`NUM :A`](#NUM) `=>` [`NUM`](#NUM) [`(CELL :A)`](#CELL)
 - [`INTO`](#INTO) [`(CELL :A)`](#CELL) [`:A`](#:A)
 - [`INTO`](#INTO) [`:A`](#:A) [`(CELL :A)`](#CELL)
-- [`SHOW :A`](#SHOW) `=>` [`SHOW`](#SHOW) [`(CELL :A)`](#CELL)
 - [`FUNCTOR`](#FUNCTOR) [`CELL`](#CELL)
 - [`SEMIGROUP :A`](#SEMIGROUP) `=>` [`SEMIGROUP`](#SEMIGROUP) [`(CELL :A)`](#CELL)
 - [`APPLICATIVE`](#APPLICATIVE) [`CELL`](#CELL)
@@ -1918,7 +1858,6 @@ Constructors:
 
 - [`EQ`](#EQ) [`EDGEINDEX`](#EDGEINDEX)
 - [`INTO`](#INTO) [`EDGEINDEX`](#EDGEINDEX) [`INTEGER`](#INTEGER)
-- [`SHOW`](#SHOW) [`EDGEINDEX`](#EDGEINDEX)
 
 </details>
 
@@ -1945,18 +1884,12 @@ Constructors:
 
 - [`EQ`](#EQ) [`NODEINDEX`](#NODEINDEX)
 - [`INTO`](#INTO) [`NODEINDEX`](#NODEINDEX) [`INTEGER`](#INTEGER)
-- [`SHOW`](#SHOW) [`NODEINDEX`](#NODEINDEX)
 
 </details>
 
 ***
 
 ### Functions
-
-#### `GRAPH-VIZ` <sup><sub>[FUNCTION]</sub></sup><a name="GRAPH-VIZ"></a>
-`∀ :A :B. SHOW :A ⇒ ((GRAPH :A :B) → STRING)`
-
-***
 
 #### `MAKE-GRAPH` <sup><sub>[FUNCTION]</sub></sup><a name="MAKE-GRAPH"></a>
 `∀ :A :B. (UNIT → (GRAPH :A :B))`

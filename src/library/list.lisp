@@ -6,7 +6,7 @@
   ;; Cons Lists
   ;;
 
-  ;; Definition of List is in types.lisp
+  ;; List is an early type
 
   (declare head ((List :a) -> (Optional :a)))
   (define (head l)
@@ -174,12 +174,12 @@
   (declare concat ((List (List :a)) -> (List :a)))
   (define (concat xs)
     "Appends a list of lists together into a single new list."
-    (fold append Nil xs))
+    (concatMap (fn (x) x) xs))
 
   (declare concatMap ((:a -> (List :b)) -> (List :a) -> (List :b)))
   (define (concatMap f xs)
     "Apply F to each element in XS and concatenate the results."
-    (fold (fn (a b) (append (f a) b)) Nil xs))
+    (fold (fn (a b) (append b (f a))) Nil xs))
 
   (declare member (Eq :a => (:a -> (List :a) -> Boolean)))
   (define (member e xs)
@@ -428,6 +428,13 @@
            (any f xs)))
       ((Nil) False)))
 
+  (declare split (Char -> String -> (List String)))
+  (define (split c str)
+    (lisp (List String) (c str)
+      (cl:let ((split-chars (cl:list c)))
+        (cl:declare (cl:dynamic-extent split-chars))
+        (uiop:split-string str :separator split-chars))))
+
   ;;
   ;; List instances
   ;;
@@ -444,9 +451,7 @@
         ((Nil)
          (match b
            ((Nil) True)
-           (_ False)))))
-    (define (/= a b)
-      (not (== a b))))
+           (_ False))))))
 
   (define-instance (Semigroup (List :a))
     (define (<> a b) (append a b)))
@@ -477,14 +482,3 @@
       (concatMap f m))
     (define (>> a b)
       (>>= a (fn (_) b)))))
-
-(cl:defun cl-list-to-coalton (list)
-  (cl:if (cl:null list)
-        Nil
-        (Cons (cl:car list) (cl-list-to-coalton (cl:cdr list)))))
-
-(cl:defun coalton-to-cl-list (list)
-  (cl:loop
-      :for xs := list :then (cl:slot-value xs '_1)
-      :until (cl:typep xs 'List/Nil)
-      :collect (cl:slot-value xs '_0)))

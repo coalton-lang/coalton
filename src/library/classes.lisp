@@ -3,21 +3,16 @@
 (coalton-toplevel
 
   ;;
-  ;; Show
-  ;;
-
-  (define-class (Show :a)
-    "Types which can be shown in string representation."
-    (show (:a -> String)))
-
-  ;;
   ;; Eq
   ;;
 
   (define-class (Eq :a)
     "Types which have equality defined."
-    (== (:a -> :a -> Boolean))
-    (/= (:a -> :a -> Boolean)))
+    (== (:a -> :a -> Boolean)))
+
+  (declare /= (Eq :a => (:a -> :a -> Boolean)))
+  (define (/= a b)
+    (boolean-not (== a b)))
 
   ;;
   ;; Ord
@@ -78,7 +73,7 @@
   ;; Num
   ;;
 
-  (define-class ((Eq :a) (Show :a) => (Num :a))
+  (define-class ((Eq :a) => (Num :a))
     "Types which have numeric operations defined."
     (+ (:a -> :a -> :a))
     (- (:a -> :a -> :a))

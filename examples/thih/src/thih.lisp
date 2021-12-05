@@ -9,17 +9,14 @@
   (define-type Id
     (Id String))
 
-  (define-instance (Show Id)
-      (define (show i)
-        (match i
-          ((Id str) str))))
+  (define (id->string id)
+    (match id
+      ((Id s) s)))
 
   (define-instance (Eq Id)
       (define (== x y)
         (== (get-id x)
-            (get-id y)))
-    (define (/= x y)
-      (not (== x y))))
+            (get-id y))))
 
   (declare get-id (Id -> String))
   (define (get-id x)
@@ -28,7 +25,7 @@
 
   (declare enumId (Integer -> Id))
   (define (enumId n)
-    (Id (concat-string "v" (show n))))
+    (Id (concat-string "v" (integer->string n))))
 
 
   ;;
@@ -47,9 +44,7 @@
                   (Kfun b1 b2))
            (and (== a1 b1)
                 (== a2 b2)))
-          (_ False)))
-    (define (/= k1 k2)
-      (not (== k1 k2))))
+          (_ False))))
 
   ;;
   ;; Types
@@ -70,9 +65,7 @@
            (and (== a1 b1)
                 (== a2 b2)))
           ((Tuple (TGen g1) (TGen g2)) (== g1 g2))
-          (_ False)))
-    (define (/= t1 t2)
-      (not (== t1 t2))))
+          (_ False))))
 
 
   (define-type Tyvar
@@ -83,9 +76,7 @@
         (match (Tuple x y)
           ((Tuple (Tyvar i1 k1) (Tyvar i2 k2))
            (and (== i1 i2)
-                (== k1 k2)))))
-    (define (/= x y)
-      (not (== x y))))
+                (== k1 k2))))))
 
 
   (define-type Tycon
@@ -96,9 +87,7 @@
         (match (Tuple x y)
           ((Tuple (Tycon i1 k1) (Tycon i2 k2))
            (and (== i1 i2)
-                (== k1 k2)))))
-    (define (/= x y)
-      (not (== x y))))
+                (== k1 k2))))))
 
 
   (define tUnit (TCon (Tycon (Id "()") Star)))
@@ -292,9 +281,7 @@
         (match (Tuple x y)
           ((Tuple (Qual xs t1) (Qual ys t2))
            (and (== xs ys)
-                (== t1 t2)))))
-    (define (/= x y)
-      (not (== x y))))
+                (== t1 t2))))))
 
   (define-instance (Types :t => (Types (Qual :t)))
       (define (apply s q)
@@ -316,9 +303,7 @@
         (match (Tuple x y)
           ((Tuple (IsIn id1 t1) (IsIn id2 t2))
            (and (== id1 id2)
-                (== t1 t2)))))
-    (define (/= x y)
-      (not (== x y))))
+                (== t1 t2))))))
 
   (define-instance (Types Pred)
       (define (apply s p)
@@ -599,9 +584,7 @@
           ((Tuple (Forall ks1 q1)
                   (Forall ks2 q2))
            (and (== ks1 ks2)
-                (== q1 q2)))))
-    (define (/= x y)
-      (not (== x y))))
+                (== q1 q2))))))
 
   (define-instance (Types Scheme)
       (define (apply s t)
@@ -641,9 +624,7 @@
       (match (Tuple a b)
         ((Tuple (Assump id-a scheme-a) (Assump id-b scheme-b))
          (and (== id-a id-b)
-              (== scheme-a scheme-b)))))
-    (define (/= a b)
-      (not (== a b))))
+              (== scheme-a scheme-b))))))
 
   (define-instance (Types Assump)
       (define (apply s a)
@@ -659,7 +640,7 @@
   (define (find i xs)
     (match xs
       ((Nil)
-       (fail (concat-string "Unbound identifier: " (show i))))
+       (fail (concat-string "Unbound identifier: " (id->string i))))
       ((Cons (Assump i_ sc) as)
        (if (== i i_)
            (pure sc)

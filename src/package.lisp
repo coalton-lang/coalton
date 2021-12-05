@@ -409,7 +409,8 @@
    #:String
    #:Arrow
    #:Void
-   #:Lisp-Object)
+   #:Lisp-Object
+   #:List #:Cons #:Nil)
   (:export
    #:fn #:λ
    #:match
@@ -490,10 +491,14 @@
    #:TryInto)
   ;; Builtin
   (:export
+   #:undefined
+   #:error)
+  (:export
    #:single-float->integer
    #:double-float->integer
    #:integer->single-float
    #:integer->double-float
+   #:integer->string
    #:negate
    #:abs
    #:ash
@@ -570,8 +575,7 @@
    #:product
    #:all
    #:any
-   #:cl-list-to-coalton
-   #:coalton-to-cl-list)
+   #:split)
   ;; Tuple
   (:export
    #:fst

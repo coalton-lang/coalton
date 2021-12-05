@@ -5,6 +5,10 @@
 (cl:defstruct cell-internal
   (inner (cl:error "") :type cl:t))
 
+(cl:defmethod cl:print-object ((self cell-internal) stream)
+  (cl:format stream "~A" (cell-internal-inner self))
+  self)
+
 #+sbcl
 (cl:declaim (sb-ext:freeze-type cell-internal))
 
@@ -48,15 +52,9 @@
   (define (cell-update f cell)
     (cell-write (f (cell-read cell)) cell))
 
-  (define-instance (Show :a => (Show (Cell :a)))
-    (define (show x)
-      (concat-string (concat-string "Cell<" (show (cell-read x))) ">")))
-
   (define-instance (Eq :a => (Eq (Cell :a)))
     (define (== c1 c2)
-      (== (cell-read c1) (cell-read c2)))
-    (define (/= c1 c2)
-      (not (== c1 c2))))
+      (== (cell-read c1) (cell-read c2))))
 
   (define-instance (Num :a => (Num (Cell :a)))
     (define (+ c1 c2)

@@ -34,20 +34,12 @@
   ;; Optional instances
   ;;
 
-  (define-instance (Show :a => (Show (Optional :a)))
-    (define (show x)
-      (match x
-        ((Some a) (concat-string "Some " (show a)))
-        ((None) "None"))))
-
   (define-instance (Eq :a => (Eq (Optional :a)))
     (define (== x y)
       (match (Tuple x y)
         ((Tuple (Some x) (Some y)) (== x y))
         ((Tuple (None) (None)) True)
-        (_ False)))
-    (define (/= x y)
-      (not (== x y))))
+        (_ False))))
 
   (define-instance (Ord :a => (Ord (Optional :a)))
     (define (<=> x y)

@@ -191,19 +191,7 @@ Numbers implement the `Num` typeclass, which has methods `+`, `-`, `*`, and `fro
 
 ## Lists
 
-Coalton has a list data type defined as
-
-```lisp
-(coalton-toplevel
-  (define-type (List :a)
-    (Cons :a (List :a))
-    Nil))
-```
-
-Coalton lists are not Lisp lists.
-
-
-Coalton also has a syntactic shorthand for constructing lists called `make-list`.
+Coalton uses lisp lists under the hood. Lists can be constructed with `make-list`.
 
 ```lisp
 (coalton-toplevel
@@ -223,6 +211,16 @@ in unification of types (INTEGER → (LIST SINGLE-FLOAT) → :A) and (:B → (LI
 in definition of WUT
 in COALTON-TOPLEVEL
    [Condition of type COALTON-IMPL/TYPECHECKER::COALTON-TYPE-ERROR-CONTEXT]
+```
+
+Lists can also be deconstructed with match
+
+```lisp
+(coalton-toplevel
+  (define (is-empty lst)
+    (match lst
+      ((Cons _ _) "is not empty")
+      ((Nil) "is empty"))))
 ```
 
 ## Static Typing
@@ -333,14 +331,6 @@ The Boolean operators `and` and `or` (of `coalton-library`) are actually variadi
 
 In this case, `really-expensive` will never get called due to short-circuiting. Also note that both `and` and `or` can take any number of arguments, including zero.
 
-Coalton also has `unless` and `when` (of `coalton-library`) which work similary to their definitions in Lisp. We recommend only using these operators for conditionalizing stateful operations.
-
-```lisp
-(coalton-toplevel
-  (define (f x)
-    (when (== x 5)
-      (error "I only want the number 5"))))
-```
 
 ## `COALTON-LIBRARY:PROGN`
 
@@ -366,6 +356,28 @@ Coalton's `progn` can have flattened `let` syntax.
       (let x_ = (show x))
       (let y_ = (show y))
       (concat-string x_ y_))))
+```
+
+## Unless and When
+
+Coalton also has `unless` and `when` (of `coalton-library`) which work similary to their definitions in Lisp. We recommend only using these operators for conditionalizing stateful operations.
+
+```lisp
+(coalton-toplevel
+  (define (f x)
+    (when (== x 5)
+      (error "I only want the number 5"))))
+```
+
+Unless and when both form implicit progn blocks.
+
+```lisp
+(coalton-toplevel
+  (define (f b)
+    (when b
+      (let x = 5)
+      (let y = 7)
+      (traceObject "sum" (+ x y)))))
 ```
 
 ## Typeclasses

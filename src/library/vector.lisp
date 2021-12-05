@@ -238,9 +238,7 @@
                (unless (== e1 e2)
                  (cell-write False out)))
              v1 v2)
-            (cell-read out))))
-    (define (/= v1 v2)
-      (not (== v1 v2))))
+            (cell-read out)))))
 
   (define-instance (Semigroup (Vector :a))
     (define (<> v1 v2)

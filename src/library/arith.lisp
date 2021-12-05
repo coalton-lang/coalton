@@ -22,16 +22,10 @@
 
 (cl:defmacro %define-number-stuff (coalton-type)
   `(coalton-toplevel
-     (define-instance (Show ,coalton-type)
-       (define (show x)
-         (lisp String (x) (cl:prin1-to-string x))))
-
      (define-instance (Eq ,coalton-type)
        (define (== a b)
          (lisp Boolean (a b)
-           (to-boolean (cl:= a b))))
-       (define (/= a b)
-         (not (== a b))))
+           (to-boolean (cl:= a b)))))
 
      (define-instance (Ord ,coalton-type)
        (define (<=> a b)
@@ -172,15 +166,18 @@
       (cl:if (cl:or (float-features:float-infinity-p x)
                     (float-features:float-nan-p x))
              None
-             (Some (cl:round x))))))
+             (Some (cl:round x)))))
+
+  (declare integer->string (Integer -> String))
+  (define (integer->string n)
+    (lisp String (n)
+      (cl:format cl:nil "~A" n))))
 
 (coalton-toplevel
   (define-instance (Eq Fraction)
     (define (== p q)
       (and (== (numerator p) (numerator q))
-           (== (denominator p) (denominator q))))
-    (define (/= p q)
-      (not (== p q))))
+           (== (denominator p) (denominator q)))))
 
   (define-instance (Ord Fraction)
     (define (<=> p q)

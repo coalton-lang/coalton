@@ -11,9 +11,4 @@
   (define (denominator q)
     "The denominator of a fraction Q."
     (match q
-      ((%Fraction _ d) d)))
-
-  (define-instance (Show Fraction)
-    (define (show q)
-      (lisp String (q)
-        (cl:format cl:nil "~D/~D" (numerator q) (denominator q))))))
+      ((%Fraction _ d) d))))
