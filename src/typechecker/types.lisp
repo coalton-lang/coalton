@@ -145,6 +145,8 @@
 
 (defvar tArrow (%make-tcon (%make-tycon :name '-> :kind (kfun kstar (kfun kstar kstar)))))
 
+(defvar tList (%make-tcon (%make-tycon :name 'coalton:List :kind (kfun kstar kstar))))
+
 
 (defun apply-type-argument (tcon arg)
   (declare (type (or tcon tapp tvar) tcon)

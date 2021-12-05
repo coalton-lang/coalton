@@ -409,7 +409,8 @@
    #:String
    #:Arrow
    #:Void
-   #:Lisp-Object)
+   #:Lisp-Object
+   #:List #:Cons #:Nil)
   (:export
    #:fn #:λ
    #:match
@@ -571,9 +572,7 @@
    #:sum
    #:product
    #:all
-   #:any
-   #:cl-list-to-coalton
-   #:coalton-to-cl-list)
+   #:any)
   ;; Tuple
   (:export
    #:fst
