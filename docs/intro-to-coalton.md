@@ -492,7 +492,7 @@ COALTON-USER> (kind-of 'Result)
 * -> (* -> *)
 ```
 
-The following functions all take an optional package parameter 
+The following functions all take an optional package parameter
 
 * `print-type-db` - Print every known type
 * `print-value-db` - Print the type of every toplevel value
