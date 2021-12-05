@@ -191,19 +191,7 @@ Numbers implement the `Num` typeclass, which has methods `+`, `-`, `*`, and `fro
 
 ## Lists
 
-Coalton has a list data type defined as
-
-```lisp
-(coalton-toplevel
-  (define-type (List :a)
-    (Cons :a (List :a))
-    Nil))
-```
-
-Coalton lists are not Lisp lists.
-
-
-Coalton also has a syntactic shorthand for constructing lists called `make-list`.
+Coalton uses lisp lists under the hood. Lists can be constructed with `make-list`.
 
 ```lisp
 (coalton-toplevel
@@ -223,6 +211,16 @@ in unification of types (INTEGER → (LIST SINGLE-FLOAT) → :A) and (:B → (LI
 in definition of WUT
 in COALTON-TOPLEVEL
    [Condition of type COALTON-IMPL/TYPECHECKER::COALTON-TYPE-ERROR-CONTEXT]
+```
+
+Lists can also be deconstructed with match
+
+```lisp
+(coalton-toplevel
+  (define (is-empty lst)
+    (match lst
+      ((Cons _ _) "is not empty")
+      ((Nil) "is empty"))))
 ```
 
 ## Static Typing

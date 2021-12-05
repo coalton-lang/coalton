@@ -6,7 +6,7 @@
   ;; Cons Lists
   ;;
 
-  ;; Definition of List is in types.lisp
+  ;; List is an early type
 
   (declare head ((List :a) -> (Optional :a)))
   (define (head l)
@@ -462,14 +462,3 @@
       (concatMap f m))
     (define (>> a b)
       (>>= a (fn (_) b)))))
-
-(cl:defun cl-list-to-coalton (list)
-  (cl:if (cl:null list)
-        Nil
-        (Cons (cl:car list) (cl-list-to-coalton (cl:cdr list)))))
-
-(cl:defun coalton-to-cl-list (list)
-  (cl:loop
-      :for xs := list :then (cl:slot-value xs '_1)
-      :until (cl:typep xs 'List/Nil)
-      :collect (cl:slot-value xs '_0)))

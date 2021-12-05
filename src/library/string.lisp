@@ -15,23 +15,13 @@
   (define (unpack-string str)
     "Unpack a string into a list of characters."
     (lisp (List Char) (str)
-      (cl:reduce
-       (cl:lambda (x xs) (Cons x xs))
-       (cl:coerce str 'cl:list) :from-end cl:t :initial-value Nil)))
+       (cl:coerce str 'cl:list)))
 
   (declare pack-string ((List Char) -> String))
   (define (pack-string xs)
     "Pack a list of charactes into a string."
     (lisp String (xs)
-      (cl:labels ((f (xs)
-                    (cl:if (cl:typep xs 'List/Nil)
-                           ""
-                           (cl:let ((element (cl:slot-value xs 'coalton-library::|_0|))
-                                    (rest (cl:slot-value xs 'coalton-library::|_1|)))
-                             (cl:declare (cl:type cl:character element))
-                             (cl:concatenate
-                              'cl:string (cl:string element) (f rest))))))
-        (f xs))))
+      (cl:coerce xs 'cl:string)))
 
   (declare parse-int (String -> (Optional Integer)))
   (define (parse-int str)

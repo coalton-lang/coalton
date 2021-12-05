@@ -164,6 +164,14 @@
             :runtime-type nil
             :type tArrow
             :enum-repr nil
+            :newtype nil))
+
+          ('coalton:List
+           (type-entry
+            :name 'coalton:List
+            :runtime-type 'cl:list
+            :type tList
+            :enum-repr nil
             :newtype nil)))))
 
 ;;;
@@ -200,28 +208,51 @@
 
 (defun make-default-constructor-environment ()
   "Create a TYPE-ENVIRONMENT containing early constructors"
-  (make-constructor-environment
-   :data (fset:map
-          ;; Early Constructors
-          ('coalton:True
-           (make-constructor-entry
-            :name 'coalton:True
-            :arity 0
-            :constructs 'coalton:Boolean
-            :scheme (to-scheme (qualify nil tBoolean))
-            :arguments nil
-            :classname 'coalton::Boolean/True
-            :compressed-repr 't))
+  (let* ((tvar (make-variable))
+         (list-scheme (%make-ty-scheme (list tvar) (qualify nil (%make-tapp tList tvar))))
+         (var-scheme (%make-ty-scheme (list tvar) (qualify nil tvar))))
+    (make-constructor-environment
+     :data (fset:map
+            ;; Early Constructors
+            ('coalton:True
+             (make-constructor-entry
+              :name 'coalton:True
+              :arity 0
+              :constructs 'coalton:Boolean
+              :scheme (to-scheme (qualify nil tBoolean))
+              :arguments nil
+              :classname 'coalton::Boolean/True
+              :compressed-repr 't))
 
-          ('coalton:False
-           (make-constructor-entry
-            :name 'coalton:False
-            :arity 0
-            :constructs 'coalton:Boolean
-            :scheme (to-scheme (qualify nil tBoolean))
-            :arguments nil
-            :classname 'coalton::Boolean/False
-            :compressed-repr 'nil)))))
+            ('coalton:False
+             (make-constructor-entry
+              :name 'coalton:False
+              :arity 0
+              :constructs 'coalton:Boolean
+              :scheme (to-scheme (qualify nil tBoolean))
+              :arguments nil
+              :classname 'coalton::Boolean/False
+              :compressed-repr 'nil))
+
+            ('coalton:Cons
+             (make-constructor-entry
+              :name 'coalton:Cons
+              :arity 2
+              :constructs 'coalton:List
+              :scheme list-scheme
+              :arguments (list var-scheme var-scheme)
+              :classname nil
+              :compressed-repr 'nil))
+
+            ('coalton:Nil
+             (make-constructor-entry
+              :name 'coalton:Nil
+              :arity 0
+              :constructs 'coalton:List
+              :scheme list-scheme
+              :arguments nil
+              :classname nil
+              :compressed-repr 'nil))))))
 
 #+sbcl
 (declaim (sb-ext:freeze-type constructor-environment))

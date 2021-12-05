@@ -44,10 +44,17 @@
   (define True (lisp Boolean ()  cl:t))
   (define False (lisp Boolean ()  cl:nil))
 
-  (define-type (List :a)
-    "A list in singly-linked representation."
-    (Cons :a (List :a))
-    Nil)
+
+  ;; List is an early type
+  (declare Cons (:a -> (List :a) -> (List :a)))
+  (define (Cons x xs)
+    (lisp (List :a) (x xs)
+      (cl:cons x xs)))
+
+  (declare Nil (List :a))
+  (define Nil
+    (lisp (List :a) ()
+      cl:nil))
 
   (define-type (Tuple :a :b)
     "A heterogeneous collection of items."
