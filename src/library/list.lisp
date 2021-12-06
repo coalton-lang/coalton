@@ -15,12 +15,12 @@
       ((Cons x _) (Some x))
       ((Nil) None)))
 
-  (declare tail ((List :a) -> (List :a)))
+  (declare tail ((List :a) -> (Optional (List :a))))
   (define (tail l)
     "Returns every element except the first in a list."
     (match l
-      ((Cons _ xs) xs)
-      ((Nil) Nil)))
+      ((Cons _ xs) (Some xs))
+      ((Nil) None)))
 
   (declare last ((List :a) -> (Optional :a)))
   (define (last l)
@@ -33,7 +33,8 @@
   (declare init ((List :a) -> (List :a)))
   (define (init l)
     "Returns every element except the last in a list."
-    (reverse (tail (reverse l))))
+    (lisp (List :a) (l)
+      (cl:butlast l)))
 
   (declare null ((List :a) -> Boolean))
   (define (null xs)
