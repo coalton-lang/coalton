@@ -240,7 +240,7 @@
               :arity 2
               :constructs 'coalton:List
               :scheme list-scheme
-              :arguments (list var-scheme var-scheme)
+              :arguments (list var-scheme list-scheme)
               :classname nil
               :compressed-repr 'nil))
 
