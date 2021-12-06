@@ -169,7 +169,7 @@ See also: `/`
 
   (define-instance (Iso :a :a))
 
-  (define-class (WithDefault :f)
+  (define-class (Unwrappable :f)
     "Types which might be able to be unwrapped, otherwise returning a default value."
-    (withDefault (:a -> (:f :a) -> :a)))
-  )
+    (withDefault (:a -> (:f :a) -> :a))
+    (unwrap ((:f :a) -> :a))))
