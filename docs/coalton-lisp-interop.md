@@ -44,7 +44,9 @@ Unfortunately, having two modes may mean one inadvertently depend on the behavio
 
 **PROMISE**: `COALTON:Boolean` is a Lisp `BOOLEAN`; `COALTON:True` is Lisp `T`, and `COALTON:False` is Lisp `NIL`.
 
-**WARNING**: Lists and other data types may not correspond to Lisp's conception of them.
+**PROMISE**: Every Coalton `List` is a non-circular, homogeneous Common Lisp list.
+
+**WARNING**: Not every Common Lisp list is a Coalton `List`! It must be homogeneous, and the element values must also be valid Coalton objects. (For instance, a Common Lisp list of strings is a valid Coalton list.)
 
 ## Promises of  `define-type`
 
