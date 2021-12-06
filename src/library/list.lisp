@@ -163,7 +163,9 @@
                    (if (> x end)
                        Nil
                        (Cons x (inner (+ 1 x)))))))
-      (inner start)))
+      (if (<= start end)
+          (inner start)
+          (reverse (range end start)))))
 
   (declare append ((List :a) -> (List :a) -> (List :a)))
   (define (append xs ys)
