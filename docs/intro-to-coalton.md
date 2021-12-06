@@ -492,6 +492,12 @@ COALTON-USER> (kind-of 'Result)
 * -> (* -> *)
 ```
 
+Type-search can be used to search for a function matching a type signatrue
+```
+COALTON-USER> (type-search '(String -> (List Char)))
+UNPACK-STRING :: (STRING → (LIST CHAR))
+```
+
 The following functions all take an optional package parameter 
 
 * `print-type-db` - Print every known type

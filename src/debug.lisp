@@ -23,3 +23,6 @@
 (defun coalton:kind-of (symbol)
   "Lookup the kind of type SYMBOL in the global environment"
   (coalton-impl/typechecker::kind-of (coalton-impl/typechecker::type-entry-type (coalton-impl::lookup-type *global-environment* symbol))))
+
+(defun coalton:type-search (type)
+  (coalton-impl/typechecker::type-search type coalton-impl::*global-environment*))

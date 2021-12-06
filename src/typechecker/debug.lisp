@@ -129,3 +129,13 @@
               (error "Invalid package ~A" package))
             (print-package p (gethash p sorted-by-package)))
           (maphash #'print-package sorted-by-package)))))
+
+(defun type-search (expr env)
+  (let ((type (qualified-ty-type (fresh-inst (parse-and-resolve-type env expr)))))
+    (fset:do-map (name type_ (immutable-map-data (environment-value-environment env)))
+      (handler-case
+          (progn
+            (match type (qualified-ty-type (fresh-inst type_)))
+            (format t "~A :: ~A~%" name type_))
+        (coalton-type-error ()))))
+  (values))

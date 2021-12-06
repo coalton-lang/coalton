@@ -433,7 +433,8 @@
    #:print-class-db
    #:print-instance-db
    #:type-of
-   #:kind-of))
+   #:kind-of
+   #:type-search))
 
 (uiop:define-package #:coalton-library
   (:documentation "The Coalton standard library.")
@@ -486,7 +487,7 @@
    #:Applicative #:pure #:liftA2
    #:Monad #:>>= #:>>
    #:MonadFail #:fail
-   #:Applicative #:alt #:empty
+   #:Alternative #:alt #:empty
    #:Into
    #:TryInto)
   ;; Builtin
