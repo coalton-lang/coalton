@@ -196,8 +196,7 @@ Optional ALLOW-UNKNOWN-CLASSES allows classes to appear in the type expression t
                     (some #'coalton-double-arrow-p expr))
                ;; Split the expression into parts before and after the arrow
                (let ((subseqs (split-sequence:split-sequence-if #'coalton-double-arrow-p expr)))
-                 (unless (and (= 2 (length subseqs))
-                              (= 1 (length (second subseqs))))
+                 (unless (= 2 (length subseqs))
                    (error-parsing-type expr "Malformed constrained type"))
                  ;; If the first member of the predicates is a list then we can assume there are multiple to parse.
                  (let ((preds (if (listp (first (first subseqs)))
@@ -217,7 +216,9 @@ Optional ALLOW-UNKNOWN-CLASSES allows classes to appear in the type expression t
                                           subs new-subs)
                                     (list pred))))
                        (type (multiple-value-bind (type new-type-vars new-subs)
-                                 (parse-type-expr env (first (second subseqs)) type-vars subs)
+                                 (if (= 1 (length (second subseqs)))
+                                     (parse-type-expr env (first (second subseqs)) type-vars subs)
+                                     (parse-type-expr env (second subseqs) type-vars subs))
                                (setf type-vars new-type-vars
                                      subs new-subs)
                                type)))
