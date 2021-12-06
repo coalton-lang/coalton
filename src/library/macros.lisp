@@ -91,10 +91,9 @@ to
     (list-helper forms)))
 
 (cl:defmacro to-boolean (expr)
-  "Convert generalized boolean lisp expression EXPR to coalton boolean"
-  `(cl:if (cl:the cl:boolean ,expr)
-          True
-          False))
+  "Convert the Lisp expression EXPR, representing a generalized boolean, to a
+Coalton boolean."
+  `(cl:not (cl:eql ,expr cl:nil)))
 
 (cl:defmacro do (cl:&rest forms)
   (cl:labels ((process (forms)
