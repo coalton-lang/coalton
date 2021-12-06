@@ -49,7 +49,7 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
        ;; The
        ((coalton:the  &rest args)
         (unless (= 2 (length args))
-          (error-parsing expr "Invalid the exprssion."))
+          (error-parsing expr "Invalid the expression."))
         (parse-the expr (first args) (second args) m package))
 
        ;; Application
