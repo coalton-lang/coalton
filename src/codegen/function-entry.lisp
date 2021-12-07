@@ -2,10 +2,10 @@
 
 ;; We need to evaluate this early so the macro below can inline calls
 (eval-when (:load-toplevel)
-  (serapeum:defstruct-read-only function-entry
-    (arity :type fixnum)
-    (function :type function)
-    (curried :type function))
+  (defstruct function-entry
+    (arity    (required 'arity)    :type fixnum   :read-only t)
+    (function (required 'function) :type function :read-only t)
+    (curried  (required 'curried)  :type function :read-only t))
   #+sbcl
   (declaim (sb-ext:freeze-type function-entry)))
 

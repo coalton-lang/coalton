@@ -4,9 +4,15 @@
 ;;; Type schemes
 ;;;
 
-(serapeum:defstruct-read-only (ty-scheme (:constructor %make-ty-scheme (kinds type)))
-  (kinds :type list)
-  (type  :type qualified-ty))
+(defstruct (ty-scheme (:constructor %make-ty-scheme (kinds type)))
+  (kinds (required 'kinds) :type list         :read-only t)
+  (type  (required 'type)  :type qualified-ty :read-only t))
+
+(defmethod make-load-form ((self ty-scheme) &optional env)
+  (make-load-form-saving-slots
+   self
+   :slot-names '(kinds type)
+   :environment env))
 
 #+sbcl
 (declaim (sb-ext:freeze-type ty-scheme))

@@ -1,8 +1,8 @@
 (in-package #:coalton-impl/codegen)
 
-(serapeum:defstruct-read-only struct-or-class-field
-  (name :type symbol)
-  (type :type t))
+(defstruct struct-or-class-field
+  (name (required 'name) :type symbol :read-only t)
+  (type (required 'type) :type t      :read-only t))
 
 #+sbcl
 (declaim (sb-ext:freeze-type struct-or-class-field))
