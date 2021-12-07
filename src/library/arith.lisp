@@ -312,26 +312,26 @@
       (%Fraction z 1)))
 
   (define-instance (Dividable Single-Float Single-Float)
-    (define (unsafe/ x y)
+    (define (/ x y)
       (lisp Single-Float (x y)
         (cl:/ x y))))
 
   (define-instance (Dividable Double-Float Double-Float)
-    (define (unsafe/ x y)
+    (define (/ x y)
       (lisp Double-Float (x y)
         (cl:/ x y))))
 
   (define-instance (Dividable Integer Fraction)
-    (define (unsafe/ x y)
+    (define (/ x y)
       (%mkFraction x y)))
 
   (define-instance (Dividable Integer Single-Float)
-    (define (unsafe/ x y)
+    (define (/ x y)
       (lisp Single-Float (x y)
         (cl:coerce (cl:/ x y) 'cl:single-float))))
 
   (define-instance (Dividable Integer Double-Float)
-    (define (unsafe/ x y)
+    (define (/ x y)
       (lisp Double-Float (x y)
         (cl:coerce (cl:/ x y) 'cl:double-float))))
   )

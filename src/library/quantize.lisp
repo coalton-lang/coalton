@@ -75,55 +75,50 @@
   )                                     ; Coalton-Toplevel
 
 (coalton-toplevel
-  (declare / ((Dividable :a :b) => (:a -> :a -> (Optional :b))))
-  (define (/ x y)
-    "Divide X by Y, returning None if Y is zero.
-
-This operator requires the resulting type to be known and constrained.
-
-Some monomorphic convenience variants: `exact/`, `floor/`, `ceiling/`, `round/`
-"
+  (declare safe/ ((Dividable :a :b) => (:a -> :a -> (Optional :b))))
+  (define (safe/ x y)
+    "Safely divide X by Y, returning None if Y is zero."
     (if (== y (fromInt 0))
         None
-        (Some (unsafe/ x y))))
+        (Some (/ x y))))
   )
 
 (coalton-toplevel
-  (declare exact/ (Integer -> Integer -> (Optional Fraction)))
+  (declare exact/ (Integer -> Integer -> Fraction))
   (define (exact/ a b)
     "Exactly divide two integers and produce a fraction."
     ;; BUG: I don't know why I *have* to specify (the Integer *) here,
     ;; but the type checker fails otherwise.
-    (the (Optional Fraction) (/ (the Integer a) (the Integer b))))
+    (the Fraction (/ (the Integer a) (the Integer b))))
 
-  (declare inexact/ (Integer -> Integer -> (Optional Double-Float)))
+  (declare inexact/ (Integer -> Integer -> Double-Float))
   (define (inexact/ a b)
     "Compute the quotient of integers A and B as a double-precision float.
 
 Note: This does *not* divide double-float arguments."
     (/ a b))
 
-  (declare floor/ (Integer -> Integer -> (Optional Integer)))
+  (declare floor/ (Integer -> Integer -> Integer))
   (define (floor/ a b)
     "Divide two integers and compute the floor of the quotient."
-    (map floor (exact/ a b)))
+    (floor (exact/ a b)))
 
-  (declare ceiling/ (Integer -> Integer -> (Optional Integer)))
+  (declare ceiling/ (Integer -> Integer -> Integer))
   (define (ceiling/ a b)
     "Divide two integers and compute the ceiling of the quotient."
-    (map ceiling (exact/ a b)))
+    (ceiling (exact/ a b)))
 
-  (declare round/ (Integer -> Integer -> (Optional Integer)))
+  (declare round/ (Integer -> Integer -> Integer))
   (define (round/ a b)
     "Divide two integers and round the quotient."
-    (map round (exact/ a b)))
+    (round (exact/ a b)))
 
-  (declare single/ (Single-Float -> Single-Float -> (Optional Single-Float)))
+  (declare single/ (Single-Float -> Single-Float -> Single-Float))
   (define (single/ a b)
     "Compute the quotient of single-precision floats A and B as a single-precision float."
     (/ a b))
 
-  (declare double/ (Double-Float -> Double-Float -> (Optional Double-Float)))
+  (declare double/ (Double-Float -> Double-Float -> Double-Float))
   (define (double/ a b)
     "Compute the quotient of single-precision floats A and B as a single-precision float."
     (/ a b))

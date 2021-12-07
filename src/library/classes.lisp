@@ -103,15 +103,12 @@ establishes that division of two `Single-Float`s can result in a `Single-Float`.
 
 Note that `Dividable` does *not* establish a default result type; you must constrain the result type yourself.
 
-See also: `/`
+The function / is partial, and will error produce a run-time error if the divisor is zero.
 "
     ;; This is a type that is more pragmatic and less mathematical in
     ;; nature. It expresses a division relationship between one input
     ;; type and one output type.
-    ;;
-    ;; UNSAFE/ does the division unsafely. This may mean that an
-    ;; error is signaled or that undefined results may occur.
-    (unsafe/ (:arg-type -> :arg-type -> :res-type)))
+    (/ (:arg-type -> :arg-type -> :res-type)))
 
   ;;
   ;; Quantizable

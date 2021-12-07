@@ -494,11 +494,11 @@ establishes that division of two `Single-Float`s can result in a `Single-Float`.
 
 Note that `Dividable` does *not* establish a default result type; you must constrain the result type yourself.
 
-See also: `/`
+The function / is partial, and will error produce a run-time error if the divisor is zero.
 
 
 Methods:
-- `UNSAFE/ :: (:A → :A → :B)`
+- `/ :: (:A → :A → :B)`
 
 <details>
 <summary>Instances</summary>
@@ -764,7 +764,7 @@ Is N even?
 #### `EXPT` <sup><sub>[FUNCTION]</sub></sup><a name="EXPT"></a>
 `(INTEGER → INTEGER → INTEGER)`
 
-Exponentiate BASE to the POWER.
+Exponentiate BASE to a non-negative POWER.
 
 
 ***
@@ -1409,19 +1409,6 @@ Print a line to *STANDARD-OUTPUT* in the form "{STR}: {ITEM}"
 
 ### Functions
 
-#### `/` <sup><sub>[FUNCTION]</sub></sup><a name="/"></a>
-`∀ :A :B. DIVIDABLE :A :B ⇒ (:A → :A → (OPTIONAL :B))`
-
-Divide X by Y, returning None if Y is zero.
-
-This operator requires the resulting type to be known and constrained.
-
-Some monomorphic convenience variants: `exact/`, `floor/`, `ceiling/`, `round/`
-
-
-
-***
-
 #### `FLOOR` <sup><sub>[FUNCTION]</sub></sup><a name="FLOOR"></a>
 `∀ :A. QUANTIZABLE :A ⇒ (:A → INTEGER)`
 
@@ -1438,8 +1425,16 @@ Return the nearest integer to X, with ties breaking toward positive infinity.
 
 ***
 
+#### `SAFE/` <sup><sub>[FUNCTION]</sub></sup><a name="SAFE/"></a>
+`∀ :A :B. DIVIDABLE :A :B ⇒ (:A → :A → (OPTIONAL :B))`
+
+Safely divide X by Y, returning None if Y is zero.
+
+
+***
+
 #### `EXACT/` <sup><sub>[FUNCTION]</sub></sup><a name="EXACT/"></a>
-`(INTEGER → INTEGER → (OPTIONAL FRACTION))`
+`(INTEGER → INTEGER → FRACTION)`
 
 Exactly divide two integers and produce a fraction.
 
@@ -1447,7 +1442,7 @@ Exactly divide two integers and produce a fraction.
 ***
 
 #### `FLOOR/` <sup><sub>[FUNCTION]</sub></sup><a name="FLOOR/"></a>
-`(INTEGER → INTEGER → (OPTIONAL INTEGER))`
+`(INTEGER → INTEGER → INTEGER)`
 
 Divide two integers and compute the floor of the quotient.
 
@@ -1455,7 +1450,7 @@ Divide two integers and compute the floor of the quotient.
 ***
 
 #### `ROUND/` <sup><sub>[FUNCTION]</sub></sup><a name="ROUND/"></a>
-`(INTEGER → INTEGER → (OPTIONAL INTEGER))`
+`(INTEGER → INTEGER → INTEGER)`
 
 Divide two integers and round the quotient.
 
@@ -1471,7 +1466,7 @@ Return the least integer greater than or equal to X.
 ***
 
 #### `DOUBLE/` <sup><sub>[FUNCTION]</sub></sup><a name="DOUBLE/"></a>
-`(DOUBLE-FLOAT → DOUBLE-FLOAT → (OPTIONAL DOUBLE-FLOAT))`
+`(DOUBLE-FLOAT → DOUBLE-FLOAT → DOUBLE-FLOAT)`
 
 Compute the quotient of single-precision floats A and B as a single-precision float.
 
@@ -1479,7 +1474,7 @@ Compute the quotient of single-precision floats A and B as a single-precision fl
 ***
 
 #### `SINGLE/` <sup><sub>[FUNCTION]</sub></sup><a name="SINGLE/"></a>
-`(SINGLE-FLOAT → SINGLE-FLOAT → (OPTIONAL SINGLE-FLOAT))`
+`(SINGLE-FLOAT → SINGLE-FLOAT → SINGLE-FLOAT)`
 
 Compute the quotient of single-precision floats A and B as a single-precision float.
 
@@ -1487,7 +1482,7 @@ Compute the quotient of single-precision floats A and B as a single-precision fl
 ***
 
 #### `CEILING/` <sup><sub>[FUNCTION]</sub></sup><a name="CEILING/"></a>
-`(INTEGER → INTEGER → (OPTIONAL INTEGER))`
+`(INTEGER → INTEGER → INTEGER)`
 
 Divide two integers and compute the ceiling of the quotient.
 
@@ -1495,7 +1490,7 @@ Divide two integers and compute the ceiling of the quotient.
 ***
 
 #### `INEXACT/` <sup><sub>[FUNCTION]</sub></sup><a name="INEXACT/"></a>
-`(INTEGER → INTEGER → (OPTIONAL DOUBLE-FLOAT))`
+`(INTEGER → INTEGER → DOUBLE-FLOAT)`
 
 Compute the quotient of integers A and B as a double-precision float.
 

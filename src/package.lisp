@@ -491,7 +491,7 @@
    #:max
    #:min
    #:Num #:+ #:- #:* #:fromInt
-   #:Dividable #:unsafe/
+   #:Dividable #:/
    #:Quantization
    #:Quantizable #:quantize
    #:Semigroup #:<>
@@ -529,7 +529,14 @@
    #:floor
    #:ceiling
    #:round
-   #:/ #:exact/ #:inexact/ #:floor/ #:ceiling/ #:round/ #:single/ #:double/)
+   #:safe/
+   #:exact/
+   #:inexact/
+   #:floor/
+   #:ceiling/
+   #:round/
+   #:single/
+   #:double/)
   ;; Fraction
   (:export
    #:numerator

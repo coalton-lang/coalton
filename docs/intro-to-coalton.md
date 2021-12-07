@@ -204,7 +204,7 @@ Numbers implement the `Num` typeclass, which has methods `+`, `-`, `*`, and `fro
 
 Division is complicated; see the next section. But here are some quick tips.
 
-- The division operator `/` and its variants are safe, and return an `Optional` value. Make sure to match against it!
+- The division operator `/` and its variants can produce run-time errors if the divisor is zero. Use `safe/` if you prefer an `Optional` return type.
 
 - If you have single- or double-floats, use `single/` or `double/` respectively.
 
@@ -226,11 +226,7 @@ Coalton does have a division operator `/`, but it's a separate, slightly more di
 
 2. Dividing two numbers doesn't necessarily result in the same type. (In fact, division may not even be possible!)
 
-To address the first concern, division must result in an `Optional` value in case division fails.
-
-```
-(declare / (??? => ??? -> ??? -> (Optional ???))
-```
+To address the first concern, division may result in a run-time error. We don't use `Optional` because it is quite cumbersome to use in mathematical contexts. (One may use `safe/` for a variant that does a division-by-zero check and produces an `Optional`.)
 
 To address the second concern, we need to introduce a new typeclass called `Dividable`. The type expression
 
@@ -242,7 +238,7 @@ says that division of two items of type `:s` may result in an item of type `:t`.
 
 ```
 COALTON-USER> (type-of '/)
-∀ :A :B. DIVIDABLE :A :B ⇒ (:A → :A → (OPTIONAL :B))
+∀ :A :B. DIVIDABLE :A :B ⇒ (:A → :A → :B)
 ```
 
 Because of the generic nature of division, if you're computing some values at the REPL, "raw division" simply does not work.
@@ -257,16 +253,16 @@ in COALTON
 You have to constrain the result type of the `Dividable` instance. You can do this with the `the` operator. There are lots of `Dividable` instances made for you.
 
 ```
-COALTON-USER> (coalton (the (Optional Single-Float) (/ 4 2)))
-#.(SOME 2.0)
-COALTON-USER> (coalton (the (Optional Fraction) (/ 4 2)))
-#.(SOME #.(COALTON-LIBRARY::%FRACTION 2 1))
+COALTON-USER> (coalton (the Single-Float (/ 4 2)))
+2.0
+COALTON-USER> (coalton (the Fraction (/ 4 2)))
+#.(COALTON-LIBRARY::%FRACTION 2 1)
 ```
 
 But division of integers does not work.
 
 ```
-COALTON-USER> (coalton (the (Optional Integer) (/ 4 2)))
+COALTON-USER> (coalton (the Integer (/ 4 2)))
 Failed to reduce context for DIVIDABLE INTEGER :A
 in COALTON
    [Condition of type COALTON-IMPL/TYPECHECKER::COALTON-TYPE-ERROR-CONTEXT]
@@ -275,26 +271,26 @@ in COALTON
 Why shouldn't this just be `2`?! The unfortunate answer is because `/` might not *always* produce an integer `2`, and when it doesn't divide exactly, Coalton doesn't force a particular way of rounding. As such, the proper way to do it is divide exactly, then round as you please with `floor`, `ceiling`, or `round`.
 
 ```
-COALTON-USER> (coalton (map floor (the (Optional Fraction) (/ 4 2))))
-#.(SOME 2)
+COALTON-USER> (coalton (floor (the Fraction (/ 4 2))))
+2
 ```
-
-Recall we use `map` to apply a function inside of the `Option` type.
 
 You can see what happens when you choose values that don't divide evenly.
 
 ```
-COALTON-USER> (coalton (map floor (the (Optional Fraction) (/ 3 2))))
-#.(SOME 1)
-COALTON-USER> (coalton (map ceiling (the (Optional Fraction) (/ 3 2))))
-#.(SOME 2)
-COALTON-USER> (coalton (map round (the (Optional Fraction) (/ 3 2))))
-#.(SOME 2)
+COALTON-USER> (coalton (floor (the Fraction (/ 3 2))))
+1
+COALTON-USER> (coalton (ceiling (the Fraction (/ 3 2))))
+2
+COALTON-USER> (coalton (round (the Fraction (/ 3 2))))
+2
 ```
 
 All of these cases are sufficiently common that we provide a few shorthands:
 
-- `exact/` for integer-to-fraction division,
+- `safe/` to do a division-by-zero check and produce `None` if so,
+
+- `exact/` for integer-to-fraction division (which replaces all of the `the Fraction` business above),
 
 - `inexact/` for integer-to-double division,
 
