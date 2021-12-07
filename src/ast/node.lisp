@@ -76,7 +76,7 @@
     (node-abstraction
      (:include node)
      (:constructor node-abstraction (unparsed vars subexpr name-map)))
-  (vars     (required 'vars)     :type t :read-only t)
+  (vars     (required 'vars)     :type t           :read-only t)
   (subexpr  (required 'subexpr)  :type node        :read-only t)
   (name-map (required 'name-map) :type list        :read-only t))
 

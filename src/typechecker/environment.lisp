@@ -412,7 +412,7 @@
   (name      (required 'name)      :type symbol                               :read-only t)
   (type      (required 'type)      :type (member :value :method :constructor) :read-only t)
   (docstring (required 'docstring) :type (or null string)                     :read-only t)
-  (location  (required 'location)  :type t)                                   :read-only t)
+  (location  (required 'location)  :type t                                    :read-only t))
 
 (defmethod make-load-form ((self name-entry) &optional env)
   (make-load-form-saving-slots
@@ -448,7 +448,7 @@
   (class-environment       (required 'class-environment)       :type class-environment       :read-only t)
   (instance-environment    (required 'instance-environment)    :type instance-environment    :read-only t)
   (function-environment    (required 'function-environment)    :type function-environment    :read-only t)
-  (name-environment        (required 'name-environment)        :type name-environment)       :read-only t)
+  (name-environment        (required 'name-environment)        :type name-environment       :read-only t))
 
 (defmethod make-load-form ((self environment) &optional env)
   (make-load-form-saving-slots
