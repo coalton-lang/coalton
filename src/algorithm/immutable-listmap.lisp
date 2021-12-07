@@ -6,7 +6,7 @@
 ;;
 
 (defstruct immutable-listmap
-  (data (fset:empty-map (fset:empty-seq)) :type fset:map) :read-only t)
+  (data (fset:empty-map (fset:empty-seq)) :type fset:map :read-only t))
 
 (defun immutable-listmap-lookup (m key &key no-error)
   "Lookup key in M"
