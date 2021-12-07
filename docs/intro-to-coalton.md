@@ -1,8 +1,8 @@
 # Whirlwind Tour of Coalton
 
-Coalton is a statically typed language that is embedded in and compiles to Common Lisp.
+Coalton is a statically typed language that is embedded in, and compiles to, Common Lisp.
 
-This document is aimed toward individuals with familiarity with strongly typed functional programming languages already.
+This document is aimed toward people who are already familiar with functional programming languages.
 
 ## Program Structure
 
@@ -87,7 +87,7 @@ Functions are defined similarly to variables. Unlike Common Lisp, Coalton functi
     (+ c (* a b))))
 ```
 
-Truth be known, `fma` actually technically takes *one argument*: `a`. To a Common Lisper, this function is roughly equivalent to:
+Truth be known, `fma` actually technically takes *one argument*: `a`. To a Common Lisper, this function is roughly equivalent to
 
 ```lisp
 (defun fma (a)
@@ -122,7 +122,7 @@ Here is an example of using a curried function to transform a list.
 ```
 
 There are convenient *syntaxes* for composing functions with the
-`pipe` and `nest` macros:
+`pipe` and `nest` macros.
 
 ```lisp
 (nest f g ... h x)
@@ -138,7 +138,9 @@ There are convenient *syntaxes* for composing functions with the
 
 These are useful to make code less noisy.
 
-Note that since these are macros (indicated by their variadic arguments), they cannot be used as high-order functions. Consider either currying or the `compose` function if you're thinking in that direction.
+Note that since these are macros (indicated by their variadic arguments), they
+cannot be used as higher-order functions. Consider either currying or the
+`compose` function if you're thinking in that direction.
 
 ## Data Types
 
@@ -163,7 +165,8 @@ Coalton allows the definition of parametric algebraic data types.
     (Leaf :a)))
 ```
 
-Type definitions introduce type constructors. For example, we may construct a somewhat festive tree as follows
+Type definitions introduce type constructors. For example, we may construct a somewhat festive tree as follows.
+
 ```lisp
 (coalton
   (Branch (Leaf Red)
@@ -184,14 +187,17 @@ Coalton supports a few numeric types. The main ones are `Integer`, `Single-Float
   (define num-df  5.0d0))
 ```
 
-One can leave off the suffix and just write `5.0`, which will be resolved depending on `cl:*read-default-float-format*`, which is typically `cl:single-float` (meaning unadorned floats will be single-precision).
+One can leave off the suffix and just write `5.0`, which will be resolved
+depending on the read-time value of `cl:*read-default-float-format*`. That
+variable is set to `cl:single-float` by default, meaning unadorned floats will
+be single-precision.
 
 Numbers implement the `Num` typeclass, which has methods `+`, `-`, `*`, and `fromInt`.
 
 
 ## Lists
 
-Coalton uses lisp lists under the hood. Lists can be constructed with `make-list`.
+Coalton uses Lisp lists under the hood. Lists can be constructed with `make-list`.
 
 ```lisp
 (coalton-toplevel
@@ -213,7 +219,7 @@ in COALTON-TOPLEVEL
    [Condition of type COALTON-IMPL/TYPECHECKER::COALTON-TYPE-ERROR-CONTEXT]
 ```
 
-Lists can also be deconstructed with match
+Lists can also be deconstructed with `match`.
 
 ```lisp
 (coalton-toplevel
@@ -225,7 +231,7 @@ Lists can also be deconstructed with match
 
 ## Static Typing
 
-Coalton code is statically typechecked and types are inferred.
+Coalton code is statically typechecked. Types are inferred.
 
 ```lisp
 (coalton-toplevel
@@ -240,7 +246,7 @@ COALTON-USER> (type-of 'fun)
 (STRING -> (OPTIONAL INT)
 ```
 
-Type annotations can always be added manually
+Type annotations can always be added manually.
 
 ```lisp
 (coalton-toplevel
@@ -249,9 +255,9 @@ Type annotations can always be added manually
     (map (+ 2) (parse-int x))))
 ```
 
-## Match expressions
+## Pattern Matching
 
-Match expressions can be used to pattern-match and deconstruct algebraic data types:
+`match` expressions can be used to pattern-match and deconstruct algebraic data types.
 
 ```lisp
 (coalton-toplevel
@@ -260,7 +266,7 @@ Match expressions can be used to pattern-match and deconstruct algebraic data ty
     Blue
     Green)
 
-  ;; Constructors must be wrapped in parenthesies
+  ;; Constructors must be wrapped in parentheses
   (declare color-to-string (Color -> String))
   (define (color-to-string c)
     (match c
@@ -268,14 +274,14 @@ Match expressions can be used to pattern-match and deconstruct algebraic data ty
       ((Blue) "Blue")
       ((Green) "Green")))
 
-  ;; Variables are not wrapped in parenthesies
+  ;; Variables are not wrapped in parentheses
   (declare map-optional ((:a -> :b) -> (Optional :a) -> (Optional :b)))
   (define (map-optional f x)
     (match x
       ((Some x_) (Some (f x_)))
       ((None) None)))
 
-  ;; Patterns can be nested. And wildcard "_" patterns are supported.
+  ;; Patterns can be nested, and wildcard "_" patterns are supported
   (declare flatten-optional ((Optional (Optional :a)) -> (Optional :a)))
   (define (flatten-optional x)
     (match x
@@ -360,7 +366,9 @@ Coalton's `progn` can have flattened `let` syntax.
 
 ## Unless and When
 
-Coalton also has `unless` and `when` (of `coalton-library`) which work similary to their definitions in Lisp. We recommend only using these operators for conditionalizing stateful operations.
+The `coalton-library` package also includes `unless` and `when`, which work
+similarly to their definitions in Lisp. We recommend only using these operators
+for conditionalizing stateful operations.
 
 ```lisp
 (coalton-toplevel
@@ -369,7 +377,7 @@ Coalton also has `unless` and `when` (of `coalton-library`) which work similary 
       (error "I only want the number 5"))))
 ```
 
-Unless and when both form implicit progn blocks.
+`unless` and `when` both form implicit `progn` blocks.
 
 ```lisp
 (coalton-toplevel
@@ -388,7 +396,7 @@ Currently, *all* member functions must be defined for each typeclass instance.
 
 ```lisp
 (coalton-toplevel
-  ;; Type classes are defined with the define-class keyword
+  ;; Typeclasses are defined with the define-class keyword
   (define-class (Eq :a)
     (== (:a -> :a -> Boolean))
     (/= (:a -> :a -> Boolean)))
@@ -398,7 +406,7 @@ Currently, *all* member functions must be defined for each typeclass instance.
     Green
     Blue)
 
-  ;; Type class instance are defined with the define-instance keyword
+  ;; Typeclass instances are defined with the define-instance keyword
   (define-instance (Eq Color)
     (define (== a b)
       (match (Tuple a b)
@@ -408,15 +416,14 @@ Currently, *all* member functions must be defined for each typeclass instance.
         (_ False)))
     (define (/= a b) (not (== a b))))
 
-
-  ;; Type declerations can have constraints
+  ;; Type declarations can have constraints
   (declare is-eql (Eq :a => (:a -> :a -> String)))
   (define (is-eql a b)
     (if (== a b)
       "They are equal"
       "They are not equal"))
 
-  ;; Multiple constraints must be wrapped in parenthesies
+  ;; Multiple constraints must be wrapped in parentheses
   (declare double-is-eql ((Eq :a) (Eq :b) => (:a -> :a -> :b -> :b -> String)))
   (define (double-is-eql a b c d)
     (if (and (== a b) (== c d))
@@ -425,9 +432,9 @@ Currently, *all* member functions must be defined for each typeclass instance.
 ```
 
 
-## Builtin Type Classes
+## Builtin Typeclasses
 
-The following are the main type classes defined in the standard library.
+The following are the main typeclasses defined in the standard library.
 
 * `Eq` - defined on types that are comparable
 * `Ord` - defined on types that are orderable
@@ -437,21 +444,22 @@ The following are the main type classes defined in the standard library.
 * `Monoid` - defined on types that are semigroups and have an identiy element
 
 
-The following type classes are similar to the typeclasses with the same name in Haskell with a few differences.
+Each of the following typeclasses resembles the class of the same name in
+Haskell, aside from meager differences.
 
 * `Functor` - `fmap` is just `map` in Coalton
 * `Applicative`
 * `Monad` - monad does not have `return`, use `pure` from applicative instead
 * `Alternative` - `<|>` is called `alt` in Coalton
 
-These type classes are inspired by traits of the same name in Rust:
+These typeclasses are inspired by traits of the same name in Rust:
 
 * `Into` - total conversions between one type and another
-* `TryInto` - non total conversions between one type and another
+* `TryInto` - non-total conversions between one type and another
 
 ## Do Notation
 
-Coalton has a do-notation macro that works similary to do notation in Haskell.
+Coalton has a `do` macro that works similarly to do notation in Haskell.
 
 ```lisp
 (coalton-toplevel
@@ -468,7 +476,7 @@ Coalton has a do-notation macro that works similary to do notation in Haskell.
 
 ## Inline Type Annotations
 
-Inline type annotations can be added to resolve ambiguities when using type classes.
+Inline type annotations can be added to resolve ambiguities when using typeclasses.
 
 ```lisp
 (coalton-toplevel
@@ -483,8 +491,8 @@ Coalton does not have nullary functions. However, a function with the type signa
 
 The `coalton` package defines several debugging functions.
 
+`type-of` and `kind-of` can be used to inspect the types and kinds of definitions.
 
-Type-of and kind-of can be used to inspect the types and kinds of definitions.
 ```
 COALTON-USER> (type-of 'map)
 ∀ :A :B :C. FUNCTOR :C ⇒ ((:A → :B) → (:C :A) → (:C :B))
@@ -492,12 +500,12 @@ COALTON-USER> (kind-of 'Result)
 * -> (* -> *)
 ```
 
-The following functions all take an optional package parameter
+The following functions all take an optional package parameter.
 
-* `print-type-db` - Print every known type
-* `print-value-db` - Print the type of every toplevel value
-* `print-class-db` - Print every class and their methods
-* `print-instance-db` - Print the instances of every class
+* `print-type-db` - print every known type
+* `print-value-db` - print the type of every toplevel value
+* `print-class-db` - print every class and their methods
+* `print-instance-db` - print the instances of every class
 
 
 ## Quirks and Differences from Common Lisp
