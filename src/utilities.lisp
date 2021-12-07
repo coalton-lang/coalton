@@ -1,10 +1,10 @@
 ;;;; utilities.lisp
 
-(in-package #:coalton-impl)
+(in-package #:coalton-util)
 
 (defun required (name)
   (declare (type symbol name))
-  (error "Property ~S is required" name))
+  (error "Slot ~S is required" name))
 
 (define-condition coalton-bug (error)
   ((reason :initarg :reason
