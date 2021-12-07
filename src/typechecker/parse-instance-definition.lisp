@@ -4,12 +4,12 @@
 ;;; Parsing instance defintions
 ;;;
 
-(serapeum:defstruct-read-only instance-definition
-  (class-name :type symbol)
-  (predicate :type ty-predicate)
-  (context :type ty-predicate-list)
-  (methods :type typed-binding-list)
-  (codegen-sym :type symbol))
+(defstruct instance-definition
+  (class-name  (required 'class-name)  :type symbol             :read-only t)
+  (predicate   (required 'predicate)   :type ty-predicate       :read-only t)
+  (context     (required 'context)     :type ty-predicate-list  :read-only t)
+  (methods     (required 'methods)     :type typed-binding-list :read-only t)
+  (codegen-sym (required 'codegen-sym) :type symbol             :read-only t))
 
 (defun instance-definition-list-p (x)
   (and (alexandria:proper-list-p x)

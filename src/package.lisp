@@ -104,8 +104,6 @@
   (:use #:cl
         #:coalton-impl/algorithm
         #:coalton-impl/ast)
-  (:import-from #:serapeum
-                #:true)
   (:export
    #:ty                                 ; STRUCT
    #:ty-scheme                          ; STRUCT

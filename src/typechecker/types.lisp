@@ -4,7 +4,7 @@
 ;;; Types
 ;;;
 
-(serapeum:defstruct-read-only (ty (:constructor nil)))
+(defstruct (ty (:constructor nil)))
 
 (defun ty-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -26,9 +26,13 @@
 #+sbcl
 (declaim (sb-ext:freeze-type ty-binding-list))
 
-(serapeum:defstruct-read-only (tyvar (:constructor %make-tyvar))
-  (id   :type fixnum)
-  (kind :type kind))
+(defstruct (tyvar (:constructor %make-tyvar))
+  (id   (required 'id)   :type fixnum :read-only t)
+  (kind (required 'kind) :type kind   :read-only t))
+(defmethod make-load-form ((self tyvar) &optional env) (make-load-form-saving-slots
+   self
+   :slot-names '(id kind)
+   :environment env))
 
 #+sbcl
 (declaim (sb-ext:freeze-type tyvar))
@@ -43,9 +47,16 @@
 #+sbcl
 (declaim (sb-ext:freeze-type tyvar-list))
 
-(serapeum:defstruct-read-only (tvar (:include ty)
-                 (:constructor %make-tvar (tyvar)))
-  (tyvar (required 'tyvar) :type tyvar))
+(defstruct
+    (tvar (:include ty)
+          (:constructor %make-tvar (tyvar)))
+  (tyvar (required 'tyvar) :type tyvar :read-only t))
+
+(defmethod make-load-form ((self tvar) &optional env)
+  (make-load-form-saving-slots
+   self
+   :slot-names '(tyvar)
+   :environment env))
 
 #+sbcl
 (declaim (sb-ext:freeze-type tvar))
@@ -60,31 +71,58 @@
 #+sbcl
 (declaim (sb-ext:freeze-type tvar-list))
 
-(serapeum:defstruct-read-only (tycon (:constructor %make-tycon))
-  (name  :type symbol)
-  (kind  :type kind))
+(defstruct (tycon (:constructor %make-tycon))
+  (name (required 'name) :type symbol :read-only t)
+  (kind (required 'kind) :type kind   :read-only t))
+
+(defmethod make-load-form ((self tycon) &optional env)
+  (make-load-form-saving-slots
+   self
+   :slot-names '(name kind)
+   :environment env))
 
 #+sbcl
 (declaim (sb-ext:freeze-type tycon))
 
-(serapeum:defstruct-read-only (tcon (:include ty)
-                 (:constructor %make-tcon (tycon)))
-  (tycon :type tycon))
+(defstruct
+    (tcon (:include ty)
+          (:constructor %make-tcon (tycon)))
+  (tycon (required 'tycon) :type tycon :read-only t))
+
+(defmethod make-load-form ((self tcon) &optional env)
+  (make-load-form-saving-slots
+   self
+   :slot-names '(tycon)
+   :environment env))
 
 #+sbcl
 (declaim (sb-ext:freeze-type tcon))
 
-(serapeum:defstruct-read-only (tapp (:include ty)
-                 (:constructor %make-tapp (from to)))
-  (from  :type ty)
-  (to    :type ty))
+(defstruct
+    (tapp (:include ty)
+          (:constructor %make-tapp (from to)))
+  (from (required 'from) :type ty :read-only t)
+  (to   (required 'to)   :type ty :read-only t))
+
+(defmethod make-load-form ((self tapp) &optional env)
+  (make-load-form-saving-slots
+   self
+   :slot-names '(from to)
+   :environment env))
 
 #+sbcl
 (declaim (sb-ext:freeze-type tapp))
 
-(serapeum:defstruct-read-only (tgen (:include ty)
-                 (:constructor %make-tgen (id)))
-  (id  :type fixnum))
+(defstruct
+    (tgen (:include ty)
+          (:constructor %make-tgen (id)))
+  (id (required 'id) :type fixnum :read-only t))
+
+(defmethod make-load-form ((self tgen) &optional env)
+  (make-load-form-saving-slots
+   self
+   :slot-names '(id)
+   :environment env))
 
 #+sbcl
 (declaim (sb-ext:freeze-type tgen))

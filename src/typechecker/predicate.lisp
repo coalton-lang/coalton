@@ -4,12 +4,18 @@
 ;;; Type predicates
 ;;;
 
-(serapeum:defstruct-read-only
+(defstruct
     (ty-predicate
      (:constructor ty-predicate (class types)))
   "A type predicate indicating that TYPE is of the CLASS"
-  (class :type symbol)
-  (types :type ty-list))
+  (class (required 'class) :type symbol  :read-only t)
+  (types (required 'types) :type ty-list :read-only t))
+
+(defmethod make-load-form ((self ty-predicate) &optional env)
+  (make-load-form-saving-slots
+   self
+   :slot-names '(class types)
+   :environment env))
 
 #+sbcl
 (declaim (sb-ext:freeze-type ty-predicate))
@@ -29,11 +35,16 @@
 ;;; Qualified types
 ;;;
 
-(serapeum:defstruct-read-only
+(defstruct
     (qualified-ty
      (:constructor qualified-ty (predicates type)))
-  (predicates :type ty-predicate-list)
-  (type :type ty))
+  (predicates (required 'predicates) :type ty-predicate-list :read-only t)
+  (type       (required 'type)       :type ty                :read-only t))
+
+(defmethod make-load-form ((self qualified-ty) &optional env)
+  (make-load-form-saving-slots
+   self
+   :slot-names '(predicates type)))
 
 #+sbcl
 (declaim (sb-ext:freeze-type qualified-ty))

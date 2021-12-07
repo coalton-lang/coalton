@@ -5,8 +5,8 @@
 ;; Wrapper around fset:map<fset:seq>
 ;;
 
-(serapeum:defstruct-read-only immutable-listmap
-  (data (fset:empty-map (fset:empty-seq)) :type fset:map))
+(defstruct immutable-listmap
+  (data (fset:empty-map (fset:empty-seq)) :type fset:map) :read-only t)
 
 (defun immutable-listmap-lookup (m key &key no-error)
   "Lookup key in M"

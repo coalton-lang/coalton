@@ -46,8 +46,8 @@
     "Return a new vector containing the same elements as V"
     (match v
       ((Vector v)
-        (lisp (Vector :a) (v)
-          (Vector (alexandria:copy-array v))))))
+       (lisp (Vector :a) (v)
+         (Vector (alexandria:copy-array v))))))
 
   (declare vector-push (:a -> (Vector :a) -> Integer))
   (define (vector-push item v)
@@ -272,10 +272,25 @@
   (define-instance (Into (Vector :a) (List :a))
     (define (into v)
       (let ((inner
-            (fn (v index)
-              (if (>= index (vector-length v))
-                  Nil
-                  (Cons (vector-index-unsafe index v) (inner v (+ 1 index)))))))
-      (inner v 0))))
+              (fn (v index)
+                (if (>= index (vector-length v))
+                    Nil
+                    (Cons (vector-index-unsafe index v) (inner v (+ 1 index)))))))
+        (inner v 0))))
 
-  (define-instance (Iso (Vector :a) (List :a))))
+  (define-instance (Iso (Vector :a) (List :a)))
+
+  (coalton-toplevel
+    (declare vector-to-list ((Vector :a) -> (List :a)))
+    (define (vector-to-list v)
+      (match v
+        ((Vector v)
+         (lisp (List :a) (v) 
+           (cl:coerce v 'cl:list)))))))
+
+
+(coalton-toplevel
+  (declare v (Vector Integer))
+  (define v (into (make-list 1 2 3 4 5)))
+                
+  (define v2 (map (+ 2) v)))

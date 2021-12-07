@@ -5,16 +5,16 @@
 ;;;
 
 
-(serapeum:defstruct-read-only type-definition
-  (name :type symbol)
-  (type :type ty)
-  (runtime-type :type t)
+(defstruct type-definition
+  (name         (required 'name)         :type symbol                 :read-only t)
+  (type         (required 'type)         :type ty                     :read-only t)
+  (runtime-type (required 'runtime-type) :type t                      :read-only t)
 
   ;; See the fields with the same name on type-entry
-  (enum-repr :type boolean)
-  (newtype :type boolean)
+  (enum-repr    (required 'enum-repr)    :type boolean                :read-only t)
+  (newtype      (required 'newtype)      :type boolean                :read-only t)
 
-  (constructors :type constructor-entry-list))
+  (constructors (required 'constructors) :type constructor-entry-list :read-only t))
 
 #+sbcl
 (declaim (sb-ext:freeze-type type-definition))

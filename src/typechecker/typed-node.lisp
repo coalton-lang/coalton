@@ -4,9 +4,9 @@
 ;;; Typed AST nodes
 ;;;
 
-(serapeum:defstruct-read-only (typed-node (:constructor nil))
-  (type :type ty-scheme)
-  (unparsed :type t))
+(defstruct (typed-node (:constructor nil))
+  (type     (required 'type)     :type ty-scheme :read-only t)
+  (unparsed (required 'unparsed) :type t         :read-only t))
 
 (defun typed-node-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -28,39 +28,39 @@
 #+sbcl
 (declaim (sb-ext:freeze-type typed-binding-list))
 
-(serapeum:defstruct-read-only
+(defstruct
     (typed-node-literal
      (:include typed-node)
      (:constructor typed-node-literal (type unparsed value)))
-  (value :type literal-value))
+  (value (required 'value) :type literal-value :read-only t))
 
 #+sbcl
 (declaim (sb-ext:freeze-type typed-node-literal))
 
-(serapeum:defstruct-read-only
+(defstruct
     (typed-node-variable
      (:include typed-node)
      (:constructor typed-node-variable (type unparsed name)))
   ;; The name of the variable
-  (name :type symbol))
+  (name (required 'name) :type symbol :read-only t))
 
 #+sbcl
 (declaim (sb-ext:freeze-type typed-node-variable))
 
-(serapeum:defstruct-read-only
+(defstruct
     (typed-node-application
      (:include typed-node)
      (:constructor typed-node-application (type unparsed rator rands)))
   ;; The function
-  (rator :type typed-node)
+  (rator (required 'rator) :type typed-node :read-only t)
 
   ;; The arguments
-  (rands :type typed-node-list))
+  (rands (required 'rands) :type typed-node-list :read-only t))
 
 #+sbcl
 (declaim (sb-ext:freeze-type typed-node-application))
 
-(serapeum:defstruct-read-only
+(defstruct
     (typed-node-direct-application
      (:include typed-node)
      (:constructor typed-node-direct-application (type unparsed rator-type rator rands)))
@@ -68,78 +68,78 @@
 
   This allows emitting a direct call instead of funcalling a function-entry."
   ;; The type of the function
-  (rator-type :type ty-scheme)
+  (rator-type (required 'rator-type) :type ty-scheme       :read-only t)
 
   ;; The name of the function
-  (rator :type symbol)
+  (rator      (required 'rator)      :type symbol          :read-only t)
 
   ;; The arguments
-  (rands :type typed-node-list))
+  (rands      (required 'rands)      :type typed-node-list :read-only t))
 
 #+sbcl
 (declaim (sb-ext:freeze-type typed-node-direct-application))
 
-(serapeum:defstruct-read-only
+(defstruct
     (typed-node-abstraction
      (:include typed-node)
      (:constructor typed-node-abstraction (type unparsed vars subexpr name-map)))
   ;; The functions arguments and their types
-  (vars    :type scheme-binding-list)
+  (vars (required 'vars)         :type scheme-binding-list :read-only t)
 
   ;; The body of the function
-  (subexpr :type typed-node)
+  (subexpr (required 'subexpr)   :type typed-node          :read-only t)
 
   ;; An alist mapping of the current paramater names
   ;; to their origional names
-  (name-map :type list))
+  (name-map (required 'name-map) :type list                :read-only t))
 
 #+sbcl
 (declaim (sb-ext:freeze-type typed-node-abstraction))
 
-(serapeum:defstruct-read-only
+(defstruct
     (typed-node-let
      (:include typed-node)
      (:constructor typed-node-let (type unparsed bindings subexpr sorted-bindings dynamic-extent-bindings name-map)))
   ;; Bindings declared in the let
-  (bindings :type typed-binding-list)
+  (bindings                (required 'bindings)                :type typed-binding-list :read-only t)
 
   ;; The body of the let expression
-  (subexpr  :type typed-node)
+  (subexpr                 (required 'subexpr)                 :type typed-node         :read-only t)
 
   ;; The bindings' SCCS
-  (sorted-bindings :type list)
+  (sorted-bindings         (required 'sorted-bindings)         :type list               :read-only t)
 
   ;; Bindings which can be declared dynamic-extent durring codegen
-  (dynamic-extent-bindings :type symbol-list)
+  (dynamic-extent-bindings (required 'dynamic-extent-bindings) :type symbol-list        :read-only t)
 
   ;; An alist mapping the current binding names
   ;; to their origional names
-  (name-map :type list))
+  (name-map                (required 'name-map)                :type list               :read-only t))
 
 #+sbcl
 (declaim (sb-ext:freeze-type typed-node-let))
 
-(serapeum:defstruct-read-only
+(defstruct
     (typed-node-lisp
      (:include typed-node)
      (:constructor typed-node-lisp (type unparsed variables form)))
   ;; Local variables used in the lisp block
-  (variables :type list)
+  (variables (required 'variables) :type list :read-only t)
 
   ;; The lisp block
-  (form :type t))
+  (form      (required 'form)      :type t :read-only t))
 
 #+sbcl
 (declaim (sb-ext:freeze-type typed-node-lisp))
 
-(serapeum:defstruct-read-only
+(defstruct
     (typed-match-branch
      (:constructor typed-match-branch (unparsed pattern subexpr bindings name-map)))
-  (unparsed :type t)
-  (pattern :type pattern)
-  (subexpr :type typed-node)
-  (bindings :type scheme-binding-list)
-  (name-map :type list))
+  (unparsed (required 'unparsed) :type t                   :read-only t)
+  (pattern  (required 'pattern)  :type pattern             :read-only t)
+  (subexpr  (required 'subexpr)  :type typed-node          :read-only t)
+  (bindings (required 'bindings) :type scheme-binding-list :read-only t)
+  (name-map (required 'name-map) :type list                :read-only t))
 
 #+sbcl
 (declaim (sb-ext:freeze-type typed-match-branch))
@@ -154,21 +154,21 @@
 #+sbcl
 (declaim (sb-ext:freeze-type typed-match-branch-list))
 
-(serapeum:defstruct-read-only
+(defstruct
     (typed-node-match
      (:include typed-node)
      (:constructor typed-node-match (type unparsed expr branches)))
-  (expr     :type typed-node)
-  (branches :type typed-match-branch-list))
+  (expr     (required 'expr)     :type typed-node              :read-only t)
+  (branches (required 'branches) :type typed-match-branch-list :read-only t))
 
 #+sbcl
 (declaim (sb-ext:freeze-type typed-node-match))
 
-(serapeum:defstruct-read-only
+(defstruct
     (typed-node-seq
      (:include typed-node)
      (:constructor typed-node-seq (type unparsed subnodes)))
-     (subnodes :type typed-node-list))
+  (subnodes (required 'subnodes) :type typed-node-list :read-only t))
 
 #+sbcl
 (declaim (sb-ext:freeze-type typed-node-seq))

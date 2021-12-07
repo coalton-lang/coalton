@@ -4,6 +4,11 @@
 ;; Context reduction
 ;;
 
+(defun true (x)
+  (if x
+      t
+      nil))
+
 (defun by-super (env pred)
   "Recursively get all super classes of predicate
 
