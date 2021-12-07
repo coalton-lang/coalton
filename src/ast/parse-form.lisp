@@ -54,10 +54,14 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
 
        ;; Application
        ((t &rest rands)
-        (if (null rands)
-            (parse-application expr (first expr) `(coalton-library:Unit) m package)
-            (parse-application expr (first expr) rands m package)))))
-    (t (error-parsing expr "The expression is not a valid value expression."))))
+        (cond
+          ((and (symbolp (first expr)) (macro-function (first expr)))
+           (let ((expansion (funcall (macro-function (first expr)) expr nil)))
+             (parse-form expansion m package)))
+          ((null rands)
+           (parse-application expr (first expr) `(coalton-library:Unit) m package))
+
+          (t (parse-application expr (first expr) rands m package))))))))
 
 (defun invert-alist (alist)
   (loop :for (key . value) :in alist
@@ -134,18 +138,13 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
 (defun parse-application (unparsed rator rands m package)
   (declare (type immutable-map m)
            (type package package))
-  (cond
-    ((and (symbolp rator) (macro-function rator))
-     (let ((expansion (funcall (macro-function rator) (cons rator rands) nil)))
-       (parse-form expansion m package)))
-    (t
      (node-application
       unparsed
       (parse-form rator m package)
       (mapcar
        (lambda (rand)
          (parse-form rand m package))
-       rands)))))
+       rands)))
 
 (defun parse-match-branch (branch m package)
   (declare (type immutable-map m)
