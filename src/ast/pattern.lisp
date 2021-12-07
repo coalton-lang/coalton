@@ -4,7 +4,7 @@
 ;;; Patterns
 ;;;
 
-(serapeum:defstruct-read-only (pattern (:constructor nil)))
+(defstruct (pattern (:constructor nil)))
 
 (defun pattern-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -16,16 +16,16 @@
 #+sbcl
 (declaim (sb-ext:freeze-type pattern-list))
 
-(serapeum:defstruct-read-only
+(defstruct
     (pattern-var
      (:include pattern)
      (:constructor pattern-var (id)))
-  (id :type symbol))
+  (id (required 'id) :type symbol :read-only t))
 
 #+sbcl
 (declaim (sb-ext:freeze-type pattern-var))
 
-(serapeum:defstruct-read-only
+(defstruct
     (pattern-wildcard
      (:include pattern)
      (:constructor pattern-wildcard)))
@@ -33,21 +33,21 @@
 #+sbcl
 (declaim (sb-ext:freeze-type pattern-wildcard))
 
-(serapeum:defstruct-read-only
+(defstruct
     (pattern-literal
      (:include pattern)
      (:constructor pattern-literal (value)))
-  (value  :type node-literal))
+  (value (required 'value) :type node-literal :read-only t))
 
 #+sbcl
 (declaim (sb-ext:freeze-type pattern-literal))
 
-(serapeum:defstruct-read-only
+(defstruct
     (pattern-constructor
      (:include pattern)
-     (:constructor pattern-constructor (name patterns)))
-  (name      :type symbol)
-  (patterns  :type pattern-list))
+     (:coNstructor Pattern-constructor (name patterns)))
+  (name      (required 'name) :type symbol       :read-only t)
+  (patterns  (required 'type) :type pattern-list :read-only t))
 
 #+sbcl
 (declaim (sb-ext:freeze-type pattern-constructor))

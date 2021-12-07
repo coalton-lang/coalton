@@ -4,7 +4,7 @@
 ;;; Value type environments
 ;;;
 
-(serapeum:defstruct-read-only (value-environment (:include immutable-map)))
+(defstruct (value-environment (:include immutable-map)))
 
 #+sbcl
 (declaim (sb-ext:freeze-type value-environment))
@@ -21,14 +21,14 @@
 ;;; Type environments
 ;;;
 
-(serapeum:defstruct-read-only (type-entry (:constructor type-entry))
-  (name :type symbol)
-  (runtime-type :type t)
-  (type :type ty)
+(defstruct (type-entry (:constructor type-entry))
+  (name         (required 'name)         :type symbol  :read-only t)
+  (runtime-type (required 'runtime-type) :type t       :read-only t)
+  (type         (required 'type)         :type ty      :read-only t)
 
   ;; If this is true then the type is compiled to a more effecient
   ;; enum representation at runtime
-  (enum-repr :type boolean)
+  (enum-repr (required 'enum-repr)       :type boolean :read-only t)
 
   ;; If this is true then the type does not exist at runtime
   ;; See https://wiki.haskell.org/Newtype
@@ -43,7 +43,13 @@
   ;; A type that is a newtype has another Coalton type as it's
   ;; runtime-type instead of a lisp type. This is to avoid issues with
   ;; recursive newtypes.
-  (newtype :type boolean))
+  (newtype (required 'newtype)           :type boolean :read-only t))
+
+(defmethod make-load-form ((self type-entry) &optional env)
+  (make-load-form-saving-slots
+   self
+   :slot-names '(name runtime-type type enum-repr newtype)
+   :environment env))
 
 (defmethod coalton-impl/typechecker::kind-of ((entry type-entry))
   (coalton-impl/typechecker::kind-of (type-entry-type entry)))
@@ -51,7 +57,7 @@
 #+sbcl
 (declaim (sb-ext:freeze-type type-entry))
 
-(serapeum:defstruct-read-only (type-environment (:include immutable-map)))
+(defstruct (type-environment (:include immutable-map)))
 
 #+sbcl
 (declaim (sb-ext:freeze-type type-environment))
@@ -178,17 +184,23 @@
 ;;; Constructor environment
 ;;;
 
-(serapeum:defstruct-read-only constructor-entry
-  (name :type symbol)
-  (arity :type alexandria:non-negative-fixnum)
-  (constructs  :type symbol)
-  (scheme :type ty-scheme)
-  (arguments :type scheme-list)
-  (classname :type symbol)
+(defstruct constructor-entry
+  (name            (required 'name)            :type symbol                         :read-only t)
+  (arity           (required 'arity)           :type alexandria:non-negative-fixnum :read-only t)
+  (constructs      (required 'constructs)      :type symbol                         :read-only t)
+  (scheme          (required 'scheme)          :type ty-scheme                      :read-only t)
+  (arguments       (required 'arguments)       :type scheme-list                    :read-only t)
+  (classname       (required 'classname)       :type symbol                         :read-only t)
 
   ;; If this constructor constructs a compressed-repr type then
   ;; compressed-repr is the runtime value of this nullary constructor
-  (compressed-repr :type t))
+  (compressed-repr (required 'compressed-repr) :type t                              :read-only t))
+
+(defmethod make-load-form ((self constructor-entry) &optional env)
+  (make-load-form-saving-slots
+   self
+   :slot-names '(name arity constructs scheme arguments classname compressed-repr)
+   :environment env))
 
 #+sbcl
 (declaim (sb-ext:freeze-type constructor-entry))
@@ -204,13 +216,13 @@
 (declaim (sb-ext:freeze-type constructor-entry-list))
 
 
-(serapeum:defstruct-read-only (constructor-environment (:include immutable-map)))
+(defstruct (constructor-environment (:include immutable-map)))
 
 (defun make-default-constructor-environment ()
   "Create a TYPE-ENVIRONMENT containing early constructors"
   (let* ((tvar (make-variable))
-         (list-scheme (%make-ty-scheme (list tvar) (qualify nil (%make-tapp tList tvar))))
-         (var-scheme (%make-ty-scheme (list tvar) (qualify nil tvar))))
+         (list-scheme (quantify (list tvar) (qualify nil (%make-tapp tList tvar))))
+         (var-scheme (quantify (list tvar) (qualify nil tvar))))
     (make-constructor-environment
      :data (fset:map
             ;; Early Constructors
@@ -261,19 +273,25 @@
 ;;; Class environment
 ;;;
 
-(serapeum:defstruct-read-only
+(defstruct
     (ty-class
      (:constructor ty-class (name predicate superclasses unqualified-methods codegen-sym superclass-dict docstring location)))
-  (name :type symbol)
-  (predicate :type ty-predicate)
-  (superclasses :type ty-predicate-list)
+  (name                (required 'name)                :type symbol              :read-only t)
+  (predicate           (required 'predicate)           :type ty-predicate        :read-only t)
+  (superclasses        (requried 'superclasses)        :type ty-predicate-list   :read-only t)
   ;; Methods of the class containing the same tyvars in PREDICATE for
   ;; use in pretty printing
-  (unqualified-methods :type scheme-binding-list)
-  (codegen-sym :type symbol)
-  (superclass-dict :type list)
-  (docstring :type (or null string))
-  (location :type t))
+  (unqualified-methods (required 'unqualified-methods) :type scheme-binding-list :read-only t)
+  (codegen-sym         (required 'codegen-sym)         :type symbol              :read-only t)
+  (superclass-dict     (required 'superclass-dict)     :type list                :read-only t)
+  (docstring           (required 'docstring)           :type (or null string)    :read-only t)
+  (location            (required 'location)            :type t                   :read-only t))
+
+(defmethod make-load-form ((self ty-class) &optional env)
+  (make-load-form-saving-slots
+   self
+   :slot-names '(name predicate superclasses unqualified-methods codegen-sym superclass-dict docstring location)
+   :environment env))
 
 #+sbcl
 (declaim (sb-ext:freeze-type ty-class))
@@ -306,7 +324,7 @@
             (ty-class-docstring class)
             (ty-class-location class)))
 
-(serapeum:defstruct-read-only (class-environment (:include immutable-map)))
+(defstruct (class-environment (:include immutable-map)))
 
 #+sbcl
 (declaim (sb-ext:freeze-type class-environment))
@@ -315,12 +333,18 @@
 ;;; Instance environment
 ;;;
 
-(serapeum:defstruct-read-only
+(defstruct
     (ty-class-instance
      (:constructor ty-class-instance (constraints predicate codegen-sym)))
-  (constraints :type ty-predicate-list)
-  (predicate :type ty-predicate)
-  (codegen-sym :type symbol))
+  (constraints (required 'constraints) :type ty-predicate-list :read-only t)
+  (predicate  (required 'predicate)    :type ty-predicate      :read-only t)
+  (codegen-sym (required 'codegen-sym) :type symbol            :read-only t))
+
+(defmethod make-load-form ((self ty-class-instance) &optional env)
+  (make-load-form-saving-slots
+   self
+   :slot-names '(constraints predicate codegen-sym)
+   :environment env))
 
 #+sbcl
 (declaim (sb-ext:freeze-type ty-class-instance))
@@ -343,7 +367,7 @@
    (apply-substitution subst-list (ty-class-instance-predicate instance))
    (ty-class-instance-codegen-sym instance)))
 
-(serapeum:defstruct-read-only (instance-environment (:include immutable-listmap)))
+(defstruct (instance-environment (:include immutable-listmap)))
 
 #+sbcl
 (declaim (sb-ext:freeze-type instance-environment))
@@ -352,9 +376,15 @@
 ;;; Function environment
 ;;;
 
-(serapeum:defstruct-read-only function-env-entry
-  (name :type symbol)
-  (arity :type fixnum))
+(defstruct function-env-entry
+  (name  (required 'name)  :type symbol :read-only t)
+  (arity (required 'arity) :type fixnum :read-only t))
+
+(defmethod make-load-form ((self function-env-entry) &optional env)
+  (make-load-form-saving-slots
+   self
+   :slot-names '(name arity)
+   :environment env))
 
 #+sbcl
 (declaim (sb-ext:freeze-type function-env-entry))
@@ -369,7 +399,7 @@
 #+sbcl
 (declaim (sb-ext:freeze-type function-env-entry-list))
 
-(serapeum:defstruct-read-only (function-environment (:include immutable-map)))
+(defstruct (function-environment (:include immutable-map)))
 
 #+sbcl
 (declaim (sb-ext:freeze-type function-environment))
@@ -378,16 +408,22 @@
 ;;; Name environment
 ;;;
 
-(serapeum:defstruct-read-only name-entry
-  (name :type symbol)
-  (type :type (member :value :method :constructor))
-  (docstring :type (or null string))
-  (location :type t))
+(defstruct name-entry
+  (name      (required 'name)      :type symbol                               :read-only t)
+  (type      (required 'type)      :type (member :value :method :constructor) :read-only t)
+  (docstring (required 'docstring) :type (or null string)                     :read-only t)
+  (location  (required 'location)  :type t)                                   :read-only t)
+
+(defmethod make-load-form ((self name-entry) &optional env)
+  (make-load-form-saving-slots
+   self
+   :slot-names '(name type docstring location)
+   :environment env))
 
 #+sbcl
 (declaim (sb-ext:freeze-type name-entry))
 
-(serapeum:defstruct-read-only (name-environment (:include immutable-map)))
+(defstruct (name-environment (:include immutable-map)))
 
 #+sbcl
 (declaim (sb-ext:freeze-type name-environment))
@@ -396,7 +432,7 @@
 ;;; Environment
 ;;;
 
-(serapeum:defstruct-read-only
+(defstruct
     (environment
      (:constructor make-environment
          (value-environment
@@ -406,13 +442,19 @@
           instance-environment
           function-environment
           name-environment)))
-  (value-environment       :type value-environment)
-  (type-environment        :type type-environment)
-  (constructor-environment :type constructor-environment)
-  (class-environment       :type class-environment)
-  (instance-environment    :type instance-environment)
-  (function-environment    :type function-environment)
-  (name-environment        :type name-environment))
+  (value-environment       (required 'value-environment)       :type value-environment       :read-only t)
+  (type-environment        (required 'type-environment)        :type type-environment        :read-only t)
+  (constructor-environment (requried 'constructor-environment) :type constructor-environment :read-only t)
+  (class-environment       (required 'class-environment)       :type class-environment       :read-only t)
+  (instance-environment    (required 'instance-environment)    :type instance-environment    :read-only t)
+  (function-environment    (required 'function-environment)    :type function-environment    :read-only t)
+  (name-environment        (required 'name-environment)        :type name-environment)       :read-only t)
+
+(defmethod make-load-form ((self environment) &optional env)
+  (make-load-form-saving-slots
+   self
+   :slot-names '(value-environment type-environment constructor-environment class-environment instance-environment function-environment name-environment)
+   :environment env))
 
 #+sbcl
 (declaim (sb-ext:freeze-type environment))

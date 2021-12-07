@@ -1,9 +1,10 @@
 (in-package #:coalton-impl/codegen)
 
-(serapeum:defstruct-read-only (optimizer
-                               (:constructor optimizer (env toplevel-functions)))
-  (env :type environment)
-  (toplevel-functions :type list))
+(defstruct
+    (optimizer
+     (:constructor optimizer (env toplevel-functions)))
+  (env                (required 'env)                :type environment :read-only t)
+  (toplevel-functions (required 'toplevel-functions) :type list        :read-only t))
 
 (defun make-optimizer (env)
   (declare (type environment env)

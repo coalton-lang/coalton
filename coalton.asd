@@ -8,9 +8,9 @@
   :depends-on (#:alexandria
                #:global-vars
                #:trivia
-               #:serapeum
                #:fset
                #:float-features
+               #:split-sequence
                #:uiop)
   :in-order-to ((asdf:test-op (asdf:test-op #:coalton/tests)))
   :around-compile (lambda (compile)

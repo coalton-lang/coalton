@@ -6,8 +6,14 @@
 ;; Wrapper around fset:map
 ;;
 
-(serapeum:defstruct-read-only immutable-map
-  (data (fset:empty-map) :type fset:map))
+(defstruct immutable-map
+  (data (fset:empty-map) :type fset:map :read-only t))
+
+(defmethod make-load-form ((self immutable-map) &optional env)
+  (make-load-form-saving-slots
+   self
+   :slot-names '(data)
+   :environment env))
 
 (defun immutable-map-lookup (m key)
   "Lookup KEY in M"

@@ -2,6 +2,10 @@
 
 (in-package #:coalton-impl)
 
+(defun required (name)
+  (declare (type symbol name))
+  (error "Property ~S is required" name))
+
 (define-condition coalton-bug (error)
   ((reason :initarg :reason
            :reader coalton-bug-reason)

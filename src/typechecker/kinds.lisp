@@ -4,21 +4,33 @@
 ;;; Kinds
 ;;;
 
-(serapeum:defstruct-read-only (kind (:constructor nil)))
+(defstruct (kind (:constructor nil)))
 
-(serapeum:defstruct-read-only (kstar (:include kind)))
+(defstruct (kstar (:include kind)))
+
+(defmethod make-load-form ((self kstar) &optional env)
+  (make-load-form-saving-slots
+   self
+   :slot-names nil
+   :environment env))
 
 #+sbcl
 (declaim (sb-ext:freeze-type kstar))
 
 (alexandria:define-constant kstar (make-instance 'kstar) :test #'equalp)
 
-(serapeum:defstruct-read-only
+(defstruct
     (kfun
      (:include kind)
      (:constructor kfun (from to)))
-  (from :type kind)
-  (to   :type kind))
+  (from (required 'from) :type kind :read-only t)
+  (to   (required 'to)   :type kind :read-only t))
+
+(defmethod make-load-form ((self kfun) &optional env)
+  (make-load-form-saving-slots
+   self
+   :slot-names '(from to)
+   :environment env))
 
 #+sbcl
 (declaim (sb-ext:freeze-type kfun))
