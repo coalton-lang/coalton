@@ -491,7 +491,9 @@
    #:max
    #:min
    #:Num #:+ #:- #:* #:fromInt
-   #:Dividable #:unsafe-/
+   #:Dividable #:unsafe/
+   #:Quantization
+   #:Quantizable #:quantize
    #:Semigroup #:<>
    #:Monoid #:mempty
    #:Functor #:map
@@ -505,6 +507,7 @@
   (:export
    #:undefined
    #:error)
+  ;; Arith
   (:export
    #:single-float->integer
    #:double-float->integer
@@ -520,8 +523,13 @@
    #:even
    #:odd
    #:gcd
-   #:lcm
-   #:/)
+   #:lcm)
+  ;; Quantize
+  (:export
+   #:floor
+   #:ceiling
+   #:round
+   #:/ #:exact/ #:inexact/ #:floor/ #:ceiling/ #:round/ #:single/ #:double/)
   ;; Fraction
   (:export
    #:numerator

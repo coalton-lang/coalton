@@ -47,7 +47,7 @@ Constructors:
 - [`FUNCTOR`](#FUNCTOR) [`(RESULT :A)`](#RESULT)
 - [`SEMIGROUP :A`](#SEMIGROUP) `=>` [`SEMIGROUP`](#SEMIGROUP) [`(RESULT :B :A)`](#RESULT)
 - [`APPLICATIVE`](#APPLICATIVE) [`(RESULT :A)`](#RESULT)
-- [`WITHDEFAULT`](#WITHDEFAULT) [`(RESULT :A)`](#RESULT)
+- [`UNWRAPPABLE`](#UNWRAPPABLE) [`(RESULT :A)`](#RESULT)
 
 </details>
 
@@ -113,6 +113,7 @@ Constructors:
 - [`NUM`](#NUM) [`FRACTION`](#FRACTION)
 - [`ORD`](#ORD) [`FRACTION`](#FRACTION)
 - [`DIVIDABLE`](#DIVIDABLE) [`INTEGER`](#INTEGER) [`FRACTION`](#FRACTION)
+- [`QUANTIZABLE`](#QUANTIZABLE) [`FRACTION`](#FRACTION)
 
 </details>
 
@@ -143,7 +144,7 @@ Constructors:
 - [`SEMIGROUP :A`](#SEMIGROUP) `=>` [`SEMIGROUP`](#SEMIGROUP) [`(OPTIONAL :A)`](#OPTIONAL)
 - [`ALTERNATIVE`](#ALTERNATIVE) [`OPTIONAL`](#OPTIONAL)
 - [`APPLICATIVE`](#APPLICATIVE) [`OPTIONAL`](#OPTIONAL)
-- [`WITHDEFAULT`](#WITHDEFAULT) [`OPTIONAL`](#OPTIONAL)
+- [`UNWRAPPABLE`](#UNWRAPPABLE) [`OPTIONAL`](#OPTIONAL)
 
 </details>
 
@@ -213,6 +214,29 @@ Constructors:
 - `LT :: ORD`
 - `GT :: ORD`
 - `EQ :: ORD`
+
+***
+
+#### `QUANTIZATION :A` <sup><sub>[TYPE]</sub></sup><a name="QUANTIZATION"></a>
+- `(QUANTIZATION :A INTEGER :A INTEGER :A)`
+
+Represents an integer quantization of `:t`. See the `Quantizable` typeclass.
+
+The fields are defined as follows:
+
+1. A value of type `:t`.
+
+2. The greatest integer less than or equal to a particular value.
+
+3. The remainder of this as a value of type `:t`.
+
+4. The least integer greater than or equal to a particular value.
+
+5. The remainder of this as a value of type `:t`.
+
+
+Constructors:
+- `QUANTIZATION :: (:A → INTEGER → :A → INTEGER → :A → (QUANTIZATION :A))`
 
 ***
 
@@ -474,11 +498,13 @@ See also: `/`
 
 
 Methods:
-- `UNSAFE-/ :: (:A → :A → :B)`
+- `UNSAFE/ :: (:A → :A → :B)`
 
 <details>
 <summary>Instances</summary>
 
+- [`DIVIDABLE`](#DIVIDABLE) [`INTEGER`](#INTEGER) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
+- [`DIVIDABLE`](#DIVIDABLE) [`INTEGER`](#INTEGER) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
 - [`DIVIDABLE`](#DIVIDABLE) [`INTEGER`](#INTEGER) [`FRACTION`](#FRACTION)
 - [`DIVIDABLE`](#DIVIDABLE) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
 - [`DIVIDABLE`](#DIVIDABLE) [`SINGLE-FLOAT`](#SINGLE-FLOAT) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
@@ -543,6 +569,33 @@ Methods:
 - [`APPLICATIVE`](#APPLICATIVE) [`(RESULT :A)`](#RESULT)
 - [`APPLICATIVE`](#APPLICATIVE) [`LIST`](#LIST)
 - [`APPLICATIVE`](#APPLICATIVE) [`OPTIONAL`](#OPTIONAL)
+
+</details>
+
+
+***
+
+#### `QUANTIZABLE` <sup><sub>[CLASS]</sub></sup><a name="QUANTIZABLE"></a>
+[`ORD :A`](#ORD) [`NUM :A`](#NUM) `=>` [`QUANTIZABLE`](#QUANTIZABLE) [`:A`](#:A)
+
+The representation of a type that allows "quantizing", "snapping to integers", or "rounding." (All of these concepts are roughly equivalent.)
+
+
+Methods:
+- `QUANTIZE :: (:A → (QUANTIZATION :A))`
+
+<details>
+<summary>Instances</summary>
+
+- [`QUANTIZABLE`](#QUANTIZABLE) [`FRACTION`](#FRACTION)
+- [`QUANTIZABLE`](#QUANTIZABLE) [`DOUBLE-FLOAT`](#DOUBLE-FLOAT)
+- [`QUANTIZABLE`](#QUANTIZABLE) [`SINGLE-FLOAT`](#SINGLE-FLOAT)
+- [`QUANTIZABLE`](#QUANTIZABLE) [`U64`](#U64)
+- [`QUANTIZABLE`](#QUANTIZABLE) [`U32`](#U32)
+- [`QUANTIZABLE`](#QUANTIZABLE) [`U8`](#U8)
+- [`QUANTIZABLE`](#QUANTIZABLE) [`I64`](#I64)
+- [`QUANTIZABLE`](#QUANTIZABLE) [`I32`](#I32)
+- [`QUANTIZABLE`](#QUANTIZABLE) [`INTEGER`](#INTEGER)
 
 </details>
 
@@ -651,14 +704,6 @@ The denominator of a fraction Q.
 ## File: [arith.lisp](../src/library/arith.lisp)
 
 ### Functions
-
-#### `/` <sup><sub>[FUNCTION]</sub></sup><a name="/"></a>
-`∀ :A :B. DIVIDABLE :A :B ⇒ (:A → :A → (OPTIONAL :B))`
-
-Divide X by Y, returning None if Y is zero.
-
-
-***
 
 #### `ABS` <sup><sub>[FUNCTION]</sub></sup><a name="ABS"></a>
 `∀ :A. (NUM :A) (ORD :A) ⇒ (:A → :A)`
@@ -903,6 +948,22 @@ Returns the first element of a list.
 
 ***
 
+#### `INIT` <sup><sub>[FUNCTION]</sub></sup><a name="INIT"></a>
+`∀ :A. ((LIST :A) → (LIST :A))`
+
+Returns every element except the last in a list.
+
+
+***
+
+#### `LAST` <sup><sub>[FUNCTION]</sub></sup><a name="LAST"></a>
+`∀ :A. ((LIST :A) → (OPTIONAL :A))`
+
+Returns the last element of a list.
+
+
+***
+
 #### `NULL` <sup><sub>[FUNCTION]</sub></sup><a name="NULL"></a>
 `∀ :A. ((LIST :A) → BOOLEAN)`
 
@@ -922,7 +983,7 @@ Performs a stable sort of XS.
 #### `TAIL` <sup><sub>[FUNCTION]</sub></sup><a name="TAIL"></a>
 `∀ :A. ((LIST :A) → (OPTIONAL (LIST :A)))`
 
-Returns every element but the first in a list.
+Returns every element except the first in a list.
 
 
 ***
@@ -956,6 +1017,11 @@ Returns the Ith element of XS.
 
 Returns a list containing the numbers from START to END inclusive.
 
+
+***
+
+#### `SPLIT` <sup><sub>[FUNCTION]</sub></sup><a name="SPLIT"></a>
+`(CHAR → STRING → (LIST STRING))`
 
 ***
 
@@ -1339,6 +1405,106 @@ Print a line to *STANDARD-OUTPUT* in the form "{STR}: {ITEM}"
 ***
 
 
+## File: [quantize.lisp](../src/library/quantize.lisp)
+
+### Functions
+
+#### `/` <sup><sub>[FUNCTION]</sub></sup><a name="/"></a>
+`∀ :A :B. DIVIDABLE :A :B ⇒ (:A → :A → (OPTIONAL :B))`
+
+Divide X by Y, returning None if Y is zero.
+
+This operator requires the resulting type to be known and constrained.
+
+Some monomorphic convenience variants: `exact/`, `floor/`, `ceiling/`, `round/`
+
+
+
+***
+
+#### `FLOOR` <sup><sub>[FUNCTION]</sub></sup><a name="FLOOR"></a>
+`∀ :A. QUANTIZABLE :A ⇒ (:A → INTEGER)`
+
+Return the greatest integer less than or equal to X.
+
+
+***
+
+#### `ROUND` <sup><sub>[FUNCTION]</sub></sup><a name="ROUND"></a>
+`∀ :A. QUANTIZABLE :A ⇒ (:A → INTEGER)`
+
+Return the nearest integer to X, with ties breaking toward positive infinity.
+
+
+***
+
+#### `EXACT/` <sup><sub>[FUNCTION]</sub></sup><a name="EXACT/"></a>
+`(INTEGER → INTEGER → (OPTIONAL FRACTION))`
+
+Exactly divide two integers and produce a fraction.
+
+
+***
+
+#### `FLOOR/` <sup><sub>[FUNCTION]</sub></sup><a name="FLOOR/"></a>
+`(INTEGER → INTEGER → (OPTIONAL INTEGER))`
+
+Divide two integers and compute the floor of the quotient.
+
+
+***
+
+#### `ROUND/` <sup><sub>[FUNCTION]</sub></sup><a name="ROUND/"></a>
+`(INTEGER → INTEGER → (OPTIONAL INTEGER))`
+
+Divide two integers and round the quotient.
+
+
+***
+
+#### `CEILING` <sup><sub>[FUNCTION]</sub></sup><a name="CEILING"></a>
+`∀ :A. QUANTIZABLE :A ⇒ (:A → INTEGER)`
+
+Return the least integer greater than or equal to X.
+
+
+***
+
+#### `DOUBLE/` <sup><sub>[FUNCTION]</sub></sup><a name="DOUBLE/"></a>
+`(DOUBLE-FLOAT → DOUBLE-FLOAT → (OPTIONAL DOUBLE-FLOAT))`
+
+Compute the quotient of single-precision floats A and B as a single-precision float.
+
+
+***
+
+#### `SINGLE/` <sup><sub>[FUNCTION]</sub></sup><a name="SINGLE/"></a>
+`(SINGLE-FLOAT → SINGLE-FLOAT → (OPTIONAL SINGLE-FLOAT))`
+
+Compute the quotient of single-precision floats A and B as a single-precision float.
+
+
+***
+
+#### `CEILING/` <sup><sub>[FUNCTION]</sub></sup><a name="CEILING/"></a>
+`(INTEGER → INTEGER → (OPTIONAL INTEGER))`
+
+Divide two integers and compute the ceiling of the quotient.
+
+
+***
+
+#### `INEXACT/` <sup><sub>[FUNCTION]</sub></sup><a name="INEXACT/"></a>
+`(INTEGER → INTEGER → (OPTIONAL DOUBLE-FLOAT))`
+
+Compute the quotient of integers A and B as a double-precision float.
+
+Note: This does *not* divide double-float arguments.
+
+
+***
+
+
 ## File: [cell.lisp](../src/library/cell.lisp)
 
 ### Types
@@ -1544,6 +1710,11 @@ Call the function F once for each item in V
 
 Sort a vector with predicate function F
 
+
+***
+
+#### `VECTOR-TO-LIST` <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-TO-LIST"></a>
+`∀ :A. ((VECTOR :A) → (LIST :A))`
 
 ***
 

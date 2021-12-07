@@ -1,4 +1,8 @@
-(in-package #:coalton-library)
+;;;; arith.lisp
+;;;;
+;;;; Number types and basic arithmetic.
+
+(cl:in-package #:coalton-library)
 
 (cl:declaim (cl:inline %unsigned->signed))
 (cl:defun %unsigned->signed (bits x)
@@ -271,13 +275,6 @@
     "Compute the least common multiple of A and B."
     (lisp Integer (a b) (cl:lcm a b)))
 
-  (declare / ((Dividable :a :b) => (:a -> :a -> (Optional :b))))
-  (define (/ x y)
-    "Divide X by Y, returning None if Y is zero."
-    (if (== y (fromInt 0))
-        None
-        (Some (unsafe-/ x y))))
-
   (declare %reduce-fraction (Fraction -> Fraction))
   (define (%reduce-fraction q)
     (let ((n (numerator q))
@@ -315,18 +312,29 @@
       (%Fraction z 1)))
 
   (define-instance (Dividable Single-Float Single-Float)
-    (define (unsafe-/ x y)
+    (define (unsafe/ x y)
       (lisp Single-Float (x y)
         (cl:/ x y))))
 
   (define-instance (Dividable Double-Float Double-Float)
-    (define (unsafe-/ x y)
+    (define (unsafe/ x y)
       (lisp Double-Float (x y)
         (cl:/ x y))))
 
   (define-instance (Dividable Integer Fraction)
-    (define (unsafe-/ x y)
-      (%mkFraction x y))))
+    (define (unsafe/ x y)
+      (%mkFraction x y)))
+
+  (define-instance (Dividable Integer Single-Float)
+    (define (unsafe/ x y)
+      (lisp Single-Float (x y)
+        (cl:coerce (cl:/ x y) 'cl:single-float))))
+
+  (define-instance (Dividable Integer Double-Float)
+    (define (unsafe/ x y)
+      (lisp Double-Float (x y)
+        (cl:coerce (cl:/ x y) 'cl:double-float))))
+  )
 
 (coalton-toplevel
   (define-instance (Into Integer String)

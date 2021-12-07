@@ -96,6 +96,7 @@
                              (:file "tuple")
                              (:file "result")
                              (:file "functions")
+                             (:file "quantize")
                              (:file "cell")
                              (:file "vector")
                              (:file "slice")
@@ -125,4 +126,5 @@
                (:file "runtime-tests")
                (:file "environment-persist-tests")
                (:file "slice-tests")
+               (:file "quantize-tests")
                (:file "graph-tests")))
