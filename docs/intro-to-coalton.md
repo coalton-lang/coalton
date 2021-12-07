@@ -192,8 +192,111 @@ depending on the read-time value of `cl:*read-default-float-format*`. That
 variable is set to `cl:single-float` by default, meaning unadorned floats will
 be single-precision.
 
+There are also other, more restricted integer types, like fixed-width
+signed types (`I32` and `I64`) and fixed-width unsigned types (`U8`,
+`U32`, `U64`).
+
+Lastly, there's a ratio type called `Fraction`, which is a ratio of two `Integer` values.
+
 Numbers implement the `Num` typeclass, which has methods `+`, `-`, `*`, and `fromInt`.
 
+### Division, in short
+
+Division is complicated; see the next section. But here are some quick tips.
+
+- The division operator `/` and its variants can produce run-time errors if the divisor is zero. Use `safe/` if you prefer an `Optional` return type.
+
+- If you have single- or double-floats, use `single/` or `double/` respectively.
+
+- If you have integers and you want a double-float, use `inexact/`. (For a single-float, use `into`.)
+
+- If you have integers and you want an integer answer, use `floor/`, `ceiling/`, or `round/`.
+
+- If you're trying to divide two integers to get an exact rational answer, use `exact/`.
+
+- If you're writing generic code that uses division, or you want to remain abstract, learn `/` and how to constrain it properly.
+
+### Details about Division
+
+Why doesn't the `Num` type class have division, i.e., `/`?
+
+Coalton does have a division operator `/`, but it's a separate, slightly more difficult concept. Division is tricky for two reasons:
+
+1. Division can fail if we divide by something like zero,
+
+2. Dividing two numbers doesn't necessarily result in the same type. (In fact, division may not even be possible!)
+
+To address the first concern, division may result in a run-time error. We don't use `Optional` because it is quite cumbersome to use in mathematical contexts. (One may use `safe/` for a variant that does a division-by-zero check and produces an `Optional`.)
+
+To address the second concern, we need to introduce a new typeclass called `Dividable`. The type expression
+
+```
+(Dividable :s :t)
+```
+
+says that division of two items of type `:s` may result in an item of type `:t`. With all of this, we have the final type of `/`.
+
+```
+COALTON-USER> (type-of '/)
+∀ :A :B. DIVIDABLE :A :B ⇒ (:A → :A → :B)
+```
+
+Because of the generic nature of division, if you're computing some values at the REPL, "raw division" simply does not work.
+
+```
+COALTON-USER> (coalton (/ 1 2))
+Failed to reduce context for DIVIDABLE INTEGER :A
+in COALTON
+   [Condition of type COALTON-IMPL/TYPECHECKER::COALTON-TYPE-ERROR-CONTEXT]
+```
+
+You have to constrain the result type of the `Dividable` instance. You can do this with the `the` operator. There are lots of `Dividable` instances made for you.
+
+```
+COALTON-USER> (coalton (the Single-Float (/ 4 2)))
+2.0
+COALTON-USER> (coalton (the Fraction (/ 4 2)))
+#.(COALTON-LIBRARY::%FRACTION 2 1)
+```
+
+But division of integers does not work.
+
+```
+COALTON-USER> (coalton (the Integer (/ 4 2)))
+Failed to reduce context for DIVIDABLE INTEGER :A
+in COALTON
+   [Condition of type COALTON-IMPL/TYPECHECKER::COALTON-TYPE-ERROR-CONTEXT]
+```
+
+Why shouldn't this just be `2`?! The unfortunate answer is because `/` might not *always* produce an integer `2`, and when it doesn't divide exactly, Coalton doesn't force a particular way of rounding. As such, the proper way to do it is divide exactly, then round as you please with `floor`, `ceiling`, or `round`.
+
+```
+COALTON-USER> (coalton (floor (the Fraction (/ 4 2))))
+2
+```
+
+You can see what happens when you choose values that don't divide evenly.
+
+```
+COALTON-USER> (coalton (floor (the Fraction (/ 3 2))))
+1
+COALTON-USER> (coalton (ceiling (the Fraction (/ 3 2))))
+2
+COALTON-USER> (coalton (round (the Fraction (/ 3 2))))
+2
+```
+
+All of these cases are sufficiently common that we provide a few shorthands:
+
+- `safe/` to do a division-by-zero check and produce `None` if so,
+
+- `exact/` for integer-to-fraction division (which replaces all of the `the Fraction` business above),
+
+- `inexact/` for integer-to-double division,
+
+- `floor/`, `ceiling/`, and `round/` for integer-to-integer division, and
+
+- `single/`, `double/` for single- and double-float division.
 
 ## Lists
 

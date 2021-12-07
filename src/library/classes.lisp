@@ -103,15 +103,42 @@ establishes that division of two `Single-Float`s can result in a `Single-Float`.
 
 Note that `Dividable` does *not* establish a default result type; you must constrain the result type yourself.
 
-See also: `/`
+The function / is partial, and will error produce a run-time error if the divisor is zero.
 "
     ;; This is a type that is more pragmatic and less mathematical in
     ;; nature. It expresses a division relationship between one input
     ;; type and one output type.
-    ;;
-    ;; UNSAFE-/ does the division unsafely. This may mean that an
-    ;; error is signaled or that undefined results may occur.
-    (unsafe-/ (:arg-type -> :arg-type -> :res-type)))
+    (/ (:arg-type -> :arg-type -> :res-type)))
+
+  ;;
+  ;; Quantizable
+  ;;
+
+  (define-type (Quantization :t)
+    "Represents an integer quantization of `:t`. See the `Quantizable` typeclass.
+
+The fields are defined as follows:
+
+1. A value of type `:t`.
+
+2. The greatest integer less than or equal to a particular value.
+
+3. The remainder of this as a value of type `:t`.
+
+4. The least integer greater than or equal to a particular value.
+
+5. The remainder of this as a value of type `:t`.
+"
+    (Quantization :t Integer :t Integer :t))
+
+  (define-class ((Ord :t) (Num :t) => (Quantizable :t))
+    "The representation of a type that allows \"quantizing\", \"snapping to integers\", or \"rounding.\" (All of these concepts are roughly equivalent.)
+"
+    ;; Given a X of type :T, (QUANTIZE X) will return the least
+    ;; integer greater or equal to X, and the greatest integer less
+    ;; than or equal to X, along with their respective remainders
+    ;; expressed as values of type :T.
+    (quantize (:t -> (Quantization :t))))
 
   ;;
   ;; Haskell
