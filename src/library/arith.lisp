@@ -234,8 +234,10 @@
 
   (declare expt (Integer -> Integer -> Integer))
   (define (expt base power)
-    "Exponentiate BASE to the POWER."
-    (lisp Integer (base power) (cl:expt base power)))
+    "Exponentiate BASE to a non-negative POWER."
+    (if (< power 0)
+        (error "Can't exponentiate with a negative exponent.")
+        (lisp Integer (base power) (cl:expt base power))))
 
   (declare ash (Integer -> Integer -> Integer))
   (define (ash x n)
@@ -245,7 +247,9 @@
   (declare mod (Integer -> Integer -> Integer))
   (define (mod num base)
     "Compute NUM modulo BASE."
-    (lisp Integer (num base) (cl:values (cl:mod num base))))
+    (if (== base 0)
+        (error "Can't mod by 0.")
+        (lisp Integer (num base) (cl:values (cl:mod num base)))))
 
   (declare even (Integer ->  Boolean))
   (define (even n)
