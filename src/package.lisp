@@ -8,9 +8,18 @@
   (:documentation "A place that global value stores are stashed. We don't use uninterned symbols so that they can be reified through the compilation process.")
   (:use))
 
+(uiop:define-package #:coalton-util
+    (:use #:cl)
+  (:export
+   #:required
+   #:coalton-bug
+   #:sexp-fmt
+   #:include-if
+   #:define-symbol-property))
+
 (uiop:define-package #:coalton-impl/algorithm
     (:documentation "Implementation of generic algorithms used by COALTON. This is a package private to the COALTON system and is not intended for public use.")
-  (:use #:cl)
+  (:use #:cl #:coalton-util)
   (:export
    #:tarjan-scc                         ; FUNCTION
    #:immutable-map                      ; STRUCT
@@ -33,7 +42,9 @@
 
 (uiop:define-package #:coalton-impl/ast
     (:documentation "Implementation of the abstract syntax tree used by COALTON. This is a package private to the COALTON system and is not intended for public use.")
-  (:use #:cl #:coalton-impl/algorithm)
+  (:use #:cl
+        #:coalton-util
+        #:coalton-impl/algorithm)
   (:export
    #:literal-value                      ; TYPE
    #:node                               ; STRUCT
@@ -102,6 +113,7 @@
 (uiop:define-package #:coalton-impl/typechecker
     (:documentation "Implementation of types and the typechecker for COALTON. This is a package private to the COALTON system and is not intended for public use.")
   (:use #:cl
+        #:coalton-util
         #:coalton-impl/algorithm
         #:coalton-impl/ast)
   (:export
@@ -318,6 +330,7 @@
 (uiop:define-package #:coalton-impl/doc
   (:documentation "Implementation of documentation generation for COALTON. This is a package private to the COALTON system and is not intended for public use.")
   (:use #:cl
+        #:coalton-util
         #:coalton-impl/algorithm
         #:coalton-impl/ast
         #:coalton-impl/typechecker
@@ -328,6 +341,7 @@
 (uiop:define-package #:coalton-impl
   (:documentation "Implementation and runtime for COALTON. This is a package private to the COALTON system and is not intended for public use.")
   (:use #:cl
+        #:coalton-util
         #:coalton-impl/algorithm
         #:coalton-impl/ast
         #:coalton-impl/typechecker

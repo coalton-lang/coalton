@@ -45,7 +45,7 @@
 (defstruct
     (pattern-constructor
      (:include pattern)
-     (:coNstructor Pattern-constructor (name patterns)))
+     (:constructor pattern-constructor (name patterns)))
   (name      (required 'name) :type symbol       :read-only t)
   (patterns  (required 'type) :type pattern-list :read-only t))
 
