@@ -57,6 +57,19 @@
     (fn (x)
       (f (g x))))
 
+  (define (conjoin f g x)
+    "Compute the conjunction of two unary Boolean functions."
+    (and (f x) (g x)))
+
+  (define (disjoin f g x)
+    "Compute the disjunction of two unary Boolean functions."
+    (or (f x) (g x)))
+
+  (define (complement f x)
+    "Compute the complement of a unary Boolean function."
+    (not (f x)))
+
+
   ;;
   ;; Monadic operators
   ;;

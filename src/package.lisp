@@ -626,6 +626,9 @@
    #:const
    #:flip
    #:compose
+   #:conjoin
+   #:disjoin
+   #:complement
    #:traverse
    #:mapM
    #:liftM
