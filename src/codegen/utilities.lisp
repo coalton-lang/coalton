@@ -12,7 +12,7 @@
                           (constructor (error "Constructor required"))
                           (superclass nil)
                           (fields nil)
-                          (mode (error "Mode required")))
+                          (mode))
   (declare (type symbol classname)
            (type symbol constructor)
            (type symbol superclass)

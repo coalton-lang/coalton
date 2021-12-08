@@ -17,10 +17,19 @@ jobs:
       matrix:
         COALTON_ENV: ["release", "development"]
         SAFETY: ["0", "3"]
+        LISP: ["sbcl-bin"]
+        include:
+        - COALTON_ENV: "release"
+          SAFETY: "0"
+          LISP: "ecl"
+        - COALTON_ENV: "development"
+          SAFETY: "0"
+          LISP: "ecl"
 
     env:
       # Tell ASDF to look through our repo recursively
       CL_SOURCE_REGISTRY: "/home/runner/work/coalton/coalton//"
+      LISP: ${{ matrix.LISP }}
 
     steps:
       - uses: actions/checkout@v2
@@ -30,6 +39,7 @@ jobs:
           COALTON_ENV: ${{ matrix.COALTON_ENV }}
         run: |
           cat <<EOF > run-tests.lisp
+          #+sbcl
           (sb-ext:restrict-compiler-policy 'safety ${{ matrix.SAFETY }})
           (defun main (&rest args)
             (asdf:test-system :coalton))

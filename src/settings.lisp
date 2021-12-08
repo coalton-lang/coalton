@@ -25,6 +25,6 @@
 (defvar *interaction-mode* :development)
 
 (when (string-equal (uiop:getenv "COALTON_ENV") "release")
-  (format t ";; COALTON starting in release mode~%")
+  (format t "~%;; COALTON starting in release mode~%")
   (setf *interaction-mode* ':release))
 
