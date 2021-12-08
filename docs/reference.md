@@ -285,22 +285,22 @@ Constructors:
 ### Functions
 
 #### <code>NIL</code> <sup><sub>[FUNCTION]</sub></sup><a name="NIL"></a>
-<code>∀ :A. (LIST :A)</code>
+<code>∀ :A. (<a href="#LIST">LIST</a> :A)</code>
 
 ***
 
 #### <code>CONS</code> <sup><sub>[FUNCTION]</sub></sup><a name="CONS"></a>
-<code>∀ :A. (:A → (LIST :A) → (LIST :A))</code>
+<code>∀ :A. (:A → (<a href="#LIST">LIST</a> :A) → (<a href="#LIST">LIST</a> :A))</code>
 
 ***
 
 #### <code>TRUE</code> <sup><sub>[FUNCTION]</sub></sup><a name="TRUE"></a>
-<code>BOOLEAN</code>
+<code><a href="#BOOLEAN">BOOLEAN</a></code>
 
 ***
 
 #### <code>FALSE</code> <sup><sub>[FUNCTION]</sub></sup><a name="FALSE"></a>
-<code>BOOLEAN</code>
+<code><a href="#BOOLEAN">BOOLEAN</a></code>
 
 ***
 
@@ -466,7 +466,7 @@ Constructors:
 ### Functions
 
 #### <code>NOT</code> <sup><sub>[FUNCTION]</sub></sup><a name="NOT"></a>
-<code>(BOOLEAN → BOOLEAN)</code>
+<code>(<a href="#BOOLEAN">BOOLEAN</a> → <a href="#BOOLEAN">BOOLEAN</a>)</code>
 
 Synonym for BOOLEAN-NOT.
 
@@ -474,7 +474,7 @@ Synonym for BOOLEAN-NOT.
 ***
 
 #### <code>XOR</code> <sup><sub>[FUNCTION]</sub></sup><a name="XOR"></a>
-<code>(BOOLEAN → BOOLEAN → BOOLEAN)</code>
+<code>(<a href="#BOOLEAN">BOOLEAN</a> → <a href="#BOOLEAN">BOOLEAN</a> → <a href="#BOOLEAN">BOOLEAN</a>)</code>
 
 Synonym for BOOLEAN-XOR.
 
@@ -482,7 +482,7 @@ Synonym for BOOLEAN-XOR.
 ***
 
 #### <code>BOOLEAN-OR</code> <sup><sub>[FUNCTION]</sub></sup><a name="BOOLEAN-OR"></a>
-<code>(BOOLEAN → BOOLEAN → BOOLEAN)</code>
+<code>(<a href="#BOOLEAN">BOOLEAN</a> → <a href="#BOOLEAN">BOOLEAN</a> → <a href="#BOOLEAN">BOOLEAN</a>)</code>
 
 Is X or Y True? Note that this is a *function* which means both X and Y will be evaluated. Use the OR macro for short-circuiting behavior.
 
@@ -490,7 +490,7 @@ Is X or Y True? Note that this is a *function* which means both X and Y will be 
 ***
 
 #### <code>BOOLEAN-AND</code> <sup><sub>[FUNCTION]</sub></sup><a name="BOOLEAN-AND"></a>
-<code>(BOOLEAN → BOOLEAN → BOOLEAN)</code>
+<code>(<a href="#BOOLEAN">BOOLEAN</a> → <a href="#BOOLEAN">BOOLEAN</a> → <a href="#BOOLEAN">BOOLEAN</a>)</code>
 
 Are X and Y True? Note that this is a *function* which means both X and Y will be evaluated. Use the AND macro for short-circuiting behavior.
 
@@ -498,7 +498,7 @@ Are X and Y True? Note that this is a *function* which means both X and Y will b
 ***
 
 #### <code>BOOLEAN-NOT</code> <sup><sub>[FUNCTION]</sub></sup><a name="BOOLEAN-NOT"></a>
-<code>(BOOLEAN → BOOLEAN)</code>
+<code>(<a href="#BOOLEAN">BOOLEAN</a> → <a href="#BOOLEAN">BOOLEAN</a>)</code>
 
 Is X False?
 
@@ -506,7 +506,7 @@ Is X False?
 ***
 
 #### <code>BOOLEAN-XOR</code> <sup><sub>[FUNCTION]</sub></sup><a name="BOOLEAN-XOR"></a>
-<code>(BOOLEAN → BOOLEAN → BOOLEAN)</code>
+<code>(<a href="#BOOLEAN">BOOLEAN</a> → <a href="#BOOLEAN">BOOLEAN</a> → <a href="#BOOLEAN">BOOLEAN</a>)</code>
 
 Are X or Y True, but not both?
 
@@ -713,8 +713,8 @@ Methods:
 Types which are monads as defined in Haskell. See https://wiki.haskell.org/Monad for more information.
 
 Methods:
-- <code>>>= :: ((:A :B) → (:B → (:A :C)) → (:A :C))</code>
-- <code>>> :: ((:A :D) → (:A :E) → (:A :E))</code>
+- <code>>>= :: ∀ :B :C. ((:A :B) → (:B → (:A :C)) → (:A :C))</code>
+- <code>>> :: ∀ :B :C. ((:A :B) → (:A :C) → (:A :C))</code>
 
 <details>
 <summary>Instances</summary>
@@ -755,7 +755,7 @@ Methods:
 Types which can map an inner type where the mapping adheres to the identity and composition laws.
 
 Methods:
-- <code>MAP :: ((:B → :C) → (:A :B) → (:A :C))</code>
+- <code>MAP :: ∀ :B :C. ((:B → :C) → (:A :B) → (:A :C))</code>
 
 <details>
 <summary>Instances</summary>
@@ -832,7 +832,7 @@ Methods:
 <code><a href="#MONAD">MONAD</a> :A => <a href="#MONADFAIL">MONADFAIL</a> :A</code>
 
 Methods:
-- <code>FAIL :: (<a href="#STRING">STRING</a> → (:A :B))</code>
+- <code>FAIL :: ∀ :B. (<a href="#STRING">STRING</a> → (:A :B))</code>
 
 <details>
 <summary>Instances</summary>
@@ -873,8 +873,8 @@ Methods:
 Types which are a functor which can embed pure expressions and sequence operations.
 
 Methods:
-- <code>PURE :: (:B → (:A :B))</code>
-- <code>LIFTA2 :: ((:C → :D → :E) → (:A :C) → (:A :D) → (:A :E))</code>
+- <code>PURE :: ∀ :B. (:B → (:A :B))</code>
+- <code>LIFTA2 :: ∀ :B :C :D. ((:B → :C → :D) → (:A :B) → (:A :C) → (:A :D))</code>
 
 <details>
 <summary>Instances</summary>
@@ -919,7 +919,7 @@ Methods:
 ### Functions
 
 #### <code><</code> <sup><sub>[FUNCTION]</sub></sup><a name="<"></a>
-<code>∀ :A. ORD :A ⇒ (:A → :A → BOOLEAN)</code>
+<code>∀ :A. <a href="#ORD">ORD</a> :A => (:A → :A → <a href="#BOOLEAN">BOOLEAN</a>)</code>
 
 Is X less than Y?
 
@@ -927,7 +927,7 @@ Is X less than Y?
 ***
 
 #### <code>></code> <sup><sub>[FUNCTION]</sub></sup><a name=">"></a>
-<code>∀ :A. ORD :A ⇒ (:A → :A → BOOLEAN)</code>
+<code>∀ :A. <a href="#ORD">ORD</a> :A => (:A → :A → <a href="#BOOLEAN">BOOLEAN</a>)</code>
 
 Is X greater than Y?
 
@@ -935,12 +935,12 @@ Is X greater than Y?
 ***
 
 #### <code>/=</code> <sup><sub>[FUNCTION]</sub></sup><a name="/="></a>
-<code>∀ :A. EQ :A ⇒ (:A → :A → BOOLEAN)</code>
+<code>∀ :A. <a href="#EQ">EQ</a> :A => (:A → :A → <a href="#BOOLEAN">BOOLEAN</a>)</code>
 
 ***
 
 #### <code><=</code> <sup><sub>[FUNCTION]</sub></sup><a name="<="></a>
-<code>∀ :A. ORD :A ⇒ (:A → :A → BOOLEAN)</code>
+<code>∀ :A. <a href="#ORD">ORD</a> :A => (:A → :A → <a href="#BOOLEAN">BOOLEAN</a>)</code>
 
 Is X less than or equal to Y?
 
@@ -948,7 +948,7 @@ Is X less than or equal to Y?
 ***
 
 #### <code>>=</code> <sup><sub>[FUNCTION]</sub></sup><a name=">="></a>
-<code>∀ :A. ORD :A ⇒ (:A → :A → BOOLEAN)</code>
+<code>∀ :A. <a href="#ORD">ORD</a> :A => (:A → :A → <a href="#BOOLEAN">BOOLEAN</a>)</code>
 
 Is X greater than or equal to Y?
 
@@ -956,7 +956,7 @@ Is X greater than or equal to Y?
 ***
 
 #### <code>MAX</code> <sup><sub>[FUNCTION]</sub></sup><a name="MAX"></a>
-<code>∀ :A. ORD :A ⇒ (:A → :A → :A)</code>
+<code>∀ :A. <a href="#ORD">ORD</a> :A => (:A → :A → :A)</code>
 
 Returns the greater element of X and Y.
 
@@ -964,7 +964,7 @@ Returns the greater element of X and Y.
 ***
 
 #### <code>MIN</code> <sup><sub>[FUNCTION]</sub></sup><a name="MIN"></a>
-<code>∀ :A. ORD :A ⇒ (:A → :A → :A)</code>
+<code>∀ :A. <a href="#ORD">ORD</a> :A => (:A → :A → :A)</code>
 
 Returns the lesser element of X and Y.
 
@@ -976,7 +976,7 @@ Returns the lesser element of X and Y.
 ### Functions
 
 #### <code>ERROR</code> <sup><sub>[FUNCTION]</sub></sup><a name="ERROR"></a>
-<code>∀ :A. (STRING → :A)</code>
+<code>∀ :A. (<a href="#STRING">STRING</a> → :A)</code>
 
 Signal an error by calling CL:ERROR
 
@@ -996,7 +996,7 @@ A function which can be used in place of any value, throwing an error at runtime
 ### Functions
 
 #### <code>NUMERATOR</code> <sup><sub>[FUNCTION]</sub></sup><a name="NUMERATOR"></a>
-<code>(FRACTION → INTEGER)</code>
+<code>(<a href="#FRACTION">FRACTION</a> → <a href="#INTEGER">INTEGER</a>)</code>
 
 The numerator of a fraction Q.
 
@@ -1004,7 +1004,7 @@ The numerator of a fraction Q.
 ***
 
 #### <code>DENOMINATOR</code> <sup><sub>[FUNCTION]</sub></sup><a name="DENOMINATOR"></a>
-<code>(FRACTION → INTEGER)</code>
+<code>(<a href="#FRACTION">FRACTION</a> → <a href="#INTEGER">INTEGER</a>)</code>
 
 The denominator of a fraction Q.
 
@@ -1016,7 +1016,7 @@ The denominator of a fraction Q.
 ### Functions
 
 #### <code>ABS</code> <sup><sub>[FUNCTION]</sub></sup><a name="ABS"></a>
-<code>∀ :A. (NUM :A) (ORD :A) ⇒ (:A → :A)</code>
+<code>∀ :A. (<a href="#NUM">NUM</a> :A) (<a href="#ORD">ORD</a> :A) => (:A → :A)</code>
 
 Absolute value of X.
 
@@ -1024,7 +1024,7 @@ Absolute value of X.
 ***
 
 #### <code>ASH</code> <sup><sub>[FUNCTION]</sub></sup><a name="ASH"></a>
-<code>(INTEGER → INTEGER → INTEGER)</code>
+<code>(<a href="#INTEGER">INTEGER</a> → <a href="#INTEGER">INTEGER</a> → <a href="#INTEGER">INTEGER</a>)</code>
 
 Compute the "arithmetic shift" of X by N. 
 
@@ -1032,7 +1032,7 @@ Compute the "arithmetic shift" of X by N.
 ***
 
 #### <code>GCD</code> <sup><sub>[FUNCTION]</sub></sup><a name="GCD"></a>
-<code>(INTEGER → INTEGER → INTEGER)</code>
+<code>(<a href="#INTEGER">INTEGER</a> → <a href="#INTEGER">INTEGER</a> → <a href="#INTEGER">INTEGER</a>)</code>
 
 Compute the greatest common divisor of A and B.
 
@@ -1040,7 +1040,7 @@ Compute the greatest common divisor of A and B.
 ***
 
 #### <code>LCM</code> <sup><sub>[FUNCTION]</sub></sup><a name="LCM"></a>
-<code>(INTEGER → INTEGER → INTEGER)</code>
+<code>(<a href="#INTEGER">INTEGER</a> → <a href="#INTEGER">INTEGER</a> → <a href="#INTEGER">INTEGER</a>)</code>
 
 Compute the least common multiple of A and B.
 
@@ -1048,7 +1048,7 @@ Compute the least common multiple of A and B.
 ***
 
 #### <code>MOD</code> <sup><sub>[FUNCTION]</sub></sup><a name="MOD"></a>
-<code>(INTEGER → INTEGER → INTEGER)</code>
+<code>(<a href="#INTEGER">INTEGER</a> → <a href="#INTEGER">INTEGER</a> → <a href="#INTEGER">INTEGER</a>)</code>
 
 Compute NUM modulo BASE.
 
@@ -1056,7 +1056,7 @@ Compute NUM modulo BASE.
 ***
 
 #### <code>ODD</code> <sup><sub>[FUNCTION]</sub></sup><a name="ODD"></a>
-<code>(INTEGER → BOOLEAN)</code>
+<code>(<a href="#INTEGER">INTEGER</a> → <a href="#BOOLEAN">BOOLEAN</a>)</code>
 
 Is N odd?
 
@@ -1064,7 +1064,7 @@ Is N odd?
 ***
 
 #### <code>EVEN</code> <sup><sub>[FUNCTION]</sub></sup><a name="EVEN"></a>
-<code>(INTEGER → BOOLEAN)</code>
+<code>(<a href="#INTEGER">INTEGER</a> → <a href="#BOOLEAN">BOOLEAN</a>)</code>
 
 Is N even?
 
@@ -1072,7 +1072,7 @@ Is N even?
 ***
 
 #### <code>EXPT</code> <sup><sub>[FUNCTION]</sub></sup><a name="EXPT"></a>
-<code>(INTEGER → INTEGER → INTEGER)</code>
+<code>(<a href="#INTEGER">INTEGER</a> → <a href="#INTEGER">INTEGER</a> → <a href="#INTEGER">INTEGER</a>)</code>
 
 Exponentiate BASE to a non-negative POWER.
 
@@ -1080,7 +1080,7 @@ Exponentiate BASE to a non-negative POWER.
 ***
 
 #### <code>SIGN</code> <sup><sub>[FUNCTION]</sub></sup><a name="SIGN"></a>
-<code>∀ :A. (NUM :A) (ORD :A) ⇒ (:A → INTEGER)</code>
+<code>∀ :A. (<a href="#NUM">NUM</a> :A) (<a href="#ORD">ORD</a> :A) => (:A → <a href="#INTEGER">INTEGER</a>)</code>
 
 The sign of X.
 
@@ -1088,17 +1088,17 @@ The sign of X.
 ***
 
 #### <code>NEGATE</code> <sup><sub>[FUNCTION]</sub></sup><a name="NEGATE"></a>
-<code>∀ :A. NUM :A ⇒ (:A → :A)</code>
+<code>∀ :A. <a href="#NUM">NUM</a> :A => (:A → :A)</code>
 
 ***
 
 #### <code>INTEGER->STRING</code> <sup><sub>[FUNCTION]</sub></sup><a name="INTEGER->STRING"></a>
-<code>(INTEGER → STRING)</code>
+<code>(<a href="#INTEGER">INTEGER</a> → <a href="#STRING">STRING</a>)</code>
 
 ***
 
 #### <code>DOUBLE-FLOAT->INTEGER</code> <sup><sub>[FUNCTION]</sub></sup><a name="DOUBLE-FLOAT->INTEGER"></a>
-<code>(DOUBLE-FLOAT → (OPTIONAL INTEGER))</code>
+<code>(<a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a> → (<a href="#OPTIONAL">OPTIONAL</a> <a href="#INTEGER">INTEGER</a>))</code>
 
 Round a Double-Float to the nearest Integer.
 
@@ -1106,17 +1106,17 @@ Round a Double-Float to the nearest Integer.
 ***
 
 #### <code>INTEGER->DOUBLE-FLOAT</code> <sup><sub>[FUNCTION]</sub></sup><a name="INTEGER->DOUBLE-FLOAT"></a>
-<code>(INTEGER → DOUBLE-FLOAT)</code>
+<code>(<a href="#INTEGER">INTEGER</a> → <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a>)</code>
 
 ***
 
 #### <code>INTEGER->SINGLE-FLOAT</code> <sup><sub>[FUNCTION]</sub></sup><a name="INTEGER->SINGLE-FLOAT"></a>
-<code>(INTEGER → SINGLE-FLOAT)</code>
+<code>(<a href="#INTEGER">INTEGER</a> → <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a>)</code>
 
 ***
 
 #### <code>SINGLE-FLOAT->INTEGER</code> <sup><sub>[FUNCTION]</sub></sup><a name="SINGLE-FLOAT->INTEGER"></a>
-<code>(SINGLE-FLOAT → (OPTIONAL INTEGER))</code>
+<code>(<a href="#SINGLE-FLOAT">SINGLE-FLOAT</a> → (<a href="#OPTIONAL">OPTIONAL</a> <a href="#INTEGER">INTEGER</a>))</code>
 
 Round a Single-Float to the nearest Integer.
 
@@ -1128,7 +1128,7 @@ Round a Single-Float to the nearest Integer.
 ### Functions
 
 #### <code>PARSE-INT</code> <sup><sub>[FUNCTION]</sub></sup><a name="PARSE-INT"></a>
-<code>(STRING → (OPTIONAL INTEGER))</code>
+<code>(<a href="#STRING">STRING</a> → (<a href="#OPTIONAL">OPTIONAL</a> <a href="#INTEGER">INTEGER</a>))</code>
 
 Parse the integer in string STR.
 
@@ -1136,7 +1136,7 @@ Parse the integer in string STR.
 ***
 
 #### <code>PACK-STRING</code> <sup><sub>[FUNCTION]</sub></sup><a name="PACK-STRING"></a>
-<code>((LIST CHAR) → STRING)</code>
+<code>((<a href="#LIST">LIST</a> <a href="#CHAR">CHAR</a>) → <a href="#STRING">STRING</a>)</code>
 
 Pack a list of charactes into a string.
 
@@ -1144,7 +1144,7 @@ Pack a list of charactes into a string.
 ***
 
 #### <code>CONCAT-STRING</code> <sup><sub>[FUNCTION]</sub></sup><a name="CONCAT-STRING"></a>
-<code>(STRING → STRING → STRING)</code>
+<code>(<a href="#STRING">STRING</a> → <a href="#STRING">STRING</a> → <a href="#STRING">STRING</a>)</code>
 
 Concatenate STR1 and STR2 together, returning a new string.
 
@@ -1152,7 +1152,7 @@ Concatenate STR1 and STR2 together, returning a new string.
 ***
 
 #### <code>UNPACK-STRING</code> <sup><sub>[FUNCTION]</sub></sup><a name="UNPACK-STRING"></a>
-<code>(STRING → (LIST CHAR))</code>
+<code>(<a href="#STRING">STRING</a> → (<a href="#LIST">LIST</a> <a href="#CHAR">CHAR</a>))</code>
 
 Unpack a string into a list of characters.
 
@@ -1164,7 +1164,7 @@ Unpack a string into a list of characters.
 ### Functions
 
 #### <code>ISNONE</code> <sup><sub>[FUNCTION]</sub></sup><a name="ISNONE"></a>
-<code>∀ :A. ((OPTIONAL :A) → BOOLEAN)</code>
+<code>∀ :A. ((<a href="#OPTIONAL">OPTIONAL</a> :A) → <a href="#BOOLEAN">BOOLEAN</a>)</code>
 
 Is X None?
 
@@ -1172,7 +1172,7 @@ Is X None?
 ***
 
 #### <code>ISSOME</code> <sup><sub>[FUNCTION]</sub></sup><a name="ISSOME"></a>
-<code>∀ :A. ((OPTIONAL :A) → BOOLEAN)</code>
+<code>∀ :A. ((<a href="#OPTIONAL">OPTIONAL</a> :A) → <a href="#BOOLEAN">BOOLEAN</a>)</code>
 
 Is X Some?
 
@@ -1180,7 +1180,7 @@ Is X Some?
 ***
 
 #### <code>FROMSOME</code> <sup><sub>[FUNCTION]</sub></sup><a name="FROMSOME"></a>
-<code>∀ :A. (STRING → (OPTIONAL :A) → :A)</code>
+<code>∀ :A. (<a href="#STRING">STRING</a> → (<a href="#OPTIONAL">OPTIONAL</a> :A) → :A)</code>
 
 Get the value of OPT, erroring with the provided string if it is None.
 
@@ -1192,7 +1192,7 @@ Get the value of OPT, erroring with the provided string if it is None.
 ### Functions
 
 #### <code>ALL</code> <sup><sub>[FUNCTION]</sub></sup><a name="ALL"></a>
-<code>∀ :A. ((:A → BOOLEAN) → (LIST :A) → BOOLEAN)</code>
+<code>∀ :A. ((:A → <a href="#BOOLEAN">BOOLEAN</a>) → (<a href="#LIST">LIST</a> :A) → <a href="#BOOLEAN">BOOLEAN</a>)</code>
 
 Returns TRUE if every element in XS matches F.
 
@@ -1200,7 +1200,7 @@ Returns TRUE if every element in XS matches F.
 ***
 
 #### <code>ANY</code> <sup><sub>[FUNCTION]</sub></sup><a name="ANY"></a>
-<code>∀ :A. ((:A → BOOLEAN) → (LIST :A) → BOOLEAN)</code>
+<code>∀ :A. ((:A → <a href="#BOOLEAN">BOOLEAN</a>) → (<a href="#LIST">LIST</a> :A) → <a href="#BOOLEAN">BOOLEAN</a>)</code>
 
 Returns TRUE if at least one element in XS matches F.
 
@@ -1208,7 +1208,7 @@ Returns TRUE if at least one element in XS matches F.
 ***
 
 #### <code>SUM</code> <sup><sub>[FUNCTION]</sub></sup><a name="SUM"></a>
-<code>∀ :A. NUM :A ⇒ ((LIST :A) → :A)</code>
+<code>∀ :A. <a href="#NUM">NUM</a> :A => ((<a href="#LIST">LIST</a> :A) → :A)</code>
 
 Returns the sum of XS
 
@@ -1216,7 +1216,7 @@ Returns the sum of XS
 ***
 
 #### <code>ZIP</code> <sup><sub>[FUNCTION]</sub></sup><a name="ZIP"></a>
-<code>∀ :A :B. ((LIST :A) → (LIST :B) → (LIST (TUPLE :A :B)))</code>
+<code>∀ :A :B. ((<a href="#LIST">LIST</a> :A) → (<a href="#LIST">LIST</a> :B) → (<a href="#LIST">LIST</a> (<a href="#TUPLE">TUPLE</a> :A :B)))</code>
 
 Builds a list of tuples with the elements of XS and YS.
 
@@ -1224,7 +1224,7 @@ Builds a list of tuples with the elements of XS and YS.
 ***
 
 #### <code>DROP</code> <sup><sub>[FUNCTION]</sub></sup><a name="DROP"></a>
-<code>∀ :A. (INTEGER → (LIST :A) → (LIST :A))</code>
+<code>∀ :A. (<a href="#INTEGER">INTEGER</a> → (<a href="#LIST">LIST</a> :A) → (<a href="#LIST">LIST</a> :A))</code>
 
 Returns a list with the first N elements of XS removed
 
@@ -1232,7 +1232,7 @@ Returns a list with the first N elements of XS removed
 ***
 
 #### <code>FIND</code> <sup><sub>[FUNCTION]</sub></sup><a name="FIND"></a>
-<code>∀ :A. ((:A → BOOLEAN) → (LIST :A) → (OPTIONAL :A))</code>
+<code>∀ :A. ((:A → <a href="#BOOLEAN">BOOLEAN</a>) → (<a href="#LIST">LIST</a> :A) → (<a href="#OPTIONAL">OPTIONAL</a> :A))</code>
 
 Returns the first element in a list matching the predicate function F.
 
@@ -1240,7 +1240,7 @@ Returns the first element in a list matching the predicate function F.
 ***
 
 #### <code>FOLD</code> <sup><sub>[FUNCTION]</sub></sup><a name="FOLD"></a>
-<code>∀ :A :B. ((:A → :B → :B) → :B → (LIST :A) → :B)</code>
+<code>∀ :A :B. ((:A → :B → :B) → :B → (<a href="#LIST">LIST</a> :A) → :B)</code>
 
 Tail recursive left fold on lists.
 
@@ -1248,7 +1248,7 @@ Tail recursive left fold on lists.
 ***
 
 #### <code>HEAD</code> <sup><sub>[FUNCTION]</sub></sup><a name="HEAD"></a>
-<code>∀ :A. ((LIST :A) → (OPTIONAL :A))</code>
+<code>∀ :A. ((<a href="#LIST">LIST</a> :A) → (<a href="#OPTIONAL">OPTIONAL</a> :A))</code>
 
 Returns the first element of a list.
 
@@ -1256,7 +1256,7 @@ Returns the first element of a list.
 ***
 
 #### <code>INIT</code> <sup><sub>[FUNCTION]</sub></sup><a name="INIT"></a>
-<code>∀ :A. ((LIST :A) → (LIST :A))</code>
+<code>∀ :A. ((<a href="#LIST">LIST</a> :A) → (<a href="#LIST">LIST</a> :A))</code>
 
 Returns every element except the last in a list.
 
@@ -1264,7 +1264,7 @@ Returns every element except the last in a list.
 ***
 
 #### <code>LAST</code> <sup><sub>[FUNCTION]</sub></sup><a name="LAST"></a>
-<code>∀ :A. ((LIST :A) → (OPTIONAL :A))</code>
+<code>∀ :A. ((<a href="#LIST">LIST</a> :A) → (<a href="#OPTIONAL">OPTIONAL</a> :A))</code>
 
 Returns the last element of a list.
 
@@ -1272,7 +1272,7 @@ Returns the last element of a list.
 ***
 
 #### <code>NULL</code> <sup><sub>[FUNCTION]</sub></sup><a name="NULL"></a>
-<code>∀ :A. ((LIST :A) → BOOLEAN)</code>
+<code>∀ :A. ((<a href="#LIST">LIST</a> :A) → <a href="#BOOLEAN">BOOLEAN</a>)</code>
 
 Returns TRUE if XS is an empty list.
 
@@ -1280,7 +1280,7 @@ Returns TRUE if XS is an empty list.
 ***
 
 #### <code>SORT</code> <sup><sub>[FUNCTION]</sub></sup><a name="SORT"></a>
-<code>∀ :A. ORD :A ⇒ ((LIST :A) → (LIST :A))</code>
+<code>∀ :A. <a href="#ORD">ORD</a> :A => ((<a href="#LIST">LIST</a> :A) → (<a href="#LIST">LIST</a> :A))</code>
 
 Performs a stable sort of XS.
 
@@ -1288,7 +1288,7 @@ Performs a stable sort of XS.
 ***
 
 #### <code>TAIL</code> <sup><sub>[FUNCTION]</sub></sup><a name="TAIL"></a>
-<code>∀ :A. ((LIST :A) → (OPTIONAL (LIST :A)))</code>
+<code>∀ :A. ((<a href="#LIST">LIST</a> :A) → (<a href="#OPTIONAL">OPTIONAL</a> (<a href="#LIST">LIST</a> :A)))</code>
 
 Returns every element except the first in a list.
 
@@ -1296,7 +1296,7 @@ Returns every element except the first in a list.
 ***
 
 #### <code>TAKE</code> <sup><sub>[FUNCTION]</sub></sup><a name="TAKE"></a>
-<code>∀ :A. (INTEGER → (LIST :A) → (LIST :A))</code>
+<code>∀ :A. (<a href="#INTEGER">INTEGER</a> → (<a href="#LIST">LIST</a> :A) → (<a href="#LIST">LIST</a> :A))</code>
 
 Returns the first N elements of XS
 
@@ -1304,7 +1304,7 @@ Returns the first N elements of XS
 ***
 
 #### <code>FOLDR</code> <sup><sub>[FUNCTION]</sub></sup><a name="FOLDR"></a>
-<code>∀ :A :B. ((:A → :B → :B) → :B → (LIST :A) → :B)</code>
+<code>∀ :A :B. ((:A → :B → :B) → :B → (<a href="#LIST">LIST</a> :A) → :B)</code>
 
 Right fold on lists. Is not tail recursive.
 
@@ -1312,7 +1312,7 @@ Right fold on lists. Is not tail recursive.
 ***
 
 #### <code>INDEX</code> <sup><sub>[FUNCTION]</sub></sup><a name="INDEX"></a>
-<code>∀ :A. ((LIST :A) → INTEGER → (OPTIONAL :A))</code>
+<code>∀ :A. ((<a href="#LIST">LIST</a> :A) → <a href="#INTEGER">INTEGER</a> → (<a href="#OPTIONAL">OPTIONAL</a> :A))</code>
 
 Returns the Ith element of XS.
 
@@ -1320,7 +1320,7 @@ Returns the Ith element of XS.
 ***
 
 #### <code>RANGE</code> <sup><sub>[FUNCTION]</sub></sup><a name="RANGE"></a>
-<code>(INTEGER → INTEGER → (LIST INTEGER))</code>
+<code>(<a href="#INTEGER">INTEGER</a> → <a href="#INTEGER">INTEGER</a> → (<a href="#LIST">LIST</a> <a href="#INTEGER">INTEGER</a>))</code>
 
 Returns a list containing the numbers from START to END inclusive.
 
@@ -1328,12 +1328,12 @@ Returns a list containing the numbers from START to END inclusive.
 ***
 
 #### <code>SPLIT</code> <sup><sub>[FUNCTION]</sub></sup><a name="SPLIT"></a>
-<code>(CHAR → STRING → (LIST STRING))</code>
+<code>(<a href="#CHAR">CHAR</a> → <a href="#STRING">STRING</a> → (<a href="#LIST">LIST</a> <a href="#STRING">STRING</a>))</code>
 
 ***
 
 #### <code>UNION</code> <sup><sub>[FUNCTION]</sub></sup><a name="UNION"></a>
-<code>∀ :A. EQ :A ⇒ ((LIST :A) → (LIST :A) → (LIST :A))</code>
+<code>∀ :A. <a href="#EQ">EQ</a> :A => ((<a href="#LIST">LIST</a> :A) → (<a href="#LIST">LIST</a> :A) → (<a href="#LIST">LIST</a> :A))</code>
 
 Returns a new list with the elements from both XS and YS and without duplicates.
 
@@ -1341,7 +1341,7 @@ Returns a new list with the elements from both XS and YS and without duplicates.
 ***
 
 #### <code>APPEND</code> <sup><sub>[FUNCTION]</sub></sup><a name="APPEND"></a>
-<code>∀ :A. ((LIST :A) → (LIST :A) → (LIST :A))</code>
+<code>∀ :A. ((<a href="#LIST">LIST</a> :A) → (<a href="#LIST">LIST</a> :A) → (<a href="#LIST">LIST</a> :A))</code>
 
 Appends two lists together and returns a new list.
 
@@ -1349,7 +1349,7 @@ Appends two lists together and returns a new list.
 ***
 
 #### <code>CONCAT</code> <sup><sub>[FUNCTION]</sub></sup><a name="CONCAT"></a>
-<code>∀ :A. ((LIST (LIST :A)) → (LIST :A))</code>
+<code>∀ :A. ((<a href="#LIST">LIST</a> (<a href="#LIST">LIST</a> :A)) → (<a href="#LIST">LIST</a> :A))</code>
 
 Appends a list of lists together into a single new list.
 
@@ -1357,7 +1357,7 @@ Appends a list of lists together into a single new list.
 ***
 
 #### <code>DELETE</code> <sup><sub>[FUNCTION]</sub></sup><a name="DELETE"></a>
-<code>∀ :A. EQ :A ⇒ (:A → (LIST :A) → (LIST :A))</code>
+<code>∀ :A. <a href="#EQ">EQ</a> :A => (:A → (<a href="#LIST">LIST</a> :A) → (<a href="#LIST">LIST</a> :A))</code>
 
 Return a new list with the first element equal to X removed.
 
@@ -1365,7 +1365,7 @@ Return a new list with the first element equal to X removed.
 ***
 
 #### <code>FILTER</code> <sup><sub>[FUNCTION]</sub></sup><a name="FILTER"></a>
-<code>∀ :A. ((:A → BOOLEAN) → (LIST :A) → (LIST :A))</code>
+<code>∀ :A. ((:A → <a href="#BOOLEAN">BOOLEAN</a>) → (<a href="#LIST">LIST</a> :A) → (<a href="#LIST">LIST</a> :A))</code>
 
 Returns a new list containing every element of XS that matches the predicate function F in the same order.
 
@@ -1373,7 +1373,7 @@ Returns a new list containing every element of XS that matches the predicate fun
 ***
 
 #### <code>INSERT</code> <sup><sub>[FUNCTION]</sub></sup><a name="INSERT"></a>
-<code>∀ :A. ORD :A ⇒ (:A → (LIST :A) → (LIST :A))</code>
+<code>∀ :A. <a href="#ORD">ORD</a> :A => (:A → (<a href="#LIST">LIST</a> :A) → (<a href="#LIST">LIST</a> :A))</code>
 
 Inserts an element into a list at the first place it is less than or equal to the next element.
 
@@ -1381,7 +1381,7 @@ Inserts an element into a list at the first place it is less than or equal to th
 ***
 
 #### <code>LENGTH</code> <sup><sub>[FUNCTION]</sub></sup><a name="LENGTH"></a>
-<code>∀ :A. ((LIST :A) → INTEGER)</code>
+<code>∀ :A. ((<a href="#LIST">LIST</a> :A) → <a href="#INTEGER">INTEGER</a>)</code>
 
 Returns the length of a list.
 
@@ -1389,7 +1389,7 @@ Returns the length of a list.
 ***
 
 #### <code>LOOKUP</code> <sup><sub>[FUNCTION]</sub></sup><a name="LOOKUP"></a>
-<code>∀ :A :B. EQ :A ⇒ (:A → (LIST (TUPLE :A :B)) → (OPTIONAL :B))</code>
+<code>∀ :A :B. <a href="#EQ">EQ</a> :A => (:A → (<a href="#LIST">LIST</a> (<a href="#TUPLE">TUPLE</a> :A :B)) → (<a href="#OPTIONAL">OPTIONAL</a> :B))</code>
 
 Returns the value of the first (key, value) tuple in XS where the key matches E.
 
@@ -1397,7 +1397,7 @@ Returns the value of the first (key, value) tuple in XS where the key matches E.
 ***
 
 #### <code>MEMBER</code> <sup><sub>[FUNCTION]</sub></sup><a name="MEMBER"></a>
-<code>∀ :A. EQ :A ⇒ (:A → (LIST :A) → BOOLEAN)</code>
+<code>∀ :A. <a href="#EQ">EQ</a> :A => (:A → (<a href="#LIST">LIST</a> :A) → <a href="#BOOLEAN">BOOLEAN</a>)</code>
 
 Returns true if any element of XS is equal to E.
 
@@ -1405,7 +1405,7 @@ Returns true if any element of XS is equal to E.
 ***
 
 #### <code>REPEAT</code> <sup><sub>[FUNCTION]</sub></sup><a name="REPEAT"></a>
-<code>∀ :A. (INTEGER → :A → (LIST :A))</code>
+<code>∀ :A. (<a href="#INTEGER">INTEGER</a> → :A → (<a href="#LIST">LIST</a> :A))</code>
 
 Returns a list with X repeated N times.
 
@@ -1413,7 +1413,7 @@ Returns a list with X repeated N times.
 ***
 
 #### <code>SORTBY</code> <sup><sub>[FUNCTION]</sub></sup><a name="SORTBY"></a>
-<code>∀ :A. ((:A → :A → ORD) → (LIST :A) → (LIST :A))</code>
+<code>∀ :A. ((:A → :A → <a href="#ORD">ORD</a>) → (<a href="#LIST">LIST</a> :A) → (<a href="#LIST">LIST</a> :A))</code>
 
 Generic version of sort
 
@@ -1421,7 +1421,7 @@ Generic version of sort
 ***
 
 #### <code>MAXIMUM</code> <sup><sub>[FUNCTION]</sub></sup><a name="MAXIMUM"></a>
-<code>∀ :A. ORD :A ⇒ ((LIST :A) → (OPTIONAL :A))</code>
+<code>∀ :A. <a href="#ORD">ORD</a> :A => ((<a href="#LIST">LIST</a> :A) → (<a href="#OPTIONAL">OPTIONAL</a> :A))</code>
 
 Returns the greatest element in XS.
 
@@ -1429,7 +1429,7 @@ Returns the greatest element in XS.
 ***
 
 #### <code>MINIMUM</code> <sup><sub>[FUNCTION]</sub></sup><a name="MINIMUM"></a>
-<code>∀ :A. ORD :A ⇒ ((LIST :A) → (OPTIONAL :A))</code>
+<code>∀ :A. <a href="#ORD">ORD</a> :A => ((<a href="#LIST">LIST</a> :A) → (<a href="#OPTIONAL">OPTIONAL</a> :A))</code>
 
 Returns the least element in XS.
 
@@ -1437,7 +1437,7 @@ Returns the least element in XS.
 ***
 
 #### <code>PRODUCT</code> <sup><sub>[FUNCTION]</sub></sup><a name="PRODUCT"></a>
-<code>∀ :A. NUM :A ⇒ ((LIST :A) → :A)</code>
+<code>∀ :A. <a href="#NUM">NUM</a> :A => ((<a href="#LIST">LIST</a> :A) → :A)</code>
 
 Returns the product of XS
 
@@ -1445,7 +1445,7 @@ Returns the product of XS
 ***
 
 #### <code>REVERSE</code> <sup><sub>[FUNCTION]</sub></sup><a name="REVERSE"></a>
-<code>∀ :A. ((LIST :A) → (LIST :A))</code>
+<code>∀ :A. ((<a href="#LIST">LIST</a> :A) → (<a href="#LIST">LIST</a> :A))</code>
 
 Returns a new list containing the same elements in reverse order.
 
@@ -1453,7 +1453,7 @@ Returns a new list containing the same elements in reverse order.
 ***
 
 #### <code>ZIPWITH</code> <sup><sub>[FUNCTION]</sub></sup><a name="ZIPWITH"></a>
-<code>∀ :A :B :C. ((:A → :B → :C) → (LIST :A) → (LIST :B) → (LIST :C))</code>
+<code>∀ :A :B :C. ((:A → :B → :C) → (<a href="#LIST">LIST</a> :A) → (<a href="#LIST">LIST</a> :B) → (<a href="#LIST">LIST</a> :C))</code>
 
 Builds a new list by calling F with elements of XS and YS.
 
@@ -1461,7 +1461,7 @@ Builds a new list by calling F with elements of XS and YS.
 ***
 
 #### <code>INSERTBY</code> <sup><sub>[FUNCTION]</sub></sup><a name="INSERTBY"></a>
-<code>∀ :A. ((:A → :A → ORD) → :A → (LIST :A) → (LIST :A))</code>
+<code>∀ :A. ((:A → :A → <a href="#ORD">ORD</a>) → :A → (<a href="#LIST">LIST</a> :A) → (<a href="#LIST">LIST</a> :A))</code>
 
 Generic version of insert
 
@@ -1469,7 +1469,7 @@ Generic version of insert
 ***
 
 #### <code>ZIPWITH3</code> <sup><sub>[FUNCTION]</sub></sup><a name="ZIPWITH3"></a>
-<code>∀ :A :B :C :D. ((:A → :B → :C → :D) → (LIST :A) → (LIST :B) → (LIST :C) → (LIST :D))</code>
+<code>∀ :A :B :C :D. ((:A → :B → :C → :D) → (<a href="#LIST">LIST</a> :A) → (<a href="#LIST">LIST</a> :B) → (<a href="#LIST">LIST</a> :C) → (<a href="#LIST">LIST</a> :D))</code>
 
 Build a new list by calling F with elements of XS, YS and ZS
 
@@ -1477,7 +1477,7 @@ Build a new list by calling F with elements of XS, YS and ZS
 ***
 
 #### <code>ZIPWITH4</code> <sup><sub>[FUNCTION]</sub></sup><a name="ZIPWITH4"></a>
-<code>∀ :A :B :C :D :E. ((:A → :B → :C → :D → :E) → (LIST :A) → (LIST :B) → (LIST :C) → (LIST :D) → (LIST :E))</code>
+<code>∀ :A :B :C :D :E. ((:A → :B → :C → :D → :E) → (<a href="#LIST">LIST</a> :A) → (<a href="#LIST">LIST</a> :B) → (<a href="#LIST">LIST</a> :C) → (<a href="#LIST">LIST</a> :D) → (<a href="#LIST">LIST</a> :E))</code>
 
 Build a new list by calling F with elements of AS, BS, CS and DS
 
@@ -1485,7 +1485,7 @@ Build a new list by calling F with elements of AS, BS, CS and DS
 ***
 
 #### <code>ZIPWITH5</code> <sup><sub>[FUNCTION]</sub></sup><a name="ZIPWITH5"></a>
-<code>∀ :A :B :C :D :E :F. ((:A → :B → :C → :D → :E → :F) → (LIST :A) → (LIST :B) → (LIST :C) → (LIST :D) → (LIST :E) → (LIST :F))</code>
+<code>∀ :A :B :C :D :E :F. ((:A → :B → :C → :D → :E → :F) → (<a href="#LIST">LIST</a> :A) → (<a href="#LIST">LIST</a> :B) → (<a href="#LIST">LIST</a> :C) → (<a href="#LIST">LIST</a> :D) → (<a href="#LIST">LIST</a> :E) → (<a href="#LIST">LIST</a> :F))</code>
 
 Build a new list by calling F with elements of AS, BS, CS, DS and ES
 
@@ -1493,7 +1493,7 @@ Build a new list by calling F with elements of AS, BS, CS, DS and ES
 ***
 
 #### <code>CONCATMAP</code> <sup><sub>[FUNCTION]</sub></sup><a name="CONCATMAP"></a>
-<code>∀ :A :B. ((:A → (LIST :B)) → (LIST :A) → (LIST :B))</code>
+<code>∀ :A :B. ((:A → (<a href="#LIST">LIST</a> :B)) → (<a href="#LIST">LIST</a> :A) → (<a href="#LIST">LIST</a> :B))</code>
 
 Apply F to each element in XS and concatenate the results.
 
@@ -1501,17 +1501,17 @@ Apply F to each element in XS and concatenate the results.
 ***
 
 #### <code>ELEMINDEX</code> <sup><sub>[FUNCTION]</sub></sup><a name="ELEMINDEX"></a>
-<code>∀ :A. EQ :A ⇒ (:A → (LIST :A) → (OPTIONAL INTEGER))</code>
+<code>∀ :A. <a href="#EQ">EQ</a> :A => (:A → (<a href="#LIST">LIST</a> :A) → (<a href="#OPTIONAL">OPTIONAL</a> <a href="#INTEGER">INTEGER</a>))</code>
 
 ***
 
 #### <code>FINDINDEX</code> <sup><sub>[FUNCTION]</sub></sup><a name="FINDINDEX"></a>
-<code>∀ :A. ((:A → BOOLEAN) → (LIST :A) → (OPTIONAL INTEGER))</code>
+<code>∀ :A. ((:A → <a href="#BOOLEAN">BOOLEAN</a>) → (<a href="#LIST">LIST</a> :A) → (<a href="#OPTIONAL">OPTIONAL</a> <a href="#INTEGER">INTEGER</a>))</code>
 
 ***
 
 #### <code>PARTITION</code> <sup><sub>[FUNCTION]</sub></sup><a name="PARTITION"></a>
-<code>∀ :A. ((:A → BOOLEAN) → (LIST :A) → (TUPLE (LIST :A) (LIST :A)))</code>
+<code>∀ :A. ((:A → <a href="#BOOLEAN">BOOLEAN</a>) → (<a href="#LIST">LIST</a> :A) → (<a href="#TUPLE">TUPLE</a> (<a href="#LIST">LIST</a> :A) (<a href="#LIST">LIST</a> :A)))</code>
 
 Splits a list into two new lists. The first list contains elements matching predicate F.
 
@@ -1519,7 +1519,7 @@ Splits a list into two new lists. The first list contains elements matching pred
 ***
 
 #### <code>SINGLETON</code> <sup><sub>[FUNCTION]</sub></sup><a name="SINGLETON"></a>
-<code>∀ :A. (:A → (LIST :A))</code>
+<code>∀ :A. (:A → (<a href="#LIST">LIST</a> :A))</code>
 
 Returns a single element list containg only X.
 
@@ -1527,7 +1527,7 @@ Returns a single element list containg only X.
 ***
 
 #### <code>TRANSPOSE</code> <sup><sub>[FUNCTION]</sub></sup><a name="TRANSPOSE"></a>
-<code>∀ :A. ((LIST (LIST :A)) → (LIST (LIST :A)))</code>
+<code>∀ :A. ((<a href="#LIST">LIST</a> (<a href="#LIST">LIST</a> :A)) → (<a href="#LIST">LIST</a> (<a href="#LIST">LIST</a> :A)))</code>
 
 Transposes a matrix represented by a list of lists.
 
@@ -1535,7 +1535,7 @@ Transposes a matrix represented by a list of lists.
 ***
 
 #### <code>INTERCALATE</code> <sup><sub>[FUNCTION]</sub></sup><a name="INTERCALATE"></a>
-<code>∀ :A. ((LIST :A) → (LIST (LIST :A)) → (LIST :A))</code>
+<code>∀ :A. ((<a href="#LIST">LIST</a> :A) → (<a href="#LIST">LIST</a> (<a href="#LIST">LIST</a> :A)) → (<a href="#LIST">LIST</a> :A))</code>
 
 Intersperses XS into XSS and then concatenates the result.
 
@@ -1543,7 +1543,7 @@ Intersperses XS into XSS and then concatenates the result.
 ***
 
 #### <code>INTERSPERSE</code> <sup><sub>[FUNCTION]</sub></sup><a name="INTERSPERSE"></a>
-<code>∀ :A. (:A → (LIST :A) → (LIST :A))</code>
+<code>∀ :A. (:A → (<a href="#LIST">LIST</a> :A) → (<a href="#LIST">LIST</a> :A))</code>
 
 Returns a new list where every other element is E.
 
@@ -1551,7 +1551,7 @@ Returns a new list where every other element is E.
 ***
 
 #### <code>INTERSECTION</code> <sup><sub>[FUNCTION]</sub></sup><a name="INTERSECTION"></a>
-<code>∀ :A. EQ :A ⇒ ((LIST :A) → (LIST :A) → (LIST :A))</code>
+<code>∀ :A. <a href="#EQ">EQ</a> :A => ((<a href="#LIST">LIST</a> :A) → (<a href="#LIST">LIST</a> :A) → (<a href="#LIST">LIST</a> :A))</code>
 
 Returns elements which occur in both lists. Does not return duplicates and does not guarantee order.
 
@@ -1559,7 +1559,7 @@ Returns elements which occur in both lists. Does not return duplicates and does 
 ***
 
 #### <code>LIST-DIFFERENCE</code> <sup><sub>[FUNCTION]</sub></sup><a name="LIST-DIFFERENCE"></a>
-<code>∀ :A. EQ :A ⇒ ((LIST :A) → (LIST :A) → (LIST :A))</code>
+<code>∀ :A. <a href="#EQ">EQ</a> :A => ((<a href="#LIST">LIST</a> :A) → (<a href="#LIST">LIST</a> :A) → (<a href="#LIST">LIST</a> :A))</code>
 
 Returns a new list with the first occurence of each element in YS deleted from XS.
 
@@ -1567,7 +1567,7 @@ Returns a new list with the first occurence of each element in YS deleted from X
 ***
 
 #### <code>REMOVE-DUPLICATES</code> <sup><sub>[FUNCTION]</sub></sup><a name="REMOVE-DUPLICATES"></a>
-<code>∀ :A. EQ :A ⇒ ((LIST :A) → (LIST :A))</code>
+<code>∀ :A. <a href="#EQ">EQ</a> :A => ((<a href="#LIST">LIST</a> :A) → (<a href="#LIST">LIST</a> :A))</code>
 
 Returns a new list without duplicate elements.
 
@@ -1579,7 +1579,7 @@ Returns a new list without duplicate elements.
 ### Functions
 
 #### <code>FST</code> <sup><sub>[FUNCTION]</sub></sup><a name="FST"></a>
-<code>∀ :A :B. ((TUPLE :A :B) → :A)</code>
+<code>∀ :A :B. ((<a href="#TUPLE">TUPLE</a> :A :B) → :A)</code>
 
 Get the first element of a tuple.
 
@@ -1587,7 +1587,7 @@ Get the first element of a tuple.
 ***
 
 #### <code>SND</code> <sup><sub>[FUNCTION]</sub></sup><a name="SND"></a>
-<code>∀ :A :B. ((TUPLE :A :B) → :B)</code>
+<code>∀ :A :B. ((<a href="#TUPLE">TUPLE</a> :A :B) → :B)</code>
 
 Get the second element of a tuple.
 
@@ -1599,7 +1599,7 @@ Get the second element of a tuple.
 ### Functions
 
 #### <code>ISOK</code> <sup><sub>[FUNCTION]</sub></sup><a name="ISOK"></a>
-<code>∀ :A :B. ((RESULT :A :B) → BOOLEAN)</code>
+<code>∀ :A :B. ((<a href="#RESULT">RESULT</a> :A :B) → <a href="#BOOLEAN">BOOLEAN</a>)</code>
 
 Returns TRUE if X is ERR
 
@@ -1607,7 +1607,7 @@ Returns TRUE if X is ERR
 ***
 
 #### <code>ISERR</code> <sup><sub>[FUNCTION]</sub></sup><a name="ISERR"></a>
-<code>∀ :A :B. ((RESULT :A :B) → BOOLEAN)</code>
+<code>∀ :A :B. ((<a href="#RESULT">RESULT</a> :A :B) → <a href="#BOOLEAN">BOOLEAN</a>)</code>
 
 Returns TRUE if X is ERR
 
@@ -1615,7 +1615,7 @@ Returns TRUE if X is ERR
 ***
 
 #### <code>MAPERR</code> <sup><sub>[FUNCTION]</sub></sup><a name="MAPERR"></a>
-<code>∀ :A :B :C. ((:A → :B) → (RESULT :A :C) → (RESULT :B :C))</code>
+<code>∀ :A :B :C. ((:A → :B) → (<a href="#RESULT">RESULT</a> :A :C) → (<a href="#RESULT">RESULT</a> :B :C))</code>
 
 Map over the ERR case
 
@@ -1651,7 +1651,7 @@ The factorial function can be written
 ***
 
 #### <code>ASUM</code> <sup><sub>[FUNCTION]</sub></sup><a name="ASUM"></a>
-<code>∀ :A :B. ALTERNATIVE :A ⇒ ((LIST (:A :B)) → (:A :B))</code>
+<code>∀ :A :B. <a href="#ALTERNATIVE">ALTERNATIVE</a> :A => ((<a href="#LIST">LIST</a> (:A :B)) → (:A :B))</code>
 
 Fold over a list using alt
 
@@ -1675,7 +1675,7 @@ A function that always returns its first argument
 ***
 
 #### <code>TRACE</code> <sup><sub>[FUNCTION]</sub></sup><a name="TRACE"></a>
-<code>(STRING → UNIT)</code>
+<code>(<a href="#STRING">STRING</a> → <a href="#UNIT">UNIT</a>)</code>
 
 Print a line to *STANDARD-OUTPUT*
 
@@ -1688,12 +1688,12 @@ Print a line to *STANDARD-OUTPUT*
 ***
 
 #### <code>SEQUENCE</code> <sup><sub>[FUNCTION]</sub></sup><a name="SEQUENCE"></a>
-<code>∀ :A :B. APPLICATIVE :A ⇒ ((LIST (:A :B)) → (:A (LIST :B)))</code>
+<code>∀ :A :B. <a href="#APPLICATIVE">APPLICATIVE</a> :A => ((<a href="#LIST">LIST</a> (:A :B)) → (:A (<a href="#LIST">LIST</a> :B)))</code>
 
 ***
 
 #### <code>TRAVERSE</code> <sup><sub>[FUNCTION]</sub></sup><a name="TRAVERSE"></a>
-<code>∀ :A :B :C. APPLICATIVE :B ⇒ ((:A → (:B :C)) → (LIST :A) → (:B (LIST :C)))</code>
+<code>∀ :A :B :C. <a href="#APPLICATIVE">APPLICATIVE</a> :B => ((:A → (:B :C)) → (<a href="#LIST">LIST</a> :A) → (:B (<a href="#LIST">LIST</a> :C)))</code>
 
 Map the elements of XS with F then collect the results.
 
@@ -1701,7 +1701,7 @@ Map the elements of XS with F then collect the results.
 ***
 
 #### <code>TRACEOBJECT</code> <sup><sub>[FUNCTION]</sub></sup><a name="TRACEOBJECT"></a>
-<code>∀ :A. (STRING → :A → UNIT)</code>
+<code>∀ :A. (<a href="#STRING">STRING</a> → :A → <a href="#UNIT">UNIT</a>)</code>
 
 Print a line to *STANDARD-OUTPUT* in the form "{STR}: {ITEM}"
 
@@ -1713,7 +1713,7 @@ Print a line to *STANDARD-OUTPUT* in the form "{STR}: {ITEM}"
 ### Functions
 
 #### <code>FLOOR</code> <sup><sub>[FUNCTION]</sub></sup><a name="FLOOR"></a>
-<code>∀ :A. QUANTIZABLE :A ⇒ (:A → INTEGER)</code>
+<code>∀ :A. <a href="#QUANTIZABLE">QUANTIZABLE</a> :A => (:A → <a href="#INTEGER">INTEGER</a>)</code>
 
 Return the greatest integer less than or equal to X.
 
@@ -1721,7 +1721,7 @@ Return the greatest integer less than or equal to X.
 ***
 
 #### <code>ROUND</code> <sup><sub>[FUNCTION]</sub></sup><a name="ROUND"></a>
-<code>∀ :A. QUANTIZABLE :A ⇒ (:A → INTEGER)</code>
+<code>∀ :A. <a href="#QUANTIZABLE">QUANTIZABLE</a> :A => (:A → <a href="#INTEGER">INTEGER</a>)</code>
 
 Return the nearest integer to X, with ties breaking toward positive infinity.
 
@@ -1729,7 +1729,7 @@ Return the nearest integer to X, with ties breaking toward positive infinity.
 ***
 
 #### <code>SAFE/</code> <sup><sub>[FUNCTION]</sub></sup><a name="SAFE/"></a>
-<code>∀ :A :B. DIVIDABLE :A :B ⇒ (:A → :A → (OPTIONAL :B))</code>
+<code>∀ :A :B. <a href="#DIVIDABLE">DIVIDABLE</a> :A :B => (:A → :A → (<a href="#OPTIONAL">OPTIONAL</a> :B))</code>
 
 Safely divide X by Y, returning None if Y is zero.
 
@@ -1737,7 +1737,7 @@ Safely divide X by Y, returning None if Y is zero.
 ***
 
 #### <code>EXACT/</code> <sup><sub>[FUNCTION]</sub></sup><a name="EXACT/"></a>
-<code>(INTEGER → INTEGER → FRACTION)</code>
+<code>(<a href="#INTEGER">INTEGER</a> → <a href="#INTEGER">INTEGER</a> → <a href="#FRACTION">FRACTION</a>)</code>
 
 Exactly divide two integers and produce a fraction.
 
@@ -1745,7 +1745,7 @@ Exactly divide two integers and produce a fraction.
 ***
 
 #### <code>FLOOR/</code> <sup><sub>[FUNCTION]</sub></sup><a name="FLOOR/"></a>
-<code>(INTEGER → INTEGER → INTEGER)</code>
+<code>(<a href="#INTEGER">INTEGER</a> → <a href="#INTEGER">INTEGER</a> → <a href="#INTEGER">INTEGER</a>)</code>
 
 Divide two integers and compute the floor of the quotient.
 
@@ -1753,7 +1753,7 @@ Divide two integers and compute the floor of the quotient.
 ***
 
 #### <code>ROUND/</code> <sup><sub>[FUNCTION]</sub></sup><a name="ROUND/"></a>
-<code>(INTEGER → INTEGER → INTEGER)</code>
+<code>(<a href="#INTEGER">INTEGER</a> → <a href="#INTEGER">INTEGER</a> → <a href="#INTEGER">INTEGER</a>)</code>
 
 Divide two integers and round the quotient.
 
@@ -1761,7 +1761,7 @@ Divide two integers and round the quotient.
 ***
 
 #### <code>CEILING</code> <sup><sub>[FUNCTION]</sub></sup><a name="CEILING"></a>
-<code>∀ :A. QUANTIZABLE :A ⇒ (:A → INTEGER)</code>
+<code>∀ :A. <a href="#QUANTIZABLE">QUANTIZABLE</a> :A => (:A → <a href="#INTEGER">INTEGER</a>)</code>
 
 Return the least integer greater than or equal to X.
 
@@ -1769,7 +1769,7 @@ Return the least integer greater than or equal to X.
 ***
 
 #### <code>DOUBLE/</code> <sup><sub>[FUNCTION]</sub></sup><a name="DOUBLE/"></a>
-<code>(DOUBLE-FLOAT → DOUBLE-FLOAT → DOUBLE-FLOAT)</code>
+<code>(<a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a> → <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a> → <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a>)</code>
 
 Compute the quotient of single-precision floats A and B as a single-precision float.
 
@@ -1777,7 +1777,7 @@ Compute the quotient of single-precision floats A and B as a single-precision fl
 ***
 
 #### <code>SINGLE/</code> <sup><sub>[FUNCTION]</sub></sup><a name="SINGLE/"></a>
-<code>(SINGLE-FLOAT → SINGLE-FLOAT → SINGLE-FLOAT)</code>
+<code>(<a href="#SINGLE-FLOAT">SINGLE-FLOAT</a> → <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a> → <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a>)</code>
 
 Compute the quotient of single-precision floats A and B as a single-precision float.
 
@@ -1785,7 +1785,7 @@ Compute the quotient of single-precision floats A and B as a single-precision fl
 ***
 
 #### <code>CEILING/</code> <sup><sub>[FUNCTION]</sub></sup><a name="CEILING/"></a>
-<code>(INTEGER → INTEGER → INTEGER)</code>
+<code>(<a href="#INTEGER">INTEGER</a> → <a href="#INTEGER">INTEGER</a> → <a href="#INTEGER">INTEGER</a>)</code>
 
 Divide two integers and compute the ceiling of the quotient.
 
@@ -1793,7 +1793,7 @@ Divide two integers and compute the ceiling of the quotient.
 ***
 
 #### <code>INEXACT/</code> <sup><sub>[FUNCTION]</sub></sup><a name="INEXACT/"></a>
-<code>(INTEGER → INTEGER → DOUBLE-FLOAT)</code>
+<code>(<a href="#INTEGER">INTEGER</a> → <a href="#INTEGER">INTEGER</a> → <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a>)</code>
 
 Compute the quotient of integers A and B as a double-precision float.
 
@@ -1833,7 +1833,7 @@ Constructors:
 ### Functions
 
 #### <code>CELL-READ</code> <sup><sub>[FUNCTION]</sub></sup><a name="CELL-READ"></a>
-<code>∀ :A. ((CELL :A) → :A)</code>
+<code>∀ :A. ((<a href="#CELL">CELL</a> :A) → :A)</code>
 
 Read the value of a mutable cell
 
@@ -1841,7 +1841,7 @@ Read the value of a mutable cell
 ***
 
 #### <code>CELL-SWAP</code> <sup><sub>[FUNCTION]</sub></sup><a name="CELL-SWAP"></a>
-<code>∀ :A. (:A → (CELL :A) → :A)</code>
+<code>∀ :A. (:A → (<a href="#CELL">CELL</a> :A) → :A)</code>
 
 Replace the value of a mutable cell with a new value, then return the old value
 
@@ -1849,7 +1849,7 @@ Replace the value of a mutable cell with a new value, then return the old value
 ***
 
 #### <code>MAKE-CELL</code> <sup><sub>[FUNCTION]</sub></sup><a name="MAKE-CELL"></a>
-<code>∀ :A. (:A → (CELL :A))</code>
+<code>∀ :A. (:A → (<a href="#CELL">CELL</a> :A))</code>
 
 Create a new mutable cell
 
@@ -1857,7 +1857,7 @@ Create a new mutable cell
 ***
 
 #### <code>CELL-WRITE</code> <sup><sub>[FUNCTION]</sub></sup><a name="CELL-WRITE"></a>
-<code>∀ :A. (:A → (CELL :A) → UNIT)</code>
+<code>∀ :A. (:A → (<a href="#CELL">CELL</a> :A) → <a href="#UNIT">UNIT</a>)</code>
 
 Set the value of a mutable cell
 
@@ -1865,7 +1865,7 @@ Set the value of a mutable cell
 ***
 
 #### <code>CELL-UPDATE</code> <sup><sub>[FUNCTION]</sub></sup><a name="CELL-UPDATE"></a>
-<code>∀ :A. ((:A → :A) → (CELL :A) → UNIT)</code>
+<code>∀ :A. ((:A → :A) → (<a href="#CELL">CELL</a> :A) → <a href="#UNIT">UNIT</a>)</code>
 
 ***
 
@@ -1900,7 +1900,7 @@ Constructors:
 ### Functions
 
 #### <code>VECTOR-POP</code> <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-POP"></a>
-<code>∀ :A. ((VECTOR :A) → (OPTIONAL :A))</code>
+<code>∀ :A. ((<a href="#VECTOR">VECTOR</a> :A) → (<a href="#OPTIONAL">OPTIONAL</a> :A))</code>
 
 Remove and return the first item of V
 
@@ -1908,7 +1908,7 @@ Remove and return the first item of V
 ***
 
 #### <code>VECTOR-SET</code> <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-SET"></a>
-<code>∀ :A. (INTEGER → :A → (VECTOR :A) → UNIT)</code>
+<code>∀ :A. (<a href="#INTEGER">INTEGER</a> → :A → (<a href="#VECTOR">VECTOR</a> :A) → <a href="#UNIT">UNIT</a>)</code>
 
 Set the INDEXth element of V to ITEM. This function left intentionally unsafe because it does not have a return value to check.
 
@@ -1916,7 +1916,7 @@ Set the INDEXth element of V to ITEM. This function left intentionally unsafe be
 ***
 
 #### <code>MAKE-VECTOR</code> <sup><sub>[FUNCTION]</sub></sup><a name="MAKE-VECTOR"></a>
-<code>∀ :A. (UNIT → (VECTOR :A))</code>
+<code>∀ :A. (<a href="#UNIT">UNIT</a> → (<a href="#VECTOR">VECTOR</a> :A))</code>
 
 Create a new empty vector
 
@@ -1924,7 +1924,7 @@ Create a new empty vector
 ***
 
 #### <code>VECTOR-COPY</code> <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-COPY"></a>
-<code>∀ :A. ((VECTOR :A) → (VECTOR :A))</code>
+<code>∀ :A. ((<a href="#VECTOR">VECTOR</a> :A) → (<a href="#VECTOR">VECTOR</a> :A))</code>
 
 Return a new vector containing the same elements as V
 
@@ -1932,7 +1932,7 @@ Return a new vector containing the same elements as V
 ***
 
 #### <code>VECTOR-HEAD</code> <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-HEAD"></a>
-<code>∀ :A. ((VECTOR :A) → (OPTIONAL :A))</code>
+<code>∀ :A. ((<a href="#VECTOR">VECTOR</a> :A) → (<a href="#OPTIONAL">OPTIONAL</a> :A))</code>
 
 Return the first item of V
 
@@ -1940,7 +1940,7 @@ Return the first item of V
 ***
 
 #### <code>VECTOR-LAST</code> <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-LAST"></a>
-<code>∀ :A. ((VECTOR :A) → (OPTIONAL :A))</code>
+<code>∀ :A. ((<a href="#VECTOR">VECTOR</a> :A) → (<a href="#OPTIONAL">OPTIONAL</a> :A))</code>
 
 Return the last element of V
 
@@ -1948,7 +1948,7 @@ Return the last element of V
 ***
 
 #### <code>VECTOR-PUSH</code> <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-PUSH"></a>
-<code>∀ :A. (:A → (VECTOR :A) → INTEGER)</code>
+<code>∀ :A. (:A → (<a href="#VECTOR">VECTOR</a> :A) → <a href="#INTEGER">INTEGER</a>)</code>
 
 Append ITEM to V and resize V if necessary
 
@@ -1956,7 +1956,7 @@ Append ITEM to V and resize V if necessary
 ***
 
 #### <code>VECTOR-SORT</code> <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-SORT"></a>
-<code>∀ :A. ORD :A ⇒ ((VECTOR :A) → UNIT)</code>
+<code>∀ :A. <a href="#ORD">ORD</a> :A => ((<a href="#VECTOR">VECTOR</a> :A) → <a href="#UNIT">UNIT</a>)</code>
 
 Sort a vector inplace
 
@@ -1964,7 +1964,7 @@ Sort a vector inplace
 ***
 
 #### <code>VECTOR-EMPTY</code> <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-EMPTY"></a>
-<code>∀ :A. ((VECTOR :A) → BOOLEAN)</code>
+<code>∀ :A. ((<a href="#VECTOR">VECTOR</a> :A) → <a href="#BOOLEAN">BOOLEAN</a>)</code>
 
 Returns TRUE if V is empty
 
@@ -1972,7 +1972,7 @@ Returns TRUE if V is empty
 ***
 
 #### <code>VECTOR-INDEX</code> <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-INDEX"></a>
-<code>∀ :A. (INTEGER → (VECTOR :A) → (OPTIONAL :A))</code>
+<code>∀ :A. (<a href="#INTEGER">INTEGER</a> → (<a href="#VECTOR">VECTOR</a> :A) → (<a href="#OPTIONAL">OPTIONAL</a> :A))</code>
 
 Return the INDEXth element of V
 
@@ -1980,7 +1980,7 @@ Return the INDEXth element of V
 ***
 
 #### <code>VECTOR-APPEND</code> <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-APPEND"></a>
-<code>∀ :A. ((VECTOR :A) → (VECTOR :A) → (VECTOR :A))</code>
+<code>∀ :A. ((<a href="#VECTOR">VECTOR</a> :A) → (<a href="#VECTOR">VECTOR</a> :A) → (<a href="#VECTOR">VECTOR</a> :A))</code>
 
 Create a new VECTOR containing the elements of v1 followed by the elements of v2
 
@@ -1988,7 +1988,7 @@ Create a new VECTOR containing the elements of v1 followed by the elements of v2
 ***
 
 #### <code>VECTOR-LENGTH</code> <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-LENGTH"></a>
-<code>∀ :A. ((VECTOR :A) → INTEGER)</code>
+<code>∀ :A. ((<a href="#VECTOR">VECTOR</a> :A) → <a href="#INTEGER">INTEGER</a>)</code>
 
 Returns the length of V
 
@@ -1996,7 +1996,7 @@ Returns the length of V
 ***
 
 #### <code>VECTOR-FOREACH</code> <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-FOREACH"></a>
-<code>∀ :A :B. ((:A → :B) → (VECTOR :A) → UNIT)</code>
+<code>∀ :A :B. ((:A → :B) → (<a href="#VECTOR">VECTOR</a> :A) → <a href="#UNIT">UNIT</a>)</code>
 
 Call the function F once for each item in V
 
@@ -2004,7 +2004,7 @@ Call the function F once for each item in V
 ***
 
 #### <code>VECTOR-SORT-BY</code> <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-SORT-BY"></a>
-<code>∀ :A. ((:A → :A → BOOLEAN) → (VECTOR :A) → UNIT)</code>
+<code>∀ :A. ((:A → :A → <a href="#BOOLEAN">BOOLEAN</a>) → (<a href="#VECTOR">VECTOR</a> :A) → <a href="#UNIT">UNIT</a>)</code>
 
 Sort a vector with predicate function F
 
@@ -2012,12 +2012,12 @@ Sort a vector with predicate function F
 ***
 
 #### <code>VECTOR-TO-LIST</code> <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-TO-LIST"></a>
-<code>∀ :A. ((VECTOR :A) → (LIST :A))</code>
+<code>∀ :A. ((<a href="#VECTOR">VECTOR</a> :A) → (<a href="#LIST">LIST</a> :A))</code>
 
 ***
 
 #### <code>VECTOR-CAPACITY</code> <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-CAPACITY"></a>
-<code>∀ :A. ((VECTOR :A) → INTEGER)</code>
+<code>∀ :A. ((<a href="#VECTOR">VECTOR</a> :A) → <a href="#INTEGER">INTEGER</a>)</code>
 
 Returns the number of elements that V can store without resizing
 
@@ -2025,7 +2025,7 @@ Returns the number of elements that V can store without resizing
 ***
 
 #### <code>VECTOR-FOREACH2</code> <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-FOREACH2"></a>
-<code>∀ :A :B :C. ((:A → :B → :C) → (VECTOR :A) → (VECTOR :B) → UNIT)</code>
+<code>∀ :A :B :C. ((:A → :B → :C) → (<a href="#VECTOR">VECTOR</a> :A) → (<a href="#VECTOR">VECTOR</a> :B) → <a href="#UNIT">UNIT</a>)</code>
 
 Like vector-foreach but twice as good
 
@@ -2033,7 +2033,7 @@ Like vector-foreach but twice as good
 ***
 
 #### <code>VECTOR-POP-UNSAFE</code> <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-POP-UNSAFE"></a>
-<code>∀ :A. ((VECTOR :A) → :A)</code>
+<code>∀ :A. ((<a href="#VECTOR">VECTOR</a> :A) → :A)</code>
 
 Remove and return the first item of V without checking if the vector is empty
 
@@ -2041,7 +2041,7 @@ Remove and return the first item of V without checking if the vector is empty
 ***
 
 #### <code>VECTOR-HEAD-UNSAFE</code> <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-HEAD-UNSAFE"></a>
-<code>∀ :A. ((VECTOR :A) → :A)</code>
+<code>∀ :A. ((<a href="#VECTOR">VECTOR</a> :A) → :A)</code>
 
 Return the first item of V without first checking if V is empty
 
@@ -2049,7 +2049,7 @@ Return the first item of V without first checking if V is empty
 ***
 
 #### <code>VECTOR-LAST-UNSAFE</code> <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-LAST-UNSAFE"></a>
-<code>∀ :A. ((VECTOR :A) → :A)</code>
+<code>∀ :A. ((<a href="#VECTOR">VECTOR</a> :A) → :A)</code>
 
 Return the last element of V without first checking if V is empty
 
@@ -2057,7 +2057,7 @@ Return the last element of V without first checking if V is empty
 ***
 
 #### <code>VECTOR-SWAP-REMOVE</code> <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-SWAP-REMOVE"></a>
-<code>∀ :A. (INTEGER → (VECTOR :A) → (OPTIONAL :A))</code>
+<code>∀ :A. (<a href="#INTEGER">INTEGER</a> → (<a href="#VECTOR">VECTOR</a> :A) → (<a href="#OPTIONAL">OPTIONAL</a> :A))</code>
 
 Remove the element IDX from VEC and replace it with the last element in VEC. Then return the removed element.
 
@@ -2065,7 +2065,7 @@ Remove the element IDX from VEC and replace it with the last element in VEC. The
 ***
 
 #### <code>VECTOR-INDEX-UNSAFE</code> <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-INDEX-UNSAFE"></a>
-<code>∀ :A. (INTEGER → (VECTOR :A) → :A)</code>
+<code>∀ :A. (<a href="#INTEGER">INTEGER</a> → (<a href="#VECTOR">VECTOR</a> :A) → :A)</code>
 
 Return the INDEXth element of V without checking if the element exists
 
@@ -2073,7 +2073,7 @@ Return the INDEXth element of V without checking if the element exists
 ***
 
 #### <code>MAKE-VECTOR-CAPACITY</code> <sup><sub>[FUNCTION]</sub></sup><a name="MAKE-VECTOR-CAPACITY"></a>
-<code>∀ :A. (INTEGER → (VECTOR :A))</code>
+<code>∀ :A. (<a href="#INTEGER">INTEGER</a> → (<a href="#VECTOR">VECTOR</a> :A))</code>
 
 Create a new vector with N elements preallocated
 
@@ -2081,7 +2081,7 @@ Create a new vector with N elements preallocated
 ***
 
 #### <code>VECTOR-FOREACH-INDEX</code> <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-FOREACH-INDEX"></a>
-<code>∀ :A :B. ((INTEGER → :A → :B) → (VECTOR :A) → UNIT)</code>
+<code>∀ :A :B. ((<a href="#INTEGER">INTEGER</a> → :A → :B) → (<a href="#VECTOR">VECTOR</a> :A) → <a href="#UNIT">UNIT</a>)</code>
 
 Call the function F once for each item in V with its index
 
@@ -2089,7 +2089,7 @@ Call the function F once for each item in V with its index
 ***
 
 #### <code>VECTOR-SWAP-REMOVE-UNSAFE</code> <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-SWAP-REMOVE-UNSAFE"></a>
-<code>∀ :A. (INTEGER → (VECTOR :A) → :A)</code>
+<code>∀ :A. (<a href="#INTEGER">INTEGER</a> → (<a href="#VECTOR">VECTOR</a> :A) → :A)</code>
 
 Remove the element IDX from VEC and replace it with the last element in VEC without bounds checking. Then return the removed element.
 
@@ -2122,7 +2122,7 @@ Constructors:
 ### Functions
 
 #### <code>SLICE-SET</code> <sup><sub>[FUNCTION]</sub></sup><a name="SLICE-SET"></a>
-<code>∀ :A. (INTEGER → :A → (SLICE :A) → UNIT)</code>
+<code>∀ :A. (<a href="#INTEGER">INTEGER</a> → :A → (<a href="#SLICE">SLICE</a> :A) → <a href="#UNIT">UNIT</a>)</code>
 
 Set the element at INDEX in S to ITEM
 
@@ -2130,12 +2130,12 @@ Set the element at INDEX in S to ITEM
 ***
 
 #### <code>MAKE-SLICE</code> <sup><sub>[FUNCTION]</sub></sup><a name="MAKE-SLICE"></a>
-<code>∀ :A. (INTEGER → INTEGER → (VECTOR :A) → (SLICE :A))</code>
+<code>∀ :A. (<a href="#INTEGER">INTEGER</a> → <a href="#INTEGER">INTEGER</a> → (<a href="#VECTOR">VECTOR</a> :A) → (<a href="#SLICE">SLICE</a> :A))</code>
 
 ***
 
 #### <code>SLICE-COPY</code> <sup><sub>[FUNCTION]</sub></sup><a name="SLICE-COPY"></a>
-<code>∀ :A. ((SLICE :A) → (SLICE :A))</code>
+<code>∀ :A. ((<a href="#SLICE">SLICE</a> :A) → (<a href="#SLICE">SLICE</a> :A))</code>
 
 Returns a new slice containg the same elements as S
 
@@ -2143,7 +2143,7 @@ Returns a new slice containg the same elements as S
 ***
 
 #### <code>SLICE-INDEX</code> <sup><sub>[FUNCTION]</sub></sup><a name="SLICE-INDEX"></a>
-<code>∀ :A. (INTEGER → (SLICE :A) → (OPTIONAL :A))</code>
+<code>∀ :A. (<a href="#INTEGER">INTEGER</a> → (<a href="#SLICE">SLICE</a> :A) → (<a href="#OPTIONAL">OPTIONAL</a> :A))</code>
 
 Lookup the element at INDEX in S
 
@@ -2151,7 +2151,7 @@ Lookup the element at INDEX in S
 ***
 
 #### <code>SLICE-LENGTH</code> <sup><sub>[FUNCTION]</sub></sup><a name="SLICE-LENGTH"></a>
-<code>∀ :A. ((SLICE :A) → INTEGER)</code>
+<code>∀ :A. ((<a href="#SLICE">SLICE</a> :A) → <a href="#INTEGER">INTEGER</a>)</code>
 
 Returns the length of S
 
@@ -2159,7 +2159,7 @@ Returns the length of S
 ***
 
 #### <code>SLICE-FOREACH</code> <sup><sub>[FUNCTION]</sub></sup><a name="SLICE-FOREACH"></a>
-<code>∀ :A :B. ((:A → :B) → (SLICE :A) → UNIT)</code>
+<code>∀ :A :B. ((:A → :B) → (<a href="#SLICE">SLICE</a> :A) → <a href="#UNIT">UNIT</a>)</code>
 
 Call the function F once for each item in S
 
@@ -2167,7 +2167,7 @@ Call the function F once for each item in S
 ***
 
 #### <code>SLICE-FOREACH2</code> <sup><sub>[FUNCTION]</sub></sup><a name="SLICE-FOREACH2"></a>
-<code>∀ :A :B :C. ((:A → :B → :C) → (SLICE :A) → (SLICE :B) → UNIT)</code>
+<code>∀ :A :B :C. ((:A → :B → :C) → (<a href="#SLICE">SLICE</a> :A) → (<a href="#SLICE">SLICE</a> :B) → <a href="#UNIT">UNIT</a>)</code>
 
 Iterate over S1 and S2 calling F once on each iteration
 
@@ -2175,7 +2175,7 @@ Iterate over S1 and S2 calling F once on each iteration
 ***
 
 #### <code>VECTOR-CHUNKED</code> <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-CHUNKED"></a>
-<code>∀ :A :B. (((SLICE :A) → :B) → INTEGER → (VECTOR :A) → UNIT)</code>
+<code>∀ :A :B. (((<a href="#SLICE">SLICE</a> :A) → :B) → <a href="#INTEGER">INTEGER</a> → (<a href="#VECTOR">VECTOR</a> :A) → <a href="#UNIT">UNIT</a>)</code>
 
 Chunked iteration over a vector. Ignores elements at the end if the vector does not evenly divide by the chunk size.
 
@@ -2183,7 +2183,7 @@ Chunked iteration over a vector. Ignores elements at the end if the vector does 
 ***
 
 #### <code>VECTOR-SLIDING</code> <sup><sub>[FUNCTION]</sub></sup><a name="VECTOR-SLIDING"></a>
-<code>∀ :A :B. (((SLICE :A) → :B) → INTEGER → (VECTOR :A) → UNIT)</code>
+<code>∀ :A :B. (((<a href="#SLICE">SLICE</a> :A) → :B) → <a href="#INTEGER">INTEGER</a> → (<a href="#VECTOR">VECTOR</a> :A) → <a href="#UNIT">UNIT</a>)</code>
 
 Sliding iteration over a vector
 
@@ -2191,7 +2191,7 @@ Sliding iteration over a vector
 ***
 
 #### <code>SLICE-INDEX-UNSAFE</code> <sup><sub>[FUNCTION]</sub></sup><a name="SLICE-INDEX-UNSAFE"></a>
-<code>∀ :A. (INTEGER → (SLICE :A) → :A)</code>
+<code>∀ :A. (<a href="#INTEGER">INTEGER</a> → (<a href="#SLICE">SLICE</a> :A) → :A)</code>
 
 Lookup the element at INDEX in S without bounds checking
 
@@ -2199,7 +2199,7 @@ Lookup the element at INDEX in S without bounds checking
 ***
 
 #### <code>SLICE-FOREACH-INDEX</code> <sup><sub>[FUNCTION]</sub></sup><a name="SLICE-FOREACH-INDEX"></a>
-<code>∀ :A :B. ((INTEGER → :A → :B) → (SLICE :A) → UNIT)</code>
+<code>∀ :A :B. ((<a href="#INTEGER">INTEGER</a> → :A → :B) → (<a href="#SLICE">SLICE</a> :A) → <a href="#UNIT">UNIT</a>)</code>
 
 Call the function F once for each item in S with its index
 
@@ -2222,7 +2222,7 @@ Constructors:
 ### Functions
 
 #### <code>HASHTABLE-GET</code> <sup><sub>[FUNCTION]</sub></sup><a name="HASHTABLE-GET"></a>
-<code>∀ :A :B. (:A → (HASHTABLE :A :B) → (OPTIONAL :B))</code>
+<code>∀ :A :B. (:A → (<a href="#HASHTABLE">HASHTABLE</a> :A :B) → (<a href="#OPTIONAL">OPTIONAL</a> :B))</code>
 
 Lookup KEY in TABLE
 
@@ -2230,7 +2230,7 @@ Lookup KEY in TABLE
 ***
 
 #### <code>HASHTABLE-SET</code> <sup><sub>[FUNCTION]</sub></sup><a name="HASHTABLE-SET"></a>
-<code>∀ :A :B. (:A → :B → (HASHTABLE :A :B) → UNIT)</code>
+<code>∀ :A :B. (:A → :B → (<a href="#HASHTABLE">HASHTABLE</a> :A :B) → <a href="#UNIT">UNIT</a>)</code>
 
 Set KEY to VALUE in TABLE
 
@@ -2238,7 +2238,7 @@ Set KEY to VALUE in TABLE
 ***
 
 #### <code>HASHTABLE-KEYS</code> <sup><sub>[FUNCTION]</sub></sup><a name="HASHTABLE-KEYS"></a>
-<code>∀ :A :B. ((HASHTABLE :A :B) → (VECTOR :A))</code>
+<code>∀ :A :B. ((<a href="#HASHTABLE">HASHTABLE</a> :A :B) → (<a href="#VECTOR">VECTOR</a> :A))</code>
 
 Returns the keys in TABLE as a vector
 
@@ -2246,7 +2246,7 @@ Returns the keys in TABLE as a vector
 ***
 
 #### <code>MAKE-HASHTABLE</code> <sup><sub>[FUNCTION]</sub></sup><a name="MAKE-HASHTABLE"></a>
-<code>∀ :A :B. (UNIT → (HASHTABLE :A :B))</code>
+<code>∀ :A :B. (<a href="#UNIT">UNIT</a> → (<a href="#HASHTABLE">HASHTABLE</a> :A :B))</code>
 
 Create a new empty hashtable
 
@@ -2254,7 +2254,7 @@ Create a new empty hashtable
 ***
 
 #### <code>HASHTABLE-COUNT</code> <sup><sub>[FUNCTION]</sub></sup><a name="HASHTABLE-COUNT"></a>
-<code>∀ :A :B. ((HASHTABLE :A :B) → INTEGER)</code>
+<code>∀ :A :B. ((<a href="#HASHTABLE">HASHTABLE</a> :A :B) → <a href="#INTEGER">INTEGER</a>)</code>
 
 Returns the number of entries in TABLE
 
@@ -2262,7 +2262,7 @@ Returns the number of entries in TABLE
 ***
 
 #### <code>HASHTABLE-REMOVE</code> <sup><sub>[FUNCTION]</sub></sup><a name="HASHTABLE-REMOVE"></a>
-<code>∀ :A :B. (:A → (HASHTABLE :A :B) → UNIT)</code>
+<code>∀ :A :B. (:A → (<a href="#HASHTABLE">HASHTABLE</a> :A :B) → <a href="#UNIT">UNIT</a>)</code>
 
 Remove the entry at KEY from TABLE
 
@@ -2270,7 +2270,7 @@ Remove the entry at KEY from TABLE
 ***
 
 #### <code>HASHTABLE-VALUES</code> <sup><sub>[FUNCTION]</sub></sup><a name="HASHTABLE-VALUES"></a>
-<code>∀ :A :B. ((HASHTABLE :A :B) → (VECTOR :B))</code>
+<code>∀ :A :B. ((<a href="#HASHTABLE">HASHTABLE</a> :A :B) → (<a href="#VECTOR">VECTOR</a> :B))</code>
 
 Returns the values in TABLE as a vector
 
@@ -2278,7 +2278,7 @@ Returns the values in TABLE as a vector
 ***
 
 #### <code>HASHTABLE-ENTRIES</code> <sup><sub>[FUNCTION]</sub></sup><a name="HASHTABLE-ENTRIES"></a>
-<code>∀ :A :B. ((HASHTABLE :A :B) → (VECTOR (TUPLE :A :B)))</code>
+<code>∀ :A :B. ((<a href="#HASHTABLE">HASHTABLE</a> :A :B) → (<a href="#VECTOR">VECTOR</a> (<a href="#TUPLE">TUPLE</a> :A :B)))</code>
 
 Returns the keys and values in TABLE as a vector
 
@@ -2286,7 +2286,7 @@ Returns the keys and values in TABLE as a vector
 ***
 
 #### <code>HASHTABLE-FOREACH</code> <sup><sub>[FUNCTION]</sub></sup><a name="HASHTABLE-FOREACH"></a>
-<code>∀ :A :B :C. ((:A → :B → :C) → (HASHTABLE :A :B) → UNIT)</code>
+<code>∀ :A :B :C. ((:A → :B → :C) → (<a href="#HASHTABLE">HASHTABLE</a> :A :B) → <a href="#UNIT">UNIT</a>)</code>
 
 Call F once for each key value pair in TABLE
 
@@ -2294,7 +2294,7 @@ Call F once for each key value pair in TABLE
 ***
 
 #### <code>MAKE-HASHTABLE-CAPACITY</code> <sup><sub>[FUNCTION]</sub></sup><a name="MAKE-HASHTABLE-CAPACITY"></a>
-<code>∀ :A :B. (INTEGER → (HASHTABLE :A :B))</code>
+<code>∀ :A :B. (<a href="#INTEGER">INTEGER</a> → (<a href="#HASHTABLE">HASHTABLE</a> :A :B))</code>
 
 Crate a new empty hashtable with a given capacity
 
@@ -2364,7 +2364,7 @@ Constructors:
 ### Functions
 
 #### <code>MAKE-GRAPH</code> <sup><sub>[FUNCTION]</sub></sup><a name="MAKE-GRAPH"></a>
-<code>∀ :A :B. (UNIT → (GRAPH :A :B))</code>
+<code>∀ :A :B. (<a href="#UNIT">UNIT</a> → (<a href="#GRAPH">GRAPH</a> :A :B))</code>
 
 Create a new empty undirected graph
 
@@ -2372,7 +2372,7 @@ Create a new empty undirected graph
 ***
 
 #### <code>GRAPH-EDGES</code> <sup><sub>[FUNCTION]</sub></sup><a name="GRAPH-EDGES"></a>
-<code>∀ :A :B. ((GRAPH :A :B) → (VECTOR (EDGE :B)))</code>
+<code>∀ :A :B. ((<a href="#GRAPH">GRAPH</a> :A :B) → (<a href="#VECTOR">VECTOR</a> (<a href="#EDGE">EDGE</a> :B)))</code>
 
 Returns the edges in a graph
 
@@ -2380,7 +2380,7 @@ Returns the edges in a graph
 ***
 
 #### <code>GRAPH-NODES</code> <sup><sub>[FUNCTION]</sub></sup><a name="GRAPH-NODES"></a>
-<code>∀ :A :B. ((GRAPH :A :B) → (VECTOR (NODE :A)))</code>
+<code>∀ :A :B. ((<a href="#GRAPH">GRAPH</a> :A :B) → (<a href="#VECTOR">VECTOR</a> (<a href="#NODE">NODE</a> :A)))</code>
 
 Returns the nodes in a graph
 
@@ -2388,7 +2388,7 @@ Returns the nodes in a graph
 ***
 
 #### <code>MAKE-DIGRAPH</code> <sup><sub>[FUNCTION]</sub></sup><a name="MAKE-DIGRAPH"></a>
-<code>∀ :A :B. (UNIT → (GRAPH :A :B))</code>
+<code>∀ :A :B. (<a href="#UNIT">UNIT</a> → (<a href="#GRAPH">GRAPH</a> :A :B))</code>
 
 Create a new directed graph
 
@@ -2396,7 +2396,7 @@ Create a new directed graph
 ***
 
 #### <code>GRAPH-ADD-EDGE</code> <sup><sub>[FUNCTION]</sub></sup><a name="GRAPH-ADD-EDGE"></a>
-<code>∀ :A :B. (:A → NODEINDEX → NODEINDEX → (GRAPH :B :A) → EDGEINDEX)</code>
+<code>∀ :A :B. (:A → <a href="#NODEINDEX">NODEINDEX</a> → <a href="#NODEINDEX">NODEINDEX</a> → (<a href="#GRAPH">GRAPH</a> :B :A) → <a href="#EDGEINDEX">EDGEINDEX</a>)</code>
 
 Add an edge with associated data from node FROM to node TO in the graph.
 
@@ -2404,7 +2404,7 @@ Add an edge with associated data from node FROM to node TO in the graph.
 ***
 
 #### <code>GRAPH-ADD-NODE</code> <sup><sub>[FUNCTION]</sub></sup><a name="GRAPH-ADD-NODE"></a>
-<code>∀ :A :B. (:A → (GRAPH :A :B) → NODEINDEX)</code>
+<code>∀ :A :B. (:A → (<a href="#GRAPH">GRAPH</a> :A :B) → <a href="#NODEINDEX">NODEINDEX</a>)</code>
 
 Add a node with associated data to the graph, returning the index of the new node.
 
@@ -2412,7 +2412,7 @@ Add a node with associated data to the graph, returning the index of the new nod
 ***
 
 #### <code>GRAPH-EDGE-COUNT</code> <sup><sub>[FUNCTION]</sub></sup><a name="GRAPH-EDGE-COUNT"></a>
-<code>∀ :A :B. ((GRAPH :A :B) → INTEGER)</code>
+<code>∀ :A :B. ((<a href="#GRAPH">GRAPH</a> :A :B) → <a href="#INTEGER">INTEGER</a>)</code>
 
 Returns the number of edges in a graph
 
@@ -2420,7 +2420,7 @@ Returns the number of edges in a graph
 ***
 
 #### <code>GRAPH-LOOKUP-EDGE</code> <sup><sub>[FUNCTION]</sub></sup><a name="GRAPH-LOOKUP-EDGE"></a>
-<code>∀ :A :B. (EDGEINDEX → (GRAPH :A :B) → (OPTIONAL (EDGE :B)))</code>
+<code>∀ :A :B. (<a href="#EDGEINDEX">EDGEINDEX</a> → (<a href="#GRAPH">GRAPH</a> :A :B) → (<a href="#OPTIONAL">OPTIONAL</a> (<a href="#EDGE">EDGE</a> :B)))</code>
 
 Lookup a node with index IDX in graph G
 
@@ -2428,7 +2428,7 @@ Lookup a node with index IDX in graph G
 ***
 
 #### <code>GRAPH-LOOKUP-NODE</code> <sup><sub>[FUNCTION]</sub></sup><a name="GRAPH-LOOKUP-NODE"></a>
-<code>∀ :A :B. (NODEINDEX → (GRAPH :A :B) → (OPTIONAL (NODE :A)))</code>
+<code>∀ :A :B. (<a href="#NODEINDEX">NODEINDEX</a> → (<a href="#GRAPH">GRAPH</a> :A :B) → (<a href="#OPTIONAL">OPTIONAL</a> (<a href="#NODE">NODE</a> :A)))</code>
 
 Lookup a node with index IDX in graph G
 
@@ -2436,7 +2436,7 @@ Lookup a node with index IDX in graph G
 ***
 
 #### <code>GRAPH-REMOVE-EDGE</code> <sup><sub>[FUNCTION]</sub></sup><a name="GRAPH-REMOVE-EDGE"></a>
-<code>∀ :A :B. (EDGEINDEX → (GRAPH :A :B) → (OPTIONAL :B))</code>
+<code>∀ :A :B. (<a href="#EDGEINDEX">EDGEINDEX</a> → (<a href="#GRAPH">GRAPH</a> :A :B) → (<a href="#OPTIONAL">OPTIONAL</a> :B))</code>
 
 Remove an edge from GRAPH
 
@@ -2444,7 +2444,7 @@ Remove an edge from GRAPH
 ***
 
 #### <code>GRAPH-REMOVE-NODE</code> <sup><sub>[FUNCTION]</sub></sup><a name="GRAPH-REMOVE-NODE"></a>
-<code>∀ :A :B. (NODEINDEX → (GRAPH :A :B) → (OPTIONAL :A))</code>
+<code>∀ :A :B. (<a href="#NODEINDEX">NODEINDEX</a> → (<a href="#GRAPH">GRAPH</a> :A :B) → (<a href="#OPTIONAL">OPTIONAL</a> :A))</code>
 
 Remove a node and all edges connecting to it from GRAPH
 

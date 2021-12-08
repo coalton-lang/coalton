@@ -11,8 +11,10 @@
       (coalton-impl/typechecker::pprint-ty stream (coalton-impl/typechecker::pprint-tvar ty))))
 
   (:method ((ty coalton-impl/typechecker::tcon))
-    (format nil "<a href=\"#~A\">~:*~A</a>"
-            (coalton-impl/typechecker::tycon-name (coalton-impl/typechecker::tcon-tycon ty))))
+    (let ((tcon-name (coalton-impl/typechecker::tycon-name (coalton-impl/typechecker::tcon-tycon ty))))
+      (if (string= "KEYWORD" (package-name (symbol-package tcon-name)))
+          (format nil "~S" tcon-name)
+          (format nil "<a href=\"#~A\">~:*~A</a>" tcon-name))))
 
   (:method ((ty coalton-impl/typechecker::tapp))
     (with-output-to-string (stream)
@@ -79,7 +81,21 @@
               (to-markdown qual-type))))
 
   (:method ((object ty-scheme))
-    (to-markdown (coalton-impl/typechecker::fresh-inst object)))
+    (cond
+    ((null (coalton-impl/typechecker::ty-scheme-kinds object))
+     (to-markdown (coalton-impl/typechecker::ty-scheme-type object)))
+    (t
+     (with-pprint-variable-scope ()
+       (let* ((types (mapcar (lambda (k) (coalton-impl/typechecker::next-pprint-variable-as-tvar k))
+                             (coalton-impl/typechecker::ty-scheme-kinds object)))
+              (new-type (coalton-impl/typechecker::instantiate
+                         types (coalton-impl/typechecker::ty-scheme-type object))))
+         (format nil "~A~{ ~A~}. ~A"
+                 (if *coalton-print-unicode*
+                     "∀"
+                     "FORALL")
+                 types
+                 (to-markdown new-type)))))))
 
   (:method ((object ty-predicate))
     (format nil "<a href=\"#~A\">~:*~A</a>~{ ~A~}"
@@ -215,7 +231,8 @@
 
     (format stream "#### <code>~A</code> <sup><sub>[FUNCTION]</sub></sup><a name=\"~A\"></a>~%" name name)
 
-    (format stream "<code>~A</code>~%" type)
+    (with-pprint-variable-context ()
+      (format stream "<code>~A</code>~%" (to-markdown type)))
 
     (when documentation
       (format stream "~%~A~%~%" documentation))))
