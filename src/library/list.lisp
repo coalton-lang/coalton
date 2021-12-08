@@ -387,29 +387,30 @@
                           (inner xs as (Cons x bs))))))))
       (inner xs Nil Nil)))
 
+  (declare optimumBy ((:a -> :a -> Boolean)
+                      -> (List :a)
+                      -> (Optional :a)))
+  (define (optimumBy f xs)
+    "Returns an optimum according to a total order."
+    (match xs
+      ((Nil) None)
+      ((Cons x xs)
+       (Some
+        (fold (fn (opt x)
+                (if (f x opt)
+                    x
+                    opt))
+              x xs)))))
+
   (declare maximum (Ord :a => ((List :a) -> (Optional :a))))
-  (define (maximum xs)
-    "Returns the greatest element in XS."
-    (fold (fn (a b)
-            (match (Tuple a b)
-              ((Tuple _ (Some b_))
-               (if (> a b_)
-                   (Some a)
-                   b))
-              (_ (Some a))))
-          None xs))
+  (define maximum
+    "Returns a greatest element of a list, or None."
+    (optimumBy >))
 
   (declare minimum (Ord :a => ((List :a) -> (Optional :a))))
-  (define (minimum xs)
-    "Returns the least element in XS."
-    (fold (fn (a b)
-            (match (Tuple a b)
-              ((Tuple _ (Some b_))
-               (if (< a b_)
-                   (Some a)
-                   b))
-              (_ (Some a))))
-          None xs))
+  (define minimum
+    "Returns a least element of a list, or None."
+    (optimumBy <))
 
   (declare sum (Num :a => ((List :a) -> :a)))
   (define (sum xs)
