@@ -1,6 +1,6 @@
 # Reference for COALTON-LIBRARY
 
-## File: [/home/cole/lisp/coalton/src/library/types.lisp](/home/cole/lisp/coalton/src/library/types.lisp)
+## File: [types.lisp](../src/library/types.lisp)
 
 ### Types
 
@@ -207,7 +207,7 @@ Are X or Y True, but not both?
 
 ***
 
-## File: [/home/cole/lisp/coalton/src/library/classes.lisp](/home/cole/lisp/coalton/src/library/classes.lisp)
+## File: [classes.lisp](../src/library/classes.lisp)
 
 ### Types
 
@@ -665,7 +665,7 @@ Returns the lesser element of X and Y.
 
 ***
 
-## File: [/home/cole/lisp/coalton/src/library/builtin.lisp](/home/cole/lisp/coalton/src/library/builtin.lisp)
+## File: [builtin.lisp](../src/library/builtin.lisp)
 
 ### Functions
 
@@ -685,7 +685,7 @@ A function which can be used in place of any value, throwing an error at runtime
 
 ***
 
-## File: [/home/cole/lisp/coalton/src/library/fraction.lisp](/home/cole/lisp/coalton/src/library/fraction.lisp)
+## File: [fraction.lisp](../src/library/fraction.lisp)
 
 ### Functions
 
@@ -705,7 +705,7 @@ The denominator of a fraction Q.
 
 ***
 
-## File: [/home/cole/lisp/coalton/src/library/arith.lisp](/home/cole/lisp/coalton/src/library/arith.lisp)
+## File: [arith.lisp](../src/library/arith.lisp)
 
 ### Functions
 
@@ -817,7 +817,7 @@ Round a Single-Float to the nearest Integer.
 
 ***
 
-## File: [/home/cole/lisp/coalton/src/library/string.lisp](/home/cole/lisp/coalton/src/library/string.lisp)
+## File: [string.lisp](../src/library/string.lisp)
 
 ### Functions
 
@@ -853,7 +853,7 @@ Unpack a string into a list of characters.
 
 ***
 
-## File: [/home/cole/lisp/coalton/src/library/optional.lisp](/home/cole/lisp/coalton/src/library/optional.lisp)
+## File: [optional.lisp](../src/library/optional.lisp)
 
 ### Functions
 
@@ -881,7 +881,7 @@ Get the value of OPT, erroring with the provided string if it is None.
 
 ***
 
-## File: [/home/cole/lisp/coalton/src/library/list.lisp](/home/cole/lisp/coalton/src/library/list.lisp)
+## File: [list.lisp](../src/library/list.lisp)
 
 ### Functions
 
@@ -1268,7 +1268,7 @@ Returns a new list without duplicate elements.
 
 ***
 
-## File: [/home/cole/lisp/coalton/src/library/tuple.lisp](/home/cole/lisp/coalton/src/library/tuple.lisp)
+## File: [tuple.lisp](../src/library/tuple.lisp)
 
 ### Functions
 
@@ -1288,7 +1288,7 @@ Get the second element of a tuple.
 
 ***
 
-## File: [/home/cole/lisp/coalton/src/library/result.lisp](/home/cole/lisp/coalton/src/library/result.lisp)
+## File: [result.lisp](../src/library/result.lisp)
 
 ### Functions
 
@@ -1316,7 +1316,7 @@ Map over the ERR case
 
 ***
 
-## File: [/home/cole/lisp/coalton/src/library/functions.lisp](/home/cole/lisp/coalton/src/library/functions.lisp)
+## File: [functions.lisp](../src/library/functions.lisp)
 
 ### Functions
 
@@ -1402,7 +1402,7 @@ Print a line to *STANDARD-OUTPUT* in the form "{STR}: {ITEM}"
 
 ***
 
-## File: [/home/cole/lisp/coalton/src/library/quantize.lisp](/home/cole/lisp/coalton/src/library/quantize.lisp)
+## File: [quantize.lisp](../src/library/quantize.lisp)
 
 ### Functions
 
@@ -1496,7 +1496,7 @@ Note: This does *not* divide double-float arguments.
 
 ***
 
-## File: [/home/cole/lisp/coalton/src/library/cell.lisp](/home/cole/lisp/coalton/src/library/cell.lisp)
+## File: [cell.lisp](../src/library/cell.lisp)
 
 ### Types
 
@@ -1563,7 +1563,7 @@ Set the value of a mutable cell
 
 ***
 
-## File: [/home/cole/lisp/coalton/src/library/vector.lisp](/home/cole/lisp/coalton/src/library/vector.lisp)
+## File: [vector.lisp](../src/library/vector.lisp)
 
 ### Types
 
@@ -1790,7 +1790,7 @@ Remove the element IDX from VEC and replace it with the last element in VEC with
 
 ***
 
-## File: [/home/cole/lisp/coalton/src/library/slice.lisp](/home/cole/lisp/coalton/src/library/slice.lisp)
+## File: [slice.lisp](../src/library/slice.lisp)
 
 ### Types
 
@@ -1900,7 +1900,7 @@ Call the function F once for each item in S with its index
 
 ***
 
-## File: [/home/cole/lisp/coalton/src/library/hashtable.lisp](/home/cole/lisp/coalton/src/library/hashtable.lisp)
+## File: [hashtable.lisp](../src/library/hashtable.lisp)
 
 ### Types
 
@@ -1995,7 +1995,7 @@ Crate a new empty hashtable with a given capacity
 
 ***
 
-## File: [/home/cole/lisp/coalton/src/library/graph.lisp](/home/cole/lisp/coalton/src/library/graph.lisp)
+## File: [graph.lisp](../src/library/graph.lisp)
 
 ### Types
 
