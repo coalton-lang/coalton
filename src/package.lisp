@@ -547,6 +547,9 @@
    #:concat-string
    #:unpack-string
    #:pack-string
+   #:reverse-string
+   #:string-length
+   #:substring
    #:parse-int)
   ;; Optional
   (:export

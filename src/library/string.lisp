@@ -23,6 +23,25 @@
     (lisp String (xs)
       (cl:coerce xs 'cl:string)))
 
+  (declare reverse-string (String -> String))
+  (define (reverse-string s)
+    "Reverse a string."
+    (lisp String (s) (cl:reverse s)))
+
+  (declare string-length (String -> Integer))
+  (define (string-length str)
+    "The length of a string STR."
+    (lisp Integer (str)
+      (cl:length str)))
+
+  (declare substring (String -> Integer -> Integer -> String))
+  (define (substring str start end)
+    "Compute a substring of a string bounded by given indices."
+    (let ((real-start (max 0 (min start end)))
+          (real-end (min (string-length str) (max start end))))
+      (lisp String (real-start real-end str)
+        (cl:subseq str real-start real-end))))
+
   (declare parse-int (String -> (Optional Integer)))
   (define (parse-int str)
     "Parse the integer in string STR."
