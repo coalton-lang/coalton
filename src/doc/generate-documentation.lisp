@@ -223,7 +223,7 @@
                (ty-class-superclasses e)
                (ty-class-predicate e)
                (ty-class-unqualified-methods e)
-               (fset:convert 'list (lookup-class-instances env (ty-class-name e) :no-error t))
+               (reverse (fset:convert 'list (lookup-class-instances env (ty-class-name e) :no-error t)))
                (coalton-impl/typechecker::ty-class-docstring e)
                (coalton-impl/typechecker::ty-class-location e)))
             values)))

@@ -261,30 +261,30 @@ Methods:
 <details>
 <summary>Instances</summary>
 
-- <code><a href="#EQ">EQ</a> <a href="#NODEINDEX">NODEINDEX</a></code>
-- <code><a href="#EQ">EQ</a> <a href="#EDGEINDEX">EDGEINDEX</a></code>
-- <code><a href="#EQ">EQ :A</a> => <a href="#EQ">EQ</a> <a href="#SLICE">(SLICE :A)</a></code>
-- <code><a href="#EQ">EQ :A</a> => <a href="#EQ">EQ</a> <a href="#VECTOR">(VECTOR :A)</a></code>
-- <code><a href="#EQ">EQ :A</a> => <a href="#EQ">EQ</a> <a href="#CELL">(CELL :A)</a></code>
-- <code><a href="#EQ">EQ :A</a> <a href="#EQ">EQ :B</a> => <a href="#EQ">EQ</a> <a href="#RESULT">(RESULT :A :B)</a></code>
-- <code><a href="#EQ">EQ :A</a> <a href="#EQ">EQ :B</a> <a href="#EQ">EQ :C</a> <a href="#EQ">EQ :D</a> <a href="#EQ">EQ :E</a> => <a href="#EQ">EQ</a> <a href="#TUPLE5">(TUPLE5 :A :B :C :D :E)</a></code>
-- <code><a href="#EQ">EQ :A</a> <a href="#EQ">EQ :B</a> <a href="#EQ">EQ :C</a> <a href="#EQ">EQ :D</a> => <a href="#EQ">EQ</a> <a href="#TUPLE4">(TUPLE4 :A :B :C :D)</a></code>
-- <code><a href="#EQ">EQ :A</a> <a href="#EQ">EQ :B</a> <a href="#EQ">EQ :C</a> => <a href="#EQ">EQ</a> <a href="#TUPLE3">(TUPLE3 :A :B :C)</a></code>
-- <code><a href="#EQ">EQ :A</a> <a href="#EQ">EQ :B</a> => <a href="#EQ">EQ</a> <a href="#TUPLE">(TUPLE :A :B)</a></code>
-- <code><a href="#EQ">EQ :A</a> => <a href="#EQ">EQ</a> <a href="#LIST">(LIST :A)</a></code>
-- <code><a href="#EQ">EQ :A</a> => <a href="#EQ">EQ</a> <a href="#OPTIONAL">(OPTIONAL :A)</a></code>
-- <code><a href="#EQ">EQ</a> <a href="#STRING">STRING</a></code>
-- <code><a href="#EQ">EQ</a> <a href="#CHAR">CHAR</a></code>
-- <code><a href="#EQ">EQ</a> <a href="#FRACTION">FRACTION</a></code>
-- <code><a href="#EQ">EQ</a> <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a></code>
-- <code><a href="#EQ">EQ</a> <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a></code>
-- <code><a href="#EQ">EQ</a> <a href="#INTEGER">INTEGER</a></code>
-- <code><a href="#EQ">EQ</a> <a href="#U64">U64</a></code>
-- <code><a href="#EQ">EQ</a> <a href="#U32">U32</a></code>
-- <code><a href="#EQ">EQ</a> <a href="#U8">U8</a></code>
-- <code><a href="#EQ">EQ</a> <a href="#I64">I64</a></code>
-- <code><a href="#EQ">EQ</a> <a href="#I32">I32</a></code>
 - <code><a href="#EQ">EQ</a> <a href="#BOOLEAN">BOOLEAN</a></code>
+- <code><a href="#EQ">EQ</a> <a href="#I32">I32</a></code>
+- <code><a href="#EQ">EQ</a> <a href="#I64">I64</a></code>
+- <code><a href="#EQ">EQ</a> <a href="#U8">U8</a></code>
+- <code><a href="#EQ">EQ</a> <a href="#U32">U32</a></code>
+- <code><a href="#EQ">EQ</a> <a href="#U64">U64</a></code>
+- <code><a href="#EQ">EQ</a> <a href="#INTEGER">INTEGER</a></code>
+- <code><a href="#EQ">EQ</a> <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a></code>
+- <code><a href="#EQ">EQ</a> <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a></code>
+- <code><a href="#EQ">EQ</a> <a href="#FRACTION">FRACTION</a></code>
+- <code><a href="#EQ">EQ</a> <a href="#CHAR">CHAR</a></code>
+- <code><a href="#EQ">EQ</a> <a href="#STRING">STRING</a></code>
+- <code><a href="#EQ">EQ :A</a> => <a href="#EQ">EQ</a> <a href="#OPTIONAL">(OPTIONAL :A)</a></code>
+- <code><a href="#EQ">EQ :A</a> => <a href="#EQ">EQ</a> <a href="#LIST">(LIST :A)</a></code>
+- <code><a href="#EQ">EQ :A</a> <a href="#EQ">EQ :B</a> => <a href="#EQ">EQ</a> <a href="#TUPLE">(TUPLE :A :B)</a></code>
+- <code><a href="#EQ">EQ :A</a> <a href="#EQ">EQ :B</a> <a href="#EQ">EQ :C</a> => <a href="#EQ">EQ</a> <a href="#TUPLE3">(TUPLE3 :A :B :C)</a></code>
+- <code><a href="#EQ">EQ :A</a> <a href="#EQ">EQ :B</a> <a href="#EQ">EQ :C</a> <a href="#EQ">EQ :D</a> => <a href="#EQ">EQ</a> <a href="#TUPLE4">(TUPLE4 :A :B :C :D)</a></code>
+- <code><a href="#EQ">EQ :A</a> <a href="#EQ">EQ :B</a> <a href="#EQ">EQ :C</a> <a href="#EQ">EQ :D</a> <a href="#EQ">EQ :E</a> => <a href="#EQ">EQ</a> <a href="#TUPLE5">(TUPLE5 :A :B :C :D :E)</a></code>
+- <code><a href="#EQ">EQ :A</a> <a href="#EQ">EQ :B</a> => <a href="#EQ">EQ</a> <a href="#RESULT">(RESULT :A :B)</a></code>
+- <code><a href="#EQ">EQ :A</a> => <a href="#EQ">EQ</a> <a href="#CELL">(CELL :A)</a></code>
+- <code><a href="#EQ">EQ :A</a> => <a href="#EQ">EQ</a> <a href="#VECTOR">(VECTOR :A)</a></code>
+- <code><a href="#EQ">EQ :A</a> => <a href="#EQ">EQ</a> <a href="#SLICE">(SLICE :A)</a></code>
+- <code><a href="#EQ">EQ</a> <a href="#EDGEINDEX">EDGEINDEX</a></code>
+- <code><a href="#EQ">EQ</a> <a href="#NODEINDEX">NODEINDEX</a></code>
 
 </details>
 
@@ -305,16 +305,16 @@ Methods:
 <details>
 <summary>Instances</summary>
 
-- <code><a href="#NUM">NUM :A</a> => <a href="#NUM">NUM</a> <a href="#CELL">(CELL :A)</a></code>
-- <code><a href="#NUM">NUM</a> <a href="#FRACTION">FRACTION</a></code>
-- <code><a href="#NUM">NUM</a> <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a></code>
-- <code><a href="#NUM">NUM</a> <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a></code>
-- <code><a href="#NUM">NUM</a> <a href="#INTEGER">INTEGER</a></code>
-- <code><a href="#NUM">NUM</a> <a href="#U64">U64</a></code>
-- <code><a href="#NUM">NUM</a> <a href="#U32">U32</a></code>
-- <code><a href="#NUM">NUM</a> <a href="#U8">U8</a></code>
-- <code><a href="#NUM">NUM</a> <a href="#I64">I64</a></code>
 - <code><a href="#NUM">NUM</a> <a href="#I32">I32</a></code>
+- <code><a href="#NUM">NUM</a> <a href="#I64">I64</a></code>
+- <code><a href="#NUM">NUM</a> <a href="#U8">U8</a></code>
+- <code><a href="#NUM">NUM</a> <a href="#U32">U32</a></code>
+- <code><a href="#NUM">NUM</a> <a href="#U64">U64</a></code>
+- <code><a href="#NUM">NUM</a> <a href="#INTEGER">INTEGER</a></code>
+- <code><a href="#NUM">NUM</a> <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a></code>
+- <code><a href="#NUM">NUM</a> <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a></code>
+- <code><a href="#NUM">NUM</a> <a href="#FRACTION">FRACTION</a></code>
+- <code><a href="#NUM">NUM :A</a> => <a href="#NUM">NUM</a> <a href="#CELL">(CELL :A)</a></code>
 
 </details>
 
@@ -332,21 +332,21 @@ Methods:
 <details>
 <summary>Instances</summary>
 
-- <code><a href="#ORD">ORD :A</a> <a href="#ORD">ORD :B</a> => <a href="#ORD">ORD</a> <a href="#RESULT">(RESULT :A :B)</a></code>
-- <code><a href="#ORD">ORD :A</a> <a href="#ORD">ORD :B</a> => <a href="#ORD">ORD</a> <a href="#TUPLE">(TUPLE :A :B)</a></code>
-- <code><a href="#ORD">ORD :A</a> => <a href="#ORD">ORD</a> <a href="#OPTIONAL">(OPTIONAL :A)</a></code>
-- <code><a href="#ORD">ORD</a> <a href="#STRING">STRING</a></code>
-- <code><a href="#ORD">ORD</a> <a href="#CHAR">CHAR</a></code>
-- <code><a href="#ORD">ORD</a> <a href="#FRACTION">FRACTION</a></code>
-- <code><a href="#ORD">ORD</a> <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a></code>
-- <code><a href="#ORD">ORD</a> <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a></code>
-- <code><a href="#ORD">ORD</a> <a href="#INTEGER">INTEGER</a></code>
-- <code><a href="#ORD">ORD</a> <a href="#U64">U64</a></code>
-- <code><a href="#ORD">ORD</a> <a href="#U32">U32</a></code>
-- <code><a href="#ORD">ORD</a> <a href="#U8">U8</a></code>
-- <code><a href="#ORD">ORD</a> <a href="#I64">I64</a></code>
-- <code><a href="#ORD">ORD</a> <a href="#I32">I32</a></code>
 - <code><a href="#ORD">ORD</a> <a href="#BOOLEAN">BOOLEAN</a></code>
+- <code><a href="#ORD">ORD</a> <a href="#I32">I32</a></code>
+- <code><a href="#ORD">ORD</a> <a href="#I64">I64</a></code>
+- <code><a href="#ORD">ORD</a> <a href="#U8">U8</a></code>
+- <code><a href="#ORD">ORD</a> <a href="#U32">U32</a></code>
+- <code><a href="#ORD">ORD</a> <a href="#U64">U64</a></code>
+- <code><a href="#ORD">ORD</a> <a href="#INTEGER">INTEGER</a></code>
+- <code><a href="#ORD">ORD</a> <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a></code>
+- <code><a href="#ORD">ORD</a> <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a></code>
+- <code><a href="#ORD">ORD</a> <a href="#FRACTION">FRACTION</a></code>
+- <code><a href="#ORD">ORD</a> <a href="#CHAR">CHAR</a></code>
+- <code><a href="#ORD">ORD</a> <a href="#STRING">STRING</a></code>
+- <code><a href="#ORD">ORD :A</a> => <a href="#ORD">ORD</a> <a href="#OPTIONAL">(OPTIONAL :A)</a></code>
+- <code><a href="#ORD">ORD :A</a> <a href="#ORD">ORD :B</a> => <a href="#ORD">ORD</a> <a href="#TUPLE">(TUPLE :A :B)</a></code>
+- <code><a href="#ORD">ORD :A</a> <a href="#ORD">ORD :B</a> => <a href="#ORD">ORD</a> <a href="#RESULT">(RESULT :A :B)</a></code>
 
 </details>
 
@@ -364,37 +364,37 @@ Methods:
 <details>
 <summary>Instances</summary>
 
-- <code><a href="#INTO">INTO</a> <a href="#NODEINDEX">NODEINDEX</a> <a href="#INTEGER">INTEGER</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#EDGEINDEX">EDGEINDEX</a> <a href="#INTEGER">INTEGER</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#VECTOR">(VECTOR :A)</a> <a href="#SLICE">(SLICE :A)</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#SLICE">(SLICE :A)</a> <a href="#VECTOR">(VECTOR :A)</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#VECTOR">(VECTOR :A)</a> <a href="#LIST">(LIST :A)</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#LIST">(LIST :A)</a> <a href="#VECTOR">(VECTOR :A)</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#CELL">(CELL :A)</a> <a href="#:A">:A</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#:A">:A</a> <a href="#CELL">(CELL :A)</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#OPTIONAL">(OPTIONAL :A)</a> <a href="#RESULT">(RESULT UNIT :A)</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#RESULT">(RESULT :A :B)</a> <a href="#OPTIONAL">(OPTIONAL :B)</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#TUPLE">(TUPLE :A :B)</a> <a href="#TUPLE">(TUPLE :B :A)</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#LIST">(LIST CHAR)</a> <a href="#STRING">STRING</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#STRING">STRING</a> <a href="#LIST">(LIST CHAR)</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#INTEGER">INTEGER</a> <a href="#STRING">STRING</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#U64">U64</a> <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#U64">U64</a> <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#U64">U64</a> <a href="#INTEGER">INTEGER</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#INTEGER">INTEGER</a> <a href="#U64">U64</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#U32">U32</a> <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#U32">U32</a> <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#U32">U32</a> <a href="#INTEGER">INTEGER</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#INTEGER">INTEGER</a> <a href="#U32">U32</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#U8">U8</a> <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#U8">U8</a> <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#U8">U8</a> <a href="#INTEGER">INTEGER</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#INTEGER">INTEGER</a> <a href="#U8">U8</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#I64">I64</a> <a href="#INTEGER">INTEGER</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#INTEGER">INTEGER</a> <a href="#I64">I64</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#I32">I32</a> <a href="#INTEGER">INTEGER</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#INTEGER">INTEGER</a> <a href="#I32">I32</a></code>
 - <code><a href="#INTO">INTO</a> <a href="#:A">:A</a> <a href="#:A">:A</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#INTEGER">INTEGER</a> <a href="#I32">I32</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#I32">I32</a> <a href="#INTEGER">INTEGER</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#INTEGER">INTEGER</a> <a href="#I64">I64</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#I64">I64</a> <a href="#INTEGER">INTEGER</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#INTEGER">INTEGER</a> <a href="#U8">U8</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#U8">U8</a> <a href="#INTEGER">INTEGER</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#U8">U8</a> <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#U8">U8</a> <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#INTEGER">INTEGER</a> <a href="#U32">U32</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#U32">U32</a> <a href="#INTEGER">INTEGER</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#U32">U32</a> <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#U32">U32</a> <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#INTEGER">INTEGER</a> <a href="#U64">U64</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#U64">U64</a> <a href="#INTEGER">INTEGER</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#U64">U64</a> <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#U64">U64</a> <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#INTEGER">INTEGER</a> <a href="#STRING">STRING</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#STRING">STRING</a> <a href="#LIST">(LIST CHAR)</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#LIST">(LIST CHAR)</a> <a href="#STRING">STRING</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#TUPLE">(TUPLE :A :B)</a> <a href="#TUPLE">(TUPLE :B :A)</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#RESULT">(RESULT :A :B)</a> <a href="#OPTIONAL">(OPTIONAL :B)</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#OPTIONAL">(OPTIONAL :A)</a> <a href="#RESULT">(RESULT UNIT :A)</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#:A">:A</a> <a href="#CELL">(CELL :A)</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#CELL">(CELL :A)</a> <a href="#:A">:A</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#LIST">(LIST :A)</a> <a href="#VECTOR">(VECTOR :A)</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#VECTOR">(VECTOR :A)</a> <a href="#LIST">(LIST :A)</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#SLICE">(SLICE :A)</a> <a href="#VECTOR">(VECTOR :A)</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#VECTOR">(VECTOR :A)</a> <a href="#SLICE">(SLICE :A)</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#EDGEINDEX">EDGEINDEX</a> <a href="#INTEGER">INTEGER</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#NODEINDEX">NODEINDEX</a> <a href="#INTEGER">INTEGER</a></code>
 
 </details>
 
@@ -413,9 +413,9 @@ Methods:
 <details>
 <summary>Instances</summary>
 
-- <code><a href="#MONAD">MONAD</a> <a href="#RESULT">(RESULT :A)</a></code>
-- <code><a href="#MONAD">MONAD</a> <a href="#LIST">LIST</a></code>
 - <code><a href="#MONAD">MONAD</a> <a href="#OPTIONAL">OPTIONAL</a></code>
+- <code><a href="#MONAD">MONAD</a> <a href="#LIST">LIST</a></code>
+- <code><a href="#MONAD">MONAD</a> <a href="#RESULT">(RESULT :A)</a></code>
 
 </details>
 
@@ -433,10 +433,10 @@ Methods:
 <details>
 <summary>Instances</summary>
 
-- <code><a href="#MONOID">MONOID :A</a> => <a href="#MONOID">MONOID</a> <a href="#RESULT">(RESULT :B :A)</a></code>
-- <code><a href="#MONOID">MONOID</a> <a href="#LIST">(LIST :A)</a></code>
-- <code><a href="#MONOID">MONOID :A</a> => <a href="#MONOID">MONOID</a> <a href="#OPTIONAL">(OPTIONAL :A)</a></code>
 - <code><a href="#MONOID">MONOID</a> <a href="#STRING">STRING</a></code>
+- <code><a href="#MONOID">MONOID :A</a> => <a href="#MONOID">MONOID</a> <a href="#OPTIONAL">(OPTIONAL :A)</a></code>
+- <code><a href="#MONOID">MONOID</a> <a href="#LIST">(LIST :A)</a></code>
+- <code><a href="#MONOID">MONOID :A</a> => <a href="#MONOID">MONOID</a> <a href="#RESULT">(RESULT :B :A)</a></code>
 
 </details>
 
@@ -454,11 +454,11 @@ Methods:
 <details>
 <summary>Instances</summary>
 
-- <code><a href="#FUNCTOR">FUNCTOR</a> <a href="#VECTOR">VECTOR</a></code>
-- <code><a href="#FUNCTOR">FUNCTOR</a> <a href="#CELL">CELL</a></code>
-- <code><a href="#FUNCTOR">FUNCTOR</a> <a href="#RESULT">(RESULT :A)</a></code>
-- <code><a href="#FUNCTOR">FUNCTOR</a> <a href="#LIST">LIST</a></code>
 - <code><a href="#FUNCTOR">FUNCTOR</a> <a href="#OPTIONAL">OPTIONAL</a></code>
+- <code><a href="#FUNCTOR">FUNCTOR</a> <a href="#LIST">LIST</a></code>
+- <code><a href="#FUNCTOR">FUNCTOR</a> <a href="#RESULT">(RESULT :A)</a></code>
+- <code><a href="#FUNCTOR">FUNCTOR</a> <a href="#CELL">CELL</a></code>
+- <code><a href="#FUNCTOR">FUNCTOR</a> <a href="#VECTOR">VECTOR</a></code>
 
 </details>
 
@@ -511,11 +511,11 @@ Methods:
 <details>
 <summary>Instances</summary>
 
-- <code><a href="#DIVIDABLE">DIVIDABLE</a> <a href="#INTEGER">INTEGER</a> <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a></code>
-- <code><a href="#DIVIDABLE">DIVIDABLE</a> <a href="#INTEGER">INTEGER</a> <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a></code>
-- <code><a href="#DIVIDABLE">DIVIDABLE</a> <a href="#INTEGER">INTEGER</a> <a href="#FRACTION">FRACTION</a></code>
-- <code><a href="#DIVIDABLE">DIVIDABLE</a> <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a> <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a></code>
 - <code><a href="#DIVIDABLE">DIVIDABLE</a> <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a> <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a></code>
+- <code><a href="#DIVIDABLE">DIVIDABLE</a> <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a> <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a></code>
+- <code><a href="#DIVIDABLE">DIVIDABLE</a> <a href="#INTEGER">INTEGER</a> <a href="#FRACTION">FRACTION</a></code>
+- <code><a href="#DIVIDABLE">DIVIDABLE</a> <a href="#INTEGER">INTEGER</a> <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a></code>
+- <code><a href="#DIVIDABLE">DIVIDABLE</a> <a href="#INTEGER">INTEGER</a> <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a></code>
 
 </details>
 
@@ -549,12 +549,12 @@ Methods:
 <details>
 <summary>Instances</summary>
 
-- <code><a href="#SEMIGROUP">SEMIGROUP</a> <a href="#VECTOR">(VECTOR :A)</a></code>
-- <code><a href="#SEMIGROUP">SEMIGROUP :A</a> => <a href="#SEMIGROUP">SEMIGROUP</a> <a href="#CELL">(CELL :A)</a></code>
-- <code><a href="#SEMIGROUP">SEMIGROUP :A</a> => <a href="#SEMIGROUP">SEMIGROUP</a> <a href="#RESULT">(RESULT :B :A)</a></code>
-- <code><a href="#SEMIGROUP">SEMIGROUP</a> <a href="#LIST">(LIST :A)</a></code>
-- <code><a href="#SEMIGROUP">SEMIGROUP :A</a> => <a href="#SEMIGROUP">SEMIGROUP</a> <a href="#OPTIONAL">(OPTIONAL :A)</a></code>
 - <code><a href="#SEMIGROUP">SEMIGROUP</a> <a href="#STRING">STRING</a></code>
+- <code><a href="#SEMIGROUP">SEMIGROUP :A</a> => <a href="#SEMIGROUP">SEMIGROUP</a> <a href="#OPTIONAL">(OPTIONAL :A)</a></code>
+- <code><a href="#SEMIGROUP">SEMIGROUP</a> <a href="#LIST">(LIST :A)</a></code>
+- <code><a href="#SEMIGROUP">SEMIGROUP :A</a> => <a href="#SEMIGROUP">SEMIGROUP</a> <a href="#RESULT">(RESULT :B :A)</a></code>
+- <code><a href="#SEMIGROUP">SEMIGROUP :A</a> => <a href="#SEMIGROUP">SEMIGROUP</a> <a href="#CELL">(CELL :A)</a></code>
+- <code><a href="#SEMIGROUP">SEMIGROUP</a> <a href="#VECTOR">(VECTOR :A)</a></code>
 
 </details>
 
@@ -573,10 +573,10 @@ Methods:
 <details>
 <summary>Instances</summary>
 
-- <code><a href="#APPLICATIVE">APPLICATIVE</a> <a href="#CELL">CELL</a></code>
-- <code><a href="#APPLICATIVE">APPLICATIVE</a> <a href="#RESULT">(RESULT :A)</a></code>
-- <code><a href="#APPLICATIVE">APPLICATIVE</a> <a href="#LIST">LIST</a></code>
 - <code><a href="#APPLICATIVE">APPLICATIVE</a> <a href="#OPTIONAL">OPTIONAL</a></code>
+- <code><a href="#APPLICATIVE">APPLICATIVE</a> <a href="#LIST">LIST</a></code>
+- <code><a href="#APPLICATIVE">APPLICATIVE</a> <a href="#RESULT">(RESULT :A)</a></code>
+- <code><a href="#APPLICATIVE">APPLICATIVE</a> <a href="#CELL">CELL</a></code>
 
 </details>
 
@@ -595,15 +595,15 @@ Methods:
 <details>
 <summary>Instances</summary>
 
-- <code><a href="#QUANTIZABLE">QUANTIZABLE</a> <a href="#FRACTION">FRACTION</a></code>
-- <code><a href="#QUANTIZABLE">QUANTIZABLE</a> <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a></code>
-- <code><a href="#QUANTIZABLE">QUANTIZABLE</a> <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a></code>
-- <code><a href="#QUANTIZABLE">QUANTIZABLE</a> <a href="#U64">U64</a></code>
-- <code><a href="#QUANTIZABLE">QUANTIZABLE</a> <a href="#U32">U32</a></code>
-- <code><a href="#QUANTIZABLE">QUANTIZABLE</a> <a href="#U8">U8</a></code>
-- <code><a href="#QUANTIZABLE">QUANTIZABLE</a> <a href="#I64">I64</a></code>
-- <code><a href="#QUANTIZABLE">QUANTIZABLE</a> <a href="#I32">I32</a></code>
 - <code><a href="#QUANTIZABLE">QUANTIZABLE</a> <a href="#INTEGER">INTEGER</a></code>
+- <code><a href="#QUANTIZABLE">QUANTIZABLE</a> <a href="#I32">I32</a></code>
+- <code><a href="#QUANTIZABLE">QUANTIZABLE</a> <a href="#I64">I64</a></code>
+- <code><a href="#QUANTIZABLE">QUANTIZABLE</a> <a href="#U8">U8</a></code>
+- <code><a href="#QUANTIZABLE">QUANTIZABLE</a> <a href="#U32">U32</a></code>
+- <code><a href="#QUANTIZABLE">QUANTIZABLE</a> <a href="#U64">U64</a></code>
+- <code><a href="#QUANTIZABLE">QUANTIZABLE</a> <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a></code>
+- <code><a href="#QUANTIZABLE">QUANTIZABLE</a> <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a></code>
+- <code><a href="#QUANTIZABLE">QUANTIZABLE</a> <a href="#FRACTION">FRACTION</a></code>
 
 </details>
 
