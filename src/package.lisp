@@ -338,7 +338,7 @@
         #:coalton-impl/typechecker
         #:coalton-impl/codegen)
   (:export
-   #:write-library-documentation-to-markdown))
+   #:write-documentation-for-packages))
 
 (uiop:define-package #:coalton-impl
   (:documentation "Implementation and runtime for COALTON. This is a package private to the COALTON system and is not intended for public use.")
