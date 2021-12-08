@@ -159,11 +159,11 @@
         (type (documentation-type-entry-type object))
         (ctors (documentation-type-entry-constructors object))
         (instances (documentation-type-entry-instances object)))
-    (with-pprint-variable-context ()
-      (let ((type-vars
-              (loop :for i :below (coalton-impl/typechecker::kind-arity
-                                   (coalton-impl/typechecker::kind-of type))
-                    :collect (coalton-impl/typechecker::make-variable))))
+    (let ((type-vars
+            (loop :for i :below (coalton-impl/typechecker::kind-arity
+                                 (coalton-impl/typechecker::kind-of type))
+                  :collect (coalton-impl/typechecker::make-variable))))
+      (with-pprint-variable-context ()
         (format stream
                 "#### <code>~A~{ ~A~}</code> <sup><sub>[TYPE]</sub></sup><a name=\"~(~A-type~)\"></a>~%"
                 name type-vars name)
@@ -194,15 +194,15 @@
                     type-vars
                     (coalton-impl/typechecker::ty-scheme-type
                      (constructor-entry-scheme entry))))))
-        (format stream "~%")
+        (format stream "~%"))
 
-        (when instances
-          (format stream "<details>~%")
-          (format stream "<summary>Instances</summary>~%~%")
-          (loop :for instance :in instances :do
-            (with-pprint-variable-context ()
-              (format stream "- <code>~A</code>~%" (to-markdown instance))))
-          (format stream "~%</details>~%~%"))))))
+      (when instances
+        (format stream "<details>~%")
+        (format stream "<summary>Instances</summary>~%~%")
+        (loop :for instance :in instances :do
+          (with-pprint-variable-context ()
+            (format stream "- <code>~A</code>~%" (to-markdown instance))))
+        (format stream "~%</details>~%~%")))))
 
 (defmethod write-documentation ((backend (eql ':markdown)) stream (object documentation-class-entry))
   (with-slots (name context predicate methods instances documentation location)
