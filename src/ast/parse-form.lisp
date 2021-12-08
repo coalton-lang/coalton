@@ -61,7 +61,9 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
           ((null rands)
            (parse-application expr (first expr) `(coalton-library:Unit) m package))
 
-          (t (parse-application expr (first expr) rands m package))))))))
+          (t (parse-application expr (first expr) rands m package))))))
+    (t
+     (unreachable))))
 
 (defun invert-alist (alist)
   (loop :for (key . value) :in alist
