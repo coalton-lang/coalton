@@ -311,6 +311,10 @@
     (define (fromInt z)
       (%Fraction z 1)))
 
+  (define-instance (Dividable Fraction Fraction)
+    (define (/ a b)
+      (* a (reciprocal b))))
+
   (define-instance (Dividable Single-Float Single-Float)
     (define (/ x y)
       (lisp Single-Float (x y)

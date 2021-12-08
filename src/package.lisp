@@ -9,7 +9,7 @@
   (:use))
 
 (uiop:define-package #:coalton-util
-    (:use #:cl)
+  (:use #:cl)
   (:export
    #:required
    #:coalton-bug
@@ -18,7 +18,7 @@
    #:define-symbol-property))
 
 (uiop:define-package #:coalton-impl/algorithm
-    (:documentation "Implementation of generic algorithms used by COALTON. This is a package private to the COALTON system and is not intended for public use.")
+  (:documentation "Implementation of generic algorithms used by COALTON. This is a package private to the COALTON system and is not intended for public use.")
   (:use #:cl #:coalton-util)
   (:export
    #:tarjan-scc                         ; FUNCTION
@@ -540,7 +540,8 @@
   ;; Fraction
   (:export
    #:numerator
-   #:denominator)
+   #:denominator
+   #:reciprocal)
   ;; String
   (:export
    #:concat-string
