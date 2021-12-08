@@ -14,7 +14,7 @@
     (let ((tcon-name (coalton-impl/typechecker::tycon-name (coalton-impl/typechecker::tcon-tycon ty))))
       (if (string= "KEYWORD" (package-name (symbol-package tcon-name)))
           (format nil "~S" tcon-name)
-          (format nil "<a href=\"#~A\">~:*~A</a>" tcon-name))))
+          (format nil "<a href=\"#~(~A-type~)\">~:*~A</a>" tcon-name))))
 
   (:method ((ty coalton-impl/typechecker::tapp))
     (with-output-to-string (stream)
@@ -98,7 +98,7 @@
                  (to-markdown new-type)))))))
 
   (:method ((object ty-predicate))
-    (format nil "<a href=\"#~A\">~:*~A</a>~{ ~A~}"
+    (format nil "<a href=\"#~(~A-class~)\">~:*~A</a>~{ ~A~}"
             (ty-predicate-class object)
             (mapcar #'to-markdown (ty-predicate-types object))))
 
@@ -162,7 +162,7 @@
                                    (coalton-impl/typechecker::kind-of type))
                     :collect (coalton-impl/typechecker::make-variable))))
         (format stream
-                "#### <code>~A~{ ~A~}</code> <sup><sub>[TYPE]</sub></sup><a name=\"~A\"></a>~%"
+                "#### <code>~A~{ ~A~}</code> <sup><sub>[TYPE]</sub></sup><a name=\"~(~A-type~)\"></a>~%"
                 name type-vars name)
 
         (loop :for (ctor-name . entry) :in ctors :do
@@ -205,7 +205,8 @@
   (with-slots (name context predicate methods instances documentation location)
       object
 
-    (format stream "#### <code>~A</code> <sup><sub>[CLASS]</sub></sup><a name=\"~A\"></a>~%" name name)
+    (format stream "#### <code>~A</code> <sup><sub>[CLASS]</sub></sup><a name=\"~(~A-class~)\"></a>~%"
+            name name)
 
     (with-pprint-variable-context ()
       (format stream "<code>~A</code>~%~%" (to-markdown (ty-class-instance context predicate nil)))
@@ -229,7 +230,7 @@
   (with-slots (name type documentation location)
       object
 
-    (format stream "#### <code>~A</code> <sup><sub>[FUNCTION]</sub></sup><a name=\"~A\"></a>~%" name name)
+    (format stream "#### <code>~A</code> <sup><sub>[FUNCTION]</sub></sup><a name=\"~:*~(~A-function~)\"></a>~%" name)
 
     (with-pprint-variable-context ()
       (format stream "<code>~A</code>~%" (to-markdown type)))
