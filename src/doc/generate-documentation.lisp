@@ -45,29 +45,28 @@
   (:documentation "Write the given OBJECT to output STREAM. This is
   specialized on the given BACKEND."))
 
-(defun write-documentation-for-package (&key
-                                          (env coalton-impl::*global-environment*)
-                                          (stream t)
-                                          (package "COALTON-LIBRARY")
-                                          (asdf-system ':COALTON)
-                                          (file-link-prefix ""))
+(defun write-documentation-for-packages (&key
+                                           (env coalton-impl::*global-environment*)
+                                           (stream t)
+                                           (packages '(coalton coalton-library))
+                                           (asdf-system ':COALTON)
+                                           (file-link-prefix ""))
   (let* ((component (asdf:find-component asdf-system 'library))
          (component-path (asdf:component-pathname component))
          (filenames (mapcar (lambda (file)
                               (file-namestring (asdf:component-relative-pathname file)))
-                            (asdf:component-children component)))
-         
-         (file-entries (collect-documentation-by-file (truename component-path) file-link-prefix env package))
+                            (asdf:component-children component))))
 
-         (*package* (find-package package)))
+    (dolist (package packages)
+      (let ((*package* (find-package package))
+            (file-entries (collect-documentation-by-file (truename component-path) file-link-prefix env package)))
+        (format stream "# Reference for ~A~%~%" package)
 
-    (format stream "# Reference for ~A~%~%" package)
-
-    (dolist (file filenames)
-      (let* ((pathname file)
-             (file-entry (gethash pathname file-entries)))
-        (when file-entry
-          (write-documentation :markdown stream file-entry))))))
+        (dolist (file filenames)
+          (let* ((pathname file)
+                 (file-entry (gethash pathname file-entries)))
+            (when file-entry
+              (write-documentation :markdown stream file-entry))))))))
 
 (defun collect-documentation (&optional
                                 (env coalton-impl::*global-environment*)
@@ -203,8 +202,10 @@
                    nil ; TODO: grab type documentation
                    ;; Here we will assume that all constructors
                    ;; share the same location as the type.
-                   (coalton-impl/typechecker::name-entry-location
-                    (lookup-name env (car (first ctors)))))))
+                   (if (first ctors)
+                       (coalton-impl/typechecker::name-entry-location
+                        (lookup-name env (car (first ctors))))
+                       ""))))
               types))))
 
 (defun get-doc-class-info (env package)
