@@ -22,6 +22,19 @@
       ((Cons _ xs) (Some xs))
       ((Nil) None)))
 
+  (define (car x)
+    "Return the traditional car of a list XS. (Error when there is no car.)"
+    (match x
+      ((Cons x _) x)
+      ((Nil) (error "there is no first element"))))
+
+  (declare cdr ((List :a) -> (List :a)))
+  (define (cdr xs)
+    "Return the traditional cdr of a list XS."
+    (match xs
+      ((Cons _ xs) xs)
+      ((Nil) Nil)))
+
   (declare last ((List :a) -> (Optional :a)))
   (define (last l)
     "Returns the last element of a list."
@@ -139,6 +152,11 @@
        (if (== 0 i)
            (Some x)
            (index xs (- i 1))))))
+
+  (declare nth (Integer -> (List :t) -> :t))
+  (define (nth n l)
+    "Like INDEX, but errors if the index is not found."
+    (fromSome "There is no NTH" (index l n)))
 
   (declare elemIndex (Eq :a => (:a -> (List :a) -> (Optional Integer))))
   (define (elemIndex x xs)

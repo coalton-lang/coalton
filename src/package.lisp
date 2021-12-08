@@ -560,6 +560,8 @@
   (:export
    #:head
    #:tail
+   #:car
+   #:cdr
    #:last
    #:init
    #:null
@@ -574,6 +576,7 @@
    #:filter
    #:length
    #:index
+   #:nth
    #:elemIndex
    #:findIndex
    #:range
