@@ -64,7 +64,9 @@
       (let ((file-entries (collect-documentation-by-file (truename component-path) file-link-prefix env package)))
         (format stream "# Reference for ~A~%~%" package)
 
-        (dolist (file filenames)
+        ;; NOTE: We are including the empty filename here to allow for
+        ;;       symbols without file information to be included.
+        (dolist (file (append '("") filenames))
           (let* ((pathname file)
                  (file-entry (gethash pathname file-entries)))
             (when file-entry
@@ -158,7 +160,7 @@
         (package (find-package package)))
     ;; Sort the entires by package
     (fset:do-map (sym entry (immutable-map-data (coalton-impl/typechecker::environment-type-environment env)))
-      ;; Only include exported symbols from our package
+      ;; Only include exported symbols from our packages
       (when (and (equalp (symbol-package sym) package)
                  (multiple-value-bind (symbol status)
                      (find-symbol (symbol-name sym) package)

@@ -1,5 +1,225 @@
 # Reference for COALTON
 
+### Types
+
+#### <code>U8</code> <sup><sub>[TYPE]</sub></sup><a name="U8"></a>
+
+
+<details>
+<summary>Instances</summary>
+
+- <code><a href="#EQ">EQ</a> <a href="#U8">U8</a></code>
+- <code><a href="#NUM">NUM</a> <a href="#U8">U8</a></code>
+- <code><a href="#ORD">ORD</a> <a href="#U8">U8</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#U8">U8</a> <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#U8">U8</a> <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#U8">U8</a> <a href="#INTEGER">INTEGER</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#INTEGER">INTEGER</a> <a href="#U8">U8</a></code>
+- <code><a href="#QUANTIZABLE">QUANTIZABLE</a> <a href="#U8">U8</a></code>
+
+</details>
+
+
+***
+
+#### <code>I32</code> <sup><sub>[TYPE]</sub></sup><a name="I32"></a>
+
+
+<details>
+<summary>Instances</summary>
+
+- <code><a href="#EQ">EQ</a> <a href="#I32">I32</a></code>
+- <code><a href="#NUM">NUM</a> <a href="#I32">I32</a></code>
+- <code><a href="#ORD">ORD</a> <a href="#I32">I32</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#I32">I32</a> <a href="#INTEGER">INTEGER</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#INTEGER">INTEGER</a> <a href="#I32">I32</a></code>
+- <code><a href="#QUANTIZABLE">QUANTIZABLE</a> <a href="#I32">I32</a></code>
+
+</details>
+
+
+***
+
+#### <code>I64</code> <sup><sub>[TYPE]</sub></sup><a name="I64"></a>
+
+
+<details>
+<summary>Instances</summary>
+
+- <code><a href="#EQ">EQ</a> <a href="#I64">I64</a></code>
+- <code><a href="#NUM">NUM</a> <a href="#I64">I64</a></code>
+- <code><a href="#ORD">ORD</a> <a href="#I64">I64</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#I64">I64</a> <a href="#INTEGER">INTEGER</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#INTEGER">INTEGER</a> <a href="#I64">I64</a></code>
+- <code><a href="#QUANTIZABLE">QUANTIZABLE</a> <a href="#I64">I64</a></code>
+
+</details>
+
+
+***
+
+#### <code>U32</code> <sup><sub>[TYPE]</sub></sup><a name="U32"></a>
+
+
+<details>
+<summary>Instances</summary>
+
+- <code><a href="#EQ">EQ</a> <a href="#U32">U32</a></code>
+- <code><a href="#NUM">NUM</a> <a href="#U32">U32</a></code>
+- <code><a href="#ORD">ORD</a> <a href="#U32">U32</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#U32">U32</a> <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#U32">U32</a> <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#U32">U32</a> <a href="#INTEGER">INTEGER</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#INTEGER">INTEGER</a> <a href="#U32">U32</a></code>
+- <code><a href="#QUANTIZABLE">QUANTIZABLE</a> <a href="#U32">U32</a></code>
+
+</details>
+
+
+***
+
+#### <code>U64</code> <sup><sub>[TYPE]</sub></sup><a name="U64"></a>
+
+
+<details>
+<summary>Instances</summary>
+
+- <code><a href="#EQ">EQ</a> <a href="#U64">U64</a></code>
+- <code><a href="#NUM">NUM</a> <a href="#U64">U64</a></code>
+- <code><a href="#ORD">ORD</a> <a href="#U64">U64</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#U64">U64</a> <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#U64">U64</a> <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#U64">U64</a> <a href="#INTEGER">INTEGER</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#INTEGER">INTEGER</a> <a href="#U64">U64</a></code>
+- <code><a href="#QUANTIZABLE">QUANTIZABLE</a> <a href="#U64">U64</a></code>
+
+</details>
+
+
+***
+
+#### <code>CHAR</code> <sup><sub>[TYPE]</sub></sup><a name="CHAR"></a>
+
+
+<details>
+<summary>Instances</summary>
+
+- <code><a href="#EQ">EQ</a> <a href="#CHAR">CHAR</a></code>
+- <code><a href="#ORD">ORD</a> <a href="#CHAR">CHAR</a></code>
+
+</details>
+
+
+***
+
+#### <code>ARROW :A :B</code> <sup><sub>[TYPE]</sub></sup><a name="ARROW"></a>
+
+
+
+***
+
+#### <code>STRING</code> <sup><sub>[TYPE]</sub></sup><a name="STRING"></a>
+
+
+<details>
+<summary>Instances</summary>
+
+- <code><a href="#EQ">EQ</a> <a href="#STRING">STRING</a></code>
+- <code><a href="#ISO">ISO</a> <a href="#LIST">(LIST CHAR)</a> <a href="#STRING">STRING</a></code>
+- <code><a href="#ORD">ORD</a> <a href="#STRING">STRING</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#LIST">(LIST CHAR)</a> <a href="#STRING">STRING</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#STRING">STRING</a> <a href="#LIST">(LIST CHAR)</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#INTEGER">INTEGER</a> <a href="#STRING">STRING</a></code>
+- <code><a href="#MONOID">MONOID</a> <a href="#STRING">STRING</a></code>
+- <code><a href="#TRYINTO">TRYINTO</a> <a href="#STRING">STRING</a> <a href="#INTEGER">INTEGER</a></code>
+- <code><a href="#SEMIGROUP">SEMIGROUP</a> <a href="#STRING">STRING</a></code>
+
+</details>
+
+
+***
+
+#### <code>INTEGER</code> <sup><sub>[TYPE]</sub></sup><a name="INTEGER"></a>
+
+
+<details>
+<summary>Instances</summary>
+
+- <code><a href="#EQ">EQ</a> <a href="#INTEGER">INTEGER</a></code>
+- <code><a href="#NUM">NUM</a> <a href="#INTEGER">INTEGER</a></code>
+- <code><a href="#ORD">ORD</a> <a href="#INTEGER">INTEGER</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#NODEINDEX">NODEINDEX</a> <a href="#INTEGER">INTEGER</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#EDGEINDEX">EDGEINDEX</a> <a href="#INTEGER">INTEGER</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#INTEGER">INTEGER</a> <a href="#STRING">STRING</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#U64">U64</a> <a href="#INTEGER">INTEGER</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#INTEGER">INTEGER</a> <a href="#U64">U64</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#U32">U32</a> <a href="#INTEGER">INTEGER</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#INTEGER">INTEGER</a> <a href="#U32">U32</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#U8">U8</a> <a href="#INTEGER">INTEGER</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#INTEGER">INTEGER</a> <a href="#U8">U8</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#I64">I64</a> <a href="#INTEGER">INTEGER</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#INTEGER">INTEGER</a> <a href="#I64">I64</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#I32">I32</a> <a href="#INTEGER">INTEGER</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#INTEGER">INTEGER</a> <a href="#I32">I32</a></code>
+- <code><a href="#TRYINTO">TRYINTO</a> <a href="#STRING">STRING</a> <a href="#INTEGER">INTEGER</a></code>
+- <code><a href="#DIVIDABLE">DIVIDABLE</a> <a href="#INTEGER">INTEGER</a> <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a></code>
+- <code><a href="#DIVIDABLE">DIVIDABLE</a> <a href="#INTEGER">INTEGER</a> <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a></code>
+- <code><a href="#DIVIDABLE">DIVIDABLE</a> <a href="#INTEGER">INTEGER</a> <a href="#FRACTION">FRACTION</a></code>
+- <code><a href="#QUANTIZABLE">QUANTIZABLE</a> <a href="#INTEGER">INTEGER</a></code>
+
+</details>
+
+
+***
+
+#### <code>LISP-OBJECT</code> <sup><sub>[TYPE]</sub></sup><a name="LISP-OBJECT"></a>
+
+
+
+***
+
+#### <code>DOUBLE-FLOAT</code> <sup><sub>[TYPE]</sub></sup><a name="DOUBLE-FLOAT"></a>
+
+
+<details>
+<summary>Instances</summary>
+
+- <code><a href="#EQ">EQ</a> <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a></code>
+- <code><a href="#NUM">NUM</a> <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a></code>
+- <code><a href="#ORD">ORD</a> <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#U64">U64</a> <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#U32">U32</a> <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#U8">U8</a> <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a></code>
+- <code><a href="#DIVIDABLE">DIVIDABLE</a> <a href="#INTEGER">INTEGER</a> <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a></code>
+- <code><a href="#DIVIDABLE">DIVIDABLE</a> <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a> <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a></code>
+- <code><a href="#QUANTIZABLE">QUANTIZABLE</a> <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a></code>
+
+</details>
+
+
+***
+
+#### <code>SINGLE-FLOAT</code> <sup><sub>[TYPE]</sub></sup><a name="SINGLE-FLOAT"></a>
+
+
+<details>
+<summary>Instances</summary>
+
+- <code><a href="#EQ">EQ</a> <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a></code>
+- <code><a href="#NUM">NUM</a> <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a></code>
+- <code><a href="#ORD">ORD</a> <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#U64">U64</a> <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#U32">U32</a> <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#U8">U8</a> <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a></code>
+- <code><a href="#DIVIDABLE">DIVIDABLE</a> <a href="#INTEGER">INTEGER</a> <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a></code>
+- <code><a href="#DIVIDABLE">DIVIDABLE</a> <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a> <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a></code>
+- <code><a href="#QUANTIZABLE">QUANTIZABLE</a> <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a></code>
+
+</details>
+
+
+***
+
 ## File: [types.lisp](../src/library/types.lisp)
 
 ### Types
