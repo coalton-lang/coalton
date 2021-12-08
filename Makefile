@@ -23,7 +23,7 @@ docs:
 	sbcl --non-interactive \
 	     --eval "(ql:quickload :coalton)" \
 	     --eval "(with-open-file (out \"docs/reference.md\" :direction :output :if-exists :supersede) \
-	               (coalton-impl/doc::write-documentation-for-package :env coalton-impl::*global-environment* :stream out :file-link-prefix \"../src/library/\"))"
+	               (coalton-impl/doc::write-documentation-for-packages :env coalton-impl::*global-environment* :stream out :file-link-prefix \"../src/library/\"))"
 
 ###############################################################################
 # CLEAN
