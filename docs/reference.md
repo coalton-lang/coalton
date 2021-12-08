@@ -867,6 +867,26 @@ Methods:
 
 ***
 
+#### <code>ALTERNATIVE</code> <sup><sub>[CLASS]</sub></sup><a name="alternative-class"></a>
+<code><a href="#applicative-class">APPLICATIVE</a> :A => <a href="#alternative-class">ALTERNATIVE</a> :A</code>
+
+Types which are monoids on applicative functors.
+
+Methods:
+- <code>ALT :: ∀ :B. ((:A :B) → (:A :B) → (:A :B))</code>
+- <code>EMPTY :: ∀ :B. (:A :B)</code>
+
+<details>
+<summary>Instances</summary>
+
+- <code><a href="#alternative-class">ALTERNATIVE</a> <a href="#optional-type">OPTIONAL</a></code>
+- <code><a href="#alternative-class">ALTERNATIVE</a> <a href="#list-type">LIST</a></code>
+
+</details>
+
+
+***
+
 #### <code>APPLICATIVE</code> <sup><sub>[CLASS]</sub></sup><a name="applicative-class"></a>
 <code><a href="#functor-class">FUNCTOR</a> :A => <a href="#applicative-class">APPLICATIVE</a> :A</code>
 
