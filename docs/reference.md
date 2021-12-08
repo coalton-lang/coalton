@@ -424,6 +424,7 @@ Constructors:
 - <code><a href="#num-class">NUM</a> <a href="#fraction-type">FRACTION</a></code>
 - <code><a href="#ord-class">ORD</a> <a href="#fraction-type">FRACTION</a></code>
 - <code><a href="#dividable-class">DIVIDABLE</a> <a href="#integer-type">INTEGER</a> <a href="#fraction-type">FRACTION</a></code>
+- <code><a href="#dividable-class">DIVIDABLE</a> <a href="#fraction-type">FRACTION</a> <a href="#fraction-type">FRACTION</a></code>
 - <code><a href="#quantizable-class">QUANTIZABLE</a> <a href="#fraction-type">FRACTION</a></code>
 
 </details>
@@ -527,6 +528,13 @@ Constructors:
 - <code>GT :: <a href="#ord-type">ORD</a></code>
 - <code>EQ :: <a href="#ord-type">ORD</a></code>
 
+<details>
+<summary>Instances</summary>
+
+- <code><a href="#eq-class">EQ</a> <a href="#ord-type">ORD</a></code>
+
+</details>
+
 
 ***
 
@@ -567,6 +575,7 @@ Methods:
 <details>
 <summary>Instances</summary>
 
+- <code><a href="#eq-class">EQ</a> <a href="#ord-type">ORD</a></code>
 - <code><a href="#eq-class">EQ</a> <a href="#boolean-type">BOOLEAN</a></code>
 - <code><a href="#eq-class">EQ</a> <a href="#i32-type">I32</a></code>
 - <code><a href="#eq-class">EQ</a> <a href="#i64-type">I64</a></code>
@@ -817,6 +826,7 @@ Methods:
 <details>
 <summary>Instances</summary>
 
+- <code><a href="#dividable-class">DIVIDABLE</a> <a href="#fraction-type">FRACTION</a> <a href="#fraction-type">FRACTION</a></code>
 - <code><a href="#dividable-class">DIVIDABLE</a> <a href="#single-float-type">SINGLE-FLOAT</a> <a href="#single-float-type">SINGLE-FLOAT</a></code>
 - <code><a href="#dividable-class">DIVIDABLE</a> <a href="#double-float-type">DOUBLE-FLOAT</a> <a href="#double-float-type">DOUBLE-FLOAT</a></code>
 - <code><a href="#dividable-class">DIVIDABLE</a> <a href="#integer-type">INTEGER</a> <a href="#fraction-type">FRACTION</a></code>
@@ -1018,7 +1028,15 @@ A function which can be used in place of any value, throwing an error at runtime
 #### <code>NUMERATOR</code> <sup><sub>[FUNCTION]</sub></sup><a name="numerator-function"></a>
 <code>(<a href="#fraction-type">FRACTION</a> → <a href="#integer-type">INTEGER</a>)</code>
 
-The numerator of a fraction Q.
+The numerator of a fraction.
+
+
+***
+
+#### <code>RECIPROCAL</code> <sup><sub>[FUNCTION]</sub></sup><a name="reciprocal-function"></a>
+<code>(<a href="#fraction-type">FRACTION</a> → <a href="#fraction-type">FRACTION</a>)</code>
+
+The reciprocal of a fraction.
 
 
 ***
@@ -1026,7 +1044,7 @@ The numerator of a fraction Q.
 #### <code>DENOMINATOR</code> <sup><sub>[FUNCTION]</sub></sup><a name="denominator-function"></a>
 <code>(<a href="#fraction-type">FRACTION</a> → <a href="#integer-type">INTEGER</a>)</code>
 
-The denominator of a fraction Q.
+The denominator of a fraction.
 
 
 ***
@@ -1155,6 +1173,14 @@ Parse the integer in string STR.
 
 ***
 
+#### <code>SUBSTRING</code> <sup><sub>[FUNCTION]</sub></sup><a name="substring-function"></a>
+<code>(<a href="#string-type">STRING</a> → <a href="#integer-type">INTEGER</a> → <a href="#integer-type">INTEGER</a> → <a href="#string-type">STRING</a>)</code>
+
+Compute a substring of a string bounded by given indices.
+
+
+***
+
 #### <code>PACK-STRING</code> <sup><sub>[FUNCTION]</sub></sup><a name="pack-string-function"></a>
 <code>((<a href="#list-type">LIST</a> <a href="#char-type">CHAR</a>) → <a href="#string-type">STRING</a>)</code>
 
@@ -1171,10 +1197,26 @@ Concatenate STR1 and STR2 together, returning a new string.
 
 ***
 
+#### <code>STRING-LENGTH</code> <sup><sub>[FUNCTION]</sub></sup><a name="string-length-function"></a>
+<code>(<a href="#string-type">STRING</a> → <a href="#integer-type">INTEGER</a>)</code>
+
+The length of a string STR.
+
+
+***
+
 #### <code>UNPACK-STRING</code> <sup><sub>[FUNCTION]</sub></sup><a name="unpack-string-function"></a>
 <code>(<a href="#string-type">STRING</a> → (<a href="#list-type">LIST</a> <a href="#char-type">CHAR</a>))</code>
 
 Unpack a string into a list of characters.
+
+
+***
+
+#### <code>REVERSE-STRING</code> <sup><sub>[FUNCTION]</sub></sup><a name="reverse-string-function"></a>
+<code>(<a href="#string-type">STRING</a> → <a href="#string-type">STRING</a>)</code>
+
+Reverse a string.
 
 
 ***
@@ -1223,6 +1265,30 @@ Returns TRUE if every element in XS matches F.
 <code>∀ :A. ((:A → <a href="#boolean-type">BOOLEAN</a>) → (<a href="#list-type">LIST</a> :A) → <a href="#boolean-type">BOOLEAN</a>)</code>
 
 Returns TRUE if at least one element in XS matches F.
+
+
+***
+
+#### <code>CAR</code> <sup><sub>[FUNCTION]</sub></sup><a name="car-function"></a>
+<code>∀ :A. ((<a href="#list-type">LIST</a> :A) → :A)</code>
+
+Return the traditional car of a list XS. (Error when there is no car.)
+
+
+***
+
+#### <code>CDR</code> <sup><sub>[FUNCTION]</sub></sup><a name="cdr-function"></a>
+<code>∀ :A. ((<a href="#list-type">LIST</a> :A) → (<a href="#list-type">LIST</a> :A))</code>
+
+Return the traditional cdr of a list XS.
+
+
+***
+
+#### <code>NTH</code> <sup><sub>[FUNCTION]</sub></sup><a name="nth-function"></a>
+<code>∀ :A. (<a href="#integer-type">INTEGER</a> → (<a href="#list-type">LIST</a> :A) → :A)</code>
+
+Like INDEX, but errors if the index is not found.
 
 
 ***
@@ -1440,10 +1506,18 @@ Generic version of sort
 
 ***
 
+#### <code>COUNTBY</code> <sup><sub>[FUNCTION]</sub></sup><a name="countby-function"></a>
+<code>∀ :A. ((:A → <a href="#boolean-type">BOOLEAN</a>) → (<a href="#list-type">LIST</a> :A) → <a href="#integer-type">INTEGER</a>)</code>
+
+Count the number of items in THINGS that satisfy the predicate F.
+
+
+***
+
 #### <code>MAXIMUM</code> <sup><sub>[FUNCTION]</sub></sup><a name="maximum-function"></a>
 <code>∀ :A. <a href="#ord-class">ORD</a> :A ⇒ ((<a href="#list-type">LIST</a> :A) → (<a href="#optional-type">OPTIONAL</a> :A))</code>
 
-Returns the greatest element in XS.
+Returns a greatest element of a list, or None.
 
 
 ***
@@ -1451,7 +1525,7 @@ Returns the greatest element in XS.
 #### <code>MINIMUM</code> <sup><sub>[FUNCTION]</sub></sup><a name="minimum-function"></a>
 <code>∀ :A. <a href="#ord-class">ORD</a> :A ⇒ ((<a href="#list-type">LIST</a> :A) → (<a href="#optional-type">OPTIONAL</a> :A))</code>
 
-Returns the least element in XS.
+Returns a least element of a list, or None.
 
 
 ***
@@ -1530,6 +1604,14 @@ Apply F to each element in XS and concatenate the results.
 
 ***
 
+#### <code>OPTIMUMBY</code> <sup><sub>[FUNCTION]</sub></sup><a name="optimumby-function"></a>
+<code>∀ :A. ((:A → :A → <a href="#boolean-type">BOOLEAN</a>) → (<a href="#list-type">LIST</a> :A) → (<a href="#optional-type">OPTIONAL</a> :A))</code>
+
+Returns an optimum according to a total order.
+
+
+***
+
 #### <code>PARTITION</code> <sup><sub>[FUNCTION]</sub></sup><a name="partition-function"></a>
 <code>∀ :A. ((:A → <a href="#boolean-type">BOOLEAN</a>) → (<a href="#list-type">LIST</a> :A) → (<a href="#tuple-type">TUPLE</a> (<a href="#list-type">LIST</a> :A) (<a href="#list-type">LIST</a> :A)))</code>
 
@@ -1590,6 +1672,19 @@ Returns a new list with the first occurence of each element in YS deleted from X
 <code>∀ :A. <a href="#eq-class">EQ</a> :A ⇒ ((<a href="#list-type">LIST</a> :A) → (<a href="#list-type">LIST</a> :A))</code>
 
 Returns a new list without duplicate elements.
+
+
+***
+
+#### <code>EQUIVALENCE-CLASSES</code> <sup><sub>[FUNCTION]</sub></sup><a name="equivalence-classes-function"></a>
+<code>∀ :A. <a href="#eq-class">EQ</a> :A ⇒ ((<a href="#list-type">LIST</a> :A) → (<a href="#list-type">LIST</a> (<a href="#list-type">LIST</a> :A)))</code>
+
+***
+
+#### <code>EQUIVALENCE-CLASSES-BY</code> <sup><sub>[FUNCTION]</sub></sup><a name="equivalence-classes-by-function"></a>
+<code>∀ :A. ((:A → :A → <a href="#boolean-type">BOOLEAN</a>) → (<a href="#list-type">LIST</a> :A) → (<a href="#list-type">LIST</a> (<a href="#list-type">LIST</a> :A)))</code>
+
+Break a list into a list of equivalence classes according to an equivalence relation.
 
 
 ***
@@ -1707,6 +1802,22 @@ Print a line to *STANDARD-OUTPUT*
 
 ***
 
+#### <code>CONJOIN</code> <sup><sub>[FUNCTION]</sub></sup><a name="conjoin-function"></a>
+<code>∀ :A. ((:A → <a href="#boolean-type">BOOLEAN</a>) → (:A → <a href="#boolean-type">BOOLEAN</a>) → :A → <a href="#boolean-type">BOOLEAN</a>)</code>
+
+Compute the conjunction of two unary Boolean functions.
+
+
+***
+
+#### <code>DISJOIN</code> <sup><sub>[FUNCTION]</sub></sup><a name="disjoin-function"></a>
+<code>∀ :A. ((:A → <a href="#boolean-type">BOOLEAN</a>) → (:A → <a href="#boolean-type">BOOLEAN</a>) → :A → <a href="#boolean-type">BOOLEAN</a>)</code>
+
+Compute the disjunction of two unary Boolean functions.
+
+
+***
+
 #### <code>SEQUENCE</code> <sup><sub>[FUNCTION]</sub></sup><a name="sequence-function"></a>
 <code>∀ :A :B. <a href="#applicative-class">APPLICATIVE</a> :A ⇒ ((<a href="#list-type">LIST</a> (:A :B)) → (:A (<a href="#list-type">LIST</a> :B)))</code>
 
@@ -1716,6 +1827,14 @@ Print a line to *STANDARD-OUTPUT*
 <code>∀ :A :B :C. <a href="#applicative-class">APPLICATIVE</a> :B ⇒ ((:A → (:B :C)) → (<a href="#list-type">LIST</a> :A) → (:B (<a href="#list-type">LIST</a> :C)))</code>
 
 Map the elements of XS with F then collect the results.
+
+
+***
+
+#### <code>COMPLEMENT</code> <sup><sub>[FUNCTION]</sub></sup><a name="complement-function"></a>
+<code>∀ :A. ((:A → <a href="#boolean-type">BOOLEAN</a>) → :A → <a href="#boolean-type">BOOLEAN</a>)</code>
+
+Compute the complement of a unary Boolean function.
 
 
 ***
