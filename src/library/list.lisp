@@ -405,6 +405,21 @@
                           (inner xs as (Cons x bs))))))))
       (inner xs Nil Nil)))
 
+  (declare equivalence-classes-by ((:a -> :a -> Boolean) -> (List :a) -> (List (List :a))))
+  (define (equivalence-classes-by f l)
+    "Break a list into a list of equivalence classes according to an equivalence relation."
+    (let ((rec (fn (remaining partitions)
+                 (match remaining
+                   ((Nil) partitions)
+                   ((Cons x _)
+                    (match (partition (f x) remaining)
+                      ((Tuple yes no)
+                       (rec no (Cons (Cons x yes) partitions)))))))))
+      (rec l Nil)))
+
+  (declare equivalence-classes (Eq :a => ((List :a) -> (List (List :a)))))
+  (define equivalence-classes (equivalence-classes-by ==))
+
   (declare optimumBy ((:a -> :a -> Boolean)
                       -> (List :a)
                       -> (Optional :a)))
