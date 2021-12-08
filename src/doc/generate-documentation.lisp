@@ -34,11 +34,12 @@
 
 (defstruct (documentation-file-entry
             (:constructor make-documentation-file-entry
-                (filename value-entries type-entries class-entries)))
+                (filename value-entries type-entries class-entries link-prefix)))
   filename
   value-entries
   type-entries
-  class-entries)
+  class-entries
+  link-prefix)
 
 (defgeneric write-documentation (backend stream object)
   (:documentation "Write the given OBJECT to output STREAM. This is
@@ -56,14 +57,14 @@
                               (file-namestring (asdf:component-relative-pathname file)))
                             (asdf:component-children component)))
          
-         (file-entries (collect-documentation-by-file env package))
+         (file-entries (collect-documentation-by-file (truename component-path) file-link-prefix env package))
 
          (*package* (find-package package)))
 
     (format stream "# Reference for ~A~%~%" package)
 
     (dolist (file filenames)
-      (let* ((pathname (merge-pathnames file component-path))
+      (let* ((pathname file)
              (file-entry (gethash pathname file-entries)))
         (when file-entry
           (write-documentation :markdown stream file-entry))))))
@@ -77,47 +78,49 @@
           (get-doc-class-info env package)))
 
 (defun collect-documentation-by-file (&optional
+                                        basepath
+                                        link-prefix
                                         (env coalton-impl::*global-environment*)
                                         (package "COALTON-LIBRARY"))
   (multiple-value-bind (value-entries type-entries class-entries)
       (collect-documentation env package)
-    (sort-documentation-by-file value-entries type-entries class-entries)))
+    (sort-documentation-by-file basepath link-prefix value-entries type-entries class-entries)))
 
 ;; TODO: We should sort everything here
-(defun sort-documentation-by-file (value-entries type-entries class-entries)
+(defun sort-documentation-by-file (basepath link-prefix value-entries type-entries class-entries)
   (let ((file-entries (make-hash-table :test #'equalp)))
     ;; Sort the functions by file
     (loop :for entry :in value-entries
-          :for filename := (documentation-entry-location entry) :do
+          :for filename := (enough-namestring (documentation-entry-location entry) basepath) :do
             (push entry
                   (documentation-file-entry-value-entries
                    (alexandria:ensure-gethash
                     filename
                     file-entries
                     (make-documentation-file-entry
-                     filename nil nil nil)))))
+                     filename nil nil nil link-prefix)))))
 
     ;; Sort the types by file
     (loop :for entry :in type-entries
-          :for filename := (documentation-entry-location entry) :do
+          :for filename := (enough-namestring (documentation-entry-location entry) basepath) :do
             (push entry
                   (documentation-file-entry-type-entries
                    (alexandria:ensure-gethash
                     filename
                     file-entries
                     (make-documentation-file-entry
-                     filename nil nil nil)))))
+                     filename nil nil nil link-prefix)))))
 
     ;; Sort the classes by file
     (loop :for entry :in class-entries
-          :for filename := (documentation-entry-location entry) :do
+          :for filename := (enough-namestring (documentation-entry-location entry) basepath) :do
             (push entry
                   (documentation-file-entry-class-entries
                    (alexandria:ensure-gethash
                     filename
                     file-entries
                     (make-documentation-file-entry
-                     filename nil nil nil)))))
+                     filename nil nil nil link-prefix)))))
 
     file-entries))
 

@@ -28,14 +28,14 @@
 
 ;; TODO: Do the prefixing for file links
 (defmethod write-documentation ((backend (eql ':markdown)) stream (object documentation-file-entry))
-  (with-slots (filename value-entries type-entries class-entries)
+  (with-slots (filename value-entries type-entries class-entries link-prefix)
       object
     ;; We only want to write documentation when there is documentation to write.
     (when (or value-entries
               type-entries
               class-entries)
       
-      (format stream "## File: [~A](~A)~%~%" filename filename)
+      (format stream "## File: [~A](~A)~%~%" filename (concatenate 'string link-prefix filename))
 
       ;; Print type information
       (when type-entries
