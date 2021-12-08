@@ -44,7 +44,8 @@
 (defmethod make-load-form ((self qualified-ty) &optional env)
   (make-load-form-saving-slots
    self
-   :slot-names '(predicates type)))
+   :slot-names '(predicates type)
+   :environment env))
 
 #+sbcl
 (declaim (sb-ext:freeze-type qualified-ty))
