@@ -604,6 +604,8 @@
    #:intercalate
    #:transpose
    #:partition
+   #:equivalence-classes-by
+   #:equivalence-classes
    #:optimumBy
    #:maximum
    #:minimum
