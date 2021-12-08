@@ -49,17 +49,19 @@
                                            (env coalton-impl::*global-environment*)
                                            (stream t)
                                            (packages '(coalton coalton-library))
+                                           (base-package 'coalton-library)
                                            (asdf-system ':COALTON)
                                            (file-link-prefix ""))
   (let* ((component (asdf:find-component asdf-system 'library))
          (component-path (asdf:component-pathname component))
          (filenames (mapcar (lambda (file)
                               (file-namestring (asdf:component-relative-pathname file)))
-                            (asdf:component-children component))))
+                            (asdf:component-children component)))
+
+         (*package* (find-package base-package)))
 
     (dolist (package packages)
-      (let ((*package* (find-package package))
-            (file-entries (collect-documentation-by-file (truename component-path) file-link-prefix env package)))
+      (let ((file-entries (collect-documentation-by-file (truename component-path) file-link-prefix env package)))
         (format stream "# Reference for ~A~%~%" package)
 
         (dolist (file filenames)
