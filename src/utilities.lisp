@@ -2,10 +2,6 @@
 
 (in-package #:coalton-util)
 
-(defun required (name)
-  (declare (type symbol name))
-  (error "Slot ~S is required" name))
-
 (define-condition coalton-bug (error)
   ((reason :initarg :reason
            :reader coalton-bug-reason)
@@ -20,6 +16,15 @@
   (error 'coalton-bug
          :reason reason
          :args args))
+
+(defun unreachable ()
+  "A function to call when something should be unreachable."
+  (coalton-bug "This error was expected to be unreachable in the Coalton source code."))
+
+(defun required (name)
+  "A function to call as a slot initializer when it's required."
+  (declare (type symbol name))
+  (coalton-bug "A slot ~S (of package ~S) is required but not supplied" name (symbol-package name)))
 
 (defun sexp-fmt (stream object &optional colon-modifier at-modifier)
   "A formatter for qualified S-expressions. Use like

@@ -12,6 +12,7 @@
   (:use #:cl)
   (:export
    #:required
+   #:unreachable
    #:coalton-bug
    #:sexp-fmt
    #:include-if
