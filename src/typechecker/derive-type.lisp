@@ -465,6 +465,7 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                     (lambda (name)
                       (cons name (lookup-value-type env name)))
                     names)))
+    (declare (ignore bindings))
     (values
      typed-nodes
      preds
