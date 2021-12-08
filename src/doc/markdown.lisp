@@ -1,26 +1,99 @@
 (in-package #:coalton-impl/doc)
 
-;; TODO: remove this
-(defun write-predicate-to-markdown (ctx pred)
-  ;; TODO: Only link if the thing is part of the package being documented
-  (labels ((base-type (type)
-             (typecase type
-               (coalton-impl/typechecker::tapp
-                (base-type (coalton-impl/typechecker::tapp-from type)))
-               (t
-                type))))
-    (let ((class (ty-predicate-class pred))
-          (types (ty-predicate-types pred)))
-      (format nil "<code>~{~A ~}~:[~;=> ~]<a href=\"#~A\">~A</a>~{ ~A~}</code>"
-              (loop :for pred :in ctx
-                    :for class := (ty-predicate-class pred)
-                    :for types := (ty-predicate-types pred)
-                    :collect (format nil "<a href=\"#~A\">~A~{ ~A~}</a>" class class types))
-              ctx
-              class class
-              (loop :for type :in types
-                    :for base-type :in (mapcar #'base-type types)
-                    :collect (format nil "<a href=\"#~A\">~A</a>" base-type type))))))
+(defgeneric to-markdown (object)
+
+  ;;
+  ;; Type printing (modification of pprint-type)
+  ;;
+
+  (:method ((ty coalton-impl/typechecker::tvar))
+    (with-output-to-string (stream)
+      (coalton-impl/typechecker::pprint-ty stream (coalton-impl/typechecker::pprint-tvar ty))))
+
+  (:method ((ty coalton-impl/typechecker::tcon))
+    (format nil "<a href=\"#~A\">~:*~A</a>"
+            (coalton-impl/typechecker::tycon-name (coalton-impl/typechecker::tcon-tycon ty))))
+
+  (:method ((ty coalton-impl/typechecker::tapp))
+    (with-output-to-string (stream)
+      (cond
+        ((function-type-p ty) ;; Print function types
+         (write-string "(" stream)
+         (write-string (to-markdown (coalton-impl/typechecker::tapp-to (coalton-impl/typechecker::tapp-from ty)))
+                       stream)
+         (write-string (if *coalton-print-unicode*
+                           " → "
+                           " -> ")
+                       stream)
+         ;; Avoid printing extra parenthesis on curried functions
+         (labels ((print-subfunction (to)
+                    (cond
+                      ((function-type-p to)
+                       (write-string
+                        (to-markdown (coalton-impl/typechecker::tapp-to (coalton-impl/typechecker::tapp-from to)))
+                        stream)
+                       (write-string (if *coalton-print-unicode*
+                                         " → "
+                                         " -> ")
+                                     stream)
+                       (print-subfunction (coalton-impl/typechecker::tapp-to to)))
+                      (t
+                       (write-string (to-markdown to) stream)))))
+           (print-subfunction (coalton-impl/typechecker::tapp-to ty)))
+         (write-string ")" stream))
+        (t ;; Print type constructors
+         (let* ((tcon ty)
+                (tcon-args (loop :while (coalton-impl/typechecker::tapp-p tcon)
+                                 :collect (coalton-impl/typechecker::tapp-to tcon)
+                                 :do (setf tcon (coalton-impl/typechecker::tapp-from tcon)))))
+           (cond
+             ((and (coalton-impl/typechecker::tcon-p tcon)
+                   (coalton-impl/typechecker::simple-kind-p
+                    (coalton-impl/typechecker::tycon-kind (coalton-impl/typechecker::tcon-tycon tcon)))
+                   (<= (length tcon-args)
+                       (coalton-impl/typechecker::kind-arity
+                        (coalton-impl/typechecker::tycon-kind (coalton-impl/typechecker::tcon-tycon tcon)))))
+              (write-string "(" stream)
+              (write-string (to-markdown tcon) stream)
+              (dolist (arg (reverse tcon-args))
+                (write-string " " stream)
+                (write-string (to-markdown arg) stream))
+              (write-string ")" stream))
+             (t
+              (write-string "(" stream)
+              (write-string (to-markdown (coalton-impl/typechecker::tapp-from ty)) stream)
+              (write-string " " stream)
+              (write-string (to-markdown (coalton-impl/typechecker::tapp-to ty)) stream)
+              (write-string ")" stream))))))))
+
+  (:method ((object qualified-ty))
+    ;;
+    ;; TODO: Preds should get parens if they are not the only one
+    ;;
+    (let ((preds (coalton-impl/typechecker::qualified-ty-predicates object))
+          (qual-type (coalton-impl/typechecker::qualified-ty-type object)))
+      (format nil "~:[~{~A ~}~;~{(~A) ~}~]~:*~:[~;=> ~]~A"
+              ;; Get the second element to test if we have more than one predicate
+              (second preds)
+              (mapcar #'to-markdown preds)
+              (to-markdown qual-type))))
+
+  (:method ((object ty-scheme))
+    (to-markdown (coalton-impl/typechecker::fresh-inst object)))
+
+  (:method ((object ty-predicate))
+    (format nil "<a href=\"#~A\">~:*~A</a>~{ ~A~}"
+            (ty-predicate-class object)
+            (mapcar #'to-markdown (ty-predicate-types object))))
+
+  (:method ((object ty-class-instance))
+    (let ((ctx (ty-class-instance-constraints object))
+          (pred (ty-class-instance-predicate object)))
+      (format nil "~:[~{~A ~}~;~{(~A) ~}~]~:*~:[~;=> ~]~A"
+              ;; Get the second element to test if we have more than one predicate
+              (second ctx)
+              (mapcar #'to-markdown ctx)
+              (to-markdown pred)))))
 
 ;;;
 ;;; Methods for WRITE-DOCUMENTATION
@@ -75,7 +148,7 @@
         (format stream
                 "#### <code>~A~{ ~A~}</code> <sup><sub>[TYPE]</sub></sup><a name=\"~A\"></a>~%"
                 name type-vars name)
-          
+
         (loop :for (ctor-name . entry) :in ctors :do
           (let ((args (coalton-impl/typechecker::function-type-arguments
                        (coalton-impl/typechecker::qualified-ty-type
@@ -97,10 +170,11 @@
         (loop :for (ctor-name . entry) :in ctors :do
           (format stream "- <code>~A :: ~A</code>~%"
                   ctor-name
-                  (coalton-impl/typechecker::instantiate
-                   type-vars
-                   (coalton-impl/typechecker::ty-scheme-type
-                    (constructor-entry-scheme entry)))))
+                  (to-markdown
+                   (coalton-impl/typechecker::instantiate
+                    type-vars
+                    (coalton-impl/typechecker::ty-scheme-type
+                     (constructor-entry-scheme entry))))))
         (format stream "~%")
 
         (when instances
@@ -108,10 +182,7 @@
           (format stream "<summary>Instances</summary>~%~%")
           (loop :for instance :in instances :do
             (with-pprint-variable-context ()
-              (format stream "- ~A~%"
-                      (write-predicate-to-markdown
-                       (ty-class-instance-constraints instance)
-                       (ty-class-instance-predicate instance)))))
+              (format stream "- <code>~A</code>~%" (to-markdown instance))))
           (format stream "~%</details>~%~%"))))))
 
 (defmethod write-documentation ((backend (eql ':markdown)) stream (object documentation-class-entry))
@@ -121,25 +192,21 @@
     (format stream "#### <code>~A</code> <sup><sub>[CLASS]</sub></sup><a name=\"~A\"></a>~%" name name)
 
     (with-pprint-variable-context ()
-      (format stream "~A~%~%"
-              (write-predicate-to-markdown context predicate))
+      (format stream "<code>~A</code>~%~%" (to-markdown (ty-class-instance context predicate nil)))
 
       (when documentation
         (format stream "~A~%~%" documentation))
 
       (format stream "Methods:~%")
       (loop :for (name . type) :in methods :do
-        (format stream "- <code>~A :: ~A</code>~%" name type)))
+        (format stream "- <code>~A :: ~A</code>~%" name (to-markdown type))))
 
     (when instances
       (format stream "~%<details>~%")
       (format stream "<summary>Instances</summary>~%~%")
       (loop :for instance :in instances :do
         (with-pprint-variable-context ()
-          (format stream "- ~A~%"
-                  (write-predicate-to-markdown
-                   (ty-class-instance-constraints instance)
-                   (ty-class-instance-predicate instance)))))
+          (format stream "- <code>~A</code>~%" (to-markdown instance))))
       (format stream "~%</details>~%~%"))))
 
 (defmethod write-documentation ((backend (eql ':markdown)) stream (object documentation-value-entry))
@@ -147,8 +214,8 @@
       object
 
     (format stream "#### <code>~A</code> <sup><sub>[FUNCTION]</sub></sup><a name=\"~A\"></a>~%" name name)
-    
+
     (format stream "<code>~A</code>~%" type)
-    
+
     (when documentation
       (format stream "~%~A~%~%" documentation))))

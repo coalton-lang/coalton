@@ -125,10 +125,10 @@
 <summary>Instances</summary>
 
 - <code><a href="#EQ">EQ</a> <a href="#STRING">STRING</a></code>
-- <code><a href="#ISO">ISO</a> <a href="#LIST">(LIST CHAR)</a> <a href="#STRING">STRING</a></code>
+- <code><a href="#ISO">ISO</a> (<a href="#LIST">LIST</a> <a href="#CHAR">CHAR</a>) <a href="#STRING">STRING</a></code>
 - <code><a href="#ORD">ORD</a> <a href="#STRING">STRING</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#LIST">(LIST CHAR)</a> <a href="#STRING">STRING</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#STRING">STRING</a> <a href="#LIST">(LIST CHAR)</a></code>
+- <code><a href="#INTO">INTO</a> (<a href="#LIST">LIST</a> <a href="#CHAR">CHAR</a>) <a href="#STRING">STRING</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#STRING">STRING</a> (<a href="#LIST">LIST</a> <a href="#CHAR">CHAR</a>)</code>
 - <code><a href="#INTO">INTO</a> <a href="#INTEGER">INTEGER</a> <a href="#STRING">STRING</a></code>
 - <code><a href="#MONOID">MONOID</a> <a href="#STRING">STRING</a></code>
 - <code><a href="#TRYINTO">TRYINTO</a> <a href="#STRING">STRING</a> <a href="#INTEGER">INTEGER</a></code>
@@ -229,23 +229,23 @@
 - <code>NIL</code>
 
 Constructors:
-- <code>CONS :: (LIST :B)</code>
-- <code>NIL :: (LIST :B)</code>
+- <code>CONS :: (<a href="#LIST">LIST</a> :B)</code>
+- <code>NIL :: (<a href="#LIST">LIST</a> :B)</code>
 
 <details>
 <summary>Instances</summary>
 
-- <code><a href="#EQ">EQ :C</a> => <a href="#EQ">EQ</a> <a href="#LIST">(LIST :C)</a></code>
-- <code><a href="#ISO">ISO</a> <a href="#VECTOR">(VECTOR :C)</a> <a href="#LIST">(LIST :C)</a></code>
-- <code><a href="#ISO">ISO</a> <a href="#LIST">(LIST CHAR)</a> <a href="#STRING">STRING</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#VECTOR">(VECTOR :C)</a> <a href="#LIST">(LIST :C)</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#LIST">(LIST :C)</a> <a href="#VECTOR">(VECTOR :C)</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#LIST">(LIST CHAR)</a> <a href="#STRING">STRING</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#STRING">STRING</a> <a href="#LIST">(LIST CHAR)</a></code>
+- <code><a href="#EQ">EQ</a> :C => <a href="#EQ">EQ</a> (<a href="#LIST">LIST</a> :C)</code>
+- <code><a href="#ISO">ISO</a> (<a href="#VECTOR">VECTOR</a> :C) (<a href="#LIST">LIST</a> :C)</code>
+- <code><a href="#ISO">ISO</a> (<a href="#LIST">LIST</a> <a href="#CHAR">CHAR</a>) <a href="#STRING">STRING</a></code>
+- <code><a href="#INTO">INTO</a> (<a href="#VECTOR">VECTOR</a> :C) (<a href="#LIST">LIST</a> :C)</code>
+- <code><a href="#INTO">INTO</a> (<a href="#LIST">LIST</a> :C) (<a href="#VECTOR">VECTOR</a> :C)</code>
+- <code><a href="#INTO">INTO</a> (<a href="#LIST">LIST</a> <a href="#CHAR">CHAR</a>) <a href="#STRING">STRING</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#STRING">STRING</a> (<a href="#LIST">LIST</a> <a href="#CHAR">CHAR</a>)</code>
 - <code><a href="#MONAD">MONAD</a> <a href="#LIST">LIST</a></code>
-- <code><a href="#MONOID">MONOID</a> <a href="#LIST">(LIST :C)</a></code>
+- <code><a href="#MONOID">MONOID</a> (<a href="#LIST">LIST</a> :C)</code>
 - <code><a href="#FUNCTOR">FUNCTOR</a> <a href="#LIST">LIST</a></code>
-- <code><a href="#SEMIGROUP">SEMIGROUP</a> <a href="#LIST">(LIST :C)</a></code>
+- <code><a href="#SEMIGROUP">SEMIGROUP</a> (<a href="#LIST">LIST</a> :C)</code>
 - <code><a href="#ALTERNATIVE">ALTERNATIVE</a> <a href="#LIST">LIST</a></code>
 - <code><a href="#APPLICATIVE">APPLICATIVE</a> <a href="#LIST">LIST</a></code>
 
@@ -258,7 +258,7 @@ Constructors:
 - <code>UNIT</code>
 
 Constructors:
-- <code>UNIT :: UNIT</code>
+- <code>UNIT :: <a href="#UNIT">UNIT</a></code>
 
 
 ***
@@ -268,8 +268,8 @@ Constructors:
 - <code>TRUE</code>
 
 Constructors:
-- <code>FALSE :: BOOLEAN</code>
-- <code>TRUE :: BOOLEAN</code>
+- <code>FALSE :: <a href="#BOOLEAN">BOOLEAN</a></code>
+- <code>TRUE :: <a href="#BOOLEAN">BOOLEAN</a></code>
 
 <details>
 <summary>Instances</summary>
@@ -316,15 +316,15 @@ Constructors:
 A heterogeneous collection of items.
 
 Constructors:
-- <code>TUPLE :: (:A → :B → (TUPLE :A :B))</code>
+- <code>TUPLE :: (:A → :B → (<a href="#TUPLE">TUPLE</a> :A :B))</code>
 
 <details>
 <summary>Instances</summary>
 
-- <code><a href="#EQ">EQ :C</a> <a href="#EQ">EQ :D</a> => <a href="#EQ">EQ</a> <a href="#TUPLE">(TUPLE :C :D)</a></code>
-- <code><a href="#ISO">ISO</a> <a href="#TUPLE">(TUPLE :C :D)</a> <a href="#TUPLE">(TUPLE :D :C)</a></code>
-- <code><a href="#ORD">ORD :C</a> <a href="#ORD">ORD :D</a> => <a href="#ORD">ORD</a> <a href="#TUPLE">(TUPLE :C :D)</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#TUPLE">(TUPLE :C :D)</a> <a href="#TUPLE">(TUPLE :D :C)</a></code>
+- <code>(<a href="#EQ">EQ</a> :C) (<a href="#EQ">EQ</a> :D) => <a href="#EQ">EQ</a> (<a href="#TUPLE">TUPLE</a> :C :D)</code>
+- <code><a href="#ISO">ISO</a> (<a href="#TUPLE">TUPLE</a> :C :D) (<a href="#TUPLE">TUPLE</a> :D :C)</code>
+- <code>(<a href="#ORD">ORD</a> :C) (<a href="#ORD">ORD</a> :D) => <a href="#ORD">ORD</a> (<a href="#TUPLE">TUPLE</a> :C :D)</code>
+- <code><a href="#INTO">INTO</a> (<a href="#TUPLE">TUPLE</a> :C :D) (<a href="#TUPLE">TUPLE</a> :D :C)</code>
 
 </details>
 
@@ -338,23 +338,23 @@ Constructors:
 Represents something that may have failed.
 
 Constructors:
-- <code>ERR :: (:A → (RESULT :A :B))</code>
-- <code>OK :: (:B → (RESULT :A :B))</code>
+- <code>ERR :: (:A → (<a href="#RESULT">RESULT</a> :A :B))</code>
+- <code>OK :: (:B → (<a href="#RESULT">RESULT</a> :A :B))</code>
 
 <details>
 <summary>Instances</summary>
 
-- <code><a href="#EQ">EQ :C</a> <a href="#EQ">EQ :D</a> => <a href="#EQ">EQ</a> <a href="#RESULT">(RESULT :C :D)</a></code>
-- <code><a href="#ISO">ISO</a> <a href="#RESULT">(RESULT UNIT :C)</a> <a href="#OPTIONAL">(OPTIONAL :C)</a></code>
-- <code><a href="#ORD">ORD :C</a> <a href="#ORD">ORD :D</a> => <a href="#ORD">ORD</a> <a href="#RESULT">(RESULT :C :D)</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#OPTIONAL">(OPTIONAL :C)</a> <a href="#RESULT">(RESULT UNIT :C)</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#RESULT">(RESULT :C :D)</a> <a href="#OPTIONAL">(OPTIONAL :D)</a></code>
-- <code><a href="#MONAD">MONAD</a> <a href="#RESULT">(RESULT :C)</a></code>
-- <code><a href="#MONOID">MONOID :C</a> => <a href="#MONOID">MONOID</a> <a href="#RESULT">(RESULT :D :C)</a></code>
-- <code><a href="#FUNCTOR">FUNCTOR</a> <a href="#RESULT">(RESULT :C)</a></code>
-- <code><a href="#SEMIGROUP">SEMIGROUP :C</a> => <a href="#SEMIGROUP">SEMIGROUP</a> <a href="#RESULT">(RESULT :D :C)</a></code>
-- <code><a href="#APPLICATIVE">APPLICATIVE</a> <a href="#RESULT">(RESULT :C)</a></code>
-- <code><a href="#UNWRAPPABLE">UNWRAPPABLE</a> <a href="#RESULT">(RESULT :C)</a></code>
+- <code>(<a href="#EQ">EQ</a> :C) (<a href="#EQ">EQ</a> :D) => <a href="#EQ">EQ</a> (<a href="#RESULT">RESULT</a> :C :D)</code>
+- <code><a href="#ISO">ISO</a> (<a href="#RESULT">RESULT</a> <a href="#UNIT">UNIT</a> :C) (<a href="#OPTIONAL">OPTIONAL</a> :C)</code>
+- <code>(<a href="#ORD">ORD</a> :C) (<a href="#ORD">ORD</a> :D) => <a href="#ORD">ORD</a> (<a href="#RESULT">RESULT</a> :C :D)</code>
+- <code><a href="#INTO">INTO</a> (<a href="#OPTIONAL">OPTIONAL</a> :C) (<a href="#RESULT">RESULT</a> <a href="#UNIT">UNIT</a> :C)</code>
+- <code><a href="#INTO">INTO</a> (<a href="#RESULT">RESULT</a> :C :D) (<a href="#OPTIONAL">OPTIONAL</a> :D)</code>
+- <code><a href="#MONAD">MONAD</a> (<a href="#RESULT">RESULT</a> :C)</code>
+- <code><a href="#MONOID">MONOID</a> :C => <a href="#MONOID">MONOID</a> (<a href="#RESULT">RESULT</a> :D :C)</code>
+- <code><a href="#FUNCTOR">FUNCTOR</a> (<a href="#RESULT">RESULT</a> :C)</code>
+- <code><a href="#SEMIGROUP">SEMIGROUP</a> :C => <a href="#SEMIGROUP">SEMIGROUP</a> (<a href="#RESULT">RESULT</a> :D :C)</code>
+- <code><a href="#APPLICATIVE">APPLICATIVE</a> (<a href="#RESULT">RESULT</a> :C)</code>
+- <code><a href="#UNWRAPPABLE">UNWRAPPABLE</a> (<a href="#RESULT">RESULT</a> :C)</code>
 
 </details>
 
@@ -365,12 +365,12 @@ Constructors:
 - <code>(TUPLE3 :A :B :C)</code>
 
 Constructors:
-- <code>TUPLE3 :: (:A → :B → :C → (TUPLE3 :A :B :C))</code>
+- <code>TUPLE3 :: (:A → :B → :C → (<a href="#TUPLE3">TUPLE3</a> :A :B :C))</code>
 
 <details>
 <summary>Instances</summary>
 
-- <code><a href="#EQ">EQ :D</a> <a href="#EQ">EQ :E</a> <a href="#EQ">EQ :F</a> => <a href="#EQ">EQ</a> <a href="#TUPLE3">(TUPLE3 :D :E :F)</a></code>
+- <code>(<a href="#EQ">EQ</a> :D) (<a href="#EQ">EQ</a> :E) (<a href="#EQ">EQ</a> :F) => <a href="#EQ">EQ</a> (<a href="#TUPLE3">TUPLE3</a> :D :E :F)</code>
 
 </details>
 
@@ -381,12 +381,12 @@ Constructors:
 - <code>(TUPLE4 :A :B :C :D)</code>
 
 Constructors:
-- <code>TUPLE4 :: (:A → :B → :C → :D → (TUPLE4 :A :B :C :D))</code>
+- <code>TUPLE4 :: (:A → :B → :C → :D → (<a href="#TUPLE4">TUPLE4</a> :A :B :C :D))</code>
 
 <details>
 <summary>Instances</summary>
 
-- <code><a href="#EQ">EQ :E</a> <a href="#EQ">EQ :F</a> <a href="#EQ">EQ :G</a> <a href="#EQ">EQ :H</a> => <a href="#EQ">EQ</a> <a href="#TUPLE4">(TUPLE4 :E :F :G :H)</a></code>
+- <code>(<a href="#EQ">EQ</a> :E) (<a href="#EQ">EQ</a> :F) (<a href="#EQ">EQ</a> :G) (<a href="#EQ">EQ</a> :H) => <a href="#EQ">EQ</a> (<a href="#TUPLE4">TUPLE4</a> :E :F :G :H)</code>
 
 </details>
 
@@ -397,12 +397,12 @@ Constructors:
 - <code>(TUPLE5 :A :B :C :D :E)</code>
 
 Constructors:
-- <code>TUPLE5 :: (:A → :B → :C → :D → :E → (TUPLE5 :A :B :C :D :E))</code>
+- <code>TUPLE5 :: (:A → :B → :C → :D → :E → (<a href="#TUPLE5">TUPLE5</a> :A :B :C :D :E))</code>
 
 <details>
 <summary>Instances</summary>
 
-- <code><a href="#EQ">EQ :F</a> <a href="#EQ">EQ :G</a> <a href="#EQ">EQ :H</a> <a href="#EQ">EQ :I</a> <a href="#EQ">EQ :J</a> => <a href="#EQ">EQ</a> <a href="#TUPLE5">(TUPLE5 :F :G :H :I :J)</a></code>
+- <code>(<a href="#EQ">EQ</a> :F) (<a href="#EQ">EQ</a> :G) (<a href="#EQ">EQ</a> :H) (<a href="#EQ">EQ</a> :I) (<a href="#EQ">EQ</a> :J) => <a href="#EQ">EQ</a> (<a href="#TUPLE5">TUPLE5</a> :F :G :H :I :J)</code>
 
 </details>
 
@@ -415,7 +415,7 @@ Constructors:
 A ratio of integers always in reduced form.
 
 Constructors:
-- <code>%FRACTION :: (INTEGER → INTEGER → FRACTION)</code>
+- <code>%FRACTION :: (<a href="#INTEGER">INTEGER</a> → <a href="#INTEGER">INTEGER</a> → <a href="#FRACTION">FRACTION</a>)</code>
 
 <details>
 <summary>Instances</summary>
@@ -438,22 +438,22 @@ Constructors:
 Represents something that may not have a value.
 
 Constructors:
-- <code>SOME :: (:A → (OPTIONAL :A))</code>
-- <code>NONE :: (OPTIONAL :A)</code>
+- <code>SOME :: (:A → (<a href="#OPTIONAL">OPTIONAL</a> :A))</code>
+- <code>NONE :: (<a href="#OPTIONAL">OPTIONAL</a> :A)</code>
 
 <details>
 <summary>Instances</summary>
 
-- <code><a href="#EQ">EQ :B</a> => <a href="#EQ">EQ</a> <a href="#OPTIONAL">(OPTIONAL :B)</a></code>
-- <code><a href="#ISO">ISO</a> <a href="#RESULT">(RESULT UNIT :B)</a> <a href="#OPTIONAL">(OPTIONAL :B)</a></code>
-- <code><a href="#ORD">ORD :B</a> => <a href="#ORD">ORD</a> <a href="#OPTIONAL">(OPTIONAL :B)</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#OPTIONAL">(OPTIONAL :B)</a> <a href="#RESULT">(RESULT UNIT :B)</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#RESULT">(RESULT :B :C)</a> <a href="#OPTIONAL">(OPTIONAL :C)</a></code>
+- <code><a href="#EQ">EQ</a> :B => <a href="#EQ">EQ</a> (<a href="#OPTIONAL">OPTIONAL</a> :B)</code>
+- <code><a href="#ISO">ISO</a> (<a href="#RESULT">RESULT</a> <a href="#UNIT">UNIT</a> :B) (<a href="#OPTIONAL">OPTIONAL</a> :B)</code>
+- <code><a href="#ORD">ORD</a> :B => <a href="#ORD">ORD</a> (<a href="#OPTIONAL">OPTIONAL</a> :B)</code>
+- <code><a href="#INTO">INTO</a> (<a href="#OPTIONAL">OPTIONAL</a> :B) (<a href="#RESULT">RESULT</a> <a href="#UNIT">UNIT</a> :B)</code>
+- <code><a href="#INTO">INTO</a> (<a href="#RESULT">RESULT</a> :B :C) (<a href="#OPTIONAL">OPTIONAL</a> :C)</code>
 - <code><a href="#MONAD">MONAD</a> <a href="#OPTIONAL">OPTIONAL</a></code>
-- <code><a href="#MONOID">MONOID :B</a> => <a href="#MONOID">MONOID</a> <a href="#OPTIONAL">(OPTIONAL :B)</a></code>
+- <code><a href="#MONOID">MONOID</a> :B => <a href="#MONOID">MONOID</a> (<a href="#OPTIONAL">OPTIONAL</a> :B)</code>
 - <code><a href="#FUNCTOR">FUNCTOR</a> <a href="#OPTIONAL">OPTIONAL</a></code>
 - <code><a href="#MONADFAIL">MONADFAIL</a> <a href="#OPTIONAL">OPTIONAL</a></code>
-- <code><a href="#SEMIGROUP">SEMIGROUP :B</a> => <a href="#SEMIGROUP">SEMIGROUP</a> <a href="#OPTIONAL">(OPTIONAL :B)</a></code>
+- <code><a href="#SEMIGROUP">SEMIGROUP</a> :B => <a href="#SEMIGROUP">SEMIGROUP</a> (<a href="#OPTIONAL">OPTIONAL</a> :B)</code>
 - <code><a href="#ALTERNATIVE">ALTERNATIVE</a> <a href="#OPTIONAL">OPTIONAL</a></code>
 - <code><a href="#APPLICATIVE">APPLICATIVE</a> <a href="#OPTIONAL">OPTIONAL</a></code>
 - <code><a href="#UNWRAPPABLE">UNWRAPPABLE</a> <a href="#OPTIONAL">OPTIONAL</a></code>
@@ -523,9 +523,9 @@ Are X or Y True, but not both?
 - <code>EQ</code>
 
 Constructors:
-- <code>LT :: ORD</code>
-- <code>GT :: ORD</code>
-- <code>EQ :: ORD</code>
+- <code>LT :: <a href="#ORD">ORD</a></code>
+- <code>GT :: <a href="#ORD">ORD</a></code>
+- <code>EQ :: <a href="#ORD">ORD</a></code>
 
 
 ***
@@ -549,7 +549,7 @@ The fields are defined as follows:
 
 
 Constructors:
-- <code>QUANTIZATION :: (:A → INTEGER → :A → INTEGER → :A → (QUANTIZATION :A))</code>
+- <code>QUANTIZATION :: (:A → <a href="#INTEGER">INTEGER</a> → :A → <a href="#INTEGER">INTEGER</a> → :A → (<a href="#QUANTIZATION">QUANTIZATION</a> :A))</code>
 
 
 ***
@@ -557,12 +557,12 @@ Constructors:
 ### Classes
 
 #### <code>EQ</code> <sup><sub>[CLASS]</sub></sup><a name="EQ"></a>
-<code><a href="#EQ">EQ</a> <a href="#:A">:A</a></code>
+<code><a href="#EQ">EQ</a> :A</code>
 
 Types which have equality defined.
 
 Methods:
-- <code>== :: (:A → :A → BOOLEAN)</code>
+- <code>== :: (:A → :A → <a href="#BOOLEAN">BOOLEAN</a>)</code>
 
 <details>
 <summary>Instances</summary>
@@ -579,16 +579,16 @@ Methods:
 - <code><a href="#EQ">EQ</a> <a href="#FRACTION">FRACTION</a></code>
 - <code><a href="#EQ">EQ</a> <a href="#CHAR">CHAR</a></code>
 - <code><a href="#EQ">EQ</a> <a href="#STRING">STRING</a></code>
-- <code><a href="#EQ">EQ :A</a> => <a href="#EQ">EQ</a> <a href="#OPTIONAL">(OPTIONAL :A)</a></code>
-- <code><a href="#EQ">EQ :A</a> => <a href="#EQ">EQ</a> <a href="#LIST">(LIST :A)</a></code>
-- <code><a href="#EQ">EQ :A</a> <a href="#EQ">EQ :B</a> => <a href="#EQ">EQ</a> <a href="#TUPLE">(TUPLE :A :B)</a></code>
-- <code><a href="#EQ">EQ :A</a> <a href="#EQ">EQ :B</a> <a href="#EQ">EQ :C</a> => <a href="#EQ">EQ</a> <a href="#TUPLE3">(TUPLE3 :A :B :C)</a></code>
-- <code><a href="#EQ">EQ :A</a> <a href="#EQ">EQ :B</a> <a href="#EQ">EQ :C</a> <a href="#EQ">EQ :D</a> => <a href="#EQ">EQ</a> <a href="#TUPLE4">(TUPLE4 :A :B :C :D)</a></code>
-- <code><a href="#EQ">EQ :A</a> <a href="#EQ">EQ :B</a> <a href="#EQ">EQ :C</a> <a href="#EQ">EQ :D</a> <a href="#EQ">EQ :E</a> => <a href="#EQ">EQ</a> <a href="#TUPLE5">(TUPLE5 :A :B :C :D :E)</a></code>
-- <code><a href="#EQ">EQ :A</a> <a href="#EQ">EQ :B</a> => <a href="#EQ">EQ</a> <a href="#RESULT">(RESULT :A :B)</a></code>
-- <code><a href="#EQ">EQ :A</a> => <a href="#EQ">EQ</a> <a href="#CELL">(CELL :A)</a></code>
-- <code><a href="#EQ">EQ :A</a> => <a href="#EQ">EQ</a> <a href="#VECTOR">(VECTOR :A)</a></code>
-- <code><a href="#EQ">EQ :A</a> => <a href="#EQ">EQ</a> <a href="#SLICE">(SLICE :A)</a></code>
+- <code><a href="#EQ">EQ</a> :A => <a href="#EQ">EQ</a> (<a href="#OPTIONAL">OPTIONAL</a> :A)</code>
+- <code><a href="#EQ">EQ</a> :A => <a href="#EQ">EQ</a> (<a href="#LIST">LIST</a> :A)</code>
+- <code>(<a href="#EQ">EQ</a> :A) (<a href="#EQ">EQ</a> :B) => <a href="#EQ">EQ</a> (<a href="#TUPLE">TUPLE</a> :A :B)</code>
+- <code>(<a href="#EQ">EQ</a> :A) (<a href="#EQ">EQ</a> :B) (<a href="#EQ">EQ</a> :C) => <a href="#EQ">EQ</a> (<a href="#TUPLE3">TUPLE3</a> :A :B :C)</code>
+- <code>(<a href="#EQ">EQ</a> :A) (<a href="#EQ">EQ</a> :B) (<a href="#EQ">EQ</a> :C) (<a href="#EQ">EQ</a> :D) => <a href="#EQ">EQ</a> (<a href="#TUPLE4">TUPLE4</a> :A :B :C :D)</code>
+- <code>(<a href="#EQ">EQ</a> :A) (<a href="#EQ">EQ</a> :B) (<a href="#EQ">EQ</a> :C) (<a href="#EQ">EQ</a> :D) (<a href="#EQ">EQ</a> :E) => <a href="#EQ">EQ</a> (<a href="#TUPLE5">TUPLE5</a> :A :B :C :D :E)</code>
+- <code>(<a href="#EQ">EQ</a> :A) (<a href="#EQ">EQ</a> :B) => <a href="#EQ">EQ</a> (<a href="#RESULT">RESULT</a> :A :B)</code>
+- <code><a href="#EQ">EQ</a> :A => <a href="#EQ">EQ</a> (<a href="#CELL">CELL</a> :A)</code>
+- <code><a href="#EQ">EQ</a> :A => <a href="#EQ">EQ</a> (<a href="#VECTOR">VECTOR</a> :A)</code>
+- <code><a href="#EQ">EQ</a> :A => <a href="#EQ">EQ</a> (<a href="#SLICE">SLICE</a> :A)</code>
 - <code><a href="#EQ">EQ</a> <a href="#EDGEINDEX">EDGEINDEX</a></code>
 - <code><a href="#EQ">EQ</a> <a href="#NODEINDEX">NODEINDEX</a></code>
 
@@ -598,7 +598,7 @@ Methods:
 ***
 
 #### <code>NUM</code> <sup><sub>[CLASS]</sub></sup><a name="NUM"></a>
-<code><a href="#EQ">EQ :A</a> => <a href="#NUM">NUM</a> <a href="#:A">:A</a></code>
+<code><a href="#EQ">EQ</a> :A => <a href="#NUM">NUM</a> :A</code>
 
 Types which have numeric operations defined.
 
@@ -606,7 +606,7 @@ Methods:
 - <code>+ :: (:A → :A → :A)</code>
 - <code>- :: (:A → :A → :A)</code>
 - <code>* :: (:A → :A → :A)</code>
-- <code>FROMINT :: (INTEGER → :A)</code>
+- <code>FROMINT :: (<a href="#INTEGER">INTEGER</a> → :A)</code>
 
 <details>
 <summary>Instances</summary>
@@ -620,7 +620,7 @@ Methods:
 - <code><a href="#NUM">NUM</a> <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a></code>
 - <code><a href="#NUM">NUM</a> <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a></code>
 - <code><a href="#NUM">NUM</a> <a href="#FRACTION">FRACTION</a></code>
-- <code><a href="#NUM">NUM :A</a> => <a href="#NUM">NUM</a> <a href="#CELL">(CELL :A)</a></code>
+- <code><a href="#NUM">NUM</a> :A => <a href="#NUM">NUM</a> (<a href="#CELL">CELL</a> :A)</code>
 
 </details>
 
@@ -628,12 +628,12 @@ Methods:
 ***
 
 #### <code>ORD</code> <sup><sub>[CLASS]</sub></sup><a name="ORD"></a>
-<code><a href="#EQ">EQ :A</a> => <a href="#ORD">ORD</a> <a href="#:A">:A</a></code>
+<code><a href="#EQ">EQ</a> :A => <a href="#ORD">ORD</a> :A</code>
 
 Types whose values can be ordered.
 
 Methods:
-- <code><=> :: (:A → :A → ORD)</code>
+- <code><=> :: (:A → :A → <a href="#ORD">ORD</a>)</code>
 
 <details>
 <summary>Instances</summary>
@@ -650,9 +650,9 @@ Methods:
 - <code><a href="#ORD">ORD</a> <a href="#FRACTION">FRACTION</a></code>
 - <code><a href="#ORD">ORD</a> <a href="#CHAR">CHAR</a></code>
 - <code><a href="#ORD">ORD</a> <a href="#STRING">STRING</a></code>
-- <code><a href="#ORD">ORD :A</a> => <a href="#ORD">ORD</a> <a href="#OPTIONAL">(OPTIONAL :A)</a></code>
-- <code><a href="#ORD">ORD :A</a> <a href="#ORD">ORD :B</a> => <a href="#ORD">ORD</a> <a href="#TUPLE">(TUPLE :A :B)</a></code>
-- <code><a href="#ORD">ORD :A</a> <a href="#ORD">ORD :B</a> => <a href="#ORD">ORD</a> <a href="#RESULT">(RESULT :A :B)</a></code>
+- <code><a href="#ORD">ORD</a> :A => <a href="#ORD">ORD</a> (<a href="#OPTIONAL">OPTIONAL</a> :A)</code>
+- <code>(<a href="#ORD">ORD</a> :A) (<a href="#ORD">ORD</a> :B) => <a href="#ORD">ORD</a> (<a href="#TUPLE">TUPLE</a> :A :B)</code>
+- <code>(<a href="#ORD">ORD</a> :A) (<a href="#ORD">ORD</a> :B) => <a href="#ORD">ORD</a> (<a href="#RESULT">RESULT</a> :A :B)</code>
 
 </details>
 
@@ -660,7 +660,7 @@ Methods:
 ***
 
 #### <code>INTO</code> <sup><sub>[CLASS]</sub></sup><a name="INTO"></a>
-<code><a href="#INTO">INTO</a> <a href="#:A">:A</a> <a href="#:B">:B</a></code>
+<code><a href="#INTO">INTO</a> :A :B</code>
 
 INTO imples *every* element of :FROM can be represented by an element of :TO. This conversion might not be injective (i.e., there may be elements in :TO that don't correspond to any in :FROM).
 
@@ -670,7 +670,7 @@ Methods:
 <details>
 <summary>Instances</summary>
 
-- <code><a href="#INTO">INTO</a> <a href="#:A">:A</a> <a href="#:A">:A</a></code>
+- <code><a href="#INTO">INTO</a> :A :A</code>
 - <code><a href="#INTO">INTO</a> <a href="#INTEGER">INTEGER</a> <a href="#I32">I32</a></code>
 - <code><a href="#INTO">INTO</a> <a href="#I32">I32</a> <a href="#INTEGER">INTEGER</a></code>
 - <code><a href="#INTO">INTO</a> <a href="#INTEGER">INTEGER</a> <a href="#I64">I64</a></code>
@@ -688,17 +688,17 @@ Methods:
 - <code><a href="#INTO">INTO</a> <a href="#U64">U64</a> <a href="#SINGLE-FLOAT">SINGLE-FLOAT</a></code>
 - <code><a href="#INTO">INTO</a> <a href="#U64">U64</a> <a href="#DOUBLE-FLOAT">DOUBLE-FLOAT</a></code>
 - <code><a href="#INTO">INTO</a> <a href="#INTEGER">INTEGER</a> <a href="#STRING">STRING</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#STRING">STRING</a> <a href="#LIST">(LIST CHAR)</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#LIST">(LIST CHAR)</a> <a href="#STRING">STRING</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#TUPLE">(TUPLE :A :B)</a> <a href="#TUPLE">(TUPLE :B :A)</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#RESULT">(RESULT :A :B)</a> <a href="#OPTIONAL">(OPTIONAL :B)</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#OPTIONAL">(OPTIONAL :A)</a> <a href="#RESULT">(RESULT UNIT :A)</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#:A">:A</a> <a href="#CELL">(CELL :A)</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#CELL">(CELL :A)</a> <a href="#:A">:A</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#LIST">(LIST :A)</a> <a href="#VECTOR">(VECTOR :A)</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#VECTOR">(VECTOR :A)</a> <a href="#LIST">(LIST :A)</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#SLICE">(SLICE :A)</a> <a href="#VECTOR">(VECTOR :A)</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#VECTOR">(VECTOR :A)</a> <a href="#SLICE">(SLICE :A)</a></code>
+- <code><a href="#INTO">INTO</a> <a href="#STRING">STRING</a> (<a href="#LIST">LIST</a> <a href="#CHAR">CHAR</a>)</code>
+- <code><a href="#INTO">INTO</a> (<a href="#LIST">LIST</a> <a href="#CHAR">CHAR</a>) <a href="#STRING">STRING</a></code>
+- <code><a href="#INTO">INTO</a> (<a href="#TUPLE">TUPLE</a> :A :B) (<a href="#TUPLE">TUPLE</a> :B :A)</code>
+- <code><a href="#INTO">INTO</a> (<a href="#RESULT">RESULT</a> :A :B) (<a href="#OPTIONAL">OPTIONAL</a> :B)</code>
+- <code><a href="#INTO">INTO</a> (<a href="#OPTIONAL">OPTIONAL</a> :A) (<a href="#RESULT">RESULT</a> <a href="#UNIT">UNIT</a> :A)</code>
+- <code><a href="#INTO">INTO</a> :A (<a href="#CELL">CELL</a> :A)</code>
+- <code><a href="#INTO">INTO</a> (<a href="#CELL">CELL</a> :A) :A</code>
+- <code><a href="#INTO">INTO</a> (<a href="#LIST">LIST</a> :A) (<a href="#VECTOR">VECTOR</a> :A)</code>
+- <code><a href="#INTO">INTO</a> (<a href="#VECTOR">VECTOR</a> :A) (<a href="#LIST">LIST</a> :A)</code>
+- <code><a href="#INTO">INTO</a> (<a href="#SLICE">SLICE</a> :A) (<a href="#VECTOR">VECTOR</a> :A)</code>
+- <code><a href="#INTO">INTO</a> (<a href="#VECTOR">VECTOR</a> :A) (<a href="#SLICE">SLICE</a> :A)</code>
 - <code><a href="#INTO">INTO</a> <a href="#EDGEINDEX">EDGEINDEX</a> <a href="#INTEGER">INTEGER</a></code>
 - <code><a href="#INTO">INTO</a> <a href="#NODEINDEX">NODEINDEX</a> <a href="#INTEGER">INTEGER</a></code>
 
@@ -708,20 +708,20 @@ Methods:
 ***
 
 #### <code>MONAD</code> <sup><sub>[CLASS]</sub></sup><a name="MONAD"></a>
-<code><a href="#APPLICATIVE">APPLICATIVE :A</a> => <a href="#MONAD">MONAD</a> <a href="#:A">:A</a></code>
+<code><a href="#APPLICATIVE">APPLICATIVE</a> :A => <a href="#MONAD">MONAD</a> :A</code>
 
 Types which are monads as defined in Haskell. See https://wiki.haskell.org/Monad for more information.
 
 Methods:
-- <code>>>= :: ∀ :B :C. ((:A :B) → (:B → (:A :C)) → (:A :C))</code>
-- <code>>> :: ∀ :B :C. ((:A :B) → (:A :C) → (:A :C))</code>
+- <code>>>= :: ((:A :B) → (:B → (:A :C)) → (:A :C))</code>
+- <code>>> :: ((:A :D) → (:A :E) → (:A :E))</code>
 
 <details>
 <summary>Instances</summary>
 
 - <code><a href="#MONAD">MONAD</a> <a href="#OPTIONAL">OPTIONAL</a></code>
 - <code><a href="#MONAD">MONAD</a> <a href="#LIST">LIST</a></code>
-- <code><a href="#MONAD">MONAD</a> <a href="#RESULT">(RESULT :A)</a></code>
+- <code><a href="#MONAD">MONAD</a> (<a href="#RESULT">RESULT</a> :A)</code>
 
 </details>
 
@@ -729,7 +729,7 @@ Methods:
 ***
 
 #### <code>MONOID</code> <sup><sub>[CLASS]</sub></sup><a name="MONOID"></a>
-<code><a href="#SEMIGROUP">SEMIGROUP :A</a> => <a href="#MONOID">MONOID</a> <a href="#:A">:A</a></code>
+<code><a href="#SEMIGROUP">SEMIGROUP</a> :A => <a href="#MONOID">MONOID</a> :A</code>
 
 Types with an associative binary operation and identity defined.
 
@@ -740,9 +740,9 @@ Methods:
 <summary>Instances</summary>
 
 - <code><a href="#MONOID">MONOID</a> <a href="#STRING">STRING</a></code>
-- <code><a href="#MONOID">MONOID :A</a> => <a href="#MONOID">MONOID</a> <a href="#OPTIONAL">(OPTIONAL :A)</a></code>
-- <code><a href="#MONOID">MONOID</a> <a href="#LIST">(LIST :A)</a></code>
-- <code><a href="#MONOID">MONOID :A</a> => <a href="#MONOID">MONOID</a> <a href="#RESULT">(RESULT :B :A)</a></code>
+- <code><a href="#MONOID">MONOID</a> :A => <a href="#MONOID">MONOID</a> (<a href="#OPTIONAL">OPTIONAL</a> :A)</code>
+- <code><a href="#MONOID">MONOID</a> (<a href="#LIST">LIST</a> :A)</code>
+- <code><a href="#MONOID">MONOID</a> :A => <a href="#MONOID">MONOID</a> (<a href="#RESULT">RESULT</a> :B :A)</code>
 
 </details>
 
@@ -750,19 +750,19 @@ Methods:
 ***
 
 #### <code>FUNCTOR</code> <sup><sub>[CLASS]</sub></sup><a name="FUNCTOR"></a>
-<code><a href="#FUNCTOR">FUNCTOR</a> <a href="#:A">:A</a></code>
+<code><a href="#FUNCTOR">FUNCTOR</a> :A</code>
 
 Types which can map an inner type where the mapping adheres to the identity and composition laws.
 
 Methods:
-- <code>MAP :: ∀ :B :C. ((:B → :C) → (:A :B) → (:A :C))</code>
+- <code>MAP :: ((:B → :C) → (:A :B) → (:A :C))</code>
 
 <details>
 <summary>Instances</summary>
 
 - <code><a href="#FUNCTOR">FUNCTOR</a> <a href="#OPTIONAL">OPTIONAL</a></code>
 - <code><a href="#FUNCTOR">FUNCTOR</a> <a href="#LIST">LIST</a></code>
-- <code><a href="#FUNCTOR">FUNCTOR</a> <a href="#RESULT">(RESULT :A)</a></code>
+- <code><a href="#FUNCTOR">FUNCTOR</a> (<a href="#RESULT">RESULT</a> :A)</code>
 - <code><a href="#FUNCTOR">FUNCTOR</a> <a href="#CELL">CELL</a></code>
 - <code><a href="#FUNCTOR">FUNCTOR</a> <a href="#VECTOR">VECTOR</a></code>
 
@@ -772,12 +772,12 @@ Methods:
 ***
 
 #### <code>TRYINTO</code> <sup><sub>[CLASS]</sub></sup><a name="TRYINTO"></a>
-<code><a href="#TRYINTO">TRYINTO</a> <a href="#:A">:A</a> <a href="#:B">:B</a></code>
+<code><a href="#TRYINTO">TRYINTO</a> :A :B</code>
 
 TRY-INTO implies *most* elements of :FROM can be represented exactly by an element of :TO, but sometimes not. If not, an error string is returned.
 
 Methods:
-- <code>TRYINTO :: (:A → (RESULT STRING :B))</code>
+- <code>TRYINTO :: (:A → (<a href="#RESULT">RESULT</a> <a href="#STRING">STRING</a> :B))</code>
 
 <details>
 <summary>Instances</summary>
@@ -790,7 +790,7 @@ Methods:
 ***
 
 #### <code>DIVIDABLE</code> <sup><sub>[CLASS]</sub></sup><a name="DIVIDABLE"></a>
-<code><a href="#NUM">NUM :A</a> <a href="#NUM">NUM :B</a> => <a href="#DIVIDABLE">DIVIDABLE</a> <a href="#:A">:A</a> <a href="#:B">:B</a></code>
+<code>(<a href="#NUM">NUM</a> :A) (<a href="#NUM">NUM</a> :B) => <a href="#DIVIDABLE">DIVIDABLE</a> :A :B</code>
 
 The representation of a type such that division within that type possibly results in another type. For instance,
 
@@ -829,10 +829,10 @@ Methods:
 ***
 
 #### <code>MONADFAIL</code> <sup><sub>[CLASS]</sub></sup><a name="MONADFAIL"></a>
-<code><a href="#MONAD">MONAD :A</a> => <a href="#MONADFAIL">MONADFAIL</a> <a href="#:A">:A</a></code>
+<code><a href="#MONAD">MONAD</a> :A => <a href="#MONADFAIL">MONADFAIL</a> :A</code>
 
 Methods:
-- <code>FAIL :: ∀ :B. (STRING → (:A :B))</code>
+- <code>FAIL :: (<a href="#STRING">STRING</a> → (:A :B))</code>
 
 <details>
 <summary>Instances</summary>
@@ -845,7 +845,7 @@ Methods:
 ***
 
 #### <code>SEMIGROUP</code> <sup><sub>[CLASS]</sub></sup><a name="SEMIGROUP"></a>
-<code><a href="#SEMIGROUP">SEMIGROUP</a> <a href="#:A">:A</a></code>
+<code><a href="#SEMIGROUP">SEMIGROUP</a> :A</code>
 
 Types with an associative binary operation defined.
 
@@ -856,11 +856,11 @@ Methods:
 <summary>Instances</summary>
 
 - <code><a href="#SEMIGROUP">SEMIGROUP</a> <a href="#STRING">STRING</a></code>
-- <code><a href="#SEMIGROUP">SEMIGROUP :A</a> => <a href="#SEMIGROUP">SEMIGROUP</a> <a href="#OPTIONAL">(OPTIONAL :A)</a></code>
-- <code><a href="#SEMIGROUP">SEMIGROUP</a> <a href="#LIST">(LIST :A)</a></code>
-- <code><a href="#SEMIGROUP">SEMIGROUP :A</a> => <a href="#SEMIGROUP">SEMIGROUP</a> <a href="#RESULT">(RESULT :B :A)</a></code>
-- <code><a href="#SEMIGROUP">SEMIGROUP :A</a> => <a href="#SEMIGROUP">SEMIGROUP</a> <a href="#CELL">(CELL :A)</a></code>
-- <code><a href="#SEMIGROUP">SEMIGROUP</a> <a href="#VECTOR">(VECTOR :A)</a></code>
+- <code><a href="#SEMIGROUP">SEMIGROUP</a> :A => <a href="#SEMIGROUP">SEMIGROUP</a> (<a href="#OPTIONAL">OPTIONAL</a> :A)</code>
+- <code><a href="#SEMIGROUP">SEMIGROUP</a> (<a href="#LIST">LIST</a> :A)</code>
+- <code><a href="#SEMIGROUP">SEMIGROUP</a> :A => <a href="#SEMIGROUP">SEMIGROUP</a> (<a href="#RESULT">RESULT</a> :B :A)</code>
+- <code><a href="#SEMIGROUP">SEMIGROUP</a> :A => <a href="#SEMIGROUP">SEMIGROUP</a> (<a href="#CELL">CELL</a> :A)</code>
+- <code><a href="#SEMIGROUP">SEMIGROUP</a> (<a href="#VECTOR">VECTOR</a> :A)</code>
 
 </details>
 
@@ -868,20 +868,20 @@ Methods:
 ***
 
 #### <code>APPLICATIVE</code> <sup><sub>[CLASS]</sub></sup><a name="APPLICATIVE"></a>
-<code><a href="#FUNCTOR">FUNCTOR :A</a> => <a href="#APPLICATIVE">APPLICATIVE</a> <a href="#:A">:A</a></code>
+<code><a href="#FUNCTOR">FUNCTOR</a> :A => <a href="#APPLICATIVE">APPLICATIVE</a> :A</code>
 
 Types which are a functor which can embed pure expressions and sequence operations.
 
 Methods:
-- <code>PURE :: ∀ :B. (:B → (:A :B))</code>
-- <code>LIFTA2 :: ∀ :B :C :D. ((:B → :C → :D) → (:A :B) → (:A :C) → (:A :D))</code>
+- <code>PURE :: (:B → (:A :B))</code>
+- <code>LIFTA2 :: ((:C → :D → :E) → (:A :C) → (:A :D) → (:A :E))</code>
 
 <details>
 <summary>Instances</summary>
 
 - <code><a href="#APPLICATIVE">APPLICATIVE</a> <a href="#OPTIONAL">OPTIONAL</a></code>
 - <code><a href="#APPLICATIVE">APPLICATIVE</a> <a href="#LIST">LIST</a></code>
-- <code><a href="#APPLICATIVE">APPLICATIVE</a> <a href="#RESULT">(RESULT :A)</a></code>
+- <code><a href="#APPLICATIVE">APPLICATIVE</a> (<a href="#RESULT">RESULT</a> :A)</code>
 - <code><a href="#APPLICATIVE">APPLICATIVE</a> <a href="#CELL">CELL</a></code>
 
 </details>
@@ -890,13 +890,13 @@ Methods:
 ***
 
 #### <code>QUANTIZABLE</code> <sup><sub>[CLASS]</sub></sup><a name="QUANTIZABLE"></a>
-<code><a href="#ORD">ORD :A</a> <a href="#NUM">NUM :A</a> => <a href="#QUANTIZABLE">QUANTIZABLE</a> <a href="#:A">:A</a></code>
+<code>(<a href="#ORD">ORD</a> :A) (<a href="#NUM">NUM</a> :A) => <a href="#QUANTIZABLE">QUANTIZABLE</a> :A</code>
 
 The representation of a type that allows "quantizing", "snapping to integers", or "rounding." (All of these concepts are roughly equivalent.)
 
 
 Methods:
-- <code>QUANTIZE :: (:A → (QUANTIZATION :A))</code>
+- <code>QUANTIZE :: (:A → (<a href="#QUANTIZATION">QUANTIZATION</a> :A))</code>
 
 <details>
 <summary>Instances</summary>
@@ -1812,17 +1812,17 @@ Note: This does *not* divide double-float arguments.
 Internally mutable cell
 
 Constructors:
-- <code>CELL :: (LISP-OBJECT → (CELL :A))</code>
+- <code>CELL :: (<a href="#LISP-OBJECT">LISP-OBJECT</a> → (<a href="#CELL">CELL</a> :A))</code>
 
 <details>
 <summary>Instances</summary>
 
-- <code><a href="#EQ">EQ :B</a> => <a href="#EQ">EQ</a> <a href="#CELL">(CELL :B)</a></code>
-- <code><a href="#NUM">NUM :B</a> => <a href="#NUM">NUM</a> <a href="#CELL">(CELL :B)</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#CELL">(CELL :B)</a> <a href="#:B">:B</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#:B">:B</a> <a href="#CELL">(CELL :B)</a></code>
+- <code><a href="#EQ">EQ</a> :B => <a href="#EQ">EQ</a> (<a href="#CELL">CELL</a> :B)</code>
+- <code><a href="#NUM">NUM</a> :B => <a href="#NUM">NUM</a> (<a href="#CELL">CELL</a> :B)</code>
+- <code><a href="#INTO">INTO</a> (<a href="#CELL">CELL</a> :B) :B</code>
+- <code><a href="#INTO">INTO</a> :B (<a href="#CELL">CELL</a> :B)</code>
 - <code><a href="#FUNCTOR">FUNCTOR</a> <a href="#CELL">CELL</a></code>
-- <code><a href="#SEMIGROUP">SEMIGROUP :B</a> => <a href="#SEMIGROUP">SEMIGROUP</a> <a href="#CELL">(CELL :B)</a></code>
+- <code><a href="#SEMIGROUP">SEMIGROUP</a> :B => <a href="#SEMIGROUP">SEMIGROUP</a> (<a href="#CELL">CELL</a> :B)</code>
 - <code><a href="#APPLICATIVE">APPLICATIVE</a> <a href="#CELL">CELL</a></code>
 
 </details>
@@ -1877,20 +1877,20 @@ Set the value of a mutable cell
 - <code>(VECTOR LISP-OBJECT)</code>
 
 Constructors:
-- <code>VECTOR :: (LISP-OBJECT → (VECTOR :A))</code>
+- <code>VECTOR :: (<a href="#LISP-OBJECT">LISP-OBJECT</a> → (<a href="#VECTOR">VECTOR</a> :A))</code>
 
 <details>
 <summary>Instances</summary>
 
-- <code><a href="#EQ">EQ :B</a> => <a href="#EQ">EQ</a> <a href="#VECTOR">(VECTOR :B)</a></code>
-- <code><a href="#ISO">ISO</a> <a href="#SLICE">(SLICE :B)</a> <a href="#VECTOR">(VECTOR :B)</a></code>
-- <code><a href="#ISO">ISO</a> <a href="#VECTOR">(VECTOR :B)</a> <a href="#LIST">(LIST :B)</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#VECTOR">(VECTOR :B)</a> <a href="#SLICE">(SLICE :B)</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#SLICE">(SLICE :B)</a> <a href="#VECTOR">(VECTOR :B)</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#VECTOR">(VECTOR :B)</a> <a href="#LIST">(LIST :B)</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#LIST">(LIST :B)</a> <a href="#VECTOR">(VECTOR :B)</a></code>
+- <code><a href="#EQ">EQ</a> :B => <a href="#EQ">EQ</a> (<a href="#VECTOR">VECTOR</a> :B)</code>
+- <code><a href="#ISO">ISO</a> (<a href="#SLICE">SLICE</a> :B) (<a href="#VECTOR">VECTOR</a> :B)</code>
+- <code><a href="#ISO">ISO</a> (<a href="#VECTOR">VECTOR</a> :B) (<a href="#LIST">LIST</a> :B)</code>
+- <code><a href="#INTO">INTO</a> (<a href="#VECTOR">VECTOR</a> :B) (<a href="#SLICE">SLICE</a> :B)</code>
+- <code><a href="#INTO">INTO</a> (<a href="#SLICE">SLICE</a> :B) (<a href="#VECTOR">VECTOR</a> :B)</code>
+- <code><a href="#INTO">INTO</a> (<a href="#VECTOR">VECTOR</a> :B) (<a href="#LIST">LIST</a> :B)</code>
+- <code><a href="#INTO">INTO</a> (<a href="#LIST">LIST</a> :B) (<a href="#VECTOR">VECTOR</a> :B)</code>
 - <code><a href="#FUNCTOR">FUNCTOR</a> <a href="#VECTOR">VECTOR</a></code>
-- <code><a href="#SEMIGROUP">SEMIGROUP</a> <a href="#VECTOR">(VECTOR :B)</a></code>
+- <code><a href="#SEMIGROUP">SEMIGROUP</a> (<a href="#VECTOR">VECTOR</a> :B)</code>
 
 </details>
 
@@ -2104,15 +2104,15 @@ Remove the element IDX from VEC and replace it with the last element in VEC with
 - <code>(SLICE LISP-OBJECT)</code>
 
 Constructors:
-- <code>SLICE :: (LISP-OBJECT → (SLICE :A))</code>
+- <code>SLICE :: (<a href="#LISP-OBJECT">LISP-OBJECT</a> → (<a href="#SLICE">SLICE</a> :A))</code>
 
 <details>
 <summary>Instances</summary>
 
-- <code><a href="#EQ">EQ :B</a> => <a href="#EQ">EQ</a> <a href="#SLICE">(SLICE :B)</a></code>
-- <code><a href="#ISO">ISO</a> <a href="#SLICE">(SLICE :B)</a> <a href="#VECTOR">(VECTOR :B)</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#VECTOR">(VECTOR :B)</a> <a href="#SLICE">(SLICE :B)</a></code>
-- <code><a href="#INTO">INTO</a> <a href="#SLICE">(SLICE :B)</a> <a href="#VECTOR">(VECTOR :B)</a></code>
+- <code><a href="#EQ">EQ</a> :B => <a href="#EQ">EQ</a> (<a href="#SLICE">SLICE</a> :B)</code>
+- <code><a href="#ISO">ISO</a> (<a href="#SLICE">SLICE</a> :B) (<a href="#VECTOR">VECTOR</a> :B)</code>
+- <code><a href="#INTO">INTO</a> (<a href="#VECTOR">VECTOR</a> :B) (<a href="#SLICE">SLICE</a> :B)</code>
+- <code><a href="#INTO">INTO</a> (<a href="#SLICE">SLICE</a> :B) (<a href="#VECTOR">VECTOR</a> :B)</code>
 
 </details>
 
@@ -2214,7 +2214,7 @@ Call the function F once for each item in S with its index
 - <code>(HASHTABLE LISP-OBJECT)</code>
 
 Constructors:
-- <code>HASHTABLE :: (LISP-OBJECT → (HASHTABLE :A :B))</code>
+- <code>HASHTABLE :: (<a href="#LISP-OBJECT">LISP-OBJECT</a> → (<a href="#HASHTABLE">HASHTABLE</a> :A :B))</code>
 
 
 ***
@@ -2311,7 +2311,7 @@ Crate a new empty hashtable with a given capacity
 A graph using adjacency list representation
 
 Constructors:
-- <code>GRAPH :: (GRAPHTYPE → (VECTOR (NODE :A)) → (VECTOR (EDGE :B)) → (GRAPH :A :B))</code>
+- <code>GRAPH :: (<a href="#GRAPHTYPE">GRAPHTYPE</a> → (<a href="#VECTOR">VECTOR</a> (<a href="#NODE">NODE</a> :A)) → (<a href="#VECTOR">VECTOR</a> (<a href="#EDGE">EDGE</a> :B)) → (<a href="#GRAPH">GRAPH</a> :A :B))</code>
 
 
 ***
@@ -2320,7 +2320,7 @@ Constructors:
 - <code>(EDGEINDEX INTEGER)</code>
 
 Constructors:
-- <code>EDGEINDEX :: (INTEGER → EDGEINDEX)</code>
+- <code>EDGEINDEX :: (<a href="#INTEGER">INTEGER</a> → <a href="#EDGEINDEX">EDGEINDEX</a>)</code>
 
 <details>
 <summary>Instances</summary>
@@ -2338,8 +2338,8 @@ Constructors:
 - <code>DIRECTED</code>
 
 Constructors:
-- <code>UNDIRECTED :: GRAPHTYPE</code>
-- <code>DIRECTED :: GRAPHTYPE</code>
+- <code>UNDIRECTED :: <a href="#GRAPHTYPE">GRAPHTYPE</a></code>
+- <code>DIRECTED :: <a href="#GRAPHTYPE">GRAPHTYPE</a></code>
 
 
 ***
@@ -2348,7 +2348,7 @@ Constructors:
 - <code>(NODEINDEX INTEGER)</code>
 
 Constructors:
-- <code>NODEINDEX :: (INTEGER → NODEINDEX)</code>
+- <code>NODEINDEX :: (<a href="#INTEGER">INTEGER</a> → <a href="#NODEINDEX">NODEINDEX</a>)</code>
 
 <details>
 <summary>Instances</summary>
