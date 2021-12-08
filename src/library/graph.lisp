@@ -255,7 +255,6 @@
           ((Some ed)
            (let ((swap-edges (node-edge-pair ed))
                  (old-index (NodeIndex (vector-length (graph-nodes graph))))
-                 (accessor index-pair-incoming)
 
                  (adjust-edges
                    (fn (idx dir-node-accessor dir-edge-accessor dir-update)
