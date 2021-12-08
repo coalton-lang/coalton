@@ -69,9 +69,6 @@
               (write-string ")" stream))))))))
 
   (:method ((object qualified-ty))
-    ;;
-    ;; TODO: Preds should get parens if they are not the only one
-    ;;
     (let ((preds (coalton-impl/typechecker::qualified-ty-predicates object))
           (qual-type (coalton-impl/typechecker::qualified-ty-type object)))
       (format nil "~:[~{~A ~}~;~{(~A) ~}~]~:*~:[~;=> ~]~A"
