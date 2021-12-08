@@ -235,7 +235,7 @@ Constructors:
 <details>
 <summary>Instances</summary>
 
-- <code><a href="#eq-class">EQ</a> :C => <a href="#eq-class">EQ</a> (<a href="#list-type">LIST</a> :C)</code>
+- <code><a href="#eq-class">EQ</a> :C ⇒ <a href="#eq-class">EQ</a> (<a href="#list-type">LIST</a> :C)</code>
 - <code><a href="#iso-class">ISO</a> (<a href="#vector-type">VECTOR</a> :C) (<a href="#list-type">LIST</a> :C)</code>
 - <code><a href="#iso-class">ISO</a> (<a href="#list-type">LIST</a> <a href="#char-type">CHAR</a>) <a href="#string-type">STRING</a></code>
 - <code><a href="#into-class">INTO</a> (<a href="#vector-type">VECTOR</a> :C) (<a href="#list-type">LIST</a> :C)</code>
@@ -321,9 +321,9 @@ Constructors:
 <details>
 <summary>Instances</summary>
 
-- <code>(<a href="#eq-class">EQ</a> :C) (<a href="#eq-class">EQ</a> :D) => <a href="#eq-class">EQ</a> (<a href="#tuple-type">TUPLE</a> :C :D)</code>
+- <code>(<a href="#eq-class">EQ</a> :C) (<a href="#eq-class">EQ</a> :D) ⇒ <a href="#eq-class">EQ</a> (<a href="#tuple-type">TUPLE</a> :C :D)</code>
 - <code><a href="#iso-class">ISO</a> (<a href="#tuple-type">TUPLE</a> :C :D) (<a href="#tuple-type">TUPLE</a> :D :C)</code>
-- <code>(<a href="#ord-class">ORD</a> :C) (<a href="#ord-class">ORD</a> :D) => <a href="#ord-class">ORD</a> (<a href="#tuple-type">TUPLE</a> :C :D)</code>
+- <code>(<a href="#ord-class">ORD</a> :C) (<a href="#ord-class">ORD</a> :D) ⇒ <a href="#ord-class">ORD</a> (<a href="#tuple-type">TUPLE</a> :C :D)</code>
 - <code><a href="#into-class">INTO</a> (<a href="#tuple-type">TUPLE</a> :C :D) (<a href="#tuple-type">TUPLE</a> :D :C)</code>
 
 </details>
@@ -344,15 +344,15 @@ Constructors:
 <details>
 <summary>Instances</summary>
 
-- <code>(<a href="#eq-class">EQ</a> :C) (<a href="#eq-class">EQ</a> :D) => <a href="#eq-class">EQ</a> (<a href="#result-type">RESULT</a> :C :D)</code>
+- <code>(<a href="#eq-class">EQ</a> :C) (<a href="#eq-class">EQ</a> :D) ⇒ <a href="#eq-class">EQ</a> (<a href="#result-type">RESULT</a> :C :D)</code>
 - <code><a href="#iso-class">ISO</a> (<a href="#result-type">RESULT</a> <a href="#unit-type">UNIT</a> :C) (<a href="#optional-type">OPTIONAL</a> :C)</code>
-- <code>(<a href="#ord-class">ORD</a> :C) (<a href="#ord-class">ORD</a> :D) => <a href="#ord-class">ORD</a> (<a href="#result-type">RESULT</a> :C :D)</code>
+- <code>(<a href="#ord-class">ORD</a> :C) (<a href="#ord-class">ORD</a> :D) ⇒ <a href="#ord-class">ORD</a> (<a href="#result-type">RESULT</a> :C :D)</code>
 - <code><a href="#into-class">INTO</a> (<a href="#optional-type">OPTIONAL</a> :C) (<a href="#result-type">RESULT</a> <a href="#unit-type">UNIT</a> :C)</code>
 - <code><a href="#into-class">INTO</a> (<a href="#result-type">RESULT</a> :C :D) (<a href="#optional-type">OPTIONAL</a> :D)</code>
 - <code><a href="#monad-class">MONAD</a> (<a href="#result-type">RESULT</a> :C)</code>
-- <code><a href="#monoid-class">MONOID</a> :C => <a href="#monoid-class">MONOID</a> (<a href="#result-type">RESULT</a> :D :C)</code>
+- <code><a href="#monoid-class">MONOID</a> :C ⇒ <a href="#monoid-class">MONOID</a> (<a href="#result-type">RESULT</a> :D :C)</code>
 - <code><a href="#functor-class">FUNCTOR</a> (<a href="#result-type">RESULT</a> :C)</code>
-- <code><a href="#semigroup-class">SEMIGROUP</a> :C => <a href="#semigroup-class">SEMIGROUP</a> (<a href="#result-type">RESULT</a> :D :C)</code>
+- <code><a href="#semigroup-class">SEMIGROUP</a> :C ⇒ <a href="#semigroup-class">SEMIGROUP</a> (<a href="#result-type">RESULT</a> :D :C)</code>
 - <code><a href="#applicative-class">APPLICATIVE</a> (<a href="#result-type">RESULT</a> :C)</code>
 - <code><a href="#unwrappable-class">UNWRAPPABLE</a> (<a href="#result-type">RESULT</a> :C)</code>
 
@@ -370,7 +370,7 @@ Constructors:
 <details>
 <summary>Instances</summary>
 
-- <code>(<a href="#eq-class">EQ</a> :D) (<a href="#eq-class">EQ</a> :E) (<a href="#eq-class">EQ</a> :F) => <a href="#eq-class">EQ</a> (<a href="#tuple3-type">TUPLE3</a> :D :E :F)</code>
+- <code>(<a href="#eq-class">EQ</a> :D) (<a href="#eq-class">EQ</a> :E) (<a href="#eq-class">EQ</a> :F) ⇒ <a href="#eq-class">EQ</a> (<a href="#tuple3-type">TUPLE3</a> :D :E :F)</code>
 
 </details>
 
@@ -386,7 +386,7 @@ Constructors:
 <details>
 <summary>Instances</summary>
 
-- <code>(<a href="#eq-class">EQ</a> :E) (<a href="#eq-class">EQ</a> :F) (<a href="#eq-class">EQ</a> :G) (<a href="#eq-class">EQ</a> :H) => <a href="#eq-class">EQ</a> (<a href="#tuple4-type">TUPLE4</a> :E :F :G :H)</code>
+- <code>(<a href="#eq-class">EQ</a> :E) (<a href="#eq-class">EQ</a> :F) (<a href="#eq-class">EQ</a> :G) (<a href="#eq-class">EQ</a> :H) ⇒ <a href="#eq-class">EQ</a> (<a href="#tuple4-type">TUPLE4</a> :E :F :G :H)</code>
 
 </details>
 
@@ -402,7 +402,7 @@ Constructors:
 <details>
 <summary>Instances</summary>
 
-- <code>(<a href="#eq-class">EQ</a> :F) (<a href="#eq-class">EQ</a> :G) (<a href="#eq-class">EQ</a> :H) (<a href="#eq-class">EQ</a> :I) (<a href="#eq-class">EQ</a> :J) => <a href="#eq-class">EQ</a> (<a href="#tuple5-type">TUPLE5</a> :F :G :H :I :J)</code>
+- <code>(<a href="#eq-class">EQ</a> :F) (<a href="#eq-class">EQ</a> :G) (<a href="#eq-class">EQ</a> :H) (<a href="#eq-class">EQ</a> :I) (<a href="#eq-class">EQ</a> :J) ⇒ <a href="#eq-class">EQ</a> (<a href="#tuple5-type">TUPLE5</a> :F :G :H :I :J)</code>
 
 </details>
 
@@ -444,16 +444,16 @@ Constructors:
 <details>
 <summary>Instances</summary>
 
-- <code><a href="#eq-class">EQ</a> :B => <a href="#eq-class">EQ</a> (<a href="#optional-type">OPTIONAL</a> :B)</code>
+- <code><a href="#eq-class">EQ</a> :B ⇒ <a href="#eq-class">EQ</a> (<a href="#optional-type">OPTIONAL</a> :B)</code>
 - <code><a href="#iso-class">ISO</a> (<a href="#result-type">RESULT</a> <a href="#unit-type">UNIT</a> :B) (<a href="#optional-type">OPTIONAL</a> :B)</code>
-- <code><a href="#ord-class">ORD</a> :B => <a href="#ord-class">ORD</a> (<a href="#optional-type">OPTIONAL</a> :B)</code>
+- <code><a href="#ord-class">ORD</a> :B ⇒ <a href="#ord-class">ORD</a> (<a href="#optional-type">OPTIONAL</a> :B)</code>
 - <code><a href="#into-class">INTO</a> (<a href="#optional-type">OPTIONAL</a> :B) (<a href="#result-type">RESULT</a> <a href="#unit-type">UNIT</a> :B)</code>
 - <code><a href="#into-class">INTO</a> (<a href="#result-type">RESULT</a> :B :C) (<a href="#optional-type">OPTIONAL</a> :C)</code>
 - <code><a href="#monad-class">MONAD</a> <a href="#optional-type">OPTIONAL</a></code>
-- <code><a href="#monoid-class">MONOID</a> :B => <a href="#monoid-class">MONOID</a> (<a href="#optional-type">OPTIONAL</a> :B)</code>
+- <code><a href="#monoid-class">MONOID</a> :B ⇒ <a href="#monoid-class">MONOID</a> (<a href="#optional-type">OPTIONAL</a> :B)</code>
 - <code><a href="#functor-class">FUNCTOR</a> <a href="#optional-type">OPTIONAL</a></code>
 - <code><a href="#monadfail-class">MONADFAIL</a> <a href="#optional-type">OPTIONAL</a></code>
-- <code><a href="#semigroup-class">SEMIGROUP</a> :B => <a href="#semigroup-class">SEMIGROUP</a> (<a href="#optional-type">OPTIONAL</a> :B)</code>
+- <code><a href="#semigroup-class">SEMIGROUP</a> :B ⇒ <a href="#semigroup-class">SEMIGROUP</a> (<a href="#optional-type">OPTIONAL</a> :B)</code>
 - <code><a href="#alternative-class">ALTERNATIVE</a> <a href="#optional-type">OPTIONAL</a></code>
 - <code><a href="#applicative-class">APPLICATIVE</a> <a href="#optional-type">OPTIONAL</a></code>
 - <code><a href="#unwrappable-class">UNWRAPPABLE</a> <a href="#optional-type">OPTIONAL</a></code>
@@ -579,16 +579,16 @@ Methods:
 - <code><a href="#eq-class">EQ</a> <a href="#fraction-type">FRACTION</a></code>
 - <code><a href="#eq-class">EQ</a> <a href="#char-type">CHAR</a></code>
 - <code><a href="#eq-class">EQ</a> <a href="#string-type">STRING</a></code>
-- <code><a href="#eq-class">EQ</a> :A => <a href="#eq-class">EQ</a> (<a href="#optional-type">OPTIONAL</a> :A)</code>
-- <code><a href="#eq-class">EQ</a> :A => <a href="#eq-class">EQ</a> (<a href="#list-type">LIST</a> :A)</code>
-- <code>(<a href="#eq-class">EQ</a> :A) (<a href="#eq-class">EQ</a> :B) => <a href="#eq-class">EQ</a> (<a href="#tuple-type">TUPLE</a> :A :B)</code>
-- <code>(<a href="#eq-class">EQ</a> :A) (<a href="#eq-class">EQ</a> :B) (<a href="#eq-class">EQ</a> :C) => <a href="#eq-class">EQ</a> (<a href="#tuple3-type">TUPLE3</a> :A :B :C)</code>
-- <code>(<a href="#eq-class">EQ</a> :A) (<a href="#eq-class">EQ</a> :B) (<a href="#eq-class">EQ</a> :C) (<a href="#eq-class">EQ</a> :D) => <a href="#eq-class">EQ</a> (<a href="#tuple4-type">TUPLE4</a> :A :B :C :D)</code>
-- <code>(<a href="#eq-class">EQ</a> :A) (<a href="#eq-class">EQ</a> :B) (<a href="#eq-class">EQ</a> :C) (<a href="#eq-class">EQ</a> :D) (<a href="#eq-class">EQ</a> :E) => <a href="#eq-class">EQ</a> (<a href="#tuple5-type">TUPLE5</a> :A :B :C :D :E)</code>
-- <code>(<a href="#eq-class">EQ</a> :A) (<a href="#eq-class">EQ</a> :B) => <a href="#eq-class">EQ</a> (<a href="#result-type">RESULT</a> :A :B)</code>
-- <code><a href="#eq-class">EQ</a> :A => <a href="#eq-class">EQ</a> (<a href="#cell-type">CELL</a> :A)</code>
-- <code><a href="#eq-class">EQ</a> :A => <a href="#eq-class">EQ</a> (<a href="#vector-type">VECTOR</a> :A)</code>
-- <code><a href="#eq-class">EQ</a> :A => <a href="#eq-class">EQ</a> (<a href="#slice-type">SLICE</a> :A)</code>
+- <code><a href="#eq-class">EQ</a> :A ⇒ <a href="#eq-class">EQ</a> (<a href="#optional-type">OPTIONAL</a> :A)</code>
+- <code><a href="#eq-class">EQ</a> :A ⇒ <a href="#eq-class">EQ</a> (<a href="#list-type">LIST</a> :A)</code>
+- <code>(<a href="#eq-class">EQ</a> :A) (<a href="#eq-class">EQ</a> :B) ⇒ <a href="#eq-class">EQ</a> (<a href="#tuple-type">TUPLE</a> :A :B)</code>
+- <code>(<a href="#eq-class">EQ</a> :A) (<a href="#eq-class">EQ</a> :B) (<a href="#eq-class">EQ</a> :C) ⇒ <a href="#eq-class">EQ</a> (<a href="#tuple3-type">TUPLE3</a> :A :B :C)</code>
+- <code>(<a href="#eq-class">EQ</a> :A) (<a href="#eq-class">EQ</a> :B) (<a href="#eq-class">EQ</a> :C) (<a href="#eq-class">EQ</a> :D) ⇒ <a href="#eq-class">EQ</a> (<a href="#tuple4-type">TUPLE4</a> :A :B :C :D)</code>
+- <code>(<a href="#eq-class">EQ</a> :A) (<a href="#eq-class">EQ</a> :B) (<a href="#eq-class">EQ</a> :C) (<a href="#eq-class">EQ</a> :D) (<a href="#eq-class">EQ</a> :E) ⇒ <a href="#eq-class">EQ</a> (<a href="#tuple5-type">TUPLE5</a> :A :B :C :D :E)</code>
+- <code>(<a href="#eq-class">EQ</a> :A) (<a href="#eq-class">EQ</a> :B) ⇒ <a href="#eq-class">EQ</a> (<a href="#result-type">RESULT</a> :A :B)</code>
+- <code><a href="#eq-class">EQ</a> :A ⇒ <a href="#eq-class">EQ</a> (<a href="#cell-type">CELL</a> :A)</code>
+- <code><a href="#eq-class">EQ</a> :A ⇒ <a href="#eq-class">EQ</a> (<a href="#vector-type">VECTOR</a> :A)</code>
+- <code><a href="#eq-class">EQ</a> :A ⇒ <a href="#eq-class">EQ</a> (<a href="#slice-type">SLICE</a> :A)</code>
 - <code><a href="#eq-class">EQ</a> <a href="#edgeindex-type">EDGEINDEX</a></code>
 - <code><a href="#eq-class">EQ</a> <a href="#nodeindex-type">NODEINDEX</a></code>
 
@@ -598,7 +598,7 @@ Methods:
 ***
 
 #### <code>NUM</code> <sup><sub>[CLASS]</sub></sup><a name="num-class"></a>
-<code><a href="#eq-class">EQ</a> :A => <a href="#num-class">NUM</a> :A</code>
+<code><a href="#eq-class">EQ</a> :A ⇒ <a href="#num-class">NUM</a> :A</code>
 
 Types which have numeric operations defined.
 
@@ -620,7 +620,7 @@ Methods:
 - <code><a href="#num-class">NUM</a> <a href="#single-float-type">SINGLE-FLOAT</a></code>
 - <code><a href="#num-class">NUM</a> <a href="#double-float-type">DOUBLE-FLOAT</a></code>
 - <code><a href="#num-class">NUM</a> <a href="#fraction-type">FRACTION</a></code>
-- <code><a href="#num-class">NUM</a> :A => <a href="#num-class">NUM</a> (<a href="#cell-type">CELL</a> :A)</code>
+- <code><a href="#num-class">NUM</a> :A ⇒ <a href="#num-class">NUM</a> (<a href="#cell-type">CELL</a> :A)</code>
 
 </details>
 
@@ -628,7 +628,7 @@ Methods:
 ***
 
 #### <code>ORD</code> <sup><sub>[CLASS]</sub></sup><a name="ord-class"></a>
-<code><a href="#eq-class">EQ</a> :A => <a href="#ord-class">ORD</a> :A</code>
+<code><a href="#eq-class">EQ</a> :A ⇒ <a href="#ord-class">ORD</a> :A</code>
 
 Types whose values can be ordered.
 
@@ -650,9 +650,9 @@ Methods:
 - <code><a href="#ord-class">ORD</a> <a href="#fraction-type">FRACTION</a></code>
 - <code><a href="#ord-class">ORD</a> <a href="#char-type">CHAR</a></code>
 - <code><a href="#ord-class">ORD</a> <a href="#string-type">STRING</a></code>
-- <code><a href="#ord-class">ORD</a> :A => <a href="#ord-class">ORD</a> (<a href="#optional-type">OPTIONAL</a> :A)</code>
-- <code>(<a href="#ord-class">ORD</a> :A) (<a href="#ord-class">ORD</a> :B) => <a href="#ord-class">ORD</a> (<a href="#tuple-type">TUPLE</a> :A :B)</code>
-- <code>(<a href="#ord-class">ORD</a> :A) (<a href="#ord-class">ORD</a> :B) => <a href="#ord-class">ORD</a> (<a href="#result-type">RESULT</a> :A :B)</code>
+- <code><a href="#ord-class">ORD</a> :A ⇒ <a href="#ord-class">ORD</a> (<a href="#optional-type">OPTIONAL</a> :A)</code>
+- <code>(<a href="#ord-class">ORD</a> :A) (<a href="#ord-class">ORD</a> :B) ⇒ <a href="#ord-class">ORD</a> (<a href="#tuple-type">TUPLE</a> :A :B)</code>
+- <code>(<a href="#ord-class">ORD</a> :A) (<a href="#ord-class">ORD</a> :B) ⇒ <a href="#ord-class">ORD</a> (<a href="#result-type">RESULT</a> :A :B)</code>
 
 </details>
 
@@ -708,7 +708,7 @@ Methods:
 ***
 
 #### <code>MONAD</code> <sup><sub>[CLASS]</sub></sup><a name="monad-class"></a>
-<code><a href="#applicative-class">APPLICATIVE</a> :A => <a href="#monad-class">MONAD</a> :A</code>
+<code><a href="#applicative-class">APPLICATIVE</a> :A ⇒ <a href="#monad-class">MONAD</a> :A</code>
 
 Types which are monads as defined in Haskell. See https://wiki.haskell.org/Monad for more information.
 
@@ -729,7 +729,7 @@ Methods:
 ***
 
 #### <code>MONOID</code> <sup><sub>[CLASS]</sub></sup><a name="monoid-class"></a>
-<code><a href="#semigroup-class">SEMIGROUP</a> :A => <a href="#monoid-class">MONOID</a> :A</code>
+<code><a href="#semigroup-class">SEMIGROUP</a> :A ⇒ <a href="#monoid-class">MONOID</a> :A</code>
 
 Types with an associative binary operation and identity defined.
 
@@ -740,9 +740,9 @@ Methods:
 <summary>Instances</summary>
 
 - <code><a href="#monoid-class">MONOID</a> <a href="#string-type">STRING</a></code>
-- <code><a href="#monoid-class">MONOID</a> :A => <a href="#monoid-class">MONOID</a> (<a href="#optional-type">OPTIONAL</a> :A)</code>
+- <code><a href="#monoid-class">MONOID</a> :A ⇒ <a href="#monoid-class">MONOID</a> (<a href="#optional-type">OPTIONAL</a> :A)</code>
 - <code><a href="#monoid-class">MONOID</a> (<a href="#list-type">LIST</a> :A)</code>
-- <code><a href="#monoid-class">MONOID</a> :A => <a href="#monoid-class">MONOID</a> (<a href="#result-type">RESULT</a> :B :A)</code>
+- <code><a href="#monoid-class">MONOID</a> :A ⇒ <a href="#monoid-class">MONOID</a> (<a href="#result-type">RESULT</a> :B :A)</code>
 
 </details>
 
@@ -790,7 +790,7 @@ Methods:
 ***
 
 #### <code>DIVIDABLE</code> <sup><sub>[CLASS]</sub></sup><a name="dividable-class"></a>
-<code>(<a href="#num-class">NUM</a> :A) (<a href="#num-class">NUM</a> :B) => <a href="#dividable-class">DIVIDABLE</a> :A :B</code>
+<code>(<a href="#num-class">NUM</a> :A) (<a href="#num-class">NUM</a> :B) ⇒ <a href="#dividable-class">DIVIDABLE</a> :A :B</code>
 
 The representation of a type such that division within that type possibly results in another type. For instance,
 
@@ -829,7 +829,7 @@ Methods:
 ***
 
 #### <code>MONADFAIL</code> <sup><sub>[CLASS]</sub></sup><a name="monadfail-class"></a>
-<code><a href="#monad-class">MONAD</a> :A => <a href="#monadfail-class">MONADFAIL</a> :A</code>
+<code><a href="#monad-class">MONAD</a> :A ⇒ <a href="#monadfail-class">MONADFAIL</a> :A</code>
 
 Methods:
 - <code>FAIL :: ∀ :B. (<a href="#string-type">STRING</a> → (:A :B))</code>
@@ -856,10 +856,10 @@ Methods:
 <summary>Instances</summary>
 
 - <code><a href="#semigroup-class">SEMIGROUP</a> <a href="#string-type">STRING</a></code>
-- <code><a href="#semigroup-class">SEMIGROUP</a> :A => <a href="#semigroup-class">SEMIGROUP</a> (<a href="#optional-type">OPTIONAL</a> :A)</code>
+- <code><a href="#semigroup-class">SEMIGROUP</a> :A ⇒ <a href="#semigroup-class">SEMIGROUP</a> (<a href="#optional-type">OPTIONAL</a> :A)</code>
 - <code><a href="#semigroup-class">SEMIGROUP</a> (<a href="#list-type">LIST</a> :A)</code>
-- <code><a href="#semigroup-class">SEMIGROUP</a> :A => <a href="#semigroup-class">SEMIGROUP</a> (<a href="#result-type">RESULT</a> :B :A)</code>
-- <code><a href="#semigroup-class">SEMIGROUP</a> :A => <a href="#semigroup-class">SEMIGROUP</a> (<a href="#cell-type">CELL</a> :A)</code>
+- <code><a href="#semigroup-class">SEMIGROUP</a> :A ⇒ <a href="#semigroup-class">SEMIGROUP</a> (<a href="#result-type">RESULT</a> :B :A)</code>
+- <code><a href="#semigroup-class">SEMIGROUP</a> :A ⇒ <a href="#semigroup-class">SEMIGROUP</a> (<a href="#cell-type">CELL</a> :A)</code>
 - <code><a href="#semigroup-class">SEMIGROUP</a> (<a href="#vector-type">VECTOR</a> :A)</code>
 
 </details>
@@ -868,7 +868,7 @@ Methods:
 ***
 
 #### <code>ALTERNATIVE</code> <sup><sub>[CLASS]</sub></sup><a name="alternative-class"></a>
-<code><a href="#applicative-class">APPLICATIVE</a> :A => <a href="#alternative-class">ALTERNATIVE</a> :A</code>
+<code><a href="#applicative-class">APPLICATIVE</a> :A ⇒ <a href="#alternative-class">ALTERNATIVE</a> :A</code>
 
 Types which are monoids on applicative functors.
 
@@ -888,7 +888,7 @@ Methods:
 ***
 
 #### <code>APPLICATIVE</code> <sup><sub>[CLASS]</sub></sup><a name="applicative-class"></a>
-<code><a href="#functor-class">FUNCTOR</a> :A => <a href="#applicative-class">APPLICATIVE</a> :A</code>
+<code><a href="#functor-class">FUNCTOR</a> :A ⇒ <a href="#applicative-class">APPLICATIVE</a> :A</code>
 
 Types which are a functor which can embed pure expressions and sequence operations.
 
@@ -910,7 +910,7 @@ Methods:
 ***
 
 #### <code>QUANTIZABLE</code> <sup><sub>[CLASS]</sub></sup><a name="quantizable-class"></a>
-<code>(<a href="#ord-class">ORD</a> :A) (<a href="#num-class">NUM</a> :A) => <a href="#quantizable-class">QUANTIZABLE</a> :A</code>
+<code>(<a href="#ord-class">ORD</a> :A) (<a href="#num-class">NUM</a> :A) ⇒ <a href="#quantizable-class">QUANTIZABLE</a> :A</code>
 
 The representation of a type that allows "quantizing", "snapping to integers", or "rounding." (All of these concepts are roughly equivalent.)
 
@@ -939,7 +939,7 @@ Methods:
 ### Functions
 
 #### <code><</code> <sup><sub>[FUNCTION]</sub></sup><a name="<-function"></a>
-<code>∀ :A. <a href="#ord-class">ORD</a> :A => (:A → :A → <a href="#boolean-type">BOOLEAN</a>)</code>
+<code>∀ :A. <a href="#ord-class">ORD</a> :A ⇒ (:A → :A → <a href="#boolean-type">BOOLEAN</a>)</code>
 
 Is X less than Y?
 
@@ -947,7 +947,7 @@ Is X less than Y?
 ***
 
 #### <code>></code> <sup><sub>[FUNCTION]</sub></sup><a name=">-function"></a>
-<code>∀ :A. <a href="#ord-class">ORD</a> :A => (:A → :A → <a href="#boolean-type">BOOLEAN</a>)</code>
+<code>∀ :A. <a href="#ord-class">ORD</a> :A ⇒ (:A → :A → <a href="#boolean-type">BOOLEAN</a>)</code>
 
 Is X greater than Y?
 
@@ -955,12 +955,12 @@ Is X greater than Y?
 ***
 
 #### <code>/=</code> <sup><sub>[FUNCTION]</sub></sup><a name="/=-function"></a>
-<code>∀ :A. <a href="#eq-class">EQ</a> :A => (:A → :A → <a href="#boolean-type">BOOLEAN</a>)</code>
+<code>∀ :A. <a href="#eq-class">EQ</a> :A ⇒ (:A → :A → <a href="#boolean-type">BOOLEAN</a>)</code>
 
 ***
 
 #### <code><=</code> <sup><sub>[FUNCTION]</sub></sup><a name="<=-function"></a>
-<code>∀ :A. <a href="#ord-class">ORD</a> :A => (:A → :A → <a href="#boolean-type">BOOLEAN</a>)</code>
+<code>∀ :A. <a href="#ord-class">ORD</a> :A ⇒ (:A → :A → <a href="#boolean-type">BOOLEAN</a>)</code>
 
 Is X less than or equal to Y?
 
@@ -968,7 +968,7 @@ Is X less than or equal to Y?
 ***
 
 #### <code>>=</code> <sup><sub>[FUNCTION]</sub></sup><a name=">=-function"></a>
-<code>∀ :A. <a href="#ord-class">ORD</a> :A => (:A → :A → <a href="#boolean-type">BOOLEAN</a>)</code>
+<code>∀ :A. <a href="#ord-class">ORD</a> :A ⇒ (:A → :A → <a href="#boolean-type">BOOLEAN</a>)</code>
 
 Is X greater than or equal to Y?
 
@@ -976,7 +976,7 @@ Is X greater than or equal to Y?
 ***
 
 #### <code>MAX</code> <sup><sub>[FUNCTION]</sub></sup><a name="max-function"></a>
-<code>∀ :A. <a href="#ord-class">ORD</a> :A => (:A → :A → :A)</code>
+<code>∀ :A. <a href="#ord-class">ORD</a> :A ⇒ (:A → :A → :A)</code>
 
 Returns the greater element of X and Y.
 
@@ -984,7 +984,7 @@ Returns the greater element of X and Y.
 ***
 
 #### <code>MIN</code> <sup><sub>[FUNCTION]</sub></sup><a name="min-function"></a>
-<code>∀ :A. <a href="#ord-class">ORD</a> :A => (:A → :A → :A)</code>
+<code>∀ :A. <a href="#ord-class">ORD</a> :A ⇒ (:A → :A → :A)</code>
 
 Returns the lesser element of X and Y.
 
@@ -1036,7 +1036,7 @@ The denominator of a fraction Q.
 ### Functions
 
 #### <code>ABS</code> <sup><sub>[FUNCTION]</sub></sup><a name="abs-function"></a>
-<code>∀ :A. (<a href="#num-class">NUM</a> :A) (<a href="#ord-class">ORD</a> :A) => (:A → :A)</code>
+<code>∀ :A. (<a href="#num-class">NUM</a> :A) (<a href="#ord-class">ORD</a> :A) ⇒ (:A → :A)</code>
 
 Absolute value of X.
 
@@ -1100,7 +1100,7 @@ Exponentiate BASE to a non-negative POWER.
 ***
 
 #### <code>SIGN</code> <sup><sub>[FUNCTION]</sub></sup><a name="sign-function"></a>
-<code>∀ :A. (<a href="#num-class">NUM</a> :A) (<a href="#ord-class">ORD</a> :A) => (:A → <a href="#integer-type">INTEGER</a>)</code>
+<code>∀ :A. (<a href="#num-class">NUM</a> :A) (<a href="#ord-class">ORD</a> :A) ⇒ (:A → <a href="#integer-type">INTEGER</a>)</code>
 
 The sign of X.
 
@@ -1108,7 +1108,7 @@ The sign of X.
 ***
 
 #### <code>NEGATE</code> <sup><sub>[FUNCTION]</sub></sup><a name="negate-function"></a>
-<code>∀ :A. <a href="#num-class">NUM</a> :A => (:A → :A)</code>
+<code>∀ :A. <a href="#num-class">NUM</a> :A ⇒ (:A → :A)</code>
 
 ***
 
@@ -1228,7 +1228,7 @@ Returns TRUE if at least one element in XS matches F.
 ***
 
 #### <code>SUM</code> <sup><sub>[FUNCTION]</sub></sup><a name="sum-function"></a>
-<code>∀ :A. <a href="#num-class">NUM</a> :A => ((<a href="#list-type">LIST</a> :A) → :A)</code>
+<code>∀ :A. <a href="#num-class">NUM</a> :A ⇒ ((<a href="#list-type">LIST</a> :A) → :A)</code>
 
 Returns the sum of XS
 
@@ -1300,7 +1300,7 @@ Returns TRUE if XS is an empty list.
 ***
 
 #### <code>SORT</code> <sup><sub>[FUNCTION]</sub></sup><a name="sort-function"></a>
-<code>∀ :A. <a href="#ord-class">ORD</a> :A => ((<a href="#list-type">LIST</a> :A) → (<a href="#list-type">LIST</a> :A))</code>
+<code>∀ :A. <a href="#ord-class">ORD</a> :A ⇒ ((<a href="#list-type">LIST</a> :A) → (<a href="#list-type">LIST</a> :A))</code>
 
 Performs a stable sort of XS.
 
@@ -1353,7 +1353,7 @@ Returns a list containing the numbers from START to END inclusive.
 ***
 
 #### <code>UNION</code> <sup><sub>[FUNCTION]</sub></sup><a name="union-function"></a>
-<code>∀ :A. <a href="#eq-class">EQ</a> :A => ((<a href="#list-type">LIST</a> :A) → (<a href="#list-type">LIST</a> :A) → (<a href="#list-type">LIST</a> :A))</code>
+<code>∀ :A. <a href="#eq-class">EQ</a> :A ⇒ ((<a href="#list-type">LIST</a> :A) → (<a href="#list-type">LIST</a> :A) → (<a href="#list-type">LIST</a> :A))</code>
 
 Returns a new list with the elements from both XS and YS and without duplicates.
 
@@ -1377,7 +1377,7 @@ Appends a list of lists together into a single new list.
 ***
 
 #### <code>DELETE</code> <sup><sub>[FUNCTION]</sub></sup><a name="delete-function"></a>
-<code>∀ :A. <a href="#eq-class">EQ</a> :A => (:A → (<a href="#list-type">LIST</a> :A) → (<a href="#list-type">LIST</a> :A))</code>
+<code>∀ :A. <a href="#eq-class">EQ</a> :A ⇒ (:A → (<a href="#list-type">LIST</a> :A) → (<a href="#list-type">LIST</a> :A))</code>
 
 Return a new list with the first element equal to X removed.
 
@@ -1393,7 +1393,7 @@ Returns a new list containing every element of XS that matches the predicate fun
 ***
 
 #### <code>INSERT</code> <sup><sub>[FUNCTION]</sub></sup><a name="insert-function"></a>
-<code>∀ :A. <a href="#ord-class">ORD</a> :A => (:A → (<a href="#list-type">LIST</a> :A) → (<a href="#list-type">LIST</a> :A))</code>
+<code>∀ :A. <a href="#ord-class">ORD</a> :A ⇒ (:A → (<a href="#list-type">LIST</a> :A) → (<a href="#list-type">LIST</a> :A))</code>
 
 Inserts an element into a list at the first place it is less than or equal to the next element.
 
@@ -1409,7 +1409,7 @@ Returns the length of a list.
 ***
 
 #### <code>LOOKUP</code> <sup><sub>[FUNCTION]</sub></sup><a name="lookup-function"></a>
-<code>∀ :A :B. <a href="#eq-class">EQ</a> :A => (:A → (<a href="#list-type">LIST</a> (<a href="#tuple-type">TUPLE</a> :A :B)) → (<a href="#optional-type">OPTIONAL</a> :B))</code>
+<code>∀ :A :B. <a href="#eq-class">EQ</a> :A ⇒ (:A → (<a href="#list-type">LIST</a> (<a href="#tuple-type">TUPLE</a> :A :B)) → (<a href="#optional-type">OPTIONAL</a> :B))</code>
 
 Returns the value of the first (key, value) tuple in XS where the key matches E.
 
@@ -1417,7 +1417,7 @@ Returns the value of the first (key, value) tuple in XS where the key matches E.
 ***
 
 #### <code>MEMBER</code> <sup><sub>[FUNCTION]</sub></sup><a name="member-function"></a>
-<code>∀ :A. <a href="#eq-class">EQ</a> :A => (:A → (<a href="#list-type">LIST</a> :A) → <a href="#boolean-type">BOOLEAN</a>)</code>
+<code>∀ :A. <a href="#eq-class">EQ</a> :A ⇒ (:A → (<a href="#list-type">LIST</a> :A) → <a href="#boolean-type">BOOLEAN</a>)</code>
 
 Returns true if any element of XS is equal to E.
 
@@ -1441,7 +1441,7 @@ Generic version of sort
 ***
 
 #### <code>MAXIMUM</code> <sup><sub>[FUNCTION]</sub></sup><a name="maximum-function"></a>
-<code>∀ :A. <a href="#ord-class">ORD</a> :A => ((<a href="#list-type">LIST</a> :A) → (<a href="#optional-type">OPTIONAL</a> :A))</code>
+<code>∀ :A. <a href="#ord-class">ORD</a> :A ⇒ ((<a href="#list-type">LIST</a> :A) → (<a href="#optional-type">OPTIONAL</a> :A))</code>
 
 Returns the greatest element in XS.
 
@@ -1449,7 +1449,7 @@ Returns the greatest element in XS.
 ***
 
 #### <code>MINIMUM</code> <sup><sub>[FUNCTION]</sub></sup><a name="minimum-function"></a>
-<code>∀ :A. <a href="#ord-class">ORD</a> :A => ((<a href="#list-type">LIST</a> :A) → (<a href="#optional-type">OPTIONAL</a> :A))</code>
+<code>∀ :A. <a href="#ord-class">ORD</a> :A ⇒ ((<a href="#list-type">LIST</a> :A) → (<a href="#optional-type">OPTIONAL</a> :A))</code>
 
 Returns the least element in XS.
 
@@ -1457,7 +1457,7 @@ Returns the least element in XS.
 ***
 
 #### <code>PRODUCT</code> <sup><sub>[FUNCTION]</sub></sup><a name="product-function"></a>
-<code>∀ :A. <a href="#num-class">NUM</a> :A => ((<a href="#list-type">LIST</a> :A) → :A)</code>
+<code>∀ :A. <a href="#num-class">NUM</a> :A ⇒ ((<a href="#list-type">LIST</a> :A) → :A)</code>
 
 Returns the product of XS
 
@@ -1521,7 +1521,7 @@ Apply F to each element in XS and concatenate the results.
 ***
 
 #### <code>ELEMINDEX</code> <sup><sub>[FUNCTION]</sub></sup><a name="elemindex-function"></a>
-<code>∀ :A. <a href="#eq-class">EQ</a> :A => (:A → (<a href="#list-type">LIST</a> :A) → (<a href="#optional-type">OPTIONAL</a> <a href="#integer-type">INTEGER</a>))</code>
+<code>∀ :A. <a href="#eq-class">EQ</a> :A ⇒ (:A → (<a href="#list-type">LIST</a> :A) → (<a href="#optional-type">OPTIONAL</a> <a href="#integer-type">INTEGER</a>))</code>
 
 ***
 
@@ -1571,7 +1571,7 @@ Returns a new list where every other element is E.
 ***
 
 #### <code>INTERSECTION</code> <sup><sub>[FUNCTION]</sub></sup><a name="intersection-function"></a>
-<code>∀ :A. <a href="#eq-class">EQ</a> :A => ((<a href="#list-type">LIST</a> :A) → (<a href="#list-type">LIST</a> :A) → (<a href="#list-type">LIST</a> :A))</code>
+<code>∀ :A. <a href="#eq-class">EQ</a> :A ⇒ ((<a href="#list-type">LIST</a> :A) → (<a href="#list-type">LIST</a> :A) → (<a href="#list-type">LIST</a> :A))</code>
 
 Returns elements which occur in both lists. Does not return duplicates and does not guarantee order.
 
@@ -1579,7 +1579,7 @@ Returns elements which occur in both lists. Does not return duplicates and does 
 ***
 
 #### <code>LIST-DIFFERENCE</code> <sup><sub>[FUNCTION]</sub></sup><a name="list-difference-function"></a>
-<code>∀ :A. <a href="#eq-class">EQ</a> :A => ((<a href="#list-type">LIST</a> :A) → (<a href="#list-type">LIST</a> :A) → (<a href="#list-type">LIST</a> :A))</code>
+<code>∀ :A. <a href="#eq-class">EQ</a> :A ⇒ ((<a href="#list-type">LIST</a> :A) → (<a href="#list-type">LIST</a> :A) → (<a href="#list-type">LIST</a> :A))</code>
 
 Returns a new list with the first occurence of each element in YS deleted from XS.
 
@@ -1587,7 +1587,7 @@ Returns a new list with the first occurence of each element in YS deleted from X
 ***
 
 #### <code>REMOVE-DUPLICATES</code> <sup><sub>[FUNCTION]</sub></sup><a name="remove-duplicates-function"></a>
-<code>∀ :A. <a href="#eq-class">EQ</a> :A => ((<a href="#list-type">LIST</a> :A) → (<a href="#list-type">LIST</a> :A))</code>
+<code>∀ :A. <a href="#eq-class">EQ</a> :A ⇒ ((<a href="#list-type">LIST</a> :A) → (<a href="#list-type">LIST</a> :A))</code>
 
 Returns a new list without duplicate elements.
 
@@ -1671,7 +1671,7 @@ The factorial function can be written
 ***
 
 #### <code>ASUM</code> <sup><sub>[FUNCTION]</sub></sup><a name="asum-function"></a>
-<code>∀ :A :B. <a href="#alternative-class">ALTERNATIVE</a> :A => ((<a href="#list-type">LIST</a> (:A :B)) → (:A :B))</code>
+<code>∀ :A :B. <a href="#alternative-class">ALTERNATIVE</a> :A ⇒ ((<a href="#list-type">LIST</a> (:A :B)) → (:A :B))</code>
 
 Fold over a list using alt
 
@@ -1708,12 +1708,12 @@ Print a line to *STANDARD-OUTPUT*
 ***
 
 #### <code>SEQUENCE</code> <sup><sub>[FUNCTION]</sub></sup><a name="sequence-function"></a>
-<code>∀ :A :B. <a href="#applicative-class">APPLICATIVE</a> :A => ((<a href="#list-type">LIST</a> (:A :B)) → (:A (<a href="#list-type">LIST</a> :B)))</code>
+<code>∀ :A :B. <a href="#applicative-class">APPLICATIVE</a> :A ⇒ ((<a href="#list-type">LIST</a> (:A :B)) → (:A (<a href="#list-type">LIST</a> :B)))</code>
 
 ***
 
 #### <code>TRAVERSE</code> <sup><sub>[FUNCTION]</sub></sup><a name="traverse-function"></a>
-<code>∀ :A :B :C. <a href="#applicative-class">APPLICATIVE</a> :B => ((:A → (:B :C)) → (<a href="#list-type">LIST</a> :A) → (:B (<a href="#list-type">LIST</a> :C)))</code>
+<code>∀ :A :B :C. <a href="#applicative-class">APPLICATIVE</a> :B ⇒ ((:A → (:B :C)) → (<a href="#list-type">LIST</a> :A) → (:B (<a href="#list-type">LIST</a> :C)))</code>
 
 Map the elements of XS with F then collect the results.
 
@@ -1733,7 +1733,7 @@ Print a line to *STANDARD-OUTPUT* in the form "{STR}: {ITEM}"
 ### Functions
 
 #### <code>FLOOR</code> <sup><sub>[FUNCTION]</sub></sup><a name="floor-function"></a>
-<code>∀ :A. <a href="#quantizable-class">QUANTIZABLE</a> :A => (:A → <a href="#integer-type">INTEGER</a>)</code>
+<code>∀ :A. <a href="#quantizable-class">QUANTIZABLE</a> :A ⇒ (:A → <a href="#integer-type">INTEGER</a>)</code>
 
 Return the greatest integer less than or equal to X.
 
@@ -1741,7 +1741,7 @@ Return the greatest integer less than or equal to X.
 ***
 
 #### <code>ROUND</code> <sup><sub>[FUNCTION]</sub></sup><a name="round-function"></a>
-<code>∀ :A. <a href="#quantizable-class">QUANTIZABLE</a> :A => (:A → <a href="#integer-type">INTEGER</a>)</code>
+<code>∀ :A. <a href="#quantizable-class">QUANTIZABLE</a> :A ⇒ (:A → <a href="#integer-type">INTEGER</a>)</code>
 
 Return the nearest integer to X, with ties breaking toward positive infinity.
 
@@ -1749,7 +1749,7 @@ Return the nearest integer to X, with ties breaking toward positive infinity.
 ***
 
 #### <code>SAFE/</code> <sup><sub>[FUNCTION]</sub></sup><a name="safe/-function"></a>
-<code>∀ :A :B. <a href="#dividable-class">DIVIDABLE</a> :A :B => (:A → :A → (<a href="#optional-type">OPTIONAL</a> :B))</code>
+<code>∀ :A :B. <a href="#dividable-class">DIVIDABLE</a> :A :B ⇒ (:A → :A → (<a href="#optional-type">OPTIONAL</a> :B))</code>
 
 Safely divide X by Y, returning None if Y is zero.
 
@@ -1781,7 +1781,7 @@ Divide two integers and round the quotient.
 ***
 
 #### <code>CEILING</code> <sup><sub>[FUNCTION]</sub></sup><a name="ceiling-function"></a>
-<code>∀ :A. <a href="#quantizable-class">QUANTIZABLE</a> :A => (:A → <a href="#integer-type">INTEGER</a>)</code>
+<code>∀ :A. <a href="#quantizable-class">QUANTIZABLE</a> :A ⇒ (:A → <a href="#integer-type">INTEGER</a>)</code>
 
 Return the least integer greater than or equal to X.
 
@@ -1837,12 +1837,12 @@ Constructors:
 <details>
 <summary>Instances</summary>
 
-- <code><a href="#eq-class">EQ</a> :B => <a href="#eq-class">EQ</a> (<a href="#cell-type">CELL</a> :B)</code>
-- <code><a href="#num-class">NUM</a> :B => <a href="#num-class">NUM</a> (<a href="#cell-type">CELL</a> :B)</code>
+- <code><a href="#eq-class">EQ</a> :B ⇒ <a href="#eq-class">EQ</a> (<a href="#cell-type">CELL</a> :B)</code>
+- <code><a href="#num-class">NUM</a> :B ⇒ <a href="#num-class">NUM</a> (<a href="#cell-type">CELL</a> :B)</code>
 - <code><a href="#into-class">INTO</a> (<a href="#cell-type">CELL</a> :B) :B</code>
 - <code><a href="#into-class">INTO</a> :B (<a href="#cell-type">CELL</a> :B)</code>
 - <code><a href="#functor-class">FUNCTOR</a> <a href="#cell-type">CELL</a></code>
-- <code><a href="#semigroup-class">SEMIGROUP</a> :B => <a href="#semigroup-class">SEMIGROUP</a> (<a href="#cell-type">CELL</a> :B)</code>
+- <code><a href="#semigroup-class">SEMIGROUP</a> :B ⇒ <a href="#semigroup-class">SEMIGROUP</a> (<a href="#cell-type">CELL</a> :B)</code>
 - <code><a href="#applicative-class">APPLICATIVE</a> <a href="#cell-type">CELL</a></code>
 
 </details>
@@ -1902,7 +1902,7 @@ Constructors:
 <details>
 <summary>Instances</summary>
 
-- <code><a href="#eq-class">EQ</a> :B => <a href="#eq-class">EQ</a> (<a href="#vector-type">VECTOR</a> :B)</code>
+- <code><a href="#eq-class">EQ</a> :B ⇒ <a href="#eq-class">EQ</a> (<a href="#vector-type">VECTOR</a> :B)</code>
 - <code><a href="#iso-class">ISO</a> (<a href="#slice-type">SLICE</a> :B) (<a href="#vector-type">VECTOR</a> :B)</code>
 - <code><a href="#iso-class">ISO</a> (<a href="#vector-type">VECTOR</a> :B) (<a href="#list-type">LIST</a> :B)</code>
 - <code><a href="#into-class">INTO</a> (<a href="#vector-type">VECTOR</a> :B) (<a href="#slice-type">SLICE</a> :B)</code>
@@ -1976,7 +1976,7 @@ Append ITEM to V and resize V if necessary
 ***
 
 #### <code>VECTOR-SORT</code> <sup><sub>[FUNCTION]</sub></sup><a name="vector-sort-function"></a>
-<code>∀ :A. <a href="#ord-class">ORD</a> :A => ((<a href="#vector-type">VECTOR</a> :A) → <a href="#unit-type">UNIT</a>)</code>
+<code>∀ :A. <a href="#ord-class">ORD</a> :A ⇒ ((<a href="#vector-type">VECTOR</a> :A) → <a href="#unit-type">UNIT</a>)</code>
 
 Sort a vector inplace
 
@@ -2129,7 +2129,7 @@ Constructors:
 <details>
 <summary>Instances</summary>
 
-- <code><a href="#eq-class">EQ</a> :B => <a href="#eq-class">EQ</a> (<a href="#slice-type">SLICE</a> :B)</code>
+- <code><a href="#eq-class">EQ</a> :B ⇒ <a href="#eq-class">EQ</a> (<a href="#slice-type">SLICE</a> :B)</code>
 - <code><a href="#iso-class">ISO</a> (<a href="#slice-type">SLICE</a> :B) (<a href="#vector-type">VECTOR</a> :B)</code>
 - <code><a href="#into-class">INTO</a> (<a href="#vector-type">VECTOR</a> :B) (<a href="#slice-type">SLICE</a> :B)</code>
 - <code><a href="#into-class">INTO</a> (<a href="#slice-type">SLICE</a> :B) (<a href="#vector-type">VECTOR</a> :B)</code>
