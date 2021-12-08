@@ -5,7 +5,7 @@
   (declare parse-quil-string (Parser String))
   (define parse-quil-string
     (map3
-     (fn (a b c) (pack-string b))
+     (fn (a b c) (into b))
      (char #\")
      (many0
       (alt
@@ -26,7 +26,7 @@
       (with-context "parsing quil name"
         (map1
          (fn (str)
-           (Name (pack-string str)))
+           (Name (into str)))
          ;; NOTE: Due to not having backtracking, we have to check for
          ;;       hyphens at the end of names with verify.
          (map2
@@ -70,7 +70,7 @@
   ;;       allowed to be anything without parenthesis.
   (declare parse-quil-expression (Parser Expression))
   (define parse-quil-expression
-    (map1 (fn (x) (Expression (pack-string x)))
+    (map1 (fn (x) (Expression (into x)))
           (many1 (verify
                   (fn (c)
                     (not (or (== c #\()

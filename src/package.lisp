@@ -515,7 +515,6 @@
    #:double-float->integer
    #:integer->single-float
    #:integer->double-float
-   #:integer->string
    #:negate
    #:abs
    #:ash
@@ -547,8 +546,6 @@
   ;; String
   (:export
    #:concat-string
-   #:unpack-string
-   #:pack-string
    #:reverse-string
    #:string-length
    #:substring

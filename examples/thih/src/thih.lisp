@@ -25,7 +25,7 @@
 
   (declare enumId (Integer -> Id))
   (define (enumId n)
-    (Id (concat-string "v" (integer->string n))))
+    (Id (concat-string "v" (into n))))
 
 
   ;;
