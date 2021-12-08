@@ -103,4 +103,4 @@
          (match i
            ((Some a) (const-value a))
            ((None) (pfail "Invalid integer"))))
-       (map1 parse-int (map1 pack-string (many1 digit)))))))
+       (map1 parse-int (map1 into (many1 digit)))))))

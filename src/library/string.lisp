@@ -11,18 +11,6 @@
     (lisp String (str1 str2)
       (cl:concatenate 'cl:string str1 str2)))
 
-  (declare unpack-string (String -> (List Char)))
-  (define (unpack-string str)
-    "Unpack a string into a list of characters."
-    (lisp (List Char) (str)
-       (cl:coerce str 'cl:list)))
-
-  (declare pack-string ((List Char) -> String))
-  (define (pack-string xs)
-    "Pack a list of charactes into a string."
-    (lisp String (xs)
-      (cl:coerce xs 'cl:string)))
-
   (declare reverse-string (String -> String))
   (define (reverse-string s)
     "Reverse a string."
@@ -73,9 +61,13 @@
     (define mempty ""))
 
   (define-instance (Into String (List Char))
-    (define into unpack-string))
+    (define (into str)
+      (lisp (List Char) (str)
+        (cl:coerce str 'cl:list))))
 
   (define-instance (Into (List Char) String)
-    (define into pack-string))
+    (define (into lst)
+      (lisp String (lst)
+        (cl:coerce lst 'cl:string))))
 
   (define-instance (Iso (List Char) String)))

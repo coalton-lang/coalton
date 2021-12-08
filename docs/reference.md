@@ -1130,11 +1130,6 @@ The sign of X.
 
 ***
 
-#### <code>INTEGER->STRING</code> <sup><sub>[FUNCTION]</sub></sup><a name="integer->string-function"></a>
-<code>(<a href="#integer-type">INTEGER</a> → <a href="#string-type">STRING</a>)</code>
-
-***
-
 #### <code>DOUBLE-FLOAT->INTEGER</code> <sup><sub>[FUNCTION]</sub></sup><a name="double-float->integer-function"></a>
 <code>(<a href="#double-float-type">DOUBLE-FLOAT</a> → (<a href="#optional-type">OPTIONAL</a> <a href="#integer-type">INTEGER</a>))</code>
 
@@ -1181,14 +1176,6 @@ Compute a substring of a string bounded by given indices.
 
 ***
 
-#### <code>PACK-STRING</code> <sup><sub>[FUNCTION]</sub></sup><a name="pack-string-function"></a>
-<code>((<a href="#list-type">LIST</a> <a href="#char-type">CHAR</a>) → <a href="#string-type">STRING</a>)</code>
-
-Pack a list of charactes into a string.
-
-
-***
-
 #### <code>CONCAT-STRING</code> <sup><sub>[FUNCTION]</sub></sup><a name="concat-string-function"></a>
 <code>(<a href="#string-type">STRING</a> → <a href="#string-type">STRING</a> → <a href="#string-type">STRING</a>)</code>
 
@@ -1201,14 +1188,6 @@ Concatenate STR1 and STR2 together, returning a new string.
 <code>(<a href="#string-type">STRING</a> → <a href="#integer-type">INTEGER</a>)</code>
 
 The length of a string STR.
-
-
-***
-
-#### <code>UNPACK-STRING</code> <sup><sub>[FUNCTION]</sub></sup><a name="unpack-string-function"></a>
-<code>(<a href="#string-type">STRING</a> → (<a href="#list-type">LIST</a> <a href="#char-type">CHAR</a>))</code>
-
-Unpack a string into a list of characters.
 
 
 ***

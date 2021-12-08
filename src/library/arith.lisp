@@ -170,12 +170,7 @@
       (cl:if (cl:or (float-features:float-infinity-p x)
                     (float-features:float-nan-p x))
              None
-             (Some (cl:round x)))))
-
-  (declare integer->string (Integer -> String))
-  (define (integer->string n)
-    (lisp String (n)
-      (cl:format cl:nil "~A" n))))
+             (Some (cl:round x))))))
 
 (coalton-toplevel
   (define-instance (Eq Fraction)
