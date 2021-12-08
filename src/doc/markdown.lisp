@@ -173,7 +173,7 @@
                          (coalton-impl/typechecker::ty-scheme-type
                           (constructor-entry-scheme entry)))))))
             (if args
-                (format stream "- <code>(~A~{ ~A~})</code>~%" ctor-name args)
+                (format stream "- <code>(~A~{ ~A~})</code>~%" ctor-name (mapcar #'to-markdown args))
                 (format stream "- <code>~A</code>~%" ctor-name))))
 
         (let ((docs (documentation name 'type)))

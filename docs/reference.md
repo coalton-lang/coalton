@@ -410,7 +410,7 @@ Constructors:
 ***
 
 #### <code>FRACTION</code> <sup><sub>[TYPE]</sub></sup><a name="FRACTION"></a>
-- <code>(%FRACTION INTEGER INTEGER)</code>
+- <code>(%FRACTION <a href="#INTEGER">INTEGER</a> <a href="#INTEGER">INTEGER</a>)</code>
 
 A ratio of integers always in reduced form.
 
@@ -531,7 +531,7 @@ Constructors:
 ***
 
 #### <code>QUANTIZATION :A</code> <sup><sub>[TYPE]</sub></sup><a name="QUANTIZATION"></a>
-- <code>(QUANTIZATION :A INTEGER :A INTEGER :A)</code>
+- <code>(QUANTIZATION :A <a href="#INTEGER">INTEGER</a> :A <a href="#INTEGER">INTEGER</a> :A)</code>
 
 Represents an integer quantization of `:t`. See the `Quantizable` typeclass.
 
@@ -1807,7 +1807,7 @@ Note: This does *not* divide double-float arguments.
 ### Types
 
 #### <code>CELL :A</code> <sup><sub>[TYPE]</sub></sup><a name="CELL"></a>
-- <code>(CELL LISP-OBJECT)</code>
+- <code>(CELL <a href="#LISP-OBJECT">LISP-OBJECT</a>)</code>
 
 Internally mutable cell
 
@@ -1874,7 +1874,7 @@ Set the value of a mutable cell
 ### Types
 
 #### <code>VECTOR :A</code> <sup><sub>[TYPE]</sub></sup><a name="VECTOR"></a>
-- <code>(VECTOR LISP-OBJECT)</code>
+- <code>(VECTOR <a href="#LISP-OBJECT">LISP-OBJECT</a>)</code>
 
 Constructors:
 - <code>VECTOR :: (<a href="#LISP-OBJECT">LISP-OBJECT</a> → (<a href="#VECTOR">VECTOR</a> :A))</code>
@@ -2101,7 +2101,7 @@ Remove the element IDX from VEC and replace it with the last element in VEC with
 ### Types
 
 #### <code>SLICE :A</code> <sup><sub>[TYPE]</sub></sup><a name="SLICE"></a>
-- <code>(SLICE LISP-OBJECT)</code>
+- <code>(SLICE <a href="#LISP-OBJECT">LISP-OBJECT</a>)</code>
 
 Constructors:
 - <code>SLICE :: (<a href="#LISP-OBJECT">LISP-OBJECT</a> → (<a href="#SLICE">SLICE</a> :A))</code>
@@ -2211,7 +2211,7 @@ Call the function F once for each item in S with its index
 ### Types
 
 #### <code>HASHTABLE :A :B</code> <sup><sub>[TYPE]</sub></sup><a name="HASHTABLE"></a>
-- <code>(HASHTABLE LISP-OBJECT)</code>
+- <code>(HASHTABLE <a href="#LISP-OBJECT">LISP-OBJECT</a>)</code>
 
 Constructors:
 - <code>HASHTABLE :: (<a href="#LISP-OBJECT">LISP-OBJECT</a> → (<a href="#HASHTABLE">HASHTABLE</a> :A :B))</code>
@@ -2306,7 +2306,7 @@ Crate a new empty hashtable with a given capacity
 ### Types
 
 #### <code>GRAPH :A :B</code> <sup><sub>[TYPE]</sub></sup><a name="GRAPH"></a>
-- <code>(GRAPH GRAPHTYPE (VECTOR (NODE :A)) (VECTOR (EDGE :B)))</code>
+- <code>(GRAPH <a href="#GRAPHTYPE">GRAPHTYPE</a> (<a href="#VECTOR">VECTOR</a> (<a href="#NODE">NODE</a> :A)) (<a href="#VECTOR">VECTOR</a> (<a href="#EDGE">EDGE</a> :B)))</code>
 
 A graph using adjacency list representation
 
@@ -2317,7 +2317,7 @@ Constructors:
 ***
 
 #### <code>EDGEINDEX</code> <sup><sub>[TYPE]</sub></sup><a name="EDGEINDEX"></a>
-- <code>(EDGEINDEX INTEGER)</code>
+- <code>(EDGEINDEX <a href="#INTEGER">INTEGER</a>)</code>
 
 Constructors:
 - <code>EDGEINDEX :: (<a href="#INTEGER">INTEGER</a> → <a href="#EDGEINDEX">EDGEINDEX</a>)</code>
@@ -2345,7 +2345,7 @@ Constructors:
 ***
 
 #### <code>NODEINDEX</code> <sup><sub>[TYPE]</sub></sup><a name="NODEINDEX"></a>
-- <code>(NODEINDEX INTEGER)</code>
+- <code>(NODEINDEX <a href="#INTEGER">INTEGER</a>)</code>
 
 Constructors:
 - <code>NODEINDEX :: (<a href="#INTEGER">INTEGER</a> → <a href="#NODEINDEX">NODEINDEX</a>)</code>
