@@ -34,8 +34,9 @@
     (when (or value-entries
               type-entries
               class-entries)
-      
-      (format stream "## File: [~A](~A)~%~%" filename (concatenate 'string link-prefix filename))
+
+      (unless (string= "" filename)
+        (format stream "## File: [~A](~A)~%~%" filename (concatenate 'string link-prefix filename)))
 
       ;; Print type information
       (when type-entries
@@ -91,7 +92,8 @@
             (format stream "~%~A~%" docs)))
         (format stream "~%")
 
-        (format stream "Constructors:~%")
+        (when ctors
+          (format stream "Constructors:~%"))
         (loop :for (ctor-name . entry) :in ctors :do
           (format stream "- <code>~A :: ~A</code>~%"
                   ctor-name
