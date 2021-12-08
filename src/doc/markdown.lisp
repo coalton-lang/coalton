@@ -71,10 +71,13 @@
   (:method ((object qualified-ty))
     (let ((preds (coalton-impl/typechecker::qualified-ty-predicates object))
           (qual-type (coalton-impl/typechecker::qualified-ty-type object)))
-      (format nil "~:[~{~A ~}~;~{(~A) ~}~]~:*~:[~;=> ~]~A"
+      (format nil "~:[~{~A ~}~;~{(~A) ~}~]~:*~:[~*~;~A ~]~A"
               ;; Get the second element to test if we have more than one predicate
               (second preds)
               (mapcar #'to-markdown preds)
+              (if *coalton-print-unicode*
+                          "⇒"
+                          "=>")
               (to-markdown qual-type))))
 
   (:method ((object ty-scheme))
@@ -102,10 +105,13 @@
   (:method ((object ty-class-instance))
     (let ((ctx (ty-class-instance-constraints object))
           (pred (ty-class-instance-predicate object)))
-      (format nil "~:[~{~A ~}~;~{(~A) ~}~]~:*~:[~;=> ~]~A"
+      (format nil "~:[~{~A ~}~;~{(~A) ~}~]~:*~:[~*~;~A ~]~A"
               ;; Get the second element to test if we have more than one predicate
               (second ctx)
               (mapcar #'to-markdown ctx)
+              (if *coalton-print-unicode*
+                          "⇒"
+                          "=>")
               (to-markdown pred)))))
 
 ;;;
