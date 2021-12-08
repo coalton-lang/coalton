@@ -307,6 +307,7 @@
 (uiop:define-package #:coalton-impl/codegen
   (:documentation "Implementation of code generation for COALTON. This is a package private to the COALTON system and is not intended for public use.")
   (:use #:cl
+        #:coalton-util
         #:coalton-impl/algorithm
         #:coalton-impl/ast
         #:coalton-impl/typechecker)
