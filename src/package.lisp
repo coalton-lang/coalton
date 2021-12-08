@@ -597,6 +597,7 @@
    #:intercalate
    #:transpose
    #:partition
+   #:optimumBy
    #:maximum
    #:minimum
    #:sum
