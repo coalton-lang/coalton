@@ -78,7 +78,8 @@
                (:file "debug")
                (:module "doc"
                 :serial t
-                :components ((:file "generate-documentation")))
+                :components ((:file "generate-documentation")
+                             (:file "markdown")))
                (:file "faux-macros")
                (:module "library"
                 :serial t
