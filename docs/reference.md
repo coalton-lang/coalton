@@ -282,9 +282,9 @@ Constructors:
 
 ***
 
-### Functions
+### Values
 
-#### <code>NIL</code> <sup><sub>[FUNCTION]</sub></sup><a name="nil-function"></a>
+#### <code>NIL</code> <sup><sub>[VALUE]</sub></sup><a name="nil-function"></a>
 <code>∀ :A. (<a href="#list-type">LIST</a> :A)</code>
 
 ***
@@ -294,12 +294,12 @@ Constructors:
 
 ***
 
-#### <code>TRUE</code> <sup><sub>[FUNCTION]</sub></sup><a name="true-function"></a>
+#### <code>TRUE</code> <sup><sub>[VALUE]</sub></sup><a name="true-function"></a>
 <code><a href="#boolean-type">BOOLEAN</a></code>
 
 ***
 
-#### <code>FALSE</code> <sup><sub>[FUNCTION]</sub></sup><a name="false-function"></a>
+#### <code>FALSE</code> <sup><sub>[VALUE]</sub></sup><a name="false-function"></a>
 <code><a href="#boolean-type">BOOLEAN</a></code>
 
 ***
@@ -464,7 +464,7 @@ Constructors:
 
 ***
 
-### Functions
+### Values
 
 #### <code>NOT</code> <sup><sub>[FUNCTION]</sub></sup><a name="not-function"></a>
 <code>(<a href="#boolean-type">BOOLEAN</a> → <a href="#boolean-type">BOOLEAN</a>)</code>
@@ -946,7 +946,7 @@ Methods:
 
 ***
 
-### Functions
+### Values
 
 #### <code><</code> <sup><sub>[FUNCTION]</sub></sup><a name="<-function"></a>
 <code>∀ :A. <a href="#ord-class">ORD</a> :A ⇒ (:A → :A → <a href="#boolean-type">BOOLEAN</a>)</code>
@@ -1003,7 +1003,7 @@ Returns the lesser element of X and Y.
 
 ## File: [builtin.lisp](../src/library/builtin.lisp)
 
-### Functions
+### Values
 
 #### <code>ERROR</code> <sup><sub>[FUNCTION]</sub></sup><a name="error-function"></a>
 <code>∀ :A. (<a href="#string-type">STRING</a> → :A)</code>
@@ -1023,7 +1023,7 @@ A function which can be used in place of any value, throwing an error at runtime
 
 ## File: [fraction.lisp](../src/library/fraction.lisp)
 
-### Functions
+### Values
 
 #### <code>NUMERATOR</code> <sup><sub>[FUNCTION]</sub></sup><a name="numerator-function"></a>
 <code>(<a href="#fraction-type">FRACTION</a> → <a href="#integer-type">INTEGER</a>)</code>
@@ -1051,7 +1051,7 @@ The denominator of a fraction.
 
 ## File: [arith.lisp](../src/library/arith.lisp)
 
-### Functions
+### Values
 
 #### <code>ABS</code> <sup><sub>[FUNCTION]</sub></sup><a name="abs-function"></a>
 <code>∀ :A. (<a href="#num-class">NUM</a> :A) (<a href="#ord-class">ORD</a> :A) ⇒ (:A → :A)</code>
@@ -1158,7 +1158,7 @@ Round a Single-Float to the nearest Integer.
 
 ## File: [string.lisp](../src/library/string.lisp)
 
-### Functions
+### Values
 
 #### <code>PARSE-INT</code> <sup><sub>[FUNCTION]</sub></sup><a name="parse-int-function"></a>
 <code>(<a href="#string-type">STRING</a> → (<a href="#optional-type">OPTIONAL</a> <a href="#integer-type">INTEGER</a>))</code>
@@ -1202,7 +1202,7 @@ Reverse a string.
 
 ## File: [optional.lisp](../src/library/optional.lisp)
 
-### Functions
+### Values
 
 #### <code>ISNONE</code> <sup><sub>[FUNCTION]</sub></sup><a name="isnone-function"></a>
 <code>∀ :A. ((<a href="#optional-type">OPTIONAL</a> :A) → <a href="#boolean-type">BOOLEAN</a>)</code>
@@ -1230,7 +1230,7 @@ Get the value of OPT, erroring with the provided string if it is None.
 
 ## File: [list.lisp](../src/library/list.lisp)
 
-### Functions
+### Values
 
 #### <code>ALL</code> <sup><sub>[FUNCTION]</sub></sup><a name="all-function"></a>
 <code>∀ :A. ((:A → <a href="#boolean-type">BOOLEAN</a>) → (<a href="#list-type">LIST</a> :A) → <a href="#boolean-type">BOOLEAN</a>)</code>
@@ -1670,7 +1670,7 @@ Break a list into a list of equivalence classes according to an equivalence rela
 
 ## File: [tuple.lisp](../src/library/tuple.lisp)
 
-### Functions
+### Values
 
 #### <code>FST</code> <sup><sub>[FUNCTION]</sub></sup><a name="fst-function"></a>
 <code>∀ :A :B. ((<a href="#tuple-type">TUPLE</a> :A :B) → :A)</code>
@@ -1690,7 +1690,7 @@ Get the second element of a tuple.
 
 ## File: [result.lisp](../src/library/result.lisp)
 
-### Functions
+### Values
 
 #### <code>ISOK</code> <sup><sub>[FUNCTION]</sub></sup><a name="isok-function"></a>
 <code>∀ :A :B. ((<a href="#result-type">RESULT</a> :A :B) → <a href="#boolean-type">BOOLEAN</a>)</code>
@@ -1718,7 +1718,7 @@ Map over the ERR case
 
 ## File: [functions.lisp](../src/library/functions.lisp)
 
-### Functions
+### Values
 
 #### <code>ID</code> <sup><sub>[FUNCTION]</sub></sup><a name="id-function"></a>
 <code>∀ :A. (:A → :A)</code>
@@ -1828,7 +1828,7 @@ Print a line to *STANDARD-OUTPUT* in the form "{STR}: {ITEM}"
 
 ## File: [quantize.lisp](../src/library/quantize.lisp)
 
-### Functions
+### Values
 
 #### <code>FLOOR</code> <sup><sub>[FUNCTION]</sub></sup><a name="floor-function"></a>
 <code>∀ :A. <a href="#quantizable-class">QUANTIZABLE</a> :A ⇒ (:A → <a href="#integer-type">INTEGER</a>)</code>
@@ -1948,7 +1948,7 @@ Constructors:
 
 ***
 
-### Functions
+### Values
 
 #### <code>CELL-READ</code> <sup><sub>[FUNCTION]</sub></sup><a name="cell-read-function"></a>
 <code>∀ :A. ((<a href="#cell-type">CELL</a> :A) → :A)</code>
@@ -2015,7 +2015,7 @@ Constructors:
 
 ***
 
-### Functions
+### Values
 
 #### <code>VECTOR-POP</code> <sup><sub>[FUNCTION]</sub></sup><a name="vector-pop-function"></a>
 <code>∀ :A. ((<a href="#vector-type">VECTOR</a> :A) → (<a href="#optional-type">OPTIONAL</a> :A))</code>
@@ -2237,7 +2237,7 @@ Constructors:
 
 ***
 
-### Functions
+### Values
 
 #### <code>SLICE-SET</code> <sup><sub>[FUNCTION]</sub></sup><a name="slice-set-function"></a>
 <code>∀ :A. (<a href="#integer-type">INTEGER</a> → :A → (<a href="#slice-type">SLICE</a> :A) → <a href="#unit-type">UNIT</a>)</code>
@@ -2337,7 +2337,7 @@ Constructors:
 
 ***
 
-### Functions
+### Values
 
 #### <code>HASHTABLE-GET</code> <sup><sub>[FUNCTION]</sub></sup><a name="hashtable-get-function"></a>
 <code>∀ :A :B. (:A → (<a href="#hashtable-type">HASHTABLE</a> :A :B) → (<a href="#optional-type">OPTIONAL</a> :B))</code>
@@ -2479,7 +2479,7 @@ Constructors:
 
 ***
 
-### Functions
+### Values
 
 #### <code>MAKE-GRAPH</code> <sup><sub>[FUNCTION]</sub></sup><a name="make-graph-function"></a>
 <code>∀ :A :B. (<a href="#unit-type">UNIT</a> → (<a href="#graph-type">GRAPH</a> :A :B))</code>
