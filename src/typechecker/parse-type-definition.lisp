@@ -87,7 +87,8 @@ Returns (TYPE-DEFINITIONS DOCSTRINGS)"
                   :runtime-type (first parsed)
                   :type (second parsed)
                   :enum-repr nil
-                  :newtype nil)))
+                  :newtype nil
+                  :docstring "nil")))
               parsed-tcons))
            (new-env (push-type-environment env new-bindings))
            (parsed-defs (loop :for parsed :in parsed-tcons

@@ -43,12 +43,14 @@
   ;; A type that is a newtype has another Coalton type as it's
   ;; runtime-type instead of a lisp type. This is to avoid issues with
   ;; recursive newtypes.
-  (newtype (required 'newtype)           :type boolean :read-only t))
+  (newtype (required 'newtype)           :type boolean :read-only t)
+
+  (docstring (required 'docstring)       :type (or null string) :read-only t))
 
 (defmethod make-load-form ((self type-entry) &optional env)
   (make-load-form-saving-slots
    self
-   :slot-names '(name runtime-type type enum-repr newtype)
+   :slot-names '(name runtime-type type enum-repr newtype docstring)
    :environment env))
 
 (defmethod coalton-impl/typechecker::kind-of ((entry type-entry))
@@ -74,7 +76,8 @@
             :runtime-type 'cl:boolean
             :type tBoolean
             :enum-repr t
-            :newtype nil))
+            :newtype nil
+            :docstring "Either true or false represented by `t` and `nil` respectively."))
 
           ('coalton:Char
            (type-entry
@@ -82,23 +85,8 @@
             :runtime-type 'cl:character
             :type tChar
             :enum-repr nil
-            :newtype nil))
-
-          ('coalton:I32
-           (type-entry
-            :name 'coalton:I32
-            :runtime-type '(cl:signed-byte 32)
-            :type tI32
-            :enum-repr nil
-            :newtype nil))
-
-          ('coalton:I64
-           (type-entry
-            :name 'coalton:I64
-            :runtime-type '(cl:signed-byte 64)
-            :type tI64
-            :enum-repr nil
-            :newtype nil))
+            :newtype nil
+            :docstring "A single character represented as a `character` type."))
 
           ('coalton:U8
            (type-entry
@@ -106,7 +94,17 @@
             :runtime-type '(cl:unsigned-byte 8)
             :type tU8
             :enum-repr nil
-            :newtype nil))
+            :newtype nil
+            :docstring "Unsigned 8-bit integer. Uses `(unsigned-byte 8)`."))
+
+          ('coalton:U16
+           (type-entry
+            :name 'coalton:U16
+            :runtime-type '(cl:unsigned-byte 16)
+            :type tU16
+            :enum-repr nil
+            :newtype nil
+            :docstring "Unsigned 16-bit integer. Uses `(unsigned-byte 16)`."))
 
           ('coalton:U32
            (type-entry
@@ -114,7 +112,8 @@
             :runtime-type '(cl:unsigned-byte 32)
             :type tU32
             :enum-repr nil
-            :newtype nil))
+            :newtype nil
+            :docstring "Unsigned 32-bit integer. Uses `(unsigned-byte 32)`."))
 
           ('coalton:U64
            (type-entry
@@ -122,7 +121,44 @@
             :runtime-type '(cl:unsigned-byte 64)
             :type tU64
             :enum-repr nil
-            :newtype nil))
+            :newtype nil
+            :docstring "Unsigned 64-bit integer. Uses `(unsigned-byte 64)`."))
+
+          ('coalton:I8
+           (type-entry
+            :name 'coalton:I8
+            :runtime-type '(cl:signed-byte 8)
+            :type tI8
+            :enum-repr nil
+            :newtype nil
+            :docstring "Signed 8-bit integer. Uses `(signed-byte 8)`."))
+
+          ('coalton:I16
+           (type-entry
+            :name 'coalton:I16
+            :runtime-type '(cl:signed-byte 16)
+            :type tI16
+            :enum-repr nil
+            :newtype nil
+            :docstring "Signed 16-bit integer. Uses `(signed-byte 16)`."))
+
+          ('coalton:I32
+           (type-entry
+            :name 'coalton:I32
+            :runtime-type '(cl:signed-byte 32)
+            :type tI32
+            :enum-repr nil
+            :newtype nil
+            :docstring "Signed 32-bit integer. Uses `(signed-byte 32)`."))
+
+          ('coalton:I64
+           (type-entry
+            :name 'coalton:I64
+            :runtime-type '(cl:signed-byte 64)
+            :type tI64
+            :enum-repr nil
+            :newtype nil
+            :docstring "Signed 64-bit integer. Uses `(signed-byte 64)`."))
 
           ('coalton:Integer
            (type-entry
@@ -130,7 +166,8 @@
             :runtime-type 'cl:integer
             :type tInteger
             :enum-repr nil
-            :newtype nil))
+            :newtype nil
+            :docstring "Unbound integer. Uses `integer`."))
 
           ('coalton:Single-Float
            (type-entry
@@ -138,7 +175,8 @@
             :runtime-type 'cl:single-float
             :type tSingle-Float
             :enum-repr nil
-            :newtype nil))
+            :newtype nil
+            :docstring "Single precision floating point numer. Uses `single-float`."))
 
           ('coalton:Double-Float
            (type-entry
@@ -146,7 +184,8 @@
             :runtime-type 'cl:double-float
             :type tDouble-Float
             :enum-repr nil
-            :newtype nil))
+            :newtype nil
+            :docstring "Double precision floating point numer. Uses `double-float`."))
 
           ('coalton:String
            (type-entry
@@ -154,7 +193,8 @@
             :runtime-type 'cl:string
             :type tString
             :enum-repr nil
-            :newtype nil))
+            :newtype nil
+            :docstring "String represented by `string`."))
 
           ('coalton:Lisp-Object
            (type-entry
@@ -162,7 +202,8 @@
             :runtime-type 't
             :type tLisp-Object
             :enum-repr nil
-            :newtype nil))
+            :newtype nil
+            :docstring nil))
 
           ('coalton:Arrow
            (type-entry
@@ -170,7 +211,8 @@
             :runtime-type nil
             :type tArrow
             :enum-repr nil
-            :newtype nil))
+            :newtype nil
+            :docstring nil))
 
           ('coalton:List
            (type-entry
@@ -178,7 +220,8 @@
             :runtime-type 'cl:list
             :type tList
             :enum-repr nil
-            :newtype nil)))))
+            :newtype nil
+            :docstring nil)))))
 
 ;;;
 ;;; Constructor environment

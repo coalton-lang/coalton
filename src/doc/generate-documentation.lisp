@@ -203,7 +203,7 @@
                    (type-entry-type (cdr e))
                    ctors
                    applicable-instances
-                   nil ; TODO: grab type documentation
+                   (type-entry-docstring (cdr e))
                    ;; Here we will assume that all constructors
                    ;; share the same location as the type.
                    (if (first ctors)

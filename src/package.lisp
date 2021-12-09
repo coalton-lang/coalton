@@ -198,6 +198,7 @@
    #:type-entry-type                    ; ACCESSOR
    #:type-entry-enum-repr               ; ACCESSOR
    #:type-entry-newtype                 ; ACCESSOR
+   #:type-entry-docstring               ; ACCESSOR
    #:constructor-entry                  ; STRUCT
    #:constructor-entry-name             ; ACCESSOR
    #:constructor-entry-arity            ; ACCESSOR
@@ -412,11 +413,14 @@
    #:Unit
    #:Boolean #:True #:False
    #:Char
-   #:I32
-   #:I64
    #:U8
+   #:U16
    #:U32
    #:U64
+   #:I8
+   #:I16
+   #:I32
+   #:I64
    #:Integer
    #:Single-Float
    #:Double-Float

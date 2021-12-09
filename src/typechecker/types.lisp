@@ -167,11 +167,14 @@
 
 (defvar tBoolean (%make-tcon (%make-tycon :name 'coalton:Boolean     :kind kstar)))
 (defvar tChar    (%make-tcon (%make-tycon :name 'coalton:Char        :kind kstar)))
-(defvar tI32     (%make-tcon (%make-tycon :name 'coalton:I32         :kind kstar)))
-(defvar tI64     (%make-tcon (%make-tycon :name 'coalton:I64         :kind kstar)))
 (defvar tU8      (%make-tcon (%make-tycon :name 'coalton:U8          :kind kstar)))
+(defvar tU16     (%make-tcon (%make-tycon :name 'coalton:U16         :kind kstar)))
 (defvar tU32     (%make-tcon (%make-tycon :name 'coalton:U32         :kind kstar)))
 (defvar tU64     (%make-tcon (%make-tycon :name 'coalton:U64         :kind kstar)))
+(defvar tI8      (%make-tcon (%make-tycon :name 'coalton:I8          :kind kstar)))
+(defvar tI16     (%make-tcon (%make-tycon :name 'coalton:I16         :kind kstar)))
+(defvar tI32     (%make-tcon (%make-tycon :name 'coalton:I32         :kind kstar)))
+(defvar tI64     (%make-tcon (%make-tycon :name 'coalton:I64         :kind kstar)))
 (defvar tInteger (%make-tcon (%make-tycon :name 'coalton:Integer     :kind kstar)))
 (defvar tSingle-Float
   (%make-tcon (%make-tycon :name 'coalton:Single-Float :kind kstar)))
