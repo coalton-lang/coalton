@@ -21,6 +21,8 @@
                   ,(cl:format cl:nil "Signed value overflowed ~D bits." bits))
        (%unsigned->signed ,bits (cl:mod value ,(cl:expt 2 bits)))))))
 
+(%define-overflow-handler %handle-8bit-overflow 8)
+(%define-overflow-handler %handle-16bit-overflow 16)
 (%define-overflow-handler %handle-32bit-overflow 32)
 (%define-overflow-handler %handle-64bit-overflow 64)
 
@@ -42,17 +44,48 @@
              (cl:t
               EQ)))))))
 
-(%define-number-stuff I32)
-(%define-number-stuff I64)
 (%define-number-stuff U8)
+(%define-number-stuff U16)
 (%define-number-stuff U32)
 (%define-number-stuff U64)
+(%define-number-stuff I8)
+(%define-number-stuff I16)
+(%define-number-stuff I32)
+(%define-number-stuff I64)
 (%define-number-stuff Integer)
 (%define-number-stuff Single-Float)
 (%define-number-stuff Double-Float)
 
 
 (coalton-toplevel
+  (define-instance (Num I8)
+    (define (+ a b)
+      (lisp I8 (a b)
+        (%handle-8bit-overflow (cl:+ a b))))
+    (define (- a b)
+      (lisp I8 (a b)
+        (%handle-8bit-overflow (cl:- a b))))
+    (define (* a b)
+      (lisp I8 (a b)
+        (%handle-8bit-overflow (cl:* a b))))
+    (define (fromInt x)
+      (lisp I8 (x)
+        (%handle-8bit-overflow x))))
+
+  (define-instance (Num I16)
+    (define (+ a b)
+      (lisp I16 (a b)
+        (%handle-16bit-overflow (cl:+ a b))))
+    (define (- a b)
+      (lisp I16 (a b)
+        (%handle-16bit-overflow (cl:- a b))))
+    (define (* a b)
+      (lisp I16 (a b)
+        (%handle-16bit-overflow (cl:* a b))))
+    (define (fromInt x)
+      (lisp I16 (x)
+        (%handle-16bit-overflow x))))
+
   (define-instance (Num I32)
     (define (+ a b)
       (lisp I32 (a b)
@@ -93,6 +126,8 @@
          (lisp Integer (x)
            x)))))
 
+(%define-signed-instances I8  8)
+(%define-signed-instances I16 16)
 (%define-signed-instances I32 32)
 (%define-signed-instances I64 64)
 
@@ -131,7 +166,8 @@
          (lisp Double-Float (x)
            (cl:coerce x 'cl:double-float))))))
 
-(%define-unsigned-num-instance U8   8)
+(%define-unsigned-num-instance U8  8)
+(%define-unsigned-num-instance U16 16)
 (%define-unsigned-num-instance U32 32)
 (%define-unsigned-num-instance U64 64)
 

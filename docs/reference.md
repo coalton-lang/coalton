@@ -7,6 +7,17 @@
 Signed 8-bit integer. Uses `(signed-byte 8)`.
 
 
+<details>
+<summary>Instances</summary>
+
+- <code><a href="#eq-class">EQ</a> <a href="#i8-type">I8</a></code>
+- <code><a href="#num-class">NUM</a> <a href="#i8-type">I8</a></code>
+- <code><a href="#ord-class">ORD</a> <a href="#i8-type">I8</a></code>
+- <code><a href="#into-class">INTO</a> <a href="#i8-type">I8</a> <a href="#integer-type">INTEGER</a></code>
+- <code><a href="#into-class">INTO</a> <a href="#integer-type">INTEGER</a> <a href="#i8-type">I8</a></code>
+
+</details>
+
 
 ***
 
@@ -36,6 +47,17 @@ Unsigned 8-bit integer. Uses `(unsigned-byte 8)`.
 
 Signed 16-bit integer. Uses `(signed-byte 16)`.
 
+
+<details>
+<summary>Instances</summary>
+
+- <code><a href="#eq-class">EQ</a> <a href="#i16-type">I16</a></code>
+- <code><a href="#num-class">NUM</a> <a href="#i16-type">I16</a></code>
+- <code><a href="#ord-class">ORD</a> <a href="#i16-type">I16</a></code>
+- <code><a href="#into-class">INTO</a> <a href="#i16-type">I16</a> <a href="#integer-type">INTEGER</a></code>
+- <code><a href="#into-class">INTO</a> <a href="#integer-type">INTEGER</a> <a href="#i16-type">I16</a></code>
+
+</details>
 
 
 ***
@@ -84,6 +106,19 @@ Signed 64-bit integer. Uses `(signed-byte 64)`.
 
 Unsigned 16-bit integer. Uses `(unsigned-byte 16)`.
 
+
+<details>
+<summary>Instances</summary>
+
+- <code><a href="#eq-class">EQ</a> <a href="#u16-type">U16</a></code>
+- <code><a href="#num-class">NUM</a> <a href="#u16-type">U16</a></code>
+- <code><a href="#ord-class">ORD</a> <a href="#u16-type">U16</a></code>
+- <code><a href="#into-class">INTO</a> <a href="#u16-type">U16</a> <a href="#double-float-type">DOUBLE-FLOAT</a></code>
+- <code><a href="#into-class">INTO</a> <a href="#u16-type">U16</a> <a href="#single-float-type">SINGLE-FLOAT</a></code>
+- <code><a href="#into-class">INTO</a> <a href="#u16-type">U16</a> <a href="#integer-type">INTEGER</a></code>
+- <code><a href="#into-class">INTO</a> <a href="#integer-type">INTEGER</a> <a href="#u16-type">U16</a></code>
+
+</details>
 
 
 ***
@@ -195,12 +230,18 @@ Unbound integer. Uses `integer`.
 - <code><a href="#into-class">INTO</a> <a href="#integer-type">INTEGER</a> <a href="#u64-type">U64</a></code>
 - <code><a href="#into-class">INTO</a> <a href="#u32-type">U32</a> <a href="#integer-type">INTEGER</a></code>
 - <code><a href="#into-class">INTO</a> <a href="#integer-type">INTEGER</a> <a href="#u32-type">U32</a></code>
+- <code><a href="#into-class">INTO</a> <a href="#u16-type">U16</a> <a href="#integer-type">INTEGER</a></code>
+- <code><a href="#into-class">INTO</a> <a href="#integer-type">INTEGER</a> <a href="#u16-type">U16</a></code>
 - <code><a href="#into-class">INTO</a> <a href="#u8-type">U8</a> <a href="#integer-type">INTEGER</a></code>
 - <code><a href="#into-class">INTO</a> <a href="#integer-type">INTEGER</a> <a href="#u8-type">U8</a></code>
 - <code><a href="#into-class">INTO</a> <a href="#i64-type">I64</a> <a href="#integer-type">INTEGER</a></code>
 - <code><a href="#into-class">INTO</a> <a href="#integer-type">INTEGER</a> <a href="#i64-type">I64</a></code>
 - <code><a href="#into-class">INTO</a> <a href="#i32-type">I32</a> <a href="#integer-type">INTEGER</a></code>
 - <code><a href="#into-class">INTO</a> <a href="#integer-type">INTEGER</a> <a href="#i32-type">I32</a></code>
+- <code><a href="#into-class">INTO</a> <a href="#i16-type">I16</a> <a href="#integer-type">INTEGER</a></code>
+- <code><a href="#into-class">INTO</a> <a href="#integer-type">INTEGER</a> <a href="#i16-type">I16</a></code>
+- <code><a href="#into-class">INTO</a> <a href="#i8-type">I8</a> <a href="#integer-type">INTEGER</a></code>
+- <code><a href="#into-class">INTO</a> <a href="#integer-type">INTEGER</a> <a href="#i8-type">I8</a></code>
 - <code><a href="#tryinto-class">TRYINTO</a> <a href="#string-type">STRING</a> <a href="#integer-type">INTEGER</a></code>
 - <code><a href="#dividable-class">DIVIDABLE</a> <a href="#integer-type">INTEGER</a> <a href="#double-float-type">DOUBLE-FLOAT</a></code>
 - <code><a href="#dividable-class">DIVIDABLE</a> <a href="#integer-type">INTEGER</a> <a href="#single-float-type">SINGLE-FLOAT</a></code>
@@ -231,6 +272,7 @@ Double precision floating point numer. Uses `double-float`.
 - <code><a href="#ord-class">ORD</a> <a href="#double-float-type">DOUBLE-FLOAT</a></code>
 - <code><a href="#into-class">INTO</a> <a href="#u64-type">U64</a> <a href="#double-float-type">DOUBLE-FLOAT</a></code>
 - <code><a href="#into-class">INTO</a> <a href="#u32-type">U32</a> <a href="#double-float-type">DOUBLE-FLOAT</a></code>
+- <code><a href="#into-class">INTO</a> <a href="#u16-type">U16</a> <a href="#double-float-type">DOUBLE-FLOAT</a></code>
 - <code><a href="#into-class">INTO</a> <a href="#u8-type">U8</a> <a href="#double-float-type">DOUBLE-FLOAT</a></code>
 - <code><a href="#dividable-class">DIVIDABLE</a> <a href="#integer-type">INTEGER</a> <a href="#double-float-type">DOUBLE-FLOAT</a></code>
 - <code><a href="#dividable-class">DIVIDABLE</a> <a href="#double-float-type">DOUBLE-FLOAT</a> <a href="#double-float-type">DOUBLE-FLOAT</a></code>
@@ -254,6 +296,7 @@ Single precision floating point numer. Uses `single-float`.
 - <code><a href="#ord-class">ORD</a> <a href="#single-float-type">SINGLE-FLOAT</a></code>
 - <code><a href="#into-class">INTO</a> <a href="#u64-type">U64</a> <a href="#single-float-type">SINGLE-FLOAT</a></code>
 - <code><a href="#into-class">INTO</a> <a href="#u32-type">U32</a> <a href="#single-float-type">SINGLE-FLOAT</a></code>
+- <code><a href="#into-class">INTO</a> <a href="#u16-type">U16</a> <a href="#single-float-type">SINGLE-FLOAT</a></code>
 - <code><a href="#into-class">INTO</a> <a href="#u8-type">U8</a> <a href="#single-float-type">SINGLE-FLOAT</a></code>
 - <code><a href="#dividable-class">DIVIDABLE</a> <a href="#integer-type">INTEGER</a> <a href="#single-float-type">SINGLE-FLOAT</a></code>
 - <code><a href="#dividable-class">DIVIDABLE</a> <a href="#single-float-type">SINGLE-FLOAT</a> <a href="#single-float-type">SINGLE-FLOAT</a></code>
@@ -623,11 +666,14 @@ Methods:
 
 - <code><a href="#eq-class">EQ</a> <a href="#ord-type">ORD</a></code>
 - <code><a href="#eq-class">EQ</a> <a href="#boolean-type">BOOLEAN</a></code>
-- <code><a href="#eq-class">EQ</a> <a href="#i32-type">I32</a></code>
-- <code><a href="#eq-class">EQ</a> <a href="#i64-type">I64</a></code>
 - <code><a href="#eq-class">EQ</a> <a href="#u8-type">U8</a></code>
+- <code><a href="#eq-class">EQ</a> <a href="#u16-type">U16</a></code>
 - <code><a href="#eq-class">EQ</a> <a href="#u32-type">U32</a></code>
 - <code><a href="#eq-class">EQ</a> <a href="#u64-type">U64</a></code>
+- <code><a href="#eq-class">EQ</a> <a href="#i8-type">I8</a></code>
+- <code><a href="#eq-class">EQ</a> <a href="#i16-type">I16</a></code>
+- <code><a href="#eq-class">EQ</a> <a href="#i32-type">I32</a></code>
+- <code><a href="#eq-class">EQ</a> <a href="#i64-type">I64</a></code>
 - <code><a href="#eq-class">EQ</a> <a href="#integer-type">INTEGER</a></code>
 - <code><a href="#eq-class">EQ</a> <a href="#single-float-type">SINGLE-FLOAT</a></code>
 - <code><a href="#eq-class">EQ</a> <a href="#double-float-type">DOUBLE-FLOAT</a></code>
@@ -666,9 +712,12 @@ Methods:
 <details>
 <summary>Instances</summary>
 
+- <code><a href="#num-class">NUM</a> <a href="#i8-type">I8</a></code>
+- <code><a href="#num-class">NUM</a> <a href="#i16-type">I16</a></code>
 - <code><a href="#num-class">NUM</a> <a href="#i32-type">I32</a></code>
 - <code><a href="#num-class">NUM</a> <a href="#i64-type">I64</a></code>
 - <code><a href="#num-class">NUM</a> <a href="#u8-type">U8</a></code>
+- <code><a href="#num-class">NUM</a> <a href="#u16-type">U16</a></code>
 - <code><a href="#num-class">NUM</a> <a href="#u32-type">U32</a></code>
 - <code><a href="#num-class">NUM</a> <a href="#u64-type">U64</a></code>
 - <code><a href="#num-class">NUM</a> <a href="#integer-type">INTEGER</a></code>
@@ -694,11 +743,14 @@ Methods:
 <summary>Instances</summary>
 
 - <code><a href="#ord-class">ORD</a> <a href="#boolean-type">BOOLEAN</a></code>
-- <code><a href="#ord-class">ORD</a> <a href="#i32-type">I32</a></code>
-- <code><a href="#ord-class">ORD</a> <a href="#i64-type">I64</a></code>
 - <code><a href="#ord-class">ORD</a> <a href="#u8-type">U8</a></code>
+- <code><a href="#ord-class">ORD</a> <a href="#u16-type">U16</a></code>
 - <code><a href="#ord-class">ORD</a> <a href="#u32-type">U32</a></code>
 - <code><a href="#ord-class">ORD</a> <a href="#u64-type">U64</a></code>
+- <code><a href="#ord-class">ORD</a> <a href="#i8-type">I8</a></code>
+- <code><a href="#ord-class">ORD</a> <a href="#i16-type">I16</a></code>
+- <code><a href="#ord-class">ORD</a> <a href="#i32-type">I32</a></code>
+- <code><a href="#ord-class">ORD</a> <a href="#i64-type">I64</a></code>
 - <code><a href="#ord-class">ORD</a> <a href="#integer-type">INTEGER</a></code>
 - <code><a href="#ord-class">ORD</a> <a href="#single-float-type">SINGLE-FLOAT</a></code>
 - <code><a href="#ord-class">ORD</a> <a href="#double-float-type">DOUBLE-FLOAT</a></code>
@@ -726,6 +778,10 @@ Methods:
 <summary>Instances</summary>
 
 - <code><a href="#into-class">INTO</a> :A :A</code>
+- <code><a href="#into-class">INTO</a> <a href="#integer-type">INTEGER</a> <a href="#i8-type">I8</a></code>
+- <code><a href="#into-class">INTO</a> <a href="#i8-type">I8</a> <a href="#integer-type">INTEGER</a></code>
+- <code><a href="#into-class">INTO</a> <a href="#integer-type">INTEGER</a> <a href="#i16-type">I16</a></code>
+- <code><a href="#into-class">INTO</a> <a href="#i16-type">I16</a> <a href="#integer-type">INTEGER</a></code>
 - <code><a href="#into-class">INTO</a> <a href="#integer-type">INTEGER</a> <a href="#i32-type">I32</a></code>
 - <code><a href="#into-class">INTO</a> <a href="#i32-type">I32</a> <a href="#integer-type">INTEGER</a></code>
 - <code><a href="#into-class">INTO</a> <a href="#integer-type">INTEGER</a> <a href="#i64-type">I64</a></code>
@@ -734,6 +790,10 @@ Methods:
 - <code><a href="#into-class">INTO</a> <a href="#u8-type">U8</a> <a href="#integer-type">INTEGER</a></code>
 - <code><a href="#into-class">INTO</a> <a href="#u8-type">U8</a> <a href="#single-float-type">SINGLE-FLOAT</a></code>
 - <code><a href="#into-class">INTO</a> <a href="#u8-type">U8</a> <a href="#double-float-type">DOUBLE-FLOAT</a></code>
+- <code><a href="#into-class">INTO</a> <a href="#integer-type">INTEGER</a> <a href="#u16-type">U16</a></code>
+- <code><a href="#into-class">INTO</a> <a href="#u16-type">U16</a> <a href="#integer-type">INTEGER</a></code>
+- <code><a href="#into-class">INTO</a> <a href="#u16-type">U16</a> <a href="#single-float-type">SINGLE-FLOAT</a></code>
+- <code><a href="#into-class">INTO</a> <a href="#u16-type">U16</a> <a href="#double-float-type">DOUBLE-FLOAT</a></code>
 - <code><a href="#into-class">INTO</a> <a href="#integer-type">INTEGER</a> <a href="#u32-type">U32</a></code>
 - <code><a href="#into-class">INTO</a> <a href="#u32-type">U32</a> <a href="#integer-type">INTEGER</a></code>
 - <code><a href="#into-class">INTO</a> <a href="#u32-type">U32</a> <a href="#single-float-type">SINGLE-FLOAT</a></code>
