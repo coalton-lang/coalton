@@ -148,7 +148,7 @@
 
       ;; Print value information
       (when value-entries
-        (format stream "### Functions~%~%")
+        (format stream "### Values~%~%")
 
         (dolist (entry value-entries)
           (write-documentation backend stream entry)
@@ -233,10 +233,11 @@
   (with-slots (name type documentation location)
       object
 
-    (format stream "#### <code>~A</code> <sup><sub>[FUNCTION]</sub></sup><a name=\"~:*~(~A-function~)\"></a>~%" name)
+    (let ((function-type? (function-type-p type)))
+      (format stream "#### <code>~A</code> <sup><sub>[~:[VALUE~;FUNCTION~]~:*]</sub></sup><a name=\"~:*~(~A-function~)\"></a>~%" name function-type?)
 
-    (with-pprint-variable-context ()
-      (format stream "<code>~A</code>~%" (to-markdown type)))
+      (with-pprint-variable-context ()
+        (format stream "<code>~A</code>~%" (to-markdown type)))
 
-    (when documentation
-      (format stream "~%~A~%~%" documentation))))
+      (when documentation
+        (format stream "~%~A~%~%" documentation)))))
