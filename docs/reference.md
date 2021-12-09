@@ -4,7 +4,7 @@
 
 #### <code>I8</code> <sup><sub>[TYPE]</sub></sup><a name="i8-type"></a>
 
-Signed 8-bit integer. Uses `(signed-byte 8)`.
+Signed 8-bit integer capable of storing values in `[-128, 127]`. Uses `(signed-byte 8)`.
 
 
 <details>
@@ -23,7 +23,7 @@ Signed 8-bit integer. Uses `(signed-byte 8)`.
 
 #### <code>U8</code> <sup><sub>[TYPE]</sub></sup><a name="u8-type"></a>
 
-Unsigned 8-bit integer. Uses `(unsigned-byte 8)`.
+Unsigned 8-bit integer capable of storing values in `[0, 255]`. Uses `(unsigned-byte 8)`.
 
 
 <details>
@@ -45,7 +45,7 @@ Unsigned 8-bit integer. Uses `(unsigned-byte 8)`.
 
 #### <code>I16</code> <sup><sub>[TYPE]</sub></sup><a name="i16-type"></a>
 
-Signed 16-bit integer. Uses `(signed-byte 16)`.
+Signed 16-bit integer capable of storing values in `[-32768, 32767]`. Uses `(signed-byte 16)`.
 
 
 <details>
@@ -64,7 +64,7 @@ Signed 16-bit integer. Uses `(signed-byte 16)`.
 
 #### <code>I32</code> <sup><sub>[TYPE]</sub></sup><a name="i32-type"></a>
 
-Signed 32-bit integer. Uses `(signed-byte 32)`.
+Signed 32-bit integer capable of storing values in `[-2147483648, 2147483647]`. Uses `(signed-byte 32)`.
 
 
 <details>
@@ -84,7 +84,7 @@ Signed 32-bit integer. Uses `(signed-byte 32)`.
 
 #### <code>I64</code> <sup><sub>[TYPE]</sub></sup><a name="i64-type"></a>
 
-Signed 64-bit integer. Uses `(signed-byte 64)`.
+Signed 64-bit integer capable of storing values in `[-9223372036854775808, 9223372036854775807]`. Uses `(signed-byte 64)`.
 
 
 <details>
@@ -104,7 +104,7 @@ Signed 64-bit integer. Uses `(signed-byte 64)`.
 
 #### <code>U16</code> <sup><sub>[TYPE]</sub></sup><a name="u16-type"></a>
 
-Unsigned 16-bit integer. Uses `(unsigned-byte 16)`.
+Unsigned 16-bit integer capable of storing values in `[0, 65535]`. Uses `(unsigned-byte 16)`.
 
 
 <details>
@@ -125,7 +125,7 @@ Unsigned 16-bit integer. Uses `(unsigned-byte 16)`.
 
 #### <code>U32</code> <sup><sub>[TYPE]</sub></sup><a name="u32-type"></a>
 
-Unsigned 32-bit integer. Uses `(unsigned-byte 32)`.
+Unsigned 32-bit integer capable of storing values in `[0, 4294967295]`. Uses `(unsigned-byte 32)`.
 
 
 <details>
@@ -147,7 +147,7 @@ Unsigned 32-bit integer. Uses `(unsigned-byte 32)`.
 
 #### <code>U64</code> <sup><sub>[TYPE]</sub></sup><a name="u64-type"></a>
 
-Unsigned 64-bit integer. Uses `(unsigned-byte 64)`.
+Unsigned 64-bit integer capable of storing values in `[0, 18446744073709551615]`. Uses `(unsigned-byte 64)`.
 
 
 <details>
@@ -185,13 +185,15 @@ A single character represented as a `character` type.
 
 #### <code>ARROW :A :B</code> <sup><sub>[TYPE]</sub></sup><a name="arrow-type"></a>
 
+Type constructor for function types. `(Arrow :a :b)` is equivalent to `(:a -> :b)`.
+
 
 
 ***
 
 #### <code>STRING</code> <sup><sub>[TYPE]</sub></sup><a name="string-type"></a>
 
-String represented by `string`.
+String of characters represented by Common Lisp `string`.
 
 
 <details>
@@ -255,6 +257,8 @@ Unbound integer. Uses `integer`.
 
 #### <code>LISP-OBJECT</code> <sup><sub>[TYPE]</sub></sup><a name="lisp-object-type"></a>
 
+Opaque container for arbitrary lisp objects. At runtime this is equivalent to the type `t`.
+
 
 
 ***
@@ -314,6 +318,8 @@ Single precision floating point numer. Uses `single-float`.
 #### <code>LIST :A</code> <sup><sub>[TYPE]</sub></sup><a name="list-type"></a>
 - <code>CONS</code>
 - <code>NIL</code>
+
+Homogeneous list of objects represented as a Common Lisp `list`.
 
 Constructors:
 - <code>CONS :: (<a href="#list-type">LIST</a> :B)</code>
