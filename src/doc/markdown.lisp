@@ -155,10 +155,8 @@
           (format stream "~%***~%~%"))))))
 
 (defmethod write-documentation ((backend (eql ':markdown)) stream (object documentation-type-entry))
-  (let ((name (documentation-entry-name object))
-        (type (documentation-type-entry-type object))
-        (ctors (documentation-type-entry-constructors object))
-        (instances (documentation-type-entry-instances object)))
+  (with-slots (name type constructors instances documentation)
+      object
     (let ((type-vars
             (loop :for i :below (coalton-impl/typechecker::kind-arity
                                  (coalton-impl/typechecker::kind-of type))
@@ -168,7 +166,7 @@
                 "#### <code>~A~{ ~A~}</code> <sup><sub>[TYPE]</sub></sup><a name=\"~(~A-type~)\"></a>~%"
                 name type-vars name)
 
-        (loop :for (ctor-name . entry) :in ctors :do
+        (loop :for (ctor-name . entry) :in constructors :do
           (let ((args (coalton-impl/typechecker::function-type-arguments
                        (coalton-impl/typechecker::qualified-ty-type
                         (coalton-impl/typechecker::instantiate
@@ -179,14 +177,13 @@
                 (format stream "- <code>(~A~{ ~A~})</code>~%" ctor-name (mapcar #'to-markdown args))
                 (format stream "- <code>~A</code>~%" ctor-name))))
 
-        (let ((docs (documentation name 'type)))
-          (when docs
-            (format stream "~%~A~%" docs)))
+        (when documentation
+          (format stream "~%~A~%" documentation))
         (format stream "~%")
 
-        (when ctors
+        (when constructors
           (format stream "Constructors:~%"))
-        (loop :for (ctor-name . entry) :in ctors :do
+        (loop :for (ctor-name . entry) :in constructors :do
           (format stream "- <code>~A :: ~A</code>~%"
                   ctor-name
                   (to-markdown

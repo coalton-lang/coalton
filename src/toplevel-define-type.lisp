@@ -28,7 +28,8 @@
     (dolist (parsed-deftype parsed-deftypes)
       (let* ((type-name (type-definition-name parsed-deftype))
              (tycon (type-definition-type parsed-deftype))
-             (ctors (type-definition-constructors parsed-deftype)))
+             (ctors (type-definition-constructors parsed-deftype))
+             (docstring-entry (find type-name parsed-docstrings :key #'first)))
 
         ;; Add the type to the type environment
         (setf
@@ -41,7 +42,9 @@
            :runtime-type (type-definition-runtime-type parsed-deftype)
            :type tycon
            :enum-repr (type-definition-enum-repr parsed-deftype)
-           :newtype (type-definition-newtype parsed-deftype))))
+           :newtype (type-definition-newtype parsed-deftype)
+           :docstring (when docstring-entry
+                        (second docstring-entry)))))
 
         (dolist (ctor ctors)
           ;; Add the constructors to the constructor environment

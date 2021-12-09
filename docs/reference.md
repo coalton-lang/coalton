@@ -2,7 +2,17 @@
 
 ### Types
 
+#### <code>I8</code> <sup><sub>[TYPE]</sub></sup><a name="i8-type"></a>
+
+Signed 8-bit integer. Uses `(signed-byte 8)`.
+
+
+
+***
+
 #### <code>U8</code> <sup><sub>[TYPE]</sub></sup><a name="u8-type"></a>
+
+Unsigned 8-bit integer. Uses `(unsigned-byte 8)`.
 
 
 <details>
@@ -22,7 +32,17 @@
 
 ***
 
+#### <code>I16</code> <sup><sub>[TYPE]</sub></sup><a name="i16-type"></a>
+
+Signed 16-bit integer. Uses `(signed-byte 16)`.
+
+
+
+***
+
 #### <code>I32</code> <sup><sub>[TYPE]</sub></sup><a name="i32-type"></a>
+
+Signed 32-bit integer. Uses `(signed-byte 32)`.
 
 
 <details>
@@ -42,6 +62,8 @@
 
 #### <code>I64</code> <sup><sub>[TYPE]</sub></sup><a name="i64-type"></a>
 
+Signed 64-bit integer. Uses `(signed-byte 64)`.
+
 
 <details>
 <summary>Instances</summary>
@@ -58,7 +80,17 @@
 
 ***
 
+#### <code>U16</code> <sup><sub>[TYPE]</sub></sup><a name="u16-type"></a>
+
+Unsigned 16-bit integer. Uses `(unsigned-byte 16)`.
+
+
+
+***
+
 #### <code>U32</code> <sup><sub>[TYPE]</sub></sup><a name="u32-type"></a>
+
+Unsigned 32-bit integer. Uses `(unsigned-byte 32)`.
 
 
 <details>
@@ -80,6 +112,8 @@
 
 #### <code>U64</code> <sup><sub>[TYPE]</sub></sup><a name="u64-type"></a>
 
+Unsigned 64-bit integer. Uses `(unsigned-byte 64)`.
+
 
 <details>
 <summary>Instances</summary>
@@ -99,6 +133,8 @@
 ***
 
 #### <code>CHAR</code> <sup><sub>[TYPE]</sub></sup><a name="char-type"></a>
+
+A single character represented as a `character` type.
 
 
 <details>
@@ -120,6 +156,8 @@
 
 #### <code>STRING</code> <sup><sub>[TYPE]</sub></sup><a name="string-type"></a>
 
+String represented by `string`.
+
 
 <details>
 <summary>Instances</summary>
@@ -140,6 +178,8 @@
 ***
 
 #### <code>INTEGER</code> <sup><sub>[TYPE]</sub></sup><a name="integer-type"></a>
+
+Unbound integer. Uses `integer`.
 
 
 <details>
@@ -180,6 +220,8 @@
 
 #### <code>DOUBLE-FLOAT</code> <sup><sub>[TYPE]</sub></sup><a name="double-float-type"></a>
 
+Double precision floating point numer. Uses `double-float`.
+
 
 <details>
 <summary>Instances</summary>
@@ -200,6 +242,8 @@
 ***
 
 #### <code>SINGLE-FLOAT</code> <sup><sub>[TYPE]</sub></sup><a name="single-float-type"></a>
+
+Single precision floating point numer. Uses `single-float`.
 
 
 <details>
@@ -266,6 +310,8 @@ Constructors:
 #### <code>BOOLEAN</code> <sup><sub>[TYPE]</sub></sup><a name="boolean-type"></a>
 - <code>FALSE</code>
 - <code>TRUE</code>
+
+Either true or false represented by `t` and `nil` respectively.
 
 Constructors:
 - <code>FALSE :: <a href="#boolean-type">BOOLEAN</a></code>
