@@ -1,10 +1,7 @@
 (in-package #:coalton-impl/doc)
 
-;;;
-;;; This is the beginning of the end
-;;;
-
-(defstruct documentation-entry
+(defstruct (documentation-entry
+            (:constructor nil))
   (name (required 'name) :type symbol)
   (documentation nil :type (or null string))
   location)

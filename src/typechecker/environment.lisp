@@ -95,7 +95,7 @@
             :type tU8
             :enum-repr nil
             :newtype nil
-            :docstring "Unsigned 8-bit integer. Uses `(unsigned-byte 8)`."))
+            :docstring "Unsigned 8-bit integer capable of storing values in `[0, 255]`. Uses `(unsigned-byte 8)`."))
 
           ('coalton:U16
            (type-entry
@@ -104,7 +104,7 @@
             :type tU16
             :enum-repr nil
             :newtype nil
-            :docstring "Unsigned 16-bit integer. Uses `(unsigned-byte 16)`."))
+            :docstring "Unsigned 16-bit integer capable of storing values in `[0, 65535]`. Uses `(unsigned-byte 16)`."))
 
           ('coalton:U32
            (type-entry
@@ -113,7 +113,7 @@
             :type tU32
             :enum-repr nil
             :newtype nil
-            :docstring "Unsigned 32-bit integer. Uses `(unsigned-byte 32)`."))
+            :docstring "Unsigned 32-bit integer capable of storing values in `[0, 4294967295]`. Uses `(unsigned-byte 32)`."))
 
           ('coalton:U64
            (type-entry
@@ -122,7 +122,7 @@
             :type tU64
             :enum-repr nil
             :newtype nil
-            :docstring "Unsigned 64-bit integer. Uses `(unsigned-byte 64)`."))
+            :docstring "Unsigned 64-bit integer capable of storing values in `[0, 18446744073709551615]`. Uses `(unsigned-byte 64)`."))
 
           ('coalton:I8
            (type-entry
@@ -131,7 +131,7 @@
             :type tI8
             :enum-repr nil
             :newtype nil
-            :docstring "Signed 8-bit integer. Uses `(signed-byte 8)`."))
+            :docstring "Signed 8-bit integer capable of storing values in `[-128, 127]`. Uses `(signed-byte 8)`."))
 
           ('coalton:I16
            (type-entry
@@ -140,7 +140,7 @@
             :type tI16
             :enum-repr nil
             :newtype nil
-            :docstring "Signed 16-bit integer. Uses `(signed-byte 16)`."))
+            :docstring "Signed 16-bit integer capable of storing values in `[-32768, 32767]`. Uses `(signed-byte 16)`."))
 
           ('coalton:I32
            (type-entry
@@ -149,7 +149,7 @@
             :type tI32
             :enum-repr nil
             :newtype nil
-            :docstring "Signed 32-bit integer. Uses `(signed-byte 32)`."))
+            :docstring "Signed 32-bit integer capable of storing values in `[-2147483648, 2147483647]`. Uses `(signed-byte 32)`."))
 
           ('coalton:I64
            (type-entry
@@ -158,7 +158,7 @@
             :type tI64
             :enum-repr nil
             :newtype nil
-            :docstring "Signed 64-bit integer. Uses `(signed-byte 64)`."))
+            :docstring "Signed 64-bit integer capable of storing values in `[-9223372036854775808, 9223372036854775807]`. Uses `(signed-byte 64)`."))
 
           ('coalton:Integer
            (type-entry
@@ -194,7 +194,7 @@
             :type tString
             :enum-repr nil
             :newtype nil
-            :docstring "String represented by `string`."))
+            :docstring "String of characters represented by Common Lisp `string`."))
 
           ('coalton:Lisp-Object
            (type-entry
@@ -203,7 +203,7 @@
             :type tLisp-Object
             :enum-repr nil
             :newtype nil
-            :docstring nil))
+            :docstring "Opaque container for arbitrary lisp objects. At runtime this is equivalent to the type `t`."))
 
           ('coalton:Arrow
            (type-entry
@@ -212,7 +212,7 @@
             :type tArrow
             :enum-repr nil
             :newtype nil
-            :docstring nil))
+            :docstring "Type constructor for function types. `(Arrow :a :b)` is equivalent to `(:a -> :b)`."))
 
           ('coalton:List
            (type-entry
@@ -221,7 +221,7 @@
             :type tList
             :enum-repr nil
             :newtype nil
-            :docstring nil)))))
+            :docstring "Homogeneous list of objects represented as a Common Lisp `list`.")))))
 
 ;;;
 ;;; Constructor environment
