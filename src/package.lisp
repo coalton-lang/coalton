@@ -405,6 +405,9 @@
    #:define-class
    #:define-instance
    #:repr)
+  (:export
+   #:syntax
+   #:enable-coalton-toplevel-file)
   ;; Early Types
   (:export
    #:-> #:→

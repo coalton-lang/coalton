@@ -11,7 +11,8 @@
                #:fset
                #:float-features
                #:split-sequence
-               #:uiop)
+               #:uiop
+               #:named-readtables)
   :in-order-to ((asdf:test-op (asdf:test-op #:coalton/tests)))
   :around-compile (lambda (compile)
                     (let (#+sbcl (sb-ext:*derive-function-types* t))
