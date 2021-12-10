@@ -137,6 +137,6 @@ and wrap in a COALTON-TOPLEVEL block."
   (:merge :standard)
   (:macro-char #\( #'read-coalton-toplevel-form))
 
-(defun coalton:enable-coalton-toplevel-file ()
+(defmacro coalton:enable-coalton-toplevel-file ()
   "Enables the coalton readtable to read the file as a coalton toplevel form."
-  (named-readtables:in-readtable coalton:syntax))
+  `(named-readtables:in-readtable coalton:syntax))
