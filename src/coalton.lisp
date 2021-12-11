@@ -9,7 +9,8 @@
 ;;; be generated at macroexpansion time of the ambient Common Lisp
 ;;; compiler. See the COALTON macro.
 
-(define-global-var **toplevel-operators** '(coalton:coalton-toplevel))
+(define-global-var **toplevel-operators** '(coalton:coalton-toplevel
+                                            coalton-library:progn))
 (define-global-var **special-operators** `(,@**toplevel-operators**
                                            coalton:define
                                            coalton:define-type
