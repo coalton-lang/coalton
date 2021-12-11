@@ -98,7 +98,7 @@ Returns (VALUES type predicate-list typed-node subs)")
               (values ret-ty
                       preds
                       (typed-node-application
-                       (to-scheme (qualify (reduce-context env preds) ret-ty))
+                       (to-scheme (qualify (reduce-context env preds substs) ret-ty))
                        (node-unparsed value)
                        typed-rator
                        (reverse typed-rands))
@@ -232,12 +232,7 @@ Returns (VALUES type predicate-list typed-node subs)")
 
         (let* ((subs_ (match (apply-substitution subs type) declared-type))
                (subs (compose-substitution-lists subs_ subs))
-               (preds_ (reduce-context env (apply-substitution subs preds))))
-
-          (unless (subsetp preds_ declared-preds :test #'equalp)
-            (error 'declared-type-missing-predicates
-                   :preds (set-difference preds_ declared-preds :test #'equalp)
-                   :type declared-scheme))
+               (preds_ (reduce-context env preds subs)))
 
           (unless (subsetp declared-preds preds_ :test #'equalp)
             (error 'declared-type-additional-predicates
@@ -505,7 +500,7 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                                           :test #'equalp)) ; gs
              )
         (multiple-value-bind (deferred-preds retained-preds)
-            (split-context env env-tvars expr-preds)
+            (split-context env env-tvars expr-preds local-subs)
           (labels ((restricted (bindings)
                      (some (lambda (b) (not (coalton-impl/ast::node-abstraction-p (cdr b))))
                            bindings)))
@@ -597,10 +592,10 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
              (output-scheme (quantify local-tvars output-qual-type))
              (reduced-preds (remove-if-not (lambda (p)
                                              (not (entail env expr-preds p)))
-                                           (apply-substitution local-subs preds))))
+                                       (apply-substitution local-subs preds))))
 
         (multiple-value-bind (deferred-preds retained-preds)
-            (split-context env env-tvars reduced-preds)
+            (split-context env env-tvars reduced-preds local-subs)
 
           ;; Make sure the declared scheme is not too general
           (when (not (equalp output-scheme declared-ty))

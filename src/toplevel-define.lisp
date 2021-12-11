@@ -121,7 +121,7 @@ Returns new environment, binding list of declared nodes, a DAG of dependencies, 
         (dolist (b typed-bindings)
           (let* ((type (coalton-impl/typechecker::fresh-inst (lookup-value-type env (car b))))
 
-                 (preds (reduce-context env (coalton-impl/typechecker::qualified-ty-predicates type))))
+                 (preds (reduce-context env (coalton-impl/typechecker::qualified-ty-predicates type) subs)))
             (when (and (not (gethash (car b) declared-types))
                        (not (coalton-impl/typechecker::typed-node-abstraction-p (cdr b)))
                        (not (null preds)))

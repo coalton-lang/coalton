@@ -133,7 +133,7 @@
           (derive-expression-type parsed-form *global-environment* nil)
         (let* ((env (coalton-impl/typechecker::apply-substitution substs *global-environment*))
                (preds (coalton-impl/typechecker::apply-substitution substs preds))
-               (preds (coalton-impl/typechecker::reduce-context env preds))
+               (preds (coalton-impl/typechecker::reduce-context env preds substs))
                (typed-node (coalton-impl/typechecker::apply-substitution substs typed-node))
                (type (coalton-impl/typechecker::apply-substitution substs type))
                (qual-type (coalton-impl/typechecker::qualify preds type))
