@@ -1,12 +1,11 @@
 LISP_CACHE ?= $(HOME)/.cache/common-lisp
-RIGETTI_LISP_LIBRARY_HOME=../
 SBCL_BIN=sbcl
 SBCL=$(SBCL_BIN) --noinform --no-userinit --no-sysinit --non-interactive
 QUICKLISP_HOME=$(HOME)/quicklisp
 QUICKLISP_SETUP=$(QUICKLISP_HOME)/setup.lisp
 QUICKLISP=$(SBCL) --load $(QUICKLISP_HOME)/setup.lisp \
 	--eval '(push (truename ".") asdf:*central-registry*)' \
-	--eval "(push (truename \"$(RIGETTI_LISP_LIBRARY_HOME)\") ql:*local-project-directories*)"
+	--eval "(push (truename \"../\") ql:*local-project-directories*)"
 
 .PHONY: test test-safe
 test:
