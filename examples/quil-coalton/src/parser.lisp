@@ -2,14 +2,14 @@
 
 (coalton-toplevel
   (define-type ParseError
-    (Error String)
+    (ParseError String)
     (Context String ParseError))
 
-  (define parse-error-eof (Error "EOF"))
+  (define parse-error-eof (ParseError "EOF"))
 
   (declare incomplete-parse-error (String -> ParseError))
   (define (incomplete-parse-error str)
-    (Error (lisp String (str) (cl:format cl:nil "Parser did not complete: ~A" str))))
+    (ParseError (lisp String (str) (cl:format cl:nil "Parser did not complete: ~A" str))))
 
   (define-type (Parser :a)
     (Parser (StringView -> (Result ParseError (Tuple :a StringView)))))
@@ -56,10 +56,4 @@
   (define (const-value x)
     (Parser
      (fn (str)
-       (Ok (Tuple x str)))))
-
-  (declare pfail (String -> (Parser :a)))
-  (define (pfail s)
-    (Parser
-     (fn (str)
-       (Err (Error s))))))
+       (Ok (Tuple x str))))))

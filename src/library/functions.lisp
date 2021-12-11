@@ -93,4 +93,4 @@
   (declare asum (Alternative :f => ((List (:f :a)) -> (:f :a))))
   (define (asum xs)
     "Fold over a list using alt"
-    (fold alt empty xs)))
+    (foldr alt empty xs)))

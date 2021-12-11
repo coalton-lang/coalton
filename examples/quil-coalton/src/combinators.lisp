@@ -19,7 +19,7 @@
 
   (declare many1 ((Parser :a) -> (Parser (List :a))))
   (define (many1 p)
-    (and-then (fn (a) (map1 (Cons a) (many0 p))) p))
+    (>>= p (fn (a) (map (Cons a) (many0 p)))))
 
   (declare option ((Parser :a) -> (Parser (Optional :a))))
   (define (option p_)
@@ -30,74 +30,68 @@
            ((Ok (Tuple a str)) (Ok (Tuple (Some a) str)))
            ((Err _) (Ok (Tuple None str))))))))
 
-  (declare alt ((Parser :a) -> ((Parser :a) -> (Parser :a))))
-  (define (alt p1_ p2_)
-    (let ((p1 (get-parser p1_))
-          (p2 (get-parser p2_)))
-      (Parser
-       (fn (str)
-         (match (p1 str)
-           ((Ok (Tuple a str))
-            (Ok (Tuple a str)))
-           ((Err _)
-            (match (p2 str)
-              ((Err e) (Err e))
-              ((Ok (Tuple b str))
-               (Ok (Tuple b str))))))))))
-
-  (declare alt* ((List (Parser :a)) -> (Parser :a)))
-  (define (alt* ps)
-    (match ps
-      ((Cons x (Nil)) x)
-      ((Cons x xs) (alt x (alt* xs)))
-      ((Nil) (pfail "Input did not match any pattern in alt*"))))
-
   (declare verify ((:a -> Boolean) -> ((Parser :a) -> (Parser :a))))
   (define (verify f p)
-    (and-then
-     (fn (x)
-       (match (f x)
-         ((True) (const-value x))
-         ((False) (pfail "Validation failed"))))
-     p))
+    (>>= p
+         (fn (x)
+           (match (f x)
+             ((True) (const-value x))
+             ((False) (fail "Validation failed"))))))
 
-  (declare and-then ((:a -> (Parser :b)) -> ((Parser :a) -> (Parser :b))))
-  (define (and-then f p_)
-    (let ((p (get-parser p_)))
+  (define-instance (Functor Parser)
+    (define (map f p_)
+      (let ((p (get-parser p_)))
+        (Parser
+         (fn (str)
+           (match (p str)
+             ((Err e) (Err e))
+             ((Ok (Tuple a str))
+              (Ok (Tuple (f a) str)))))))))
+
+  (define-instance (Applicative Parser)
+    (define pure const-value) 
+    (define (liftA2 f a b)
+      (do
+       (a <- a)
+       (b <- b)
+        (pure (f a b)))))
+
+  (define-instance (Monad Parser)
+    (define (>>= p_ f)
+      (let ((p (get-parser p_)))
+        (Parser
+         (fn (str)
+           (match (p str)
+             ((Err e) (Err e))
+             ((Ok (Tuple a str))
+              ((get-parser (f a)) str)))))))
+    (define (>> a b)
+      (>>= a (const b))))
+
+  (define-instance (MonadFail Parser)
+    (define (fail s)
       (Parser
        (fn (str)
-         (match (p str)
-           ((Err e) (Err e))
-           ((Ok (Tuple a str))
-            ((get-parser (f a)) str)))))))
+         (Err (ParseError s))))))
 
-;;;
-;;; Mapping parser output
-;;;
-
-  (declare map1 ((:a -> :b) -> ((Parser :a) -> (Parser :b))))
-  (define (map1 f p_)
-    (let ((p (get-parser p_)))
-      (Parser
-       (fn (str)
-         (match (p str)
-           ((Err e) (Err e))
-           ((Ok (Tuple a str))
-            (Ok (Tuple (f a) str))))))))
+  (define-instance (Alternative Parser)
+    (define (alt p1_ p2_)
+      (let ((p1 (get-parser p1_))
+            (p2 (get-parser p2_)))
+        (Parser
+         (fn (str)
+           (match (p1 str)
+             ((Ok (Tuple a str))
+              (Ok (Tuple a str)))
+             ((Err _)
+              (match (p2 str)
+                ((Err e) (Err e))
+                ((Ok (Tuple b str))
+                 (Ok (Tuple b str))))))))))
+    (define empty (fail "alt")))
 
   (declare map2 ((:a -> (:b -> :c)) -> ((Parser :a) -> ((Parser :b) -> (Parser :c)))))
-  (define (map2 f p1_ p2_)
-    (let ((p1 (get-parser p1_))
-          (p2 (get-parser p2_)))
-      (Parser
-       (fn (str)
-         (match (p1 str)
-           ((Err e) (Err e))
-           ((Ok (Tuple a str))
-            (match (p2 str)
-              ((Err e) (Err e))
-              ((Ok (Tuple b str))
-               (Ok (Tuple (f a b) str))))))))))
+  (define map2 liftA2)
 
   (declare map3 ((:a -> (:b -> (:c -> :d))) -> ((Parser :a) -> ((Parser :b) -> ((Parser :c) -> (Parser :d))))))
   (define (map3 f p1_ p2_ p3_)
