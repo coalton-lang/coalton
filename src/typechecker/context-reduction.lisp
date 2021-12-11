@@ -82,9 +82,9 @@ Returns (PREDS FOUNDP)"
       (list pred)
       (multiple-value-bind (inst-preds found)
           (by-inst env pred)
-        (unless found
-          (error 'context-reduction-failure :pred pred))
-        (mapcan (lambda (p) (to-hnf env p)) inst-preds))))
+        (if found
+            (mapcan (lambda (p) (to-hnf env p)) inst-preds)
+            (list pred)))))
 
 (defun simplify-context (env preds)
   "Simplify PREDS to head-normal form"
@@ -96,19 +96,20 @@ Returns (PREDS FOUNDP)"
                      (simp-loop (append (list (first ps)) rs) (rest ps))))))
     (simp-loop nil preds)))
 
-(defun reduce-context (env preds)
+(defun reduce-context (env preds subs)
   "Reduce predicate context PREDS in ENV"
-  (simplify-context env
-                    (mapcan (lambda (p)
-                              (to-hnf env p))
-                            preds)))
+  (simplify-context (apply-substitution subs env)
+                    (apply #'append
+                           (mapcar (lambda (p)
+                                     (to-hnf env p))
+                                   (apply-substitution subs preds)))))
 
-(defun split-context (env fixed-vars preds)
+(defun split-context (env fixed-vars preds subs)
   "Split PREDS into retained predicates and deferred predicates
 
 Returns (VALUES deferred-preds retained-preds)"
   (declare (values ty-predicate-list ty-predicate-list))
-  (let* ((reduced-preds (reduce-context env preds)))
+  (let* ((reduced-preds (reduce-context env preds subs)))
     (loop :for p :in reduced-preds
           :if (every (lambda (tv) (member tv fixed-vars :test #'equalp))
                      (type-variables p))

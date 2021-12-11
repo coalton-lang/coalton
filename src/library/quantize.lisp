@@ -87,9 +87,7 @@
   (declare exact/ (Integer -> Integer -> Fraction))
   (define (exact/ a b)
     "Exactly divide two integers and produce a fraction."
-    ;; BUG: I don't know why I *have* to specify (the Integer *) here,
-    ;; but the type checker fails otherwise.
-    (the Fraction (/ (the Integer a) (the Integer b))))
+    (/ a b))
 
   (declare inexact/ (Integer -> Integer -> Double-Float))
   (define (inexact/ a b)

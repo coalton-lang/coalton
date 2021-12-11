@@ -235,13 +235,14 @@ Optional ALLOW-UNKNOWN-CLASSES allows classes to appear in the type expression t
                                                                  (tvar-tyvar (cadr x)))
                                                           :test #'equalp)))))))
 
-                   (let* ((preds (append additional-predicates preds))
-                          (reduced-preds (reduce-context env preds)))
-                     (unless (null (set-exclusive-or preds reduced-preds))
-                       (warn "Reduced context for type ~A~%   from ~{~A~^, ~} to ~{~A~^, ~}"
-                             expr
-                             preds
-                             (or reduced-preds '("nothing"))))
+                   (let* ((preds (apply-substitution subs (append additional-predicates preds)))
+                          (reduced-preds (reduce-context env preds subs)))
+                     (unless (null (set-exclusive-or preds reduced-preds :test #'equalp))
+                       (with-pprint-variable-context ()
+                         (warn "Reduced context for type ~A~%   from ~{~A~^, ~} to ~{~A~^, ~}"
+                               expr
+                               preds
+                               (or reduced-preds '("nothing")))))
                      (qualify reduced-preds type)))))
               ;; Otherwise parse as a type
               (t
@@ -249,7 +250,7 @@ Optional ALLOW-UNKNOWN-CLASSES allows classes to appear in the type expression t
                    (parse-type-expr env expr type-vars subs)
                  (setf type-vars new-type-vars
                        subs new-subs)
-                 (qualify (reduce-context env additional-predicates) type))))))
+                 (qualify (reduce-context env additional-predicates subs) type))))))
       (values (apply-substitution subs type) type-vars subs))))
 
 (defun parse-type-predicate (env expr type-vars subs &key

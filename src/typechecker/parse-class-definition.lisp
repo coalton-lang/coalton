@@ -187,11 +187,13 @@
                                                     :test #'equalp)
                                         (coalton-impl/ast::error-parsing form "class type variable ~S cannot appear in method constraints" (car tyvar))))
 
-                                    (let* ((qualified-method-type (qualify
-                                                                   (reduce-context env
-                                                                    (append method-context
-                                                                            (qualified-ty-predicates fresh-method-type)))
-                                                                   (qualified-ty-type fresh-method-type)))
+                                    (let* ((qualified-method-type
+                                             (qualify
+                                              (reduce-context env
+                                                              (append method-context
+                                                                      (qualified-ty-predicates fresh-method-type))
+                                                              subs)
+                                              (qualified-ty-type fresh-method-type)))
                                            (method-type (quantify (type-variables qualified-method-type)
                                                                   qualified-method-type)))
                                       (cons method-name method-type)))))))

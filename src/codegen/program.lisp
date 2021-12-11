@@ -157,7 +157,8 @@
          (preds (reduce-context
                  env
                  (remove-duplicates (remove-if #'static-predicate-p (scheme-predicates type))
-                                    :test #'equalp)))
+                                    :test #'equalp)
+                 nil))
 
          (dict-context (mapcar (lambda (pred) (cons pred (gensym))) preds))
 
@@ -199,7 +200,7 @@
           ((= 1 (length scc-typed-bindings))
            ;; Variables
            (let* ((b (first scc-typed-bindings))
-                  (preds (reduce-context env (scheme-predicates (typed-node-type (cdr b))))))
+                  (preds (reduce-context env (scheme-predicates (typed-node-type (cdr b))) nil)))
              (if (not (every #'static-predicate-p  preds))
                  `(,@(compile-function (car b) nil (typed-node-type (cdr b)) (typed-node-type (cdr b)) (cdr b) env))
                  `((coalton-impl::define-global-lexical ,(car b) ':|@@unbound@@|)

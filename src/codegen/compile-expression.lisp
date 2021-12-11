@@ -110,7 +110,7 @@
                       (typed-node-seq-subnodes expr)))))
 
 (defun reduce-preds-for-codegen (preds env)
-  (reduce-context env (remove-duplicates preds :test #'equalp)))
+  (reduce-context env (remove-duplicates preds :test #'equalp) nil))
 
 (defun compile-binding-list (typed-bindings sorted-bindings subnode dynamic-extent-bindings ctx env)
   "Compiles a binding list to nested LET and LABELS based on topological sorting of the bindings."
