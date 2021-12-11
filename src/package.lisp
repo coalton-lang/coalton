@@ -466,6 +466,8 @@
    #:cond
    #:nest
    #:pipe
+   #:.>
+   #:.<
    #:make-list
    #:to-boolean
    #:do
