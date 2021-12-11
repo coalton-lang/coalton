@@ -15,7 +15,11 @@
                 (immutable-map-data env))))
 
 (defmethod type-variables ((env value-environment))
-  (remove-duplicates (mapcan #'type-variables (fset:convert 'list (fset:range (immutable-map-data env)))) :test #'equalp))
+  (let ((out nil))
+    (fset:do-map (name type (immutable-map-data env))
+      (declare (ignore name))
+      (setf out (append (type-variables type) out)))
+    (remove-duplicates out :test #'equalp)))
 
 ;;;
 ;;; Type environments

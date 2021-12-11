@@ -501,7 +501,8 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                                  expr-types
                                  :key #'type-variables)) ; vss
              (local-tvars (set-difference expr-tvars
-                                          env-tvars)) ; gs
+                                          env-tvars
+                                          :test #'equalp)) ; gs
              )
         (multiple-value-bind (deferred-preds retained-preds)
             (split-context env env-tvars expr-preds)
