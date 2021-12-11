@@ -98,44 +98,47 @@ Coalton boolean."
 (cl:defmacro do (cl:&rest forms)
   (cl:labels ((process (forms)
                 (cl:let ((form (cl:car forms)))
-                  (cl:cond ((cl:not (cl:listp form))
-                            ;; If it is not a list then simply emit the form
-                            form)
-                           (;; If we are on the last one then just emit the form
-                            (cl:null (cl:cdr forms))
+                  (cl:cond
+                    (;; If we are on the last one then just emit the form
+                     (cl:null (cl:cdr forms))
 
-                            (cl:when (cl:member 'coalton:<- form)
-                              (cl:error "Last element of DO block cannot be a binding"))
+                     (cl:when (cl:and (cl:listp form) (cl:member 'coalton:<- form))
+                       (cl:error "Last element of DO block cannot be a binding"))
 
-                            form)
-                           (;; If the form is a let binding
-                            (cl:and
-                             (cl:= 4 (cl:length form))
-                             (cl:eql 'coalton:let (cl:first form))
-                             (cl:symbolp (cl:second form))
-                             (cl:eql 'coalton:= (cl:third form)))
-                            `(let ((,(cl:second form) ,(cl:fourth form)))
-                               ,(process (cl:cdr forms))))
+                     form)
+                    ((cl:not (cl:listp form))
+                     ;; If it is not a list then simply emit the form
+                     `(>>= ,form
+                           (const ,(process (cl:cdr forms)))))
 
-                           (;; Otherwise if we are a binding we can use >>=
-                            (cl:and
-                             (cl:= 3 (cl:length form))
-                             (cl:eql 'coalton:<- (cl:second form)))
+                    (;; If the form is a let binding
+                     (cl:and
+                      (cl:= 4 (cl:length form))
+                      (cl:eql 'coalton:let (cl:first form))
+                      (cl:symbolp (cl:second form))
+                      (cl:eql 'coalton:= (cl:third form)))
+                     `(let ((,(cl:second form) ,(cl:fourth form)))
+                        ,(process (cl:cdr forms))))
 
-                            (cl:let ((binding-name (cl:first form))
-                                     (binding-value (cl:third form)))
+                    (;; Otherwise if we are a binding we can use >>=
+                     (cl:and
+                      (cl:= 3 (cl:length form))
+                      (cl:eql 'coalton:<- (cl:second form)))
 
-                              `(>>= ,binding-value
-                                    (fn (,binding-name)
-                                      ,(process (cl:cdr forms))))))
-                           (;; Or just perform the action.
-                            cl:t
+                     (cl:let ((binding-name (cl:first form))
+                              (binding-value (cl:third form)))
 
-                            (cl:when (cl:member 'coalton:<- form)
-                              (cl:error "Malformed DO notation form ~A" form))
+                       `(>>= ,binding-value
+                             (fn (,binding-name)
+                               ,(process (cl:cdr forms))))))
+                    (;; Or just perform the action.
+                     cl:t
 
-                            `(>> ,form
-                                 ,(process (cl:cdr forms))))))))
+                     (cl:when (cl:member 'coalton:<- form)
+                       (cl:error "Malformed DO notation form ~A" form))
+
+                     `(>> ,form
+                          ,(process (cl:cdr forms))))))))
     (process forms)))
 
 (cl:defmacro progn (cl:&rest forms)
