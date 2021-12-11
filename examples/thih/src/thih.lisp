@@ -685,11 +685,8 @@
               (match ((get-ti f) s n)
                 ((Tuple3 s_ m x)
                  (let ((gx (get-ti (g x))))
-                   (gx s_ m)))))))
-    (define (>> m k)
-      (>>= m
-           (fn (_)
-             k))))
+                   (gx s_ m))))))))
+
   (define-instance (MonadFail TI)
       (define fail error))
 

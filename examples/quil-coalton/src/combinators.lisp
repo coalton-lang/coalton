@@ -64,9 +64,7 @@
            (match (p str)
              ((Err e) (Err e))
              ((Ok (Tuple a str))
-              ((get-parser (f a)) str)))))))
-    (define (>> a b)
-      (>>= a (const b))))
+              ((get-parser (f a)) str))))))))
 
   (define-instance (MonadFail Parser)
     (define (fail s)

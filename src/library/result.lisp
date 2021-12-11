@@ -85,9 +85,7 @@
     (define (>>= m f)
       (match m
         ((Ok x) (f x))
-        ((Err e) (Err e))))
-    (define (>> ma mb)
-      (>>= ma (fn (_) mb))))
+        ((Err e) (Err e)))))
 
   (define-instance (Into (Result :a :b) (Optional :b))
     (define (into res)

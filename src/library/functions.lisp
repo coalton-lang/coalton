@@ -17,37 +17,6 @@
       (lisp :a (str item) (cl:format cl:t "~A: ~A~%" str item))
       Unit))
 
-  ;;
-  ;; Function combinators
-  ;;
-
-  (declare fix (((:a -> :b) -> (:a -> :b)) -> (:a -> :b)))
-  (define (fix f n)
-    "The factorial function can be written
-    ```
-    (define fact
-      (fix
-        (fn (f n)
-          (if (== n 0)
-            1
-            (* n (f (- n 1)))))))
-    ```"
-    (f (fix f) n))
-
-  (declare id (:a -> :a))
-  (define (id x)
-    "A function that always returns its argument"
-    x)
-
-  (declare const (:a -> :b -> :a))
-  (define (const a b)
-    "A function that always returns its first argument"
-    a)
-
-  (declare flip ((:a -> :b -> :c) -> :b -> :a -> :c))
-  (define (flip f x y)
-    "FLIP reverses the arguments to F"
-    (f y x))
 
   ;; We don't write (COMPOSE F G X) even though it's OK so that the
   ;; most common case of using compose---as a binary function---is
