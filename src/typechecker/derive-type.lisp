@@ -547,14 +547,17 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                    (mapcar (lambda (b node)
                              (let* ((node-qual-type (fresh-inst (typed-node-type node)))
                                     (node-type (qualified-ty-type node-qual-type))
-                                    (node-preds (qualified-ty-predicates node-qual-type))
+                                    (node-preds (reduce-context
+                                                 env
+                                                 (qualified-ty-predicates node-qual-type)
+                                                 local-subs))
                                     (new-preds (remove-if
                                                 (lambda (p)
                                                   (member p deferred-preds :test #'equalp))
                                                 node-preds)))
+
                                (cons (car b)
-                                     (replace-node-type node (to-scheme (qualify new-preds node-type)))
-                                     )))
+                                     (replace-node-type node (to-scheme (qualify new-preds node-type))))))
                            bindings typed-bindings)
                    deferred-preds
                    output-env
