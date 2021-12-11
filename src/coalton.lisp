@@ -40,14 +40,7 @@
         (defclasses nil)
         (definstances nil)
         (repr-table (make-hash-table)))
-    (labels ((flatten (forms)
-               (loop :for form :in forms
-                     :append (cond
-                               ((atom form) (list form))
-                               ((member (first form) **toplevel-operators**)
-                                (flatten (rest form)))
-                               (t (list form)))))
-             (walk (forms)
+    (labels ((walk (forms)
                (let ((next-form (first forms)))
                  (cond
                    ((endp forms)
@@ -102,7 +95,7 @@
 
                    (t
                     (assert nil () "Unreachable."))))))
-      (walk (flatten forms)))))
+      (walk forms))))
 
 (defparameter *global-environment* (make-default-environment))
 
