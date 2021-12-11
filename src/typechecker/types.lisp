@@ -184,7 +184,7 @@
 (defvar tLisp-Object
   (%make-tcon (%make-tycon :name 'coalton:Lisp-Object :kind kstar)))
 
-(defvar tArrow (%make-tcon (%make-tycon :name '-> :kind (kfun kstar (kfun kstar kstar)))))
+(defvar tArrow (%make-tcon (%make-tycon :name 'coalton:-> :kind (kfun kstar (kfun kstar kstar)))))
 
 (defvar tList (%make-tcon (%make-tycon :name 'coalton:List :kind (kfun kstar kstar))))
 
