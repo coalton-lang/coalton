@@ -24,7 +24,7 @@
           (alphanumeric_ (alt alphanumeric (char #\_)))
           (alphanumeric_- (alt alphanumeric_ (char #\-))))
       (with-context "parsing quil name"
-        (map1
+        (map
          (fn (str)
            (Name (into str)))
          ;; NOTE: Due to not having backtracking, we have to check for
@@ -32,7 +32,7 @@
          (map2
           (fn (a b)
             (append a b))
-          (map1 (fn (x) (Cons x Nil)) alpha_)
+          (map (fn (x) (Cons x Nil)) alpha_)
           (let ((f (fn (xs)
                      (match xs
                        ((Cons x (Nil)) (not (== x #\-)))
@@ -45,7 +45,7 @@
 
   (declare parse-quil-qubit (Parser Qubit))
   (define parse-quil-qubit
-    (map1 Qubit natural))
+    (map Qubit natural))
 
 
   ;;
@@ -70,7 +70,7 @@
   ;;       allowed to be anything without parenthesis.
   (declare parse-quil-expression (Parser Expression))
   (define parse-quil-expression
-    (map1 (fn (x) (Expression (into x)))
+    (map (fn (x) (Expression (into x)))
           (many1 (verify
                   (fn (c)
                     (not (or (== c #\()
@@ -110,7 +110,7 @@
      (fix
       (fn (f str)
         (let ((parser_
-                (alt*
+                (asum
                  (make-list
                   (map3 (fn (_ __ g) (Controlled g))
                         (parse-string (make-string-view "CONTROLLED"))
@@ -124,8 +124,8 @@
                         (parse-string (make-string-view "FORKED"))
                         (many1 non-newline-whitespace)
                         (Parser f))
-                  (map1 Parametric parse-parametric-gate)
-                  (map1 Simple parse-quil-simple-gate)))))
+                  (map Parametric parse-parametric-gate)
+                  (map Simple parse-quil-simple-gate)))))
           ((get-parser parser_) str))))))
 
 
@@ -180,7 +180,7 @@
            (parse-string (make-string-view "RESET"))
            (many1 non-newline-whitespace)
            parse-quil-qubit)
-     (map1 (const StateReset) (parse-string (make-string-view "RESET")))))
+     (map (const StateReset) (parse-string (make-string-view "RESET")))))
 
   ;;
   ;; Parsing labels
@@ -211,7 +211,7 @@
 
   (declare parse-quil-control (Parser Control))
   (define parse-quil-control
-    (alt*
+    (asum
      (make-list
       (map3 (fn (_ __ name) (Jump name))
             (parse-string (make-string-view "JUMP"))
@@ -229,9 +229,8 @@
             parse-quil-label-name
             (many1 non-newline-whitespace)
             parse-quil-classical-mem)
-      (map1 (const Halt) (parse-string (make-string-view "HALT")))
-      (map1 (const Wait) (parse-string (make-string-view "WAIT")))
-      )))
+      (map (const Halt) (parse-string (make-string-view "HALT")))
+      (map (const Wait) (parse-string (make-string-view "WAIT"))))))
 
   ;;
   ;; Parsing full quil statements
@@ -246,13 +245,13 @@
 
   (declare parse-quil-statement (Parser QuilStatement))
   (define parse-quil-statement
-    (alt*
+    (asum
      (make-list
-      (map1 QuilMeas parse-quil-measure)
-      (map1 QuilReset parse-quil-reset)
-      (map1 QuilControl parse-quil-control)
-      (map1 QuilLabel parse-quil-label)
-      (map1 QuilGate parse-quil-gate))))
+      (map QuilMeas parse-quil-measure)
+      (map QuilReset parse-quil-reset)
+      (map QuilControl parse-quil-control)
+      (map QuilLabel parse-quil-label)
+      (map QuilGate parse-quil-gate))))
 
   ;;
   ;; Comments
@@ -270,7 +269,7 @@
     (map3 (fn (_ __ ___) Unit)
           (many0 whitespace)
           parse-quil-comment
-          (alt (map1 (const Unit) (char #\Newline))
+          (alt (map (const Unit) (char #\Newline))
                eof)))
 
   ;;
@@ -282,7 +281,7 @@
 
   (declare parse-quil-program (Parser QuilProgram))
   (define parse-quil-program
-    (map1
+    (map
      QuilProgram
      (map2 const
            (many0
@@ -298,7 +297,7 @@
                    (option parse-quil-comment))
                   ;; End of lines
                   (alt eof
-                       (map1 (const Unit)
+                       (map (const Unit)
                              (alt (char #\;)
                                   (char #\Newline))))))
            ;; Grab any trailing whitespace or comments

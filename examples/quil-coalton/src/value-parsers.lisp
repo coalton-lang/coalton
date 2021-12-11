@@ -10,7 +10,7 @@
     (Parser
      (fn (str)
        (match (next-char str)
-         ((Some (Tuple read-char _)) (Err (Error (lisp String (read-char)
+         ((Some (Tuple read-char _)) (Err (ParseError (lisp String (read-char)
                                                    (cl:format cl:nil "Unexpected character '~A' expected EOF" read-char)))))
          ((None) (Ok (Tuple Unit str)))))))
 
@@ -32,7 +32,7 @@
           (let ((read-char (fst t_)))
             (if (== c read-char)
                 (Ok t_)
-                (Err (Error (lisp String (read-char c) (cl:format cl:nil "Unexpected character '~A' expected '~A'" read-char c)))))))
+                (Err (ParseError (lisp String (read-char c) (cl:format cl:nil "Unexpected character '~A' expected '~A'" read-char c)))))))
          ((None) (Err parse-error-eof))))))
 
   (declare not-char (Char -> (Parser Char)))
@@ -43,7 +43,7 @@
          ((Some t_)
           (let ((read-char (fst t_)))
             (if (== c read-char)
-                (Err (Error (lisp String (read-char c) (cl:format cl:nil "Unexpected character '~A' expected not '~A'" read-char c))))
+                (Err (ParseError (lisp String (read-char c) (cl:format cl:nil "Unexpected character '~A' expected not '~A'" read-char c))))
                 (Ok t_))))
          ((None) (Err parse-error-eof))))))
 
@@ -52,20 +52,20 @@
     (let ((f (fn (s)
                (match (next-char s)
                  ((Some (Tuple c s))
-                  (and-then (fn (_) (f s)) (char c)))
+                  (>>= (char c) (fn (_) (f s))))
                  ((None) (const-value str))))))
       (f str)))
 
   (declare whitespace (Parser Unit))
   (define whitespace
-    (map1 (fn (_) Unit)
-          (alt (char #\Space)
-               (char #\Return))))
+    (map (fn (_) Unit)
+         (alt (char #\Space)
+              (char #\Return))))
 
   (declare digit (Parser Char))
   (define digit
     (map-error
-     (fn (_) (Error "Invalid digit"))
+     (fn (_) (ParseError "Invalid digit"))
      (verify
       (fn (x) (and (>= x #\0)
                    (<= x #\9)))
@@ -74,7 +74,7 @@
   (declare lowercase (Parser Char))
   (define lowercase
     (map-error
-     (fn (_) (Error "Invalid lowercase character"))
+     (fn (_) (ParseError "Invalid lowercase character"))
      (verify
       (fn (x) (and (>= x #\a)
                    (<= x #\z)))
@@ -83,7 +83,7 @@
   (declare uppercase (Parser Char))
   (define uppercase
     (map-error
-     (fn (_) (Error "Invalid uppercase character"))
+     (fn (_) (ParseError "Invalid uppercase character"))
      (verify
       (fn (x) (and (>= x #\A)
                    (<= x #\Z)))
@@ -98,9 +98,8 @@
   (declare natural (Parser Integer))
   (define natural
     (with-context "While parsing natural number"
-      (and-then
-       (fn (i)
-         (match i
-           ((Some a) (const-value a))
-           ((None) (pfail "Invalid integer"))))
-       (map1 parse-int (map1 into (many1 digit)))))))
+      (>>= (map parse-int (map into (many1 digit)))
+           (fn (i)
+             (match i
+               ((Some a) (const-value a))
+               ((None) (fail "Invalid integer"))))))))
