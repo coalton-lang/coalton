@@ -131,15 +131,39 @@
     (coalton-impl/typechecker::with-type-context ("COALTON")
       (multiple-value-bind (type preds typed-node substs)
           (derive-expression-type parsed-form *global-environment* nil)
-        (declare (ignore type))
         (let* ((env (coalton-impl/typechecker::apply-substitution substs *global-environment*))
                (preds (coalton-impl/typechecker::apply-substitution substs preds))
                (preds (coalton-impl/typechecker::reduce-context env preds))
-               (typed-node (coalton-impl/typechecker::apply-substitution substs typed-node)))
+               (typed-node (coalton-impl/typechecker::apply-substitution substs typed-node))
+               (type (coalton-impl/typechecker::apply-substitution substs type))
+               (qual-type (coalton-impl/typechecker::qualify preds type))
+               (scheme (coalton-impl/typechecker::quantify (coalton-impl/typechecker::type-variables qual-type) qual-type)))
 
-          (assert (null preds))
-          (setf *global-environment* env)
-          (coalton-impl/codegen::compile-expression typed-node nil *global-environment*))))))
+          (if (null preds)
+              (progn
+                (setf *global-environment* env)
+                (coalton-impl/codegen::compile-expression typed-node nil *global-environment*))
+              (progn
+                (coalton-impl/typechecker::with-pprint-variable-context ()
+                  (let* ((tvars (loop :for i :to (coalton-impl/typechecker::kind-arity
+                                                     (coalton-impl/typechecker::kind-of type))
+                                      :collect (coalton-impl/typechecker::make-variable)))
+                         (qual-type (coalton-impl/typechecker::instantiate
+                                     tvars
+                                     (coalton-impl/typechecker::ty-scheme-type scheme))))
+                    (format t "Expression ~A~%    of type ~A~{ ~A~}. ~A => ~A~%    has unresolved constraint~A ~A~%    add a type assertion with THE to resolve it"
+                            form
+                            (if *coalton-print-unicode*
+                                "∀"
+                                "FORALL")
+                            tvars
+                            (coalton-impl/typechecker::qualified-ty-predicates qual-type)
+                            (coalton-impl/typechecker::qualified-ty-type qual-type)
+                            (if (= (length (coalton-impl/typechecker::qualified-ty-predicates qual-type)) 1)
+                                ""
+                                "s")
+                            (coalton-impl/typechecker::qualified-ty-predicates qual-type))))
+                (values))))))))
 
 (defun process-coalton-toplevel (toplevel-forms &optional (env *global-environment*))
   "Top-level definitions for use within Coalton."
