@@ -82,6 +82,26 @@ to
   (cl:assert (cl:<= 2 (cl:list-length items)))
   `(nest ,@(cl:reverse items)))
 
+(cl:defmacro .< (cl:&rest items)
+  "Right associative compose operator. Creates a new functions that will run the
+functions right to left when applied. This is the same as the NEST macro without supplying
+the value. The composition is thus the same order as COMPOSE.
+
+`(.< f g h)` creates the function `(fn (x) (f (g (h x))))"
+  (alexandria:with-gensyms (x)
+    `(fn (,x)
+       (nest ,@items ,x))))
+
+(cl:defmacro .> (cl:&rest items)
+  "Left associative compose operator. Creates a new functions that will run the
+functions left to right when applied. This is the same as the PIPE macro without supplying
+the value. The composition is thus the reverse order of COMPOSE.
+
+`(.> f g h)` creates the function `(fn (x) (h (g (f x))))"
+  (alexandria:with-gensyms (x)
+    `(fn (,x)
+       (pipe ,x ,@items))))
+
 (cl:defmacro make-list (cl:&rest forms)
   (cl:labels
       ((list-helper (forms)
