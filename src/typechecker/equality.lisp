@@ -71,11 +71,6 @@
    (fresh-inst scheme1)
    (fresh-inst scheme2)))
 
-(defmethod fset:compare ((x ty-scheme) (y ty-scheme))
-  (if (type-scheme= x y)
-      :equal
-      :unequal))
-
 (defun type-predicate= (pred1 pred2)
   (and (eql (ty-predicate-class pred1)
             (ty-predicate-class pred2))

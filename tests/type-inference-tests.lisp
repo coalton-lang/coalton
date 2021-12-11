@@ -398,3 +398,11 @@
    '((coalton:define x (coalton:the coalton:U32 (coalton-library:+ (coalton-library:fromInt 1)
                                                                    (coalton-library:fromInt 2)))))
    '((x . coalton:U32))))
+
+(deftest test-regression ()
+  ;; Fixed in #283
+  (check-coalton-types
+   '((coalton:define (f a)
+       (coalton:let ((g (coalton:fn (x) (coalton-library:Tuple x a))))
+         (g 5))))
+   '((f . (:a -> (coalton-library:Tuple Integer :a))))))
