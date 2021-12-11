@@ -2,6 +2,12 @@
 
 (in-package #:coalton-util)
 
+(defmacro debug-log (&rest vars)
+  "Log names and values of VARS to standard output"
+  `(format t
+           ,(format nil "~{~A: ~~A~~%~}" vars)
+           ,@vars))
+
 (define-condition coalton-bug (error)
   ((reason :initarg :reason
            :reader coalton-bug-reason)

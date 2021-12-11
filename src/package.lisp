@@ -16,7 +16,8 @@
    #:coalton-bug
    #:sexp-fmt
    #:include-if
-   #:define-symbol-property))
+   #:define-symbol-property
+   #:debug-log))
 
 (uiop:define-package #:coalton-impl/algorithm
   (:documentation "Implementation of generic algorithms used by COALTON. This is a package private to the COALTON system and is not intended for public use.")
