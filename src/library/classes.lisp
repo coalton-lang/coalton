@@ -171,8 +171,11 @@ The fields are defined as follows:
 
   (define-class (Applicative :m => (Monad :m))
     "Types which are monads as defined in Haskell. See https://wiki.haskell.org/Monad for more information."
-    (>>= ((:m :a) -> (:a -> (:m :b)) -> (:m :b)))
-    (>> ((:m :a) -> (:m :b) -> (:m :b))))
+    (>>= ((:m :a) -> (:a -> (:m :b)) -> (:m :b))))
+
+  (declare >> (Monad :m => (:m :a) -> (:m :b) -> (:m :b)))
+  (define (>> a b)
+    (>>= a (const b)))
 
   (define-class (Monad :m => (MonadFail :m))
     (fail (String -> (:m :a))))

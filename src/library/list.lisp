@@ -526,6 +526,4 @@
 
   (define-instance (Monad List)
     (define (>>= m f)
-      (concatMap f m))
-    (define (>> a b)
-      (>>= a (fn (_) b)))))
+      (concatMap f m))))

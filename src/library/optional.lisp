@@ -84,11 +84,7 @@
     (define (>>= x f)
       (match x
         ((Some x) (f x))
-        ((None) None)))
-    (define (>> m k)
-      (>>= m
-           (fn (_)
-             k))))
+        ((None) None))))
 
   (define-instance (MonadFail Optional)
     (define (fail str)

@@ -85,9 +85,9 @@
                 :serial t
                 :components ((:file "macros")
                              (:file "types")
+                             (:file "builtin")
                              (:file "classes")
                              (:file "boolean")
-                             (:file "builtin")
                              (:file "fraction")
                              (:file "arith")
                              (:file "char")
