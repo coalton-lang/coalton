@@ -460,6 +460,7 @@
     ;; Macros
   (:export
    #:if
+   #:let*
    #:unless
    #:when
    #:and

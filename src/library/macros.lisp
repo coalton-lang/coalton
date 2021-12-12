@@ -5,19 +5,31 @@
      ((True) ,then)
      ((False) ,else)))
 
-(cl:defmacro when (expr cl:&rest then)
+(cl:defmacro when (expr cl:&body then)
   `(if ,expr
        (progn
         ,@then
         Unit)
        Unit))
 
-(cl:defmacro unless (expr cl:&rest then)
+(cl:defmacro unless (expr cl:&body then)
   `(if ,expr
        Unit
        (progn
         ,@then
         Unit)))
+
+(cl:defmacro let* (bindings cl:&rest body)
+  "Parallel, non-recursive binding. This is similar to COMMON-LISP:LET."
+  (cl:loop
+    :for (var val) :in bindings
+    :for gen := (cl:gensym (cl:symbol-name var))
+    :collect `(,gen ,val) :into outer
+    :collect `(,var ,gen) :into inner
+    :finally (cl:return
+               `(let ,outer
+                  (let ,inner
+                    ,@body)))))
 
 (cl:defmacro and (cl:&rest exprs)
   "A short-circuiting AND operator."

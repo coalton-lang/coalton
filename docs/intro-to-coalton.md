@@ -142,6 +142,60 @@ Note that since these are macros (indicated by their variadic arguments), they
 cannot be used as higher-order functions. Consider either currying or the
 `compose` function if you're thinking in that direction.
 
+
+### Variable Binding with `let` and `let*`
+
+The operators `let` and `let*` is used to bind local variables and functions.
+
+**Note**: These operators are **different** than their Common Lisp counterparts!
+
+In Coalton, `let` is close to "letrec" or "let rec" in other languages. What that means is that `let` introduces a collection of *possibly mutually dependent* variables, and as such, they can appear in any order.
+
+```lisp
+(coalton-toplevel
+  (define (quadratic a b c)
+    (let ((discr (- (* b b) (* 2 (* d c))))
+          (d (* 2 a)))
+      (Tuple (/ (+ (negate b) (sqrt discr)) d)
+             (/ (- (negate b) (sqrt discr)) d)))))
+```
+
+Note that in this definition, `discr` (introduced first) depends on `d` (introduced second).
+
+Variables can also be recursive! So the following code fragment defining a local factorial function is valid.
+
+```lisp
+(let ((f (fn (x)
+           (if (== 0 x)
+               1
+               (* x (f (- x 1)))))))
+ ;; ...
+ )
+```
+
+*Beware*, since recursion of definitions is valid, the following will give unexpected results.
+
+```lisp
+;; bad, invalid
+(coalton-toplevel
+  (define (f xs)
+    (let ((xs (map sqrt xs)))
+      (append xs xs))))
+```
+
+Here, the `let` which is attempting to re-bind `xs` is *actually* referring to itself! To remedy this, either rename the variable, or use `let*`.
+
+```lisp
+;; good
+(coalton-toplevel
+  (define (f xs)
+    (let* ((xs (map sqrt xs)))
+      (append xs xs))))
+```
+
+As can be seen, `let*` is closer to Common Lisp's `let`.
+
+
 ## Data Types
 
 Coalton allows the definition of parametric algebraic data types.
