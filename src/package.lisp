@@ -730,7 +730,14 @@
    #:graph-remove-node
    #:graph-add-edge
    #:graph-remove-edge
-   #:graph-viz))
+   #:graph-viz)
+  ;; Symbol
+  (:export
+   #:Symbol
+   #:intern
+   #:unique-symbol
+   #:symbol-name
+   #:symbol-package))
 
 (uiop:define-package #:coalton-user
   (:documentation "A default user package for Coalton.")

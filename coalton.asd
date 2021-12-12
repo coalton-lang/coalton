@@ -102,7 +102,8 @@
                              (:file "vector")
                              (:file "slice")
                              (:file "hashtable")
-                             (:file "graph")))
+                             (:file "graph")
+                             (:file "symbol")))
                (:file "toplevel-environment")))
 
 (asdf:defsystem #:coalton/tests
@@ -115,7 +116,7 @@
                #:quil-coalton/tests
                #:thih-coalton/tests)
   :perform (asdf:test-op (o s)
-                         (unless (symbol-call :coalton-tests :run-coalton-tests)
+                         (unless (uiop:symbol-call :coalton-tests :run-coalton-tests)
                            (error "Tests failed")))
   :pathname "tests/"
   :serial t
