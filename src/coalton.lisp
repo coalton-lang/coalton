@@ -56,8 +56,12 @@ in FORMS that begin with that operator."
     (labels
         ((operator (form)
            (handler-case
-               (car form)
-             (type-error () (error-parsing form "Non-list form at toplevel"))))
+               (prog1
+                   (car form)
+                 (assert (symbolp (car form))))
+             (type-error () (error-parsing form "Non-list form at toplevel"))
+             (simple-error () (error-parsing form "A toplevel form must begin ~
+                                                   with a symbol."))))
          (establish-repr (specifier type)
            (unless (member specifier **repr-specifiers**)
              (alexandria:simple-style-warning
