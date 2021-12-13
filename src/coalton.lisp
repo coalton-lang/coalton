@@ -9,93 +9,97 @@
 ;;; be generated at macroexpansion time of the ambient Common Lisp
 ;;; compiler. See the COALTON macro.
 
-(define-global-var **toplevel-operators** '(coalton:coalton-toplevel))
-(define-global-var **special-operators** `(,@**toplevel-operators**
-                                           coalton:define
-                                           coalton:define-type
-                                           coalton:declare
-                                           coalton:define-class
-                                           coalton:define-instance
-                                           coalton:repr))
+(define-global-var **repr-specifiers** '(:lisp)
+  "(repr ...) specifiers that the compiler is known to understand.")
 
+(defmacro install-operator-metadata (&rest directives)
+  "Associate metadata with symbols as described by DIRECTIVES.
+
+For each directive of the form
+  (SYMBOL PROPERTY*)
+insert each PROPERTY into the symbol-plist of SYMBOL. A property can be given as
+either (INDICATOR VALUE) or just INDICATOR; the short form means (INDICATOR T)."
+  `(dolist (directive ',directives)
+     (let ((symbol (car directive)))
+       (dolist (property (cdr directive))
+         (let* ((indicator (if (listp property) (car property) property))
+                (value (if (listp property) (cadr property) t)))
+           ;; Set properties individually instead of appending, so that using
+           ;; the macro twice on the same operator does the reasonable thing.
+           (setf (get symbol indicator) value))))))
+
+(install-operator-metadata
+ (coalton:coalton-toplevel  :toplevel-container)
+
+ (coalton:declare           :toplevel)
+ (coalton:define            :toplevel)
+ (coalton:define-type       :toplevel)
+ (coalton:define-class      :toplevel)
+ (coalton:define-instance   :toplevel)
+
+ (coalton:repr              :toplevel
+                            (:must-precede-one-of (coalton:define-type))))
 
 ;;; Entry Point
 
 (defun collect-toplevel-forms (forms)
-  "Walk through the top-level forms and sort them out. Return three values:
+  "Return an organized representation of FORMS, a sequence of toplevel forms.
 
-    1. All DEFINE-TYPE forms
+Signal an error if FORMS is not a valid container for toplevel forms, or if any
+subform of FORMS is not a valid toplevel form.
 
-    2. All DECLARE forms
+The return value is a plist containing (1) a hash table of reprs associated with
+types defined in FORMS; (2) for every toplevel operator, a list of the subforms
+in FORMS that begin with that operator."
+  (let ((plist
+          (list 'repr-table (make-hash-table))))
+    (labels
+        ((operator (form)
+           (handler-case
+               (car form)
+             (type-error () (error-parsing form "Non-list form at toplevel"))))
+         (establish-repr (specifier type)
+           (unless (member specifier **repr-specifiers**)
+             (alexandria:simple-style-warning
+              "The compiler is not known to understand (repr ~S)."
+              specifier))
+           (setf (gethash type (getf plist 'repr-table)) specifier))
+         (walk (forms)
+           (loop
+             :until (null forms)
+             :for form := (pop forms)
+             :for next-form := (first forms)
+             :for op := (operator form)
+             :for must-precede-list := (get op :must-precede-one-of)
 
-    3. All DEFINE forms
+             :unless (get op :toplevel)
+               :do (error-parsing form
+                                  "The form (~A ...) is not valid at toplevel."
+                                  op)
 
-    4. All DEFINE-CLASS forms
+             :when must-precede-list
+               :unless (member (operator next-form) must-precede-list)
+                 :do (error-parsing form
+                                    "The ~A form must precede one of: ~
+                                     ~{~A~^, ~}."
+                                    op must-precede-list)
 
-    5. All DEFINE-INSTANCE forms
-"
-  (let ((deftypes nil)
-        (declares nil)
-        (defines nil)
-        (defclasses nil)
-        (definstances nil)
-        (repr-table (make-hash-table)))
-    (labels ((walk (forms)
-               (let ((next-form (first forms)))
-                 (cond
-                   ((endp forms)
-                    (values
-                     (nreverse deftypes)
-                     (nreverse declares)
-                     (nreverse defines)
-                     (nreverse defclasses)
-                     (nreverse definstances)
-                     repr-table))
-
-                   ((or (atom next-form)
-                        (not (member (first next-form) **special-operators**)))
-                    (error-parsing next-form "This can't show up at the top-level."))
-
-                   ((eql 'coalton:define-type (first next-form))
-                    (push next-form deftypes)
-                    (walk (rest forms)))
-
-                   ((eql 'coalton:declare (first next-form))
-                    (push next-form declares)
-                    (walk (rest forms)))
-
-                   ((eql 'coalton:define (first next-form))
-                    (push next-form defines)
-                    (walk (rest forms)))
-
-                   ((eql 'coalton:define-class (first next-form))
-                    (push next-form defclasses)
-                    (walk (rest forms)))
-
-                   ((eql 'coalton:define-instance (first next-form))
-                    (push next-form definstances)
-                    (walk (rest forms)))
-
-                   ((eql 'coalton:repr (first next-form))
-                    ;; Repr must immediatly precede a type definition
-                    (unless (eql 'coalton:define-type (first (second forms)))
-                      (error-parsing next-form "Orphan repr instance."))
-
-                    ;; Repr must have only two parts
-                    (unless (= 2 (length next-form))
-                      (error-parsing next-form "Invalid repr form."))
-
-                    (let ((repr-dec (second next-form)))
-
-                      (unless (eql :lisp repr-dec)
-                        (error-parsing next-form "Unknown repr ~A." repr-dec))
-
-                      (setf (gethash (second (second forms)) repr-table) repr-dec)
-                      (walk (rest forms))))
-
-                   (t
-                    (assert nil () "Unreachable."))))))
-      (walk forms))))
+             :do (push form (getf plist op))
+                 ;; Specific behaviors for particular operators
+                 (case op
+                   (coalton:repr
+                    (unless (= (length form) 2)
+                      (error-parsing form "Wrong number of arguments"))
+                    (establish-repr (cadr form) (cadr next-form)))))))
+      ;; Populate PLIST...
+      (walk forms)
+      ;; ...and return it, with its values reversed to reflect the order that
+      ;; the forms appeared.
+      (mapcar (lambda (element)
+                (if (listp element)
+                    (nreverse element)
+                    element))
+                    plist))))
 
 (defparameter *global-environment* (make-default-environment))
 
@@ -160,8 +164,14 @@
 
 (defun process-coalton-toplevel (toplevel-forms &optional (env *global-environment*))
   "Top-level definitions for use within Coalton."
-
-  (multiple-value-bind (type-defines declares defines class-defines instance-defines repr-table)
+  (destructuring-bind (&key
+                         ((coalton:declare declares))
+                         ((coalton:define defines))
+                         ((coalton:define-type type-defines))
+                         ((coalton:define-class class-defines))
+                         ((coalton:define-instance instance-defines))
+                         ((repr-table repr-table))
+                       &allow-other-keys)
       (collect-toplevel-forms toplevel-forms)
 
     (multiple-value-bind (defined-types env type-docstrings)
