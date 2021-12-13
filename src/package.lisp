@@ -659,6 +659,11 @@
    #:cell-swap
    #:cell-write
    #:cell-update)
+  ;; Lazy
+  (:export
+   #:Lazy
+   #:lazy
+   #:force)
   ;; Vector
   (:export
    #:Vector

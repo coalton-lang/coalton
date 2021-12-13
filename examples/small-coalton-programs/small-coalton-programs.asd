@@ -4,4 +4,5 @@
   :serial t
   :components ((:file "package")
                (:file "diff")
+               (:file "lazy-list")
                (:file "microbench1")))
