@@ -112,9 +112,11 @@
                                      (derive-expl-type (cons method-name parsed-method-form)
                                                        instance-method-type
                                                        env
-                                                       instance-subs nil)
+                                                       instance-subs nil
+                                                       :allow-deferred-predicates nil)
                                    (declare (ignore scheme env))
-                                   ;; TODO: Is this actually valid?
+
+                                   ;; Predicates should never be here
                                    (unless (null preds)
                                      (coalton-impl::coalton-bug "Instance definition predicates should be nil"))
 

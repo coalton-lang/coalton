@@ -14,7 +14,7 @@
    (args :initarg :args
          :reader coalton-bug-args))
   (:report (lambda (c s)
-             (format s "Internal coalton bug: ~?"
+             (format s "Internal coalton bug: ~?~%~%If you are seeing this, please file an issue on Github."
                      (coalton-bug-reason c)
                      (coalton-bug-args c)))))
 
