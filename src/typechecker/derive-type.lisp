@@ -282,7 +282,8 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
           ;; Derive the type of all parts of the scc together
           (multiple-value-bind (typed-impl-bindings impl-preds new-env new-subs)
               (derive-impls-type scc-bindings env subs name-map
-                                 :disable-monomorphism-restriction disable-monomorphism-restriction)
+                                 :disable-monomorphism-restriction disable-monomorphism-restriction
+                                 :allow-deferred-predicates allow-deferred-predicates)
 
             ;; Update the current environment and substitutions
             (setf env new-env
@@ -444,7 +445,8 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
       (when (member name (collect-variable-namespace node) :test #'equalp)
         (error 'self-recursive-variable-definition :name name)))))
 
-(defun derive-binding-type-seq (names tvars exprs env subs name-map)
+(defun derive-binding-type-seq (names tvars exprs env subs name-map
+                                &key (allow-deferred-predicates t))
   (declare (type tvar-list tvars)
            (type node-list exprs)
            (type environment env)
@@ -460,6 +462,15 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                  (multiple-value-bind (typed-node binding-preds new-subs)
                      (derive-binding-type name tvar expr env subs name-map)
                    (setf subs new-subs)
+
+                   (with-type-context ("definition of ~A" name)
+                     (when (not allow-deferred-predicates)
+                       ;; When we are not allowed to defer predicates,
+                       ;; call reduce-context which will signal an
+                       ;; error on deferred preds.
+                       (reduce-context env binding-preds new-subs
+                                       :allow-deferred-predicates nil)))
+
                    (setf preds (append preds binding-preds))
                    typed-node)))
          (bindings (mapcar
@@ -472,7 +483,10 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
      preds
      subs)))
 
-(defun derive-impls-type (bindings env subs name-map &key (disable-monomorphism-restriction nil))
+(defun derive-impls-type (bindings env subs name-map
+                          &key
+                            (disable-monomorphism-restriction nil)
+                            (allow-deferred-predicates t))
   (declare (type binding-list bindings)
            (type environment env)
            (type substitution-list subs)
@@ -491,7 +505,8 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
 
     ;; Derive the type of each binding
     (multiple-value-bind (typed-bindings local-preds local-subs)
-        (derive-binding-type-seq (mapcar #'car bindings) tvars exprs local-env subs name-map)
+        (derive-binding-type-seq (mapcar #'car bindings) tvars exprs local-env subs name-map
+                                 :allow-deferred-predicates allow-deferred-predicates)
 
       (let* ((expr-types (apply-substitution local-subs tvars)) ; ts'
              (expr-preds (apply-substitution local-subs local-preds)) ; ps'
