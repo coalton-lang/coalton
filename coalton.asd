@@ -121,6 +121,7 @@
   :serial t
   :components ((:file "package")
                (:file "utilities")
+               (:file "syntax-tests")
                (:file "free-variables-tests")
                (:file "tarjan-scc-tests")
                (:file "type-inference-tests")
