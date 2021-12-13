@@ -25,5 +25,8 @@
                    (coalton-impl::lookup-value-type env symbol)
                    (coalton-impl/typechecker::parse-and-resolve-type env type))))))
 
+(defun run-coalton-walker (toplevel)
+  (coalton-impl::collect-toplevel-forms toplevel))
+
 (defun run-coalton-typechecker (toplevel)
   (coalton-impl::process-coalton-toplevel toplevel coalton-impl::*initial-environment*))
