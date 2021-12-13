@@ -102,7 +102,8 @@ Returns new environment, binding list of declared nodes, a DAG of dependencies, 
       (multiple-value-bind (typed-bindings preds new-env subs)
           (coalton-impl/typechecker::derive-bindings-type
            impl-bindings expl-bindings declared-types env nil nil
-           :disable-monomorphism-restriction t)
+           :disable-monomorphism-restriction t
+           :allow-deferred-predicates nil)
         (when preds
           (coalton-bug "Preds not expected. ~A" preds))
 
@@ -119,15 +120,17 @@ Returns new environment, binding list of declared nodes, a DAG of dependencies, 
 
         ;; Checks for monomorphism restriction for top level bindings
         (dolist (b typed-bindings)
-          (let* ((type (coalton-impl/typechecker::fresh-inst (lookup-value-type env (car b))))
+          (with-type-context ("definition of ~A" (car b))
+            (let* ((type (coalton-impl/typechecker::fresh-inst (lookup-value-type env (car b))))
 
-                 (preds (reduce-context env (coalton-impl/typechecker::qualified-ty-predicates type) subs)))
-            (when (and (not (gethash (car b) declared-types))
-                       (not (coalton-impl/typechecker::typed-node-abstraction-p (cdr b)))
-                       (not (null preds)))
-              (error 'toplevel-monomorphism-restriction
-                     :type type
-                     :name (car b)))))
+                   (preds (reduce-context env (coalton-impl/typechecker::qualified-ty-predicates type) subs
+                                          :allow-deferred-predicates nil)))
+              (when (and (not (gethash (car b) declared-types))
+                         (not (coalton-impl/typechecker::typed-node-abstraction-p (cdr b)))
+                         (not (null preds)))
+                (error 'toplevel-monomorphism-restriction
+                       :type type
+                       :name (car b))))))
 
         (loop :for (name . node) :in typed-bindings :do
           (setf env (set-name env name (make-name-entry :name name

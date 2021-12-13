@@ -252,7 +252,10 @@ Returns (VALUES type predicate-list typed-node subs)")
 ;;; Let Bindings
 ;;;
 
-(defun derive-bindings-type (impl-bindings expl-bindings expl-declarations env subs name-map &key (disable-monomorphism-restriction nil))
+(defun derive-bindings-type (impl-bindings expl-bindings expl-declarations env subs name-map
+                             &key
+                               (disable-monomorphism-restriction nil)
+                               (allow-deferred-predicates t))
   "IMPL-BINDINGS and EXPL-BINDIGNS are of form (SYMBOL . EXPR)
 EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
   (declare (type environment env)
@@ -280,6 +283,7 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
           (multiple-value-bind (typed-impl-bindings impl-preds new-env new-subs)
               (derive-impls-type scc-bindings env subs name-map
                                  :disable-monomorphism-restriction disable-monomorphism-restriction)
+
             ;; Update the current environment and substitutions
             (setf env new-env
                   subs new-subs)
@@ -294,8 +298,10 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
         (multiple-value-bind (ty-scheme typed-expl-binding expl-preds new-env new-subs)
             (derive-expl-type binding
                               (gethash (car binding) expl-declarations)
-                              env subs name-map)
+                              env subs name-map
+                              :allow-deferred-predicates allow-deferred-predicates)
           (declare (ignore ty-scheme))
+
           ;; Update the current environment and substitutions
           (setf env new-env
                 subs new-subs)
@@ -321,7 +327,7 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                :collect (cons name
                               (rewrite-recursive-calls
                                (apply-substitution subs node)
-                               bindings))) 
+                               bindings)))
          preds
          env
          subs
@@ -563,7 +569,8 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                    output-env
                    local-subs)))))))))
 
-(defun derive-expl-type (binding declared-ty env subs name-map)
+(defun derive-expl-type (binding declared-ty env subs name-map
+                         &key (allow-deferred-predicates t))
   (declare (type cons binding)
            (type ty-scheme declared-ty)
            (type environment env)
@@ -595,24 +602,32 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
              (output-scheme (quantify local-tvars output-qual-type))
              (reduced-preds (remove-if-not (lambda (p)
                                              (not (entail env expr-preds p)))
-                                       (apply-substitution local-subs preds))))
+                                           (apply-substitution local-subs preds))))
 
         (multiple-value-bind (deferred-preds retained-preds)
             (split-context env env-tvars reduced-preds local-subs)
 
-          ;; Make sure the declared scheme is not too general
-          (when (not (equalp output-scheme declared-ty))
-            (error 'type-declaration-too-general-error
-                   :name (car binding)
-                   :declared-type declared-ty
-                   :derived-type output-scheme))
+          (with-type-context ("definition of ~A" (car binding))
+            ;; Make sure the declared scheme is not too general
+            (when (not (equalp output-scheme declared-ty))
+              (error 'type-declaration-too-general-error
+                     :name (car binding)
+                     :declared-type declared-ty
+                     :derived-type output-scheme))
 
-          ;; Make sure the declared type includes all the required predicates
-          (when (not (null retained-preds))
-            (error 'weak-context-error
-                   :name (car binding)
-                   :declared-type declared-ty
-                   :preds retained-preds))
+            ;; Make sure the declared type includes all the required predicates
+            (when (not (null retained-preds))
+              (error 'weak-context-error
+                     :name (car binding)
+                     :declared-type declared-ty
+                     :preds retained-preds))
+
+            ;; Ensure that we are allowed to defer predicates (this is
+            ;; not allowable in toplevel forms)
+            (when (and (not allow-deferred-predicates)
+                       deferred-preds)
+              (error 'context-reduction-failure
+                     :pred (apply-substitution subs (first deferred-preds)))))
 
           (values output-scheme
                   (cons (car binding)

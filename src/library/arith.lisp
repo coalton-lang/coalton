@@ -321,7 +321,7 @@
   (define (%mkFraction n d)
     (progn
       (when (== 0 d)
-        (undefined "Division by zero"))
+        (error "Division by zero"))
       (%reduce-fraction
        (%Fraction n d))))
 

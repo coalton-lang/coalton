@@ -249,6 +249,7 @@
    #:overlapping-instance-error         ; SIGNAL
    #:cyclic-class-definitions-error     ; SIGNAL
    #:toplevel-monomorphism-restriction  ; SIGNAL
+   #:with-type-context
    )
   (:export
    #:process-toplevel-definitions       ; FUNCTION

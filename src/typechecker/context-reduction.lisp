@@ -76,15 +76,23 @@ Returns (PREDS FOUNDP)"
              (hnf type))
            (ty-predicate-types pred))))
 
-(defun to-hnf (env pred)
-  "Simplify PRED to a list of head-normal predicates"
+(defun to-hnf (env pred &optional (allow-deferred-predicates t))
+  "Simplify PRED to a list of head-normal predicates
+
+ALLOW-DEFERRED-PREDICATES allows for predicates not in head-normal
+form to be deferred (PRED is returned). Otherwise, an error is
+signalled on non-head-normal forms."
   (if (hnf-p pred)
       (list pred)
       (multiple-value-bind (inst-preds found)
           (by-inst env pred)
-        (if found
-            (mapcan (lambda (p) (to-hnf env p)) inst-preds)
-            (list pred)))))
+        (cond
+          (found
+           (mapcan (lambda (p) (to-hnf env p)) inst-preds))
+          (allow-deferred-predicates
+           (list pred))
+          (t
+           (error 'context-reduction-failure :pred pred))))))
 
 (defun simplify-context (env preds)
   "Simplify PREDS to head-normal form"
@@ -96,12 +104,17 @@ Returns (PREDS FOUNDP)"
                      (simp-loop (append (list (first ps)) rs) (rest ps))))))
     (simp-loop nil preds)))
 
-(defun reduce-context (env preds subs)
-  "Reduce predicate context PREDS in ENV"
+(defun reduce-context (env preds subs &key (allow-deferred-predicates t))
+  "Reduce predicate context PREDS in ENV
+
+If ALLOW-DEFERRRED-PREDICATES is NIL then an error is signalled if
+PREDS cannot be reduced to head-normal form. Non-head-normal
+predicates are allowed by default because multi-parameter typeclass
+predicates cannot necessarily be resolved at the call site."
   (simplify-context (apply-substitution subs env)
                     (apply #'append
                            (mapcar (lambda (p)
-                                     (to-hnf env p))
+                                     (to-hnf env p allow-deferred-predicates))
                                    (apply-substitution subs preds)))))
 
 (defun split-context (env fixed-vars preds subs)
