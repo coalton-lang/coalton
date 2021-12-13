@@ -24,7 +24,7 @@
        (coalton:define-type Foo Foo)))))
 
 (deftest test-repr-form-argument ()
-  (signals warning
+  (signals style-warning
     (run-coalton-walker
      ;; Not a meaningful repr choice
      '((coalton:repr :something-weird)
