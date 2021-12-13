@@ -35,10 +35,10 @@
   (define b (lazy-head (lazy-tail lst)))
   ;; Evaluating the second item works, and will also run the side-effects
   ;; Printing "Evaluating second item"
-  (define bvalue (force b))
+  (define bvalue (lazy-force b))
   ;; Evaluating a second time will just return the value, not run the computation again
   ;; Nothing is printed
-  (define bvalue (force b))
+  (define bvalue (lazy-force b))
   ;; Evaluating the first item will fail
-  ;; (define avalue (force a))
+  ;; (define avalue (lazy-force a))
   )

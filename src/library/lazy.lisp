@@ -12,12 +12,12 @@ run, VALUE is the result of the computation."
 
   (define-type (Lazy :a)
     "Lazily evaluated computation. Construct by using the LAZY macro, compute the
-value by calling FORCE."
+value by calling LAZY-FORCE."
     (LazyCell (Cell (LazyState :a))))
 
   (define-instance (Functor Lazy)
     (define (map f l)
-      (lazy (f (force l)))))
+      (lazy (f (lazy-force l)))))
 
   (define-instance (Applicative Lazy)
     (define (pure v)
@@ -29,19 +29,18 @@ value by calling FORCE."
     (define (>>= ma f)
       (lazy (into (f (into ma))))))
 
-  ;; TODO: Into should be implemented for all Applicative by using pure
   (define-instance (Into :a (Lazy :a))
     (define into pure))
 
   (define-instance (Into (Lazy :a) :a)
-    (define into force))
+    (define into lazy-force))
 
-  (declare force ((Lazy :a) -> :a))
-  (define (force l)
+  (declare lazy-force ((Lazy :a) -> :a))
+  (define (lazy-force l)
     "Return result of lazy computation, computing it if necessary.
 
-The computation is only evaluated once, and subsequent calls to FORCE will just
-return the result.
+The computation is only evaluated once, and subsequent calls to LAZY-FORCE will
+just return the result.
 
 The function is not thread-safe, so trying to access from several threads might
 run the computation more than once, and if the computation isn't idempotent,

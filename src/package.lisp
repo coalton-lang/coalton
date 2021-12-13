@@ -663,7 +663,7 @@
   (:export
    #:Lazy
    #:lazy
-   #:force)
+   #:lazy-force)
   ;; Vector
   (:export
    #:Vector
