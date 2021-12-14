@@ -14,9 +14,7 @@
 
   (define-instance (Eq Symbol)
     (define (== a b)
-      (== (symbol-name a) (symbol-name b)))
-    (define (/= a b)
-      (not (== a b))))
+      (== (symbol-name a) (symbol-name b))))
   
   (define-type Expr
     (EConst Integer)
