@@ -99,6 +99,7 @@
                              (:file "functions")
                              (:file "quantize")
                              (:file "cell")
+                             (:file "lazy")
                              (:file "vector")
                              (:file "slice")
                              (:file "hashtable")
