@@ -1,6 +1,8 @@
 (in-package #:coalton-library)
 
 (cl:defmacro lazy (expr)
+  "Computes EXPR on-demand when LAZY-FORCE is called. The value is
+only computed once, and subsequent calls just returns the computed value."
   `(%Lazy (make-cell (Thunk (fn (_) ,expr)))))
 
 (coalton-toplevel
