@@ -661,7 +661,6 @@
    #:cell-update)
   ;; Lazy
   (:export
-   #:Lazy
    #:lazy
    #:lazy-force)
   ;; Vector
