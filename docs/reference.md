@@ -876,6 +876,8 @@ Methods:
 - <code><a href="#into-class">INTO</a> (<a href="#optional-type">OPTIONAL</a> :A) (<a href="#result-type">RESULT</a> <a href="#unit-type">UNIT</a> :A)</code>
 - <code><a href="#into-class">INTO</a> :A (<a href="#cell-type">CELL</a> :A)</code>
 - <code><a href="#into-class">INTO</a> (<a href="#cell-type">CELL</a> :A) :A</code>
+- <code><a href="#into-class">INTO</a> :A (<a href="#lazy-type">LAZY</a> :A)</code>
+- <code><a href="#into-class">INTO</a> (<a href="#lazy-type">LAZY</a> :A) :A</code>
 - <code><a href="#into-class">INTO</a> (<a href="#list-type">LIST</a> :A) (<a href="#vector-type">VECTOR</a> :A)</code>
 - <code><a href="#into-class">INTO</a> (<a href="#vector-type">VECTOR</a> :A) (<a href="#list-type">LIST</a> :A)</code>
 - <code><a href="#into-class">INTO</a> (<a href="#slice-type">SLICE</a> :A) (<a href="#vector-type">VECTOR</a> :A)</code>
@@ -902,6 +904,7 @@ Methods:
 - <code><a href="#monad-class">MONAD</a> <a href="#optional-type">OPTIONAL</a></code>
 - <code><a href="#monad-class">MONAD</a> <a href="#list-type">LIST</a></code>
 - <code><a href="#monad-class">MONAD</a> (<a href="#result-type">RESULT</a> :A)</code>
+- <code><a href="#monad-class">MONAD</a> <a href="#lazy-type">LAZY</a></code>
 
 </details>
 
@@ -944,6 +947,7 @@ Methods:
 - <code><a href="#functor-class">FUNCTOR</a> <a href="#list-type">LIST</a></code>
 - <code><a href="#functor-class">FUNCTOR</a> (<a href="#result-type">RESULT</a> :A)</code>
 - <code><a href="#functor-class">FUNCTOR</a> <a href="#cell-type">CELL</a></code>
+- <code><a href="#functor-class">FUNCTOR</a> <a href="#lazy-type">LAZY</a></code>
 - <code><a href="#functor-class">FUNCTOR</a> <a href="#vector-type">VECTOR</a></code>
 
 </details>
@@ -1084,6 +1088,7 @@ Methods:
 - <code><a href="#applicative-class">APPLICATIVE</a> <a href="#list-type">LIST</a></code>
 - <code><a href="#applicative-class">APPLICATIVE</a> (<a href="#result-type">RESULT</a> :A)</code>
 - <code><a href="#applicative-class">APPLICATIVE</a> <a href="#cell-type">CELL</a></code>
+- <code><a href="#applicative-class">APPLICATIVE</a> <a href="#lazy-type">LAZY</a></code>
 
 </details>
 
@@ -2120,6 +2125,50 @@ Set the value of a mutable cell
 
 #### <code>CELL-UPDATE</code> <sup><sub>[FUNCTION]</sub></sup><a name="cell-update-function"></a>
 <code>∀ :A. ((:A → :A) → (<a href="#cell-type">CELL</a> :A) → <a href="#unit-type">UNIT</a>)</code>
+
+***
+
+## File: [lazy.lisp](../src/library/lazy.lisp)
+
+### Types
+
+#### <code>LAZY :A</code> <sup><sub>[TYPE]</sub></sup><a name="lazy-type"></a>
+- <code>(%LAZY (<a href="#cell-type">CELL</a> (<a href="#lazystate-type">LAZYSTATE</a> :A)))</code>
+
+Lazily evaluated computation. Construct by using the LAZY macro, compute the
+value by calling LAZY-FORCE.
+
+Constructors:
+- <code>%LAZY :: ((<a href="#cell-type">CELL</a> (<a href="#lazystate-type">LAZYSTATE</a> :A)) → (<a href="#lazy-type">LAZY</a> :A))</code>
+
+<details>
+<summary>Instances</summary>
+
+- <code><a href="#into-class">INTO</a> (<a href="#lazy-type">LAZY</a> :A) :A</code>
+- <code><a href="#into-class">INTO</a> :A (<a href="#lazy-type">LAZY</a> :A)</code>
+- <code><a href="#monad-class">MONAD</a> <a href="#lazy-type">LAZY</a></code>
+- <code><a href="#functor-class">FUNCTOR</a> <a href="#lazy-type">LAZY</a></code>
+- <code><a href="#applicative-class">APPLICATIVE</a> <a href="#lazy-type">LAZY</a></code>
+
+</details>
+
+
+***
+
+### Values
+
+#### <code>LAZY-FORCE</code> <sup><sub>[FUNCTION]</sub></sup><a name="lazy-force-function"></a>
+<code>∀ :A. ((<a href="#lazy-type">LAZY</a> :A) → :A)</code>
+
+Return result of lazy computation, computing it if necessary.
+
+The computation is only evaluated once, and subsequent calls to LAZY-FORCE will
+just return the result.
+
+The function is not thread-safe, so trying to access from several threads might
+run the computation more than once, and if the computation isn't idempotent,
+different values might be produced.
+
 
 ***
 
