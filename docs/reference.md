@@ -1117,6 +1117,26 @@ Methods:
 
 ***
 
+#### <code>UNWRAPPABLE</code> <sup><sub>[CLASS]</sub></sup><a name="unwrappable-class"></a>
+<code><a href="#unwrappable-class">UNWRAPPABLE</a> :A</code>
+
+Types which might be able to be unwrapped, otherwise returning a default value.
+
+Methods:
+- <code>WITHDEFAULT :: ∀ :B. (:B → (:A :B) → :B)</code>
+- <code>UNWRAP :: ∀ :B. ((:A :B) → :B)</code>
+
+<details>
+<summary>Instances</summary>
+
+- <code><a href="#unwrappable-class">UNWRAPPABLE</a> <a href="#optional-type">OPTIONAL</a></code>
+- <code><a href="#unwrappable-class">UNWRAPPABLE</a> (<a href="#result-type">RESULT</a> :A)</code>
+
+</details>
+
+
+***
+
 ### Values
 
 #### <code><</code> <sup><sub>[FUNCTION]</sub></sup><a name="<-function"></a>

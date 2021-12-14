@@ -512,7 +512,8 @@
    #:MonadFail #:fail
    #:Alternative #:alt #:empty
    #:Into
-   #:TryInto)
+   #:TryInto
+   #:Unwrappable #:withDefault #:unwrap)
   ;; Builtin
   (:export
    #:undefined
