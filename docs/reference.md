@@ -609,6 +609,66 @@ Are X or Y True, but not both?
 
 ***
 
+## File: [builtin.lisp](../src/library/builtin.lisp)
+
+### Values
+
+#### <code>ID</code> <sup><sub>[FUNCTION]</sub></sup><a name="id-function"></a>
+<code>∀ :A. (:A → :A)</code>
+
+A function that always returns its argument
+
+
+***
+
+#### <code>FIX</code> <sup><sub>[FUNCTION]</sub></sup><a name="fix-function"></a>
+<code>∀ :A :B. (((:A → :B) → :A → :B) → :A → :B)</code>
+
+The factorial function can be written
+    ```
+    (define fact
+      (fix
+        (fn (f n)
+          (if (== n 0)
+            1
+            (* n (f (- n 1)))))))
+    ```
+
+
+***
+
+#### <code>FLIP</code> <sup><sub>[FUNCTION]</sub></sup><a name="flip-function"></a>
+<code>∀ :A :B :C. ((:A → :B → :C) → :B → :A → :C)</code>
+
+FLIP reverses the arguments to F
+
+
+***
+
+#### <code>CONST</code> <sup><sub>[FUNCTION]</sub></sup><a name="const-function"></a>
+<code>∀ :A :B. (:A → :B → :A)</code>
+
+A function that always returns its first argument
+
+
+***
+
+#### <code>ERROR</code> <sup><sub>[FUNCTION]</sub></sup><a name="error-function"></a>
+<code>∀ :A. (<a href="#string-type">STRING</a> → :A)</code>
+
+Signal an error by calling CL:ERROR
+
+
+***
+
+#### <code>UNDEFINED</code> <sup><sub>[FUNCTION]</sub></sup><a name="undefined-function"></a>
+<code>∀ :A :B. (:A → :B)</code>
+
+A function which can be used in place of any value, throwing an error at runtime.
+
+
+***
+
 ## File: [classes.lisp](../src/library/classes.lisp)
 
 ### Types
@@ -835,7 +895,6 @@ Types which are monads as defined in Haskell. See https://wiki.haskell.org/Monad
 
 Methods:
 - <code>>>= :: ∀ :B :C. ((:A :B) → (:B → (:A :C)) → (:A :C))</code>
-- <code>>> :: ∀ :B :C. ((:A :B) → (:A :C) → (:A :C))</code>
 
 <details>
 <summary>Instances</summary>
@@ -1058,6 +1117,26 @@ Methods:
 
 ***
 
+#### <code>UNWRAPPABLE</code> <sup><sub>[CLASS]</sub></sup><a name="unwrappable-class"></a>
+<code><a href="#unwrappable-class">UNWRAPPABLE</a> :A</code>
+
+Types which might be able to be unwrapped, otherwise returning a default value.
+
+Methods:
+- <code>WITHDEFAULT :: ∀ :B. (:B → (:A :B) → :B)</code>
+- <code>UNWRAP :: ∀ :B. ((:A :B) → :B)</code>
+
+<details>
+<summary>Instances</summary>
+
+- <code><a href="#unwrappable-class">UNWRAPPABLE</a> <a href="#optional-type">OPTIONAL</a></code>
+- <code><a href="#unwrappable-class">UNWRAPPABLE</a> (<a href="#result-type">RESULT</a> :A)</code>
+
+</details>
+
+
+***
+
 ### Values
 
 #### <code><</code> <sup><sub>[FUNCTION]</sub></sup><a name="<-function"></a>
@@ -1097,6 +1176,11 @@ Is X greater than or equal to Y?
 
 ***
 
+#### <code>>></code> <sup><sub>[FUNCTION]</sub></sup><a name=">>-function"></a>
+<code>∀ :A :B :C. <a href="#monad-class">MONAD</a> :A ⇒ ((:A :B) → (:A :C) → (:A :C))</code>
+
+***
+
 #### <code>MAX</code> <sup><sub>[FUNCTION]</sub></sup><a name="max-function"></a>
 <code>∀ :A. <a href="#ord-class">ORD</a> :A ⇒ (:A → :A → :A)</code>
 
@@ -1109,26 +1193,6 @@ Returns the greater element of X and Y.
 <code>∀ :A. <a href="#ord-class">ORD</a> :A ⇒ (:A → :A → :A)</code>
 
 Returns the lesser element of X and Y.
-
-
-***
-
-## File: [builtin.lisp](../src/library/builtin.lisp)
-
-### Values
-
-#### <code>ERROR</code> <sup><sub>[FUNCTION]</sub></sup><a name="error-function"></a>
-<code>∀ :A. (<a href="#string-type">STRING</a> → :A)</code>
-
-Signal an error by calling CL:ERROR
-
-
-***
-
-#### <code>UNDEFINED</code> <sup><sub>[FUNCTION]</sub></sup><a name="undefined-function"></a>
-<code>∀ :A :B. (:A → :B)</code>
-
-A function which can be used in place of any value, throwing an error at runtime.
 
 
 ***
@@ -1832,50 +1896,10 @@ Map over the ERR case
 
 ### Values
 
-#### <code>ID</code> <sup><sub>[FUNCTION]</sub></sup><a name="id-function"></a>
-<code>∀ :A. (:A → :A)</code>
-
-A function that always returns its argument
-
-
-***
-
-#### <code>FIX</code> <sup><sub>[FUNCTION]</sub></sup><a name="fix-function"></a>
-<code>∀ :A :B. (((:A → :B) → :A → :B) → :A → :B)</code>
-
-The factorial function can be written
-    ```
-    (define fact
-      (fix
-        (fn (f n)
-          (if (== n 0)
-            1
-            (* n (f (- n 1)))))))
-    ```
-
-
-***
-
 #### <code>ASUM</code> <sup><sub>[FUNCTION]</sub></sup><a name="asum-function"></a>
 <code>∀ :A :B. <a href="#alternative-class">ALTERNATIVE</a> :A ⇒ ((<a href="#list-type">LIST</a> (:A :B)) → (:A :B))</code>
 
 Fold over a list using alt
-
-
-***
-
-#### <code>FLIP</code> <sup><sub>[FUNCTION]</sub></sup><a name="flip-function"></a>
-<code>∀ :A :B :C. ((:A → :B → :C) → :B → :A → :C)</code>
-
-FLIP reverses the arguments to F
-
-
-***
-
-#### <code>CONST</code> <sup><sub>[FUNCTION]</sub></sup><a name="const-function"></a>
-<code>∀ :A :B. (:A → :B → :A)</code>
-
-A function that always returns its first argument
 
 
 ***
@@ -2238,11 +2262,6 @@ Call the function F once for each item in V
 
 Sort a vector with predicate function F
 
-
-***
-
-#### <code>VECTOR-TO-LIST</code> <sup><sub>[FUNCTION]</sub></sup><a name="vector-to-list-function"></a>
-<code>∀ :A. ((<a href="#vector-type">VECTOR</a> :A) → (<a href="#list-type">LIST</a> :A))</code>
 
 ***
 
