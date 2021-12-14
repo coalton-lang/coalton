@@ -1,7 +1,7 @@
 (in-package #:coalton-library)
 
 (cl:defmacro lazy (body)
-  `(LazyCell (make-cell (Thunk (fn (_) ,body)))))
+  `(%Lazy (make-cell (Thunk (fn (_) ,body)))))
 
 (coalton-toplevel
   (define-type (LazyState :a)
@@ -13,7 +13,7 @@ run, VALUE is the result of the computation."
   (define-type (Lazy :a)
     "Lazily evaluated computation. Construct by using the LAZY macro, compute the
 value by calling LAZY-FORCE."
-    (LazyCell (Cell (LazyState :a))))
+    (%Lazy (Cell (LazyState :a))))
 
   (define-instance (Functor Lazy)
     (define (map f l)
@@ -21,7 +21,7 @@ value by calling LAZY-FORCE."
 
   (define-instance (Applicative Lazy)
     (define (pure v)
-      (LazyCell (make-cell (Value v))))
+      (%Lazy (make-cell (Value v))))
     (define (liftA2 f fa fb)
       (lazy (f (into fa) (into fb)))))
 
@@ -46,7 +46,7 @@ The function is not thread-safe, so trying to access from several threads might
 run the computation more than once, and if the computation isn't idempotent,
 different values might be produced."
     (match l
-      ((LazyCell c)
+      ((%Lazy c)
        (match (into c)
          ((Value v) v)
          ((Thunk f)
