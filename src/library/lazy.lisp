@@ -1,7 +1,7 @@
 (in-package #:coalton-library)
 
-(cl:defmacro lazy (body)
-  `(%Lazy (make-cell (Thunk (fn (_) ,body)))))
+(cl:defmacro lazy (expr)
+  `(%Lazy (make-cell (Thunk (fn (_) ,expr)))))
 
 (coalton-toplevel
   (define-type (LazyState :a)
