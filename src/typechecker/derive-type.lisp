@@ -138,11 +138,31 @@ Returns (VALUES type predicate-list typed-node subs)")
     (declare (type environment env)
              (type substitution-list subs)
              (values ty ty-predicate-list typed-node substitution-list &optional))
-    (let ((bindings (node-let-bindings value)))
+    (let ((bindings (node-let-bindings value))
+          (declared-types
+            (mapcar (lambda (form)
+                      (cons (car form)
+                            (parse-and-resolve-type env (cdr form))))
+                    (node-let-declared-types value)))
+          (expl-bindings nil)
+          (impl-bindings nil))
+      ;; Split out explicit and implicit bindings
+      (loop :for binding :in bindings
+            :if (assoc (car binding) declared-types) :do
+              (push binding expl-bindings)
+            :else :do
+              (push binding impl-bindings))
+
       (multiple-value-bind (typed-bindings bindings-preds env subs sccs)
           ;; NOTE: If we wanted explicit types in let bindings this
           ;;       would be the place to do it.
-          (derive-bindings-type bindings nil nil env subs (node-let-name-map value))
+          (derive-bindings-type
+           impl-bindings
+           expl-bindings
+           (alexandria:alist-hash-table declared-types)
+           env
+           subs
+           (node-let-name-map value))
         (multiple-value-bind (type ret-preds typed-subexpr new-subs)
             (derive-expression-type (node-let-subexpr value) env subs)
           (let ((preds (append ret-preds bindings-preds)))
@@ -278,7 +298,8 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
     (let ((sccs (reverse (tarjan-scc (bindings-to-dag impl-bindings)))))
       (dolist (scc sccs)
         ;; Lookup all bindings in this scc
-        (let ((scc-bindings (mapcar (lambda (b) (find b impl-bindings :key #'car)) scc)))
+        (let ((scc-bindings
+                (mapcar (lambda (b) (find b impl-bindings :key #'car)) scc)))
           ;; Derive the type of all parts of the scc together
           (multiple-value-bind (typed-impl-bindings impl-preds new-env new-subs)
               (derive-impls-type scc-bindings env subs name-map
@@ -332,7 +353,7 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
          preds
          env
          subs
-         sccs)))))
+         (reverse (tarjan-scc (bindings-to-dag (append impl-bindings expl-bindings)))))))))
 
 (defgeneric rewrite-recursive-calls (node bindings)
   (:method ((node typed-node-literal) bindings)

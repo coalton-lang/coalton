@@ -19,14 +19,14 @@
      (g . Integer)
      (h . String)))
 
-   ;; Check that identity qualifies
-   (check-coalton-types
-    '((coalton:define (id a) a)
-      (coalton:define x (id 3))
-      (coalton:define y (id "three")))
-    '((id . (:a -> :a))
-      (x . Integer)
-      (y . String)))
+  ;; Check that identity qualifies
+  (check-coalton-types
+   '((coalton:define (id a) a)
+     (coalton:define x (id 3))
+     (coalton:define y (id "three")))
+   '((id . (:a -> :a))
+     (x . Integer)
+     (y . String)))
 
   ;; Check that let bindings are polymorphic over kinds
   (check-coalton-types
@@ -34,6 +34,14 @@
        (coalton:let ((id (fn (a) a)))
          ((id id) 5))))
    '((x . Integer)))
+
+  ;; Check that let bindings can have explicit types
+  (check-coalton-types
+   '((coalton:define (f x)
+       (coalton:let ((coalton:declare g (Integer -> Integer))
+             (g coalton-library:id))
+         (g x))))
+   '((f . (Integer -> Integer))))
 
   ;; Check that you can only call callable things
   (signals coalton-impl::coalton-type-error
