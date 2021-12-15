@@ -67,6 +67,7 @@
    #:node-abstraction-name-map          ; ACCESSOR
    #:node-let                           ; STRUCT
    #:node-let-bindings                  ; ACCESSOR
+   #:node-let-declared-types            ; ACCESSOR
    #:node-let-subexpr                   ; ACCESSOR
    #:node-let-name-map                  ; ACCESSOR
    #:node-lisp                          ; STRUCT

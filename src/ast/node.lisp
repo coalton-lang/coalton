@@ -86,10 +86,11 @@
 (defstruct
     (node-let
      (:include node)
-     (:constructor node-let (unparsed bindings subexpr name-map)))
-  (bindings (required 'bindings) :type binding-list :read-only t)
-  (subexpr  (required 'subexpr)  :type node         :read-only t)
-  (name-map (required 'name-map) :type list         :read-only t))
+     (:constructor node-let (unparsed bindings declared-types subexpr name-map)))
+  (bindings       (required 'bindings)      :type binding-list :read-only t)
+  (declared-types (required 'declare-types) :type list         :read-only t)
+  (subexpr        (required 'subexpr)       :type node         :read-only t)
+  (name-map       (required 'name-map)      :type list         :read-only t))
 
 #+sbcl
 (declaim (sb-ext:freeze-type node-let))
