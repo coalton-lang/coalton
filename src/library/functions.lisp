@@ -45,10 +45,10 @@
 
   (declare traverse (Applicative :m => ((:a -> (:m :b)) -> (List :a) -> (:m (List :b)))))
   (define (traverse f xs)
-    "Map the elements of XS with F then collect the results."
+    "Map the elements of XS with F from left to right, collecting the results."
     (let ((cons-f (fn (x ys)
                     (liftA2 Cons (f x) ys))))
-      (fold cons-f (pure Nil) xs)))
+      (fold cons-f (pure Nil) (reverse xs))))
 
   (declare sequence (Applicative :f => ((List (:f :a)) -> (:f (List :a)))))
   (define (sequence xs)
