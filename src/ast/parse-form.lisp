@@ -104,25 +104,60 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
      (parse-form subexpr new-m package)
      (invert-alist binding-local-names))))
 
-(defun parse-let (unparsed bindings subexpr m package)
+(defun parse-let (unparsed binding-forms subexpr m package)
   (declare (type t unparsed)
-           (type list bindings)
+           (type list binding-forms)
            (type t subexpr)
            (type immutable-map m)
            (type package package)
            (values node-let))
-  (let* ((binding-names (mapcar #'car bindings))
-         (binding-local-names (make-local-vars binding-names package))
-         (new-m (immutable-map-set-multiple m binding-local-names)))
 
-    (node-let
-     unparsed
-     (loop :for (bind-var bind-val) :in bindings
-           :collect (cons
-                     (lookup-or-key new-m bind-var)
-                     (parse-form bind-val new-m package)))
-     (parse-form subexpr new-m package)
-     (invert-alist binding-local-names))))
+  (let ((bindings nil)
+        (declared-types nil))
+    ;; Separate bindings from type declarations
+    (loop :for form :in binding-forms :do
+      (cond
+        ((not (listp form))
+         (error-parsing form "Invalid let binding form"))
+        ((= 2 (length form))
+         (unless (symbolp (first form))
+           (error-parsing form "Invalid let binding form"))
+         (push (cons (first form)
+                     (second form))
+               bindings))
+        ((= 3 (length form))
+         (unless (eql 'coalton:declare (first form))
+           (error-parsing form "Invalid let binding form"))
+         (unless (symbolp (second form))
+           (error-parsing form "Invalid let binding declaration form"))
+         (push (cons (second form)
+                     (third form))
+               declared-types))
+        (t
+         (error-parsing form "Invalid let binding form"))))
+
+    ;; Check that all declarations have a matching binding
+    (loop :for (bind-var . bind-type) :in declared-types :do
+      (unless (member bind-var bindings :key #'car)
+        (error-parsing unparsed "Orphan type declaration for variable ~S" bind-var)))
+
+    ;; Perform variable renaming
+    (let* ((binding-names (mapcar #'car bindings))
+           (binding-local-names (make-local-vars binding-names package))
+           (new-m (immutable-map-set-multiple m binding-local-names)))
+
+      (node-let
+       unparsed
+       (loop :for (bind-var . bind-val) :in bindings
+             :collect (cons
+                       (lookup-or-key new-m bind-var)
+                       (parse-form bind-val new-m package)))
+       (loop :for (bind-var . bind-type) :in declared-types
+             :collect (cons
+                       (lookup-or-key new-m bind-var)
+                       bind-type))
+       (parse-form subexpr new-m package)
+       (invert-alist binding-local-names)))))
 
 (defun parse-lisp (unparsed type variables lisp-expr m)
   (declare (type immutable-map m))
