@@ -407,7 +407,8 @@
    #:define-type
    #:define-class
    #:define-instance
-   #:repr)
+   #:repr
+   #:unable-to-codegen)
   ;; Early Types
   (:export
    #:-> #:→

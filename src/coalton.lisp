@@ -156,19 +156,19 @@ in FORMS that begin with that operator."
                       (qual-type (coalton-impl/typechecker::instantiate
                                   tvars
                                   (coalton-impl/typechecker::ty-scheme-type scheme))))
-                 (format t "Expression ~A~%    of type ~A~{ ~A~}. ~A => ~A~%    has unresolved constraint~A ~A~%    add a type assertion with THE to resolve it"
-                         form
-                         (if *coalton-print-unicode*
-                             "∀"
-                             "FORALL")
-                         tvars
-                         (coalton-impl/typechecker::qualified-ty-predicates qual-type)
-                         (coalton-impl/typechecker::qualified-ty-type qual-type)
-                         (if (= (length (coalton-impl/typechecker::qualified-ty-predicates qual-type)) 1)
-                             ""
-                             "s")
-                         (coalton-impl/typechecker::qualified-ty-predicates qual-type))))
-             (values))))))))
+                 (warn "The expression ~A~%    of type ~A~{ ~A~}. ~A => ~A~%    has unresolved constraint~A ~A~%    add a type assertion with THE to resolve it"
+                       form
+                       (if *coalton-print-unicode*
+                           "∀"
+                           "FORALL")
+                       tvars
+                       (coalton-impl/typechecker::qualified-ty-predicates qual-type)
+                       (coalton-impl/typechecker::qualified-ty-type qual-type)
+                       (if (= (length (coalton-impl/typechecker::qualified-ty-predicates qual-type)) 1)
+                           ""
+                           "s")
+                       (coalton-impl/typechecker::qualified-ty-predicates qual-type))))
+             ''coalton::unable-to-codegen)))))))
 
 (defun process-coalton-toplevel (toplevel-forms &optional (env *global-environment*))
   "Top-level definitions for use within Coalton."
