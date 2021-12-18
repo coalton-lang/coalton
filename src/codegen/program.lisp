@@ -80,7 +80,7 @@
                             others
                             setfs-ltv)))))
 
-(defun codegen-program (types bindings sccs classes instance-definitions docstrings env)
+(defun codegen-program (types bindings sccs classes instance-definitions env)
   (declare (type type-definition-list types)
            (type typed-binding-list bindings)
            (type list sccs)
@@ -105,25 +105,9 @@
                                  ;; ... instance structs
                                  (compile-instance-definitions instance-definitions optimizer)))
 
-       ;; Emit documentation
-       ,@(compile-docstring-forms docstrings)
-
        ;; Emit a dummy value at the end so that REPL return values
        ;; don't look strange.
        (values))))
-
-(defun compile-docstring-forms (docstrings)
-  (loop :for (name docstring type) :in docstrings
-        :append
-        (unless (equalp docstring nil)
-            (ecase type
-              (:variable
-               `((setf (documentation ',name 'variable) ,docstring)))
-              (:function
-               `((setf (documentation ',name 'variable) ,docstring
-                        (documentation ',name 'function) ,docstring)))
-              (:type
-               `((setf (documentation ',name 'type) ,docstring)))))))
 
 (defun update-function-env (toplevel-bindings env)
   (declare (type typed-binding-list toplevel-bindings)
@@ -188,24 +172,44 @@
               scc)
         :append
         (cond
-          ((every #'coalton-impl/typechecker::typed-node-abstraction-p (mapcar #'cdr scc-typed-bindings))
+          ((every #'coalton-impl/typechecker::typed-node-abstraction-p
+                  (mapcar #'cdr scc-typed-bindings))
            ;; Functions
            `(,@(loop :for (name . node) :in scc-typed-bindings
                      :for vars := (typed-node-abstraction-vars node)
                      :for type := (typed-node-type node)
                      :for subexpr := (typed-node-abstraction-subexpr node)
                      :for return-type := (typed-node-type (typed-node-abstraction-subexpr node))
-                     :append (compile-function name vars type return-type subexpr env))))
+                     :for docstring := (name-entry-docstring (lookup-name env name))
+
+                     :append (compile-function name vars type return-type subexpr env)
+
+                     :when docstring
+                     :append `((setf (documentation ',name 'variable) ,docstring
+                                      (documentation ',name 'function) ,docstring)))))
 
           ((= 1 (length scc-typed-bindings))
            ;; Variables
            (let* ((b (first scc-typed-bindings))
-                  (preds (reduce-context env (scheme-predicates (typed-node-type (cdr b))) nil)))
-             (if (not (every #'static-predicate-p  preds))
-                 `(,@(compile-function (car b) nil (typed-node-type (cdr b)) (typed-node-type (cdr b)) (cdr b) env))
+                  (name (car b))
+                  (node (cdr b))
+                  (preds (reduce-context env (scheme-predicates (typed-node-type node)) nil))
+                  (docstring (name-entry-docstring (lookup-name env name))))
+             ;; If there are predicates still on the form then we need
+             ;; to generate a function so dictionaries can be captured.
+             (if (not (every #'static-predicate-p preds))
+                 `(,@(compile-function
+                      name
+                      nil
+                      (typed-node-type node)
+                      (typed-node-type node)
+                      node
+                      env))
                  `((coalton-impl::define-global-lexical ,(car b) ':|@@unbound@@|)
                    (setf ,(car b) (load-time-value
-                                   ,(compile-expression (cdr b) nil env)))))))
+                                   ,(compile-expression (cdr b) nil env))
+                         ,@(when docstring
+                             `((documentation ',name 'variable) ,docstring)))))))
           (t (error "")))))
 
 

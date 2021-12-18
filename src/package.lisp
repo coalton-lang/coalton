@@ -219,6 +219,7 @@
    #:name-entry                         ; STRUCT
    #:name-entry-name                    ; ACCESSOR
    #:name-entry-type                    ; ACCESSOR
+   #:name-entry-docstring               ; ACCESSOR
    #:make-name-entry                    ; CONSTRUCTOR
    #:directly-applicable-functions      ; FUNCTION
    )
@@ -233,6 +234,7 @@
    #:parse-instance-definition          ; FUNCTION
    )
   (:export
+   #:parse-type-definitions             ; FUNCTION
    #:type-definition                    ; STRUCT
    #:type-definition-name               ; ACCESSOR
    #:type-definition-type               ; ACCESSOR
@@ -241,6 +243,7 @@
    #:type-definition-runtime-type       ; ACCESSOR
    #:type-definition-enum-repr          ; ACCESSOR
    #:type-definition-newtype            ; ACCESSOR
+   #:type-definition-docstring          ; ACCESSOR
    )
   (:export
    #:coalton-type-error                 ; SIGNAL
@@ -319,6 +322,7 @@
    #:construct-function-entry
    #:apply-function-entry
    #:codegen-program
+   #:compile-expression
    #:update-function-env
    )
   (:export
