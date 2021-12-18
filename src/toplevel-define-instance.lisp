@@ -1,5 +1,7 @@
 (in-package #:coalton-impl)
 
+;;; Handling of toplevel COALTON:DEFINE-INSTANCE.
+
 (defun process-toplevel-instance-definitions (definstance-forms env)
   (declare (values instance-definition-list))
   (mapcar

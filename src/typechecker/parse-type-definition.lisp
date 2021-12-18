@@ -14,7 +14,9 @@
   (enum-repr    (required 'enum-repr)    :type boolean                :read-only t)
   (newtype      (required 'newtype)      :type boolean                :read-only t)
 
-  (constructors (required 'constructors) :type constructor-entry-list :read-only t))
+  (constructors (required 'constructors) :type constructor-entry-list :read-only t)
+
+  (docstring    (required 'docstring)    :type (or null string)       :read-only t))
 
 #+sbcl
 (declaim (sb-ext:freeze-type type-definition))
@@ -30,14 +32,13 @@
 (defun parse-type-definitions (forms repr-table env)
   "Parse the type defintion FORM in the ENVironment
 
-Returns (TYPE-DEFINITIONS DOCSTRINGS)"
+Returns TYPE-DEFINITIONS"
   (declare (type list forms)
            (type environment env)
-           (values type-definition-list list))
+           (values type-definition-list))
 
   ;; Pull out and verify DEFINE-TYPE and type
-  (let ((parsed-tcons nil)
-        (parsed-docstrings nil))
+  (let ((parsed-tcons nil))
     ;; First, go through and parse out all tycons so we can build an
     ;; environment
     (dolist (form forms)
@@ -63,113 +64,133 @@ Returns (TYPE-DEFINITIONS DOCSTRINGS)"
                   () "Type variables must be in the KEYWORD package. In type ~A" form)
 
           ;; Push this tycon onto the list
-          (let ((tycon-type (%make-tcon (%make-tycon :name tycon-name
-                                                     :kind (tvar-count-to-kind (length tyvar-names)))))
-                (type-vars (loop :for i :below (length tyvar-names)
-                                 :collect (make-variable))))
+          (let ((tycon-type
+                  (%make-tcon (%make-tycon :name tycon-name
+                                           :kind (tvar-count-to-kind (length tyvar-names)))))
 
-            ;; If there is a docstring it should occur as the first member of ctors. Pull this out
-            (when (stringp (car ctors))
-              (push (list tycon-name (car ctors) :type) parsed-docstrings)
-              (setf ctors (cdr ctors)))
+                (type-vars
+                  (loop :for i :below (length tyvar-names)
+                        :collect (make-variable)))
+
+                ;; If the first ctor is a string then it is the docstring and we should skip it.
+                (constructors
+                  (if (stringp (car ctors))
+                      (cdr ctors)
+                      ctors))
+
+                ;; Pull out the docstring if it exists
+                (docstring
+                  (when (stringp (car ctors))
+                    (car ctors))))
 
             ;; Save this for later
-            (push (list tycon-name tycon-type ctors type-vars tyvar-names) parsed-tcons)))))
+            (push (list tycon-name
+                        tycon-type
+                        constructors
+                        type-vars
+                        tyvar-names
+                        docstring)
+                  parsed-tcons)))))
+
+
+    ;; Push the *incomplete* type definitions onto the
+    ;; environment to allow types to depend on concurrently
+    ;; defined types.
+    ;;
+    ;; NOTE: This does not modify the ENV of the caller and gets
+    ;;       thrown away when this function returns
+    (loop :for (tycon-name tcon ctors type-vars tyvar-names docstring) :in parsed-tcons :do
+      (setf env
+            (set-type env
+                      tycon-name
+                      (type-entry
+                       :name tycon-name
+                       :runtime-type tycon-name
+                       :type tcon
+                       :enum-repr nil
+                       :newtype nil
+                       :docstring nil))))
 
     ;; Then, re-parse all of the type definitions and ctors using the environment
-    (let* ((new-bindings
-             (mapcar
-              (lambda (parsed)
-                (cons
-                 (first parsed)
-                 (type-entry
-                  :name (first parsed)
-                  :runtime-type (first parsed)
-                  :type (second parsed)
-                  :enum-repr nil
-                  :newtype nil
-                  :docstring "nil")))
-              parsed-tcons))
-           (new-env (push-type-environment env new-bindings))
-           (parsed-defs (loop :for parsed :in parsed-tcons
-                              :collect
-                              (let* ((tycon-name (first parsed))
-                                     (tcon (second parsed))
-                                     (ctors (third parsed))
-                                     (type-vars (fourth parsed))
-                                     (tyvar-names (fifth parsed))
-                                     (type-vars-alist nil)
-                                     (applied-tycon (apply-type-argument-list tcon type-vars)))
+    (loop :for (tycon-name tcon ctors type-vars tyvar-names docstring) :in parsed-tcons
+          :collect
+          (let* ((type-vars-alist nil)
+                 (applied-tycon (apply-type-argument-list tcon type-vars)))
 
-                                (with-parsing-context ("definition of type ~A" tycon-name)
-                                  ;; Populate the type variable table for use in parsing types
-                                  (setf type-vars-alist
-                                        (loop :for name :in tyvar-names
-                                              :for tvar :in type-vars
-                                              :collect (cons name
-                                                             (cons tvar
-                                                                   (kind-arity (kind-of tvar))))))
-                                  ;; Parse out the ctors
-                                  (let* ((parsed-ctors
-                                           (loop :for ctor in ctors
-                                                 :collect
-                                                 (parse-type-ctor ctor applied-tycon type-vars-alist tycon-name new-env)))
+            (with-parsing-context ("definition of type ~A" tycon-name)
+              ;; Populate the type variable table for use in parsing types
+              (setf type-vars-alist
+                    (loop :for name :in tyvar-names
+                          :for tvar :in type-vars
+                          :collect (cons name
+                                         (cons tvar
+                                               (kind-arity (kind-of tvar))))))
+              ;; Parse out the ctors
+              (let* ((parsed-ctors
+                       (loop :for ctor in ctors
+                             :collect
+                             (parse-type-ctor ctor applied-tycon type-vars-alist tycon-name env)))
 
-                                         ;; If every constructor entry has an arity of 0 then this type can be compiled as an enum
-                                         (enum-type (every (lambda (ctor)
-                                                             (= 0 (constructor-entry-arity ctor)))
-                                                           parsed-ctors))
+                     ;; If every constructor entry has an arity of 0
+                     ;; then this type can be compiled as an enum
+                     (enum-type (every (lambda (ctor)
+                                         (= 0 (constructor-entry-arity ctor)))
+                                       parsed-ctors))
 
-                                         ;; If there is a single constructor with a single field then this type can be compiled as a newtype 
-                                         (newtype (and (= 1 (length parsed-ctors))
-                                                       (= 1 (constructor-entry-arity (first parsed-ctors)))))
+                     ;; If there is a single constructor with a single
+                     ;; field then this type can be compiled as a
+                     ;; newtype
+                     (newtype (and (= 1 (length parsed-ctors))
+                                   (= 1 (constructor-entry-arity (first parsed-ctors)))))
 
-                                         (repr (gethash tycon-name repr-table)))
-                                    (cond
-                                      ;; If the type is repr lisp then
-                                      ;; do *not* attempt to generate
-                                      ;; an optimized implementation
-                                      ((eql repr :lisp)
-                                       (make-type-definition
-                                        :name tycon-name
-                                        :type tcon
-                                        :runtime-type tycon-name
-                                        :enum-repr nil
-                                        :newtype nil
-                                        :constructors parsed-ctors))
+                     (repr (gethash tycon-name repr-table)))
+                (cond
+                  ;; If the type is repr lisp then do *not* attempt to
+                  ;; generate an optimized implementation
+                  ((eql repr :lisp)
+                   (make-type-definition
+                    :name tycon-name
+                    :type tcon
+                    :runtime-type tycon-name
+                    :enum-repr nil
+                    :newtype nil
+                    :constructors parsed-ctors
+                    :docstring docstring))
 
-                                      ((and enum-type
-                                            (eql coalton-impl:*interaction-mode* ':release))
-                                       (let ((parsed-ctors (mapcar #'rewrite-ctor parsed-ctors)))
-                                         (make-type-definition
-                                          :name tycon-name
-                                          :type tcon
-                                          :runtime-type `(member ,@(mapcar #'constructor-entry-compressed-repr parsed-ctors))
-                                          :enum-repr t
-                                          :newtype nil
-                                          :constructors parsed-ctors)))
+                  ((and enum-type
+                        (eql coalton-impl:*interaction-mode* ':release))
+                   (let ((parsed-ctors (mapcar #'rewrite-ctor parsed-ctors)))
+                     (make-type-definition
+                      :name tycon-name
+                      :type tcon
+                      :runtime-type `(member ,@(mapcar #'constructor-entry-compressed-repr parsed-ctors))
+                      :enum-repr t
+                      :newtype nil
+                      :constructors parsed-ctors
+                      :docstring docstring)))
 
-                                      ((and newtype
-                                            (eql coalton-impl:*interaction-mode* ':release))
-                                       (let (;; The runtime type of a newtype is the runtime type of it's only constructor's only argument
-                                             (runtime-type (qualified-ty-type (fresh-inst (first (constructor-entry-arguments (first parsed-ctors)))))))
-                                         (make-type-definition
-                                          :name tycon-name
-                                          :type tcon
-                                          :runtime-type runtime-type
-                                          :enum-repr nil
-                                          :newtype t
-                                          :constructors parsed-ctors)))
+                  ((and newtype
+                        (eql coalton-impl:*interaction-mode* ':release))
+                   (let (;; The runtime type of a newtype is the runtime type of it's only constructor's only argument
+                         (runtime-type (qualified-ty-type (fresh-inst (first (constructor-entry-arguments (first parsed-ctors)))))))
+                     (make-type-definition
+                      :name tycon-name
+                      :type tcon
+                      :runtime-type runtime-type
+                      :enum-repr nil
+                      :newtype t
+                      :constructors parsed-ctors
+                      :docstring docstring)))
 
-                                      (t
-                                       (make-type-definition
-                                        :name tycon-name
-                                        :type tcon
-                                        :runtime-type tycon-name
-                                        :enum-repr nil
-                                        :newtype nil
-                                        :constructors parsed-ctors)))))))))
-      (values parsed-defs parsed-docstrings))))
+                  (t
+                   (make-type-definition
+                    :name tycon-name
+                    :type tcon
+                    :runtime-type tycon-name
+                    :enum-repr nil
+                    :newtype nil
+                    :constructors parsed-ctors
+                    :docstring docstring)))))))))
 
 (defun rewrite-ctor (ctor)
   (assert (= 0 (constructor-entry-arity ctor)))

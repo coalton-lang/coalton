@@ -182,7 +182,7 @@ in FORMS that begin with that operator."
                        &allow-other-keys)
       (collect-toplevel-forms toplevel-forms)
 
-    (multiple-value-bind (defined-types env type-docstrings)
+    (multiple-value-bind (defined-types env)
         (process-toplevel-type-definitions type-defines repr-table env)
 
       ;; Class definitions must be checked after types are defined
@@ -196,7 +196,7 @@ in FORMS that begin with that operator."
         (setf env (predeclare-toplevel-instance-definitions instance-defines env))
 
         (let ((declared-types (process-toplevel-declarations declares env)))
-          (multiple-value-bind (env toplevel-bindings dag value-docstrings)
+          (multiple-value-bind (env toplevel-bindings dag)
               (process-toplevel-value-definitions defines declared-types env)
 
             ;; Methods must be typechecker after the types of values
@@ -214,8 +214,6 @@ in FORMS that begin with that operator."
                                dag
                                classes
                                instance-definitions
-                               (append type-docstrings
-                                       value-docstrings)
                                env)))
                 (values
                  ;; Only generate an update block if there are environment updates

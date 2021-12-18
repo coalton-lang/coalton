@@ -25,10 +25,14 @@
        `(,(if (eql coalton-impl::*interaction-mode* ':release)
               `(defstruct (,(type-definition-name def)
                            (:constructor nil)
-                           (:predicate nil)))
+                           (:predicate nil))
+                 ,@(when (type-definition-docstring def)
+                     (list (type-definition-docstring def))))
 
               `(defclass ,(type-definition-name def) ()
-                 ()))
+                 ()
+                 ,@(when (type-definition-docstring def)
+                     `((:documentation ,(type-definition-docstring def))))))
 
          ,@(loop
              :for constructor :in (type-definition-constructors def)
