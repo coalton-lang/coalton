@@ -32,6 +32,7 @@ jobs:
           cat <<EOF > run-tests.lisp
           (sb-ext:restrict-compiler-policy 'safety ${{ matrix.SAFETY }})
           (defun main (&rest args)
-            (asdf:test-system :coalton))
+            (asdf:test-system :coalton)
+            (asdf:load-system :small-coalton-programs))
           EOF
           qlot exec ros -- run-tests.lisp
