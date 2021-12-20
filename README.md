@@ -28,9 +28,7 @@ Coalton can be written in files:
 
   (define-instance (Eq Symbol)
     (define (== a b)
-      (== (symbol-name a) (symbol-name b)))
-    (define (/= a b)
-      (not (== a b))))
+      (== (symbol-name a) (symbol-name b))))
 
   (define-type Expr
     "A symbolic expression of basic arithmetic."
