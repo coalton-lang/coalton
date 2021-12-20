@@ -62,6 +62,8 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
            (parse-application expr (first expr) `(coalton-library:Unit) m package))
 
           (t (parse-application expr (first expr) rands m package))))))
+    ((listp expr) ;; EXPR already flunked PROPER-LIST-P, so it's a dotted list.
+     (error-parsing expr "Dotted lists are not valid in Coalton"))
     (t
      (unreachable))))
 
