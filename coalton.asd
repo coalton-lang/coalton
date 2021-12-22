@@ -102,7 +102,8 @@
                              (:file "vector")
                              (:file "slice")
                              (:file "hashtable")
-                             (:file "graph")))
+                             (:file "graph")
+			     (:file "stateful-computation")))
                (:file "toplevel-environment")))
 
 (asdf:defsystem #:coalton/tests
