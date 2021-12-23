@@ -184,9 +184,10 @@
 
                      :append (compile-function name vars type return-type subexpr env)
 
-                     :when docstring
-                     :append `((setf (documentation ',name 'variable) ,docstring
-                                      (documentation ',name 'function) ,docstring)))))
+                     :append
+                     (let ((codegen-docstring (codegen-docstring name docstring env)))
+                       `((setf (documentation ',name 'variable) ,codegen-docstring
+                               (documentation ',name 'function) ,codegen-docstring))))))
 
           ((= 1 (length scc-typed-bindings))
            ;; Variables
@@ -205,11 +206,11 @@
                       (typed-node-type node)
                       node
                       env))
-                 `((coalton-impl::define-global-lexical ,(car b) ':|@@unbound@@|)
-                   (setf ,(car b) (load-time-value
-                                   ,(compile-expression (cdr b) nil env))
-                         ,@(when docstring
-                             `((documentation ',name 'variable) ,docstring)))))))
+                 (let ((codegen-docstring (codegen-docstring name docstring env)))
+                   `((coalton-impl::define-global-lexical ,(car b) ':|@@unbound@@|)
+                     (setf ,(car b) (load-time-value
+                                     ,(compile-expression (cdr b) nil env))
+                           (documentation ',name 'variable) ,codegen-docstring))))))
           (t (error "")))))
 
 

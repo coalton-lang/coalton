@@ -1,5 +1,10 @@
 (in-package #:coalton-impl/codegen)
 
+(defun codegen-docstring (name docstring env)
+  (if docstring
+      (format nil "~S :: ~A~%~A" name (lookup-value-type env name) docstring)
+      (format nil "~S :: ~A" name (lookup-value-type env name))))
+
 (defstruct struct-or-class-field
   (name (required 'name) :type symbol :read-only t)
   (type (required 'type) :type t      :read-only t))
