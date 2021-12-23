@@ -225,8 +225,6 @@ Unbound integer. Uses `integer`.
 - <code><a href="#eq-class">EQ</a> <a href="#integer-type">INTEGER</a></code>
 - <code><a href="#num-class">NUM</a> <a href="#integer-type">INTEGER</a></code>
 - <code><a href="#ord-class">ORD</a> <a href="#integer-type">INTEGER</a></code>
-- <code><a href="#into-class">INTO</a> <a href="#nodeindex-type">NODEINDEX</a> <a href="#integer-type">INTEGER</a></code>
-- <code><a href="#into-class">INTO</a> <a href="#edgeindex-type">EDGEINDEX</a> <a href="#integer-type">INTEGER</a></code>
 - <code><a href="#into-class">INTO</a> <a href="#integer-type">INTEGER</a> <a href="#string-type">STRING</a></code>
 - <code><a href="#into-class">INTO</a> <a href="#u64-type">U64</a> <a href="#integer-type">INTEGER</a></code>
 - <code><a href="#into-class">INTO</a> <a href="#integer-type">INTEGER</a> <a href="#u64-type">U64</a></code>
@@ -756,8 +754,6 @@ Methods:
 - <code><a href="#eq-class">EQ</a> :A ⇒ <a href="#eq-class">EQ</a> (<a href="#cell-type">CELL</a> :A)</code>
 - <code><a href="#eq-class">EQ</a> :A ⇒ <a href="#eq-class">EQ</a> (<a href="#vector-type">VECTOR</a> :A)</code>
 - <code><a href="#eq-class">EQ</a> :A ⇒ <a href="#eq-class">EQ</a> (<a href="#slice-type">SLICE</a> :A)</code>
-- <code><a href="#eq-class">EQ</a> <a href="#edgeindex-type">EDGEINDEX</a></code>
-- <code><a href="#eq-class">EQ</a> <a href="#nodeindex-type">NODEINDEX</a></code>
 
 </details>
 
@@ -880,8 +876,6 @@ Methods:
 - <code><a href="#into-class">INTO</a> (<a href="#vector-type">VECTOR</a> :A) (<a href="#list-type">LIST</a> :A)</code>
 - <code><a href="#into-class">INTO</a> (<a href="#slice-type">SLICE</a> :A) (<a href="#vector-type">VECTOR</a> :A)</code>
 - <code><a href="#into-class">INTO</a> (<a href="#vector-type">VECTOR</a> :A) (<a href="#slice-type">SLICE</a> :A)</code>
-- <code><a href="#into-class">INTO</a> <a href="#edgeindex-type">EDGEINDEX</a> <a href="#integer-type">INTEGER</a></code>
-- <code><a href="#into-class">INTO</a> <a href="#nodeindex-type">NODEINDEX</a> <a href="#integer-type">INTEGER</a></code>
 
 </details>
 
@@ -902,6 +896,7 @@ Methods:
 - <code><a href="#monad-class">MONAD</a> <a href="#optional-type">OPTIONAL</a></code>
 - <code><a href="#monad-class">MONAD</a> <a href="#list-type">LIST</a></code>
 - <code><a href="#monad-class">MONAD</a> (<a href="#result-type">RESULT</a> :A)</code>
+- <code><a href="#monad-class">MONAD</a> (<a href="#statefulcomputation-type">STATEFULCOMPUTATION</a> :A)</code>
 
 </details>
 
@@ -945,6 +940,7 @@ Methods:
 - <code><a href="#functor-class">FUNCTOR</a> (<a href="#result-type">RESULT</a> :A)</code>
 - <code><a href="#functor-class">FUNCTOR</a> <a href="#cell-type">CELL</a></code>
 - <code><a href="#functor-class">FUNCTOR</a> <a href="#vector-type">VECTOR</a></code>
+- <code><a href="#functor-class">FUNCTOR</a> (<a href="#statefulcomputation-type">STATEFULCOMPUTATION</a> :A)</code>
 
 </details>
 
@@ -1084,6 +1080,7 @@ Methods:
 - <code><a href="#applicative-class">APPLICATIVE</a> <a href="#list-type">LIST</a></code>
 - <code><a href="#applicative-class">APPLICATIVE</a> (<a href="#result-type">RESULT</a> :A)</code>
 - <code><a href="#applicative-class">APPLICATIVE</a> <a href="#cell-type">CELL</a></code>
+- <code><a href="#applicative-class">APPLICATIVE</a> (<a href="#statefulcomputation-type">STATEFULCOMPUTATION</a> :A)</code>
 
 </details>
 
@@ -1941,7 +1938,7 @@ Compute the disjunction of two unary Boolean functions.
 #### <code>TRAVERSE</code> <sup><sub>[FUNCTION]</sub></sup><a name="traverse-function"></a>
 <code>∀ :A :B :C. <a href="#applicative-class">APPLICATIVE</a> :B ⇒ ((:A → (:B :C)) → (<a href="#list-type">LIST</a> :A) → (:B (<a href="#list-type">LIST</a> :C)))</code>
 
-Map the elements of XS with F then collect the results.
+Map the elements of XS with F from left to right, collecting the results.
 
 
 ***
@@ -2550,60 +2547,25 @@ Crate a new empty hashtable with a given capacity
 
 ***
 
-## File: [graph.lisp](../src/library/graph.lisp)
+## File: [stateful-computation.lisp](../src/library/stateful-computation.lisp)
 
 ### Types
 
-#### <code>GRAPH :A :B</code> <sup><sub>[TYPE]</sub></sup><a name="graph-type"></a>
-- <code>(GRAPH <a href="#graphtype-type">GRAPHTYPE</a> (<a href="#vector-type">VECTOR</a> (<a href="#node-type">NODE</a> :A)) (<a href="#vector-type">VECTOR</a> (<a href="#edge-type">EDGE</a> :B)))</code>
+#### <code>STATEFULCOMPUTATION :A :B</code> <sup><sub>[TYPE]</sub></sup><a name="statefulcomputation-type"></a>
+- <code>(STATEFULCOMPUTATION (:A → (<a href="#tuple-type">TUPLE</a> :A :B)))</code>
 
-A graph using adjacency list representation
-
-Constructors:
-- <code>GRAPH :: (<a href="#graphtype-type">GRAPHTYPE</a> → (<a href="#vector-type">VECTOR</a> (<a href="#node-type">NODE</a> :A)) → (<a href="#vector-type">VECTOR</a> (<a href="#edge-type">EDGE</a> :B)) → (<a href="#graph-type">GRAPH</a> :A :B))</code>
-
-
-***
-
-#### <code>EDGEINDEX</code> <sup><sub>[TYPE]</sub></sup><a name="edgeindex-type"></a>
-- <code>(EDGEINDEX <a href="#integer-type">INTEGER</a>)</code>
+A computation of a value which may affect the state.
+Represented as a closure from initial state to updated state and value.
 
 Constructors:
-- <code>EDGEINDEX :: (<a href="#integer-type">INTEGER</a> → <a href="#edgeindex-type">EDGEINDEX</a>)</code>
+- <code>STATEFULCOMPUTATION :: ((:A → (<a href="#tuple-type">TUPLE</a> :A :B)) → (<a href="#statefulcomputation-type">STATEFULCOMPUTATION</a> :A :B))</code>
 
 <details>
 <summary>Instances</summary>
 
-- <code><a href="#eq-class">EQ</a> <a href="#edgeindex-type">EDGEINDEX</a></code>
-- <code><a href="#into-class">INTO</a> <a href="#edgeindex-type">EDGEINDEX</a> <a href="#integer-type">INTEGER</a></code>
-
-</details>
-
-
-***
-
-#### <code>GRAPHTYPE</code> <sup><sub>[TYPE]</sub></sup><a name="graphtype-type"></a>
-- <code>UNDIRECTED</code>
-- <code>DIRECTED</code>
-
-Constructors:
-- <code>UNDIRECTED :: <a href="#graphtype-type">GRAPHTYPE</a></code>
-- <code>DIRECTED :: <a href="#graphtype-type">GRAPHTYPE</a></code>
-
-
-***
-
-#### <code>NODEINDEX</code> <sup><sub>[TYPE]</sub></sup><a name="nodeindex-type"></a>
-- <code>(NODEINDEX <a href="#integer-type">INTEGER</a>)</code>
-
-Constructors:
-- <code>NODEINDEX :: (<a href="#integer-type">INTEGER</a> → <a href="#nodeindex-type">NODEINDEX</a>)</code>
-
-<details>
-<summary>Instances</summary>
-
-- <code><a href="#eq-class">EQ</a> <a href="#nodeindex-type">NODEINDEX</a></code>
-- <code><a href="#into-class">INTO</a> <a href="#nodeindex-type">NODEINDEX</a> <a href="#integer-type">INTEGER</a></code>
+- <code><a href="#monad-class">MONAD</a> (<a href="#statefulcomputation-type">STATEFULCOMPUTATION</a> :A)</code>
+- <code><a href="#functor-class">FUNCTOR</a> (<a href="#statefulcomputation-type">STATEFULCOMPUTATION</a> :A)</code>
+- <code><a href="#applicative-class">APPLICATIVE</a> (<a href="#statefulcomputation-type">STATEFULCOMPUTATION</a> :A)</code>
 
 </details>
 
@@ -2612,90 +2574,26 @@ Constructors:
 
 ### Values
 
-#### <code>MAKE-GRAPH</code> <sup><sub>[FUNCTION]</sub></sup><a name="make-graph-function"></a>
-<code>∀ :A :B. (<a href="#unit-type">UNIT</a> → (<a href="#graph-type">GRAPH</a> :A :B))</code>
+#### <code>STATEFUL-COMPUTATION-GET</code> <sup><sub>[VALUE]</sub></sup><a name="stateful-computation-get-function"></a>
+<code>∀ :A. (<a href="#statefulcomputation-type">STATEFULCOMPUTATION</a> :A :A)</code>
 
-Create a new empty undirected graph
-
-
-***
-
-#### <code>GRAPH-EDGES</code> <sup><sub>[FUNCTION]</sub></sup><a name="graph-edges-function"></a>
-<code>∀ :A :B. ((<a href="#graph-type">GRAPH</a> :A :B) → (<a href="#vector-type">VECTOR</a> (<a href="#edge-type">EDGE</a> :B)))</code>
-
-Returns the edges in a graph
+A StatefulComputation which returns the current state as the value.
 
 
 ***
 
-#### <code>GRAPH-NODES</code> <sup><sub>[FUNCTION]</sub></sup><a name="graph-nodes-function"></a>
-<code>∀ :A :B. ((<a href="#graph-type">GRAPH</a> :A :B) → (<a href="#vector-type">VECTOR</a> (<a href="#node-type">NODE</a> :A)))</code>
+#### <code>STATEFUL-COMPUTATION-PUT</code> <sup><sub>[FUNCTION]</sub></sup><a name="stateful-computation-put-function"></a>
+<code>∀ :A. (:A → (<a href="#statefulcomputation-type">STATEFULCOMPUTATION</a> :A <a href="#unit-type">UNIT</a>))</code>
 
-Returns the nodes in a graph
-
-
-***
-
-#### <code>MAKE-DIGRAPH</code> <sup><sub>[FUNCTION]</sub></sup><a name="make-digraph-function"></a>
-<code>∀ :A :B. (<a href="#unit-type">UNIT</a> → (<a href="#graph-type">GRAPH</a> :A :B))</code>
-
-Create a new directed graph
+A StatefulComputation with state set to be given state. The returned value is Unit.
 
 
 ***
 
-#### <code>GRAPH-ADD-EDGE</code> <sup><sub>[FUNCTION]</sub></sup><a name="graph-add-edge-function"></a>
-<code>∀ :A :B. (:A → <a href="#nodeindex-type">NODEINDEX</a> → <a href="#nodeindex-type">NODEINDEX</a> → (<a href="#graph-type">GRAPH</a> :B :A) → <a href="#edgeindex-type">EDGEINDEX</a>)</code>
+#### <code>STATEFUL-COMPUTATION-RUN</code> <sup><sub>[FUNCTION]</sub></sup><a name="stateful-computation-run-function"></a>
+<code>∀ :A :B. ((<a href="#statefulcomputation-type">STATEFULCOMPUTATION</a> :A :B) → :A → (<a href="#tuple-type">TUPLE</a> :A :B))</code>
 
-Add an edge with associated data from node FROM to node TO in the graph.
-
-
-***
-
-#### <code>GRAPH-ADD-NODE</code> <sup><sub>[FUNCTION]</sub></sup><a name="graph-add-node-function"></a>
-<code>∀ :A :B. (:A → (<a href="#graph-type">GRAPH</a> :A :B) → <a href="#nodeindex-type">NODEINDEX</a>)</code>
-
-Add a node with associated data to the graph, returning the index of the new node.
-
-
-***
-
-#### <code>GRAPH-EDGE-COUNT</code> <sup><sub>[FUNCTION]</sub></sup><a name="graph-edge-count-function"></a>
-<code>∀ :A :B. ((<a href="#graph-type">GRAPH</a> :A :B) → <a href="#integer-type">INTEGER</a>)</code>
-
-Returns the number of edges in a graph
-
-
-***
-
-#### <code>GRAPH-LOOKUP-EDGE</code> <sup><sub>[FUNCTION]</sub></sup><a name="graph-lookup-edge-function"></a>
-<code>∀ :A :B. (<a href="#edgeindex-type">EDGEINDEX</a> → (<a href="#graph-type">GRAPH</a> :A :B) → (<a href="#optional-type">OPTIONAL</a> (<a href="#edge-type">EDGE</a> :B)))</code>
-
-Lookup a node with index IDX in graph G
-
-
-***
-
-#### <code>GRAPH-LOOKUP-NODE</code> <sup><sub>[FUNCTION]</sub></sup><a name="graph-lookup-node-function"></a>
-<code>∀ :A :B. (<a href="#nodeindex-type">NODEINDEX</a> → (<a href="#graph-type">GRAPH</a> :A :B) → (<a href="#optional-type">OPTIONAL</a> (<a href="#node-type">NODE</a> :A)))</code>
-
-Lookup a node with index IDX in graph G
-
-
-***
-
-#### <code>GRAPH-REMOVE-EDGE</code> <sup><sub>[FUNCTION]</sub></sup><a name="graph-remove-edge-function"></a>
-<code>∀ :A :B. (<a href="#edgeindex-type">EDGEINDEX</a> → (<a href="#graph-type">GRAPH</a> :A :B) → (<a href="#optional-type">OPTIONAL</a> :B))</code>
-
-Remove an edge from GRAPH
-
-
-***
-
-#### <code>GRAPH-REMOVE-NODE</code> <sup><sub>[FUNCTION]</sub></sup><a name="graph-remove-node-function"></a>
-<code>∀ :A :B. (<a href="#nodeindex-type">NODEINDEX</a> → (<a href="#graph-type">GRAPH</a> :A :B) → (<a href="#optional-type">OPTIONAL</a> :A))</code>
-
-Remove a node and all edges connecting to it from GRAPH
+Runs a StatefulComputation to produce a final updated state and value given an initial state
 
 
 ***

@@ -102,7 +102,6 @@
                              (:file "vector")
                              (:file "slice")
                              (:file "hashtable")
-                             (:file "graph")
 			     (:file "stateful-computation")))
                (:file "toplevel-environment")))
 
@@ -129,5 +128,4 @@
                (:file "runtime-tests")
                (:file "environment-persist-tests")
                (:file "slice-tests")
-               (:file "quantize-tests")
-               (:file "graph-tests")))
+               (:file "quantize-tests")))

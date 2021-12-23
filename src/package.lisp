@@ -720,25 +720,6 @@
    #:hashtable-keys
    #:hashtable-values
    #:hashtable-entries)
-  ;; Graph
-  (:export
-   #:NodeIndex
-   #:EdgeIndex
-   #:GraphType #:Undirected #:Directed
-   #:Graph
-   #:make-graph
-   #:make-digraph
-   #:graph-nodes
-   #:graph-edges
-   #:graph-number-count
-   #:graph-edge-count
-   #:graph-lookup-node
-   #:graph-lookup-edge
-   #:graph-add-node
-   #:graph-remove-node
-   #:graph-add-edge
-   #:graph-remove-edge
-   #:graph-viz)
   ;; StatefulComputation
   (:export
     #:StatefulComputation
