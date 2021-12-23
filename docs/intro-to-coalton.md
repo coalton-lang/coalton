@@ -349,13 +349,23 @@ COALTON-USER> (type-of 'fun)
 (STRING -> (OPTIONAL INT)
 ```
 
-Type annotations can always be added manually.
+Type declarations can always be added manually.
 
 ```lisp
 (coalton-toplevel
   (declare fun (String -> (Optional Integer)))
   (define (fun x)
     (map (+ 2) (parse-int x))))
+```
+
+Type declarations can also be added in let expressions
+
+```lisp
+(coalton-toplevel
+  (define (f a b)
+    (let ((declare g (Integer -> Integer -> Integer))
+          (g +))
+      (g a b)))) 
 ```
 
 ## Pattern Matching
@@ -501,8 +511,7 @@ Currently, *all* member functions must be defined for each typeclass instance.
 (coalton-toplevel
   ;; Typeclasses are defined with the define-class keyword
   (define-class (Eq :a)
-    (== (:a -> :a -> Boolean))
-    (/= (:a -> :a -> Boolean)))
+    (== (:a -> :a -> Boolean)))
 
   (define-type Color
     Red
