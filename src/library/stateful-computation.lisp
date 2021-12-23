@@ -34,7 +34,7 @@ Represented as a closure from initial state to updated state and value."
     (define (map fa->b sca)
       (StatefulComputation
        (fn (state)
-	 (match (stateful-computation-run sca state)
+	 (match (run-stateful-computation sca state)
 	   ((Tuple state2 a)
 	    (Tuple state2 (fa->b a))))))))
 
