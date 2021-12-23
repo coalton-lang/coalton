@@ -20,8 +20,8 @@ Represented as a closure from initial state to updated state and value."
     "A StatefulComputation which returns the current state as the value."
     (StatefulComputation (fn (state) (Tuple state state))))
 
-  (declare run-stateful-computation ((StatefulComputation :state :a) -> :state -> (Tuple :state :a)))
-  (define (run-stateful-computation sc)
+  (declare stateful-computation-run ((StatefulComputation :state :a) -> :state -> (Tuple :state :a)))
+  (define (stateful-computation-run sc)
     "Runs a StatefulComputation to produce a final updated state and value given an initial state"
     (match sc
       ((StatefulComputation fstate)
@@ -34,7 +34,7 @@ Represented as a closure from initial state to updated state and value."
     (define (map fa->b sca)
       (StatefulComputation
        (fn (state)
-	 (match (run-stateful-computation sca state)
+	 (match (stateful-computation-run sca state)
 	   ((Tuple state2 a)
 	    (Tuple state2 (fa->b a))))))))
 
@@ -46,10 +46,10 @@ Represented as a closure from initial state to updated state and value."
       (StatefulComputation
        (fn (state1)
 	 ;; Apply the initial state to sca
-	 (match (run-stateful-computation sca state1)
+	 (match (stateful-computation-run sca state1)
 	   ((Tuple state2 a)
 	    ;; Appply the state from sca to scb
-	    (match (run-stateful-computation scb state2)
+	    (match (stateful-computation-run scb state2)
 	      ((Tuple state3 b)
 	       (Tuple state3 (fab a b))))))))))
 
@@ -57,8 +57,8 @@ Represented as a closure from initial state to updated state and value."
     (define (>>= sca fa->scb)
       (StatefulComputation
        (fn (state1)
-	 (match (run-stateful-computation sca state1)
+	 (match (stateful-computation-run sca state1)
 	   ((Tuple state2 a)
 	    ;; Use the a to compute the scb,
 	    ;; and apply the state from sca to the scb
-	    (run-stateful-computation (fa->scb a) state2))))))))
+	    (stateful-computation-run (fa->scb a) state2))))))))

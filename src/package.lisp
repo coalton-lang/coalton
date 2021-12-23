@@ -738,7 +738,13 @@
    #:graph-remove-node
    #:graph-add-edge
    #:graph-remove-edge
-   #:graph-viz))
+   #:graph-viz)
+  ;; StatefulComputation
+  (:export
+    #:StatefulComputation
+    #:stateful-computation-run
+    #:stateful-computation-get
+    #:stateful-computation-put))
 
 (uiop:define-package #:coalton-user
   (:documentation "A default user package for Coalton.")
