@@ -10,32 +10,36 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
   (cond
     ((atom expr)
      (etypecase expr
-       (null    (error-parsing expr "NIL is not allowed!"))
+       (null    (error-parsing
+                 expr
+                 "The empty list literal (), also written as the symbol ~
+                 COMMON-LISP:NIL, is not valid in Coalton.~&~%This error is ~
+                 often triggered by expanding a buggy macro."))
        (symbol  (parse-variable expr m))
        (literal-value
         (parse-atom expr))))
     ((alexandria:proper-list-p expr)
      (alexandria:destructuring-case expr
        ;; Abstraction
-       ((coalton:fn &rest args)
+       (((or coalton:fn coalton:λ) &rest args)
         (unless (= 2 (length args))
-          (error-parsing expr "Invalid fn expression.."))
-        (parse-abstraction expr (first args) (second args) m package))
-       ((coalton:λ &rest args)
-        (unless (= 2 (length args))
-          (error-parsing expr "Invalid fn expression.."))
+          (error-parsing
+           expr
+           "Invalid anonymous function expression.~&~%~
+            Usage: (~S (VARS*) BODY)"
+           (car expr)))
         (parse-abstraction expr (first args) (second args) m package))
 
        ;; Let
        ((coalton:let &rest args)
         (unless (= 2 (length args))
-          (error-parsing expr "Invalid let expression."))
+          (error-parsing expr "Invalid binding expression."))
         (parse-let expr (first args) (second args) m package))
 
        ;; Lisp
        ((coalton:lisp &rest args)
         (unless (= 3 (length args))
-          (error-parsing expr "Invalid lisp expression."))
+          (error-parsing expr "Invalid embedded Lisp expression."))
         (parse-lisp expr (first args) (second args) (third args) m))
 
        ;; Match
@@ -47,9 +51,9 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
         (parse-seq expr subnodes m package))
 
        ;; The
-       ((coalton:the  &rest args)
+       ((coalton:the &rest args)
         (unless (= 2 (length args))
-          (error-parsing expr "Invalid the expression."))
+          (error-parsing expr "Invalid type assertion."))
         (parse-the expr (first args) (second args) m package))
 
        ;; Application
@@ -63,7 +67,7 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
 
           (t (parse-application expr (first expr) rands m package))))))
     ((listp expr) ;; EXPR already flunked PROPER-LIST-P, so it's a dotted list.
-     (error-parsing expr "Dotted lists are not valid in Coalton"))
+     (error-parsing expr "Dotted lists are not valid Coalton syntax."))
     (t
      (unreachable))))
 
