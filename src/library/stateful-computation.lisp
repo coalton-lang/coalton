@@ -5,7 +5,10 @@
   ;; StatefulComputation
   ;;
 
-  ;; Definition is in types.lisp
+  (define-type (StatefulComputation :state :value)
+    "A computation of a value which may affect the state.
+Represented as a closure from initial state to updated state and value."
+    (StatefulComputation (:state -> (Tuple :state :value))))
 
   (declare stateful-computation-put (:state -> (StatefulComputation :state Unit)))
   (define (stateful-computation-put state)

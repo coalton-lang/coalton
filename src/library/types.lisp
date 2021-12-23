@@ -91,9 +91,4 @@
     ;; This shouldn't be pattern matched against with user code.
     ;;
     ;; See fraction.lisp for more info.
-    (%Fraction Integer Integer))
-
-  (define-type (StatefulComputation :state :value)
-    "A computation of a value which may affect the state.
-Represented as a closure from initial state to updated state and value."
-    (StatefulComputation (:state -> (Tuple :state :value)))))
+    (%Fraction Integer Integer)))
