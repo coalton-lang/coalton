@@ -23,9 +23,16 @@
          :reason reason
          :args args))
 
-(defun unreachable ()
-  "A function to call when something should be unreachable."
-  (coalton-bug "This error was expected to be unreachable in the Coalton source code."))
+(defmacro unreachable ()
+  "Assert that a branch of code cannot be evaluated in the course of normal execution."
+  ;; Ideally, we would *catch* the code-deletion-note condition and signal a
+  ;; warning if no such condition was seen (i.e., if SBCL didn't prove the
+  ;; (UNREACHABLE) form to be prunable). As far as I can tell, though, that
+  ;; requires wrapping the entire containing toplevel form in a HANDLER-BIND,
+  ;; which cannot be done by the expansion of an inner macro form.
+  '(locally
+      #+sbcl (declare (sb-ext:muffle-conditions sb-ext:code-deletion-note))
+      (coalton-bug "This error was expected to be unreachable in the Coalton source code.")))
 
 (defun required (name)
   "A function to call as a slot initializer when it's required."
