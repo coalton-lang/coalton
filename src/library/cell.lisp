@@ -9,7 +9,7 @@
   (cl:format stream "~A" (cell-internal-inner self))
   self)
 
-#+sbcl
+#+(and sbcl coalton-release)
 (cl:declaim (sb-ext:freeze-type cell-internal))
 
 (coalton-toplevel

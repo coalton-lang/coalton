@@ -15,7 +15,7 @@
 (deftype typed-node-list ()
   '(satisfies typed-node-list-p))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type typed-node-list))
 
 (defun typed-binding-list-p (x)
@@ -25,7 +25,7 @@
 (deftype typed-binding-list ()
   `(satisfies typed-binding-list-p))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type typed-binding-list))
 
 (defstruct
@@ -34,7 +34,7 @@
      (:constructor typed-node-literal (type unparsed value)))
   (value (required 'value) :type literal-value :read-only t))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type typed-node-literal))
 
 (defstruct
@@ -44,7 +44,7 @@
   ;; The name of the variable
   (name (required 'name) :type symbol :read-only t))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type typed-node-variable))
 
 (defstruct
@@ -57,7 +57,7 @@
   ;; The arguments
   (rands (required 'rands) :type typed-node-list :read-only t))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type typed-node-application))
 
 (defstruct
@@ -76,7 +76,7 @@
   ;; The arguments
   (rands      (required 'rands)      :type typed-node-list :read-only t))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type typed-node-direct-application))
 
 (defstruct
@@ -93,7 +93,7 @@
   ;; to their origional names
   (name-map (required 'name-map) :type list                :read-only t))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type typed-node-abstraction))
 
 (defstruct
@@ -116,7 +116,7 @@
   ;; to their origional names
   (name-map                (required 'name-map)                :type list               :read-only t))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type typed-node-let))
 
 (defstruct
@@ -129,7 +129,7 @@
   ;; The lisp block
   (form      (required 'form)      :type t :read-only t))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type typed-node-lisp))
 
 (defstruct
@@ -141,7 +141,7 @@
   (bindings (required 'bindings) :type scheme-binding-list :read-only t)
   (name-map (required 'name-map) :type list                :read-only t))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type typed-match-branch))
 
 (defun typed-match-branch-list-p (x)
@@ -151,7 +151,7 @@
 (deftype typed-match-branch-list ()
   '(satisfies typed-match-branch-list-p))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type typed-match-branch-list))
 
 (defstruct
@@ -161,7 +161,7 @@
   (expr     (required 'expr)     :type typed-node              :read-only t)
   (branches (required 'branches) :type typed-match-branch-list :read-only t))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type typed-node-match))
 
 (defstruct
@@ -170,10 +170,10 @@
      (:constructor typed-node-seq (type unparsed subnodes)))
   (subnodes (required 'subnodes) :type typed-node-list :read-only t))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type typed-node-seq))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type typed-node))
 
 ;;;

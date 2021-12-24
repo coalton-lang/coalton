@@ -239,7 +239,7 @@
                   :classname codegen-name
                   :constructor codegen-name
                   :fields fields
-                  :mode (if (eql coalton-impl::*interaction-mode* :release)
+                  :mode (if (coalton-impl:coalton-release-p)
                             :struct
                             :class))
 

@@ -6,7 +6,7 @@
     (arity    (required 'arity)    :type fixnum   :read-only t)
     (function (required 'function) :type function :read-only t)
     (curried  (required 'curried)  :type function :read-only t))
-  #+sbcl
+  #+(and sbcl coalton-release)
   (declaim (sb-ext:freeze-type function-entry)))
 
 (defvar *function-constructor-functions* (make-hash-table))

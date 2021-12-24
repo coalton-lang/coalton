@@ -19,9 +19,9 @@
   :pathname "src/"
   :serial t
   :components ((:file "package")
+               (:file "settings")
                (:file "utilities")
                (:file "global-lexical")
-               (:file "settings")
                (:module "algorithm"
                 :serial t
                 :components ((:file "tarjan-scc")

@@ -4,7 +4,7 @@
   (name (required 'name) :type symbol :read-only t)
   (type (required 'type) :type t      :read-only t))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type struct-or-class-field))
 
 (defun struct-or-class (&key

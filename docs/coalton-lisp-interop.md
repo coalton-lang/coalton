@@ -6,16 +6,23 @@ Coalton is a language embedded in Lisp, and indeed, Coalton compiles to Lisp cod
 
 ## Interaction Mode
 
-First and foremost, there are two ways to globally compile Coalton. This is determined by an environment variable `COALTON_ENV` which in turns sets a global variable `*interaction-mode*`. There are two options for this variable:
+First and foremost, there are two ways to globally compile Coalton. This is determined by
+an environment variable `COALTON_ENV` which in turn sets a Lisp feature `:coalton-release`
+and controls a Lisp function `(coalton-release-p)`.
 
-- `COALTON_ENV=development`, which sets `*interaction-mode*` to `:development`
-- `COALTON_ENV=release`, which sets `*interaction-mode*` to `:release`
+If `COALTON_ENV=release`, then `:coalton-release` will appear in `*features*`, and
+`(coalton-release-p)` will return a true (non-null) value.
+
+Otherwise, Coalton is in development mode, `*features*` will not contain `:coalton-release`, and `(coalton-release-p)` will return `nil`.
 
 As the names imply, these two modes have different behaviors that optimize for either development or release.
 
-**WARNING**: *All* Coalton code, *including* the standard library, *must* be compiled in the same mode. We advise application writers to set the environment variable during their application's build process before Coalton is compiled, and to ensure caches are not stale.
+**WARNING**: *All* Coalton code, *including* the compiler and the standard library, *must*
+be compiled in the same mode.
 
-By default, the interaction mode is `:development`.
+The default is development mode. If you want to run Coalton in release mode, you must set
+the appropriate environment variable before compiling and loading Coalton, and you must
+ensure that ASDF is not loading cached fasls compiled for development mode.
 
 ### Development Mode
 
@@ -35,6 +42,12 @@ Release mode freezes most structures and optimizes them.
 ### Pitfalls of Having Two Modes
 
 Unfortunately, having two modes may mean one inadvertently depend on the behavior in one mode that is not supported in the other. We advise testing your code against both modes.
+
+### Developing the compiler
+
+In release mode, the Coalton compiler will `declaim freeze-type` on its internal data
+structures. Altering one of these structures in release mode will likely require you to
+restart your Lisp process and reload Coalton.
 
 ## Promises of Data and Basic Data Types
 

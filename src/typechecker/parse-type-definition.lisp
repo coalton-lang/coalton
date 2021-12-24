@@ -18,7 +18,7 @@
 
   (docstring    (required 'docstring)    :type (or null string)       :read-only t))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type type-definition))
 
 (defun type-definition-list-p (x)
@@ -158,7 +158,7 @@ Returns TYPE-DEFINITIONS"
                     :docstring docstring))
 
                   ((and enum-type
-                        (eql coalton-impl:*interaction-mode* ':release))
+                        (coalton-impl:coalton-release-p))
                    (let ((parsed-ctors (mapcar #'rewrite-ctor parsed-ctors)))
                      (make-type-definition
                       :name tycon-name
@@ -170,7 +170,7 @@ Returns TYPE-DEFINITIONS"
                       :docstring docstring)))
 
                   ((and newtype
-                        (eql coalton-impl:*interaction-mode* ':release))
+                        (coalton-impl:coalton-release-p))
                    (let (;; The runtime type of a newtype is the runtime type of it's only constructor's only argument
                          (runtime-type (qualified-ty-type (fresh-inst (first (constructor-entry-arguments (first parsed-ctors)))))))
                      (make-type-definition

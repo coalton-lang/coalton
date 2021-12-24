@@ -6,7 +6,7 @@
 
 (defstruct (value-environment (:include immutable-map)))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type value-environment))
 
 (defmethod apply-substitution (subst-list (env value-environment))
@@ -60,12 +60,12 @@
 (defmethod coalton-impl/typechecker::kind-of ((entry type-entry))
   (coalton-impl/typechecker::kind-of (type-entry-type entry)))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type type-entry))
 
 (defstruct (type-environment (:include immutable-map)))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type type-environment))
 
 
@@ -249,7 +249,7 @@
    :slot-names '(name arity constructs scheme arguments classname compressed-repr)
    :environment env))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type constructor-entry))
 
 (defun constructor-entry-list-p (x)
@@ -259,7 +259,7 @@
 (deftype constructor-entry-list ()
   '(satisfies constructor-entry-list-p))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type constructor-entry-list))
 
 
@@ -313,7 +313,7 @@
               :classname nil
               :compressed-repr 'nil))))))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type constructor-environment))
 
 ;;;
@@ -340,7 +340,7 @@
    :slot-names '(name predicate superclasses unqualified-methods codegen-sym superclass-dict docstring location)
    :environment env))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type ty-class))
 
 (defun ty-class-list-p (x)
@@ -350,7 +350,7 @@
 (deftype ty-class-list ()
   '(satisfies ty-class-list-p))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type ty-class-list))
 
 (defmethod apply-substitution (subst-list (class ty-class))
@@ -373,7 +373,7 @@
 
 (defstruct (class-environment (:include immutable-map)))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type class-environment))
 
 ;;;
@@ -393,7 +393,7 @@
    :slot-names '(constraints predicate codegen-sym)
    :environment env))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type ty-class-instance))
 
 (defun ty-class-instance-list-p (x)
@@ -403,7 +403,7 @@
 (deftype ty-class-instance-list ()
   `(satisfies ty-class-instance-list-p))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type ty-class-instance-list))
 
 (defmethod apply-substitution (subst-list (instance ty-class-instance))
@@ -416,7 +416,7 @@
 
 (defstruct (instance-environment (:include immutable-listmap)))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type instance-environment))
 
 ;;;
@@ -433,7 +433,7 @@
    :slot-names '(name arity)
    :environment env))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type function-env-entry))
 
 (defun function-env-entry-list-p (x)
@@ -443,12 +443,12 @@
 (deftype function-env-entry-list ()
   `(satisfies function-env-entry-list-p))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type function-env-entry-list))
 
 (defstruct (function-environment (:include immutable-map)))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type function-environment))
 
 ;;;
@@ -467,12 +467,12 @@
    :slot-names '(name type docstring location)
    :environment env))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type name-entry))
 
 (defstruct (name-environment (:include immutable-map)))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type name-environment))
 
 ;;;
@@ -503,7 +503,7 @@
    :slot-names '(value-environment type-environment constructor-environment class-environment instance-environment function-environment name-environment)
    :environment env))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type environment))
 
 (defun make-default-environment ()
