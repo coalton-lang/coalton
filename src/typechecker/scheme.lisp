@@ -14,7 +14,7 @@
    :slot-names '(kinds type)
    :environment env))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type ty-scheme))
 
 (defun scheme-list-p (x)
@@ -24,7 +24,7 @@
 (deftype scheme-list ()
   '(satisfies scheme-list-p))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type scheme-list))
 
 (defun scheme-binding-list-p (x)
@@ -34,7 +34,7 @@
 (deftype scheme-binding-list ()
   `(satisfies scheme-binding-list-p))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type scheme-binding-list))
 
 (defun quantify (tyvars type)

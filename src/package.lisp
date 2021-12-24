@@ -352,7 +352,7 @@
                 #:define-global-var*)
   ;; settings
   (:export
-   #:*interaction-mode*)
+   #:coalton-release-p)
 
   (:export
    #:coalton-parse-error                ; CONDITION

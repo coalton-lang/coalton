@@ -14,7 +14,7 @@
    :slot-names nil
    :environment env))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type kstar))
 
 (alexandria:define-constant kstar (make-instance 'kstar) :test #'equalp)
@@ -32,10 +32,10 @@
    :slot-names '(from to)
    :environment env))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type kfun))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type kind))
 
 (defun simple-kind-p (kind)

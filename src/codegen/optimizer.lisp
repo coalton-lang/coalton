@@ -25,7 +25,7 @@
          ;; Classes cannot be stack allocated
          (node (pointfree-transform node optimizer))
          (node (direct-application-transform node optimizer))
-         (node (if (eql coalton-impl:*interaction-mode* ':release)
+         (node (if (coalton-impl:coalton-release-p)
                    (match-constructor-lift-transform node optimizer)
                    node)))
 

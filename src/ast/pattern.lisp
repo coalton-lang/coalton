@@ -13,7 +13,7 @@
 (deftype pattern-list ()
   '(satisfies pattern-list-p))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type pattern-list))
 
 (defstruct
@@ -22,7 +22,7 @@
      (:constructor pattern-var (id)))
   (id (required 'id) :type symbol :read-only t))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type pattern-var))
 
 (defstruct
@@ -30,7 +30,7 @@
      (:include pattern)
      (:constructor pattern-wildcard)))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type pattern-wildcard))
 
 (defstruct
@@ -39,7 +39,7 @@
      (:constructor pattern-literal (value)))
   (value (required 'value) :type node-literal :read-only t))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type pattern-literal))
 
 (defstruct
@@ -49,10 +49,10 @@
   (name      (required 'name) :type symbol       :read-only t)
   (patterns  (required 'type) :type pattern-list :read-only t))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type pattern-constructor))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type pattern))
 
 (defun rewrite-pattern-vars (pattern m)

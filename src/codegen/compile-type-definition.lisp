@@ -22,7 +22,7 @@
                     (coalton-impl/codegen::F1 #',(constructor-entry-name constructor))))))
 
       (t
-       `(,(if (eql coalton-impl::*interaction-mode* ':release)
+       `(,(if (coalton-impl:coalton-release-p)
               `(defstruct (,(type-definition-name def)
                            (:constructor nil)
                            (:predicate nil))
@@ -52,7 +52,7 @@
 
              ;; Declare the constructor as inline in release mode
              :append
-             (when (eql coalton-impl::*interaction-mode* :release)
+             (when (coalton-impl:coalton-release-p)
                (list `(declaim (inline ,constructor-name))))
 
              :append (struct-or-class
@@ -60,7 +60,7 @@
                       :constructor constructor-name
                       :superclass superclass
                       :fields fields
-                      :mode (if (eql coalton-impl::*interaction-mode* :release)
+                      :mode (if (coalton-impl:coalton-release-p)
                                 :struct
                                 :class))
 
@@ -96,7 +96,7 @@
                                      ,(constructor-entry-name constructor)
                                    ,entry))))))
 
-         ,@(when (eql coalton-impl::*interaction-mode* ':release)
+         ,@(when (coalton-impl:coalton-release-p)
              (list
               #+sbcl
               `(declaim (sb-ext:freeze-type ,(type-definition-name def))))))))))

@@ -13,7 +13,7 @@
 (deftype ty-list ()
   '(satisfies ty-list-p))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type ty-list))
 
 (defun ty-binding-list-p (x)
@@ -23,7 +23,7 @@
 (deftype ty-binding-list ()
   `(satisfies ty-binding-list-p))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type ty-binding-list))
 
 (defstruct (tyvar (:constructor %make-tyvar))
@@ -34,7 +34,7 @@
    :slot-names '(id kind)
    :environment env))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type tyvar))
 
 (defun tyvar-list-p (x)
@@ -44,7 +44,7 @@
 (deftype tyvar-list ()
   '(satisfies tyvar-list-p))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type tyvar-list))
 
 (defstruct
@@ -58,7 +58,7 @@
    :slot-names '(tyvar)
    :environment env))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type tvar))
 
 (defun tvar-list-p (x)
@@ -68,7 +68,7 @@
 (deftype tvar-list ()
   '(satisfies tvar-list-p))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type tvar-list))
 
 (defstruct (tycon (:constructor %make-tycon))
@@ -81,7 +81,7 @@
    :slot-names '(name kind)
    :environment env))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type tycon))
 
 (defstruct
@@ -95,7 +95,7 @@
    :slot-names '(tycon)
    :environment env))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type tcon))
 
 (defstruct
@@ -110,7 +110,7 @@
    :slot-names '(from to)
    :environment env))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type tapp))
 
 (defstruct
@@ -124,10 +124,10 @@
    :slot-names '(id)
    :environment env))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type tgen))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type ty))
 
 

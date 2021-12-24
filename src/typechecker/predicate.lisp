@@ -17,7 +17,7 @@
    :slot-names '(class types)
    :environment env))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type ty-predicate))
 
 (defun ty-predicate-list-p (x)
@@ -28,7 +28,7 @@
   "A list of type predicates"
   `(satisfies ty-predicate-list-p))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type ty-predicate-list))
 
 ;;;
@@ -47,7 +47,7 @@
    :slot-names '(predicates type)
    :environment env))
 
-#+sbcl
+#+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type qualified-ty))
 
 (defun qualify (predicates type)
