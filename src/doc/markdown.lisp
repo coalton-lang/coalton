@@ -7,14 +7,15 @@
   ;;
 
   (:method ((ty coalton-impl/typechecker::tvar))
-    (with-output-to-string (stream)
-      (coalton-impl/typechecker::pprint-ty stream (coalton-impl/typechecker::pprint-tvar ty))))
+    (html-entities:encode-entities
+     (with-output-to-string (stream)
+       (coalton-impl/typechecker::pprint-ty stream (coalton-impl/typechecker::pprint-tvar ty)))))
 
   (:method ((ty coalton-impl/typechecker::tcon))
     (let ((tcon-name (coalton-impl/typechecker::tycon-name (coalton-impl/typechecker::tcon-tycon ty))))
       (if (string= "KEYWORD" (package-name (symbol-package tcon-name)))
-          (format nil "~S" tcon-name)
-          (format nil "<a href=\"#~(~A-type~)\">~:*~A</a>" tcon-name))))
+          (html-entities:encode-entities (format nil "~S" tcon-name))
+          (format nil "<a href=\"#~(~A-type~)\">~:*~A</a>" (html-entities:encode-entities (symbol-name tcon-name))))))
 
   (:method ((ty coalton-impl/typechecker::tapp))
     (with-output-to-string (stream)
@@ -23,9 +24,10 @@
          (write-string "(" stream)
          (write-string (to-markdown (coalton-impl/typechecker::tapp-to (coalton-impl/typechecker::tapp-from ty)))
                        stream)
-         (write-string (if *coalton-print-unicode*
-                           " → "
-                           " -> ")
+         (write-string (html-entities:encode-entities
+                        (if *coalton-print-unicode*
+                            " → "
+                            " -> "))
                        stream)
          ;; Avoid printing extra parenthesis on curried functions
          (labels ((print-subfunction (to)
@@ -34,9 +36,10 @@
                        (write-string
                         (to-markdown (coalton-impl/typechecker::tapp-to (coalton-impl/typechecker::tapp-from to)))
                         stream)
-                       (write-string (if *coalton-print-unicode*
-                                         " → "
-                                         " -> ")
+                       (write-string (html-entities:encode-entities
+                                      (if *coalton-print-unicode*
+                                          " → "
+                                          " -> "))
                                      stream)
                        (print-subfunction (coalton-impl/typechecker::tapp-to to)))
                       (t
@@ -75,31 +78,33 @@
               ;; Get the second element to test if we have more than one predicate
               (second preds)
               (mapcar #'to-markdown preds)
-              (if *coalton-print-unicode*
-                          "⇒"
-                          "=>")
+              (html-entities:encode-entities
+               (if *coalton-print-unicode*
+                   "⇒"
+                   "=>"))
               (to-markdown qual-type))))
 
   (:method ((object ty-scheme))
     (cond
-    ((null (coalton-impl/typechecker::ty-scheme-kinds object))
-     (to-markdown (coalton-impl/typechecker::ty-scheme-type object)))
-    (t
-     (with-pprint-variable-scope ()
-       (let* ((types (mapcar (lambda (k) (coalton-impl/typechecker::next-pprint-variable-as-tvar k))
-                             (coalton-impl/typechecker::ty-scheme-kinds object)))
-              (new-type (coalton-impl/typechecker::instantiate
-                         types (coalton-impl/typechecker::ty-scheme-type object))))
-         (format nil "~A~{ ~A~}. ~A"
-                 (if *coalton-print-unicode*
-                     "∀"
-                     "FORALL")
-                 types
-                 (to-markdown new-type)))))))
+      ((null (coalton-impl/typechecker::ty-scheme-kinds object))
+       (to-markdown (coalton-impl/typechecker::ty-scheme-type object)))
+      (t
+       (with-pprint-variable-scope ()
+         (let* ((types (mapcar (lambda (k) (coalton-impl/typechecker::next-pprint-variable-as-tvar k))
+                               (coalton-impl/typechecker::ty-scheme-kinds object)))
+                (new-type (coalton-impl/typechecker::instantiate
+                           types (coalton-impl/typechecker::ty-scheme-type object))))
+           (format nil "~A~A. ~A"
+                   (html-entities:encode-entities
+                    (if *coalton-print-unicode*
+                        "∀"
+                        "FORALL"))
+                   (html-entities:encode-entities (format nil "~{ ~A~}" types))
+                   (to-markdown new-type)))))))
 
   (:method ((object ty-predicate))
     (format nil "<a href=\"#~(~A-class~)\">~:*~A</a>~{ ~A~}"
-            (ty-predicate-class object)
+            (html-entities:encode-entities (symbol-name (ty-predicate-class object)))
             (mapcar #'to-markdown (ty-predicate-types object))))
 
   (:method ((object ty-class-instance))
@@ -109,16 +114,29 @@
               ;; Get the second element to test if we have more than one predicate
               (second ctx)
               (mapcar #'to-markdown ctx)
-              (if *coalton-print-unicode*
-                          "⇒"
-                          "=>")
+              (html-entities:encode-entities
+               (if *coalton-print-unicode*
+                   "⇒"
+                   "=>"))
               (to-markdown pred)))))
 
 ;;;
 ;;; Methods for WRITE-DOCUMENTATION
 ;;;
 
-;; TODO: Do the prefixing for file links
+(defmethod write-documentation ((backend (eql ':markdown)) stream (object documentation-package-entry))
+  (let ((file-entries (documentation-package-entry-documentation-entries-by-file object))
+        (valid-files (documentation-package-entry-valid-files object))
+        (package (documentation-package-entry-package object)))
+    (format stream "# Reference for ~A~%~%" package)
+
+    ;; NOTE: We are including the empty filename here to allow for
+    ;;       symbols without file information to be included.
+    (dolist (pathname (append '("") valid-files))
+      (let ((file-entry (gethash pathname file-entries)))
+        (when file-entry
+          (write-documentation :markdown stream file-entry))))))
+
 (defmethod write-documentation ((backend (eql ':markdown)) stream (object documentation-file-entry))
   (with-slots (filename value-entries type-entries class-entries link-prefix)
       object
@@ -128,7 +146,7 @@
               class-entries)
 
       (unless (string= "" filename)
-        (format stream "## File: [~A](~A)~%~%" filename (concatenate 'string link-prefix filename)))
+        (format stream "## File: [~A](~A)~%~%" (html-entities:encode-entities filename) (concatenate 'string link-prefix filename)))
 
       ;; Print type information
       (when type-entries
@@ -163,8 +181,10 @@
                   :collect (coalton-impl/typechecker::make-variable))))
       (with-pprint-variable-context ()
         (format stream
-                "#### <code>~A~{ ~A~}</code> <sup><sub>[TYPE]</sub></sup><a name=\"~(~A-type~)\"></a>~%"
-                name type-vars name)
+                "#### <code>~A~A</code> <sup><sub>[TYPE]</sub></sup><a name=\"~(~A-type~)\"></a>~%"
+                (html-entities:encode-entities (symbol-name name))
+                (html-entities:encode-entities (format nil "~{ ~A~}" type-vars))
+                (html-entities:encode-entities (symbol-name name)))
 
         (loop :for (ctor-name . entry) :in constructors :do
           (let ((args (coalton-impl/typechecker::function-type-arguments
@@ -174,18 +194,23 @@
                          (coalton-impl/typechecker::ty-scheme-type
                           (constructor-entry-scheme entry)))))))
             (if args
-                (format stream "- <code>(~A~{ ~A~})</code>~%" ctor-name (mapcar #'to-markdown args))
-                (format stream "- <code>~A</code>~%" ctor-name))))
+                (format stream "- <code>(~A~{ ~A~})</code>~%"
+                        (html-entities:encode-entities (symbol-name ctor-name))
+                        (mapcar #'to-markdown args))
+                (format stream "- <code>~A</code>~%" (html-entities:encode-entities (symbol-name ctor-name))))))
 
         (when documentation
-          (format stream "~%~A~%" documentation))
+          (format stream "~%~A~%"
+                  (html-entities:encode-entities
+                   documentation
+                   :regex "[<>&]")))
         (format stream "~%")
 
         (when constructors
           (format stream "Constructors:~%"))
         (loop :for (ctor-name . entry) :in constructors :do
           (format stream "- <code>~A :: ~A</code>~%"
-                  ctor-name
+                  (html-entities:encode-entities (symbol-name ctor-name))
                   (to-markdown
                    (coalton-impl/typechecker::instantiate
                     type-vars
@@ -205,18 +230,23 @@
   (with-slots (name context predicate methods instances documentation location)
       object
 
-    (format stream "#### <code>~A</code> <sup><sub>[CLASS]</sub></sup><a name=\"~(~A-class~)\"></a>~%"
-            name name)
+    (format stream "#### <code>~A</code> <sup><sub>[CLASS]</sub></sup><a name=\"~(~:*~A-class~)\"></a>~%"
+            (html-entities:encode-entities (symbol-name name)))
 
     (with-pprint-variable-context ()
       (format stream "<code>~A</code>~%~%" (to-markdown (ty-class-instance context predicate nil)))
 
       (when documentation
-        (format stream "~A~%~%" documentation))
+        (format stream "~A~%~%"
+                (html-entities:encode-entities
+                 documentation
+                 :regex "[<>&]")))
 
       (format stream "Methods:~%")
       (loop :for (name . type) :in methods :do
-        (format stream "- <code>~A :: ~A</code>~%" name (to-markdown type))))
+        (format stream "- <code>~A :: ~A</code>~%"
+                (html-entities:encode-entities (symbol-name name))
+                (to-markdown type))))
 
     (when instances
       (format stream "~%<details>~%")
@@ -231,10 +261,15 @@
       object
 
     (let ((function-type? (function-type-p type)))
-      (format stream "#### <code>~A</code> <sup><sub>[~:[VALUE~;FUNCTION~]~:*]</sub></sup><a name=\"~:*~(~A-function~)\"></a>~%" name function-type?)
+      (format stream "#### <code>~A</code> <sup><sub>[~:[VALUE~;FUNCTION~]~:*]</sub></sup><a name=\"~:*~(~A-function~)\"></a>~%"
+              (html-entities:encode-entities (symbol-name name))
+              function-type?)
 
       (with-pprint-variable-context ()
         (format stream "<code>~A</code>~%" (to-markdown type)))
 
       (when documentation
-        (format stream "~%~A~%~%" documentation)))))
+        (format stream "~%~A~%~%"
+                (html-entities:encode-entities
+                 documentation
+                 :regex "[<>&]"))))))

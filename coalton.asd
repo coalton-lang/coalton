@@ -76,10 +76,6 @@
                (:file "toplevel-define-instance")
                (:file "coalton")
                (:file "debug")
-               (:module "doc"
-                :serial t
-                :components ((:file "generate-documentation")
-                             (:file "markdown")))
                (:file "faux-macros")
                (:module "library"
                 :serial t
@@ -105,6 +101,24 @@
                              (:file "graph")
 			     (:file "stateful-computation")))
                (:file "toplevel-environment")))
+
+(asdf:defsystem #:coalton/doc
+  :description "Documentation generator for Coalton"
+  :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
+  :license "MIT"
+  :version (:read-file-form "VERSION.txt")
+  :depends-on (#:coalton
+               #:html-entities
+               #:yason
+               #:uiop)
+  :around-compile (lambda (compile)
+                    (let (#+sbcl (sb-ext:*derive-function-types* t))
+                      (funcall compile)))
+  :pathname "src/doc"
+  :serial t
+  :components ((:file "package")
+               (:file "generate-documentation")
+               (:file "markdown")))
 
 (asdf:defsystem #:coalton/tests
   :description "Tests for COALTON."

@@ -38,6 +38,13 @@
   class-entries
   link-prefix)
 
+(defstruct (documentation-package-entry
+            (:constructor make-documentation-package-entry
+                (package valid-files documentation-entries-by-file)))
+  package
+  valid-files
+  documentation-entries-by-file)
+
 (defgeneric write-documentation (backend stream object)
   (:documentation "Write the given OBJECT to output STREAM. This is
   specialized on the given BACKEND."))
@@ -45,6 +52,7 @@
 (defun write-documentation-for-packages (&key
                                            (env coalton-impl::*global-environment*)
                                            (stream t)
+                                           (backend ':markdown)
                                            (packages '(coalton coalton-library))
                                            (base-package 'coalton-library)
                                            (asdf-system ':COALTON)
@@ -57,17 +65,15 @@
 
          (*package* (find-package base-package)))
 
+    ;; For each package, we just need to collect the require
+    ;; documentation and call out to the backend.
     (dolist (package packages)
-      (let ((file-entries (collect-documentation-by-file (truename component-path) file-link-prefix env package)))
-        (format stream "# Reference for ~A~%~%" package)
-
-        ;; NOTE: We are including the empty filename here to allow for
-        ;;       symbols without file information to be included.
-        (dolist (file (append '("") filenames))
-          (let* ((pathname file)
-                 (file-entry (gethash pathname file-entries)))
-            (when file-entry
-              (write-documentation :markdown stream file-entry))))))))
+      (let ((file-entries (collect-documentation-by-file
+                           (truename component-path)
+                           file-link-prefix
+                           env package)))
+        (write-documentation backend stream
+                             (make-documentation-package-entry package filenames file-entries))))))
 
 (defun collect-documentation (&optional
                                 (env coalton-impl::*global-environment*)

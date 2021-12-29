@@ -20,7 +20,7 @@ test-safe:
 .PHONY: docs
 docs:
 	sbcl --non-interactive \
-	     --eval "(ql:quickload :coalton)" \
+	     --eval "(ql:quickload :coalton/doc)" \
 	     --eval "(with-open-file (out \"docs/reference.md\" :direction :output :if-exists :supersede) \
 	               (coalton-impl/doc::write-documentation-for-packages :env coalton-impl::*global-environment* :stream out :file-link-prefix \"../src/library/\"))"
 
