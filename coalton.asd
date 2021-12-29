@@ -118,7 +118,8 @@
   :serial t
   :components ((:file "package")
                (:file "generate-documentation")
-               (:file "markdown")))
+               (:file "markdown")
+               (:file "hugo")))
 
 (asdf:defsystem #:coalton/tests
   :description "Tests for COALTON."

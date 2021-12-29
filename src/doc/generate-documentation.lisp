@@ -31,8 +31,9 @@
 
 (defstruct (documentation-file-entry
             (:constructor make-documentation-file-entry
-                (filename value-entries type-entries class-entries link-prefix)))
+                (filename package value-entries type-entries class-entries link-prefix)))
   filename
+  package
   value-entries
   type-entries
   class-entries
@@ -44,6 +45,13 @@
   package
   valid-files
   documentation-entries-by-file)
+
+(defstruct (documentation-package-entries
+            (:constructor make-documentation-package-entries
+                (packages asdf-system documentation-by-package)))
+  packages
+  asdf-system
+  documentation-by-package)
 
 (defgeneric write-documentation (backend stream object)
   (:documentation "Write the given OBJECT to output STREAM. This is
@@ -67,13 +75,20 @@
 
     ;; For each package, we just need to collect the require
     ;; documentation and call out to the backend.
-    (dolist (package packages)
-      (let ((file-entries (collect-documentation-by-file
-                           (truename component-path)
-                           file-link-prefix
-                           env package)))
-        (write-documentation backend stream
-                             (make-documentation-package-entry package filenames file-entries))))))
+    (let ((documentation-by-package (make-hash-table)))
+      (loop :for package :in packages :do
+        (setf (gethash package documentation-by-package)
+              (make-documentation-package-entry
+               package filenames
+               (collect-documentation-by-file
+                (truename component-path)
+                file-link-prefix
+                env package))))
+
+      (write-documentation backend stream
+                           (make-documentation-package-entries
+                            packages asdf-system
+                            documentation-by-package)))))
 
 (defun collect-documentation (&optional
                                 (env coalton-impl::*global-environment*)
@@ -90,10 +105,10 @@
                                         (package "COALTON-LIBRARY"))
   (multiple-value-bind (value-entries type-entries class-entries)
       (collect-documentation env package)
-    (sort-documentation-by-file basepath link-prefix value-entries type-entries class-entries)))
+    (sort-documentation-by-file basepath link-prefix package value-entries type-entries class-entries)))
 
 ;; TODO: We should sort everything here
-(defun sort-documentation-by-file (basepath link-prefix value-entries type-entries class-entries)
+(defun sort-documentation-by-file (basepath link-prefix package value-entries type-entries class-entries)
   (let ((file-entries (make-hash-table :test #'equalp)))
     ;; Sort the functions by file
     (loop :for entry :in value-entries
@@ -104,7 +119,7 @@
                     filename
                     file-entries
                     (make-documentation-file-entry
-                     filename nil nil nil link-prefix)))))
+                     filename package nil nil nil link-prefix)))))
 
     ;; Sort the types by file
     (loop :for entry :in type-entries
@@ -115,7 +130,7 @@
                     filename
                     file-entries
                     (make-documentation-file-entry
-                     filename nil nil nil link-prefix)))))
+                     filename package nil nil nil link-prefix)))))
 
     ;; Sort the classes by file
     (loop :for entry :in class-entries
@@ -126,7 +141,7 @@
                     filename
                     file-entries
                     (make-documentation-file-entry
-                     filename nil nil nil link-prefix)))))
+                     filename package nil nil nil link-prefix)))))
 
     file-entries))
 
