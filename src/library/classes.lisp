@@ -25,11 +25,11 @@
 
   (define-instance (Eq Ord)
     (define (== a b)
-     (match (Tuple a b)
-       ((Tuple (LT) (LT)) True)
-       ((Tuple (EQ) (EQ)) True)
-       ((Tuple (GT) (GT)) True)
-       (_                 False))))
+      (match (Tuple a b)
+        ((Tuple (LT) (LT)) True)
+        ((Tuple (EQ) (EQ)) True)
+        ((Tuple (GT) (GT)) True)
+        (_                 False))))
 
   (define-class ((Eq :a) => (Ord :a))
     "Types whose values can be ordered."
@@ -87,6 +87,18 @@
     (- (:a -> :a -> :a))
     (* (:a -> :a -> :a))
     (fromInt (Integer -> :a)))
+
+  ;;
+  ;; Bits
+  ;;
+
+  (define-class ((Num :int) => (Bits :int))
+    "Operations on the bits of twos-complement integers"
+    (bit-and (:int -> :int -> :int))
+    (bit-or (:int -> :int -> :int))
+    (bit-xor (:int -> :int -> :int))
+    (bit-not (:int -> :int))
+    (bit-shift (Integer -> :int -> :int)))
 
   ;;
   ;; Dividable
@@ -211,3 +223,23 @@ The fields are defined as follows:
     "Types which might be able to be unwrapped, otherwise returning a default value."
     (withDefault (:a -> (:f :a) -> :a))
     (unwrap ((:f :a) -> :a))))
+
+(coalton-toplevel
+  (define-class ((Eq :a) => (Hash :a))
+    "Types which can be hashed for storage in hash tables.
+
+Invariant (== left right) implies (== (hash left) (hash right))."
+    (hash (:a -> Integer)))
+
+  (declare combine-hashes (Integer -> Integer -> Integer))
+  (define (combine-hashes left right)
+    (lisp Integer (left right)
+      (cl:logxor left right))))
+
+(cl:defmacro define-sxhash-hasher (type)
+  `(coalton-toplevel
+     (define-instance (Hash ,type)
+       (define (hash item)
+         (lisp Integer (item)
+           (cl:sxhash item))))))
+

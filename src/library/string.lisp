@@ -71,3 +71,5 @@
         (cl:coerce lst 'cl:string))))
 
   (define-instance (Iso (List Char) String)))
+
+(define-sxhash-hasher String)

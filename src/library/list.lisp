@@ -500,6 +500,13 @@
            ((Nil) True)
            (_ False))))))
 
+  (define-instance (Hash :a => (Hash (List :a)))
+    (define (hash lst)
+      (fold (fn (elt so-far)
+              (combine-hashes so-far (hash elt)))
+            0
+            lst)))
+
   (define-instance (Semigroup (List :a))
     (define (<> a b) (append a b)))
 
