@@ -28,6 +28,28 @@ cell or writing to a stream, should be named with a trailing `!`, like `write!`.
 Predicates, i.e. non-side-effecting functions which return a boolean, should be named with
 a trailing `?`, like `empty?` or `null?`.
 
+#### Side-effecting predicates
+
+Predicates with side effects are rare, and generally should be avoided, but are in some
+cases necessary. For example, the `Iterator` iterface defines some operators which consume
+an iterator and return a boolean depending on its contents.
+
+These functions should be named with a trailing `!?`, like `any!?` or `some!?`. This makes
+code sound very funny.
+
+#### Conversion functions
+
+Many Common Lisp libraries obey the convention that a function which converts a value of
+type `foo` into `bar` should be named `foo-bar`, like `graph-list` or
+`string-rope`. Others replace the hyphen `-` with an arrow `->`, like `graph->list` or
+`string->rope`. Still others reverse the order and use a left arrow `<-`, like
+`graph<-list` or `rope<-string`.
+
+All of these conventions are symptoms of the fact that Common Lisp's facility for type
+conversions, `coerce`, is not extensible to user-defined types. Coalton code has no need
+to define conversion functions; it should instead define instances on `Into` or `TryInto`
+as appropriate.
+
 ### Types, classes and constructors
 
 Type names, class names, and constructor names, i.e. those defined by `define-type` and
