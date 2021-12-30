@@ -219,7 +219,9 @@
                              (node (cdr binding))
                              (type (typed-node-type node))
 
-                             (preds (reduce-preds-for-codegen (scheme-predicates type) env))
+                             (preds
+                               (remove-if (lambda (p) (member p ctx :key #'car :test #'equalp))
+                                          (reduce-preds-for-codegen (scheme-predicates type) env)))
 
                              (dict-context (mapcar (lambda (pred) (cons pred (gensym))) preds)))
 
