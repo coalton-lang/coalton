@@ -669,16 +669,16 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                   (cons (car binding)
                         (replace-node-type (apply-substitution local-subs typed-node)
                                            (to-scheme (qualified-ty
-                                                       (append
-                                                        (remove-if-not (lambda (p)
-                                                                         (member p expr-preds :test #'equalp))
-                                                                       (apply-substitution local-subs preds))
-                                                        (remove-if-not (lambda (p)
-                                                                         (not (super-entail env expr-preds p)))
-                                                                       (apply-substitution local-subs preds))
-                                                        (remove-if-not (lambda (p)
-                                                                         (not (super-entail env (apply-substitution local-subs preds) p)))
-                                                                       expr-preds))
+                                                       (remove-duplicates
+                                                        (append
+                                                         (remove-if-not (lambda (p)
+                                                                          (or (member p expr-preds :test #'equalp)
+                                                                              (not (super-entail env expr-preds p))))
+                                                                        (apply-substitution local-subs preds))
+                                                         (remove-if-not (lambda (p)
+                                                                          (not (super-entail env (apply-substitution local-subs preds) p)))
+                                                                        expr-preds))
+                                                        :test #'equalp)
 
                                                        expr-type))))
                   deferred-preds env local-subs
