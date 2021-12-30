@@ -78,7 +78,7 @@
            (type-entry
             :name 'coalton:Boolean
             :runtime-type 'cl:boolean
-            :type tBoolean
+            :type *boolean-type*
             :enum-repr t
             :newtype nil
             :docstring "Either true or false represented by `t` and `nil` respectively."))
@@ -87,7 +87,7 @@
            (type-entry
             :name 'coalton:Char
             :runtime-type 'cl:character
-            :type tChar
+            :type *char-type*
             :enum-repr nil
             :newtype nil
             :docstring "A single character represented as a `character` type."))
@@ -96,7 +96,7 @@
            (type-entry
             :name 'coalton:U8
             :runtime-type '(cl:unsigned-byte 8)
-            :type tU8
+            :type *u8-type*
             :enum-repr nil
             :newtype nil
             :docstring "Unsigned 8-bit integer capable of storing values in `[0, 255]`. Uses `(unsigned-byte 8)`."))
@@ -105,7 +105,7 @@
            (type-entry
             :name 'coalton:U16
             :runtime-type '(cl:unsigned-byte 16)
-            :type tU16
+            :type *u16-type*
             :enum-repr nil
             :newtype nil
             :docstring "Unsigned 16-bit integer capable of storing values in `[0, 65535]`. Uses `(unsigned-byte 16)`."))
@@ -114,7 +114,7 @@
            (type-entry
             :name 'coalton:U32
             :runtime-type '(cl:unsigned-byte 32)
-            :type tU32
+            :type *u32-type*
             :enum-repr nil
             :newtype nil
             :docstring "Unsigned 32-bit integer capable of storing values in `[0, 4294967295]`. Uses `(unsigned-byte 32)`."))
@@ -123,7 +123,7 @@
            (type-entry
             :name 'coalton:U64
             :runtime-type '(cl:unsigned-byte 64)
-            :type tU64
+            :type *u64-type*
             :enum-repr nil
             :newtype nil
             :docstring "Unsigned 64-bit integer capable of storing values in `[0, 18446744073709551615]`. Uses `(unsigned-byte 64)`."))
@@ -132,7 +132,7 @@
            (type-entry
             :name 'coalton:I8
             :runtime-type '(cl:signed-byte 8)
-            :type tI8
+            :type *i8-type*
             :enum-repr nil
             :newtype nil
             :docstring "Signed 8-bit integer capable of storing values in `[-128, 127]`. Uses `(signed-byte 8)`."))
@@ -141,7 +141,7 @@
            (type-entry
             :name 'coalton:I16
             :runtime-type '(cl:signed-byte 16)
-            :type tI16
+            :type *i16-type*
             :enum-repr nil
             :newtype nil
             :docstring "Signed 16-bit integer capable of storing values in `[-32768, 32767]`. Uses `(signed-byte 16)`."))
@@ -150,7 +150,7 @@
            (type-entry
             :name 'coalton:I32
             :runtime-type '(cl:signed-byte 32)
-            :type tI32
+            :type *i32-type*
             :enum-repr nil
             :newtype nil
             :docstring "Signed 32-bit integer capable of storing values in `[-2147483648, 2147483647]`. Uses `(signed-byte 32)`."))
@@ -159,7 +159,7 @@
            (type-entry
             :name 'coalton:I64
             :runtime-type '(cl:signed-byte 64)
-            :type tI64
+            :type *i64-type*
             :enum-repr nil
             :newtype nil
             :docstring "Signed 64-bit integer capable of storing values in `[-9223372036854775808, 9223372036854775807]`. Uses `(signed-byte 64)`."))
@@ -168,16 +168,34 @@
            (type-entry
             :name 'coalton:Integer
             :runtime-type 'cl:integer
-            :type tInteger
+            :type *integer-type*
             :enum-repr nil
             :newtype nil
             :docstring "Unbound integer. Uses `integer`."))
+
+          ('coalton:Fixnum
+           (type-entry
+            :name 'coalton:Fixnum
+            :runtime-type 'cl:fixnum
+            :type *fixnum-type*
+            :enum-repr nil
+            :newtype nil
+            :docstring "Non-allocating tagged integer; range is platform-dependent. Uses `fixnum`."))
+
+          ('coalton:Natnum
+           (type-entry
+            :name 'coalton:Natnum
+            :runtime-type '(cl:and cl:fixnum cl:unsigned-byte)
+            :type *natnum-type*
+            :enum-repr nil
+            :newtype nil
+            :docstring "Non-allocating tagged non-negative integer; range is platform-dependent. Uses `(and fixnum unsigned-byte)`."))
 
           ('coalton:Single-Float
            (type-entry
             :name 'coalton:Single-Float
             :runtime-type 'cl:single-float
-            :type tSingle-Float
+            :type *single-float-type*
             :enum-repr nil
             :newtype nil
             :docstring "Single precision floating point numer. Uses `single-float`."))
@@ -186,7 +204,7 @@
            (type-entry
             :name 'coalton:Double-Float
             :runtime-type 'cl:double-float
-            :type tDouble-Float
+            :type *double-float-type*
             :enum-repr nil
             :newtype nil
             :docstring "Double precision floating point numer. Uses `double-float`."))
@@ -195,7 +213,7 @@
            (type-entry
             :name 'coalton:String
             :runtime-type 'cl:string
-            :type tString
+            :type *string-type*
             :enum-repr nil
             :newtype nil
             :docstring "String of characters represented by Common Lisp `string`."))
@@ -204,7 +222,7 @@
            (type-entry
             :name 'coalton:Lisp-Object
             :runtime-type 't
-            :type tLisp-Object
+            :type *lisp-object-type*
             :enum-repr nil
             :newtype nil
             :docstring "Opaque container for arbitrary lisp objects. At runtime this is equivalent to the type `t`."))
@@ -213,7 +231,7 @@
            (type-entry
             :name 'coalton:Arrow
             :runtime-type nil
-            :type tArrow
+            :type *arrow-type*
             :enum-repr nil
             :newtype nil
             :docstring "Type constructor for function types. `(Arrow :a :b)` is equivalent to `(:a -> :b)`."))
@@ -222,7 +240,7 @@
            (type-entry
             :name 'coalton:List
             :runtime-type 'cl:list
-            :type tList
+            :type *list-type*
             :enum-repr nil
             :newtype nil
             :docstring "Homogeneous list of objects represented as a Common Lisp `list`.")))))
@@ -268,7 +286,7 @@
 (defun make-default-constructor-environment ()
   "Create a TYPE-ENVIRONMENT containing early constructors"
   (let* ((tvar (make-variable))
-         (list-scheme (quantify (list tvar) (qualify nil (%make-tapp tList tvar))))
+         (list-scheme (quantify (list tvar) (qualify nil (%make-tapp *list-type* tvar))))
          (var-scheme (quantify (list tvar) (qualify nil tvar))))
     (make-constructor-environment
      :data (fset:map
@@ -278,7 +296,7 @@
               :name 'coalton:True
               :arity 0
               :constructs 'coalton:Boolean
-              :scheme (to-scheme (qualify nil tBoolean))
+              :scheme (to-scheme (qualify nil *boolean-type*))
               :arguments nil
               :classname 'coalton::Boolean/True
               :compressed-repr 't))
@@ -288,7 +306,7 @@
               :name 'coalton:False
               :arity 0
               :constructs 'coalton:Boolean
-              :scheme (to-scheme (qualify nil tBoolean))
+              :scheme (to-scheme (qualify nil *boolean-type*))
               :arguments nil
               :classname 'coalton::Boolean/False
               :compressed-repr 'nil))

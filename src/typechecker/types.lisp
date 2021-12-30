@@ -165,28 +165,30 @@
 ;;; Early types
 ;;;
 
-(defvar tBoolean (%make-tcon (%make-tycon :name 'coalton:Boolean     :kind kstar)))
-(defvar tChar    (%make-tcon (%make-tycon :name 'coalton:Char        :kind kstar)))
-(defvar tU8      (%make-tcon (%make-tycon :name 'coalton:U8          :kind kstar)))
-(defvar tU16     (%make-tcon (%make-tycon :name 'coalton:U16         :kind kstar)))
-(defvar tU32     (%make-tcon (%make-tycon :name 'coalton:U32         :kind kstar)))
-(defvar tU64     (%make-tcon (%make-tycon :name 'coalton:U64         :kind kstar)))
-(defvar tI8      (%make-tcon (%make-tycon :name 'coalton:I8          :kind kstar)))
-(defvar tI16     (%make-tcon (%make-tycon :name 'coalton:I16         :kind kstar)))
-(defvar tI32     (%make-tcon (%make-tycon :name 'coalton:I32         :kind kstar)))
-(defvar tI64     (%make-tcon (%make-tycon :name 'coalton:I64         :kind kstar)))
-(defvar tInteger (%make-tcon (%make-tycon :name 'coalton:Integer     :kind kstar)))
-(defvar tSingle-Float
+(defvar *boolean-type* (%make-tcon (%make-tycon :name 'coalton:Boolean     :kind kstar)))
+(defvar *char-type*    (%make-tcon (%make-tycon :name 'coalton:Char        :kind kstar)))
+(defvar *u8-type*      (%make-tcon (%make-tycon :name 'coalton:U8          :kind kstar)))
+(defvar *u16-type*     (%make-tcon (%make-tycon :name 'coalton:U16         :kind kstar)))
+(defvar *u32-type*     (%make-tcon (%make-tycon :name 'coalton:U32         :kind kstar)))
+(defvar *u64-type*     (%make-tcon (%make-tycon :name 'coalton:U64         :kind kstar)))
+(defvar *i8-type*      (%make-tcon (%make-tycon :name 'coalton:I8          :kind kstar)))
+(defvar *i16-type*     (%make-tcon (%make-tycon :name 'coalton:I16         :kind kstar)))
+(defvar *i32-type*     (%make-tcon (%make-tycon :name 'coalton:I32         :kind kstar)))
+(defvar *i64-type*     (%make-tcon (%make-tycon :name 'coalton:I64         :kind kstar)))
+(defvar *integer-type* (%make-tcon (%make-tycon :name 'coalton:Integer     :kind kstar)))
+(defvar *fixnum-type*  (%make-tcon (%make-tycon :name 'coalton:Fixnum      :kind kstar)))
+(defvar *natnum-type*  (%make-tcon (%make-tycon :name 'coalton:Natnum      :kind kstar)))
+(defvar *single-float-type*
   (%make-tcon (%make-tycon :name 'coalton:Single-Float :kind kstar)))
-(defvar tDouble-Float
+(defvar *double-float-type*
   (%make-tcon (%make-tycon :name 'coalton:Double-Float :kind kstar)))
-(defvar tString  (%make-tcon (%make-tycon :name 'coalton:String      :kind kstar)))
-(defvar tLisp-Object
+(defvar *string-type*  (%make-tcon (%make-tycon :name 'coalton:String      :kind kstar)))
+(defvar *lisp-object-type*
   (%make-tcon (%make-tycon :name 'coalton:Lisp-Object :kind kstar)))
 
-(defvar tArrow (%make-tcon (%make-tycon :name 'coalton:-> :kind (kfun kstar (kfun kstar kstar)))))
+(defvar *arrow-type* (%make-tcon (%make-tycon :name 'coalton:-> :kind (kfun kstar (kfun kstar kstar)))))
 
-(defvar tList (%make-tcon (%make-tycon :name 'coalton:List :kind (kfun kstar kstar))))
+(defvar *list-type* (%make-tcon (%make-tycon :name 'coalton:List :kind (kfun kstar kstar))))
 
 
 (defun apply-type-argument (tcon arg)
@@ -214,7 +216,7 @@
     (error "Unable to construct function with type ~A of kind ~A" from (kind-of from)))
   (unless (kstar-p (kind-of to))
     (error "Unable to construct function with type ~A of kind ~A" to (kind-of to)))
-  (%make-tapp (%make-tapp tArrow from) to))
+  (%make-tapp (%make-tapp *arrow-type* from) to))
 
 (defun make-function-type* (args to)
   (declare (type ty-list args)
@@ -230,7 +232,7 @@
     (declare (type ty ty))
     (and (tapp-p ty)
          (tapp-p (tapp-from ty))
-         (equalp tArrow (tapp-from (tapp-from ty))))))
+         (equalp *arrow-type* (tapp-from (tapp-from ty))))))
 
 (defun function-type-from (ty)
   (declare (type tapp ty))

@@ -1,0 +1,58 @@
+name: Docs
+
+on:
+  push:
+    branches: [ main ]
+
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    env:
+      # Tell ASDF to look through our repo recursively
+      CL_SOURCE_REGISTRY: "/home/runner/work/coalton/coalton//"
+
+    steps:
+      # Check out coalton and coalton-website
+      - uses: actions/checkout@v2
+        with:
+          repository: "coalton-lang/coalton"
+          path: coalton
+      - uses: actions/checkout@v2
+        with:
+          repository: "coalton-lang/coalton-website"
+          path: coalton-website
+
+      # Run docs generator targeting website directory
+      - uses: 40ants/setup-lisp@v1
+      - name: Run Docs Generator
+        run: |
+          cat <<EOF > run-tests.lisp
+          (sb-ext:restrict-compiler-policy 'safety ${{ matrix.SAFETY }})
+          (defun main (&rest args)
+            (asdf:load-system :coalton/doc)
+            (with-open-file (out "coalton-website/content/reference.md" :direction :output :if-exists :supersede)
+              (uiop:symbol-call :coalton-impl/doc :write-documentation-for-packages
+                :stream out
+                :file-link-prefix "https://github.com/coalton-lang/coalton/tree/main/src/library/"
+                :backend ':hugo)))
+          EOF
+          qlot exec ros -- run-tests.lisp
+
+      # Create PR in website repository for changes2
+      - uses: peter-evans/create-pull-request@v3
+        with:
+          token: ${{ secrets.DOCS_PAT }}
+          path: coalton-website
+          branch: "update-docs/${{ github.sha }}"
+          base: main
+          author: coalton-docs-bot <coalton-docs-bot@users.noreply.github.com>
+          commit-message: "Update Coalton documentation for coalton-lang/coalton@${{ github.sha }}"
+          title: "Update Coalton documentation"
+          body: |
+            Update coalton standard library documentation for coalton-lang/coalton@${{ github.sha }}
+
+            This action was performed automatically.
+          delete-branch: true
