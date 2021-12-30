@@ -419,6 +419,8 @@
    #:I32
    #:I64
    #:Integer
+   #:Fixnum
+   #:Natnum
    #:Single-Float
    #:Double-Float
    #:String
