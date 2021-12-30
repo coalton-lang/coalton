@@ -21,10 +21,16 @@
                   ,(cl:format cl:nil "Signed value overflowed ~D bits." bits))
        (%unsigned->signed ,bits (cl:mod value ,(cl:expt 2 bits)))))))
 
+(cl:eval-when (:compile-toplevel :load-toplevel)
+  (cl:defparameter +fixnum-bits+
+    #+sbcl sb-vm:n-fixnum-bits
+    #-sbcl (cl:1+ (cl:floor (cl:log cl:most-positive-fixnum 2)))))
+
 (%define-overflow-handler %handle-8bit-overflow 8)
 (%define-overflow-handler %handle-16bit-overflow 16)
 (%define-overflow-handler %handle-32bit-overflow 32)
 (%define-overflow-handler %handle-64bit-overflow 64)
+(%define-overflow-handler %handle-fixnum-overflow #.+fixnum-bits+)
 
 (cl:defmacro %define-number-stuff (coalton-type)
   `(coalton-toplevel
@@ -53,6 +59,8 @@
 (%define-number-stuff I32)
 (%define-number-stuff I64)
 (%define-number-stuff Integer)
+(%define-number-stuff Fixnum)
+(%define-number-stuff Natnum)
 (%define-number-stuff Single-Float)
 (%define-number-stuff Double-Float)
 
@@ -112,7 +120,21 @@
         (%handle-64bit-overflow (cl:* a b))))
     (define (fromInt x)
       (lisp I64 (x)
-        (%handle-64bit-overflow x)))))
+        (%handle-64bit-overflow x))))
+
+  (define-instance (Num Fixnum)
+    (define (+ a b)
+      (lisp Fixnum (a b)
+        (%handle-fixnum-overflow (cl:+ a b))))
+    (define (- a b)
+      (lisp Fixnum (a b)
+        (%handle-fixnum-overflow (cl:- a b))))
+    (define (* a b)
+      (lisp Fixnum (a b)
+        (%handle-fixnum-overflow (cl:* a b))))
+    (define (fromInt x)
+      (lisp Fixnum (x)
+        (%handle-fixnum-overflow x)))))
 
 
 (cl:defmacro %define-signed-instances (coalton-type bits)
@@ -130,6 +152,7 @@
 (%define-signed-instances I16 16)
 (%define-signed-instances I32 32)
 (%define-signed-instances I64 64)
+(%define-signed-instances Fixnum #.+fixnum-bits+)
 
 
 (cl:defmacro %define-unsigned-num-instance (coalton-type bits)
@@ -170,6 +193,7 @@
 (%define-unsigned-num-instance U16 16)
 (%define-unsigned-num-instance U32 32)
 (%define-unsigned-num-instance U64 64)
+(%define-unsigned-num-instance Natnum #.(cl:1- +fixnum-bits+))
 
 (coalton-toplevel
   (declare integer->single-float (Integer -> Single-Float))
