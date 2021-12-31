@@ -504,7 +504,7 @@
     (define (hash lst)
       (fold (fn (elt so-far)
               (combine-hashes so-far (hash elt)))
-            0
+            (fromInt 0)
             lst)))
 
   (define-instance (Semigroup (List :a))

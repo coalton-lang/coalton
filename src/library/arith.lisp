@@ -431,6 +431,7 @@
 (define-signed-bit-instance I16 %handle-16bit-overflow)
 (define-signed-bit-instance I32 %handle-32bit-overflow)
 (define-signed-bit-instance I64 %handle-64bit-overflow)
+(define-signed-bit-instance Fixnum %handle-fixnum-overflow)
 (define-signed-bit-instance Integer cl:identity)
 
 ;; TODO: unsinged (Bits _) instances
@@ -444,5 +445,7 @@
 (define-sxhash-hasher U32)
 (define-sxhash-hasher U64)
 (define-sxhash-hasher Integer)
+(define-sxhash-hasher Fixnum)
+(define-sxhash-hasher Natnum)
 (define-sxhash-hasher Single-Float)
 (define-sxhash-hasher Double-Float)

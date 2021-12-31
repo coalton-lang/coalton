@@ -10,9 +10,10 @@
   (define-type (Hashtable :key :value)
     (%Hashtable Lisp-Object))
 
-  (declare %make-hashtable-capacity ((Hash :key) => Integer -> (Tuple3 (Hashtable :key :value)
-                                                                       (:key -> :key -> Boolean)
-                                                                       (:key -> Integer))))
+  (declare %make-hashtable-capacity
+           ((Hash :key) => Integer -> (Tuple3 (Hashtable :key :value)
+                                              (:key -> :key -> Boolean)
+                                              (:key -> Natnum))))
   (define (%make-hashtable-capacity cap)
     (let ((hash-fn hash)
           (test-fn ==))

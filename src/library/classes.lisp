@@ -229,17 +229,18 @@ The fields are defined as follows:
     "Types which can be hashed for storage in hash tables.
 
 Invariant (== left right) implies (== (hash left) (hash right))."
-    (hash (:a -> Integer)))
+    (hash (:a -> Natnum)))
 
-  (declare combine-hashes (Integer -> Integer -> Integer))
+  (declare combine-hashes (Natnum -> Natnum -> Natnum))
   (define (combine-hashes left right)
-    (lisp Integer (left right)
-      (cl:logxor left right))))
+    (lisp Natnum (left right)
+      (#+sbcl sb-int:mix
+       #-sbcl cl:logxor left right))))
 
 (cl:defmacro define-sxhash-hasher (type)
   `(coalton-toplevel
      (define-instance (Hash ,type)
        (define (hash item)
-         (lisp Integer (item)
+         (lisp Natnum (item)
            (cl:sxhash item))))))
 
