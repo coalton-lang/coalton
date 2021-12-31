@@ -1,6 +1,4 @@
-(in-package #:coalton-library)
-
-#-sbcl (error "Coalton hash tables are only supported on SBCL!")
+(cl:in-package #:coalton-library)
 
 (coalton-toplevel
   ;;
@@ -22,9 +20,9 @@
                                         (coalton-impl/codegen:a2 test-fn a b))
                                       (coalton-hashtable-hash (key)
                                         (coalton-impl/codegen:a1 hash-fn key)))
-                              (cl:make-hash-table :size cap
-                                                  :test #'coalton-hashtable-test
-                                                  :hash-function #'coalton-hashtable-hash))))
+                              (coalton/hashtable-shim:make-custom-hash-table cap
+                                                                             #'coalton-hashtable-hash
+                                                                             #'coalton-hashtable-test))))
               test-fn
               hash-fn)))
 
@@ -46,7 +44,7 @@
       ((%Hashtable table)
        (lisp (Optional :a) (key table)
          (cl:multiple-value-bind (elem exists?)
-             (cl:gethash key table)
+             (coalton/hashtable-shim:custom-hash-table-get key table)
            (cl:if exists?
                   (Some elem)
                   None))))))
@@ -54,22 +52,22 @@
   (declare hashtable-set! ((Hash :key) => (Hashtable :key :value) -> :key -> :value -> Unit))
   (define (hashtable-set! table key value)
     "Set KEY to VALUE in TABLE"
-    (progn
-      (match table
-        ((%Hashtable inner)
-         (lisp :any (key value inner)
-           (cl:setf (cl:gethash key inner) value))))
-       Unit))
+    (match table
+      ((%Hashtable inner)
+       (lisp Unit (key value inner)
+         (cl:progn
+           (coalton/hashtable-shim:custom-hash-table-set inner key value)
+           Unit)))))
 
   (declare hashtable-remove! ((Hash :key) => (Hashtable :key :value) -> :key -> Unit))
   (define (hashtable-remove! table key)
     "Remove the entry at KEY from TABLE"
-    (progn
-      (match table
-        ((%Hashtable inner)
-         (lisp :any (inner key)
-           (cl:remhash key inner))))
-      Unit))
+    (match table
+      ((%Hashtable inner)
+       (lisp Unit (inner key)
+         (cl:progn
+           (coalton/hashtable-shim:custom-hash-table-remove inner key)
+           Unit)))))
 
   (declare hashtable-count ((Hashtable :key :value) -> Integer))
   (define (hashtable-count table)
@@ -77,42 +75,46 @@
     (match table
       ((%Hashtable table)
        (lisp Integer (table)
-         (cl:hash-table-count table)))))
+         (coalton/hashtable-shim:custom-hash-table-count table)))))
 
   (declare hashtable-foreach ((:key -> :value -> :a) -> (Hashtable :key :value) -> Unit))
   (define (hashtable-foreach f table)
     "Call F once for each key value pair in TABLE"
     (match table
       ((%Hashtable table)
-       (progn
-         (lisp Lisp-Object (f table)
-           (cl:maphash
+       (lisp Unit (f table)
+         (cl:progn 
+           (coalton/hashtable-shim:custom-hash-table-foreach
+            table
             (cl:lambda (key value)
-              (coalton-impl/codegen::A2 f key value))
-            table))
-         Unit))))
+              (coalton-impl/codegen::A2 f key value)))
+           Unit)))))
 
   (declare hashtable-entries ((Hashtable :key :value) -> (List (Tuple :key :value))))
   (define (hashtable-entries table)
-    (match table
-      ((%Hashtable inner) 
-       (lisp (List (Tuple :key :value)) (inner)
-         (cl:loop :for key :being :the :hash-keys :of inner
-              :using (:hash-value value)
-            :collect (coalton-impl/codegen:a2 Tuple key value))))))
+    (progn
+      (let lst = (make-cell Nil))
+      (hashtable-foreach (fn (key val)
+                           (cell-push! lst (Tuple key val)))
+                         table)
+      (cell-read lst)))
 
   (declare hashtable-keys ((Hashtable :key :value) -> (List :key)))
   (define (hashtable-keys table)
     "Returns the keys in TABLE as a list"
-    (match table
-      ((%Hashtable inner)
-       (lisp (List :key) (inner)
-         (alexandria:hash-table-keys inner)))))
+    (progn
+      (let lst = (make-cell Nil))
+      (hashtable-foreach (fn (key _)
+                           (cell-push! lst key))
+                         table)
+      (cell-read lst)))
 
   (declare hashtable-values ((Hashtable :key :value) -> (List :value)))
   (define (hashtable-values table)
     "Returns the values in TABLE as a list"
-    (match table
-      ((%Hashtable inner)
-       (lisp (List :value) (inner)
-         (alexandria:hash-table-values inner))))))
+    (progn
+      (let lst = (make-cell Nil))
+      (hashtable-foreach (fn (_ val)
+                           (cell-push! lst val))
+                         table)
+      (cell-read lst))))

@@ -11,7 +11,8 @@
                #:fset
                #:float-features
                #:split-sequence
-               #:uiop)
+               #:uiop
+               #:coalton/hashtable-shim)
   :in-order-to ((asdf:test-op (asdf:test-op #:coalton/tests)))
   :around-compile (lambda (compile)
                     (let (#+sbcl (sb-ext:*derive-function-types* t))
@@ -101,6 +102,17 @@
                              (:file "graph")
 			     (:file "stateful-computation")))
                (:file "toplevel-environment")))
+
+(asdf:defsystem #:coalton/hashtable-shim
+  :description "Shim over Common Lisp hash tables with custom hash functions, for use by the Coalton standard library."
+  :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
+  :license "MIT"
+  :version (:read-file-form "VERSION.txt")
+  :pathname "src/hashtable-shim"
+  :serial t
+  :components ((:file "defs")
+               (:file "impl-sbcl" :if-feature :sbcl)
+               (:file "impl-fail" :if-feature (:not :sbcl))))
 
 (asdf:defsystem #:coalton/doc
   :description "Documentation generator for Coalton"

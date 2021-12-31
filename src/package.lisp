@@ -659,7 +659,8 @@
    #:cell-read
    #:cell-swap
    #:cell-write
-   #:cell-update)
+   #:cell-update
+   #:cell-push!)
   ;; Vector
   (:export
    #:Vector

@@ -1,4 +1,4 @@
-(in-package #:coalton-library)
+(cl:in-package #:coalton-library)
 
 (coalton-toplevel
 
