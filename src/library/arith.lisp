@@ -409,18 +409,21 @@
                  (Err "String doesn't have integer syntax.")
                  (Ok z)))))))
 
+;;;; `Bits' instances
+;;; signed
+
 (cl:defmacro define-signed-bit-instance (type handle-overflow)
-  (cl:flet ((lisp-op (op)
-           `(lisp ,type (left right)
-              (,op left right))))
+  (cl:flet ((lisp-binop (op)
+              `(lisp ,type (left right)
+                     (,op left right))))
     `(coalton-toplevel
        (define-instance (Bits ,type)
          (define (bit-and left right)
-           ,(lisp-op 'cl:logand))
+           ,(lisp-binop 'cl:logand))
          (define (bit-or left right)
-           ,(lisp-op 'cl:logior))
+           ,(lisp-binop 'cl:logior))
          (define (bit-xor left right)
-           ,(lisp-op 'cl:logxor))
+           ,(lisp-binop 'cl:logxor))
          (define (bit-not bits)
            (lisp ,type (bits) (cl:lognot bits)))
          (define (bit-shift amount bits)
@@ -434,7 +437,38 @@
 (define-signed-bit-instance Fixnum %handle-fixnum-overflow)
 (define-signed-bit-instance Integer cl:identity)
 
-;; TODO: unsinged (Bits _) instances
+;;; unsigned
+
+(cl:declaim (cl:inline unsigned-lognot)
+            (cl:ftype (cl:function (cl:unsigned-byte cl:unsigned-byte)
+                                   (cl:values cl:unsigned-byte cl:&optional))
+                      unsigned-lognot))
+(cl:defun unsigned-lognot (int n-bits)
+  (cl:- (cl:ash 1 n-bits) int 1))
+(cl:defmacro define-unsigned-bit-instance (type width)
+  (cl:flet ((define-binop (coalton-name lisp-name)
+              `(define (,coalton-name left right)
+                   (lisp ,type (left right)
+                         (,lisp-name left right)))))
+    `(coalton-toplevel
+      (define-instance (Bits ,type)
+        ,(define-binop 'bit-and 'cl:logand)
+        ,(define-binop 'bit-or 'cl:logior)
+        ,(define-binop 'bit-xor 'cl:logxor)
+        (define (bit-not bits)
+            (lisp ,type (bits) (unsigned-lognot bits ,width)))
+        (define (bit-shift amount bits)
+            (lisp ,type (amount bits)
+                  (cl:logand (cl:ash bits amount)
+                             (cl:1- (cl:ash 1 ,width)))))))))
+
+(define-unsigned-bit-instance U8 8)
+(define-unsigned-bit-instance U16 16)
+(define-unsigned-bit-instance U32 32)
+(define-unsigned-bit-instance U64 64)
+(define-unsigned-bit-instance Natnum #.(cl:1- +fixnum-bits+))
+
+;;;; `Hash' instances
 
 (define-sxhash-hasher I8)
 (define-sxhash-hasher I16)
