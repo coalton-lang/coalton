@@ -24,7 +24,9 @@
 (cl:eval-when (:compile-toplevel :load-toplevel)
   (cl:defparameter +fixnum-bits+
     #+sbcl sb-vm:n-fixnum-bits
-    #-sbcl (cl:1+ (cl:floor (cl:log cl:most-positive-fixnum 2)))))
+    #-sbcl (cl:1+ (cl:floor (cl:log cl:most-positive-fixnum 2))))
+  (cl:defparameter +unsigned-fixnum-bits+
+    (cl:1- +fixnum-bits+)))
 
 (%define-overflow-handler %handle-8bit-overflow 8)
 (%define-overflow-handler %handle-16bit-overflow 16)
@@ -193,7 +195,7 @@
 (%define-unsigned-num-instance U16 16)
 (%define-unsigned-num-instance U32 32)
 (%define-unsigned-num-instance U64 64)
-(%define-unsigned-num-instance Natnum #.(cl:1- +fixnum-bits+))
+(%define-unsigned-num-instance Natnum #.+unsigned-fixnum-bits+)
 
 (coalton-toplevel
   (declare integer->single-float (Integer -> Single-Float))
@@ -466,7 +468,7 @@
 (define-unsigned-bit-instance U16 16)
 (define-unsigned-bit-instance U32 32)
 (define-unsigned-bit-instance U64 64)
-(define-unsigned-bit-instance Natnum #.(cl:1- +fixnum-bits+))
+(define-unsigned-bit-instance Natnum #.+unsigned-fixnum-bits+)
 
 ;;;; `Hash' instances
 
