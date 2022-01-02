@@ -173,20 +173,20 @@
             :newtype nil
             :docstring "Unbound integer. Uses `integer`."))
 
-          ('coalton:Fixnum
+          ('coalton:IFix
            (type-entry
-            :name 'coalton:Fixnum
+            :name 'coalton:IFix
             :runtime-type 'cl:fixnum
-            :type *fixnum-type*
+            :type *ifix-type*
             :enum-repr nil
             :newtype nil
             :docstring "Non-allocating tagged integer; range is platform-dependent. Uses `fixnum`."))
 
-          ('coalton:Natnum
+          ('coalton:UFix
            (type-entry
-            :name 'coalton:Natnum
+            :name 'coalton:UFix
             :runtime-type '(cl:and cl:fixnum cl:unsigned-byte)
-            :type *natnum-type*
+            :type *ufix-type*
             :enum-repr nil
             :newtype nil
             :docstring "Non-allocating tagged non-negative integer; range is platform-dependent. Uses `(and fixnum unsigned-byte)`."))

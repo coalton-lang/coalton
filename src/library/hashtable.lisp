@@ -11,7 +11,7 @@
   (declare %make-hashtable-capacity
            ((Hash :key) => Integer -> (Tuple3 (Hashtable :key :value)
                                               (:key -> :key -> Boolean)
-                                              (:key -> Natnum))))
+                                              (:key -> UFix))))
   (define (%make-hashtable-capacity cap)
     (let ((hash-fn hash)
           (test-fn ==))

@@ -421,8 +421,8 @@
    #:I32
    #:I64
    #:Integer
-   #:Fixnum
-   #:Natnum
+   #:IFix
+   #:UFix
    #:Single-Float
    #:Double-Float
    #:String

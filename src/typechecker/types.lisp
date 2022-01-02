@@ -176,8 +176,8 @@
 (defvar *i32-type*     (%make-tcon (%make-tycon :name 'coalton:I32         :kind kstar)))
 (defvar *i64-type*     (%make-tcon (%make-tycon :name 'coalton:I64         :kind kstar)))
 (defvar *integer-type* (%make-tcon (%make-tycon :name 'coalton:Integer     :kind kstar)))
-(defvar *fixnum-type*  (%make-tcon (%make-tycon :name 'coalton:Fixnum      :kind kstar)))
-(defvar *natnum-type*  (%make-tcon (%make-tycon :name 'coalton:Natnum      :kind kstar)))
+(defvar *ifix-type*    (%make-tcon (%make-tycon :name 'coalton:IFix        :kind kstar)))
+(defvar *ufix-type*    (%make-tcon (%make-tycon :name 'coalton:UFix        :kind kstar)))
 (defvar *single-float-type*
   (%make-tcon (%make-tycon :name 'coalton:Single-Float :kind kstar)))
 (defvar *double-float-type*

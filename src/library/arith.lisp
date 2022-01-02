@@ -61,8 +61,8 @@
 (%define-number-stuff I32)
 (%define-number-stuff I64)
 (%define-number-stuff Integer)
-(%define-number-stuff Fixnum)
-(%define-number-stuff Natnum)
+(%define-number-stuff IFix)
+(%define-number-stuff UFix)
 (%define-number-stuff Single-Float)
 (%define-number-stuff Double-Float)
 
@@ -124,18 +124,18 @@
       (lisp I64 (x)
         (%handle-64bit-overflow x))))
 
-  (define-instance (Num Fixnum)
+  (define-instance (Num IFix)
     (define (+ a b)
-      (lisp Fixnum (a b)
+      (lisp IFix (a b)
         (%handle-fixnum-overflow (cl:+ a b))))
     (define (- a b)
-      (lisp Fixnum (a b)
+      (lisp IFix (a b)
         (%handle-fixnum-overflow (cl:- a b))))
     (define (* a b)
-      (lisp Fixnum (a b)
+      (lisp IFix (a b)
         (%handle-fixnum-overflow (cl:* a b))))
     (define (fromInt x)
-      (lisp Fixnum (x)
+      (lisp IFix (x)
         (%handle-fixnum-overflow x)))))
 
 
@@ -154,7 +154,7 @@
 (%define-signed-instances I16 16)
 (%define-signed-instances I32 32)
 (%define-signed-instances I64 64)
-(%define-signed-instances Fixnum #.+fixnum-bits+)
+(%define-signed-instances IFix #.+fixnum-bits+)
 
 
 (cl:defmacro %define-unsigned-num-instance (coalton-type bits)
@@ -195,7 +195,7 @@
 (%define-unsigned-num-instance U16 16)
 (%define-unsigned-num-instance U32 32)
 (%define-unsigned-num-instance U64 64)
-(%define-unsigned-num-instance Natnum #.+unsigned-fixnum-bits+)
+(%define-unsigned-num-instance UFix #.+unsigned-fixnum-bits+)
 
 (coalton-toplevel
   (declare integer->single-float (Integer -> Single-Float))
@@ -436,7 +436,7 @@
 (define-signed-bit-instance I16 %handle-16bit-overflow)
 (define-signed-bit-instance I32 %handle-32bit-overflow)
 (define-signed-bit-instance I64 %handle-64bit-overflow)
-(define-signed-bit-instance Fixnum %handle-fixnum-overflow)
+(define-signed-bit-instance IFix %handle-fixnum-overflow)
 (define-signed-bit-instance Integer cl:identity)
 
 ;;; unsigned
@@ -468,7 +468,7 @@
 (define-unsigned-bit-instance U16 16)
 (define-unsigned-bit-instance U32 32)
 (define-unsigned-bit-instance U64 64)
-(define-unsigned-bit-instance Natnum #.+unsigned-fixnum-bits+)
+(define-unsigned-bit-instance UFix #.+unsigned-fixnum-bits+)
 
 ;;;; `Hash' instances
 
@@ -481,7 +481,7 @@
 (define-sxhash-hasher U32)
 (define-sxhash-hasher U64)
 (define-sxhash-hasher Integer)
-(define-sxhash-hasher Fixnum)
-(define-sxhash-hasher Natnum)
+(define-sxhash-hasher IFix)
+(define-sxhash-hasher UFix)
 (define-sxhash-hasher Single-Float)
 (define-sxhash-hasher Double-Float)

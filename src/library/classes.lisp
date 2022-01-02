@@ -229,11 +229,11 @@ The fields are defined as follows:
     "Types which can be hashed for storage in hash tables.
 
 Invariant (== left right) implies (== (hash left) (hash right))."
-    (hash (:a -> Natnum)))
+    (hash (:a -> UFix)))
 
-  (declare combine-hashes (Natnum -> Natnum -> Natnum))
+  (declare combine-hashes (UFix -> UFix -> UFix))
   (define (combine-hashes left right)
-    (lisp Natnum (left right)
+    (lisp UFix (left right)
       (#+sbcl sb-int:mix
        #-sbcl cl:logxor left right))))
 
@@ -241,6 +241,6 @@ Invariant (== left right) implies (== (hash left) (hash right))."
   `(coalton-toplevel
      (define-instance (Hash ,type)
        (define (hash item)
-         (lisp Natnum (item)
+         (lisp UFix (item)
            (cl:sxhash item))))))
 
