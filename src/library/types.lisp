@@ -90,5 +90,5 @@
     ;;
     ;; This shouldn't be pattern matched against with user code.
     ;;
-    ;; See fraction.lisp for more info.
+    ;; See arith.lisp for more info.
     (%Fraction Integer Integer)))
