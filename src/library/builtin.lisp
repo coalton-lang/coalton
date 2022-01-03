@@ -7,7 +7,7 @@
 
   (declare error (String -> :a))
   (define (error str)
-    "Signal an error by calling CL:ERROR"
+    "Signal an error by calling `CL:ERROR`."
     (lisp :a (str) (cl:error str)))
 
   ;;
@@ -16,7 +16,12 @@
 
   (declare fix (((:a -> :b) -> (:a -> :b)) -> (:a -> :b)))
   (define (fix f n)
-    "The factorial function can be written
+    "Compute the fixed point of a unary function. This is equivalent to the Y-combinator of the lambda calculus. 
+
+
+    This combinator allows recursion without specific assignment of names. For example, the factorial function can be written
+
+
     ```
     (define fact
       (fix
@@ -29,15 +34,15 @@
 
   (declare id (:a -> :a))
   (define (id x)
-    "A function that always returns its argument"
+    "A function that always returns its argument."
     x)
 
   (declare const (:a -> :b -> :a))
   (define (const a b)
-    "A function that always returns its first argument"
+    "A function that always returns its first argument."
     a)
 
   (declare flip ((:a -> :b -> :c) -> :b -> :a -> :c))
   (define (flip f x y)
-    "FLIP reverses the arguments to F"
+    "Returns a function that takes its arguments in reverse order."
     (f y x)))

@@ -31,6 +31,19 @@
         ((Tuple (GT) (GT)) True)
         (_                 False))))
 
+  (define-instance (Ord Ord)
+    (define (<=> a b)
+      (match (Tuple a b)
+        ((Tuple (LT) (LT)) EQ)
+        ((Tuple (LT) (EQ)) LT)
+        ((Tuple (LT) (GT)) LT)
+        ((Tuple (EQ) (LT)) GT)
+        ((Tuple (EQ) (EQ)) EQ)
+        ((Tuple (EQ) (GT)) LT)
+        ((Tuple (GT) (LT)) GT)
+        ((Tuple (GT) (EQ)) GT)
+        ((Tuple (GT) (GT)) EQ))))
+
   (define-class ((Eq :a) => (Ord :a))
     "Types whose values can be ordered."
     (<=> (:a -> :a -> Ord)))
@@ -134,31 +147,31 @@ The function / is partial, and will error produce a run-time error if the diviso
   ;; Quantizable
   ;;
 
-  (define-type (Quantization :t)
-    "Represents an integer quantization of `:t`. See the `Quantizable` typeclass.
+  (define-type (Quantization :a)
+    "Represents an integer quantization of `:a`. See the `Quantizable` typeclass.
 
 The fields are defined as follows:
 
-1. A value of type `:t`.
+1. A value of type `:a`.
 
 2. The greatest integer less than or equal to a particular value.
 
-3. The remainder of this as a value of type `:t`.
+3. The remainder of this as a value of type `:a`.
 
 4. The least integer greater than or equal to a particular value.
 
-5. The remainder of this as a value of type `:t`.
+5. The remainder of this as a value of type `:a`.
 "
-    (Quantization :t Integer :t Integer :t))
+    (Quantization :a Integer :a Integer :a))
 
-  (define-class ((Ord :t) (Num :t) => (Quantizable :t))
+  (define-class ((Ord :a) (Num :a) => (Quantizable :a))
     "The representation of a type that allows \"quantizing\", \"snapping to integers\", or \"rounding.\" (All of these concepts are roughly equivalent.)
 "
-    ;; Given a X of type :T, (QUANTIZE X) will return the least
+    ;; Given a X of type :A, (QUANTIZE X) will return the least
     ;; integer greater or equal to X, and the greatest integer less
     ;; than or equal to X, along with their respective remainders
     ;; expressed as values of type :T.
-    (quantize (:t -> (Quantization :t))))
+    (quantize (:a -> (Quantization :a))))
 
   ;;
   ;; Haskell
@@ -201,9 +214,9 @@ The fields are defined as follows:
   ;; Conversions
   ;;
 
-  (define-class (Into :from :to)
-    "INTO imples *every* element of :FROM can be represented by an element of :TO. This conversion might not be injective (i.e., there may be elements in :TO that don't correspond to any in :FROM)."
-    (into (:from -> :to)))
+  (define-class (Into :a :b)
+    "INTO imples *every* element of :a can be represented by an element of :b. This conversion might not be injective (i.e., there may be elements in :a that don't correspond to any in :b)."
+    (into (:a -> :b)))
 
   (define-class ((Into :a :b) (Into :b :a) => (Iso :a :b))
     "Opting into this marker typeclass imples that the instances for (Into :a :b) and (Into :b :a) form a bijection.")
@@ -211,11 +224,11 @@ The fields are defined as follows:
   (define-instance (Into :a :a)
     (define (into x) x))
 
-  (define-class (TryInto :from :to)
-    "TRY-INTO implies *most* elements of :FROM can be represented exactly by an element of :TO, but sometimes not. If not, an error string is returned."
+  (define-class (TryInto :a :b)
+    "TRY-INTO implies *most* elements of :a can be represented exactly by an element of :b, but sometimes not. If not, an error string is returned."
     ;; Ideally we'd have an associated-type here instead of locking in
     ;; on String.
-    (tryInto (:from -> (Result String :to))))
+    (tryInto (:a -> (Result String :b))))
 
   (define-instance (Iso :a :a))
 
