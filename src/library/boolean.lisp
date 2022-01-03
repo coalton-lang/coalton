@@ -27,3 +27,5 @@
          (match y
            ((True) LT)
            ((False) EQ)))))))
+
+(define-sxhash-hasher Boolean)

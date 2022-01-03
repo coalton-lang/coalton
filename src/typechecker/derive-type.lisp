@@ -7,11 +7,11 @@
 (defun derive-literal-type (value)
   (declare (values ty ty-predicate-list))
   (etypecase value
-    (integer      (values tInteger      nil))
-    (single-float (values tSingle-Float nil))
-    (double-float (values tDouble-Float nil))
-    (string       (values tString       nil))
-    (character    (values tChar         nil))))
+    (integer      (values *integer-type*      nil))
+    (single-float (values *single-float-type* nil))
+    (double-float (values *double-float-type* nil))
+    (string       (values *string-type*       nil))
+    (character    (values *char-type*         nil))))
 
 (defgeneric derive-expression-type (value env substs)
   (:documentation "Derive the TYPE and generate a TYPED-NODE for expression VALUE

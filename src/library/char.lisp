@@ -12,3 +12,5 @@
           (if (lisp Boolean (x y) (to-boolean (cl:char> x y)))
               GT
               LT)))))
+
+(define-sxhash-hasher Char)

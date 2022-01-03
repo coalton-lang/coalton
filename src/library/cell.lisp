@@ -52,6 +52,10 @@
   (define (cell-update f cell)
     (cell-write (f (cell-read cell)) cell))
 
+  (declare cell-push! ((Cell (List :elt)) -> :elt -> Unit))
+  (define (cell-push! cel new-elt)
+    (cell-update (Cons new-elt) cel))
+
   (define-instance (Eq :a => (Eq (Cell :a)))
     (define (== c1 c2)
       (== (cell-read c1) (cell-read c2))))

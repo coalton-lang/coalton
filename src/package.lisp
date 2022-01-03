@@ -324,6 +324,8 @@
    #:codegen-program
    #:compile-expression
    #:update-function-env
+   #:a1 #:a2 #:a3 #:a4 #:a5 #:a6 #:a7 #:a8 #:a9 #:a10
+   #:f1 #:f2 #:f3 #:f4 #:f5 #:f6 #:f7 #:f8 #:f9 #:f10
    )
   (:export
    #:toplevel-value-definition          ; STRUCT
@@ -419,6 +421,8 @@
    #:I32
    #:I64
    #:Integer
+   #:IFix
+   #:UFix
    #:Single-Float
    #:Double-Float
    #:String
@@ -496,6 +500,7 @@
    #:max
    #:min
    #:Num #:+ #:- #:* #:fromInt
+   #:Bits #:bit-or #:bit-and #:bit-xor #:bit-not #:bit-shift
    #:Dividable #:/
    #:Quantization
    #:Quantizable #:quantize
@@ -508,7 +513,8 @@
    #:Alternative #:alt #:empty
    #:Into
    #:TryInto
-   #:Unwrappable #:withDefault #:unwrap)
+   #:Unwrappable #:withDefault #:unwrap
+   #:Hash #:hash #:combine-hashes)
   ;; Builtin
   (:export
    #:undefined
@@ -653,7 +659,8 @@
    #:cell-read
    #:cell-swap
    #:cell-write
-   #:cell-update)
+   #:cell-update
+   #:cell-push!)
   ;; Vector
   (:export
    #:Vector
