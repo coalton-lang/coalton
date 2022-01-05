@@ -121,11 +121,12 @@ Returns (VALUES type predicate-list typed-node subs)")
                        ret-ty
                        (make-function-type (qualified-ty-type (fresh-inst (lookup-value-type new-env (car args))))
                                            (build-function (cdr args))))))
-          (let ((ret-ty (build-function vars)))
+          (let ((ret-ty (build-function vars))
+                (ret-preds (reduce-context env ret-preds new-substs)))
             (values ret-ty
                     ret-preds
                     (typed-node-abstraction
-                     (to-scheme (qualified-ty (apply-substitution new-substs ret-preds) ret-ty))
+                     (to-scheme (qualified-ty ret-preds ret-ty))
                      (node-unparsed value)
                      (mapcar (lambda (var)
                                (cons var (lookup-value-type new-env var)))
