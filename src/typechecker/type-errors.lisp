@@ -266,7 +266,7 @@
    (lambda (c s)
      (let ((*print-circle* nil) ; Prevent printing using reader macros
            )
-       (format s "Explicit type of ~A for binding ~A missing inferred predicates ~{~A~^, ~}"
+       (format s "Explicit type of ~A~%for binding ~A missing inferred predicates ~{~A~^, ~}"
                (weak-context-error-declared-type c)
                (weak-context-error-name c)
                (weak-context-error-preds c))))))

@@ -656,7 +656,7 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
             (when (not (null retained-preds))
               (error 'weak-context-error
                      :name (car binding)
-                     :declared-type declared-ty
+                     :declared-type output-qual-type
                      :preds retained-preds))
 
             ;; Ensure that we are allowed to defer predicates (this is
