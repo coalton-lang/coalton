@@ -167,10 +167,13 @@
         (lookup-value-type env (car e))
         (coalton-impl/typechecker::name-entry-docstring (cdr e))
         (coalton-impl/typechecker::name-entry-location (cdr e))))
-     (remove-if-not
+     (remove-if
       (lambda (x)
-        (eql :value (name-entry-type (cdr x))))
-      values))))
+        (coalton-impl/typechecker::lookup-constructor env (car x) :no-error t))
+      (remove-if-not
+       (lambda (x)
+         (eql :value (name-entry-type (cdr x))))
+       values)))))
 
 (defun get-doc-type-info (env package)
   (let ((types nil)

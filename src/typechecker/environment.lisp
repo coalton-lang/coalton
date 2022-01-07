@@ -287,7 +287,17 @@
   "Create a TYPE-ENVIRONMENT containing early constructors"
   (let* ((tvar (make-variable))
          (list-scheme (quantify (list tvar) (qualify nil (%make-tapp *list-type* tvar))))
-         (var-scheme (quantify (list tvar) (qualify nil tvar))))
+         (var-scheme (quantify (list tvar) (qualify nil tvar)))
+         (cons-scheme
+           (quantify
+            (list tvar)
+            (qualify
+             nil
+             (make-function-type*
+              (list
+               tvar
+               (%make-tapp *list-type* tvar))
+              (%make-tapp *list-type* tvar))))))
     (make-constructor-environment
      :data (fset:map
             ;; Early Constructors
@@ -316,7 +326,7 @@
               :name 'coalton:Cons
               :arity 2
               :constructs 'coalton:List
-              :scheme list-scheme
+              :scheme cons-scheme
               :arguments (list var-scheme list-scheme)
               :classname nil
               :compressed-repr 'nil))
