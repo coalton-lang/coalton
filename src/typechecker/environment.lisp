@@ -234,7 +234,7 @@
             :type *arrow-type*
             :enum-repr nil
             :newtype nil
-            :docstring "Type constructor for function types. `(Arrow :a :b)` is equivalent to `(:a -> :b)`."))
+            :docstring "Type constructor for function types. `(Arrow :a :b)` is equivalent to <code>(:a -> :b)</code>."))
 
           ('coalton:List
            (type-entry
