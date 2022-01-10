@@ -489,6 +489,7 @@
    #:Result #:Err #:Ok
    #:Optional #:Some #:None
    #:Fraction
+   #:Complex
    #:undefined
    )
   ;; Classes
@@ -534,7 +535,15 @@
    #:even
    #:odd
    #:gcd
-   #:lcm)
+   #:lcm
+   #:numerator
+   #:denominator
+   #:reciprocal
+   #:real-part
+   #:imag-part
+   #:conjugate
+   #:ii
+   )
   ;; Quantize
   (:export
    #:floor
@@ -548,11 +557,6 @@
    #:round/
    #:single/
    #:double/)
-  ;; Fraction
-  (:export
-   #:numerator
-   #:denominator
-   #:reciprocal)
   ;; String
   (:export
    #:concat-string
