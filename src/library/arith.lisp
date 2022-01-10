@@ -417,6 +417,58 @@
   )
 
 (coalton-toplevel
+  (declare real-part ((Complex :a) -> :a))
+  (define (real-part z)
+    "The real part of a complex number."
+    (match z
+      ((Complex a _) a)))
+
+  (declare imag-part ((Complex :a) -> :a))
+  (define (imag-part z)
+    "The imaginary part of a complex number."
+    (match z
+      ((Complex _ b) b)))
+
+  (define-instance ((Eq :a) => (Eq (Complex :a)))
+    (define (== p q)
+      (and (== (real-part p) (real-part q))
+           (== (imag-part p) (imag-part q)))))
+
+  (define-instance ((Num :a) => (Num (Complex :a)))
+    (define (+ a b)
+      (Complex (+ (real-part a) (real-part b))
+               (+ (imag-part a) (imag-part b))))
+    (define (- a b)
+      (Complex (+ (real-part a) (real-part b))
+               (+ (imag-part a) (imag-part b))))
+    (define (* a b)
+      (match (Tuple a b)
+        ((Tuple (Complex ra ia)
+                (Complex rb ib))
+         (Complex (- (* ra rb) (* ia ib))
+                  (+ (* ra ib) (* ia rb))))))
+    (define (fromInt x)
+      (Complex (fromInt x) (fromInt 0))))
+
+  (declare conjugate ((Num :a) => (Complex :a) -> (Complex :a)))
+  (define (conjugate z)
+    (Complex (real-part z) (negate (imag-part z))))
+
+  (declare ii ((Num :a) => (Complex :a)))
+  (define ii
+    "The complex unit i. (The double ii represents a blackboard-bold i.)"
+    (Complex (fromInt 0) (fromInt 1)))
+
+  (define-instance ((Num :a) (Dividable :a :a) => (Dividable (Complex :a) (Complex :a)))
+    (define (/ a b)
+      (match (Tuple a b)
+        ((Tuple (Complex ra ia)
+                (Complex rb ib))
+         (let ((d (+ (* rb rb) (* ib ib))))
+           (Complex (/ (+ (* ia ib) (* ra rb)) d)
+                    (/ (- (* ia rb) (* ra ib)) d))))))))
+
+(coalton-toplevel
   (define-instance (Into Integer String)
     (define (into z)
       (lisp String (z)
@@ -428,7 +480,11 @@
         (cl:let ((z (cl:ignore-errors (cl:parse-integer s))))
           (cl:if (cl:null z)
                  (Err "String doesn't have integer syntax.")
-                 (Ok z)))))))
+                 (Ok z))))))
+
+  (define-instance ((Num :a) => (Into :a (Complex :a)))
+    (define (into x)
+      (Complex x (fromInt 0)))))
 
 ;;;; `Bits' instances
 ;;; signed
@@ -506,7 +562,7 @@
 (define-sxhash-hasher Double-Float)
 
 
-;;; `Quantization' 
+;;; `Quantization'
 
 (coalton-toplevel
   (define-instance (Quantizable Integer)
