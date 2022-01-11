@@ -21,10 +21,18 @@
                   ,(cl:format cl:nil "Signed value overflowed ~D bits." bits))
        (%unsigned->signed ,bits (cl:mod value ,(cl:expt 2 bits)))))))
 
+(cl:eval-when (:compile-toplevel :load-toplevel)
+  (cl:defparameter +fixnum-bits+
+    #+sbcl sb-vm:n-fixnum-bits
+    #-sbcl (cl:1+ (cl:floor (cl:log cl:most-positive-fixnum 2))))
+  (cl:defparameter +unsigned-fixnum-bits+
+    (cl:1- +fixnum-bits+)))
+
 (%define-overflow-handler %handle-8bit-overflow 8)
 (%define-overflow-handler %handle-16bit-overflow 16)
 (%define-overflow-handler %handle-32bit-overflow 32)
 (%define-overflow-handler %handle-64bit-overflow 64)
+(%define-overflow-handler %handle-fixnum-overflow #.+fixnum-bits+)
 
 (cl:defmacro %define-number-stuff (coalton-type)
   `(coalton-toplevel
@@ -53,6 +61,8 @@
 (%define-number-stuff I32)
 (%define-number-stuff I64)
 (%define-number-stuff Integer)
+(%define-number-stuff IFix)
+(%define-number-stuff UFix)
 (%define-number-stuff Single-Float)
 (%define-number-stuff Double-Float)
 
@@ -112,7 +122,21 @@
         (%handle-64bit-overflow (cl:* a b))))
     (define (fromInt x)
       (lisp I64 (x)
-        (%handle-64bit-overflow x)))))
+        (%handle-64bit-overflow x))))
+
+  (define-instance (Num IFix)
+    (define (+ a b)
+      (lisp IFix (a b)
+        (%handle-fixnum-overflow (cl:+ a b))))
+    (define (- a b)
+      (lisp IFix (a b)
+        (%handle-fixnum-overflow (cl:- a b))))
+    (define (* a b)
+      (lisp IFix (a b)
+        (%handle-fixnum-overflow (cl:* a b))))
+    (define (fromInt x)
+      (lisp IFix (x)
+        (%handle-fixnum-overflow x)))))
 
 
 (cl:defmacro %define-signed-instances (coalton-type bits)
@@ -130,6 +154,7 @@
 (%define-signed-instances I16 16)
 (%define-signed-instances I32 32)
 (%define-signed-instances I64 64)
+(%define-signed-instances IFix #.+fixnum-bits+)
 
 
 (cl:defmacro %define-unsigned-num-instance (coalton-type bits)
@@ -170,6 +195,7 @@
 (%define-unsigned-num-instance U16 16)
 (%define-unsigned-num-instance U32 32)
 (%define-unsigned-num-instance U64 64)
+(%define-unsigned-num-instance UFix #.+unsigned-fixnum-bits+)
 
 (coalton-toplevel
   (declare integer->single-float (Integer -> Single-Float))
@@ -325,6 +351,25 @@
       (%reduce-fraction
        (%Fraction n d))))
 
+  (declare numerator (Fraction -> Integer))
+  (define (numerator q)
+    "The numerator of a fraction."
+    (match q
+      ((%Fraction n _) n)))
+
+  (declare denominator (Fraction -> Integer))
+  (define (denominator q)
+    "The denominator of a fraction."
+    (match q
+      ((%Fraction _ d) d)))
+
+  (declare reciprocal (Fraction -> Fraction))
+  (define (reciprocal q)
+    "The reciprocal of a fraction."
+    (match q
+      ;; n/d and d/n will always be reduced
+      ((%Fraction n d) (%Fraction d n))))
+
   (define-instance (Num Fraction)
     (define (+ p q)
       (let ((a (* (numerator p) (denominator q)))
@@ -372,6 +417,58 @@
   )
 
 (coalton-toplevel
+  (declare real-part ((Complex :a) -> :a))
+  (define (real-part z)
+    "The real part of a complex number."
+    (match z
+      ((Complex a _) a)))
+
+  (declare imag-part ((Complex :a) -> :a))
+  (define (imag-part z)
+    "The imaginary part of a complex number."
+    (match z
+      ((Complex _ b) b)))
+
+  (define-instance ((Eq :a) => (Eq (Complex :a)))
+    (define (== p q)
+      (and (== (real-part p) (real-part q))
+           (== (imag-part p) (imag-part q)))))
+
+  (define-instance ((Num :a) => (Num (Complex :a)))
+    (define (+ a b)
+      (Complex (+ (real-part a) (real-part b))
+               (+ (imag-part a) (imag-part b))))
+    (define (- a b)
+      (Complex (+ (real-part a) (real-part b))
+               (+ (imag-part a) (imag-part b))))
+    (define (* a b)
+      (match (Tuple a b)
+        ((Tuple (Complex ra ia)
+                (Complex rb ib))
+         (Complex (- (* ra rb) (* ia ib))
+                  (+ (* ra ib) (* ia rb))))))
+    (define (fromInt x)
+      (Complex (fromInt x) (fromInt 0))))
+
+  (declare conjugate ((Num :a) => (Complex :a) -> (Complex :a)))
+  (define (conjugate z)
+    (Complex (real-part z) (negate (imag-part z))))
+
+  (declare ii ((Num :a) => (Complex :a)))
+  (define ii
+    "The complex unit i. (The double ii represents a blackboard-bold i.)"
+    (Complex (fromInt 0) (fromInt 1)))
+
+  (define-instance ((Num :a) (Dividable :a :a) => (Dividable (Complex :a) (Complex :a)))
+    (define (/ a b)
+      (match (Tuple a b)
+        ((Tuple (Complex ra ia)
+                (Complex rb ib))
+         (let ((d (+ (* rb rb) (* ib ib))))
+           (Complex (/ (+ (* ia ib) (* ra rb)) d)
+                    (/ (- (* ia rb) (* ra ib)) d))))))))
+
+(coalton-toplevel
   (define-instance (Into Integer String)
     (define (into z)
       (lisp String (z)
@@ -383,4 +480,198 @@
         (cl:let ((z (cl:ignore-errors (cl:parse-integer s))))
           (cl:if (cl:null z)
                  (Err "String doesn't have integer syntax.")
-                 (Ok z)))))))
+                 (Ok z))))))
+
+  (define-instance ((Num :a) => (Into :a (Complex :a)))
+    (define (into x)
+      (Complex x (fromInt 0)))))
+
+;;;; `Bits' instances
+;;; signed
+
+(cl:defmacro define-signed-bit-instance (type handle-overflow)
+  (cl:flet ((lisp-binop (op)
+              `(lisp ,type (left right)
+                     (,op left right))))
+    `(coalton-toplevel
+       (define-instance (Bits ,type)
+         (define (bit-and left right)
+           ,(lisp-binop 'cl:logand))
+         (define (bit-or left right)
+           ,(lisp-binop 'cl:logior))
+         (define (bit-xor left right)
+           ,(lisp-binop 'cl:logxor))
+         (define (bit-not bits)
+           (lisp ,type (bits) (cl:lognot bits)))
+         (define (bit-shift amount bits)
+           (lisp ,type (amount bits)
+             (,handle-overflow (cl:ash bits amount))))))))
+
+(define-signed-bit-instance I8 %handle-8bit-overflow)
+(define-signed-bit-instance I16 %handle-16bit-overflow)
+(define-signed-bit-instance I32 %handle-32bit-overflow)
+(define-signed-bit-instance I64 %handle-64bit-overflow)
+(define-signed-bit-instance IFix %handle-fixnum-overflow)
+(define-signed-bit-instance Integer cl:identity)
+
+;;; unsigned
+
+(cl:declaim (cl:inline unsigned-lognot)
+            (cl:ftype (cl:function (cl:unsigned-byte cl:unsigned-byte)
+                                   (cl:values cl:unsigned-byte cl:&optional))
+                      unsigned-lognot))
+(cl:defun unsigned-lognot (int n-bits)
+  (cl:- (cl:ash 1 n-bits) int 1))
+(cl:defmacro define-unsigned-bit-instance (type width)
+  (cl:flet ((define-binop (coalton-name lisp-name)
+              `(define (,coalton-name left right)
+                   (lisp ,type (left right)
+                         (,lisp-name left right)))))
+    `(coalton-toplevel
+      (define-instance (Bits ,type)
+        ,(define-binop 'bit-and 'cl:logand)
+        ,(define-binop 'bit-or 'cl:logior)
+        ,(define-binop 'bit-xor 'cl:logxor)
+        (define (bit-not bits)
+            (lisp ,type (bits) (unsigned-lognot bits ,width)))
+        (define (bit-shift amount bits)
+            (lisp ,type (amount bits)
+                  (cl:logand (cl:ash bits amount)
+                             (cl:1- (cl:ash 1 ,width)))))))))
+
+(define-unsigned-bit-instance U8 8)
+(define-unsigned-bit-instance U16 16)
+(define-unsigned-bit-instance U32 32)
+(define-unsigned-bit-instance U64 64)
+(define-unsigned-bit-instance UFix #.+unsigned-fixnum-bits+)
+
+;;;; `Hash' instances
+
+(define-sxhash-hasher I8)
+(define-sxhash-hasher I16)
+(define-sxhash-hasher I32)
+(define-sxhash-hasher I64)
+(define-sxhash-hasher U8)
+(define-sxhash-hasher U16)
+(define-sxhash-hasher U32)
+(define-sxhash-hasher U64)
+(define-sxhash-hasher Integer)
+(define-sxhash-hasher IFix)
+(define-sxhash-hasher UFix)
+(define-sxhash-hasher Single-Float)
+(define-sxhash-hasher Double-Float)
+
+
+;;; `Quantization'
+
+(coalton-toplevel
+  (define-instance (Quantizable Integer)
+    (define (quantize x)
+      (Quantization x x 0 x 0))))
+
+(cl:macrolet ((define-integer-quantizations (cl:&rest int-types)
+                `(coalton-toplevel
+                   ,@(cl:loop :for ty :in int-types :collect
+                        `(define-instance (Quantizable ,ty)
+                           (define (quantize x)
+                             (let ((n (into x)))
+                               (Quantization x n (fromInt 0) n (fromInt 0)))))))))
+  (define-integer-quantizations I32 I64 U8 U32 U64))
+
+(coalton-toplevel
+  (define-instance (Quantizable Single-Float)
+    (define (quantize f)
+      (lisp (Quantization Single-Float) (f)
+        (uiop:nest
+         (cl:multiple-value-bind (fl-quo fl-rem) (cl:floor f))
+         (cl:multiple-value-bind (ce-quo ce-rem) (cl:ceiling f))
+         (Quantization f fl-quo fl-rem ce-quo ce-rem)))))
+
+  (define-instance (Quantizable Double-Float)
+    (define (quantize f)
+      (lisp (Quantization Double-Float) (f)
+        (uiop:nest
+         (cl:multiple-value-bind (fl-quo fl-rem) (cl:floor f))
+         (cl:multiple-value-bind (ce-quo ce-rem) (cl:ceiling f))
+         (Quantization f fl-quo fl-rem ce-quo ce-rem)))))
+
+  (define-instance (Quantizable Fraction)
+    (define (quantize q)
+      (let ((n (numerator q))
+            (d (denominator q)))
+        (lisp (Quantization Fraction) (n d)
+          ;; Not the most efficient... just relying on CL to do the
+          ;; work.
+          (cl:flet ((to-frac (f)
+                      (%Fraction (cl:numerator f) (cl:denominator f))))
+            (cl:let ((f (cl:/ n d)))
+              (uiop:nest
+               (cl:multiple-value-bind (fl-quo fl-rem) (cl:floor f))
+               (cl:multiple-value-bind (ce-quo ce-rem) (cl:ceiling f))
+               (Quantization f
+                             fl-quo (to-frac fl-rem)
+                             ce-quo (to-frac ce-rem)))))))))
+
+  (define (floor x)
+    "Return the greatest integer less than or equal to X."
+    (match (quantize x)
+      ((Quantization _ z _ _ _) z)))
+
+  (define (ceiling x)
+    "Return the least integer greater than or equal to X."
+    (match (quantize x)
+      ((Quantization _ _ _ z _) z)))
+
+  (define (round x)
+    "Return the nearest integer to X, with ties breaking toward positive infinity."
+    (match (quantize x)
+      ((Quantization _ a ar b br)
+       (match (<=> (abs ar) (abs br))
+         ((LT) a)
+         ((GT) b)
+         ((EQ) (max a b))))))
+
+  (declare safe/ ((Dividable :a :b) => (:a -> :a -> (Optional :b))))
+  (define (safe/ x y)
+    "Safely divide X by Y, returning None if Y is zero."
+    (if (== y (fromInt 0))
+        None
+        (Some (/ x y))))
+
+  (declare exact/ (Integer -> Integer -> Fraction))
+  (define (exact/ a b)
+    "Exactly divide two integers and produce a fraction."
+    (/ a b))
+
+  (declare inexact/ (Integer -> Integer -> Double-Float))
+  (define (inexact/ a b)
+    "Compute the quotient of integers as a double-precision float.
+
+Note: This does *not* divide double-float arguments."
+    (/ a b))
+
+  (declare floor/ (Integer -> Integer -> Integer))
+  (define (floor/ a b)
+    "Divide two integers and compute the floor of the quotient."
+    (floor (exact/ a b)))
+
+  (declare ceiling/ (Integer -> Integer -> Integer))
+  (define (ceiling/ a b)
+    "Divide two integers and compute the ceiling of the quotient."
+    (ceiling (exact/ a b)))
+
+  (declare round/ (Integer -> Integer -> Integer))
+  (define (round/ a b)
+    "Divide two integers and round the quotient."
+    (round (exact/ a b)))
+
+  (declare single/ (Single-Float -> Single-Float -> Single-Float))
+  (define (single/ a b)
+    "Compute the quotient of single-precision floats as a single-precision float."
+    (/ a b))
+
+  (declare double/ (Double-Float -> Double-Float -> Double-Float))
+  (define (double/ a b)
+    "Compute the quotient of single-precision floats as a single-precision float."
+    (/ a b)))
+

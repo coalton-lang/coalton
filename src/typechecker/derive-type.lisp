@@ -7,11 +7,11 @@
 (defun derive-literal-type (value)
   (declare (values ty ty-predicate-list))
   (etypecase value
-    (integer      (values tInteger      nil))
-    (single-float (values tSingle-Float nil))
-    (double-float (values tDouble-Float nil))
-    (string       (values tString       nil))
-    (character    (values tChar         nil))))
+    (integer      (values *integer-type*      nil))
+    (single-float (values *single-float-type* nil))
+    (double-float (values *double-float-type* nil))
+    (string       (values *string-type*       nil))
+    (character    (values *char-type*         nil))))
 
 (defgeneric derive-expression-type (value env substs)
   (:documentation "Derive the TYPE and generate a TYPED-NODE for expression VALUE
@@ -121,11 +121,12 @@ Returns (VALUES type predicate-list typed-node subs)")
                        ret-ty
                        (make-function-type (qualified-ty-type (fresh-inst (lookup-value-type new-env (car args))))
                                            (build-function (cdr args))))))
-          (let ((ret-ty (build-function vars)))
+          (let ((ret-ty (build-function vars))
+                (ret-preds (reduce-context env ret-preds new-substs)))
             (values ret-ty
                     ret-preds
                     (typed-node-abstraction
-                     (to-scheme (qualified-ty (apply-substitution new-substs ret-preds) ret-ty))
+                     (to-scheme (qualified-ty ret-preds ret-ty))
                      (node-unparsed value)
                      (mapcar (lambda (var)
                                (cons var (lookup-value-type new-env var)))
@@ -655,7 +656,7 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
             (when (not (null retained-preds))
               (error 'weak-context-error
                      :name (car binding)
-                     :declared-type declared-ty
+                     :declared-type output-qual-type
                      :preds retained-preds))
 
             ;; Ensure that we are allowed to defer predicates (this is
@@ -669,16 +670,16 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                   (cons (car binding)
                         (replace-node-type (apply-substitution local-subs typed-node)
                                            (to-scheme (qualified-ty
-                                                       (append
-                                                        (remove-if-not (lambda (p)
-                                                                         (member p expr-preds :test #'equalp))
-                                                                       (apply-substitution local-subs preds))
-                                                        (remove-if-not (lambda (p)
-                                                                         (not (super-entail env expr-preds p)))
-                                                                       (apply-substitution local-subs preds))
-                                                        (remove-if-not (lambda (p)
-                                                                         (not (super-entail env (apply-substitution local-subs preds) p)))
-                                                                       expr-preds))
+                                                       (remove-duplicates
+                                                        (append
+                                                         (remove-if-not (lambda (p)
+                                                                          (or (member p expr-preds :test #'equalp)
+                                                                              (not (super-entail env expr-preds p))))
+                                                                        (apply-substitution local-subs preds))
+                                                         (remove-if-not (lambda (p)
+                                                                          (not (super-entail env (apply-substitution local-subs preds) p)))
+                                                                        expr-preds))
+                                                        :test #'equalp)
 
                                                        expr-type))))
                   deferred-preds env local-subs

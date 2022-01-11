@@ -13,7 +13,8 @@
 
   (define-instance (Eq Boolean)
     (define (== x y)
-      (not (/= x y))))
+        (lisp Boolean (x y)
+              (cl:eq x y))))
 
   (define-instance (Ord Boolean)
     (define (<=> x y)
@@ -26,3 +27,5 @@
          (match y
            ((True) LT)
            ((False) EQ)))))))
+
+(define-sxhash-hasher Boolean)

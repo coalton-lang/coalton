@@ -90,5 +90,9 @@
     ;;
     ;; This shouldn't be pattern matched against with user code.
     ;;
-    ;; See fraction.lisp for more info.
-    (%Fraction Integer Integer)))
+    ;; See arith.lisp for more info.
+    (%Fraction Integer Integer))
+
+  (define-type (Complex :a)
+    "Represents a complex algebra of a given type."
+    (Complex :a :a)))

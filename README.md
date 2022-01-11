@@ -79,7 +79,7 @@ It also contains a few example programs, such as:
 - An [implementation](examples/thih/) of Jones's *Typing Haskell in Haskell*, and
 - An [implementation](examples/quil-coalton/) of a simple [Quil](https://en.wikipedia.org/wiki/Quil_(instruction_set_architecture)) parser.
 
-Lastly and importantly, we maintain a collection of documentation about Coalton in the [docs](docs/) directory, including a [standard library reference guide](docs/reference.md).
+Lastly and importantly, we maintain a collection of documentation about Coalton in the [docs](docs/) directory, including a [standard library reference guide](https://coalton-lang.github.io/reference/).
 
 ## Getting Started
 

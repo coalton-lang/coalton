@@ -44,8 +44,10 @@
 
   (:method ((expr typed-node-direct-application) ctx env)
     `(,(typed-node-direct-application-rator expr)
-      ,@(compile-typeclass-dicts (scheme-predicates
-                                  (typed-node-direct-application-rator-type expr))
+      ,@(compile-typeclass-dicts (remove-duplicates
+                                  (scheme-predicates
+                                   (typed-node-direct-application-rator-type expr))
+                                  :test #'equalp)
                                  ctx env)
       ,@(mapcar
          (lambda (expr) (compile-expression expr ctx env))
@@ -60,14 +62,11 @@
                                           (values ,(lisp-type (typed-node-abstraction-subexpr expr) env) &optional))))
                            ,(compile-expression (typed-node-abstraction-subexpr expr) ctx env)))
            (arity (length (typed-node-abstraction-vars expr))))
-      (cond
-        ((= 1 arity)
-         lambda-expr)
-        (t
-         (let ((function-constructor (gethash arity *function-constructor-functions*)))
-           (unless function-constructor
-             (coalton-impl::coalton-bug "Unable to construct function of arity ~A" arity))
-           `(,function-constructor ,lambda-expr))))))
+        
+      (let ((function-constructor (gethash arity *function-constructor-functions*)))
+        (unless function-constructor
+          (coalton-impl::coalton-bug "Unable to construct function of arity ~A" arity))
+        `(,function-constructor ,lambda-expr))))
 
   (:method ((expr typed-node-let) ctx env)
     (compile-binding-list (typed-node-let-bindings expr)
@@ -219,7 +218,9 @@
                              (node (cdr binding))
                              (type (typed-node-type node))
 
-                             (preds (reduce-preds-for-codegen (scheme-predicates type) env))
+                             (preds
+                               (remove-if (lambda (p) (member p ctx :key #'car :test #'equalp))
+                                          (reduce-preds-for-codegen (scheme-predicates type) env)))
 
                              (dict-context (mapcar (lambda (pred) (cons pred (gensym))) preds)))
 

@@ -11,7 +11,8 @@
                #:fset
                #:float-features
                #:split-sequence
-               #:uiop)
+               #:uiop
+               #:coalton/hashtable-shim)
   :in-order-to ((asdf:test-op (asdf:test-op #:coalton/tests)))
   :around-compile (lambda (compile)
                     (let (#+sbcl (sb-ext:*derive-function-types* t))
@@ -76,10 +77,6 @@
                (:file "toplevel-define-instance")
                (:file "coalton")
                (:file "debug")
-               (:module "doc"
-                :serial t
-                :components ((:file "generate-documentation")
-                             (:file "markdown")))
                (:file "faux-macros")
                (:module "library"
                 :serial t
@@ -88,7 +85,6 @@
                              (:file "builtin")
                              (:file "classes")
                              (:file "boolean")
-                             (:file "fraction")
                              (:file "arith")
                              (:file "char")
                              (:file "string")
@@ -97,7 +93,6 @@
                              (:file "tuple")
                              (:file "result")
                              (:file "functions")
-                             (:file "quantize")
                              (:file "cell")
                              (:file "vector")
                              (:file "slice")
@@ -105,6 +100,36 @@
                              (:file "graph")
 			     (:file "stateful-computation")))
                (:file "toplevel-environment")))
+
+(asdf:defsystem #:coalton/hashtable-shim
+  :description "Shim over Common Lisp hash tables with custom hash functions, for use by the Coalton standard library."
+  :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
+  :license "MIT"
+  :version (:read-file-form "VERSION.txt")
+  :pathname "src/hashtable-shim"
+  :serial t
+  :components ((:file "defs")
+               (:file "impl-sbcl" :if-feature :sbcl)
+               (:file "impl-fail" :if-feature (:not :sbcl))))
+
+(asdf:defsystem #:coalton/doc
+  :description "Documentation generator for Coalton"
+  :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
+  :license "MIT"
+  :version (:read-file-form "VERSION.txt")
+  :depends-on (#:coalton
+               #:html-entities
+               #:yason
+               #:uiop)
+  :around-compile (lambda (compile)
+                    (let (#+sbcl (sb-ext:*derive-function-types* t))
+                      (funcall compile)))
+  :pathname "src/doc"
+  :serial t
+  :components ((:file "package")
+               (:file "generate-documentation")
+               (:file "markdown")
+               (:file "hugo")))
 
 (asdf:defsystem #:coalton/tests
   :description "Tests for COALTON."

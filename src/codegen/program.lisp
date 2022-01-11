@@ -138,11 +138,9 @@
            (type environment env))
   (let* ((var-names (mapcar #'car vars))
 
-         (preds (reduce-context
-                 env
-                 (remove-duplicates (remove-if #'static-predicate-p (scheme-predicates type))
-                                    :test #'equalp)
-                 nil))
+         (preds (remove-duplicates
+                 (remove-if #'static-predicate-p (scheme-predicates type))
+                 :test #'equalp))
 
          (dict-context (mapcar (lambda (pred) (cons pred (gensym))) preds))
 

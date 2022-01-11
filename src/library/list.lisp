@@ -22,15 +22,16 @@
       ((Cons _ xs) (Some xs))
       ((Nil) None)))
 
+  (declare car ((List :a) -> :a))
   (define (car x)
-    "Return the traditional car of a list XS. (Error when there is no car.)"
+    "Return the traditional car of a list. This function is partial"
     (match x
       ((Cons x _) x)
       ((Nil) (error "there is no first element"))))
 
   (declare cdr ((List :a) -> (List :a)))
   (define (cdr xs)
-    "Return the traditional cdr of a list XS."
+    "Return the traditional cdr of a list. This function is partial"
     (match xs
       ((Cons _ xs) xs)
       ((Nil) Nil)))
@@ -58,12 +59,12 @@
 
   (declare singleton (:a -> (List :a)))
   (define (singleton x)
-    "Returns a single element list containg only X."
+    "Returns a list containting one element."
     (Cons x Nil))
 
   (declare repeat (Integer -> :a -> (List :a)))
   (define (repeat n x)
-    "Returns a list with X repeated N times."
+    "Returns a list with the same value repeated multiple times."
     (if (== 0 n)
         Nil
         (Cons x (repeat (- n 1) x))))
@@ -79,7 +80,7 @@
 
   (declare drop (Integer -> (List :a) -> (List :a)))
   (define (drop n xs)
-    "Returns a list with the first N elements of XS removed"
+    "Returns a list with the first N elements removed."
     (if (== n 0)
         xs
         (match xs
@@ -89,7 +90,7 @@
 
   (declare take (Integer -> (List :a) -> (List :a)))
   (define (take n xs)
-    "Returns the first N elements of XS"
+    "Returns the first N elements of a list."
     (if (== n 0)
         Nil
         (match xs
@@ -144,7 +145,7 @@
 
   (declare index ((List :a) -> Integer -> (Optional :a)))
   (define (index xs i)
-    "Returns the Ith element of XS."
+    "Returns the Ith element of a list."
     (match xs
       ((Nil)
        None)
@@ -164,6 +165,7 @@
 
   (declare findIndex ((:a -> Boolean) -> (List :a) -> (Optional Integer)))
   (define (findIndex f xs)
+    "Returns the index of the first element matching the predicate function F."
     (let ((find (fn (xs n)
                   (match xs
                     ((Nil)
@@ -176,7 +178,16 @@
 
   (declare range (Integer -> Integer -> (List Integer)))
   (define (range start end)
-    "Returns a list containing the numbers from START to END inclusive."
+    "Returns a list containing the numbers from START to END inclusive.
+
+
+    ```
+    > COALTON-USER> (coalton (range 1 5))
+    (1 2 3 4 5)
+
+    > COALTON-USER> (coalton (range 5 2))
+    (5 4 3 2)
+    ```"
     (let ((inner (fn (x)
                    (if (> x end)
                        Nil
@@ -499,6 +510,13 @@
          (match b
            ((Nil) True)
            (_ False))))))
+
+  (define-instance (Hash :a => (Hash (List :a)))
+    (define (hash lst)
+      (fold (fn (elt so-far)
+              (combine-hashes so-far (hash elt)))
+            (fromInt 0)
+            lst)))
 
   (define-instance (Semigroup (List :a))
     (define (<> a b) (append a b)))
