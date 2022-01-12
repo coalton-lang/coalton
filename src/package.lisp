@@ -661,10 +661,12 @@
    #:Cell
    #:make-cell
    #:cell-read
-   #:cell-swap
-   #:cell-write
-   #:cell-update
-   #:cell-push!)
+   #:cell-swap!
+   #:cell-write!
+   #:cell-update!
+   #:cell-update-swap!
+   #:cell-push!
+   #:cell-pop!)
   ;; Vector
   (:export
    #:Vector
