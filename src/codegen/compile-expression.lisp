@@ -23,10 +23,8 @@
            ;;       already apply the arguments.
            (preds (and (not (coalton-impl/typechecker::typed-node-application-p
                              (typed-node-application-rator expr)))
-                       (remove-duplicates
-                        (scheme-predicates
-                         (typed-node-type (typed-node-application-rator expr)))
-                        :test #'equalp)))
+                       (scheme-predicates
+                        (typed-node-type (typed-node-application-rator expr)))))
            (num-preds (length preds))
            (function-application (gethash (+ arity num-preds) *function-application-functions*))
            (rator (typed-node-application-rator expr)))
@@ -44,11 +42,10 @@
 
   (:method ((expr typed-node-direct-application) ctx env)
     `(,(typed-node-direct-application-rator expr)
-      ,@(compile-typeclass-dicts (remove-duplicates
-                                  (scheme-predicates
-                                   (typed-node-direct-application-rator-type expr))
-                                  :test #'equalp)
-                                 ctx env)
+      ,@(compile-typeclass-dicts
+         (scheme-predicates
+          (typed-node-direct-application-rator-type expr))
+         ctx env)
       ,@(mapcar
          (lambda (expr) (compile-expression expr ctx env))
          (typed-node-direct-application-rands expr))))
