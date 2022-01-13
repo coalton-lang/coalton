@@ -236,7 +236,7 @@
             (vector-foreach2
              (fn (e1 e2)
                (unless (== e1 e2)
-                 (cell-write False out)))
+                 (cell-write! out False)))
              v1 v2)
             (cell-read out)))))
 
