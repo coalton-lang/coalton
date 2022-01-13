@@ -417,6 +417,10 @@
   )
 
 (coalton-toplevel
+  (define-type (Complex :a)
+    "Represents a complex algebra of a given type."
+    (Complex :a :a))
+
   (declare real-part ((Complex :a) -> :a))
   (define (real-part z)
     "The real part of a complex number."
