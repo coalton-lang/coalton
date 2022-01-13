@@ -59,6 +59,7 @@
     "Apply F to the contents of CEL, swapping the result for the old value"
     (cell-swap! cel (f (cell-read cel))))
 
+  ;;; operators on cells of lists
   (declare cell-push! ((Cell (List :elt)) -> :elt -> (List :elt)))
   (define (cell-push! cel new-elt)
     (cell-update! (Cons new-elt) cel))
@@ -70,6 +71,17 @@
        (progn (cell-write! cel rst)
               (Some fst)))
       ((Nil) None)))
+
+  ;;; operators on cells of numbers
+  (declare cell-increment! ((Num :counter) => (Cell :counter) -> :counter))
+  (define (cell-increment! cel)
+    "Add one to the contents of CEL, storing and returning the new value"
+    (cell-update! (+ (fromInt 1)) cel))
+
+  (declare cell-decrement! ((Num :counter) => (Cell :counter) -> :counter))
+  (define (cell-decrement! cel)
+    "Add one to the contents of CEL, storing and returning the new value"
+    (cell-update! (- (fromInt 1)) cel))
 
   ;; i am very skeptical of these instances
   (define-instance (Eq :a => (Eq (Cell :a)))

@@ -666,7 +666,9 @@
    #:cell-update!
    #:cell-update-swap!
    #:cell-push!
-   #:cell-pop!)
+   #:cell-pop!
+   #:cell-increment!
+   #:cell-decrement!)
   ;; Vector
   (:export
    #:Vector
