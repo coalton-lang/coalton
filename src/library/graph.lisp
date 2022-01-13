@@ -494,7 +494,7 @@
                 (vector-push node-idx stack)
 
                 ;; Increment the current index
-                (cell-write (+ 1 (cell-read current-index)) current-index)
+                (cell-update! (+ 1) current-index)
 
                 ;; Consider successors
                 (let visit-edge =
