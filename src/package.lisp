@@ -717,8 +717,8 @@
    #:make-hashtable
    #:make-hashtable-capacity
    #:hashtable-get
-   #:hashtable-set
-   #:hashtable-remove
+   #:hashtable-set!
+   #:hashtable-remove!
    #:hashtable-count
    #:hashtable-foreach
    #:hashtable-keys
