@@ -101,6 +101,18 @@
 			     (:file "stateful-computation")))
                (:file "toplevel-environment")))
 
+;;; we need to inspect the sbcl version in order to decide which version of the hashtable shim to load,
+;;; because 2.1.12 includes (or will include) a bugfix that allows a cleaner, more maintainable
+;;; implementation.
+
+(cl:if (uiop:featurep :sbcl)
+       (cl:pushnew
+        (cl:if (uiop:version< (cl:lisp-implementation-version)
+                              "2.1.12")
+               :sbcl-pre-2-1-12
+               :sbcl-post-2-1-12)
+        cl:*features*))
+
 (asdf:defsystem #:coalton/hashtable-shim
   :description "Shim over Common Lisp hash tables with custom hash functions, for use by the Coalton standard library."
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
@@ -109,7 +121,8 @@
   :pathname "src/hashtable-shim"
   :serial t
   :components ((:file "defs")
-               (:file "impl-sbcl" :if-feature :sbcl)
+               (:file "impl-sbcl-pre-2-1-12" :if-feature :sbcl-pre-2-1-12)
+               (:file "impl-sbcl-post-2-1-12" :if-feature :sbcl-post-2-1-12)
                (:file "impl-fail" :if-feature (:not :sbcl))))
 
 (asdf:defsystem #:coalton/doc
@@ -147,6 +160,7 @@
   :serial t
   :components ((:file "package")
                (:file "utilities")
+               (:file "coalton-native-test-utils")
                (:file "toplevel-walker-tests")
                (:file "free-variables-tests")
                (:file "tarjan-scc-tests")
@@ -155,4 +169,5 @@
                (:file "environment-persist-tests")
                (:file "slice-tests")
                (:file "quantize-tests")
-               (:file "graph-tests")))
+               (:file "graph-tests")
+               (:file "hashtable-tests")))

@@ -319,6 +319,7 @@
         #:coalton-impl/ast
         #:coalton-impl/typechecker)
   (:export
+   #:function-entry
    #:construct-function-entry
    #:apply-function-entry
    #:codegen-program
