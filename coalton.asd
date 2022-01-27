@@ -108,9 +108,9 @@
 (cl:if (uiop:featurep :sbcl)
        (cl:pushnew
         (cl:if (uiop:version< (cl:lisp-implementation-version)
-                              "2.1.12")
-               :sbcl-pre-2-1-12
-               :sbcl-post-2-1-12)
+                              "2.2.2")
+               :sbcl-pre-2-2-2
+               :sbcl-post-2-2-2)
         cl:*features*))
 
 (asdf:defsystem #:coalton/hashtable-shim
@@ -121,8 +121,8 @@
   :pathname "src/hashtable-shim"
   :serial t
   :components ((:file "defs")
-               (:file "impl-sbcl-pre-2-1-12" :if-feature :sbcl-pre-2-1-12)
-               (:file "impl-sbcl-post-2-1-12" :if-feature :sbcl-post-2-1-12)
+               (:file "impl-sbcl-pre-2-2-2" :if-feature :sbcl-pre-2-2-2)
+               (:file "impl-sbcl-post-2-2-2" :if-feature :sbcl-post-2-2-2)
                (:file "impl-fail" :if-feature (:not :sbcl))))
 
 (asdf:defsystem #:coalton/doc
