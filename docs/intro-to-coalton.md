@@ -438,7 +438,7 @@ Several `if` expressions can be combined with a `cond`:
         "Fizz")
       ((== 0 (mod n 5))
         "Buzz")
-      (True (show n)))))
+      (True (into n)))))
 ```
 
 The Boolean operators `and` and `or` (of `coalton-library`) are actually variadic macros that short-circuit. Their functional counterparts are `boolean-and` and `boolean-or`.
@@ -472,8 +472,8 @@ Coalton's `progn` can have flattened `let` syntax.
  (declare f (Integer -> Integer -> String))
   (define (f x y)
     (progn
-      (let x_ = (show x))
-      (let y_ = (show y))
+      (let x_ = (into x))
+      (let y_ = (into y))
       (concat-string x_ y_))))
 ```
 
