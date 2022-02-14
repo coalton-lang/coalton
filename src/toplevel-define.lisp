@@ -128,12 +128,15 @@ Returns new environment, binding list of declared nodes, and a DAG of dependenci
                        :name (car b))))))
 
         (loop :for (name . node) :in typed-bindings :do
-          (setf env (set-name env name
-                              (make-name-entry
-                               :name name
-                               :type :value
-                               :docstring (second (find name docstrings :key #'car))
-                               :location (or *compile-file-pathname* *load-truename*)))))
+          (progn
+            (when *coalton-dump-ast*
+              (format t "~A :: ~A~%~A~%~%" name (lookup-value-type env name) node))
+            (setf env (set-name env name
+                                (make-name-entry
+                                 :name name
+                                 :type :value
+                                 :docstring (second (find name docstrings :key #'car))
+                                 :location (or *compile-file-pathname* *load-truename*))))))
 
         (values
          env
