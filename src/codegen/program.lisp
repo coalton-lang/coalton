@@ -138,9 +138,19 @@
            (type environment env))
   (let* ((var-names (mapcar #'car vars))
 
-         (preds (remove-duplicates
-                 (remove-if #'static-predicate-p (scheme-predicates type))
-                 :test #'equalp))
+         (inferred-type (coalton-impl/typechecker::fresh-inst
+                         (lookup-value-type env name)))
+         (inferred-type-ty (coalton-impl/typechecker::qualified-ty-type inferred-type))
+
+         (inferred-type-preds
+           (coalton-impl/typechecker::qualified-ty-predicates inferred-type))
+
+         (node-type
+           (coalton-impl/typechecker::qualified-ty-type
+            (coalton-impl/typechecker::fresh-inst type)))
+
+         (subs (coalton-impl/typechecker::match inferred-type-ty node-type))
+         (preds (coalton-impl/typechecker::apply-substitution subs inferred-type-preds))
 
          (dict-context (mapcar (lambda (pred) (cons pred (gensym))) preds))
 

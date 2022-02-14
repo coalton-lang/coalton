@@ -127,6 +127,12 @@ in FORMS that begin with that operator."
   `(let ((*emit-type-annotations* t))
      (process-coalton-toplevel ',toplevel-forms *global-environment*)))
 
+(defmacro coalton:coalton-codegen-ast (&body toplevel-forms)
+  "Prints the AST of the typechecked coalton code. Intended for debugging."
+  `(let ((*coalton-dump-ast* t))
+     (process-coalton-toplevel ',toplevel-forms *global-environment*)
+     (values)))
+
 (defmacro coalton:coalton (form)
   (let ((parsed-form (parse-form form (make-immutable-map) *package*)))
     (coalton-impl/typechecker::with-type-context ("COALTON")
