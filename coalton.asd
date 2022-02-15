@@ -161,7 +161,6 @@
                (:file "utilities")
                (:file "coalton-native-test-utils")
                (:file "toplevel-walker-tests")
-               (:file "free-variables-tests")
                (:file "tarjan-scc-tests")
                (:file "type-inference-tests")
                (:file "runtime-tests")

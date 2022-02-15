@@ -1,33 +1,30 @@
 (in-package #:coalton-impl/ast)
 
-(defun free-variables (value)
-  "Compute a list of free variables in the VALUE expression.
+(defun expr-variables (value)
+  "Compute a list of variables referenced in the VALUE expression.
 
-NOTE: Just because a variable shows up in the list does *NOT* mean all occurrences of that variable are free in the expression."
+NOTE: Just because a variable shows up in the list does *NOT* mean the
+variable is free in the expression."
   (declare (type node value)
            (values list))
   (let ((fv nil))
-    (labels ((analyze (expr bv)
+    (labels ((analyze (expr)
                (etypecase expr
                  (node-literal
                   nil)
 
                  (node-variable
                   (let ((name (node-variable-name expr)))
-                    (unless (member name bv)
-                      (push name fv))))
+                    (push name fv)))
 
                  (node-abstraction
-                  (let ((vars (node-abstraction-vars expr)))
-                    (analyze (node-abstraction-subexpr expr) (union bv vars))))
+                   (analyze (node-abstraction-subexpr expr)))
 
                  (node-let
                   (let* ((bindings (node-let-bindings expr))
                          (subexpr (node-let-subexpr expr))
-                         (vars (mapcar #'car bindings))
-                         (vals (mapcar #'cdr bindings))
-                         (bv* (union bv vars)))
-                    (mapc (lambda (expr) (analyze expr bv*)) (cons subexpr vals))))
+                         (vals (mapcar #'cdr bindings)))
+                    (mapc #'analyze (cons subexpr vals))))
 
                  (node-lisp
                   nil)
@@ -35,26 +32,26 @@ NOTE: Just because a variable shows up in the list does *NOT* mean all occurrenc
                  (node-application
                   (let ((rator (node-application-rator expr))
                         (rands (node-application-rands expr)))
-                    (mapc (lambda (expr) (analyze expr bv)) (cons rator rands))))
+                    (mapc #'analyze (cons rator rands))))
 
                  (node-match
                   (let ((value (node-match-expr expr))
                         (branches (node-match-branches expr)))
-                    (analyze value bv)
+                    (analyze value)
                     (dolist (branch branches)
-                      (analyze (match-branch-subexpr branch)
-                               (union bv (pattern-variables
-                                          (match-branch-pattern branch)))))))
+                      (analyze (match-branch-subexpr branch)))))
+
                  (node-seq
                   (dolist (subnode (node-seq-subnodes expr))
-                    (analyze subnode bv)))
+                    (analyze subnode)))
 
                  (node-the
-                  (analyze (node-the-subnode expr) bv)))))
-      (analyze value nil)
+                  (analyze (node-the-subnode expr))))))
+
+      (analyze value)
       fv)))
 
 (defun bindings-to-dag (bindings)
   (let ((vars (mapcar #'car bindings)))
     (loop :for (var . val) :in bindings
-          :collect (cons var (copy-list (intersection vars (free-variables val)))))))
+          :collect (cons var (copy-list (intersection vars (expr-variables val)))))))
