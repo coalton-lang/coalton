@@ -253,8 +253,6 @@
   (name            (required 'name)            :type symbol                         :read-only t)
   (arity           (required 'arity)           :type alexandria:non-negative-fixnum :read-only t)
   (constructs      (required 'constructs)      :type symbol                         :read-only t)
-  (scheme          (required 'scheme)          :type ty-scheme                      :read-only t)
-  (arguments       (required 'arguments)       :type scheme-list                    :read-only t)
   (classname       (required 'classname)       :type symbol                         :read-only t)
 
   ;; If this constructor constructs a compressed-repr type then
@@ -306,8 +304,6 @@
               :name 'coalton:True
               :arity 0
               :constructs 'coalton:Boolean
-              :scheme (to-scheme (qualify nil *boolean-type*))
-              :arguments nil
               :classname 'coalton::Boolean/True
               :compressed-repr 't))
 
@@ -316,8 +312,6 @@
               :name 'coalton:False
               :arity 0
               :constructs 'coalton:Boolean
-              :scheme (to-scheme (qualify nil *boolean-type*))
-              :arguments nil
               :classname 'coalton::Boolean/False
               :compressed-repr 'nil))
 
@@ -326,8 +320,6 @@
               :name 'coalton:Cons
               :arity 2
               :constructs 'coalton:List
-              :scheme cons-scheme
-              :arguments (list var-scheme list-scheme)
               :classname nil
               :compressed-repr 'nil))
 
@@ -336,8 +328,6 @@
               :name 'coalton:Nil
               :arity 0
               :constructs 'coalton:List
-              :scheme list-scheme
-              :arguments nil
               :classname nil
               :compressed-repr 'nil))))))
 
@@ -832,6 +822,13 @@
                           (environment-function-environment env)
                           functions
                           #'make-function-environment)))
+
+(defun constructor-arguments (name env)
+  (declare (type symbol name)
+           (type environment env)
+           (values ty-list &optional))
+  (lookup-constructor env name)
+  (function-type-arguments (lookup-value-type env name)))
 
 (defun add-class (env symbol value)
   (declare (type environment env)

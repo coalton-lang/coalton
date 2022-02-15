@@ -40,13 +40,13 @@
              :for superclass := (type-definition-name def)
              :for constructor-name :=  (constructor-entry-name constructor)
              :for fields
-               := (loop :for field :in (constructor-entry-arguments constructor)
-                        :for type := (lisp-type field env)
+               := (loop :for field :in (constructor-arguments constructor-name env)
+                        :for runtime-type := (lisp-type field env)
                         :for i :from 0
                         :for name := (alexandria:format-symbol package "_~D" i)
                         :collect (make-struct-or-class-field
                                   :name name
-                                  :type type))
+                                  :type runtime-type))
 
              :for field-names := (mapcar #'struct-or-class-field-name fields)
 

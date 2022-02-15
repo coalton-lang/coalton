@@ -205,8 +205,6 @@
    #:constructor-entry-name             ; ACCESSOR
    #:constructor-entry-arity            ; ACCESSOR
    #:constructor-entry-constructs       ; ACCESSOR
-   #:constructor-entry-scheme           ; ACCESSOR
-   #:constructor-entry-arguments        ; ACCESSOR
    #:constructor-entry-classname        ; ACCESSOR
    #:constructor-entry-compressed-repr  ; ACCESSOR
    #:make-constructor-entry             ; CONSTRUCTOR
@@ -239,6 +237,7 @@
    #:type-definition-name               ; ACCESSOR
    #:type-definition-type               ; ACCESSOR
    #:type-definition-constructors       ; ACCESSOR
+   #:type-definition-constructor-types  ; ACCESSOR
    #:type-definition-list               ; TYPE
    #:type-definition-runtime-type       ; ACCESSOR
    #:type-definition-enum-repr          ; ACCESSOR
@@ -287,9 +286,10 @@
    #:reduce-context                     ; FUNCTION
    #:split-context                      ; FUNCTION
    #:apply-type-argument                ; FUNCTION
-   #:set-class
-   #:add-class
-   #:add-instance
+   #:set-class                          ; FUNCTION
+   #:constructor-arguments              ; FUNCTION
+   #:add-class                          ; FUNCTION
+   #:add-instance                       ; FUNCTION
    )
   (:export
    #:instance-definition                ; STRUCT
