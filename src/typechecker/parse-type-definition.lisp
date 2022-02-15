@@ -6,17 +6,18 @@
 
 
 (defstruct type-definition
-  (name         (required 'name)         :type symbol                 :read-only t)
-  (type         (required 'type)         :type ty                     :read-only t)
-  (runtime-type (required 'runtime-type) :type t                      :read-only t)
+  (name              (required 'name)              :type symbol                 :read-only t)
+  (type              (required 'type)              :type ty                     :read-only t)
+  (runtime-type      (required 'runtime-type)      :type t                      :read-only t)
 
   ;; See the fields with the same name on type-entry
-  (enum-repr    (required 'enum-repr)    :type boolean                :read-only t)
-  (newtype      (required 'newtype)      :type boolean                :read-only t)
+  (enum-repr         (required 'enum-repr)         :type boolean                :read-only t)
+  (newtype           (required 'newtype)           :type boolean                :read-only t)
 
-  (constructors (required 'constructors) :type constructor-entry-list :read-only t)
+  (constructors      (required 'constructors)      :type constructor-entry-list :read-only t)
+  (constructor-types (required 'constructor-types) :type scheme-list            :read-only t)
 
-  (docstring    (required 'docstring)    :type (or null string)       :read-only t))
+  (docstring         (required 'docstring)         :type (or null string)       :read-only t))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type type-definition))
@@ -126,10 +127,14 @@ Returns TYPE-DEFINITIONS"
                                          (cons tvar
                                                (kind-arity (kind-of tvar))))))
               ;; Parse out the ctors
-              (let* ((parsed-ctors
+              (let* ((ctor-data
                        (loop :for ctor in ctors
                              :collect
-                             (parse-type-ctor ctor applied-tycon type-vars-alist tycon-name env)))
+                             (multiple-value-list (parse-type-ctor ctor applied-tycon type-vars-alist tycon-name env))))
+
+                     (parsed-ctors (mapcar #'first ctor-data))
+
+                     (ctor-types (mapcar #'second ctor-data))
 
                      ;; If every constructor entry has an arity of 0
                      ;; then this type can be compiled as an enum
@@ -155,6 +160,7 @@ Returns TYPE-DEFINITIONS"
                     :enum-repr nil
                     :newtype nil
                     :constructors parsed-ctors
+                    :constructor-types ctor-types
                     :docstring docstring))
 
                   ((and enum-type
@@ -167,12 +173,15 @@ Returns TYPE-DEFINITIONS"
                       :enum-repr t
                       :newtype nil
                       :constructors parsed-ctors
+                      :constructor-types ctor-types
                       :docstring docstring)))
 
                   ((and newtype
                         (coalton-impl:coalton-release-p))
                    (let (;; The runtime type of a newtype is the runtime type of it's only constructor's only argument
-                         (runtime-type (qualified-ty-type (fresh-inst (first (constructor-entry-arguments (first parsed-ctors)))))))
+                         (runtime-type (function-type-from
+                                        (qualified-ty-type
+                                         (fresh-inst (first ctor-types))))))
                      (make-type-definition
                       :name tycon-name
                       :type tcon
@@ -180,6 +189,7 @@ Returns TYPE-DEFINITIONS"
                       :enum-repr nil
                       :newtype t
                       :constructors parsed-ctors
+                      :constructor-types ctor-types
                       :docstring docstring)))
 
                   (t
@@ -190,6 +200,7 @@ Returns TYPE-DEFINITIONS"
                     :enum-repr nil
                     :newtype nil
                     :constructors parsed-ctors
+                    :constructor-types ctor-types
                     :docstring docstring)))))))))
 
 (defun rewrite-ctor (ctor)
@@ -198,8 +209,6 @@ Returns TYPE-DEFINITIONS"
    :name (constructor-entry-name ctor)
    :arity (constructor-entry-arity ctor)
    :constructs (constructor-entry-constructs ctor)
-   :scheme (constructor-entry-scheme ctor)
-   :arguments (constructor-entry-arguments ctor)
    :classname (constructor-entry-classname ctor)
    :compressed-repr (constructor-entry-classname ctor)))
 
@@ -209,7 +218,7 @@ Returns TYPE-DEFINITIONS"
            (type list type-vars)
            (type environment env)
            (type symbol constructs)
-           (values constructor-entry))
+           (values constructor-entry ty-scheme))
   ;; Make sure we have a list we can destructure
   (setf form (alexandria:ensure-list form))
   (destructuring-bind (ctor-name &rest tyarg-names) form
@@ -244,19 +253,18 @@ Returns TYPE-DEFINITIONS"
                                        :for id :from 0
                                        :collect (%make-substitution var (%make-tgen id)))))
                      (%make-ty-scheme kinds (apply-substitution subst type)))))
-          (make-constructor-entry
-           :name ctor-name
-           :arity (length tyarg-names)
-           :arguments (mapcar (lambda (arg)
-                                (quantify tyvars (qualify nil arg)))
-                              tyargs)
-           :constructs constructs
-           :scheme (quantify-using-tvar-order tyvars
-                                              (qualify nil (build-function tyargs)))
-           :classname (alexandria:format-symbol
-                       (symbol-package constructs)
-                       "~A/~A" constructs ctor-name)
-           :compressed-repr nil))))))
+          (values
+           (make-constructor-entry
+            :name ctor-name
+            :arity (length tyarg-names)
+            :constructs constructs
+            :classname (alexandria:format-symbol
+                        (symbol-package constructs)
+                        "~A/~A" constructs ctor-name)
+            :compressed-repr nil)
+           (quantify-using-tvar-order
+            tyvars
+            (qualify nil (build-function tyargs)))))))))
 
 (defun tvar-count-to-kind (tvar-count)
   "Create a KIND from the number of type variables"
