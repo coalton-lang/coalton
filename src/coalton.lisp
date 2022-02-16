@@ -138,6 +138,9 @@ in FORMS that begin with that operator."
     (coalton-impl/typechecker::with-type-context ("COALTON")
       (multiple-value-bind (type preds typed-node substs)
           (derive-expression-type parsed-form *global-environment* nil)
+
+        (setf substs (coalton-impl/typechecker::pred-defaults preds substs))
+
         (let* ((env (coalton-impl/typechecker::apply-substitution substs *global-environment*))
                (preds (coalton-impl/typechecker::apply-substitution substs preds))
                (preds (coalton-impl/typechecker::reduce-context env preds substs))
@@ -156,8 +159,8 @@ in FORMS that begin with that operator."
                (to-hnf env pred nil))
 
              (coalton-impl/typechecker::with-pprint-variable-context ()
-               (let* ((tvars (loop :for i :to (coalton-impl/typechecker::kind-arity
-                                               (coalton-impl/typechecker::kind-of type))
+               (let* ((tvars (loop :for i :to (1- (length (remove-duplicates (coalton-impl/typechecker::type-variables qual-type)
+                                                                             :test #'equalp)))
                                    :collect (coalton-impl/typechecker::make-variable)))
                       (qual-type (coalton-impl/typechecker::instantiate
                                   tvars

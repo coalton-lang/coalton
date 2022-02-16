@@ -43,9 +43,6 @@
                                             pred
                                             context)))))))
 
-(defun static-predicate-p (pred)
-  "Is PRED a static predicate (no type variables)"
-  (= 0 (length (coalton-impl/typechecker::type-variables (ty-predicate-types pred)))))
 
 (defun lookup-dict (pred context env)
   "Lookup dictionary for predicate PRED"

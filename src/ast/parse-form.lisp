@@ -220,7 +220,7 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
 (defun parse-pattern (pattern)
   (cond
     ((typep pattern 'literal-value)
-     (pattern-literal (parse-atom pattern)))
+     (pattern-literal pattern))
     ((and (symbolp pattern)
           (eql 'coalton:_ pattern))
      (pattern-wildcard))
@@ -232,7 +232,14 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
        (pattern-constructor ctor (mapcar #'parse-pattern args))))))
 
 (defun parse-atom (atom)
-  (node-literal atom atom))
+  ;; Convert integer literals into fromInt calls. This allows for
+  ;; "overloaded" number literals. Other literals are left as is.
+  (etypecase atom
+    (integer (node-application
+              atom
+              (node-variable 'coalton-library:fromInt 'coalton-library:fromInt)
+              (list (node-literal atom atom))))
+    (t (node-literal atom atom))))
 
 (defun parse-seq (expr subnodes m package)
   (declare (type t expr)

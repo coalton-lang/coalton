@@ -28,6 +28,10 @@
   "A list of type predicates"
   `(satisfies ty-predicate-list-p))
 
+(defun static-predicate-p (pred)
+  "Is PRED a static predicate (no type variables)"
+  (endp (coalton-impl/typechecker::type-variables (ty-predicate-types pred))))
+
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type ty-predicate-list))
 

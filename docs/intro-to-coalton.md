@@ -619,6 +619,10 @@ The following functions all take an optional package parameter.
 * `print-class-db` - print every class and their methods
 * `print-instance-db` - print the instances of every class
 
+## Instance Defaulting
+
+Coalton has a similar [type defaulting system](https://www.haskell.org/onlinereport/decls.html#sect4.3.4) as Haskell. It is not currently extensible, and only resolves `Num :a` to `Num Integer`. Type defaulting is invoked on implicitly typed definitions and code compiled with the `coalton` macro.
+
 
 ## Quirks and Differences from Common Lisp
 
