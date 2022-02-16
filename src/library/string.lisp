@@ -1,23 +1,35 @@
-(in-package #:coalton-library)
+(coalton-library/utils:defstdlib-package #:coalton-library/string
+  (:use
+   #:coalton
+   #:coalton-library/builtin
+   #:coalton-library/classes)
+  (:export
+   #:concat
+   #:reverse
+   #:length
+   #:substring
+   #:parse-int))
+
+(cl:in-package #:coalton-library/string)
 
 ;;;
 ;;; String
 ;;;
 
 (coalton-toplevel
-  (declare concat-string (String -> String -> String))
-  (define (concat-string str1 str2)
+  (declare concat (String -> String -> String))
+  (define (concat str1 str2)
     "Concatenate STR1 and STR2 together, returning a new string."
     (lisp String (str1 str2)
       (cl:concatenate 'cl:string str1 str2)))
 
-  (declare reverse-string (String -> String))
-  (define (reverse-string s)
+  (declare reverse (String -> String))
+  (define (reverse s)
     "Reverse a string."
     (lisp String (s) (cl:reverse s)))
 
-  (declare string-length (String -> Integer))
-  (define (string-length str)
+  (declare length (String -> Integer))
+  (define (length str)
     "The length of a string STR."
     (lisp Integer (str)
       (cl:length str)))
@@ -26,7 +38,7 @@
   (define (substring str start end)
     "Compute a substring of a string bounded by given indices."
     (let ((real-start (max 0 (min start end)))
-          (real-end (min (string-length str) (max start end))))
+          (real-end (min (length str) (max start end))))
       (lisp String (real-start real-end str)
         (cl:subseq str real-start real-end))))
 
@@ -55,7 +67,7 @@
            (cl:t EQ)))))
 
   (define-instance (Semigroup String)
-    (define (<> a b) (concat-string a b)))
+    (define <> concat))
 
   (define-instance (Monoid String)
     (define mempty ""))
@@ -73,3 +85,6 @@
   (define-instance (Iso (List Char) String)))
 
 (define-sxhash-hasher String)
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON-LIBRARY/STRING")

@@ -78,13 +78,14 @@
                (:file "coalton")
                (:file "debug")
                (:file "faux-macros")
+               (:file "language-macros")
                (:module "library"
                 :serial t
-                :components ((:file "macros")
-                             (:file "types")
-                             (:file "builtin")
+                :components ((:file "utils")
                              (:file "classes")
+                             (:file "builtin")
                              (:file "boolean")
+                             (:file "bits")
                              (:file "arith")
                              (:file "char")
                              (:file "string")
@@ -97,7 +98,8 @@
                              (:file "vector")
                              (:file "slice")
                              (:file "hashtable")
-			     (:file "stateful-computation")))
+                             (:file "monad/state")
+                             (:file "prelude")))
                (:file "toplevel-environment")))
 
 ;;; we need to inspect the sbcl version in order to decide which version of the hashtable shim to load,

@@ -621,16 +621,19 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
 (defun pred-defaults (preds subs)
   "Given a list of predicates, compute substutions for predicates
 which have default instances. Currently only resolves Num :a -> Num Integer"
-  (loop :for pred :in (remove-if #'static-predicate-p preds)
-        :for class := (ty-predicate-class pred)
-        :do
-           (when (eq class 'coalton-library:Num)
-             (setf subs
-                   (compose-substitution-lists
-                    (predicate-match
-                     pred
-                     (ty-predicate 'coalton-library:Num (list *integer-type*)))
-                    subs))))
+  (let ((num (alexandria:ensure-symbol
+              "NUM"
+              (find-package "COALTON-LIBRARY/CLASSES"))))
+    (loop :for pred :in (remove-if #'static-predicate-p preds)
+          :for class := (ty-predicate-class pred)
+          :do
+             (when (eq class num)
+               (setf subs
+                     (compose-substitution-lists
+                      (predicate-match
+                       pred
+                       (ty-predicate num (list *integer-type*)))
+                      subs)))))
   subs)
 
 (defun derive-expl-type (binding declared-ty env subs name-map

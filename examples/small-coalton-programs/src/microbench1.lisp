@@ -19,7 +19,7 @@
            #:f-hand-optimized))
 
 (defpackage #:coalton-microbench1
-  (:use #:coalton #:coalton-library)
+  (:use #:coalton #:coalton-prelude)
   (:export #:f))
 
 (defpackage #:microbench1

@@ -1,4 +1,10 @@
-(in-package #:coalton-library)
+(coalton-library/utils:defstdlib-package #:coalton-library/char
+  (:use
+   #:coalton
+   #:coalton-library/classes
+   #:coalton-library/builtin))
+
+(cl:in-package #:coalton-library/char)
 
 (coalton-toplevel
   (define-instance (Eq Char)
@@ -14,3 +20,6 @@
               LT)))))
 
 (define-sxhash-hasher Char)
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON-LIBRARY/CHAR")

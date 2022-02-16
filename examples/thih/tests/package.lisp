@@ -7,7 +7,7 @@
    #:thih-coalton
    #:Type)
   (:shadowing-import-from
-   #:coalton-library
+   #:coalton
    #:make-list
    #:Nil)
   (:export

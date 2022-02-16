@@ -1,10 +1,9 @@
-(in-package #:coalton-library)
+(coalton-library/utils:defstdlib-package #:coalton-library/boolean
+  (:use
+   #:coalton
+   #:coalton-library/classes))
 
-;;;
-;;; Boolean
-;;;
-
-;;; Boolean is defined in types.lisp
+(cl:in-package #:coalton-library/boolean)
 
 (coalton-toplevel
   ;;
@@ -29,3 +28,6 @@
            ((False) EQ)))))))
 
 (define-sxhash-hasher Boolean)
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON-LIBRARY/BOOLEAN")

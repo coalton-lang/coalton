@@ -1,6 +1,6 @@
 ;;;; utilities.lisp
 
-(in-package #:coalton-util)
+(in-package #:coalton-impl/util)
 
 (defmacro debug-log (&rest vars)
   "Log names and values of VARS to standard output"

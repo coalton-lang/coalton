@@ -8,7 +8,7 @@
   (:documentation "A place that global value stores are stashed. We don't use uninterned symbols so that they can be reified through the compilation process.")
   (:use))
 
-(uiop:define-package #:coalton-util
+(uiop:define-package #:coalton-impl/util
   (:use #:cl)
   (:export
    #:required
@@ -21,7 +21,7 @@
 
 (uiop:define-package #:coalton-impl/algorithm
   (:documentation "Implementation of generic algorithms used by COALTON. This is a package private to the COALTON system and is not intended for public use.")
-  (:use #:cl #:coalton-util)
+  (:use #:cl #:coalton-impl/util)
   (:export
    #:tarjan-scc                         ; FUNCTION
    #:immutable-map                      ; STRUCT
@@ -45,7 +45,7 @@
 (uiop:define-package #:coalton-impl/ast
     (:documentation "Implementation of the abstract syntax tree used by COALTON. This is a package private to the COALTON system and is not intended for public use.")
   (:use #:cl
-        #:coalton-util
+        #:coalton-impl/util
         #:coalton-impl/algorithm)
   (:export
    #:literal-value                      ; TYPE
@@ -103,6 +103,7 @@
   (:export
    #:parse-form                         ; FUNCTION
    #:error-parsing                      ; FUNCTION
+   #:error-inherited-symbol             ; FUNCTION
    #:coalton-parse-error                ; CONDITION
    #:coalton-parse-error-form           ; READER
    #:coalton-parse-error-reason-control ; READER
@@ -116,7 +117,7 @@
 (uiop:define-package #:coalton-impl/typechecker
     (:documentation "Implementation of types and the typechecker for COALTON. This is a package private to the COALTON system and is not intended for public use.")
   (:use #:cl
-        #:coalton-util
+        #:coalton-impl/util
         #:coalton-impl/algorithm
         #:coalton-impl/ast)
   (:export
@@ -315,7 +316,7 @@
 (uiop:define-package #:coalton-impl/codegen
   (:documentation "Implementation of code generation for COALTON. This is a package private to the COALTON system and is not intended for public use.")
   (:use #:cl
-        #:coalton-util
+        #:coalton-impl/util
         #:coalton-impl/algorithm
         #:coalton-impl/ast
         #:coalton-impl/typechecker)
@@ -344,7 +345,7 @@
 (uiop:define-package #:coalton-impl
   (:documentation "Implementation and runtime for COALTON. This is a package private to the COALTON system and is not intended for public use.")
   (:use #:cl
-        #:coalton-util
+        #:coalton-impl/util
         #:coalton-impl/algorithm
         #:coalton-impl/ast
         #:coalton-impl/typechecker
@@ -443,6 +444,22 @@
    #:_
    #:seq
    #:the)
+  ;; Macros
+  (:export
+   #:if
+   #:when
+   #:unless
+   #:and
+   #:or
+   #:cond
+   #:nest
+   #:pipe
+   #:.<
+   #:.>
+   #:make-list
+   #:to-boolean
+   #:do
+   #:progn)
   (:import-from
    #:coalton-impl
    #:print-value-db
@@ -456,303 +473,3 @@
    #:print-instance-db
    #:type-of
    #:kind-of))
-
-(uiop:define-package #:coalton-library
-  (:documentation "The Coalton standard library.")
-  (:use #:coalton)
-    ;; Macros
-  (:export
-   #:if
-   #:unless
-   #:when
-   #:and
-   #:or
-   #:cond
-   #:nest
-   #:pipe
-   #:.>
-   #:.<
-   #:make-list
-   #:to-boolean
-   #:do
-   #:progn)
-  ;; Types
-  (:export
-   #:Unit
-   #:Boolean #:True #:False
-   #:boolean-not #:not
-   #:boolean-or
-   #:boolean-and
-   #:boolean-xor #:xor
-   #:List #:Cons #:Nil
-   #:Tuple
-   #:Tuple3
-   #:Tuple4
-   #:Tuple5
-   #:Result #:Err #:Ok
-   #:Optional #:Some #:None
-   #:Fraction
-   #:Complex
-   #:undefined
-   )
-  ;; Classes
-  (:export
-   #:Show
-   #:Eq #:== #:/=
-   #:Ord #:LT #:EQ #:GT
-   #:<=> #:> #:< #:>= #:<=
-   #:max
-   #:min
-   #:Num #:+ #:- #:* #:fromInt
-   #:Bits #:bit-or #:bit-and #:bit-xor #:bit-not #:bit-shift
-   #:Dividable #:/
-   #:Quantization
-   #:Quantizable #:quantize
-   #:Semigroup #:<>
-   #:Monoid #:mempty
-   #:Functor #:map
-   #:Applicative #:pure #:liftA2
-   #:Monad #:>>= #:>>
-   #:MonadFail #:fail
-   #:Alternative #:alt #:empty
-   #:Into
-   #:TryInto
-   #:Unwrappable #:withDefault #:unwrap
-   #:Hash #:hash #:combine-hashes)
-  ;; Builtin
-  (:export
-   #:undefined
-   #:error)
-  ;; Arith
-  (:export
-   #:single-float->integer
-   #:double-float->integer
-   #:integer->single-float
-   #:integer->double-float
-   #:negate
-   #:abs
-   #:ash
-   #:sign
-   #:expt
-   #:mod
-   #:even
-   #:odd
-   #:gcd
-   #:lcm
-   #:numerator
-   #:denominator
-   #:reciprocal
-   #:real-part
-   #:imag-part
-   #:conjugate
-   #:ii
-   )
-  ;; Quantize
-  (:export
-   #:floor
-   #:ceiling
-   #:round
-   #:safe/
-   #:exact/
-   #:inexact/
-   #:floor/
-   #:ceiling/
-   #:round/
-   #:single/
-   #:double/)
-  ;; String
-  (:export
-   #:concat-string
-   #:reverse-string
-   #:string-length
-   #:substring
-   #:parse-int)
-  ;; Optional
-  (:export
-   #:fromSome
-   #:isSome
-   #:isNone)
-  ;; List
-  (:export
-   #:head
-   #:tail
-   #:car
-   #:cdr
-   #:last
-   #:init
-   #:null
-   #:singleton
-   #:repeat
-   #:reverse
-   #:drop
-   #:take
-   #:find
-   #:fold
-   #:foldr
-   #:filter
-   #:length
-   #:index
-   #:nth
-   #:elemIndex
-   #:findIndex
-   #:range
-   #:append
-   #:concat
-   #:concatMap
-   #:member
-   #:union
-   #:intersection
-   #:lookup
-   #:remove-duplicates
-   #:delete
-   #:list-difference
-   #:zipWith
-   #:zipWith3
-   #:zipWith4
-   #:zipWith5
-   #:zip
-   #:countBy
-   #:insert
-   #:insertBy
-   #:sort
-   #:sortBy
-   #:intersperse
-   #:intercalate
-   #:transpose
-   #:partition
-   #:equivalence-classes-by
-   #:equivalence-classes
-   #:optimumBy
-   #:maximum
-   #:minimum
-   #:sum
-   #:product
-   #:all
-   #:any
-   #:split)
-  ;; Tuple
-  (:export
-   #:fst
-   #:snd)
-  ;; Result
-  (:export
-   #:isOk
-   #:isErr
-   #:mapErr)
-  ;; Functions
-  (:export
-   #:error
-   #:fix
-   #:id
-   #:const
-   #:flip
-   #:compose
-   #:conjoin
-   #:disjoin
-   #:complement
-   #:traverse
-   #:mapM
-   #:liftM
-   #:liftM2
-   #:sequence
-   #:mconcat
-   #:asum
-   #:trace
-   #:traceObject)
-  ;; Cell
-  (:export
-   #:Cell
-   #:make-cell
-   #:cell-read
-   #:cell-swap!
-   #:cell-write!
-   #:cell-update!
-   #:cell-update-swap!
-   #:cell-push!
-   #:cell-pop!
-   #:cell-increment!
-   #:cell-decrement!)
-  ;; Vector
-  (:export
-   #:Vector
-   #:make-vector
-   #:make-vector-capacity
-   #:vector-length
-   #:vector-capacity
-   #:vector-empty
-   #:vector-copy
-   #:vector-push
-   #:vector-pop
-   #:vector-pop-unsafe
-   #:vector-index
-   #:vector-index-unsafe
-   #:vector-set
-   #:vector-head
-   #:vector-head-unsafe
-   #:vector-last
-   #:vector-last-unsafe
-   #:vector-sort-by
-   #:vector-sort
-   #:vector-foreach
-   #:vector-foreach-index
-   #:vector-foreach2
-   #:vector-append
-   #:vector-to-list
-   #:vector-swap-remove
-   #:vector-swap-remove-unsafe)
-  ;; Slice
-  (:export
-   #:Slice
-   #:make-slice
-   #:slice-length
-   #:slice-copy
-   #:slice-set
-   #:slice-index
-   #:slice-index-unsafe
-   #:slice-foreach
-   #:slice-foreach-index
-   #:slice-foreach2
-   #:vector-sliding
-   #:vector-chunked)
-  ;; Hashtable
-  (:export
-   #:Hashtable
-   #:make-hashtable
-   #:make-hashtable-capacity
-   #:hashtable-get
-   #:hashtable-set!
-   #:hashtable-remove!
-   #:hashtable-count
-   #:hashtable-foreach
-   #:hashtable-keys
-   #:hashtable-values
-   #:hashtable-entries)
-  ;; Graph
-  (:export
-   #:NodeIndex
-   #:EdgeIndex
-   #:GraphType #:Undirected #:Directed
-   #:Graph
-   #:make-graph
-   #:make-digraph
-   #:graph-nodes
-   #:graph-edges
-   #:graph-number-count
-   #:graph-edge-count
-   #:graph-lookup-node
-   #:graph-lookup-edge
-   #:graph-add-node
-   #:graph-remove-node
-   #:graph-add-edge
-   #:graph-remove-edge
-   #:graph-viz)
-  ;; StatefulComputation
-  (:export
-    #:StatefulComputation
-    #:stateful-computation-run
-    #:stateful-computation-get
-    #:stateful-computation-put))
-
-(uiop:define-package #:coalton-user
-  (:documentation "A default user package for Coalton.")
-  (:use #:coalton #:coalton-library))

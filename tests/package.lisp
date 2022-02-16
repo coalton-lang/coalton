@@ -22,10 +22,18 @@
   (:export
    #:run-coalton-tests))
 
-(uiop:define-package #:coalton-native-tests
+(defpackage #:coalton-native-tests
   (:documentation "Tests for the COALTON system, written in Coalton.")
-  (:use #:coalton-library #:coalton))
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:vector #:coalton-library/vector)
+   (#:slice #:coalton-library/slice)
+   (#:hashtable #:coalton-library/hashtable)))
 
-(uiop:define-package #:coalton-test-user
+(defpackage #:coalton-test-user
   (:documentation "A copy-cat package to COALTON-USER for testing.")
-  (:use #:coalton #:coalton-library))
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:vector #:coalton-library/vector)
+   (#:slice #:coalton-library/slice)
+   (#:hashtable #:coalton-library/hashtable)))

@@ -14,7 +14,7 @@
                                                    (cl:format cl:nil "Unexpected character '~A' expected EOF" read-char)))))
          ((None) (Ok (Tuple Unit str)))))))
 
-  (declare take (Parser Char))
+  (declare take (Parser coalton:Char))
   (define take
     (Parser
      (fn (str)
@@ -23,7 +23,7 @@
           (Ok t_))
          ((None) (Err parse-error-eof))))))
 
-  (declare char (Char -> (Parser Char)))
+  (declare char (coalton:Char -> (Parser coalton:Char)))
   (define (char c)
     (Parser
      (fn (str)
@@ -35,7 +35,7 @@
                 (Err (ParseError (lisp String (read-char c) (cl:format cl:nil "Unexpected character '~A' expected '~A'" read-char c)))))))
          ((None) (Err parse-error-eof))))))
 
-  (declare not-char (Char -> (Parser Char)))
+  (declare not-char (coalton:Char -> (Parser coalton:Char)))
   (define (not-char c)
     (Parser
      (fn (str)
@@ -62,7 +62,7 @@
          (alt (char #\Space)
               (char #\Return))))
 
-  (declare digit (Parser Char))
+  (declare digit (Parser coalton:Char))
   (define digit
     (map-error
      (fn (_) (ParseError "Invalid digit"))
@@ -71,7 +71,7 @@
                    (<= x #\9)))
       take)))
 
-  (declare lowercase (Parser Char))
+  (declare lowercase (Parser coalton:Char))
   (define lowercase
     (map-error
      (fn (_) (ParseError "Invalid lowercase character"))
@@ -80,7 +80,7 @@
                    (<= x #\z)))
       take)))
 
-  (declare uppercase (Parser Char))
+  (declare uppercase (Parser coalton:Char))
   (define uppercase
     (map-error
      (fn (_) (ParseError "Invalid uppercase character"))
@@ -89,16 +89,16 @@
                    (<= x #\Z)))
       take)))
 
-  (declare alpha (Parser Char))
+  (declare alpha (Parser coalton:Char))
   (define alpha (alt lowercase uppercase))
 
-  (declare alphanumeric (Parser Char))
+  (declare alphanumeric (Parser coalton:Char))
   (define alphanumeric (alt alpha digit))
 
   (declare natural (Parser Integer))
   (define natural
     (with-context "While parsing natural number"
-      (>>= (map parse-int (map into (many1 digit)))
+      (>>= (map string:parse-int (map into (many1 digit)))
            (fn (i)
              (match i
                ((Some a) (const-value a))

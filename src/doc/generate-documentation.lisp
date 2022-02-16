@@ -62,8 +62,26 @@
                                            (env coalton-impl::*global-environment*)
                                            (stream t)
                                            (backend ':markdown)
-                                           (packages '(coalton coalton-library))
-                                           (base-package 'coalton-library)
+                                           (packages
+                                            '(coalton
+                                              coalton-library/classes
+                                              coalton-library/builtin
+                                              coalton-library/boolean
+                                              coalton-library/bits
+                                              coalton-library/arith
+                                              coalton-library/char
+                                              coalton-library/string
+                                              coalton-library/tuple
+                                              coalton-library/optional
+                                              coalton-library/list
+                                              coalton-library/result
+                                              coalton-library/functions
+                                              coalton-library/cell
+                                              coalton-library/vector
+                                              coalton-library/slice
+                                              coalton-library/hashtable
+                                              coalton-library/monad/state))
+                                           (base-package 'coalton-prelude)
                                            (asdf-system ':COALTON)
                                            (file-link-prefix ""))
   (let* ((component (asdf:find-component asdf-system 'library))

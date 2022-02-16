@@ -1,11 +1,21 @@
-(in-package #:coalton-library)
+(coalton-library/utils:defstdlib-package #:coalton-library/optional
+  (:use
+   #:coalton
+   #:coalton-library/builtin
+   #:coalton-library/classes)
+  (:local-nicknames
+   (#:classes #:coalton-library/classes))
+  (:export
+   #:fromSome
+   #:isSome
+   #:isNone))
+
+(cl:in-package #:coalton-library/optional)
 
 (coalton-toplevel
   ;;
   ;; Optional
   ;;
-
-  ;; Definition is in types.lisp
 
   (declare fromSome (String -> (Optional :a) -> :a))
   (define (fromSome str opt)
@@ -19,16 +29,16 @@
     "Is X Some?"
     (lisp Boolean (x)
       (cl:etypecase x
-        (Optional/Some True)
-        (Optional/None False))))
+        (classes::Optional/Some True)
+        (classes::Optional/None False))))
 
   (declare isNone ((Optional :a) -> Boolean))
   (define (isNone x)
     "Is X None?"
     (lisp Boolean (x)
       (cl:etypecase x
-        (Optional/None True)
-        (Optional/Some False))))
+        (classes::Optional/None True)
+        (classes::Optional/Some False))))
 
   ;;
   ;; Optional instances
@@ -106,3 +116,6 @@
       (match opt
         ((Some x) x)
         ((None) (error "unexpected None in unwrap"))))))
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON-LIBRARY/OPTIONAL")

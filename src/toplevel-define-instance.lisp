@@ -2,16 +2,17 @@
 
 ;;; Handling of toplevel COALTON:DEFINE-INSTANCE.
 
-(defun process-toplevel-instance-definitions (definstance-forms env)
+(defun process-toplevel-instance-definitions (definstance-forms package env)
   (declare (values instance-definition-list))
   (mapcar
    (lambda (form)
-     (parse-instance-definition form env))
+     (parse-instance-definition form package env))
    definstance-forms))
 
-(defun predeclare-toplevel-instance-definitions (definstance-forms env)
+(defun predeclare-toplevel-instance-definitions (definstance-forms package env)
   "Predeclare all instance definitions in the environment so values can be typechecked"
   (declare (type list definstance-forms)
+           (type package package)
            (type environment env)
            (values environment))
   (let ((parsed-instances
@@ -26,7 +27,7 @@
       (let* ((class-name (coalton-impl/typechecker::ty-predicate-class
                          (second parsed-instance)))
              (instance-codegen-sym (alexandria:format-symbol
-                                    (symbol-package class-name) "INSTANCE/~A"
+                                    package "INSTANCE/~A"
                                     (with-output-to-string (s)
                                       (with-pprint-variable-context ()
                                         (pprint-predicate s (second parsed-instance))))))

@@ -3,9 +3,12 @@
 (defpackage #:thih-coalton
   (:documentation "Public interface to THIH-COALTON.")
   (:use #:coalton
-        #:coalton-library)
-  (:shadow #:id #:find #:const #:alt
-           #:type #:compose)
+        #:coalton-prelude)
+  (:local-nicknames
+   (#:list #:coalton-library/list))
+  (:shadow #:id #:find #:const
+           #:type #:compose #:alt
+           #:split)
   (:export
    #:Id
    

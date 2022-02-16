@@ -1,8 +1,29 @@
-(in-package #:coalton-library)
+(coalton-library/utils:defstdlib-package #:coalton-library/functions
+  (:use
+   #:coalton
+   #:coalton-library/builtin
+   #:coalton-library/classes
+   #:coalton-library/list)
+  (:export
+   #:trace
+   #:traceObject
+   #:fix
+   #:id
+   #:const
+   #:flip
+   #:compose
+   #:conjoin
+   #:disjoin
+   #:complement
+   #:traverse
+   #:sequence
+   #:msum
+   #:asum
+   #:/=))
+
+(cl:in-package #:coalton-library/functions)
 
 (coalton-toplevel
-
-
   (declare trace (String -> Unit))
   (define (trace str)
     "Print a line to *STANDARD-OUTPUT*"
@@ -16,6 +37,40 @@
     (progn
       (lisp :a (str item) (cl:format cl:t "~A: ~A~%" str item))
       Unit))
+
+  ;;
+  ;; Function combinators
+  ;;
+
+  (declare fix (((:a -> :b) -> (:a -> :b)) -> (:a -> :b)))
+  (define (fix f n)
+    "Compute the fixed point of a unary function. This is equivalent to the Y-combinator of the lambda calculus. This combinator allows recursion without specific assignment of names. For example, the factorial function can be written
+
+
+    ```
+    (define fact
+      (fix
+        (fn (f n)
+          (if (== n 0)
+            1
+            (* n (f (- n 1)))))))
+    ```"
+    (f (fix f) n))
+
+  (declare id (:a -> :a))
+  (define (id x)
+    "A function that always returns its argument."
+    x)
+
+  (declare const (:a -> :b -> :a))
+  (define (const a b)
+    "A function that always returns its first argument."
+    a)
+
+  (declare flip ((:a -> :b -> :c) -> :b -> :a -> :c))
+  (define (flip f x y)
+    "Returns a function that takes its arguments in reverse order."
+    (f y x))
 
 
   ;; We don't write (COMPOSE F G X) even though it's OK so that the
@@ -62,4 +117,11 @@
   (declare asum (Alternative :f => ((List (:f :a)) -> (:f :a))))
   (define (asum xs)
     "Fold over a list using alt"
-    (foldr alt empty xs)))
+    (foldr alt empty xs))
+
+  (declare /= (Eq :a => (:a -> :a -> Boolean)))
+  (define (/= a b)
+    (boolean-not (== a b))))
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON-LIBRARY/FUNCTIONS")

@@ -1,27 +1,38 @@
-(in-package #:coalton-library)
+(coalton-library/utils:defstdlib-package #:coalton-library/result
+  (:use
+   #:coalton
+   #:coalton-library/builtin
+   #:coalton-library/classes
+   #:coalton-library/optional)
+  (:local-nicknames
+   (#:classes #:coalton-library/classes))
+  (:export
+   #:isOk
+   #:isErr
+   #:flatten))
+
+(cl:in-package #:coalton-library/result)
 
 (coalton-toplevel
   ;;
   ;; Result
   ;;
 
-  ;; Result is defined in types.lisp
-
   (declare isOk ((Result :a :b) -> Boolean))
   (define (isOk x)
     "Returns TRUE if X is ERR"
     (lisp Boolean (x)
       (cl:etypecase x
-        (Result/Ok True)
-        (Result/Err False))))
+        (classes::Result/Ok True)
+        (classes::Result/Err False))))
 
   (declare isErr ((Result :a :b) -> Boolean))
   (define (isErr x)
     "Returns TRUE if X is ERR"
     (lisp Boolean (x)
       (cl:etypecase x
-        (Result/Err True)
-        (Result/Ok False))))
+        (classes::Result/Err True)
+        (classes::Result/Ok False))))
 
   (declare mapErr ((:a -> :b) -> (Result :a :c) -> (Result :b :c)))
   (define (mapErr f x)
@@ -30,8 +41,8 @@
       ((Err x) (Err (f x)))
       ((Ok x) (Ok x))))
 
-  (declare flattenResult ((Result :a :a) -> :a))
-  (define (flattenResult x)
+  (declare flatten ((Result :a :a) -> :a))
+  (define (flatten x)
     (match x
       ((Ok x) x)
       ((Err x) x)))
@@ -110,3 +121,6 @@
       (match opt
         ((Ok x) x)
         ((Err _) (error "unexpected Err in unwrap"))))))
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON-LIBRARY/RESULT")

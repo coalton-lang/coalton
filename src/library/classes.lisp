@@ -1,6 +1,81 @@
-(cl:in-package #:coalton-library)
+(coalton-library/utils:defstdlib-package #:coalton-library/classes
+  (:use
+   #:coalton)
+  (:export
+   #:Tuple
+   #:Optional #:Some #:None
+   #:Result #:Ok #:Err
+   #:Eq #:==
+   #:Ord #:LT #:EQ #:GT
+   #:<=> #:> #:< #:>= #:<=
+   #:max
+   #:min
+   #:Num #:+ #:- #:* #:fromInt
+   #:Semigroup #:<>
+   #:Monoid #:mempty
+   #:Functor #:map
+   #:Applicative #:pure #:liftA2
+   #:Monad #:>>=
+   #:>>
+   #:MonadFail #:fail
+   #:Alternative #:alt #:empty
+   #:Into
+   #:TryInto
+   #:Iso
+   #:Unwrappable #:withDefault #:unwrap
+   #:Hash #:hash
+   #:combine-hashes
+   #:define-sxhash-hasher))
+
+(cl:in-package #:coalton)
 
 (coalton-toplevel
+  ;;
+  ;; All definitions in this block must have explicit type
+  ;; declerations. Implicit declerations are unavaliable until Num is
+  ;; defined.
+  ;;
+
+  (define-type Unit Unit)
+
+  ;; Boolean is an early type
+  (declare True Boolean)
+  (define True (lisp Boolean ()  cl:t))
+
+  (declare False Boolean)
+  (define False (lisp Boolean ()  cl:nil))
+
+  ;; List is an early type
+  (declare Cons (:a -> (List :a) -> (List :a)))
+  (define (Cons x xs)
+    (lisp (List :a) (x xs)
+      (cl:cons x xs)))
+
+  (declare Nil (List :a))
+  (define Nil
+    (lisp (List :a) ()
+      cl:nil)))
+
+(cl:in-package #:coalton-library/classes)
+
+(coalton-toplevel
+ 
+  (define-type (Tuple :a :b)
+    "A heterogeneous collection of items."
+    (Tuple :a :b))
+
+  (define-type (Optional :a)
+    "Represents something that may not have a value."
+    (Some :a)
+    None)
+
+  (define-type (Result :bad :good)
+    "Represents something that may have failed."
+    ;; We write (Result :bad :good) instead of (Result :good :bad)
+    ;; because of the limitations of how we deal with higher-kinded
+    ;; types; we want to implement Functor on this.
+    (Ok :good)
+    (Err :bad))
 
   ;;
   ;; Eq
@@ -9,10 +84,6 @@
   (define-class (Eq :a)
     "Types which have equality defined."
     (== (:a -> :a -> Boolean)))
-
-  (declare /= (Eq :a => (:a -> :a -> Boolean)))
-  (define (/= a b)
-    (boolean-not (== a b)))
 
   ;;
   ;; Ord
@@ -101,77 +172,6 @@
     (* (:a -> :a -> :a))
     (fromInt (Integer -> :a)))
 
-  ;;
-  ;; Bits
-  ;;
-
-  (define-class ((Num :int) => (Bits :int))
-    "Operations on the bits of twos-complement integers"
-    (bit-and (:int -> :int -> :int))
-    (bit-or (:int -> :int -> :int))
-    (bit-xor (:int -> :int -> :int))
-    (bit-not (:int -> :int))
-    (bit-shift (Integer -> :int -> :int)))
-
-  ;;
-  ;; Dividable
-  ;;
-
-  (define-class ((Num :arg-type)
-                 (Num :res-type)
-                 => (Dividable :arg-type :res-type))
-    "The representation of a type such that division within that type possibly results in another type. For instance,
-
-
-    (Dividable Integer Fraction)
-
-
-establishes that division of two `Integer`s can result in a `Fraction`, whereas
-
-
-    (Dividable Single-Float Single-Float)
-
-
-establishes that division of two `Single-Float`s can result in a `Single-Float`.
-
-Note that `Dividable` does *not* establish a default result type; you must constrain the result type yourself.
-
-The function / is partial, and will error produce a run-time error if the divisor is zero.
-"
-    ;; This is a type that is more pragmatic and less mathematical in
-    ;; nature. It expresses a division relationship between one input
-    ;; type and one output type.
-    (/ (:arg-type -> :arg-type -> :res-type)))
-
-  ;;
-  ;; Quantizable
-  ;;
-
-  (define-type (Quantization :a)
-    "Represents an integer quantization of `:a`. See the `Quantizable` typeclass.
-
-The fields are defined as follows:
-
-1. A value of type `:a`.
-
-2. The greatest integer less than or equal to a particular value.
-
-3. The remainder of this as a value of type `:a`.
-
-4. The least integer greater than or equal to a particular value.
-
-5. The remainder of this as a value of type `:a`.
-"
-    (Quantization :a Integer :a Integer :a))
-
-  (define-class ((Ord :a) (Num :a) => (Quantizable :a))
-    "The representation of a type that allows \"quantizing\", \"snapping to integers\", or \"rounding.\" (All of these concepts are roughly equivalent.)
-"
-    ;; Given a X of type :A, (QUANTIZE X) will return the least
-    ;; integer greater or equal to X, and the greatest integer less
-    ;; than or equal to X, along with their respective remainders
-    ;; expressed as values of type :T.
-    (quantize (:a -> (Quantization :a))))
 
   ;;
   ;; Haskell
@@ -200,7 +200,7 @@ The fields are defined as follows:
 
   (declare >> (Monad :m => (:m :a) -> (:m :b) -> (:m :b)))
   (define (>> a b)
-    (>>= a (const b)))
+    (>>= a (fn (_) b)))
 
   (define-class (Monad :m => (MonadFail :m))
     (fail (String -> (:m :a))))
@@ -235,9 +235,8 @@ The fields are defined as follows:
   (define-class (Unwrappable :f)
     "Types which might be able to be unwrapped, otherwise returning a default value."
     (withDefault (:a -> (:f :a) -> :a))
-    (unwrap ((:f :a) -> :a))))
+    (unwrap ((:f :a) -> :a)))
 
-(coalton-toplevel
   (define-class ((Eq :a) => (Hash :a))
     "Types which can be hashed for storage in hash tables.
 
@@ -257,3 +256,5 @@ Invariant (== left right) implies (== (hash left) (hash right))."
          (lisp UFix (item)
            (cl:sxhash item))))))
 
+#+sb-package-locks
+(sb-ext:lock-package "COALTON-LIBRARY/CLASSES")

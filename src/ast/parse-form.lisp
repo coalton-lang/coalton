@@ -63,7 +63,10 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
            (let ((expansion (funcall (macro-function (first expr)) expr nil)))
              (parse-form expansion m package)))
           ((null rands)
-           (parse-application expr (first expr) `(coalton-library:Unit) m package))
+           (let ((unit (alexandria:ensure-symbol
+                        "UNIT"
+                        (find-package "COALTON-LIBRARY/CLASSES"))))
+             (parse-application expr (first expr) (list unit) m package)))
 
           (t (parse-application expr (first expr) rands m package))))))
     ((listp expr) ;; EXPR already flunked PROPER-LIST-P, so it's a dotted list.
@@ -234,12 +237,16 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
 (defun parse-atom (atom)
   ;; Convert integer literals into fromInt calls. This allows for
   ;; "overloaded" number literals. Other literals are left as is.
-  (etypecase atom
-    (integer (node-application
-              atom
-              (node-variable 'coalton-library:fromInt 'coalton-library:fromInt)
-              (list (node-literal atom atom))))
-    (t (node-literal atom atom))))
+  (let ((fromInt
+          (alexandria:ensure-symbol
+           "FROMINT"
+           (find-package "COALTON-LIBRARY/CLASSES"))))
+    (etypecase atom
+      (integer (node-application
+         atom
+         (node-variable fromInt fromInt)
+         (list (node-literal atom atom))))
+      (t (node-literal atom atom)))))
 
 (defun parse-seq (expr subnodes m package)
   (declare (type t expr)
