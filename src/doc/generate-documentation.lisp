@@ -9,9 +9,10 @@
 (defstruct (documentation-type-entry
             (:include documentation-entry)
             (:constructor make-documentation-type-entry
-                (name type constructors instances documentation location)))
+                (name type constructors constructor-types instances documentation location)))
   (type (required 'type) :type ty)
   constructors
+  constructor-types
   instances)
 
 (defstruct (documentation-class-entry
@@ -223,6 +224,10 @@
                    (car e)
                    (type-entry-type (cdr e))
                    ctors
+                   (mapcar
+                    (lambda (ctor)
+                      (lookup-value-type env (car ctor)))
+                    ctors)
                    applicable-instances
                    (type-entry-docstring (cdr e))
                    ;; Here we will assume that all constructors
