@@ -111,7 +111,7 @@
           (format stream "~%***~%~%"))))))
 
 (defmethod write-documentation ((backend (eql ':markdown)) stream (object documentation-type-entry))
-  (with-slots (name type constructors instances documentation)
+  (with-slots (name type constructors constructor-types instances documentation)
       object
     (let ((type-vars
             (loop :for i :below (coalton-impl/typechecker::kind-arity
@@ -124,18 +124,19 @@
                 (html-entities:encode-entities (format nil "~{ ~A~}" type-vars))
                 (html-entities:encode-entities (symbol-name name)))
 
-        (loop :for (ctor-name . entry) :in constructors :do
-          (let ((args (coalton-impl/typechecker::function-type-arguments
-                       (coalton-impl/typechecker::qualified-ty-type
-                        (coalton-impl/typechecker::instantiate
-                         type-vars
-                         (coalton-impl/typechecker::ty-scheme-type
-                          (constructor-entry-scheme entry)))))))
-            (if args
-                (format stream "- <code>(~A~{ ~A~})</code>~%"
-                        (html-entities:encode-entities (symbol-name ctor-name))
-                        (mapcar #'to-markdown args))
-                (format stream "- <code>~A</code>~%" (html-entities:encode-entities (symbol-name ctor-name))))))
+        (loop :for (ctor-name . entry) :in constructors
+              :for ctor-type :in constructor-types :do
+                (let ((args (coalton-impl/typechecker::function-type-arguments
+                             (coalton-impl/typechecker::qualified-ty-type
+                              (coalton-impl/typechecker::instantiate
+                               type-vars
+                               (coalton-impl/typechecker::ty-scheme-type
+                                ctor-type))))))
+                  (if args
+                      (format stream "- <code>(~A~{ ~A~})</code>~%"
+                              (html-entities:encode-entities (symbol-name ctor-name))
+                              (mapcar #'to-markdown args))
+                      (format stream "- <code>~A</code>~%" (html-entities:encode-entities (symbol-name ctor-name))))))
 
         (when documentation
           (format stream "~%~A~%"
@@ -146,14 +147,15 @@
 
         (when constructors
           (format stream "Constructors:~%"))
-        (loop :for (ctor-name . entry) :in constructors :do
-          (format stream "- <code>~A :: ~A</code>~%"
-                  (html-entities:encode-entities (symbol-name ctor-name))
-                  (to-markdown
-                   (coalton-impl/typechecker::instantiate
-                    type-vars
-                    (coalton-impl/typechecker::ty-scheme-type
-                     (constructor-entry-scheme entry))))))
+        (loop :for (ctor-name . entry) :in constructors
+              :for ctor-type :in constructor-types :do
+                (format stream "- <code>~A :: ~A</code>~%"
+                        (html-entities:encode-entities (symbol-name ctor-name))
+                        (to-markdown
+                         (coalton-impl/typechecker::instantiate
+                          type-vars
+                          (coalton-impl/typechecker::ty-scheme-type
+                           ctor-type)))))
         (format stream "~%"))
 
       (when instances
