@@ -14,11 +14,11 @@
                       :displaced-to str
                       :displaced-index-offset 0))))
 
-  (declare next-char (StringView -> (Optional (Tuple Char StringView))))
+  (declare next-char (StringView -> (Optional (Tuple coalton:Char StringView))))
   (define (next-char str)
     (match str
       ((StringView str)
-       (lisp (Optional (Tuple Char StringView)) (str)
+       (lisp (Optional (Tuple coalton:Char StringView)) (str)
          (cl:let* ((arr str))
            (cl:declare (cl:type (cl:vector cl:character) arr)
                        ;; Muffle sbcl wanting to optimize aref. This cannot be optimized.

@@ -2,7 +2,114 @@
 ;;;;
 ;;;; Number types and basic arithmetic.
 
-(cl:in-package #:coalton-library)
+(coalton-library/utils::defstdlib-package #:coalton-library/arith
+  (:use
+     #:coalton
+     #:coalton-library/builtin
+     #:coalton-library/classes)
+  (:local-nicknames
+   (#:bits #:coalton-library/bits))
+  (:export
+   #:Dividable #:/
+   #:Quantization
+   #:Quantizable #:quantize
+   #:integer->single-float
+   #:integer->double-float
+   #:single-float->integer
+   #:double-float->integer
+   #:Fraction
+   #:negate
+   #:abs
+   #:sign
+   #:expt
+   #:ash
+   #:mod
+   #:even?
+   #:odd?
+   #:gcd
+   #:lcm
+   #:numerator
+   #:denominator
+   #:reciprocal
+   #:real-part
+   #:imag-part
+   #:conjugate
+   #:ii
+   #:floor
+   #:ceiling
+   #:round
+   #:save/
+   #:exact/
+   #:inexact/
+   #:floor/
+   #:ceiling/
+   #:round/
+   #:single/
+   #:double/))
+
+(cl:in-package #:coalton-library/arith)
+
+(coalton-toplevel
+  ;;
+  ;; Dividable
+  ;;
+
+  (define-class ((Num :arg-type)
+                 (Num :res-type)
+                 => (Dividable :arg-type :res-type))
+    "The representation of a type such that division within that type possibly results in another type. For instance,
+
+
+    (Dividable Integer Fraction)
+
+
+establishes that division of two `Integer`s can result in a `Fraction`, whereas
+
+
+    (Dividable Single-Float Single-Float)
+
+
+establishes that division of two `Single-Float`s can result in a `Single-Float`.
+
+Note that `Dividable` does *not* establish a default result type; you must constrain the result type yourself.
+
+The function / is partial, and will error produce a run-time error if the divisor is zero.
+"
+    ;; This is a type that is more pragmatic and less mathematical in
+    ;; nature. It expresses a division relationship between one input
+    ;; type and one output type.
+    (/ (:arg-type -> :arg-type -> :res-type)))
+
+  ;;
+  ;; Quantizable
+  ;;
+
+  (define-type (Quantization :a)
+    "Represents an integer quantization of `:a`. See the `Quantizable` typeclass.
+
+The fields are defined as follows:
+
+1. A value of type `:a`.
+
+2. The greatest integer less than or equal to a particular value.
+
+3. The remainder of this as a value of type `:a`.
+
+4. The least integer greater than or equal to a particular value.
+
+5. The remainder of this as a value of type `:a`.
+"
+    (Quantization :a Integer :a Integer :a))
+
+  (define-class ((Ord :a) (Num :a) => (Quantizable :a))
+    "The representation of a type that allows \"quantizing\", \"snapping to integers\", or \"rounding.\" (All of these concepts are roughly equivalent.)
+"
+    ;; Given a X of type :A, (QUANTIZE X) will return the least
+    ;; integer greater or equal to X, and the greatest integer less
+    ;; than or equal to X, along with their respective remainders
+    ;; expressed as values of type :T.
+    (quantize (:a -> (Quantization :a)))))
+
 
 (cl:declaim (cl:inline %unsigned->signed))
 (cl:defun %unsigned->signed (bits x)
@@ -235,6 +342,17 @@
              (Some (cl:round x))))))
 
 (coalton-toplevel
+  (define-type Fraction
+    "A ratio of integers always in reduced form."
+    ;; We avoid "Rational" or "Ratio" since those might be a more
+    ;; generic concept than a humble fraction of integers. This
+    ;; fraction is always assumed to be in reduced terms.
+    ;;
+    ;; This shouldn't be pattern matched against with user code.
+    ;;
+    ;; See arith.lisp for more info.
+    (%Fraction Integer Integer))
+
   (define-instance (Eq Fraction)
     (define (== p q)
       (and (== (numerator p) (numerator q))
@@ -277,19 +395,19 @@
 
   (declare negate ((Num :a) => (:a -> :a)))
   (define (negate x)
-    (- (fromInt 0) x))
+    (- 0 x))
 
   (declare abs ((Ord :a) (Num :a) => (:a -> :a)))
   (define (abs x)
     "Absolute value of X."
-    (if (< x (fromInt 0))
+    (if (< x 0)
         (negate x)
         x))
 
   (declare sign ((Ord :a) (Num :a) => (:a -> Integer)))
   (define (sign x)
     "The sign of X."
-    (if (< x (fromInt 0))
+    (if (< x 0)
         -1
         1))
 
@@ -312,13 +430,13 @@
         (error "Can't mod by 0.")
         (lisp Integer (num base) (cl:values (cl:mod num base)))))
 
-  (declare even (Integer ->  Boolean))
-  (define (even n)
+  (declare even? (Integer ->  Boolean))
+  (define (even? n)
     "Is N even?"
     (lisp Boolean (n) (to-boolean (cl:evenp n))))
 
-  (declare odd (Integer -> Boolean))
-  (define (odd n)
+  (declare odd? (Integer -> Boolean))
+  (define (odd? n)
     "Is N odd?"
     (lisp Boolean (n) (to-boolean (cl:oddp n))))
 
@@ -413,8 +531,7 @@
   (define-instance (Dividable Integer Double-Float)
     (define (/ x y)
       (lisp Double-Float (x y)
-        (cl:coerce (cl:/ x y) 'cl:double-float))))
-  )
+        (cl:coerce (cl:/ x y) 'cl:double-float)))))
 
 (coalton-toplevel
   (define-type (Complex :a)
@@ -452,7 +569,7 @@
          (Complex (- (* ra rb) (* ia ib))
                   (+ (* ra ib) (* ia rb))))))
     (define (fromInt x)
-      (Complex (fromInt x) (fromInt 0))))
+      (Complex (fromInt x) 0)))
 
   (declare conjugate ((Num :a) => (Complex :a) -> (Complex :a)))
   (define (conjugate z)
@@ -461,7 +578,7 @@
   (declare ii ((Num :a) => (Complex :a)))
   (define ii
     "The complex unit i. (The double ii represents a blackboard-bold i.)"
-    (Complex (fromInt 0) (fromInt 1)))
+    (Complex 0 (fromInt 1)))
 
   (define-instance ((Num :a) (Dividable :a :a) => (Dividable (Complex :a) (Complex :a)))
     (define (/ a b)
@@ -488,7 +605,7 @@
 
   (define-instance ((Num :a) => (Into :a (Complex :a)))
     (define (into x)
-      (Complex x (fromInt 0)))))
+      (Complex x 0))))
 
 ;;;; `Bits' instances
 ;;; signed
@@ -498,16 +615,16 @@
               `(lisp ,type (left right)
                      (,op left right))))
     `(coalton-toplevel
-       (define-instance (Bits ,type)
-         (define (bit-and left right)
+       (define-instance (bits:Bits ,type)
+         (define (bits:and left right)
            ,(lisp-binop 'cl:logand))
-         (define (bit-or left right)
+         (define (bits:or left right)
            ,(lisp-binop 'cl:logior))
-         (define (bit-xor left right)
+         (define (bits:xor left right)
            ,(lisp-binop 'cl:logxor))
-         (define (bit-not bits)
+         (define (bits:not bits)
            (lisp ,type (bits) (cl:lognot bits)))
-         (define (bit-shift amount bits)
+         (define (bits:shift amount bits)
            (lisp ,type (amount bits)
              (,handle-overflow (cl:ash bits amount))))))))
 
@@ -532,13 +649,13 @@
                    (lisp ,type (left right)
                          (,lisp-name left right)))))
     `(coalton-toplevel
-      (define-instance (Bits ,type)
-        ,(define-binop 'bit-and 'cl:logand)
-        ,(define-binop 'bit-or 'cl:logior)
-        ,(define-binop 'bit-xor 'cl:logxor)
-        (define (bit-not bits)
+      (define-instance (bits:Bits ,type)
+        ,(define-binop 'bits:and 'cl:logand)
+        ,(define-binop 'bits:or 'cl:logior)
+        ,(define-binop 'bits:xor 'cl:logxor)
+        (define (bits:not bits)
             (lisp ,type (bits) (unsigned-lognot bits ,width)))
-        (define (bit-shift amount bits)
+        (define (bits:shift amount bits)
             (lisp ,type (amount bits)
                   (cl:logand (cl:ash bits amount)
                              (cl:1- (cl:ash 1 ,width)))))))))
@@ -579,7 +696,7 @@
                         `(define-instance (Quantizable ,ty)
                            (define (quantize x)
                              (let ((n (into x)))
-                               (Quantization x n (fromInt 0) n (fromInt 0)))))))))
+                               (Quantization x n 0 n 0))))))))
   (define-integer-quantizations I32 I64 U8 U32 U64))
 
 (coalton-toplevel
@@ -678,4 +795,8 @@ Note: This does *not* divide double-float arguments."
   (define (double/ a b)
     "Compute the quotient of single-precision floats as a single-precision float."
     (/ a b)))
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON-LIBRARY/ARITH")
+
 

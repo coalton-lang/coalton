@@ -18,8 +18,9 @@
 (deftype instance-definition-list ()
   '(satisfies instance-definition-list-p))
 
-(defun parse-instance-definition (form env)
+(defun parse-instance-definition (form package env)
   (declare (type list form)
+           (type package package)
            (type environment env)
            (values instance-definition))
   (unless (and (listp form)
@@ -81,7 +82,7 @@
               (loop :for method-definiton :in instance-method-defintions
                     :do
                        (push (multiple-value-bind (method-name parsed-method-form)
-                                 (coalton-impl::parse-define-form method-definiton)
+                                 (coalton-impl::parse-define-form method-definiton package env :skip-inherited-symbol-checks t)
 
                                ;; Disallow duplicate method definitions
                                (when (member method-name method-bindings :key #'car)

@@ -1,4 +1,16 @@
-(in-package #:coalton-library)
+(coalton-library/utils:defstdlib-package #:coalton-library/tuple
+  (:use
+   #:coalton
+   #:coalton-library/builtin
+   #:coalton-library/classes)
+  (:export
+   #:fst
+   #:snd
+   #:Tuple3
+   #:Tuple4
+   #:Tuple5))
+
+(cl:in-package #:coalton-library/tuple)
 
 (coalton-toplevel
 
@@ -128,3 +140,6 @@
             (combine-hashes
              (hash d)
              (hash e))))))))))
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON-LIBRARY/TUPLE")

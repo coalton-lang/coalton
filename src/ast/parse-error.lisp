@@ -44,3 +44,21 @@
          :form form
          :reason-control reason-control
          :reason-args reason-args))
+
+(define-condition coalton-inherited-symbol (error)
+  ((symbol :initarg :symbol
+           :reader coalton-inherited-symbol-symbol
+           :type symbol)
+   (package :initarg :package
+            :reader coalton-inherited-symbol-package ))
+  (:report (lambda (c s)
+             (let ((*print-pretty* nil))
+               (format s "Unable to define ~a in ~a~%   that symbol was inherited from ~a"
+                       (symbol-name (coalton-inherited-symbol-symbol c))
+                       (coalton-inherited-symbol-package c) 
+                       (symbol-package (coalton-inherited-symbol-symbol c)))))))
+
+(defun error-inherited-symbol (symbol package)
+  (error 'coalton-inherited-symbol
+         :symbol symbol
+         :package package))

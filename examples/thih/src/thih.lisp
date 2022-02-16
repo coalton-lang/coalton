@@ -25,7 +25,7 @@
 
   (declare enumId (Integer -> Id))
   (define (enumId n)
-    (Id (concat-string "v" (into n))))
+    (Id (<> "v" (into n))))
 
 
   ;;
@@ -167,7 +167,7 @@
       (define (apply s t)
         (match t
           ((TVar u)
-           (match (lookup u (get-subst s))
+           (match (list:lookup u (get-subst s))
              ((Some t) t)
              ((None) (Tvar u))))
           ((TAp l r)
@@ -176,7 +176,7 @@
     (define (tv t)
       (match t
         ((TVar u) (make-list u))
-        ((TAp l r) (union (tv l) (tv r)))
+        ((TAp l r) (list:union (tv l) (tv r)))
         (_ Nil))))
 
 
@@ -203,7 +203,7 @@
     (let ((agree (all (fn (v)
                         (== (apply s1 (TVar v))
                             (apply s2 (TVar v))))
-                      (intersection
+                      (list:intersection
                        (map fst (get-subst s1))
                        (map fst (get-subst s2))))))
       (if agree
@@ -239,7 +239,7 @@
   (define (varBind u t_)
     (if (== t_ (TVar u))
         (pure nullSubst)
-        (if (member u (tv t_))
+        (if (list:member u (tv t_))
             (fail "Occurs check fails")
             (if (/= (kind u) (kind t_))
                 (fail "Kinds do not match")
@@ -292,7 +292,7 @@
     (define (tv q)
       (match q
         ((Qual ps t)
-         (union (tv ps) (tv t))))))
+         (list:union (tv ps) (tv t))))))
 
 
   (define-type (Pred)
@@ -513,7 +513,7 @@
   (declare entail (ClassEnv -> (List Pred) -> Pred -> Boolean))
   (define (entail ce ps p)
     (or (any
-         (member p)
+         (list:member p)
          (map (bySuper ce) ps))
         (match (byInst ce p)
           ((None)
@@ -567,7 +567,7 @@
 
   (declare scEntail (ClassEnv -> (List Pred) -> Pred -> Boolean))
   (define (scEntail ce ps p)
-    (any (member p)
+    (any (list:member p)
          (map (bySuper ce) ps)))
 
 
@@ -600,7 +600,7 @@
   (define (quantify vs qt)
     (let ((vs_ (filter
                 (fn (e)
-                  (member e vs))
+                  (list:member e vs))
                 (tv qt)))
           (ks (map kind vs_))
           (gens (map TGen (range 0 (- (length vs_) 1))))
@@ -640,7 +640,7 @@
   (define (find i xs)
     (match xs
       ((Nil)
-       (fail (concat-string "Unbound identifier: " (id->string i))))
+       (fail (<> "Unbound identifier: " (id->string i))))
       ((Cons (Assump i_ sc) as)
        (if (== i i_)
            (pure sc)
@@ -650,9 +650,6 @@
   ;;
   ;; Type Inference Monad
   ;;
-
-  (define-type (Tuple3 :a :b :c)
-    (Tuple3 :a :b :c))
 
   (define-type (TI :a)
     (TI (Subst -> Integer -> (Tuple3 Subst Integer :a))))
@@ -732,7 +729,7 @@
       (define (inst ts t)
         (match t
           ((TAp l r) (TAp (inst ts l) (inst ts r)))
-          ((TGen n)  (coalton-library:fromSome "Failed to find TGen type" (index ts n)))
+          ((TGen n)  (fromSome "Failed to find TGen type" (list:index ts n)))
           (_ t))))
 
   (define-instance (Instantiate :a => (Instantiate (List :a)))
@@ -910,11 +907,11 @@
   (declare split (MonadFail :m => (ClassEnv -> (List Tyvar) -> (List Tyvar) -> (List Pred) -> (:m (Tuple (List Pred) (List Pred))))))
   (define (split ce fs gs ps)
     (do (ps_ <- (reduce ce ps))
-        (match (partition (fn (x) (all (flip member fs) (tv x)))
+        (match (list:partition (fn (x) (all (flip list:member fs) (tv x)))
                           ps_)
         ((Tuple ds rs)
          (do (rs_ <- (defaultedPreds ce (append fs gs) rs))
-             (pure (Tuple ds (list-difference rs rs_))))))))
+             (pure (Tuple ds (list:difference rs rs_))))))))
 
   (define-type Ambiguity
     (Ambiguity Tyvar (List Pred)))
@@ -924,9 +921,9 @@
     (map (fn (v)
            (Ambiguity v (filter
                          (fn (x)
-                           (member v (tv x)))
+                           (list:member v (tv x)))
                          ps)))
-         (list-difference (tv ps) vs)))
+         (list:difference (tv ps) vs)))
 
   (declare numClasses (List Id))
   (define numClasses
@@ -957,8 +954,8 @@
                        t)))
                   qs)))
          (if (and (all (== (TVar v)) ts)
-                  (and (any (flip member numClasses) is)
-                       (all (flip member stdClasses) is)))
+                  (and (any (flip list:member numClasses) is)
+                       (all (flip list:member stdClasses) is)))
              (let ((ts_ (defaults ce)))
                (if (all (fn (t_)
                                (all (entail ce Nil)
@@ -973,9 +970,9 @@
   (define (withDefaults f ce vs ps)
     (let ((vps (ambiguities ce vs ps))
           (tss (map (candidates ce) vps)))
-      (if (any null tss)
+      (if (any list:null? tss)
           (fail "Cannot resolve ambiguity")
-          (pure (f vps (map (fn (l) (coalton-library:fromSome "" (head l))) tss))))))
+          (pure (f vps (map (fn (l) (fromSome "" (head l))) tss))))))
 
   (declare defaultedPreds (MonadFail :m => (ClassEnv -> (List Tyvar) -> (List Pred) -> (:m (List Pred)))))
   (define defaultedPreds
@@ -1010,7 +1007,7 @@
                   (let qs_ = (apply s qs))
                   (let t_  = (apply s t))
                   (let fs  = (tv (apply s as)))
-                  (let gs  = (list-difference (tv t_) fs))
+                  (let gs  = (list:difference (tv t_) fs))
                   (let sc_ = (quantify gs (Qual qs_ t_)))
                   (let ps_ = (filter (fn (p) (not (entail ce qs_ p)))
                                      (apply s ps)))
@@ -1020,7 +1017,7 @@
                      (cond
                        ((/= sc sc_)
                         (fail "Signature too general"))
-                       ((not (null rs))
+                       ((not (list:null? rs))
                         (fail "Context too weak"))
                        (True
                         (pure ds))))))))))))
@@ -1037,7 +1034,7 @@
                        (any (fn (x)
                               (match x
                                 ((Alt pats _)
-                                 (null pats))))
+                                 (list:null? pats))))
                             alts))))))
       (any simple bs)))
 
@@ -1060,20 +1057,20 @@
         (let ts_ = (apply s ts))
         (let fs  = (tv (apply s as)))
         (let vss = (map tv ts_))
-        (let gs  = (list-difference
+        (let gs  = (list:difference
                     (match vss
                       ((Cons vs vss)
-                       (foldr union vs vss)))
+                       (foldr list:union vs vss)))
                     fs))
         (ps <- (split ce fs
                       (match vss
                         ((Cons vs vss)
-                         (foldr intersection vs vss)))
+                         (foldr list:intersection vs vss)))
                       ps_))
         (match ps
           ((Tuple ds rs)
            (if (restricted bs)
-               (let ((gs_ (list-difference gs (tv rs)))
+               (let ((gs_ (list:difference gs (tv rs)))
                      (scs_ (map (fn (x)
                                   (quantify gs_ (Qual Nil x)))
                                 ts_)))

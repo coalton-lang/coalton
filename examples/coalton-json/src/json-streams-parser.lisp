@@ -8,9 +8,9 @@
                  ((member :NULL)
                   coalton-json:Json-Null)
                  ((member :TRUE)
-                  (coalton-json:Json-Boolean coalton-library:True))
+                  (coalton-json:Json-Boolean coalton:True))
                  ((member :FALSE)
-                  (coalton-json:Json-Boolean coalton-library:False))
+                  (coalton-json:Json-Boolean coalton:False))
                  (number
                   (coalton-json:Json-Number (coerce tok 'double-float)))
                  (string
@@ -24,14 +24,14 @@
                         (string
                          (setf sm (coalton-json:sm-insert sm n (_parse-token (_next)))))))))
                  ((member :BEGIN-ARRAY)
-                  (let ((l coalton-library:Nil))
+                  (let ((l coalton:Nil))
                     (loop :for n := (_next) :do
                       (etypecase n
                         ((member :END-ARRAY)
                          (return-from _parse-token (coalton-json:json-array
-                                                    (coalton-library:reverse l))))
+                                                    (coalton-prelude:reverse l))))
                         (t
-                         (setf l (coalton-library:Cons (_parse-token n) l)))))))
+                         (setf l (coalton:Cons (_parse-token n) l)))))))
                  ((member :EOF :END-OBJECT :END-ARRAY)
                   (error "Shouldn't be reached")))))
     (_parse-token (_next))))

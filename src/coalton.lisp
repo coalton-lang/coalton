@@ -113,7 +113,7 @@ in FORMS that begin with that operator."
 (defmacro coalton:coalton-toplevel (&body toplevel-forms)
   "Top-level definitions for use within Coalton."
   (multiple-value-bind (form env)
-      (process-coalton-toplevel toplevel-forms *global-environment*)
+      (process-coalton-toplevel toplevel-forms *package* *global-environment*)
     (setf *global-environment* env)
     form))
 
@@ -179,8 +179,9 @@ in FORMS that begin with that operator."
                        (coalton-impl/typechecker::qualified-ty-predicates qual-type))))
              ''coalton::unable-to-codegen)))))))
 
-(defun process-coalton-toplevel (toplevel-forms &optional (env *global-environment*))
+(defun process-coalton-toplevel (toplevel-forms package &optional (env *global-environment*))
   "Top-level definitions for use within Coalton."
+  (declare (type package package))
   (destructuring-bind (&key
                          ((coalton:declare declares))
                          ((coalton:define defines))
@@ -202,15 +203,19 @@ in FORMS that begin with that operator."
 
         ;; Methods need to be added to the environment before we can
         ;; check value types.
-        (setf env (predeclare-toplevel-instance-definitions instance-defines env))
+        (setf env (predeclare-toplevel-instance-definitions instance-defines package env))
 
         (let ((declared-types (process-toplevel-declarations declares env)))
           (multiple-value-bind (env toplevel-bindings dag)
-              (process-toplevel-value-definitions defines declared-types env)
+              (process-toplevel-value-definitions defines declared-types package env)
 
             ;; Methods must be typechecker after the types of values
             ;; are determined since instances may reference them.
-            (let ((instance-definitions (process-toplevel-instance-definitions instance-defines env)))
+            (let ((instance-definitions
+                    (process-toplevel-instance-definitions
+                     instance-defines
+                     package
+                     env)))
 
               (let* ((env-diff (environment-diff env *global-environment*))
                      (env (update-function-env toplevel-bindings env))

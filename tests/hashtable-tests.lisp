@@ -1,9 +1,9 @@
 (cl:in-package #:coalton-native-tests)
 
 (define-test simple-hashtable ()
-  (let ((ht (the (Hashtable String Integer) (make-hashtable)))
-        (insert! (hashtable-set! ht))
-        (get (hashtable-get ht)))
+  (let ((ht (the (Hashtable String Integer) (hashtable:new)))
+        (insert! (hashtable:set! ht))
+        (get (hashtable:get ht)))
     (progn
       (insert! "zero" 0)
       (insert! "one" 1)
@@ -14,7 +14,7 @@
       (is (== (Some 2) (get "two")))
       (is (== (Some 3) (get "three")))
       (is (isNone (get "four")))
-      (is (== 4 (hashtable-count ht)))
-      (hashtable-remove! ht "zero")
+      (is (== 4 (hashtable:count ht)))
+      (hashtable:remove! ht "zero")
       (is (isNone (get "zero")))
-      (is (== 3 (hashtable-count ht))))))
+      (is (== 3 (hashtable:count ht))))))

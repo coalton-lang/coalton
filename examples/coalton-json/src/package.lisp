@@ -3,7 +3,7 @@
 (defpackage #:coalton-json
   (:documentation "Public interface to COALTON-JSON.")
   (:use #:coalton
-        #:coalton-library)
+        #:coalton-prelude)
   (:export
    #:String-Map
    #:SM-Alist

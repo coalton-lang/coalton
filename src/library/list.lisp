@@ -1,4 +1,68 @@
-(in-package #:coalton-library)
+(coalton-library/utils::defstdlib-package #:coalton-library/list
+  (:use
+   #:coalton
+   #:coalton-library/builtin
+   #:coalton-library/classes
+   #:coalton-library/tuple
+   #:coalton-library/optional)
+  (:export
+   #:head
+   #:tail
+   #:car
+   #:cdr
+   #:last
+   #:init
+   #:null?
+   #:singleton
+   #:repeat
+   #:reverse
+   #:drop
+   #:take
+   #:find
+   #:fold
+   #:foldr
+   #:filter
+   #:length
+   #:index
+   #:nth
+   #:elemIndex
+   #:findIndex
+   #:range
+   #:append
+   #:concat
+   #:concatMap
+   #:member
+   #:union
+   #:intersection
+   #:lookup
+   #:remove-duplicates
+   #:delete
+   #:difference
+   #:zipWith
+   #:zipWith3
+   #:zipWith4
+   #:zipWith5
+   #:zip
+   #:countBy
+   #:insert
+   #:insertBy
+   #:sort
+   #:intersperse
+   #:intercalate
+   #:transpose
+   #:partition
+   #:equivalence-classes
+   #:equivalence-classes-by
+   #:optimumBy
+   #:maximum
+   #:minimum
+   #:sum
+   #:product
+   #:all
+   #:any
+   #:split))
+
+(cl:in-package #:coalton-library/list)
 
 (coalton-toplevel
 
@@ -50,8 +114,8 @@
     (lisp (List :a) (l)
       (cl:butlast l)))
 
-  (declare null ((List :a) -> Boolean))
-  (define (null xs)
+  (declare null? ((List :a) -> Boolean))
+  (define (null? xs)
     "Returns TRUE if XS is an empty list."
     (match xs
       ((Nil) True)
@@ -280,8 +344,8 @@
            ys
            (Cons y (delete x ys))))))
 
-  (declare list-difference (Eq :a => ((List :a) -> (List :a) -> (List :a))))
-  (define (list-difference xs ys)
+  (declare difference (Eq :a => ((List :a) -> (List :a) -> (List :a))))
+  (define (difference xs ys)
     "Returns a new list with the first occurence of each element in YS deleted from XS."
     (fold delete xs ys))
 
@@ -545,3 +609,6 @@
   (define-instance (Monad List)
     (define (>>= m f)
       (concatMap f m))))
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON-LIBRARY/LIST")

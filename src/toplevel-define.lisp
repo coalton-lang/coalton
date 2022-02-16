@@ -4,9 +4,11 @@
 
 ;;; Handling of top-level COALTON:DEFINE.
 
-(defun parse-define-form (form)
+(defun parse-define-form (form package env &key (skip-inherited-symbol-checks nil))
   "Parse a COALTON:DEFINE form."
   (declare (type list form)
+           (type package package)
+           (type environment env)
            (values symbol node (or null string) &optional))
   (assert (and (eql (first form) 'coalton:define)
                (or (= 3 (length form))   ; Without docstring
@@ -35,46 +37,61 @@
        (error-parsing form "Found a null value where a symbol or function ~
                             was expected."))
       ((symbolp var-thing)
-       (parse-define-form-variable var-thing val docstring))
+       (parse-define-form-variable var-thing val docstring package env :skip-inherited-symbol-checks skip-inherited-symbol-checks))
       ((and (listp var-thing)
             (every #'symbolp var-thing))
        ;; Disallow zero arity functions
        (unless (>= (length var-thing) 2)
          (error-parsing form "Unable to define function with arity ~A" (1- (length var-thing))))
-       (parse-define-form-function (first var-thing) (rest var-thing) val docstring))
+       (parse-define-form-function (first var-thing) (rest var-thing) val docstring package env :skip-inherited-symbol-checks skip-inherited-symbol-checks))
       (t
        (error-parsing form "Invalid second argument.")))))
 
-(defun parse-define-form-variable (var val docstring)
+(defun parse-define-form-variable (var val docstring package env &key (skip-inherited-symbol-checks nil))
   (declare (type symbol var)
            (type t val)
+           (type package package)
+           (type environment env)
+           (ignore env)
            (values symbol node (or null string)))
   ;; The (DEFINE <var> <val>) case.
   ;; XXX: Should this be LETREC too? Probably for something like F = x => ... F.
+  (unless (or skip-inherited-symbol-checks (equalp package (symbol-package var)))
+    (error-inherited-symbol
+     var
+     package))
   (values var
-          (parse-form val (make-immutable-map) (symbol-package var))
+          (parse-form val (make-immutable-map) package)
           docstring))
 
-(defun parse-define-form-function (fvar args val docstring)
+(defun parse-define-form-function (fvar args val docstring package env &key (skip-inherited-symbol-checks nil))
   (declare (type symbol fvar)
            (type list args)
            (type t val)
+           (type package package)
+           (type environment env)
+           (ignore env)
            (values symbol node (or null string)))
   ;; The (DEFINE (<fvar> . <args>) <val>) case.
+  (unless (or skip-inherited-symbol-checks (equalp package (symbol-package fvar)))
+    (error-inherited-symbol
+     fvar
+     package))
   (values fvar
-          (parse-form `(coalton:fn ,args ,val) (make-immutable-map) (symbol-package fvar))
+          (parse-form `(coalton:fn ,args ,val) (make-immutable-map) package)
           docstring))
 
-(defun process-toplevel-value-definitions (def-forms declared-types env)
+(defun process-toplevel-value-definitions (def-forms declared-types package env)
   "Parse all coalton DEFINE forms in DEF-FORMS, optionally with declared types
 
 Returns new environment, binding list of declared nodes, and a DAG of dependencies"
-  (declare (values environment typed-binding-list list list))
+  (declare (type package package)
+           (values environment typed-binding-list list list))
 
   (let* ((docstrings nil)
          (parsed (loop :for form :in def-forms
                        :collect (multiple-value-bind (name node docstring)
-                                    (parse-define-form form)
+                                    (parse-define-form form package env)
                                   (push (list name docstring) docstrings)
                                   (cons name node))))
          (expl-names (alexandria:hash-table-keys declared-types))
