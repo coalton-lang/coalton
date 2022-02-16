@@ -548,6 +548,18 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                      (some (lambda (b) (not (coalton-impl/ast::node-abstraction-p (cdr b))))
                            bindings)))
 
+            ;; NOTE: This is where defaulting happens. Retained
+            ;; predicates are inspected to generate new substitutions
+            ;; based on defaulting rules.
+
+            (setf local-subs (pred-defaults retained-preds local-subs))
+            (setf retained-preds
+                  (reduce-context
+                   env
+                   retained-preds
+                   local-subs
+                   :allow-deferred-predicates allow-deferred-predicates))
+            (setf expr-types (apply-substitution local-subs expr-types))
 
             ;; NOTE: This is where the monomorphism restriction happens
 
@@ -605,6 +617,21 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                    deferred-preds
                    output-env
                    local-subs)))))))))
+
+(defun pred-defaults (preds subs)
+  "Given a list of predicates, compute substutions for predicates
+which have default instances. Currently only resolves Num :a -> Num Integer"
+  (loop :for pred :in (remove-if #'static-predicate-p preds)
+        :for class := (ty-predicate-class pred)
+        :do
+           (when (eq class 'coalton-library:Num)
+             (setf subs
+                   (compose-substitution-lists
+                    (predicate-match
+                     pred
+                     (ty-predicate 'coalton-library:Num (list *integer-type*)))
+                    subs))))
+  subs)
 
 (defun derive-expl-type (binding declared-ty env subs name-map
                          &key (allow-deferred-predicates t))
@@ -733,7 +760,7 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
              (type substitution-list subs)
              (values ty ty-predicate-list list substitution-list))
     (multiple-value-bind (type preds)
-        (derive-literal-type (node-literal-value (pattern-literal-value pat)))
+        (derive-literal-type (pattern-literal-value pat))
       (values
        type
        preds

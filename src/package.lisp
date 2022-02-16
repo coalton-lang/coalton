@@ -262,6 +262,7 @@
    #:ty-predicate-class                 ; ACCESSOR
    #:ty-predicate-types                 ; ACCESSOR
    #:ty-predicate-list                  ; TYPE
+   #:static-predicate-p                 ; FUNCTION
    #:ty-class                           ; STRUCT
    #:ty-class-name                      ; ACCESSOR
    #:ty-class-predicate                 ; ACCESSOR

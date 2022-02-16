@@ -4,7 +4,10 @@
   (let* ((v (coalton:coalton
             (coalton:the
              (coalton-library:Vector coalton:Integer)
-             (coalton-library:into (coalton-library:make-list 1 2 3 4 5 6 7 8)))))
+             (coalton-library:into
+              (coalton:the
+               (coalton:List coalton:Integer)
+               (coalton-library:make-list 1 2 3 4 5 6 7 8))))))
 
          (s (coalton-library:make-slice 0 3 v)))
 
@@ -28,7 +31,10 @@
   (let* ((v (coalton:coalton
             (coalton:the
              (coalton-library:Vector coalton:Integer)
-             (coalton-library:into (coalton-library:make-list 1 2 3 4 5 6 7 8)))))
+             (coalton-library:into
+              (coalton:the
+               (coalton:List coalton:Integer)
+               (coalton-library:make-list 1 2 3 4 5 6 7 8))))))
 
          (s (coalton-library:make-slice 2 3 v)))
 
@@ -40,7 +46,10 @@
   (let* ((v (coalton:coalton
              (coalton:the
               (coalton-library:Vector coalton:Integer)
-              (coalton-library:into (coalton-library:make-list 1 2 3 4 5 6 7 8)))))
+              (coalton-library:into
+               (coalton:the
+                (coalton:List coalton:Integer)
+                (coalton-library:make-list 1 2 3 4 5 6 7 8))))))
 
          (out nil))
 
@@ -65,7 +74,10 @@
   (let* ((v (coalton:coalton
              (coalton:the
               (coalton-library:Vector coalton:Integer)
-              (coalton-library:into (coalton-library:make-list 1 2 3 4 5 6 7 8)))))
+              (coalton-library:into
+               (coalton:the
+                (coalton:List coalton:Integer)
+                (coalton-library:make-list 1 2 3 4 5 6 7 8))))))
 
          (out nil))
 

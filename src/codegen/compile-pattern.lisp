@@ -10,7 +10,7 @@
     '_)
   (:method ((pattern pattern-literal) env)
     (declare (type coalton-impl/typechecker::environment env))
-    (node-literal-value (pattern-literal-value pattern)))
+    (pattern-literal-value pattern))
 
   (:method ((pattern pattern-constructor) env)
     (declare (type coalton-impl/typechecker::environment env))

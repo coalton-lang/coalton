@@ -37,7 +37,7 @@
     (pattern-literal
      (:include pattern)
      (:constructor pattern-literal (value)))
-  (value (required 'value) :type node-literal :read-only t))
+  (value (required 'value) :type literal-value :read-only t))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type pattern-literal))

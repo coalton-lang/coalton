@@ -1,7 +1,7 @@
 (cl:in-package #:coalton-native-tests)
 
 (define-test simple-hashtable ()
-  (let ((ht (make-hashtable))
+  (let ((ht (the (Hashtable String Integer) (make-hashtable)))
         (insert! (hashtable-set! ht))
         (get (hashtable-get ht)))
     (progn
