@@ -16,10 +16,7 @@
 
   (declare fix (((:a -> :b) -> (:a -> :b)) -> (:a -> :b)))
   (define (fix f n)
-    "Compute the fixed point of a unary function. This is equivalent to the Y-combinator of the lambda calculus. 
-
-
-    This combinator allows recursion without specific assignment of names. For example, the factorial function can be written
+    "Compute the fixed point of a unary function. This is equivalent to the Y-combinator of the lambda calculus. This combinator allows recursion without specific assignment of names. For example, the factorial function can be written
 
 
     ```

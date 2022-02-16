@@ -225,7 +225,7 @@
             :type *lisp-object-type*
             :enum-repr nil
             :newtype nil
-            :docstring "Opaque container for arbitrary lisp objects. At runtime this is equivalent to the type `t`."))
+            :docstring "Opaque container for arbitrary lisp objects. At runtime this is equivalent to type `t`."))
 
           ('coalton:Arrow
            (type-entry
@@ -234,7 +234,7 @@
             :type *arrow-type*
             :enum-repr nil
             :newtype nil
-            :docstring "Type constructor for function types. `(Arrow :a :b)` is equivalent to <code>(:a -> :b)</code>."))
+            :docstring "Type constructor for function types."))
 
           ('coalton:List
            (type-entry
