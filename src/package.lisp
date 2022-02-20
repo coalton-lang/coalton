@@ -354,7 +354,8 @@
                 #:define-global-var*)
   ;; settings
   (:export
-   #:coalton-release-p)
+   #:coalton-release-p
+   #:*coalton-compile-hook*)
 
   (:export
    #:coalton-parse-error                ; CONDITION

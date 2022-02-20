@@ -27,7 +27,11 @@
          (node (direct-application-transform node optimizer))
          (node (if (coalton-impl:coalton-release-p)
                    (match-constructor-lift-transform node optimizer)
-                   node)))
+                   node))
+         (node (if coalton-impl:*coalton-compile-hook*
+                   (funcall coalton-impl:*coalton-compile-hook* node)
+                   node))) 
+
 
 
     ;; Ensure that the node is still valid after transformations are
