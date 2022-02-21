@@ -11,9 +11,10 @@
            (type environment env)
            (values symbol node (or null string) &optional))
   (assert (and (eql (first form) 'coalton:define)
-               (or (= 3 (length form))   ; Without docstring
-                   (= 4 (length form)))) ; With docstring
+               (or (<= 3 (length form))   ; Without docstring
+                    )) ; With docstring
           () "Malformed DEFINE form ~A" form)
+
   ;; Defines either define a value or a function. Values and functions
   ;; in Coalton occupy the namespace, but the intent of the user can
   ;; be distinguished. A definition either looks like:
@@ -22,30 +23,51 @@
   ;;
   ;; or
   ;;
-  ;;     (DEFINE (<fvar> <arg>*) <val>)
+  ;;     (DEFINE (<fvar> <arg>*) <val>+)
   ;;
   ;; The former defines a variable, the latter defines a function.
-  (let* ((parse-docstring? (= 4 (length form)))
-         (var-thing (second form))
-         (val (if parse-docstring?
-                  (fourth form)
-                  (third form)))
-         (docstring (when parse-docstring?
-                      (third form))))
+
+  (let ((docstring nil)
+        (var-thing (second form)))
+
+    ;; Grab the docstring if it exists
+    (when (and (> (length form) 3) (typep (third form) 'string))
+      (setf docstring (third form)))
+
+
     (cond
+      ;; (define () 5) is invalid
       ((null var-thing)
-       (error-parsing form "Found a null value where a symbol or function ~
-                            was expected."))
-      ((symbolp var-thing)
-       (parse-define-form-variable var-thing val docstring package env :skip-inherited-symbol-checks skip-inherited-symbol-checks))
-      ((and (listp var-thing)
-            (every #'symbolp var-thing))
-       ;; Disallow zero arity functions
-       (unless (>= (length var-thing) 2)
-         (error-parsing form "Unable to define function with arity ~A" (1- (length var-thing))))
-       (parse-define-form-function (first var-thing) (rest var-thing) val docstring package env :skip-inherited-symbol-checks skip-inherited-symbol-checks))
-      (t
-       (error-parsing form "Invalid second argument.")))))
+       (error-parsing form "Found a null value where a symbol or function was expected"))
+
+
+    ;; Parse a variable declaration
+    ((symbolp var-thing)
+     (parse-define-form-variable
+      var-thing
+      (if docstring
+          (fourth form)
+          (third form))
+      docstring
+      package
+      env
+      :skip-inherited-symbol-checks skip-inherited-symbol-checks))
+
+    ((and (listp var-thing)
+          (every #'symbolp var-thing))
+     (parse-define-form-function
+      (first var-thing)
+      (rest var-thing)
+      (if docstring
+          (nthcdr 3 form)
+          (nthcdr 2 form))
+      docstring
+      package
+      env
+      :skip-inherited-symbol-checks skip-inherited-symbol-checks))
+
+    (t
+     (error-parsing form "Invalid define form.")))))
 
 (defun parse-define-form-variable (var val docstring package env &key (skip-inherited-symbol-checks nil))
   (declare (type symbol var)
@@ -64,21 +86,21 @@
           (parse-form val (make-immutable-map) package)
           docstring))
 
-(defun parse-define-form-function (fvar args val docstring package env &key (skip-inherited-symbol-checks nil))
+(defun parse-define-form-function (fvar args forms docstring package env &key (skip-inherited-symbol-checks nil))
   (declare (type symbol fvar)
            (type list args)
-           (type t val)
+           (type list forms)
            (type package package)
            (type environment env)
            (ignore env)
            (values symbol node (or null string)))
-  ;; The (DEFINE (<fvar> . <args>) <val>) case.
+  ;; The (DEFINE (<fvar> <arg>*) <val>+) case.
   (unless (or skip-inherited-symbol-checks (equalp package (symbol-package fvar)))
     (error-inherited-symbol
      fvar
      package))
   (values fvar
-          (parse-form `(coalton:fn ,args ,val) (make-immutable-map) package)
+          (parse-form `(coalton:fn ,args ,@forms) (make-immutable-map) package)
           docstring))
 
 (defun process-toplevel-value-definitions (def-forms declared-types package env)

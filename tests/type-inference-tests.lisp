@@ -414,3 +414,15 @@
        (coalton:let ((g (coalton:fn (x) (coalton-prelude:Tuple x a))))
          (g 5))))
    '((f . (:a -> (coalton-prelude:Tuple Integer :a))))))
+
+(deftest test-function-definition-shorthand ()
+  (check-coalton-types
+   '((coalton:define f (fn () 5)))
+   '((f . (coalton:Unit -> coalton:Integer)))))
+
+(deftest test-function-implicit-progn ()
+  (check-coalton-types
+   '((coalton:define (f a)
+       (coalton:let a_ coalton:= (coalton-prelude:+ a 1))
+       a_))
+   nil))

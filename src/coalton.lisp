@@ -120,17 +120,17 @@ in FORMS that begin with that operator."
 (defmacro coalton:coalton-codegen (&body toplevel-forms)
   "Returns the lisp code generated from coalton code. Intended for debugging."
   `(let ((*emit-type-annotations* nil))
-     (process-coalton-toplevel ',toplevel-forms *global-environment*)))
+     (process-coalton-toplevel ',toplevel-forms *package* *global-environment*)))
 
 (defmacro coalton:coalton-codegen-types (&body toplevel-forms)
   "Returns the lisp code generated from coalton code with lisp type annotations. Intended for debugging."
   `(let ((*emit-type-annotations* t))
-     (process-coalton-toplevel ',toplevel-forms *global-environment*)))
+     (process-coalton-toplevel ',toplevel-forms *package* *global-environment*)))
 
 (defmacro coalton:coalton-codegen-ast (&body toplevel-forms)
   "Prints the AST of the typechecked coalton code. Intended for debugging."
   `(let ((*coalton-dump-ast* t))
-     (process-coalton-toplevel ',toplevel-forms *global-environment*)
+     (process-coalton-toplevel ',toplevel-forms *package* *global-environment*)
      (values)))
 
 (defmacro coalton:coalton (form)
