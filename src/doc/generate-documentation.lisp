@@ -80,7 +80,8 @@
                                               coalton-library/vector
                                               coalton-library/slice
                                               coalton-library/hashtable
-                                              coalton-library/monad/state))
+                                              coalton-library/monad/state
+                                              coalton-library/iterator))
                                            (base-package 'coalton-prelude)
                                            (asdf-system ':COALTON)
                                            (file-link-prefix ""))

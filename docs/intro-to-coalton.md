@@ -474,7 +474,18 @@ Coalton's `progn` can have flattened `let` syntax.
     (progn
       (let x_ = (into x))
       (let y_ = (into y))
-      (concat-string x_ y_))))
+      (<> x_ y_))))
+```
+
+Function defintions create an implicit `progn` block
+
+```lisp
+(coalton-toplevel
+  (declare f (Integer -> Integer -> String))
+  (define (f x y)
+    (let x_ = (into x))
+    (let y_ = (into y))
+    (<> x_ y_)))
 ```
 
 ## Unless and When
@@ -595,9 +606,11 @@ Inline type annotations can be added to resolve ambiguities when using typeclass
   (define f (the U32 (+ (fromInt 5) (fromInt 7)))))
 ```
 
-## Shorthand Function Call Syntax
+## Shorthand Function Syntax
 
 Coalton does not have nullary functions. However, a function with the type signature `Unit -> *` can be called in Coalton without explicitly passing `Unit`. For instance, the Coalton form `(make-vector)` is a shorthand for `(make-vector Unit)`.
+
+Functions can also be defined with an implicit paramater using `(fn () 5)`. This creates a function with a single implicit paramater of type `Unit`.
 
 ## Inspecting the Coalton System
 

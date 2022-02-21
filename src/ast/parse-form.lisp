@@ -22,13 +22,13 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
      (alexandria:destructuring-case expr
        ;; Abstraction
        (((or coalton:fn coalton:λ) &rest args)
-        (unless (= 2 (length args))
+        (unless (<= 2 (length args))
           (error-parsing
            expr
            "Invalid anonymous function expression.~&~%~
             Usage: (~S (VARS*) BODY)"
            (car expr)))
-        (parse-abstraction expr (first args) (second args) m package))
+        (parse-abstraction expr (first args) (rest args) m package))
 
        ;; Let
        ((coalton:let &rest args)
@@ -99,19 +99,43 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
          var
          (alexandria:ensure-symbol (gensym (concatenate 'string (symbol-name var) "-")) package))))
 
-(defun parse-abstraction (unparsed vars subexpr m package)
+(defun parse-abstraction (unparsed vars subexprs m package)
   (declare (type t unparsed)
            (type symbol-list vars)
-           (type t subexpr)
+           (type list subexprs)
            (type immutable-map m)
            (type package package))
-  (let* ((binding-local-names (make-local-vars vars package))
-         (new-m (immutable-map-set-multiple m binding-local-names)))
-    (node-abstraction
-     unparsed
-     (mapcar #'cdr binding-local-names)
-     (parse-form subexpr new-m package)
-     (invert-alist binding-local-names))))
+
+  (let ((nullary-fn nil)
+        (var nil))
+    (when (null vars)
+      (setf var (alexandria:ensure-symbol (gensym) package))
+      (setf vars (list var))
+      (setf nullary-fn t))
+
+    (let* ((binding-local-names (make-local-vars vars package))
+           (new-m (immutable-map-set-multiple m binding-local-names))
+           (subform (parse-form
+                     (funcall (macro-function 'coalton:progn) (cons 'coalton:progn subexprs) nil)
+                     new-m
+                     package)))
+
+       (node-abstraction
+        unparsed
+        (mapcar #'cdr binding-local-names)
+        (if nullary-fn
+            (node-seq
+             unparsed
+             (list
+              (node-the
+               `(the Unit ,var)
+               `coalton:Unit
+               (node-variable
+                var
+                (immutable-map-lookup new-m var)))
+              subform))
+            subform)
+        (invert-alist binding-local-names)))))
 
 (defun parse-let (unparsed binding-forms subexpr m package)
   (declare (type t unparsed)
