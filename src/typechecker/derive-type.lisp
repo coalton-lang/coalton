@@ -162,7 +162,7 @@ Returns (VALUES type predicate-list typed-node subs)")
             :else :do
               (push binding impl-bindings))
 
-      (multiple-value-bind (typed-bindings bindings-preds env subs sccs)
+      (multiple-value-bind (typed-bindings bindings-preds env subs)
           ;; NOTE: If we wanted explicit types in let bindings this
           ;;       would be the place to do it.
           (derive-bindings-type
@@ -181,8 +181,7 @@ Returns (VALUES type predicate-list typed-node subs)")
                      (to-scheme (qualify nil type))
                      (node-unparsed value)
                      typed-bindings
-                     typed-subexpr sccs
-                     nil
+                     typed-subexpr
                      (node-let-name-map value))
                     new-subs))))))
 
@@ -230,8 +229,9 @@ Returns (VALUES type predicate-list typed-node subs)")
           (push node nodes)
 
           (when (function-type-p (apply-substitution subs tyvar))
-            (alexandria:simple-style-warning "Expression ~A in progn evaluates to a function. This may be intentional, but is also a common mistake in the event a function is accidentally curried."
-                                             (node-unparsed elem)))))
+            (alexandria:simple-style-warning
+             "Expression ~A in progn evaluates to a function. This may be intentional, but is also a common mistake in the event a function is partially applied."
+             (node-unparsed elem)))))
 
       (multiple-value-bind (tyvar preds_ node subs)
           (derive-expression-type last-element env subs)
@@ -272,10 +272,7 @@ Returns (VALUES type predicate-list typed-node subs)")
            type
            preds
            node
-           subs)))))
-
-  (:method (value env subs)
-    (error "Unable to derive type of expression ~A" value)))
+           subs))))))
 
 ;;;
 ;;; Let Bindings
@@ -290,7 +287,7 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
   (declare (type environment env)
            (type substitution-list subs)
            (type list name-map)
-           (values typed-binding-list ty-predicate-list environment substitution-list list &optional))
+           (values typed-binding-list ty-predicate-list environment substitution-list &optional))
 
   ;; Push all the explicit type declarations on to the environment
   (let* ((expl-binds (mapcar (lambda (b)
@@ -357,12 +354,11 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
          (loop :for (name . node) :in typed-bindings
                :collect (cons name
                               (rewrite-recursive-calls
-                               (apply-substitution subs node)
+                               (remove-static-preds (apply-substitution subs node))
                                bindings)))
          preds
          env
-         subs
-         (reverse (tarjan-scc (bindings-to-dag (append impl-bindings expl-bindings)))))))))
+         subs)))))
 
 (defgeneric rewrite-recursive-calls (node bindings)
   (:method ((node typed-node-literal) bindings)
@@ -421,8 +417,6 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                      name
                      (rewrite-recursive-calls node bindings)))
      (rewrite-recursive-calls (typed-node-let-subexpr node) bindings)
-     (typed-node-let-sorted-bindings node)
-     (typed-node-let-dynamic-extent-bindings node)
      (typed-node-let-name-map node)))
 
   (:method ((node typed-node-lisp) bindings)
@@ -561,12 +555,7 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
             ;; based on defaulting rules.
 
             (setf local-subs (pred-defaults retained-preds local-subs))
-            (setf retained-preds
-                  (reduce-context
-                   env
-                   retained-preds
-                   local-subs
-                   :allow-deferred-predicates allow-deferred-predicates))
+            (setf retained-preds (apply-substitution local-subs retained-preds))
             (setf expr-types (apply-substitution local-subs expr-types))
 
             ;; NOTE: This is where the monomorphism restriction happens
@@ -586,7 +575,9 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                                             bindings output-schemes))))
                   (values
                    (mapcar (lambda (b typed) (cons (car b) typed)) bindings typed-bindings)
-                   (append deferred-preds retained-preds)
+                   (append
+                    deferred-preds
+                    retained-preds)
                    output-env
                    local-subs))
                 (let* (;; Quantify local type variables
@@ -594,7 +585,11 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                                                  ;; Here we need to manually qualify the
                                                  ;; type (without calling QUALIFY) since the
                                                  ;; substitutions have not been fully applied yet.
-                                                 (quantify local-tvars (qualified-ty retained-preds type)))
+                                                 (quantify
+                                                  local-tvars
+                                                  (qualified-ty
+                                                   (remove-if #'static-predicate-p retained-preds) ; retained predicates made static by defaulting should not be retained
+                                                   type)))
                                                expr-types))
 
                        ;; Build new env
@@ -617,7 +612,14 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                                     (new-preds (remove-if
                                                 (lambda (p)
                                                   (member p deferred-preds :test #'equalp))
-                                                node-preds)))
+                                                (append
+                                                 node-preds
+                                                 ;; Defaulted predicates will not be added to the binding.
+                                                 ;; On a compound ast node the substutions generated by defaulting
+                                                 ;; will make interior predicates static. Variable nodes will not have these interior predicates
+                                                 ;; so they must be added manually.
+                                                 (when (typed-node-variable-p node)
+                                                     (remove-if-not #'static-predicate-p retained-preds))))))
 
                                (cons (car b)
                                      (replace-node-type node (to-scheme (qualify new-preds node-type))))))
@@ -706,20 +708,7 @@ which have default instances. Currently only resolves Num :a -> Num Integer"
 
           (values output-scheme
                   (cons (car binding)
-                        (replace-node-type (apply-substitution local-subs typed-node)
-                                           (to-scheme (qualified-ty
-                                                       (remove-duplicates
-                                                        (append
-                                                         (remove-if-not (lambda (p)
-                                                                          (or (member p expr-preds :test #'equalp)
-                                                                              (not (super-entail env expr-preds p))))
-                                                                        (apply-substitution local-subs preds))
-                                                         (remove-if-not (lambda (p)
-                                                                          (not (super-entail env (apply-substitution local-subs preds) p)))
-                                                                        expr-preds))
-                                                        :test #'equalp)
-
-                                                       expr-type))))
+                        (apply-substitution local-subs typed-node))
                   deferred-preds env local-subs
                   output-qual-type))))))
 

@@ -8,4 +8,6 @@
      #+sb-package-locks
      (cl:when (cl:find-package ',name)
        (sb-ext:unlock-package ',name))
-     (cl:defpackage ,name ,@args)))
+     (cl:defpackage ,name ,@args)
+     #+sb-package-locks
+     (sb-ext:lock-package ',name)))

@@ -5,11 +5,12 @@
 ;;;
 
 (defstruct instance-definition
-  (class-name  (required 'class-name)  :type symbol             :read-only t)
-  (predicate   (required 'predicate)   :type ty-predicate       :read-only t)
-  (context     (required 'context)     :type ty-predicate-list  :read-only t)
-  (methods     (required 'methods)     :type typed-binding-list :read-only t)
-  (codegen-sym (required 'codegen-sym) :type symbol             :read-only t))
+  (class-name          (required 'class-name)          :type symbol             :read-only t)
+  (predicate           (required 'predicate)           :type ty-predicate       :read-only t)
+  (context             (required 'context)             :type ty-predicate-list  :read-only t)
+  (methods             (required 'methods)             :type hash-table         :read-only t)
+  (codegen-sym         (required 'codegen-sym)         :type symbol             :read-only t)
+  (method-codegen-syms (required 'method-codegen-syms) :type hash-table         :read-only t))
 
 (defun instance-definition-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -133,7 +134,7 @@
                                                   (compose-substitution-lists (predicate-match node-pred context-pred) subs)))
                                    ;; Return the typed method
                                    (cons (car binding)
-                                         (apply-substitution subs (cdr binding))))))
+                                         (remove-static-preds (apply-substitution subs (cdr binding)))))))
                              method-bindings))
               (let ((missing-methods (set-difference (ty-class-unqualified-methods class-entry)
                                                      method-bindings
@@ -145,5 +146,9 @@
                :class-name class-name
                :predicate instance-predicate
                :context instance-context
-               :methods method-bindings
-               :codegen-sym (ty-class-instance-codegen-sym instance-entry)))))))))
+               :methods (let ((table (make-hash-table)))
+                          (loop :for (name . node) :in method-bindings
+                                :do (setf (gethash name table) node))
+                          table)
+               :codegen-sym (ty-class-instance-codegen-sym instance-entry)
+               :method-codegen-syms (ty-class-instance-method-codegen-syms instance-entry)))))))))

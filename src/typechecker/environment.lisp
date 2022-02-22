@@ -57,8 +57,8 @@
    :slot-names '(name runtime-type type enum-repr newtype docstring)
    :environment env))
 
-(defmethod coalton-impl/typechecker::kind-of ((entry type-entry))
-  (coalton-impl/typechecker::kind-of (type-entry-type entry)))
+(defmethod kind-of ((entry type-entry))
+  (kind-of (type-entry-type entry)))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type type-entry))
@@ -283,53 +283,40 @@
 
 (defun make-default-constructor-environment ()
   "Create a TYPE-ENVIRONMENT containing early constructors"
-  (let* ((tvar (make-variable))
-         (list-scheme (quantify (list tvar) (qualify nil (%make-tapp *list-type* tvar))))
-         (var-scheme (quantify (list tvar) (qualify nil tvar)))
-         (cons-scheme
-           (quantify
-            (list tvar)
-            (qualify
-             nil
-             (make-function-type*
-              (list
-               tvar
-               (%make-tapp *list-type* tvar))
-              (%make-tapp *list-type* tvar))))))
-    (make-constructor-environment
-     :data (fset:map
-            ;; Early Constructors
-            ('coalton:True
-             (make-constructor-entry
-              :name 'coalton:True
-              :arity 0
-              :constructs 'coalton:Boolean
-              :classname 'coalton::Boolean/True
-              :compressed-repr 't))
+  (make-constructor-environment
+   :data (fset:map
+          ;; Early Constructors
+          ('coalton:True
+           (make-constructor-entry
+            :name 'coalton:True
+            :arity 0
+            :constructs 'coalton:Boolean
+            :classname 'coalton::Boolean/True
+            :compressed-repr 't))
 
-            ('coalton:False
-             (make-constructor-entry
-              :name 'coalton:False
-              :arity 0
-              :constructs 'coalton:Boolean
-              :classname 'coalton::Boolean/False
-              :compressed-repr 'nil))
+          ('coalton:False
+           (make-constructor-entry
+            :name 'coalton:False
+            :arity 0
+            :constructs 'coalton:Boolean
+            :classname 'coalton::Boolean/False
+            :compressed-repr 'nil))
 
-            ('coalton:Cons
-             (make-constructor-entry
-              :name 'coalton:Cons
-              :arity 2
-              :constructs 'coalton:List
-              :classname nil
-              :compressed-repr 'nil))
+          ('coalton:Cons
+           (make-constructor-entry
+            :name 'coalton:Cons
+            :arity 2
+            :constructs 'coalton:List
+            :classname nil
+            :compressed-repr 'nil))
 
-            ('coalton:Nil
-             (make-constructor-entry
-              :name 'coalton:Nil
-              :arity 0
-              :constructs 'coalton:List
-              :classname nil
-              :compressed-repr 'nil))))))
+          ('coalton:Nil
+           (make-constructor-entry
+            :name 'coalton:Nil
+            :arity 0
+            :constructs 'coalton:List
+            :classname nil
+            :compressed-repr 'nil)))))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type constructor-environment))
@@ -400,15 +387,16 @@
 
 (defstruct
     (ty-class-instance
-     (:constructor ty-class-instance (constraints predicate codegen-sym)))
-  (constraints (required 'constraints) :type ty-predicate-list :read-only t)
-  (predicate  (required 'predicate)    :type ty-predicate      :read-only t)
-  (codegen-sym (required 'codegen-sym) :type symbol            :read-only t))
+     (:constructor ty-class-instance (constraints predicate codegen-sym method-codegen-syms)))
+  (constraints         (required 'constraints)         :type ty-predicate-list :read-only t)
+  (predicate           (required 'predicate)           :type ty-predicate      :read-only t)
+  (codegen-sym         (required 'codegen-sym)         :type symbol            :read-only t)
+  (method-codegen-syms (required 'method-codegen-syms) :type hash-table        :read-only t))
 
 (defmethod make-load-form ((self ty-class-instance) &optional env)
   (make-load-form-saving-slots
    self
-   :slot-names '(constraints predicate codegen-sym)
+   :slot-names '(constraints predicate codegen-sym method-codegen-syms)
    :environment env))
 
 #+(and sbcl coalton-release)
@@ -430,7 +418,8 @@
   (ty-class-instance
    (apply-substitution subst-list (ty-class-instance-constraints instance))
    (apply-substitution subst-list (ty-class-instance-predicate instance))
-   (ty-class-instance-codegen-sym instance)))
+   (ty-class-instance-codegen-sym instance)
+   (ty-class-instance-method-codegen-syms instance)))
 
 (defstruct (instance-environment (:include immutable-listmap)))
 
@@ -494,6 +483,15 @@
 (declaim (sb-ext:freeze-type name-environment))
 
 ;;;
+;;; Method Inline environment
+;;;
+
+(defstruct (method-inline-environment (:include immutable-map)))
+
+#+(and sbcl coalton-release)
+(declaim (sb-ext:freeze-type method-inline-environment))
+
+;;;
 ;;; Environment
 ;;;
 
@@ -506,19 +504,29 @@
           class-environment
           instance-environment
           function-environment
-          name-environment)))
-  (value-environment       (required 'value-environment)       :type value-environment       :read-only t)
-  (type-environment        (required 'type-environment)        :type type-environment        :read-only t)
-  (constructor-environment (requried 'constructor-environment) :type constructor-environment :read-only t)
-  (class-environment       (required 'class-environment)       :type class-environment       :read-only t)
-  (instance-environment    (required 'instance-environment)    :type instance-environment    :read-only t)
-  (function-environment    (required 'function-environment)    :type function-environment    :read-only t)
-  (name-environment        (required 'name-environment)        :type name-environment       :read-only t))
+          name-environment
+          method-inline-environment)))
+  (value-environment         (required 'value-environment)         :type value-environment         :read-only t)
+  (type-environment          (required 'type-environment)          :type type-environment          :read-only t)
+  (constructor-environment   (requried 'constructor-environment)   :type constructor-environment   :read-only t)
+  (class-environment         (required 'class-environment)         :type class-environment         :read-only t)
+  (instance-environment      (required 'instance-environment)      :type instance-environment      :read-only t)
+  (function-environment      (required 'function-environment)      :type function-environment      :read-only t)
+  (name-environment          (required 'name-environment)          :type name-environment          :read-only t)
+  (method-inline-environment (required 'method-inline-environment) :type method-inline-environment :read-only t))
 
 (defmethod make-load-form ((self environment) &optional env)
   (make-load-form-saving-slots
    self
-   :slot-names '(value-environment type-environment constructor-environment class-environment instance-environment function-environment name-environment)
+   :slot-names
+   '(value-environment
+     type-environment
+     constructor-environment
+     class-environment
+     instance-environment
+     function-environment
+     name-environment
+     method-inline-environment)
    :environment env))
 
 #+(and sbcl coalton-release)
@@ -532,7 +540,8 @@
    (make-class-environment)
    (make-instance-environment)
    (make-function-environment)
-   (make-name-environment)))
+   (make-name-environment)
+   (make-method-inline-environment)))
 
 (defun update-environment (env
                            &key
@@ -542,7 +551,8 @@
                              (class-environment (environment-class-environment env))
                              (instance-environment (environment-instance-environment env))
                              (function-environment (environment-function-environment env))
-                             (name-environment (environment-name-environment env)))
+                             (name-environment (environment-name-environment env))
+                             (method-inline-environment (environment-method-inline-environment env)))
   (declare (type environment env)
            (type value-environment value-environment)
            (type constructor-environment constructor-environment)
@@ -550,6 +560,7 @@
            (type instance-environment instance-environment)
            (type function-environment function-environment)
            (type name-environment name-environment)
+           (type method-inline-environment method-inline-environment)
            (values environment))
   (make-environment
    value-environment
@@ -558,7 +569,8 @@
    class-environment
    instance-environment
    function-environment
-   name-environment))
+   name-environment
+   method-inline-environment))
 
 (defun environment-diff (env old-env)
   (declare (type environment env)
@@ -585,7 +597,10 @@
                       #'make-function-environment)
    (immutable-map-diff (environment-name-environment env)
                       (environment-name-environment old-env)
-                      #'make-name-environment)))
+                      #'make-name-environment)
+   (immutable-map-diff (environment-method-inline-environment env)
+                       (environment-method-inline-environment old-env)
+                       #'make-method-inline-environment)))
 
 ;;;
 ;;; Methods
@@ -882,6 +897,30 @@
                           class
                           value
                           #'make-instance-environment)))
+
+(defun set-method-inline (env method instance codegen-sym)
+  (declare (type environment env)
+           (type symbol method instance codegen-sym)
+           (values environment &optional))
+  (update-environment
+   env
+   :method-inline-environment
+   (immutable-map-set
+    (environment-method-inline-environment env)
+    (cons method instance)
+    codegen-sym
+    #'make-method-inline-environment)))
+
+(defun lookup-method-inline (env method instance &key no-error)
+  (declare (type environment env)
+           (type symbol method instance)
+           (values symbol))
+  (or
+   (immutable-map-lookup
+    (environment-method-inline-environment env)
+    (cons method instance))
+   (unless no-error
+     (error "Unable to find inline method for method ~A on instance ~A." method instance))))
 ;;;
 ;;; Directly applicable functions
 ;;;
@@ -903,6 +942,7 @@
         (function-table (immutable-map-data (environment-function-environment env-diff)))
         (instance-table (immutable-listmap-data (environment-instance-environment env-diff)))
         (name-table (immutable-map-data (environment-name-environment env-diff)))
+        (method-inline-table (immutable-map-data (environment-method-inline-environment env-diff)))
         (forms nil))
 
     ;; Tell the world about our types
@@ -927,6 +967,9 @@
     ;; Names
     (fset:do-map (k v name-table)
       (push `(setf ,env (set-name ,env ',k ,v)) forms))
+    ;; Method inlines
+    (fset:do-map (k v method-inline-table)
+      (push `(setf ,env (set-method-inline ,env ',(car k) ',(cdr k) ',v)) forms))
 
     `(eval-when (:load-toplevel)
        ,@(reverse forms))))

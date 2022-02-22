@@ -1,362 +1,229 @@
-(in-package #:coalton-impl/codegen)
+(defpackage #:coalton-impl/codegen/program
+  (:use
+   #:cl
+   #:coalton-impl/util
+   #:coalton-impl/codegen/ast)
+  (:import-from
+   #:coalton-impl/algorithm
+   #:immutable-map-data)
+  (:import-from
+   #:coalton-impl/codegen/lisp-type
+   #:lisp-type)
+  (:import-from
+   #:coalton-impl/codegen/function-entry
+   #:construct-function-entry
+   #:apply-function-entry)
+  (:import-from
+   #:coalton-impl/codegen/compile-expression
+   #:compile-toplevel)
+  (:import-from
+   #:coalton-impl/codegen/codegen-class
+   #:codegen-class-definitions)
+  (:import-from
+   #:coalton-impl/codegen/compile-instance
+   #:compile-instance)
+  (:import-from
+   #:coalton-impl/codegen/codegen-expression
+   #:codegen-expression
+   #:*emit-type-annotations*)
+  (:import-from
+   #:coalton-impl/codegen/codegen-type-definition
+   #:codegen-type-definition)
+  (:import-from
+   #:coalton-impl/codegen/function-entry
+   #:construct-function-entry
+   #:apply-function-entry)
+  (:import-from
+   #:coalton-impl/codegen/typecheck-node
+   #:typecheck-node)
+  (:import-from
+   #:coalton-impl/codegen/transformations
+   #:canonicalize
+   #:pointfree
+   #:direct-application)
+  (:local-nicknames
+   (#:tc #:coalton-impl/typechecker))
+  (:export
+   #:translation-unit
+   #:make-translation-unit
+   #:translation-unit-types
+   #:translation-unit-definitions
+   #:translation-unit-instances
+   #:translation-unit-classes
+   #:compile-translation-unit))
 
-(defun reshuffle-definitions (things)
-  ;; This is an extremely gross function that just makes Lisp compilation order
-  ;; nicer. In particular, it puts:
-  ;;
-  ;;    - First, all inline decls (they need to be caught early so the
-  ;;      compiler can save them)
-  ;;
-  ;;    - Second, structure definitions
-  ;;
-  ;;    - Third, any other declaims (probably FREEZE-TYPEs)
-  ;;
-  ;;    - Fourth, stub definitions
-  ;;
-  ;;    - Fifth, anything that doesn't fit in the aforementioned
-  ;;      categories.
-  ;;
-  ;;    - Sixth and finally, any SETFs of LOAD-TIME-VALUE definitions.
-  ;;
-  ;; This function is pretty brittle. If we change codegen details,
-  ;; this has to change.
-  ;;
-  ;; Of important note, this function DOES NOT change the relative
-  ;; ordering of things within each group.
-  (labels ((sub-struct-p (thing)
-             (and (eq 'cl:defstruct (car thing))
-                  (find ':INCLUDE (cdadr thing) :key #'car :test #'eq)))
-           (setf-ltv-p (thing)
-             (and (or (eq 'cl:setf (car thing))
-                      (eq 'cl:setq (car thing)))
-                  (= 3 (length thing))
-                  (typep (caddr thing) '(cons (member load-time-value))))))
-    (loop :for thing :in things
-          ;; (DEFSTRUCT (FOO ... (:INCLUDE ...
-          :if (and (typep thing '(cons (member cl:defstruct)))
-                   (sub-struct-p thing))
-            :collect thing :into defsubstructs
-          ;; (DEFSTRUCT FOO ...
-          :else :if (and (typep thing '(cons (member cl:defstruct)))
-                         (not (sub-struct-p thing)))
-                  :collect thing :into defstructs
-          ;; (DEFCLASS FOO (...) ...
-          :else :if (and (typep thing '(cons (member cl:defclass)))
-                         (not (null (third thing))))
-                  :collect thing :into defsubstructs
-          ;; (DEFCLASS FOO ...
-          :else :if (and (typep thing '(cons (member cl:defclass)))
-                         (null (third thing)))
-                  :collect thing :into defstructs
-          ;; (DECLAIM (INLINE ...
-          :else :if (typep thing '(cons
-                                   (member cl:declaim)
-                                   (cons
-                                    (cons (member cl:inline cl:notinline)))))
-                  :collect thing :into declaims-inline
-          ;; (DECLAIM ...
-          :else :if (typep thing '(cons (member cl:declaim)))
-                  :collect thing :into declaims-other
-          ;; (DEFINE-* FOO ':|@@unbound@@|)
-          :else :if (or (member ':|@@unbound@@| thing)
-                        (member '':|@@unbound@@| thing :test 'equal))
-                  :collect thing :into deflex-stubs
-          :else :if (setf-ltv-p thing)
-                  :collect thing :into setfs-ltv
-          ;; Other things
-          :else :collect thing :into others
-          :finally (return (append
-                            declaims-inline
-                            (unless (null defstructs)
-                              (list
-                               `(eval-when (:compile-toplevel :load-toplevel :execute)
-                                  ,@defstructs)))
-                            (unless (null defsubstructs)
-                              (list
-                               `(eval-when (:compile-toplevel :load-toplevel :execute)
-                                  ,@defsubstructs)))
-                            declaims-other
-                            deflex-stubs
-                            others
-                            setfs-ltv)))))
+(in-package #:coalton-impl/codegen/program)
 
-(defun codegen-program (types bindings sccs classes instance-definitions env)
-  (declare (type type-definition-list types)
-           (type typed-binding-list bindings)
-           (type list sccs)
-           (type instance-definition-list instance-definitions)
-           (type ty-class-list classes)
-           (type environment env))
-  (let* ((optimizer (make-optimizer env))
-         (bindings (optimize-bindings optimizer bindings)))
-    `(progn
-       ;; Define types
-       ,@(reshuffle-definitions
-          (loop :for type :in types
-                :append (compile-type-definition type env)))
+(defstruct translation-unit
+  (types       (required 'types)       :type tc:type-definition-list     :read-only t)
+  (definitions (required 'definitions) :type tc:typed-binding-list       :read-only t)
+  (instances   (required 'instances)   :type tc:instance-definition-list :read-only t)
+  (classes     (required 'classes)     :type tc:ty-class-list            :read-only t))
 
-       ;; Define typeclasses
-       ,@(reshuffle-definitions (compile-class-definitions classes env))
+(defun compile-translation-unit (translation-unit env)
+  (declare (type translation-unit translation-unit)
+           (type tc:environment env))
 
-       ;; Define ...
-       ,@(reshuffle-definitions (append
-                                 ;; ... functions and variables
-                                 (compile-toplevel-sccs bindings sccs env)
-                                 ;; ... instance structs
-                                 (compile-instance-definitions instance-definitions optimizer)))
+  (let* ((inline-funs nil)
 
-       ;; Emit a dummy value at the end so that REPL return values
-       ;; don't look strange.
-       (values))))
+         (add-inline
+           (lambda (name)
+             (declare (type symbol name))
+             (push name inline-funs)))
 
-(defun update-function-env (toplevel-bindings env)
-  (declare (type typed-binding-list toplevel-bindings)
-           (type environment env)
-           (values environment))
+         (definitions
+           (append
+            (loop :for (name . node) :in (translation-unit-definitions translation-unit)
+                  :for compiled-node := (compile-toplevel name node env)
+                  :do (when coalton-impl::*coalton-dump-ast*
+                        (format t "~A :: ~A~%~A~%~%~A~%~%"
+                                name
+                                (tc:lookup-value-type env name)
+                                node
+                                compiled-node))
+                  :collect (cons name compiled-node))
+            (loop :for instance :in (translation-unit-instances translation-unit)
+                  :append (compile-instance instance add-inline env))))
+
+         (definitions
+           (loop :for (name . node) :in definitions
+                 :for pointfree-node := (pointfree node)
+                 :for canonicalized-node := (canonicalize pointfree-node)
+                 :do (typecheck-node canonicalized-node env)
+                 :collect (cons name canonicalized-node)))
+
+         (sccs (node-binding-sccs definitions)))
+
+    (setf env (update-function-env definitions env))
+
+    (let* ((function-table (make-function-table env))
+
+           (definitions
+             (loop :for (name . node) :in definitions
+                   :for direct-node := (direct-application node function-table)
+                   :do (typecheck-node direct-node env)
+                   :collect (cons name direct-node))))
+
+
+      (values
+       `(progn
+          ,@(loop :for name :in inline-funs
+                  :collect `(declaim (inline ,name)))
+
+          (eval-when (:compile-toplevel :load-toplevel)
+            ,@(loop :for type :in (translation-unit-types translation-unit)
+                    :append (codegen-type-definition type env)))
+
+          ,@(codegen-class-definitions
+             (translation-unit-classes translation-unit)
+             env)
+
+          ,@(loop :for scc :in sccs
+                  :for bindings
+                    := (remove-if-not
+                        (lambda (binding)
+                          (find (car binding) scc))
+                        definitions)
+                  :append (compile-scc bindings env)))
+       env))))
+
+(defun split-binding-definitions (bindings)
+  (let ((functions nil)
+        (variables nil))
+    (loop :for (name . node) :in bindings
+          :do (if (node-abstraction-p node)
+                  (push (cons name (length (node-abstraction-vars node))) functions)
+                  (push name variables)))
+    (values functions variables)))
+
+(defun update-function-env (bindings env)
+  (declare (type binding-list bindings)
+           (type tc:environment env)
+           (values tc:environment))
   (multiple-value-bind (toplevel-functions toplevel-values)
-      (split-binding-definitions toplevel-bindings)
+      (split-binding-definitions bindings)
     (loop :for (name . arity) :in toplevel-functions
           :do
              (setf env
-                   (set-function
+                   (tc:set-function
                     env
                     name
-                    (make-function-env-entry
+                    (tc:make-function-env-entry
                      :name name
                      :arity arity))))
     (loop :for name :in toplevel-values
           :do
-             (setf env (unset-function env name))))
+             (setf env (tc:unset-function env name))))
   env)
 
-(defun compile-function (name vars type return-type node env)
+(defun make-function-table (env)
+  (declare (type tc:environment env)
+           (values hash-table))
+  (let ((table (make-hash-table)))
+    (fset:do-map (name entry (immutable-map-data (tc:environment-function-environment env)))
+      (setf (gethash name table) (tc:function-env-entry-arity entry)))
+    table))
+
+(defun compile-function (name node env)
   (declare (type symbol name)
-           (type coalton-impl/typechecker::scheme-binding-list vars)
-           (type ty-scheme type)
-           (type ty-scheme return-type)
-           (type typed-node node)
-           (type environment env))
-  (let* ((var-names (mapcar #'car vars))
+           (type node-abstraction node)
+           (type tc:environment env))
+  (let ((type-decs
+           (when *emit-type-annotations*
+             (append
+              (loop :for name :in (node-abstraction-vars node)
+                    :for i :from 0
+                    :for arg-ty := (nth i (tc:function-type-arguments (node-type node)))
+                    :collect `(type ,(lisp-type arg-ty env) ,name))
+              (list `(values ,(lisp-type (node-type (node-abstraction-subexpr node)) env)
+                             &optional))))))
 
-         (inferred-type (coalton-impl/typechecker::fresh-inst
-                         (lookup-value-type env name)))
-         (inferred-type-ty (coalton-impl/typechecker::qualified-ty-type inferred-type))
+    `(defun ,name ,(node-abstraction-vars node)
+       (declare (ignorable ,@(node-abstraction-vars node))
+                ,@type-decs)
+       ,(codegen-expression (node-abstraction-subexpr node) env))))
 
-         (inferred-type-preds
-           (coalton-impl/typechecker::qualified-ty-predicates inferred-type))
+(defun compile-scc (bindings env)
+  (declare (type binding-list bindings)
+           (type tc:environment env))
+  (append
+   ;; Predeclare symbol macros
+   (loop :for (name . node) :in bindings
+         :collect `(coalton-impl:define-global-lexical ,name ':|@@unbound@@|))
 
-         (node-type
-           (coalton-impl/typechecker::qualified-ty-type
-            (coalton-impl/typechecker::fresh-inst type)))
+   ;; Compile functions
+   (loop :for (name . node) :in bindings
+         :if (node-abstraction-p node)
+           :append (list
+                    (compile-function name node env)
+                    `(setf
+                      ,name
+                      ,(construct-function-entry
+                       `#',name (length (node-abstraction-vars node))))))
 
-         (subs (coalton-impl/typechecker::match inferred-type-ty node-type))
-         (preds (coalton-impl/typechecker::apply-substitution subs inferred-type-preds))
+  ;; Compile variables
+  (loop :for (name . node) :in bindings
+        :if (not (node-abstraction-p node))
+          :collect `(setf
+                     ,name
+                     ,(codegen-expression node env)))
+  ;; Docstrings
+  (loop :for (name . node) :in bindings
+        :for entry := (tc:lookup-name env name :no-error t)
+        :for type := (tc:lookup-value-type env name :no-error t)
+        :for docstring
+          := (cond
+               ((and entry (tc:name-entry-docstring entry) type)
+                (format nil "~A :: ~A~%~A" name type (tc:name-entry-docstring entry)))
 
-         (dict-context (mapcar (lambda (pred) (cons pred (gensym))) preds))
+               ((and entry (tc:name-entry-docstring entry))
+                (tc:name-entry-docstring entry))
 
-         (dict-types (mapcar (lambda (dict-context)
-                               (cons
-                                (ty-class-codegen-sym (lookup-class env (ty-predicate-class (car dict-context))))
-                                (cdr dict-context)))
-                             dict-context))
-
-         (params (append (mapcar #'cdr dict-context) var-names)))
-    `((coalton-impl::define-global-lexical ,name ':|@@unbound@@|)
-      (defun ,name ,params
-        (declare (ignorable ,@params)
-                 ,@(when *emit-type-annotations*
-                     `(,@(mapcar (lambda (var) `(type ,(lisp-type (cdr var) env) ,(car var))) vars)
-                       ,@(mapcar (lambda (dict) `(type ,(car  dict) ,(cdr dict))) dict-types)
-                       (values ,(lisp-type return-type env) &optional))))
-        ,(compile-expression node dict-context env))
-      (setf ,name (load-time-value ,(construct-function-entry `#',name (+ (length vars) (length preds))))))))
-
-(defun compile-toplevel-sccs (toplevel-bindings sccs env)
-  (loop :for scc :in sccs
-        :for scc-typed-bindings
-          := (mapcar
-              (lambda (b)
-                (find b toplevel-bindings :key #'car))
-              scc)
-        :append
-        (cond
-          ((every #'coalton-impl/typechecker::typed-node-abstraction-p
-                  (mapcar #'cdr scc-typed-bindings))
-           ;; Functions
-           `(,@(loop :for (name . node) :in scc-typed-bindings
-                     :for vars := (typed-node-abstraction-vars node)
-                     :for type := (typed-node-type node)
-                     :for subexpr := (typed-node-abstraction-subexpr node)
-                     :for return-type := (typed-node-type (typed-node-abstraction-subexpr node))
-                     :for docstring := (name-entry-docstring (lookup-name env name))
-
-                     :append (compile-function name vars type return-type subexpr env)
-
-                     :when docstring
-                     :append `((setf (documentation ',name 'variable) ,docstring
-                                      (documentation ',name 'function) ,docstring)))))
-
-          ((= 1 (length scc-typed-bindings))
-           ;; Variables
-           (let* ((b (first scc-typed-bindings))
-                  (name (car b))
-                  (node (cdr b))
-                  (preds (reduce-context env (scheme-predicates (typed-node-type node)) nil))
-                  (docstring (name-entry-docstring (lookup-name env name))))
-             ;; If there are predicates still on the form then we need
-             ;; to generate a function so dictionaries can be captured.
-             (if (not (every #'static-predicate-p preds))
-                 `(,@(compile-function
-                      name
-                      nil
-                      (typed-node-type node)
-                      (typed-node-type node)
-                      node
-                      env))
-                 `((coalton-impl::define-global-lexical ,(car b) ':|@@unbound@@|)
-                   (setf ,(car b) (load-time-value
-                                   ,(compile-expression (cdr b) nil env))
-                         ,@(when docstring
-                             `((documentation ',name 'variable) ,docstring)))))))
-          (t (error "")))))
-
-
-(defun compile-class-definitions (classes env)
-  (declare (type ty-class-list classes)
-           (type environment env)
-           (values list))
-  (loop :for class :in classes
-        :for name := (ty-class-name class)
-        :for codegen-name := (ty-class-codegen-sym class)
-        :for package := (symbol-package name)
-
-        :for fields
-          := (append
-              (loop :for (superclass-pred . field-name) :in (ty-class-superclass-dict class)
-                    :for superclass := (lookup-class env (ty-predicate-class superclass-pred))
-                    :collect (make-struct-or-class-field
-                              :name field-name
-                              :type (ty-class-codegen-sym superclass)))
-
-              (loop :for method :in (ty-class-unqualified-methods class)
-                    :collect (make-struct-or-class-field
-                              :name (car method)
-                              :type (lisp-type (cdr method) env))))
-
-        :append (struct-or-class
-                  :classname codegen-name
-                  :constructor codegen-name
-                  :fields fields
-                  :mode (if (coalton-impl:coalton-release-p)
-                            :struct
-                            :class))
-
-
-
-        :append (mapcan (lambda (m)
-                          (make-method-fun m package class))
-                        (ty-class-unqualified-methods class))))
-
-(defun make-method-fun (m package class)
-  (let* ((arity (coalton-impl/typechecker::function-type-arity
-                 (coalton-impl/typechecker::qualified-ty-type
-                  (coalton-impl/typechecker::fresh-inst (cdr m)))))
-         (params
-           (loop :for i :from 0 :below arity
-                 :collect (alexandria:format-symbol package "_~A" i)))
-         (class-codegen-sym (ty-class-codegen-sym class))
-         (method-accessor (alexandria:format-symbol (symbol-package class-codegen-sym) "~A-~A" class-codegen-sym (car m))))
-    ;; TODO: add type annotations
-    `((declaim (inline ,(car m)))
-      (defun ,(car m) (dict ,@params)
-        ,(if (null params)
-             `(,method-accessor dict)
-             (apply #'apply-function-entry `(,method-accessor dict) params)))
-      ;; Generate the wrapper functions
-      (coalton-impl::define-global-lexical ,(car m)
-          ,(construct-function-entry
-            `#',(car m)
-            (+ arity 1) ; We need a function of arity + 1 to account for DICT
-            )))))
-
-(defun compile-instance-definitions (instance-definitions optimizer)
-  (declare (type instance-definition-list instance-definitions)
-           (type optimizer optimizer)
-           (values list))
-  (loop :with env := (optimizer-env optimizer)
-        :for instance :in instance-definitions
-        :for class-name := (instance-definition-class-name instance)
-        :for predicate := (instance-definition-predicate instance)
-        :for unsorted-methods := (instance-definition-methods instance)
-        :for codegen-sym := (instance-definition-codegen-sym instance)
-
-        :for class := (lookup-class env class-name)
-        :for class-methods := (mapcar #'car (ty-class-unqualified-methods class))
-        :for class-codegen-sym := (ty-class-codegen-sym class)
-
-        :for context := (instance-definition-context instance)
-        :for context-dict := (mapcar (lambda (pred)
-                                       (cons pred (gensym)))
-                                     context)
-        :for context-params := (mapcar #'cdr context-dict)
-        :for dict-types := (mapcar (lambda (dict-context)
-                                     (cons
-                                      (ty-class-codegen-sym (lookup-class env (ty-predicate-class (car dict-context))))
-                                      (cdr dict-context)))
-                                   context-dict)
-
-
-        ;; Order method definitions so that they match the order in
-        ;; which they were declared in the class definition.
-        :for methods
-          := (mapcar
-              (lambda (method-name)
-                (find method-name unsorted-methods :test #'eql :key #'car))
-              class-methods)
-
-        :for codegen-methods
-          := (mapcar
-              (lambda (m)
-                (let ((method-body (optimize-node optimizer (cdr m))))
-                  (if (coalton-impl/typechecker::typed-node-abstraction-p method-body)
-                      (let ((vars (mapcar #'car (typed-node-abstraction-vars method-body)))
-                            (subexpr (typed-node-abstraction-subexpr method-body)))
-                        (construct-function-entry
-                         `(lambda ,vars
-                            (declare
-                             (ignorable ,@vars)
-                             ,@(when *emit-type-annotations*
-                                 (mapcar (lambda (v) `(type ,(lisp-type (cdr v) env) ,(car v) ))
-                                         (typed-node-abstraction-vars method-body))))
-                            ,(compile-expression subexpr context-dict env))
-                         (length vars)))
-                      (compile-expression (cdr m) context-dict env))))
-              methods)
-
-        :for pred-subs := (coalton-impl/typechecker::predicate-match (ty-class-predicate class) predicate)
-        :for codegen-superclasses
-          := (loop :for (superclass-pred . field-name) :in (ty-class-superclass-dict class)
-                   :for superclass := (lookup-class env (ty-predicate-class superclass-pred))
-                   :collect
-                   (lookup-dict (coalton-impl/typechecker::apply-substitution pred-subs superclass-pred)
-                                context-dict env))
-
-        :collect
-        `(global-vars:define-global-var ,codegen-sym ':|@@unbound@@|)
-        :collect
-        (if (null context)
-            `(cl:setf
-              ,codegen-sym
-              (load-time-value
-               (,class-codegen-sym
-                ,@codegen-superclasses
-                ,@codegen-methods)))
-            `(cl:defun ,codegen-sym ,context-params
-               (declare
-                (ignorable ,@context-params)
-                ,@(when *emit-type-annotations*
-                    (mapcar (lambda (dict-ctx) `(type ,(car dict-ctx) ,(cdr dict-ctx)))
-                            dict-types)))
-               (,class-codegen-sym
-                ,@codegen-superclasses
-                ,@codegen-methods)))))
+                (type
+                 (format nil "~A :: ~A" name type)))
+        :append (when docstring
+                  (list `(setf (documentation ',name 'variable)
+                               ,docstring)))
+        :append (when (and entry (node-abstraction-p node))
+                  (list `(setf (documentation ',name 'function)
+                               ,docstring))))))

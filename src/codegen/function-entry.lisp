@@ -1,4 +1,16 @@
-(in-package #:coalton-impl/codegen)
+(defpackage #:coalton-impl/codegen/function-entry
+  (:use
+   #:cl
+   #:coalton-impl/util)
+  (:export
+   #:*function-constructor-functions*
+   #:*function-application-functions*
+   #:construct-function-entry
+   #:apply-function-entry
+   #:f1 #:f2 #:f3 #:f4 #:f5 #:f6 #:f7 #:f8 #:f9
+   #:a1 #:a2 #:a3 #:a4 #:a5 #:a6 #:a7 #:a8 #:a9))
+
+(in-package #:coalton-impl/codegen/function-entry)
 
 ;; We need to evaluate this early so the macro below can inline calls
 (eval-when (:load-toplevel)
@@ -6,7 +18,7 @@
     (arity    (required 'arity)    :type fixnum   :read-only t)
     (function (required 'function) :type function :read-only t)
     (curried  (required 'curried)  :type function :read-only t))
-  #+(and sbcl coalton-release)
+  #+sbcl
   (declaim (sb-ext:freeze-type function-entry)))
 
 (defvar *function-constructor-functions* (make-hash-table))
@@ -76,18 +88,15 @@
   "Construct a FUNCTION-ENTRY object with ARITY
 
 NOTE: There is no FUNCTION-ENTRY for arity 1 and the function will be returned"
-  (cond
-      ((= 1 arity) function)
-      (t
        (let ((function-constructor (gethash arity *function-constructor-functions*)))
          (unless function-constructor
            (error "Unable to construct function of arity ~A" arity))
-         `(,function-constructor ,function)))))
+         `(,function-constructor ,function)))
 
 (defun apply-function-entry (function &rest args)
-  "Apply a function (OR FUNCTION-ENTRY FUNCTION) constructed by coalton"
-  (let* ((arity (length args))
-         (function-application (gethash arity *function-application-functions*)))
-    (unless function-application
-      (error "Unable to apply function of arity ~A" arity))
-    `(,function-application ,function ,@args)))
+"Apply a function (OR FUNCTION-ENTRY FUNCTION) constructed by coalton"
+(let* ((arity (length args))
+       (function-application (gethash arity *function-application-functions*)))
+  (unless function-application
+    (error "Unable to apply function of arity ~A" arity))
+  `(,function-application ,function ,@args)))

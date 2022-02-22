@@ -23,25 +23,7 @@
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type binding-list))
 
-(defun symbol-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'symbolp x)))
-
-(deftype symbol-list ()
-  '(satisfies symbol-list-p))
-
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type symbol-list))
-
-
 ;;;;;;;;;;;;;;;;;;;;;;;;; The types of nodes ;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(deftype literal-value ()
-  "Allowed literal values as Lisp objects."
-  '(or integer single-float double-float string character))
-
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type literal-value))
 
 (defstruct
     (node-literal

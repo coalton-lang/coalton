@@ -127,12 +127,12 @@ in FORMS that begin with that operator."
 
 (defmacro coalton:coalton-codegen (&body toplevel-forms)
   "Returns the lisp code generated from coalton code. Intended for debugging."
-  `(let ((*emit-type-annotations* nil))
+  `(let ((coalton-impl/codegen:*emit-type-annotations* nil))
      (process-coalton-toplevel ',toplevel-forms *package* *global-environment*)))
 
 (defmacro coalton:coalton-codegen-types (&body toplevel-forms)
   "Returns the lisp code generated from coalton code with lisp type annotations. Intended for debugging."
-  `(let ((*emit-type-annotations* t))
+  `(let ((coalton-impl/codegen:*emit-type-annotations* t))
      (process-coalton-toplevel ',toplevel-forms *package* *global-environment*)))
 
 (defmacro coalton:coalton-codegen-ast (&body toplevel-forms)
@@ -152,7 +152,8 @@ in FORMS that begin with that operator."
         (let* ((env (coalton-impl/typechecker::apply-substitution substs *global-environment*))
                (preds (coalton-impl/typechecker::apply-substitution substs preds))
                (preds (coalton-impl/typechecker::reduce-context env preds substs))
-               (typed-node (coalton-impl/typechecker::apply-substitution substs typed-node))
+               (typed-node (coalton-impl/typechecker::remove-static-preds
+                            (coalton-impl/typechecker::apply-substitution substs typed-node)))
                (type (coalton-impl/typechecker::apply-substitution substs type))
                (qual-type (coalton-impl/typechecker::qualify preds type))
                (scheme (coalton-impl/typechecker::quantify (coalton-impl/typechecker::type-variables qual-type) qual-type)))
@@ -160,7 +161,13 @@ in FORMS that begin with that operator."
           (cond
             ((null preds)
              (setf *global-environment* env)
-             (values (coalton-impl/codegen::compile-expression typed-node nil *global-environment*)))
+             (values
+              (coalton-impl/codegen::codegen-expression
+               (coalton-impl/codegen::compile-expression
+                typed-node
+                nil
+                *global-environment*)
+               *global-environment*)))
             (t
              ;; Force an error on non-hnf preds
              (dolist (pred preds)
@@ -214,34 +221,35 @@ in FORMS that begin with that operator."
         (setf env (predeclare-toplevel-instance-definitions instance-defines package env))
 
         (let ((declared-types (process-toplevel-declarations declares env)))
-          (multiple-value-bind (env toplevel-bindings dag)
+          (multiple-value-bind (env toplevel-bindings)
               (process-toplevel-value-definitions defines declared-types package env)
 
             ;; Methods must be typechecker after the types of values
             ;; are determined since instances may reference them.
-            (let ((instance-definitions
-                    (process-toplevel-instance-definitions
-                     instance-defines
-                     package
-                     env)))
+            (let* ((instance-definitions
+                     (process-toplevel-instance-definitions
+                      instance-defines
+                      package
+                      env))
 
-              (let* ((env-diff (environment-diff env *global-environment*))
-                     (env (update-function-env toplevel-bindings env))
-                     (update (generate-environment-update
-                              env-diff
-                              '*global-environment*))
-                     (program (codegen-program
-                               defined-types
-                               toplevel-bindings
-                               dag
-                               classes
-                               instance-definitions
-                               env)))
-                (values
-                 ;; Only generate an update block if there are environment updates
-                 (if (not (equalp update `(eval-when (:load-toplevel))))
-                     `(progn
-                        ,update
-                        ,program)
-                     program)
-                 env)))))))))
+                   (translation-unit
+                     (coalton-impl/codegen::make-translation-unit
+                      :types defined-types
+                      :definitions toplevel-bindings
+                      :instances instance-definitions
+                      :classes classes)))
+
+              (multiple-value-bind (program env)
+                  (coalton-impl/codegen/program::compile-translation-unit
+                   translation-unit
+                   env)
+
+                (let* ((env-diff (environment-diff env *global-environment*))
+                       (update (generate-environment-update
+                                env-diff
+                                '*global-environment*)))
+                  (values
+                   `(progn
+                      ,update
+                      ,program)
+                   env))))))))))
