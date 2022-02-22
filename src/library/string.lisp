@@ -8,7 +8,9 @@
    #:reverse
    #:length
    #:substring
-   #:parse-int))
+   #:parse-int
+   #:ref
+   #:ref-unchecked))
 
 (cl:in-package #:coalton-library/string)
 
@@ -50,6 +52,18 @@
         (cl:if x
                (Some x)
                None))))
+  
+  (declare ref-unchecked (String -> UFix -> Char))
+  (define (ref-unchecked str idx)
+    (lisp Char (str idx)
+      (cl:char str idx)))
+
+  (declare ref (String -> UFix -> (Optional Char)))
+  (define (ref str idx)
+    (if (< idx (fromInt (length str)))
+        (Some (ref-unchecked str idx))
+        None))
+
   ;;
   ;; String Instances
   ;;

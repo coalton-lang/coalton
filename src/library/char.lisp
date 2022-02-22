@@ -2,11 +2,33 @@
   (:use
    #:coalton
    #:coalton-library/classes
-   #:coalton-library/builtin))
+   #:coalton-library/builtin)
+  (:export
+   #:char-code
+   #:char-code-unchecked
+   #:code-char))
 
 (cl:in-package #:coalton-library/char)
 
 (coalton-toplevel
+  (declare char-code (Char -> UFix))
+  (define (char-code char)
+    (lisp UFix (char)
+      (cl:char-code char)))
+
+  (declare code-char-unchecked (UFix -> Char))
+  (define (code-char-unchecked code)
+    (lisp Char (code)
+      (cl:code-char code)))
+
+  (declare code-char (UFix -> (Optional Char)))
+  (define (code-char code)
+    (lisp (Optional Char) (code)
+      ;; not sufficient to compare against `char-code-limit', because the char-code space may be sparse.
+      (alexandria:if-let (char (cl:code-char code))
+        (Some char)
+        None)))
+
   (define-instance (Eq Char)
     (define (== x y)
       (lisp Boolean (x y) (to-boolean (cl:char= x y)))))

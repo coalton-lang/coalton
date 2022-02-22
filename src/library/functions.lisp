@@ -15,6 +15,7 @@
    #:conjoin
    #:disjoin
    #:complement
+   #:uncurry
    #:traverse
    #:sequence
    #:msum
@@ -93,6 +94,11 @@
     "Compute the complement of a unary Boolean function."
     (not (f x)))
 
+  (declare uncurry ((:left -> :right -> :result) -> (Tuple :left :right) -> :result))
+  (define (uncurry func tpl)
+    (match tpl
+      ((Tuple left right)
+       (func left right))))
 
   ;;
   ;; Monadic operators

@@ -1,10 +1,10 @@
 (cl:in-package #:coalton-native-tests)
 
-(cl:defmacro define-test (name args cl:&body (body))
+(cl:defmacro define-test (name args cl:&body body)
   `(fiasco:deftest (,name :in fiasco-suites::coalton-tests)
        ,args
      (coalton
-      ,body)))
+      (progn ,@body))))
 
 (cl:define-condition coalton-is-assertion (fiasco::test-assertion)
   ((form :initarg :form
@@ -14,7 +14,9 @@
 (cl:define-condition coalton-failed-assertion (fiasco::failure)
   ((form :initarg :form
          :accessor coalton-is-assertion-form))
-  (:documentation "Signaled when an IS assertion fails"))
+  (:documentation "Signaled when an IS assertion fails")
+  (:report (cl:lambda (failure stream)
+             (cl:format stream "IS assertion ~a failed" (coalton-is-assertion-form failure)))))
 
 (coalton-toplevel
   (declare %register-assertion (Lisp-Object -> Unit))

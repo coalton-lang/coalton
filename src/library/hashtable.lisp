@@ -52,6 +52,10 @@
          (coalton/hashtable-shim:make-custom-hash-table cap
                                                         #'coalton-hashtable-hash
                                                         #'coalton-hashtable-test)))))
+  (declare default-hash-table-capacity UFix)
+  (define default-hash-table-capacity
+    ;; same as SBCL's
+    17)
 
   (declare with-capacity ((Hash :key) => Integer -> (Hashtable :key :value)))
   (define (with-capacity capacity)
@@ -63,7 +67,7 @@
   (define (new _)
     "Create a new empty hashtable"
     ;; default size is the same as SBCL's
-    (with-capacity 17))
+    (with-capacity (into default-hash-table-capacity)))
 
   (declare get ((Hash :key) => (Hashtable :key :value) -> :key -> (Optional :value)))
   (define (get table key)
