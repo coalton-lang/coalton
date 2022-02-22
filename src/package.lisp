@@ -459,7 +459,8 @@
    #:make-list
    #:to-boolean
    #:do
-   #:progn)
+   #:progn
+   #:assert)
   (:import-from
    #:coalton-impl
    #:print-value-db

@@ -45,7 +45,9 @@
    #:ceiling/
    #:round/
    #:single/
-   #:double/))
+   #:double/
+   #:1+
+   #:1-))
 
 (cl:in-package #:coalton-library/arith)
 
@@ -643,6 +645,15 @@ The fields are defined as follows:
                       unsigned-lognot))
 (cl:defun unsigned-lognot (int n-bits)
   (cl:- (cl:ash 1 n-bits) int 1))
+
+(cl:declaim (cl:inline handle-unsigned-overflow)
+            (cl:ftype (cl:function (cl:unsigned-byte cl:unsigned-byte)
+                                   (cl:values cl:unsigned-byte cl:&optional))
+                      handle-unsigned-overflow))
+(cl:defun handle-unsigned-overflow (int n-bits)
+  (cl:logand (cl:1- (cl:ash 1 n-bits))
+             int))
+
 (cl:defmacro define-unsigned-bit-instance (type width)
   (cl:flet ((define-binop (coalton-name lisp-name)
               `(define (,coalton-name left right)
@@ -795,6 +806,16 @@ Note: This does *not* divide double-float arguments."
   (define (double/ a b)
     "Compute the quotient of single-precision floats as a single-precision float."
     (/ a b)))
+
+;;; `Num' extensions
+(coalton-toplevel
+  (declare 1+ ((Num :num) => :num -> :num))
+  (define (1+ num)
+    (+ num (fromInt 1)))
+
+  (declare 1- ((Num :num) => :num -> :num))
+  (define (1- num)
+    (- num (fromInt 1))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/ARITH")

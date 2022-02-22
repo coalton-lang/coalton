@@ -196,3 +196,23 @@ Coalton boolean."
                          `(coalton:seq
                            ,@forms)))))
     (process forms)))
+
+(cl:defmacro assert (datum cl:&optional (format-string "") cl:&rest format-data)
+  "Signal an error unless DATUM is `True'.
+If the assertion fails, the signaled error will apply the FORMAT-DATA to the FORMAT-STRING via `cl:format' to
+produce an error message."
+  ;; OPTIMIZE: lazily evaluate the FORMAT-DATA only when the assertion fails
+  (cl:check-type format-string cl:string)
+  (cl:let* ((datum-temp (cl:gensym "ASSERT-DATUM-"))
+            (format-data-temps (alexandria:make-gensym-list (cl:length format-data)
+                                                            "ASSERT-FORMAT-DATUM-")))
+    `(let ((,datum-temp ,datum)
+           ,@(cl:mapcar #'cl:list format-data-temps format-data))
+       (progn
+         (lisp :any (,datum-temp ,@format-data-temps)
+           (cl:assert ,datum-temp ()
+                      ,(cl:format cl:nil
+                                  "Assertion ~a failed: ~a"
+                                  datum format-string)
+                      ,@format-data-temps))
+         Unit))))

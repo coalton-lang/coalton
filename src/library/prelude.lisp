@@ -16,7 +16,9 @@
    #:odd?
    #:floor
    #:ceiling
-   #:round)
+   #:round
+   #:1+
+   #:1-)
   (:export
    #:Dividable #:/
    #:Fraction
@@ -28,7 +30,9 @@
    #:odd?
    #:floor
    #:ceiling
-   #:round)
+   #:round
+   #:1+
+   #:1-)
 
   (:import-from
    #:coalton-library/string
@@ -128,7 +132,11 @@
    #:coalton-library/hashtable
    #:Hashtable)
   (:export
-   #:Hashtable))
+   #:Hashtable)
+
+  (:import-from
+   #:coalton-library/iterator
+   #:Iterator))
 
 (uiop:define-package #:coalton-user
   (:use

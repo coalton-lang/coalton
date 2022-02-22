@@ -99,6 +99,7 @@
                              (:file "slice")
                              (:file "hashtable")
                              (:file "monad/state")
+                             (:file "iterator")
                              (:file "prelude")))
                (:file "toplevel-environment")))
 
@@ -169,4 +170,5 @@
                (:file "environment-persist-tests")
                (:file "slice-tests")
                (:file "quantize-tests")
-               (:file "hashtable-tests")))
+               (:file "hashtable-tests")
+               (:file "iterator-tests")))
