@@ -120,7 +120,7 @@
            (coalton/hashtable-shim:custom-hash-table-foreach
             table
             (cl:lambda (key value)
-              (coalton-impl/codegen::A2 f key value)))
+              (coalton-impl/codegen:A2 f key value)))
            Unit)))))
 
   (declare entries ((Hashtable :key :value) -> (List (Tuple :key :value))))

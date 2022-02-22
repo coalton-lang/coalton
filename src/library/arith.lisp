@@ -504,8 +504,9 @@ The fields are defined as follows:
       (%mkFraction (* (numerator p) (numerator q))
                    (* (denominator p) (denominator q))))
     (define (fromInt z)
-      (%Fraction z 1)))
+      (%Fraction z 1))))
 
+(coalton-toplevel
   (define-instance (Dividable Fraction Fraction)
     (define (/ a b)
       (* a (reciprocal b))))

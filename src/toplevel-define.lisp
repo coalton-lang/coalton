@@ -139,7 +139,7 @@ Returns new environment, binding list of declared nodes, and a DAG of dependenci
     ;; Assert that there are no orphan declares
     (loop :for name :in expl-names :do
       (assert (member name expl-bindings :key #'car)
-              () "Orphan type declaration for variable ~A" name))
+          () "Orphan type declaration for variable ~A" name))
 
     (coalton-impl/typechecker::with-type-context ("COALTON-TOPLEVEL")
       (multiple-value-bind (typed-bindings preds new-env subs)
@@ -177,17 +177,14 @@ Returns new environment, binding list of declared nodes, and a DAG of dependenci
 
         (loop :for (name . node) :in typed-bindings :do
           (progn
-            (when *coalton-dump-ast*
-              (format t "~A :: ~A~%~A~%~%" name (lookup-value-type env name) node))
-            (setf env (set-name env name
-                                (make-name-entry
-                                 :name name
-                                 :type :value
-                                 :docstring (second (find name docstrings :key #'car))
-                                 :location (or *compile-file-pathname* *load-truename*))))))
+            (setf env
+                  (set-name env name
+                            (make-name-entry
+                             :name name
+                             :type :value
+                             :docstring (second (find name docstrings :key #'car))
+                             :location (or *compile-file-pathname* *load-truename*))))))
 
         (values
          env
-         typed-bindings
-         (reverse
-          (tarjan-scc (bindings-to-dag (append impl-bindings expl-bindings)))))))))
+         typed-bindings)))))

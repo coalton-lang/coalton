@@ -9,18 +9,23 @@
   (:use))
 
 (uiop:define-package #:coalton-impl/util
+    (:documentation "Utility functions and methods used throughout COALTON.")
   (:use #:cl)
   (:export
-   #:required
-   #:unreachable
-   #:coalton-bug
-   #:sexp-fmt
-   #:include-if
-   #:define-symbol-property
-   #:debug-log))
+   #:required                           ; FUNCTION
+   #:unreachable                        ; MACRO
+   #:coalton-bug                        ; FUNCTION
+   #:sexp-fmt                           ; FUNCTION
+   #:include-if                         ; MACRO
+   #:define-symbol-property             ; MACRO
+   #:debug-log                          ; MACRO
+   #:debug-tap                          ; MACRO
+   #:symbol-list                        ; TYPE
+   #:literal-value                      ; TYPE
+   ))
 
 (uiop:define-package #:coalton-impl/algorithm
-  (:documentation "Implementation of generic algorithms used by COALTON. This is a package private to the COALTON system and is not intended for public use.")
+    (:documentation "Implementation of generic algorithms used by COALTON. This is a package private to the COALTON system and is not intended for public use.")
   (:use #:cl #:coalton-impl/util)
   (:export
    #:tarjan-scc                         ; FUNCTION
@@ -52,7 +57,6 @@
    #:node                               ; STRUCT
    #:node-list                          ; TYPE
    #:node-unparsed                      ; ACCESSOR
-   #:symbol-list                        ; TYPE
    #:binding-list                       ; TYPE
    #:node-literal                       ; STRUCT
    #:node-literal-value                 ; ACCESSOR
@@ -122,62 +126,113 @@
         #:coalton-impl/ast)
   (:export
    #:ty                                 ; STRUCT
-   #:ty-scheme                          ; STRUCT
-   #:qualified-ty                       ; STRUCT
+   #:ty-list                            ; TYPE
+   #:ty-binding-list                    ; TYPE
+   #:tyvar                              ; STRUCT
+   #:tyvar-id                           ; ACCESSOR
+   #:tyvar-kind                         ; ACCESSOR
+   #:tyvar-list                         ; TYPE
+   #:tvar                               ; STRUCT
+   #:%make-tvar                         ; CONSTRUCTOR
+   #:tvar-tyvar                         ; ACCESSOR
+   #:tycon                              ; STRUCT
+   #:%make-tycon                        ; CONSTRUCTOR
+   #:tycon-name                         ; ACCESSOR
+   #:tycon-kind                         ; ACCESSOR
+   #:tcon                               ; STRUCT
+   #:%make-tcon                         ; CONSTRUCTOR
+   #:tcon-tycon                         ; ACCESSOR
+   #:tapp                               ; STRUCT
+   #:%make-tapp                         ; CONSTRUCTOR
+   #:tapp-from                          ; ACCESSOR
+   #:tapp-to                            ; ACCESSOR
+   #:tgen                               ; STRUCT
+   #:%make-tgen                         ; CONSTRUCTOR
+   #:tgen-id                            ; ACCESSOR
+   #:kind-of                            ; FUNCTION
+   #:apply-type-argument                ; FUNCTION
+   #:apply-type-argument-list           ; FUNCTION
+   #:make-function-type                 ; FUNCTION
+   #:make-function-type*                ; FUNCTION
    #:function-type-p                    ; FUNCTION
    #:function-type-from                 ; FUNCTION
    #:function-type-to                   ; FUNCTION
+   #:function-type-arigy                ; FUNCTION
+   #:function-type-arguments            ; FUNCTION
+   #:function-return-type               ; FUNCTION
+   ) 
+  (:export
+   #:kstar                              ; VARIABLE
+   #:ty-scheme                          ; STRUCT
+   #:qualified-ty                       ; STRUCT
    #:scheme-predicates                  ; FUNCTION
+   #:apply-substitution                 ; FUNCTION
+   #:predicate-match                    ; FUNCTION
+   #:make-function-type                 ; FUNCTION
+   #:make-kind-of-arity                 ; FUNCTION
+   #:kfun                               ; FUNCTION
+   #:fresh-inst                         ; FUNCTION
+   #:qualified-ty-predicates            ; ACCESSOR
+   #:qualified-ty-type                  ; ACCESSOR
+   #:match                              ; FUNCTION
+   #:ty-scheme-type                     ; ACCESSOR
+   #:qualify                            ; FUNCTION
+   #:to-scheme                          ; FUNCTION
+   #:replace-node-type                  ; FUNCTION
+   #:pattern-var-id                     ; ACCESSOR
+   #:pattern-wildcard                   ; STRUCT
+   #:pattern-literal                    ; STRUCT
+   #:pattern-constructor                ; STRUCT
+   #:pattern-var                        ; STRUCT
+   #:pattern-literal-value              ; ACCESSOR
+   #:pattern-constructor-name           ; ACCESSOR
+   #:pattern-constructor-patterns       ; ACCESSOR
    )
   (:export
-   #:typed-node                               ; STRUCT
-   #:typed-binding-list                       ; TYPE
-   #:typed-node-type                          ; ACCESSOR
-   #:typed-node-unparsed                      ; ACCESSOR
-   #:typed-node-list                          ; TYPE
-   #:typed-node-literal                       ; STRUCT
-   #:typed-node-literal-value                 ; ACCESSOR
-   #:typed-node-variable                      ; STRUCT
-   #:typed-node-variable-name                 ; ACCESSOR
-   #:typed-node-application                   ; STRUCT
-   #:typed-node-application-rator             ; ACCESSOR
-   #:typed-node-application-rands             ; ACCESSOR
-   #:typed-node-direct-application            ; STRUCT
-   #:typed-node-direct-application-rator-type ; ACCESSOR
-   #:typed-node-direct-application-rator      ; ACCESSOR
-   #:typed-node-direct-application-rands      ; ACCESSOR
-   #:typed-node-abstraction                   ; STRUCT
-   #:typed-node-abstraction-vars              ; ACCESSOR
-   #:typed-node-abstraction-subexpr           ; ACCESSOR
-   #:typed-node-abstraction-name-map          ; ACCESSOR
-   #:typed-node-bound-abstraction             ; STRUCT
-   #:typed-node-bound-abstraction-vars        ; ACCESSOR
-   #:typed-node-bound-abstraction-subexpr     ; ACCESSSOR
-   #:typed-node-let                           ; STRUCT
-   #:typed-node-let-bindings                  ; ACCESSOR
-   #:typed-node-let-subexpr                   ; ACCESSOR
-   #:typed-node-let-sorted-bindings           ; ACCESSOR
-   #:typed-node-let-dynamic-extent-bindings   ; ACCESSOR
-   #:typed-node-let-name-map                  ; ACCESSOR
-   #:typed-node-lisp                          ; STRUCT
-   #:typed-node-lisp-type                     ; ACCESSOR
-   #:typed-node-lisp-form                     ; ACCESSOR
-   #:typed-node-lisp-variables                ; ACCESSOR
-   #:typed-node-match                         ; STRUCT
-   #:typed-node-match-expr                    ; ACCESSOR
-   #:typed-node-match-branches                ; ACCESSOR
-   #:typed-match-branch                       ; STRUCT
-   #:typed-match-branch-pattern               ; ACCESSOR
-   #:typed-match-branch-subexpr               ; ACCESSOR
-   #:typed-match-branch-bindings              ; ACCESSOR
-   #:typed-match-branch-unparsed              ; ACCESSOR
-   #:typed-match-branch-name-map              ; ACCESSOR
-   #:typed-node-seq                           ; STRUCT
-   #:typed-node-seq-subnodes                  ; ACCESSOR
+   #:typed-node                           ; STRUCT
+   #:typed-binding-list                   ; TYPE
+   #:typed-node-type                      ; ACCESSOR
+   #:typed-node-unparsed                  ; ACCESSOR
+   #:typed-node-list                      ; TYPE
+   #:typed-node-literal                   ; STRUCT
+   #:typed-node-literal-value             ; ACCESSOR
+   #:typed-node-variable                  ; STRUCT
+   #:typed-node-variable-name             ; ACCESSOR
+   #:typed-node-application               ; STRUCT
+   #:typed-node-application-rator         ; ACCESSOR
+   #:typed-node-application-rands         ; ACCESSOR
+   #:typed-node-abstraction               ; STRUCT
+   #:typed-node-abstraction-p             ; FUNCTION
+   #:typed-node-abstraction-vars          ; ACCESSOR
+   #:typed-node-abstraction-subexpr       ; ACCESSOR
+   #:typed-node-abstraction-name-map      ; ACCESSOR
+   #:typed-node-bound-abstraction         ; STRUCT
+   #:typed-node-bound-abstraction-vars    ; ACCESSOR
+   #:typed-node-bound-abstraction-subexpr ; ACCESSSOR
+   #:typed-node-let                       ; STRUCT
+   #:typed-node-let-bindings              ; ACCESSOR
+   #:typed-node-let-subexpr               ; ACCESSOR
+   #:typed-node-let-name-map              ; ACCESSOR
+   #:typed-node-lisp                      ; STRUCT
+   #:typed-node-lisp-type                 ; ACCESSOR
+   #:typed-node-lisp-form                 ; ACCESSOR
+   #:typed-node-lisp-variables            ; ACCESSOR
+   #:typed-node-match                     ; STRUCT
+   #:typed-node-match-expr                ; ACCESSOR
+   #:typed-node-match-branches            ; ACCESSOR
+   #:typed-match-branch                   ; STRUCT
+   #:typed-match-branch-pattern           ; ACCESSOR
+   #:typed-match-branch-subexpr           ; ACCESSOR
+   #:typed-match-branch-bindings          ; ACCESSOR
+   #:typed-match-branch-unparsed          ; ACCESSOR
+   #:typed-match-branch-name-map          ; ACCESSOR
+   #:typed-node-seq                       ; STRUCT
+   #:typed-node-seq-subnodes              ; ACCESSOR
    )
   (:export
    #:environment                        ; STRUCT
    #:make-default-environment           ; FUNCTION
+   #:environment-function-environment   ; ACCESSOR
    #:environment-diff                   ; FUNCTION
    #:environment-shadow                 ; FUNCTION
    #:generate-environment-update        ; FUNCTION
@@ -195,8 +250,9 @@
    #:lookup-class-instances             ; FUNCTION
    #:lookup-class-instance              ; FUNCTION
    #:lookup-name                        ; FUNCTION
-   #:type-entry
-   #:type-entry-name                    ; STRUCT
+   #:lookup-method-inline               ; FUNCTION
+   #:type-entry                         ; STRUCT
+   #:type-entry-name                    ; ACCESSOR
    #:type-entry-runtime-type            ; ACCESSOR
    #:type-entry-type                    ; ACCESSOR
    #:type-entry-enum-repr               ; ACCESSOR
@@ -295,14 +351,15 @@
    #:add-instance                       ; FUNCTION
    )
   (:export
-   #:instance-definition                ; STRUCT
-   #:make-instance-definition           ; CONSTRUCTOR
-   #:instance-definition-class-name     ; ACCESSOR
-   #:instance-definition-predicate      ; ACCESSOR
-   #:instance-definition-context        ; ACCESSOR
-   #:instance-definition-methods        ; ACCESSOR
-   #:instance-definition-codegen-sym    ; ACCESSOR
-   #:instance-definition-list           ; TYPE
+   #:instance-definition                     ; STRUCT
+   #:make-instance-definition                ; CONSTRUCTOR
+   #:instance-definition-class-name          ; ACCESSOR
+   #:instance-definition-predicate           ; ACCESSOR
+   #:instance-definition-context             ; ACCESSOR
+   #:instance-definition-methods             ; ACCESSOR
+   #:instance-definition-codegen-sym         ; ACCESSOR
+   #:instance-definition-method-codegen-syms ; ACCESSOR
+   #:instance-definition-list                ; TYPE
    )
   ;; Pretty printers
   (:export
@@ -314,49 +371,24 @@
    #:*coalton-print-unicode*
    #:*coalton-pretty-print-tyvars*))
 
-(uiop:define-package #:coalton-impl/codegen
-  (:documentation "Implementation of code generation for COALTON. This is a package private to the COALTON system and is not intended for public use.")
+
+(uiop:define-package #:coalton-impl
+    (:documentation "Implementation and runtime for COALTON. This is a package private to the COALTON system and is not intended for public use.")
   (:use #:cl
         #:coalton-impl/util
         #:coalton-impl/algorithm
         #:coalton-impl/ast
         #:coalton-impl/typechecker)
-  (:export
-   #:function-entry
-   #:construct-function-entry
-   #:apply-function-entry
-   #:codegen-program
-   #:compile-expression
-   #:update-function-env
-   #:a1 #:a2 #:a3 #:a4 #:a5 #:a6 #:a7 #:a8 #:a9 #:a10
-   #:f1 #:f2 #:f3 #:f4 #:f5 #:f6 #:f7 #:f8 #:f9 #:f10
-   )
-  (:export
-   #:toplevel-value-definition          ; STRUCT
-   #:make-toplevel-value-definition     ; FUNCTION
-   #:toplevel-value-definition-name     ; ACCESSOR
-   #:toplevel-value-definition-type     ; ACCESSOR
-   #:toplevel-value-definition-node     ; ACCESSOR
-   #:toplevel-value-definition-list     ; TYPE
-   )
-  (:export
-   #:*emit-type-annotations*
-   ))
-
-(uiop:define-package #:coalton-impl
-  (:documentation "Implementation and runtime for COALTON. This is a package private to the COALTON system and is not intended for public use.")
-  (:use #:cl
-        #:coalton-impl/util
-        #:coalton-impl/algorithm
-        #:coalton-impl/ast
-        #:coalton-impl/typechecker
-        #:coalton-impl/codegen)
   (:import-from #:global-vars
                 #:define-global-var
                 #:define-global-var*)
   ;; settings
   (:export
    #:coalton-release-p)
+  ;; codegen
+  (:export
+   #:define-global-lexical              ; MACRO
+   )
 
   (:export
    #:coalton-parse-error                ; CONDITION
@@ -433,7 +465,6 @@
    #:Double-Float
    #:String
    #:Arrow
-   #:Void
    #:Lisp-Object
    #:List #:Cons #:Nil)
   (:export
@@ -473,6 +504,7 @@
    #:print-value-db
    #:print-type-db
    #:print-class-db
-   #:print-instance-db
+   #:print-instance-db)
+  (:export
    #:type-of
    #:kind-of))

@@ -6,7 +6,7 @@
 
 (defstruct (substitution (:constructor %make-substitution (from to)))
   (from (required 'from) :type tyvar :read-only t)
-  (to   (required 'to)   :type (or ty ty-scheme)    :read-only t))
+  (to   (required 'to)   :type ty    :read-only t))
 
 (defun substitution-list-p (thing)
   (and (alexandria:proper-list-p thing)

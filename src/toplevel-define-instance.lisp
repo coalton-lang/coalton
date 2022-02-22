@@ -25,15 +25,39 @@
                   definstance-forms)))
     (dolist (parsed-instance parsed-instances)
       (let* ((class-name (coalton-impl/typechecker::ty-predicate-class
-                         (second parsed-instance)))
+                          (second parsed-instance)))
              (instance-codegen-sym (alexandria:format-symbol
                                     package "INSTANCE/~A"
                                     (with-output-to-string (s)
                                       (with-pprint-variable-context ()
                                         (pprint-predicate s (second parsed-instance))))))
-            (instance (coalton-impl/typechecker::ty-class-instance
-                       (first parsed-instance)
-                       (second parsed-instance)
-                       instance-codegen-sym)))
+             (method-names (mapcar
+                            #'car
+                            (coalton-impl/typechecker::ty-class-unqualified-methods
+                             (coalton-impl/typechecker::lookup-class env class-name))))
+
+             (method-codegen-syms
+               (let ((table (make-hash-table)))
+                 (loop :for method-name :in method-names
+                       :do (setf (gethash method-name table)
+                                 (alexandria:format-symbol
+                                  package
+                                  "~A-~A"
+                                  instance-codegen-sym
+                                  method-name)))
+                 table))
+             
+             (instance (coalton-impl/typechecker::ty-class-instance
+                        (first parsed-instance)
+                        (second parsed-instance)
+                        instance-codegen-sym
+                        method-codegen-syms)))
+
+
+        (loop :for key :being :the :hash-keys :of method-codegen-syms
+              :for value :being :the :hash-values :of method-codegen-syms
+              :for codegen-sym := (coalton-impl/typechecker::ty-class-instance-codegen-sym instance)
+              :do (setf env (coalton-impl/typechecker::set-method-inline env key codegen-sym value)))
+
         (setf env (coalton-impl/typechecker::add-instance env class-name instance))))
     env))

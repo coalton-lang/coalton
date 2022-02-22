@@ -29,6 +29,7 @@
 (defstruct (tyvar (:constructor %make-tyvar))
   (id   (required 'id)   :type fixnum :read-only t)
   (kind (required 'kind) :type kind   :read-only t))
+
 (defmethod make-load-form ((self tyvar) &optional env) (make-load-form-saving-slots
    self
    :slot-names '(id kind)

@@ -102,8 +102,9 @@
                                                     :location (or *compile-file-pathname* *load-truename*))))
 
                                (if (function-type-p (qualified-ty-type (fresh-inst (cdr method))))
-                                   (let ((arity (function-type-arity
-                                                 (qualified-ty-type (fresh-inst (cdr method))))))
+                                   (let ((arity (+ (function-type-arity
+                                                    (qualified-ty-type (fresh-inst (cdr method))))
+                                                   (length (qualified-ty-predicates (fresh-inst (cdr method)))))))
                                      (setf env (set-function env (car method)
                                                              (make-function-env-entry
                                                               :name (car method)

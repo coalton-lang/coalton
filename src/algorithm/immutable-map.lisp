@@ -18,14 +18,12 @@
 (defun immutable-map-lookup (m key)
   "Lookup KEY in M"
   (declare (type immutable-map m)
-           (type symbol key)
            (values t))
   (fset:lookup (immutable-map-data m) key))
 
 (defun immutable-map-set (m key value &optional (constructor #'make-immutable-map))
   "Set KEY to VALUE in M"
-  (declare (type immutable-map m)
-           (type symbol key))
+  (declare (type immutable-map m))
   (funcall constructor :data (fset:with (immutable-map-data m) key value)))
 
 (defun immutable-map-set-multiple (m items &optional (constructor #'make-immutable-map))
@@ -39,8 +37,7 @@
     (funcall constructor :data map)))
 
 (defun immutable-map-keys (m)
-  (declare (type immutable-map m)
-           (values coalton-impl/ast::symbol-list &optional))
+  (declare (type immutable-map m))
   "Return a unique list containg the keys in M and its parents"
   (declare (type immutable-map m))
   (fset:convert 'list (fset:domain (immutable-map-data m))))
@@ -54,6 +51,5 @@
 
 (defun immutable-map-remove (m key &optional (constructor #'make-immutable-map))
   (declare (type immutable-map m)
-           (type symbol key)
            (values immutable-map &optional))
   (funcall constructor :data (fset:less (immutable-map-data m) key)))

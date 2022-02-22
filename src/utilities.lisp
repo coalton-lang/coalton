@@ -8,6 +8,12 @@
            ,(format nil "~{~A: ~~A~~%~}" vars)
            ,@vars))
 
+(defmacro debug-tap (var)
+  (let ((var-name (gensym)))
+    `(let ((,var-name ,var))
+       (format t ,(format nil "~A: ~~A~~%" var) ,var-name)
+       ,var-name)))
+
 (define-condition coalton-bug (error)
   ((reason :initarg :reason
            :reader coalton-bug-reason)
@@ -54,9 +60,7 @@ and it will print a flat S-expression with all symbols qualified."
   `(when ,condition
      (list ,@ (remove nil body))))
 
-(defmacro define-symbol-property (property-accessor &key
-                                                      (type nil type-provided)
-                                                      documentation)
+(defmacro define-symbol-property (property-accessor)
   "Define an accessor for a symbol property.
 
 Implementation notes: These notes aren't relevant to users of this macro, but are Good To Know.
@@ -66,18 +70,28 @@ Implementation notes: These notes aren't relevant to users of this macro, but ar
     * The plist key is just the name of the accessor.
     "
   (check-type property-accessor symbol)
-  (check-type documentation (or null string))
   (let ((symbol (gensym "SYMBOL"))
         (new-value (gensym "NEW-VALUE")))
     `(progn
        (declaim (inline ,property-accessor (setf ,property-accessor)))
-       ,@(include-if type-provided
-           `(declaim (ftype (function (symbol) (or null ,type)) ,property-accessor))
-           `(declaim (ftype (function (,type symbol) ,type) (setf ,property-accessor))))
        (defun ,property-accessor (,symbol)
-         ,@(include-if documentation documentation)
          (get ,symbol ',property-accessor))
        (defun (setf ,property-accessor) (,new-value ,symbol)
-         (setf (get ,symbol ',property-accessor) ,new-value))
-       ;; Return the name defined.
-       ',property-accessor)))
+         (setf (get ,symbol ',property-accessor) ,new-value)))))
+
+(defun symbol-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'symbolp x)))
+
+(deftype symbol-list ()
+  '(satisfies symbol-list-p))
+
+#+(and sbcl coalton-release)
+(declaim (sb-ext:freeze-type symbol-list))
+
+(deftype literal-value ()
+  "Allowed literal values as Lisp objects."
+  '(or integer single-float double-float string character))
+
+#+(and sbcl coalton-release)
+(declaim (sb-ext:freeze-type literal-value))

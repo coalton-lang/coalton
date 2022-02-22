@@ -61,25 +61,6 @@
 (declaim (sb-ext:freeze-type typed-node-application))
 
 (defstruct
-    (typed-node-direct-application
-     (:include typed-node)
-     (:constructor typed-node-direct-application (type unparsed rator-type rator rands)))
-  "Application where the function is know statically and all arguments are provided.
-
-  This allows emitting a direct call instead of funcalling a function-entry."
-  ;; The type of the function
-  (rator-type (required 'rator-type) :type ty-scheme       :read-only t)
-
-  ;; The name of the function
-  (rator      (required 'rator)      :type symbol          :read-only t)
-
-  ;; The arguments
-  (rands      (required 'rands)      :type typed-node-list :read-only t))
-
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type typed-node-direct-application))
-
-(defstruct
     (typed-node-abstraction
      (:include typed-node)
      (:constructor typed-node-abstraction (type unparsed vars subexpr name-map)))
@@ -99,22 +80,16 @@
 (defstruct
     (typed-node-let
      (:include typed-node)
-     (:constructor typed-node-let (type unparsed bindings subexpr sorted-bindings dynamic-extent-bindings name-map)))
+     (:constructor typed-node-let (type unparsed bindings subexpr  name-map)))
   ;; Bindings declared in the let
-  (bindings                (required 'bindings)                :type typed-binding-list :read-only t)
+  (bindings (required 'bindings) :type typed-binding-list :read-only t)
 
   ;; The body of the let expression
-  (subexpr                 (required 'subexpr)                 :type typed-node         :read-only t)
-
-  ;; The bindings' SCCS
-  (sorted-bindings         (required 'sorted-bindings)         :type list               :read-only t)
-
-  ;; Bindings which can be declared dynamic-extent durring codegen
-  (dynamic-extent-bindings (required 'dynamic-extent-bindings) :type symbol-list        :read-only t)
+  (subexpr  (required 'subexpr)  :type typed-node         :read-only t)
 
   ;; An alist mapping the current binding names
   ;; to their origional names
-  (name-map                (required 'name-map)                :type list               :read-only t))
+  (name-map (required 'name-map) :type list               :read-only t))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type typed-node-let))
@@ -212,16 +187,6 @@
    (apply-substitution subs (typed-node-application-rator node))
    (apply-substitution subs (typed-node-application-rands node))))
 
-(defmethod apply-substitution (subs (node typed-node-direct-application))
-  (declare (type substitution-list subs)
-           (values typed-node-direct-application))
-  (typed-node-direct-application
-   (apply-substitution subs (typed-node-type node))
-   (typed-node-unparsed node)
-   (apply-substitution subs (typed-node-direct-application-rator-type node))
-   (typed-node-direct-application-rator node)
-   (apply-substitution subs (typed-node-direct-application-rands node))))
-
 (defmethod apply-substitution (subs (node typed-node-abstraction))
   (declare (type substitution-list subs)
            (values typed-node-abstraction))
@@ -244,8 +209,6 @@
     (lambda (binding) (cons (car binding) (apply-substitution subs (cdr binding))))
     (typed-node-let-bindings node))
    (apply-substitution subs (typed-node-let-subexpr node))
-   (typed-node-let-sorted-bindings node)
-   (typed-node-let-dynamic-extent-bindings node)
    (typed-node-let-name-map node)))
 
 (defmethod apply-substitution (subs (node typed-node-lisp))
@@ -322,22 +285,12 @@
      (typed-node-application-rator node)
      (typed-node-application-rands node)))
 
-  (:method ((node typed-node-direct-application) new-type)
-    (typed-node-direct-application
-     new-type
-     (typed-node-unparsed node)
-     (typed-node-direct-application-rator-type node)
-     (typed-node-direct-application-rator node)
-     (typed-node-direct-application-rands node)))
-
   (:method ((node typed-node-let) new-type)
     (typed-node-let
      new-type
      (typed-node-unparsed node)
      (typed-node-let-bindings node)
      (typed-node-let-subexpr node)
-     (typed-node-let-sorted-bindings node)
-     (typed-node-let-dynamic-extent-bindings node)
      (typed-node-let-name-map node)))
 
   (:method ((node typed-node-match) new-type)
@@ -375,13 +328,6 @@
      (append (collect-type-predicates (typed-node-type node))
              (collect-type-predicates (typed-node-application-rator node))
              (mapcan #'collect-type-predicates (typed-node-application-rands node)))
-     :test #'equalp))
-
-  (:method ((node typed-node-direct-application))
-    (remove-duplicates
-     (append (collect-type-predicates (typed-node-type node))
-             (collect-type-predicates (typed-node-direct-application-rator-type node))
-             (mapcan #'collect-type-predicates (typed-node-direct-application-rands node)))
      :test #'equalp))
 
   (:method ((node typed-node-abstraction))
@@ -436,9 +382,6 @@
      (collect-variable-namespace-g (typed-node-application-rator node))
      (mapcan #'collect-variable-namespace-g (typed-node-application-rands node))))
 
-  (:method ((node typed-node-direct-application))
-    (mapcan #'collect-variable-namespace-g (typed-node-direct-application-rands node)))
-
   (:method ((node typed-node-abstraction))
     (collect-variable-namespace-g (typed-node-abstraction-subexpr node)))
 
@@ -461,3 +404,63 @@
 
   (:method ((node typed-node-seq))
     (mapcan #'collect-variable-namespace-g (typed-node-seq-subnodes node))))
+
+(defgeneric remove-static-preds (node)
+  (:method ((node typed-node-literal))
+    node)
+
+  (:method ((node typed-node-variable))
+    node)
+
+  (:method ((node typed-node-application))
+    (typed-node-application
+     (typed-node-type node)
+     (typed-node-unparsed node)
+     (remove-static-preds (typed-node-application-rator node))
+     (mapcar #'remove-static-preds (typed-node-application-rands node))))
+
+  (:method ((node typed-node-abstraction))
+    (let* ((qual-ty (ty-scheme-type (typed-node-type node)))
+           (preds (remove-if #'static-predicate-p (qualified-ty-predicates qual-ty)))
+           (scheme (quantify nil (qualify preds (qualified-ty-type qual-ty)))))
+      (typed-node-abstraction
+       scheme
+       (typed-node-unparsed node)
+       (typed-node-abstraction-vars node)
+       (remove-static-preds (typed-node-abstraction-subexpr node))
+       (typed-node-abstraction-name-map node))))
+
+  (:method ((node typed-node-let))
+    (typed-node-let
+     (typed-node-type node)
+     (typed-node-unparsed node)
+     (loop :for (name . node) :in (typed-node-let-bindings node)
+           :collect (cons name (remove-static-preds node)))
+     (remove-static-preds (typed-node-let-subexpr node))
+     (typed-node-let-name-map node)))
+
+  (:method ((node typed-node-lisp))
+    node)
+
+  (:method ((node typed-match-branch))
+    (typed-match-branch
+     (typed-match-branch-unparsed node)
+     (typed-match-branch-pattern node)
+     (remove-static-preds (typed-match-branch-subexpr node))
+     (typed-match-branch-bindings node)
+     (typed-match-branch-name-map node)))
+
+
+  (:method ((node typed-node-match))
+    (typed-node-match
+     (typed-node-type node)
+     (typed-node-unparsed node)
+     (remove-static-preds (typed-node-match-expr node))
+     (mapcar #'remove-static-preds (typed-node-match-branches node))))
+
+  (:method ((node typed-node-seq))
+    (typed-node-seq
+     (typed-node-type node)
+     (typed-node-unparsed node)
+     (mapcar #'remove-static-preds (typed-node-seq-subnodes node)))))
+

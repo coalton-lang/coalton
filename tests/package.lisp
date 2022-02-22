@@ -7,8 +7,6 @@
                           #:fn
                           #:->
                           #:=>)
-  (:import-from #:coalton-impl/codegen
-                #:direct-application)
   (:import-from #:coalton-impl/ast
                 #:pattern-var
                 #:pattern-wildcard
