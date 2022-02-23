@@ -138,10 +138,25 @@
    #:coalton-library/iterator
    #:Iterator))
 
-(uiop:define-package #:coalton-user
+(cl:defpackage #:coalton-user
   (:use
    #:coalton
-   #:coalton-prelude))
+   #:coalton-prelude)
+  (:local-nicknames
+   (#:bits #:coalton-library/bits)
+   (#:arith #:coalton-library/arith)
+   (#:char #:coalton-library/char)
+   (#:string #:coalton-library/string)
+   (#:tuple #:coalton-library/tuple)
+   (#:optional #:coalton-library/optional)
+   (#:list #:coalton-library/list)
+   (#:result #:coalton-library/result)
+   (#:cell #:coalton-library/cell)
+   (#:vector #:coalton-library/vector)
+   (#:slice #:coalton-library/slice)
+   (#:hashtable #:coalton-library/hashtable)
+   (#:st #:coalton-library/monad/state)
+   (#:iter #:coalton-library/iterator)))
 
 (cl:in-package #:coalton-prelude)
 

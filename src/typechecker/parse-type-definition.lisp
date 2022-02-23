@@ -148,7 +148,8 @@ Returns TYPE-DEFINITIONS"
                      (newtype (and (= 1 (length parsed-ctors))
                                    (= 1 (constructor-entry-arity (first parsed-ctors)))))
 
-                     (repr (gethash tycon-name repr-table)))
+                     (repr (car (gethash tycon-name repr-table)))
+                     (repr-arg (cdr (gethash tycon-name repr-table))))
                 (cond
                   ;; If the type is repr lisp then do *not* attempt to
                   ;; generate an optimized implementation
@@ -157,6 +158,20 @@ Returns TYPE-DEFINITIONS"
                     :name tycon-name
                     :type tcon
                     :runtime-type tycon-name
+                    :enum-repr nil
+                    :newtype nil
+                    :constructors parsed-ctors
+                    :constructor-types ctor-types
+                    :docstring docstring))
+
+                  ((eql repr :native)
+                   (progn
+                     (unless repr-arg
+                       (error "Type ~A cannot have native repr of NIL" tycon-name)))
+                   (make-type-definition
+                    :name tycon-name
+                    :type tcon
+                    :runtime-type repr-arg
                     :enum-repr nil
                     :newtype nil
                     :constructors parsed-ctors
@@ -181,7 +196,7 @@ Returns TYPE-DEFINITIONS"
                       :docstring docstring)))
 
                   ((and (eql repr :transparent) (not newtype))
-                   (error "Type ~A cannot be repr transparent" tycon-name))
+                   (error "Type ~A cannot be repr transparent. To be repr transparent a type must have a single constructor with a single field." tycon-name))
 
                   ((and enum-type
                         (coalton-impl:coalton-release-p))

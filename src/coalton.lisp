@@ -9,7 +9,7 @@
 ;;; be generated at macroexpansion time of the ambient Common Lisp
 ;;; compiler. See the COALTON macro.
 
-(define-global-var **repr-specifiers** '(:lisp :transparent)
+(define-global-var **repr-specifiers** '(:lisp :transparent :native)
   "(repr ...) specifiers that the compiler is known to understand.")
 
 (defmacro install-operator-metadata (&rest directives)
@@ -62,7 +62,7 @@ in FORMS that begin with that operator."
              (type-error () (error-parsing form "Non-list form at toplevel"))
              (simple-error () (error-parsing form "A toplevel form must begin ~
                                                    with a symbol."))))
-         (establish-repr (specifier type)
+         (establish-repr (specifier type arg)
            (unless (member specifier **repr-specifiers**)
              (error
               "The compiler does not understand (repr ~S)."
@@ -71,7 +71,7 @@ in FORMS that begin with that operator."
            (when (listp type)
              (setf type (car type)))
 
-           (setf (gethash type (getf plist 'repr-table)) specifier))
+           (setf (gethash type (getf plist 'repr-table)) (cons specifier arg)))
          (walk (forms)
            (loop
              :until (null forms)
@@ -96,9 +96,13 @@ in FORMS that begin with that operator."
                  ;; Specific behaviors for particular operators
                  (case op
                    (coalton:repr
-                    (unless (= (length form) 2)
+                    (unless (or (= (length form) 2) (= 3 (length form)))
                       (error-parsing form "Wrong number of arguments"))
-                    (establish-repr (cadr form) (cadr next-form)))))))
+
+                    (when (and (not (eq (cadr form) :native)) (caddr form))
+                      (error-parsing form "Wrong number of arguments"))
+
+                    (establish-repr (cadr form) (cadr next-form) (caddr form)))))))
       ;; Populate PLIST...
       (walk forms)
       ;; ...and return it, with its values reversed to reflect the order that
@@ -107,7 +111,7 @@ in FORMS that begin with that operator."
                 (if (listp element)
                     (nreverse element)
                     element))
-                    plist))))
+              plist))))
 
 (defparameter *global-environment* (make-default-environment))
 
