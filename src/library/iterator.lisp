@@ -75,16 +75,16 @@
 
   (declare next! ((Iterator :elt) -> (Optional :elt)))
   (define (next! iter)
-    "Advance ITER, returning its next yielded value, or `None' if the iterator is exhausted.
-Behavior is undefined if two threads concurrently call `next!' on the same iterator without a lock. Note that
-most of the operators defined on iterators call `next!' internally, or create new iterators which will call
-`next!' on their inputs."
+    "Advance ITER, returning its next yielded value, or `None` if the iterator is exhausted.
+Behavior is undefined if two threads concurrently call `next!` on the same iterator without a lock. Note that
+most of the operators defined on iterators call `next!` internally, or create new iterators which will call
+`next!` on their inputs."
     (match iter
       ((%Iterator func) (func Unit))))
 
   (declare fold! ((:state -> :elt -> :state) -> :state -> (Iterator :elt) -> :state))
   (define (fold! func init iter)
-    "Tail recursive in-order fold. Common Lisp calls this operation `reduce'.
+    "Tail recursive in-order fold. Common Lisp calls this operation `reduce`.
 
 If ITER is empty, returns INIT. Otherwise, calls (FUNC STATE ITEM) for each ITEM of ITER to produce a new
 STATE, using INIT as the first STATE."
@@ -106,7 +106,7 @@ STATE, using INIT as the first STATE."
 ;; once coalton gets functional dependencies, associated types or type families, much of this will be
 ;; abstracted into a class `(IntoIterator :collection :item)', with instances like `(IntoIterator (List :elt)
 ;; :elt)' and `(IntoIterator String Char)'. It's currently not possible for Coalton to do useful type
-;; inference on these classes, so we're stuck with monomorphic constructors like `list-iter'.
+;; inference on these classes, so we're stuck with monomorphic constructors like `list-iter`.
 (coalton-toplevel
   (declare empty (Iterator :any))
   (define empty
@@ -129,16 +129,16 @@ Behavior is undefined if the iterator is advanced after a destructive modificati
 
   (declare string-chars (String -> (Iterator Char)))
   (define (string-chars str)
-    "Yield successive `Char's from STR.
+    "Yield successive `Char`s from STR.
 Behavior is undefined if the iterator is advanced after a destructive modification of STR."
     (map (string:ref-unchecked str)
          (up-to (fromInt (string:length str)))))
 
   (declare recursive-iter ((:elt -> :elt) -> (:elt -> Boolean) -> :elt -> (Iterator :elt)))
   (define (recursive-iter succ done? start)
-    "An iterator which yields first START, then (SUCC START), then (SUCC (SUCC START)), and so on, stopping as soon as such a value is `done?'.
+    "An iterator which yields first START, then (SUCC START), then (SUCC (SUCC START)), and so on, stopping as soon as such a value is `done?`.
 
-Beware off-by-one errors: the first value which is `done?' is not yielded. If `(done?  start)' is true, the
+Beware off-by-one errors: the first value which is `done?` is not yielded. If `(done?  start)' is true, the
 iterator is empty."
     (let ((next (cell:new start)))
       (%Iterator
@@ -174,7 +174,7 @@ iterator is empty."
   (define (range-decreasing step start end)
     "A range which begins below START and counts down through and including END by STEP.
 
-Equivalent to reversing `range-increasing'"
+Equivalent to reversing `range-increasing`"
     (progn 
       (assert (<= end start)
           "END ~a should be less than or equal to START ~a in RANGE-INCREASING"
@@ -229,7 +229,7 @@ Equivalent to reversing `range-increasing'"
   (define (zip! left right)
     "Return an iterator of tuples of elements from LEFT and RIGHT which terminates as soon as either LEFT or RIGHT does.
 
-Often useful combined with `uncurry' to allow mapping a multi-argument function across multiple iterators."
+Often useful combined with `uncurry` to allow mapping a multi-argument function across multiple iterators."
     (%Iterator
       (fn (_)
         (match (Tuple (next! left) (next! right))
@@ -254,7 +254,7 @@ Often useful combined with `uncurry' to allow mapping a multi-argument function 
 
   (declare take! (UFix -> (Iterator :elt) -> (Iterator :elt)))
   (define (take! count iter)
-    "An `Iterator' which yields at most COUNT elements from ITER."
+    "An `Iterator` which yields at most COUNT elements from ITER."
     (map fst
          (zip! iter
                (up-to count))))
@@ -307,7 +307,7 @@ Often useful combined with `uncurry' to allow mapping a multi-argument function 
   (declare count! ((Iterator :elt) -> Integer))
   (define (count! iter)
     "Return the number of elements in ITER.
-This operation could be called `length!', but `count!' emphasizes the fact that it consumes ITER, and
+This operation could be called `length!`, but `count!` emphasizes the fact that it consumes ITER, and
 afterwards, ITER will be exhausted."
     (sum! (map (const 1) iter)))
 
@@ -321,7 +321,7 @@ Discard values returned by THUNK."
 
   (declare find! ((:elt -> Boolean) -> (Iterator :elt) -> (Optional :elt)))
   (define (find! this? iter)
-    "Return the first element of ITER for which THIS? returns `True', or `None' if no element matches."
+    "Return the first element of ITER for which THIS? returns `True`, or `None` if no element matches."
     (match (next! iter)
       ((Some elt) (if (this? elt)
                       (Some elt)
@@ -330,16 +330,16 @@ Discard values returned by THUNK."
 
   (declare index-of! ((:elt -> Boolean) -> (Iterator :elt) -> (Optional UFix)))
   (define (index-of! this? iter)
-    "Return the zero-based index of the first element of ITER for which THIS? is `True', or `None' if no element matches."
+    "Return the zero-based index of the first element of ITER for which THIS? is `True`, or `None` if no element matches."
     (map fst
          (find! (compose this? snd)
                 (enumerate! iter))))
 
   (declare optimize! ((:elt -> :elt -> Boolean) -> (Iterator :elt) -> (Optional :elt)))
   (define (optimize! better? iter)
-    "For an order BETTER? which returns `True' if its first argument is better than its second argument, return the best element of ITER.
+    "For an order BETTER? which returns `True` if its first argument is better than its second argument, return the best element of ITER.
 
-Return `None' if ITER is empty."
+Return `None` if ITER is empty."
     (match (next! iter)
       ((None) None)
       ((Some first)
@@ -351,40 +351,40 @@ Return `None' if ITER is empty."
 
   (declare max! ((Ord :num) => (Iterator :num) -> (Optional :num)))
   (define (max! iter)
-    "Return the most-positive element of ITER, or `None' if ITER is empty."
+    "Return the most-positive element of ITER, or `None` if ITER is empty."
     (optimize! > iter))
 
   (declare min! ((Ord :num) => (Iterator :num) -> (Optional :num)))
   (define (min! iter)
-    "Return the most-negative element of ITER, or `None' if ITER is empty."
+    "Return the most-negative element of ITER, or `None` if ITER is empty."
     (optimize! < iter))
 
   (declare every! ((:elt -> Boolean) -> (Iterator :elt) -> Boolean))
   (define (every! good? iter)
-    "Return `True' if every element of ITER is GOOD?, or `False' as soon as any element is not GOOD?.
+    "Return `True` if every element of ITER is GOOD?, or `False` as soon as any element is not GOOD?.
 
-Returns `True' if ITER is empty."
+Returns `True` if ITER is empty."
     (match (next! iter)
       ((None) True)
       ((Some item) (and (good? item) (every! good? iter)))))
 
   (declare any! ((:elt -> Boolean) -> (Iterator :elt) -> Boolean))
   (define (any! good? iter)
-    "Return `True' as soon as any element of ITER is GOOD?, or `False' if none of them are.
+    "Return `True` as soon as any element of ITER is GOOD?, or `False` if none of them are.
 
-Returns `False' if ITER is empty."
+Returns `False` if ITER is empty."
     (isSome (find! good? iter)))
 
 ;;; collecting
-  ;; as with `IntoIterator', these will one day be abstracted into a class `(FromIterator :collection :item)'.
+  ;; as with `IntoIterator`, these will one day be abstracted into a class `(FromIterator :collection :item)'.
   (declare collect-list! ((Iterator :elt) -> (List :elt)))
   (define (collect-list! iter)
-    "Construct a `List' containing all the elements from ITER in order."
+    "Construct a `List` containing all the elements from ITER in order."
     (list:reverse (fold! (flip Cons) Nil iter)))
 
   (declare collect-vector-size-hint! (Integer -> (Iterator :elt) -> (Vector :elt)))
   (define (collect-vector-size-hint! size iter)
-    "Construct a `Vector' with initial allocation for SIZE elements, and fill it with all the elements from ITER in order.
+    "Construct a `Vector` with initial allocation for SIZE elements, and fill it with all the elements from ITER in order.
 
 The vector will be resized if ITER contains more than SIZE elements."
     (progn 
@@ -394,7 +394,7 @@ The vector will be resized if ITER contains more than SIZE elements."
 
   (declare collect-vector! ((Iterator :elt) -> (Vector :elt)))
   (define (collect-vector! iter)
-    "Construct a `Vector' containing all the elements from ITER in order."
+    "Construct a `Vector` containing all the elements from ITER in order."
     (collect-vector-size-hint! 0 iter))
 
   (declare collect-hashtable-size-hint!
@@ -403,7 +403,7 @@ The vector will be resized if ITER contains more than SIZE elements."
             (Iterator (Tuple :key :value)) ->
             (HashTable :key :value)))
   (define (collect-hashtable-size-hint! size iter)
-    "Construct a `HashTable' with initial allocation for SIZE key/value pairs, and fill it with all the key/value pairs from ITER.
+    "Construct a `HashTable` with initial allocation for SIZE key/value pairs, and fill it with all the key/value pairs from ITER.
 
 If a key appears in ITER multiple times, the resulting table will contain its last corresponding value.
 
@@ -417,7 +417,7 @@ The table will be resized if ITER contains more than SIZE unique keys."
   (declare collect-hashtable!
            ((Hash :key) => (Iterator (Tuple :key :value)) -> (HashTable :key :value)))
   (define (collect-hashtable! iter)
-    "Construct a `HashTable' containing all the key/value pairs from ITER.
+    "Construct a `HashTable` containing all the key/value pairs from ITER.
 
 If a key appears in ITER multiple times, the resulting table will contain its last corresponding value."
     (collect-hashtable-size-hint! coalton-library/hashtable::default-hash-table-capacity iter)))
