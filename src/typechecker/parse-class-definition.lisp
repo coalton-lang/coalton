@@ -161,15 +161,17 @@
                                                      (alexandria:format-symbol
                                                       (symbol-package class-name)
                                                       (format nil "SUPER-~D" i)))))
-               (class (ty-class
-                       class-name
-                       class-predicate
-                       class-context
-                       class-methods
-                       class-codegen-sym
-                       superclass-dict
-                       docstring
-                       (or *compile-file-pathname* *load-truename*)))
+               (class (apply-substitution
+                       subs
+                       (ty-class
+                        class-name
+                        class-predicate
+                        class-context
+                        class-methods
+                        class-codegen-sym
+                        superclass-dict
+                        docstring
+                        (or *compile-file-pathname* *load-truename*))))
 
                ;; Create a ENV with our new class defined so that reduce-context will work
                (env (set-class env class-name class))

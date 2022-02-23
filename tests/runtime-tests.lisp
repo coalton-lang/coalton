@@ -53,3 +53,23 @@
             (make-list 5 4 3 2 1 0)))
     (is (== (gh-377-b 1 0 5)
             (make-list 5 4 3 2 1 0)))))
+
+
+;; Test that classes can have both methods and constants in either order
+;; See gh #400
+(coalton-toplevel
+  (define-class (Gh-400-a :a)
+    (gh-400-a-constant :a)
+    (gh-400-a-method (:a -> :a)))
+
+  (define-class (Gh-400-b :a)
+    (gh-400-b-method (:a -> :a))
+    (gh-400-b-constant :a))
+
+  (define-instance (Gh-400-a Integer)
+    (define gh-400-a-constant 5)
+    (define (gh-400-a-method x) x))
+
+  (define-instance (Gh-400-b Integer)
+    (define (gh-400-b-method x) x)
+    (define gh-400-b-constant 5)))
