@@ -163,21 +163,9 @@ Returns TYPE-DEFINITIONS"
                     :constructor-types ctor-types
                     :docstring docstring))
 
-                  ((and enum-type
-                        (coalton-impl:coalton-release-p))
-                   (let ((parsed-ctors (mapcar #'rewrite-ctor parsed-ctors)))
-                     (make-type-definition
-                      :name tycon-name
-                      :type tcon
-                      :runtime-type `(member ,@(mapcar #'constructor-entry-compressed-repr parsed-ctors))
-                      :enum-repr t
-                      :newtype nil
-                      :constructors parsed-ctors
-                      :constructor-types ctor-types
-                      :docstring docstring)))
-
-                  ((and newtype
-                        (coalton-impl:coalton-release-p))
+                  ((or (and newtype (eql repr :transparent))
+                    (and newtype
+                            (coalton-impl:coalton-release-p)))
                    (let (;; The runtime type of a newtype is the runtime type of it's only constructor's only argument
                          (runtime-type (function-type-from
                                         (qualified-ty-type
@@ -191,6 +179,23 @@ Returns TYPE-DEFINITIONS"
                       :constructors parsed-ctors
                       :constructor-types ctor-types
                       :docstring docstring)))
+
+                  ((and (eql repr :transparent) (not newtype))
+                   (error "Type ~A cannot be repr transparent" tycon-name))
+
+                  ((and enum-type
+                        (coalton-impl:coalton-release-p))
+                   (let ((parsed-ctors (mapcar #'rewrite-ctor parsed-ctors)))
+                     (make-type-definition
+                      :name tycon-name
+                      :type tcon
+                      :runtime-type `(member ,@(mapcar #'constructor-entry-compressed-repr parsed-ctors))
+                      :enum-repr t
+                      :newtype nil
+                      :constructors parsed-ctors
+                      :constructor-types ctor-types
+                      :docstring docstring)))
+
 
                   (t
                    (make-type-definition

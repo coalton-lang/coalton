@@ -25,13 +25,15 @@
   (inner (cl:error "") :type cl:t))
 
 (cl:defmethod cl:print-object ((self cell-internal) stream)
-  (cl:format stream "~A" (cell-internal-inner self))
+  (cl:format stream "#.(CELL ~A)" (cell-internal-inner self))
   self)
 
 #+sbcl
 (cl:declaim (sb-ext:freeze-type cell-internal))
 
 (coalton-toplevel
+
+  (repr :transparent)
   (define-type (Cell :a)
     "Internally mutable cell"
     (%Cell Lisp-Object))

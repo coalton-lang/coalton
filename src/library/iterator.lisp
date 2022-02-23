@@ -66,6 +66,7 @@
 
 ;;; fundamental operators
 (coalton-toplevel
+  (repr :transparent)
   (define-type (Iterator :elt)
     "A forward-moving pointer into an ordered sequence of :ELTs"
     (%Iterator (Unit -> (Optional :elt))))

@@ -25,6 +25,7 @@
   ;; Hashtable
   ;;
 
+  (repr :transparent)
   (define-type (Hashtable :key :value)
     (%Hashtable Lisp-Object))
 
