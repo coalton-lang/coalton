@@ -113,6 +113,10 @@ The pragma `(repr :lisp)` helps achieve Lisp compatibility of structures regardl
 
 **HALF-HEARTED PROMISE**: For each non-nullary constructor (say `Ctor1`), a `setf`-able accessor function called `<class-name>/<ctor-name>-_<k>` will be defined for the `k`th member of that constructor. For the example above, suppose that `Ctor1` has two fields. Then the accessor functions `FOO/CTOR1-_0` and `FOO/CTOR1-_1` will be defined. (*Note*: The naming here is subject to change.)
 
+### Wrapper types with `(REPR :TRANSPARENT)`
+
+Types with a single construtor consisting of a single field can be annotated with `(REPR :TRANSPARENT)`. This guarentees the wrapper type does not exist at runtime. The constructor function will still be generated, but it will be the identity function.
+
 ## Promises of `define`
 
 Consider the following definitions:

@@ -30,6 +30,7 @@
   ;; Slice
   ;;
 
+  (repr :transparent)
   (define-type (Slice :a)
     (%Slice Lisp-Object))
 

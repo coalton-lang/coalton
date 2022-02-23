@@ -43,6 +43,7 @@
   ;; Vector
   ;;
 
+  (repr :transparent)
   (define-type (Vector :a)
     (%Vector Lisp-Object))
 

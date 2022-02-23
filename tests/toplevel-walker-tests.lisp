@@ -40,7 +40,7 @@
        (coalton:define-type Foo Foo)))))
 
 (deftest test-repr-form-argument ()
-  (signals style-warning
+  (signals error
     (run-coalton-toplevel-walker
      ;; Not a meaningful repr choice
      '((coalton:repr :something-weird)

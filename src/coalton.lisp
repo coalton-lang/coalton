@@ -9,7 +9,7 @@
 ;;; be generated at macroexpansion time of the ambient Common Lisp
 ;;; compiler. See the COALTON macro.
 
-(define-global-var **repr-specifiers** '(:lisp)
+(define-global-var **repr-specifiers** '(:lisp :transparent)
   "(repr ...) specifiers that the compiler is known to understand.")
 
 (defmacro install-operator-metadata (&rest directives)
@@ -64,9 +64,13 @@ in FORMS that begin with that operator."
                                                    with a symbol."))))
          (establish-repr (specifier type)
            (unless (member specifier **repr-specifiers**)
-             (alexandria:simple-style-warning
-              "The compiler is not known to understand (repr ~S)."
+             (error
+              "The compiler does not understand (repr ~S)."
               specifier))
+
+           (when (listp type)
+             (setf type (car type)))
+
            (setf (gethash type (getf plist 'repr-table)) specifier))
          (walk (forms)
            (loop
