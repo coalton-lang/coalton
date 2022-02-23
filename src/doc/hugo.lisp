@@ -33,25 +33,9 @@
 <div>~%~%"
             (mapcar
              (lambda (package)
-               (let* ((package-entry (gethash package documentation-by-package))
-                      ;; Only print out files that are used _and_ appear in the valid files list
-                      (valid-files
-                        (intersection
-                         (reverse (documentation-package-entry-valid-files package-entry))
-                         (alexandria:hash-table-keys
-                          (documentation-package-entry-documentation-entries-by-file package-entry))
-                         :test #'string=)))
-                 (format nil
-                         "- <a href=\"#~(~A-package~)\"><code>~:*~(~A~)</code></a>~%~{~A~}"
-                         package
-                         (mapcar
-                          (lambda (file)
-                            (format nil
-                                    "  - <a href=\"#~(~A-~A-file~)\"><code>~A</code></a>~%"
-                                    package
-                                    (cl-ppcre:regex-replace-all "[^a-zA-Z\d\s:]" file "-")
-                                    file))
-                          valid-files))))
+               (format nil
+                       "- <a href=\"#~(~A-package~)\"><code>~:*~(~A~)</code></a>~%"
+                       package))
              packages))
 
     ;; For the main content, just render as markdown
