@@ -38,9 +38,9 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
 
        ;; Lisp
        ((coalton:lisp &rest args)
-        (unless (= 3 (length args))
+        (unless (<= 3 (length args))
           (error-parsing expr "Invalid embedded Lisp expression."))
-        (parse-lisp expr (first args) (second args) (third args) m))
+        (parse-lisp expr (first args) (second args) (nthcdr 2 args) m))
 
        ;; Match
        ((coalton:match expr_ &rest patterns)
@@ -192,7 +192,7 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
        (parse-form subexpr new-m package)
        (invert-alist binding-local-names)))))
 
-(defun parse-lisp (unparsed type variables lisp-expr m)
+(defun parse-lisp (unparsed type variables lisp-exprs m)
   (declare (type immutable-map m))
   (node-lisp
    unparsed
@@ -203,7 +203,7 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
                    (or (immutable-map-lookup m var)
                        (error-parsing unparsed "Unknown variable ~A in lisp node~%" var))))
    ;; Do *NOT* parse LISP-EXPR!
-   lisp-expr))
+   lisp-exprs))
 
 (defun parse-application (unparsed rator rands m package)
   (declare (type immutable-map m)

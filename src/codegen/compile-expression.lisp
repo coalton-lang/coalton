@@ -75,15 +75,15 @@
 
   (:method ((expr typed-node-lisp) ctx env)
     (let ((inner
-            (if *emit-type-annotations*
-                `(the (values ,(lisp-type expr env) &optional) ,(typed-node-lisp-form expr))
-                (typed-node-lisp-form expr))))
-      (if (typed-node-lisp-variables expr)
-          `(let ,(mapcar
-                  (lambda (vars)
-                    (list (car vars) (cdr vars)))
-                  (typed-node-lisp-variables expr))
-             ,inner)
+            `(let ,(mapcar
+                    (lambda (vars)
+                      (list (car vars) (cdr vars)))
+                    (typed-node-lisp-variables expr))
+               ,@ (typed-node-lisp-form expr))))
+
+      (if *emit-type-annotations*
+          `(the (values ,(lisp-type expr env) &optional)
+                ,inner)
           inner)))
 
   (:method ((expr typed-node-match) ctx env)
