@@ -98,7 +98,7 @@ Returns (VALUES type predicate-list typed-node subs)")
               (values ret-ty
                       preds
                       (typed-node-application
-                       (to-scheme (qualify (reduce-context env preds substs) ret-ty))
+                       (to-scheme (qualify nil ret-ty))
                        (node-unparsed value)
                        typed-rator
                        (reverse typed-rands))
