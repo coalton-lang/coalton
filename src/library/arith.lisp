@@ -460,7 +460,7 @@ The fields are defined as follows:
           (%Fraction 0 1)
           (%Fraction
            (* (* (sign n) (sign d))
-              (lisp Integer (n g) (cl:values (cl:floor n g))))
+              (lisp Integer (n g) (cl:values (cl:floor (cl:abs n) g))))
            (lisp Integer (d g) (cl:values (cl:floor (cl:abs d) g)))))))
 
   (define (%mkFraction n d)
