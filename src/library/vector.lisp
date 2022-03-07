@@ -56,23 +56,19 @@
   (define (with-capacity n)
     "Create a new vector with N elements preallocated"
     (lisp (Vector :a) (n)
-      (%Vector (cl:make-array n :fill-pointer 0 :adjustable cl:t))))
+      (cl:make-array n :fill-pointer 0 :adjustable cl:t)))
 
   (declare length ((Vector :a) -> Integer))
   (define (length v)
     "Returns the length of V"
-    (match v
-      ((%Vector v)
-       (lisp Integer (v)
-         (cl:fill-pointer v)))))
+    (lisp Integer (v)
+      (cl:fill-pointer v)))
 
   (declare capacity ((Vector :a) -> Integer))
   (define (capacity v)
     "Returns the number of elements that V can store without resizing"
-    (match v
-      ((%Vector v)
-       (lisp Integer (v)
-         (cl:array-dimension v 0)))))
+    (lisp Integer (v)
+      (cl:array-dimension v 0)))
 
   (declare empty? ((Vector :a) -> Boolean))
   (define (empty? v)
@@ -82,20 +78,16 @@
   (declare copy ((Vector :a) -> (Vector :a)))
   (define (copy v)
     "Return a new vector containing the same elements as V"
-    (match v
-      ((%Vector v)
-       (lisp (Vector :a) (v)
-         (%Vector (alexandria:copy-array v))))))
+    (lisp (Vector :a) (v)
+      (%Vector (alexandria:copy-array v))))
 
   (declare push! (:a -> (Vector :a) -> Integer))
   (define (push! item v)
     "Append ITEM to V and resize V if necessary"
-    (match v
-      ((%Vector v)
-       (lisp Integer (item v)
-         (cl:progn
-	   (cl:vector-push-extend item v)
-	   (cl:1- (cl:fill-pointer v)))))))
+    (lisp Integer (item v)
+      (cl:progn
+	(cl:vector-push-extend item v)
+	(cl:1- (cl:fill-pointer v)))))
 
   (declare pop! ((Vector :a) -> (Optional :a)))
   (define (pop! v)
@@ -107,10 +99,8 @@
   (declare pop-unsafe! ((Vector :a) -> :a))
   (define (pop-unsafe! v)
     "Remove and return the first item of V without checking if the vector is empty"
-    (match v
-      ((%Vector v)
-       (lisp :a (v)
-         (cl:vector-pop v)))))
+    (lisp :a (v)
+      (cl:vector-pop v)))
 
   (declare index (Integer -> (Vector :a) -> (Optional :a)))
   (define (index index v)
@@ -122,20 +112,16 @@
   (declare index-unsafe (Integer -> (Vector :a) -> :a))
   (define (index-unsafe index v)
     "Return the INDEXth element of V without checking if the element exists"
-    (match v
-      ((%Vector v)
-       (lisp :a (index v)
-         (cl:aref v index)))))
+    (lisp :a (index v)
+      (cl:aref v index)))
 
   (declare set! (Integer -> :a -> (Vector :a) -> Unit))
   (define (set! index item v)
     "Set the INDEXth element of V to ITEM. This function left intentionally unsafe because it does not have a return value to check."
-    (match v
-      ((%Vector v)
-       (lisp Unit (index item v)
-         (cl:progn
-           (cl:setf (cl:aref v index) item)
-           Unit)))))
+    (lisp Unit (index item v)
+      (cl:progn
+        (cl:setf (cl:aref v index) item)
+        Unit)))
 
   (declare head ((Vector :a) -> (Optional :a)))
   (define (head v)
@@ -160,57 +146,49 @@
   (declare find-elem (Eq :a => (:a -> (Vector :a) -> (Optional Integer))))
   (define (find-elem e v)
     "Find the index of element E in V"
-    (match v
-      ((%Vector v)
-       (let ((test (fn (elem)
-                     (== elem e))))
+    (let ((test (fn (elem)
+                  (== elem e))))
 
-         (progn
-           (lisp (Optional Integer) (v test)
-             (cl:let ((pos (cl:position-if
-                            #'(cl:lambda (x)
-                                (cl:equalp True (coalton-impl/codegen::A1 test x)))
-                            v)))
-               (cl:if pos
-                      (Some pos)
-                      None))))))))
+      (progn
+        (lisp (Optional Integer) (v test)
+          (cl:let ((pos (cl:position-if
+                         #'(cl:lambda (x)
+                             (cl:equalp True (coalton-impl/codegen::A1 test x)))
+                         v)))
+            (cl:if pos
+                   (Some pos)
+                   None))))))
 
   (declare foreach ((:a -> :b) -> (Vector :a) -> Unit))
   (define (foreach f v)
     "Call the function F once for each item in V"
-    (match v
-      ((%Vector v)
-       (lisp Unit (f v)
-         (cl:progn
-           (cl:loop :for elem :across v
-              :do (coalton-impl/codegen::A1 f elem))
-           Unit)))))
+    (lisp Unit (f v)
+      (cl:progn
+        (cl:loop :for elem :across v
+           :do (coalton-impl/codegen::A1 f elem))
+        Unit)))
 
   (declare foreach-index ((Integer -> :a -> :b) -> (Vector :a) -> Unit))
   (define (foreach-index f v)
     "Call the function F once for each item in V with its index"
-    (match v
-      ((%Vector v)
-       (lisp Unit (f v)
-         (cl:progn
-           (cl:loop
-              :for elem :across v
-              :for i :from 0
-              :do (coalton-impl/codegen::A2 f i elem))
-           Unit)))))
+    (lisp Unit (f v)
+      (cl:progn
+        (cl:loop
+           :for elem :across v
+           :for i :from 0
+           :do (coalton-impl/codegen::A2 f i elem))
+        Unit)))
 
   (declare foreach2 ((:a -> :b -> :c) -> (Vector :a) -> (Vector :b) -> Unit))
   (define (foreach2 f v1 v2)
     "Like vector-foreach but twice as good"
-    (match (Tuple v1 v2)
-      ((Tuple (%Vector v1) (%Vector v2))
-       (lisp Unit (f v1 v2)
-         (cl:progn
-           (cl:loop
-              :for e1 :across v1
-              :for e2 :across v2
-              :do (coalton-impl/codegen::A2 f e1 e2))
-           Unit)))))
+    (lisp Unit (f v1 v2)
+      (cl:progn
+        (cl:loop
+           :for e1 :across v1
+           :for e2 :across v2
+           :do (coalton-impl/codegen::A2 f e1 e2))
+        Unit)))
 
   (declare append ((Vector :a) -> (Vector :a) -> (Vector :a)))
   (define (append v1 v2)
