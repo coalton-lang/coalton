@@ -1,1 +1,4 @@
 *.lisp linguist-language=Common-Lisp
+
+# See https://sourceforge.net/p/sbcl/mailman/sbcl-devel/thread/4D50C7E6.20400@yv.org/
+*.lisp text eol=lf 
