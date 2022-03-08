@@ -374,7 +374,7 @@ Returns `True` if ITER is empty."
     "Return `True` as soon as any element of ITER is GOOD?, or `False` if none of them are.
 
 Returns `False` if ITER is empty."
-    (isSome (find! good? iter)))
+    (some? (find! good? iter)))
 
 ;;; collecting
   ;; as with `IntoIterator`, these will one day be abstracted into a class `(FromIterator :collection :item)'.

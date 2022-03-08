@@ -1,10 +1,10 @@
 (cl:in-package #:thih-coalton-tests)
 
-(cl:defparameter *initial-env* (coalton-prelude:fromSome "Failed to init classenv"
-                                                         (compose
-                                                          addPreludeClasses
-                                                          exampleInsts
-                                                          initialEnv)))
+(cl:defparameter *initial-env* (coalton-prelude:from-some "Failed to init classenv"
+                                                          (compose
+                                                           addPreludeClasses
+                                                           exampleInsts
+                                                           initialEnv)))
 
 (deftest test-type-inference ()
   (is (thih-coalton::assumption-list-equal (tiProgram

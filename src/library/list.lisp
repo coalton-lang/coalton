@@ -221,7 +221,7 @@
   (declare nth (Integer -> (List :t) -> :t))
   (define (nth n l)
     "Like INDEX, but errors if the index is not found."
-    (fromSome "There is no NTH" (index l n)))
+    (from-some "There is no NTH" (index l n)))
 
   (declare elemIndex (Eq :a => (:a -> (List :a) -> (Optional Integer))))
   (define (elemIndex x xs)

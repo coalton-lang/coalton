@@ -56,13 +56,13 @@
 
   (:import-from
    #:coalton-library/optional
-   #:fromSome
-   #:isSome
-   #:isNone)
+   #:from-some
+   #:some?
+   #:none?)
   (:export
-   #:fromSome
-   #:isSome
-   #:isNone)
+   #:from-some
+   #:some?
+   #:none?)
 
   (:import-from
    #:coalton-library/list
