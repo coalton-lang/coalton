@@ -93,33 +93,31 @@ STATE, using INIT as the first STATE."
       ((Some item) (fold! func
                           (func init item)
                           iter))
-      ((None) init))))
+      ((None) init)))
 
-;;; instances
-;; should iterator implement applicative or monad? the only law-abiding applicative instances are
-;; pathological, so i doubt it.
-(coalton-toplevel
+  ;;; instances
+  ;; should iterator implement applicative or monad? the only law-abiding applicative instances are
+  ;; pathological, so i doubt it.
   (define-instance (Functor Iterator)
     (define (map func iter)
-      (%Iterator (fn (_) (map func (next! iter)))))))
+      (%Iterator (fn () (map func (next! iter))))))
 
-;;; constructors
-;; once coalton gets functional dependencies, associated types or type families, much of this will be
-;; abstracted into a class `(IntoIterator :collection :item)', with instances like `(IntoIterator (List :elt)
-;; :elt)' and `(IntoIterator String Char)'. It's currently not possible for Coalton to do useful type
-;; inference on these classes, so we're stuck with monomorphic constructors like `list-iter`.
-(coalton-toplevel
+  ;;; constructors
+  ;; once coalton gets functional dependencies, associated types or type families, much of this will be
+  ;; abstracted into a class `(IntoIterator :collection :item)', with instances like `(IntoIterator (List :elt)
+  ;; :elt)' and `(IntoIterator String Char)'. It's currently not possible for Coalton to do useful type
+  ;; inference on these classes, so we're stuck with monomorphic constructors like `list-iter`.
   (declare empty (Iterator :any))
   (define empty
     "Yields nothing; stops immediately"
-    (%Iterator (fn (_) None)))
+    (%Iterator (fn () None)))
   
   (declare list-iter ((List :elt) -> (Iterator :elt)))
   (define (list-iter lst)
     "Yield successive elements of LST.
 Behavior is undefined if the iterator is advanced after a destructive modification of LST."
     (let ((remaining (cell:new lst)))
-      (%Iterator (fn (_) (cell:pop! remaining)))))
+      (%Iterator (fn () (cell:pop! remaining)))))
 
   (declare vector-iter ((Vector :elt) -> (Iterator :elt)))
   (define (vector-iter vec)
@@ -143,7 +141,7 @@ Beware off-by-one errors: the first value which is `done?` is not yielded. If `(
 iterator is empty."
     (let ((next (cell:new start)))
       (%Iterator
-       (fn (_)
+       (fn ()
          (let ((this (cell:read next)))
            (if (done? this)
                None
@@ -152,14 +150,13 @@ iterator is empty."
   (declare range-increasing ((Num :num) (Ord :num) => (:num -> :num -> :num -> (Iterator :num))))
   (define (range-increasing step start end)
     "An iterator which begins at START and yields successive elements spaced by STEP, stopping before END."
-    (progn 
-      (assert (>= end start)
-          "END ~a should be greater than or equal to START ~a in RANGE-INCREASING"
-          end start)
-      (assert (> step 0)
-          "STEP ~a should be positive and non-zero in RANGE-INCREASING"
-          step)
-      (recursive-iter (+ step) (<= end) start)))
+    (assert (>= end start)
+        "END ~a should be greater than or equal to START ~a in RANGE-INCREASING"
+        end start)
+    (assert (> step 0)
+        "STEP ~a should be positive and non-zero in RANGE-INCREASING"
+        step)
+    (recursive-iter (+ step) (<= end) start))
 
   (declare up-to ((Num :num) (Ord :num) => :num -> (Iterator :num)))
   (define (up-to limit)
@@ -176,18 +173,17 @@ iterator is empty."
     "A range which begins below START and counts down through and including END by STEP.
 
 Equivalent to reversing `range-increasing`"
-    (progn 
-      (assert (<= end start)
-          "END ~a should be less than or equal to START ~a in RANGE-INCREASING"
-          end start)
-      (assert (> step 0)
-          "STEP ~a should be positive and non-zero in RANGE-INCREASING"
-          step)
-      ;; FIXME: avoid underflow in the DONE? test
-      (recursive-iter ((flip -) step)
-                      (fn (n) (>= end (+ n step))) ; like (>= (- end step)), but without potential underflow
-                      (- start step)               ; begin after START
-                      )))
+    (assert (<= end start)
+        "END ~a should be less than or equal to START ~a in RANGE-INCREASING"
+        end start)
+    (assert (> step 0)
+        "STEP ~a should be positive and non-zero in RANGE-INCREASING"
+        step)
+    ;; FIXME: avoid underflow in the DONE? test
+    (recursive-iter ((flip -) step)
+                    (fn (n) (>= end (+ n step))) ; like (>= (- end step)), but without potential underflow
+                    (- start step)               ; begin after START
+                    ))
 
   (declare down-from ((Num :num) (Ord :num) => :num -> (Iterator :num)))
   (define (down-from limit)
@@ -205,8 +201,8 @@ Equivalent to reversing `range-increasing`"
   (define (repeat-forever item)
     "Yield ITEM over and over, infinitely."
     (%Iterator
-      (fn (_)
-        (Some item))))
+     (fn ()
+       (Some item))))
 
   (declare repeat-item (:item -> UFix -> (Iterator :item)))
   (define (repeat-item item count)
@@ -221,7 +217,7 @@ Equivalent to reversing `range-increasing`"
                            (char-code start)
                            (+ 1 (char-code end)))))
 
-  ;;; combinators
+;;; combinators
   ;; these are named with a !, even though they're lazy and therefore do not actually mutate anything on their
   ;; own, for two reasons:
   ;; 1. it prevents name conflicts with list operators
@@ -232,10 +228,10 @@ Equivalent to reversing `range-increasing`"
 
 Often useful combined with `uncurry` to allow mapping a multi-argument function across multiple iterators."
     (%Iterator
-      (fn (_)
-        (match (Tuple (next! left) (next! right))
-          ((Tuple (Some l) (Some r)) (Some (Tuple l r)))
-          (_ None)))))
+     (fn ()
+       (match (Tuple (next! left) (next! right))
+         ((Tuple (Some l) (Some r)) (Some (Tuple l r)))
+         (_ None)))))
 
   (declare enumerate! ((Iterator :elt) -> (Iterator (Tuple UFix :elt))))
   (define (enumerate! iter)
@@ -268,7 +264,7 @@ Often useful combined with `uncurry` to allow mapping a multi-argument function 
       ((Some first)
        (let ((current (cell:new first))
              (flatten-iter-inner
-               (fn (_)
+               (fn ()
                  (match (next! (cell:read current))
                    ((Some elt) (Some elt))
                    ((None) (match (next! iters)
@@ -316,7 +312,7 @@ afterwards, ITER will be exhausted."
   (define (for-each! thunk iter)
     "Call THUNK on each element of ITER in order for side effects.
 Discard values returned by THUNK."
-    (fold! (fn (u elt) (progn (thunk elt) u))
+    (fold! (fn (u elt) (thunk elt) u)
            Unit
            iter))
 
@@ -388,10 +384,9 @@ Returns `False` if ITER is empty."
     "Construct a `Vector` with initial allocation for SIZE elements, and fill it with all the elements from ITER in order.
 
 The vector will be resized if ITER contains more than SIZE elements."
-    (progn 
-      (let v = (vector:with-capacity size))
-      (for-each! ((flip vector:push!) v) iter)
-      v))
+    (let v = (vector:with-capacity size))
+    (for-each! ((flip vector:push!) v) iter)
+    v)
 
   (declare collect-vector! ((Iterator :elt) -> (Vector :elt)))
   (define (collect-vector! iter)
@@ -409,14 +404,13 @@ The vector will be resized if ITER contains more than SIZE elements."
 If a key appears in ITER multiple times, the resulting table will contain its last corresponding value.
 
 The table will be resized if ITER contains more than SIZE unique keys."
-    (let ((ht (hashtable:with-capacity (into size))))
-      (progn
-        (for-each! (uncurry (hashtable:set! ht))
-                   iter)
-        ht)))
+    (let ht = (hashtable:with-capacity (into size)))
+    (for-each! (uncurry (hashtable:set! ht))
+               iter)
+    ht)
 
   (declare collect-hashtable!
-           ((Hash :key) => (Iterator (Tuple :key :value)) -> (HashTable :key :value)))
+           (Hash :key => (Iterator (Tuple :key :value)) -> (HashTable :key :value)))
   (define (collect-hashtable! iter)
     "Construct a `HashTable` containing all the key/value pairs from ITER.
 
