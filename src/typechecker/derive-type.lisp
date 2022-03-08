@@ -139,6 +139,14 @@ Returns (VALUES type predicate-list typed-node subs)")
     (declare (type environment env)
              (type substitution-list subs)
              (values ty ty-predicate-list typed-node substitution-list &optional))
+    (let ((name-table (make-hash-table)))
+      (loop :for (name . node_) :in (node-let-bindings value) :do
+        (progn
+          (when (gethash name name-table)
+            (error 'duplicate-definition
+                   :name (cdr (assoc name (node-let-name-map value)))))
+          (setf (gethash name name-table) t))))
+
     (let ((bindings (node-let-bindings value))
           (declared-types
             (mapcar (lambda (form)

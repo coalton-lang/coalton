@@ -118,7 +118,16 @@ Returns new environment, binding list of declared nodes, and a DAG of dependenci
                                   (cons name node))))
          (expl-names (alexandria:hash-table-keys declared-types))
          (impl-bindings nil)
-         (expl-bindings nil))
+         (expl-bindings nil)
+         (name-table (make-hash-table)))
+
+    (coalton-impl/typechecker::with-type-context ("COALTON-TOPLEVEL")
+      (loop :for (name . node) :in parsed
+            :do (progn
+                  (when (gethash name name-table)
+                    (error 'duplicate-definition
+                           :name name))
+                  (setf (gethash name name-table) t))))
 
     ;; Sort our bindings into implicit and explicit
     (loop :for binding :in parsed
