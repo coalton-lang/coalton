@@ -42,33 +42,27 @@
   (define (new data)
     "Create a new mutable cell"
     (lisp (Cell :a) (data)
-      (%Cell (make-cell-internal :inner data))))
+      (make-cell-internal :inner data)))
 
   (declare read ((Cell :a) -> :a))
-  (define (read c)
+  (define (read cel)
     "Read the value of a mutable cell"
-    (match c
-      ((%Cell c)
-       (lisp :a (c)
-         (cell-internal-inner c)))))
+    (lisp :a (cel)
+      (cell-internal-inner cel)))
 
   (declare swap! ((Cell :a) -> :a -> :a))
   (define (swap! cel data)
     "Replace the value of a mutable cell with a new value, then return the old value"
-    (match cel
-      ((%Cell c)
-       (lisp :a (data c)
-         (cl:let* ((old (cell-internal-inner c)))
-           (cl:setf (cell-internal-inner c) data)
-           old)))))
+    (lisp :a (data cel)
+      (cl:let* ((old (cell-internal-inner cel)))
+        (cl:setf (cell-internal-inner cel) data)
+        old)))
 
   (declare write! ((Cell :a) -> :a -> :a))
   (define (write! cel data)
     "Set the value of a mutable cell, returning the new value"
-    (match cel
-      ((%Cell c)
-       (lisp :a (data c)
-         (cl:setf (cell-internal-inner c) data)))))
+    (lisp :a (data cel)
+      (cl:setf (cell-internal-inner cel) data)))
 
   (declare update! ((:a -> :a) -> (Cell :a) -> :a))
   (define (update! f cel)
@@ -80,7 +74,7 @@
     "Apply F to the contents of CEL, swapping the result for the old value"
     (swap! cel (f (read cel))))
 
-  ;;; operators on cells of lists
+;;; operators on cells of lists
   (declare push! ((Cell (List :elt)) -> :elt -> (List :elt)))
   (define (push! cel new-elt)
     (update! (Cons new-elt) cel))
@@ -93,7 +87,7 @@
               (Some fst)))
       ((Nil) None)))
 
-  ;;; operators on cells of numbers
+;;; operators on cells of numbers
   (declare increment! ((Num :counter) => (Cell :counter) -> :counter))
   (define (increment! cel)
     "Add one to the contents of CEL, storing and returning the new value"
