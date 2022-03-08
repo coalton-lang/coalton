@@ -118,10 +118,9 @@
   (declare set! (Integer -> :a -> (Vector :a) -> Unit))
   (define (set! index item v)
     "Set the INDEXth element of V to ITEM. This function left intentionally unsafe because it does not have a return value to check."
-    (lisp Unit (index item v)
-      (cl:progn
-        (cl:setf (cl:aref v index) item)
-        Unit)))
+    (lisp Void (index item v)
+      (cl:setf (cl:aref v index) item))
+    Unit)
 
   (declare head ((Vector :a) -> (Optional :a)))
   (define (head v)
@@ -149,7 +148,6 @@
     (let ((test (fn (elem)
                   (== elem e))))
 
-      (progn
         (lisp (Optional Integer) (v test)
           (cl:let ((pos (cl:position-if
                          #'(cl:lambda (x)
@@ -157,43 +155,39 @@
                          v)))
             (cl:if pos
                    (Some pos)
-                   None))))))
+                   None)))))
 
   (declare foreach ((:a -> :b) -> (Vector :a) -> Unit))
   (define (foreach f v)
     "Call the function F once for each item in V"
-    (lisp Unit (f v)
-      (cl:progn
+    (lisp Void (f v)
         (cl:loop :for elem :across v
-           :do (coalton-impl/codegen::A1 f elem))
-        Unit)))
+           :do (coalton-impl/codegen::A1 f elem)))
+    Unit)
 
   (declare foreach-index ((Integer -> :a -> :b) -> (Vector :a) -> Unit))
   (define (foreach-index f v)
     "Call the function F once for each item in V with its index"
-    (lisp Unit (f v)
-      (cl:progn
+    (lisp Void (f v)
         (cl:loop
            :for elem :across v
            :for i :from 0
-           :do (coalton-impl/codegen::A2 f i elem))
-        Unit)))
+           :do (coalton-impl/codegen::A2 f i elem)))
+    Unit)
 
   (declare foreach2 ((:a -> :b -> :c) -> (Vector :a) -> (Vector :b) -> Unit))
   (define (foreach2 f v1 v2)
     "Like vector-foreach but twice as good"
-    (lisp Unit (f v1 v2)
-      (cl:progn
+    (lisp Void (f v1 v2)
         (cl:loop
            :for e1 :across v1
            :for e2 :across v2
-           :do (coalton-impl/codegen::A2 f e1 e2))
-        Unit)))
+           :do (coalton-impl/codegen::A2 f e1 e2)))
+    Unit)
 
   (declare append ((Vector :a) -> (Vector :a) -> (Vector :a)))
   (define (append v1 v2)
     "Create a new VECTOR containing the elements of v1 followed by the elements of v2"
-    (progn
       (let out = (with-capacity (+ (length v1) (length v2))))
       (let f =
         (fn (item)
@@ -201,7 +195,7 @@
 
       (foreach f v1)
       (foreach f v2)
-      out))
+      out)
 
   (declare swap-remove! (Integer -> (Vector :a) -> (Optional :a)))
   (define (swap-remove! idx vec)
@@ -223,15 +217,12 @@
   (declare sort-by! ((:a -> :a -> Boolean) -> (Vector :a) -> Unit))
   (define (sort-by! f v)
     "Sort a vector inplace with predicate function F"
-    (match v
-      ((%Vector v)
-       (progn
-         (lisp :a (v f)
-           (cl:sort
-            v
-            (cl:lambda (a b)
-              (coalton-impl/codegen::A2 f a b))))
-         Unit))))
+    (lisp Void (v f)
+      (cl:sort
+       v
+       (cl:lambda (a b)
+         (coalton-impl/codegen::A2 f a b))))
+    Unit)
 
   (declare sort! (Ord :a => ((Vector :a) -> Unit)))
   (define (sort! v)
@@ -261,28 +252,26 @@
 
   (define-instance (Functor Vector)
     (define (map f v)
-      (progn
-        (let out = (with-capacity (length v)))
-        (foreach
-         (fn (item)
-           (push! (f item) out))
-         v)
-        out)))
+      (let out = (with-capacity (length v)))
+      (foreach
+       (fn (item)
+         (push! (f item) out))
+       v)
+      out))
 
   (define-instance (Into (List :a) (Vector :a))
     (define (into lst)
-      (progn
-        (let out = (with-capacity (list:length lst)))
-        (let inner =
-          (fn (lst)
-            (match lst
-              ((Cons x xs)
-               (progn
-                 (push! x out)
-                 (inner xs)))
-              ((Nil) Unit))))
-        (inner lst)
-        out)))
+      (let out = (with-capacity (list:length lst)))
+      (let inner =
+        (fn (lst)
+          (match lst
+            ((Cons x xs)
+             (progn
+               (push! x out)
+               (inner xs)))
+            ((Nil) Unit))))
+      (inner lst)
+      out))
 
   (define-instance (Into (Vector :a) (List :a))
     (define (into v)

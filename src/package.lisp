@@ -415,6 +415,7 @@
    #:=> #:⇒
    #:∀
    #:Unit
+   #:Void
    #:Boolean #:True #:False
    #:Char
    #:U8

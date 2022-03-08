@@ -36,22 +36,21 @@
 
   (declare new (Integer -> Integer -> (Vector :a) -> (Slice :a)))
   (define (new start length v)
-    (progn
-      (when (< start 0)
-        (error "Start of slice cannot be less than 0."))
+    (when (< start 0)
+      (error "Start of slice cannot be less than 0."))
 
-      (when (<= length 0)
-        (error "Length of slice cannot be equal to or less than 0."))
+    (when (<= length 0)
+      (error "Length of slice cannot be equal to or less than 0."))
 
-      (let end = (+ start length))
-      (when (> end (vector:length v))
-        (error "Slice cannot extend beyond length of backing vector."))
+    (let end = (+ start length))
+    (when (> end (vector:length v))
+      (error "Slice cannot extend beyond length of backing vector."))
 
-      (lisp (Slice :a) (v start length)
-        (cl:make-array
-         length
-         :displaced-to v
-         :displaced-index-offset start))))
+    (lisp (Slice :a) (v start length)
+      (cl:make-array
+       length
+       :displaced-to v
+       :displaced-index-offset start)))
 
   (declare length ((Slice :a) -> Integer))
   (define (length s)
@@ -68,10 +67,9 @@
   (declare set! (Integer -> :a -> (Slice :a) -> Unit))
   (define (set! index item s)
     "Set the element at INDEX in S to ITEM"
-    (progn
-      (lisp Lisp-Object (index item s)
-        (cl:setf (cl:aref s index) item))
-      Unit))
+    (lisp Lisp-Object (index item s)
+      (cl:setf (cl:aref s index) item))
+    Unit)
 
   (declare index (Integer -> (Slice :a) -> (Optional :a)))
   (define (index idx s)
@@ -91,33 +89,30 @@
   (declare foreach ((:a -> :b) -> (Slice :a) -> Unit))
   (define (foreach f s)
     "Call the function F once for each item in S"
-    (progn
-      (lisp Lisp-Object (f s)
-        (cl:loop :for elem :across s
-           :do (coalton-impl/codegen::A1 f elem)))
-      Unit))
+    (lisp Lisp-Object (f s)
+      (cl:loop :for elem :across s
+         :do (coalton-impl/codegen::A1 f elem)))
+    Unit)
 
   (declare foreach-index ((Integer -> :a -> :b) -> (Slice :a) -> Unit))
   (define (foreach-index f s)
     "Call the function F once for each item in S with its index"
-    (progn
-      (lisp Lisp-Object (f s)
-        (cl:loop
-           :for elem :across s
-           :for i :from 0
-           :do (coalton-impl/codegen::A2 f i elem)))
-      Unit))
+    (lisp Lisp-Object (f s)
+      (cl:loop
+         :for elem :across s
+         :for i :from 0
+         :do (coalton-impl/codegen::A2 f i elem)))
+    Unit)
 
   (declare foreach2 ((:a -> :b -> :c) -> (Slice :a) -> (Slice :b) -> Unit))
   (define (foreach2 f s1 s2)
     "Iterate over S1 and S2 calling F once on each iteration"
-    (progn
-      (lisp Lisp-Object (f s1 s2)
-        (cl:loop
-           :for e1 :across s1
-           :for e2 :across s2
-           :do (coalton-impl/codegen::A2 f e1 e2)))
-      Unit))
+    (lisp Lisp-Object (f s1 s2)
+      (cl:loop
+         :for e1 :across s1
+         :for e2 :across s2
+         :do (coalton-impl/codegen::A2 f e1 e2)))
+    Unit)
 
   ;;
   ;; Vector functions
@@ -168,13 +163,12 @@
 
   (define-instance (Into (Slice :a) (Vector :a))
     (define (into s)
-      (progn
-        (let v = (vector:with-capacity (length s)))
-        (foreach
-         (fn (x)
-           (vector:push! x v))
-         s)
-        v)))
+      (let v = (vector:with-capacity (length s)))
+      (foreach
+       (fn (x)
+         (vector:push! x v))
+       s)
+      v))
 
   (define-instance (Into (Vector :a) (Slice :a))
     (define (into v)

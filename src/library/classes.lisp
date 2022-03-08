@@ -38,6 +38,9 @@
 
   (define-type Unit Unit)
 
+  (repr :native cl:t)
+  (define-type Void)
+
   ;; Boolean is an early type
   (declare True Boolean)
   (define True (lisp Boolean ()  cl:t))
@@ -237,7 +240,7 @@
     (withDefault (:a -> (:f :a) -> :a))
     (unwrap ((:f :a) -> :a)))
 
-  (define-class ((Eq :a) => (Hash :a))
+  (define-class (Eq :a => (Hash :a))
     "Types which can be hashed for storage in hash tables.
 
 Invariant (== left right) implies (== (hash left) (hash right))."
