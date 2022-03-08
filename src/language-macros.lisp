@@ -7,20 +7,6 @@
      ((True) ,then)
      ((False) ,else)))
 
-(cl:defmacro when (expr cl:&rest then)
-  `(if ,expr
-       (progn
-        ,@then
-        Unit)
-       Unit))
-
-(cl:defmacro unless (expr cl:&rest then)
-  `(if ,expr
-       Unit
-       (progn
-        ,@then
-        Unit)))
-
 (cl:defmacro and (cl:&rest exprs)
   "A short-circuiting AND operator."
   (cl:cond

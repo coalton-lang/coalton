@@ -464,11 +464,10 @@ The fields are defined as follows:
            (lisp Integer (d g) (cl:values (cl:floor (cl:abs d) g)))))))
 
   (define (%mkFraction n d)
-    (progn
-      (when (== 0 d)
-        (error "Division by zero"))
-      (%reduce-fraction
-       (%Fraction n d))))
+    (if (== 0 d)
+        (error "Division by zero")
+        (%reduce-fraction
+         (%Fraction n d))))
 
   (declare numerator (Fraction -> Integer))
   (define (numerator q)

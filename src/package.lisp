@@ -447,8 +447,6 @@
   ;; Macros
   (:export
    #:if
-   #:when
-   #:unless
    #:and
    #:or
    #:cond

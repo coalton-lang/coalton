@@ -36,24 +36,21 @@
 
   (declare new (Integer -> Integer -> (Vector :a) -> (Slice :a)))
   (define (new start length v)
-    (progn
-      (when (< start 0)
-        (error "Start of slice cannot be less than 0."))
-
-      (when (<= length 0)
-        (error "Length of slice cannot be equal to or less than 0."))
-
-      (let end = (+ start length))
-      (when (> end (vector:length v))
-        (error "Slice cannot extend beyond length of backing vector."))
-
-      (match v
-        ((vector::%Vector v)
-         (lisp (Slice :a) (v start length)
-           (%Slice (cl:make-array
-                   length
-                   :displaced-to v
-                   :displaced-index-offset start)))))))
+    (let ((end (+ start length)))
+      (cond ((< start 0)
+             (error "Start of slice cannot be less than 0."))
+            ((<= length 0)
+             (error "Length of slice cannot be equal to or less than 0."))
+            ((> end (vector:length v))
+             (error "Slice cannot extend beyond length of backing vector."))
+            (True
+             (match v
+               ((vector::%Vector v)
+                (lisp (Slice :a) (v start length)
+                  (%Slice (cl:make-array
+                           length
+                           :displaced-to v
+                           :displaced-index-offset start)))))))))
 
   (declare length ((Slice :a) -> Integer))
   (define (length s)
@@ -167,6 +164,7 @@
   ;; Instances
   ;;
 
+  ;;; FIXME: change dependencies so that this file depends on iter rather than vice-versa, then rewrite this instance in terms of (every! (uncurry ==) (zip! s1 s2))
   (define-instance (Eq :a => (Eq (Slice :a)))
     (define (== s1 s2)
       (if (/= (length s1) (length s2))
@@ -175,8 +173,9 @@
             (let out = (cell:new True))
             (foreach2
              (fn (e1 e2)
-               (unless (== e1 e2)
-                 (cell:write! out False)))
+               (if (== e1 e2)
+                   (const Unit (cell:write! out False))
+                   Unit))
              s1 s2)
             (cell:read out)))))
 

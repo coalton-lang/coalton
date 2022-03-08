@@ -8,9 +8,21 @@
   (:export
    #:from-some
    #:some?
-   #:none?))
+   #:none?
+   #:when
+   #:unless))
 
 (cl:in-package #:coalton-library/optional)
+
+(cl:defmacro when (condition cl:&body body)
+  `(if ,condition
+       (Some (progn ,@body))
+       None))
+
+(cl:defmacro unless (condition cl:&body body)
+  `(if ,condition
+       None
+       (Some (progn ,@body))))
 
 (coalton-toplevel
   ;;

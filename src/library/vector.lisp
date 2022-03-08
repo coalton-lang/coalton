@@ -265,6 +265,7 @@
   ;; Vector Instances
   ;;
 
+  ;;; FIXME: change dependencies so that this file depends on iter rather than vice-versa, then rewrite this instance in terms of (every! (uncurry ==) (zip! v1 v2))
   (define-instance (Eq :a => (Eq (Vector :a)))
     (define (== v1 v2)
       (if (/= (length v1) (length v2))
@@ -273,8 +274,9 @@
             (let out = (cell:new True))
             (foreach2
              (fn (e1 e2)
-               (unless (== e1 e2)
-                 (cell:write! out False)))
+               (if (== e1 e2)
+                   (const Unit (cell:write! out False))
+                   Unit))
              v1 v2)
             (cell:read out)))))
 

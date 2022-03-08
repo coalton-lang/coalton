@@ -58,11 +58,15 @@
    #:coalton-library/optional
    #:from-some
    #:some?
-   #:none?)
+   #:none?
+   #:when
+   #:unless)
   (:export
    #:from-some
    #:some?
-   #:none?)
+   #:none?
+   #:when
+   #:unless)
 
   (:import-from
    #:coalton-library/list
