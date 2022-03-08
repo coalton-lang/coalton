@@ -253,7 +253,8 @@
    #:overlapping-instance-error         ; SIGNAL
    #:cyclic-class-definitions-error     ; SIGNAL
    #:toplevel-monomorphism-restriction  ; SIGNAL
-   #:with-type-context
+   #:duplicate-definition               ; SIGNAL
+   #:with-type-context                  ; MACRO
    )
   (:export
    #:process-toplevel-definitions       ; FUNCTION

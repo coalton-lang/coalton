@@ -325,3 +325,13 @@
                name
                type
                name)))))
+
+(define-condition duplicate-definition (coalton-type-error)
+  ((name :initarg :name
+         :reader duplicate-definition-name))
+  (:report
+   (lambda (c s)
+     (let ((*print-circle* nil) ; Prevent printing using reader macros
+           )
+       (format s "Duplicate definition of ~A"
+               (duplicate-definition-name c))))))
