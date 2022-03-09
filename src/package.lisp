@@ -242,6 +242,7 @@
    #:unset-function                     ; FUNCTION
    #:set-constructor                    ; FUNCTION
    #:set-name                           ; FUNCTION
+   #:set-method-inline                  ; FUNCTION
    #:lookup-value-type                  ; FUNCTION
    #:lookup-type                        ; FUNCTION
    #:lookup-class                       ; FUNCTION
