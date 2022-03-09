@@ -40,7 +40,8 @@
    #:coalton-impl/codegen/transformations
    #:canonicalize
    #:pointfree
-   #:direct-application)
+   #:direct-application
+   #:inline-methods)
   (:local-nicknames
    (#:tc #:coalton-impl/typechecker))
   (:export
@@ -89,8 +90,9 @@
            (loop :for (name . node) :in definitions
                  :for pointfree-node := (pointfree node)
                  :for canonicalized-node := (canonicalize pointfree-node)
-                 :do (typecheck-node canonicalized-node env)
-                 :collect (cons name canonicalized-node)))
+                 :for method-inline-node := (inline-methods canonicalized-node env)
+                 :do (typecheck-node method-inline-node env)
+                 :collect (cons name method-inline-node)))
 
          (sccs (node-binding-sccs definitions)))
 

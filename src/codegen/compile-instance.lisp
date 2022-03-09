@@ -47,24 +47,29 @@
            (loop :for (method-name . type) :in (tc:ty-class-unqualified-methods class)
                  :for method-node := (gethash method-name method-nodes)
                  :for codegen-name := (gethash method-name method-codegen-syms)
-                 :do (funcall add-inline codegen-name)
-                 :collect (cons
-                           codegen-name
-                           (cond
-                             ;; If the method has context but is not a
-                             ;; function then wrap it in function
-                             ((and ctx (not (node-abstraction-p method-node)))
-                              (let ((inner (compile-expression method-node ctx env)))
-                                (node-abstraction
-                                 (tc:make-function-type*
-                                  (loop :for (pred . name) :in ctx
-                                        :collect (pred-type pred env))
-                                  (node-type inner))
-                                 (mapcar #'cdr ctx)
-                                 inner)))
 
-                             ;; Otherwise compile the method normally
-                             (t (compile-expression method-node nil env))))))
+                 :for node
+                   := (cond
+                        ;; If the method has context but is not a
+                        ;; function then wrap it in function
+                        ((and ctx (not (tc:typed-node-abstraction-p method-node)))
+                         (let ((inner (compile-expression method-node ctx env)))
+                           (node-abstraction
+                            (tc:make-function-type*
+                             (loop :for (pred . name) :in ctx
+                                   :collect (pred-type pred env))
+                             (node-type inner))
+                            (mapcar #'cdr ctx)
+                            inner)))
+
+                        ;; Otherwise compile the method normally
+                        (t (compile-expression method-node nil env)))
+
+                 ;; Don't inline recursive methods
+                 :do (unless (find method-name (node-variables node))
+                       (funcall add-inline codegen-name))
+
+                 :collect (cons codegen-name node)))
 
          ;; Iterate through the methods creating a node for each The
          ;; context is removed from individual methods because it will

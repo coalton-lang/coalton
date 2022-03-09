@@ -8,7 +8,8 @@
   (:export
    #:canonicalize
    #:pointfree
-   #:direct-application))
+   #:direct-application
+   #:inline-methods))
 
 (in-package #:coalton-impl/codegen/transformations)
 
@@ -85,6 +86,47 @@
      (list
       (cons :application #'rewrite-direct-application)
       (cons :before-let #'add-local-funs)))))
+
+(defun inline-methods (node env)
+  (labels ((inline-method (node)
+             (let ((rator (node-application-rator node))
+                   (rands (node-application-rands node)))
+               (when (node-variable-p rator)
+                 (let (dict rands_)
+                   (cond
+                     ((node-variable-p (first rands))
+                      (setf dict (node-variable-value (first rands)))
+                      (setf rands_ (cdr rands)))
+
+                     ((and (node-application-p (first rands))
+                           (node-variable-p (node-application-rator (first rands))))
+                      (setf dict (node-variable-value (node-application-rator (first rands))))
+                      (setf rands_ (append (node-application-rands (first rands)) (cdr rands))))
+
+                     (t
+                      (return-from inline-method nil)))
+
+                   (let* ((method-name (node-variable-value rator))
+                          (inline-method-name (tc:lookup-method-inline env method-name dict :no-error t)))
+
+                     (when inline-method-name
+                       (if (null rands_)
+                           (node-variable
+                            (node-type node)
+                            inline-method-name)
+
+                           (node-application
+                            (node-type node)
+                            (node-variable
+                             (tc:make-function-type*
+                              (mapcar #'node-type rands_)
+                              (node-type node))
+                             inline-method-name)
+                            rands_))))))))) 
+    (traverse
+     node
+     (list
+      (cons :application #'inline-method)))))
 
 (defun call-if (node key funs)
   (declare (type node node)
