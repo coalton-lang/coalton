@@ -218,35 +218,45 @@
                            (coalton-impl/typechecker::environment-instance-environment env)))))
 
       (mapcar (lambda (e)
-                (let ((ctors (remove-if-not
-                              (lambda (ctor)
-                                (eql (constructor-entry-constructs (cdr ctor))
-                                     (car e)))
-                              ctors))
-                      (applicable-instances
-                        (loop :for (class . instances) :in instance-list
-                              :append
-                              (loop :for instance :in (fset:convert 'list instances)
-                                    :append
-                                    (when (some
-                                           (lambda (pred-type)
-                                             (labels ((check (pred)
-                                                        (typecase pred
-                                                          (coalton-impl/typechecker::tapp
-                                                           (check (coalton-impl/typechecker::tapp-from pred)))
-                                                          (t
-                                                           (equalp (type-entry-type (cdr e)) pred)))))
-                                               (check pred-type)))
-                                           (ty-predicate-types (ty-class-instance-predicate instance)))
-                                      (list instance))))))
+                (let* ((ctors (remove-if-not
+                               (lambda (ctor)
+                                 (and (eql (constructor-entry-constructs (cdr ctor))
+                                           (car e))))
+                               ctors))
+
+                       (exported-ctors
+                         (remove-if-not
+                          (lambda (ctor)
+                            (multiple-value-bind (symbol status)
+                                (find-symbol (symbol-name (car ctor)) (symbol-package (car ctor)))
+                              (declare (ignore symbol))
+                              (eq :external status)))
+                          ctors))
+
+                       (applicable-instances
+                         (loop :for (class . instances) :in instance-list
+                               :append
+                               (loop :for instance :in (fset:convert 'list instances)
+                                     :append
+                                     (when (some
+                                            (lambda (pred-type)
+                                              (labels ((check (pred)
+                                                         (typecase pred
+                                                           (coalton-impl/typechecker::tapp
+                                                            (check (coalton-impl/typechecker::tapp-from pred)))
+                                                           (t
+                                                            (equalp (type-entry-type (cdr e)) pred)))))
+                                                (check pred-type)))
+                                            (ty-predicate-types (ty-class-instance-predicate instance)))
+                                       (list instance))))))
                   (make-documentation-type-entry
                    (car e)
                    (type-entry-type (cdr e))
-                   ctors
+                   exported-ctors
                    (mapcar
                     (lambda (ctor)
                       (lookup-value-type env (car ctor)))
-                    ctors)
+                    exported-ctors)
                    applicable-instances
                    (type-entry-docstring (cdr e))
                    ;; Here we will assume that all constructors
