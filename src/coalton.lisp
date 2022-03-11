@@ -127,7 +127,8 @@ in FORMS that begin with that operator."
 
 (defmacro coalton:coalton-codegen (&body toplevel-forms)
   "Returns the lisp code generated from coalton code. Intended for debugging."
-  `(let ((coalton-impl/codegen:*emit-type-annotations* nil))
+  `(let ((coalton-impl/codegen:*emit-type-annotations* nil)
+         (*coalton-skip-update* t))
      (process-coalton-toplevel ',toplevel-forms *package* *global-environment*)))
 
 (defmacro coalton:coalton-codegen-types (&body toplevel-forms)
@@ -196,7 +197,8 @@ in FORMS that begin with that operator."
 
 (defun process-coalton-toplevel (toplevel-forms package &optional (env *global-environment*))
   "Top-level definitions for use within Coalton."
-  (declare (type package package))
+  (declare (type package package)
+           (values t environment))
   (destructuring-bind (&key
                          ((coalton:declare declares))
                          ((coalton:define defines))
@@ -233,23 +235,24 @@ in FORMS that begin with that operator."
                       env))
 
                    (translation-unit
-                     (coalton-impl/codegen::make-translation-unit
+                     (make-translation-unit
                       :types defined-types
                       :definitions toplevel-bindings
                       :instances instance-definitions
                       :classes classes)))
 
               (multiple-value-bind (program env)
-                  (coalton-impl/codegen/program::compile-translation-unit
+                  (coalton-impl/codegen:compile-translation-unit
                    translation-unit
                    env)
 
-                (let* ((env-diff (environment-diff env *global-environment*))
-                       (update (generate-environment-update
-                                env-diff
-                                '*global-environment*)))
-                  (values
-                   `(progn
-                      ,update
-                      ,program)
-                   env))))))))))
+                (values
+                 (if *coalton-skip-update*
+                     program
+                     `(progn
+                        ,(coalton-impl/typechecker::generate-diff
+                          translation-unit
+                          env
+                          '*global-environment*)
+                        ,program))
+                 env)))))))))

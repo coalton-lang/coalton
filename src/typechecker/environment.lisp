@@ -921,58 +921,6 @@
     (cons method instance))
    (unless no-error
      (error "Unable to find inline method for method ~A on instance ~A." method instance))))
-;;;
-;;; Directly applicable functions
-;;;
-
-(defun directly-applicable-functions (env)
-  (mapcar
-   (lambda (f) (cons (function-env-entry-name f) (function-env-entry-arity f)))
-   (fset:convert 'list (fset:range (immutable-map-data (environment-function-environment env))))))
-
-;;;
-;;; Generating environment update code
-;;;
-
-(defun generate-environment-update (env-diff env)
-  (let ((type-table (immutable-map-data (environment-type-environment env-diff)))
-        (value-table (immutable-map-data (environment-value-environment env-diff)))
-        (constructor-table (immutable-map-data (environment-constructor-environment env-diff)))
-        (class-table (immutable-map-data (environment-class-environment env-diff)))
-        (function-table (immutable-map-data (environment-function-environment env-diff)))
-        (instance-table (immutable-listmap-data (environment-instance-environment env-diff)))
-        (name-table (immutable-map-data (environment-name-environment env-diff)))
-        (method-inline-table (immutable-map-data (environment-method-inline-environment env-diff)))
-        (forms nil))
-
-    ;; Tell the world about our types
-    (fset:do-map (k v type-table)
-      (push `(setf ,env (set-type ,env ',k ,v)) forms))
-    ;; Store all the values
-    (fset:do-map (k v value-table)
-      (push `(setf ,env (set-value-type ,env ',k ,v)) forms))
-    ;; Constructor
-    (fset:do-map (k v constructor-table)
-      (push `(setf ,env (set-constructor ,env ',k ,v)) forms))
-    ;; Classes
-    (fset:do-map (k v class-table)
-      (push `(setf ,env (set-class ,env ',k ,v)) forms))
-    ;; Functions
-    (fset:do-map (k v function-table)
-      (push `(setf ,env (set-function ,env ',k ,v)) forms))
-    ;; Instance
-    (fset:do-map (k v instance-table)
-      (fset:do-seq (inst v)
-        (push `(setf ,env (add-instance ,env ',k ,inst)) forms)))
-    ;; Names
-    (fset:do-map (k v name-table)
-      (push `(setf ,env (set-name ,env ',k ,v)) forms))
-    ;; Method inlines
-    (fset:do-map (k v method-inline-table)
-      (push `(setf ,env (set-method-inline ,env ',(car k) ',(cdr k) ',v)) forms))
-
-    `(eval-when (:load-toplevel)
-       ,@(reverse forms))))
 
 ;;;
 ;;; Pretty printing

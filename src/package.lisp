@@ -233,9 +233,6 @@
    #:environment                        ; STRUCT
    #:make-default-environment           ; FUNCTION
    #:environment-function-environment   ; ACCESSOR
-   #:environment-diff                   ; FUNCTION
-   #:environment-shadow                 ; FUNCTION
-   #:generate-environment-update        ; FUNCTION
    #:set-value-type                     ; FUNCTION
    #:set-type                           ; FUNCTION
    #:set-function                       ; FUNCTION
@@ -277,7 +274,6 @@
    #:name-entry-type                    ; ACCESSOR
    #:name-entry-docstring               ; ACCESSOR
    #:make-name-entry                    ; CONSTRUCTOR
-   #:directly-applicable-functions      ; FUNCTION
    )
   (:export
    #:derive-expression-type             ; FUNCTION
@@ -361,6 +357,14 @@
    #:instance-definition-codegen-sym         ; ACCESSOR
    #:instance-definition-method-codegen-syms ; ACCESSOR
    #:instance-definition-list                ; TYPE
+   )
+  (:export
+   #:translation-unit                   ; STRUCT
+   #:make-translation-unit              ; CONSTRUCTOR
+   #:translation-unit-types             ; ACCESSOR
+   #:translation-unit-definitions       ; ACCESSOR
+   #:translation-unit-instances         ; ACCESSOR
+   #:translation-unit-classes           ; ACCESSOR
    )
   ;; Pretty printers
   (:export

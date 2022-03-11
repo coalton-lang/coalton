@@ -55,7 +55,8 @@
                              (:file "parse-class-definition")
                              (:file "parse-instance-definition")
                              (:file "derive-type")
-                             (:file "debug")))
+                             (:file "debug")
+                             (:file "translation-unit")))
                (:module "codegen"
                 :serial t
                 :components ((:file "ast")

@@ -45,24 +45,13 @@
   (:local-nicknames
    (#:tc #:coalton-impl/typechecker))
   (:export
-   #:translation-unit
-   #:make-translation-unit
-   #:translation-unit-types
-   #:translation-unit-definitions
-   #:translation-unit-instances
-   #:translation-unit-classes
    #:compile-translation-unit))
 
 (in-package #:coalton-impl/codegen/program)
 
-(defstruct translation-unit
-  (types       (required 'types)       :type tc:type-definition-list     :read-only t)
-  (definitions (required 'definitions) :type tc:typed-binding-list       :read-only t)
-  (instances   (required 'instances)   :type tc:instance-definition-list :read-only t)
-  (classes     (required 'classes)     :type tc:ty-class-list            :read-only t))
 
 (defun compile-translation-unit (translation-unit env)
-  (declare (type translation-unit translation-unit)
+  (declare (type tc:translation-unit translation-unit)
            (type tc:environment env))
 
   (let* ((inline-funs nil)
@@ -74,7 +63,7 @@
 
          (definitions
            (append
-            (loop :for (name . node) :in (translation-unit-definitions translation-unit)
+            (loop :for (name . node) :in (tc:translation-unit-definitions translation-unit)
                   :for compiled-node := (compile-toplevel name node env)
                   :do (when coalton-impl::*coalton-dump-ast*
                         (format t "~A :: ~A~%~A~%~%~A~%~%"
@@ -83,7 +72,7 @@
                                 node
                                 compiled-node))
                   :collect (cons name compiled-node))
-            (loop :for instance :in (translation-unit-instances translation-unit)
+            (loop :for instance :in (tc:translation-unit-instances translation-unit)
                   :append (compile-instance instance add-inline env))))
 
          (definitions
@@ -113,11 +102,11 @@
                   :collect `(declaim (inline ,name)))
 
           (eval-when (:compile-toplevel :load-toplevel)
-            ,@(loop :for type :in (translation-unit-types translation-unit)
+            ,@(loop :for type :in (tc:translation-unit-types translation-unit)
                     :append (codegen-type-definition type env)))
 
           ,@(codegen-class-definitions
-             (translation-unit-classes translation-unit)
+             (tc:translation-unit-classes translation-unit)
              env)
 
           ,@(loop :for scc :in sccs
