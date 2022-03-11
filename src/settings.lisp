@@ -28,3 +28,5 @@ Enable release mode either by setting the UNIX environment variable COALTON_ENV 
   (format t "~&;; COALTON starting in release mode~%"))
 
 (defvar *coalton-dump-ast* nil)
+
+(defvar *coalton-skip-update* nil)
