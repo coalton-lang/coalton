@@ -51,3 +51,6 @@
 
 (define-coalton-editor-macro coalton:lisp (type vars &body lisp-expr)
   "An escape from Coalton into the Lisp world.")
+
+(define-coalton-editor-macro coalton:do (&body form)
+  "Do notation")
