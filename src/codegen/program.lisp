@@ -115,7 +115,8 @@
                         (lambda (binding)
                           (find (car binding) scc))
                         definitions)
-                  :append (compile-scc bindings env)))
+                  :append (compile-scc bindings env))
+          (values))
        env))))
 
 (defun split-binding-definitions (bindings)
