@@ -305,6 +305,13 @@ Optional ALLOW-UNKNOWN-CLASSES allows classes to appear in the type expression t
                                   (setf subs new-subs)
                                   (setf type-vars (append type-vars new-type-vars))
                                   pred-type)))))
+      (when class-pred
+        (unless (= (length (ty-predicate-types class-pred)) (length (cdr expr)))
+          (error-parsing-type
+           expr
+           (format nil "Unexpected number of type variables: Expected ~A Got ~A"
+                   (length (ty-predicate-types class-pred))
+                   (length (cdr expr))))))
 
       (values (apply-substitution subs (ty-predicate pred-class pred-types))
               type-vars
