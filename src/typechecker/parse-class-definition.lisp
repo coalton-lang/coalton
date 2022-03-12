@@ -204,37 +204,49 @@
 (defun parse-class-signature (env top-expr type-vars subs &key allow-unknown-classes)
   (declare (type environment env)
            (values ty-predicate-list ty-predicate list))
-  (cond
-    ;; If the expression is a list and contains => then it has constraints
-    ((and (listp top-expr)
-          (some #'coalton-double-arrow-p top-expr))
-     ;; Split the expression into parts before and after the arrow
-     (let ((subseqs (split-sequence:split-sequence-if #'coalton-double-arrow-p top-expr)))
-       (unless (and (= 2 (length subseqs))
-                    (= 1 (length (second subseqs))))
-         (error-parsing-type top-expr "Malformed constrained type class"))
-       ;; If the first member of the predicates is a list then we can assume there are multiple to parse.
-       (let* ((preds (if (listp (first (first subseqs)))
-                         (loop :for pred-expr :in (first subseqs)
-                               :collect (multiple-value-bind (pred new-type-vars new-subs)
-                                            (parse-type-predicate env pred-expr type-vars subs :allow-unknown-classes allow-unknown-classes)
-                                          (setf type-vars new-type-vars
-                                                subs new-subs)
-                                          pred))
-                         (multiple-value-bind (pred new-type-vars new-subs)
-                             (parse-type-predicate env (first subseqs) type-vars subs :allow-unknown-classes allow-unknown-classes)
-                           (setf type-vars new-type-vars
-                                 subs new-subs)
-                           (list pred))))
-              (class-pred (multiple-value-bind (pred new-type-vars new-subs)
-                              (parse-type-predicate env (first (second subseqs)) type-vars subs :allow-unknown-classes t)
-                            (setf type-vars new-type-vars
-                                  subs new-subs)
-                            pred)))
+  (with-parsing-context ("signature ~S" top-expr)
+    (cond
+      ;; If the expression is a list and contains => then it has constraints
+      ((and (listp top-expr)
+            (some #'coalton-double-arrow-p top-expr))
+       ;; Split the expression into parts before and after the arrow
+       (let ((subseqs (split-sequence:split-sequence-if #'coalton-double-arrow-p top-expr)))
+         (unless (and (= 2 (length subseqs))
+                      (= 1 (length (second subseqs))))
+           (error-parsing-type top-expr "Malformed constrained type class"))
+         ;; If the first member of the predicates is a list then we can assume there are multiple to parse.
+         (let* ((preds (if (listp (first (first subseqs)))
+                           (progn
+                             ;; Check for duplicate predicates before parsing
+                             (labels ((check-for-duplicate-preds (preds)
+                                        (unless (null preds)
+                                          (let ((pred (car preds))
+                                                (rest (cdr preds)))
+                                            (if (find pred rest :test #'equalp)
+                                                (error-parsing pred "duplicate predicate")
+                                                (check-for-duplicate-preds rest))))))
+                               (check-for-duplicate-preds (first subseqs)))
 
-         (values preds class-pred type-vars subs))))
-    ;; Otherwise parse as a type
-    (t
-     (multiple-value-bind (class-pred type-vars subs)
-         (parse-type-predicate env top-expr type-vars subs :allow-unknown-classes t)
-       (values nil class-pred type-vars subs)))))
+                             (loop :for pred-expr :in (first subseqs)
+                                   :collect (multiple-value-bind (pred new-type-vars new-subs)
+                                                (parse-type-predicate env pred-expr type-vars subs :allow-unknown-classes allow-unknown-classes)
+                                              (setf type-vars new-type-vars
+                                                    subs new-subs)
+                                              pred)))
+                           (multiple-value-bind (pred new-type-vars new-subs)
+                               (parse-type-predicate env (first subseqs) type-vars subs :allow-unknown-classes allow-unknown-classes)
+                             (setf type-vars new-type-vars
+                                   subs new-subs)
+                             (list pred))))
+                (class-pred (multiple-value-bind (pred new-type-vars new-subs)
+                                (parse-type-predicate env (first (second subseqs)) type-vars subs :allow-unknown-classes t)
+                              (setf type-vars new-type-vars
+                                    subs new-subs)
+                              pred)))
+
+           (values preds class-pred type-vars subs))))
+      ;; Otherwise parse as a type
+      (t
+       (multiple-value-bind (class-pred type-vars subs)
+           (parse-type-predicate env top-expr type-vars subs :allow-unknown-classes t)
+         (values nil class-pred type-vars subs))))))

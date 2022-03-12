@@ -52,7 +52,7 @@ Optional ADDITIONAL-PREDICATES specifys additional predicates to qualify the res
   (declare (type environment env)
            (type list type-vars)
            (values ty list substitution-list))
-  (with-parsing-context ("type expression ~A" expr)
+  (with-parsing-context ("type expression ~S" expr)
     (labels ((find-tyvar-entry (name)
                (find name type-vars :key #'car))
              (find-tyvar-entry-from-tvar (tvar)
@@ -188,7 +188,7 @@ Optional ALLOW-UNKNOWN-CLASSES allows classes to appear in the type expression t
   (declare (type environment env)
            (type list type-vars)
            (values qualified-ty list substitution-list))
-  (with-parsing-context ("qualified type expression ~A" expr)
+  (with-parsing-context ("qualified type expression ~S" expr)
     (let ((type
             (cond
               ;; If the expression is a list and contains => then it has constraints
@@ -200,14 +200,26 @@ Optional ALLOW-UNKNOWN-CLASSES allows classes to appear in the type expression t
                    (error-parsing-type expr "Malformed constrained type"))
                  ;; If the first member of the predicates is a list then we can assume there are multiple to parse.
                  (let ((preds (if (listp (first (first subseqs)))
-                                  (loop :for pred-expr :in (first subseqs)
-                                        :collect (multiple-value-bind (pred new-type-vars new-subs)
-                                                     (parse-type-predicate env pred-expr type-vars subs
-                                                                           :allow-unknown-classes allow-unknown-classes
-                                                                           :additional-class-predicates additional-class-predicates)
-                                                   (setf type-vars new-type-vars
-                                                         subs new-subs)
-                                                   pred))
+                                  (progn
+
+                                    ;; Check for duplicate predicates before parsing
+                                    (labels ((check-for-duplicate-preds (preds)
+                                               (unless (null preds)
+                                                 (let ((pred (car preds))
+                                                       (rest (cdr preds)))
+                                                   (if (find pred rest :test #'equalp)
+                                                       (error-parsing pred "duplicate predicate")
+                                                       (check-for-duplicate-preds rest))))))
+                                      (check-for-duplicate-preds (first subseqs)))
+
+                                    (loop :for pred-expr :in (first subseqs)
+                                          :collect (multiple-value-bind (pred new-type-vars new-subs)
+                                                       (parse-type-predicate env pred-expr type-vars subs
+                                                                             :allow-unknown-classes allow-unknown-classes
+                                                                             :additional-class-predicates additional-class-predicates)
+                                                     (setf type-vars new-type-vars
+                                                           subs new-subs)
+                                                     pred)))
                                   (multiple-value-bind (pred new-type-vars new-subs)
                                       (parse-type-predicate env (first subseqs) type-vars subs
                                                             :allow-unknown-classes allow-unknown-classes
@@ -263,7 +275,7 @@ Optional ALLOW-UNKNOWN-CLASSES allows classes to appear in the type expression t
   (declare (type environment env)
            (type list type-vars)
            (values ty-predicate list substitution-list))
-  (with-parsing-context ("type predicate ~A" expr)
+  (with-parsing-context ("type predicate ~S" expr)
     (unless (and (listp expr)
                  (>= (length expr) 2)
                  (symbolp (first expr)))
