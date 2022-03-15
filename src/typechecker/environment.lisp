@@ -327,10 +327,10 @@
 
 (defstruct
     (ty-class
-     (:constructor ty-class (name predicate superclasses unqualified-methods codegen-sym superclass-dict docstring location)))
+     (:constructor ty-class))
   (name                (required 'name)                :type symbol              :read-only t)
   (predicate           (required 'predicate)           :type ty-predicate        :read-only t)
-  (superclasses        (requried 'superclasses)        :type ty-predicate-list   :read-only t)
+  (superclasses        (required 'superclasses)        :type ty-predicate-list   :read-only t)
   ;; Methods of the class containing the same tyvars in PREDICATE for
   ;; use in pretty printing
   (unqualified-methods (required 'unqualified-methods) :type scheme-binding-list :read-only t)
@@ -361,20 +361,21 @@
 (defmethod apply-substitution (subst-list (class ty-class))
   (declare (type substitution-list subst-list)
            (values ty-class &optional))
-  (ty-class (ty-class-name class)
-            (apply-substitution subst-list (ty-class-predicate class))
-            (apply-substitution subst-list (ty-class-superclasses class))
-            (mapcar (lambda (entry)
-                      (cons (car entry)
-                            (apply-substitution subst-list (cdr entry))))
-                    (ty-class-unqualified-methods class))
-            (ty-class-codegen-sym class)
-            (mapcar (lambda (entry)
-                      (cons (apply-substitution subst-list (car entry))
-                            (cdr entry)))
-                    (ty-class-superclass-dict class))
-            (ty-class-docstring class)
-            (ty-class-location class)))
+  (ty-class
+   :name (ty-class-name class)
+   :predicate (apply-substitution subst-list (ty-class-predicate class))
+   :superclasses (apply-substitution subst-list (ty-class-superclasses class))
+   :unqualified-methods (mapcar (lambda (entry)
+                                  (cons (car entry)
+                                        (apply-substitution subst-list (cdr entry))))
+                                (ty-class-unqualified-methods class))
+   :codegen-sym (ty-class-codegen-sym class)
+   :superclass-dict (mapcar (lambda (entry)
+                              (cons (apply-substitution subst-list (car entry))
+                                    (cdr entry)))
+                            (ty-class-superclass-dict class))
+   :docstring (ty-class-docstring class)
+   :location (ty-class-location class)))
 
 (defstruct (class-environment (:include immutable-map)))
 
@@ -387,7 +388,7 @@
 
 (defstruct
     (ty-class-instance
-     (:constructor ty-class-instance (constraints predicate codegen-sym method-codegen-syms)))
+     (:constructor ty-class-instance))
   (constraints         (required 'constraints)         :type ty-predicate-list :read-only t)
   (predicate           (required 'predicate)           :type ty-predicate      :read-only t)
   (codegen-sym         (required 'codegen-sym)         :type symbol            :read-only t)
@@ -416,10 +417,10 @@
   (declare (type substitution-list subst-list)
            (values ty-class-instance &optional))
   (ty-class-instance
-   (apply-substitution subst-list (ty-class-instance-constraints instance))
-   (apply-substitution subst-list (ty-class-instance-predicate instance))
-   (ty-class-instance-codegen-sym instance)
-   (ty-class-instance-method-codegen-syms instance)))
+   :constraints (apply-substitution subst-list (ty-class-instance-constraints instance))
+   :predicate (apply-substitution subst-list (ty-class-instance-predicate instance))
+   :codegen-sym (ty-class-instance-codegen-sym instance)
+   :method-codegen-syms (ty-class-instance-method-codegen-syms instance)))
 
 (defstruct (instance-environment (:include immutable-listmap)))
 

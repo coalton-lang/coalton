@@ -30,7 +30,8 @@
   (id   (required 'id)   :type fixnum :read-only t)
   (kind (required 'kind) :type kind   :read-only t))
 
-(defmethod make-load-form ((self tyvar) &optional env) (make-load-form-saving-slots
+(defmethod make-load-form ((self tyvar) &optional env)
+  (make-load-form-saving-slots
    self
    :slot-names '(id kind)
    :environment env))
@@ -162,6 +163,44 @@
           (kfun-to from-kind)
           (error "Malformed type application")))))
 
+(defmethod apply-ksubstitution (subs (type tyvar))
+  (%make-tyvar
+   :id (tyvar-id type)
+   :kind (apply-ksubstitution subs (tyvar-kind type))))
+
+(defmethod apply-ksubstitution (subs (type tycon))
+  (%make-tycon
+   :name (tycon-name type)
+   :kind (apply-ksubstitution subs (tycon-kind type))))
+
+(defmethod apply-ksubstitution (subs (type tcon))
+  (%make-tcon (apply-ksubstitution subs (tcon-tycon type))))
+
+(defmethod apply-ksubstitution (subs (type tvar))
+  (%make-tvar (apply-ksubstitution subs (tvar-tyvar type))))
+
+(defmethod apply-ksubstitution (subs (type tapp))
+  (%make-tapp
+   (apply-ksubstitution subs (tapp-from type))
+   (apply-ksubstitution subs (tapp-to type))))
+
+(defmethod kind-variables ((type tyvar))
+  (kind-variables (kind-of type)))
+
+(defmethod kind-variables ((type tvar))
+  (kind-variables (tvar-tyvar type)))
+
+(defmethod kind-variables ((type tycon))
+  (kind-variables (kind-of type)))
+
+(defmethod kind-variables ((type tcon))
+  (kind-variables (tcon-tycon type)))
+
+(defmethod kind-variables ((type tapp))
+  (append
+   (kind-variables (tapp-to type))
+   (kind-variables (tapp-from type))))
+
 ;;;
 ;;; Early types
 ;;;
@@ -192,23 +231,34 @@
 (defvar *list-type* (%make-tcon (%make-tycon :name 'coalton:List :kind (kfun kstar kstar))))
 
 
-(defun apply-type-argument (tcon arg)
+(defun apply-type-argument (tcon arg &key ksubs)
   (declare (type (or tcon tapp tvar) tcon)
            (type ty arg)
-           (values tapp))
-  (unless (kfun-p (kind-of tcon))
-    (error 'type-application-error :type tcon :argument arg))
-  (unless (equalp (kfun-from (kind-of tcon)) (kind-of arg))
-    (error 'type-application-error :type tcon :argument arg))
-  (%make-tapp tcon arg))
+           (values tapp ksubstitution-list))
+  (handler-case
+      (let ((ksubs (kunify
+                    (kind-of (apply-ksubstitution ksubs tcon))
+                    (kfun (kind-of (apply-ksubstitution ksubs arg)) (make-kvariable))
+                    ksubs)))
+        (values
+         (%make-tapp tcon arg)
+         ksubs))
+    (kunify-error (e)
+      (declare (ignore e))
+      (error 'type-application-error :type tcon :argument arg))))
 
-(defun apply-type-argument-list (tcon args)
-  (labels ((%apply-type-argument-list (tcon args)
+(defun apply-type-argument-list (tcon args &key ksubs)
+  (declare (type ty tcon)
+           (type ty-list args)
+           (type ksubstitution-list ksubs)
+           (values ty ksubstitution-list &optional))
+  (labels ((%apply-type-argument-list (tcon args ksubs)
              (if args
-                 (apply-type-argument (%apply-type-argument-list tcon (cdr args))
-                                      (car args))
-                 tcon)))
-    (%apply-type-argument-list tcon (reverse args))))
+                 (multiple-value-bind (tcon ksubs)
+                     (%apply-type-argument-list tcon (cdr args) ksubs)
+                   (apply-type-argument tcon (car args) :ksubs ksubs))
+                 (values tcon ksubs))))
+    (%apply-type-argument-list tcon (reverse args) ksubs)))
 
 (defun make-function-type (from to)
   (declare (type ty from to)

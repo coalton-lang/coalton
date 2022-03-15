@@ -29,293 +29,217 @@
 
 (alexandria:define-constant keyword-package (find-package "KEYWORD") :test #'equalp)
 
-(defun parse-and-resolve-type (env top-expr &optional type-vars disallowed-type-vars additional-predicates)
-  "Parse the type expression EXPR in environment ENV returning a TY-SCHEME
-
-Optional TYPE-VARS is an ALIST specifying type variables within the current parsing context
-Optional DISALLOWED-TYPE-VARS is a list specifying the type variables which should be excluded from type quantification
-Optional ADDITIONAL-PREDICATES specifys additional predicates to qualify the resulting type over"
+(defun parse-and-resolve-type (env expr)
+  "Parse the type expression EXPR in environment ENV returning a TY-SCHEME"
   (declare (type environment env)
            (values ty-scheme &optional))
 
   ;; Parse out the expression and quantify over non-disallowed type variables
-  (multiple-value-bind (parsed type-vars subs)
-      (parse-qualified-type-expr env top-expr type-vars nil :additional-predicates additional-predicates)
-    (apply-substitution subs
-                        (quantify (remove-if
-                                   (lambda (x) (member x disallowed-type-vars :test #'equalp))
-                                   (type-variables (mapcar #'cadr type-vars)))
-                                  parsed))))
+  (let ((type-vars
+          (mapcar
+           (lambda (type-var)
+             (list type-var (make-variable (make-kvariable))))
+           (collect-type-vars expr))))
+    (multiple-value-bind (type ksubs)
+        (parse-qualified-type-expr env expr type-vars nil)
+      
+      (let* ((kvars (kind-variables (apply-ksubstitution ksubs type)))
 
-(defun parse-type-expr (env expr type-vars subs &optional output-kind)
-  "Parse type expression EXPR with the type variable context TYPE-VARS"
+             (ksubs (kind-monomorphise-subs kvars ksubs))
+
+             (type (apply-ksubstitution ksubs type)))
+
+        (let* ((preds (qualified-ty-predicates type))
+               (reduced-preds (reduce-context env preds nil :allow-deferred-predicates nil)))
+          (unless (null (set-exclusive-or preds reduced-preds :test #'equalp))
+            (with-pprint-variable-context ()
+              (warn "Context for type ~S~%    can be reduced from ~{~S~^, ~} to ~{~S~^, ~}"
+                    expr
+                    preds
+                    (or reduced-preds '("nothing"))))))
+
+        (quantify (type-variables type) type)))))
+
+(defun rewrite-type-expr (expr)
+  (etypecase expr
+    (symbol expr)
+    (list
+     (let ((arrow-index (position-if #'coalton-arrow-p expr)))
+       (if arrow-index
+           (list 'coalton:Arrow
+                 (rewrite-type-expr (subseq expr 0 arrow-index))
+                 (rewrite-type-expr (subseq expr (1+ arrow-index))))
+           (mapcar #'rewrite-type-expr expr))))))
+
+(defun parse-type-expr-inner (env expr type-vars ksubs)
+  (declare (type environment env)
+           (type t expr)
+           (type list type-vars)
+           (type ksubstitution-list ksubs)
+           (values ty ksubstitution-list &optional))
+  (labels
+      ((find-tyvar-entry (name)
+         (second (find name type-vars :key #'car))))
+
+    (etypecase expr
+      (symbol
+       (let ((tyvar (find-tyvar-entry expr)))
+         (values
+          (if tyvar
+              tyvar
+              (type-entry-type (lookup-type env expr)))
+          ksubs)))
+
+      (list
+       (let ((elems
+               (loop :for elem :in expr
+                     :collect (multiple-value-bind (type new-ksubs)
+                                  (parse-type-expr-inner env elem type-vars ksubs)
+                                (setf ksubs new-ksubs)
+                                type))))
+         (apply-type-argument-list
+          (first elems)
+          (rest elems)
+          :ksubs ksubs))))))
+
+(defun parse-type-expr (env expr type-vars ksubs)
+  (multiple-value-bind (ty ksubs)
+      (parse-type-expr-inner env (rewrite-type-expr expr) type-vars ksubs)
+    (values
+     (apply-ksubstitution ksubs ty)
+     ksubs)))
+
+(defun collect-type-vars (expr)
+  (let ((type-vars nil))
+    (labels ((inner (expr)
+               (etypecase expr
+                 (symbol
+                  (when (equalp keyword-package (symbol-package expr))
+                    (push expr type-vars)))
+
+                 (list
+                  (loop :for elem :in expr
+                        :do (inner elem))))))
+      (inner expr)
+      (remove-duplicates type-vars :test #'equalp))))
+
+(defun collect-types (expr)
+  (let ((types nil))
+    (labels ((inner (expr)
+               (etypecase expr
+                 (symbol
+                  (when (not (equalp keyword-package (symbol-package expr)))
+                    (push expr types)))
+
+                 (list
+                  (loop :for elem :in expr
+                        :do (inner elem))))))
+      (inner expr)
+      (remove-duplicates types :test #'equalp))))
+
+(defun parse-qualified-type-expr (env expr type-vars ksubs)
+  "Parse qualified type expression EXPR in type environment ENV"
   (declare (type environment env)
            (type list type-vars)
-           (values ty list substitution-list))
-  (with-parsing-context ("type expression ~S" expr)
-    (labels ((find-tyvar-entry (name)
-               (find name type-vars :key #'car))
-             (find-tyvar-entry-from-tvar (tvar)
-               (find tvar type-vars :key #'cadr :test #'equalp))
-             (resolve-type-variables (type kind)
-               "Resolve kinds of all type variables in TYPE such that TYPE is of kind KIND"
-               (etypecase type
-                 (tvar
-                  (let ((entry (find-tyvar-entry-from-tvar type)))
-                    ;; If we don't know this tyvar then don't attempt
-                    ;; to resolve, just check that it is the correct
-                    ;; kind.
-                    (if (null entry)
-                        (progn
-                          (unless (equalp kind (kind-of type))
-                            (error 'kind-mismatch-error :type type :kind kind))
-                          type)
-                        (if (null (cddr entry))
-                            ;; If the kind of the variable has not been
-                            ;; resolved then set its kind and emit a
-                            ;; substitution
-                            (let* ((new-var (make-variable kind))
-                                   (type-vars-with-entry-removed (remove-if
-                                                                  (lambda (e)
-                                                                    (equalp type (cadr e)))
-                                                                  type-vars))
-                                   (entry (cons (car entry) (cons new-var (kind-arity kind)))))
-                              (setf type-vars (append type-vars-with-entry-removed (list entry)))
-                              (push (%make-substitution (tvar-tyvar type) new-var) subs)
-                              new-var)
+           (values qualified-ty ksubstitution-list))
 
-                            ;; Otherwise, assert that we are resolved to the correct kind
-                            (progn
-                              (unless (and (= (cddr entry) (kind-arity kind))
-                                           (equalp kind (kind-of (cadr entry))))
-                                (error 'kind-mismatch-error :type (cadr entry) :kind kind))
-                              type)))))
-                 (tcon
-                  ;; For type constructors, simply assert
-                  ;; that we have the correct kind.
-                  (unless (equalp kind (kind-of type))
-                    (error 'kind-mismatch-error :type type :kind kind))
-                  type)
-                 (tapp
-                  ;; For type applications, we will
-                  ;; assume simple kind and require the
-                  ;; applied type to be of kind *
-                  (%make-tapp (resolve-type-variables (tapp-from type) (kFun kStar kind))
-                              (resolve-type-variables (tapp-to type) kStar))))))
-      (let ((type
-              (etypecase expr
-                ;; Symbols are either type constructors or type variables
-                (symbol
-                 (cond
-                   ;; Type variable
-                   ((equalp (symbol-package expr)
-                            keyword-package)
-                    (or (car (cdr (find-tyvar-entry expr)))
-                        (let* ((var (make-variable))
-                               ;; Create a type variable with unknown
-                               ;; arity to be determined on usage
-                               (entry (cons expr (cons var nil))))
-                          (setf type-vars (append type-vars (list entry)))
-                          var)))
-                   ;; Type constructor in current scope
-                   (t
-                    (type-entry-type (lookup-type env expr)))))
-                (list
-                 (cond
-                   ((some #'coalton-arrow-p expr)
-                    (unless (oddp (length expr))
-                      (error-parsing-type expr "Malformed function type"))
-
-                    (let ((arg-types nil)
-                          (function-type nil))
-                      ;; Create argument types in the _correct_ order
-                      (loop :for (type arrow) :on expr :by #'cddr
-                            :for num :from 0
-                            :do
-                               ;; Unless we are at the last type, there must be arrows
-                               (unless (or (= num (/ (1- (length expr)) 2))
-                                           (coalton-arrow-p arrow))
-                                 (error-parsing-type expr "Malformed function type"))
-
-                               ;; Parse the type, adding any new type variables to the context
-                               (multiple-value-bind (arg-type new-type-vars new-subs)
-                                   (parse-type-expr env type type-vars subs)
-                                 (setf type-vars new-type-vars
-                                       subs new-subs)
-                                 ;; Ensure we have a type of kind kStar
-                                 (let ((resolved-arg-type (resolve-type-variables arg-type kStar)))
-                                   (push resolved-arg-type arg-types))))
-                      (dolist (arg-type arg-types)
-                        (setf function-type
-                              (if function-type
-                                  (make-function-type arg-type function-type)
-                                  arg-type)))
-                      function-type))
-                   (t
-                    ;; NOTE: We might be able to remove this restriction if we allow constructing non-* types
-                    (unless (symbolp (first expr))
-                      (error-parsing-type expr "Invalid type constructor ~S" (first expr)))
-
-                    (let* ((ty-con-arity (if output-kind
-                                             (+ (length (rest expr)) (kind-arity output-kind))
-                                             (length (rest expr))))
-                           (ty-con-kind (make-kind-of-arity ty-con-arity))
-                           (ty-con (multiple-value-bind (tcon new-type-vars new-subs)
-                                       (parse-type-expr env (first expr) type-vars subs ty-con-kind)
-                                     (setf type-vars new-type-vars
-                                           subs new-subs)
-                                     (resolve-type-variables tcon ty-con-kind)))
-                           (arg-tys
-                             (loop :for e :in (rest expr)
-                                   :collect (multiple-value-bind (arg-type new-type-vars new-subs)
-                                                (parse-type-expr env e type-vars subs)
-                                              (setf type-vars new-type-vars
-                                                    subs new-subs)
-                                              arg-type))))
-                      (apply-type-argument-list ty-con arg-tys))))))))
-        (let ((output-type (apply-substitution subs type)))
-          (values output-type type-vars subs))))))
-
-(defun parse-qualified-type-expr (env expr type-vars subs &key
-                                                            additional-predicates
-                                                            additional-class-predicates
-                                                            allow-unknown-classes)
-  "Parse qualified type expression EXPR in type environment ENV
-
-Optional ADDITIONAL-PREDICATES provides additional predicates to qualify over
-Optional ADDITIONAL-CLASS-PREDICATES provides additional class predicates to use before looking in ENV
-Optional ALLOW-UNKNOWN-CLASSES allows classes to appear in the type expression that are not defined in ENV or ADDITIONAL-CLASS-PREDICATES"
-  (declare (type environment env)
-           (type list type-vars)
-           (values qualified-ty list substitution-list))
   (with-parsing-context ("qualified type expression ~S" expr)
-    (let ((type
-            (cond
-              ;; If the expression is a list and contains => then it has constraints
-              ((and (listp expr)
-                    (some #'coalton-double-arrow-p expr))
-               ;; Split the expression into parts before and after the arrow
-               (let ((subseqs (split-sequence:split-sequence-if #'coalton-double-arrow-p expr)))
-                 (unless (= 2 (length subseqs))
-                   (error-parsing-type expr "Malformed constrained type"))
-                 ;; If the first member of the predicates is a list then we can assume there are multiple to parse.
-                 (let ((preds (if (listp (first (first subseqs)))
-                                  (progn
+    (let ((unparsed-type nil)
+          (unparsed-preds nil))
 
-                                    ;; Check for duplicate predicates before parsing
-                                    (labels ((check-for-duplicate-preds (preds)
-                                               (unless (null preds)
-                                                 (let ((pred (car preds))
-                                                       (rest (cdr preds)))
-                                                   (if (find pred rest :test #'equalp)
-                                                       (error-parsing pred "duplicate predicate")
-                                                       (check-for-duplicate-preds rest))))))
-                                      (check-for-duplicate-preds (first subseqs)))
+      ;; If the expression is a list and contains => then it has constraints
+      (if (and (listp expr) (some #'coalton-double-arrow-p expr))
+          ;; Split the expression into parts before and after the arrow
+          (let ((subseqs (split-sequence:split-sequence-if #'coalton-double-arrow-p expr)))
+            (unless (= 2 (length subseqs))
+              (error-parsing-type expr "Malformed constrained type"))
 
-                                    (loop :for pred-expr :in (first subseqs)
-                                          :collect (multiple-value-bind (pred new-type-vars new-subs)
-                                                       (parse-type-predicate env pred-expr type-vars subs
-                                                                             :allow-unknown-classes allow-unknown-classes
-                                                                             :additional-class-predicates additional-class-predicates)
-                                                     (setf type-vars new-type-vars
-                                                           subs new-subs)
-                                                     pred)))
-                                  (multiple-value-bind (pred new-type-vars new-subs)
-                                      (parse-type-predicate env (first subseqs) type-vars subs
-                                                            :allow-unknown-classes allow-unknown-classes
-                                                            :additional-class-predicates additional-class-predicates)
-                                    (setf type-vars new-type-vars
-                                          subs new-subs)
-                                    (list pred))))
-                       (type (multiple-value-bind (type new-type-vars new-subs)
-                                 (if (= 1 (length (second subseqs)))
-                                     (parse-type-expr env (first (second subseqs)) type-vars subs)
-                                     (parse-type-expr env (second subseqs) type-vars subs))
-                               (setf type-vars new-type-vars
-                                     subs new-subs)
-                               type)))
+            (setf unparsed-type (second subseqs))
 
-                   ;; Ensure predicates can only constrain type variables in the type
-                   (let ((tyvars (type-variables type)))
-                     (dolist (pred preds)
-                       (dolist (pred-tyvar (type-variables (apply-substitution subs pred)))
-                         (unless (member pred-tyvar tyvars :test #'equalp)
-                           (error-parsing-type expr "Type variable ~S appears in predicates but not in type"
-                                               (car (find pred-tyvar
-                                                          type-vars
-                                                          :key (lambda (x)
-                                                                 (tvar-tyvar (cadr x)))
-                                                          :test #'equalp)))))))
+            ;; If the first member of the predicates is a list then we can assume there are multiple to parse.
+            (if (listp (car (first subseqs)))
+                (setf unparsed-preds (first subseqs))
+                (setf unparsed-preds (list (first subseqs)))))
 
-                   (let* ((preds (apply-substitution subs (append additional-predicates preds)))
-                          (reduced-preds (reduce-context env preds subs)))
-                     (unless (null (set-exclusive-or preds reduced-preds :test #'equalp))
-                       (with-pprint-variable-context ()
-                         (warn "Reduced context for type ~A~%   from ~{~A~^, ~} to ~{~A~^, ~}"
+          (setf unparsed-type expr))
+
+      ;; Check for duplicate predicates before parsing
+      (labels ((check-for-duplicate-preds (preds)
+                 (unless (null preds)
+                   (let ((pred (car preds))
+                         (rest (cdr preds)))
+                     (if (find pred rest :test #'equalp)
+                         (error-parsing pred "duplicate predicate")
+                         (check-for-duplicate-preds rest))))))
+        (check-for-duplicate-preds unparsed-preds))
+
+      (let ((unparsed-type-vars (collect-type-vars unparsed-type)))
+        (loop :for pred :in unparsed-preds
+              :for pred-vars := (collect-type-vars pred)
+              :do (loop :for var :in pred-vars
+                        :unless (find var unparsed-type-vars :test #'equalp)
+                          :do (error-parsing
                                expr
-                               preds
-                               (or reduced-preds '("nothing")))))
-                     (qualify reduced-preds type)))))
-              ;; Otherwise parse as a type
-              (t
-               (multiple-value-bind (type new-type-vars new-subs)
-                   (parse-type-expr env expr type-vars subs)
-                 (setf type-vars new-type-vars
-                       subs new-subs)
-                 (qualify (reduce-context env additional-predicates subs) type))))))
-      (values (apply-substitution subs type) type-vars subs))))
+                               "type variable ~S appears in predicate ~S but not in type."
+                               var
+                               pred))))
 
-(defun parse-type-predicate (env expr type-vars subs &key
-                                                       additional-class-predicates
-                                                       allow-unknown-classes)
-  "Parse type predicate EXPR in type environment ENV
+      (let ((preds
+              (loop :for unparsed-pred :in unparsed-preds
+                    :collect (multiple-value-bind (pred new-ksubs)
+                                 (parse-type-predicate env unparsed-pred type-vars ksubs)
+                               (setf ksubs new-ksubs)
+                               pred))))
 
-Optional ADDITIONAL-CLASS-PREDICATES provides additional class predicates to use before looking in ENV
-Optional ALLOW-UNKNOWN-CLASSES allows classes to appear in the type expression that are not defined in ENV or ADDITIONAL-CLASS-PREDICATES"
+        (multiple-value-bind (type new-ksubs)
+            (parse-type-expr env unparsed-type type-vars ksubs)
+          (setf ksubs new-ksubs)
+
+          (values
+           (apply-ksubstitution ksubs (qualify preds type))
+           ksubs))))))
+
+(defun parse-type-predicate (env expr type-vars ksubs)
+  "Parse type predicate EXPR in type environment ENV"
   (declare (type environment env)
            (type list type-vars)
-           (values ty-predicate list substitution-list))
+           (type ksubstitution-list ksubs)
+           (values ty-predicate ksubstitution-list))
   (with-parsing-context ("type predicate ~S" expr)
     (unless (and (listp expr)
                  (>= (length expr) 2)
                  (symbolp (first expr)))
       (error-parsing-type expr "Malformed type predicate"))
+
     (let* ((pred-class (first expr))
-           ;; Look up the class in the environment to find the kind of any type variables
-           (class-pred (or (find pred-class additional-class-predicates :key #'ty-predicate-class)
-                           (let ((class-entry (lookup-class env pred-class :no-error allow-unknown-classes)))
-                             (and class-entry
-                                  (ty-class-predicate class-entry)))))
-           (class-pred-kinds (and class-pred
-                                  (mapcar #'kind-of (ty-predicate-types class-pred))))
+
+           (class-entry (lookup-class env pred-class))
 
            (pred-types
              ;; We need two loops so that we can do with or without the kinds
-             (if class-pred-kinds
+             (if class-entry
                  (loop :for pred-expr :in (cdr expr)
-                       :for pred-kind :in class-pred-kinds
-                       :collect (multiple-value-bind (pred-type new-type-vars new-subs)
-                                    (parse-type-expr env pred-expr type-vars subs pred-kind)
-                                  (setf subs new-subs)
-                                  (setf type-vars (append type-vars new-type-vars))
+                       :for pred-kind :in (mapcar #'kind-of (ty-predicate-types (ty-class-predicate class-entry)))
+                       :collect (multiple-value-bind (pred-type new-ksubs)
+                                    (parse-type-expr env pred-expr type-vars ksubs)
+                                  (setf ksubs new-ksubs)
+                                  (setf ksubs (kunify pred-kind (kind-of pred-type) ksubs))
                                   pred-type))
                  (loop :for pred-expr :in (cdr expr)
-                       :collect (multiple-value-bind (pred-type new-type-vars new-subs)
-                                    (parse-type-expr env pred-expr type-vars subs nil)
-                                  (setf subs new-subs)
-                                  (setf type-vars (append type-vars new-type-vars))
+                       :collect (multiple-value-bind (pred-type new-ksubs)
+                                    (parse-type-expr env pred-expr type-vars ksubs)
+                                  (setf ksubs new-ksubs)
                                   pred-type)))))
-      (when class-pred
-        (unless (= (length (ty-predicate-types class-pred)) (length (cdr expr)))
+      (when class-entry
+        (unless (= (length (ty-predicate-types (ty-class-predicate class-entry))) (length (cdr expr)))
           (error-parsing-type
            expr
            (format nil "Unexpected number of type variables: Expected ~A Got ~A"
-                   (length (ty-predicate-types class-pred))
+                   (length (ty-predicate-types (ty-class-predicate class-entry)))
                    (length (cdr expr))))))
 
-      (values (apply-substitution subs (ty-predicate pred-class pred-types))
-              type-vars
-              subs))))
+      (values (ty-predicate pred-class pred-types)
+              ksubs))))
 
 
 ;;;

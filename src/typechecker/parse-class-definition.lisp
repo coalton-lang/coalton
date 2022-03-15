@@ -4,250 +4,282 @@
 ;;; Parsing class defintions
 ;;;
 
+(defun parse-method-predicates (name type)
+  (declare (type symbol name))
+
+  (with-parsing-context ("method ~A" name)
+    (unless (some #'coalton-double-arrow-p type)
+      (return-from parse-method-predicates nil))
+
+    (let ((subseqs (split-sequence:split-sequence-if #'coalton-double-arrow-p type)))
+      (unless (= 2 (length subseqs))
+        (error-parsing type "malformed method type"))
+
+      (if (symbolp (car (first subseqs)))
+          (list (first subseqs))
+          (progn
+            (unless (every (alexandria:compose #'symbolp #'car) (first subseqs))
+              (error-parsing type "malformed method type"))
+            (first subseqs))))))
+
+(defun split-class-signature (signature error-message)
+  (declare (type string error-message))
+
+  (let (predicate context)
+    (cond
+      ;; (define-class (B ... => (C ...) ...)
+      ;; (define-class ((B ...) (A ...) ... => (C ...)) ...)
+      ((some #'coalton-double-arrow-p signature)
+       (let ((subseqs (split-sequence:split-sequence-if #'coalton-double-arrow-p signature)))
+         (unless (= 2 (length subseqs))
+           (error-parsing signature error-message))
+
+         ;; Support both single and multiple predicate forms
+         (if (symbolp (car (first subseqs)))
+             (setf context (list (first subseqs)))
+             (setf context (first subseqs)))
+
+         ;; Allow both of the following forms
+         ;; (... => C :a)
+         ;; (... => (C :a))
+         (if (symbolp (car (second subseqs)))
+             (setf predicate (second subseqs))
+             (setf predicate (car (second subseqs))))
+
+         (unless (symbolp (car predicate))
+           (error-parsing signature error-message))))
+
+      ;; (define-class (C ...) ...)
+      ((symbolp (first signature))
+       (setf predicate signature))
+
+      (t
+       (error-parsing signature error-message)))
+
+    (values
+     predicate
+     context)))
+
 (defun parse-class-definitions (forms env)
   (declare (type list forms)
            (type environment env)
            (values ty-class-list environment))
 
-  ;; Parse out class definitions and sort them by superclass dependencies
-  (let ((class-deps nil) ; DAG as list of (CLASS SUPERCLASS*) for topological sorting
-        (class-forms nil)               ; List of (CLASS FORM)
-        )
-    (dolist (form forms)
-      (unless (and (listp form)
-                   (<= 2 (length form))
-                   (eql 'coalton:define-class (first form)))
-        (error "Malformed DEFINE-CLASS form ~A" form))
-      ;; Parse out the type class signature to form dependency graph of superclasses
-      (multiple-value-bind (class-context class-predicate class-tyvars subs)
-          (parse-class-signature env (second form) nil nil :allow-unknown-classes t)
+    ;; Parse out class definitions and sort them by superclass dependencies
+    (let ((class-deps nil) ; DAG as list of (CLASS SUPERCLASS*) for topological sorting
+          (class-forms nil) ; List of (name predicate methods docstring)
+          )
 
-        (when (some (lambda (pred)
-                      (eql (ty-predicate-class pred)
-                           (ty-predicate-class class-predicate)))
-                    class-context)
-          (error 'cyclic-class-definitions-error :classes (list (ty-predicate-class class-predicate))))
+      ;; Inital parsing of define-class forms
+      ;; * split apart predicate, context, and methods
+      ;; * find class dependencies to compute sccs
+      (dolist (form forms)
+        (unless (and (listp form)
+                     (<= 2 (length form))
+                     (eql 'coalton:define-class (first form)))
+          (error-parsing form "Malformed DEFINE-CLASS"))
 
-        (let* ((class-name (ty-predicate-class class-predicate))
-               (superclass-names (mapcar #'ty-predicate-class class-context))
-               (docstring? (stringp (third form)))
-               ;; Also parse out constraints of all methods
-               (class-method-deps
-                 (mapcan (lambda (form)
-                           (unless (and (listp form)
-                                        (= 2 (length form))
-                                        (symbolp (first form)))
-                             (error "Malformed DEFINE-CLASS method form ~A" form))
-                           (qualified-ty-predicates
-                            (parse-qualified-type-expr env (second form) class-tyvars subs :allow-unknown-classes t)))
-                         (if docstring?
-                             (cdddr form)
-                             (cddr form))))
-               (class-method-dep-names (mapcar #'ty-predicate-class class-method-deps)))
-          ;; Add the dependency group to the DAG
-          (push (append (list class-name) superclass-names class-method-dep-names)
+        (let ((name nil)
+              (context nil)
+              (predicate nil)
+              (method-predicates nil)
+              (methods nil)
+              (docstring nil))
+
+          (multiple-value-setq (predicate context) (split-class-signature (second form) "malformed DEFINE-CLASS"))
+
+          (setf name (car predicate))
+
+          (if (stringp (first (nthcdr 2 form)))
+              (setf docstring (first (nthcdr 2 form))
+                    methods (nthcdr 3 form))
+              (setf methods (nthcdr 2 form)))
+
+          (with-parsing-context ("DEFINE-CLASS for class ~A" (car predicate))
+            (loop :for method :in methods
+                  :do (unless (= 2 (length method))
+                        (error-parsing method "invalid method definition"))
+                  :do (unless (symbolp (car method))
+                        (error-parsing method "invalid method name ~A" (car method)))
+                  :do (setf method-predicates (append method-predicates (parse-method-predicates (first method) (alexandria:ensure-list (second method)))))))
+
+          (push (cons name
+                      (remove-duplicates
+                       (append (mapcar #'car context) (mapcar #'car method-predicates))))
                 class-deps)
-          ;; Add the class form for later use
-          (push (cons class-name form)
-                class-forms))))
+          (push (list name predicate context methods docstring) class-forms)))
 
-    ;; Ensure we know about all of the superclasses and remove any
-    ;; references to known classes from the DAG (tarjan scc will fail
-    ;; otherwise).
-    (setf class-deps
-          (loop :for class-dep :in class-deps
-                :collect (cons (car class-dep)
-                               (mapcan (lambda (dep)
-                                         (cond
-                                           ;; If the dep is part of the current definitions then allow it
-                                           ((member dep class-deps :key #'car)
-                                            (list dep))
-                                           ;; Else if we know about this class in the environment then remove it
-                                           ((lookup-class env dep :no-error t)
-                                            nil)
-                                           ;; Otherwise, signal an error
-                                           (t
-                                            (error "Unknown class ~S in definition of class ~S" dep (car class-dep)))))
-                                       (cdr class-dep)))))
+      ;; Ensure we know about all of the superclasses and remove any
+      ;; references to known classes from the DAG (tarjan scc will fail
+      ;; otherwise).
+      (setf class-deps
+            (loop :for class-dep :in class-deps
+                  :do (when (find (car class-dep) (cdr class-dep))
+                        (error 'cyclic-class-definitions-error :classes (list (car class-dep))))
+                  :collect (cons (car class-dep)
+                                 (mapcan (lambda (dep)
+                                           (cond
+                                             ;; If the dep is part of the current definitions then allow it
+                                             ((member dep class-deps :key #'car)
+                                              (list dep))
+                                             ;; Else if we know about this class in the environment then remove it
+                                             ((lookup-class env dep :no-error t)
+                                              nil)
+                                             ;; Otherwise, signal an error
+                                             (t
+                                              (error "Unknown class ~S in definition of class ~S" dep (car class-dep)))))
+                                         (cdr class-dep)))))
 
-    ;; Perform a topological sort of classes to ensure contexts can be resolved
-    (let* ((sorted-classes (reverse (tarjan-scc class-deps)))
-           (sorted-forms
-             (loop :for class-group :in sorted-classes
-                   :collect (progn
-                              (unless (= 1 (length class-group))
-                                (error 'cyclic-class-definitions-error :classes class-group))
-                              (find (first class-group) class-forms :key #'car)))))
+      ;; Perform a topological sort of classes to ensure contexts can be resolved
+      (let* ((sorted-classes (reverse (tarjan-scc class-deps)))
+             (sorted-forms
+               (loop :for class-group :in sorted-classes
+                     :collect (progn
+                                (unless (= 1 (length class-group))
+                                  (error 'cyclic-class-definitions-error :classes class-group))
+                                (find (first class-group) class-forms :key #'car)))))
 
-      ;; Now we can go through and re-parse and add classes to the environment
-      (let ((classes (loop :for (class-name . form) :in sorted-forms
-                           :collect
-                           (multiple-value-bind (class methods docstring)
-                               (parse-class-definition form env)
+        ;; Now we can go through and re-parse and add classes to the environment
+        (let ((classes
+                (loop :for (name unparsed-predicate unparsed-context unparsed-methods docstring) :in sorted-forms
+                      :collect (with-parsing-context ("DEFINE-CLASS for class ~A" name)
+                                 (multiple-value-bind (class methods)
+                                     (parse-class-definition name unparsed-predicate unparsed-context unparsed-methods docstring env)
+                                   (setf env (set-class env (ty-class-name class) class))
 
-                             (declare (ignore docstring))
+                                   (dolist (method methods)
+                                     (setf env (set-value-type env (car method) (cdr method)))
 
-                             ;; Add class to environment
-                             (setf env (set-class env (ty-class-name class) class))
+                                     (setf env (set-name env (car method)
+                                                         (make-name-entry
+                                                          :name (car method)
+                                                          :type :method
+                                                          :docstring nil
+                                                          :location (or *compile-file-pathname* *load-truename*))))
 
-                             ;; Add method types to environment
-                             (dolist (method methods)
-                               (setf env (set-value-type env (car method) (cdr method)))
+                                     (if (function-type-p (qualified-ty-type (fresh-inst (cdr method))))
+                                         (let ((arity (+ (function-type-arity
+                                                          (qualified-ty-type (fresh-inst (cdr method))))
+                                                         (length (qualified-ty-predicates (fresh-inst (cdr method)))))))
+                                           (setf env (set-function env (car method)
+                                                                   (make-function-env-entry
+                                                                    :name (car method)
+                                                                    :arity arity))))
+                                         (setf env (unset-function env (car method)))))
 
-                               (setf env (set-name env (car method)
-                                                   (make-name-entry
-                                                    :name (car method)
-                                                    :type :method
-                                                    :docstring nil
-                                                    :location (or *compile-file-pathname* *load-truename*))))
+                                   class)))))
 
-                               (if (function-type-p (qualified-ty-type (fresh-inst (cdr method))))
-                                   (let ((arity (+ (function-type-arity
-                                                    (qualified-ty-type (fresh-inst (cdr method))))
-                                                   (length (qualified-ty-predicates (fresh-inst (cdr method)))))))
-                                     (setf env (set-function env (car method)
-                                                             (make-function-env-entry
-                                                              :name (car method)
-                                                              :arity arity))))
-                                   (setf env (unset-function env (car method)))))
+          (values
+           classes
+           env)))))
 
-                             class))))
+(defun parse-class-definition (class-name unparsed-predicate unparsed-context unparsed-methods docstring env)
+  (declare (type symbol class-name)
+           (type list unparsed-predicate unparsed-context unparsed-methods)
+           (type (or null string) docstring)
+           (type environment env)
+           (values ty-class scheme-binding-list))
+
+  (let* ((class-tyvar-names (collect-type-vars unparsed-predicate))
+
+         (class-tyvars
+           (loop :for tyvar :in class-tyvar-names
+                 :collect (list tyvar (make-variable (make-kvariable)))))
+
+         (ksubs nil))
+
+    ;; Check for invalid elements in the context
+    (loop :for elem :in (rest unparsed-predicate)
+          :do (unless (and (symbolp elem)
+                           (equalp (symbol-package elem) keyword-package))
+                (error-parsing unparsed-predicate "invalid type class predicate")))
+
+    ;; Check for type variables that appear in context but not in the predicate
+    (loop :for unparsed-ctx :in unparsed-context
+          :for ctx-tyvar-names := (collect-type-vars unparsed-ctx)
+          :do (loop :for ctx-tyvar :in ctx-tyvar-names
+                    :do (unless (find ctx-tyvar class-tyvar-names :test #'equalp)
+                          (error-parsing unparsed-ctx "type variable ~S appears in superclass ~S but not in class" ctx-tyvar unparsed-ctx))))
+
+    (let*  ((superclasses
+              (loop :for unparsed-ctx :in unparsed-context
+                    :collect (multiple-value-bind (predicate new-ksubs)
+                                 (parse-type-predicate env unparsed-ctx class-tyvars ksubs)
+                               (setf ksubs new-ksubs)
+                               predicate)))
+
+            (unqualifed-methods
+              (loop :for (name unparsed-type) :in unparsed-methods
+                    :for method-tyvars := (collect-type-vars unparsed-type)
+                    :for method-only-tyvars
+                      := (remove-if
+                          (lambda (var)
+                            (member var class-tyvar-names))
+                          method-tyvars)
+                    :for method-tvars
+                      := (append
+                          class-tyvars
+                          (mapcar
+                           (lambda (tvar)
+                             (list tvar (make-variable (make-kvariable))))
+                           method-only-tyvars))
+                    :collect (multiple-value-bind (type new-ksubs)
+                                 (parse-qualified-type-expr env unparsed-type method-tvars ksubs)
+                               (check-for-invalid-method-preds
+                                name
+                                unparsed-type
+                                type
+                                (mapcar (alexandria:compose #'tvar-tyvar #'second) class-tyvars))
+                               (setf ksubs new-ksubs)
+                               (setf ksubs (kunify (kind-of type) kstar ksubs))
+                               (cons name (apply-ksubstitution ksubs type)))))
+
+            (predicate (ty-predicate
+                        class-name
+                        ;; Collect type variables in the order they were defined on the unparsed predicate
+                        (loop :for var :in (rest unparsed-predicate)
+                              :for tyvar := (second (find var class-tyvars :key #'car :test #'equalp))
+                              :collect (apply-ksubstitution ksubs tyvar)))))
+
+      (setf ksubs (kind-monomorphise-subs (kind-variables predicate) ksubs))
+      (setf predicate (apply-ksubstitution ksubs predicate))
+
+      (let ((superclasses (apply-ksubstitution ksubs superclasses))
+
+            (unqualifed-methods
+              (loop :for (name . type) :in unqualifed-methods
+                    :for ksubs := (kind-monomorphise-subs (kind-variables type) ksubs)
+                    :collect (cons name (apply-ksubstitution ksubs type)))))
 
         (values
-         classes
-         env)))))
+         (ty-class
+          :name class-name
+          :predicate predicate
+          :superclasses superclasses
+          :unqualified-methods (loop :for (name . type) :in  unqualifed-methods
+                                     :collect (cons name (quantify nil (apply-ksubstitution ksubs type))))
+          :codegen-sym (alexandria:format-symbol (symbol-package class-name) "CLASS/~A" class-name)
+          :superclass-dict (loop :for super :in superclasses
+                                 :for i :from 0
+                                 :collect (cons super
+                                                (alexandria:format-symbol
+                                                 (symbol-package class-name)
+                                                 (format nil "SUPER-~D" i))))
+          :docstring docstring
+          :location (or *compile-file-pathname* *load-truename*))
+         (loop :for (name . qual-ty) :in unqualifed-methods
+               :for type := (qualified-ty-type qual-ty)
+               :for preds := (qualified-ty-predicates qual-ty)
+               :for new-qual-ty := (apply-ksubstitution ksubs (qualify (cons predicate preds) type))
+               :collect (cons name (quantify (type-variables new-qual-ty) new-qual-ty))))))))
 
-(defun parse-class-definition (form env)
-  (declare (type list form)
-           (type environment env)
-           (values ty-class scheme-binding-list &optional))
-  (unless (and (listp form)
-               (<= 2 (length form))
-               (eql 'coalton:define-class (first form)))
-    (error "Malformed DEFINE-CLASS form ~A" form))
+(defun check-for-invalid-method-preds (name unparsed-type type class-tyvars)
+  (declare (type symbol name)
+           (type qualified-ty type)
+           (type tyvar-list class-tyvars))
 
-  (with-parsing-context ("class definition ~A" form)
-    (multiple-value-bind (class-context class-predicate class-tyvars subs)
-        (parse-class-signature env (second form) nil nil)
-
-      (let* ((class-name (ty-predicate-class class-predicate))
-             (class-codegen-sym (alexandria:format-symbol (symbol-package class-name) "CLASS/~A" class-name)))
-
-        (let* ((disallowed-type-vars (mapcar #'cadr class-tyvars))
-               (docstring (and (stringp (third form))
-                               (third form)))
-               (class-methods (mapcar (lambda (form)
-                                        (unless (and (listp form)
-                                                     (= 2 (length form))
-                                                     (symbolp (first form)))
-                                          (error "Malformed DEFINE-CLASS method form ~A" form))
-                                        (cons (first form)
-                                              (multiple-value-bind (parsed type-vars new-subs)
-                                                  (parse-qualified-type-expr env (second form) class-tyvars subs :additional-class-predicates (list class-predicate))
-                                                (setf class-tyvars type-vars
-                                                      subs new-subs)
-                                                (apply-substitution subs
-                                                                    (quantify (remove-if
-                                                                               (lambda (x) (member x (type-variables (apply-substitution subs disallowed-type-vars)) :test #'equalp))
-                                                                               (type-variables (mapcar #'cadr class-tyvars)))
-                                                                              parsed)))))
-                                      (if docstring
-                                          (cdddr form)
-                                          (cddr form))))
-               (class-predicate (apply-substitution subs class-predicate))
-               (class-context (apply-substitution subs class-context))
-               (superclass-dict (loop :for super :in class-context
-                                      :for i :from 0
-                                      :collect (cons super
-                                                     (alexandria:format-symbol
-                                                      (symbol-package class-name)
-                                                      (format nil "SUPER-~D" i)))))
-               (class (apply-substitution
-                       subs
-                       (ty-class
-                        class-name
-                        class-predicate
-                        class-context
-                        class-methods
-                        class-codegen-sym
-                        superclass-dict
-                        docstring
-                        (or *compile-file-pathname* *load-truename*))))
-
-               ;; Create a ENV with our new class defined so that reduce-context will work
-               (env (set-class env class-name class))
-
-               (method-context (append (list class-predicate) class-context))
-               (qualified-methods
-                 (loop :for (method-name . unqualified-method-type) :in (ty-class-unqualified-methods class)
-                       :collect (with-parsing-context ("method ~S" method-name)
-                                  (let* ((fresh-method-type (fresh-inst unqualified-method-type)))
-                                    ;; Ensure that the class type variables
-                                    ;; do not occur in the method constraint
-                                    (dolist (tyvar class-tyvars)
-                                      (when (member (tvar-tyvar (cadr tyvar))
-                                                    (type-variables (qualified-ty-predicates fresh-method-type))
-                                                    :test #'equalp)
-                                        (coalton-impl/ast::error-parsing form "class type variable ~S cannot appear in method constraints" (car tyvar))))
-
-                                    (let* ((qualified-method-type
-                                             (qualify
-                                              (reduce-context env
-                                                              (append method-context
-                                                                      (qualified-ty-predicates fresh-method-type))
-                                                              subs)
-                                              (qualified-ty-type fresh-method-type)))
-                                           (method-type (quantify (type-variables qualified-method-type)
-                                                                  qualified-method-type)))
-                                      (cons method-name method-type)))))))
-          (values class qualified-methods))))))
-
-(defun parse-class-signature (env top-expr type-vars subs &key allow-unknown-classes)
-  (declare (type environment env)
-           (values ty-predicate-list ty-predicate list))
-  (with-parsing-context ("signature ~S" top-expr)
-    (cond
-      ;; If the expression is a list and contains => then it has constraints
-      ((and (listp top-expr)
-            (some #'coalton-double-arrow-p top-expr))
-       ;; Split the expression into parts before and after the arrow
-       (let ((subseqs (split-sequence:split-sequence-if #'coalton-double-arrow-p top-expr)))
-         (unless (and (= 2 (length subseqs))
-                      (= 1 (length (second subseqs))))
-           (error-parsing-type top-expr "Malformed constrained type class"))
-         ;; If the first member of the predicates is a list then we can assume there are multiple to parse.
-         (let* ((preds (if (listp (first (first subseqs)))
-                           (progn
-                             ;; Check for duplicate predicates before parsing
-                             (labels ((check-for-duplicate-preds (preds)
-                                        (unless (null preds)
-                                          (let ((pred (car preds))
-                                                (rest (cdr preds)))
-                                            (if (find pred rest :test #'equalp)
-                                                (error-parsing pred "duplicate predicate")
-                                                (check-for-duplicate-preds rest))))))
-                               (check-for-duplicate-preds (first subseqs)))
-
-                             (loop :for pred-expr :in (first subseqs)
-                                   :collect (multiple-value-bind (pred new-type-vars new-subs)
-                                                (parse-type-predicate env pred-expr type-vars subs :allow-unknown-classes allow-unknown-classes)
-                                              (setf type-vars new-type-vars
-                                                    subs new-subs)
-                                              pred)))
-                           (multiple-value-bind (pred new-type-vars new-subs)
-                               (parse-type-predicate env (first subseqs) type-vars subs :allow-unknown-classes allow-unknown-classes)
-                             (setf type-vars new-type-vars
-                                   subs new-subs)
-                             (list pred))))
-                (class-pred (multiple-value-bind (pred new-type-vars new-subs)
-                                (parse-type-predicate env (first (second subseqs)) type-vars subs :allow-unknown-classes t)
-                              (setf type-vars new-type-vars
-                                    subs new-subs)
-                              pred)))
-
-           (values preds class-pred type-vars subs))))
-      ;; Otherwise parse as a type
-      (t
-       (multiple-value-bind (class-pred type-vars subs)
-           (parse-type-predicate env top-expr type-vars subs :allow-unknown-classes t)
-         (values nil class-pred type-vars subs))))))
+  (loop :for pred :in (qualified-ty-predicates type)
+        :do (when (subsetp (mapcar #'tyvar-id (type-variables pred))
+                           (mapcar #'tyvar-id class-tyvars)
+                           :test #'equalp)
+              (error-parsing (list name unparsed-type) "predicate in method decleration only constrains class variables"))))

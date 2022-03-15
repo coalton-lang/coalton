@@ -72,8 +72,18 @@
   (ty-predicate (ty-predicate-class type)
                       (apply-substitution subst-list (ty-predicate-types type))))
 
+(defmethod apply-ksubstitution (subs (type ty-predicate))
+  (declare (type ksubstitution-list subs))
+  (ty-predicate
+   (ty-predicate-class type)
+   (apply-ksubstitution subs (ty-predicate-types type))))
+
 (defmethod type-variables ((type ty-predicate))
   (type-variables (ty-predicate-types type)))
+
+(defmethod kind-variables ((type ty-predicate))
+  (declare (values kyvar-list))
+  (mapcan #'kind-variables (ty-predicate-types type)))
 
 (defmethod instantiate (types (type ty-predicate))
   (ty-predicate (ty-predicate-class type)
@@ -85,11 +95,23 @@
   (qualified-ty (apply-substitution subst-list (qualified-ty-predicates type))
                       (apply-substitution subst-list (qualified-ty-type type))))
 
+(defmethod apply-ksubstitution (subs (type qualified-ty))
+  (declare (type ksubstitution-list subs))
+  (qualified-ty
+   (apply-ksubstitution subs (qualified-ty-predicates type))
+   (apply-ksubstitution subs (qualified-ty-type type))))
+
 (defmethod type-variables ((type qualified-ty))
   (remove-duplicates
    (append (type-variables (qualified-ty-predicates type))
            (type-variables (qualified-ty-type type)))
    :test #'equalp))
+
+(defmethod kind-variables ((type qualified-ty))
+  (declare (values kyvar-list))
+  (append
+   (kind-variables (qualified-ty-type type))
+   (mapcan #'kind-variables (qualified-ty-predicates type))))
 
 (defmethod instantiate (types (type qualified-ty))
   (qualified-ty (instantiate types (qualified-ty-predicates type))
