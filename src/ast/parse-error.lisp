@@ -8,8 +8,8 @@
    (reason-args :initarg :reason-args
                 :reader coalton-parse-error-reason-args))
   (:report (lambda (c s)
-             (let ((*print-pretty* nil))
-               (format s "Failed to parse ~S~%    ~?"
+             (let ((*print-circle* nil))
+               (format s "Failed to parse ~S~%~?"
                        (coalton-parse-error-form c)
                        (coalton-parse-error-reason-control c)
                        (coalton-parse-error-reason-args c))))))
@@ -44,6 +44,18 @@
          :form form
          :reason-control reason-control
          :reason-args reason-args))
+
+(define-condition coalton-unknown-instance (coalton-parse-error)
+  ((instance :initarg :instance
+             :reader coalton-unknown-instance-instance))
+  (:report (lambda (c s)
+             (let ((*print-circle* nil))
+               (format s "Missing definition for ~A"
+                       (coalton-unknown-instance-instance c))))))
+
+(defun error-unknown-instance (instance)
+  (error 'coalton-unknown-instance
+         :instance instance))
 
 (define-condition coalton-inherited-symbol (error)
   ((symbol :initarg :symbol

@@ -23,7 +23,7 @@
 (defun pred-type (pred env)
   "Returns a type represention of PRED"
   (declare (type tc:ty-predicate pred)
-           (values tc:ty &optional))
+           (values tc:ty tc::ksubstitution-list &optional))
   (let* ((class-entry (tc:lookup-class env (tc:ty-predicate-class pred)))
          (pred-kind tc:kstar))
 

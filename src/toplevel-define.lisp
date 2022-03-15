@@ -10,10 +10,10 @@
            (type package package)
            (type environment env)
            (values symbol node (or null string) &optional))
-  (assert (and (eql (first form) 'coalton:define)
+  (unless (and (eql (first form) 'coalton:define)
                (or (<= 3 (length form))   ; Without docstring
                     )) ; With docstring
-          () "Malformed DEFINE form ~A" form)
+    (error-parsing form "malformed DEFINE form"))
 
   ;; Defines either define a value or a function. Values and functions
   ;; in Coalton occupy the namespace, but the intent of the user can

@@ -326,6 +326,21 @@
                type
                name)))))
 
+(define-condition kunify-error (coalton-type-error)
+  ((kind1 :initarg :kind1
+          :reader kunify-errror-kind1
+          :type kind)
+   (kind2 :initarg :kind2
+          :reader kunify-error-kind2
+          :type kind))
+  (:report
+   (lambda (c s)
+     (let ((*print-circle* nil) ; Prevent printing using reader macros
+           )
+       (format s "Unable to unify kinds ~A and ~A"
+               (kunify-errror-kind1 c)
+               (kunify-error-kind2 c))))))
+
 (define-condition duplicate-definition (coalton-type-error)
   ((name :initarg :name
          :reader duplicate-definition-name))

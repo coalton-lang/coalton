@@ -125,6 +125,12 @@
        (B (A :a))))
    '())
 
+  ;; Check higher kinded type variables
+  (check-coalton-types
+   '((coalton:define-type (Fix :f)
+       (In (:f (Fix :f)))))
+   '((In . (:f (Fix :f) -> Fix :f))))
+
   ;; Check that constructors are properly typed
   (signals coalton-impl::coalton-type-error
     (run-coalton-typechecker
@@ -349,7 +355,8 @@
         (example-method ((TestClassA :a) => (:a -> :b))))
        (coalton:define-class ((TestClassB :a) => (TestClassA :a))))))
 
-  (not-signals coalton-impl::cyclic-class-definitions-error
+  ;; NOTE: This is allowed in Haskell 98
+  (signals coalton-impl::cyclic-class-definitions-error
     (run-coalton-typechecker
      '((coalton:define-class (TestClassA :a)
         (example-method ((TestClassA :b) => (:a -> :b))))))))
