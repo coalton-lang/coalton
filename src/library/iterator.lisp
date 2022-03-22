@@ -40,6 +40,7 @@
    #:repeat-item
    #:char-range
    #:zip!
+   #:zipWith!
    #:enumerate!
    #:filter!
    #:take!
@@ -48,6 +49,8 @@
    #:remove-duplicates!
    #:pair-with!
    #:sum!
+   #:and!
+   #:or!
    #:count!
    #:for-each!
    #:find!
@@ -95,14 +98,14 @@ STATE, using INIT as the first STATE."
                           iter))
       ((None) init)))
 
-  ;;; instances
+;;; instances
   ;; should iterator implement applicative or monad? the only law-abiding applicative instances are
   ;; pathological, so i doubt it.
   (define-instance (Functor Iterator)
     (define (map func iter)
       (%Iterator (fn () (map func (next! iter))))))
 
-  ;;; constructors
+;;; constructors
   ;; once coalton gets functional dependencies, associated types or type families, much of this will be
   ;; abstracted into a class `(IntoIterator :collection :item)', with instances like `(IntoIterator (List :elt)
   ;; :elt)' and `(IntoIterator String Char)'. It's currently not possible for Coalton to do useful type
@@ -222,16 +225,19 @@ Equivalent to reversing `range-increasing`"
   ;; own, for two reasons:
   ;; 1. it prevents name conflicts with list operators
   ;; 2. to emphasize the flow of mutable data
-  (declare zip! ((Iterator :left) -> (Iterator :right) -> (Iterator (Tuple :left :right))))
-  (define (zip! left right)
-    "Return an iterator of tuples of elements from LEFT and RIGHT which terminates as soon as either LEFT or RIGHT does.
-
-Often useful combined with `uncurry` to allow mapping a multi-argument function across multiple iterators."
+  (declare zipWith! ((:left -> :right -> :out) -> (Iterator :left) -> (Iterator :right) -> (Iterator :out)))
+  (define (zipWith! f left right)
+    "Return an iterator of elements from LEFT and RIGHT which terminates as soon as either LEFT or RIGHT does."
     (%Iterator
      (fn ()
        (match (Tuple (next! left) (next! right))
-         ((Tuple (Some l) (Some r)) (Some (Tuple l r)))
+         ((Tuple (Some l) (Some r)) (Some (f l r)))
          (_ None)))))
+
+  (declare zip! ((Iterator :left) -> (Iterator :right) -> (Iterator (Tuple :left :right))))
+  (define zip!
+    "Return an iterator of tuples contining elements from two iterators."
+    (zipWith! Tuple))
 
   (declare enumerate! ((Iterator :elt) -> (Iterator (Tuple UFix :elt))))
   (define (enumerate! iter)
@@ -296,6 +302,12 @@ Often useful combined with `uncurry` to allow mapping a multi-argument function 
          keys))
 
 ;;; consumers
+  (declare and! ((Iterator Boolean) -> Boolean))
+  (define and! (fold! boolean-and True))
+
+  (declare or! ((Iterator Boolean) -> Boolean))
+  (define or! (fold! boolean-or False))
+
   (declare sum! ((Num :num) => (Iterator :num) -> :num))
   (define (sum! iter)
     "Add together all the elements of ITER."
