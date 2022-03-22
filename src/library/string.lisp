@@ -8,6 +8,8 @@
    #:reverse
    #:length
    #:substring
+   #:strip-prefix
+   #:strip-suffix
    #:parse-int
    #:ref
    #:ref-unchecked))
@@ -43,6 +45,27 @@
           (real-end (min (length str) (max start end))))
       (lisp String (real-start real-end str)
         (cl:subseq str real-start real-end))))
+
+  (declare strip-prefix (String -> String -> (Optional String)))
+  (define (strip-prefix prefix str)
+    "Returns a string without a give prefix, or None if the string
+does not have that suffix."
+    (let prefix-len = (length prefix))
+    (let substr = (substring str 0 prefix-len))
+    (if (== substr prefix)
+        (Some (substring str prefix-len (length str)))
+        None))
+
+  (declare strip-suffix (String -> String -> (Optional String)))
+  (define (strip-suffix suffix str)
+    "Returns a string without a give suffix, or None if the string
+does not have that suffix."
+    (let suffix-len = (length suffix))
+    (let str-len = (length str))
+    (let substr = (substring str (- str-len suffix-len) str-len))
+    (if (== substr suffix)
+        (Some (substring str 0 (- str-len suffix-len)))
+        None))
 
   (declare parse-int (String -> (Optional Integer)))
   (define (parse-int str)

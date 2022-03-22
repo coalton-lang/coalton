@@ -32,9 +32,11 @@
 
 (define-test iter-char-range-string-chars ()
   (let ((same? (fn (expected-str range-start range-end)
-                 (iter:every! (uncurry ==)
-                         (iter:zip! (iter:string-chars expected-str)
-                               (iter:char-range range-start range-end))))))
+                 (iter:and! 
+                  (iter:zipWith!
+                   ==
+                   (iter:string-chars expected-str)
+                   (iter:char-range range-start range-end))))))
     (progn (is (same? "abcdef" #\a #\f))
            (is (same? "0123456789" #\0 #\9))
            (is (same? "ABCDEF" #\A #\F)))))
