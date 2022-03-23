@@ -152,6 +152,7 @@ in FORMS that begin with that operator."
 
         (let* ((env (coalton-impl/typechecker::apply-substitution substs *global-environment*))
                (preds (coalton-impl/typechecker::apply-substitution substs preds))
+               (substs (coalton-impl/typechecker::pred-defaults preds substs))
                (preds (coalton-impl/typechecker::reduce-context env preds substs))
                (typed-node (coalton-impl/typechecker::remove-static-preds
                             (coalton-impl/typechecker::apply-substitution substs typed-node)))
