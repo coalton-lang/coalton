@@ -57,14 +57,20 @@
                         (tc:ty-class-unqualified-methods class))))
 
 (defun make-method-fun (m package class)
-  (let* ((arity (coalton-impl/typechecker::function-type-arity
-                 (coalton-impl/typechecker::qualified-ty-type
-                  (coalton-impl/typechecker::fresh-inst (cdr m)))))
+  (let* ((qual-ty (tc:fresh-inst (cdr m)))
+
+         (method-contraint-args
+           (length (tc:qualified-ty-predicates qual-ty)))
+
+         (arity (+ (tc:function-type-arity
+                    (tc:qualified-ty-type qual-ty))
+                   method-contraint-args))
          (params
            (loop :for i :from 0 :below arity
                  :collect (alexandria:format-symbol package "_~A" i)))
          (class-codegen-sym (tc:ty-class-codegen-sym class))
          (method-accessor (alexandria:format-symbol (symbol-package class-codegen-sym) "~A-~A" class-codegen-sym (car m))))
+
     ;; TODO: add type annotations
     `((declaim (inline ,(car m)))
       (defun ,(car m) (dict ,@params)

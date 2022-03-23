@@ -73,3 +73,16 @@
   (define-instance (Gh-400-b Integer)
     (define (gh-400-b-method x) x)
     (define gh-400-b-constant 5)))
+
+;; Test that classes can have method constraints
+(coalton-toplevel
+  (define-class (Gh-430 :a)
+    (gh-430-m (Num :b => :a -> :b -> :b -> :b)))
+
+  (define-instance (Gh-430 String)
+    (define (gh-430-m a b c)
+      (+ b c))))
+
+(define-test test-method-constraints ()
+  (is (== 5 (gh-430-m "str" 2 3)))
+  (is (== 2 (gh-430-m "hello" 1 1))))

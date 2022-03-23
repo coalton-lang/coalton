@@ -161,6 +161,7 @@
    #:function-type-arigy                ; FUNCTION
    #:function-type-arguments            ; FUNCTION
    #:function-return-type               ; FUNCTION
+   #:function-type-arity                ; FUNCTION
    ) 
   (:export
    #:kstar                              ; VARIABLE
