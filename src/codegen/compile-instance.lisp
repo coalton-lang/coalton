@@ -48,18 +48,28 @@
                  :for method-node := (gethash method-name method-nodes)
                  :for codegen-name := (gethash method-name method-codegen-syms)
 
+                 :for method-qual-ty := (tc:ty-scheme-type (tc:typed-node-type method-node))
+
+                 :for method-ctx
+                   := (append
+                       ctx
+                       (loop :for pred :in (remove (tc:instance-definition-predicate instance)
+                                                   (tc:qualified-ty-predicates method-qual-ty)
+                                                   :test #'equalp)
+                             :collect (cons pred (gensym))))
+
                  :for node
                    := (cond
                         ;; If the method has context but is not a
                         ;; function then wrap it in function
-                        ((and ctx (not (tc:typed-node-abstraction-p method-node)))
-                         (let ((inner (compile-expression method-node ctx env)))
+                        ((and method-ctx (not (tc:typed-node-abstraction-p method-node)))
+                         (let ((inner (compile-expression method-node method-ctx env)))
                            (node-abstraction
                             (tc:make-function-type*
-                             (loop :for (pred . name) :in ctx
+                             (loop :for (pred . name) :in method-ctx
                                    :collect (pred-type pred env))
                              (node-type inner))
-                            (mapcar #'cdr ctx)
+                            (mapcar #'cdr method-ctx)
                             inner)))
 
                         ;; Otherwise compile the method normally
@@ -71,17 +81,47 @@
 
                  :collect (cons codegen-name node)))
 
-         ;; Iterate through the methods creating a node for each The
-         ;; context is removed from individual methods because it will
-         ;; be closed over
+         ;; Iterate through the methods creating a node for each.
+         ;; The instance predicate is removed from individual methods context
+         ;; because it will be closed over
          (unqualified-method-definitions
            (loop :for (method-name . type) :in (tc:ty-class-unqualified-methods class)
                  :for method-node := (gethash method-name method-nodes)
                  :for method-qual := (tc:ty-scheme-type (tc:typed-node-type method-node))
+
+                 :for method-preds := (remove-if
+                                       (lambda (pred)
+                                         (member pred (tc:instance-definition-context instance) :test #'equalp))
+                                       (tc:qualified-ty-predicates method-qual))
+
+                 :for method-ctx
+                   := (append
+                       ctx
+                       (loop :for pred :in method-preds
+                             :collect (cons pred (gensym))))
+
                  :for unqualified-scheme := (tc:to-scheme
-                                             (tc:qualify nil (tc:qualified-ty-type method-qual)))
+                                             (tc:qualify
+                                              method-preds
+                                              (tc:qualified-ty-type method-qual)))
+
                  :for unqualified-node := (tc:replace-node-type method-node unqualified-scheme)
-                 :collect (compile-expression unqualified-node ctx env)))
+
+                 :for node
+                   := (cond
+                        ((and method-ctx (not (tc:typed-node-abstraction-p unqualified-node)))
+                         (let ((inner (compile-expression unqualified-node method-ctx env)))
+                           (node-abstraction
+                            (tc:make-function-type*
+                             (loop :for (pred . name) :in method-ctx
+                                   :collect (pred-type pred env))
+                             (node-type inner))
+                            (mapcar #'cdr method-ctx)
+                            inner)))
+
+                        (t (compile-expression unqualified-node method-ctx env)))
+
+                 :collect node))
 
          (method-ty (mapcar #'node-type unqualified-method-definitions))
 

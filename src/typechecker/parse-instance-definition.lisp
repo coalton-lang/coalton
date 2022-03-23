@@ -154,7 +154,8 @@
                                        (setf subs
                                              (compose-substitution-lists (predicate-match node-pred context-pred) subs)))
  
-                              (setf (gethash method-name method-bindings) (remove-static-preds (apply-substitution subs (cdr binding)))))))))
+                              (setf (gethash method-name method-bindings)
+                                    (remove-static-preds (apply-substitution subs (cdr binding)))))))))
 
             ;; Check for missing method definitions
             (loop :for (name . type) :in (ty-class-unqualified-methods class-entry)
