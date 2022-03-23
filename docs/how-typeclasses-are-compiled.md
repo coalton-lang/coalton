@@ -67,7 +67,7 @@ Each method definion in an instance is also compiled to a seperate function. The
 
 Coalton maintains a mapping of `(method, instance) -> static method`. These mappings are used to rewrite method calls on instances known at compile time.
 
-* `(+ |INSTANCE/NUM INTEGER| 1 2) -> (|INSTANCE/NUM INTEGER-+| 1 2)`
-* `(== (|INSTANCE/EQ OPTIONAL :A| G106) (Some a) (Some b)) -> (|INSTANCE/EQ OPTIONAL :A-==| G106 (Some a) (Some b))`
+* `(+ |INSTANCE/NUM INTEGER| 1 2)` becomes `(|INSTANCE/NUM INTEGER-+| 1 2)`
+* `(== (|INSTANCE/EQ OPTIONAL :A| G106) (Some a) (Some b))` becomes `(|INSTANCE/EQ OPTIONAL :A-==| G106 (Some a) (Some b))`
 
 Note that in the second example, the context variable `G106` become a parameter to `|INSTANCE/EQ OPTIONAL :A-==|`.
