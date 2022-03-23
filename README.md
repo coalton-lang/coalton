@@ -83,6 +83,8 @@ Lastly and importantly, we maintain a collection of documentation about Coalton 
 
 ## Getting Started
 
+**Prerequisites**: Install sbcl flavor of lisp: `brew install sbcl` (on mac).  Follow instructions for install quicklisp https://www.quicklisp.org/beta/#installation.  (The step command involving `gpg` is not needed).  After loading quicklisp, you should have a `quicklisp` folder.
+
 **Install**: Clone this repository into a place your Lisp can see (e.g., `~/quicklisp/local-projects/`). (Coalton is not yet on Quicklisp.)
 
 **Use**: Either run `(ql:quickload :coalton)`, or add `#:coalton` to your ASD's `:depends-on` list.
