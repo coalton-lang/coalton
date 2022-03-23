@@ -15,20 +15,8 @@
 
   (:import-from
    #:coalton-impl/codegen/program
-   #:translation-unit
-   #:make-translation-unit
-   #:translation-unit-types
-   #:translation-unit-definitions
-   #:translation-unit-instances
-   #:translation-unit-classes
    #:compile-translation-unit)
   (:export
-   #:translation-unit
-   #:make-translation-unit
-   #:translation-unit-types
-   #:translation-unit-definitions
-   #:translation-unit-instances
-   #:translation-unit-classes
    #:compile-translation-unit)
 
   (:import-from
