@@ -340,8 +340,7 @@ Returns TYPE-DEFINITIONS"
                     :docstring docstring))
 
                   ((or (and newtype (eql repr :transparent))
-                       (and newtype
-                            (coalton-impl:coalton-release-p)))
+                       (and newtype (coalton-impl:coalton-release-p)))
                    (let (;; The runtime type of a newtype is the runtime type of it's only constructor's only argument
                          (runtime-type (function-type-from
                                         (qualified-ty-type
@@ -359,8 +358,8 @@ Returns TYPE-DEFINITIONS"
                   ((and (eql repr :transparent) (not newtype))
                    (error "Type ~A cannot be repr transparent. To be repr transparent a type must have a single constructor with a single field." tycon-name))
 
-                  ((and enum-type
-                        (coalton-impl:coalton-release-p))
+                  ((or (and enum-type (eql repr :enum))
+                       (and enum-type (coalton-impl:coalton-release-p)))
                    (let ((parsed-ctors (mapcar #'rewrite-ctor parsed-ctors)))
                      (make-type-definition
                       :name tycon-name
@@ -371,6 +370,9 @@ Returns TYPE-DEFINITIONS"
                       :constructors parsed-ctors
                       :constructor-types ctor-types
                       :docstring docstring)))
+
+                  ((and (eql repr :enum) (not enum-type))
+                   (error "Type ~A cannot be repr enum. To be repr enum a type must only have constructors without fields." tycon-name))
 
 
                   (t

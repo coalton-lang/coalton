@@ -92,6 +92,7 @@
   ;; Ord
   ;;
 
+  (repr :enum)
   (define-type Ord
     LT
     EQ
