@@ -15,7 +15,8 @@
    #:coalton-impl/codegen/codegen-pattern
    #:codegen-pattern)
   (:local-nicknames
-   (#:tc #:coalton-impl/typechecker))
+   (#:tc #:coalton-impl/typechecker)
+   (#:ast #:coalton-impl/ast))
   (:export
    #:codegen-expression
    #:*emit-type-annotations*))
@@ -105,6 +106,19 @@
 
   (:method ((expr node-match) env)
     (declare (type tc:environment env))
+
+    ;; If possible codegen a cl:if instead of a trivia:match
+    (when (and (equalp (node-type (node-match-expr expr)) tc:*boolean-type*)
+               (= 2 (length (node-match-branches expr)))
+               (equalp (match-branch-pattern (first (node-match-branches expr)))
+                       (ast:pattern-constructor 'coalton:True nil))
+               (equalp (match-branch-pattern (second (node-match-branches expr)))
+                       (ast:pattern-constructor 'coalton:False nil)))
+      (return-from codegen-expression
+        `(if ,(codegen-expression (node-match-expr expr) env)
+             ,(codegen-expression (match-branch-body (first (node-match-branches expr))) env)
+             ,(codegen-expression (match-branch-body (second (node-match-branches expr))) env))))
+
 
     (let* ((subexpr (codegen-expression (node-match-expr expr) env))
 
