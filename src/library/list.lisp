@@ -45,6 +45,7 @@
    #:insert
    #:insertBy
    #:sort
+   #:sortBy
    #:intersperse
    #:intercalate
    #:transpose
@@ -410,15 +411,16 @@
 
   (declare sort (Ord :a => ((List :a) -> (List :a))))
   (define (sort xs)
-    "Performs a stable sort of XS."
+    "Performs a sort of XS."
     (sortBy <=> xs))
 
-  ;; NOTE: This is a very inefficient implementation and can be
-  ;;       replaced with a faster stable sorting algorithm.
   (declare sortBy ((:a -> :a -> Ord) -> (List :a) -> (List :a)))
   (define (sortBy cmp xs)
     "Generic version of sort"
-    (foldr (insertBy cmp) Nil xs))
+    (lisp (List :a) (cmp xs)
+      (cl:sort (cl:copy-list xs)
+               (cl:lambda (a b)
+                 (cl:eq 'coalton-library/classes::ord/lt (coalton-impl/codegen:a2 cmp a b))))))
 
   (declare intersperse (:a -> (List :a) -> (List :a)))
   (define (intersperse e xs)
