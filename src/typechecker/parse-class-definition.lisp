@@ -65,113 +65,124 @@
            (type environment env)
            (values ty-class-list environment))
 
-    ;; Parse out class definitions and sort them by superclass dependencies
-    (let ((class-deps nil) ; DAG as list of (CLASS SUPERCLASS*) for topological sorting
-          (class-forms nil) ; List of (name predicate methods docstring)
-          )
+  ;; Parse out class definitions and sort them by superclass dependencies
+  (let ((class-deps nil) ; DAG as list of (CLASS SUPERCLASS*) for topological sorting
+        (class-forms nil) ; List of (name predicate methods docstring)
+        )
 
-      ;; Inital parsing of define-class forms
-      ;; * split apart predicate, context, and methods
-      ;; * find class dependencies to compute sccs
-      (dolist (form forms)
-        (unless (and (listp form)
-                     (<= 2 (length form))
-                     (eql 'coalton:define-class (first form)))
-          (error-parsing form "Malformed DEFINE-CLASS"))
+    ;; Inital parsing of define-class forms
+    ;; * split apart predicate, context, and methods
+    ;; * find class dependencies to compute sccs
+    (dolist (form forms)
+      (unless (and (listp form)
+                   (<= 2 (length form))
+                   (eql 'coalton:define-class (first form)))
+        (error-parsing form "Malformed DEFINE-CLASS"))
 
-        (let ((name nil)
-              (context nil)
-              (predicate nil)
-              (method-predicates nil)
-              (methods nil)
-              (docstring nil))
+      (let ((name nil)
+            (context nil)
+            (predicate nil)
+            (method-predicates nil)
+            (methods nil)
+            (docstring nil))
 
-          (multiple-value-setq (predicate context) (split-class-signature (second form) "malformed DEFINE-CLASS"))
+        (multiple-value-setq (predicate context) (split-class-signature (second form) "malformed DEFINE-CLASS"))
 
-          (setf name (car predicate))
+        (setf name (car predicate))
 
-          (if (stringp (first (nthcdr 2 form)))
-              (setf docstring (first (nthcdr 2 form))
-                    methods (nthcdr 3 form))
-              (setf methods (nthcdr 2 form)))
+        (if (stringp (first (nthcdr 2 form)))
+            (setf docstring (first (nthcdr 2 form))
+                  methods (nthcdr 3 form))
+            (setf methods (nthcdr 2 form)))
 
-          (with-parsing-context ("DEFINE-CLASS for class ~A" (car predicate))
-            (loop :for method :in methods
-                  :do (unless (= 2 (length method))
-                        (error-parsing method "invalid method definition"))
-                  :do (unless (symbolp (car method))
-                        (error-parsing method "invalid method name ~A" (car method)))
-                  :do (setf method-predicates (append method-predicates (parse-method-predicates (first method) (alexandria:ensure-list (second method)))))))
+        (with-parsing-context ("DEFINE-CLASS for class ~A" (car predicate))
+          (loop :for method :in methods
+                :do (unless (= 2 (length method))
+                      (error-parsing method "invalid method definition"))
+                :do (unless (symbolp (car method))
+                      (error-parsing method "invalid method name ~A" (car method)))
+                :do (setf method-predicates (append method-predicates (parse-method-predicates (first method) (alexandria:ensure-list (second method)))))))
 
-          (push (cons name
-                      (remove-duplicates
-                       (append (mapcar #'car context) (mapcar #'car method-predicates))))
-                class-deps)
-          (push (list name predicate context methods docstring) class-forms)))
+        (push (cons name
+                    (remove-duplicates
+                     (append (mapcar #'car context) (mapcar #'car method-predicates))))
+              class-deps)
+        (push (list name predicate context methods docstring) class-forms)))
 
-      ;; Ensure we know about all of the superclasses and remove any
-      ;; references to known classes from the DAG (tarjan scc will fail
-      ;; otherwise).
-      (setf class-deps
-            (loop :for class-dep :in class-deps
-                  :do (when (find (car class-dep) (cdr class-dep))
-                        (error 'cyclic-class-definitions-error :classes (list (car class-dep))))
-                  :collect (cons (car class-dep)
-                                 (mapcan (lambda (dep)
-                                           (cond
-                                             ;; If the dep is part of the current definitions then allow it
-                                             ((member dep class-deps :key #'car)
-                                              (list dep))
-                                             ;; Else if we know about this class in the environment then remove it
-                                             ((lookup-class env dep :no-error t)
-                                              nil)
-                                             ;; Otherwise, signal an error
-                                             (t
-                                              (error "Unknown class ~S in definition of class ~S" dep (car class-dep)))))
-                                         (cdr class-dep)))))
+    ;; Ensure we know about all of the superclasses and remove any
+    ;; references to known classes from the DAG (tarjan scc will fail
+    ;; otherwise).
+    (setf class-deps
+          (loop :for class-dep :in class-deps
+                :do (when (find (car class-dep) (cdr class-dep))
+                      (error 'cyclic-class-definitions-error :classes (list (car class-dep))))
+                :collect (cons (car class-dep)
+                               (mapcan (lambda (dep)
+                                         (cond
+                                           ;; If the dep is part of the current definitions then allow it
+                                           ((member dep class-deps :key #'car)
+                                            (list dep))
+                                           ;; Else if we know about this class in the environment then remove it
+                                           ((lookup-class env dep :no-error t)
+                                            nil)
+                                           ;; Otherwise, signal an error
+                                           (t
+                                            (error "Unknown class ~S in definition of class ~S" dep (car class-dep)))))
+                                       (cdr class-dep)))))
 
-      ;; Perform a topological sort of classes to ensure contexts can be resolved
-      (let* ((sorted-classes (reverse (tarjan-scc class-deps)))
-             (sorted-forms
-               (loop :for class-group :in sorted-classes
-                     :collect (progn
-                                (unless (= 1 (length class-group))
-                                  (error 'cyclic-class-definitions-error :classes class-group))
-                                (find (first class-group) class-forms :key #'car)))))
+    ;; Perform a topological sort of classes to ensure contexts can be resolved
+    (let* ((sorted-classes (reverse (tarjan-scc class-deps)))
+           (sorted-forms
+             (loop :for class-group :in sorted-classes
+                   :collect (progn
+                              (unless (= 1 (length class-group))
+                                (error 'cyclic-class-definitions-error :classes class-group))
+                              (find (first class-group) class-forms :key #'car)))))
 
-        ;; Now we can go through and re-parse and add classes to the environment
-        (let ((classes
-                (loop :for (name unparsed-predicate unparsed-context unparsed-methods docstring) :in sorted-forms
-                      :collect (with-parsing-context ("DEFINE-CLASS for class ~A" name)
-                                 (multiple-value-bind (class methods)
-                                     (parse-class-definition name unparsed-predicate unparsed-context unparsed-methods docstring env)
-                                   (setf env (set-class env (ty-class-name class) class))
+      ;; Now we can go through to parse and then add classes to the environment
+      (let ((classes
+              (loop :for (name unparsed-predicate unparsed-context unparsed-methods docstring) :in sorted-forms
+                    :collect (with-parsing-context ("DEFINE-CLASS for class ~A" name)
+                               (multiple-value-bind (class methods)
+                                   (parse-class-definition name unparsed-predicate unparsed-context unparsed-methods docstring env)
+                                 (setf env (set-class env (ty-class-name class) class))
 
-                                   (dolist (method methods)
-                                     (setf env (set-value-type env (car method) (cdr method)))
+                                 ;; Add the class constructor function to the function env
+                                 (let ((class-arity (+ (length (ty-class-superclasses class))
+                                                       (length (ty-class-unqualified-methods class)))))
+                                   (if (not (zerop class-arity))
+                                       (setf env (set-function env
+                                                               (ty-class-codegen-sym class)
+                                                               (make-function-env-entry
+                                                                :name (ty-class-codegen-sym class)
+                                                                :arity class-arity)))
+                                       (setf env (unset-function env (ty-class-codegen-sym class)))))
 
-                                     (setf env (set-name env (car method)
-                                                         (make-name-entry
-                                                          :name (car method)
-                                                          :type :method
-                                                          :docstring nil
-                                                          :location (or *compile-file-pathname* *load-truename*))))
+                                 (dolist (method methods)
+                                   (setf env (set-value-type env (car method) (cdr method)))
 
-                                     (if (function-type-p (qualified-ty-type (fresh-inst (cdr method))))
-                                         (let ((arity (+ (function-type-arity
-                                                          (qualified-ty-type (fresh-inst (cdr method))))
-                                                         (length (qualified-ty-predicates (fresh-inst (cdr method)))))))
-                                           (setf env (set-function env (car method)
-                                                                   (make-function-env-entry
-                                                                    :name (car method)
-                                                                    :arity arity))))
-                                         (setf env (unset-function env (car method)))))
+                                   (setf env (set-name env (car method)
+                                                       (make-name-entry
+                                                        :name (car method)
+                                                        :type :method
+                                                        :docstring nil
+                                                        :location (or *compile-file-pathname* *load-truename*))))
 
-                                   class)))))
+                                   (if (function-type-p (qualified-ty-type (fresh-inst (cdr method))))
+                                       (let ((arity (+ (function-type-arity
+                                                        (qualified-ty-type (fresh-inst (cdr method))))
+                                                       (length (qualified-ty-predicates (fresh-inst (cdr method)))))))
+                                         (setf env (set-function env (car method)
+                                                                 (make-function-env-entry
+                                                                  :name (car method)
+                                                                  :arity arity))))
+                                       (setf env (unset-function env (car method)))))
 
-          (values
-           classes
-           env)))))
+                                 class)))))
+
+        (values
+         classes
+         env)))))
 
 (defun parse-class-definition (class-name unparsed-predicate unparsed-context unparsed-methods docstring env)
   (declare (type symbol class-name)

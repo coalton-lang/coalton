@@ -54,6 +54,8 @@
   (loop :for class :in classes
         :for name := (ty-class-name class)
         :collect `(set-class env ',name ,(lookup-class env name))
+        :if (lookup-function env (ty-class-codegen-sym class) :no-error t)
+          :collect `(set-function env ',name ,(lookup-function env (ty-class-codegen-sym class)))
         :append (loop :for (name . node) :in (ty-class-unqualified-methods class)
                       :for function-entry := (lookup-function env name :no-error t)
                       :collect `(set-value-type env ',name ,(lookup-value-type env name))
