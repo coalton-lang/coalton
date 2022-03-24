@@ -19,6 +19,9 @@
    #:>>
    #:MonadFail #:fail
    #:Alternative #:alt #:empty
+   #:Foldable #:fold #:foldr
+   #:Traversable #:traverse
+   #:sequence
    #:Into
    #:TryInto
    #:Iso
@@ -213,6 +216,21 @@
     "Types which are monoids on applicative functors."
     (alt ((:f :a) -> (:f :a) -> (:f :a)))
     (empty (:f :a)))
+
+  (define-class (Foldable :t)
+    "Types which can be folded into a single element.
+
+`fold` is a left tail recursive fold
+
+`foldr` is a right non tail recursive fold"
+    (fold ((:b -> :a -> :b) -> :b -> :t :a -> :b))
+    (foldr ((:a -> :b -> :b) -> :b -> :t :a -> :b)))
+
+  (define-class (Traversable :t)
+    (traverse (Applicative :f => (:a -> :f :b) -> :t :a -> :f (:t :b))))
+
+  (declare sequence ((Traversable :t) (Applicative :f) => :t (:f :b) -> :f (:t :b)))
+  (define sequence (traverse (fn (x) x)))
 
   ;;
   ;; Conversions
