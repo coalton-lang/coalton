@@ -19,8 +19,6 @@
    #:drop
    #:take
    #:find
-   #:fold
-   #:foldr
    #:filter
    #:length
    #:index
@@ -166,25 +164,11 @@
   (define (find f xs)
     "Returns the first element in a list matching the predicate function F."
     (fold (fn (a b)
-            (match b
-              ((Some _) b)
+            (match a
+              ((Some _) a)
               (_
-               (if (f a) (Some a) None))))
+               (if (f b) (Some b) None))))
           None xs))
-
-  (declare fold ((:a -> :b -> :b) -> :b -> (List :a) -> :b))
-  (define (fold f y xs)
-    "Tail recursive left fold on lists."
-    (match xs
-      ((Cons x xs) (fold f (f x y) xs))
-      ((Nil) y)))
-
-  (declare foldr ((:a -> :b -> :b) -> :b -> (List :a) -> :b))
-  (define (foldr f y xs)
-    "Right fold on lists. Is not tail recursive."
-    (match xs
-      ((Cons x xs) (f x (foldr f y xs)))
-      ((Nil) y)))
 
   (declare filter ((:a -> Boolean) -> (List :a) -> (List :a)))
   (define (filter f xs)
@@ -203,7 +187,7 @@
   (define (length l)
     "Returns the length of a list."
     (fold (fn (a b)
-            (+ 1 b))
+            (+ 1 a))
           0
           l))
 
@@ -275,7 +259,7 @@
   (declare concatMap ((:a -> (List :b)) -> (List :a) -> (List :b)))
   (define (concatMap f xs)
     "Apply F to each element in XS and concatenate the results."
-    (fold (fn (a b) (append b (f a))) Nil xs))
+    (fold (fn (a b) (append a (f b))) Nil xs))
 
   (declare member (Eq :a => (:a -> (List :a) -> Boolean)))
   (define (member e xs)
@@ -347,7 +331,7 @@
   (declare difference (Eq :a => ((List :a) -> (List :a) -> (List :a))))
   (define (difference xs ys)
     "Returns a new list with the first occurence of each element in YS deleted from XS."
-    (fold delete xs ys))
+    (fold (fn (a b) (delete b a)) xs ys))
 
   (declare zipWith ((:a -> :b -> :c) -> (List :a) -> (List :b) -> (List :c)))
   (define (zipWith f xs ys)
@@ -399,7 +383,7 @@
   (declare countBy ((:a -> Boolean) -> (List :a) -> Integer))
   (define (countBy f things)
     "Count the number of items in THINGS that satisfy the predicate F."
-    (fold (fn (x sum)
+    (fold (fn (sum x)
             (if (f x)
                 (+ 1 sum)
                 sum))
@@ -577,7 +561,7 @@
 
   (define-instance (Hash :a => (Hash (List :a)))
     (define (hash lst)
-      (fold (fn (elt so-far)
+      (fold (fn (so-far elt)
               (combine-hashes so-far (hash elt)))
             (fromInt 0)
             lst)))
@@ -608,7 +592,24 @@
 
   (define-instance (Monad List)
     (define (>>= m f)
-      (concatMap f m))))
+      (concatMap f m)))
+
+  (define-instance (Foldable List)
+    (define (fold f y xs)
+      (match xs
+        ((Cons x xs) (fold f (f y x) xs))
+        ((Nil) y)))
+
+    (define (foldr f y xs)
+      (match xs
+        ((Cons x xs) (f x (foldr f y xs)))
+        ((Nil) y))))
+
+  (define-instance (Traversable List)
+    (define (traverse f xs)
+      (match xs
+        ((Cons x xs) (liftA2 Cons (f x) (traverse f xs)))
+        ((Nil) (pure Nil))))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/LIST")
