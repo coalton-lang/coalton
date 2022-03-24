@@ -96,19 +96,27 @@
     ;; For each package, we just need to collect the require
     ;; documentation and call out to the backend.
     (let ((documentation-by-package (make-hash-table)))
-      (loop :for package :in packages :do
-        (setf (gethash package documentation-by-package)
-              (make-documentation-package-entry
-               package filenames
-               (collect-documentation-by-file
-                (truename component-path)
-                file-link-prefix
-                env package))))
+      (loop :for package :in packages
+            :for documentation-entries
+              := (collect-documentation-by-file
+                  (truename component-path)
+                  file-link-prefix
+                  env package)
+            :do (unless (zerop (hash-table-count documentation-entries))
+                  (setf (gethash package documentation-by-package)
+                        (make-documentation-package-entry
+                         package filenames
+                         documentation-entries))))
 
-      (write-documentation backend stream
-                           (make-documentation-package-entries
-                            packages asdf-system
-                            documentation-by-package)))))
+      (write-documentation
+       backend
+       stream
+       (make-documentation-package-entries
+        (loop :for package :in packages
+              :if (gethash package documentation-by-package)
+                :collect package)
+        asdf-system
+        documentation-by-package)))))
 
 (defun collect-documentation (&optional
                                 (env coalton-impl::*global-environment*)
