@@ -101,7 +101,7 @@
           ,@(loop :for name :in inline-funs
                   :collect `(declaim (inline ,name)))
 
-          (eval-when (:compile-toplevel :load-toplevel)
+          (eval-when (:compile-toplevel :load-toplevel :execute)
             ,@(loop :for type :in (tc:translation-unit-types translation-unit)
                     :append (codegen-type-definition type env)))
 
