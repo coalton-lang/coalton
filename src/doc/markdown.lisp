@@ -143,19 +143,6 @@
                   (html-entities:encode-entities
                    documentation
                    :regex "[<>&]")))
-        (format stream "~%")
-
-        (when constructors
-          (format stream "Constructors:~%"))
-        (loop :for (ctor-name . entry) :in constructors
-              :for ctor-type :in constructor-types :do
-                (format stream "- <code>~A :: ~A</code>~%"
-                        (html-entities:encode-entities (symbol-name ctor-name))
-                        (to-markdown
-                         (coalton-impl/typechecker::instantiate
-                          type-vars
-                          (coalton-impl/typechecker::ty-scheme-type
-                           ctor-type)))))
         (format stream "~%"))
 
       (when instances
