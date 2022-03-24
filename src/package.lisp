@@ -164,6 +164,26 @@
    #:function-type-arity                ; FUNCTION
    ) 
   (:export
+   #:*boolean-type*
+   #:*char-type*
+   #:*u8-type*
+   #:*u16-type*
+   #:*u32-type*
+   #:*u64-type*
+   #:*i8-type*
+   #:*i16-type*
+   #:*132-type*
+   #:*164-type*
+   #:*integer-type*
+   #:*ifix-type*
+   #:*ufix-type*
+   #:*single-float-type*
+   #:*double-float-type*
+   #:*string-type*
+   #:*lisp-object-type*
+   #:*arrow-type*
+   #:*list-type*)
+  (:export
    #:kstar                              ; VARIABLE
    #:ty-scheme                          ; STRUCT
    #:qualified-ty                       ; STRUCT
