@@ -8,7 +8,7 @@
    (#:list #:coalton-library/list))
   (:shadow #:id #:find #:const
            #:type #:compose #:alt
-           #:split)
+           #:split #:reduce)
   (:export
    #:Id
    

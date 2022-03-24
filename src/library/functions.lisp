@@ -11,6 +11,7 @@
    #:id
    #:const
    #:flip
+   #:reduce
    #:compose
    #:conjoin
    #:disjoin
@@ -70,6 +71,11 @@
   (define (flip f x y)
     "Returns a function that takes its arguments in reverse order."
     (f y x))
+
+  (declare reduce (Foldable :f => (:a -> :b -> :b) -> :b -> (:f :a) -> :b))
+  (define (reduce f y xs)
+    "The same as `fold` but with the argument order swapped to match `cl:reduce`"
+    (fold (flip f) y xs))
 
 
   ;; We don't write (COMPOSE F G X) even though it's OK so that the
