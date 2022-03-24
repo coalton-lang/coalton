@@ -174,7 +174,13 @@
             (html-entities:encode-entities (symbol-name name)))
 
     (with-pprint-variable-context ()
-      (format stream "<code>~A</code>~%~%" (to-markdown (ty-class-instance context predicate nil (make-hash-table))))
+      (format stream "<code>~A</code>~%~%"
+              (to-markdown
+               (ty-class-instance
+                :constraints context
+                :predicate predicate
+                :codegen-sym nil
+                :method-codegen-syms (make-hash-table))))
 
       (when documentation
         (format stream "~A~%~%"
