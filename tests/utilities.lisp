@@ -29,4 +29,4 @@
   (coalton-impl::collect-toplevel-forms toplevel))
 
 (defun run-coalton-typechecker (toplevel)
-  (coalton-impl::process-coalton-toplevel toplevel *package* coalton-impl::*initial-environment*))
+  (coalton-impl::process-coalton-toplevel toplevel *package* coalton-impl::*global-environment*))
