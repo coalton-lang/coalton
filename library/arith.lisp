@@ -102,7 +102,7 @@ The fields are defined as follows:
 "
     (Quantization :a Integer :a Integer :a))
 
-  (define-class ((Ord :a) (Num :a) => (Quantizable :a))
+  (define-class ((Ord :a) (Num :a) => Quantizable :a)
     "The representation of a type that allows \"quantizing\", \"snapping to integers\", or \"rounding.\" (All of these concepts are roughly equivalent.)
 "
     ;; Given a X of type :A, (QUANTIZE X) will return the least
@@ -324,7 +324,7 @@ The fields are defined as follows:
                float-features:double-float-nan
                x))))
 
-  (declare single-float->integer (Single-Float -> (Optional Integer)))
+  (declare single-float->integer (Single-Float -> Optional Integer))
   (define (single-float->integer x)
     "Round a Single-Float to the nearest Integer."
     (lisp (Optional Integer) (x)
@@ -333,7 +333,7 @@ The fields are defined as follows:
              None
              (Some (cl:round x)))))
 
-  (declare double-float->integer (Double-Float -> (Optional Integer)))
+  (declare double-float->integer (Double-Float -> Optional Integer))
   (define (double-float->integer x)
     "Round a Double-Float to the nearest Integer."
     (lisp (Optional Integer) (x)
@@ -394,18 +394,18 @@ The fields are defined as follows:
     (define (fromInt x)
       (integer->double-float x)))
 
-  (declare negate ((Num :a) => (:a -> :a)))
+  (declare negate (Num :a => :a -> :a))
   (define (negate x)
     (- 0 x))
 
-  (declare abs ((Ord :a) (Num :a) => (:a -> :a)))
+  (declare abs ((Ord :a) (Num :a) => :a -> :a))
   (define (abs x)
     "Absolute value of X."
     (if (< x 0)
         (negate x)
         x))
 
-  (declare sign ((Ord :a) (Num :a) => (:a -> Integer)))
+  (declare sign ((Ord :a) (Num :a) => :a -> Integer))
   (define (sign x)
     "The sign of X."
     (if (< x 0)
@@ -587,12 +587,12 @@ The fields are defined as follows:
     (define (complex a b)
       (%Complex a b)))
 
-  (define-instance (Eq (Complex :a) => (Eq (Complex (Complex :a))))
+  (define-instance (Eq (Complex :a) => Eq (Complex (Complex :a)))
     (define (== a b)
       (and (== (real-part a) (real-part b))
            (== (imag-part a) (imag-part b)))))
 
-  (define-instance (Num (Complex :a) => (Num (Complex (Complex :a))))
+  (define-instance (Num (Complex :a) => Num (Complex (Complex :a)))
     (define (+ a b)
       (%Complex (+ (real-part a) (real-part b))
                 (+ (imag-part a) (imag-part b))))

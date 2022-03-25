@@ -18,7 +18,7 @@
   ;; Result
   ;;
 
-  (declare isOk ((Result :a :b) -> Boolean))
+  (declare isOk (Result :a :b -> Boolean))
   (define (isOk x)
     "Returns TRUE if X is ERR"
     (lisp Boolean (x)
@@ -26,7 +26,7 @@
         (classes::Result/Ok True)
         (classes::Result/Err False))))
 
-  (declare isErr ((Result :a :b) -> Boolean))
+  (declare isErr (Result :a :b -> Boolean))
   (define (isErr x)
     "Returns TRUE if X is ERR"
     (lisp Boolean (x)
@@ -34,7 +34,7 @@
         (classes::Result/Err True)
         (classes::Result/Ok False))))
 
-  (declare mapErr ((:a -> :b) -> (Result :a :c) -> (Result :b :c)))
+  (declare mapErr ((:a -> :b) -> Result :a :c -> Result :b :c))
   (define (mapErr f x)
     "Map over the ERR case"
     (match x
@@ -51,14 +51,14 @@
   ;; Result instances
   ;;
 
-  (define-instance ((Eq :a) (Eq :b) => (Eq (Result :a :b)))
+  (define-instance ((Eq :a) (Eq :b) => Eq (Result :a :b))
     (define (== a b)
       (match (Tuple a b)
         ((Tuple (Ok a) (Ok b)) (== a b))
         ((Tuple (Err a) (Err b)) (== a b))
         (_ False))))
 
-  (define-instance ((Ord :a) (Ord :b) => (Ord (Result :a :b)))
+  (define-instance ((Ord :a) (Ord :b) => Ord (Result :a :b))
     (define (<=> a b)
       (match (Tuple a b)
         ((Tuple (Ok a) (Ok b)) (<=> a b))
@@ -66,7 +66,7 @@
         ((Tuple (Err _) (Ok _)) LT)
         ((Tuple (Ok _) (Err _)) GT))))
 
-  (define-instance (Semigroup :b => (Semigroup (Result :a :b)))
+  (define-instance (Semigroup :b => Semigroup (Result :a :b))
     (define (<> a b)
       (match (Tuple a b)
         ((Tuple (Ok x) (Ok y))
@@ -74,7 +74,7 @@
         ((Tuple (Err _) _) a)
         (_ b))))
 
-  (define-instance (Monoid :b => (Monoid (Result :a :b)))
+  (define-instance (Monoid :b => Monoid (Result :a :b))
     (define mempty (Ok mempty)))
 
   (define-instance (Functor (Result :a))
