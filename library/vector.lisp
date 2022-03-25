@@ -47,41 +47,41 @@
   (define-type (Vector :a)
     (%Vector Lisp-Object))
 
-  (declare new (Unit -> (Vector :a)))
+  (declare new (Unit -> Vector :a))
   (define (new _)
     "Create a new empty vector"
     (with-capacity 0))
 
-  (declare with-capacity (Integer -> (Vector :a)))
+  (declare with-capacity (Integer -> Vector :a))
   (define (with-capacity n)
     "Create a new vector with N elements preallocated"
     (lisp (Vector :a) (n)
       (cl:make-array n :fill-pointer 0 :adjustable cl:t)))
 
-  (declare length ((Vector :a) -> Integer))
+  (declare length (Vector :a -> Integer))
   (define (length v)
     "Returns the length of V"
     (lisp Integer (v)
       (cl:fill-pointer v)))
 
-  (declare capacity ((Vector :a) -> Integer))
+  (declare capacity (Vector :a -> Integer))
   (define (capacity v)
     "Returns the number of elements that V can store without resizing"
     (lisp Integer (v)
       (cl:array-dimension v 0)))
 
-  (declare empty? ((Vector :a) -> Boolean))
+  (declare empty? (Vector :a -> Boolean))
   (define (empty? v)
     "Returns TRUE if V is empty"
     (== 0 (length v)))
 
-  (declare copy ((Vector :a) -> (Vector :a)))
+  (declare copy (Vector :a -> Vector :a))
   (define (copy v)
     "Return a new vector containing the same elements as V"
     (lisp (Vector :a) (v)
       (%Vector (alexandria:copy-array v))))
 
-  (declare push! (:a -> (Vector :a) -> Integer))
+  (declare push! (:a -> Vector :a -> Integer))
   (define (push! item v)
     "Append ITEM to V and resize V if necessary"
     (lisp Integer (item v)
@@ -89,60 +89,60 @@
 	(cl:vector-push-extend item v)
 	(cl:1- (cl:fill-pointer v)))))
 
-  (declare pop! ((Vector :a) -> (Optional :a)))
+  (declare pop! (Vector :a -> Optional :a))
   (define (pop! v)
     "Remove and return the first item of V"
     (if (== 0 (length v))
         None
         (Some (pop-unsafe! v))))
 
-  (declare pop-unsafe! ((Vector :a) -> :a))
+  (declare pop-unsafe! (Vector :a -> :a))
   (define (pop-unsafe! v)
     "Remove and return the first item of V without checking if the vector is empty"
     (lisp :a (v)
       (cl:vector-pop v)))
 
-  (declare index (Integer -> (Vector :a) -> (Optional :a)))
+  (declare index (Integer -> Vector :a -> Optional :a))
   (define (index index v)
     "Return the INDEXth element of V"
     (if (>= index (length v))
         None
         (Some (index-unsafe index v))))
 
-  (declare index-unsafe (Integer -> (Vector :a) -> :a))
+  (declare index-unsafe (Integer -> Vector :a -> :a))
   (define (index-unsafe index v)
     "Return the INDEXth element of V without checking if the element exists"
     (lisp :a (index v)
       (cl:aref v index)))
 
-  (declare set! (Integer -> :a -> (Vector :a) -> Unit))
+  (declare set! (Integer -> :a -> Vector :a -> Unit))
   (define (set! index item v)
     "Set the INDEXth element of V to ITEM. This function left intentionally unsafe because it does not have a return value to check."
     (lisp Void (index item v)
       (cl:setf (cl:aref v index) item))
     Unit)
 
-  (declare head ((Vector :a) -> (Optional :a)))
+  (declare head (Vector :a -> Optional :a))
   (define (head v)
     "Return the first item of V"
     (index 0 v))
 
-  (declare head-unsafe ((Vector :a) -> :a))
+  (declare head-unsafe (Vector :a -> :a))
   (define (head-unsafe v)
     "Return the first item of V without first checking if V is empty"
     (index-unsafe 0 v))
 
-  (declare last ((Vector :a) -> (Optional :a)))
+  (declare last (Vector :a -> Optional :a))
   (define (last v)
     "Return the last element of V"
     (index (- (length v) 1) v))
 
-  (declare last-unsafe ((Vector :a) -> :a))
+  (declare last-unsafe (Vector :a -> :a))
   (define (last-unsafe v)
     "Return the last element of V without first checking if V is empty"
     (index-unsafe (- (length v) 1) v))
 
-  (declare find-elem (Eq :a => (:a -> (Vector :a) -> (Optional Integer))))
+  (declare find-elem (Eq :a => :a -> Vector :a -> Optional Integer))
   (define (find-elem e v)
     "Find the index of element E in V"
     (let ((test (fn (elem)
@@ -157,7 +157,7 @@
                    (Some pos)
                    None)))))
 
-  (declare foreach ((:a -> :b) -> (Vector :a) -> Unit))
+  (declare foreach ((:a -> :b) -> Vector :a -> Unit))
   (define (foreach f v)
     "Call the function F once for each item in V"
     (lisp Void (f v)
@@ -165,7 +165,7 @@
            :do (coalton-impl/codegen::A1 f elem)))
     Unit)
 
-  (declare foreach-index ((Integer -> :a -> :b) -> (Vector :a) -> Unit))
+  (declare foreach-index ((Integer -> :a -> :b) -> Vector :a -> Unit))
   (define (foreach-index f v)
     "Call the function F once for each item in V with its index"
     (lisp Void (f v)
@@ -175,7 +175,7 @@
            :do (coalton-impl/codegen::A2 f i elem)))
     Unit)
 
-  (declare foreach2 ((:a -> :b -> :c) -> (Vector :a) -> (Vector :b) -> Unit))
+  (declare foreach2 ((:a -> :b -> :c) -> Vector :a -> Vector :b -> Unit))
   (define (foreach2 f v1 v2)
     "Like vector-foreach but twice as good"
     (lisp Void (f v1 v2)
@@ -185,7 +185,7 @@
            :do (coalton-impl/codegen::A2 f e1 e2)))
     Unit)
 
-  (declare append ((Vector :a) -> (Vector :a) -> (Vector :a)))
+  (declare append (Vector :a -> Vector :a -> Vector :a))
   (define (append v1 v2)
     "Create a new VECTOR containing the elements of v1 followed by the elements of v2"
       (let out = (with-capacity (+ (length v1) (length v2))))
@@ -197,14 +197,14 @@
       (foreach f v2)
       out)
 
-  (declare swap-remove! (Integer -> (Vector :a) -> (Optional :a)))
+  (declare swap-remove! (Integer -> Vector :a -> Optional :a))
   (define (swap-remove! idx vec)
     "Remove the element IDX from VEC and replace it with the last element in VEC. Then return the removed element."
     (if (>= idx (length vec))
         None
         (Some (swap-remove-unsafe! idx vec))))
 
-  (declare swap-remove-unsafe! (Integer -> (Vector :a) -> :a))
+  (declare swap-remove-unsafe! (Integer -> Vector :a -> :a))
   (define (swap-remove-unsafe! idx vec)
     "Remove the element IDX from VEC and replace it with the last element in VEC without bounds checking. Then return the removed element."
     (if (== (+ 1 idx) (length vec))
@@ -214,7 +214,7 @@
           (set! idx (pop-unsafe! vec) vec)
           out)))
 
-  (declare sort-by! ((:a -> :a -> Boolean) -> (Vector :a) -> Unit))
+  (declare sort-by! ((:a -> :a -> Boolean) -> Vector :a -> Unit))
   (define (sort-by! f v)
     "Sort a vector inplace with predicate function F"
     (lisp Void (v f)
@@ -224,7 +224,7 @@
          (coalton-impl/codegen::A2 f a b))))
     Unit)
 
-  (declare sort! (Ord :a => ((Vector :a) -> Unit)))
+  (declare sort! (Ord :a => Vector :a -> Unit))
   (define (sort! v)
     "Sort a vector inplace"
     (sort-by! < v))

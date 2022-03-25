@@ -2,8 +2,7 @@
   (:use
    #:coalton
    #:coalton-library/builtin
-   #:coalton-library/classes
-   #:coalton-library/list)
+   #:coalton-library/classes)
   (:export
    #:trace
    #:traceObject
@@ -86,19 +85,22 @@
     (fn (x)
       (f (g x))))
 
+  (declare conjoin ((:a -> Boolean) -> (:a -> Boolean) -> :a -> Boolean))
   (define (conjoin f g x)
     "Compute the conjunction of two unary Boolean functions."
     (and (f x) (g x)))
 
+  (declare disjoin ((:a -> Boolean) -> (:a -> Boolean) -> :a -> Boolean))
   (define (disjoin f g x)
     "Compute the disjunction of two unary Boolean functions."
     (or (f x) (g x)))
 
+  (declare complement ((:a -> Boolean) -> :a -> Boolean))
   (define (complement f x)
     "Compute the complement of a unary Boolean function."
     (not (f x)))
 
-  (declare uncurry ((:left -> :right -> :result) -> (Tuple :left :right) -> :result))
+  (declare uncurry ((:left -> :right -> :result) -> Tuple :left :right -> :result))
   (define (uncurry func tpl)
     (match tpl
       ((Tuple left right)
@@ -108,17 +110,17 @@
   ;; Monadic operators
   ;;
 
-  (declare msum (Monoid :a => ((List :a) -> :a)))
+  (declare msum ((Monoid :a) (Foldable :t) => :t :a -> :a))
   (define (msum xs)
     "Fold over a list using <>"
     (foldr <> mempty xs))
 
-  (declare asum (Alternative :f => ((List (:f :a)) -> (:f :a))))
+  (declare asum ((Alternative :f) (Foldable :t) => :t (:f :a) -> :f :a))
   (define (asum xs)
     "Fold over a list using alt"
     (foldr alt empty xs))
 
-  (declare /= (Eq :a => (:a -> :a -> Boolean)))
+  (declare /= (Eq :a => :a -> :a -> Boolean))
   (define (/= a b)
     (boolean-not (== a b))))
 

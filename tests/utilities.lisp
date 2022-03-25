@@ -17,7 +17,7 @@
 
 (defun check-coalton-types (toplevel expected-types)
   (multiple-value-bind (form env)
-      (coalton-impl::process-coalton-toplevel toplevel *package* coalton-impl::*initial-environment*)
+      (coalton-impl::process-coalton-toplevel toplevel *package* coalton-impl::*global-environment*)
     (declare (ignore form))
 
     (loop :for (symbol . type) :in expected-types
