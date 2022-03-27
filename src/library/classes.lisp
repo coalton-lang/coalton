@@ -91,6 +91,9 @@
     "Types which have equality defined."
     (== (:a -> :a -> Boolean)))
 
+  (define-instance (Eq Unit)
+    (define (== _ _) True))
+
   ;;
   ;; Ord
   ;;
