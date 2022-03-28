@@ -27,7 +27,7 @@
   (let* ((class-entry (tc:lookup-class env (tc:ty-predicate-class pred)))
          (pred-kind tc:kstar))
 
-    (loop :for type :in (tc:ty-predicate-types pred) :do
+    (loop :for type :in (reverse (tc:ty-predicate-types pred)) :do
       (setf pred-kind (tc:kfun (tc:kind-of type) pred-kind)))
 
     (tc:apply-type-argument-list
