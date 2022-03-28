@@ -225,6 +225,8 @@
 (defvar *string-type*  (%make-tcon (%make-tycon :name 'coalton:String      :kind kstar)))
 (defvar *lisp-object-type*
   (%make-tcon (%make-tycon :name 'coalton:Lisp-Object :kind kstar)))
+(defvar *fraction-type*
+  (%make-tcon (%make-tycon :name 'coalton:Fraction :kind kstar)))
 
 (defvar *arrow-type* (%make-tcon (%make-tycon :name 'coalton:-> :kind (kfun kstar (kfun kstar kstar)))))
 

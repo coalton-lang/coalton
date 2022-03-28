@@ -11,7 +11,8 @@
     (single-float (values *single-float-type* nil))
     (double-float (values *double-float-type* nil))
     (string       (values *string-type*       nil))
-    (character    (values *char-type*         nil))))
+    (character    (values *char-type*         nil))
+    (ratio        (values *fraction-type* nil))))
 
 (defgeneric derive-expression-type (value env substs)
   (:documentation "Derive the TYPE and generate a TYPED-NODE for expression VALUE

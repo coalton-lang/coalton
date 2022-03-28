@@ -227,6 +227,15 @@
             :newtype nil
             :docstring "Opaque container for arbitrary lisp objects. At runtime this is equivalent to type `t`."))
 
+          ('coalton:Fraction
+           (type-entry
+            :name 'coalton:Fraction
+            :runtime-type 'cl:rational
+            :type *fraction-type*
+            :enum-repr nil
+            :newtype nil
+            :docstring "A ratio of integers always in reduced form."))
+
           ('coalton:Arrow
            (type-entry
             :name 'coalton:Arrow

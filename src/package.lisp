@@ -181,6 +181,7 @@
    #:*double-float-type*
    #:*string-type*
    #:*lisp-object-type*
+   #:*fraction-type*
    #:*arrow-type*
    #:*list-type*)
   (:export
@@ -491,8 +492,9 @@
    #:Single-Float
    #:Double-Float
    #:String
-   #:Arrow
    #:Lisp-Object
+   #:Fraction
+   #:Arrow
    #:List #:Cons #:Nil)
   (:export
    #:fn #:λ

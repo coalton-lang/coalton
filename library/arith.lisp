@@ -17,7 +17,6 @@
    #:integer->double-float
    #:single-float->integer
    #:double-float->integer
-   #:Fraction
    #:negate
    #:abs
    #:sign
@@ -28,6 +27,7 @@
    #:odd?
    #:gcd
    #:lcm
+   #:mkFraction
    #:numerator
    #:denominator
    #:reciprocal
@@ -340,29 +340,7 @@ The fields are defined as follows:
       (cl:if (cl:or (float-features:float-infinity-p x)
                     (float-features:float-nan-p x))
              None
-             (Some (cl:round x))))))
-
-(coalton-toplevel
-  (define-type Fraction
-    "A ratio of integers always in reduced form."
-    ;; We avoid "Rational" or "Ratio" since those might be a more
-    ;; generic concept than a humble fraction of integers. This
-    ;; fraction is always assumed to be in reduced terms.
-    ;;
-    ;; This shouldn't be pattern matched against with user code.
-    ;;
-    ;; See arith.lisp for more info.
-    (%Fraction Integer Integer))
-
-  (define-instance (Eq Fraction)
-    (define (== p q)
-      (and (== (numerator p) (numerator q))
-           (== (denominator p) (denominator q)))))
-
-  (define-instance (Ord Fraction)
-    (define (<=> p q)
-      (<=> (* (numerator p) (denominator q))
-           (* (numerator q) (denominator p)))))
+             (Some (cl:round x)))))
 
   (define-instance (Num Integer)
     (define (+ a b)
@@ -449,67 +427,69 @@ The fields are defined as follows:
   (declare lcm (Integer -> Integer -> Integer))
   (define (lcm a b)
     "Compute the least common multiple of A and B."
-    (lisp Integer (a b) (cl:lcm a b)))
+    (lisp Integer (a b) (cl:lcm a b))))
 
-  (declare %reduce-fraction (Fraction -> Fraction))
-  (define (%reduce-fraction q)
-    (let ((n (numerator q))
-          (d (denominator q))
-          (g (gcd n d)))
-      (if (== 0 n)
-          (%Fraction 0 1)
-          (%Fraction
-           (* (* (sign n) (sign d))
-              (lisp Integer (n g) (cl:values (cl:floor (cl:abs n) g))))
-           (lisp Integer (d g) (cl:values (cl:floor (cl:abs d) g)))))))
+(coalton-toplevel
+  ;; We avoid "Rational" or "Ratio" since those might be a more
+  ;; generic concept than a humble fraction of integers. This
+  ;; fraction is always assumed to be in reduced terms.
 
-  (define (%mkFraction n d)
-    (progn
-      (when (== 0 d)
-        (error "Division by zero"))
-      (%reduce-fraction
-       (%Fraction n d))))
+  (define-instance (Eq Fraction)
+    (define (== p q)
+      (lisp Boolean (p q)
+        (cl:= p q))))
+
+  (define-instance (Ord Fraction)
+    (define (<=> p q)
+      (cond
+        ((> p q)
+         GT)
+        ((< p q)
+         LT)
+        (True
+         EQ))))
+
+  (declare mkFraction (Integer -> Integer -> Fraction))
+  (define (mkFraction a b)
+    (lisp Fraction (a b)
+      (cl:/ a b)))
 
   (declare numerator (Fraction -> Integer))
   (define (numerator q)
     "The numerator of a fraction."
-    (match q
-      ((%Fraction n _) n)))
+    (lisp Integer (q)
+      (cl:numerator q)))
 
   (declare denominator (Fraction -> Integer))
   (define (denominator q)
     "The denominator of a fraction."
-    (match q
-      ((%Fraction _ d) d)))
+    (lisp Integer (q)
+      (cl:denominator q)))
 
   (declare reciprocal (Fraction -> Fraction))
   (define (reciprocal q)
     "The reciprocal of a fraction."
-    (match q
-      ;; n/d and d/n will always be reduced
-      ((%Fraction n d) (%Fraction d n))))
+    (lisp Fraction (q)
+      (cl:/ q)))
 
   (define-instance (Num Fraction)
     (define (+ p q)
-      (let ((a (* (numerator p) (denominator q)))
-            (b (* (numerator q) (denominator p)))
-            (c (* (denominator p) (denominator q))))
-        (%mkFraction (+ a b) c)))
+      (lisp Fraction (p q)
+        (cl:+ p q)))
     (define (- p q)
-      (let ((a (* (numerator p) (denominator q)))
-            (b (* (numerator q) (denominator p)))
-            (c (* (denominator p) (denominator q))))
-        (%mkFraction (- a b) c)))
+      (lisp Fraction (p q)
+        (cl:- p q)))
     (define (* p q)
-      (%mkFraction (* (numerator p) (numerator q))
-                   (* (denominator p) (denominator q))))
+      (lisp Fraction (p q)
+        (cl:* p q)))
     (define (fromInt z)
-      (%Fraction z 1))))
+      (lisp Fraction (z) z))))
 
 (coalton-toplevel
   (define-instance (Dividable Fraction Fraction)
     (define (/ a b)
-      (* a (reciprocal b))))
+      (lisp Fraction (a b)
+        (cl:/ a b))))
 
   (define-instance (Dividable Single-Float Single-Float)
     (define (/ x y)
@@ -523,7 +503,7 @@ The fields are defined as follows:
 
   (define-instance (Dividable Integer Fraction)
     (define (/ x y)
-      (%mkFraction x y)))
+      (mkFraction x y)))
 
   (define-instance (Dividable Integer Single-Float)
     (define (/ x y)
@@ -574,18 +554,15 @@ The fields are defined as follows:
   (define-class (Complex :a)
     (complex (:a -> :a -> (Complex :a))))
 
-  (declare conjugate ((Complex :a) (Num :a) => (Complex :a) -> (Complex :a)))
+  (declare conjugate ((Complex :a) (Num :a) => Complex :a -> Complex :a))
   (define (conjugate n)
     (complex (real-part n) (negate (imag-part n))))
 
-  (declare ii ((Complex :a) (Num :a) => (Complex :a)))
+  (declare ii ((Complex :a) (Num :a) => Complex :a))
   (define ii
     "The complex unit i. (The double ii represents a blackboard-bold i.)"
     (complex 0 1))
 
-  (define-instance (Complex (Complex :a))
-    (define (complex a b)
-      (%Complex a b)))
 
   (define-instance (Eq (Complex :a) => Eq (Complex (Complex :a)))
     (define (== a b)
@@ -603,7 +580,11 @@ The fields are defined as follows:
       (%Complex (* (real-part a) (real-part b))
                  (* (imag-part a) (imag-part b))))
     (define (fromInt n)
-      (%Complex (fromInt n) 0))))
+      (%Complex (fromInt n) 0)))
+
+  (define-instance (Complex (Complex :a))
+    (define (complex a b)
+      (%Complex a b))))
 
 (cl:defmacro %define-native-complex-instances (type repr)
   `(coalton-toplevel
@@ -804,7 +785,7 @@ The fields are defined as follows:
           ;; Not the most efficient... just relying on CL to do the
           ;; work.
           (cl:flet ((to-frac (f)
-                      (%Fraction (cl:numerator f) (cl:denominator f))))
+                      (mkFraction (cl:numerator f) (cl:denominator f))))
             (cl:let ((f (cl:/ n d)))
               (uiop:nest
                (cl:multiple-value-bind (fl-quo fl-rem) (cl:floor f))

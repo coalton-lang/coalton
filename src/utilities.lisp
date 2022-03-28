@@ -91,7 +91,7 @@ Implementation notes: These notes aren't relevant to users of this macro, but ar
 
 (deftype literal-value ()
   "Allowed literal values as Lisp objects."
-  '(or integer single-float double-float string character))
+  '(or integer ratio single-float double-float string character))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type literal-value))
