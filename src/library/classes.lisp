@@ -25,7 +25,8 @@
    #:Into
    #:TryInto
    #:Iso
-   #:Unwrappable #:withDefault #:unwrap
+   #:error
+   #:Unwrappable #:unwrap-or-else #:with-default #:unwrap #:expect
    #:Hash #:hash
    #:combine-hashes
    #:define-sxhash-hasher))
@@ -257,10 +258,59 @@
 
   (define-instance (Iso :a :a))
 
-  (define-class (Unwrappable :f)
-    "Types which might be able to be unwrapped, otherwise returning a default value."
-    (withDefault (:a -> (:f :a) -> :a))
-    (unwrap ((:f :a) -> :a)))
+  ;;
+  ;; Unwrappable for fallible unboxing
+  ;;
+
+  (declare error (String -> :a))
+  (define (error str)
+    "Signal an error by calling `CL:ERROR`."
+    (lisp :a (str) (cl:error str)))
+
+  (define-class (Unwrappable :container)
+    "Containers which can be unwrapped to get access to their contents.
+
+The first argument to `unwrap-or-else' is a continuation, usually named `fail'. Methods should call `fail' and
+return its value if they are unable to unwrap a value.
+
+Typical `fail' continuations are:
+- Return a default value, or
+- Signal an error."
+    (unwrap-or-else ((Unit -> :elt)
+                     -> (:container :elt)
+                     -> :elt)))
+
+  (declare expect ((Unwrappable :container) =>
+                   String
+                   -> (:container :element)
+                   -> :element))
+  (define (expect reason container)
+    "Unwrap CONTAINER, signaling an error with the description REASON on failure."
+    (unwrap-or-else (fn () (error reason))
+                    container))
+
+  (declare unwrap ((Unwrappable :container) =>
+                   (:container :element)
+                   -> :element))
+  (define (unwrap container)
+    "Unwrap CONTAINER, signaling an error on failure."
+    (unwrap-or-else (fn () (error (lisp String (container)
+                                    (cl:format cl:nil "Unexpected ~a in UNWRAP"
+                                               container))))
+                    container))
+
+  (declare with-default ((Unwrappable :container) =>
+                         :element
+                         -> (:container :element)
+                         -> :element))
+  (define (with-default default container)
+    "Unwrap CONTAINER, returning DEFAULT on failure."
+    (unwrap-or-else (fn () default)
+                    container))
+
+  ;;
+  ;; hashing
+  ;;
 
   (define-class (Eq :a => (Hash :a))
     "Types which can be hashed for storage in hash tables.

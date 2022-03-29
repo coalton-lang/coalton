@@ -113,14 +113,10 @@
   (define-instance (Iso (Result Unit :a) (Optional :a)))
 
   (define-instance (Unwrappable (Result :a))
-    (define (withDefault default result)
-      (match result
-        ((Ok x) x)
-        ((Err _) default)))
-    (define (unwrap opt)
-      (match opt
-        ((Ok x) x)
-        ((Err _) (error "unexpected Err in unwrap"))))))
+    (define (unwrap-or-else fail res)
+      (match res
+        ((Ok elt) elt)
+        ((Err _) (fail))))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/RESULT")
