@@ -108,14 +108,10 @@
         (_ y))))
 
   (define-instance (Unwrappable Optional)
-    (define (withDefault default opt)
+    (define (unwrap-or-else fail opt)
       (match opt
-        ((Some x) x)
-        ((None) default)))
-    (define (unwrap opt)
-      (match opt
-        ((Some x) x)
-        ((None) (error "unexpected None in unwrap"))))))
+        ((Some elt) elt)
+        ((None) (fail))))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/OPTIONAL")

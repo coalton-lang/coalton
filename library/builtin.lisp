@@ -4,7 +4,7 @@
    #:coalton-library/classes)
   (:export
    #:undefined
-   #:error
+   #:error ; re-export from classes
    #:not
    #:xor
    #:boolean-not
@@ -17,12 +17,7 @@
 (coalton-toplevel
   (define (undefined x)
     "A function which can be used in place of any value, throwing an error at runtime."
-    (lisp :a () (cl:error "Undefined")))
-
-  (declare error (String -> :a))
-  (define (error str)
-    "Signal an error by calling `CL:ERROR`."
-    (lisp :a (str) (cl:error str)))
+    (error "Undefined"))
 
   (define not
     "Synonym for BOOLEAN-NOT."
