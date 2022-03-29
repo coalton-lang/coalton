@@ -47,7 +47,6 @@
                  ;; from already typechecked coalton, we can use the
                  ;; OPTIMIZE flags to remove type checks.
                  `(progn
-                    (declaim (inline ,application-sym))
                     (defun ,application-sym (,applied-function-sym ,@arg-syms)
                       (declare (optimize (speed 3) (safety 3))
                                (type (or function function-entry) ,applied-function-sym)
@@ -74,9 +73,21 @@
                        ;; Build up a curried function to be called for partial application
                        :curried ,(build-curried-function arg-syms)))
                     (setf (gethash ,arity *function-constructor-functions*) ',constructor-sym))))))
-    `(progn
-       ,@(loop :for i :of-type fixnum :from 1 :below 10
-               :collect (define-function-macros-with-arity i)))))
+    (let ((body nil)
+          (funs nil))
+      (loop :for i :of-type fixnum :from 1 :below 50
+            :do (push (define-function-macros-with-arity i) body)
+            :do (setf funs
+                      (append (list (alexandria:format-symbol *package* "F~D" i)
+                                    (alexandria:format-symbol *package* "A~D" i))
+                              funs)))
+      `(progn
+         #+sbcl
+         (declaim (sb-ext:start-block ,@funs))
+         ,@(reverse body)
+         #+sbcl
+         (declaim (sb-ext:end-block))))))
+
 (define-function-macros)
 
 

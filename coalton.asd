@@ -11,7 +11,8 @@
 
 (asdf:defsystem #:coalton/compiler
   :around-compile (lambda (compile)
-                    (let (#+sbcl (sb-ext:*derive-function-types* t))
+                    (let (#+sbcl (sb-ext:*derive-function-types* t)
+                          #+sbcl (sb-ext:*block-compile-default* :specified))
                       (funcall compile)))
   :depends-on (#:alexandria
                #:global-vars
