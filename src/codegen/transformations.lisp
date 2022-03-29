@@ -3,13 +3,21 @@
    #:cl
    #:coalton-impl/util
    #:coalton-impl/codegen/ast)
+  (:import-from
+   #:coalton-impl/codegen/hoister
+   #:hoister
+   #:push-hoist-point
+   #:pop-hoist-point
+   #:hoist-definition)
   (:local-nicknames
-   (#:tc #:coalton-impl/typechecker))
+   (#:tc #:coalton-impl/typechecker)
+   (#:ast #:coalton-impl/ast))
   (:export
    #:canonicalize
    #:pointfree
    #:direct-application
-   #:inline-methods))
+   #:inline-methods
+   #:static-dict-lift))
 
 (in-package #:coalton-impl/codegen/transformations)
 
@@ -128,6 +136,44 @@
      (list
       (cons :application #'inline-method)))))
 
+(defun static-dict-lift (node hoister package env)
+  (declare (type node node)
+           (type hoister hoister)
+           (type package package)
+           (ignore env))
+  (labels ((lift-static-dict (node)
+             ;; Only pure functions can be lifted
+             (unless (node-application-pure node)
+               (return-from lift-static-dict nil))
+
+             (hoist-definition node package hoister))
+
+           (handle-push-hoist-point (node)
+             (push-hoist-point (node-abstraction-vars node) hoister)
+             nil)
+
+           (handle-pop-hoist-point (node)
+             ;; If definitions were hoisted to this lambda
+             ;; then add them to the ast
+             (let ((hoisted (pop-hoist-point hoister)))
+               (if hoisted
+                   (node-abstraction
+                    (node-type node)
+                    (node-abstraction-vars node)
+                    (node-let
+                     (node-type (node-abstraction-subexpr node))
+                     hoisted
+                     (node-abstraction-subexpr node)))
+
+                   node))))
+
+    (traverse
+     node
+     (list
+      (cons :application #'lift-static-dict)
+      (cons :before-abstraction #'handle-push-hoist-point)
+      (cons :abstraction #'handle-pop-hoist-point)))))
+
 (defun call-if (node key funs)
   (declare (type node node)
            (type symbol key)
@@ -152,7 +198,8 @@
              (mapcar
               (lambda (node)
                 (traverse node funs))
-              (node-application-rands node)))))
+              (node-application-rands node))
+             :pure (node-application-pure node))))
       (call-if node :application funs)))
 
   (:method ((node node-direct-application) funs)
@@ -168,12 +215,13 @@
       (call-if node :direct-application funs)))
 
   (:method ((node node-abstraction) funs)
+    (call-if node :before-abstraction funs)
     (let ((node
             (node-abstraction
              (node-type node)
              (node-abstraction-vars node)
              (traverse (node-abstraction-subexpr node) funs))))
-      (call-if node :direct-application funs)))
+      (call-if node :abstraction funs)))
 
   (:method ((node node-let) funs)
     (call-if node :before-let funs)

@@ -4,7 +4,8 @@
   (types       (required 'types)       :type type-definition-list     :read-only t)
   (definitions (required 'definitions) :type typed-binding-list       :read-only t)
   (instances   (required 'instances)   :type instance-definition-list :read-only t)
-  (classes     (required 'classes)     :type ty-class-list            :read-only t))
+  (classes     (required 'classes)     :type ty-class-list            :read-only t)
+  (package     (required 'package)     :type package                  :read-only t))
 
 ;; FUNCTION ENV
 

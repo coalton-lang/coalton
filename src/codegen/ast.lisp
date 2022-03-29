@@ -24,6 +24,7 @@
    #:node-application-p                 ; FUNCTION
    #:node-application-rator             ; ACCESSOR
    #:node-application-rands             ; ACCESSOR
+   #:node-application-pure              ; ACCESSOR
    #:node-direct-application            ; STRUCT
    #:node-direct-application-rator-type ; ACCESSOR
    #:node-direct-application-rator      ; ACCESSOR
@@ -86,9 +87,10 @@
 
 (defstruct (node-application
             (:include node)
-            (:constructor node-application (type rator rands)))
+            (:constructor node-application (type rator rands &key (pure nil))))
   (rator (required 'rator) :type node      :read-only t)
-  (rands (required 'rands) :type node-list :read-only t))
+  (rands (required 'rands) :type node-list :read-only t)
+  (pure  (required 'pure)  :type boolean   :read-only t))
 
 (defstruct (node-direct-application
             (:include node)

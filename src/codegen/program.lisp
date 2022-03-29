@@ -36,11 +36,16 @@
    #:coalton-impl/codegen/typecheck-node
    #:typecheck-node)
   (:import-from
+   #:coalton-impl/codegen/hoister
+   #:make-hoister
+   #:pop-final-hoist-point)
+  (:import-from
    #:coalton-impl/codegen/transformations
    #:canonicalize
    #:pointfree
    #:direct-application
-   #:inline-methods)
+   #:inline-methods
+   #:static-dict-lift)
   (:local-nicknames
    (#:tc #:coalton-impl/typechecker))
   (:export
@@ -74,13 +79,19 @@
             (loop :for instance :in (tc:translation-unit-instances translation-unit)
                   :append (compile-instance instance add-inline env))))
 
+         (hoister
+           (make-hoister))
+
          (definitions
-           (loop :for (name . node) :in definitions
-                 :for pointfree-node := (pointfree node)
-                 :for canonicalized-node := (canonicalize pointfree-node)
-                 :for method-inline-node := (inline-methods canonicalized-node env)
-                 :do (typecheck-node method-inline-node env)
-                 :collect (cons name method-inline-node)))
+           (append
+            (loop :for (name . node) :in definitions
+                  :for pointfree-node := (pointfree node)
+                  :for canonicalized-node := (canonicalize pointfree-node)
+                  :for method-inline-node := (inline-methods canonicalized-node env)
+                  :for lifted-node := (static-dict-lift method-inline-node hoister (tc:translation-unit-package translation-unit) env)
+                  :do (typecheck-node lifted-node env)
+                  :collect (cons name lifted-node))
+            (pop-final-hoist-point hoister)))
 
          (sccs (node-binding-sccs definitions)))
 
