@@ -3,6 +3,7 @@
    #:coalton
    #:coalton-library/builtin
    #:coalton-library/classes
+   #:coalton-library/functions
    #:coalton-library/tuple
    #:coalton-library/optional)
   (:export
@@ -71,35 +72,35 @@
 
   ;; List is an early type
 
-  (declare head ((List :a) -> (Optional :a)))
+  (declare head (List :a -> Optional :a))
   (define (head l)
     "Returns the first element of a list."
     (match l
       ((Cons x _) (Some x))
       ((Nil) None)))
 
-  (declare tail ((List :a) -> (Optional (List :a))))
+  (declare tail (List :a -> Optional (List :a)))
   (define (tail l)
     "Returns every element except the first in a list."
     (match l
       ((Cons _ xs) (Some xs))
       ((Nil) None)))
 
-  (declare car ((List :a) -> :a))
+  (declare car (List :a -> :a))
   (define (car x)
     "Return the traditional car of a list. This function is partial"
     (match x
       ((Cons x _) x)
       ((Nil) (error "there is no first element"))))
 
-  (declare cdr ((List :a) -> (List :a)))
+  (declare cdr (List :a -> List :a))
   (define (cdr xs)
     "Return the traditional cdr of a list. This function is partial"
     (match xs
       ((Cons _ xs) xs)
       ((Nil) Nil)))
 
-  (declare last ((List :a) -> (Optional :a)))
+  (declare last (List :a -> Optional :a))
   (define (last l)
     "Returns the last element of a list."
     (match l
@@ -107,32 +108,32 @@
       ((Cons _ xs) (last xs))
       ((Nil) None)))
 
-  (declare init ((List :a) -> (List :a)))
+  (declare init (List :a -> List :a))
   (define (init l)
     "Returns every element except the last in a list."
     (lisp (List :a) (l)
       (cl:butlast l)))
 
-  (declare null? ((List :a) -> Boolean))
+  (declare null? (List :a -> Boolean))
   (define (null? xs)
     "Returns TRUE if XS is an empty list."
     (match xs
       ((Nil) True)
       (_ False)))
 
-  (declare singleton (:a -> (List :a)))
+  (declare singleton (:a -> List :a))
   (define (singleton x)
     "Returns a list containting one element."
     (Cons x Nil))
 
-  (declare repeat (Integer -> :a -> (List :a)))
+  (declare repeat (Integer -> :a -> List :a))
   (define (repeat n x)
     "Returns a list with the same value repeated multiple times."
     (if (== 0 n)
         Nil
         (Cons x (repeat (- n 1) x))))
 
-  (declare reverse ((List :a) -> (List :a)))
+  (declare reverse (List :a -> List :a))
   (define (reverse xs)
     "Returns a new list containing the same elements in reverse order."
     (let ((inner (fn (as bs)
@@ -141,7 +142,7 @@
                      ((Cons a as) (inner as (Cons a bs)))))))
       (inner xs Nil)))
 
-  (declare drop (Integer -> (List :a) -> (List :a)))
+  (declare drop (Integer -> List :a -> List :a))
   (define (drop n xs)
     "Returns a list with the first N elements removed."
     (if (== n 0)
@@ -151,7 +152,7 @@
            (drop (- n 1) xs))
           ((Nil) Nil))))
 
-  (declare take (Integer -> (List :a) -> (List :a)))
+  (declare take (Integer -> List :a -> List :a))
   (define (take n xs)
     "Returns the first N elements of a list."
     (if (== n 0)
@@ -161,7 +162,7 @@
            (Cons x (take (- n 1) xs)))
           ((Nil) Nil))))
 
-  (declare find ((:a -> Boolean) -> (List :a) -> (Optional :a)))
+  (declare find ((:a -> Boolean) -> List :a -> Optional :a))
   (define (find f xs)
     "Returns the first element in a list matching the predicate function F."
     (fold (fn (a b)
@@ -171,7 +172,7 @@
                (if (f b) (Some b) None))))
           None xs))
 
-  (declare filter ((:a -> Boolean) -> (List :a) -> (List :a)))
+  (declare filter ((:a -> Boolean) -> List :a -> List :a))
   (define (filter f xs)
     "Returns a new list containing every element of XS that matches the predicate function F in the same order."
     (let ((fun (fn (xs ys)
@@ -184,7 +185,7 @@
                         (fun xs ys)))))))
       (fun xs Nil)))
 
-  (declare length ((List :a) -> Integer))
+  (declare length (List :a -> Integer))
   (define (length l)
     "Returns the length of a list."
     (fold (fn (a b)
@@ -192,7 +193,7 @@
           0
           l))
 
-  (declare index ((List :a) -> Integer -> (Optional :a)))
+  (declare index (List :a -> Integer -> Optional :a))
   (define (index xs i)
     "Returns the Ith element of a list."
     (match xs
@@ -203,16 +204,16 @@
            (Some x)
            (index xs (- i 1))))))
 
-  (declare nth (Integer -> (List :t) -> :t))
+  (declare nth (Integer -> List :t -> :t))
   (define (nth n l)
     "Like INDEX, but errors if the index is not found."
     (fromSome "There is no NTH" (index l n)))
 
-  (declare elemIndex (Eq :a => (:a -> (List :a) -> (Optional Integer))))
+  (declare elemIndex (Eq :a => :a -> List :a -> Optional Integer))
   (define (elemIndex x xs)
     (findIndex (== x) xs))
 
-  (declare findIndex ((:a -> Boolean) -> (List :a) -> (Optional Integer)))
+  (declare findIndex ((:a -> Boolean) -> List :a -> Optional Integer))
   (define (findIndex f xs)
     "Returns the index of the first element matching the predicate function F."
     (let ((find (fn (xs n)
@@ -225,7 +226,7 @@
                          (find xs (+ n 1))))))))
       (find xs 0)))
 
-  (declare range (Integer -> Integer -> (List Integer)))
+  (declare range (Integer -> Integer -> List Integer))
   (define (range start end)
     "Returns a list containing the numbers from START to END inclusive.
 
@@ -245,19 +246,19 @@
           (inner start)
           (reverse (range end start)))))
 
-  (declare append ((List :a) -> (List :a) -> (List :a)))
+  (declare append (List :a -> List :a -> List :a))
   (define (append xs ys)
     "Appends two lists together and returns a new list."
     (match xs
       ((Nil) ys)
       ((Cons x xs) (Cons x (append xs ys)))))
 
-  (declare concat ((List (List :a)) -> (List :a)))
+  (declare concat (List (List :a) -> List :a))
   (define (concat xs)
     "Appends a list of lists together into a single new list."
     (concatMap (fn (x) x) xs))
 
-  (declare concatMap ((:a -> (List :b)) -> (List :a) -> (List :b)))
+  (declare concatMap ((:a -> (List :b)) -> List :a -> List :b))
   (define (concatMap f xs)
     "Apply F to each element in XS and concatenate the results."
     (fold (fn (a b) (append a (f b))) Nil xs))

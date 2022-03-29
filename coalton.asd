@@ -5,18 +5,21 @@
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
   :license "MIT"
   :version (:read-file-form "VERSION.txt")
+  :in-order-to ((asdf:test-op (asdf:test-op #:coalton/tests)))
+  :depends-on (#:coalton/compiler
+               #:coalton/library))
+
+(asdf:defsystem #:coalton/compiler
+  :around-compile (lambda (compile)
+                    (let (#+sbcl (sb-ext:*derive-function-types* t))
+                      (funcall compile)))
   :depends-on (#:alexandria
                #:global-vars
                #:trivia
                #:fset
                #:float-features
                #:split-sequence
-               #:uiop
-               #:coalton/hashtable-shim)
-  :in-order-to ((asdf:test-op (asdf:test-op #:coalton/tests)))
-  :around-compile (lambda (compile)
-                    (let (#+sbcl (sb-ext:*derive-function-types* t))
-                      (funcall compile)))
+               #:uiop)
   :pathname "src/"
   :serial t
   :components ((:file "package")
@@ -81,30 +84,36 @@
                (:file "coalton")
                (:file "debug")
                (:file "faux-macros")
-               (:file "language-macros")
-               (:module "library"
-                :serial t
-                :components ((:file "utils")
-                             (:file "classes")
-                             (:file "builtin")
-                             (:file "boolean")
-                             (:file "bits")
-                             (:file "arith")
-                             (:file "char")
-                             (:file "string")
-                             (:file "tuple")
-                             (:file "optional")
-                             (:file "list")
-                             (:file "result")
-                             (:file "functions")
-                             (:file "cell")
-                             (:file "vector")
-                             (:file "slice")
-                             (:file "hashtable")
-                             (:file "monad/state")
-                             (:file "iterator")
-                             (:file "prelude")))
-               (:file "toplevel-environment")))
+               (:file "language-macros")))
+
+(asdf:defsystem #:coalton/library
+  :around-compile (lambda (compile)
+                    (let (#+sbcl (sb-ext:*derive-function-types* t))
+                      (funcall compile)))
+  :depends-on (#:coalton/hashtable-shim)
+  :pathname "library/"
+  :serial t
+  :components ((:file "utils")
+               (:file "classes")
+               (:file "builtin")
+               (:file "functions")
+               (:file "boolean")
+               (:file "bits")
+               (:file "arith")
+               (:file "char")
+               (:file "string")
+               (:file "tuple")
+               (:file "optional")
+               (:file "list")
+               (:file "result")
+               (:file "cell")
+               (:file "vector")
+               (:file "slice")
+               (:file "hashtable")
+               (:file "monad/state")
+               (:file "iterator")
+               (:file "prelude")))
+
 
 ;;; we need to inspect the sbcl version in order to decide which version of the hashtable shim to load,
 ;;; because 2.1.12 includes (or will include) a bugfix that allows a cleaner, more maintainable

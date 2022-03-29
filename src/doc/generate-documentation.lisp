@@ -83,9 +83,9 @@
                                               coalton-library/monad/state
                                               coalton-library/iterator))
                                            (base-package 'coalton-prelude)
-                                           (asdf-system ':COALTON)
+                                           (asdf-system ':COALTON/LIBRARY)
                                            (file-link-prefix ""))
-  (let* ((component (asdf:find-component asdf-system 'library))
+  (let* ((component (asdf:find-system asdf-system))
          (component-path (asdf:component-pathname component))
          (filenames (mapcar (lambda (file)
                               (file-namestring (asdf:component-relative-pathname file)))

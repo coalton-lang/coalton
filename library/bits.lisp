@@ -6,8 +6,9 @@
      #:not)
   (:use
    #:coalton)
-  (:local-nicknames
-   (#:classes #:coalton-library/classes))
+  (:import-from
+   #:coalton-library/classes
+   #:Num)
   (:export
    #:Bits
    #:and
@@ -19,7 +20,7 @@
 (cl:in-package #:coalton-library/bits)
 
 (coalton-toplevel
-  (define-class ((classes:Num :int) => (Bits :int))
+  (define-class (Num :int => Bits :int)
     "Operations on the bits of twos-complement integers"
     (and (:int -> :int -> :int))
     (or (:int -> :int -> :int))

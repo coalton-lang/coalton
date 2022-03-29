@@ -16,12 +16,13 @@
   ;; State Monad
   ;;
 
+  (repr :transparent)
   (define-type (ST :state :value)
     "A computation of a value which may affect the state.
 Represented as a closure from initial state to updated state and value."
     (ST (:state -> (Tuple :state :value))))
 
-  (declare put (:state -> (ST :state Unit)))
+  (declare put (:state -> ST :state Unit))
   (define (put state)
     "A StatefulComputation with state set to be given state. The returned value is Unit."
     (ST (fn (_) (Tuple state Unit))))
@@ -31,7 +32,7 @@ Represented as a closure from initial state to updated state and value."
     "A StatefulComputation which returns the current state as the value."
     (ST (fn (state) (Tuple state state))))
 
-  (declare run ((ST :state :a) -> :state -> (Tuple :state :a)))
+  (declare run (ST :state :a -> :state -> Tuple :state :a))
   (define (run sc)
     "Runs a StatefulComputation to produce a final updated state and value given an initial state"
     (match sc
