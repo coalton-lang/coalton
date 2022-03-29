@@ -240,7 +240,8 @@ in FORMS that begin with that operator."
                       :types defined-types
                       :definitions toplevel-bindings
                       :instances instance-definitions
-                      :classes classes)))
+                      :classes classes
+                      :package package)))
 
               (multiple-value-bind (program env)
                   (coalton-impl/codegen:compile-translation-unit

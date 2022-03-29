@@ -76,7 +76,8 @@
            (node-variable
             (tc:make-function-type* arg-types (pred-type pred env))
             (tc:ty-class-instance-codegen-sym instance))
-           subdicts)))))
+           subdicts
+           :pure t)))))
 
 
 (defun superclass-accessors (pred ctx-pred env)

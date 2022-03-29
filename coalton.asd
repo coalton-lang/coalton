@@ -71,6 +71,7 @@
                 :components ((:file "ast")
                              (:file "resolve-instance")
                              (:file "typecheck-node")
+                             (:file "hoister")
                              (:file "transformations")
                              (:file "compile-expression")
                              (:file "compile-instance")

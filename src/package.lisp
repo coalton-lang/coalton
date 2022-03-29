@@ -392,6 +392,7 @@
    #:translation-unit-definitions       ; ACCESSOR
    #:translation-unit-instances         ; ACCESSOR
    #:translation-unit-classes           ; ACCESSOR
+   #:translation-unit-package           ; ACCESSOR
    )
   ;; Pretty printers
   (:export
