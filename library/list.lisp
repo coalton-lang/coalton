@@ -49,6 +49,7 @@
    #:sortBy
    #:intersperse
    #:intercalate
+   #:insertions
    #:transpose
    #:partition
    #:equivalence-classes
@@ -60,7 +61,10 @@
    #:product
    #:all
    #:any
-   #:split))
+   #:split
+   #:perms
+   #:combs
+   #:combsOf))
 
 (cl:in-package #:coalton-library/list)
 
@@ -435,6 +439,18 @@
     "Intersperses XS into XSS and then concatenates the result."
     (concat (intersperse xs xss)))
 
+  (declare insertions (:a -> List :a -> (List (List :a))))
+  (define (insertions a l)
+    "Produce a list of copies of L, each with A inserted at a possible position.
+
+    (insertions 0 (make-list 1 2))
+    => ((0 1 2) (1 0 2) (1 2 0))
+"
+    (match l
+      ((Nil)       (make-list (make-list a)))
+      ((Cons x ls) (Cons (Cons a l)
+                         (map (Cons x) (insertions a ls))))))
+
   (declare transpose ((List (List :a)) -> (List (List :a))))
   (define (transpose xs)
     "Transposes a matrix represented by a list of lists."
@@ -543,6 +559,38 @@
       (cl:let ((split-chars (cl:list c)))
         (cl:declare (cl:dynamic-extent split-chars))
         (uiop:split-string str :separator split-chars))))
+
+  (declare perms (List :a -> (List (List :a))))
+  (define (perms l)
+    "Produce all permutations of the list L."
+    (foldr (compose concatMap insertions) (make-list Nil) l))
+
+  (declare combs (List :a -> (List (List :a))))
+  (define (combs l)
+    "Compute a list of all combinations of elements of L. This function is sometimes goes by the name \"power set\" or \"subsets\".
+
+The ordering of elements of L is preserved in the ordering of elements in each list produced by `(COMBS L)`."
+    (match l
+      ((Nil)
+       (make-list Nil))
+      ((Cons x xs)
+       (concatMap (fn (y) (make-list y (Cons x y))) (combs xs)))))
+
+  (declare combsOf (Integer -> List :a -> (List (List :a))))
+  (define (combsOf n l)
+    "Produce a list of size-N subsets of L.
+
+The ordering of elements of L is preserved in the ordering of elements in each list produced by `(COMBSOF N L)`.
+
+This function is equivalent to all size-N elements of `(COMBS L)`."
+
+    (match (Tuple n l)
+      ((Tuple 0 _)           (make-list Nil))
+      ((Tuple 1 _)           (map singleton l))
+      ((Tuple _ (Nil))       Nil)
+      ((Tuple _ (Cons x xs)) (append
+                              (map (Cons x) (combsOf (- n 1) xs)) ; combs with X
+                              (combsOf n xs)))))                  ; and without X
 
   ;;
   ;; List instances
