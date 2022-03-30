@@ -169,6 +169,7 @@ The fields are defined as follows:
 (%define-number-stuff I32)
 (%define-number-stuff I64)
 (%define-number-stuff Integer)
+(%define-number-stuff Fraction)
 (%define-number-stuff IFix)
 (%define-number-stuff UFix)
 (%define-number-stuff Single-Float)
@@ -433,21 +434,6 @@ The fields are defined as follows:
   ;; We avoid "Rational" or "Ratio" since those might be a more
   ;; generic concept than a humble fraction of integers. This
   ;; fraction is always assumed to be in reduced terms.
-
-  (define-instance (Eq Fraction)
-    (define (== p q)
-      (lisp Boolean (p q)
-        (cl:= p q))))
-
-  (define-instance (Ord Fraction)
-    (define (<=> p q)
-      (cond
-        ((> p q)
-         GT)
-        ((< p q)
-         LT)
-        (True
-         EQ))))
 
   (declare mkFraction (Integer -> Integer -> Fraction))
   (define (mkFraction a b)
