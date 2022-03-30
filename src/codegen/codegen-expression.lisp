@@ -18,12 +18,9 @@
    (#:tc #:coalton-impl/typechecker)
    (#:ast #:coalton-impl/ast))
   (:export
-   #:codegen-expression
-   #:*emit-type-annotations*))
+   #:codegen-expression))
 
 (in-package #:coalton-impl/codegen/codegen-expression)
-
-(defvar *emit-type-annotations* t)
 
 (defgeneric codegen-expression (node env)
   (:method ((node node-literal) env)
@@ -68,7 +65,7 @@
              (gethash arity *function-constructor-functions*))
 
            (type-decs
-             (when *emit-type-annotations*
+             (when coalton-impl:*emit-type-annotations*
                (append
                 (loop :for name :in (node-abstraction-vars expr)
                       :for i :from 0
@@ -99,7 +96,7 @@
                     (node-lisp-vars expr))
                ,@(node-lisp-form expr))))
 
-      (if *emit-type-annotations*
+      (if coalton-impl:*emit-type-annotations*
           `(the (values ,(lisp-type (node-type expr) env) &optional)
                 ,inner)
           inner)))

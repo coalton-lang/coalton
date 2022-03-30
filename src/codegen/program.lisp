@@ -24,8 +24,7 @@
    #:compile-instance)
   (:import-from
    #:coalton-impl/codegen/codegen-expression
-   #:codegen-expression
-   #:*emit-type-annotations*)
+   #:codegen-expression)
   (:import-from
    #:coalton-impl/codegen/codegen-type-definition
    #:codegen-type-definition)
@@ -161,7 +160,7 @@
            (type node-abstraction node)
            (type tc:environment env))
   (let ((type-decs
-           (when *emit-type-annotations*
+           (when coalton-impl:*emit-type-annotations*
              (append
               (loop :for name :in (node-abstraction-vars node)
                     :for i :from 0

@@ -115,7 +115,6 @@ in FORMS that begin with that operator."
 
 (defparameter *global-environment* (make-default-environment))
 
-(defparameter *initial-environment* nil)
 
 ;;; Coalton Macros
 (defmacro coalton:coalton-toplevel (&body toplevel-forms)
@@ -127,13 +126,13 @@ in FORMS that begin with that operator."
 
 (defmacro coalton:coalton-codegen (&body toplevel-forms)
   "Returns the lisp code generated from coalton code. Intended for debugging."
-  `(let ((coalton-impl/codegen:*emit-type-annotations* nil)
+  `(let ((*emit-type-annotations* nil)
          (*coalton-skip-update* t))
      (process-coalton-toplevel ',toplevel-forms *package* *global-environment*)))
 
 (defmacro coalton:coalton-codegen-types (&body toplevel-forms)
   "Returns the lisp code generated from coalton code with lisp type annotations. Intended for debugging."
-  `(let ((coalton-impl/codegen:*emit-type-annotations* t))
+  `(let ((*emit-type-annotations* t))
      (process-coalton-toplevel ',toplevel-forms *package* *global-environment*)))
 
 (defmacro coalton:coalton-codegen-ast (&body toplevel-forms)

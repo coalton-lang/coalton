@@ -536,4 +536,7 @@
    #:print-instance-db)
   (:export
    #:type-of
-   #:kind-of))
+   #:kind-of)
+  (:intern
+   #:Boolean/True
+   #:Boolean/False))
