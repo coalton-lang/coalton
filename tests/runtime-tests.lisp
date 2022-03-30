@@ -86,3 +86,20 @@
 (define-test test-method-constraints ()
   (is (== 5 (gh-430-m "str" 2 3)))
   (is (== 2 (gh-430-m "hello" 1 1))))
+
+;; Test that unused instance predicates are compiled correctly
+;; See gh #463
+
+(coalton-toplevel
+  (define-class (Gh-463 :a)
+    (gh-463-m (:a -> :a -> :a)))
+
+  (define-instance (Num :a => Gh-463 :a)
+    (define (gh-463-m x y)
+      x))
+
+  (define (gh-463-f x)
+    (gh-463-m x 2)))
+
+(define-test test-unused-instance-constraint ()
+  (is (== 3 (gh-463-f 3))))
