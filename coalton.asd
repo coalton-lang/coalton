@@ -85,7 +85,8 @@
                (:file "coalton")
                (:file "debug")
                (:file "faux-macros")
-               (:file "language-macros")))
+               (:file "language-macros")
+               (:file "lock-package")))
 
 (asdf:defsystem #:coalton/library
   :around-compile (lambda (compile)

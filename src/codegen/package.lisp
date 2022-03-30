@@ -1,11 +1,9 @@
 (uiop:define-package #:coalton-impl/codegen
   (:import-from
    #:coalton-impl/codegen/codegen-expression
-   #:codegen-expression
-   #:*emit-type-annotations*)
+   #:codegen-expression)
   (:export
-   #:codegen-expression
-   #:*emit-type-annotations*)
+   #:codegen-expression)
 
   (:import-from
    #:coalton-impl/codegen/compile-expression
