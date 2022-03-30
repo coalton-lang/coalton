@@ -7,7 +7,8 @@
    (#:tc #:coalton-impl/typechecker))
   (:import-from
    #:coalton-impl/codegen/compile-expression
-   #:compile-expression)
+   #:compile-expression
+   #:compile-toplevel)
   (:import-from
    #:coalton-impl/codegen/typecheck-node
    #:typecheck-node)
@@ -48,32 +49,12 @@
                  :for method-node := (gethash method-name method-nodes)
                  :for codegen-name := (gethash method-name method-codegen-syms)
 
-                 :for method-qual-ty := (tc:ty-scheme-type (tc:typed-node-type method-node))
+                 :for method-qual-ty := (tc:fresh-inst type)
 
-                 :for method-ctx
-                   := (append
-                       ctx
-                       (loop :for pred :in (remove (tc:instance-definition-predicate instance)
-                                                   (tc:qualified-ty-predicates method-qual-ty)
-                                                   :test #'equalp)
-                             :collect (cons pred (gensym))))
+                 :for preds := (append (tc:instance-definition-context instance)
+                                       (tc:qualified-ty-predicates method-qual-ty))
 
-                 :for node
-                   := (cond
-                        ;; If the method has context but is not a
-                        ;; function then wrap it in function
-                        ((and method-ctx (not (tc:typed-node-abstraction-p method-node)))
-                         (let ((inner (compile-expression method-node method-ctx env)))
-                           (node-abstraction
-                            (tc:make-function-type*
-                             (loop :for (pred . name) :in method-ctx
-                                   :collect (pred-type pred env))
-                             (node-type inner))
-                            (mapcar #'cdr method-ctx)
-                            inner)))
-
-                        ;; Otherwise compile the method normally
-                        (t (compile-expression method-node nil env)))
+                 :for node := (compile-toplevel (tc:qualify preds (tc:qualified-ty-type method-qual-ty)) method-node env)
 
                  ;; Don't inline recursive methods
                  :do (unless (find method-name (node-variables node))
@@ -81,46 +62,10 @@
 
                  :collect (cons codegen-name node)))
 
-         ;; Iterate through the methods creating a node for each.
-         ;; The instance predicate is removed from individual methods context
-         ;; because it will be closed over
          (unqualified-method-definitions
            (loop :for (method-name . type) :in (tc:ty-class-unqualified-methods class)
                  :for method-node := (gethash method-name method-nodes)
-                 :for method-qual := (tc:ty-scheme-type (tc:typed-node-type method-node))
-
-                 :for method-preds := (remove-if
-                                       (lambda (pred)
-                                         (member pred (tc:instance-definition-context instance) :test #'equalp))
-                                       (tc:qualified-ty-predicates method-qual))
-
-                 :for method-ctx
-                   := (append
-                       ctx
-                       (loop :for pred :in method-preds
-                             :collect (cons pred (gensym))))
-
-                 :for unqualified-scheme := (tc:to-scheme
-                                             (tc:qualify
-                                              method-preds
-                                              (tc:qualified-ty-type method-qual)))
-
-                 :for unqualified-node := (tc:replace-node-type method-node unqualified-scheme)
-
-                 :for node
-                   := (cond
-                        ((and method-ctx (not (tc:typed-node-abstraction-p unqualified-node)))
-                         (let ((inner (compile-expression unqualified-node method-ctx env)))
-                           (node-abstraction
-                            (tc:make-function-type*
-                             (loop :for (pred . name) :in method-ctx
-                                   :collect (pred-type pred env))
-                             (node-type inner))
-                            (mapcar #'cdr method-ctx)
-                            inner)))
-
-                        (t (compile-expression unqualified-node method-ctx env)))
-
+                 :for node := (compile-toplevel (tc:fresh-inst type) method-node env :extra-context ctx)
                  :collect node))
 
          (method-ty (mapcar #'node-type unqualified-method-definitions))

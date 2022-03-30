@@ -15,14 +15,15 @@
 
 (in-package #:coalton-impl/codegen/compile-expression)
 
-(defun compile-toplevel (name expr env)
-  (declare (type symbol name)
+(defun compile-toplevel (inferred-type expr env &key (extra-context nil))
+  (declare (type tc:qualified-ty inferred-type)
            (type tc:typed-node expr)
            (type tc:environment env)
+           (type pred-context extra-context)
            (values node &optional))
 
-  (let* ((inferred-type (tc:fresh-inst (tc:lookup-value-type env name)))
-
+  (let* (;; Match the inferred-type against the node-type. This makes
+         ;; the type variables in ctx match those in the ast node.
          (inferred-type-ty (tc:qualified-ty-type inferred-type))
 
          (inferred-type-preds (tc:qualified-ty-predicates inferred-type))
@@ -33,13 +34,20 @@
 
          (preds (tc:apply-substitution subs inferred-type-preds))
 
-         (ctx (loop :for pred in preds
-                    :collect (cons pred (gensym)))))
+         (ctx
+           (loop :for pred in preds
+                 :collect (cons pred (gensym))))
+
+         (full-ctx
+           (append ctx extra-context)))
 
     (let ((node
             (cond
+              ;;
+              ;; Reorder predicates to match definition order
+              ;;
               ((tc:typed-node-abstraction-p expr)
-               (let ((subnode (compile-expression (tc:typed-node-abstraction-subexpr expr) ctx env)))
+               (let ((subnode (compile-expression (tc:typed-node-abstraction-subexpr expr) full-ctx env)))
                  (node-abstraction
                   (tc:make-function-type*
                    (append
@@ -54,7 +62,7 @@
                   subnode)))
 
               (ctx
-               (let ((inner (compile-expression expr ctx env)))
+               (let ((inner (compile-expression expr full-ctx env)))
                  (node-abstraction
                   (tc:make-function-type*
                    (loop :for pred :in preds
@@ -64,7 +72,7 @@
                   inner)))
 
               (t
-               (compile-expression expr ctx env)))))
+               (compile-expression expr full-ctx env)))))
 
       (typecheck-node node env)
       node)))

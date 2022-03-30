@@ -64,7 +64,7 @@
          (definitions
            (append
             (loop :for (name . node) :in (tc:translation-unit-definitions translation-unit)
-                  :for compiled-node := (compile-toplevel name node env)
+                  :for compiled-node := (compile-toplevel (tc:fresh-inst (tc:lookup-value-type env name)) node env)
                   :do (when coalton-impl::*coalton-dump-ast*
                         (format t "~A :: ~A~%~A~%~%~A~%~%"
                                 name
