@@ -447,6 +447,7 @@
    #:*emit-type-annotations*
    #:*freeze-emitted-types*
    #:*coalton-print-unicode*
+   #:*coalton-optimize*
    ))
 
 ;;
