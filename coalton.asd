@@ -116,6 +116,14 @@
                (:file "iterator")
                (:file "prelude")))
 
+(asdf:defsystem #:coalton/testing
+  :depends-on (#:coalton
+               #:fiasco)
+  :pathname "src/testing/"
+  :serial t
+  :components ((:file "package")
+               (:file "coalton-native-test-utils")))
+
 
 ;;; we need to inspect the sbcl version in order to decide which version of the hashtable shim to load,
 ;;; because 2.1.12 includes (or will include) a bugfix that allows a cleaner, more maintainable
@@ -165,6 +173,7 @@
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
   :license "MIT"
   :depends-on (#:coalton
+               #:coalton/testing
                #:fiasco
                #:coalton-json/tests
                #:quil-coalton/tests
@@ -176,7 +185,6 @@
   :serial t
   :components ((:file "package")
                (:file "utilities")
-               (:file "coalton-native-test-utils")
                (:file "toplevel-walker-tests")
                (:file "tarjan-scc-tests")
                (:file "type-inference-tests")

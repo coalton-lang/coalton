@@ -22,7 +22,7 @@
 
 (defpackage #:coalton-native-tests
   (:documentation "Tests for the COALTON system, written in Coalton.")
-  (:use #:coalton #:coalton-prelude)
+  (:use #:coalton-testing)
   (:local-nicknames
    (#:string #:coalton-library/string)
    (#:vector #:coalton-library/vector)
@@ -30,12 +30,8 @@
    (#:hashtable #:coalton-library/hashtable)
    (#:iter #:coalton-library/iterator)))
 
-(defpackage #:coalton-test-user
-  (:documentation "A copy-cat package to COALTON-USER for testing.")
-  (:use #:coalton #:coalton-prelude)
-  (:local-nicknames
-   (#:string #:coalton-library/string)
-   (#:vector #:coalton-library/vector)
-   (#:slice #:coalton-library/slice)
-   (#:hashtable #:coalton-library/hashtable)
-   (#:iter #:coalton-library/iterator)))
+(in-package #:coalton-native-tests)
+
+(coalton-fiasco-init #:coalton-tests)
+
+
