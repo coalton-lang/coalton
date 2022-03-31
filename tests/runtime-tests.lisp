@@ -103,3 +103,7 @@
 
 (define-test test-unused-instance-constraint ()
   (is (== 3 (gh-463-f 3))))
+
+;; Test defaulting and context reduction
+(define-test test-defaulting ()
+  (is (== (+ (Some (Some 1)) (Some (Some 2))) (Some (Some 3)))))
