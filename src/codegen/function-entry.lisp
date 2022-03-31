@@ -48,7 +48,7 @@
                  ;; OPTIMIZE flags to remove type checks.
                  `(progn
                     (defun ,application-sym (,applied-function-sym ,@arg-syms)
-                      (declare (optimize (speed 3) (safety 3))
+                      (declare #.coalton-impl:*coalton-optimize*
                                (type (or function function-entry) ,applied-function-sym)
                                (values t))
                       (etypecase ,applied-function-sym
@@ -64,7 +64,7 @@
                     (declaim (inline ,constructor-sym))
                     (defun ,constructor-sym (,function-sym)
                       (declare (type (function ,(loop :for i :below arity :collect 't) t) ,function-sym)
-                               (optimize (speed 3) (safety 0))
+                               #.coalton-impl:*coalton-optimize*
                                (values function-entry))
                       (make-function-entry
                        :arity ,arity

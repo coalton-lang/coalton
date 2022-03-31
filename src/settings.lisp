@@ -38,3 +38,5 @@ Enable release mode either by setting the UNIX environment variable COALTON_ENV 
 ;; Configure the backend to remove type annotations from the generated code
 (declaim (type boolean *emit-type-annotations*))
 (defvar *emit-type-annotations* t)
+
+(defvar *coalton-optimize* '(optimize (speed 3) (safety 0)))
