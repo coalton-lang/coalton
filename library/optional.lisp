@@ -63,6 +63,12 @@
            ((Some _) LT)
            ((None) EQ))))))
 
+  (define-instance (Num :a => Num (Optional :a))
+    (define (+ a b) (liftA2 + a b))
+    (define (- a b) (liftA2 - a b))
+    (define (* a b) (liftA2 * a b))
+    (define (fromInt x) (pure (fromInt x))))
+
   (define-instance (Semigroup :a => (Semigroup (Optional :a)))
     (define (<> a b)
       (match (Tuple a b)
