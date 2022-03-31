@@ -3,7 +3,7 @@
 (deftest test-persist-value ()
   "Test that the value environment persists across loads and fasl loads"
   (let ((test-expr
-          '((in-package #:coalton-test-user)
+          '((in-package #:coalton-native-tests)
             (coalton-toplevel
               (define (test-id a) a)))))
 
@@ -29,31 +29,31 @@
                               (invoke-restart 'muffle-warning))))
           (let ((coalton-impl::*global-environment* (make-default-environment)))
             ;; Be sure that the environment is clean
-            (is (null (coalton-impl::lookup-value-type coalton-impl::*global-environment* 'coalton-test-user::test-id :no-error t)))
+            (is (null (coalton-impl::lookup-value-type coalton-impl::*global-environment* 'coalton-native-tests::test-id :no-error t)))
 
             ;; Load our coalton code and check for function availability
             (load input-file :verbose nil)
 
             ;; Be sure that we have the correct function type
-            (is (coalton-impl::lookup-value-type coalton-impl::*global-environment* 'coalton-test-user::test-id :no-error t))
+            (is (coalton-impl::lookup-value-type coalton-impl::*global-environment* 'coalton-native-tests::test-id :no-error t))
 
             ;; Ok, now clean the environment
             (setf coalton-impl::*global-environment* (make-default-environment))
-            (is (null (coalton-impl::lookup-value-type coalton-impl::*global-environment* 'coalton-test-user::test-id :no-error t)))
+            (is (null (coalton-impl::lookup-value-type coalton-impl::*global-environment* 'coalton-native-tests::test-id :no-error t)))
 
             ;; And compile the file
             (compile-file input-file :output-file output-file :verbose nil :print nil)
 
             ;; After compiling we should have the function available
-            (is (not (null (coalton-impl::lookup-value-type coalton-impl::*global-environment* 'coalton-test-user::test-id :no-error t))))
+            (is (not (null (coalton-impl::lookup-value-type coalton-impl::*global-environment* 'coalton-native-tests::test-id :no-error t))))
             ;; Clean
             (setf coalton-impl::*global-environment* (make-default-environment))
-            (is (null (coalton-impl::lookup-value-type coalton-impl::*global-environment* 'coalton-test-user::test-id :no-error t)))
+            (is (null (coalton-impl::lookup-value-type coalton-impl::*global-environment* 'coalton-native-tests::test-id :no-error t)))
 
             ;; Now load the fasl
             (load output-file :verbose nil)
 
             ;; Now we should have our function
-            (is (not (null (coalton-impl::lookup-value-type coalton-impl::*global-environment* 'coalton-test-user::test-id :no-error t))))
+            (is (not (null (coalton-impl::lookup-value-type coalton-impl::*global-environment* 'coalton-native-tests::test-id :no-error t))))
 
             t))))))

@@ -1,10 +1,19 @@
-(cl:in-package #:coalton-native-tests)
+(cl:in-package #:coalton-testing)
 
-(cl:defmacro define-test (name args cl:&body body)
-  `(fiasco:deftest (,name :in fiasco-suites::coalton-tests)
-       ,args
-     (coalton
-      (progn ,@body))))
+(cl:defmacro coalton-fiasco-init (test-system)
+  "Allows for the use of `define-test' to define a fiasco test within a given
+test-package `test-system'."
+  `(cl:defmacro ,(cl:intern "DEFINE-TEST") (name args cl:&body body)
+     "Defines a fiasco test NAME with parameters ARGS and evaluates the
+BODY within a `coalton' expression."
+     (cl:let ((test-system
+                ',(cl:find-symbol
+                   (cl:package-name test-system)
+                   :fiasco-suites)))
+       `(fiasco:deftest (,name :in ,test-system)
+            ,args
+          (coalton
+           (progn ,@body))))))
 
 (cl:define-condition coalton-is-assertion (fiasco::test-assertion)
   ((form :initarg :form
