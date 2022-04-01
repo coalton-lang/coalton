@@ -89,6 +89,8 @@
    #:node-the                           ; STRUCT
    #:node-the-type                      ; ACCESSOR
    #:node-the-subnode                   ; ACCESSOR
+   #:node-return                        ; STRUCT
+   #:node-return-expr                   ; ACCESSOR
    #:match-branch-pattern               ; ACCESSOR
    #:match-branch-subexpr               ; ACCESSOR
    #:match-branch-unparsed              ; ACCESOR
@@ -251,6 +253,8 @@
    #:typed-match-branch-name-map          ; ACCESSOR
    #:typed-node-seq                       ; STRUCT
    #:typed-node-seq-subnodes              ; ACCESSOR
+   #:typed-node-return                    ; STRUCT
+   #:typed-node-return-expr               ; ACCESSSOR
    )
   (:export
    #:environment                        ; STRUCT
@@ -505,6 +509,7 @@
    #:lisp
    #:<-                                 ; Syntax
    #:_
+   #:return
    #:seq
    #:the)
   ;; Macros

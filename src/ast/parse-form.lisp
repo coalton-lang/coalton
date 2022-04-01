@@ -56,6 +56,9 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
           (error-parsing expr "Invalid type assertion."))
         (parse-the expr (first args) (second args) m package))
 
+       ((coalton:return form)
+        (parse-return expr form m package))
+
        ;; Application
        ((t &rest rands)
         (cond
@@ -294,4 +297,14 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
   (node-the
    expr
    type
+   (parse-form form m package)))
+
+
+(defun parse-return (expr form m package)
+  (declare (type t expr)
+           (type t form)
+           (type immutable-map m)
+           (type package package))
+  (node-return
+   expr
    (parse-form form m package)))

@@ -112,4 +112,8 @@
     (let ((last-node (car (last (node-seq-nodes expr)))))
       (tc:match (node-type expr) (node-type last-node))
       (tc:match (node-type last-node) (node-type expr))
-      (node-type last-node))))
+      (node-type last-node)))
+
+  (:method ((expr node-return) env)
+    (typecheck-node (node-return-expr expr) env)
+    (node-type expr)))

@@ -512,6 +512,25 @@ for conditionalizing stateful operations.
       (traceObject "sum" (+ x y)))))
 ```
 
+## Early Returns
+
+Functions can be returned from early with `return`.
+
+```lisp
+(coalton-toplevel
+  (define (fizz-buzz n)
+    (when (== 0 (mod n 15))
+      (return "fizzbuzz"))
+
+    (when (== 0 (mod n 3))
+      (return "fizz"))
+
+    (when (== 0 (mod n 5))
+      (return "buzz"))
+
+    (into n)))
+```
+
 ## Typeclasses
 
 Coalton supports typeclasses.

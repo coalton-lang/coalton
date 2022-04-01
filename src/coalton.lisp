@@ -167,6 +167,7 @@ in FORMS that begin with that operator."
                 typed-node
                 nil
                 *global-environment*)
+               nil
                *global-environment*)))
 
             (t

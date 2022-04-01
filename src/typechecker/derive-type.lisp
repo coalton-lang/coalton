@@ -20,7 +20,7 @@
 Returns (VALUES type predicate-list typed-node subs)")
   (:method ((value node-literal) env substs)
     (declare (type substitution-list substs)
-             (values ty ty-predicate-list typed-node substitution-list &optional))
+             (values ty ty-predicate-list typed-node substitution-list ty-list &optional))
     (let ((literal-value (node-literal-value value)))
       (multiple-value-bind (type preds)
           (derive-literal-type literal-value)
@@ -31,12 +31,13 @@ Returns (VALUES type predicate-list typed-node subs)")
           (to-scheme (qualify nil type))
           (node-unparsed value)
           literal-value)
-         substs))))
+         substs
+         nil))))
 
   (:method ((value node-lisp) env substs)
     (declare (type environment env)
              (type substitution-list substs)
-             (values ty ty-predicate-list typed-node substitution-list &optional))
+             (values ty ty-predicate-list typed-node substitution-list ty-list &optional))
     (let* ((scheme (parse-and-resolve-type env (node-lisp-type value)))
            (qual-type (fresh-inst scheme))
            (type (qualified-ty-type qual-type))
@@ -48,11 +49,12 @@ Returns (VALUES type predicate-list typed-node subs)")
                (node-unparsed value)
                (node-lisp-variables value)
                (node-lisp-form value))
-              substs)))
+              substs
+              nil)))
 
   (:method ((value node-variable) env substs)
     (declare (type substitution-list substs)
-             (values ty ty-predicate-list typed-node substitution-list &optional))
+             (values ty ty-predicate-list typed-node substitution-list ty-list &optional))
     (let* ((scheme (lookup-value-type env (node-variable-name value)))
            (qual-type (fresh-inst scheme))
            (type (qualified-ty-type qual-type))
@@ -63,12 +65,13 @@ Returns (VALUES type predicate-list typed-node subs)")
                (to-scheme qual-type)
                (node-unparsed value)
                (node-variable-name value))
-              substs)))
+              substs
+              nil)))
 
   (:method ((value node-application) env substs)
     (declare (type environment env)
              (type substitution-list substs)
-             (values ty ty-predicate-list typed-node substitution-list &optional))
+             (values ty ty-predicate-list typed-node substitution-list ty-list &optional))
 
     (let* ((rator (node-application-rator value))
            (rands (node-application-rands value))
@@ -78,7 +81,7 @@ Returns (VALUES type predicate-list typed-node subs)")
       (when (null rands)
         (coalton-impl::coalton-bug "Invalid application with 0 arguments ~A." rator))
 
-      (multiple-value-bind (fun-ty fun-preds typed-rator substs)
+      (multiple-value-bind (fun-ty fun-preds typed-rator substs returns)
           (derive-expression-type rator env substs)
         (unless (or (tvar-p fun-ty)
                     (function-type-p fun-ty))
@@ -87,11 +90,12 @@ Returns (VALUES type predicate-list typed-node subs)")
           (labels ((build-function (args)
                      (if (null args)
                          ret-ty
-                         (multiple-value-bind (arg-ty arg-pred typed-rand new-substs-arg)
+                         (multiple-value-bind (arg-ty arg-pred typed-rand new-substs-arg new-returns)
                              (derive-expression-type (car args) env substs)
                            (push typed-rand typed-rands)
                            (setf arg-preds (append arg-pred arg-preds))
                            (setf substs new-substs-arg)
+                           (setf returns (append new-returns returns))
                            (make-function-type arg-ty (build-function (cdr args)))))))
             (let* ((ftype (build-function rands))
                    (preds (append fun-preds arg-preds))
@@ -103,43 +107,52 @@ Returns (VALUES type predicate-list typed-node subs)")
                        (node-unparsed value)
                        typed-rator
                        (reverse typed-rands))
-                      substs)))))))
+                      substs
+                      returns)))))))
 
   (:method ((value node-abstraction) env substs)
     (declare (type environment env)
              (type substitution-list substs)
-             (values ty ty-predicate-list typed-node substitution-list &optional))
+             (values ty ty-predicate-list typed-node substitution-list ty-list &optional))
     (let* ((subexpr (node-abstraction-subexpr value))
            (vars (node-abstraction-vars value))
            (new-env (push-value-environment
                      env
                      (mapcar (lambda (var) (cons var (to-scheme (qualify nil (make-variable)))))
                              vars))))
-      (multiple-value-bind (ret-ty ret-preds typed-subexpr new-substs)
+      (multiple-value-bind (ret-ty ret-preds typed-subexpr new-substs returns)
           (derive-expression-type subexpr new-env substs)
         (labels ((build-function (args)
                    (if (null args)
                        ret-ty
                        (make-function-type (qualified-ty-type (fresh-inst (lookup-value-type new-env (car args))))
                                            (build-function (cdr args))))))
-          (let ((ret-ty (build-function vars))
+          (let ((out-ty (build-function vars))
                 (ret-preds (reduce-context env ret-preds new-substs)))
-            (values ret-ty
+            (setf substs new-substs)
+
+            ;; Unify the functions return type against early return
+            ;; statements
+            (loop :for return :in returns
+                  :do (setf substs (unify substs ret-ty return)))
+
+            (values out-ty
                     ret-preds
                     (typed-node-abstraction
-                     (to-scheme (qualified-ty ret-preds ret-ty))
+                     (to-scheme (qualified-ty ret-preds out-ty))
                      (node-unparsed value)
                      (mapcar (lambda (var)
                                (cons var (lookup-value-type new-env var)))
                              vars)
                      typed-subexpr
                      (node-abstraction-name-map value))
-                    new-substs))))))
+                    substs
+                    nil))))))
 
   (:method ((value node-let) env subs)
     (declare (type environment env)
              (type substitution-list subs)
-             (values ty ty-predicate-list typed-node substitution-list &optional))
+             (values ty ty-predicate-list typed-node substitution-list ty-list &optional))
     (let ((name-table (make-hash-table)))
       (loop :for (name . node_) :in (node-let-bindings value) :do
         (progn
@@ -163,7 +176,7 @@ Returns (VALUES type predicate-list typed-node subs)")
             :else :do
               (push binding impl-bindings))
 
-      (multiple-value-bind (typed-bindings bindings-preds env subs)
+      (multiple-value-bind (typed-bindings bindings-preds env subs returns)
           ;; NOTE: If we wanted explicit types in let bindings this
           ;;       would be the place to do it.
           (derive-bindings-type
@@ -173,8 +186,10 @@ Returns (VALUES type predicate-list typed-node subs)")
            env
            subs
            (node-let-name-map value))
-        (multiple-value-bind (type ret-preds typed-subexpr new-subs)
+        (multiple-value-bind (type ret-preds typed-subexpr new-subs new-returns)
             (derive-expression-type (node-let-subexpr value) env subs)
+
+          (setf returns (append new-returns returns))
           (let ((preds (append ret-preds bindings-preds)))
             (values type
                     preds
@@ -184,22 +199,24 @@ Returns (VALUES type predicate-list typed-node subs)")
                      typed-bindings
                      typed-subexpr
                      (node-let-name-map value))
-                    new-subs))))))
+                    new-subs
+                    returns))))))
 
   (:method ((value node-match) env subs)
     (declare (type environment env)
              (type substitution-list subs)
-             (values ty ty-predicate-list typed-node substitution-list &optional))
+             (values ty ty-predicate-list typed-node substitution-list ty-list &optional))
     (let ((tvar (make-variable)))
-      (multiple-value-bind (ty preds typed-expr new-subs)
+      (multiple-value-bind (ty preds typed-expr new-subs returns)
           (derive-expression-type (node-match-expr value) env subs)
         (with-type-context ("match on ~A" (node-unparsed (node-match-expr value)))
-          (multiple-value-bind (typed-branches match-preds new-subs)
+          (multiple-value-bind (typed-branches match-preds new-subs new-returns)
               (derive-match-branches-type
                (make-function-type ty tvar)
                (node-match-branches value)
                env
                new-subs)
+            (setf returns (append new-returns returns))
             (let ((preds (append preds match-preds)))
               (values
                tvar
@@ -209,35 +226,40 @@ Returns (VALUES type predicate-list typed-node subs)")
                 (node-unparsed value)
                 typed-expr
                 typed-branches)
-               new-subs)))))))
+               new-subs
+               returns)))))))
 
   (:method ((value node-seq) env subs)
     (declare (type environment env)
              (type substitution-list subs)
-             (values ty ty-predicate-list typed-node substitution-list &optional))
+             (values ty ty-predicate-list typed-node substitution-list ty-list &optional))
     (let* ((initial-elements (butlast (node-seq-subnodes value)))
            (last-element (car (last (node-seq-subnodes value))))
            (preds nil)
-           (nodes nil))
+           (nodes nil)
+           (returns nil))
 
 
       (loop :for elem :in initial-elements :do
-        (multiple-value-bind (tyvar preds_ node subs_)
+        (multiple-value-bind (tyvar preds_ node subs_ new-returns)
             (derive-expression-type elem env subs)
 
           (setf subs subs_)
           (setf preds (append preds preds_))
           (push node nodes)
+          (setf returns (append new-returns returns))
 
           (when (function-type-p (apply-substitution subs tyvar))
             (alexandria:simple-style-warning
              "Expression ~A in progn evaluates to a function. This may be intentional, but is also a common mistake in the event a function is partially applied."
              (node-unparsed elem)))))
 
-      (multiple-value-bind (tyvar preds_ node subs)
+      (multiple-value-bind (tyvar preds_ node subs new-returns)
           (derive-expression-type last-element env subs)
         (setf preds (append preds preds_))
         (push node nodes)
+        (setf returns (append new-returns returns))
+
         (values
          tyvar
          preds
@@ -245,19 +267,20 @@ Returns (VALUES type predicate-list typed-node subs)")
           (to-scheme (qualify nil tyvar))
           (node-unparsed value)
           (reverse nodes))
-         subs))))
+         subs
+         returns))))
 
   (:method ((value node-the) env subs)
     (declare (type environment env)
              (type substitution-list subs)
-             (values ty ty-predicate-list typed-node substitution-list &optional))
+             (values ty ty-predicate-list typed-node substitution-list ty-list &optional))
 
     (let* ((declared-scheme (parse-and-resolve-type env (node-the-type value)))
            (declared-qualified (fresh-inst declared-scheme))
            (declared-type (qualified-ty-type declared-qualified))
            (declared-preds (qualified-ty-predicates declared-qualified)))
 
-      (multiple-value-bind (type preds node subs)
+      (multiple-value-bind (type preds node subs returns)
           (derive-expression-type (node-the-subnode value) env subs)
 
         (let* ((subs_ (match (apply-substitution subs type) declared-type))
@@ -273,7 +296,29 @@ Returns (VALUES type predicate-list typed-node subs)")
            type
            preds
            node
-           subs))))))
+           subs
+           returns)))))
+
+  (:method ((value node-return) env subs)
+    (declare (type environment env)
+             (type substitution-list subs)
+             (values ty ty-predicate-list typed-node substitution-list ty-list &optional))
+
+    (multiple-value-bind (type preds node subs returns)
+        (derive-expression-type (node-return-expr value) env subs)
+
+      (let ((return-ty (make-variable)))
+        (values
+         return-ty
+         preds
+         (typed-node-return
+          (to-scheme (qualify nil return-ty))
+          (node-unparsed value)
+          node)
+         subs
+         (cons
+          type
+          returns))))))
 
 ;;;
 ;;; Let Bindings
@@ -282,13 +327,14 @@ Returns (VALUES type predicate-list typed-node subs)")
 (defun derive-bindings-type (impl-bindings expl-bindings expl-declarations env subs name-map
                              &key
                                (disable-monomorphism-restriction nil)
-                               (allow-deferred-predicates t))
+                               (allow-deferred-predicates t)
+                               (allow-returns t))
   "IMPL-BINDINGS and EXPL-BINDIGNS are of form (SYMBOL . EXPR)
 EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
   (declare (type environment env)
            (type substitution-list subs)
            (type list name-map)
-           (values typed-binding-list ty-predicate-list environment substitution-list &optional))
+           (values typed-binding-list ty-predicate-list environment substitution-list ty-list &optional))
 
   ;; Push all the explicit type declarations on to the environment
   (let* ((expl-binds (mapcar (lambda (b)
@@ -297,7 +343,8 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                              expl-bindings))
          (env (push-value-environment env expl-binds))
          (typed-bindings nil)
-         (preds nil))
+         (preds nil)
+         (returns nil))
 
     ;; First we will be checking the implicit bindings
     ;; Sort the bindings into strongly connected components of mutually
@@ -308,35 +355,45 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
         (let ((scc-bindings
                 (mapcar (lambda (b) (find b impl-bindings :key #'car)) scc)))
           ;; Derive the type of all parts of the scc together
-          (multiple-value-bind (typed-impl-bindings impl-preds new-env new-subs)
-              (derive-impls-type scc-bindings env subs name-map
-                                 :disable-monomorphism-restriction disable-monomorphism-restriction
-                                 :allow-deferred-predicates allow-deferred-predicates)
+          (multiple-value-bind (typed-impl-bindings impl-preds new-env new-subs new-returns)
+              (derive-impls-type
+               scc-bindings
+               env
+               subs
+               name-map
+               :disable-monomorphism-restriction disable-monomorphism-restriction
+               :allow-deferred-predicates allow-deferred-predicates
+               :allow-returns allow-returns)
 
             ;; Update the current environment and substitutions
             (setf env new-env
                   subs new-subs)
             ;; Add the typed binding nodes to the output typed nodes
             (setf typed-bindings (append typed-bindings typed-impl-bindings))
-            (setf preds (append impl-preds preds)))))
+            (setf preds (append impl-preds preds))
+
+            (setf returns (append new-returns returns)))))
 
       ;; Now that we have the implicit bindings sorted out, we can type
       ;; check the explicit ones.
       (dolist (binding expl-bindings)
         ;; Derive the type of the binding
-        (multiple-value-bind (ty-scheme typed-expl-binding expl-preds new-env new-subs)
+        (multiple-value-bind (ty-scheme typed-expl-binding expl-preds new-env new-subs qual-ty new-returns)
             (derive-expl-type binding
                               (gethash (car binding) expl-declarations)
                               env subs name-map
-                              :allow-deferred-predicates allow-deferred-predicates)
-          (declare (ignore ty-scheme))
+                              :allow-deferred-predicates allow-deferred-predicates
+                              :allow-returns allow-returns)
+          (declare (ignore ty-scheme qual-ty))
 
           ;; Update the current environment and substitutions
           (setf env new-env
                 subs new-subs)
           ;; Add the binding to the list of bindings
           (push typed-expl-binding typed-bindings)
-          (setf preds (append preds expl-preds))))
+          (setf preds (append preds expl-preds))
+
+          (setf returns (append new-returns returns))))
 
       (validate-bindings-for-codegen typed-bindings)
 
@@ -359,7 +416,8 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                                bindings)))
          preds
          env
-         subs)))))
+         subs
+         returns)))))
 
 (defgeneric rewrite-recursive-calls (node bindings)
   (:method ((node typed-node-literal) bindings)
@@ -459,7 +517,15 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
      (mapcar
       (lambda (node)
         (rewrite-recursive-calls node bindings))
-      (typed-node-seq-subnodes node)))))
+      (typed-node-seq-subnodes node))))
+
+  (:method ((node typed-node-return) bindings)
+    (declare (type typed-node node)
+             (type scheme-binding-list bindings))
+    (typed-node-return
+     (typed-node-type node)
+     (typed-node-unparsed node)
+     (rewrite-recursive-calls (typed-node-return-expr node) bindings))))
 
 (defun validate-bindings-for-codegen (bindings)
   "Some coalton forms can be typechecked but cannot currently be codegened into valid lisp."
@@ -471,24 +537,29 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
         (error 'self-recursive-variable-definition :name name)))))
 
 (defun derive-binding-type-seq (names tvars exprs env subs name-map
-                                &key (allow-deferred-predicates t))
+                                &key (allow-deferred-predicates t)
+                                  (allow-returns t))
   (declare (type tvar-list tvars)
            (type node-list exprs)
            (type environment env)
            (type substitution-list subs)
            (type list name-map)
-           (values typed-node-list ty-predicate-list substitution-list))
+           (values typed-node-list ty-predicate-list substitution-list ty-list))
   (let* ((preds nil)
+         (returns nil)
          (typed-nodes
            (loop :for name :in names
                  :for tvar :in tvars
                  :for expr :in exprs
                  :collect
-                 (multiple-value-bind (typed-node binding-preds new-subs)
+                 (multiple-value-bind (typed-node binding-preds new-subs new-returns)
                      (derive-binding-type name tvar expr env subs name-map)
                    (setf subs new-subs)
+                   (setf returns (append new-returns returns))
 
                    (with-type-context ("definition of ~A" name)
+                     (when (and new-returns (not allow-returns))
+                       (error 'unexpected-return))
                      (when (not allow-deferred-predicates)
                        ;; When we are not allowed to defer predicates,
                        ;; call reduce-context which will signal an
@@ -506,17 +577,19 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
     (values
      typed-nodes
      preds
-     subs)))
+     subs
+     returns)))
 
 (defun derive-impls-type (bindings env subs name-map
                           &key
                             (disable-monomorphism-restriction nil)
-                            (allow-deferred-predicates t))
+                            (allow-deferred-predicates t)
+                            (allow-returns nil))
   (declare (type binding-list bindings)
            (type environment env)
            (type substitution-list subs)
            (type list name-map)
-           (values typed-binding-list ty-predicate-list environment substitution-list))
+           (values typed-binding-list ty-predicate-list environment substitution-list ty-list))
   (let* (;; Generate fresh tvars and schemes for each binding
          (tvars (mapcar (lambda (_)
                           (declare (ignore _))
@@ -529,9 +602,10 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
          (exprs (mapcar #'cdr bindings)))
 
     ;; Derive the type of each binding
-    (multiple-value-bind (typed-bindings local-preds local-subs)
+    (multiple-value-bind (typed-bindings local-preds local-subs returns)
         (derive-binding-type-seq (mapcar #'car bindings) tvars exprs local-env subs name-map
-                                 :allow-deferred-predicates allow-deferred-predicates)
+                                 :allow-deferred-predicates allow-deferred-predicates
+                                 :allow-returns allow-returns)
 
       (let* ((expr-types (apply-substitution local-subs tvars)) ; ts'
              (expr-preds (apply-substitution local-subs local-preds)) ; ps'
@@ -580,7 +654,8 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                     deferred-preds
                     retained-preds)
                    output-env
-                   local-subs))
+                   local-subs
+                   returns))
                 (let* (;; Quantify local type variables
                        (output-schemes (mapcar (lambda (type)
                                                  ;; Here we need to manually qualify the
@@ -627,7 +702,8 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                            bindings typed-bindings)
                    deferred-preds
                    output-env
-                   local-subs)))))))))
+                   local-subs
+                   returns)))))))))
 
 (defun pred-defaults (preds subs)
   "Given a list of predicates, compute substutions for predicates
@@ -648,13 +724,14 @@ which have default instances. Currently only resolves Num :a -> Num Integer"
   subs)
 
 (defun derive-expl-type (binding declared-ty env subs name-map
-                         &key (allow-deferred-predicates t))
+                         &key (allow-deferred-predicates t)
+                           (allow-returns t))
   (declare (type cons binding)
            (type ty-scheme declared-ty)
            (type environment env)
            (type substitution-list subs)
            (type list name-map)
-           (values ty-scheme cons ty-predicate-list environment substitution-list))
+           (values ty-scheme cons ty-predicate-list environment substitution-list qualified-ty ty-list &optional))
   (let* (;; Generate fresh instance of declared type
          (fresh-qual-type (fresh-inst declared-ty))
          (fresh-type (qualified-ty-type fresh-qual-type))
@@ -662,7 +739,7 @@ which have default instances. Currently only resolves Num :a -> Num Integer"
 
     ;; Derive the type of the expression, unifying with the
     ;; declared type
-    (multiple-value-bind (typed-node preds local-subs)
+    (multiple-value-bind (typed-node preds local-subs returns)
         (derive-binding-type
          (car binding)
          fresh-type
@@ -686,6 +763,9 @@ which have default instances. Currently only resolves Num :a -> Num Integer"
             (split-context env env-tvars reduced-preds local-subs)
 
           (with-type-context ("definition of ~A" (car binding))
+            (when (and returns (not allow-returns))
+              (error 'unexpected-return))
+            
             ;; Make sure the declared scheme is not too general
             (when (not (equalp output-scheme declared-ty))
               (error 'type-declaration-too-general-error
@@ -710,23 +790,26 @@ which have default instances. Currently only resolves Num :a -> Num Integer"
           (values output-scheme
                   (cons (car binding)
                         (apply-substitution local-subs typed-node))
-                  deferred-preds env local-subs
-                  output-qual-type))))))
+                  deferred-preds
+                  env
+                  local-subs
+                  output-qual-type
+                  returns))))))
 
 (defun derive-binding-type (name type expr env subs name-map)
   (declare (type ty type)
            (type node expr)
            (type environment env)
            (type substitution-list subs)
-           (values typed-node ty-predicate-list substitution-list &optional))
+           (values typed-node ty-predicate-list substitution-list ty-list &optional))
   (let ((name (if name-map
                   (or (cdr (find name name-map :key #'car :test #'equalp))
                       (coalton-impl::coalton-bug "Invalid state. Unable to find name in name map"))
                   name)))
     (with-type-context ("definition of ~A" name)
-      (multiple-value-bind (new-type preds typed-node new-subs)
+      (multiple-value-bind (new-type preds typed-node new-subs returns)
           (derive-expression-type expr env subs)
-        (values typed-node preds (unify new-subs type new-type))))))
+        (values typed-node preds (unify new-subs type new-type) returns)))))
 
 
 ;;;
@@ -828,7 +911,7 @@ which have default instances. Currently only resolves Num :a -> Num Integer"
            (type node expr)
            (type environment env)
            (type substitution-list subs)
-           (values ty ty-predicate-list typed-match-branch substitution-list))
+           (values ty ty-predicate-list typed-match-branch substitution-list ty-list))
 
   ;; Before deriving the type of the match branch first see if any of
   ;; its variables overlap with the names of constructors
@@ -849,7 +932,7 @@ which have default instances. Currently only resolves Num :a -> Num Integer"
                         (to-scheme (qualify nil (cdr b)))))
                      bindings))
            (new-env (push-value-environment env bindings-schemes)))
-      (multiple-value-bind (expr-type expr-preds typed-subexpr new-subs)
+      (multiple-value-bind (expr-type expr-preds typed-subexpr new-subs returns)
           (derive-expression-type expr new-env new-subs)
         (values
          (make-function-type var expr-type)
@@ -860,17 +943,19 @@ which have default instances. Currently only resolves Num :a -> Num Integer"
           typed-subexpr
           bindings-schemes
           name-map)
-         new-subs)))))
+         new-subs
+         returns)))))
 
 (defun derive-match-branches-type (t_ alts env subs)
   (declare (type ty t_)
            (type list alts)
            (type environment env)
            (type substitution-list subs)
-           (values typed-match-branch-list ty-predicate-list substitution-list))
+           (values typed-match-branch-list ty-predicate-list substitution-list ty-list))
   (let ((types nil)
         (preds nil)
-        (typed-branches nil))
+        (typed-branches nil)
+        (returns nil))
     (dolist (alt alts)
 
       ;; Rewrite variables in the pattern to their original names for error messages
@@ -880,12 +965,13 @@ which have default instances. Currently only resolves Num :a -> Num Integer"
              (pattern (coalton-impl/ast::rewrite-pattern-vars pattern m)))
 
         (with-type-context ("branch ~A" pattern)
-          (multiple-value-bind (ty branch-preds typed-branch new-subs)
+          (multiple-value-bind (ty branch-preds typed-branch new-subs new-returns)
               (derive-match-branch-type (match-branch-unparsed alt) (match-branch-pattern alt) (match-branch-subexpr alt) (match-branch-name-map alt) env subs)
             (setf subs new-subs)
             (setf types (append types (list ty)))
             (setf preds (append preds branch-preds))
-            (setf typed-branches (append typed-branches (list typed-branch)))))))
+            (setf typed-branches (append typed-branches (list typed-branch)))
+            (setf returns (append new-returns returns))))))
     (dolist (typ types)
       (setf subs (unify subs t_ typ)))
-    (values typed-branches preds subs)))
+    (values typed-branches preds subs returns)))

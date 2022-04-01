@@ -235,5 +235,15 @@
        (mapcar
         (lambda (node)
           (compile-expression node ctx env))
-        (tc:typed-node-seq-subnodes expr))))))
+        (tc:typed-node-seq-subnodes expr)))))
+
+  (:method ((expr tc:typed-node-return) ctx env)
+    (declare (type pred-context ctx)
+             (type tc:environment env)
+             (values node))
+    (let ((qual-ty (tc:fresh-inst (tc:typed-node-type expr))))
+      (assert (null (tc:qualified-ty-predicates qual-ty)))
+      (node-return
+       (tc:qualified-ty-type qual-ty)
+       (compile-expression (tc:typed-node-return-expr expr) ctx env)))))
 
