@@ -10,6 +10,11 @@
                #:coalton/library))
 
 (asdf:defsystem #:coalton/compiler
+  :description "Coalton compiler"
+  :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
+  :license "MIT"
+  :version (:read-file-form "VERSION.txt")
+
   :around-compile (lambda (compile)
                     (let (#+sbcl (sb-ext:*derive-function-types* t)
                           #+sbcl (sb-ext:*block-compile-default* :specified))
@@ -89,10 +94,15 @@
                (:file "lock-package")))
 
 (asdf:defsystem #:coalton/library
+  :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
+  :license "MIT"
+  :version (:read-file-form "VERSION.txt")
+
   :around-compile (lambda (compile)
                     (let (#+sbcl (sb-ext:*derive-function-types* t))
                       (funcall compile)))
-  :depends-on (#:coalton/hashtable-shim)
+  :depends-on (#:coalton/compiler
+               #:coalton/hashtable-shim)
   :pathname "library/"
   :serial t
   :components ((:file "utils")
@@ -117,6 +127,9 @@
                (:file "prelude")))
 
 (asdf:defsystem #:coalton/testing
+  :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
+  :license "MIT"
+  :version (:read-file-form "VERSION.txt")
   :depends-on (#:coalton
                #:fiasco)
   :pathname "src/testing/"
