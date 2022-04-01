@@ -42,13 +42,15 @@
         :for codegen-sym := (instance-definition-codegen-sym inst)
         :for method-codegen-syms := (instance-definition-method-codegen-syms inst)
         :collect `(add-instance env ',class-name ,(lookup-class-instance env pred))
+        :if (instance-definition-context inst)
+          :collect `(set-function env ',codegen-sym ,(lookup-function env codegen-sym))
         :append (loop :for key :being :the :hash-keys :of method-codegen-syms
                       :for value :being :the :hash-values :of method-codegen-syms
                       :for function-entry := (lookup-function env value :no-error t)
                       :collect `(set-method-inline env ',key ',codegen-sym ',value)
                       :collect (if function-entry
-                                 `(set-function env ',value ,function-entry)
-                                 `(unset-function env ',value)))))
+                                   `(set-function env ',value ,function-entry)
+                                   `(unset-function env ',value)))))
 
 (defun generate-class-diff (classes env)
   (declare (type ty-class-list classes))
