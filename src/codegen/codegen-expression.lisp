@@ -22,41 +22,46 @@
 
 (in-package #:coalton-impl/codegen/codegen-expression)
 
-(defgeneric codegen-expression (node env)
-  (:method ((node node-literal) env)
+(defgeneric codegen-expression (node current-function env)
+  (:method ((node node-literal) current-function env)
     (declare (type tc:environment env)
-             (ignore env))
+             (type (or null symbol) current-function)
+             (ignore current-function env))
     (node-literal-value node))
 
-  (:method ((node node-variable) env)
+  (:method ((node node-variable) current-function env)
     (declare (type tc:environment env)
-             (ignore env))
+             (type (or null symbol) current-function)
+             (ignore current-function env))
     (node-variable-value node))
 
-  (:method ((node node-application) env)
-    (declare (type tc:environment env))
+  (:method ((node node-application) current-function env)
+    (declare (type tc:environment env)
+             (type (or null symbol) current-function))
     (let* ((arity (length (node-application-rands node)))
 
            (function-applicator
              (gethash arity *function-application-functions*)))
 
       `(,function-applicator
-        ,(codegen-expression (node-application-rator node) env)
+        ,(codegen-expression (node-application-rator node) current-function env)
         ,@(mapcar
            (lambda (node)
-             (codegen-expression node env))
+             (codegen-expression node current-function env))
            (node-application-rands node)))))
 
-  (:method ((node node-direct-application) env)
-    (declare (type tc:environment env))
+  (:method ((node node-direct-application) current-function env)
+    (declare (type tc:environment env)
+             (type (or null symbol) current-function))
     `(,(node-direct-application-rator node)
       ,@(mapcar
          (lambda (node)
-           (codegen-expression node env))
+           (codegen-expression node current-function env))
          (node-direct-application-rands node))))
 
-  (:method ((expr node-abstraction) env)
-    (declare (type tc:environment env))
+  (:method ((expr node-abstraction) current-function env)
+    (declare (type tc:environment env)
+             (type (or null symbol) current-function))
     (let* ((var-names (node-abstraction-vars expr))
 
            (arity (length var-names))
@@ -77,18 +82,23 @@
         (lambda ,var-names
           (declare ,@type-decs
                    (ignorable ,@var-names))
-          ,(codegen-expression (node-abstraction-subexpr expr) env)))))
+          (block @@local
+              ,(codegen-expression (node-abstraction-subexpr expr) '@@local env))))))
 
-  (:method ((expr node-let) env)
-    (declare (type tc:environment env))
+  (:method ((expr node-let) current-function env)
+    (declare (type tc:environment env)
+             (type (or null symbol) current-function))
     (let ((sccs (node-binding-sccs (node-let-bindings expr))))
       (codegen-let
        expr
        sccs
+       current-function
        (node-variables expr :variable-namespace-only t)
        env)))
 
-  (:method ((expr node-lisp) env)
+  (:method ((expr node-lisp) current-function env)
+    (declare (type tc:environment env)
+             (type (or null symbol) current-function))
     (let ((inner
             `(let ,(mapcar
                     (lambda (var)
@@ -101,8 +111,9 @@
                 ,inner)
           inner)))
 
-  (:method ((expr node-match) env)
-    (declare (type tc:environment env))
+  (:method ((expr node-match) current-function env)
+    (declare (type tc:environment env)
+             (type (or null symbol) current-function))
 
     ;; If possible codegen a cl:if instead of a trivia:match
     (when (and (equalp (node-type (node-match-expr expr)) tc:*boolean-type*)
@@ -112,39 +123,45 @@
                (equalp (match-branch-pattern (second (node-match-branches expr)))
                        (ast:pattern-constructor 'coalton:False nil)))
       (return-from codegen-expression
-        `(if ,(codegen-expression (node-match-expr expr) env)
-             ,(codegen-expression (match-branch-body (first (node-match-branches expr))) env)
-             ,(codegen-expression (match-branch-body (second (node-match-branches expr))) env))))
+        `(if ,(codegen-expression (node-match-expr expr) current-function env)
+             ,(codegen-expression (match-branch-body (first (node-match-branches expr))) current-function env)
+             ,(codegen-expression (match-branch-body (second (node-match-branches expr))) current-function env))))
 
 
-    (let* ((subexpr (codegen-expression (node-match-expr expr) env))
+    (let* ((subexpr (codegen-expression (node-match-expr expr) current-function env))
 
            (branches
              (mapcar
               (lambda (b)
                 `(,(codegen-pattern (match-branch-pattern b) env)
-                  ,(codegen-expression (match-branch-body b) env)))
+                  ,(codegen-expression (match-branch-body b) current-function env)))
               (node-match-branches expr))))
       `(trivia:match (the ,(lisp-type (node-type (node-match-expr expr)) env) ,subexpr)
          ,@branches
          (_ (error "Pattern match not exaustive error")))))
 
-  (:method ((expr node-seq) env)
-    (declare (type tc:environment env))
+  (:method ((expr node-seq) current-function env)
+    (declare (type tc:environment env)
+             (type (or null symbol) current-function))
     `(progn
        ,@(mapcar
           (lambda (node)
-            (codegen-expression node env))
-          (node-seq-nodes expr)))))
+            (codegen-expression node current-function env))
+          (node-seq-nodes expr))))
 
-(defun codegen-let (node sccs local-vars env)
+  (:method ((expr node-return) current-function env)
+    (assert (not (null current-function)))
+    `(return-from ,current-function ,(codegen-expression (node-return-expr expr) current-function env))))
+
+(defun codegen-let (node sccs current-function local-vars env)
   (declare (type node-let node)
            (type list sccs)
+           (type (or null symbol) current-function)
            (type symbol-list local-vars)
            (type tc:environment env))
 
   (when (null sccs)
-    (return-from codegen-let (codegen-expression (node-let-subexpr node) env)))
+    (return-from codegen-let (codegen-expression (node-let-subexpr node) current-function env)))
 
   (let* ((scc (car sccs))
          (scc-bindings
@@ -159,7 +176,7 @@
        (let* ( ;; functions in this scc referenced in the variable namespace
               (binding-names-vars (intersection (mapcar #'car scc-bindings) local-vars))
 
-              (inner (codegen-let node (cdr sccs) local-vars env))
+              (inner (codegen-let node (cdr sccs) current-function local-vars env))
 
               (inner
                 (if binding-names-vars
@@ -179,7 +196,7 @@
                                 :collect `(,name
                                            ,(node-abstraction-vars node)
                                            (declare (ignorable ,@(node-abstraction-vars node)))
-                                           ,(codegen-expression (node-abstraction-subexpr node) env)))
+                                           ,(codegen-expression (node-abstraction-subexpr node) name env)))
                    ,@inner))
 
               (node
@@ -197,7 +214,7 @@
        (let ((name (car (first scc-bindings)))
              (node_ (cdr (first scc-bindings))))
 
-         `(let ((,name ,(codegen-expression node_ env)))
-            ,(codegen-let node (cdr sccs) local-vars env))))
+         `(let ((,name ,(codegen-expression node_ current-function env)))
+            ,(codegen-let node (cdr sccs) current-function local-vars env))))
 
       (t (error "Invalid scc binding group. This should have been detected during typechecking.")))))

@@ -350,3 +350,12 @@
            )
        (format s "Duplicate definition of ~A"
                (duplicate-definition-name c))))))
+
+(define-condition unexpected-return (coalton-type-error)
+  ()
+  (:report
+   (lambda (c s)
+     (declare (ignore c))
+     (let ((*print-circle* nil) ; Prevent printing using reader macros
+           )
+       (format s "Unexpected return statement")))))

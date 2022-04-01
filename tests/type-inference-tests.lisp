@@ -433,3 +433,20 @@
        (coalton:let a_ coalton:= (coalton-prelude:+ a 1))
        a_))
    nil))
+
+(deftest test-returns ()
+  (check-coalton-types
+   '((coalton:define (f a)
+       (coalton:return "hello")
+       a))
+   `((f . (String -> String))))
+
+  (signals coalton-impl/typechecker::coalton-type-error-context
+    (run-coalton-typechecker
+     '((coalton:define (f a)
+         (coalton:return "hello")
+         Unit))))
+
+  (signals coalton-impl/typechecker::coalton-type-error-context
+    (run-coalton-typechecker
+     '((coalton:define x (coalton:return "hello"))))))

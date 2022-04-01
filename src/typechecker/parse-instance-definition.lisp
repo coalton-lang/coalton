@@ -136,7 +136,8 @@
                                  env
                                  nil
                                  nil
-                                 :allow-deferred-predicates nil)
+                                 :allow-deferred-predicates nil
+                                 :allow-returns nil)
                               (declare (ignore scheme env))
 
                               ;; Predicates should never be here

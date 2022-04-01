@@ -148,6 +148,15 @@
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type typed-node-seq))
 
+(defstruct
+    (typed-node-return
+     (:include typed-node)
+     (:constructor typed-node-return (type unparsed expr)))
+  (expr (required 'expr) :type typed-node :read-only t))
+
+#+(and sbcl coalton-release)
+(declaim (sb-ext:freeze-type typed-node-return))
+
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type typed-node))
 
@@ -250,6 +259,14 @@
    (typed-node-unparsed node)
    (apply-substitution subs (typed-node-seq-subnodes node))))
 
+(defmethod apply-substitution (subs (node typed-node-return))
+  (declare (type substitution-list subs)
+           (values typed-node-return))
+  (typed-node-return
+   (apply-substitution subs (typed-node-type node))
+   (typed-node-unparsed node)
+   (apply-substitution subs (typed-node-return-expr node))))
+
 (defgeneric replace-node-type (node new-type)
   (:method ((node typed-node-literal) new-type)
     (typed-node-literal
@@ -304,7 +321,13 @@
     (typed-node-seq
      new-type
      (typed-node-unparsed node)
-     (typed-node-seq-subnodes node))))
+     (typed-node-seq-subnodes node)))
+
+  (:method ((node typed-node-return) new-type)
+    (typed-node-return
+     new-type
+     (typed-node-unparsed node)
+     (typed-node-return-expr node))))
 
 (defgeneric collect-type-predicates (node)
   (:method ((type qualified-ty))
@@ -362,6 +385,13 @@
   (:method ((node typed-node-seq))
     (remove-duplicates
      (mapcan #'collect-type-predicates (typed-node-seq-subnodes node))
+     :test #'equalp))
+
+  (:method ((node typed-node-return))
+    (remove-duplicates
+     (append
+      (collect-type-predicates (typed-node-type node))
+      (collect-type-predicates (typed-node-return-expr node)))
      :test #'equalp)))
 
 (defun collect-variable-namespace (node)
@@ -403,7 +433,10 @@
     (collect-variable-namespace-g (typed-match-branch-subexpr branch)))
 
   (:method ((node typed-node-seq))
-    (mapcan #'collect-variable-namespace-g (typed-node-seq-subnodes node))))
+    (mapcan #'collect-variable-namespace-g (typed-node-seq-subnodes node)))
+
+  (:method ((node typed-node-return))
+    (collect-variable-namespace-g (typed-node-return-expr node))))
 
 (defgeneric remove-static-preds (node)
   (:method ((node typed-node-literal))
@@ -462,5 +495,11 @@
     (typed-node-seq
      (typed-node-type node)
      (typed-node-unparsed node)
-     (mapcar #'remove-static-preds (typed-node-seq-subnodes node)))))
+     (mapcar #'remove-static-preds (typed-node-seq-subnodes node))))
+
+  (:method ((node typed-node-return))
+    (typed-node-return
+     (typed-node-type node)
+     (typed-node-unparsed node)
+     (remove-static-preds (typed-node-return-expr node)))))
 

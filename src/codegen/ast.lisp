@@ -51,6 +51,8 @@
    #:node-seq-nodes                     ; ACCESSOR
    #:node-variables                     ; FUNCTION
    #:node-binding-sccs                  ; FUNCTION
+   #:node-return                        ; STRUCT
+   #:node-return-expr                   ; ACCESSOR
    ))
 
 (in-package #:coalton-impl/codegen/ast)
@@ -138,6 +140,11 @@
             (:constructor node-seq (type nodes)))
   (nodes (required 'nodes) :type node-list :read-only t))
 
+(defstruct (node-return
+            (:include node)
+            (:constructor node-return (type expr)))
+  (expr (required 'expr) :type node :read-only t))
+
 (defun node-variables (node &key variable-namespace-only)
   "Returns a deduplicated list of symbols representing variables in
 both CL namespaces appearing in NODE"
@@ -212,7 +219,11 @@ both CL namespaces appearing in NODE"
     (mapcan
      (lambda (node)
        (node-variables-g node :variable-namespace-only variable-namespace-only))
-     (node-seq-nodes node))))
+     (node-seq-nodes node)))
+
+  (:method ((node node-return) &key variable-namespace-only)
+    (declare (values symbol-list))
+    (node-variables-g (node-return-expr node) :variable-namespace-only variable-namespace-only)))
 
 
 (defun node-binding-sccs (bindings)

@@ -172,7 +172,7 @@
     `(defun ,name ,(node-abstraction-vars node)
        (declare (ignorable ,@(node-abstraction-vars node))
                 ,@type-decs)
-       ,(codegen-expression (node-abstraction-subexpr node) env))))
+       ,(codegen-expression (node-abstraction-subexpr node) name env))))
 
 (defun compile-scc (bindings env)
   (declare (type binding-list bindings)
@@ -197,7 +197,7 @@
         :if (not (node-abstraction-p node))
           :collect `(setf
                      ,name
-                     ,(codegen-expression node env)))
+                     ,(codegen-expression node nil env)))
   ;; Docstrings
   (loop :for (name . node) :in bindings
         :for entry := (tc:lookup-name env name :no-error t)

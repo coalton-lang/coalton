@@ -142,13 +142,16 @@ Returns new environment, binding list of declared nodes, and a DAG of dependenci
           () "Orphan type declaration for variable ~A" name))
 
     (coalton-impl/typechecker::with-type-context ("COALTON-TOPLEVEL")
-      (multiple-value-bind (typed-bindings preds new-env subs)
+      (multiple-value-bind (typed-bindings preds new-env subs returns)
           (coalton-impl/typechecker::derive-bindings-type
            impl-bindings expl-bindings declared-types env nil nil
            :disable-monomorphism-restriction t
-           :allow-deferred-predicates nil)
+           :allow-deferred-predicates nil
+           :allow-returns nil)
         (when preds
           (coalton-bug "Preds not expected. ~A" preds))
+        (when returns
+          (coalton-bug "Returns not expected. ~A" returns))
 
         ;; Apply output substitutions
         (setf typed-bindings

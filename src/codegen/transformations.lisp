@@ -213,4 +213,11 @@
               (lambda (node)
                 (traverse node funs))
               (node-seq-nodes node)))))
-      (call-if node :seq funs))))
+      (call-if node :seq funs)))
+
+  (:method ((node node-return) funs)
+    (let ((node
+            (node-return
+             (node-type node)
+             (traverse (node-return-expr node) funs))))
+      (call-if node :return funs))))
