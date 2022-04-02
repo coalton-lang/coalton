@@ -10,7 +10,9 @@
   (:local-nicknames
    (#:bits #:coalton-library/bits))
   (:export
-   #:Dividable #:/
+   #:Dividable
+   #:general/
+   #:/
    #:Quantization
    #:Quantizable #:quantize
    #:integer->single-float
@@ -79,8 +81,10 @@ The function / is partial, and will error produce a run-time error if the diviso
     ;; This is a type that is more pragmatic and less mathematical in
     ;; nature. It expresses a division relationship between one input
     ;; type and one output type.
-    (/ (:arg-type -> :arg-type -> :res-type)))
+    (general/ (:arg-type -> :arg-type -> :res-type)))
 
+  (declare / ((Dividable :a :a) => (:a -> :a -> :a)))
+  (define / general/)
   ;;
   ;; Quantizable
   ;;
@@ -473,31 +477,31 @@ The fields are defined as follows:
 
 (coalton-toplevel
   (define-instance (Dividable Fraction Fraction)
-    (define (/ a b)
+    (define (general/ a b)
       (lisp Fraction (a b)
         (cl:/ a b))))
 
   (define-instance (Dividable Single-Float Single-Float)
-    (define (/ x y)
+    (define (general/ x y)
       (lisp Single-Float (x y)
         (cl:/ x y))))
 
   (define-instance (Dividable Double-Float Double-Float)
-    (define (/ x y)
+    (define (general/ x y)
       (lisp Double-Float (x y)
         (cl:/ x y))))
 
   (define-instance (Dividable Integer Fraction)
-    (define (/ x y)
+    (define (general/ x y)
       (mkFraction x y)))
 
   (define-instance (Dividable Integer Single-Float)
-    (define (/ x y)
+    (define (general/ x y)
       (lisp Single-Float (x y)
         (cl:coerce (cl:/ x y) 'cl:single-float))))
 
   (define-instance (Dividable Integer Double-Float)
-    (define (/ x y)
+    (define (general/ x y)
       (lisp Double-Float (x y)
         (cl:coerce (cl:/ x y) 'cl:double-float)))))
 
@@ -604,7 +608,7 @@ The fields are defined as follows:
            (cl:coerce n ',repr))))
 
      (define-instance (Dividable (Complex ,type) (Complex ,type))
-       (define (/ a b)
+       (define (general/ a b)
          (lisp (Complex ,type) (a b)
            (cl:declare (cl:type (cl:or ,repr (cl:complex ,repr))))
            (cl:/ a b))))
@@ -804,19 +808,19 @@ The fields are defined as follows:
     "Safely divide X by Y, returning None if Y is zero."
     (if (== y 0)
         None
-        (Some (/ x y))))
+        (Some (general/ x y))))
 
   (declare exact/ (Integer -> Integer -> Fraction))
   (define (exact/ a b)
     "Exactly divide two integers and produce a fraction."
-    (/ a b))
+    (general/ a b))
 
   (declare inexact/ (Integer -> Integer -> Double-Float))
   (define (inexact/ a b)
     "Compute the quotient of integers as a double-precision float.
 
 Note: This does *not* divide double-float arguments."
-    (/ a b))
+    (general/ a b))
 
   (declare floor/ (Integer -> Integer -> Integer))
   (define (floor/ a b)
@@ -831,17 +835,7 @@ Note: This does *not* divide double-float arguments."
   (declare round/ (Integer -> Integer -> Integer))
   (define (round/ a b)
     "Divide two integers and round the quotient."
-    (round (exact/ a b)))
-
-  (declare single/ (Single-Float -> Single-Float -> Single-Float))
-  (define (single/ a b)
-    "Compute the quotient of single-precision floats as a single-precision float."
-    (/ a b))
-
-  (declare double/ (Double-Float -> Double-Float -> Double-Float))
-  (define (double/ a b)
-    "Compute the quotient of single-precision floats as a single-precision float."
-    (/ a b)))
+    (round (exact/ a b))))
 
 ;;; `Num' extensions
 (coalton-toplevel
