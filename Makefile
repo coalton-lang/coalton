@@ -9,20 +9,30 @@ QUICKLISP=$(SBCL) --load $(QUICKLISP_HOME)/setup.lisp \
 
 .PHONY: test test-safe
 test:
-	sbcl --non-interactive \
-	     --eval "(asdf:test-system :coalton)"
+	sbcl --noinform \
+		--non-interactive \
+		--eval "(asdf:test-system :coalton)"
 
 test-safe:
-	sbcl --non-interactive \
-	     --eval "(sb-ext:restrict-compiler-policy 'safety 3)" \
-	     --eval "(asdf:test-system :coalton)"
+	sbcl --noinform \
+		 --non-interactive \
+		 --eval "(sb-ext:restrict-compiler-policy 'safety 3)" \
+		 --eval "(asdf:test-system :coalton)"
 
 .PHONY: docs
 docs:
-	sbcl --non-interactive \
-	     --eval "(ql:quickload :coalton/doc)" \
-	     --eval "(with-open-file (out \"docs/reference.md\" :direction :output :if-exists :supersede) \
+	sbcl --noinform \
+		 --non-interactive \
+		 --eval "(ql:quickload :coalton/doc :silent t)" \
+		 --eval "(with-open-file (out \"docs/reference.md\" :direction :output :if-exists :supersede) \
 	               (coalton-impl/doc::write-documentation-for-packages :env coalton-impl::*global-environment* :stream out :file-link-prefix \"../library/\"))"
+
+.PHONY: bench
+bench:
+	COALTON_ENV=release sbcl --noinform \
+		 --non-interactive \
+		 --eval "(ql:quickload :coalton/benchmarks :silent t)" \
+		 --eval "(sb-ext::without-gcing (coalton-benchmarks:run-benchmarks))"
 
 ###############################################################################
 # CLEAN

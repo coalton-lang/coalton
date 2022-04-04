@@ -52,6 +52,9 @@
    #:1+
    #:1-))
 
+#+coalton-release
+(cl:declaim #.coalton-impl:*coalton-optimize-library*)
+
 (cl:in-package #:coalton-library/arith)
 
 (coalton-toplevel

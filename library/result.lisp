@@ -11,6 +11,9 @@
    #:isErr
    #:flatten))
 
+#+coalton-release
+(cl:declaim #.coalton-impl:*coalton-optimize-library*)
+
 (cl:in-package #:coalton-library/result)
 
 (coalton-toplevel

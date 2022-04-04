@@ -35,6 +35,9 @@
    #:sort!
    #:sort-by!))
 
+#+coalton-release
+(cl:declaim #.coalton-impl:*coalton-optimize-library*)
+
 (cl:in-package #:coalton-library/vector)
 
 (coalton-toplevel

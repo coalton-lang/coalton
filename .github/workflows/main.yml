@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
 
     strategy:
@@ -25,7 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: 40ants/setup-lisp@v1
-      - name: Run Tests
+      - name: Run tests
         env:
           COALTON_ENV: ${{ matrix.COALTON_ENV }}
         run: |
@@ -36,3 +36,36 @@ jobs:
             (asdf:load-system :small-coalton-programs))
           EOF
           qlot exec ros -- run-tests.lisp
+  bench:
+    runs-on: ubuntu-latest
+
+    env:
+      # Tell ASDF to look through our repo recursively
+      CL_SOURCE_REGISTRY: "/home/runner/work/coalton/coalton//"
+
+      COALTON_ENV: "release"
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: 40ants/setup-lisp@v1
+      - name: Run benchmarks
+        run: |
+          cat <<EOF > run-benchmarks.lisp
+          (defun main (&rest args)
+            (asdf:load-system :coalton/benchmarks)
+            (sb-ext::without-gcing (uiop:symbol-call :coalton-benchmarks :run-benchmarks-ci)))
+          EOF
+          qlot exec ros -- run-benchmarks.lisp
+      - uses: actions/cache@v1
+        with:
+          path: ./cache
+          key: ${{ runner.os }}-benchmarks
+      - uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: "customSmallerIsBetter"
+          output-file-path: "./bench.json"
+          external-data-json-path: "./cache/benchmark-data.json"
+          fail-on-alert: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          comment-on-alert: true
+          alert-comment-cc-users: "@eliaslfox"

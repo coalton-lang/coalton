@@ -65,6 +65,9 @@
    #:collect-vector!
    #:collect-hashtable!))
 
+#+coalton-release
+(cl:declaim #.coalton-impl:*coalton-optimize-library*)
+
 (cl:in-package #:coalton-library/iterator)
 
 ;;; fundamental operators

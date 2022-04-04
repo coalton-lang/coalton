@@ -10,6 +10,9 @@
    #:isSome
    #:isNone))
 
+#+coalton-release
+(cl:declaim #.coalton-impl:*coalton-optimize-library*)
+
 (cl:in-package #:coalton-library/optional)
 
 (coalton-toplevel
