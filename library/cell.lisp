@@ -17,6 +17,9 @@
    #:increment!
    #:decrement!))
 
+#+coalton-release
+(cl:declaim #.coalton-impl:*coalton-optimize-library*)
+
 (cl:in-package #:coalton-library/cell)
  
 (cl:declaim (cl:inline make-cell-internal))

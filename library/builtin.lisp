@@ -12,6 +12,9 @@
    #:boolean-and
    #:boolean-xor))
 
+#+coalton-release
+(cl:declaim #.coalton-impl:*coalton-optimize-library*)
+
 (cl:in-package #:coalton-library/builtin)
 
 (coalton-toplevel

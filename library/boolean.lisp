@@ -3,6 +3,9 @@
    #:coalton
    #:coalton-library/classes))
 
+#+coalton-release
+(cl:declaim #.coalton-impl:*coalton-optimize-library*)
+
 (cl:in-package #:coalton-library/boolean)
 
 (coalton-toplevel

@@ -453,6 +453,7 @@
    #:*freeze-emitted-types*
    #:*coalton-print-unicode*
    #:*coalton-optimize*
+   #:*coalton-optimize-library*
    ))
 
 ;;

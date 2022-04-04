@@ -33,6 +33,9 @@
 
 (cl:in-package #:coalton)
 
+#+coalton-release
+(cl:declaim #.coalton-impl:*coalton-optimize-library*)
+
 (coalton-toplevel
   ;;
   ;; All definitions in this block must have explicit type
