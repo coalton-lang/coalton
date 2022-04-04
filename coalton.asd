@@ -98,9 +98,9 @@
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
   :license "MIT"
   :version (:read-file-form "VERSION.txt")
-
   :around-compile (lambda (compile)
-                    (let (#+sbcl (sb-ext:*derive-function-types* t))
+                    (let (#+sbcl (sb-ext:*derive-function-types* t)
+                          #+sbcl (sb-ext:*block-compile-default* :specified))
                       (funcall compile)))
   :depends-on (#:coalton/compiler
                #:coalton/hashtable-shim)
