@@ -105,7 +105,6 @@
                    :do (typecheck-node direct-node env)
                    :collect (cons name direct-node))))
 
-
       (values
        `(progn
           ,@(loop :for name :in inline-funs
@@ -115,9 +114,14 @@
             ,@(loop :for type :in (tc:translation-unit-types translation-unit)
                     :append (codegen-type-definition type env)))
 
-          ,@(codegen-class-definitions
-             (tc:translation-unit-classes translation-unit)
-             env)
+          (eval-when (:compile-toplevel :load-toplevel :execute)
+            ,@(codegen-class-definitions
+               (tc:translation-unit-classes translation-unit)
+               env))
+
+          #+sbcl
+          ,@(when (eq sb-ext:*block-compile-default* :specified)
+              (list `(declaim (sb-ext:start-block ,@(mapcar #'car definitions)))))
 
           ,@(loop :for scc :in sccs
                   :for bindings
@@ -126,6 +130,11 @@
                           (find (car binding) scc))
                         definitions)
                   :append (compile-scc bindings env))
+
+          #+sbcl
+          ,@(when (eq sb-ext:*block-compile-default* :specified)
+              (list `(declaim (sb-ext:end-block))))
+
           (values))
        env))))
 
