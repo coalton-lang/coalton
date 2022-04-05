@@ -15,7 +15,7 @@
 
 (in-package #:coalton-impl/codegen/compile-expression)
 
-(defun compile-toplevel (inferred-type expr env &key (extra-context nil))
+(defun compile-toplevel (inferred-type expr env &key (extra-context nil) (bare-abstraction nil))
   (declare (type tc:qualified-ty inferred-type)
            (type tc:typed-node expr)
            (type tc:environment env)
@@ -39,7 +39,12 @@
                  :collect (cons pred (gensym))))
 
          (full-ctx
-           (append ctx extra-context)))
+           (append ctx extra-context))
+
+         (node-abstraction_
+           (if bare-abstraction
+               'node-bare-abstraction
+               'node-abstraction)))
 
     (let ((node
             (cond
@@ -48,7 +53,7 @@
               ;;
               ((tc:typed-node-abstraction-p expr)
                (let ((subnode (compile-expression (tc:typed-node-abstraction-subexpr expr) full-ctx env)))
-                 (node-abstraction
+                 (funcall node-abstraction_
                   (tc:make-function-type*
                    (append
                     (loop :for pred :in preds
@@ -63,7 +68,7 @@
 
               (ctx
                (let ((inner (compile-expression expr full-ctx env)))
-                 (node-abstraction
+                 (funcall node-abstraction_
                   (tc:make-function-type*
                    (loop :for pred :in preds
                          :collect (pred-type pred env))

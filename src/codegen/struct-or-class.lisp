@@ -47,8 +47,7 @@
                       (:predicate nil))
             ,@(loop :for field :in fields
                     :for name := (struct-or-class-field-name field)
-                    :for type := (struct-or-class-field-type field)
-                    :collect `(,name (error "") :type ,type :read-only t)))))
+                    :collect `(,name (error "") :read-only t)))))
 
        (:class
         (list 
@@ -58,14 +57,12 @@
                    (list))
             ,(loop :for field :in fields
                    :for name := (struct-or-class-field-name field)
-                   :for type := (struct-or-class-field-type field)
                    :for package := (symbol-package classname)
                    :for accessor
                      := (alexandria:format-symbol package "~A-~A" classname name)
                    :collect `(,name
                               :initform (error "")
                               :initarg ,name
-                              :type ,type
                               :accessor ,accessor)))
 
          `(defun ,constructor ,field-names

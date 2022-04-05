@@ -65,7 +65,7 @@
          (unqualified-method-definitions
            (loop :for (method-name . type) :in (tc:ty-class-unqualified-methods class)
                  :for method-node := (gethash method-name method-nodes)
-                 :for node := (compile-toplevel (tc:fresh-inst type) method-node env :extra-context ctx)
+                 :for node := (compile-toplevel (tc:fresh-inst type) method-node env :extra-context ctx :bare-abstraction t)
                  :collect node))
 
          (method-ty (mapcar #'node-type unqualified-method-definitions))
