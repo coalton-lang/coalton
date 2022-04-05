@@ -65,7 +65,16 @@
                       :collect `(set-name env ',name ,(lookup-name env name))
                       :collect (if function-entry
                                    `(set-function env ',name ,function-entry)
-                                   `(unset-function env ',name)))))
+                                   `(unset-function env ',name)))
+        :append (loop :for (pred . name) :in (ty-class-superclass-dict class)
+                      :for codegen-sym := (ty-class-codegen-sym class)
+                      :for accessor
+                        := (alexandria:format-symbol
+                            (symbol-package codegen-sym)
+                            "~A-~A"
+                            codegen-sym
+                            name)
+                      :collect `(set-function env ',accessor ,(lookup-function env accessor)))))
 
 (defun generate-diff (translation-unit env env_name)
   `(eval-when (:load-toplevel)
