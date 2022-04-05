@@ -158,6 +158,21 @@
                                                                 :arity class-arity)))
                                        (setf env (unset-function env (ty-class-codegen-sym class)))))
 
+                                 ;; Add the class superclass accessors to the function env
+                                 (loop :for (pred . name) :in (ty-class-superclass-dict class)
+                                       :for codegen-sym := (ty-class-codegen-sym class)
+                                       :for accessor
+                                         := (alexandria:format-symbol
+                                             (symbol-package codegen-sym)
+                                             "~A-~A"
+                                             codegen-sym
+                                             name)
+                                       :do (setf env (set-function env
+                                                                   accessor
+                                                                   (make-function-env-entry
+                                                                    :name accessor
+                                                                    :arity 1))))
+
                                  (dolist (method methods)
                                    (setf env (set-value-type env (car method) (cdr method)))
 
