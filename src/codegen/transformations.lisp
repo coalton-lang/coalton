@@ -152,6 +152,10 @@
              (push-hoist-point (node-abstraction-vars node) hoister)
              nil)
 
+           (handle-push-bare-hoist-point (node)
+             (push-hoist-point (node-bare-abstraction-vars node) hoister)
+             nil)
+
            (handle-pop-hoist-point (node)
              ;; If definitions were hoisted to this lambda
              ;; then add them to the ast
@@ -165,6 +169,19 @@
                      hoisted
                      (node-abstraction-subexpr node)))
 
+                   node)))
+
+           (handle-pop-bare-hoist-point (node)
+             (let ((hoisted (pop-hoist-point hoister)))
+               (if hoisted
+                   (node-bare-abstraction
+                    (node-type node)
+                    (node-bare-abstraction-vars node)
+                    (node-let
+                     (node-type (node-bare-abstraction-subexpr node))
+                     hoisted
+                     (node-bare-abstraction-subexpr node)))
+
                    node))))
 
     (traverse
@@ -172,7 +189,9 @@
      (list
       (cons :application #'lift-static-dict)
       (cons :before-abstraction #'handle-push-hoist-point)
-      (cons :abstraction #'handle-pop-hoist-point)))))
+      (cons :abstraction #'handle-pop-hoist-point)
+      (cons :before-bare-abstraction #'handle-push-bare-hoist-point)
+      (cons :bare-abstraction #'handle-pop-bare-hoist-point)))))
 
 (defun call-if (node key funs)
   (declare (type node node)
@@ -222,6 +241,15 @@
              (node-abstraction-vars node)
              (traverse (node-abstraction-subexpr node) funs))))
       (call-if node :abstraction funs)))
+
+  (:method ((node node-bare-abstraction) funs)
+    (call-if node :before-bare-abstraction funs)
+    (let ((node
+            (node-bare-abstraction
+             (node-type node)
+             (node-bare-abstraction-vars node)
+             (traverse (node-bare-abstraction-subexpr node) funs))))
+      (call-if node :bare-abstraction funs)))
 
   (:method ((node node-let) funs)
     (call-if node :before-let funs)

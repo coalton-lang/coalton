@@ -69,6 +69,21 @@
         (tc:match subexpr-ty type)
         (node-type expr))))
 
+  (:method ((expr node-bare-abstraction) env)
+    (declare (type tc:environment env)
+             (values tc:ty))
+    (assert (not (null (node-bare-abstraction-vars expr))))
+
+    (let ((type (node-type expr)))
+      (loop :for name :in (node-bare-abstraction-vars expr) :do
+        (progn
+          (setf type (tc:function-type-to type))))
+
+      (let ((subexpr-ty (typecheck-node (node-bare-abstraction-subexpr expr) env)))
+        (tc:match type subexpr-ty)
+        (tc:match subexpr-ty type)
+        (node-type expr))))
+
   (:method ((expr node-let) env)
     (declare (type tc:environment env)
              (values tc:ty))

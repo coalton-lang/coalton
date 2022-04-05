@@ -83,7 +83,27 @@
           (declare ,@type-decs
                    (ignorable ,@var-names))
           (block @@local
-              ,(codegen-expression (node-abstraction-subexpr expr) '@@local env))))))
+            ,(codegen-expression (node-abstraction-subexpr expr) '@@local env))))))
+
+  (:method ((expr node-bare-abstraction) current-function env)
+    (declare (type tc:environment env)
+             (type (or null symbol) current-function))
+    (let* ((var-names (node-bare-abstraction-vars expr))
+
+           (type-decs
+             (when coalton-impl:*emit-type-annotations*
+               (append
+                (loop :for name :in (node-bare-abstraction-vars expr)
+                      :for i :from 0
+                      :for arg-ty := (nth i (tc:function-type-arguments (node-type expr)))
+                      :collect `(type ,(lisp-type arg-ty env) ,name))
+                (list `(values ,(lisp-type (node-type (node-bare-abstraction-subexpr expr)) env) &optional))))))
+
+      `(lambda ,var-names
+         (declare ,@type-decs
+                  (ignorable ,@var-names))
+         (block @@local
+           ,(codegen-expression (node-bare-abstraction-subexpr expr) '@@local env)))))
 
   (:method ((expr node-let) current-function env)
     (declare (type tc:environment env)

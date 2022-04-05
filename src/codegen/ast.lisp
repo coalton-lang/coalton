@@ -33,6 +33,9 @@
    #:node-abstraction-vars              ; ACCESSOR
    #:node-abstraction-subexpr           ; ACCESSOR
    #:node-abstraction-p                 ; FUNCTION
+   #:node-bare-abstraction              ; STRUCT
+   #:node-bare-abstraction-vars         ; ACCESSOR
+   #:node-bare-abstraction-subexpr      ; ACCESSOR
    #:node-let                           ; STRUCT
    #:node-let-p                         ; FUNCTION
    #:node-let-bindings                  ; ACCESSOR
@@ -78,16 +81,19 @@
 (defstruct (node-literal
             (:include node)
             (:constructor node-literal (type value)))
+  "Literal values like 1 or \"hello\""
   (value (required 'value) :type literal-value :read-only t))
 
 (defstruct (node-variable
             (:include node)
             (:constructor node-variable (type value)))
+  "Variables like x or y"
   (value (required 'value) :type symbol :read-only t))
 
 (defstruct (node-application
             (:include node)
             (:constructor node-application (type rator rands &key (pure nil))))
+  "Function application (f x)"
   (rator (required 'rator) :type node      :read-only t)
   (rands (required 'rands) :type node-list :read-only t)
   (pure  (required 'pure)  :type boolean   :read-only t))
@@ -95,6 +101,7 @@
 (defstruct (node-direct-application
             (:include node)
             (:constructor node-direct-application (type rator-type rator rands)))
+  "Fully saturated function application of a known function"
   (rator-type (required 'rator-type) :type tc:ty     :read-only t)
   (rator      (required 'rator)      :type symbol    :read-only t)
   (rands      (required 'rands)      :type node-list :read-only t))
@@ -102,24 +109,38 @@
 (defstruct (node-abstraction
             (:include node)
             (:constructor node-abstraction (type vars subexpr)))
-  (vars    (required 'vars)    :type symbol-list :read-only t)
+  "Lambda literals (fn (x) x)"
+  (vars    (required 'vars)    :type symbol-list        :read-only t)
   (subexpr (required 'subexpr) :type node               :read-only t))
+
+(defstruct (node-bare-abstraction
+            (:include node)
+            (:constructor node-bare-abstraction (type vars subexpr)))
+  "Lambda literals which do not need be wrapped in function-entries.
+This is used to speedup method calls. This can be done because
+although method calls are to an unknown function, they should always
+be a fully saturated call."
+  (vars    (required 'vars)    :type symbol-list :read-only t)
+  (subexpr (required 'subexpr) :type node        :read-only t))
 
 
 (defstruct (node-let
             (:include node)
             (:constructor node-let (type bindings subexpr)))
+  "Introduction of local mutually-recursive bindings (let ((x 2)) (+ x x))"
   (bindings (requried 'bindings) :type binding-list :read-only t)
   (subexpr  (required 'subexpr)  :type node         :read-only t))
 
 (defstruct (node-lisp
             (:include node)
             (:constructor node-lisp (type vars form)))
+  "An embedded lisp form"
   (vars (required 'vars) :type list :read-only t)
   (form (required 'form) :type t    :read-only t))
 
 (defstruct (match-branch
             (:constructor match-branch (pattern bindings body)))
+  "A branch of a match statement"
   (pattern  (required 'pattern)  :type pattern            :read-only t)
   (bindings (required 'bindings) :type tc:ty-binding-list :read-only t)
   (body     (required 'body)     :type node               :read-only t))
@@ -134,17 +155,20 @@
 (defstruct (node-match
             (:include node)
             (:constructor node-match (type expr branches)))
+  "A pattern matching construct. Uses MATCH-BRANCH to represent branches"
   (expr (required 'expr) :type node :read-only t)
   (branches (required 'branches) :type branch-list :read-only t))
 
 (defstruct (node-seq
             (:include node)
             (:constructor node-seq (type nodes)))
+  "A series of statements to be executed sequentially"
   (nodes (required 'nodes) :type node-list :read-only t))
 
 (defstruct (node-return
             (:include node)
             (:constructor node-return (type expr)))
+  "A return statement, used for early returns in functions"
   (expr (required 'expr) :type node :read-only t))
 
 (defun node-variables (node &key variable-namespace-only)
@@ -178,6 +202,10 @@ both CL namespaces appearing in NODE"
   (:method ((node node-abstraction) &key variable-namespace-only)
     (declare (values symbol-list &optional))
     (node-variables-g (node-abstraction-subexpr node) :variable-namespace-only variable-namespace-only))
+
+  (:method ((node node-bare-abstraction) &key variable-namespace-only)
+    (declare (values symbol-list &optional))
+    (node-variables-g (node-bare-abstraction-subexpr node) :variable-namespace-only variable-namespace-only))
 
   (:method ((node node-direct-application) &key variable-namespace-only)
     (declare (values symbol-list &optional))

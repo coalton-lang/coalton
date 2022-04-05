@@ -74,14 +74,14 @@
     ;; TODO: add type annotations
     `((declaim (inline ,(car m)))
       (defun ,(car m) (dict ,@params)
+        (declare #.coalton-impl:*coalton-optimize*)
         ,(if (null params)
              `(,method-accessor dict)
-             (apply #'apply-function-entry
-                    `(,method-accessor dict) params)))
-      ;; Generate the wrapper functions
-      (coalton-impl:define-global-lexical ,(car m)
-          ,(construct-function-entry
-            `#',(car m)
-            (+ arity 1) ; We need a function of arity + 1 to account for DICT
-            )))))
+             `(funcall (the (function ,(make-list (length params) :initial-element t)) (,method-accessor dict)) ,@params)))
+    ;; Generate the wrapper functions
+    (coalton-impl:define-global-lexical ,(car m)
+        ,(construct-function-entry
+          `#',(car m)
+          (+ arity 1) ; We need a function of arity + 1 to account for DICT
+          )))))
 
