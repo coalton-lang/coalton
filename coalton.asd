@@ -47,13 +47,13 @@
                (:module "typechecker"
                 :serial t
                 :components ((:file "kinds")
+                             (:file "type-errors")
                              (:file "types")
                              (:file "pretty-printing")
                              (:file "substitutions")
                              (:file "predicate")
                              (:file "scheme")
                              (:file "typed-node")
-                             (:file "type-errors")
                              (:file "unify")
                              (:file "equality")
                              (:file "environment")
