@@ -164,6 +164,8 @@
    #:function-type-arguments            ; FUNCTION
    #:function-return-type               ; FUNCTION
    #:function-type-arity                ; FUNCTION
+   #:unify                              ; FUNCTION
+   #:apply-substitution                 ; FUNCTION
    ) 
   (:export
    #:*boolean-type*
@@ -191,6 +193,7 @@
    #:ty-scheme                          ; STRUCT
    #:qualified-ty                       ; STRUCT
    #:scheme-predicates                  ; FUNCTION
+   #:fresh-pred                         ; FUNCTION
    #:apply-substitution                 ; FUNCTION
    #:predicate-match                    ; FUNCTION
    #:make-function-type                 ; FUNCTION
@@ -267,6 +270,7 @@
    #:set-constructor                    ; FUNCTION
    #:set-name                           ; FUNCTION
    #:set-method-inline                  ; FUNCTION
+   #:set-code                           ; FUNCTION
    #:lookup-value-type                  ; FUNCTION
    #:lookup-type                        ; FUNCTION
    #:lookup-class                       ; FUNCTION
@@ -274,8 +278,10 @@
    #:lookup-function                    ; FUNCTION
    #:lookup-class-instances             ; FUNCTION
    #:lookup-class-instance              ; FUNCTION
+   #:lookup-instance-by-codegen-sym     ; FUNCTION
    #:lookup-name                        ; FUNCTION
    #:lookup-method-inline               ; FUNCTION
+   #:lookup-code                        ; FUNCTION
    #:type-entry                         ; STRUCT
    #:type-entry-name                    ; ACCESSOR
    #:type-entry-runtime-type            ; ACCESSOR
@@ -301,6 +307,10 @@
    #:name-entry-type                    ; ACCESSOR
    #:name-entry-docstring               ; ACCESSOR
    #:make-name-entry                    ; CONSTRUCTOR
+   #:code-entry                         ; STRUCT
+   #:code-entry-name                    ; ACCESSOR
+   #:code-entry-code                    ; ACCESSOR
+   #:make-code-entry                    ; CONSTRUCTOR
    )
   (:export
    #:derive-expression-type             ; FUNCTION
@@ -352,6 +362,7 @@
    #:ty-class-unqualified-methods       ; ACCESSOR
    #:ty-class-codegen-sym               ; ACCESSOR
    #:ty-class-superclass-dict           ; ACCESSOR
+   #:ty-class-superclass-map            ; ACCESSOR
    #:ty-class-list                      ; TYPE
    #:ty-class-instance                  ; STRUCT
    #:ty-class-instance-predicate        ; ACCESSOR
@@ -392,6 +403,7 @@
    #:translation-unit-definitions       ; ACCESSOR
    #:translation-unit-instances         ; ACCESSOR
    #:translation-unit-classes           ; ACCESSOR
+   #:translation-unit-attr-table        ; ACCESSOR
    #:translation-unit-package           ; ACCESSOR
    )
   ;; Pretty printers
@@ -475,6 +487,7 @@
    #:define-class
    #:define-instance
    #:repr
+   #:monomorphise
    #:unable-to-codegen)
   ;; Early Types
   (:export
@@ -541,7 +554,8 @@
    #:print-value-db
    #:print-type-db
    #:print-class-db
-   #:print-instance-db)
+   #:print-instance-db
+   #:lookup-code)
   (:export
    #:type-of
    #:kind-of)

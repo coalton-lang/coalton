@@ -345,14 +345,12 @@
   (unqualified-methods (required 'unqualified-methods) :type scheme-binding-list :read-only t)
   (codegen-sym         (required 'codegen-sym)         :type symbol              :read-only t)
   (superclass-dict     (required 'superclass-dict)     :type list                :read-only t)
+  (superclass-map      (required 'superclass-map)      :type hash-table          :read-only t)
   (docstring           (required 'docstring)           :type (or null string)    :read-only t)
   (location            (required 'location)            :type t                   :read-only t))
 
 (defmethod make-load-form ((self ty-class) &optional env)
-  (make-load-form-saving-slots
-   self
-   :slot-names '(name predicate superclasses unqualified-methods codegen-sym superclass-dict docstring location)
-   :environment env))
+  (make-load-form-saving-slots self :environment env))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type ty-class))
@@ -383,6 +381,7 @@
                               (cons (apply-substitution subst-list (car entry))
                                     (cdr entry)))
                             (ty-class-superclass-dict class))
+   :superclass-map (ty-class-superclass-map class)
    :docstring (ty-class-docstring class)
    :location (ty-class-location class)))
 
@@ -431,7 +430,9 @@
    :codegen-sym (ty-class-instance-codegen-sym instance)
    :method-codegen-syms (ty-class-instance-method-codegen-syms instance)))
 
-(defstruct (instance-environment (:include immutable-listmap)))
+(defstruct instance-environment
+  (instances    (make-immutable-listmap) :type immutable-listmap :read-only t)
+  (codegen-syms (make-immutable-map)     :type immutable-map     :read-only t))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type instance-environment))
@@ -502,6 +503,15 @@
 (declaim (sb-ext:freeze-type method-inline-environment))
 
 ;;;
+;;; Code environment
+;;;
+
+(defstruct (code-environment (:include immutable-map)))
+
+#+(and sbcl coalton-release)
+(declaim (sb-ext:freeze-type code-environment))
+
+;;;
 ;;; Environment
 ;;;
 
@@ -515,7 +525,8 @@
           instance-environment
           function-environment
           name-environment
-          method-inline-environment)))
+          method-inline-environment
+          code-environment)))
   (value-environment         (required 'value-environment)         :type value-environment         :read-only t)
   (type-environment          (required 'type-environment)          :type type-environment          :read-only t)
   (constructor-environment   (requried 'constructor-environment)   :type constructor-environment   :read-only t)
@@ -523,7 +534,9 @@
   (instance-environment      (required 'instance-environment)      :type instance-environment      :read-only t)
   (function-environment      (required 'function-environment)      :type function-environment      :read-only t)
   (name-environment          (required 'name-environment)          :type name-environment          :read-only t)
-  (method-inline-environment (required 'method-inline-environment) :type method-inline-environment :read-only t))
+  (method-inline-environment (required 'method-inline-environment) :type method-inline-environment :read-only t)
+  (code-environment          (required 'code-environment)          :type code-environment          :read-only t))
+
 
 (defmethod make-load-form ((self environment) &optional env)
   (make-load-form-saving-slots
@@ -536,13 +549,15 @@
      instance-environment
      function-environment
      name-environment
-     method-inline-environment)
+     method-inline-environment
+     code-environment)
    :environment env))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type environment))
 
 (defun make-default-environment ()
+  (declare (values environment))
   (make-environment
    (make-value-environment)
    (make-default-type-environment)
@@ -551,7 +566,8 @@
    (make-instance-environment)
    (make-function-environment)
    (make-name-environment)
-   (make-method-inline-environment)))
+   (make-method-inline-environment)
+   (make-code-environment)))
 
 (defun update-environment (env
                            &key
@@ -562,7 +578,8 @@
                              (instance-environment (environment-instance-environment env))
                              (function-environment (environment-function-environment env))
                              (name-environment (environment-name-environment env))
-                             (method-inline-environment (environment-method-inline-environment env)))
+                             (method-inline-environment (environment-method-inline-environment env))
+                             (code-environment (environment-code-environment env)))
   (declare (type environment env)
            (type value-environment value-environment)
            (type constructor-environment constructor-environment)
@@ -571,6 +588,7 @@
            (type function-environment function-environment)
            (type name-environment name-environment)
            (type method-inline-environment method-inline-environment)
+           (type code-environment code-environment)
            (values environment))
   (make-environment
    value-environment
@@ -580,37 +598,8 @@
    instance-environment
    function-environment
    name-environment
-   method-inline-environment))
-
-(defun environment-diff (env old-env)
-  (declare (type environment env)
-           (type environment old-env)
-           (values environment))
-  (make-environment
-   (immutable-map-diff (environment-value-environment env)
-                      (environment-value-environment old-env)
-                      #'make-value-environment)
-   (immutable-map-diff (environment-type-environment env)
-                      (environment-type-environment old-env)
-                      #'make-type-environment)
-   (immutable-map-diff (environment-constructor-environment env)
-                      (environment-constructor-environment old-env)
-                      #'make-constructor-environment)
-   (immutable-map-diff (environment-class-environment env)
-                      (environment-class-environment old-env)
-                      #'make-class-environment)
-   (immutable-listmap-diff (environment-instance-environment env)
-                     (environment-instance-environment old-env)
-                     #'make-instance-environment)
-   (immutable-map-diff (environment-function-environment env)
-                      (environment-function-environment old-env)
-                      #'make-function-environment)
-   (immutable-map-diff (environment-name-environment env)
-                      (environment-name-environment old-env)
-                      #'make-name-environment)
-   (immutable-map-diff (environment-method-inline-environment env)
-                       (environment-method-inline-environment old-env)
-                       #'make-method-inline-environment)))
+   method-inline-environment
+   code-environment))
 
 ;;;
 ;;; Methods
@@ -788,20 +777,27 @@
   (declare (type environment env)
            (type symbol class)
            (values fset:seq &optional))
-  (immutable-listmap-lookup (environment-instance-environment env) class :no-error no-error))
+  (immutable-listmap-lookup (instance-environment-instances (environment-instance-environment env)) class :no-error no-error))
 
 (defun lookup-class-instance (env pred &key no-error)
   (declare (type environment env))
   (let* ((pred-class (ty-predicate-class pred))
          (instances (lookup-class-instances env pred-class :no-error no-error)))
-    (fset:do-seq (instance instances :index index)
-      (declare (ignore index))
+    (fset:do-seq (instance instances)
       (handler-case
           (let ((subs (predicate-match (ty-class-instance-predicate instance) pred)))
             (return-from lookup-class-instance (values instance subs)))
         (predicate-unification-error () nil)))
     (unless no-error
       (error "Unknown instance for predicate ~A" pred))))
+
+(defun lookup-instance-by-codegen-sym (env codegen-sym &key no-error)
+  (declare (type environment env)
+           (type symbol codegen-sym))
+
+  (or (immutable-map-lookup (instance-environment-codegen-syms (environment-instance-environment env)) codegen-sym)
+   (unless no-error
+     (error "Unknown instance with codegen-sym ~A" codegen-sym))))
 
 
 (defun push-value-environment (env value-types)
@@ -890,23 +886,31 @@
           (return-from add-instance
             (update-environment
              env
-             :instance-environment (immutable-listmap-replace
-                                    (environment-instance-environment env)
-                                    class
-                                    index
-                                    value
-                                    #'make-instance-environment)))
+             :instance-environment (make-instance-environment
+                                    :instances (immutable-listmap-replace
+                                                (instance-environment-instances (environment-instance-environment env))
+                                                class
+                                                index
+                                                value)
+                                    :codegen-syms (immutable-map-set
+                                                   (instance-environment-codegen-syms (environment-instance-environment env))
+                                                   (ty-class-instance-codegen-sym value)
+                                                   value))))
           (error 'overlapping-instance-error
                  :inst1 (ty-class-instance-predicate value)
                  :inst2 (ty-class-instance-predicate inst)))))
 
   (update-environment
    env
-   :instance-environment (immutable-listmap-push
-                          (environment-instance-environment env)
-                          class
-                          value
-                          #'make-instance-environment)))
+   :instance-environment (make-instance-environment
+                          :instances (immutable-listmap-push
+                                      (instance-environment-instances (environment-instance-environment env))
+                                      class
+                                      value)
+                          :codegen-syms (immutable-map-set
+                                        (instance-environment-codegen-syms (environment-instance-environment env))
+                                        (ty-class-instance-codegen-sym value)
+                                        t))))
 
 (defun set-method-inline (env method instance codegen-sym)
   (declare (type environment env)
@@ -931,6 +935,31 @@
     (cons method instance))
    (unless no-error
      (error "Unable to find inline method for method ~A on instance ~A." method instance))))
+
+(defun set-code (env name code)
+  (declare (type environment env)
+           (type symbol name)
+           (type t code)
+           (values environment &optional))
+  (update-environment
+   env
+   :code-environment
+   (immutable-map-set
+    (environment-code-environment env)
+    name
+    code
+    #'make-code-environment)))
+
+(defun lookup-code (env name &key no-error)
+  (declare (type environment env)
+           (type symbol name)
+           (values t))
+  (or
+   (immutable-map-lookup
+    (environment-code-environment env)
+    name)
+   (unless no-error
+     (error "Unable to find code for function ~A." name))))
 
 ;;;
 ;;; Pretty printing

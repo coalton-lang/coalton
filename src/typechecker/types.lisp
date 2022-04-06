@@ -339,7 +339,7 @@ This requires a valid PPRINT-VARIABLE-CONTEXT")
          (pprint-ty stream (pprint-tvar ty))
          (format stream "#T~A" (tyvar-id (tvar-tyvar ty)))))
     (tcon
-     (format stream "~S" (tycon-name (tcon-tycon ty))))
+     (format stream "~A" (tycon-name (tcon-tycon ty))))
     (tapp
      (cond
        ((function-type-p ty) ;; Print function types

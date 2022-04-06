@@ -4,9 +4,6 @@
    #:coalton-impl/util
    #:coalton-impl/codegen/ast)
   (:import-from
-   #:coalton-impl/algorithm
-   #:immutable-map-data)
-  (:import-from
    #:coalton-impl/codegen/lisp-type
    #:lisp-type)
   (:import-from
@@ -33,26 +30,14 @@
    #:construct-function-entry
    #:apply-function-entry)
   (:import-from
-   #:coalton-impl/codegen/typecheck-node
-   #:typecheck-node)
-  (:import-from
-   #:coalton-impl/codegen/hoister
-   #:make-hoister
-   #:pop-final-hoist-point)
-  (:import-from
-   #:coalton-impl/codegen/transformations
-   #:canonicalize
-   #:pointfree
-   #:direct-application
-   #:inline-methods
-   #:static-dict-lift)
+   #:coalton-impl/codegen/optimizer
+   #:optimize-bindings)
   (:local-nicknames
    (#:tc #:coalton-impl/typechecker))
   (:export
    #:compile-translation-unit))
 
 (in-package #:coalton-impl/codegen/program)
-
 
 (defun compile-translation-unit (translation-unit env)
   (declare (type tc:translation-unit translation-unit)
@@ -79,101 +64,56 @@
             (loop :for instance :in (tc:translation-unit-instances translation-unit)
                   :append (compile-instance instance add-inline env))))
 
-         (hoister
-           (make-hoister))
+         (definition-names
+           (mapcar #'car definitions)))
 
-         (definitions
-           (append
-            (loop :for (name . node) :in definitions
-                  :for pointfree-node := (pointfree node)
-                  :for canonicalized-node := (canonicalize pointfree-node)
-                  :for method-inline-node := (inline-methods canonicalized-node env)
-                  :for lifted-node := (static-dict-lift method-inline-node hoister (tc:translation-unit-package translation-unit) env)
-                  :do (typecheck-node lifted-node env)
-                  :collect (cons name lifted-node))
-            (pop-final-hoist-point hoister)))
+    (multiple-value-bind (definitions env)
+        (optimize-bindings
+         definitions
+         (tc:translation-unit-package translation-unit)
+         (tc:translation-unit-attr-table translation-unit)
+         env)
 
-         (sccs (node-binding-sccs definitions)))
+      (let ((sccs (node-binding-sccs definitions)))
 
-    (setf env (update-function-env definitions env))
+            (values
+              `(progn
+                 ,@(loop :for name :in inline-funs
+                         :collect `(declaim (inline ,name)))
 
-    (let* ((function-table (make-function-table env))
+                 ,@(when (tc:translation-unit-types translation-unit)
+                     (list
+                      `(eval-when (:compile-toplevel :load-toplevel :execute)
+                         ,@(loop :for type :in (tc:translation-unit-types translation-unit)
+                                 :append (codegen-type-definition type env)))))
 
-           (definitions
-             (loop :for (name . node) :in definitions
-                   :for direct-node := (direct-application node function-table)
-                   :do (typecheck-node direct-node env)
-                   :collect (cons name direct-node))))
+                 ,@(when (tc:translation-unit-classes translation-unit)
+                     (list
+                      `(eval-when (:compile-toplevel :load-toplevel :execute)
+                         ,@(codegen-class-definitions
+                            (tc:translation-unit-classes translation-unit)
+                            env))))
 
-      (values
-       `(progn
-          ,@(loop :for name :in inline-funs
-                  :collect `(declaim (inline ,name)))
+                 #+sbcl
+                 ,@(when (eq sb-ext:*block-compile-default* :specified)
+                     (list
+                      `(declaim (sb-ext:start-block ,@definition-names))))
 
-          (eval-when (:compile-toplevel :load-toplevel :execute)
-            ,@(loop :for type :in (tc:translation-unit-types translation-unit)
-                    :append (codegen-type-definition type env)))
+                 ,@(loop :for scc :in sccs
+                         :for bindings
+                           := (remove-if-not
+                               (lambda (binding)
+                                 (find (car binding) scc))
+                               definitions)
+                         :append (compile-scc bindings env))
 
-          (eval-when (:compile-toplevel :load-toplevel :execute)
-            ,@(codegen-class-definitions
-               (tc:translation-unit-classes translation-unit)
-               env))
+                 #+sbcl
+                 ,@(when (eq sb-ext:*block-compile-default* :specified)
+                     (list
+                      `(declaim (sb-ext:end-block))))
 
-          #+sbcl
-          ,@(when (eq sb-ext:*block-compile-default* :specified)
-              (list `(declaim (sb-ext:start-block ,@(mapcar #'car definitions)))))
-
-          ,@(loop :for scc :in sccs
-                  :for bindings
-                    := (remove-if-not
-                        (lambda (binding)
-                          (find (car binding) scc))
-                        definitions)
-                  :append (compile-scc bindings env))
-
-          #+sbcl
-          ,@(when (eq sb-ext:*block-compile-default* :specified)
-              (list `(declaim (sb-ext:end-block))))
-
-          (values))
-       env))))
-
-(defun split-binding-definitions (bindings)
-  (let ((functions nil)
-        (variables nil))
-    (loop :for (name . node) :in bindings
-          :do (if (node-abstraction-p node)
-                  (push (cons name (length (node-abstraction-vars node))) functions)
-                  (push name variables)))
-    (values functions variables)))
-
-(defun update-function-env (bindings env)
-  (declare (type binding-list bindings)
-           (type tc:environment env)
-           (values tc:environment))
-  (multiple-value-bind (toplevel-functions toplevel-values)
-      (split-binding-definitions bindings)
-    (loop :for (name . arity) :in toplevel-functions
-          :do
-             (setf env
-                   (tc:set-function
-                    env
-                    name
-                    (tc:make-function-env-entry
-                     :name name
-                     :arity arity))))
-    (loop :for name :in toplevel-values
-          :do
-             (setf env (tc:unset-function env name))))
-  env)
-
-(defun make-function-table (env)
-  (declare (type tc:environment env)
-           (values hash-table))
-  (let ((table (make-hash-table)))
-    (fset:do-map (name entry (immutable-map-data (tc:environment-function-environment env)))
-      (setf (gethash name table) (tc:function-env-entry-arity entry)))
-    table))
+                 (values))
+              env)))))
 
 (defun compile-function (name node env)
   (declare (type symbol name)
@@ -232,9 +172,9 @@
 
                 (type
                  (format nil "~A :: ~A" name type)))
-        :append (when docstring
+        :append (when (and docstring (not coalton-impl::*coalton-skip-update*))
                   (list `(setf (documentation ',name 'variable)
                                ,docstring)))
-        :append (when (and entry (node-abstraction-p node))
+        :append (when (and entry (node-abstraction-p node) (not coalton-impl::*coalton-skip-update*))
                   (list `(setf (documentation ',name 'function)
                                ,docstring))))))

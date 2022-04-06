@@ -88,21 +88,27 @@ apply s type1 == type2")
     (coalton-type-error ()
       (error 'predicate-unification-error :pred1 pred1 :pred2 pred2))))
 
-(defun predicate-match (pred1 pred2)
+(defun predicate-match (pred1 pred2 &optional subs)
   "Returns a SUBSTITUTION-LIST of the most general substitutions required to unify PRED1 to PRED2."
-  (declare (type ty-predicate pred1 pred2))
+  (declare (type ty-predicate pred1 pred2)
+           (type substitution-list subs))
   (unless (eql (ty-predicate-class pred1)
                (ty-predicate-class pred2))
     (error 'predicate-unification-error :pred1 pred1 :pred2 pred2))
   (handler-case
-      (let ((subs nil))
-        (reduce #'merge-substitution-lists
-                (loop :for pred-type1 :in (ty-predicate-types pred1)
-                      :for pred-type2 :in (ty-predicate-types pred2)
-                      :collect (setf subs
-                                     (compose-substitution-lists
-                                      (match (apply-substitution subs pred-type1)
-                                           (apply-substitution subs pred-type2))
-                                      subs)))))
+      (merge-substitution-lists
+       (reduce #'merge-substitution-lists
+               (loop :for pred-type1 :in (apply-substitution
+                                          subs
+                                          (ty-predicate-types pred1))
+                     :for pred-type2 :in (apply-substitution
+                                          subs
+                                          (ty-predicate-types pred2))
+                     :collect (setf subs
+                                    (compose-substitution-lists
+                                     (match (apply-substitution subs pred-type1)
+                                       (apply-substitution subs pred-type2))
+                                     subs))))
+       subs)
     (coalton-type-error ()
       (error 'predicate-unification-error :pred1 pred1 :pred2 pred2))))

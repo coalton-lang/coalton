@@ -71,6 +71,15 @@
   "Get freshly instantiated predicates of scheme TY-SCHEME"
   (qualified-ty-predicates (fresh-inst ty-scheme)))
 
+(defun fresh-pred (pred)
+  "Returns PRED with fresh type variables"
+  (declare (type ty-predicate pred)
+           (values ty-predicate))
+  (let* ((var (make-variable))
+         (qual-ty (qualified-ty (list pred) var))
+         (scheme (quantify (type-variables (list pred var)) qual-ty)))
+    (car (qualified-ty-predicates (fresh-inst scheme)))))
+
 ;;;
 ;;; Methods
 ;;;

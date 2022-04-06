@@ -9,6 +9,7 @@
    #:pred-context                       ; TYPE
    #:pred-type                          ; FUNCTION
    #:resolve-dict                       ; FUNCTION
+   #:resolve-static-dict                ; FUNCTION
    ))
 
 (cl:in-package #:coalton-impl/codegen/resolve-instance)
@@ -76,8 +77,7 @@
            (node-variable
             (tc:make-function-type* arg-types (pred-type pred env))
             (tc:ty-class-instance-codegen-sym instance))
-           subdicts
-           :pure t)))))
+           subdicts)))))
 
 
 (defun superclass-accessors (pred ctx-pred env)
@@ -98,6 +98,7 @@
                         superclass-accessor)))
                 (lookup-pred pred superclass-pred ctx-pred superclass-accessor-symbol env)))
             (tc:ty-class-superclass-dict ctx-class))))
+
     superclass-ret))
 
 (defun lookup-pred (pred ctx-pred sub-pred method-accessor env)
@@ -136,6 +137,7 @@
 
     (let ((superclass-ret (superclass-accessors pred ctx-pred env)))
 
+
       (when superclass-ret
         (cons node superclass-ret)))))
 
@@ -150,10 +152,10 @@
 (defun build-call (args)
   (if (= 1 (length args))
       (car args)
-      (node-application
+      (node-field
        (tc:function-type-to (node-type (car args)))
-       (car args)
-       (list (build-call (cdr args))))))
+       (node-variable-value (car args))
+       (build-call (cdr args)))))
 
 (defun resolve-context-super (pred context env)
   "Search for PRED in all CONTEXT preds and return a node"

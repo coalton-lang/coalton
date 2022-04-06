@@ -24,11 +24,11 @@
    #:node-application-p                 ; FUNCTION
    #:node-application-rator             ; ACCESSOR
    #:node-application-rands             ; ACCESSOR
-   #:node-application-pure              ; ACCESSOR
    #:node-direct-application            ; STRUCT
    #:node-direct-application-rator-type ; ACCESSOR
    #:node-direct-application-rator      ; ACCESSOR
    #:node-direct-application-rands      ; ACCESSOR
+   #:node-direct-application-p          ; FUNCTION
    #:node-abstraction                   ; STRUCT
    #:node-abstraction-vars              ; ACCESSOR
    #:node-abstraction-subexpr           ; ACCESSOR
@@ -53,13 +53,26 @@
    #:node-match-branches                ; ACCESSOR
    #:node-seq                           ; STRUCT
    #:node-seq-nodes                     ; ACCESSOR
-   #:node-variables                     ; FUNCTION
-   #:node-binding-sccs                  ; FUNCTION
    #:node-return                        ; STRUCT
    #:node-return-expr                   ; ACCESSOR
+   #:node-field                         ; STRUCT
+   #:node-field-name                    ; ACCESSOR
+   #:node-field-dict                    ; ACCESSOR
+   #:node-field-p                       ; FUNCTION
+   #:node-variables                     ; FUNCTION
+   #:node-binding-sccs                  ; FUNCTION
+   #:node-free-p                        ; FUNCTION
+   #:node-application-symbol-rator      ; FUNCTION
+   #:node-rands                         ; FUNCTION
+   #:node-rator-name                    ; FUNCTION
+   #:node-rator-type                    ; FUNCTION
    ))
 
 (in-package #:coalton-impl/codegen/ast)
+
+;;;
+;;; Compiler Backend IR
+;;;
 
 (defstruct (node (:constructor nil))
   (type (required 'type) :type (or null tc:ty) :read-only t))
@@ -84,19 +97,27 @@
   "Literal values like 1 or \"hello\""
   (value (required 'value) :type literal-value :read-only t))
 
+(defmethod make-load-form ((self node-literal) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
 (defstruct (node-variable
             (:include node)
             (:constructor node-variable (type value)))
   "Variables like x or y"
   (value (required 'value) :type symbol :read-only t))
 
+(defmethod make-load-form ((self node-variable) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
 (defstruct (node-application
             (:include node)
-            (:constructor node-application (type rator rands &key (pure nil))))
+            (:constructor node-application (type rator rands)))
   "Function application (f x)"
   (rator (required 'rator) :type node      :read-only t)
-  (rands (required 'rands) :type node-list :read-only t)
-  (pure  (required 'pure)  :type boolean   :read-only t))
+  (rands (required 'rands) :type node-list :read-only t))
+
+(defmethod make-load-form ((self node-application) &optional env)
+  (make-load-form-saving-slots self :environment env))
 
 (defstruct (node-direct-application
             (:include node)
@@ -106,12 +127,18 @@
   (rator      (required 'rator)      :type symbol    :read-only t)
   (rands      (required 'rands)      :type node-list :read-only t))
 
+(defmethod make-load-form ((self node-direct-application) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
 (defstruct (node-abstraction
             (:include node)
             (:constructor node-abstraction (type vars subexpr)))
   "Lambda literals (fn (x) x)"
   (vars    (required 'vars)    :type symbol-list        :read-only t)
   (subexpr (required 'subexpr) :type node               :read-only t))
+
+(defmethod make-load-form ((self node-abstraction) &optional env)
+  (make-load-form-saving-slots self :environment env))
 
 (defstruct (node-bare-abstraction
             (:include node)
@@ -123,6 +150,8 @@ be a fully saturated call."
   (vars    (required 'vars)    :type symbol-list :read-only t)
   (subexpr (required 'subexpr) :type node        :read-only t))
 
+(defmethod make-load-form ((self node-bare-abstraction) &optional env)
+  (make-load-form-saving-slots self :environment env))
 
 (defstruct (node-let
             (:include node)
@@ -131,6 +160,9 @@ be a fully saturated call."
   (bindings (requried 'bindings) :type binding-list :read-only t)
   (subexpr  (required 'subexpr)  :type node         :read-only t))
 
+(defmethod make-load-form ((self node-let) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
 (defstruct (node-lisp
             (:include node)
             (:constructor node-lisp (type vars form)))
@@ -138,12 +170,18 @@ be a fully saturated call."
   (vars (required 'vars) :type list :read-only t)
   (form (required 'form) :type t    :read-only t))
 
+(defmethod make-load-form ((self node-lisp) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
 (defstruct (match-branch
             (:constructor match-branch (pattern bindings body)))
   "A branch of a match statement"
   (pattern  (required 'pattern)  :type pattern            :read-only t)
   (bindings (required 'bindings) :type tc:ty-binding-list :read-only t)
   (body     (required 'body)     :type node               :read-only t))
+
+(defmethod make-load-form ((self match-branch) &optional env)
+  (make-load-form-saving-slots self :environment env))
 
 (defun branch-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -159,17 +197,41 @@ be a fully saturated call."
   (expr (required 'expr) :type node :read-only t)
   (branches (required 'branches) :type branch-list :read-only t))
 
+(defmethod make-load-form ((self node-match) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
 (defstruct (node-seq
             (:include node)
             (:constructor node-seq (type nodes)))
   "A series of statements to be executed sequentially"
   (nodes (required 'nodes) :type node-list :read-only t))
 
+(defmethod make-load-form ((self node-seq) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
 (defstruct (node-return
             (:include node)
             (:constructor node-return (type expr)))
   "A return statement, used for early returns in functions"
   (expr (required 'expr) :type node :read-only t))
+
+(defmethod make-load-form ((self node-return) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
+(defstruct (node-field
+            (:include node)
+            (:constructor node-field (type name dict)))
+  "Accessing a superclass on a typeclass dictionary"
+  (name (required 'field) :type symbol :read-only t)
+  (dict (required 'dict)  :type node   :read-only t))
+
+(defmethod make-load-form ((self node-field) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
+
+;;;
+;;; Functions
+;;;
 
 (defun node-variables (node &key variable-namespace-only)
   "Returns a deduplicated list of symbols representing variables in
@@ -178,6 +240,71 @@ both CL namespaces appearing in NODE"
            (type boolean variable-namespace-only)
            (values symbol-list &optional))
   (remove-duplicates (node-variables-g node :variable-namespace-only variable-namespace-only) :test #'equalp))
+
+(defun node-binding-sccs (bindings)
+  "Returns a list of SCCs ordered from least to most depended on."
+  (declare (type binding-list bindings))
+  (let ((binding-names (mapcar #'car bindings)))
+    (reverse
+     (tarjan-scc
+      (loop :for (name . node) :in bindings
+            :collect (cons name (intersection binding-names (node-variables node))))))))
+
+(defun node-free-p (node bound-variables)
+  "Returns true if every variable in NODE is free with respect to BOUND-VARIABLES"
+  (declare (type node node)
+           (type symbol-list bound-variables)
+           (values boolean))
+  (null (intersection (node-variables node) bound-variables)))
+
+(defun node-application-symbol-rator (node)
+  "Returns the name of the function being called if it is known"
+  (declare (type (or node-application node-direct-application) node)
+           (values (or null symbol)))
+  (etypecase node
+    (node-direct-application
+     (node-direct-application-rator node))
+
+    (node-application
+     (unless (node-variable-p (node-application-rator node))
+       (return-from node-application-symbol-rator))
+
+     (node-variable-value (node-application-rator node)))))
+
+(defun node-rands (node)
+  (declare (type (or node-application node-direct-application))
+           (values node-list))
+  (etypecase node
+    (node-direct-application
+     (node-direct-application-rands node))
+
+    (node-application
+     (node-application-rands node))))
+
+(defun node-rator-name (node)
+  (declare (type (or node-application node-direct-application))
+           (values (or null symbol)))
+  (etypecase node
+    (node-direct-application
+     (node-direct-application-rator node))
+
+    (node-application
+     (when (node-variable-p (node-application-rator node))
+       (node-variable-value (node-application-rator node))))))
+
+(defun node-rator-type (node)
+  (declare (type (or node-application node-direct-application))
+           (values tc:ty))
+  (etypecase node
+    (node-direct-application
+     (node-direct-application-rator-type node))
+
+    (node-application
+     (node-type (node-application-rator node)))))
+
+;;;
+;;; Methods
+;;;
 
 (defgeneric node-variables-g (node &key variable-namespace-only)
   (:method ((node node-literal) &key variable-namespace-only)
@@ -253,14 +380,91 @@ both CL namespaces appearing in NODE"
 
   (:method ((node node-return) &key variable-namespace-only)
     (declare (values symbol-list &optional))
-    (node-variables-g (node-return-expr node) :variable-namespace-only variable-namespace-only)))
+    (node-variables-g (node-return-expr node) :variable-namespace-only variable-namespace-only))
 
+  (:method ((node node-field) &key variable-namespace-only)
+    (declare (values symbol-list &optional))
+    (node-variables-g (node-field-dict node) :variable-namespace-only variable-namespace-only)))
 
-(defun node-binding-sccs (bindings)
-  "Returns a list of SCCs ordered from least to most depended on."
-  (declare (type binding-list bindings))
-  (let ((binding-names (mapcar #'car bindings)))
-    (reverse
-     (tarjan-scc
-      (loop :for (name . node) :in bindings
-            :collect (cons name (intersection binding-names (node-variables node))))))))
+(defmethod tc:apply-substitution (subs (node node-literal))
+    (node-literal
+     (tc:apply-substitution subs (node-type node))
+     (node-literal-value node)))
+
+(defmethod tc:apply-substitution (subs (node node-variable))
+  (node-variable
+   (tc:apply-substitution subs (node-type node))
+   (node-variable-value node)))
+
+(defmethod tc:apply-substitution (subs (node node-application))
+  (node-application
+   (tc:apply-substitution subs (node-type node))
+   (tc:apply-substitution subs (node-application-rator node))
+   (mapcar
+    (lambda (node)
+      (tc:apply-substitution subs node))
+    (node-application-rands node))))
+
+(defmethod tc:apply-substitution (subs (node node-direct-application))
+  (node-direct-application
+   (tc:apply-substitution subs (node-type node))
+   (tc:apply-substitution subs (node-direct-application-rator-type node))
+   (node-direct-application-rator node)
+   (mapcar
+    (lambda (node)
+      (tc:apply-substitution subs node))
+    (node-direct-application-rands node))))
+
+(defmethod tc:apply-substitution (subs (node node-abstraction))
+  (node-abstraction
+   (tc:apply-substitution subs (node-type node))
+   (node-abstraction-vars node)
+   (tc:apply-substitution subs (node-abstraction-subexpr node))))
+
+(defmethod tc:apply-substitution (subs (node node-let))
+  (node-let
+   (tc:apply-substitution subs (node-type node))
+   (loop :for (name . node) :in (node-let-bindings node)
+         :collect (cons name (tc:apply-substitution subs node)))
+   (tc:apply-substitution subs (node-let-subexpr node))))
+
+(defmethod tc:apply-substitution (subs (node node-lisp))
+  (node-lisp
+   (tc:apply-substitution subs (node-type node))
+   (node-lisp-vars node)
+   (node-lisp-form node)))
+
+(defmethod tc:apply-substitution (subs (node match-branch))
+  (match-branch
+   (match-branch-pattern node)
+   (loop :for (name . ty) :in (match-branch-bindings node)
+         :collect (cons name (tc:apply-substitution subs ty)))
+   (tc:apply-substitution subs (match-branch-body node))))
+
+(defmethod tc:apply-substitution (subs (node node-match))
+  (node-match
+   (tc:apply-substitution subs (node-type node))
+   (tc:apply-substitution subs (node-match-expr node))
+   (mapcar
+    (lambda (node)
+      (tc:apply-substitution subs node))
+    (node-match-branches node))))
+
+(defmethod tc:apply-substitution (subs (node node-seq))
+  (node-seq
+   (tc:apply-substitution subs (node-type node))
+   (mapcar
+    (lambda (node)
+      (tc:apply-substitution subs node))
+    (node-seq-nodes node))))
+
+(defmethod tc:apply-substitution (subs (node node-return))
+  (node-return
+   (tc:apply-substitution subs (node-type node))
+   (tc:apply-substitution subs (node-return-expr node))))
+
+(defmethod tc:apply-substitution (subs (node node-field))
+  (node-field
+   (tc:apply-substitution subs (node-type node))
+   (node-field-name node)
+   (tc:apply-substitution subs (node-field-dict node))))

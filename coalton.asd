@@ -29,7 +29,6 @@
   :pathname "src/"
   :serial t
   :components ((:file "package")
-               (:file "unlock-package" :if-feature :sb-package-locks)
                (:file "settings")
                (:file "utilities")
                (:file "global-lexical")
@@ -70,6 +69,7 @@
                (:module "codegen"
                 :serial t
                 :components ((:file "ast")
+                             (:file "ast-subsitutions")
                              (:file "resolve-instance")
                              (:file "typecheck-node")
                              (:file "hoister")
@@ -83,12 +83,15 @@
                              (:file "codegen-expression")
                              (:file "codegen-type-definition")
                              (:file "codegen-class")
+                             (:file "monomorphise")
+                             (:file "optimizer")
                              (:file "program")
                              (:file "package")))
                (:file "toplevel-define-type")
                (:file "toplevel-declare")
                (:file "toplevel-define")
                (:file "toplevel-define-instance")
+               (:file "unlock-package" :if-feature :sb-package-locks)
                (:file "coalton")
                (:file "debug")
                (:file "faux-macros")
