@@ -9,7 +9,10 @@
   (:export
    #:fib
    #:fib-fixnum
-   #:fib-generic-wrapped))
+   #:fib-generic-wrapped
+   #:fib-monomorphised
+   #:fib-generic-optional
+   #:fib-monomorphised-optional))
 
 (cl:in-package #:coalton-benchmarks)
 
@@ -36,13 +39,6 @@
               (coalton-benchmarks/native:fib 20)))
   (report trivial-benchmark::*current-timer*))
 
-(define-benchmark recursive-fib-fixnum ()
-  (declare (optimize speed))
-  (loop :repeat 1000
-        :do (with-benchmark-sampling
-              (coalton-benchmarks/native:fib-fixnum 20)))
-  (report trivial-benchmark::*current-timer*))
-
 (define-benchmark recursive-fib-generic ()
   (declare (optimize speed))
   (loop :repeat 1000
@@ -57,11 +53,33 @@
               (lisp-fib 20)))
   (report trivial-benchmark::*current-timer*))
 
-(define-benchmark recursive-fib-lisp-fixnum ()
+
+(define-benchmark recursive-fib-monomorphised ()
   (declare (optimize speed))
   (loop :repeat 1000
         :do (with-benchmark-sampling
-              (lisp-fixnum 20)))
+              (coalton-benchmarks/native:fib-monomorphised 20)))
+  (report trivial-benchmark::*current-timer*))
+
+;;
+;; Benchmarks on optional are disabled by default because they compute the 10th
+;; instead of the 20th fibonacci number. Computing the 20th was exausting the heap.
+;;
+
+#+ignore
+(define-benchmark recursive-fib-generic-optional ()
+  (declare (optimize speed))
+  (loop :repeat 1000
+        :do (with-benchmark-sampling
+              (coalton-benchmarks/native:fib-generic-optional 10)))
+  (report trivial-benchmark::*current-timer*))
+
+#+ignore
+(define-benchmark recursive-fib-monomorphised-optional ()
+  (declare (optimize speed))
+  (loop :repeat 1000
+        :do (with-benchmark-sampling
+              (coalton-benchmarks/native:fib-monomorphised-optional 10)))
   (report trivial-benchmark::*current-timer*))
 
 (defun lisp-fib (n)
@@ -76,18 +94,6 @@
 
   (+ (lisp-fib (- n 1)) (lisp-fib (- n 2))))
  
-(defun lisp-fixnum (n)
-  (declare (type fixnum n)
-           (values fixnum)
-           (optimize (speed 3) (safety 0)))
-  (when (= n 0)
-    (return-from lisp-fixnum 0))
-
-  (when (= n 1)
-    (return-from lisp-fixnum 1))
-
-  (+ (lisp-fixnum (- n 1)) (lisp-fixnum (- n 2))))
-
 (cl:in-package #:coalton-benchmarks/native)
 
 (cl:declaim (cl:optimize (cl:speed 3) (cl:safety 0)))
@@ -103,16 +109,6 @@
 
     (+ (fib (- n 1)) (fib (- n 2))))
 
-  (declare fib-fixnum (IFix -> IFix))
-  (define (fib-fixnum n)
-    (when (== n 0)
-      (return 0))
-
-    (when (== n 1)
-      (return 1))
-
-    (+ (fib-fixnum (- n 1)) (fib-fixnum (- n 2))))
-
   (declare fib-generic (Num :a => :a -> :a))
   (define (fib-generic n)
     (when (== n 0)
@@ -124,4 +120,18 @@
     (+ (fib-generic (- n 1)) (fib-generic (- n 2))))
 
   (declare fib-generic-wrapped (Integer -> Integer))
-  (define fib-generic-wrapped fib-generic))
+  (define fib-generic-wrapped fib-generic)
+
+  (monomorphise)
+  (declare fib-monomorphised (Integer -> Integer))
+  (define fib-monomorphised fib-generic)
+
+  (declare fib-generic-optional (Integer -> Optional Integer))
+  (define (fib-generic-optional x)
+    (fib-generic (Some x)))
+
+  (monomorphise)
+  (declare fib-monomorphised-optional (Integer -> Optional Integer))
+  (define (fib-monomorphised-optional x) 
+    (fib-generic (Some x))))
+

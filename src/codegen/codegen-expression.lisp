@@ -171,7 +171,13 @@
 
   (:method ((expr node-return) current-function env)
     (assert (not (null current-function)))
-    `(return-from ,current-function ,(codegen-expression (node-return-expr expr) current-function env))))
+    `(return-from ,current-function ,(codegen-expression (node-return-expr expr) current-function env)))
+
+  (:method ((expr node-field) current-function env)
+    (declare (type tc:environment env)
+             (type (or null symbol) current-function))
+    `(,(node-field-name expr)
+      ,(codegen-expression (node-field-dict expr) current-function env))))
 
 (defun codegen-let (node sccs current-function local-vars env)
   (declare (type node-let node)

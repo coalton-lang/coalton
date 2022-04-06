@@ -4,224 +4,56 @@
    #:coalton-impl/util
    #:coalton-impl/codegen/ast)
   (:import-from
-   #:coalton-impl/codegen/hoister
-   #:hoister
-   #:push-hoist-point
-   #:pop-hoist-point
-   #:hoist-definition)
+   #:coalton-impl/algorithm
+   #:immutable-map-data)
   (:local-nicknames
-   (#:tc #:coalton-impl/typechecker)
-   (#:ast #:coalton-impl/ast))
+   (#:tc #:coalton-impl/typechecker))
   (:export
-   #:canonicalize
-   #:pointfree
-   #:direct-application
-   #:inline-methods
-   #:static-dict-lift))
+   #:traverse
+   #:traverse-bindings
+   #:update-function-env
+   #:make-function-t))
 
 (in-package #:coalton-impl/codegen/transformations)
 
-(defun pointfree (node)
-  (declare (type node node)
-           (values node))
-  (declare (type node node)
-           (values node))
-  (if (node-abstraction-p node)
-      (return-from pointfree node))
+(defun traverse-bindings (bindings funs)
+  (declare (type binding-list bindings)
+           (values binding-list))
+  (loop :for (name . node) :in bindings
+        :collect (cons name (traverse node funs nil))))
 
-  (if (not (tc:function-type-p (node-type node)))
-      (return-from pointfree node))
-
-  (let* ((arguments (tc:function-type-arguments (node-type node)))
-         (argument-names (loop :for argument :in arguments
-                               :collect (gensym))))
-
-         (node-abstraction
-           (node-type node)
-           argument-names
-           (node-application
-            (tc:function-return-type (node-type node))
-            node
-            (loop :for ty :in arguments
-                  :for name :in argument-names
-                  :collect (node-variable ty name))))))
-
-(defun canonicalize (node)
-  (declare (type node node)
-           (values node &optional))
-  (labels ((rewrite-application (node)
-             (let ((rator (node-application-rator node))
-                   (rands (node-application-rands node)))
-               (when (node-application-p rator)
-                 (node-application
-                  (node-type node)
-                  (node-application-rator rator)
-                  (append
-                   (node-application-rands rator)
-                   rands))))))
-    (traverse
-     node
-     (list
-      (cons :application #'rewrite-application)))))
-
-(defun direct-application (node table)
-  (declare (type node node)
-           (type hash-table table)
-           (values node &optional))
-  (labels ((rewrite-direct-application (node)
-             (when (node-variable-p (node-application-rator node))
-               (let ((name (node-variable-value (node-application-rator node))))
-                 (when (and (gethash name table)
-                            (equalp (gethash name table)
-                                    (length (node-application-rands node))))
-                   (return-from rewrite-direct-application
-                     (node-direct-application
-                      (node-type node)
-                      (node-type (node-application-rator node))
-                      name
-                      (mapcar
-                       (lambda (node)
-                         (direct-application node table))
-                       (node-application-rands node))))))))
-
-           (add-local-funs (node)
-             (loop :for (name . node) :in (node-let-bindings node)
-                   :when (node-abstraction-p node) :do
-                     (setf (gethash name table) (length (node-abstraction-vars node))))))
-
-    (traverse
-     node
-     (list
-      (cons :application #'rewrite-direct-application)
-      (cons :before-let #'add-local-funs)))))
-
-(defun inline-methods (node env)
-  (labels ((inline-method (node)
-             (let ((rator (node-application-rator node))
-                   (rands (node-application-rands node)))
-               (when (node-variable-p rator)
-                 (let (dict rands_)
-                   (cond
-                     ((node-variable-p (first rands))
-                      (setf dict (node-variable-value (first rands)))
-                      (setf rands_ (cdr rands)))
-
-                     ((and (node-application-p (first rands))
-                           (node-variable-p (node-application-rator (first rands))))
-                      (setf dict (node-variable-value (node-application-rator (first rands))))
-                      (setf rands_ (append (node-application-rands (first rands)) (cdr rands))))
-
-                     (t
-                      (return-from inline-method nil)))
-
-                   (let* ((method-name (node-variable-value rator))
-                          (inline-method-name (tc:lookup-method-inline env method-name dict :no-error t)))
-
-                     (when inline-method-name
-                       (if (null rands_)
-                           (node-variable
-                            (node-type node)
-                            inline-method-name)
-
-                           (node-application
-                            (node-type node)
-                            (node-variable
-                             (tc:make-function-type*
-                              (mapcar #'node-type rands_)
-                              (node-type node))
-                             inline-method-name)
-                            rands_))))))))) 
-    (traverse
-     node
-     (list
-      (cons :application #'inline-method)))))
-
-(defun static-dict-lift (node hoister package env)
-  (declare (type node node)
-           (type hoister hoister)
-           (type package package)
-           (ignore env))
-  (labels ((lift-static-dict (node)
-             ;; Only pure functions can be lifted
-             (unless (node-application-pure node)
-               (return-from lift-static-dict nil))
-
-             (hoist-definition node package hoister))
-
-           (handle-push-hoist-point (node)
-             (push-hoist-point (node-abstraction-vars node) hoister)
-             nil)
-
-           (handle-push-bare-hoist-point (node)
-             (push-hoist-point (node-bare-abstraction-vars node) hoister)
-             nil)
-
-           (handle-pop-hoist-point (node)
-             ;; If definitions were hoisted to this lambda
-             ;; then add them to the ast
-             (let ((hoisted (pop-hoist-point hoister)))
-               (if hoisted
-                   (node-abstraction
-                    (node-type node)
-                    (node-abstraction-vars node)
-                    (node-let
-                     (node-type (node-abstraction-subexpr node))
-                     hoisted
-                     (node-abstraction-subexpr node)))
-
-                   node)))
-
-           (handle-pop-bare-hoist-point (node)
-             (let ((hoisted (pop-hoist-point hoister)))
-               (if hoisted
-                   (node-bare-abstraction
-                    (node-type node)
-                    (node-bare-abstraction-vars node)
-                    (node-let
-                     (node-type (node-bare-abstraction-subexpr node))
-                     hoisted
-                     (node-bare-abstraction-subexpr node)))
-
-                   node))))
-
-    (traverse
-     node
-     (list
-      (cons :application #'lift-static-dict)
-      (cons :before-abstraction #'handle-push-hoist-point)
-      (cons :abstraction #'handle-pop-hoist-point)
-      (cons :before-bare-abstraction #'handle-push-bare-hoist-point)
-      (cons :bare-abstraction #'handle-pop-bare-hoist-point)))))
-
-(defun call-if (node key funs)
+(defun call-if (node key funs bound-variables)
   (declare (type node node)
            (type symbol key)
            (values node &optional))
   (let ((f (cdr (find key funs :key #'car))))
     (if f
-        (or (funcall f node) node)
+        (or (funcall f node :bound-variables bound-variables) node)
         node)))
 
-(defgeneric traverse (node funs)
-  (:method ((node node-literal) funs)
-    (call-if node :literal funs))
+(defgeneric traverse (node funs bound-variables)
+  (:method ((node node-literal) funs bound-variables)
+    (declare (type symbol-list bound-variables))
+    (call-if node :literal funs bound-variables))
 
-  (:method ((node node-variable) funs)
-    (call-if node :variable funs))
+  (:method ((node node-variable) funs bound-variables)
+    (declare (type symbol-list bound-variables))
+    (call-if node :variable funs bound-variables))
 
-  (:method ((node node-application) funs)
+  (:method ((node node-application) funs bound-variables)
+    (declare (type symbol-list bound-variables))
     (let ((node
             (node-application
              (node-type node)
-             (traverse (node-application-rator node) funs)
+             (traverse (node-application-rator node) funs bound-variables)
              (mapcar
               (lambda (node)
-                (traverse node funs))
-              (node-application-rands node))
-             :pure (node-application-pure node))))
-      (call-if node :application funs)))
+                (traverse node funs bound-variables))
+              (node-application-rands node)))))
+      (call-if node :application funs bound-variables)))
 
-  (:method ((node node-direct-application) funs)
+  (:method ((node node-direct-application) funs bound-variables)
+    (declare (type symbol-list bound-variables))
     (let ((node
             (node-direct-application
              (node-type node)
@@ -229,71 +61,126 @@
              (node-direct-application-rator node)
              (mapcar
               (lambda (node)
-                (traverse node funs))
+                (traverse node funs bound-variables))
               (node-direct-application-rands node)))))
-      (call-if node :direct-application funs)))
+      (call-if node :direct-application funs bound-variables)))
 
-  (:method ((node node-abstraction) funs)
-    (call-if node :before-abstraction funs)
+  (:method ((node node-abstraction) funs bound-variables)
+    (declare (type symbol-list bound-variables))
+    (call-if node :before-abstraction funs bound-variables)
     (let ((node
             (node-abstraction
              (node-type node)
              (node-abstraction-vars node)
-             (traverse (node-abstraction-subexpr node) funs))))
-      (call-if node :abstraction funs)))
+             (traverse (node-abstraction-subexpr node) funs (append (node-abstraction-vars node) bound-variables)))))
+      (call-if node :abstraction funs bound-variables)))
 
-  (:method ((node node-bare-abstraction) funs)
-    (call-if node :before-bare-abstraction funs)
+  (:method ((node node-bare-abstraction) funs bound-variables)
+    (declare (type symbol-list bound-variables))
+    (call-if node :before-bare-abstraction funs bound-variables)
     (let ((node
             (node-bare-abstraction
              (node-type node)
              (node-bare-abstraction-vars node)
-             (traverse (node-bare-abstraction-subexpr node) funs))))
-      (call-if node :bare-abstraction funs)))
+             (traverse (node-bare-abstraction-subexpr node) funs (append (node-bare-abstraction-vars node) bound-variables)))))
+      (call-if node :bare-abstraction funs bound-variables)))
 
-  (:method ((node node-let) funs)
-    (call-if node :before-let funs)
-    (let ((node
-            (node-let
-             (node-type node)
-             (loop :for (name . node) :in (node-let-bindings node)
-                   :collect (cons name (traverse node funs)))
-             (traverse (node-let-subexpr node) funs))))
-      (call-if node :let funs)))
+  (:method ((node node-let) funs bound-variables)
+    (declare (type symbol-list bound-variables))
+    (call-if node :before-let funs bound-variables)
+    (let* ((new-bound-variables (append (mapcar #'car (node-let-bindings node)) bound-variables))
+           (node
+             (node-let
+              (node-type node)
+              (loop :for (name . node) :in (node-let-bindings node)
+                    :collect (cons name (traverse node funs new-bound-variables)))
+              (traverse (node-let-subexpr node) funs new-bound-variables))))
+      (call-if node :let funs bound-variables)))
 
-  (:method ((node node-lisp) funs)
-    (call-if node :lisp funs))
+  (:method ((node node-lisp) funs bound-variables)
+    (declare (type symbol-list bound-variables))
+    (call-if node :lisp funs bound-variables))
 
-  (:method ((node match-branch) funs)
+  (:method ((node match-branch) funs bound-variables)
+    (declare (type symbol-list bound-variables))
     (match-branch
      (match-branch-pattern node)
      (match-branch-bindings node)
-     (traverse (match-branch-body node) funs)))
+     (traverse (match-branch-body node) funs (append (mapcar #'car (match-branch-bindings node)) bound-variables))))
 
-  (:method ((node node-match) funs)
+  (:method ((node node-match) funs bound-variables)
+    (declare (type symbol-list bound-variables))
     (let ((node
             (node-match
              (node-type node)
-             (traverse (node-match-expr node) funs)
+             (traverse (node-match-expr node) funs bound-variables)
              (mapcar
               (lambda (node)
-                (traverse node funs))
+                (traverse node funs bound-variables))
               (node-match-branches node)))))
-      (call-if node :match funs)))
+      (call-if node :match funs bound-variables)))
 
-  (:method ((node node-seq) funs)
+  (:method ((node node-seq) funs bound-variables)
+    (declare (type symbol-list bound-variables))
     (let ((node
             (node-seq
              (node-type node)
              (mapcar
               (lambda (node)
-                (traverse node funs))
+                (traverse node funs bound-variables))
               (node-seq-nodes node)))))
-      (call-if node :seq funs)))
+      (call-if node :seq funs bound-variables)))
 
-  (:method ((node node-return) funs)
+  (:method ((node node-return) funs bound-variables)
+    (declare (type symbol-list bound-variables))
     (let ((node
             (node-return
              (node-type node)
-             (traverse (node-return-expr node) funs))))
-      (call-if node :return funs))))
+             (traverse (node-return-expr node) funs bound-variables))))
+      (call-if node :return funs bound-variables)))
+
+  (:method ((node node-field) funs bound-variables)
+    (declare (type symbol-list bound-variables))
+    (let ((node
+            (node-field
+             (node-type node)
+             (node-field-name node)
+             (traverse (node-field-dict node) funs bound-variables))))
+      (call-if node :field funs bound-variables))))
+
+(defun split-binding-definitions (bindings)
+  (let ((functions nil)
+        (variables nil))
+    (loop :for (name . node) :in bindings
+          :do (if (node-abstraction-p node)
+                  (push (cons name (length (node-abstraction-vars node))) functions)
+                  (push name variables)))
+    (values functions variables)))
+
+(defun update-function-env (bindings env)
+  (declare (type binding-list bindings)
+           (type tc:environment env)
+           (values tc:environment))
+  (multiple-value-bind (toplevel-functions toplevel-values)
+      (split-binding-definitions bindings)
+    (loop :for (name . arity) :in toplevel-functions
+          :do
+             (setf env
+                   (tc:set-function
+                    env
+                    name
+                    (tc:make-function-env-entry
+                     :name name
+                     :arity arity))))
+    (loop :for name :in toplevel-values
+          :do
+             (setf env (tc:unset-function env name))))
+  env)
+
+(defun make-function-table (env)
+  (declare (type tc:environment env)
+           (values hash-table))
+  (let ((table (make-hash-table)))
+    (fset:do-map (name entry (immutable-map-data (tc:environment-function-environment env)))
+      (setf (gethash name table) (tc:function-env-entry-arity entry)))
+    table))

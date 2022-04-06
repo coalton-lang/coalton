@@ -38,7 +38,11 @@ either (INDICATOR VALUE) or just INDICATOR; the short form means (INDICATOR T)."
  (coalton:define-instance   :toplevel)
 
  (coalton:repr              :toplevel
-                            (:must-precede-one-of (coalton:define-type))))
+                            (:must-precede-one-of (coalton:define-type)))
+
+ (coalton:monomorphise      :toplevel
+                            (:must-precede-one-of (coalton:declare
+                                                   coalton:define))))
 
 ;;; Entry Point
 
@@ -52,7 +56,8 @@ The return value is a plist containing (1) a hash table of reprs associated with
 types defined in FORMS; (2) for every toplevel operator, a list of the subforms
 in FORMS that begin with that operator."
   (let ((plist
-          (list 'repr-table (make-hash-table))))
+          (list 'repr-table (make-hash-table)
+                'attr-table (make-hash-table))))
     (labels
         ((operator (form)
            (handler-case
@@ -72,6 +77,10 @@ in FORMS that begin with that operator."
              (setf type (car type)))
 
            (setf (gethash type (getf plist 'repr-table)) (cons specifier arg)))
+
+         (handle-monomorphise (definition-name)
+           (push :monomorphise (gethash definition-name (getf plist 'attr-table))))
+
          (walk (forms)
            (loop
              :until (null forms)
@@ -102,7 +111,15 @@ in FORMS that begin with that operator."
                     (when (and (not (eq (cadr form) :native)) (caddr form))
                       (error-parsing form "Wrong number of arguments"))
 
-                    (establish-repr (cadr form) (cadr next-form) (caddr form)))))))
+                    (establish-repr (cadr form) (cadr next-form) (caddr form)))
+
+                   (coalton:monomorphise
+                    (unless (= (length form) 1)
+                      (error-parsing form "Wrong number of arguments"))
+
+                    (if (listp (cadr next-form))
+                        (handle-monomorphise (first (cadr next-form)))
+                        (handle-monomorphise (cadr next-form))))))))
       ;; Populate PLIST...
       (walk forms)
       ;; ...and return it, with its values reversed to reflect the order that
@@ -207,6 +224,7 @@ in FORMS that begin with that operator."
                          ((coalton:define-class class-defines))
                          ((coalton:define-instance instance-defines))
                          ((repr-table repr-table))
+                         ((attr-table attr-table))
                        &allow-other-keys)
       (collect-toplevel-forms toplevel-forms)
 
@@ -241,6 +259,7 @@ in FORMS that begin with that operator."
                       :definitions toplevel-bindings
                       :instances instance-definitions
                       :classes classes
+                      :attr-table (or attr-table (make-hash-table)) ; "fix" style warning
                       :package package)))
 
               (multiple-value-bind (program env)

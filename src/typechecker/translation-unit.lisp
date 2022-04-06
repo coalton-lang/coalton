@@ -1,11 +1,12 @@
 (in-package #:coalton-impl/typechecker)
 
 (defstruct translation-unit
-  (types       (required 'types)       :type type-definition-list     :read-only t)
-  (definitions (required 'definitions) :type typed-binding-list       :read-only t)
-  (instances   (required 'instances)   :type instance-definition-list :read-only t)
-  (classes     (required 'classes)     :type ty-class-list            :read-only t)
-  (package     (required 'package)     :type package                  :read-only t))
+  (types       nil                 :type type-definition-list     :read-only t)
+  (definitions nil                 :type typed-binding-list       :read-only t)
+  (instances   nil                 :type instance-definition-list :read-only t)
+  (classes     nil                 :type ty-class-list            :read-only t)
+  (attr-table  (make-hash-table)   :type hash-table               :read-only t)
+  (package     (required 'package) :type package                  :read-only t))
 
 ;; FUNCTION ENV
 
@@ -30,6 +31,7 @@
         :for function-entry := (lookup-function env name :no-error t)
         :collect `(set-value-type env ',name ,(lookup-value-type env name))
         :collect `(set-name env ',name ,(lookup-name env name))
+        :collect `(set-code env ',name ,(lookup-code env name))
         :collect (if function-entry
                      `(set-function env ',name ,function-entry)
                      `(unset-function env ',name))))
@@ -48,6 +50,7 @@
                       :for value :being :the :hash-values :of method-codegen-syms
                       :for function-entry := (lookup-function env value :no-error t)
                       :collect `(set-method-inline env ',key ',codegen-sym ',value)
+                      :collect `(set-code env ',value ,(lookup-code env value))
                       :collect (if function-entry
                                    `(set-function env ',value ,function-entry)
                                    `(unset-function env ',value)))))
@@ -65,16 +68,7 @@
                       :collect `(set-name env ',name ,(lookup-name env name))
                       :collect (if function-entry
                                    `(set-function env ',name ,function-entry)
-                                   `(unset-function env ',name)))
-        :append (loop :for (pred . name) :in (ty-class-superclass-dict class)
-                      :for codegen-sym := (ty-class-codegen-sym class)
-                      :for accessor
-                        := (alexandria:format-symbol
-                            (symbol-package codegen-sym)
-                            "~A-~A"
-                            codegen-sym
-                            name)
-                      :collect `(set-function env ',accessor ,(lookup-function env accessor)))))
+                                   `(unset-function env ',name)))))
 
 (defun generate-diff (translation-unit env env_name)
   `(eval-when (:load-toplevel)

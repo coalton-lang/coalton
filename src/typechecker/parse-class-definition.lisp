@@ -158,21 +158,6 @@
                                                                 :arity class-arity)))
                                        (setf env (unset-function env (ty-class-codegen-sym class)))))
 
-                                 ;; Add the class superclass accessors to the function env
-                                 (loop :for (pred . name) :in (ty-class-superclass-dict class)
-                                       :for codegen-sym := (ty-class-codegen-sym class)
-                                       :for accessor
-                                         := (alexandria:format-symbol
-                                             (symbol-package codegen-sym)
-                                             "~A-~A"
-                                             codegen-sym
-                                             name)
-                                       :do (setf env (set-function env
-                                                                   accessor
-                                                                   (make-function-env-entry
-                                                                    :name accessor
-                                                                    :arity 1))))
-
                                  (dolist (method methods)
                                    (setf env (set-value-type env (car method) (cdr method)))
 
@@ -270,12 +255,23 @@
       (setf ksubs (kind-monomorphise-subs (kind-variables predicate) ksubs))
       (setf predicate (apply-ksubstitution ksubs predicate))
 
-      (let ((superclasses (apply-ksubstitution ksubs superclasses))
+      (let* ((superclasses (apply-ksubstitution ksubs superclasses))
 
-            (unqualifed-methods
-              (loop :for (name . type) :in unqualifed-methods
-                    :for ksubs := (kind-monomorphise-subs (kind-variables type) ksubs)
-                    :collect (cons name (apply-ksubstitution ksubs type)))))
+             (unqualifed-methods
+               (loop :for (name . type) :in unqualifed-methods
+                     :for ksubs := (kind-monomorphise-subs (kind-variables type) ksubs)
+                     :collect (cons name (apply-ksubstitution ksubs type))))
+
+             (superclass-dict
+               (loop :for super :in superclasses
+                                 :for i :from 0
+                                 :collect (cons super
+                                                (alexandria:format-symbol
+                                                 (symbol-package class-name)
+                                                 (format nil "SUPER-~D" i)))))
+
+             (codegen-sym
+               (alexandria:format-symbol (symbol-package class-name) "CLASS/~A" class-name)))
 
         (values
          (ty-class
@@ -284,13 +280,18 @@
           :superclasses superclasses
           :unqualified-methods (loop :for (name . type) :in  unqualifed-methods
                                      :collect (cons name (quantify nil (apply-ksubstitution ksubs type))))
-          :codegen-sym (alexandria:format-symbol (symbol-package class-name) "CLASS/~A" class-name)
-          :superclass-dict (loop :for super :in superclasses
-                                 :for i :from 0
-                                 :collect (cons super
-                                                (alexandria:format-symbol
-                                                 (symbol-package class-name)
-                                                 (format nil "SUPER-~D" i))))
+          :codegen-sym codegen-sym
+          :superclass-dict superclass-dict
+          :superclass-map (let ((table (make-hash-table)))
+                            (loop :for (pred . super-name) :in superclass-dict
+                                  :for prefixed-name
+                                    := (alexandria:format-symbol
+                                        (symbol-package class-name)
+                                        "~A-~A"
+                                        codegen-sym
+                                        super-name)
+                                  :do (setf (gethash prefixed-name table) super-name))
+                            table)
           :docstring docstring
           :location (or *compile-file-pathname* *load-truename*))
          (loop :for (name . qual-ty) :in unqualifed-methods

@@ -22,6 +22,9 @@
      (:constructor pattern-var (id)))
   (id (required 'id) :type symbol :read-only t))
 
+(defmethod make-load-form ((self pattern-var) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type pattern-var))
 
@@ -29,6 +32,9 @@
     (pattern-wildcard
      (:include pattern)
      (:constructor pattern-wildcard)))
+
+(defmethod make-load-form ((self pattern-wildcard) &optional env)
+  (make-load-form-saving-slots self :environment env))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type pattern-wildcard))
@@ -39,6 +45,9 @@
      (:constructor pattern-literal (value)))
   (value (required 'value) :type literal-value :read-only t))
 
+(defmethod make-load-form ((self pattern-literal) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type pattern-literal))
 
@@ -48,6 +57,9 @@
      (:constructor pattern-constructor (name patterns)))
   (name      (required 'name) :type symbol       :read-only t)
   (patterns  (required 'type) :type pattern-list :read-only t))
+
+(defmethod make-load-form ((self pattern-constructor) &optional env)
+  (make-load-form-saving-slots self :environment env))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type pattern-constructor))
