@@ -21,12 +21,11 @@
   (:report
    (lambda (c s)
      (let ((*print-circle* nil))
-       (with-pprint-variable-context ()
-         (format s "~A~%in ~A"
-                 (coalton-type-error-suberror c)
-                 (apply #'format nil
-                        (coalton-type-error-context-form c)
-                        (coalton-type-error-context-args c))))))))
+       (format s "~A~%in ~A"
+               (coalton-type-error-suberror c)
+               (apply #'format nil
+                      (coalton-type-error-context-form c)
+                      (coalton-type-error-context-args c)))))))
 
 (defmacro with-type-context ((context &rest args) &body body)
   `(handler-bind ((coalton-type-error
@@ -315,6 +314,7 @@
          :reader toplevel-monomorphism-restriction-type))
   (:report
    (lambda (c s)
+     (declare (notinline qualified-ty-predicates))
      (let* ((*print-circle* nil) ; Prevent printing using reader macros
             (name (toplevel-monomorphism-restriction-name c))
             (type (toplevel-monomorphism-restriction-type c))

@@ -173,7 +173,7 @@
 
 (defmethod apply-substitution (subs (node typed-node-literal))
   (declare (type substitution-list subs)
-           (values typed-node-literal))
+           (values typed-node-literal &optional))
   (typed-node-literal
    (apply-substitution subs (typed-node-type node))
    (typed-node-unparsed node)
@@ -181,7 +181,7 @@
 
 (defmethod apply-substitution (subs (node typed-node-variable))
   (declare (type substitution-list subs)
-           (values typed-node-variable))
+           (values typed-node-variable &optional))
   (typed-node-variable
    (apply-substitution subs (typed-node-type node))
    (typed-node-unparsed node)
@@ -189,7 +189,7 @@
 
 (defmethod apply-substitution (subs (node typed-node-application))
   (declare (type substitution-list subs)
-           (values typed-node-application))
+           (values typed-node-application &optional))
   (typed-node-application
    (apply-substitution subs (typed-node-type node))
    (typed-node-unparsed node)
@@ -198,7 +198,7 @@
 
 (defmethod apply-substitution (subs (node typed-node-abstraction))
   (declare (type substitution-list subs)
-           (values typed-node-abstraction))
+           (values typed-node-abstraction &optional))
   (typed-node-abstraction
    (apply-substitution subs (typed-node-type node))
    (typed-node-unparsed node)
@@ -210,7 +210,7 @@
 
 (defmethod apply-substitution (subs (node typed-node-let))
   (declare (type substitution-list subs)
-           (values typed-node-let))
+           (values typed-node-let &optional))
   (typed-node-let
    (apply-substitution subs (typed-node-type node))
    (typed-node-unparsed node)
@@ -222,7 +222,7 @@
 
 (defmethod apply-substitution (subs (node typed-node-lisp))
   (declare (type substitution-list subs)
-           (values typed-node-lisp))
+           (values typed-node-lisp &optional))
   (typed-node-lisp
    (apply-substitution subs (typed-node-type node))
    (typed-node-unparsed node)
@@ -231,7 +231,7 @@
 
 (defmethod apply-substitution (subs (node typed-node-match))
   (declare (type substitution-list subs)
-           (values typed-node-match))
+           (values typed-node-match &optional))
   (typed-node-match
    (apply-substitution subs (typed-node-type node))
    (typed-node-unparsed node)
@@ -240,7 +240,7 @@
 
 (defmethod apply-substitution (subs (node typed-match-branch))
   (declare (type substitution-list subs)
-           (values typed-match-branch))
+           (values typed-match-branch &optional))
   (typed-match-branch
    (typed-match-branch-unparsed node)
    (typed-match-branch-pattern node)
@@ -253,7 +253,7 @@
 
 (defmethod apply-substitution (subs (node typed-node-seq))
   (declare (type substitution-list subs)
-           (values typed-node-seq))
+           (values typed-node-seq &optional))
   (typed-node-seq
    (apply-substitution subs (typed-node-type node))
    (typed-node-unparsed node)
@@ -261,7 +261,7 @@
 
 (defmethod apply-substitution (subs (node typed-node-return))
   (declare (type substitution-list subs)
-           (values typed-node-return))
+           (values typed-node-return &optional))
   (typed-node-return
    (apply-substitution subs (typed-node-type node))
    (typed-node-unparsed node)
@@ -397,7 +397,7 @@
 (defun collect-variable-namespace (node)
   "Returns the name of every variable that will be referenced in the variable namespace in the generated code."
   (declare (type typed-node node)
-           (values symbol-list))
+           (values symbol-list &optional))
   (remove-duplicates (collect-variable-namespace-g node) :test #'equalp))
 
 (defgeneric collect-variable-namespace-g (node)

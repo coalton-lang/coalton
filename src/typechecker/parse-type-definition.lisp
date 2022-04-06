@@ -22,6 +22,22 @@
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type type-definition))
 
+(defstruct (partial-define-type (:constructor partial-define-type))
+  (name         (required 'name)         :type symbol           :read-only t)
+  (tyvar-names  (required 'tyvar-names)  :type symbol-list      :read-only t)
+  (constructors (required 'constructors) :type list             :read-only t)
+  (docstring    (required 'docstring)    :type (or null string) :read-only t))
+
+#+(and sbcl coalton-release)
+(declaim (sb-ext:freeze-type partial-define-type))
+
+(defun partial-define-type-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'partial-define-type-p x)))
+
+(deftype partial-define-type-list ()
+  '(satisfies partial-define-type-list-p))
+
 (defun type-definition-list-p (x)
   (and (alexandria:proper-list-p x)
        (every #'type-definition-p x)))
@@ -38,9 +54,7 @@
            (type environment env)
            (values list list ksubstitution-list))
 
-  (let* ((name (partial-define-type-name partial-type))
-
-         (tyvar-names (partial-define-type-tyvar-names partial-type))
+  (let* ((tyvar-names (partial-define-type-tyvar-names partial-type))
 
          (unparsed-ctors (partial-define-type-constructors partial-type))
 
@@ -160,21 +174,6 @@
                              :compressed-repr nil)))))
      env)))
 
-(defstruct (partial-define-type (:constructor partial-define-type))
-  (name         (required 'name)         :type symbol           :read-only t)
-  (tyvar-names  (required 'tyvar-names)  :type symbol-list      :read-only t)
-  (constructors (required 'constructors) :type list             :read-only t)
-  (docstring    (required 'docstring)    :type (or null string) :read-only t))
-
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type partial-define-type))
-
-(defun partial-define-type-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'partial-define-type-p x)))
-
-(deftype partial-define-type-list ()
-  '(satisfies partial-define-type-list-p))
 
 (defun parse-type-definitions (forms repr-table env)
   "Parse the type defintion FORM in the ENVironment

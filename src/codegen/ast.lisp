@@ -163,11 +163,11 @@ both CL namespaces appearing in NODE"
 
   (:method ((node node-variable) &key variable-namespace-only)
     (declare (ignore variable-namespace-only)
-             (values symbol-list))
+             (values symbol-list &optional))
     (list (node-variable-value node)))
 
   (:method ((node node-application) &key variable-namespace-only)
-    (declare (values symbol-list))
+    (declare (values symbol-list &optional))
     (append
      (node-variables-g (node-application-rator node) :variable-namespace-only variable-namespace-only)
      (mapcan
@@ -208,7 +208,7 @@ both CL namespaces appearing in NODE"
     (node-variables-g (match-branch-body node) :variable-namespace-only variable-namespace-only))
 
   (:method ((node node-match) &key variable-namespace-only)
-    (declare (values symbol-list))
+    (declare (values symbol-list &optional))
     (append
      (node-variables-g (node-match-expr node) :variable-namespace-only variable-namespace-only)
      (mapcan
@@ -217,14 +217,14 @@ both CL namespaces appearing in NODE"
       (node-match-branches node))))
 
   (:method ((node node-seq) &key variable-namespace-only)
-    (declare (values symbol-list))
+    (declare (values symbol-list &optional))
     (mapcan
      (lambda (node)
        (node-variables-g node :variable-namespace-only variable-namespace-only))
      (node-seq-nodes node)))
 
   (:method ((node node-return) &key variable-namespace-only)
-    (declare (values symbol-list))
+    (declare (values symbol-list &optional))
     (node-variables-g (node-return-expr node) :variable-namespace-only variable-namespace-only)))
 
 

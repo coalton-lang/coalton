@@ -58,7 +58,7 @@
   "Qualify TYPE with PREDICATES"
   (declare (type ty type)
            (type ty-predicate-list predicates)
-           (values qualified-ty))
+           (values qualified-ty &optional))
   (qualified-ty predicates type))
 
 
@@ -68,7 +68,7 @@
 
 (defmethod apply-substitution (subst-list (type ty-predicate))
   (declare (type substitution-list subst-list)
-           (values ty-predicate))
+           (values ty-predicate &optional))
   (ty-predicate (ty-predicate-class type)
                       (apply-substitution subst-list (ty-predicate-types type))))
 
@@ -82,7 +82,7 @@
   (type-variables (ty-predicate-types type)))
 
 (defmethod kind-variables ((type ty-predicate))
-  (declare (values kyvar-list))
+  (declare (values kyvar-list &optional))
   (mapcan #'kind-variables (ty-predicate-types type)))
 
 (defmethod instantiate (types (type ty-predicate))
@@ -108,7 +108,7 @@
    :test #'equalp))
 
 (defmethod kind-variables ((type qualified-ty))
-  (declare (values kyvar-list))
+  (declare (values kyvar-list &optional))
   (append
    (kind-variables (qualified-ty-type type))
    (mapcan #'kind-variables (qualified-ty-predicates type))))
@@ -138,7 +138,7 @@
            (type ty-predicate predicate)
            (ignore colon-p)
            (ignore at-sign-p)
-           (values ty-predicate))
+           (values ty-predicate &optional))
   (format stream "~S ~{~A~^ ~}"
           (ty-predicate-class predicate)
           (ty-predicate-types predicate))

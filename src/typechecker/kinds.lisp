@@ -115,19 +115,19 @@
   (:method (subs (kind kstar))
     (declare (type ksubstitution-list subs)
              (ignore subs)
-             (values kind))
+             (values kind &optional))
     kind)
 
   (:method (subs (kind kfun))
     (declare (type ksubstitution-list subs)
-             (values kind))
+             (values kind &optional))
     (kfun
      (apply-ksubstitution subs (kfun-from kind))
      (apply-ksubstitution subs (kfun-to kind))))
 
   (:method (subs (kind kvar))
     (declare (type ksubstitution-list subs)
-             (values kind))
+             (values kind &optional))
     (let ((elem (find (kvar-kyvar kind) subs :key #'ksubstitution-from :test #'equalp)))
       (if elem
           (ksubstitution-to elem)
@@ -149,25 +149,25 @@
 
 (defgeneric kmgu (kind1 kind2)
   (:method ((kind1 kstar) (kind2 kstar))
-    (declare (values ksubstitution-list))
+    (declare (values ksubstitution-list &optional))
     nil)
 
   (:method ((kind1 kvar) (kind2 kind))
-    (declare (values ksubstitution-list))
+    (declare (values ksubstitution-list &optional))
     (list
      (%make-ksubstitution
       (kvar-kyvar kind1)
       kind2)))
 
   (:method ((kind1 kind) (kind2 kvar))
-    (declare (values ksubstitution-list))
+    (declare (values ksubstitution-list &optional))
     (list
      (%make-ksubstitution
       (kvar-kyvar kind2)
       kind1)))
 
   (:method ((kind1 kfun) (kind2 kfun))
-    (declare (values ksubstitution-list))
+    (declare (values ksubstitution-list &optional))
     (append
      (kmgu (kfun-from kind1) (kfun-from kind2))
      (kmgu (kfun-to kind1) (kfun-to kind2))))
