@@ -29,6 +29,7 @@
   :pathname "src/"
   :serial t
   :components ((:file "package")
+               (:file "unlock-package" :if-feature :sb-package-locks)
                (:file "settings")
                (:file "utilities")
                (:file "global-lexical")
@@ -92,7 +93,7 @@
                (:file "debug")
                (:file "faux-macros")
                (:file "language-macros")
-               (:file "lock-package")))
+               (:file "lock-package" :if-feature :sb-package-locks)))
 
 (asdf:defsystem #:coalton/library
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
