@@ -68,6 +68,18 @@ COALTON-USER> (coalton (dt (E+ (EVar (Symbol "t"))
 
 *Coalton has **not** reached "1.0" yet. This means that, from time to time, you may have a substandard user experience. While we try to be ANSI-conforming, Coalton may only work on SBCL 2.1.x.*
 
+## Getting Started
+
+**Prepare**: Install [SBCL](http://www.sbcl.org/platform-table.html) (on macOS with Homebrew: `brew install sbcl`). Install Quicklisp by following instructions [here](https://www.quicklisp.org/beta/#installation). (The step command involving `gpg` is not needed.) After installing Quicklisp, you should have a `quicklisp` folder which will make installing Coalton easier.
+
+**Install**: Clone this repository into a place your Lisp can see (e.g., `~/quicklisp/local-projects/`). Coalton is not yet on Quicklisp.
+
+**Use**: Either run `(ql:quickload :coalton)`, or add `#:coalton` to your ASD's `:depends-on` list. Quicklisp will automatically download all of Coalton's dependencies.
+
+**Test**: Compile the tests with `(ql:quickload :coalton/tests)`, then run the tests with `(asdf:test-system :coalton)`.
+
+**Learn**: We recommend starting with the [*Intro to Coalton*](docs/intro-to-coalton.md) document, and then taking a peek in the [examples directory](examples/). It may also be helpful to check out the [introductory blog post](https://coalton-lang.github.io/20211010-introducing-coalton/).
+
 ## What's Here?
 
 This repository contains the source code to the [Coalton compiler](src/), and the [standard library](src/library/).
@@ -77,19 +89,9 @@ It also contains a few example programs, such as:
 - Some [simple pedagogical programs](examples/small-coalton-programs/),
 - A [JSON parser](examples/coalton-json) piggybacking on a native Common Lisp library.
 - An [implementation](examples/thih/) of Jones's *Typing Haskell in Haskell*, and
-- An [implementation](examples/quil-coalton/) of a simple [Quil](https://en.wikipedia.org/wiki/Quil_(instruction_set_architecture)) parser.
+- An [implementation](examples/quil-coalton/) of a simple [Quil](https://en.wikipedia.org/wiki/Quil_(instruction_set_architecture)) parser using parser combinators.
 
 Lastly and importantly, we maintain a collection of documentation about Coalton in the [docs](docs/) directory, including a [standard library reference guide](https://coalton-lang.github.io/reference/).
-
-## Getting Started
-
-**Install**: Clone this repository into a place your Lisp can see (e.g., `~/quicklisp/local-projects/`). (Coalton is not yet on Quicklisp.)
-
-**Use**: Either run `(ql:quickload :coalton)`, or add `#:coalton` to your ASD's `:depends-on` list.
-
-**Test**: Run `(ql:quickload :coalton/tests)` to download the dependencies, then run `(asdf:test-system :coalton)`.
-
-**Learn**: We recommend starting with the [*Intro to Coalton*](docs/intro-to-coalton.md) document, and then taking a peek in the [examples directory](examples/). It may also be helpful to check out the [introductory blog post](https://coalton-lang.github.io/20211010-introducing-coalton/).
 
 ## Get Involved
 
