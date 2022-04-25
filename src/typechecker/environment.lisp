@@ -52,10 +52,7 @@
   (docstring (required 'docstring)       :type (or null string) :read-only t))
 
 (defmethod make-load-form ((self type-entry) &optional env)
-  (make-load-form-saving-slots
-   self
-   :slot-names '(name runtime-type type enum-repr newtype docstring)
-   :environment env))
+  (make-load-form-saving-slots self :environment env))
 
 (defmethod kind-of ((entry type-entry))
   (kind-of (type-entry-type entry)))
@@ -269,10 +266,7 @@
   (compressed-repr (required 'compressed-repr) :type t                              :read-only t))
 
 (defmethod make-load-form ((self constructor-entry) &optional env)
-  (make-load-form-saving-slots
-   self
-   :slot-names '(name arity constructs scheme arguments classname compressed-repr)
-   :environment env))
+  (make-load-form-saving-slots self :environment env))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type constructor-entry))
@@ -403,10 +397,7 @@
   (method-codegen-syms (required 'method-codegen-syms) :type hash-table        :read-only t))
 
 (defmethod make-load-form ((self ty-class-instance) &optional env)
-  (make-load-form-saving-slots
-   self
-   :slot-names '(constraints predicate codegen-sym method-codegen-syms)
-   :environment env))
+  (make-load-form-saving-slots self :environment env))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type ty-class-instance))
@@ -446,10 +437,7 @@
   (arity (required 'arity) :type fixnum :read-only t))
 
 (defmethod make-load-form ((self function-env-entry) &optional env)
-  (make-load-form-saving-slots
-   self
-   :slot-names '(name arity)
-   :environment env))
+  (make-load-form-saving-slots self :environment env))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type function-env-entry))
@@ -480,10 +468,7 @@
   (location  (required 'location)  :type t                                    :read-only t))
 
 (defmethod make-load-form ((self name-entry) &optional env)
-  (make-load-form-saving-slots
-   self
-   :slot-names '(name type docstring location)
-   :environment env))
+  (make-load-form-saving-slots self :environment env))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type name-entry))
@@ -512,6 +497,27 @@
 (declaim (sb-ext:freeze-type code-environment))
 
 ;;;
+;;; Specialization Environment
+;;;
+
+(defstruct specialization-entry
+  (from (required 'from) :type symbol :read-only t)
+  (to (required 'to)     :type symbol :read-only t)
+  (to-ty (required 'to-ty) :type ty :read-only t))
+
+(defmethod make-load-form ((self specialization-entry) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
+(defun specialization-entry-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'specialization-entry-p x)))
+
+(deftype specialization-entry-list ()
+  '(satisfies specialization-entry-list-p))
+
+(defstruct (specialization-environment (:include immutable-listmap)))
+
+;;;
 ;;; Environment
 ;;;
 
@@ -526,7 +532,8 @@
           function-environment
           name-environment
           method-inline-environment
-          code-environment)))
+          code-environment
+          specialization-environment)))
   (value-environment         (required 'value-environment)         :type value-environment         :read-only t)
   (type-environment          (required 'type-environment)          :type type-environment          :read-only t)
   (constructor-environment   (requried 'constructor-environment)   :type constructor-environment   :read-only t)
@@ -535,23 +542,12 @@
   (function-environment      (required 'function-environment)      :type function-environment      :read-only t)
   (name-environment          (required 'name-environment)          :type name-environment          :read-only t)
   (method-inline-environment (required 'method-inline-environment) :type method-inline-environment :read-only t)
-  (code-environment          (required 'code-environment)          :type code-environment          :read-only t))
+  (code-environment          (required 'code-environment)          :type code-environment          :read-only t)
+  (specialization-environment (required 'specialization-environment) :type specialization-environment :read-only t))
 
 
 (defmethod make-load-form ((self environment) &optional env)
-  (make-load-form-saving-slots
-   self
-   :slot-names
-   '(value-environment
-     type-environment
-     constructor-environment
-     class-environment
-     instance-environment
-     function-environment
-     name-environment
-     method-inline-environment
-     code-environment)
-   :environment env))
+  (make-load-form-saving-slots self :environment env))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type environment))
@@ -567,7 +563,8 @@
    (make-function-environment)
    (make-name-environment)
    (make-method-inline-environment)
-   (make-code-environment)))
+   (make-code-environment)
+   (make-specialization-environment)))
 
 (defun update-environment (env
                            &key
@@ -579,7 +576,8 @@
                              (function-environment (environment-function-environment env))
                              (name-environment (environment-name-environment env))
                              (method-inline-environment (environment-method-inline-environment env))
-                             (code-environment (environment-code-environment env)))
+                             (code-environment (environment-code-environment env))
+                             (specialization-environment (environment-specialization-environment env)))
   (declare (type environment env)
            (type value-environment value-environment)
            (type constructor-environment constructor-environment)
@@ -589,6 +587,7 @@
            (type name-environment name-environment)
            (type method-inline-environment method-inline-environment)
            (type code-environment code-environment)
+           (type specialization-environment specialization-environment)
            (values environment))
   (make-environment
    value-environment
@@ -599,7 +598,8 @@
    function-environment
    name-environment
    method-inline-environment
-   code-environment))
+   code-environment
+   specialization-environment))
 
 ;;;
 ;;; Methods
@@ -960,6 +960,73 @@
     name)
    (unless no-error
      (error "Unable to find code for function ~A." name))))
+
+(defun add-specialization (env entry)
+  (declare (type environment env)
+           (type specialization-entry entry)
+           (values environment &optional))
+
+  (let* ((from (specialization-entry-from entry))
+         (to (specialization-entry-to entry))
+         (to-ty (specialization-entry-to-ty entry)))
+
+    (fset:do-seq (elem (immutable-listmap-lookup (environment-specialization-environment env) from :no-error t) :index index)
+      (when (type= to-ty (specialization-entry-to-ty elem))
+        (return-from add-specialization
+          (update-environment env
+                              :specialization-environment
+                              (immutable-listmap-replace
+                               (environment-specialization-environment env)
+                               from
+                               index
+                               entry
+                               #'make-specialization-environment))))
+
+      (handler-case
+          (progn
+            (unify nil to-ty (specialization-entry-to-ty elem))
+            (with-pprint-variable-context ()
+              (error "Invalid overlapping specialization for function ~A.~%Specialization target ~A with type ~A~%overlapps ~A with type ~A"
+                     from
+                     to
+                     to-ty
+                     (specialization-entry-to elem)
+                     (specialization-entry-to-ty elem))))
+        (coalton-type-error (e)
+          (declare (ignore e)))))
+
+    (update-environment env
+                        :specialization-environment
+                        (immutable-listmap-push
+                         (environment-specialization-environment env)
+                         from
+                         entry
+                         #'make-specialization-environment))))
+
+(defun lookup-specialization (env from to &key (no-error nil))
+  (declare (type environment env)
+           (type symbol from)
+           (type symbol to)
+           (values (or null specialization-entry) &optional))
+  (fset:do-seq (elem (immutable-listmap-lookup (environment-specialization-environment env) from :no-error no-error))
+    (when (eq to (specialization-entry-to elem))
+      (return-from lookup-specialization elem)))
+
+  (unless no-error
+    (error "Unable to find specialization from ~A to ~A" from to)))
+
+(defun lookup-specialization-by-type (env from ty &key (no-error nil))
+  (declare (type environment env)
+           (type symbol from)
+           (type ty ty)
+           (values (or null specialization-entry) &optional))
+  (fset:do-seq (elem (immutable-listmap-lookup (environment-specialization-environment env) from :no-error no-error))
+    (handler-case
+        (progn
+          (match (specialization-entry-to-ty elem) ty)
+          (return-from lookup-specialization-by-type elem))
+      (coalton-type-error (e)
+        (declare (ignore e))))))
 
 ;;;
 ;;; Pretty printing

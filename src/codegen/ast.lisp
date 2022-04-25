@@ -75,7 +75,7 @@
 ;;;
 
 (defstruct (node (:constructor nil))
-  (type (required 'type) :type (or null tc:ty) :read-only t))
+  (type (required 'type) :type tc:ty :read-only t))
 
 (defun node-list-p (x)
   (and (alexandria:proper-list-p x)
