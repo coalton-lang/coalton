@@ -6,7 +6,8 @@
   (instances   nil                 :type instance-definition-list :read-only t)
   (classes     nil                 :type ty-class-list            :read-only t)
   (attr-table  (make-hash-table)   :type hash-table               :read-only t)
-  (package     (required 'package) :type package                  :read-only t))
+  (package     (required 'package) :type package                  :read-only t)
+  (specializations nil             :type specialization-entry-list :read-only t))
 
 ;; FUNCTION ENV
 
@@ -69,6 +70,11 @@
                       :collect (if function-entry
                                    `(set-function env ',name ,function-entry)
                                    `(unset-function env ',name)))))
+
+(defun generate-specialization-diff (specializations env)
+  (declare (type specialization-entry-list specializations))
+  (loop :for elem :in specializations
+        :collect `(add-specialization env ',(lookup-specialization env (specialization-entry-from elem) (specialization-entry-to elem)))))
 
 (defun generate-diff (translation-unit env env_name)
   `(eval-when (:load-toplevel)

@@ -42,7 +42,8 @@ either (INDICATOR VALUE) or just INDICATOR; the short form means (INDICATOR T)."
 
  (coalton:monomorphise      :toplevel
                             (:must-precede-one-of (coalton:declare
-                                                   coalton:define))))
+                                                   coalton:define)))
+ (coalton:specialize :toplevel))
 
 ;;; Entry Point
 
@@ -225,6 +226,7 @@ in FORMS that begin with that operator."
                          ((coalton:define-instance instance-defines))
                          ((repr-table repr-table))
                          ((attr-table attr-table))
+                         ((coalton:specialize specializations))
                        &allow-other-keys)
       (collect-toplevel-forms toplevel-forms)
 
@@ -245,40 +247,45 @@ in FORMS that begin with that operator."
           (multiple-value-bind (env toplevel-bindings)
               (process-toplevel-value-definitions defines declared-types package env)
 
-            ;; Methods must be typechecker after the types of values
+            ;; Methods must be typechecked after the types of values
             ;; are determined since instances may reference them.
-            (let* ((instance-definitions
-                     (process-toplevel-instance-definitions
-                      instance-defines
-                      package
-                      env))
+            (let ((instance-definitions
+                    (process-toplevel-instance-definitions
+                     instance-defines
+                     package
+                     env)))
 
-                   (translation-unit
-                     (make-translation-unit
-                      :types defined-types
-                      :definitions toplevel-bindings
-                      :instances instance-definitions
-                      :classes classes
-                      :attr-table (or attr-table (make-hash-table)) ; "fix" style warning
-                      :package package)))
+              (multiple-value-bind (specializations env)
+                  (process-toplevel-specializations specializations env)
 
-              (multiple-value-bind (program env)
-                  (coalton-impl/codegen:compile-translation-unit
-                   translation-unit
-                   env)
 
-                (values
-                 (if *coalton-skip-update*
-                     program
-                     `(progn
-                        (eval-when (:load-toplevel)
-                          (unless (eq (coalton-release-p) ,(coalton-release-p))
-                            ,(if (coalton-release-p)
-                                `(error "~A was compiled in release mode but loaded in development." ,(or *compile-file-pathname* *load-truename*))
-                                `(error "~A was compiled in development mode but loaded in release." ,(or *compile-file-pathname* *load-truename*)))))
-                        ,(coalton-impl/typechecker::generate-diff
-                          translation-unit
-                          env
-                          '*global-environment*)
-                        ,program))
-                 env)))))))))
+                (let ((translation-unit
+                        (make-translation-unit
+                         :types defined-types
+                         :definitions toplevel-bindings
+                         :instances instance-definitions
+                         :classes classes
+                         :attr-table (or attr-table (make-hash-table)) ; "fix" style warning
+                         :package package
+                         :specializations specializations)))
+
+                  (multiple-value-bind (program env)
+                      (coalton-impl/codegen:compile-translation-unit
+                       translation-unit
+                       env)
+
+                    (values
+                     (if *coalton-skip-update*
+                         program
+                         `(progn
+                            (eval-when (:load-toplevel)
+                              (unless (eq (coalton-release-p) ,(coalton-release-p))
+                                ,(if (coalton-release-p)
+                                     `(error "~A was compiled in release mode but loaded in development." ,(or *compile-file-pathname* *load-truename*))
+                                     `(error "~A was compiled in development mode but loaded in release." ,(or *compile-file-pathname* *load-truename*)))))
+                            ,(coalton-impl/typechecker::generate-diff
+                              translation-unit
+                              env
+                              '*global-environment*)
+                            ,program))
+                     env)))))))))))

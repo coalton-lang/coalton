@@ -53,7 +53,7 @@
            ;; Passing this as a parameter breaks a cyclic dependency between the optimizer
            ;; and the monomorphiser
            (optimize-node
-             (lambda (node)
+             (lambda (node env)
                ;; minor hack because OPTIMIZE-BINDINGS-INITIAL operates on binding groups
                ;; and we need it to run on a single node
                (cdr
@@ -106,6 +106,8 @@
             :collect (cons name (pointfree node)))
 
       canonicalize
+
+      (apply-specializations env)
 
       (resolve-static-superclass env)
 
@@ -431,3 +433,47 @@
      bindings
      (list
       (cons :field #'handle-static-superclass)))))
+
+(defun apply-specializations (bindings env)
+  (declare (type binding-list bindings)
+           (type tc:environment env))
+  (labels ((apply-specialization (node &rest rest)
+             (declare (dynamic-extent rest)
+                      (ignore rest))
+             (let ((rator-name (node-rator-name node)))
+               (unless rator-name
+                 (return-from apply-specialization))
+
+               (let ((from-ty (tc:lookup-value-type env rator-name :no-error t)))
+                 (unless from-ty
+                   (return-from apply-specialization))
+
+                 (let* ((from-ty (tc:fresh-inst from-ty))
+
+                        (preds (tc:qualified-ty-predicates from-ty))
+
+                        (num-preds (length preds))
+
+                        (rator-type
+                          (tc:make-function-type*
+                           (subseq (tc:function-type-arguments (node-rator-type node)) num-preds)
+                           (tc:function-return-type (node-rator-type node))))
+
+                        (specialization (tc:lookup-specialization-by-type env rator-name rator-type :no-error t)))
+                   (unless specialization
+                     (return-from apply-specialization))
+
+                   (unless (>= (length (node-rands node)) num-preds)
+                     (coalton-bug "Expected function ~A to have at least ~A args when applying specialization." rator-name (length preds)))
+
+                   (node-application
+                    (node-type node)
+                    (node-variable
+                     rator-type
+                     (tc:specialization-entry-to specialization))
+                    (subseq (node-rands node) num-preds)))))))
+    (traverse-bindings
+     bindings
+     (list
+      (cons :application #'apply-specialization)
+      (cons :direct-application #'apply-specialization)))))

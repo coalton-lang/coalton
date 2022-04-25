@@ -91,6 +91,7 @@
                (:file "toplevel-declare")
                (:file "toplevel-define")
                (:file "toplevel-define-instance")
+               (:file "toplevel-specializations")
                (:file "unlock-package" :if-feature :sb-package-locks)
                (:file "coalton")
                (:file "debug")

@@ -15,6 +15,8 @@
   (:import-from
    #:coalton-impl/codegen/ast-substitutions
    #:ast-substitution
+   #:ast-substitution-from
+   #:ast-substitution-to
    #:apply-ast-substitution)
   (:import-from
    #:coalton-impl/codegen/typecheck-node
@@ -104,7 +106,7 @@ constant values could be."
 
   (let ((new-name
           (alexandria:ensure-symbol
-           (gensym (concatenate 'string (symbol-name (compile-candidate-name candidate)) "-"))
+           (gensym (concatenate 'string (symbol-name (compile-candidate-name candidate)) "#"))
            package)))
 
     (setf (gethash candidate (candidate-manager-map candidate-manager)) new-name))
@@ -152,13 +154,16 @@ constant values could be."
 (defun compile-candidate (candidate node env)
   (declare (type compile-candidate candidate)
            (type node-abstraction node)
-           (type tc:environment env))
+           (type tc:environment env)
+           (values node &optional))
 
-  (let* ((subs nil)
+  (let* ((ast-subs nil)
 
          (new-type (node-type node))
 
          (arg-tys nil)
+
+         (subs nil)
 
          (new-vars (loop :for var :in (node-abstraction-vars node)
                          :for arg :in (compile-candidate-args candidate)
@@ -168,20 +173,24 @@ constant values could be."
                                       (push (tc:function-type-from new-type) arg-tys)
                                       var)
                          :else
-                           :do (push (ast-substitution var arg) subs)
+                           :do (progn
+                                 (setf subs (tc:unify subs (tc:function-type-from new-type) (node-type arg)))
+                                 (push (ast-substitution var arg) ast-subs))
 
                          :do (setf new-type (tc:function-type-to new-type))))
 
-
          (new-node
-           (node-abstraction
-            (tc:make-function-type*
-             (reverse arg-tys)
-             new-type)
-            new-vars
-            (apply-ast-substitution subs (node-abstraction-subexpr node)))))
+           (tc:apply-substitution
+            subs
+            (node-abstraction
+             (tc:make-function-type*
+              (reverse arg-tys)
+              new-type)
+             new-vars
+             (apply-ast-substitution ast-subs (node-abstraction-subexpr node))))))
 
     (typecheck-node new-node env)
+
     new-node))
 
 (defun resolve-var (node resolve-table)
@@ -212,8 +221,7 @@ constant values could be."
 
                (let ((candidate
                        (valid-candidate-p
-                        name
-                        (loop :for rand :in rands
+                        name (loop :for rand :in rands
                               :collect (resolve-var rand resolve-table))
                         bound-variables
                         env)))
@@ -296,6 +304,7 @@ constant values could be."
            (type candidate-manager manager)
            (type package package)
            (type hash-table resolve-table)
+           (type function optimize-node)
            (type tc:environment env)
            (values binding-list &optional))
 
@@ -308,11 +317,17 @@ constant values could be."
 
     (loop :for candidate := (candidate-manager-pop manager)
           :while candidate
+
           :for name := (compile-candidate-name candidate)
           :for code := (tc:lookup-code env name)
-          :for new-code := (compile-candidate candidate code env)
-          :for new-code_ := (rewrite-callsites new-code manager resolve-table env)
-          :for new-code__ := (funcall optimize-node new-code_)
+          :for new-code := (funcall optimize-node (compile-candidate candidate code env) env)
+
+          :for new-code_ := (progn
+                              (candidate-selection new-code manager resolve-table package env)
+                              (rewrite-callsites new-code manager resolve-table env))
+
+          :for new-code__ := (funcall optimize-node new-code_ env)
+
           :do (candidate-selection new-code__ manager resolve-table package env)
           :do (push (cons (candidate-manager-get manager candidate) (rewrite-callsites new-code__ manager resolve-table env))
                     binding-group))

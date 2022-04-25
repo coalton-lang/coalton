@@ -282,6 +282,9 @@
    #:lookup-name                        ; FUNCTION
    #:lookup-method-inline               ; FUNCTION
    #:lookup-code                        ; FUNCTION
+   #:add-specialization                 ; FUNCTION
+   #:lookup-specialization              ; FUNCTION
+   #:lookup-specialization-by-type      ; FUNCTION
    #:type-entry                         ; STRUCT
    #:type-entry-name                    ; ACCESSOR
    #:type-entry-runtime-type            ; ACCESSOR
@@ -311,6 +314,12 @@
    #:code-entry-name                    ; ACCESSOR
    #:code-entry-code                    ; ACCESSOR
    #:make-code-entry                    ; CONSTRUCTOR
+   #:specialization-entry               ; STRUCT
+   #:specialization-entry-from          ; ACCESSOR
+   #:specialization-entry-to            ; ACCESSOR
+   #:specialization-entry-to-ty         ; ACCESSOR
+   #:make-specialization-entry          ; CONSTRUCTOR
+   #:specialization-entry-list          ; TYPE
    )
   (:export
    #:derive-expression-type             ; FUNCTION
@@ -417,7 +426,7 @@
    #:*coalton-pretty-print-tyvars*))
 
 
-(uiop:define-package #:coalton-impl
+(defpackage #:coalton-impl
     (:documentation "Implementation and runtime for COALTON. This is a package private to the COALTON system and is not intended for public use.")
   (:use #:cl
         #:coalton-impl/util
@@ -427,6 +436,8 @@
   (:import-from #:global-vars
                 #:define-global-var
                 #:define-global-var*)
+  (:local-nicknames
+   (#:tc #:coalton-impl/typechecker))
   ;; settings
   (:export
    #:coalton-release-p)
@@ -488,6 +499,7 @@
    #:define-instance
    #:repr
    #:monomorphise
+   #:specialize
    #:unable-to-codegen)
   ;; Early Types
   (:export
