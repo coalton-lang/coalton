@@ -82,11 +82,13 @@
                                     (alexandria:format-symbol *package* "A~D" i))
                               funs)))
       `(progn
-         #+sbcl
-         (declaim (sb-ext:start-block ,@funs))
-         ,@(reverse body)
-         #+sbcl
-         (declaim (sb-ext:end-block))))))
+         (declaim (inline ,@funs))
+         (locally (declaim (notinline ,@funs))
+           #+sbcl
+           (declaim (sb-ext:start-block ,@funs))
+           ,@(reverse body)
+           #+sbcl
+           (declaim (sb-ext:end-block)))))))
 
 (define-function-macros)
 

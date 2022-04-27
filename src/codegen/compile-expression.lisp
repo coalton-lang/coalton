@@ -66,6 +66,20 @@
                    (mapcar #'car (tc:typed-node-abstraction-vars expr)))
                   subnode)))
 
+              ;; Nodes that are not abstractions but are compiled to bare abstractions must be wrapped
+              ((and bare-abstraction (tc:function-type-p inferred-type))
+               (let* ((ty-args (tc:function-type-arguments inferred-type-ty))
+                      (args (alexandria:make-gensym-list (length ty-args))))
+                 (node-bare-abstraction
+                  inferred-type-ty
+                  args
+                  (node-application
+                   (tc:function-return-type inferred-type-ty)
+                   (compile-expression expr full-ctx env)
+                   (loop :for arg :in args
+                         :for ty :in (tc:function-type-arguments inferred-type-ty)
+                         :collect (node-variable ty arg))))))
+
               (ctx
                (let ((inner (compile-expression expr full-ctx env)))
                  (funcall node-abstraction_
