@@ -10,9 +10,9 @@
    #:fib
    #:fib-fixnum
    #:fib-generic-wrapped
-   #:fib-monomorphised
+   #:fib-monomorphized
    #:fib-generic-optional
-   #:fib-monomorphised-optional))
+   #:fib-monomorphized-optional))
 
 (cl:in-package #:coalton-benchmarks)
 
@@ -54,11 +54,11 @@
   (report trivial-benchmark::*current-timer*))
 
 
-(define-benchmark recursive-fib-monomorphised ()
+(define-benchmark recursive-fib-monomorphized ()
   (declare (optimize speed))
   (loop :repeat 1000
         :do (with-benchmark-sampling
-              (coalton-benchmarks/native:fib-monomorphised 20)))
+              (coalton-benchmarks/native:fib-monomorphized 20)))
   (report trivial-benchmark::*current-timer*))
 
 ;;
@@ -75,11 +75,11 @@
   (report trivial-benchmark::*current-timer*))
 
 #+ignore
-(define-benchmark recursive-fib-monomorphised-optional ()
+(define-benchmark recursive-fib-monomorphized-optional ()
   (declare (optimize speed))
   (loop :repeat 1000
         :do (with-benchmark-sampling
-              (coalton-benchmarks/native:fib-monomorphised-optional 10)))
+              (coalton-benchmarks/native:fib-monomorphized-optional 10)))
   (report trivial-benchmark::*current-timer*))
 
 (defun lisp-fib (n)
@@ -122,16 +122,16 @@
   (declare fib-generic-wrapped (Integer -> Integer))
   (define fib-generic-wrapped fib-generic)
 
-  (monomorphise)
-  (declare fib-monomorphised (Integer -> Integer))
-  (define fib-monomorphised fib-generic)
+  (monomorphize)
+  (declare fib-monomorphized (Integer -> Integer))
+  (define fib-monomorphized fib-generic)
 
   (declare fib-generic-optional (Integer -> Optional Integer))
   (define (fib-generic-optional x)
     (fib-generic (Some x)))
 
-  (monomorphise)
-  (declare fib-monomorphised-optional (Integer -> Optional Integer))
-  (define (fib-monomorphised-optional x) 
+  (monomorphize)
+  (declare fib-monomorphized-optional (Integer -> Optional Integer))
+  (define (fib-monomorphized-optional x) 
     (fib-generic (Some x))))
 

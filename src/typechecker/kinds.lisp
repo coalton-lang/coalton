@@ -194,7 +194,7 @@
      (kind-variables (kfun-from kind))
      (kind-variables (kfun-to kind)))))
 
-(defun kind-monomorphise-subs (kvars ksubs)
+(defun kind-monomorphize-subs (kvars ksubs)
   (declare (type kyvar-list kvars)
            (values ksubstitution-list &optional))
   (compose-ksubstution-lists

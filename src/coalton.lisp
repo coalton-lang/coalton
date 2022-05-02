@@ -40,7 +40,7 @@ either (INDICATOR VALUE) or just INDICATOR; the short form means (INDICATOR T)."
  (coalton:repr              :toplevel
                             (:must-precede-one-of (coalton:define-type)))
 
- (coalton:monomorphise      :toplevel
+ (coalton:monomorphize      :toplevel
                             (:must-precede-one-of (coalton:declare
                                                    coalton:define)))
  (coalton:specialize :toplevel))
@@ -79,8 +79,8 @@ in FORMS that begin with that operator."
 
            (setf (gethash type (getf plist 'repr-table)) (cons specifier arg)))
 
-         (handle-monomorphise (definition-name)
-           (push :monomorphise (gethash definition-name (getf plist 'attr-table))))
+         (handle-monomorphize (definition-name)
+           (push :monomorphize (gethash definition-name (getf plist 'attr-table))))
 
          (walk (forms)
            (loop
@@ -114,13 +114,13 @@ in FORMS that begin with that operator."
 
                     (establish-repr (cadr form) (cadr next-form) (caddr form)))
 
-                   (coalton:monomorphise
+                   (coalton:monomorphize
                     (unless (= (length form) 1)
                       (error-parsing form "Wrong number of arguments"))
 
                     (if (listp (cadr next-form))
-                        (handle-monomorphise (first (cadr next-form)))
-                        (handle-monomorphise (cadr next-form))))))))
+                        (handle-monomorphize (first (cadr next-form)))
+                        (handle-monomorphize (cadr next-form))))))))
       ;; Populate PLIST...
       (walk forms)
       ;; ...and return it, with its values reversed to reflect the order that

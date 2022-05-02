@@ -1,9 +1,9 @@
-;;;; src/codegen/monomorphise.lisp
+;;;; src/codegen/monomorphize.lisp
 ;;;;
 ;;;; Recompile specialized versions of type class generic functions across a call graph.
 ;;;;
 
-(defpackage #:coalton-impl/codegen/monomorphise
+(defpackage #:coalton-impl/codegen/monomorphize
   (:use
    #:cl
    #:coalton-impl/util
@@ -28,9 +28,9 @@
   (:local-nicknames
    (#:tc #:coalton-impl/typechecker))
   (:export
-   #:monomorphise))
+   #:monomorphize))
 
-(in-package #:coalton-impl/codegen/monomorphise)
+(in-package #:coalton-impl/codegen/monomorphize)
 
 (deftype argument ()
   `(or (member @@unpropagated) node))
@@ -299,7 +299,7 @@ constant values could be."
       (cons :direct-application #'apply-candidate))
      nil)))
 
-(defun monomorphise (name manager package resolve-table optimize-node env)
+(defun monomorphize (name manager package resolve-table optimize-node env)
   (declare (type symbol name)
            (type candidate-manager manager)
            (type package package)

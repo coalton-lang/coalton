@@ -126,7 +126,7 @@
            :for (ctors . local-tyvars) :in type-constructors
 
            :for type_ := (apply-ksubstitution ksubs type)
-           :for ksubs_ := (kind-monomorphise-subs (kind-variables type_) ksubs)
+           :for ksubs_ := (kind-monomorphize-subs (kind-variables type_) ksubs)
            :for type__ := (apply-ksubstitution ksubs_ type)
 
            :for tyvar-types

@@ -19,8 +19,8 @@
    #:push-hoist-point
    #:pop-final-hoist-point)
   (:import-from
-   #:coalton-impl/codegen/monomorphise
-   #:monomorphise
+   #:coalton-impl/codegen/monomorphize
+   #:monomorphize
    #:candidate-manager)
   (:import-from
    #:coalton-impl/codegen/transformations
@@ -51,7 +51,7 @@
            (resolve-table (alexandria:alist-hash-table bindings))
 
            ;; Passing this as a parameter breaks a cyclic dependency between the optimizer
-           ;; and the monomorphiser
+           ;; and the monomorphizer
            (optimize-node
              (lambda (node env)
                ;; minor hack because OPTIMIZE-BINDINGS-INITIAL operates on binding groups
@@ -64,11 +64,11 @@
              (loop :for (name . node) :in bindings
                    :for attrs := (gethash name attr-table)
 
-                   :for monomorphise := (find :monomorphise attrs)
+                   :for monomorphize := (find :monomorphise attrs)
 
-                   :if monomorphise
+                   :if monomorphize
                      :append (optimize-bindings-initial
-                              (monomorphise
+                              (monomorphize
                                name
                                manager
                                package
