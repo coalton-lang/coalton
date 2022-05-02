@@ -45,7 +45,7 @@
       
       (let* ((kvars (kind-variables (apply-ksubstitution ksubs type)))
 
-             (ksubs (kind-monomorphise-subs kvars ksubs))
+             (ksubs (kind-monomorphize-subs kvars ksubs))
 
              (type (apply-ksubstitution ksubs type)))
 

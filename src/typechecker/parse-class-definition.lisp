@@ -252,14 +252,14 @@
                               :for tyvar := (second (find var class-tyvars :key #'car :test #'equalp))
                               :collect (apply-ksubstitution ksubs tyvar)))))
 
-      (setf ksubs (kind-monomorphise-subs (kind-variables predicate) ksubs))
+      (setf ksubs (kind-monomorphize-subs (kind-variables predicate) ksubs))
       (setf predicate (apply-ksubstitution ksubs predicate))
 
       (let* ((superclasses (apply-ksubstitution ksubs superclasses))
 
              (unqualifed-methods
                (loop :for (name . type) :in unqualifed-methods
-                     :for ksubs := (kind-monomorphise-subs (kind-variables type) ksubs)
+                     :for ksubs := (kind-monomorphize-subs (kind-variables type) ksubs)
                      :collect (cons name (apply-ksubstitution ksubs type))))
 
              (superclass-dict

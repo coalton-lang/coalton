@@ -498,7 +498,7 @@
    #:define-class
    #:define-instance
    #:repr
-   #:monomorphise
+   #:monomorphize
    #:specialize
    #:unable-to-codegen)
   ;; Early Types
