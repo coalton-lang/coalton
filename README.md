@@ -82,7 +82,7 @@ COALTON-USER> (coalton (dt (E+ (EVar (Symbol "t"))
 
 ## What's Here?
 
-This repository contains the source code to the [Coalton compiler](src/), and the [standard library](src/library/).
+This repository contains the source code to the [Coalton compiler](src/), and the [standard library](library/).
 
 It also contains a few example programs, such as:
 
