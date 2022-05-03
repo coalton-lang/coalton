@@ -2,6 +2,40 @@
 ;;;;
 ;;;; Recompile specialized versions of type class generic functions across a call graph.
 ;;;;
+;;;; The monomorphizer works by traversing a callgraph, it starts at a
+;;;; given entrypoint and looks up the optimized AST associated that
+;;;; entrypoint. The function CANDIDATE-SELECTION then finds function
+;;;; applications within that entrypoint that are being passed
+;;;; statically known typeclass dictionaries. These application sites
+;;;; and their arguments are referred to as "compile candidates".
+;;;;
+;;;; (declare (Num :a => :a -> :a))
+;;;; (define (f x)
+;;;;   (+ 1 2)               <- Addition on "Integer"
+;;;;   (+ (Some x) (Some x)) <- Addition on "Optional :a"
+;;;;   (+ x x)               <- Addition on ":a"
+;;;;
+;;;; In the above example only the first function application is a
+;;;; valid candidate. The later calls to + do not have statically
+;;;; known dictionaries. SOME has no typeclass dictionaries and thus
+;;;; is also not a valid candidate.
+;;;;
+;;;; Candidates are comprised of a function name, which currently must
+;;;; be defined at the top level. And a list of arguments which can be
+;;;; nodes or the placeholder value '@@unpropagated. Unpropagated
+;;;; values will remain as function arguments in the recompiled
+;;;; version of a function. Valid candidates have at least two
+;;;; arguments, at least one argument must not be '@@unpropagated, and
+;;;; they must have at least one unpropagated argument.
+;;;; 
+;;;; Valid candidates can have unknown typeclass dictionaries as long
+;;;; as at least one argument is a valid dictionary. Candidates are
+;;;; each given a unique name, used as the name of their recompiled
+;;;; function. Candidates are only recompiled once per callgraph, but
+;;;; the same function may be recompiled many times with different
+;;;; static dictionaries as arguments. Candidate recompilation can
+;;;; also be deduplicated across multiple monomorphized callgraphs in
+;;;; the same compilation unit.
 
 (defpackage #:coalton-impl/codegen/monomorphize
   (:use
@@ -33,6 +67,7 @@
 (in-package #:coalton-impl/codegen/monomorphize)
 
 (deftype argument ()
+  "An ARGUMENT is either a NODE or the marker value '@@unpropagated"
   `(or (member @@unpropagated) node))
 
 (defun argument-p (x)
@@ -46,6 +81,8 @@
   '(satisfies argument-list-p))
 
 (defstruct compile-candidate
+  "A COMPILE-CANDIDATE is a compilation of a NAME and a list of
+ARGUMENTS some of which are statically known dictionaries."
   (name      (required 'name) :type symbol        :read-only t)
   (args      (required 'args) :type argument-list :read-only t))
 
@@ -84,11 +121,13 @@ constant values could be."
      nil)))
 
 (defstruct (candidate-manager (:constructor candidate-manager))
+  "A CANDIDATE-MANAGER is used to deduplicate COMPILE-CANDIDATE
+recompilation, and also maintains a stack of uncompiled candidates."
   (map   (make-hash-table :test #'equalp) :type hash-table            :read-only t)
   (stack nil                              :type compile-candidate-list            ))
 
 (defun candidate-manager-get (candidate-manager candidate)
-  "Returns name the given to a recompiled compile-candidate"
+  "Returns name the given to a compile-candidate"
   (declare (type candidate-manager candidate-manager)
            (type compile-candidate candidate)
            (values symbol))
@@ -96,7 +135,7 @@ constant values could be."
     name))
 
 (defun candidate-manager-push (candidate-manager candidate package)
-  "Push a new candidate to be compiled"
+  "Push a new candidate to be compiled. This function is idempotent."
   (declare (type candidate-manager candidate-manager)
            (type compile-candidate candidate)
            (values))
@@ -152,6 +191,8 @@ constant values could be."
      :args new-args)))
 
 (defun compile-candidate (candidate node env)
+  "Recompile a given CANDIDATE replacing propigatable arguments with
+their known values."
   (declare (type compile-candidate candidate)
            (type node-abstraction node)
            (type tc:environment env)
@@ -194,6 +235,9 @@ constant values could be."
     new-node))
 
 (defun resolve-var (node resolve-table)
+  "Lookup a given node in the RESOLVE-TABLE, returning it if it exists.
+Otherwise returns the origional node. This function is used to
+propigate dictionaries that have been moved by the hoister."
   (declare (type node node)
            (type hash-table resolve-table)
            (values node))
@@ -221,7 +265,8 @@ constant values could be."
 
                (let ((candidate
                        (valid-candidate-p
-                        name (loop :for rand :in rands
+                        name
+                        (loop :for rand :in rands
                               :collect (resolve-var rand resolve-table))
                         bound-variables
                         env)))

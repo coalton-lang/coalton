@@ -83,7 +83,7 @@
                              (:file "codegen-expression")
                              (:file "codegen-type-definition")
                              (:file "codegen-class")
-                             (:file "monomorphise")
+                             (:file "monomorphize")
                              (:file "optimizer")
                              (:file "program")
                              (:file "package")))
