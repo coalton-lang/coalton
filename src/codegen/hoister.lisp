@@ -37,7 +37,7 @@
       (progn
         (setf (gethash node (hoist-point-definitions hoist-point))
               (node-variable (node-type node)
-                             (alexandria:ensure-symbol (gensym "hoisted_") package)))
+                             (gentemp "hoisted_" package)))
         (values (gethash node (hoist-point-definitions hoist-point))))))
 
 (defun hoist-point-list-p (x)
