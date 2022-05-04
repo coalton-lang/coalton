@@ -113,7 +113,6 @@
 
       (inline-methods env)
 
-      #+this-is-broken
       (static-dict-lift hoister package env))
      (pop-final-hoist-point hoister))))
 

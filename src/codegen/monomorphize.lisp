@@ -144,9 +144,8 @@ recompilation, and also maintains a stack of uncompiled candidates."
     (return-from candidate-manager-push))
 
   (let ((new-name
-          (alexandria:ensure-symbol
-           (gensym (concatenate 'string (symbol-name (compile-candidate-name candidate)) "#"))
-           package)))
+          (gentemp (concatenate 'string (symbol-name (compile-candidate-name candidate)) "#")
+                   package)))
 
     (setf (gethash candidate (candidate-manager-map candidate-manager)) new-name))
 

@@ -100,7 +100,7 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
         :collect
         (cons
          var
-         (alexandria:ensure-symbol (gensym (concatenate 'string (symbol-name var) "-")) package))))
+         (gentemp (concatenate 'string (symbol-name var) "-") package))))
 
 (defun parse-abstraction (unparsed vars subexprs m package)
   (declare (type t unparsed)
@@ -112,7 +112,7 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
   (let ((nullary-fn nil)
         (var nil))
     (when (null vars)
-      (setf var (alexandria:ensure-symbol (gensym) package))
+      (setf var (gentemp "G" package))
       (setf vars (list var))
       (setf nullary-fn t))
 
