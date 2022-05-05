@@ -176,9 +176,7 @@ Returns (VALUES type predicate-list typed-node subs)")
             :else :do
               (push binding impl-bindings))
 
-      (multiple-value-bind (typed-bindings bindings-preds env subs returns)
-          ;; NOTE: If we wanted explicit types in let bindings this
-          ;;       would be the place to do it.
+      (multiple-value-bind (typed-bindings bindings-preds env subs returns explicit-types)
           (derive-bindings-type
            impl-bindings
            expl-bindings
@@ -190,6 +188,7 @@ Returns (VALUES type predicate-list typed-node subs)")
             (derive-expression-type (node-let-subexpr value) env subs)
 
           (setf returns (append new-returns returns))
+
           (let ((preds (append ret-preds bindings-preds)))
             (values type
                     preds
@@ -198,6 +197,7 @@ Returns (VALUES type predicate-list typed-node subs)")
                      (node-unparsed value)
                      typed-bindings
                      typed-subexpr
+                     explicit-types
                      (node-let-name-map value))
                     new-subs
                     returns))))))
@@ -334,7 +334,7 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
   (declare (type environment env)
            (type substitution-list subs)
            (type list name-map)
-           (values typed-binding-list ty-predicate-list environment substitution-list ty-list &optional))
+           (values typed-binding-list ty-predicate-list environment substitution-list ty-list hash-table &optional))
 
   ;; Push all the explicit type declarations on to the environment
   (let* ((expl-binds (mapcar (lambda (b)
@@ -374,50 +374,56 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
 
             (setf returns (append new-returns returns)))))
 
-      ;; Now that we have the implicit bindings sorted out, we can type
-      ;; check the explicit ones.
-      (dolist (binding expl-bindings)
-        ;; Derive the type of the binding
-        (multiple-value-bind (ty-scheme typed-expl-binding expl-preds new-env new-subs qual-ty new-returns)
-            (derive-expl-type binding
-                              (gethash (car binding) expl-declarations)
-                              env subs name-map
-                              :allow-deferred-predicates allow-deferred-predicates
-                              :allow-returns allow-returns)
-          (declare (ignore ty-scheme qual-ty))
+      (let ((explicit-types (make-hash-table)))
 
-          ;; Update the current environment and substitutions
-          (setf env new-env
-                subs new-subs)
-          ;; Add the binding to the list of bindings
-          (push typed-expl-binding typed-bindings)
-          (setf preds (append preds expl-preds))
+        ;; Now that we have the implicit bindings sorted out, we can type
+        ;; check the explicit ones.
+        (dolist (binding expl-bindings)
+          ;; Derive the type of the binding
+          (multiple-value-bind (ty-scheme typed-expl-binding expl-preds new-env new-subs qual-ty new-returns)
+              (derive-expl-type binding
+                                (gethash (car binding) expl-declarations)
+                                env subs name-map
+                                :allow-deferred-predicates allow-deferred-predicates
+                                :allow-returns allow-returns)
+            (declare (ignore ty-scheme))
 
-          (setf returns (append new-returns returns))))
 
-      (validate-bindings-for-codegen typed-bindings)
+            ;; Update the current environment and substitutions
+            (setf env new-env
+                  subs new-subs)
+            ;; Add the binding to the list of bindings
+            (push typed-expl-binding typed-bindings)
+            (setf preds (append preds expl-preds))
 
-      ;;
-      ;; Binding groups are typechecked before predicates are
-      ;; resolved. Once substitutions are applied the typed nodes in
-      ;; an scc will have the correct type minus predicates. The
-      ;; following rewrite pass will update the typed-nodes in a
-      ;; binding group with those missing predicates.
-      ;;
-      (let ((bindings (mapcar
-                       (lambda (binding)
-                         (cons (car binding) (lookup-value-type env (car binding))))
-                       typed-bindings)))
-        (values
-         (loop :for (name . node) :in typed-bindings
-               :collect (cons name
-                              (rewrite-recursive-calls
-                               (remove-static-preds (apply-substitution subs node))
-                               bindings)))
-         preds
-         env
-         subs
-         returns)))))
+            (setf returns (append new-returns returns))
+
+            (setf (gethash (car binding) explicit-types) qual-ty)))
+
+        (validate-bindings-for-codegen typed-bindings)
+
+        ;;
+        ;; Binding groups are typechecked before predicates are
+        ;; resolved. Once substitutions are applied the typed nodes in
+        ;; an scc will have the correct type minus predicates. The
+        ;; following rewrite pass will update the typed-nodes in a
+        ;; binding group with those missing predicates.
+        ;;
+        (let ((bindings (mapcar
+                         (lambda (binding)
+                           (cons (car binding) (lookup-value-type env (car binding))))
+                         typed-bindings)))
+          (values
+           (loop :for (name . node) :in typed-bindings
+                 :collect (cons name
+                                (rewrite-recursive-calls
+                                 (remove-static-preds (apply-substitution subs node))
+                                 bindings)))
+           preds
+           env
+           subs
+           returns
+           explicit-types))))))
 
 (defgeneric rewrite-recursive-calls (node bindings)
   (:method ((node typed-node-literal) bindings)
@@ -476,6 +482,7 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                      name
                      (rewrite-recursive-calls node bindings)))
      (rewrite-recursive-calls (typed-node-let-subexpr node) bindings)
+     (typed-node-let-explicit-types node)
      (typed-node-let-name-map node)))
 
   (:method ((node typed-node-lisp) bindings)

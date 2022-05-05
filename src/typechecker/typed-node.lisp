@@ -80,12 +80,15 @@
 (defstruct
     (typed-node-let
      (:include typed-node)
-     (:constructor typed-node-let (type unparsed bindings subexpr  name-map)))
+     (:constructor typed-node-let (type unparsed bindings subexpr explicit-types name-map)))
   ;; Bindings declared in the let
   (bindings (required 'bindings) :type typed-binding-list :read-only t)
 
   ;; The body of the let expression
   (subexpr  (required 'subexpr)  :type typed-node         :read-only t)
+
+  ;; Mapping from binding name to declared explicit types (if applicable)
+  (explicit-types (required 'explicit-types) :type hash-table :read-only t)
 
   ;; An alist mapping the current binding names
   ;; to their origional names
@@ -218,6 +221,10 @@
     (lambda (binding) (cons (car binding) (apply-substitution subs (cdr binding))))
     (typed-node-let-bindings node))
    (apply-substitution subs (typed-node-let-subexpr node))
+   (maphash-values-new
+    (lambda (type)
+      (apply-substitution subs type))
+    (typed-node-let-explicit-types node))
    (typed-node-let-name-map node)))
 
 (defmethod apply-substitution (subs (node typed-node-lisp))
@@ -308,6 +315,7 @@
      (typed-node-unparsed node)
      (typed-node-let-bindings node)
      (typed-node-let-subexpr node)
+     (typed-node-let-explicit-types node)
      (typed-node-let-name-map node)))
 
   (:method ((node typed-node-match) new-type)
@@ -366,7 +374,9 @@
     (remove-duplicates
      (append (collect-type-predicates (typed-node-type node))
              (collect-type-predicates (typed-node-let-subexpr node))
-             (mapcan #'collect-type-predicates (mapcar #'cdr (typed-node-let-bindings node))))
+             (mapcan #'collect-type-predicates (mapcar #'cdr (typed-node-let-bindings node)))
+             (loop :for node :being :the :hash-values :of (typed-node-let-explicit-types node)
+                   :append (collect-type-predicates node)))
      :test #'equalp))
 
   (:method ((node typed-node-match))
@@ -470,6 +480,7 @@
      (loop :for (name . node) :in (typed-node-let-bindings node)
            :collect (cons name (remove-static-preds node)))
      (remove-static-preds (typed-node-let-subexpr node))
+     (typed-node-let-explicit-types node)
      (typed-node-let-name-map node)))
 
   (:method ((node typed-node-lisp))
