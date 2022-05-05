@@ -199,8 +199,12 @@
 
       (node-let
        (tc:qualified-ty-type qual-ty)
-       (loop :for (name . expr) :in (tc:typed-node-let-bindings expr)
-             :collect (cons name (compile-expression expr ctx env)))
+       (loop :for (name . node) :in (tc:typed-node-let-bindings expr)
+             :for explicit-type := (gethash name (tc:typed-node-let-explicit-types expr))
+             :if explicit-type
+               :collect (cons name (compile-toplevel explicit-type node env :extra-context ctx))
+             :else
+               :collect (cons name (compile-expression node ctx env)))
        (compile-expression (tc:typed-node-let-subexpr expr) ctx env))))
 
   (:method ((expr tc:typed-node-lisp) ctx env)

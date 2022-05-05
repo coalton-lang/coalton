@@ -40,6 +40,16 @@
       #+sbcl (declare (sb-ext:muffle-conditions sb-ext:code-deletion-note))
       (coalton-bug "This error was expected to be unreachable in the Coalton source code.")))
 
+(defun maphash-values-new (function table)
+  "Map across the values of a hash-table. Returns a new hash-table with unchanged keys."
+  (declare (type function function)
+           (type hash-table table))
+  (let ((new (make-hash-table)))
+    (loop :for k :being :the :hash-keys :of table
+          :for v :being :the :hash-values :of table
+          :do (setf (gethash k new) (funcall function v)))
+    new))
+
 (defun required (name)
   "A function to call as a slot initializer when it's required."
   (declare (type symbol name))

@@ -22,6 +22,7 @@
    #:debug-tap                          ; MACRO
    #:symbol-list                        ; TYPE
    #:literal-value                      ; TYPE
+   #:maphash-values-new                 ; FUNCTION
    ))
 
 (uiop:define-package #:coalton-impl/algorithm
@@ -241,6 +242,7 @@
    #:typed-node-let-bindings              ; ACCESSOR
    #:typed-node-let-subexpr               ; ACCESSOR
    #:typed-node-let-name-map              ; ACCESSOR
+   #:typed-node-let-explicit-types        ; ACCESSOR
    #:typed-node-lisp                      ; STRUCT
    #:typed-node-lisp-type                 ; ACCESSOR
    #:typed-node-lisp-form                 ; ACCESSOR
