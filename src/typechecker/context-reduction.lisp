@@ -62,60 +62,28 @@ Returns (PREDS FOUNDP)"
   (declare (type environment env)
            (type ty-predicate-list preds)
            (type ty-predicate pred)
-           (values boolean))
+           (values boolean &optional))
   (true (member pred (mapcan (lambda (p) (by-super env p)) preds) :test #'equalp)))
 
-(defun hnf-p (pred)
-  "Is PRED in head-normal form?"
-  (labels ((hnf (ty)
-             (etypecase ty
-               (tvar t)
-               (tcon nil)
-               (tapp (hnf (tapp-from ty))))))
-    (every (lambda (type)
-             (hnf type))
-           (ty-predicate-types pred))))
-
-(defun to-hnf (env pred &optional (allow-deferred-predicates t))
-  "Simplify PRED to a list of head-normal predicates
-
-ALLOW-DEFERRED-PREDICATES allows for predicates not in head-normal
-form to be deferred (PRED is returned). Otherwise, an error is
-signalled on non-head-normal forms."
-  (if (hnf-p pred)
-      (list pred)
-      (multiple-value-bind (inst-preds found)
-          (by-inst env pred)
-        (cond
-          (found
-           (mapcan (lambda (p) (to-hnf env p)) inst-preds))
-          (allow-deferred-predicates
-           (list pred))
-          (t
-           (error 'context-reduction-failure :pred pred))))))
-
-(defun simplify-context (env preds)
+(defun simplify-context (f preds)
   "Simplify PREDS to head-normal form"
   (labels ((simp-loop (rs ps)
              (if (endp ps)
                  rs
-                 (if (entail env (append rs (rest ps)) (first ps))
+                 (if (funcall f (append rs (rest ps)) (first ps))
                      (simp-loop rs (rest ps))
                      (simp-loop (append (list (first ps)) rs) (rest ps))))))
     (simp-loop nil preds)))
 
 (defun reduce-context (env preds subs &key (allow-deferred-predicates t))
-  "Reduce predicate context PREDS in ENV
-
-If ALLOW-DEFERRRED-PREDICATES is NIL then an error is signalled if
-PREDS cannot be reduced to head-normal form. Non-head-normal
-predicates are allowed by default because multi-parameter typeclass
-predicates cannot necessarily be resolved at the call site."
-  (simplify-context (apply-substitution subs env)
-                    (apply #'append
-                           (mapcar (lambda (p)
-                                     (to-hnf env p allow-deferred-predicates))
-                                   (apply-substitution subs preds)))))
+  (declare (ignore allow-deferred-predicates))
+  (let ((env (apply-substitution subs env)))
+    (simplify-context
+     (lambda (preds pred)
+       (super-entail env preds pred))
+     (loop :for pred :in (apply-substitution subs preds)
+          :unless (entail env nil pred)
+            :collect pred))))
 
 (defun split-context (env fixed-vars preds subs)
   "Split PREDS into retained predicates and deferred predicates

@@ -167,8 +167,7 @@ in FORMS that begin with that operator."
 
         (let* ((env (coalton-impl/typechecker::apply-substitution substs *global-environment*))
                (preds (coalton-impl/typechecker::reduce-context env preds substs))
-               (substs (handler-case (coalton-impl/typechecker::pred-defaults preds substs)
-                         (coalton-impl/typechecker::predicate-unification-error () substs)))
+               (substs (coalton-impl/typechecker::pred-defaults preds substs))
                (preds (coalton-impl/typechecker::reduce-context env preds substs))
                (typed-node (coalton-impl/typechecker::remove-static-preds
                             (coalton-impl/typechecker::apply-substitution substs typed-node)))
@@ -190,10 +189,6 @@ in FORMS that begin with that operator."
 
             (t
              (coalton-impl/typechecker::with-pprint-variable-context ()
-               ;; Force an error on non-hnf preds
-               (dolist (pred preds)
-                 (to-hnf env pred nil))
-
                (let* ((tvars (loop :for i :to (1- (length (remove-duplicates (coalton-impl/typechecker::type-variables qual-type)
                                                                              :test #'equalp)))
                                    :collect (coalton-impl/typechecker::make-variable)))
