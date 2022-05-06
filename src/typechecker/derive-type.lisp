@@ -724,9 +724,11 @@ which have default instances. Currently only resolves Num :a -> Num Integer"
              (when (eq class num)
                (setf subs
                      (compose-substitution-lists
-                      (predicate-match
-                       pred
-                       (ty-predicate num (list *integer-type*)))
+                      (handler-case 
+                          (predicate-match
+                           pred
+                           (ty-predicate num (list *integer-type*)))
+                        (predicate-unification-error () nil))
                       subs)))))
   subs)
 

@@ -115,3 +115,9 @@
   (let ((declare z (Num :a => :a -> :a))
         (z id))
     (z 5)))
+
+;; Test mutli param typeclass context reduction
+(coalton-toplevel
+  (declare context-reduction (Into :a Integer => :a -> Integer))
+  (define (context-reduction x)
+    (into x)))

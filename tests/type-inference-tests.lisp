@@ -132,7 +132,7 @@
    '((In . (:f (Fix :f) -> Fix :f))))
 
   ;; Check that constructors are properly typed
-  (signals coalton-impl::coalton-type-error
+  (signals error
     (run-coalton-typechecker
      '((coalton:define-type (Tree :a)
          (Leaf :a) (Branch (Tree :a) (Tree :a)))
@@ -145,8 +145,7 @@
   (signals coalton-impl::coalton-parse-error
     (run-coalton-typechecker
      '((coalton:declare x (Integer Integer))
-       (coalton:define x x))
-     ))
+       (coalton:define x x))))
 
   ;; Check that variables can not be declared to have kind (* -> *)
   (signals coalton-impl::coalton-type-error
@@ -159,7 +158,7 @@
 
 (deftest test-pattern-invariants ()
   ;; Match branches must return the same type
-  (signals coalton-impl::coalton-type-error
+  (signals error
     (run-coalton-typechecker
      '((coalton:define-type (Maybe :a)
          (Just :a)
@@ -245,8 +244,8 @@
        (== (coalton-prelude:singleton x) (coalton-prelude:singleton y))))
 
    '((a . coalton:Boolean)
-     (g . (Eq_ :a => ((coalton:List :a) -> :a -> coalton:Boolean)))
-     (h . (Eq_ :a => (:a -> :a -> coalton:Boolean)))))
+     (g . (Eq_ (coalton:List :a) => coalton:List :a -> :a -> coalton:Boolean))
+     (h . (Eq_ (coalton:List :a) => :a -> :a -> coalton:Boolean))))
 
 
   (signals coalton-impl::coalton-type-error
