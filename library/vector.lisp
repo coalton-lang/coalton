@@ -46,9 +46,8 @@
   ;; Vector
   ;;
 
-  (repr :transparent)
-  (define-type (Vector :a)
-    (%Vector Lisp-Object))
+  (repr :native (cl:vector cl:t))
+  (define-type (Vector :a))
 
   (declare new (Unit -> Vector :a))
   (define (new _)
@@ -82,7 +81,7 @@
   (define (copy v)
     "Return a new vector containing the same elements as V"
     (lisp (Vector :a) (v)
-      (%Vector (alexandria:copy-array v))))
+      (alexandria:copy-array v)))
 
   (declare push! (:a -> Vector :a -> Integer))
   (define (push! item v)
@@ -153,7 +152,7 @@
 
       (lisp (Optional Integer) (v test)
         (cl:let ((pos (cl:position-if
-                       #'(cl:lambda (x)
+                       (cl:lambda (x)
                            (cl:equalp True (coalton-impl/codegen::A1 test x)))
                        v)))
           (cl:if pos
