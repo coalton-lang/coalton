@@ -456,7 +456,7 @@ The fields are defined as follows:
 
   (declare reciprocal ((Dividable :a :a) (Num :a) => :a -> :a))
   (define (reciprocal x)
-    "The multiplicative of a number."
+    "The multiplicative inverse of a number."
     (/ 1 x))
 
   (specialize reciprocal reciprocal-frac (Fraction -> Fraction))

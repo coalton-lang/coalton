@@ -33,9 +33,8 @@
   ;; Slice
   ;;
 
-  (repr :transparent)
-  (define-type (Slice :a)
-    (%Slice Lisp-Object))
+  (repr :native (cl:vector cl:t))
+  (define-type (Slice :a))
 
   (declare new (Integer -> Integer -> (Vector :a) -> (Slice :a)))
   (define (new start length v)
@@ -84,10 +83,8 @@
   (declare index-unsafe (Integer -> (Slice :a) -> :a))
   (define (index-unsafe idx s)
     "Lookup the element at INDEX in S without bounds checking"
-    (match s
-      ((%Slice s)
-       (lisp :a (idx s)
-         (cl:aref s idx)))))
+    (lisp :a (idx s)
+      (cl:aref s idx)))
 
   (declare foreach ((:a -> :b) -> (Slice :a) -> Unit))
   (define (foreach f s)
