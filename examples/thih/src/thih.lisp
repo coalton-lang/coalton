@@ -729,7 +729,7 @@
       (define (inst ts t)
         (match t
           ((TAp l r) (TAp (inst ts l) (inst ts r)))
-          ((TGen n)  (fromSome "Failed to find TGen type" (list:index ts n)))
+          ((TGen n)  (fromSome "Failed to find TGen type" (list:index n ts)))
           (_ t))))
 
   (define-instance (Instantiate :a => (Instantiate (List :a)))

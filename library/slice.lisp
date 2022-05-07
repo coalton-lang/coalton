@@ -164,6 +164,23 @@
              s1 s2)
             (cell:read out)))))
 
+  (define-instance (Foldable Slice)
+    (define (fold f init s)
+      (lisp :a (f init s)
+        (cl:reduce
+         (cl:lambda (b a)
+           (coalton-impl/codegen::A2 f b a))
+         s
+         :initial-value init)))
+    (define (foldr f init s)
+      (lisp :a (f init s)
+        (cl:reduce
+         (cl:lambda (a b)
+           (coalton-impl/codegen::A2 f a b))
+         s
+         :initial-value init
+         :from-end cl:t))))
+
   (define-instance (Into (Slice :a) (Vector :a))
     (define (into s)
       (let v = (vector:with-capacity (length s)))
