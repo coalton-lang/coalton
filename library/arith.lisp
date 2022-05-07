@@ -454,8 +454,15 @@ The fields are defined as follows:
     (lisp Integer (q)
       (cl:denominator q)))
 
-  (declare reciprocal (Fraction -> Fraction))
-  (define (reciprocal q)
+  (declare reciprocal ((Dividable :a :a) (Num :a) => :a -> :a))
+  (define (reciprocal x)
+    "The multiplicative of a number."
+    (/ 1 x))
+
+  (specialize reciprocal reciprocal-frac (Fraction -> Fraction))
+
+  (declare reciprocal-frac (Fraction -> Fraction))
+  (define (reciprocal-frac q)
     "The reciprocal of a fraction."
     (lisp Fraction (q)
       (cl:/ q)))

@@ -200,8 +200,8 @@
           0
           l))
 
-  (declare index (List :a -> Integer -> Optional :a))
-  (define (index xs i)
+  (declare index (Integer -> List :a -> Optional :a))
+  (define (index i xs)
     "Returns the Ith element of a list."
     (match xs
       ((Nil)
@@ -209,12 +209,12 @@
       ((Cons x xs)
        (if (== 0 i)
            (Some x)
-           (index xs (- i 1))))))
+           (index (- i 1) xs)))))
 
   (declare nth (Integer -> List :t -> :t))
   (define (nth n l)
     "Like INDEX, but errors if the index is not found."
-    (fromSome "There is no NTH" (index l n)))
+    (fromSome "There is no NTH" (index n l)))
 
   (declare elemIndex (Eq :a => :a -> List :a -> Optional Integer))
   (define (elemIndex x xs)
