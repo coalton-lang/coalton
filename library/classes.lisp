@@ -186,6 +186,12 @@
     (* (:a -> :a -> :a))
     (fromInt (Integer -> :a)))
 
+  (define-class (DefaultInt :a)
+    "Internal class to mark implicit defaulting to integers."
+    (defaultInt (:a -> :a)))
+
+  (define-instance (Num :a => DefaultInt :a)
+    (define (defaultInt x) x))
 
   ;;
   ;; Haskell

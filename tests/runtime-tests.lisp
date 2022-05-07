@@ -116,6 +116,11 @@
         (z id))
     (z 5)))
 
+;; Test the following codegens
+(define-test test-default-codegen ()
+  (fn (x) (+ x 1))
+  ((fn (x) (/ x 1)) (the Fraction 2)))
+
 ;; Test mutli param typeclass context reduction
 (coalton-toplevel
   (declare context-reduction (Into :a Integer => :a -> Integer))

@@ -12,6 +12,9 @@
                 #:pattern-wildcard
                 #:pattern-literal
                 #:pattern-constructor)
+  (:local-nicknames
+   (#:arith #:coalton-library/arith)
+   (#:class #:coalton-library/classes))
   (:shadowing-import-from #:coalton
                           #:String
                           #:Integer

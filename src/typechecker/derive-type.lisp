@@ -328,6 +328,7 @@ Returns (VALUES type predicate-list typed-node subs)")
                              &key
                                (disable-monomorphism-restriction nil)
                                (allow-deferred-predicates t)
+                               (allow-default-predicates nil)
                                (allow-returns t))
   "IMPL-BINDINGS and EXPL-BINDIGNS are of form (SYMBOL . EXPR)
 EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
@@ -363,6 +364,7 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                name-map
                :disable-monomorphism-restriction disable-monomorphism-restriction
                :allow-deferred-predicates allow-deferred-predicates
+               :allow-default-predicates allow-default-predicates
                :allow-returns allow-returns)
 
             ;; Update the current environment and substitutions
@@ -591,6 +593,7 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                           &key
                             (disable-monomorphism-restriction nil)
                             (allow-deferred-predicates t)
+                            (allow-default-predicates t)
                             (allow-returns nil))
   (declare (type binding-list bindings)
            (type environment env)
@@ -632,13 +635,15 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                      (some (lambda (b) (not (coalton-impl/ast::node-abstraction-p (cdr b))))
                            bindings)))
 
-            ;; NOTE: This is where defaulting happens. Retained
+            ;; NOTE: This is where toplevel defaulting happens. Retained
             ;; predicates are inspected to generate new substitutions
             ;; based on defaulting rules.
 
-            (setf local-subs (pred-defaults retained-preds local-subs))
-            (setf retained-preds (apply-substitution local-subs retained-preds))
-            (setf expr-types (apply-substitution local-subs expr-types))
+            (when allow-default-predicates
+              (setf (values retained-preds local-subs)
+                    (assure-pred-defaults
+                     env retained-preds local-subs))
+              (setf expr-types (apply-substitution local-subs expr-types)))
 
             ;; NOTE: This is where the monomorphism restriction happens
 
@@ -712,24 +717,48 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                    local-subs
                    returns)))))))))
 
-(defun pred-defaults (preds subs)
-  "Given a list of predicates, compute substutions for predicates
-which have default instances. Currently only resolves Num :a -> Num Integer"
-  (let ((num (alexandria:ensure-symbol
-              "NUM"
-              (find-package "COALTON-LIBRARY/CLASSES"))))
+(defun assure-pred-defaults (env preds subs &key (keep-default-constraint nil))
+  "Use default predicates only if instantiating is possible. Currently only
+resolves DefaultInt :a -> DefaultInt Integer"
+  (let* ((defaultInt (alexandria:ensure-symbol
+                      "DEFAULTINT"
+                      (find-package "COALTON-LIBRARY/CLASSES")))
+         (new-subs (pred-defaults preds subs defaultInt *integer-type*))
+         (new-preds (apply-substitution new-subs preds)))
+
+    (cond
+      ;; Don't default if asking for an instance that can't exist:
+      ;; (e.g. ((Num Integer) (Dividable Integer Integer) => Integer))
+      ((not (find-if-not
+             (lambda (pred)
+               (lookup-class-instance env pred :no-error t))
+             (remove-if-not #'static-predicate-p new-preds)))
+       (values new-preds new-subs))
+      ;; Skip needing to remove constraint
+      (keep-default-constraint
+       (values preds subs))
+      ;; Remove confusing constraint in inferred type
+      (t (values
+          (remove-if (lambda (pred)
+                       (eq (ty-predicate-class pred) defaultInt))
+                     preds)
+          subs)))))
+
+(defun pred-defaults (preds subs default-class default-type)
+  "Given a list of predicates, compute substutions for predicates which have
+default instances."
     (loop :for pred :in (remove-if #'static-predicate-p preds)
           :for class := (ty-predicate-class pred)
           :do
-             (when (eq class num)
+             (when (eq class default-class)
                (setf subs
                      (compose-substitution-lists
-                      (handler-case 
+                      (handler-case
                           (predicate-match
                            pred
-                           (ty-predicate num (list *integer-type*)))
+                           (ty-predicate default-class (list default-type)))
                         (predicate-unification-error () nil))
-                      subs)))))
+                      subs))))
   subs)
 
 (defun derive-expl-type (binding declared-ty env subs name-map
@@ -762,8 +791,6 @@ which have default instances. Currently only resolves Num :a -> Num Integer"
              (env-tvars (type-variables (apply-substitution local-subs env)))
              (local-tvars (set-difference (type-variables expr-type) env-tvars))
 
-             (output-qual-type (qualify expr-preds expr-type))
-             (output-scheme (quantify local-tvars output-qual-type))
              (reduced-preds (remove-if-not (lambda (p)
                                              (not (entail env expr-preds p)))
                                            (apply-substitution local-subs preds))))
@@ -771,39 +798,51 @@ which have default instances. Currently only resolves Num :a -> Num Integer"
         (multiple-value-bind (deferred-preds retained-preds)
             (split-context env env-tvars reduced-preds local-subs)
 
-          (with-type-context ("definition of ~A" (car binding))
-            (when (and returns (not allow-returns))
-              (error 'unexpected-return))
-            
-            ;; Make sure the declared scheme is not too general
-            (when (not (equalp output-scheme declared-ty))
-              (error 'type-declaration-too-general-error
-                     :name (car binding)
-                     :declared-type declared-ty
-                     :derived-type output-scheme))
+          ;; NOTE: This is where explicit defaulting happens
+          (unless (null retained-preds)
+            (setf (values retained-preds local-subs)
+                  (assure-pred-defaults
+                   env retained-preds local-subs))
+            (setf expr-type (apply-substitution local-subs expr-type))
+            ;; Remove defaulted predicates
+            (setf retained-preds (remove-if #'static-predicate-p retained-preds)))
 
-            ;; Make sure the declared type includes all the required predicates
-            (when (not (null retained-preds))
-              (error 'weak-context-error
-                     :name (car binding)
-                     :declared-type output-qual-type
-                     :preds retained-preds))
+          (let* ((output-qual-type (qualify expr-preds expr-type))
+                 (output-scheme (quantify local-tvars output-qual-type)))
 
-            ;; Ensure that we are allowed to defer predicates (this is
-            ;; not allowable in toplevel forms)
-            (when (and (not allow-deferred-predicates)
-                       deferred-preds)
-              (error 'context-reduction-failure
-                     :pred (apply-substitution subs (first deferred-preds)))))
+            (with-type-context ("definition of ~A" (car binding))
+              (when (and returns (not allow-returns))
+                (error 'unexpected-return))
 
-          (values output-scheme
-                  (cons (car binding)
-                        (apply-substitution local-subs typed-node))
-                  deferred-preds
-                  env
-                  local-subs
-                  output-qual-type
-                  returns))))))
+              ;; Make sure the declared scheme is not too general
+              (when (not (equalp output-scheme declared-ty))
+                (error 'type-declaration-too-general-error
+                       :name (car binding)
+                       :declared-type declared-ty
+                       :derived-type output-scheme))
+
+              ;; Make sure the declared type includes all the required predicates
+              (when (not (null retained-preds))
+                (error 'weak-context-error
+                       :name (car binding)
+                       :declared-type output-qual-type
+                       :preds retained-preds))
+
+              ;; Ensure that we are allowed to defer predicates (this is
+              ;; not allowable in toplevel forms)
+              (when (and (not allow-deferred-predicates)
+                         deferred-preds)
+                (error 'context-reduction-failure
+                       :pred (apply-substitution subs (first deferred-preds)))))
+
+            (values output-scheme
+                    (cons (car binding)
+                          (apply-substitution local-subs typed-node))
+                    deferred-preds
+                    env
+                    local-subs
+                    output-qual-type
+                    returns)))))))
 
 (defun derive-binding-type (name type expr env subs name-map)
   (declare (type ty type)

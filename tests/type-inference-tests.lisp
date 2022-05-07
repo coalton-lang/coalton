@@ -28,6 +28,20 @@
      (x . Integer)
      (y . String)))
 
+  ;; Check let bindings do default
+  (check-coalton-types
+   '((coalton:define x
+       (coalton:let ((y 2))
+         y)))
+   '((x . Integer)))
+
+  ;; Check type doesn't default and looks pretty
+  (check-coalton-types
+   '((coalton:define (f x)
+       (arith:/ 2 x)))
+   '((f . ((arith:Dividable :a :a)
+           (class:Num :a) => :a -> :a))))
+
   ;; Check that let bindings are polymorphic over kinds
   (check-coalton-types
    '((coalton:define x
@@ -83,6 +97,24 @@
     (run-coalton-typechecker
      '((coalton:declare x :a)
        (coalton:define x 5))))
+
+  ;; Check let bindings don't default on explicit declerations
+  (check-coalton-types
+   '((coalton:declare x coalton:Fraction)
+     (coalton:define x
+       (coalton:let ((y 2))
+         y)))
+   '((x . coalton:Fraction)))
+
+  ;; Check defaulting occurs within explicit declerations
+  (check-coalton-types
+   '((coalton:declare x coalton:Integer)
+     (coalton:define x
+       (coalton:progn
+         ;; 2 should be an Integer
+         2
+         3)))
+   '((x . Integer)))
 
   ;; Implicitly typed functions should only infer types from the declared type signature of an explicitly typed functions
   ;; http://jeremymikkola.com/posts/2019_01_12_type_inference_for_haskell_part_12.html

@@ -262,17 +262,25 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
        (pattern-constructor ctor (mapcar #'parse-pattern args))))))
 
 (defun parse-atom (atom)
-  ;; Convert integer literals into fromInt calls. This allows for
+  ;; Convert integer literals into defaultInt calls. This allows for
   ;; "overloaded" number literals. Other literals are left as is.
-  (let ((fromInt
+  (let ((defaultInt
+           (alexandria:ensure-symbol
+           "DEFAULTINT"
+           (find-package "COALTON-LIBRARY/CLASSES")))
+        (fromInt
           (alexandria:ensure-symbol
            "FROMINT"
            (find-package "COALTON-LIBRARY/CLASSES"))))
     (etypecase atom
-      (integer (node-application
-         atom
-         (node-variable fromInt fromInt)
-         (list (node-literal atom atom))))
+      (integer
+       (let ((num-cast
+               (node-application
+                atom (node-variable fromInt fromInt)
+                (list (node-literal atom atom)))))
+         (node-application
+          num-cast (node-variable defaultInt defaultInt)
+          (list num-cast))))
       (t (node-literal atom atom)))))
 
 (defun parse-seq (expr subnodes m package)

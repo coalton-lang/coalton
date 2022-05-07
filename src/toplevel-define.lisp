@@ -147,6 +147,7 @@ Returns new environment, binding list of declared nodes, and a DAG of dependenci
            impl-bindings expl-bindings declared-types env nil nil
            :disable-monomorphism-restriction t
            :allow-deferred-predicates nil
+           :allow-default-predicates t
            :allow-returns nil)
         (when preds
           (coalton-bug "Preds not expected. ~A" preds))

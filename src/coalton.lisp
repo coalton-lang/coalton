@@ -167,7 +167,10 @@ in FORMS that begin with that operator."
 
         (let* ((env (coalton-impl/typechecker::apply-substitution substs *global-environment*))
                (preds (coalton-impl/typechecker::reduce-context env preds substs))
-               (substs (coalton-impl/typechecker::pred-defaults preds substs))
+               (substs
+                 (nth-value
+                  1 (coalton-impl/typechecker::assure-pred-defaults
+                     env preds substs :keep-default-constraint t)))
                (preds (coalton-impl/typechecker::reduce-context env preds substs))
                (typed-node (coalton-impl/typechecker::remove-static-preds
                             (coalton-impl/typechecker::apply-substitution substs typed-node)))
