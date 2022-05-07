@@ -222,14 +222,14 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
 (defun parse-match-branch (branch m package)
   (declare (type immutable-map m)
            (type package package))
-  (assert (= 2 (length branch))
+  (assert (<= 2 (length branch))
           () "Malformed match branch ~A" branch)
   (let* ((parsed-pattern (parse-pattern (first branch)))
          (pattern-vars (pattern-variables parsed-pattern))
          (local-vars (make-local-vars pattern-vars package))
          (new-m (immutable-map-set-multiple m local-vars))
          (parsed-pattern (rewrite-pattern-vars parsed-pattern new-m))
-         (parsed-expr (parse-form (second branch) new-m package)))
+         (parsed-expr (parse-form (funcall (macro-function 'coalton:progn) (cons 'coalton:progn (cdr branch)) nil) new-m package)))
     (make-match-branch
      :unparsed branch
      :pattern parsed-pattern
