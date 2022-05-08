@@ -119,6 +119,7 @@
                (:file "bits")
                (:file "arith")
                (:file "complex")
+               (:file "integral")
                (:file "char")
                (:file "string")
                (:file "tuple")

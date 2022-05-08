@@ -24,11 +24,6 @@
    #:sign
    #:expt
    #:ash
-   #:mod
-   #:even?
-   #:odd?
-   #:gcd
-   #:lcm
    #:mkFraction
    #:numerator
    #:denominator
@@ -403,34 +398,7 @@ The fields are defined as follows:
   (declare ash (Integer -> Integer -> Integer))
   (define (ash x n)
     "Compute the \"arithmetic shift\" of X by N. "
-    (lisp Integer (x n) (cl:ash x n)))
-
-  (declare mod (Integer -> Integer -> Integer))
-  (define (mod num base)
-    "Compute NUM modulo BASE."
-    (if (== base 0)
-        (error "Can't mod by 0.")
-        (lisp Integer (num base) (cl:values (cl:mod num base)))))
-
-  (declare even? (Integer ->  Boolean))
-  (define (even? n)
-    "Is N even?"
-    (lisp Boolean (n) (to-boolean (cl:evenp n))))
-
-  (declare odd? (Integer -> Boolean))
-  (define (odd? n)
-    "Is N odd?"
-    (lisp Boolean (n) (to-boolean (cl:oddp n))))
-
-  (declare gcd (Integer -> Integer -> Integer))
-  (define (gcd a b)
-    "Compute the greatest common divisor of A and B."
-    (lisp Integer (a b) (cl:gcd a b)))
-
-  (declare lcm (Integer -> Integer -> Integer))
-  (define (lcm a b)
-    "Compute the least common multiple of A and B."
-    (lisp Integer (a b) (cl:lcm a b))))
+    (lisp Integer (x n) (cl:ash x n))))
 
 (coalton-toplevel
   ;; We avoid "Rational" or "Ratio" since those might be a more
