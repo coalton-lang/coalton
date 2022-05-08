@@ -11,9 +11,6 @@
    #:negate
    #:abs
    #:expt
-   #:mod
-   #:even?
-   #:odd?
    #:floor
    #:ceiling
    #:round
@@ -25,9 +22,6 @@
    #:negate
    #:abs
    #:expt
-   #:mod
-   #:even?
-   #:odd?
    #:floor
    #:ceiling
    #:round
@@ -43,6 +37,22 @@
    #:Complex
    #:real-part
    #:imag-part)
+
+  (:import-from
+   #:coalton-library/integral
+   #:Integral
+   #:^
+   #:^^
+   #:mod
+   #:even?
+   #:odd?)
+  (:export
+   #:Integral
+   #:^
+   #:^^
+   #:mod
+   #:even?
+   #:odd?)
 
   (:import-from
    #:coalton-library/string

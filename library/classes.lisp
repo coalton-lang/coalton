@@ -186,7 +186,6 @@
     (* (:a -> :a -> :a))
     (fromInt (Integer -> :a)))
 
-
   ;;
   ;; Haskell
   ;;
