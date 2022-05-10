@@ -15,6 +15,7 @@
    #:/
    #:Quantization
    #:Quantizable #:quantize
+   #:Fractional #:fromFraction
    #:integer->single-float
    #:integer->double-float
    #:single-float->integer
@@ -62,7 +63,7 @@
   ;; Dividable
   ;;
 
-  (define-class (Dividable :arg-type :res-type)
+  (define-class ((Num :arg-type) (Num :res-type) => Dividable :arg-type :res-type)
     "The representation of a type such that division within that type possibly results in another type. For instance,
 
 
@@ -479,20 +480,37 @@ The fields are defined as follows:
       (lisp Fraction (z) z))))
 
 (coalton-toplevel
+  (define-class (Dividable :a :a => Fractional :a)
+    (fromFraction (Fraction -> :a))))
+
+(coalton-toplevel
   (define-instance (Dividable Fraction Fraction)
     (define (general/ a b)
       (lisp Fraction (a b)
         (cl:/ a b))))
+
+  (define-instance (Fractional Fraction)
+    (define (fromFraction x) x))
 
   (define-instance (Dividable Single-Float Single-Float)
     (define (general/ x y)
       (lisp Single-Float (x y)
         (cl:/ x y))))
 
+  (define-instance (Fractional Single-Float)
+    (define (fromFraction x)
+      (lisp Single-Float (x)
+        (cl:coerce x 'cl:single-float))))
+
   (define-instance (Dividable Double-Float Double-Float)
     (define (general/ x y)
       (lisp Double-Float (x y)
         (cl:/ x y))))
+
+  (define-instance (Fractional Double-Float)
+    (define (fromFraction x)
+      (lisp Double-Float (x)
+        (cl:coerce x 'cl:double-float))))
 
   (define-instance (Dividable Integer Fraction)
     (define (general/ x y)
@@ -806,7 +824,7 @@ The fields are defined as follows:
          ((GT) b)
          ((EQ) (max a b))))))
 
-  (declare safe/ ((Num :a) (Dividable :a :b) => (:a -> :a -> (Optional :b))))
+  (declare safe/ ((Dividable :a :b) => (:a -> :a -> (Optional :b))))
   (define (safe/ x y)
     "Safely divide X by Y, returning None if Y is zero."
     (if (== y 0)
