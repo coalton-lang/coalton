@@ -35,6 +35,16 @@
    #:1-)
 
   (:import-from
+   #:coalton-library/complex
+   #:Complex
+   #:real-part
+   #:imag-part)
+  (:export
+   #:Complex
+   #:real-part
+   #:imag-part)
+
+  (:import-from
    #:coalton-library/string
    #:substring)
   (:export

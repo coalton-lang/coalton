@@ -33,11 +33,6 @@
    #:numerator
    #:denominator
    #:reciprocal
-   #:complex
-   #:real-part
-   #:imag-part
-   #:conjugate
-   #:ii
    #:floor
    #:ceiling
    #:round
@@ -508,7 +503,6 @@ The fields are defined as follows:
       (lisp Double-Float (x y)
         (cl:coerce (cl:/ x y) 'cl:double-float)))))
 
-
 (coalton-toplevel
   (define-instance (Into Integer String)
     (define (into z)
@@ -522,135 +516,6 @@ The fields are defined as follows:
           (cl:if (cl:null z)
                  (Err "String doesn't have integer syntax.")
                  (Ok z)))))))
-
-;;;; Complex
-
-(coalton-toplevel
-  (repr :native (cl:or cl:number complex))
-  (define-type (Complex :a)
-    (%Complex :a :a))
-
-  (declare real-part ((Complex :a) -> :a))
-  (define (real-part n)
-    (lisp :a (n)
-      (cl:typecase n
-        (cl:number (cl:realpart n))
-        (complex (complex/%complex-_0 n)))))
-
-  (declare imag-part ((Complex :a) -> :a))
-  (define (imag-part n)
-    (lisp :a (n)
-      (cl:typecase n
-        (cl:number (cl:imagpart n))
-        (complex (complex/%complex-_1 n)))))
-
-  (define-class (Complex :a)
-    (complex (:a -> :a -> (Complex :a))))
-
-  (declare conjugate ((Complex :a) (Num :a) => Complex :a -> Complex :a))
-  (define (conjugate n)
-    (complex (real-part n) (negate (imag-part n))))
-
-  (declare ii ((Complex :a) (Num :a) => Complex :a))
-  (define ii
-    "The complex unit i. (The double ii represents a blackboard-bold i.)"
-    (complex 0 1))
-
-
-  (define-instance (Eq (Complex :a) => Eq (Complex (Complex :a)))
-    (define (== a b)
-      (and (== (real-part a) (real-part b))
-           (== (imag-part a) (imag-part b)))))
-
-  (define-instance (Num (Complex :a) => Num (Complex (Complex :a)))
-    (define (+ a b)
-      (%Complex (+ (real-part a) (real-part b))
-                (+ (imag-part a) (imag-part b))))
-    (define (- a b)
-      (%Complex (- (real-part a) (real-part b))
-                (- (imag-part a) (imag-part b))))
-    (define (* a b)
-      (%Complex (* (real-part a) (real-part b))
-                 (* (imag-part a) (imag-part b))))
-    (define (fromInt n)
-      (%Complex (fromInt n) 0)))
-
-  (define-instance (Complex (Complex :a))
-    (define (complex a b)
-      (%Complex a b))))
-
-(cl:defmacro %define-native-complex-instances (type repr)
-  `(coalton-toplevel
-     (define-instance (Complex ,type)
-       (define (complex a b)
-         (lisp (Complex ,type) (a b)
-           (cl:declare (cl:type ,repr a b))
-           (cl:complex a b))))
-
-     (define-instance (Eq (Complex ,type))
-       (define (== a b)
-         (lisp Boolean (a b)
-           (cl:declare (cl:type (cl:or ,repr (cl:complex ,repr))))
-           (cl:= a b))))
-
-     (define-instance (Num (Complex ,type))
-       (define (+ a b)
-         (lisp (Complex ,type) (a b)
-           (cl:declare (cl:type (cl:or ,repr (cl:complex ,repr))))
-           (cl:+ a b)))
-       (define (- a b)
-         (lisp (Complex ,type) (a b)
-           (cl:declare (cl:type (cl:or ,repr (cl:complex ,repr))))
-           (cl:- a b)))
-       (define (* a b)
-         (lisp (Complex ,type) (a b)
-           (cl:declare (cl:type (cl:or ,repr (cl:complex ,repr))))
-           (cl:* a b)))
-       (define (fromInt n)
-         (lisp (Complex ,type) (n)
-           (cl:coerce n ',repr))))
-
-     (define-instance (Dividable (Complex ,type) (Complex ,type))
-       (define (general/ a b)
-         (lisp (Complex ,type) (a b)
-           (cl:declare (cl:type (cl:or ,repr (cl:complex ,repr))))
-           (cl:/ a b))))
-
-     (define-instance (Into Integer (Complex ,type))
-       (define into fromInt))))
-
-(%define-native-complex-instances Integer cl:integer)
-(%define-native-complex-instances Single-Float cl:single-float)
-(%define-native-complex-instances Double-Float cl:double-float)
-
-(cl:defmacro %define-standard-complex-instances (type)
-  `(coalton-toplevel
-     (define-instance (Complex ,type)
-       (define complex %Complex))
-
-     (define-instance (Eq (Complex ,type))
-       (define (== a b)
-         (and (== (real-part a) (real-part b))
-              (== (imag-part a) (imag-part b)))))
-
-     (define-instance (Num (Complex ,type))
-       (define (+ a b)
-         (%Complex (+ (real-part a) (real-part b))
-                   (+ (imag-part a) (imag-part b))))
-       (define (- a b)
-         (%Complex (- (real-part a) (real-part b))
-                   (- (imag-part a) (imag-part b))))
-       (define (* a b)
-         (%Complex (* (real-part a) (real-part b))
-                   (* (imag-part a) (imag-part b))))
-       (define (fromInt n)
-         (%Complex (fromInt n) 0)))
-
-     (define-instance (Into Integer (Complex ,type))
-       (define into fromInt))))
-
-(%define-standard-complex-instances Fraction)
-
 
 ;;;; `Bits' instances
 ;;; signed
