@@ -118,6 +118,7 @@
                (:file "boolean")
                (:file "bits")
                (:file "arith")
+               (:file "complex")
                (:file "char")
                (:file "string")
                (:file "tuple")
