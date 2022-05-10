@@ -180,9 +180,11 @@ in FORMS that begin with that operator."
              (setf *global-environment* env)
              (values
               (coalton-impl/codegen::codegen-expression
-               (coalton-impl/codegen::compile-expression
-                typed-node
-                nil
+               (coalton-impl/codegen::optimize-node
+                (coalton-impl/codegen::compile-expression
+                 typed-node
+                 nil
+                 *global-environment*)
                 *global-environment*)
                nil
                *global-environment*)))
