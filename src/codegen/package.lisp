@@ -6,6 +6,12 @@
    #:codegen-expression)
 
   (:import-from
+   #:coalton-impl/codegen/optimizer
+   #:optimize-node)
+  (:export
+   #:optimize-node)
+
+  (:import-from
    #:coalton-impl/codegen/compile-expression
    #:compile-expression)
   (:export

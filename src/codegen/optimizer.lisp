@@ -25,12 +25,14 @@
   (:import-from
    #:coalton-impl/codegen/transformations
    #:traverse-bindings
+   #:traverse
    #:update-function-env
    #:make-function-table)
   (:local-nicknames
    (#:tc #:coalton-impl/typechecker))
   (:export
-   #:optimize-bindings))
+   #:optimize-bindings
+   #:optimize-node))
 
 (in-package #:coalton-impl/codegen/optimizer)
 
@@ -50,16 +52,6 @@
 
            (resolve-table (alexandria:alist-hash-table bindings))
 
-           ;; Passing this as a parameter breaks a cyclic dependency between the optimizer
-           ;; and the monomorphizer
-           (optimize-node
-             (lambda (node env)
-               ;; minor hack because OPTIMIZE-BINDINGS-INITIAL operates on binding groups
-               ;; and we need it to run on a single node
-               (cdr
-                (first
-                 (optimize-bindings-initial (list (cons 'unused-name node)) package env)))))
-
            (bindings
              (loop :for (name . node) :in bindings
                    :for attrs := (gethash name attr-table)
@@ -73,7 +65,7 @@
                                manager
                                package
                                resolve-table
-                               optimize-node
+                               #'optimize-node
                                env)
                               package env)
                    :else
@@ -93,73 +85,6 @@
         (values
          bindings
          env)))))
-
-(defun optimize-bindings-initial (bindings package env)
-  (declare (type binding-list bindings)
-           (type package package)
-           (type tc:environment env)
-           (values binding-list))
-  (let ((hoister (make-hoister)))
-    (append
-     (alexandria-2:line-up-first
-      (loop :for (name . node) :in bindings
-            :collect (cons name (pointfree node)))
-
-      canonicalize
-
-      (apply-specializations env)
-
-      (resolve-static-superclass env)
-
-      (inline-methods env)
-
-      (static-dict-lift hoister package env))
-     (pop-final-hoist-point hoister))))
-
-(defun pointfree (node)
-  (declare (type node node)
-           (values node))
-  (declare (type node node)
-           (values node))
-  (if (node-abstraction-p node)
-      (return-from pointfree node))
-
-  (if (not (tc:function-type-p (node-type node)))
-      (return-from pointfree node))
-
-  (let* ((arguments (tc:function-type-arguments (node-type node)))
-         (argument-names (loop :for argument :in arguments
-                               :collect (gensym))))
-
-         (node-abstraction
-           (node-type node)
-           argument-names
-           (node-application
-            (tc:function-return-type (node-type node))
-            node
-            (loop :for ty :in arguments
-                  :for name :in argument-names
-                  :collect (node-variable ty name))))))
-
-(defun canonicalize (bindings)
-  (declare (type binding-list bindings)
-           (values binding-list &optional))
-  (labels ((rewrite-application (node &rest rest)
-             (declare (ignore rest)
-                      (dynamic-extent rest))
-             (let ((rator (node-application-rator node))
-                   (rands (node-application-rands node)))
-               (when (node-application-p rator)
-                 (node-application
-                  (node-type node)
-                  (node-application-rator rator)
-                  (append
-                   (node-application-rands rator)
-                   rands))))))
-    (traverse-bindings
-     bindings
-     (list
-      (cons :application #'rewrite-application)))))
 
 (defun direct-application (bindings table)
   (declare (type binding-list bindings)
@@ -192,10 +117,85 @@
       (cons :application #'rewrite-direct-application)
       (cons :before-let #'add-local-funs)))))
 
-(defun inline-methods (bindings env)
+(defun optimize-bindings-initial (bindings package env)
+  (declare (type binding-list bindings)
+           (type package package)
+           (type tc:environment env)
+           (values binding-list))
+  (let ((hoister (make-hoister)))
+    (append
+     (loop :for (name . node) :in bindings
+           :collect (cons name (static-dict-lift (optimize-node node env) hoister package env)))
+     (pop-final-hoist-point hoister))))
+
+(defun optimize-node (node env)
+  (declare (type node node)
+           (type tc:environment env)
+           (values node &optional))
+  (alexandria-2:line-up-first
+   node
+
+   pointfree
+
+   canonicalize
+
+   (apply-specializations env)
+
+   (resolve-static-superclass env)
+
+   (inline-methods env)))
+
+(defun pointfree (node)
+  (declare (type node node)
+           (values node))
+  (declare (type node node)
+           (values node))
+  (if (node-abstraction-p node)
+      (return-from pointfree node))
+
+  (if (not (tc:function-type-p (node-type node)))
+      (return-from pointfree node))
+
+  (let* ((arguments (tc:function-type-arguments (node-type node)))
+         (argument-names (loop :for argument :in arguments
+                               :collect (gensym))))
+
+         (node-abstraction
+           (node-type node)
+           argument-names
+           (node-application
+            (tc:function-return-type (node-type node))
+            node
+            (loop :for ty :in arguments
+                  :for name :in argument-names
+                  :collect (node-variable ty name))))))
+
+(defun canonicalize (node)
+  (declare (type node node)
+           (values node &optional))
+  (labels ((rewrite-application (node &rest rest)
+             (declare (ignore rest)
+                      (dynamic-extent rest))
+             (let ((rator (node-application-rator node))
+                   (rands (node-application-rands node)))
+               (when (node-application-p rator)
+                 (node-application
+                  (node-type node)
+                  (node-application-rator rator)
+                  (append
+                   (node-application-rands rator)
+                   rands))))))
+    (traverse
+     node
+     (list
+      (cons :application #'rewrite-application))
+     nil)))
+
+
+(defun inline-methods (node env)
   (declare (type binding-list bindings)
            (type tc:environment env)
-           (values binding-list &optional))
+           (values node &optional))
   (labels ((inline-method (node &rest rest)
              (declare (ignore rest)
                       (dynamic-extent rest))
@@ -269,18 +269,19 @@
                            inline-method-name)
                           rands_)))))))) 
 
-    (traverse-bindings
-     bindings
+    (traverse
+     node
      (list
       (cons :application #'inline-method)
-      (cons :direct-application #'inline-direct-method)))))
+      (cons :direct-application #'inline-direct-method))
+     nil)))
 
-(defun static-dict-lift (bindings hoister package env)
+(defun static-dict-lift (node hoister package env)
   (declare (type binding-list bindings)
            (type hoister hoister)
            (type package package)
            (type tc:environment env)
-           (values binding-list &optional))
+           (values node &optional))
   (labels ((lift-static-dict (node &rest rest)
              (declare (ignore rest)
                       (dynamic-extent rest))
@@ -341,14 +342,15 @@
 
                    node))))
 
-    (traverse-bindings
-     bindings
+    (traverse
+     node
      (list
       (cons :application #'lift-static-dict)
       (cons :before-abstraction #'handle-push-hoist-point)
       (cons :abstraction #'handle-pop-hoist-point)
       (cons :before-bare-abstraction #'handle-push-bare-hoist-point)
-      (cons :bare-abstraction #'handle-pop-bare-hoist-point)))))
+      (cons :bare-abstraction #'handle-pop-bare-hoist-point))
+     nil)))
 
 (defun resolve-compount-superclass (node env)
   (declare (type (or node-application node-direct-application node-variable) node)
@@ -391,10 +393,10 @@
 
       (tc:apply-substitution subs pred))))
 
-(defun resolve-static-superclass (bindings env)
-  (declare (type binding-list bindings)
+(defun resolve-static-superclass (node env)
+  (declare (type node node)
            (type tc:environment env)
-           (values binding-list &optional))
+           (values node &optional))
   (labels ((handle-static-superclass (node &key bound-variables &allow-other-keys)
              (declare (type symbol-list bound-variables))
 
@@ -429,14 +431,16 @@
                ;; Re-resolve the dictionary
                (resolve-static-dict superclass-pred nil env))))
 
-    (traverse-bindings
-     bindings
+    (traverse
+     node
      (list
-      (cons :field #'handle-static-superclass)))))
+      (cons :field #'handle-static-superclass))
+     nil)))
 
-(defun apply-specializations (bindings env)
-  (declare (type binding-list bindings)
-           (type tc:environment env))
+(defun apply-specializations (node env)
+  (declare (type node node)
+           (type tc:environment env)
+           (values node &optional))
   (labels ((apply-specialization (node &rest rest)
              (declare (dynamic-extent rest)
                       (ignore rest))
@@ -472,8 +476,9 @@
                      rator-type
                      (tc:specialization-entry-to specialization))
                     (subseq (node-rands node) num-preds)))))))
-    (traverse-bindings
-     bindings
+    (traverse
+     node 
      (list
       (cons :application #'apply-specialization)
-      (cons :direct-application #'apply-specialization)))))
+      (cons :direct-application #'apply-specialization))
+     nil)))
