@@ -222,8 +222,9 @@
 
     (let ((instance-list
             (fset:convert 'list
-                          (coalton-impl/typechecker::instance-environment-data
-                           (coalton-impl/typechecker::environment-instance-environment env)))))
+                          (coalton-impl/algorithm::immutable-listmap-data
+                           (coalton-impl/typechecker::instance-environment-instances
+                            (coalton-impl/typechecker::environment-instance-environment env))))))
 
       (mapcar (lambda (e)
                 (let* ((ctors (remove-if-not
