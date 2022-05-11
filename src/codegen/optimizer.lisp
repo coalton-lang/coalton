@@ -56,7 +56,7 @@
              (loop :for (name . node) :in bindings
                    :for attrs := (gethash name attr-table)
 
-                   :for monomorphize := (find :monomorphise attrs)
+                   :for monomorphize := (find :monomorphize attrs)
 
                    :if monomorphize
                      :append (optimize-bindings-initial
