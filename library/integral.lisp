@@ -6,6 +6,7 @@
     (:use
      #:coalton
      #:coalton-library/classes
+     #:coalton-library/builtin
      #:coalton-library/arith)
   (:import-from
    #:coalton-library/bits
@@ -152,6 +153,7 @@ are floored and truncated division, respectively."
 (%define-integral-native UFix nil)
 
 (coalton-toplevel
+
   (declare even? (Integer -> Boolean))
   (define (even? n)
     "Is N even?"
@@ -160,7 +162,7 @@ are floored and truncated division, respectively."
   (declare odd? (Integer -> Boolean))
   (define (odd? n)
     "Is N odd?"
-    (== 1 (rem n 2)))
+    (not (even? n)))
 
   (declare gcd (Integer -> Integer -> Integer))
   (define (gcd a b)
@@ -184,8 +186,7 @@ are floored and truncated division, respectively."
                (cond
                  ((even? n) (g (* a a) (quot n 2) b))
                  ((> n 1) (g (* a a) (quot n 2) (* a b)))
-                 (True (* a b))
-                 )))
+                 (True (* a b)))))
           (declare f (Num :a => :a -> Integer -> :a))
           ;; (f a n) = (a ^ n)
           (f (fn (a n)
