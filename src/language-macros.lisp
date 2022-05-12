@@ -115,7 +115,7 @@ the value. The composition is thus the reverse order of COMPOSE.
 (cl:defmacro to-boolean (expr)
   "Convert the Lisp expression EXPR, representing a generalized boolean, to a
 Coalton boolean."
-  `(cl:not (cl:eql ,expr cl:nil)))
+  `(cl:and ,expr cl:t))
 
 (cl:defmacro do (cl:&rest forms)
   (cl:let* ((classes (cl:find-package "COALTON-LIBRARY/CLASSES"))
