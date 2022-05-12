@@ -43,6 +43,7 @@
   ;; defined.
   ;;
 
+  (repr :enum)
   (define-type Unit Unit)
 
   (repr :native cl:t)
