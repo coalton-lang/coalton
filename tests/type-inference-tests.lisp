@@ -6,11 +6,13 @@
   (check-coalton-types
    '((coalton:define f 5))
    '((f . Integer)))
+
   (check-coalton-types
    '((coalton:define f (fn (x) x))
      (coalton:define g (f 5)))
    '((f . (:a -> :a))
      (g . Integer)))
+
   (check-coalton-types
    '((coalton:define f (fn (x y) x))
      (coalton:define g (f 5 "str"))
@@ -69,7 +71,7 @@
   (check-coalton-types
    '((coalton:define f
        (fn (a) (f 5))))
-   '((f . (Integer -> :a)))))
+   '((f . (coalton-library/classes:Num :a => :a -> :b)))))
 
 (deftest test-explicit-type-declerations ()
   ;; Check that explicit declerations can reduce the type of a definition
@@ -419,12 +421,12 @@
    '((coalton:define (f a)
        (coalton:let ((g (coalton:fn (x) (coalton-prelude:Tuple x a))))
          (g 5))))
-   '((f . (:a -> (coalton-prelude:Tuple Integer :a))))))
+   '((f . (coalton-library/classes:Num :b => :a -> (coalton-prelude:Tuple :b :a))))))
 
 (deftest test-function-definition-shorthand ()
   (check-coalton-types
    '((coalton:define f (fn () 5)))
-   '((f . (coalton:Unit -> coalton:Integer)))))
+   '((f . (coalton-library/classes:Num :a => coalton:Unit -> :a)))))
 
 (deftest test-function-implicit-progn ()
   (check-coalton-types
@@ -478,4 +480,15 @@
      '((coalton:define (f x)
          (coalton:let y coalton:= 1)
          (coalton-library/classes:+ 0.5 y)
-         (coalton-library/classes:+ 0.5d0 y))))))
+         (coalton-library/classes:+ 0.5d0 y)))))
+
+  ;; Check that ambigious predicates are detected
+  (signals coalton-impl::coalton-type-error
+    (run-coalton-typechecker
+     '((coalton:define (f x)
+         (coalton-library/classes:into (coalton-library/classes:into x))))))
+
+  ;; Check that superclasses of Num are defaulted
+  (check-coalton-types
+   '((coalton:define x (coalton-prelude:even? 2)))
+   '((x . coalton:Boolean))))
