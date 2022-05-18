@@ -20,8 +20,8 @@
 ;; See gh #295
 (define-test test-deferred-predicate-removal ()
   (progn
-    (is (== (gh-295-f 1 (make-list 2 3 4)) False))
-    (is (== (gh-295-f 1 (make-list 1)) True))))
+    (is (== (gh-295-f (the Integer 1) (make-list 2 3 4)) False))
+    (is (== (gh-295-f (the Integer 1) (make-list 1)) True))))
 
 
 ;; Test that functions can be given explicit predicates in any order
@@ -49,9 +49,9 @@
 
 (define-test test-explicit-predicate-order ()
   (progn
-    (is (== (gh-377-a 1 0 5)
+    (is (== (gh-377-a (the Integer 1) 0 5)
             (make-list 5 4 3 2 1 0)))
-    (is (== (gh-377-b 1 0 5)
+    (is (== (gh-377-b (the Integer 1) 0 5)
             (make-list 5 4 3 2 1 0)))))
 
 
@@ -106,7 +106,7 @@
 
 ;; Test defaulting and context reduction
 (define-test test-defaulting ()
-  (is (== (+ (Some (Some 1)) (Some (Some 2))) (Some (Some 3)))))
+  (is (== (+ (Some (Some (the Integer 1))) (Some (Some 2))) (Some (Some 3)))))
 
 
 ;; Test that explicit type declerations in let bindings work

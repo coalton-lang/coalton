@@ -154,23 +154,23 @@ are floored and truncated division, respectively."
 
 (coalton-toplevel
 
-  (declare even? (Integer -> Boolean))
+  (declare even? (Integral :a => :a -> Boolean))
   (define (even? n)
     "Is N even?"
     (== 0 (rem n 2)))
 
-  (declare odd? (Integer -> Boolean))
+  (declare odd? (Integral :a => :a -> Boolean))
   (define (odd? n)
     "Is N odd?"
     (not (even? n)))
 
-  (declare gcd (Integer -> Integer -> Integer))
+  (declare gcd (Integral :a => :a -> :a -> :a))
   (define (gcd a b)
     "The greatest common divisor of A and B."
     (if (== b 0) a
         (gcd (abs b) (abs (rem a b)))))
 
-  (declare lcm (Integer -> Integer -> Integer))
+  (declare lcm (Integral :a => :a -> :a -> :a))
   (define (lcm a b)
     "The least common multiple of A and B."
     (if (or (== a 0) (== b 0))
