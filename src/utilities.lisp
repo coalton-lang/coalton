@@ -50,6 +50,14 @@
           :do (setf (gethash k new) (funcall function v)))
     new))
 
+(defun find-symbol? (name package)
+  (declare (type string name package)
+           (values symbol-list))
+  (unless (find-package package)
+    (return-from find-symbol?))
+
+  (list (alexandria:ensure-symbol name package)))
+
 (defun required (name)
   "A function to call as a slot initializer when it's required."
   (declare (type symbol name))
