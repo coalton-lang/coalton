@@ -470,12 +470,22 @@
                    (unless (>= (length (node-rands node)) num-preds)
                      (coalton-bug "Expected function ~A to have at least ~A args when applying specialization." rator-name (length preds)))
 
-                   (node-application
-                    (node-type node)
-                    (node-variable
-                     rator-type
-                     (tc:specialization-entry-to specialization))
-                    (subseq (node-rands node) num-preds)))))))
+                   (cond
+                     ((= num-preds (length (node-rands node)))
+                      (node-variable
+                       rator-type
+                       (tc:specialization-entry-to specialization)))
+
+                     ((< num-preds (length (node-rands node)))
+                      (node-application
+                       (node-type node)
+                       (node-variable
+                        rator-type
+                        (tc:specialization-entry-to specialization))
+                       (subseq (node-rands node) num-preds)))
+
+                     (t
+                      (coalton-bug "Invalid specialization ~A~%" specialization))))))))
     (traverse
      node 
      (list
