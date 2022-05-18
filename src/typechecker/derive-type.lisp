@@ -626,19 +626,20 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                                           env-tvars
                                           :test #'equalp)) ; gs
              )
+
+        ;; NOTE: This is where defauling happens
+
+        (unless allow-deferred-predicates
+          (setf local-subs (compose-substitution-lists (default-subs env nil expr-preds) local-subs))
+          (setf expr-preds (apply-substitution local-subs expr-preds))
+          (setf expr-types (apply-substitution local-subs expr-types)))
+
         (multiple-value-bind (deferred-preds retained-preds)
-            (split-context env env-tvars expr-preds local-subs)
+            (split-context env env-tvars local-tvars expr-preds local-subs)
+
           (labels ((restricted (bindings)
                      (some (lambda (b) (not (coalton-impl/ast::node-abstraction-p (cdr b))))
                            bindings)))
-
-            ;; NOTE: This is where defaulting happens. Retained
-            ;; predicates are inspected to generate new substitutions
-            ;; based on defaulting rules.
-
-            (setf local-subs (pred-defaults retained-preds local-subs))
-            (setf retained-preds (apply-substitution local-subs retained-preds))
-            (setf expr-types (apply-substitution local-subs expr-types))
 
             ;; NOTE: This is where the monomorphism restriction happens
 
@@ -656,7 +657,11 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                                               (cons (first b) sch))
                                             bindings output-schemes))))
                   (values
-                   (mapcar (lambda (b typed) (cons (car b) typed)) bindings typed-bindings)
+                   (mapcar
+                    (lambda (b typed)
+                      (cons (car b) typed))
+                    bindings
+                    typed-bindings)
                    (append
                     deferred-preds
                     retained-preds)
@@ -671,7 +676,7 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                                                  (quantify
                                                   local-tvars
                                                   (qualified-ty
-                                                   (remove-if #'static-predicate-p retained-preds) ; retained predicates made static by defaulting should not be retained
+                                                   retained-preds
                                                    type)))
                                                expr-types))
 
@@ -712,26 +717,6 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                    local-subs
                    returns)))))))))
 
-(defun pred-defaults (preds subs)
-  "Given a list of predicates, compute substutions for predicates
-which have default instances. Currently only resolves Num :a -> Num Integer"
-  (let ((num (alexandria:ensure-symbol
-              "NUM"
-              (find-package "COALTON-LIBRARY/CLASSES"))))
-    (loop :for pred :in (remove-if #'static-predicate-p preds)
-          :for class := (ty-predicate-class pred)
-          :do
-             (when (eq class num)
-               (setf subs
-                     (compose-substitution-lists
-                      (handler-case 
-                          (predicate-match
-                           pred
-                           (ty-predicate num (list *integer-type*)))
-                        (predicate-unification-error () nil))
-                      subs)))))
-  subs)
-
 (defun derive-expl-type (binding declared-ty env subs name-map
                          &key (allow-deferred-predicates t)
                            (allow-returns t))
@@ -768,8 +753,15 @@ which have default instances. Currently only resolves Num :a -> Num Integer"
                                              (not (entail env expr-preds p)))
                                            (apply-substitution local-subs preds))))
 
+        ;; NOTE: This is where defaulting happens
+
+        (unless allow-deferred-predicates
+          (setf local-subs (compose-substitution-lists (default-subs env nil reduced-preds) local-subs))
+          (setf reduced-preds (apply-substitution local-subs reduced-preds))
+          (setf expr-types (apply-substitution local-subs expr-type)))
+
         (multiple-value-bind (deferred-preds retained-preds)
-            (split-context env env-tvars reduced-preds local-subs)
+            (split-context env env-tvars local-tvars reduced-preds local-subs)
 
           (with-type-context ("definition of ~A" (car binding))
             (when (and returns (not allow-returns))

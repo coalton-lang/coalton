@@ -1,7 +1,7 @@
 (cl:in-package #:coalton-native-tests)
 
 (define-test iter-list-iter-collect-list-id ()
-  (is (== (make-list 0 1 2 3)
+  (is (== (the (List Integer) (make-list 0 1 2 3))
           (iter:collect-list! (iter:list-iter (make-list 0 1 2 3))))))
 
 (define-test iter-empty-iter-none ()
@@ -52,16 +52,16 @@
                                          (iter:count-forever)))))))
 
 (define-test iter-concat-collect-list ()
-  (is (== (make-list 0 1 2 3 4 5 6 7 8 9)
+  (is (== (the (List Integer) (make-list 0 1 2 3 4 5 6 7 8 9))
           (iter:collect-list! (iter:concat! (iter:up-to 5)
                                   (iter:range-increasing 1 5 10)))))
-  (is (== (make-list 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14)
+  (is (== (the (List Integer) (make-list 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14))
           (iter:collect-list! (iter:flatten! (iter:list-iter (make-list (iter:up-to 5)
                                                          (iter:range-increasing 1 5 10)
                                                          (iter:list-iter (make-list 10 11 12 13 14)))))))))
 
 (define-test iter-remove-duplicates-collect-list ()
-  (is (== (make-list 0 1 2 3 4)
+  (is (== (the (List Integer) (make-list 0 1 2 3 4))
           (iter:collect-list! (iter:remove-duplicates! (iter:list-iter (make-list 0
                                                                    1 1
                                                                    2 2 2
@@ -100,19 +100,19 @@
                  (iter:repeat-item "foo" 10)))))
 
 (define-test iter-downfrom ()
-  (is (== (make-list 9 8 7 6 5 4 3 2 1 0)
+  (is (== (the (List Integer) (make-list 9 8 7 6 5 4 3 2 1 0))
           (iter:collect-list! (iter:down-from 10))))
-  (is (== (make-list 9 8 7 6 5 4 3 2 1 0)
+  (is (== (the (List Integer) (make-list 9 8 7 6 5 4 3 2 1 0))
           (iter:collect-list! (iter:range-decreasing 1 10 0)))))
 
 (define-test iter-min-max ()
-  (is (== (Some 10)
+  (is (== (Some (the Integer 10))
           (iter:max! (iter:concat! (iter:up-through 10)
                                    (iter:down-from 10)))))
   (is (== (Some (the UFix 10))
           (iter:max! (iter:concat! (iter:up-through 10)
                                    (iter:down-from 10)))))
-  (is (== (Some 0)
+  (is (== (Some (the Integer 0))
           (iter:min! (iter:concat! (iter:down-from 10)
                                    (iter:up-to 10)))))
   (is (== (Some (the UFix 0))

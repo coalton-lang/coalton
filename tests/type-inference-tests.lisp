@@ -82,7 +82,7 @@
   (signals coalton-impl::coalton-type-error
     (run-coalton-typechecker
      '((coalton:declare x :a)
-       (coalton:define x 5))))
+       (coalton:define x coalton:Unit))))
 
   ;; Implicitly typed functions should only infer types from the declared type signature of an explicitly typed functions
   ;; http://jeremymikkola.com/posts/2019_01_12_type_inference_for_haskell_part_12.html
@@ -449,3 +449,33 @@
   (signals coalton-impl/typechecker::coalton-type-error-context
     (run-coalton-typechecker
      '((coalton:define x (coalton:return "hello"))))))
+
+(deftest test-defaulting ()
+  ;; See gh #505
+  (run-coalton-typechecker
+   '((coalton:declare a (coalton-library/classes:Num :a => :a -> :a))
+     (coalton:define (a x)
+       (coalton:let y coalton:= 2)
+       (coalton-library/classes:+ x y))))
+
+  ;; See gh #505
+  (run-coalton-typechecker
+   '((coalton:declare f (:a -> :a))
+    (coalton:define (f x)
+      (coalton-library/functions:traceObject "2" 2)
+      x)))
+
+  ;; Check that bindings aren't defaulted too early
+  (check-coalton-types
+   '((coalton:define (f x)
+       (coalton:let y coalton:= 1)
+       (coalton-library/classes:+ 0.5 y)))
+   '((f . (:a -> coalton:Single-Float))))
+
+  ;; Check that the monomorphism restriction still applies to defaulted bindings
+  (signals coalton-impl::coalton-type-error
+    (run-coalton-typechecker
+     '((coalton:define (f x)
+         (coalton:let y coalton:= 1)
+         (coalton-library/classes:+ 0.5 y)
+         (coalton-library/classes:+ 0.5d0 y))))))

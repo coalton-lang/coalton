@@ -85,16 +85,112 @@ Returns (PREDS FOUNDP)"
           :unless (entail env nil pred)
             :collect pred))))
 
-(defun split-context (env fixed-vars preds subs)
+(defun split-context (env environment-vars local-vars preds subs)
   "Split PREDS into retained predicates and deferred predicates
 
 Returns (VALUES deferred-preds retained-preds)"
   (declare (values ty-predicate-list ty-predicate-list))
-  (let* ((reduced-preds (reduce-context env preds subs)))
-    (loop :for p :in reduced-preds
-          :if (every (lambda (tv) (member tv fixed-vars :test #'equalp))
-                     (type-variables p))
-            :collect p :into deferred
-          :else
-            :collect p :into retained
-          :finally (return (values deferred retained)))))
+  (let ((reduced-preds (reduce-context env preds subs)))
+
+    (multiple-value-bind (deferred retained)
+        (loop :for p :in reduced-preds
+              :if (every (lambda (tv) (member tv environment-vars :test #'equalp))
+                         (type-variables p))
+                :collect p :into deferred
+              :else
+                :collect p :into retained
+              :finally (return (values deferred retained)))
+
+
+      (let ((retained_ (default-preds env (append environment-vars local-vars) retained)))
+        (values deferred (set-difference retained retained_ :test #'equalp))))))
+
+(defstruct (ambiguity (:constructor ambiguity (var preds)))
+  (var   (required 'var)   :type tyvar             :read-only t)
+  (preds (required 'preds) :type ty-predicate-list :read-only t))
+
+(defun ambiguity-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'ambiguity-p x)))
+
+(deftype ambiguity-list ()
+  '(satisfies ambiguity-list-p))
+
+(defun ambiguities (env tvars preds)
+  (declare (type environment env)
+           (type tyvar-list tvars)
+           (type ty-predicate-list preds)
+           (values ambiguity-list)
+           (ignore env))
+  (loop :for v :in (set-difference (type-variables preds) tvars :test #'equalp)
+        :for preds_ := (remove-if-not
+                        (lambda (pred)
+                          (find v (type-variables pred) :test #'equalp))
+                        preds)
+        :collect (ambiguity v preds_)))
+
+(defun candidates (env ambig)
+  (declare (type environment env)
+           (type ambiguity ambig))
+  (let* ((var (ambiguity-var ambig))     ; v
+         (preds (ambiguity-preds ambig)) ; qs
+
+         (pred-names (mapcar #'ty-predicate-class preds)) ; is
+         (pred-heads (mapcar #'ty-predicate-types preds)) ; ts
+         )
+
+    (loop :for type :in (defaults env)
+
+          :when (and
+                 ;; Check that all predicates are in the form "Pred [var]"
+                 (every (lambda (ty)
+                          (equalp ty (list (%make-tvar var))))
+                        pred-heads)
+
+                 ;; Check that at least one predicate is a numeric class
+                 (some (lambda (name)
+                         (find name (num-classes) :test #'equalp))
+                       pred-names)
+
+                 ;; NOTE: Haskell checks that all predicates are stdlib classes here
+
+                 ;; Check that the variable would be defaulted to a valid type
+                 ;; for the given predicates
+                 (every (lambda (name)
+                          (entail env nil (ty-predicate name (list type))))
+                        pred-names))
+
+            :collect type)))
+
+(defun defaults (env)
+  (declare (type environment env)
+           (ignore env)
+           (values ty-list))
+  (list *integer-type* *double-float-type* *single-float-type*))
+
+(defun num-classes ()
+  (list (alexandria:ensure-symbol "NUM" "COALTON-LIBRARY/CLASSES")))
+
+(defun default-preds (env tvars preds)
+  (declare (type environment env)
+           (type tyvar-list tvars)
+           (type ty-predicate-list preds)
+           (values ty-predicate-list &optional))
+  (loop :for ambig :in (ambiguities env tvars preds)
+        :for candidates := (candidates env ambig)
+
+        :unless candidates
+          :do (error 'ambigious-constraint :pred (first (ambiguity-preds ambig)))
+        
+        :when candidates
+          :append (ambiguity-preds ambig)))
+
+(defun default-subs (env tvars preds)
+  (declare (type environment env)
+           (type tyvar-list tvars)
+           (type ty-predicate-list preds)
+           (values substitution-list &optional))
+  (loop :for ambig :in (ambiguities env tvars preds)
+        :for candidates := (candidates env ambig)
+        :when candidates
+          :collect (%make-substitution (ambiguity-var ambig) (first candidates))))

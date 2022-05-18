@@ -326,6 +326,16 @@
                type
                name)))))
 
+(define-condition ambigious-constraint (coalton-type-error)
+  ((pred :initarg :pred
+         :reader ambigious-constraint-pred))
+  (:report
+   (lambda (c s)
+     (let ((*print-circle* nil) ; Prevent printing using reader macros
+           )
+       (format s "Ambigious constraint ~A~%"
+               (ambigious-constraint-pred c))))))
+
 (define-condition kunify-error (coalton-type-error)
   ((kind1 :initarg :kind1
           :reader kunify-errror-kind1
