@@ -169,7 +169,14 @@ Returns (VALUES deferred-preds retained-preds)"
   (list *integer-type* *double-float-type* *single-float-type*))
 
 (defun num-classes ()
-  (list (alexandria:ensure-symbol "NUM" "COALTON-LIBRARY/CLASSES")))
+  ;; Lookup class symbols if they exist. This allows defaulting to
+  ;; work before the standard library is fully loaded
+  (append (find-symbol? "NUM" "COALTON-LIBRARY/CLASSES")
+          (find-symbol? "QUANTIZABLE" "COALTON-LIBRARY/ARITH")
+          (find-symbol? "DIVIDABLE" "COALTON-LIBRARY/ARITH")
+          (find-symbol? "COMPLEX" "COALTON-LIBRARY/COMPLEX")
+          (find-symbol? "REMAINDER" "COALTON-LIBRARY/INTEGRAL")
+          (find-symbol? "INTEGRAL" "COALTON-LIBRARY/INTEGRAL")))
 
 (defun default-preds (env tvars preds)
   (declare (type environment env)

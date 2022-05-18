@@ -23,6 +23,7 @@
    #:symbol-list                        ; TYPE
    #:literal-value                      ; TYPE
    #:maphash-values-new                 ; FUNCTION
+   #:find-symbol?                       ; FUNCTION
    ))
 
 (uiop:define-package #:coalton-impl/algorithm
