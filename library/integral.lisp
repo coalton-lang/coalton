@@ -52,18 +52,72 @@
 are floored and truncated division, respectively."
     (toInteger (:int -> Integer)))
 
+  (declare even? (Integral :a => :a -> Boolean))
+  (define (even? n)
+    "Is N even?"
+    (== 0 (rem n 2)))
+
+  (declare odd? (Integral :a => :a -> Boolean))
+  (define (odd? n)
+    "Is N odd?"
+    (not (even? n)))
+
+  (declare ^ ((Num :a) (Integral :int) => (:a -> :int -> :a)))
+  (define (^ base power)
+    "Exponentiate BASE to a non-negative POWER."
+    ;; (g x n b) = (* (x ^ n) b)
+    (let g =
+      (fn (a n b)
+        (cond
+          ((even? n) (g (* a a) (quot n 2) b))
+          ((> n 1) (g (* a a) (quot n 2) (* a b)))
+          (True (* a b)))))
+    ;; (f a n) = (a ^ n)
+    (let f =
+      (fn (a n)
+        (cond
+          ((even? n) (f (* a a) (quot n 2)))
+          ((> n 1) (g (* a a) (quot n 2) a))
+          (True a))))
+    (cond
+      ((> power 3) (f base power))
+      ((== power 3) (* (* base base) base))
+      ((== power 2) (* base base))
+      ((== power 1) base)
+      ((== power 0) 1)
+      (True (error "Can't exponentiate with a negative exponent."))))
+
+  (declare ^^ ((Dividable :a :a) (Num :a) (Integral :int) => (:a -> :int -> :a)))
+  (define (^^ base power)
+    "Exponentiate BASE to a signed POWER."
+    (if (< power 0)
+        (^ (/ 1 base) (negate power))
+        (^ base power)))
+
+  (declare gcd ((Remainder :a) (Ord :a) => :a -> :a -> :a))
+  (define (gcd a b)
+    "The greatest common divisor of A and B."
+    (if (== b 0) a
+        (gcd (abs b) (abs (rem a b)))))
+
+  (declare lcm ((Remainder :a) (Ord :a) => :a -> :a -> :a))
+  (define (lcm a b)
+    "The least common multiple of A and B."
+    (if (or (== a 0) (== b 0))
+        0
+        (* (abs a) (quot (abs b) (gcd a b)))))
+
   (declare factorial ((Integral :int) => :int -> :int))
   (define (factorial n)
     "The factorial of N."
-    (let ((declare factorial-rec ((Integral :a) => :a -> :a))
-          (factorial-rec
-            (fn (a)
-              (if (> a 0)
-                  (* a (factorial-rec (- a 1)))
-                  1))))
-      (if (< n 0)
-          (error "Cannot FACTORIAL a negative number.")
-          (factorial-rec n))))
+    (let factorial-rec =
+      (fn (a)
+        (if (> a 0)
+            (* a (factorial-rec (- a 1)))
+            1)))
+    (if (< n 0)
+        (error "Cannot FACTORIAL a negative number.")
+        (factorial-rec n)))
 
   (declare ilog ((Integral :int) => :int -> :int -> :int))
   (define (ilog b x)
@@ -100,7 +154,12 @@ are floored and truncated division, respectively."
       ((< x 0) (error "Cannot take ISQRT of a negative number.")))))
 
 (cl:defmacro %define-integral-native (type signed)
-  (cl:let ((ilog (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-ILOG")))
+  (cl:let ((even? (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-EVEN?")))
+           (odd? (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-ODD?")))
+           (gcd (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-GCD")))
+           (^ (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-^")))
+           (lcm (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-LCM")))
+           (ilog (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-ILOG")))
            (isqrt (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-ISQRT"))))
     `(coalton-toplevel
        (define-instance (Remainder ,type)
@@ -123,6 +182,36 @@ are floored and truncated division, respectively."
 
        (define-instance (Integral ,type)
          (define toInteger into))
+
+       (specialize even? ,even? (,type -> Boolean))
+       (declare ,even? (,type -> boolean))
+       (define (,even? n)
+         (lisp Boolean (n) (to-boolean (cl:evenp n))))
+
+       (specialize odd? ,odd? (,type -> Boolean))
+       (declare ,odd? (,type -> Boolean))
+       (define (,odd? n)
+         (lisp Boolean (n) (to-boolean (cl:oddp n))))
+
+       (specialize ^ ,^ (,type -> ,type -> ,type))
+       (declare ,^ (,type -> ,type -> ,type))
+       (define (,^ base power)
+         ,(cl:if signed
+                 `(if (< power 0)
+                      (error "Can't exponentiate with a negative exponent.")
+                      (lisp ,type (base power) (cl:expt base power)))
+                 `(lisp ,type (base power) (cl:expt base power))))
+
+       (specialize gcd ,gcd (,type -> ,type -> ,type))
+       (declare ,gcd (,type -> ,type -> ,type))
+       (define (,gcd a b)
+         (lisp ,type (a b) (cl:gcd a b)))
+
+       (specialize lcm ,lcm (,type -> ,type -> ,type))
+       (declare ,lcm (,type -> ,type -> ,type))
+       (define (,lcm a b)
+         ;; Allow Coalton to handle fixnum overflow
+         (fromInt (lisp Integer (a b) (cl:lcm a b))))
 
        (specialize isqrt ,isqrt (,type -> ,type))
        (declare ,isqrt (,type -> ,type))
@@ -151,63 +240,6 @@ are floored and truncated division, respectively."
 (%define-integral-native U32 nil)
 (%define-integral-native U64 nil)
 (%define-integral-native UFix nil)
-
-(coalton-toplevel
-
-  (declare even? (Integral :a => :a -> Boolean))
-  (define (even? n)
-    "Is N even?"
-    (== 0 (rem n 2)))
-
-  (declare odd? (Integral :a => :a -> Boolean))
-  (define (odd? n)
-    "Is N odd?"
-    (not (even? n)))
-
-  (declare gcd (Integral :a => :a -> :a -> :a))
-  (define (gcd a b)
-    "The greatest common divisor of A and B."
-    (if (== b 0) a
-        (gcd (abs b) (abs (rem a b)))))
-
-  (declare lcm (Integral :a => :a -> :a -> :a))
-  (define (lcm a b)
-    "The least common multiple of A and B."
-    (if (or (== a 0) (== b 0))
-        0
-        (* (abs a) (quot (abs b) (gcd a b)))))
-
-  (declare ^ ((Num :a) => (:a -> Integer -> :a)))
-  (define (^ base power)
-    "Exponentiate BASE to a non-negative POWER."
-    (let ((declare g (Num :a => :a -> Integer -> :a -> :a))
-          ;; (g x n b) = (* (x ^ n) b)
-          (g (fn (a n b)
-               (cond
-                 ((even? n) (g (* a a) (quot n 2) b))
-                 ((> n 1) (g (* a a) (quot n 2) (* a b)))
-                 (True (* a b)))))
-          (declare f (Num :a => :a -> Integer -> :a))
-          ;; (f a n) = (a ^ n)
-          (f (fn (a n)
-               (cond
-                 ((even? n) (f (* a a) (quot n 2)))
-                 ((> n 1) (g (* a a) (quot n 2) a))
-                 (True a)))))
-      (cond
-        ((> power 3) (f base power))
-        ((== power 3) (* (* base base) base))
-        ((== power 2) (* base base))
-        ((== power 1) base)
-        ((== power 0) 1)
-        (True (error "Can't exponentiate with a negative exponent.")))))
-
-  (declare ^^ ((Dividable :a :a) (Num :a) => (:a -> Integer -> :a)))
-  (define (^^ base power)
-    "Exponentiate BASE to a signed POWER."
-    (if (< power 0)
-        (^ (/ 1 base) (negate power))
-        (^ base power))))
 
 (cl:defmacro %define-native-expt (type)
   (cl:let ((^ (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-^")))
