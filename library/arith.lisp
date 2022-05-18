@@ -245,25 +245,26 @@ The fields are defined as follows:
         (%handle-fixnum-overflow x)))))
 
 
-(cl:defmacro %define-signed-instances (coalton-type bits)
+(cl:defmacro %define-signed-instances (coalton-type bits cl:&rest supers)
   (cl:declare (cl:ignore bits))
   `(coalton-toplevel
      (define-instance (Into Integer ,coalton-type)
        (define (into x) (fromInt x)))
 
-     (define-instance (Into ,coalton-type Integer)
-       (define (into x)
-         (lisp Integer (x)
-           x)))))
+     ,@(cl:loop :for super :in supers :collecting
+          `(define-instance (Into ,coalton-type ,super)
+             (define (into x)
+               (lisp ,super (x)
+                 x))))))
 
-(%define-signed-instances I8  8)
-(%define-signed-instances I16 16)
-(%define-signed-instances I32 32)
-(%define-signed-instances I64 64)
-(%define-signed-instances IFix #.+fixnum-bits+)
+(%define-signed-instances I8   8               Integer I64 I32 I16)
+(%define-signed-instances I16  16              Integer I64 I32)
+(%define-signed-instances I32  32              Integer I64)
+(%define-signed-instances I64  64              Integer)
+(%define-signed-instances IFix #.+fixnum-bits+ Integer)
 
 
-(cl:defmacro %define-unsigned-num-instance (coalton-type bits)
+(cl:defmacro %define-unsigned-num-instance (coalton-type bits cl:&rest supers)
   `(coalton-toplevel
      (define-instance (Num ,coalton-type)
        (define (+ a b)
@@ -282,10 +283,11 @@ The fields are defined as follows:
      (define-instance (Into Integer ,coalton-type)
        (define (into x) (fromInt x)))
 
-     (define-instance (Into ,coalton-type Integer)
-       (define (into x)
-         (lisp Integer (x)
-           x)))
+     ,@(cl:loop :for super :in supers :collecting
+        `(define-instance (Into ,coalton-type ,super)
+           (define (into x)
+             (lisp ,super (x)
+               x))))
 
      (define-instance (Into ,coalton-type Single-Float)
        (define (into x)
@@ -297,11 +299,11 @@ The fields are defined as follows:
          (lisp Double-Float (x)
            (cl:coerce x 'cl:double-float))))))
 
-(%define-unsigned-num-instance U8  8)
-(%define-unsigned-num-instance U16 16)
-(%define-unsigned-num-instance U32 32)
-(%define-unsigned-num-instance U64 64)
-(%define-unsigned-num-instance UFix #.+unsigned-fixnum-bits+)
+(%define-unsigned-num-instance U8   8                        Integer U64 I64 U32 I32 U16 I16)
+(%define-unsigned-num-instance U16  16                       Integer U64 I64 U32 I32)
+(%define-unsigned-num-instance U32  32                       Integer U64 I64)
+(%define-unsigned-num-instance U64  64                       Integer)
+(%define-unsigned-num-instance UFix #.+unsigned-fixnum-bits+ Integer)
 
 (coalton-toplevel
   (declare integer->single-float (Integer -> Single-Float))
