@@ -88,8 +88,8 @@ Returns (PREDS FOUNDP)"
 (defun split-context (env environment-vars local-vars preds subs)
   "Split PREDS into retained predicates and deferred predicates
 
-Returns (VALUES deferred-preds retained-preds)"
-  (declare (values ty-predicate-list ty-predicate-list))
+Returns (VALUES deferred-preds retained-preds defaultable-preds)"
+  (declare (values ty-predicate-list ty-predicate-list ty-predicate-list))
   (let ((reduced-preds (reduce-context env preds subs)))
 
     (multiple-value-bind (deferred retained)
@@ -103,7 +103,7 @@ Returns (VALUES deferred-preds retained-preds)"
 
 
       (let ((retained_ (default-preds env (append environment-vars local-vars) retained)))
-        (values deferred (set-difference retained retained_ :test #'equalp))))))
+        (values deferred (set-difference retained retained_ :test #'equalp) retained_)))))
 
 (defstruct (ambiguity (:constructor ambiguity (var preds)))
   (var   (required 'var)   :type tyvar             :read-only t)
@@ -173,7 +173,6 @@ Returns (VALUES deferred-preds retained-preds)"
   ;; work before the standard library is fully loaded
   (append (find-symbol? "NUM" "COALTON-LIBRARY/CLASSES")
           (find-symbol? "QUANTIZABLE" "COALTON-LIBRARY/ARITH")
-          (find-symbol? "DIVIDABLE" "COALTON-LIBRARY/ARITH")
           (find-symbol? "COMPLEX" "COALTON-LIBRARY/COMPLEX")
           (find-symbol? "REMAINDER" "COALTON-LIBRARY/INTEGRAL")
           (find-symbol? "INTEGRAL" "COALTON-LIBRARY/INTEGRAL")))

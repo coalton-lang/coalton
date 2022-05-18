@@ -627,19 +627,40 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                                           :test #'equalp)) ; gs
              )
 
-        ;; NOTE: This is where defauling happens
-
-        (unless allow-deferred-predicates
-          (setf local-subs (compose-substitution-lists (default-subs env nil expr-preds) local-subs))
-          (setf expr-preds (apply-substitution local-subs expr-preds))
-          (setf expr-types (apply-substitution local-subs expr-types)))
-
-        (multiple-value-bind (deferred-preds retained-preds)
+        (multiple-value-bind (deferred-preds retained-preds defaultable-preds)
             (split-context env env-tvars local-tvars expr-preds local-subs)
+
+          ;; Apply defaulting to defaultable ambigious predicates
+          (setf local-subs (compose-substitution-lists (default-subs env nil defaultable-preds) local-subs))
 
           (labels ((restricted (bindings)
                      (some (lambda (b) (not (coalton-impl/ast::node-abstraction-p (cdr b))))
                            bindings)))
+
+            ;;
+            ;; NOTE: This is where defaulting happens
+            ;;
+
+            ;; Defaulting only applies to top level bindings
+            (unless allow-deferred-predicates
+              (if (restricted bindings)
+                  ;; Restricted bindings have all predicates defaulted
+                  (progn
+                    (setf local-subs
+                          (compose-substitution-lists
+                           (default-subs env nil (append deferred-preds retained-preds))
+                           local-subs))
+                    (setf deferred-preds (reduce-context env deferred-preds local-subs))
+                    (setf retained-preds (reduce-context env retained-preds local-subs))
+                    (setf expr-types (apply-substitution local-subs expr-types)))
+                  ;; Unrestricted bindings have deferred predicates defaulted
+                  (progn
+                    (setf local-subs
+                          (compose-substitution-lists
+                           (default-subs env nil deferred-preds)
+                           local-subs))
+                    (setf deferred-preds (reduce-context env deferred-preds local-subs))
+                    (setf expr-types (apply-substitution local-subs expr-types))))) 
 
             ;; NOTE: This is where the monomorphism restriction happens
 
@@ -707,7 +728,7 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                                                  ;; will make interior predicates static. Variable nodes will not have these interior predicates
                                                  ;; so they must be added manually.
                                                  (when (typed-node-variable-p node)
-                                                     (remove-if-not #'static-predicate-p retained-preds))))))
+                                                   (remove-if-not #'static-predicate-p retained-preds))))))
 
                                (cons (car b)
                                      (replace-node-type node (to-scheme (qualify new-preds node-type))))))

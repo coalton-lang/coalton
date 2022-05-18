@@ -121,3 +121,13 @@
   (declare context-reduction (Into :a Integer => :a -> Integer))
   (define (context-reduction x)
     (into x)))
+
+;; Check that defaulting propigates through let bindings
+;; See gh #526
+(coalton-toplevel
+  (define gh-526
+    (let ((y (even? 2)))
+      y)))
+
+(define-test test-defaulting-propigation ()
+    (is (== True gh-526)))
