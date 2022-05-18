@@ -45,6 +45,7 @@
    #:filter!
    #:take!
    #:flatten!
+   #:chain!
    #:concat!
    #:remove-duplicates!
    #:pair-with!
@@ -272,6 +273,14 @@ Equivalent to reversing `range-increasing`"
     (map fst
          (zip! iter
                (up-to count))))
+
+  (declare chain! (Iterator :elt -> Iterator :elt -> Iterator :elt))
+  (define (chain! iter1 iter2)
+    (%iterator
+     (fn ()
+       (match (next! iter1)
+         ((None)    (next! iter2))
+         ((Some el) (Some el))))))
 
   (declare flatten! (Iterator (Iterator :elt) -> Iterator :elt))
   (define (flatten! iters)
