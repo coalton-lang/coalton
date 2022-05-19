@@ -220,20 +220,47 @@ their known values."
                          :do (setf new-type (tc:function-type-to new-type))))
 
          (retained-args
-           (subseq
-            (node-abstraction-vars node)
-            (length (compile-candidate-args candidate))
-            (length (node-abstraction-vars node))))
+           (if (< #1=(length (compile-candidate-args candidate)) #2=(length (node-abstraction-vars node)))
+               (subseq (node-abstraction-vars node) #1# #2#)
+               nil))
 
          (new-node
-           (tc:apply-substitution
-            subs
-            (node-abstraction
-             (tc:make-function-type*
-              (reverse arg-tys)
-              new-type)
-             (append new-vars retained-args)
-             (apply-ast-substitution ast-subs (node-abstraction-subexpr node))))))
+           (if (null new-vars)
+               ;; If new-vars is null then the abstraction has been
+               ;; over applied. generate a new abstraction with extra
+               ;; arguments so that it can be direct called.
+               ;;
+               ;; NOTE: the following is only valid when propigating dicts
+               (let* ((over-args (- (length (compile-candidate-args candidate)) (length (node-abstraction-vars node))))
+                      (arg-tys (subseq (tc:function-type-arguments (node-type node))
+                                       (1- over-args)
+                                       (length (compile-candidate-args candidate))))
+                      (args (mapcar (lambda (_) (declare (ignore _)) (gensym)) arg-tys))
+
+                      (node (tc:apply-substitution
+                             subs
+                             (apply-ast-substitution
+                              ast-subs
+                              (node-abstraction
+                               (node-type (node-abstraction-subexpr node))
+                               args
+                               (node-application
+                                (tc:make-function-type*
+                                 (subseq (tc:function-type-arguments (node-type (node-abstraction-subexpr node))) (length args))
+                                 (tc:function-return-type (node-type (node-abstraction-subexpr node))))
+                                (node-abstraction-subexpr node)
+                                (loop :for ty :in arg-tys
+                                      :for arg :in args
+                                      :collect (node-variable ty arg))))))))
+                 node)
+               (tc:apply-substitution
+                subs
+                (node-abstraction
+                 (tc:make-function-type*
+                  (reverse arg-tys)
+                  new-type)
+                 (append new-vars retained-args)
+                 (apply-ast-substitution ast-subs (node-abstraction-subexpr node)))))))
 
     (typecheck-node new-node env)
 

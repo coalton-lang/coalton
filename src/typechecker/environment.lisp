@@ -910,7 +910,7 @@
                           :codegen-syms (immutable-map-set
                                         (instance-environment-codegen-syms (environment-instance-environment env))
                                         (ty-class-instance-codegen-sym value)
-                                        t))))
+                                        value))))
 
 (defun set-method-inline (env method instance codegen-sym)
   (declare (type environment env)
