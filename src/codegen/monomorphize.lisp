@@ -219,6 +219,12 @@ their known values."
 
                          :do (setf new-type (tc:function-type-to new-type))))
 
+         (retained-args
+           (subseq
+            (node-abstraction-vars node)
+            (length (compile-candidate-args candidate))
+            (length (node-abstraction-vars node))))
+
          (new-node
            (tc:apply-substitution
             subs
@@ -226,7 +232,7 @@ their known values."
              (tc:make-function-type*
               (reverse arg-tys)
               new-type)
-             new-vars
+             (append new-vars retained-args)
              (apply-ast-substitution ast-subs (node-abstraction-subexpr node))))))
 
     (typecheck-node new-node env)
