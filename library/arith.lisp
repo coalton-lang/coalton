@@ -6,7 +6,8 @@
   (:use
      #:coalton
      #:coalton-library/builtin
-     #:coalton-library/classes)
+     #:coalton-library/classes
+     #:coalton-library/utils)
   (:local-nicknames
    (#:bits #:coalton-library/bits))
   (:export
@@ -22,12 +23,24 @@
    #:negate
    #:abs
    #:sign
-   #:expt
    #:ash
    #:mkFraction
    #:numerator
    #:denominator
    #:reciprocal
+   #:Trigonometric
+   #:sin #:cos #:tan
+   #:sinh #:cosh #:tanh
+   #:asin #:acos #:atan
+   #:asinh #:acosh #:atanh
+   #:sincos
+   #:Exponentiable
+   #:log #:expt #:sqrt #:exp #:ln
+   #:Float
+   #:pi #:ee
+   #:RealFloat
+   #:atan2
+   #:rationalize
    #:floor
    #:ceiling
    #:round
@@ -412,13 +425,6 @@ The fields are defined as follows:
         -1
         1))
 
-  (declare expt (Integer -> Integer -> Integer))
-  (define (expt base power)
-    "Exponentiate BASE to a non-negative POWER."
-    (if (< power 0)
-        (error "Can't exponentiate with a negative exponent.")
-        (lisp Integer (base power) (cl:expt base power))))
-
   (declare ash (Integer -> Integer -> Integer))
   (define (ash x n)
     "Compute the \"arithmetic shift\" of X by N. "
@@ -501,6 +507,178 @@ The fields are defined as follows:
     (define (general/ x y)
       (lisp Double-Float (x y)
         (cl:coerce (cl:/ x y) 'cl:double-float)))))
+
+(coalton-toplevel
+  (define-class (Trigonometric :a)
+    (sin   (:a -> :a))
+    (cos   (:a -> :a))
+    (tan   (:a -> :a))
+    (asin  (:a -> :a))
+    (acos  (:a -> :a))
+    (atan  (:a -> :a)))
+
+  (declare sincos (Trigonometric :a => :a -> (Tuple :a :a)))
+  (define (sincos x)
+    (Tuple (sin x) (cos x)))
+
+  (define-class (Exponentiable :a)
+    (expt (:a -> :a -> :a))
+    (log  (:a -> :a -> :a)))
+
+  (declare sqrt ((Into Fraction :a) (Exponentiable :a) => :a -> :a))
+  (define (sqrt x)
+    "Returns the square root of the input"
+    (expt x (into 1/2)))
+
+  (define-class ((Num :a) (Into Fraction :a) (Dividable :a :a) (Trigonometric :a) (Exponentiable :a)
+                 => Float :a)
+    "A finite, floating-point approximation of a real or imaginary number"
+    (ee :a)
+    (pi :a))
+
+  (declare exp ((Float :f) => :f -> :f))
+  (define exp
+    "Raise ee to the power of X"
+    (expt ee))
+
+  (declare ln ((Float :f) => :f -> :f))
+  (define ln
+    "The natural logarithm of a given value"
+    (log ee))
+
+  ;; See http://clhs.lisp.se/Body/f_sinh_.htm
+
+  (declare sinh ((Float :f) => :f -> :f))
+  (define (sinh x)
+    (/ (- (exp x) (exp (negate x))) 2))
+
+  (declare cosh ((Float :f) => :f -> :f))
+  (define (cosh x)
+    (/ (+ (exp x) (exp (negate x))) 2))
+
+  (declare tanh ((Float :f) => :f -> :f))
+  (define (tanh x)
+    (/ (sinh x) (cosh x)))
+
+  (declare asinh ((Float :f) => :f -> :f))
+  (define (asinh x)
+    (ln (+ x (sqrt (+ 1 (expt x 2))))))
+
+  (declare acosh ((Float :f) => :f -> :f))
+  (define (acosh x)
+    (* 2 (ln (+ (sqrt (/ (+ x 1) 2)) (sqrt (/ (- x 1) 2))))))
+
+  (declare atanh ((Float :f) => :f -> :f))
+  (define (atanh x)
+    (/ (- (ln (+ 1 x)) (ln (- 1 x))) (fromInt 2)))
+
+  (define-class ((Float :f) (Ord :f) => RealFloat :f)
+    "Finite, floating-point approximations of real numbers"
+    (rationalize (:f -> Fraction)))
+
+  (declare atan2 ((RealFloat :f) => :f -> :f -> :f))
+  (define (atan2 y x)
+    "Computes the two-argument arctangent of y and x, which is roughly the same as (atan (/ y x)) when defined and accounting for the quadrant of the point (x, y)."
+    (match (Tuple (<=> x 0) (<=> y 0))
+      ((Tuple (GT) _)    (atan (/ y x)))
+      ((Tuple (LT) (LT)) (- (atan (/ y x)) pi))
+      ((Tuple (LT) _)    (+ (atan (/ y x)) pi))
+      ((Tuple (EQ) (GT)) (/ pi (fromint 2)))
+      ((Tuple (EQ) (LT)) (/ pi (fromint -2)))
+      ((Tuple (EQ) (EQ)) 0))))
+
+
+(cl:defmacro %define-real-float-instance (coalton-type underlying-type)
+  "Defines the float instances for a lisp floating-point type"
+  `(coalton-toplevel
+     (define-instance (Trigonometric ,coalton-type)
+       ,(generate-unary-wrapper coalton-type 'sin  'cl:sin)
+       ,(generate-unary-wrapper coalton-type 'cos  'cl:cos)
+       ,(generate-unary-wrapper coalton-type 'tan  'cl:tan)
+       ,(generate-unary-wrapper coalton-type 'asin 'cl:asin :domain '(cl:lambda (x) (cl:<= -1 x 1)))
+       ,(generate-unary-wrapper coalton-type 'acos 'cl:acos :domain '(cl:lambda (x) (cl:<= -1 x 1)))
+       ,(generate-unary-wrapper coalton-type 'atan 'cl:atan))
+
+     (define-instance (Exponentiable ,coalton-type)
+       (define (expt base power)
+         (lisp ,coalton-type (base power)
+           (cl:when (cl:minusp base)
+             (cl:error "Cannot exponentiate with a negative base ~a" base))
+           (cl:unless (cl:or (cl:plusp base) (cl:plusp power))
+             (cl:error "Either the base (~a) or the power (~a) must be positive" base power))
+           (cl:expt base power)))
+       (define (log base number)
+         (lisp ,coalton-type (base number)
+           (cl:when (cl:minusp base)
+             (cl:error "Cannot take a logarithm with the non-positive real base ~a" base))
+           (cl:when (cl:minusp number)
+             (cl:error "Cannot take the logarithm of the non-positive real number ~a" number))
+           (cl:log number base))))
+
+     (define-instance (Into Fraction ,coalton-type)
+       (define (into x)
+         (lisp ,coalton-type (x)
+           (cl:coerce x ',underlying-type))))
+     
+     (define-instance (Float ,coalton-type)
+       (define ee
+         (lisp ,coalton-type ()
+           (cl:exp (cl:coerce 1 ',underlying-type))))
+         
+       (define pi
+         (lisp ,coalton-type ()
+           (cl:coerce cl:pi ',underlying-type))))
+
+     (define-instance (RealFloat ,coalton-type)
+       (define (rationalize x)
+         (lisp Fraction (x)
+           (cl:rationalize x))))))
+
+(%define-real-float-instance Single-Float cl:single-float)
+(%define-real-float-instance Double-Float cl:double-float)
+
+(cl:defmacro %define-integer-expt-instance (coalton-type)
+  `(coalton-toplevel
+     (define-instance (Exponentiable ,coalton-type)
+       (define (expt base power)
+         (lisp ,coalton-type (base power)
+           (cl:when (cl:minusp power)
+             (cl:error "Cannot exponentiate to the power of the negative integer ~a" power))
+           (cl:expt base power)))
+       (define (log b x)
+         ;; The floor of the logarithm with base B > 1 of X >= 1.
+         ;; See GHC's wordLogBase#
+         (let quot =
+           (fn (n m)
+             (lisp ,coalton-type (n m)
+               (cl:values (cl:truncate n m)))))
+         (let ilog-rec =
+           (fn (y)
+             (if (< x y)
+                 (the (Tuple :a :a) (Tuple x 0))
+                 (match (ilog-rec (* y y))
+                   ((Tuple a b)
+                    (if (< a y)
+                        (Tuple a (* 2 b))
+                        (Tuple (quot a y) (+ (* 2 b) 1))))))))
+         (cond
+           ((== x 1) 0)
+           ((< x 1)  (error "Power of ILOG must be greater than or equal to 1."))
+           ((<= b 1) (error "Base of ILOG must be greater than 1."))
+           ((== b 2) (- (lisp ,coalton-type (x) (cl:integer-length x)) 1))
+           (True     (match (ilog-rec b) ((Tuple _ b) b))))))))
+
+(%define-integer-expt-instance Integer)
+(%define-integer-expt-instance U8) 
+(%define-integer-expt-instance I8) 
+(%define-integer-expt-instance U16) 
+(%define-integer-expt-instance I16) 
+(%define-integer-expt-instance U32) 
+(%define-integer-expt-instance I32) 
+(%define-integer-expt-instance U64) 
+(%define-integer-expt-instance I64) 
+(%define-integer-expt-instance Ifix) 
+(%define-integer-expt-instance Ufix) 
 
 (coalton-toplevel
   (define-instance (Into Integer String)
