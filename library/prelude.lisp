@@ -71,7 +71,7 @@
    #:fst
    #:snd
    #:Tuple3
-   #:Tupel4
+   #:Tuple4
    #:Tuple5)
 
   (:import-from
