@@ -156,7 +156,17 @@
 
   (:import-from
    #:coalton-library/iterator
-   #:Iterator))
+   #:Iterator)
+  (:export
+   #:Iterator)
+
+  (:import-from
+   #:coalton-library/system
+   #:time)
+  (:export
+   #:gc
+   #:time
+   #:sleep))
 
 (cl:defpackage #:coalton-user
   (:use
@@ -176,7 +186,8 @@
    (#:slice #:coalton-library/slice)
    (#:hashtable #:coalton-library/hashtable)
    (#:st #:coalton-library/monad/state)
-   (#:iter #:coalton-library/iterator)))
+   (#:iter #:coalton-library/iterator)
+   (#:sys #:coalton-library/system)))
 
 (cl:in-package #:coalton-prelude)
 
