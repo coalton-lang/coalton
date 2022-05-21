@@ -108,7 +108,8 @@
                           #+sbcl (sb-ext:*block-compile-default* :specified))
                       (funcall compile)))
   :depends-on (#:coalton/compiler
-               #:coalton/hashtable-shim)
+               #:coalton/hashtable-shim
+               #:trivial-garbage)
   :pathname "library/"
   :serial t
   :components ((:file "utils")
@@ -132,6 +133,7 @@
                (:file "hashtable")
                (:file "monad/state")
                (:file "iterator")
+               (:file "system")
                (:file "prelude")))
 
 (asdf:defsystem #:coalton/testing
