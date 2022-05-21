@@ -140,14 +140,16 @@
         Nil
         (Cons x (repeat (- n 1) x))))
 
+  (define (%reverse as bs)
+    (match as
+      ((Nil) bs)
+      ((Cons a as) (%reverse as (Cons a bs)))))
+
   (declare reverse (List :a -> List :a))
   (define (reverse xs)
     "Returns a new list containing the same elements in reverse order."
-    (let ((inner (fn (as bs)
-                   (match as
-                     ((Nil) bs)
-                     ((Cons a as) (inner as (Cons a bs)))))))
-      (inner xs Nil)))
+    ;; like (fold (flip Cons) Nil xs)
+    (%reverse xs Nil))
 
   (declare drop (Integer -> List :a -> List :a))
   (define (drop n xs)
@@ -253,12 +255,15 @@
           (inner start)
           (reverse (range end start)))))
 
+  (define (%append list result)
+    (match list
+      ((Nil) result)
+      ((Cons x xs) (%append xs (Cons x result)))))
+
   (declare append (List :a -> List :a -> List :a))
   (define (append xs ys)
     "Appends two lists together and returns a new list."
-    (match xs
-      ((Nil) ys)
-      ((Cons x xs) (Cons x (append xs ys)))))
+    (reverse (%append ys (%append xs Nil))))
 
   (declare concat (List (List :a) -> List :a))
   (define (concat xs)
@@ -268,7 +273,7 @@
   (declare concatMap ((:a -> (List :b)) -> List :a -> List :b))
   (define (concatMap f xs)
     "Apply F to each element in XS and concatenate the results."
-    (fold (fn (a b) (append a (f b))) Nil xs))
+    (reverse (fold (fn (a b) (%append (f b) a)) Nil xs)))
 
   (declare member (Eq :a => (:a -> (List :a) -> Boolean)))
   (define (member e xs)
