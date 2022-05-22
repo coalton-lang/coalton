@@ -140,22 +140,44 @@ The fields are defined as follows:
 (%define-overflow-handler %handle-fixnum-overflow #.+fixnum-bits+)
 
 (cl:defmacro %define-number-stuff (coalton-type)
-  `(coalton-toplevel
-     (define-instance (Eq ,coalton-type)
-       (define (== a b)
-         (lisp Boolean (a b)
-           (to-boolean (cl:= a b)))))
+  (cl:let* ((ops   '(cl:< cl:<= cl:>= cl:>))
+            (specs (cl:loop
+                      :for op :in ops
+                      :collect (cl:gentemp (cl:symbol-name op)))))
+    `(cl:progn
+       ;; Inline these functions unconditionally.
+       (cl:declaim (cl:inline ,@specs))
+       (coalton-toplevel
+         (define-instance (Eq ,coalton-type)
+           (define (== a b)
+             (lisp Boolean (a b)
+               (to-boolean (cl:= a b)))))
 
-     (define-instance (Ord ,coalton-type)
-       (define (<=> a b)
-         (lisp Ord (a b)
-           (cl:cond
-             ((cl:< a b)
-              LT)
-             ((cl:> a b)
-              GT)
-             (cl:t
-              EQ)))))))
+         (define-instance (Ord ,coalton-type)
+           (define (<=> a b)
+             (lisp Ord (a b)
+               (cl:cond
+                 ((cl:< a b)
+                  LT)
+                 ((cl:> a b)
+                  GT)
+                 (cl:t
+                  EQ)))))
+
+         ;; These are originally defined in classes.lisp.
+         ;;
+         ;; These are specializations so we don't need to produce
+         ;; intermediate MATCH calls.
+         ,@(cl:loop
+              :for op :in ops
+              :for coalton-op := (cl:find-symbol (cl:symbol-name op) "COALTON-LIBRARY/CLASSES")
+              :for spec :in specs
+              :for type := `(,coalton-type -> ,coalton-type -> Boolean)
+              :collect `(declare ,spec ,type)
+              :collect `(define (,spec a b)
+                          (lisp Boolean (a b)
+                            (to-boolean (,op a b))))
+              :collect `(specialize ,coalton-op ,spec ,type))))))
 
 (%define-number-stuff U8)
 (%define-number-stuff U16)
@@ -694,5 +716,3 @@ Note: This does *not* divide double-float arguments."
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/ARITH")
-
-
