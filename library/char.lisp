@@ -11,7 +11,7 @@
 #+coalton-release
 (cl:declaim #.coalton-impl:*coalton-optimize-library*)
 
-(cl:in-package #:coalton-library/char)
+(in-package #:coalton-library/char)
 
 (coalton-toplevel
   (declare char-code (Char -> UFix))

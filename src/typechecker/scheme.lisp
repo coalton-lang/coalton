@@ -51,17 +51,6 @@
 (defun to-scheme (type)
   (%make-ty-scheme nil type))
 
-(defgeneric instantiate (types type)
-  (:method (types (type tapp))
-    (%make-tapp (instantiate types (tapp-from type))
-                (instantiate types (tapp-to type))))
-  (:method (types (type tgen))
-    (nth (tgen-id type) types))
-  (:method (types (type ty))
-    type)
-  (:method (types (type list))
-    (mapcar (lambda (type) (instantiate types type)) type)))
-
 (defun fresh-inst (ty-scheme)
   (let ((types (mapcar (lambda (k) (make-variable k))
                        (ty-scheme-kinds ty-scheme))))

@@ -21,7 +21,7 @@
 #+coalton-release
 (cl:declaim #.coalton-impl:*coalton-optimize-library*)
 
-(cl:in-package #:coalton-library/hashtable)
+(in-package #:coalton-library/hashtable)
 
 (coalton-toplevel
   ;;

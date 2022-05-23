@@ -15,7 +15,7 @@
 #+coalton-release
 (cl:declaim #.coalton-impl:*coalton-optimize-library*)
 
-(cl:in-package #:coalton-library/builtin)
+(in-package #:coalton-library/builtin)
 
 (coalton-toplevel
   (define (undefined x)

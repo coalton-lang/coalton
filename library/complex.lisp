@@ -19,7 +19,7 @@
 #+coalton-release
 (cl:declaim #.coalton-impl:*coalton-optimize-library*)
 
-(cl:in-package #:coalton-library/complex)
+(in-package #:coalton-library/complex)
 
 (coalton-toplevel
   (repr :native (cl:or cl:number complex))

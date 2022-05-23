@@ -489,6 +489,13 @@
 (uiop:define-package #:coalton
   (:documentation "Public interface to COALTON.")
   (:use)                                ; Keep the package clean!
+
+  (:import-from
+   #:common-lisp
+   #:in-package)
+  (:export
+   #:in-package)
+
   (:export
    #:coalton-toplevel
    #:coalton-codegen

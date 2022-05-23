@@ -31,7 +31,7 @@
    #:combine-hashes
    #:define-sxhash-hasher))
 
-(cl:in-package #:coalton)
+(in-package #:coalton)
 
 #+coalton-release
 (cl:declaim #.coalton-impl:*coalton-optimize-library*)

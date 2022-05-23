@@ -20,7 +20,7 @@
 #+coalton-release
 (cl:declaim #.coalton-impl:*coalton-optimize-library*)
 
-(cl:in-package #:coalton-library/cell)
+(in-package #:coalton-library/cell)
  
 (cl:declaim (cl:inline make-cell-internal))
 
@@ -36,10 +36,9 @@
 
 (coalton-toplevel
 
-  (repr :transparent)
+  (repr :native cell-internal)
   (define-type (Cell :a)
-    "Internally mutable cell"
-    (%Cell Lisp-Object))
+    "Internally mutable cell")
 
   (declare new (:a -> Cell :a))
   (define (new data)
