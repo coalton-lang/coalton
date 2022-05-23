@@ -23,7 +23,7 @@
 #+coalton-release
 (cl:declaim #.coalton-impl:*coalton-optimize-library*)
 
-(cl:in-package #:coalton-library/functions)
+(in-package #:coalton-library/functions)
 
 (coalton-toplevel
   (declare trace (String -> Unit))

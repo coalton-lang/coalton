@@ -26,7 +26,7 @@
 #+coalton-release
 (cl:declaim #.coalton-impl:*coalton-optimize-library*)
 
-(cl:in-package #:coalton-library/slice)
+(in-package #:coalton-library/slice)
 
 (coalton-toplevel
   ;;

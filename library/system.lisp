@@ -11,7 +11,7 @@
 #+coalton-release
 (cl:declaim #.coalton-impl:*coalton-optimize-library*)
 
-(cl:in-package #:coalton-library/system)
+(in-package #:coalton-library/system)
 
 (coalton-toplevel
   (declare gc (Unit -> Unit))

@@ -33,7 +33,7 @@
 #+coalton-release
 (cl:declaim #.coalton-impl:*coalton-optimize-library*)
 
-(cl:in-package #:coalton-library/integral)
+(in-package #:coalton-library/integral)
 
 (coalton-toplevel
   (define-class (Num :a => Remainder :a)

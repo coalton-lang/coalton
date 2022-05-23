@@ -164,9 +164,7 @@
    #:coalton-library/system
    #:time)
   (:export
-   #:gc
-   #:time
-   #:sleep))
+   #:time))
 
 (cl:defpackage #:coalton-user
   (:use
@@ -175,6 +173,8 @@
   (:local-nicknames
    (#:bits #:coalton-library/bits)
    (#:arith #:coalton-library/arith)
+   (#:complex #:coalton-library/complex)
+   (#:integral #:coalton-library/integral)
    (#:char #:coalton-library/char)
    (#:string #:coalton-library/string)
    (#:tuple #:coalton-library/tuple)
