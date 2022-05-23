@@ -4,4 +4,5 @@
   :serial t
   :components ((:file "package")
                (:file "diff")
+               (:file "primes")
                (:file "microbench1")))
