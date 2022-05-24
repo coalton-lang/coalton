@@ -145,6 +145,28 @@
       (is (== None
               (iter:next! iter))))))
 
+(define-test iter-interleave ()
+  (is (== (iter:collect-list!
+           (iter:interleave! (iter:list-iter (make-list 1 2 3 4 5 6))
+                             iter:empty))
+          (the (List Integer) (make-list 1 2 3 4 5 6))))
+  (is (== (iter:collect-list!
+           (iter:interleave! iter:empty
+                             (iter:list-iter (make-list 1 2 3 4 5 6))))
+          (the (List Integer) (make-list 1 2 3 4 5 6))))
+  (is (== (iter:collect-list!
+           (iter:interleave! (iter:list-iter (make-list 1 3 5))
+                             (iter:list-iter (make-list 2 4 6))))
+          (the (List Integer) (make-list 1 2 3 4 5 6))))
+  (is (== (iter:collect-list!
+           (iter:interleave! (iter:list-iter (make-list 1 3 5))
+                             (iter:list-iter (make-list 2 4 6 7 8 9 10))))
+          (the (List Integer) (make-list 1 2 3 4 5 6 7 8 9 10))))
+  (is (== (iter:collect-list!
+           (iter:interleave! (iter:list-iter (make-list 1 3 5 7 8 9 10))
+                             (iter:list-iter (make-list 2 4 6))))
+          (the (List Integer) (make-list 1 2 3 4 5 6 7 8 9 10)))))
+
 ;;; FIXME: define more tests
 ;; - vector-iter
 ;; - recursive-iter
