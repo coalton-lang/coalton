@@ -39,6 +39,7 @@
    #:repeat-forever
    #:repeat-item
    #:char-range
+   #:interleave!
    #:zip!
    #:zipWith!
    #:enumerate!
@@ -237,6 +238,22 @@ Equivalent to reversing `range-increasing`"
   ;; own, for two reasons:
   ;; 1. it prevents name conflicts with list operators
   ;; 2. to emphasize the flow of mutable data
+  (declare interleave! (Iterator :a -> Iterator :a -> Iterator :a))
+  (define (interleave! left right)
+    "Return an interator of interleaved elements from LEFT and RIGHT which terminates as soon as both LEFT and RIGHT do.
+In the case one iterator terminates before the other, the other is exhausted before terminating."
+    (let flag = (cell:new False))
+    (%Iterator
+     (fn ()
+       (cell:update! not flag)
+       (if (cell:read flag)
+           (match (next! left)
+             ((Some val) (Some val))
+             ((None) (next! right)))
+           (match (next! right)
+             ((Some val) (Some val))
+             ((None) (next! left)))))))
+
   (declare zipWith! ((:left -> :right -> :out) -> Iterator :left -> Iterator :right -> Iterator :out))
   (define (zipWith! f left right)
     "Return an iterator of elements from LEFT and RIGHT which terminates as soon as either LEFT or RIGHT does."
