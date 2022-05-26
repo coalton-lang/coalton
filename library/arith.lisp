@@ -886,11 +886,11 @@ Note: This does *not* divide double-float arguments."
 (coalton-toplevel
   (declare 1+ ((Num :num) => :num -> :num))
   (define (1+ num)
-    (+ num (fromInt 1)))
+    (+ num 1))
 
   (declare 1- ((Num :num) => :num -> :num))
   (define (1- num)
-    (- num (fromInt 1))))
+    (- num 1)))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/ARITH")
