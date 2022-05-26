@@ -150,8 +150,10 @@
            (values node))
   (declare (type node node)
            (values node))
-  (if (node-abstraction-p node)
-      (return-from pointfree node))
+
+
+  (unless (node-variable-p node)
+    (return-from pointfree node))
 
   (if (not (tc:function-type-p (node-type node)))
       (return-from pointfree node))
