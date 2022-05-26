@@ -120,11 +120,13 @@
     (+ (fib-generic (- n 1)) (fib-generic (- n 2))))
 
   (declare fib-generic-wrapped (Integer -> Integer))
-  (define fib-generic-wrapped fib-generic)
+  (define (fib-generic-wrapped x)
+    (fib-generic x))
 
   (monomorphize)
   (declare fib-monomorphized (Integer -> Integer))
-  (define fib-monomorphized fib-generic)
+  (define (fib-monomorphized x)
+    (fib-generic x))
 
   (declare fib-generic-optional (Integer -> Optional Integer))
   (define (fib-generic-optional x)
