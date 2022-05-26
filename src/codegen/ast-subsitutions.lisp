@@ -132,4 +132,13 @@
     (node-field
      (node-type node)
      (node-field-name node)
-     (apply-ast-substitution subs (node-field-dict node)))))
+     (apply-ast-substitution subs (node-field-dict node))))
+
+  (:method (subs (node node-dynamic-extent))
+    (declare (type ast-substitution-list subs)
+             (values node))
+    (node-dynamic-extent
+     (node-type node)
+     (node-dynamic-extent-name node)
+     (apply-ast-substitution subs (node-dynamic-extent-node node))
+     (apply-ast-substitution subs (node-dynamic-extent-body node)))))

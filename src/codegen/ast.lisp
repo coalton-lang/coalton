@@ -59,6 +59,10 @@
    #:node-field-name                    ; ACCESSOR
    #:node-field-dict                    ; ACCESSOR
    #:node-field-p                       ; FUNCTION
+   #:node-dynamic-extent                ; STRUCT
+   #:node-dynamic-extent-name           ; ACCESSOR
+   #:node-dynamic-extent-node           ; ACCESSOR
+   #:node-dynamic-extent-body           ; ACCESSOR
    #:node-variables                     ; FUNCTION
    #:node-binding-sccs                  ; FUNCTION
    #:node-free-p                        ; FUNCTION
@@ -228,6 +232,16 @@ be a fully saturated call."
 (defmethod make-load-form ((self node-field) &optional env)
   (make-load-form-saving-slots self :environment env))
 
+(defstruct (node-dynamic-extent
+            (:include node)
+            (:constructor node-dynamic-extent (type name node body)))
+  "A single stack allocated binding"
+  (name (required 'name) :type symbol :read-only t)
+  (node (required 'node) :type node   :read-only t)
+  (body (required 'body) :type node   :read-only t))
+
+(defmethod make-load-form ((self node-dynamic-extent) &optional env)
+  (make-load-form-saving-slots self :environment env))
 
 ;;;
 ;;; Functions
@@ -384,7 +398,13 @@ both CL namespaces appearing in NODE"
 
   (:method ((node node-field) &key variable-namespace-only)
     (declare (values symbol-list &optional))
-    (node-variables-g (node-field-dict node) :variable-namespace-only variable-namespace-only)))
+    (node-variables-g (node-field-dict node) :variable-namespace-only variable-namespace-only))
+
+  (:method ((node node-dynamic-extent) &key variable-namespace-only)
+    (declare (values symbol-list &optional))
+    (append
+     (node-variables-g (node-dynamic-extent-node node) :variable-namespace-only variable-namespace-only)
+     (node-variables-g (node-dynamic-extent-body node) :variable-namespace-only variable-namespace-only))))
 
 (defmethod tc:apply-substitution (subs (node node-literal))
     (node-literal
@@ -468,3 +488,10 @@ both CL namespaces appearing in NODE"
    (tc:apply-substitution subs (node-type node))
    (node-field-name node)
    (tc:apply-substitution subs (node-field-dict node))))
+
+(defmethod tc:apply-substitution (subs (node node-dynamic-extent))
+  (node-dynamic-extent
+   (tc:apply-substitution subs (node-type node))
+   (node-dynamic-extent-name node)
+   (node-dynamic-extent-node node)
+   (node-dynamic-extent-body node)))

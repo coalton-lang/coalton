@@ -144,11 +144,25 @@
       (node-type last-node)))
 
   (:method ((expr node-return) env)
+    (declare (type tc:environment env)
+             (values tc:ty))
     (typecheck-node (node-return-expr expr) env)
     (node-type expr))
 
   (:method ((expr node-field) env)
+    (declare (type tc:environment env)
+             (values tc:ty))
     (typecheck-node (node-field-dict expr) env)
+    (node-type expr))
+
+  (:method ((expr node-dynamic-extent) env)
+    (declare (type tc:environment env)
+             (values tc:ty))
+    (typecheck-node (node-dynamic-extent-node expr) env)
+    (tc:unify
+     nil
+     (node-type expr)
+     (typecheck-node (node-dynamic-extent-body expr) env))
     (node-type expr)))
 
 

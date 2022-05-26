@@ -29,7 +29,8 @@
    #:update-function-env
    #:make-function-table)
   (:local-nicknames
-   (#:tc #:coalton-impl/typechecker))
+   (#:tc #:coalton-impl/typechecker)
+   (#:ast #:coalton-impl/ast))
   (:export
    #:optimize-bindings
    #:optimize-node))
@@ -138,6 +139,8 @@
    pointfree
 
    canonicalize
+
+   (match-dynamic-extent-lift env)
 
    (apply-specializations env)
 
@@ -493,4 +496,60 @@
      (list
       (cons :application #'apply-specialization)
       (cons :direct-application #'apply-specialization))
+     nil)))
+
+(defun match-dynamic-extent-lift (node env)
+  "Stack allocates uncaptured ADTs constructed in the head of a match expression" 
+  (declare (type node node)
+           (type tc:environment env)
+           (values node &optional))
+
+  ;; CLOS classes generated in development mode cannot be stack
+  ;; allocated
+  (unless (coalton-impl:coalton-release-p)
+    (return-from match-dynamic-extent-lift node))
+
+  (labels ((apply-lift (node &rest rest)
+             (declare (dynamic-extent rest)
+                      (ignore rest))
+
+             ;; If the constructed value is captured by a variable
+             ;; pattern, then it can escape the match branches scope,
+             ;; and thus cannot be safely stack allocated.
+             (loop :for branch :in (node-match-branches node)
+                   :when (ast:pattern-var-p (match-branch-pattern branch)) :do
+                     (return-from apply-lift nil))
+
+             (let ((expr (node-match-expr node)))
+               (unless (or (node-direct-application-p expr)
+                            (node-application-p expr))
+                 (return-from apply-lift nil))
+
+               (let ((expr-name (node-rator-name expr)))
+                 (unless expr-name
+                   (return-from apply-lift nil))
+
+                 (let ((expr-ctor (tc:lookup-constructor env expr-name :no-error t)))
+                   (unless expr-ctor
+                     (return-from apply-lift nil))
+
+
+                   (let ((ty (tc:lookup-type env (tc:constructor-entry-constructs expr-ctor))))
+                     (when (tc:type-entry-newtype ty)
+                       (return-from apply-lift nil))
+
+                     (let ((name (gensym)))
+                       (node-dynamic-extent
+                        (node-type node)
+                        name
+                        (node-match-expr node)
+                        (node-match
+                         (node-type node)
+                         (node-variable (node-type (node-match-expr node)) name)
+                         (node-match-branches node))))))))))
+
+    (traverse
+     node
+     (list
+      (cons :match #'apply-lift))
      nil)))
