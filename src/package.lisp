@@ -100,6 +100,7 @@
    #:pattern                            ; STRUCT
    #:pattern-var                        ; STRUCT
    #:pattern-var-id                     ; ACCESSOR
+   #:pattern-var-p                      ; FUNCTION
    #:pattern-wildcard                   ; STRUCT
    #:pattern-literal                    ; STRUCT
    #:pattern-literal-value              ; ACCESSOR

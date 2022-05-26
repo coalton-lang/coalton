@@ -146,7 +146,19 @@
              (node-type node)
              (node-field-name node)
              (traverse (node-field-dict node) funs bound-variables))))
-      (call-if node :field funs bound-variables))))
+      (call-if node :field funs bound-variables)))
+
+  (:method ((node node-dynamic-extent) funs bound-variables)
+    (declare (type symbol-list bound-variables))
+    (let* ((new-bound-variables (cons (node-dynamic-extent-name node) bound-variables))
+
+           (node
+             (node-dynamic-extent
+              (node-type node)
+              (node-dynamic-extent-name node)
+              (traverse (node-dynamic-extent-node node) funs new-bound-variables)
+              (traverse (node-dynamic-extent-body node) funs new-bound-variables))))
+      (call-if node :dynamic-extent funs bound-variables))))
 
 (defun split-binding-definitions (bindings)
   (let ((functions nil)

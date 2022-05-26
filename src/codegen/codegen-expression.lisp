@@ -177,7 +177,15 @@
     (declare (type tc:environment env)
              (type (or null symbol) current-function))
     `(,(node-field-name expr)
-      ,(codegen-expression (node-field-dict expr) current-function env))))
+      ,(codegen-expression (node-field-dict expr) current-function env)))
+
+  (:method ((expr node-dynamic-extent) current-function env)
+    (declare (type tc:environment env)
+             (type (or null symbol) current-function))
+    `(let ((,(node-dynamic-extent-name expr)
+             ,(codegen-expression (node-dynamic-extent-node expr) current-function env)))
+       (declare (dynamic-extent ,(node-dynamic-extent-name expr)))
+       ,(codegen-expression (node-dynamic-extent-body expr) current-function env))))
 
 (defun codegen-let (node sccs current-function local-vars env)
   (declare (type node-let node)
