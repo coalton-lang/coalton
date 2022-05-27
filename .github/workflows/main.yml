@@ -25,6 +25,11 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: 40ants/setup-lisp@v1
+      - name: Install GMP and MPFR dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install libgmp10 libmpfr6
+          sudo ln -s /usr/lib/x86_64-linux-gnu/libmpfr.so.6 /usr/lib/libmpfr.so
       - name: Run tests
         env:
           COALTON_ENV: ${{ matrix.COALTON_ENV }}
@@ -32,6 +37,8 @@ jobs:
           cat <<EOF > run-tests.lisp
           (sb-ext:restrict-compiler-policy 'safety ${{ matrix.SAFETY }})
           (defun main (&rest args)
+            (declare (ignore args))
+
             (asdf:test-system :coalton)
             (asdf:load-system :small-coalton-programs))
           EOF
@@ -48,10 +55,16 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: 40ants/setup-lisp@v1
+      - name: Install GMP and MPFR dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install libgmp10 libmpfr6
+          sudo ln -s /usr/lib/x86_64-linux-gnu/libmpfr.so.6 /usr/lib/libmpfr.so
       - name: Run benchmarks
         run: |
           cat <<EOF > run-benchmarks.lisp
           (defun main (&rest args)
+            (declare (ignore args))
             (asdf:load-system :coalton/benchmarks)
             (sb-ext::without-gcing (uiop:symbol-call :coalton-benchmarks :run-benchmarks-ci)))
           EOF
