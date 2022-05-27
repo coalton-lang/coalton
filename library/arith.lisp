@@ -90,7 +90,7 @@ The function / is partial, and will error produce a run-time error if the diviso
     (general/ (:arg-type -> :arg-type -> :res-type)))
 
   (declare / ((Dividable :a :a) => (:a -> :a -> :a)))
-  (define / general/)
+  (define (/ a b) (general/ a b))
   ;;
   ;; Quantizable
   ;;
