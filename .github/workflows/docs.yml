@@ -27,6 +27,11 @@ jobs:
 
       # Run docs generator targeting website directory
       - uses: 40ants/setup-lisp@v1
+      - name: Install GMP and MPFR dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install libgmp10 libmpfr6
+          sudo ln -s /usr/lib/x86_64-linux-gnu/libmpfr.so.6 /usr/lib/libmpfr.so
       - name: Run Docs Generator
         run: |
           cat <<EOF > run-tests.lisp

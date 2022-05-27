@@ -1,6 +1,6 @@
 ;;;; big-float.lisp
 ;;;;
-;;;; Arbitrary precision float's using SBCL's MPFR library.
+;;;; Arbitrary precision floats using SBCL's MPFR library.
 
 (coalton-library/utils:defstdlib-package #:coalton-library/big-float
   (:use #:coalton
@@ -81,18 +81,32 @@
   (repr :native (cl:member :MPFR_RNDNA :MPFR_RNDN :MPFR_RNDZ :MPFR_RNDU :MPFR_RNDD :MPFR_RNDA :MPFR_RNDF))
   (define-type RoundingMode)
 
-  (define rndna (lisp RoundingMode () ':MPFR_RNDNA))
-  (define rndn  (lisp RoundingMode () ':MPFR_RNDN))
-  (define rndz  (lisp RoundingMode () ':MPFR_RNDZ))
-  (define rndu  (lisp RoundingMode () ':MPFR_RNDU))
-  (define rndd  (lisp RoundingMode () ':MPFR_RNDD))
-  (define rnda  (lisp RoundingMode () ':MPFR_RNDA))
-  (define rndf  (lisp RoundingMode () ':MPFR_RNDF))
+  (define rndna
+    "RouND to Nearest Away."
+    (lisp RoundingMode () ':MPFR_RNDNA))
+  (define rndn
+    "RouND to Nearest, with the even rounding rule."
+    (lisp RoundingMode () ':MPFR_RNDN))
+  (define rndz
+    "RouND toward Zero."
+    (lisp RoundingMode () ':MPFR_RNDZ))
+  (define rndu
+    "RouND Up, toward positive infinity."
+    (lisp RoundingMode () ':MPFR_RNDU))
+  (define rndd
+    "RouND Down, toward negative infinity."
+    (lisp RoundingMode () ':MPFR_RNDD))
+  (define rnda
+    "RouND Away from zero."
+    (lisp RoundingMode () ':MPFR_RNDA))
+  (define rndf
+    "Faithful rounding (experimental)."
+    (lisp RoundingMode () ':MPFR_RNDF))
 
   ;; Calculation Configuration
   (declare set-precision! (UFix -> Unit))
   (define (set-precision! prec-bits)
-    "Set the precision of arithmetic to PREC-BITS bits."
+    "Set the precision of Big-Float arithmetic to PREC-BITS bits."
     (unless (> prec-bits 0)
       (error "Precision must be positive."))
     (lisp Unit (prec-bits)
@@ -101,13 +115,15 @@
 
   (declare set-rounding-mode! (RoundingMode -> Unit))
   (define (set-rounding-mode! r)
+    "Set the global rounding mode for Big-Float operations."
     (lisp Unit (r)
       (cl:setf sb-mpfr:*mpfr-rnd* r)
       Unit))
 
   ;; Float Type
   (repr :native sb-mpfr:mpfr-float)
-  (define-type Big-Float)
+  (define-type Big-Float
+    "An arbitrary (but fixed) precision floating point number.")
 
   ;; Equality
   (define-instance (Eq Big-Float)
@@ -181,7 +197,7 @@
     (define (quantize f)
       (match (Tuple (bf-floor f) (bf-ceiling f))
         ((Tuple (Tuple fl flr) (Tuple ce cer))
-         (Quantization f ce cer fl flr)))))
+         (Quantization f fl flr ce cer)))))
 
   (define-instance (Dividable Big-Float Big-Float)
     (define (general/ a b)
@@ -228,9 +244,11 @@
   ;; Float
   ;;
   (define (bf-pi _)
+    "Return the value of pi to the currently set precision."
     (lisp Big-Float ()
       (cl:values (sb-mpfr:const-pi))))
   (define (bf-ee _)
+    "Return the value of ee = exp(1) to the currently set precision."
     (lisp Big-Float ()
       (cl:values (sb-mpfr:exp (sb-mpfr:coerce 1 'sb-mpfr:mpfr-float)))))
 
