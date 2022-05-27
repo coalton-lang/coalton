@@ -28,7 +28,7 @@ BODY within a `coalton' expression."
              (cl:format stream "IS assertion ~a failed" (coalton-is-assertion-form failure)))))
 
 (coalton-toplevel
-  (declare %register-assertion (Lisp-Object -> Unit))
+  (declare %register-assertion (:a -> Unit))
   (define (%register-assertion form)
     (progn 
       (lisp :any (form)
@@ -43,7 +43,7 @@ BODY within a `coalton' expression."
         (fiasco::register-assertion-was-successful))
       Unit))
 
-  (declare %register-failure (Lisp-Object -> String -> Unit))
+  (declare %register-failure (:a -> String -> Unit))
   (define (%register-failure form message)
     (progn
       (lisp :any (form message)
@@ -53,7 +53,7 @@ BODY within a `coalton' expression."
                                 :format-arguments message))
       Unit))
 
-  (declare %is (Lisp-Object -> (Unit -> Boolean) -> String -> Unit))
+  (declare %is (:a -> (Unit -> Boolean) -> String -> Unit))
   (define (%is form ok? message)
     (progn
       (%register-assertion form)
@@ -63,6 +63,6 @@ BODY within a `coalton' expression."
       Unit)))
 
 (cl:defmacro is (check cl:&optional (message (cl:format cl:nil "assertion failed: ~a" check)))
-  `(%is (lisp Lisp-Object () ',check)
+  `(%is (lisp :a () ',check)
         (fn (_) ,check)
         ,message))

@@ -186,7 +186,6 @@
    #:*single-float-type*
    #:*double-float-type*
    #:*string-type*
-   #:*lisp-object-type*
    #:*fraction-type*
    #:*arrow-type*
    #:*list-type*)
@@ -534,7 +533,6 @@
    #:Single-Float
    #:Double-Float
    #:String
-   #:Lisp-Object
    #:Fraction
    #:Arrow
    #:List #:Cons #:Nil)

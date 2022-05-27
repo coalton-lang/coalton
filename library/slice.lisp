@@ -69,7 +69,7 @@
   (declare set! (Integer -> :a -> (Slice :a) -> Unit))
   (define (set! index item s)
     "Set the element at INDEX in S to ITEM"
-    (lisp Lisp-Object (index item s)
+    (lisp :a (index item s)
       (cl:setf (cl:aref s index) item))
     Unit)
 
@@ -89,7 +89,7 @@
   (declare foreach ((:a -> :b) -> (Slice :a) -> Unit))
   (define (foreach f s)
     "Call the function F once for each item in S"
-    (lisp Lisp-Object (f s)
+    (lisp :a (f s)
       (cl:loop :for elem :across s
          :do (coalton-impl/codegen::A1 f elem)))
     Unit)
@@ -97,7 +97,7 @@
   (declare foreach-index ((Integer -> :a -> :b) -> (Slice :a) -> Unit))
   (define (foreach-index f s)
     "Call the function F once for each item in S with its index"
-    (lisp Lisp-Object (f s)
+    (lisp :a (f s)
       (cl:loop
          :for elem :across s
          :for i :from 0
@@ -107,7 +107,7 @@
   (declare foreach2 ((:a -> :b -> :c) -> (Slice :a) -> (Slice :b) -> Unit))
   (define (foreach2 f s1 s2)
     "Iterate over S1 and S2 calling F once on each iteration"
-    (lisp Lisp-Object (f s1 s2)
+    (lisp :a (f s1 s2)
       (cl:loop
          :for e1 :across s1
          :for e2 :across s2
