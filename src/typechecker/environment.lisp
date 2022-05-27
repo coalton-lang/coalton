@@ -215,15 +215,6 @@
             :newtype nil
             :docstring "String of characters represented by Common Lisp `string`."))
 
-          ('coalton:Lisp-Object
-           (type-entry
-            :name 'coalton:Lisp-Object
-            :runtime-type 't
-            :type *lisp-object-type*
-            :enum-repr nil
-            :newtype nil
-            :docstring "Opaque container for arbitrary lisp objects. At runtime this is equivalent to type `t`."))
-
           ('coalton:Fraction
            (type-entry
             :name 'coalton:Fraction

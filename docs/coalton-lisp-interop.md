@@ -117,6 +117,10 @@ The pragma `(repr :lisp)` helps achieve Lisp compatibility of structures regardl
 
 Types with a single construtor consisting of a single field can be annotated with `(REPR :TRANSPARENT)`. This guarentees the wrapper type does not exist at runtime. The constructor function will still be generated, but it will be the identity function.
 
+### Passing Lisp types through Coalton with `(REPR :NATIVE T)`
+
+Coalton types can be unboxed lisp types under the hood with `(repr :native T)`. See [`Vector`](https://github.com/coalton-lang/coalton/blob/main/library/vector.lisp) for an example.
+
 ## Promises of `define`
 
 Consider the following definitions:
@@ -200,16 +204,6 @@ Each `<captured-variable>` refers to a lexical variable in the surrounding Coalt
 ```
 
 Here, the values of the parameters `a` and `b` are captured for use inside of the `lisp` form.
-
-## Coalton's `Lisp-Object` Type
-
-For low-level code, such as in the standard library, it is sometimes necessary to stash a Lisp object in a Coalton data type. This is done by specifying a field in an algebraic data type to be `Lisp-Object`.
-
-**PROMISE**: `Lisp-Object`s are not wrapped in a runtime representation in any way.
-
-**PROMISE**: For a suitable, unconstrained constructor function that takes a `Lisp-Object`, one may safely call that constructor directly on a Lisp object of interest.
-
-`Lisp-Object`s should, in general, be hidden from users.
 
 ## Soundness of Coalton-Lisp Interop
 

@@ -234,8 +234,6 @@
 (defvar *double-float-type*
   (%make-tcon (%make-tycon :name 'coalton:Double-Float :kind kstar)))
 (defvar *string-type*  (%make-tcon (%make-tycon :name 'coalton:String      :kind kstar)))
-(defvar *lisp-object-type*
-  (%make-tcon (%make-tycon :name 'coalton:Lisp-Object :kind kstar)))
 (defvar *fraction-type*
   (%make-tcon (%make-tycon :name 'coalton:Fraction :kind kstar)))
 
