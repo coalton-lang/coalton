@@ -109,7 +109,9 @@
                       (funcall compile)))
   :depends-on (#:coalton/compiler
                #:coalton/hashtable-shim
-               #:trivial-garbage)
+               #:trivial-garbage
+               (:feature :sbcl #:sb-gmp)
+               (:feature :sbcl #:sb-mpfr))
   :pathname "library/"
   :serial t
   :components ((:file "utils")
@@ -121,6 +123,7 @@
                (:file "arith")
                (:file "complex")
                (:file "integral")
+               (:file "big-float" :if-feature :sbcl)
                (:file "char")
                (:file "string")
                (:file "tuple")
