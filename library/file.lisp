@@ -43,27 +43,33 @@
 
 ;; encodings
 
-(coalton-toplevel
-  (define-type Encoding
+(cl:defmacro define-encodings (type-name docstring cl:&body pairs)
+  `(cl:progn
+     (coalton-toplevel
+      (repr :native (cl:member ,@(cl:mapcar #'cl:second pairs)))
+      (define-type ,type-name ,docstring))
+     ,@(cl:mapcar (cl:lambda (pair)
+                    (cl:destructuring-bind (name keyword) pair
+                      `(coalton-toplevel
+                        (declare ,name ,type-name)
+                         (define ,name (lisp ,type-name () ,keyword)))))
+                  pairs)))
+
+(define-encodings Encoding
     "A text encoding; CL calls this an \"external format\".
 
 Others are allowed; SBCL supports a wealth, listed at http://www.sbcl.org/manual/#Supported-External-Formats .
 
-To add a new external format, define a variant of `Encoding', and add a corresponding branch to `encoding-name'."
-    ASCII
-    UTF-8
-    UTF-16
-    LATIN-1)
+To add an external format supported by SBCL as an `Encoding', add a pair (COALTON-NAME LISP-NAME) to the
+`define-encodings' form in coalton/library/file.lisp where LISP-NAME is a keyword which names an encoding, and
+add the same COALTON-NAME to the `:exports' clause in that file's `defstdlib-package' form."
+  (ASCII :ascii)
+  (UTF-8 :utf-8)
+  (UTF-16 :utf-16)
+  (LATIN-1 :latin-1))
 
-  (declare encoding-name (Encoding -> Lisp-Object))
-  (define (encoding-name enc)
-    (match enc
-      ((ASCII) (lisp Lisp-Object () :ascii))
-      ((UTF-8) (lisp Lisp-Object () :utf-8))
-      ((UTF-16) (lisp Lisp-Object () :utf-16))
-      ((LATIN-1) (lisp Lisp-Object () :latin-1))))
-
-  (define default-encoding UTF-8))
+(coalton-toplevel
+ (define default-encoding UTF-8))
 
 ;; input files
 
@@ -75,16 +81,15 @@ To add a new external format, define a variant of `Encoding', and add a correspo
   (declare input-with-encoding! (Encoding -> String -> (Optional Input)))
   (define (input-with-encoding! enc path)
     "Open PATH as an input file using the encoding ENC."
-    (let ((enc-name (encoding-name enc)))
-      (lisp (Optional Input) (path enc-name)
-        (cl:handler-case
-            (cl:open path
-                     :direction :input
-                     :element-type 'cl:character
-                     :if-does-not-exist :error
-                     :external-format enc-name)
-          (cl:file-error () None)
-          (:no-error (f) (Some f))))))
+    (lisp (Optional Input) (path enc)
+          (cl:handler-case
+              (cl:open path
+                       :direction :input
+                       :element-type 'cl:character
+                       :if-does-not-exist :error
+                       :external-format enc)
+            (cl:file-error () None)
+            (:no-error (f) (Some f)))))
 
   (declare open-input! (String -> (Optional Input)))
   (define (open-input! path)
@@ -217,14 +222,13 @@ If opening the file fails, BODY will not be evaluated, and `None' is returned."
   (declare output-with-encoding! (Encoding -> String -> (Optional Output)))
   (define (output-with-encoding! enc path)
     "Open PATH for output using ENC as an encoding, replacing if it exists."
-    (let enc-name = (encoding-name enc))
-    (lisp (Optional Output) (enc-name path)
+    (lisp (Optional Output) (enc path)
       (cl:handler-case
            (cl:open path
                     :direction :output
                     :element-type 'cl:character
                     :if-exists :supersede
-                    :external-format enc-name)
+                    :external-format enc)
          (cl:file-error () None)
          (:no-error (f) (Some f)))))
 
