@@ -5,11 +5,13 @@
         (test-data (lisp String () (cl:symbol-name (cl:gensym "coalton-test-data-")))))
     (progn
       (expect "Opening output file failed"
-              (file:with-output-file! (out path)
-                (expect "Write failed"
-                        (file:write-line! out test-data))))
+              (file:with-char-output! file:default-file-options
+                (into path)
+                (fn (out) (expect "Write failed"
+                                  (char-io:write-line! out test-data)))))
       (is (== test-data
               (expect "Opening input file failed"
-                      (file:with-input-file! (in path)
-                        (expect "Read failed"
-                                (file:read-line! in)))))))))
+                      (file:with-char-input! file:default-file-options
+                        (into path)
+                        (fn (in) (expect "Read failed"
+                                         (char-io:read-line! in))))))))))

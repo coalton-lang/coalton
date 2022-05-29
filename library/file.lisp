@@ -2,48 +2,63 @@
     (:use
      #:coalton
      #:coalton-library/classes
-     #:coalton-library/builtin)
-  (:local-nicknames (#:iter #:coalton-library/iterator))
+     #:coalton-library/builtin
+     #:coalton-library/functions)
+  (:local-nicknames (#:char-io #:coalton-library/char-io))
   (:export
 
    ;; encodings
    #:Encoding #:ASCII #:UTF-8 #:UTF-16 #:LATIN-1
    #:default-encoding
 
-   ;; input files
-   #:Input
-   #:open-input! #:input-with-encoding!
-   #:close-input!
-   #:open-input?
-   #:read-char!
-   #:read-line!
-   #:iterator!
-   #:chars!
-   #:lines!
-   #:call-with-input-file! #:with-input-file!
-   #:standard-input
-   #:call-with-standard-input! #:with-standard-input!
+   ;; the type
+   #:File
 
-   ;; output files
-   #:Output
-   #:open-output! #:output-with-encoding!
-   #:close-output!
-   #:open-output?
-   #:write-char!
-   #:write-string!
-   #:write-line!
-   #:newline!
-   #:call-with-output-file! #:with-output-file!
-   #:standard-output
-   #:call-with-standard-output! #:with-standard-output!
+   ;; introspection ops
+   #:open?
+   #:input?
+   #:output?
+   #:io?
 
-   ;; formatted output
-   #:Show #:show!))
+   ;; conversions into char streams
+   #:char-input
+   #:char-output
+
+   ;; open options
+   #:IfExists #:IfExistsError #:IfExistsRename #:IfExistsAppend #:IfExistsSupersede
+   #:IfDoesNotExist #:IfDoesNotExistError #:IfDoesNotExistCreate #:IfDoesNotExistDefault
+   #:FileOptions
+   #:default-file-options
+   #:with-input
+   #:with-output
+   #:with-io
+   #:with-encoding
+   #:if-exists
+   #:if-does-not-exist
+
+   ;; error handling
+   #:UnknownFileError
+   #:FileError #:Unknown #:Closed
+
+   ;; paths
+   #:Path
+
+   ;; opening and closing
+   #:open!
+   #:close! #:try-close!
+   #:with-file!
+
+   ;; convenience functions for input-only and output-only filess
+   #:open-char-input!
+   #:open-char-output!
+   #:with-char-input!
+   #:with-char-output!
+   ))
 (cl:in-package #:coalton-library/file)
 
 ;; encodings
 
-(cl:defmacro define-encodings (type-name docstring cl:&body pairs)
+(cl:defmacro define-cl-enum (type-name docstring cl:&body pairs)
   `(cl:progn
      (coalton-toplevel
       (repr :native (cl:member ,@(cl:mapcar #'cl:second pairs)))
@@ -55,7 +70,7 @@
                          (define ,name (lisp ,type-name () ,keyword)))))
                   pairs)))
 
-(define-encodings Encoding
+(define-cl-enum Encoding
     "A text encoding; CL calls this an \"external format\".
 
 Others are allowed; SBCL supports a wealth, listed at http://www.sbcl.org/manual/#Supported-External-Formats .
@@ -69,286 +84,235 @@ add the same COALTON-NAME to the `:exports' clause in that file's `defstdlib-pac
   (LATIN-1 :latin-1))
 
 (coalton-toplevel
- (define default-encoding UTF-8))
+  (define default-encoding UTF-8))
 
-;; input files
+;; file typedef and inspection ops
 
 (coalton-toplevel
-  (repr :native (cl:and cl:stream (cl:satisfies cl:input-stream-p)))
-  (define-type Input
-    "An input stream, from which characters can be read.")
+  (repr :native cl:file-stream)
+  (define-type File
+    "A file which may be readable and/or writeable.")
 
-  (declare input-with-encoding! (Encoding -> String -> (Optional Input)))
-  (define (input-with-encoding! enc path)
-    "Open PATH as an input file using the encoding ENC."
-    (lisp (Optional Input) (path enc)
-          (cl:handler-case
-              (cl:open path
-                       :direction :input
-                       :element-type 'cl:character
-                       :if-does-not-exist :error
-                       :external-format enc)
-            (cl:file-error () None)
-            (:no-error (f) (Some f)))))
-
-  (declare open-input! (String -> (Optional Input)))
-  (define (open-input! path)
-    "Open PATH as an input file using the default encoding."
-    (input-with-encoding! default-encoding path))
-
-  (declare open-input? (Input -> Boolean))
-  (define (open-input? file)
-    "Is FILE open? Returns `False' if `close-input!' has been called on FILE in the past.
-
-If `False', reads from FILE will fail."
+  (declare open? (File -> Boolean))
+  (define (open? file)
     (lisp Boolean (file)
       (cl:open-stream-p file)))
 
-  (declare close-input! (Input -> Unit))
-  (define (close-input! file)
-    "Close FILE, freeing any corresponding resources. Future reads from FILE will fail.
+  (declare input? (File -> Boolean))
+  (define (input? file)
+    (lisp Boolean (file)
+      (cl:input-stream-p file)))
 
-It is safe to call `close-input!' on an `Input' that is already closed."
-    (when (open-input? file)
+  (declare output? (File -> Boolean))
+  (define (output? file)
+    (lisp Boolean (file)
+      (cl:output-stream-p file)))
+
+  (declare io? (File -> Boolean))
+  (define (io? file)
+    (and (input? file) (output? file))))
+
+;; converting files into char streams
+
+(coalton-toplevel
+  (declare char-input (File -> (Optional char-io:Input)))
+  (define (char-input file)
+    (if (input? file)
+        (Some (lisp char-io:Input (file) file))
+        None))
+
+  (declare char-output (File -> (Optional char-io:Output)))
+  (define (char-output file)
+    (if (output? file)
+        (Some (lisp char-io:Output (file) file))
+        None)))
+
+;; file-opening options
+
+(define-cl-enum IfExists
+    "Behavior taken if a file to be opened for writing exists.
+
+Supported are a subset of the operators allowed by `cl:open'; see the Hyperspec for more detailed descriptions.
+
+`IfExistsError' - return an error from `open!'. The default.
+`IfExistsRename' - rename the existing file, and create a new file with the intended name.
+`IfExistsAppend' - open the existing file for writing, with its file pointer initially at the end.
+`IfExistsSupersede' - create a new file with the intended name.
+"
+  (IfExistsError :error)
+  (IfExistsRename :rename)
+  (IfExistsAppend :append)
+  (IfExistsSupersede :supersede))
+
+(define-cl-enum IfDoesNotExist
+    "Behavior taken if a file to be opened does not exist.
+
+Applies to files opened for both reading or writing, but with different defaults.
+
+`IfDoesNotExistError' - return an error from `open!'. The default for files opened only for reading.
+`IfDoesNotExistCreate' - create a new, empty file. The default for files opened for writing.
+`IfDoesNotExistDefault' - behaves like `IfDoesNotExistError' for input-only files, and like `IfDoesNotExistCreate' for writable files."
+  (IfDoesNotExistError :error)
+  (IfDoesNotExistCreate :create)
+  (IfDoesNotExistDefault :default))
+
+(cl:defun if-does-not-exist-default (out? mode)
+  (cl:if (cl:eq mode :default)
+         (cl:if out?
+                :create
+                :error)
+         mode))
+
+(cl:defun direction-spec (in? out?)
+  (cl:cond ((cl:and in? out?) :io)
+           (in? :input)
+           (out? :output)
+           (cl:t :probe)))
+
+(coalton-toplevel
+  (define-type FileOptions
+    (%FileOptions Boolean ; input?
+                  Boolean ; output?
+                  Encoding
+                  IfExists
+                  IfDoesNotExist))
+
+  (declare default-file-options FileOptions)
+  (define default-file-options
+    (%FileOptions False False default-encoding IfExistsError IfDoesNotExistDefault))
+
+  (declare with-input (FileOptions -> FileOptions))
+  (define (with-input opts)
+    (match opts
+      ((%FileOptions _ out? enc if-ex if-not)
+       (%FileOptions True out? enc if-ex if-not))))
+
+  (declare with-output (FileOptions -> FileOptions))
+  (define (with-output opts)
+    (match opts
+      ((%FileOptions in? _ enc if-ex if-not)
+       (%FileOptions in? True enc if-ex if-not))))
+
+  (declare with-io (FileOptions -> FileOptions))
+  (define with-io (compose with-input with-output))
+
+  (declare with-encoding (Encoding -> FileOptions -> FileOptions))
+  (define (with-encoding enc opts)
+    (match opts
+      ((%FileOptions in? out? _ if-ex if-not)
+       (%FileOptions in? out? enc if-ex if-not))))
+
+  (declare if-exists (IfExists -> FileOptions -> FileOptions))
+  (define (if-exists then opts)
+    (match opts
+      ((%FileOptions in? out? enc _ if-not)
+       (%FileOptions in? out? enc then if-not))))
+
+  (declare if-does-not-exist (IfDoesNotExist -> FileOptions -> FileOptions))
+  (define (if-does-not-exist then opts)
+    (match opts
+      ((%FileOptions in? out? enc if-ex _)
+       (%FileOptions in? out? enc if-ex then)))))
+
+;; error handling
+
+(coalton-toplevel
+  ;; neither the CL spec nor SBCL's extensions offer any useful information from a `cl:file-error'. they have
+  ;; a single slot, `pathname', and no interesting subclasses. as a result, i'm just returning the
+  ;; `cl:file-error' object.
+  (repr :native cl:file-error)
+  (define-type UnknownFileError)
+
+  (define-type FileError
+    (Unknown UnknownFileError)
+    Closed))
+
+;; paths
+
+(coalton-toplevel
+  ;; as of now, i'm not convinced there's a useful way to represent paths as anything other than strings. if
+  ;; it turns out in the future that there is, using an opaque wrapper here allows us to use it without
+  ;; breaking the API.
+  (define-type Path
+    (%Path String))
+
+  (define-instance (Into String Path)
+    (define into %Path)))
+
+;; opening and closing files
+
+(coalton-toplevel
+  (declare open! (FileOptions -> Path -> (Result FileError File)))
+  (define (open! opts path)
+    (match opts
+      ((%FileOptions in? out? enc if-ex if-not)
+       (match path
+         ((%Path pathname)
+          (lisp (Result FileError File) (in? out? enc if-ex if-not pathname)
+            (cl:handler-case
+                (cl:open pathname
+                         :direction (direction-spec in? out?)
+                         :external-format enc
+                         :element-type 'cl:character
+                         :if-exists if-ex
+                         :if-does-not-exist (if-does-not-exist-default out? if-not))
+              (cl:file-error (e) (Err (Unknown e)))
+              (:no-error (file) (Ok file)))))))))
+
+  (declare close! (File -> Unit))
+  (define (close! file)
+    (when (open? file)
       (lisp :any (file)
         (cl:close file))
       Unit))
 
-  (declare read-char! (Input -> (Optional Char)))
-  (define (read-char! file)
-    "Read a character from FILE.
+  (declare try-close! (File -> (Result FileError Unit)))
+  (define (try-close! file)
+    (if (open? file)
+        (Ok (close! file))
+        (Err Closed)))
 
-Blocks if no data is available from FILE."
-    (lisp (Optional Char) (file)
-      (cl:handler-case
-          (cl:read-char file cl:t cl:nil cl:nil)
-        (cl:error () None)
-        (:no-error (c) (Some c)))))
+  (declare with-resource! ((Unit -> :state) -> (:state -> :result) -> (:state -> Unit) -> :result))
+  (define (with-resource! ctor thunk dtor)
+    "A wrapper around `cl:unwind-protect'"
+    (lisp :result (ctor thunk dtor)
+      (cl:let (state)
+        (cl:unwind-protect (cl:progn (cl:setf state
+                                              (coalton-impl/codegen:a1 ctor Unit))
+                                     (coalton-impl/codegen:a1 thunk state))
+          (cl:when state
+            (coalton-impl/codegen:a1 dtor state))))))
 
-  (declare read-line! (Input -> (Optional String)))
-  (define (read-line! file)
-    "Read a line up to a newline from FILE, discard the newline and return the line.
+  (declare with-file! (FileOptions -> Path -> (File -> :result) -> (Result FileError :result)))
+  (define (with-file! opts path thunk)
+    (with-resource!
+        (fn () (open! opts path))
+      (fn (open-res) (map thunk open-res))
+      (fn (open-res) (match open-res
+                       ((Ok file) (close! file))
+                       (_ Unit))))))
 
-Blocks if no data is available from FILE."
-    (lisp (Optional String) (file)
-      (cl:handler-case
-          (cl:read-line file cl:t cl:nil cl:nil)
-        (cl:error () None)
-        (:no-error (l missing-newline-p)
-          (cl:declare (cl:ignore missing-newline-p))
-          (Some l)))))
-
-  (declare iterator! ((Input -> (Optional :elt))
-                      -> Input
-                      -> (iter:Iterator :elt)))
-  (define (iterator! read-elt! file)
-    "Returns an iterator over elements of FILE by READ-ELT!, closing FILE after READ-ELT! returns `None' for the first time."
-    (iter:new
-     (fn ()
-       (if (not (open-input? file))
-           None
-           (match (read-elt! file)
-             ((Some elt) (Some elt))
-             ((None) (progn (close-input! file)
-                            None)))))))
-
-  (declare chars! (Input -> (iter:Iterator Char)))
-  (define (chars! file)
-    "Returns an iterator over the characters of FILE, calling `read-char!' successively.
-
-Closes the file when done.
-
-`next!' may block if no data is available on FILE."
-    (iterator! read-char! file))
-
-  (declare lines! (Input -> (iter:Iterator String)))
-  (define (lines! file)
-    "Returns an iterator over the lines of FILE, calling `read-line!' successively.
-
-Closes the file when done.
-
-`next!' may block if no data is available on FILE."
-    (iterator! read-line! file))
-
-  (declare call-with-input-file! (Encoding -> String -> (Input -> :res) -> (Optional :res)))
-  (define (call-with-input-file! enc path thunk)
-    "Open PATH as an ENC-encoded input file, call THUNK with the file, then close the file.
-
-If opening the file fails, THUNK will not be called, and `None' is returned."
-    (match (input-with-encoding! enc path)
-      ((Some file)
-       (progn (let res = (thunk file))
-              (close-input! file)
-              (Some res)))
-      ((None) None)))
-
-  (declare standard-input (Unit -> Input))
-  (define (standard-input)
-    "Returns the current standard input stream, i.e. the value of `cl:*standard-input*'."
-    (lisp Input () cl:*standard-input*))
-
-  (declare call-with-standard-input! (Input -> (Unit -> :ret) -> :ret))
-  (define (call-with-standard-input! inp thunk)
-    "Call THUNK with INP as the standard input stream, i.e. with `cl:*standard-input*' bound to INP."
-    (lisp :ret (inp thunk)
-      (cl:let ((cl:*standard-input* inp))
-        (coalton-impl/codegen/function-entry:a1 thunk Unit)))))
-
-(cl:defmacro with-input-file! ((var path cl:&optional (enc 'default-encoding)) cl:&body body)
-  "Evaluate BODY with VAR bound to an open `Input' file reading from PATH using ENC encoding.
-
-Close the file after BODY.
-
-If opening the file fails, BODY will not be evaluated, and `None' is returned."
-  `(call-with-input-file! ,enc ,path (fn (,var) ,@body)))
-
-(cl:defmacro with-standard-input! ((stream) cl:&body body)
-  "Evaluate BODY with STREAM as the standard input stream, i.e. with `cl:*standard-input*' bound to STREAM."
-  `(call-with-standard-input! ,stream (fn () ,@body)))
-
-;; output files
-
-(cl:defmacro lisp-write! (inputs cl:&body (do-write))
-  `(lisp (Optional Unit) ,inputs
-     (cl:handler-case ,do-write
-       (cl:error () None)
-       (:no-error (cl:&rest stuff) (cl:declare (cl:ignore stuff)) (Some Unit)))))
+;; convenience functions for input-only and output-only files
 
 (coalton-toplevel
-  (repr :native (cl:and cl:stream (cl:satisfies cl:output-stream-p)))
-  (define-type Output
-    "An output file, to which characters can be written.")
+  (declare open-char-input! (FileOptions -> Path -> (Result FileError char-io:Input)))
+  (define (open-char-input! opts path)
+    (map (compose unwrap char-input)
+         (open! (with-input opts) path)))
 
-  (declare output-with-encoding! (Encoding -> String -> (Optional Output)))
-  (define (output-with-encoding! enc path)
-    "Open PATH for output using ENC as an encoding, replacing if it exists."
-    (lisp (Optional Output) (enc path)
-      (cl:handler-case
-           (cl:open path
-                    :direction :output
-                    :element-type 'cl:character
-                    :if-exists :supersede
-                    :external-format enc)
-         (cl:file-error () None)
-         (:no-error (f) (Some f)))))
+  (declare open-char-output! (FileOptions -> Path -> (Result FileError char-io:Output)))
+  (define (open-char-output! opts path)
+    (map (compose unwrap char-output)
+         (open! (with-output opts) path)))
 
-  (declare open-output! (String -> (Optional Output)))
-  (define (open-output! path)
-    "Open PATH for output using the default encoding, replacing if it exists."
-    (output-with-encoding! default-encoding path))
+  (declare with-char-input! (FileOptions -> Path -> (char-io:Input -> :result) -> (Result FileError :result)))
+  (define (with-char-input! opts path thunk)
+    (with-file! (with-input opts)
+      path
+      (fn (file) (thunk (unwrap (char-input file))))))
 
-  (declare open-output? (Output -> Boolean))
-  (define (open-output? file)
-    "Is FILE open? Returns `False' if `close-output!' has been called on FILE in the past.
-
-If `False', writes to FILE will fail."
-    (lisp Boolean (file)
-      (cl:open-stream-p file)))
-  
-  (declare close-output! (Output -> Unit))
-  (define (close-output! file)
-    "Close FILE, forcing its writes to complete and then freeing corresponding resources.
-
-Future writes to FILE will fail.
-
-It is safe to call `close-output!' on an `Output' that has already been closed."
-    (when (open-output? file)
-      (lisp :any (file)
-        (cl:close file)))
-    Unit)
-
-  (declare write-char! (Output -> Char -> (Optional Unit)))
-  (define (write-char! file c)
-    "Write C to FILE. Returns (Some Unit) if successful, or None if the write failed."
-    (lisp-write! (file c)
-      (cl:write-char c file)))
-
-  (declare write-string! (Output -> String -> (Optional Unit)))
-  (define (write-string! file str)
-    "Write STR to FILE. Returns (Some Unit) if successful, or None if the write failed."
-    (lisp-write! (file str)
-      (cl:write-string str file)))
-
-  (declare write-line! (Output -> String -> (Optional Unit)))
-  (define (write-line! file str)
-    "Write STR to FILE with a trailing newline. Returns (Some Unit) if successful, or None if the write failed."
-    (lisp-write! (file str)
-      (cl:write-line str file)))
-
-  (declare newline! (Output -> (Optional Unit)))
-  (define (newline! file)
-    "Write a newline to FILE. Returns (Some Unit) if successful, or None if the write failed."
-    (lisp-write! (file)
-      (cl:terpri file)))
-
-  (declare call-with-output-file! (Encoding -> String -> (Output -> :res) -> (Optional :res)))
-  (define (call-with-output-file! enc path thunk)
-    "Open PATH as an ENC-encoded output file, call THUNK with the file, then close the file.
-
-If opening the file fails, THUNK will not be called, and `None' is returned."
-    (match (output-with-encoding! enc path)
-      ((Some file)
-       (progn (let res = (thunk file))
-              (close-output! file)
-              (Some res)))
-      ((None) None)))
-
-  (declare standard-output (Unit -> Output))
-  (define (standard-output)
-    "Returns the current standard output stream, i.e. the value of `cl:*standard-output*'."
-    (lisp Output () cl:*standard-output*))
-
-  (declare call-with-standard-output! (Output -> (Unit -> :res) -> :res))
-  (define (call-with-standard-output! file thunk)
-    "Call THUNK with FILE as the standard output stream, i.e. with `cl:*standard-output*' bound to FILE."
-    (lisp :res (file thunk)
-      (cl:let ((cl:*standard-output* file))
-        (coalton-impl/codegen/function-entry:a1 thunk Unit)))))
-
-(cl:defmacro with-output-file! ((var path cl:&optional (enc 'UTF-8)) cl:&body body)
-  "Evaluate BODY with VAR bound to an open `Output' file writing to PATH using ENC encoding.
-
-If a file already exists at PATH, it will be replaced.
-
-Close the file after BODY.
-
-If opening the file fails, BODY will not be evaluated, and `None' is returned."
-  `(call-with-output-file! ,enc ,path (fn (,var) ,@body)))
-
-(cl:defmacro with-standard-output! ((file) cl:&body body)
-  "Evaluate BODY with FILE as the standard output stream, i.e. with `cl:*standard-output*' bound to FILE."
-  `(call-with-standard-output! ,file (fn () ,@body)))
-
-;; formatted output
-
-(coalton-toplevel
-  (define-class (Show :showable)
-    "Types which can be printed on an `Output' stream.
-
-`show!' methods should return (Some Unit) if the write succeeds, or None if the write fails."
-    (show! (Output -> :showable -> (Optional Unit))))
-
-  (define-instance (Show Char)
-    (define show! write-char!))
-
-  (define-instance (Show String)
-    (define show! write-string!)))
-
-(cl:defmacro define-show-integer (type)
-  `(coalton-toplevel
-     (define-instance (Show ,type)
-       (define (show! file int)
-         (lisp-write! (file int)
-           (cl:format file "~d" int))))))
-
-(define-show-integer Integer)
-(define-show-integer UFix)
-(define-show-integer IFix)
-(define-show-integer U8)
-(define-show-integer I8)
-(define-show-integer U16)
-(define-show-integer I16)
-(define-show-integer U32)
-(define-show-integer I32)
-(define-show-integer U64)
-(define-show-integer I64)
+  (declare with-char-output! (FileOptions -> Path -> (char-io:Output -> :result) -> (Result FileError :result)))
+  (define (with-char-output! opts path thunk)
+    (with-file! (with-output opts)
+      path
+      (fn (file) (thunk (unwrap (char-output file)))))))

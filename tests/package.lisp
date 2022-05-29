@@ -29,7 +29,8 @@
    (#:slice #:coalton-library/slice)
    (#:hashtable #:coalton-library/hashtable)
    (#:iter #:coalton-library/iterator)
-   (#:file #:coalton-library/file)))
+   (#:file #:coalton-library/file)
+   (#:char-io #:coalton-library/char-io)))
 
 (in-package #:coalton-native-tests)
 
