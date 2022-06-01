@@ -88,7 +88,7 @@ are floored and truncated division, respectively."
         ((== power 0) 1)
         (True (error "Can't exponentiate with a negative exponent.")))))
 
-  (declare ^^ ((Dividable :a :a) (Num :a) (Integral :int) => (:a -> :int -> :a)))
+  (declare ^^ ((Reciprocable :a) (Integral :int) => (:a -> :int -> :a)))
   (define (^^ base power)
     "Exponentiate BASE to a signed POWER."
     (if (< power 0)
