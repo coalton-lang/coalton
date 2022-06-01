@@ -142,10 +142,14 @@ Returns (VALUES deferred-preds retained-preds defaultable-preds)"
     (loop :for type :in (defaults env)
 
           :when (and
-                 ;; Check that all predicates are in the form "Pred [var]"
-                 (every (lambda (ty)
-                          (equalp ty (list (%make-tvar var))))
-                        pred-heads)
+                 ;; Check that for the predicates containg VAR, VAR is their only type variable
+                 ;;
+                 ;; NOTE: Haskell has a much stricter check here. Haskell requires that the predicate
+                 ;; is in the form "Pred [var]". Coalton will default the following other predicates
+                 ;;
+                 ;; * multiple variable classes "Pred [var var]" and "Pred [var String]"
+                 ;; * more complex types "Pred [List var]"
+                 (subsetp (type-variables pred-heads) (list var) :test #'equalp)
 
                  ;; Check that at least one predicate is a numeric class
                  (some (lambda (name)
