@@ -235,10 +235,12 @@
         ((Tuple (Tuple fl flr) (Tuple ce cer))
          (Quantization f fl flr ce cer)))))
 
-  (define-instance (Dividable Big-Float Big-Float)
-    (define (general/ a b)
-      (lisp Big-Float (a b)
-        (cl:values (sb-mpfr:div a b)))))
+  (define-instance (Reciprocable Big-Float)
+    (define (/ a b)
+      (lisp big-float (a b)
+        (cl:values (sb-mpfr:div a b))))
+    (define (reciprocal a)
+      (/ 1 a)))
 
   ;; Trig
   (define-instance (Trigonometric Big-Float)
