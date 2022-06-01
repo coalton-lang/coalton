@@ -14,7 +14,7 @@
    #:real-part
    #:imag-part
    #:conjugate
-   #:magnitude
+   #:square-magnitude
    #:ii))
 
 #+coalton-release
@@ -42,8 +42,8 @@
     "The complex conjugate."
     (complex (real-part n) (negate (imag-part n))))
 
-  (declare magnitude (Complex :a => Complex :a -> :a))
-  (define (magnitude a)
+  (declare square-magnitude (Complex :a => Complex :a -> :a))
+  (define (square-magnitude a)
     "The length of a complex number."
     (+ (* (real-part a) (real-part a))
        (* (imag-part a) (imag-part a))))
@@ -63,9 +63,20 @@
     (define (fromInt n)
       (complex (fromInt n) 0)))
 
-  (define-instance ((Complex :num) (Complex :frac) (Dividable :num :frac)
-                    => (Dividable (Complex :num) (Complex :frac)))
-    (define (general/ a b) (complex-divide a b)))
+  ;; BUG: This shouldn't be overlapping
+  ;; (define-instance ((Complex :num) (Complex :frac) (Dividable :num :frac)
+  ;;                   => (Dividable (Complex :num) (Complex :frac)))
+  ;;   (define (general/ a b) (complex-divide a b)))
+
+  (define-instance ((Complex :a) (Reciprocable :a) => Reciprocable (Complex :a))
+    (define (reciprocal x)
+      (let a = (real-part x))
+      (let b = (imag-part x))
+      (let divisor = (reciprocal (square-magnitude x)))
+      ;; z^-1 = z*/|z|^2
+      (complex (* a divisor) (negate (* b divisor))))
+    (define (/ a b)
+      (complex-divide a b)))
 
   (define-instance (Complex :a => Complex (Complex :a))
     (define (complex a b)
@@ -103,7 +114,7 @@
                            => Complex :a -> Complex :a -> Complex :b))
   (define (complex-divide a b)
     (let dividend = (* a (conjugate b)))
-    (let divisor = (magnitude b))
+    (let divisor = (square-magnitude b))
     (complex (general/ (real-part dividend) divisor)
              (general/ (imag-part dividend) divisor))))
 

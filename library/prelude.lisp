@@ -16,7 +16,7 @@
 
   (:import-from
    #:coalton-library/math/arith
-   #:Dividable #:/
+   #:Reciprocable #:/
    #:Fraction
    #:negate
    #:abs
@@ -27,7 +27,7 @@
    #:1+
    #:1-)
   (:export
-   #:Dividable #:/
+   #:Reciprocable #:/
    #:Fraction
    #:negate
    #:abs
