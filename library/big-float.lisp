@@ -183,15 +183,15 @@
   (define (bf-floor f)
     (lisp (Tuple Integer Big-Float) (f)
       (cl:let ((x (sb-mpfr:floor f)))
-        (Tuple (sb-mpfr:coerce x 'integer)
-                   (sb-mpfr:sub x f)))))
+        (Tuple (sb-mpfr:coerce x 'cl:integer)
+               (sb-mpfr:sub x f)))))
 
   (declare bf-ceiling (Big-Float -> (Tuple Integer Big-Float)))
   (define (bf-ceiling f)
     (lisp (Tuple Integer Big-Float) (f)
       (cl:let ((x (sb-mpfr::ceil f)))   ; SBCL bug: not exported correctly
-        (Tuple (sb-mpfr:coerce x 'integer)
-                   (sb-mpfr:sub x f)))))
+        (Tuple (sb-mpfr:coerce x 'cl:integer)
+               (sb-mpfr:sub x f)))))
 
   (define-instance (Quantizable Big-Float)
     (define (quantize f)
@@ -230,7 +230,7 @@
     (define (expt x n)
       (lisp Big-Float (x n)
         (cl:values (sb-mpfr:power x n))))
-    (define (log x n)
+    (define (log n x)
       (lisp Big-Float (x n)
         (cl:values (sb-mpfr:div (sb-mpfr:log x) (sb-mpfr:log n))))))
 
@@ -263,6 +263,8 @@
       (lisp Fraction (x)
         (mpfr->rational (sb-mpfr::mpfr-float-ref x)))))
 )                                       ; COALTON-TOPLEVEL
+
+(coalton-library/complex::%define-standard-complex-instances Big-Float)
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/BIG-FLOAT")

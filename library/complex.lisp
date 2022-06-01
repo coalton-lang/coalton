@@ -179,15 +179,16 @@
 (%define-native-complex-instances Fraction cl:rational)
 
 (cl:defmacro %define-standard-complex-instances (type)
-  `(define-instance (Complex ,type)
-     (define (complex a b)
-       (%Complex a b))
-     (define (real-part a)
-       (match a
-         ((%Complex a _) a)))
-     (define (imag-part a)
-       (match a
-         ((%Complex _ b) b)))))
+  `(coalton-toplevel
+     (define-instance (Complex ,type)
+       (define (complex a b)
+         (%Complex a b))
+       (define (real-part a)
+         (match a
+           ((%Complex a _) a)))
+       (define (imag-part a)
+         (match a
+           ((%Complex _ b) b))))))
 
 (cl:macrolet
     ((%define-builtin-complex-float-instances (coalton-type)
