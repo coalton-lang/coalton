@@ -4,7 +4,8 @@
      #:coalton-library/classes
      #:coalton-library/builtin
      #:coalton-library/functions)
-  (:local-nicknames (#:char-io #:coalton-library/char-io))
+  (:local-nicknames (#:char-io #:coalton-library/char-io)
+                    (#:resource #:coalton-library/resource))
   (:export
 
    ;; encodings
@@ -21,24 +22,18 @@
    #:io?
 
    ;; conversions into char streams
-   #:char-input
-   #:char-output
+   #:get-char-input!
+   #:get-char-output!
 
    ;; open options
    #:IfExists #:IfExistsError #:IfExistsRename #:IfExistsAppend #:IfExistsSupersede
    #:IfDoesNotExist #:IfDoesNotExistError #:IfDoesNotExistCreate #:IfDoesNotExistDefault
-   #:FileOptions
-   #:default-file-options
-   #:with-input
-   #:with-output
-   #:with-io
+   #:Direction #:Input #:Output #:InputOutput
+   #:FileOptions #:config
+   #:with-mode
    #:with-encoding
    #:if-exists
    #:if-does-not-exist
-
-   ;; error handling
-   #:UnknownFileError
-   #:FileError #:Unknown #:Closed
 
    ;; paths
    #:Path
@@ -52,23 +47,37 @@
    #:open-char-input!
    #:open-char-output!
    #:with-char-input!
-   #:with-char-output!
-   ))
+   #:with-char-output!))
 (cl:in-package #:coalton-library/file)
 
-;; encodings
-
 (cl:defmacro define-cl-enum (type-name docstring cl:&body pairs)
+  "Define a type TYPE-NAME to represent a set of keywords, with Coalton constants defined to hold those keywords.
+
+Each of the PAIRS should be a list (COALTON-NAME KEYWORD), where COALTON-NAME is a name that will be defined
+to hold an instance of TYPE-NAME, and KEYWORD is a literal Common Lisp keyword.
+
+For example,
+
+(define-cl-enum Foo \"docstring for Foo\"
+  (Bar :bar)
+  (Baz :baz))
+
+Will define:
+- a type named `Foo' with an appropriate `repr :native' to hold the keywords `:bar' and `:baz'
+- a constant `Bar' of type `Foo' bound to the keyword `:bar'
+- a constant `Baz' of type `Foo' bound to the keyword `:baz'"
   `(cl:progn
      (coalton-toplevel
-      (repr :native (cl:member ,@(cl:mapcar #'cl:second pairs)))
-      (define-type ,type-name ,docstring))
+       (repr :native (cl:member ,@(cl:mapcar #'cl:second pairs)))
+       (define-type ,type-name ,docstring))
      ,@(cl:mapcar (cl:lambda (pair)
                     (cl:destructuring-bind (name keyword) pair
                       `(coalton-toplevel
-                        (declare ,name ,type-name)
+                         (declare ,name ,type-name)
                          (define ,name (lisp ,type-name () ,keyword)))))
                   pairs)))
+
+;; encodings
 
 (define-cl-enum Encoding
     "A text encoding; CL calls this an \"external format\".
@@ -115,14 +124,20 @@ add the same COALTON-NAME to the `:exports' clause in that file's `defstdlib-pac
 ;; converting files into char streams
 
 (coalton-toplevel
-  (declare char-input (File -> (Optional char-io:Input)))
-  (define (char-input file)
+  (declare get-char-input! (File -> (Optional char-io:Input)))
+  (define (get-char-input! file)
+    "Returns the `char-io:Input' corresponding to FILE, if one exists.
+
+Repeated calls to `get-char-input!' on the same FILE will return the same `char-io:Input'."
     (if (input? file)
         (Some (lisp char-io:Input (file) file))
         None))
 
-  (declare char-output (File -> (Optional char-io:Output)))
-  (define (char-output file)
+  (declare get-char-output! (File -> (Optional char-io:Output)))
+  (define (get-char-output! file)
+    "Returns the `char-io:Output' corresponding to FILE, if one exists.
+
+Repeated calls to `get-char-output!' on the same FILE will return the same `char-io:Output'."
     (if (output? file)
         (Some (lisp char-io:Output (file) file))
         None)))
@@ -150,82 +165,59 @@ Supported are a subset of the operators allowed by `cl:open'; see the Hyperspec 
 Applies to files opened for both reading or writing, but with different defaults.
 
 `IfDoesNotExistError' - return an error from `open!'. The default for files opened only for reading.
-`IfDoesNotExistCreate' - create a new, empty file. The default for files opened for writing.
-`IfDoesNotExistDefault' - behaves like `IfDoesNotExistError' for input-only files, and like `IfDoesNotExistCreate' for writable files."
+`IfDoesNotExistCreate' - create a new, empty file. The default for files opened for writing."
   (IfDoesNotExistError :error)
-  (IfDoesNotExistCreate :create)
-  (IfDoesNotExistDefault :default))
+  (IfDoesNotExistCreate :create))
 
-(cl:defun if-does-not-exist-default (out? mode)
-  (cl:if (cl:eq mode :default)
-         (cl:if out?
-                :create
-                :error)
-         mode))
-
-(cl:defun direction-spec (in? out?)
-  (cl:cond ((cl:and in? out?) :io)
-           (in? :input)
-           (out? :output)
-           (cl:t :probe)))
+(define-cl-enum Direction
+    "A direction for opening a `File'"
+  (Input :input)
+  (Output :output)
+  (InputOutput :io))
 
 (coalton-toplevel
+  (define-instance (Eq Direction)
+    (define (== a b)
+      (lisp Boolean (a b)
+        (cl:eq a b))))
+
   (define-type FileOptions
-    (%FileOptions Boolean ; input?
-                  Boolean ; output?
+    (%FileOptions Direction
                   Encoding
                   IfExists
                   IfDoesNotExist))
 
-  (declare default-file-options FileOptions)
-  (define default-file-options
-    (%FileOptions False False default-encoding IfExistsError IfDoesNotExistDefault))
+  (declare config (Direction -> FileOptions))
+  (define (config dir)
+    (%FileOptions dir
+                  default-encoding
+                  IfExistsError
+                  (if (== dir Input) IfDoesNotExistError
+                      IfDoesNotExistCreate)))
 
-  (declare with-input (FileOptions -> FileOptions))
-  (define (with-input opts)
+  (declare with-mode (Direction -> FileOptions -> FileOptions))
+  (define (with-mode dir opts)
     (match opts
-      ((%FileOptions _ out? enc if-ex if-not)
-       (%FileOptions True out? enc if-ex if-not))))
-
-  (declare with-output (FileOptions -> FileOptions))
-  (define (with-output opts)
-    (match opts
-      ((%FileOptions in? _ enc if-ex if-not)
-       (%FileOptions in? True enc if-ex if-not))))
-
-  (declare with-io (FileOptions -> FileOptions))
-  (define with-io (compose with-input with-output))
+      ((%FileOptions _ enc if-ex if-not)
+       (%FileOptions dir enc if-ex if-not))))
 
   (declare with-encoding (Encoding -> FileOptions -> FileOptions))
   (define (with-encoding enc opts)
     (match opts
-      ((%FileOptions in? out? _ if-ex if-not)
-       (%FileOptions in? out? enc if-ex if-not))))
+      ((%FileOptions dir _ if-ex if-not)
+       (%FileOptions dir enc if-ex if-not))))
 
   (declare if-exists (IfExists -> FileOptions -> FileOptions))
   (define (if-exists then opts)
     (match opts
-      ((%FileOptions in? out? enc _ if-not)
-       (%FileOptions in? out? enc then if-not))))
+      ((%FileOptions dir enc _ if-not)
+       (%FileOptions dir enc then if-not))))
 
   (declare if-does-not-exist (IfDoesNotExist -> FileOptions -> FileOptions))
   (define (if-does-not-exist then opts)
     (match opts
-      ((%FileOptions in? out? enc if-ex _)
-       (%FileOptions in? out? enc if-ex then)))))
-
-;; error handling
-
-(coalton-toplevel
-  ;; neither the CL spec nor SBCL's extensions offer any useful information from a `cl:file-error'. they have
-  ;; a single slot, `pathname', and no interesting subclasses. as a result, i'm just returning the
-  ;; `cl:file-error' object.
-  (repr :native cl:file-error)
-  (define-type UnknownFileError)
-
-  (define-type FileError
-    (Unknown UnknownFileError)
-    Closed))
+      ((%FileOptions dir enc if-ex _)
+       (%FileOptions dir enc if-ex then)))))
 
 ;; paths
 
@@ -242,77 +234,72 @@ Applies to files opened for both reading or writing, but with different defaults
 ;; opening and closing files
 
 (coalton-toplevel
-  (declare open! (FileOptions -> Path -> (Result FileError File)))
+  (declare open! (FileOptions -> Path -> (Result char-io:StreamError File)))
   (define (open! opts path)
     (match opts
-      ((%FileOptions in? out? enc if-ex if-not)
+      ((%FileOptions dir enc if-ex if-not)
        (match path
          ((%Path pathname)
-          (lisp (Result FileError File) (in? out? enc if-ex if-not pathname)
-            (cl:handler-case
-                (cl:open pathname
-                         :direction (direction-spec in? out?)
-                         :external-format enc
-                         :element-type 'cl:character
-                         :if-exists if-ex
-                         :if-does-not-exist (if-does-not-exist-default out? if-not))
-              (cl:file-error (e) (Err (Unknown e)))
-              (:no-error (file) (Ok file)))))))))
+          (lisp (Result char-io:StreamError File) (dir enc if-ex if-not pathname)
+            (char-io:%with-converting-stream-errors
+              (cl:open pathname
+                       :direction dir
+                       :external-format enc
+                       :element-type 'cl:character
+                       :if-exists if-ex
+                       :if-does-not-exist if-not))))))))
 
-  (declare close! (File -> Unit))
+  (declare close! (File -> (Result char-io:StreamError Unit)))
   (define (close! file)
-    (when (open? file)
-      (lisp :any (file)
-        (cl:close file))
-      Unit))
+    "Close FILE, forcing any writes to complete and then freeing corresponding resources.
 
-  (declare try-close! (File -> (Result FileError Unit)))
-  (define (try-close! file)
+This will close FILE's corresponding `char-io:Input' and `char-io:Output'."
     (if (open? file)
-        (Ok (close! file))
-        (Err Closed)))
+        (lisp :any (file)
+          (char-io:%with-converting-stream-errors
+            (cl:close file)
+            Unit))
+        (Err char-io:Closed)))
 
-  (declare with-resource! ((Unit -> :state) -> (:state -> :result) -> (:state -> Unit) -> :result))
-  (define (with-resource! ctor thunk dtor)
-    "A wrapper around `cl:unwind-protect'"
-    (lisp :result (ctor thunk dtor)
-      (cl:let (state)
-        (cl:unwind-protect (cl:progn (cl:setf state
-                                              (coalton-impl/codegen:a1 ctor Unit))
-                                     (coalton-impl/codegen:a1 thunk state))
-          (cl:when state
-            (coalton-impl/codegen:a1 dtor state))))))
-
-  (declare with-file! (FileOptions -> Path -> (File -> :result) -> (Result FileError :result)))
+  (declare with-file! (FileOptions
+                       -> Path
+                       -> (File -> (Result char-io:StreamError :result))
+                       -> (Result char-io:StreamError :result)))
   (define (with-file! opts path thunk)
-    (with-resource!
-        (fn () (open! opts path))
-      (fn (open-res) (map thunk open-res))
-      (fn (open-res) (match open-res
-                       ((Ok file) (close! file))
-                       (_ Unit))))))
+    (match (resource:with-resource
+               (fn () (open! opts path))
+             (fn (file) (thunk file))
+             (fn (file) (close! file)))
+      ((Ok res) (Ok res))
+      ((Err e) (Err (resource:flatten-resource-error e))))))
 
 ;; convenience functions for input-only and output-only files
 
 (coalton-toplevel
-  (declare open-char-input! (FileOptions -> Path -> (Result FileError char-io:Input)))
+  (declare open-char-input! (FileOptions -> Path -> (Result char-io:StreamError char-io:Input)))
   (define (open-char-input! opts path)
-    (map (compose unwrap char-input)
-         (open! (with-input opts) path)))
+    (map (compose unwrap get-char-input!)
+         (open! (with-mode Input opts) path)))
 
-  (declare open-char-output! (FileOptions -> Path -> (Result FileError char-io:Output)))
+  (declare open-char-output! (FileOptions -> Path -> (Result char-io:StreamError char-io:Output)))
   (define (open-char-output! opts path)
-    (map (compose unwrap char-output)
-         (open! (with-output opts) path)))
+    (map (compose unwrap get-char-output!)
+         (open! (with-mode Output opts) path)))
 
-  (declare with-char-input! (FileOptions -> Path -> (char-io:Input -> :result) -> (Result FileError :result)))
+  (declare with-char-input! (FileOptions
+                             -> Path
+                             -> (char-io:Input -> (Result char-io:StreamError :result))
+                             -> (Result char-io:StreamError :result)))
   (define (with-char-input! opts path thunk)
-    (with-file! (with-input opts)
+    (with-file! (with-mode Input opts)
       path
-      (fn (file) (thunk (unwrap (char-input file))))))
+      (fn (file) (thunk (unwrap (get-char-input! file))))))
 
-  (declare with-char-output! (FileOptions -> Path -> (char-io:Output -> :result) -> (Result FileError :result)))
+  (declare with-char-output! (FileOptions
+                              -> Path
+                              -> (char-io:Output -> (Result char-io:StreamError :result))
+                              -> (Result char-io:StreamError :result)))
   (define (with-char-output! opts path thunk)
-    (with-file! (with-output opts)
+    (with-file! (with-mode Output opts)
       path
-      (fn (file) (thunk (unwrap (char-output file)))))))
+      (fn (file) (thunk (unwrap (get-char-output! file)))))))

@@ -7,8 +7,8 @@
   (:export
 
    ;; error handling
-   #:UnknownStreamError
-   #:StreamError #:Closed #:EndOfFile #:Unknown
+   #:UnknownStreamError #:UnknownFileError
+   #:StreamError #:Closed #:EndOfFile #:StreamError #:FileError
 
    ;; input files
    #:Input
@@ -29,7 +29,10 @@
    #:write-string!
    #:write-line!
    #:newline!
-   #:standard-output))
+   #:standard-output
+
+   ;; internal
+   #:%with-converting-stream-errors))
 (cl:in-package #:coalton-library/char-io)
 
 ;; errors
@@ -37,18 +40,24 @@
 (coalton-toplevel
   (repr :native cl:stream-error)
   (define-type UnknownStreamError)
-  
+
+  (repr :native cl:file-error)
+  (define-type UnknownFileError)
+
   (define-type StreamError
     Closed
     EndOfFile
-    (Unknown UnknownStreamError)))
+    (StreamError UnknownStreamError)
+    (FileError UnknownFileError)))
 
-(cl:defmacro with-converting-stream-errors (cl:&body forms)
+(cl:defmacro %with-converting-stream-errors (cl:&body forms)
+  "Intended for internal use only. Evaluate the FORMS with handlers in place for stream-related errors, and return a (Result StreamError :result)."
   `(cl:handler-case
        (cl:progn ,@forms)
      (cl:end-of-file () (Err EndOfFile))
      #+sbcl (sb-int:closed-stream-error () (Err Closed))
-     (cl:stream-error (e) (Err (Unknown e)))
+     (cl:stream-error (e) (Err (StreamError e)))
+     (cl:file-error (e) (Err (FileError e)))
      (:no-error (res cl:&rest ignored) ; `cl:read-line' returns an extra value that we don't care about, so ignore it
        (cl:declare (cl:ignore ignored))
        (Ok res))))
@@ -68,20 +77,17 @@ If `False', reads from IN will fail."
     (lisp Boolean (in)
       (cl:open-stream-p in)))
 
-  (declare close-input! (Input -> Unit))
+  (declare close-input! (Input -> (Result StreamError Unit)))
   (define (close-input! in)
     "Close IN, freeing any corresponding resources. Future reads from IN will fail.
 
-It is safe to call `close-input!' on an `Input' that is already closed."
-    (when (open-input? in)
-      (lisp :any (in)
-        (cl:close in))
-      Unit))
-
-  (declare try-close-input! (Input -> (Result StreamError Unit)))
-  (define (try-close-input! in)
+Closing an `Input' derived from a `file:File' will close the underlying file. If an `Output' is also
+associated with the same `file:File', it will also be closed."
     (if (open-input? in)
-        (Ok (close-input! in))
+        (lisp (Result StreamError Unit) (in)
+          (%with-converting-stream-errors
+            (cl:close in)
+            Unit))
         (Err Closed)))
 
   (declare read-char! (Input -> (Result StreamError Char)))
@@ -90,7 +96,7 @@ It is safe to call `close-input!' on an `Input' that is already closed."
 
 Blocks if no data is available from IN."
     (lisp (Result StreamError Char) (in)
-      (with-converting-stream-errors
+      (%with-converting-stream-errors
         (cl:read-char in cl:t cl:nil cl:nil))))
 
   (declare read-line! (Input -> (Result StreamError String)))
@@ -99,14 +105,17 @@ Blocks if no data is available from IN."
 
 Blocks if no data is available from IN."
     (lisp (Result StreamError String) (in)
-      (with-converting-stream-errors
-          (cl:read-line in cl:t cl:nil cl:nil))))
+      (%with-converting-stream-errors
+        (cl:read-line in cl:t cl:nil cl:nil))))
 
   (declare iterator! ((Input -> (Result StreamError :elt))
                       -> Input
                       -> (iter:Iterator (Result StreamError :elt))))
   (define (iterator! read-elt! in)
-    "Returns an iterator over elements of IN by READ-ELT!"
+    "Returns an iterator over elements of IN by READ-ELT!
+
+If multiple iterators are derived from the same `Input', advancing any iterator will cause all of them to
+advance."
     (iter:new
      (fn ()
        (if (not (open-input? in))
@@ -120,14 +129,20 @@ Blocks if no data is available from IN."
   (define (chars! in)
     "Returns an iterator over the characters of IN, calling `read-char!' successively.
 
-`next!' may block if no data is available on IN."
+If multiple iterators are derived from the same `Input', advancing any iterator will cause all of them to
+advance.
+
+Advancing the iterator may block if no data is available on IN."
     (iterator! read-char! in))
 
   (declare lines! (Input -> (iter:Iterator (Result StreamError String))))
   (define (lines! in)
     "Returns an iterator over the lines of IN, calling `read-line!' successively.
 
-`next!' may block if no data is available on IN."
+If multiple iterators are derived from the same `Input', advancing any iterator will cause all of them to
+advance.
+
+Advancing the iterator may block if no data is available on IN."
     (iterator! read-line! in))
 
   (declare standard-input (Unit -> Input))
@@ -149,35 +164,27 @@ Blocks if no data is available from IN."
 If `False', writes to OUT will fail."
     (lisp Boolean (out)
       (cl:open-stream-p out)))
-  
-  (declare close-output! (Output -> Unit))
+
+  (declare close-output! (Output -> (Result StreamError Unit)))
   (define (close-output! out)
     "Close OUT, forcing its writes to complete and then freeing corresponding resources.
 
 Future writes to OUT will fail.
 
-It is safe to call `close-output!' on an `Output' that has already been closed."
-    (when (open-output? out)
-      (lisp :any (out)
-        (cl:close out)))
-    Unit)
-
-  (declare try-close-output! (Output -> (Result StreamError Unit)))
-  (define (try-close-output! out)
-    "Close OUT, forcing its writes to complete and then freeing corresponding resources.
-
-Returns (Err Closed) if OUT was already closed.
-
-Future writes to OUT will fail."
+Closing an `Output' derived from a `file:File' will close the underlying file. If an `Input' is also
+associated with the same `file:File', it will also be closed."
     (if (open-output? out)
-        (Ok (close-output! out))
+        (lisp (Result StreamError Unit) (out)
+          (%with-converting-stream-errors
+            (cl:close out)
+            Unit))
         (Err Closed)))
 
   (declare write-char! (Output -> Char -> (Result StreamError Unit)))
   (define (write-char! out c)
     "Write C to OUT."
     (lisp (Result StreamError Unit) (out c)
-      (with-converting-stream-errors
+      (%with-converting-stream-errors
         (cl:write-char c out)
         Unit)))
 
@@ -185,7 +192,7 @@ Future writes to OUT will fail."
   (define (write-string! out str)
     "Write STR to OUT."
     (lisp (Result StreamError Unit) (out str)
-      (with-converting-stream-errors
+      (%with-converting-stream-errors
         (cl:write-string str out)
         Unit)))
 
@@ -193,7 +200,7 @@ Future writes to OUT will fail."
   (define (write-line! out str)
     "Write STR to OUT with a trailing newline."
     (lisp (Result StreamError Unit) (out str)
-      (with-converting-stream-errors
+      (%with-converting-stream-errors
         (cl:write-line str out)
         Unit)))
 
@@ -201,9 +208,9 @@ Future writes to OUT will fail."
   (define (newline! out)
     "Write a newline to OUT."
     (lisp (Result StreamError Unit) (out)
-        (with-converting-stream-errors
-          (cl:terpri out)
-          Unit)))
+      (%with-converting-stream-errors
+        (cl:terpri out)
+        Unit)))
 
   (declare standard-output (Unit -> Output))
   (define (standard-output)

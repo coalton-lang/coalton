@@ -4,14 +4,12 @@
   (let ((path (lisp String () (cl:symbol-name (cl:gensym "coalton-test-tempfile-"))))
         (test-data (lisp String () (cl:symbol-name (cl:gensym "coalton-test-data-")))))
     (progn
-      (expect "Opening output file failed"
-              (file:with-char-output! file:default-file-options
+      (expect "Writing as output failed"
+              (file:with-char-output! (file:config file:Output)
                 (into path)
-                (fn (out) (expect "Write failed"
-                                  (char-io:write-line! out test-data)))))
+                (fn (out) (char-io:write-line! out test-data))))
       (is (== test-data
-              (expect "Opening input file failed"
-                      (file:with-char-input! file:default-file-options
+              (expect "Reading as input failed"
+                      (file:with-char-input! (file:config file:Input)
                         (into path)
-                        (fn (in) (expect "Read failed"
-                                         (char-io:read-line! in))))))))))
+                        (fn (in) (char-io:read-line! in)))))))))

@@ -133,6 +133,7 @@
                (:file "hashtable")
                (:file "monad/state")
                (:file "iterator")
+               (:file "resource")
                (:file "char-io")
                (:file "file")
                (:file "system")
