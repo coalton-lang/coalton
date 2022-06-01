@@ -7,6 +7,7 @@
      #:coalton
      #:coalton-library/builtin
      #:coalton-library/classes
+     #:coalton-library/functions
      #:coalton-library/utils)
   (:local-nicknames
    (#:bits #:coalton-library/bits))
@@ -53,7 +54,12 @@
    #:single/
    #:double/
    #:1+
-   #:1-))
+   #:1-
+   #:positive?
+   #:negative?
+   #:nonpositive?
+   #:nonnegative?
+   #:nonzero?))
 
 #+coalton-release
 (cl:declaim #.coalton-impl:*coalton-optimize-library*)
@@ -890,7 +896,27 @@ Note: This does *not* divide double-float arguments."
 
   (declare 1- ((Num :num) => :num -> :num))
   (define (1- num)
-    (- num 1)))
+    (- num 1))
+
+  (declare positive? ((Num :a) (Ord :a) => :a -> Boolean))
+  (define (positive? x)
+    (> x 0))
+
+  (declare negative? ((Num :a) (Ord :a) => :a -> Boolean))
+  (define (negative? x)
+    (< x 0))
+
+  (declare nonpositive? ((Num :a) (Ord :a) => :a -> Boolean))
+  (define (nonpositive? x)
+    (<= x 0))
+
+  (declare nonnegative? ((Num :a) (Ord :a) => :a -> Boolean))
+  (define (nonnegative? x)
+    (>= x 0))
+
+  (declare nonzero? ((Num :a) => :a -> Boolean))
+  (define (nonzero? x)
+    (/= x 0)))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/ARITH")
