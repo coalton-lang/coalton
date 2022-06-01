@@ -239,7 +239,7 @@
    (lambda (c s)
      (let ((*print-circle* nil) ; Prevent printing using reader macros
            )
-       (format s "Constructor ~A needs ~A arguments bot got ~A."
+       (format s "Constructor ~A needs ~A arguments but got ~A."
                (invalid-constructor-arguments-constructor c)
                (invalid-constructor-arguments-expected c)
                (invalid-constructor-arguments-received c))))))
@@ -335,6 +335,16 @@
            )
        (format s "Ambigious constraint ~A~%"
                (ambigious-constraint-pred c))))))
+
+(define-condition unresolvable-constraint (coalton-type-error)
+  ((pred :initarg :pred
+         :reader unresolvable-constraint-pred))
+  (:report
+   (lambda (c s)
+     (let ((*print-circle* nil) ; Prevent printing using reader macros
+           )
+       (format s "Unresolvable constraint ~A"
+               (unresolvable-constraint-pred c))))))
 
 (define-condition kunify-error (coalton-type-error)
   ((kind1 :initarg :kind1

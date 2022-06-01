@@ -641,26 +641,31 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
             ;; NOTE: This is where defaulting happens
             ;;
 
-            ;; Defaulting only applies to top level bindings
-            (unless allow-deferred-predicates
-              (if (restricted bindings)
-                  ;; Restricted bindings have all predicates defaulted
-                  (progn
-                    (setf local-subs
-                          (compose-substitution-lists
-                           (default-subs env nil (append deferred-preds retained-preds))
-                           local-subs))
-                    (setf deferred-preds (reduce-context env deferred-preds local-subs))
-                    (setf retained-preds (reduce-context env retained-preds local-subs))
-                    (setf expr-types (apply-substitution local-subs expr-types)))
-                  ;; Unrestricted bindings have deferred predicates defaulted
-                  (progn
-                    (setf local-subs
-                          (compose-substitution-lists
-                           (default-subs env nil deferred-preds)
-                           local-subs))
-                    (setf deferred-preds (reduce-context env deferred-preds local-subs))
-                    (setf expr-types (apply-substitution local-subs expr-types))))) 
+            (with-type-context ("definition~p of ~{~S~^, ~}" (length bindings) (mapcar #'car bindings))
+              ;; Defaulting only applies to top level bindings
+              (unless allow-deferred-predicates
+                (if (restricted bindings)
+                    ;; Restricted bindings have all predicates defaulted
+                    (progn
+                      (setf local-subs
+                            (compose-substitution-lists
+                             (default-subs env nil (append deferred-preds retained-preds))
+                             local-subs))
+                      (setf deferred-preds (reduce-context env deferred-preds local-subs))
+                      (setf retained-preds (reduce-context env retained-preds local-subs))
+                      (setf expr-types (apply-substitution local-subs expr-types)))
+                    ;; Unrestricted bindings have deferred predicates defaulted
+                    (progn
+                      (setf local-subs
+                            (compose-substitution-lists
+                             (default-subs env nil deferred-preds)
+                             local-subs))
+                      (setf deferred-preds (reduce-context env deferred-preds local-subs))
+                      (setf expr-types (apply-substitution local-subs expr-types))))) 
+
+              ;; Error when predicates cannot be deferred
+              (unless (or allow-deferred-predicates (null deferred-preds))
+                (error 'unresolvable-constraint :pred (first deferred-preds))))
 
             ;; NOTE: This is where the monomorphism restriction happens
 
