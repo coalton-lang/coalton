@@ -56,6 +56,9 @@
                   ,@(when (tc:type-definition-docstring def)
                       `((:documentation ,(tc:type-definition-docstring def))))))
 
+          (defmethod make-load-form ((obj ,(tc:type-definition-name def)) &optional env)
+            (make-load-form-saving-slots obj :environment env))
+
           ,@(loop
               :for constructor :in (tc:type-definition-constructors def)
               :for classname := (tc:constructor-entry-classname constructor)
