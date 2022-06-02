@@ -17,10 +17,15 @@
    #:rnda
    #:rndf
    #:set-rounding-mode!
+   #:get-rounding-mode
+   #:with-rounding
 
    #:set-precision!
+   #:get-precision
+   #:with-precision
 
    #:Big-Float
+   #:with-precision-rounding
 
    #:bf-pi
    #:bf-e))
@@ -119,6 +124,37 @@
     (lisp Unit (r)
       (cl:setf sb-mpfr:*mpfr-rnd* r)
       Unit))
+
+  (declare get-precision (Unit -> UFix))
+  (define (get-precision _)
+    "Get the current precision of Big-Float arithmetic."
+    (lisp UFix ()
+      sb-mpfr:+mpfr-precision+))
+
+  (declare get-rounding-mode (Unit -> RoundingMode))
+  (define (get-rounding-mode _)
+    "Get the current rounding-mode of Big-Float arithmetic."
+    (lisp RoundingMode ()
+      sb-mpfr:*mpfr-rnd*))
+
+  (declare with-precision-rounding
+           (UFix -> RoundingMode -> (Unit -> :a) -> :a))
+  (define (with-precision-rounding prec-bits rnd f)
+    "Call F with a temporary Big-Float PREC-BITS precision and RND rounding-mode."
+    (lisp :a (f prec-bits rnd)
+      (cl:let ((sb-mpfr:+mpfr-precision+ prec-bits)
+               (sb-mpfr:*mpfr-rnd* rnd))
+        (coalton-impl/codegen::A1 f Unit))))
+
+  (declare with-precision (UFix -> (Unit -> :a) -> :a))
+  (define (with-precision prec-bits f)
+    "Call F with a temporary Big-Float precision PREC-BITS."
+    (with-precision-rounding prec-bits (get-rounding-mode) f))
+
+  (declare with-rounding (RoundingMode -> (Unit -> :a) -> :a))
+  (define (with-rounding rnd f)
+    "Call F with a temporary Big-Float rounding-mode RND."
+    (with-precision-rounding (get-precision) rnd f))
 
   ;; Float Type
   (repr :native sb-mpfr:mpfr-float)
