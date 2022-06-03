@@ -63,6 +63,10 @@
    #:node-dynamic-extent-name           ; ACCESSOR
    #:node-dynamic-extent-node           ; ACCESSOR
    #:node-dynamic-extent-body           ; ACCESSOR
+   #:node-bind                          ; STRUCT
+   #:node-bind-name                     ; ACCESSOR
+   #:node-bind-expr                     ; ACCESSOR
+   #:node-bind-body                     ; ACCESOR
    #:node-variables                     ; FUNCTION
    #:node-binding-sccs                  ; FUNCTION
    #:node-free-p                        ; FUNCTION
@@ -243,6 +247,17 @@ be a fully saturated call."
 (defmethod make-load-form ((self node-dynamic-extent) &optional env)
   (make-load-form-saving-slots self :environment env))
 
+(defstruct (node-bind
+            (:include node)
+            (:constructor node-bind (type name expr body)))
+  "A single non-recursive binding"
+  (name (required 'name) :type symbol :read-only t)
+  (expr (required 'expr) :type node   :read-only t)
+  (body (required 'body) :type node   :read-only t))
+
+(defmethod make-load-form ((self node-bind) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
 ;;;
 ;;; Functions
 ;;;
@@ -404,7 +419,13 @@ both CL namespaces appearing in NODE"
     (declare (values symbol-list &optional))
     (append
      (node-variables-g (node-dynamic-extent-node node) :variable-namespace-only variable-namespace-only)
-     (node-variables-g (node-dynamic-extent-body node) :variable-namespace-only variable-namespace-only))))
+     (node-variables-g (node-dynamic-extent-body node) :variable-namespace-only variable-namespace-only)))
+
+  (:method ((node node-bind) &key variable-namespace-only)
+    (declare (values symbol-list &optional))
+    (append
+     (node-variables-g (node-bind-expr node) :variable-namespace-only variable-namespace-only)
+     (node-variables-g (node-bind-body node) :variable-namespace-only variable-namespace-only))))
 
 (defmethod tc:apply-substitution (subs (node node-literal))
     (node-literal
@@ -493,5 +514,12 @@ both CL namespaces appearing in NODE"
   (node-dynamic-extent
    (tc:apply-substitution subs (node-type node))
    (node-dynamic-extent-name node)
-   (node-dynamic-extent-node node)
-   (node-dynamic-extent-body node)))
+   (tc:apply-substitution subs (node-dynamic-extent-node node))
+   (tc:apply-substitution subs (node-dynamic-extent-body node))))
+
+(defmethod tc:apply-substitution (subs (node node-bind))
+  (node-bind
+   (tc:apply-substitution subs (node-type node))
+   (node-bind-name node)
+   (tc:apply-substitution subs (node-bind-expr node))
+   (tc:apply-substitution subs (node-bind-body node))))

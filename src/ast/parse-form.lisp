@@ -47,7 +47,7 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
         (parse-match expr expr_ patterns m package))
 
        ;; Seq
-       ((coalton:seq &rest subnodes)
+       ((coalton::seq &rest subnodes)
         (parse-seq expr subnodes m package))
 
        ;; The
@@ -56,8 +56,15 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
           (error-parsing expr "Invalid type assertion."))
         (parse-the expr (first args) (second args) m package))
 
+       ;; Return
        ((coalton:return form)
         (parse-return expr form m package))
+
+       ;; Bind
+       ((coalton::bind &rest args)
+        (unless (= 3 (length args))
+          (error-parsing expr "Invalid bind expression"))
+        (parse-bind expr (first args) (second args) (third args) m package))
 
        ;; Application
        ((t &rest rands)
@@ -308,3 +315,18 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
   (node-return
    expr
    (parse-form form m package)))
+
+(defun parse-bind (expr name node body m package)
+  (declare (type t expr)
+           (type symbol name)
+           (type t node)
+           (type t body)
+           (type immutable-map m)
+           (type package package))
+  (let* ((name (first (make-local-vars (list name) package)))
+         (new-m (immutable-map-set m (car name) (cdr name))))
+    (node-bind
+     expr
+     (cdr name)
+     (parse-form node m package)
+     (parse-form body new-m package))))

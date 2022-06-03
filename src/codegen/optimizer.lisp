@@ -107,16 +107,25 @@
                       (node-application-rands node)))))))
 
            (add-local-funs (node &rest rest)
-             (declare (ignore rest))
+             (declare (ignore rest)
+                      (dynamic-extent rest))
              (loop :for (name . node) :in (node-let-bindings node)
                    :when (node-abstraction-p node) :do
-                     (setf (gethash name table) (length (node-abstraction-vars node))))))
+                     (setf (gethash name table) (length (node-abstraction-vars node)))))
+
+           (add-bind-fun (node &rest rest)
+             (declare (ignore rest)
+                      (dynamic-extent rest))
+             (when (node-abstraction-p (node-bind-expr node))
+               (setf (gethash (node-bind-name node) table) (length (node-abstraction-vars (node-bind-expr node)))))
+             nil))
 
     (traverse-bindings
      bindings
      (list
       (cons :application #'rewrite-direct-application)
-      (cons :before-let #'add-local-funs)))))
+      (cons :before-let #'add-local-funs)
+      (cons :before-bind #'add-bind-fun)))))
 
 (defun optimize-bindings-initial (bindings package env)
   (declare (type binding-list bindings)

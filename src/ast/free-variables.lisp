@@ -49,7 +49,11 @@ variable is free in the expression."
                   (analyze (node-the-subnode expr)))
 
                  (node-return
-                  (analyze (node-return-expr expr))))))
+                  (analyze (node-return-expr expr)))
+
+                 (node-bind
+                  (analyze (node-bind-expr expr))
+                  (analyze (node-bind-body expr))))))
 
       (analyze value)
       fv)))

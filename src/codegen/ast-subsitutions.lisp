@@ -141,4 +141,13 @@
      (node-type node)
      (node-dynamic-extent-name node)
      (apply-ast-substitution subs (node-dynamic-extent-node node))
-     (apply-ast-substitution subs (node-dynamic-extent-body node)))))
+     (apply-ast-substitution subs (node-dynamic-extent-body node))))
+
+  (:method (subs (node node-bind))
+    (declare (type ast-substitution-list subs)
+             (values node))
+    (node-bind
+     (node-type node)
+     (node-bind-name node)
+     (apply-ast-substitution subs (node-bind-expr node))
+     (apply-ast-substitution subs (node-bind-body node)))))

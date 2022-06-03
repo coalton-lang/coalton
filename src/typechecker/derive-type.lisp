@@ -139,7 +139,7 @@ Returns (VALUES type predicate-list typed-node subs)")
             (values out-ty
                     ret-preds
                     (typed-node-abstraction
-                     (to-scheme (qualified-ty ret-preds out-ty))
+                     (to-scheme (qualified-ty nil out-ty))
                      (node-unparsed value)
                      (mapcar (lambda (var)
                                (cons var (lookup-value-type new-env var)))
@@ -318,7 +318,35 @@ Returns (VALUES type predicate-list typed-node subs)")
          subs
          (cons
           type
-          returns))))))
+          returns)))))
+
+  (:method ((value node-bind) env subs)
+    (declare (type environment env)
+             (type substitution-list subs)
+             (values ty ty-predicate-list typed-node substitution-list ty-list &optional))
+
+    (multiple-value-bind (expr-type preds expr-node subs returns)
+        (derive-expression-type (node-bind-expr value) env subs)
+
+      (multiple-value-bind (body-type new-preds body-node subs new-returns)
+          (derive-expression-type
+           (node-bind-body value)
+           (set-value-type env (node-bind-name value) (quantify nil (qualify nil expr-type)))
+           subs)
+        (setf preds (append new-preds preds))
+        (setf returns (append new-returns returns))
+
+        (values
+         body-type
+         preds
+         (typed-node-bind
+          (quantify nil (qualify nil body-type))
+          (node-unparsed value)
+          (node-bind-name value)
+          expr-node
+          body-node)
+         subs
+         returns)))))
 
 ;;;
 ;;; Let Bindings
@@ -532,7 +560,17 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
     (typed-node-return
      (typed-node-type node)
      (typed-node-unparsed node)
-     (rewrite-recursive-calls (typed-node-return-expr node) bindings))))
+     (rewrite-recursive-calls (typed-node-return-expr node) bindings)))
+
+  (:method ((node typed-node-bind) bindings)
+    (declare (type typed-node node)
+             (type scheme-binding-list bindings))
+    (typed-node-bind
+     (typed-node-type node)
+     (typed-node-unparsed node)
+     (typed-node-bind-name node)
+     (rewrite-recursive-calls (typed-node-bind-expr node) bindings)
+     (rewrite-recursive-calls (typed-node-bind-body node) bindings))))
 
 (defun validate-bindings-for-codegen (bindings)
   "Some coalton forms can be typechecked but cannot currently be codegened into valid lisp."
@@ -695,16 +733,17 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                    local-subs
                    returns))
                 (let* (;; Quantify local type variables
-                       (output-schemes (mapcar (lambda (type)
-                                                 ;; Here we need to manually qualify the
-                                                 ;; type (without calling QUALIFY) since the
-                                                 ;; substitutions have not been fully applied yet.
-                                                 (quantify
-                                                  local-tvars
-                                                  (qualified-ty
-                                                   retained-preds
-                                                   type)))
-                                               expr-types))
+                       (output-schemes
+                         (mapcar (lambda (type)
+                                   ;; Here we need to manually qualify the
+                                   ;; type (without calling QUALIFY) since the
+                                   ;; substitutions have not been fully applied yet.
+                                   (quantify
+                                    local-tvars
+                                    (qualified-ty
+                                     retained-preds
+                                     type)))
+                                 expr-types))
 
                        ;; Build new env
                        (output-env (push-value-environment
@@ -718,18 +757,9 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                    ;; for predicates
                    (mapcar (lambda (b node)
                              (let* ((node-qual-type (fresh-inst (typed-node-type node)))
-                                    (node-type (qualified-ty-type node-qual-type))
-                                    (node-preds (reduce-context
-                                                 env
-                                                 (qualified-ty-predicates node-qual-type)
-                                                 local-subs))
-                                    (new-preds (remove-if
-                                                (lambda (p)
-                                                  (member p deferred-preds :test #'equalp))
-                                                 node-preds)))
-
+                                    (node-type (qualified-ty-type node-qual-type)))
                                (cons (car b)
-                                     (replace-node-type node (to-scheme (qualify new-preds node-type))))))
+                                     (replace-node-type node (to-scheme (qualify retained-preds node-type))))))
                            bindings typed-bindings)
                    deferred-preds
                    output-env

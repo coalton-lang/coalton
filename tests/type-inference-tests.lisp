@@ -390,7 +390,7 @@
      (coalton:define (show x) "not impl")
 
      (coalton:define (f x)
-       (coalton:seq
+       (coalton::seq
         (coalton-prelude:Ok "hello")
         (coalton-prelude:map (coalton-prelude:+ 1) (coalton:make-list 1 2 3 4))
         (show x))))
@@ -492,3 +492,22 @@
   (check-coalton-types
    '((coalton:define x (coalton-prelude:even? 2)))
    '((x . coalton:Boolean))))
+
+(deftest test-bind ()
+  (check-coalton-types
+   '((coalton:define x
+       (coalton::bind x 5 (coalton-prelude:+ x 1))))
+   '((x . Integer)))
+
+  (check-coalton-types
+   '((coalton:define (f x)
+       (coalton::bind x (coalton-prelude:+ x 1) x)))
+   '((f . (coalton-prelude:Num :a => :a -> :a))))
+
+  (signals coalton-impl::coalton-type-error
+    (run-coalton-typechecker
+     '((coalton:define _
+         (coalton::bind id (coalton:fn (x) x)
+                        (coalton::seq
+                         (id coalton:Unit)
+                         (id "hello"))))))))
