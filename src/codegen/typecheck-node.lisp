@@ -163,6 +163,16 @@
      nil
      (node-type expr)
      (typecheck-node (node-dynamic-extent-body expr) env))
+    (node-type expr))
+
+  (:method ((expr node-bind) env)
+    (declare (type tc:environment env)
+             (values tc:ty))
+    (typecheck-node (node-bind-expr expr) env)
+    (tc:unify
+     nil
+     (node-type expr)
+     (typecheck-node (node-bind-body expr) env))
     (node-type expr)))
 
 

@@ -654,25 +654,26 @@ The fields are defined as follows:
        (define (log b x)
          ;; The floor of the logarithm with base B > 1 of X >= 1.
          ;; See GHC's wordLogBase#
-         (let quot =
-           (fn (n m)
-             (lisp ,coalton-type (n m)
-               (cl:values (cl:truncate n m)))))
-         (let ilog-rec =
-           (fn (y)
-             (if (< x y)
-                 (the (Tuple :a :a) (Tuple x 0))
-                 (match (ilog-rec (* y y))
-                   ((Tuple a b)
-                    (if (< a y)
-                        (Tuple a (* 2 b))
-                        (Tuple (quot a y) (+ (* 2 b) 1))))))))
+         (let ((quot 
+                  (fn (n m)
+                    (lisp ,coalton-type (n m)
+                      (cl:values (cl:truncate n m)))))
+
+               (ilog-rec 
+                 (fn (y)
+                   (if (< x y)
+                       (the (Tuple :a :a) (Tuple x 0))
+                       (match (ilog-rec (* y y))
+                         ((Tuple a b)
+                          (if (< a y)
+                              (Tuple a (* 2 b))
+                              (Tuple (quot a y) (+ (* 2 b) 1)))))))))
          (cond
            ((== x 1) 0)
            ((< x 1)  (error "Power of ILOG must be greater than or equal to 1."))
            ((<= b 1) (error "Base of ILOG must be greater than 1."))
            ((== b 2) (- (lisp ,coalton-type (x) (cl:integer-length x)) 1))
-           (True     (match (ilog-rec b) ((Tuple _ b) b))))))))
+           (True     (match (ilog-rec b) ((Tuple _ b) b)))))))))
 
 (%define-integer-expt-instance Integer)
 (%define-integer-expt-instance U8) 

@@ -135,5 +135,16 @@
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type node-return))
 
+(defstruct
+    (node-bind
+     (:include node)
+     (:constructor node-bind (unparsed name expr body)))
+  (name (required 'name) :type symbol :read-only t)
+  (expr (required 'expr) :type node   :read-only t)
+  (body (required 'body) :type node   :read-only t))
+
+#+(and sbcl coalton-release)
+(declaim (sb-ext:freeze-type node-bind))
+
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type node))

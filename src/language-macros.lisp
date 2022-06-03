@@ -142,7 +142,7 @@ Coalton boolean."
                         (cl:eql 'coalton:let (cl:first form))
                         (cl:symbolp (cl:second form))
                         (cl:eql 'coalton:= (cl:third form)))
-                       `(let ((,(cl:second form) ,(cl:fourth form)))
+                       `(coalton::bind ,(cl:second form) ,(cl:fourth form)
                           ,(process (cl:cdr forms))))
 
                       (;; Otherwise if we are a binding we can use >>=
@@ -185,15 +185,15 @@ Coalton boolean."
                                   (cl:assert
                                    (cl:< (cl:+ 1 (cl:length before-let)) (cl:length forms)) ()  "Progn cannot be terminated by let")
                                   (cl:return-from process
-                                    `(coalton:seq
+                                    `(coalton::seq
                                       ,@(cl:reverse before-let)
-                                      (coalton:let ((,(cl:second form) ,(cl:fourth form)))
+                                      (coalton::bind ,(cl:second form) ,(cl:fourth form)
                                         ,(process (cl:nthcdr (cl:+ 1 (cl:length before-let)) forms)))))))
 
                                (cl:t (cl:push form before-let)))))
 
                          ;; There was never a let generate a simple seq
-                         `(coalton:seq
+                         `(coalton::seq
                            ,@forms)))))
     (process forms)))
 

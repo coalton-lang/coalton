@@ -93,6 +93,10 @@
    #:node-the-subnode                   ; ACCESSOR
    #:node-return                        ; STRUCT
    #:node-return-expr                   ; ACCESSOR
+   #:node-bind                          ; STRUCT
+   #:node-bind-name                     ; ACCESSOR
+   #:node-bind-expr                     ; ACCESSOR
+   #:node-bind-body                     ; ACCESSOR
    #:match-branch-pattern               ; ACCESSOR
    #:match-branch-subexpr               ; ACCESSOR
    #:match-branch-unparsed              ; ACCESOR
@@ -261,6 +265,10 @@
    #:typed-node-seq-subnodes              ; ACCESSOR
    #:typed-node-return                    ; STRUCT
    #:typed-node-return-expr               ; ACCESSSOR
+   #:typed-node-bind                      ; STRUCT
+   #:typed-node-bind-name                 ; ACCESSOR
+   #:typed-node-bind-expr                 ; ACCESSOR
+   #:typed-node-bind-body                 ; ACCESSOR
    )
   (:export
    #:environment                        ; STRUCT
@@ -546,7 +554,6 @@
    #:<-                                 ; Syntax
    #:_
    #:return
-   #:seq
    #:the)
   ;; Macros
   (:export
@@ -581,5 +588,7 @@
    #:type-of
    #:kind-of)
   (:intern
+   #:seq
+   #:bind
    #:Boolean/True
    #:Boolean/False))

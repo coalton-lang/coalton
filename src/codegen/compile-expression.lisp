@@ -268,5 +268,17 @@
       (assert (null (tc:qualified-ty-predicates qual-ty)))
       (node-return
        (tc:qualified-ty-type qual-ty)
-       (compile-expression (tc:typed-node-return-expr expr) ctx env)))))
+       (compile-expression (tc:typed-node-return-expr expr) ctx env))))
+
+  (:method ((expr tc:typed-node-bind) ctx env)
+    (declare (type pred-context ctx)
+             (type tc:environment env)
+             (values node))
+    (let ((qual-ty (tc:fresh-inst (tc:typed-node-type expr))))
+      (assert (null (tc:qualified-ty-predicates qual-ty)))
+      (node-bind
+       (tc:qualified-ty-type qual-ty)
+       (tc:typed-node-bind-name expr)
+       (compile-expression (tc:typed-node-bind-expr expr) ctx env)
+       (compile-expression (tc:typed-node-bind-body expr) ctx env)))))
 

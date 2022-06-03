@@ -465,7 +465,7 @@ Coalton has a `coalton-library:progn` construct similar to lisp.
       (Tuple x y))))
 ```
 
-Coalton's `progn` can have flattened `let` syntax.
+Coalton's `progn` can have flattened `let` syntax. 
 
 ```lisp
 (coalton-toplevel
@@ -475,6 +475,26 @@ Coalton's `progn` can have flattened `let` syntax.
       (let x_ = (into x))
       (let y_ = (into y))
       (<> x_ y_))))
+```
+
+Flattened let expression are non recursive, and do not support let polymorhpism. Thus the following is invalid:
+
+````
+(coalton
+  (progn
+    (let id = (fn (x) x))
+    (id Unit)
+    (id "hello")))
+```
+
+It does however work with standard let expressions:
+
+```
+(coalton
+  (let ((id (fn (x) x)))
+    (progn
+      (id Unit)
+      (id "hello"))))
 ```
 
 Function defintions create an implicit `progn` block

@@ -160,19 +160,23 @@
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type typed-node-return))
 
+(defstruct
+    (typed-node-bind
+     (:include typed-node)
+     (:constructor typed-node-bind (type unparsed name expr body)))
+  (name (required 'name) :type symbol     :read-only t)
+  (expr (required 'expr) :type typed-node :read-only t)
+  (body (required 'body) :type typed-node :read-only t))
+
+#+(and sbcl coalton-release)
+(declaim (sb-ext:freeze-type typed-node-bind))
+
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type typed-node))
 
 ;;;
 ;;; Methods
 ;;;
-
-(defmethod type-variables ((node typed-node))
-  (type-variables (typed-node-type node)))
-
-;; typed-node-seq has type type of it's last argument. As such it can contain type variables in it's subnodes that it does not include at the top level. This change is done for check-variables.
-(defmethod type-variables ((node typed-node-seq))
-  (remove-duplicates (mapcan #'type-variables (typed-node-seq-subnodes node)) :test #'equalp))
 
 (defmethod apply-substitution (subs (node typed-node-literal))
   (declare (type substitution-list subs)
@@ -274,6 +278,16 @@
    (typed-node-unparsed node)
    (apply-substitution subs (typed-node-return-expr node))))
 
+(defmethod apply-substitution (subs (node typed-node-bind))
+  (declare (type substitution-list subs)
+           (values typed-node-bind &optional))
+  (typed-node-bind
+   (apply-substitution subs (typed-node-type node))
+   (typed-node-unparsed node)
+   (typed-node-bind-name node)
+   (apply-substitution subs (typed-node-bind-expr node))
+   (apply-substitution subs (typed-node-bind-body node))))
+
 (defgeneric replace-node-type (node new-type)
   (:method ((node typed-node-literal) new-type)
     (typed-node-literal
@@ -335,75 +349,15 @@
     (typed-node-return
      new-type
      (typed-node-unparsed node)
-     (typed-node-return-expr node))))
+     (typed-node-return-expr node)))
 
-(defgeneric collect-type-predicates (node)
-  (:method ((type qualified-ty))
-    (qualified-ty-predicates type))
-
-  (:method ((type ty-scheme))
-    (collect-type-predicates (fresh-inst type)))
-
-
-  (:method ((node typed-node-literal))
-    (collect-type-predicates (typed-node-type node)))
-
-  (:method ((node typed-node-variable))
-    (collect-type-predicates (typed-node-type node)))
-
-  (:method ((node typed-node-lisp))
-    (collect-type-predicates (typed-node-type node)))
-
-  (:method ((node typed-node-application))
-    (remove-duplicates
-     (append (collect-type-predicates (typed-node-type node))
-             (collect-type-predicates (typed-node-application-rator node))
-             (mapcan #'collect-type-predicates (typed-node-application-rands node)))
-     :test #'equalp))
-
-  (:method ((node typed-node-abstraction))
-    (remove-duplicates
-     (append (collect-type-predicates (typed-node-type node))
-             (collect-type-predicates (typed-node-abstraction-subexpr node)))
-     :test #'equalp))
-
-  (:method ((node typed-node-lisp))
-    (collect-type-predicates (typed-node-type node)))
-
-  (:method ((node typed-node-let))
-    (remove-duplicates
-     (append (collect-type-predicates (typed-node-type node))
-             (collect-type-predicates (typed-node-let-subexpr node))
-             (mapcan #'collect-type-predicates (mapcar #'cdr (typed-node-let-bindings node)))
-             (loop :for node :being :the :hash-values :of (typed-node-let-explicit-types node)
-                   :append (collect-type-predicates node)))
-     :test #'equalp))
-
-  (:method ((node typed-node-match))
-    (remove-duplicates
-     (append
-      (collect-type-predicates (typed-node-type node))
-      (collect-type-predicates (typed-node-match-expr node))
-      (mapcan #'collect-type-predicates (typed-node-match-branches node)))))
-
-  (:method ((node typed-match-branch))
-    (remove-duplicates
-     (append (collect-type-predicates (typed-match-branch-subexpr node))
-             (mapcan #'collect-type-predicates (mapcar #'cdr (typed-match-branch-bindings node))))
-     :test #'equalp))
-
-  (:method ((node typed-node-seq))
-    (remove-duplicates
-     (mapcan #'collect-type-predicates (typed-node-seq-subnodes node))
-     :test #'equalp))
-
-  (:method ((node typed-node-return))
-    (remove-duplicates
-     (append
-      (collect-type-predicates (typed-node-type node))
-      (collect-type-predicates (typed-node-return-expr node)))
-     :test #'equalp)))
-
+  (:method ((node typed-node-bind) new-type)
+    (typed-node-bind
+     new-type
+     (typed-node-unparsed node)
+     (typed-node-bind-name node)
+     (typed-node-bind-expr node)
+     (typed-node-bind-body node))))
 (defun collect-variable-namespace (node)
   "Returns the name of every variable that will be referenced in the variable namespace in the generated code."
   (declare (type typed-node node)
@@ -446,7 +400,12 @@
     (mapcan #'collect-variable-namespace-g (typed-node-seq-subnodes node)))
 
   (:method ((node typed-node-return))
-    (collect-variable-namespace-g (typed-node-return-expr node))))
+    (collect-variable-namespace-g (typed-node-return-expr node)))
+
+  (:method ((node typed-node-bind))
+    (append
+     (collect-variable-namespace-g (typed-node-bind-expr node))
+     (collect-variable-namespace-g (typed-node-bind-body node)))))
 
 (defgeneric remove-static-preds (node)
   (:method ((node typed-node-literal))
@@ -512,5 +471,13 @@
     (typed-node-return
      (typed-node-type node)
      (typed-node-unparsed node)
-     (remove-static-preds (typed-node-return-expr node)))))
+     (remove-static-preds (typed-node-return-expr node))))
+
+  (:method ((node typed-node-bind))
+    (typed-node-bind
+     (typed-node-type node)
+     (typed-node-unparsed node)
+     (typed-node-bind-name node)
+     (remove-static-preds (typed-node-bind-expr node))
+     (remove-static-preds (typed-node-bind-body node)))))
 

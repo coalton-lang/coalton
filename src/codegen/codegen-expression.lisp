@@ -185,7 +185,38 @@
     `(let ((,(node-dynamic-extent-name expr)
              ,(codegen-expression (node-dynamic-extent-node expr) current-function env)))
        (declare (dynamic-extent ,(node-dynamic-extent-name expr)))
-       ,(codegen-expression (node-dynamic-extent-body expr) current-function env))))
+       ,(codegen-expression (node-dynamic-extent-body expr) current-function env)))
+
+  (:method ((expr node-bind) current-function env)
+    (let ((name (node-bind-name expr)))
+      (cond
+        ((and (node-abstraction-p (node-bind-expr expr))
+              (find name (node-variables (node-bind-body expr) :variable-namespace-only t)))
+         (let* ((arity (length (node-abstraction-vars (node-bind-expr expr))))
+
+                (function-constructor (gethash arity *function-constructor-functions*)))
+           `(let ((,name))
+              (declare (ignorable ,name))
+              (labels ((,name
+                           ,(node-abstraction-vars (node-bind-expr expr))
+                         ;; TODO: add type annotations
+                         (declare (ignorable ,@(node-abstraction-vars (node-bind-expr expr))))
+                         ,(codegen-expression (node-abstraction-subexpr (node-bind-expr expr)) name env)))
+                (setf ,name (,function-constructor #',name))
+                ,(codegen-expression (node-bind-body expr) current-function env)))))
+
+        ((node-abstraction-p (node-bind-expr expr))
+         `(labels ((,name
+                       ,(node-abstraction-vars (node-bind-expr expr))
+                     ;; TODO: add type annotations
+                     (declare (ignorable ,@(node-abstraction-vars (node-bind-expr expr))))
+                     ,(codegen-expression (node-abstraction-subexpr (node-bind-expr expr)) name env)))
+            ,(codegen-expression (node-bind-body expr) current-function env)))
+
+        (t
+         `(let ((,name ,(codegen-expression (node-bind-expr expr) current-function env)))
+            (declare (ignorable ,name))
+            ,(codegen-expression (node-bind-body expr) current-function env)))))))
 
 (defun codegen-let (node sccs current-function local-vars env)
   (declare (type node-let node)
@@ -229,6 +260,7 @@
                 `(labels ,(loop :for (name . node) :in scc-bindings
                                 :collect `(,name
                                            ,(node-abstraction-vars node)
+                                           ;; TODO: add type annotations
                                            (declare (ignorable ,@(node-abstraction-vars node)))
                                            ,(codegen-expression (node-abstraction-subexpr node) name env)))
                    ,@inner))
