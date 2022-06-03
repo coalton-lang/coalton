@@ -10,7 +10,7 @@
                #:coalton/library))
 
 (asdf:defsystem #:coalton/compiler
-  :description "Coalton compiler"
+  :description "The Coalton compiler."
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
   :license "MIT"
   :version (:read-file-form "VERSION.txt")
@@ -100,6 +100,7 @@
                (:file "lock-package" :if-feature :sb-package-locks)))
 
 (asdf:defsystem #:coalton/library
+  :description "The Coalton standard library."
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
   :license "MIT"
   :version (:read-file-form "VERSION.txt")
@@ -109,9 +110,7 @@
                       (funcall compile)))
   :depends-on (#:coalton/compiler
                #:coalton/hashtable-shim
-               #:trivial-garbage
-               (:feature :sbcl #:sb-gmp)
-               (:feature :sbcl #:sb-mpfr))
+               #:trivial-garbage)
   :pathname "library/"
   :serial t
   :components ((:file "utils")
@@ -123,7 +122,6 @@
                (:file "arith")
                (:file "complex")
                (:file "integral")
-               (:file "big-float" :if-feature :sbcl)
                (:file "char")
                (:file "string")
                (:file "tuple")
@@ -138,6 +136,23 @@
                (:file "iterator")
                (:file "system")
                (:file "prelude")))
+
+(asdf:defsystem #:coalton/library/big-float
+  :description "An arbitrary precision floating point library that uses SB-MPFR."
+  :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
+  :license "MIT"
+  :version (:read-file-form "VERSION.txt")
+  :around-compile (lambda (compile)
+                    (let (#+sbcl (sb-ext:*derive-function-types* t)
+                          #+sbcl (sb-ext:*block-compile-default* :specified))
+                      (funcall compile)))
+  :depends-on (#:coalton
+               #:coalton/library
+               #:sb-gmp
+               #:sb-mpfr)
+  :pathname "library/big-float/"
+  :serial t
+  :components ((:file "big-float")))
 
 (asdf:defsystem #:coalton/testing
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
@@ -196,6 +211,7 @@
   :license "MIT"
   :version (:read-file-form "VERSION.txt")
   :depends-on (#:coalton
+               (:feature :sbcl #:coalton/library/big-float)
                #:html-entities
                #:yason
                #:uiop)
@@ -214,6 +230,7 @@
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
   :license "MIT"
   :depends-on (#:coalton
+               (:feature :sbcl #:coalton/library/big-float)
                #:coalton/testing
                #:fiasco
                #:coalton-json/tests
