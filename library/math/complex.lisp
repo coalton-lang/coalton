@@ -1,14 +1,14 @@
-;;;; Complex
+;;;; complex.lisp
 ;;;;
 ;;;; Complex numbers
 
-(coalton-library/utils:defstdlib-package #:coalton-library/complex
+(coalton-library/utils:defstdlib-package #:coalton-library/math/complex
     (:use #:coalton
           #:coalton-library/classes
-          #:coalton-library/arith
-          #:coalton-library/utils)
+          #:coalton-library/utils
+          #:coalton-library/math/arith)
   (:local-nicknames
-   (#:arith #:coalton-library/arith))
+   (#:arith #:coalton-library/math/arith))
   (:export
    #:complex
    #:real-part
@@ -20,7 +20,7 @@
 #+coalton-release
 (cl:declaim #.coalton-impl:*coalton-optimize-library*)
 
-(in-package #:coalton-library/complex)
+(in-package #:coalton-library/math/complex)
 
 (coalton-toplevel
   (repr :native (cl:or cl:number complex))
@@ -219,3 +219,6 @@
 
   (%define-builtin-complex-float-instances Single-Float)
   (%define-builtin-complex-float-instances Double-Float))
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON-LIBRARY/MATH/COMPLEX")
