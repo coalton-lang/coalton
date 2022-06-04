@@ -2,8 +2,8 @@
 ;;;;
 ;;;; Number types and basic arithmetic.
 
-(coalton-library/utils::defstdlib-package #:coalton-library/arith
-  (:use
+(coalton-library/utils::defstdlib-package #:coalton-library/math/arith
+    (:use
      #:coalton
      #:coalton-library/builtin
      #:coalton-library/classes
@@ -64,7 +64,7 @@
 #+coalton-release
 (cl:declaim #.coalton-impl:*coalton-optimize-library*)
 
-(in-package #:coalton-library/arith)
+(in-package #:coalton-library/math/arith)
 
 (coalton-toplevel
   ;;
@@ -138,12 +138,12 @@ The fields are defined as follows:
 
 (cl:defmacro %define-overflow-handler (name bits)
   `(cl:defun ,name (value)
-    (cl:typecase value
-      ((cl:signed-byte ,bits) value)
-      (cl:otherwise
-       (cl:cerror "Continue, wrapping around."
-                  ,(cl:format cl:nil "Signed value overflowed ~D bits." bits))
-       (%unsigned->signed ,bits (cl:mod value ,(cl:expt 2 bits)))))))
+     (cl:typecase value
+       ((cl:signed-byte ,bits) value)
+       (cl:otherwise
+        (cl:cerror "Continue, wrapping around."
+                   ,(cl:format cl:nil "Signed value overflowed ~D bits." bits))
+        (%unsigned->signed ,bits (cl:mod value ,(cl:expt 2 bits)))))))
 
 (cl:eval-when (:compile-toplevel :load-toplevel)
   (cl:defparameter +fixnum-bits+
@@ -325,10 +325,10 @@ The fields are defined as follows:
        (define (into x) (fromInt x)))
 
      ,@(cl:loop :for super :in supers :collecting
-        `(define-instance (Into ,coalton-type ,super)
-           (define (into x)
-             (lisp ,super (x)
-               x))))
+          `(define-instance (Into ,coalton-type ,super)
+             (define (into x)
+               (lisp ,super (x)
+                 x))))
 
      (define-instance (Into ,coalton-type Single-Float)
        (define (into x)
@@ -630,7 +630,7 @@ The fields are defined as follows:
        (define ee
          (lisp ,coalton-type ()
            (cl:exp (cl:coerce 1 ',underlying-type))))
-         
+
        (define pi
          (lisp ,coalton-type ()
            (cl:coerce cl:pi ',underlying-type))))
@@ -686,27 +686,13 @@ The fields are defined as follows:
 (%define-integer-expt-instance Ifix) 
 (%define-integer-expt-instance Ufix) 
 
-(coalton-toplevel
-  (define-instance (Into Integer String)
-    (define (into z)
-      (lisp String (z)
-        (cl:format cl:nil "~D" z))))
-
-  (define-instance (TryInto String Integer)
-    (define (tryInto s)
-      (lisp (Result String Integer) (s)
-        (cl:let ((z (cl:ignore-errors (cl:parse-integer s))))
-          (cl:if (cl:null z)
-                 (Err "String doesn't have integer syntax.")
-                 (Ok z)))))))
-
 ;;;; `Bits' instances
 ;;; signed
 
 (cl:defmacro define-signed-bit-instance (type handle-overflow)
   (cl:flet ((lisp-binop (op)
               `(lisp ,type (left right)
-                     (,op left right))))
+                 (,op left right))))
     `(coalton-toplevel
        (define-instance (bits:Bits ,type)
          (define (bits:and left right)
@@ -748,19 +734,19 @@ The fields are defined as follows:
 (cl:defmacro define-unsigned-bit-instance (type width)
   (cl:flet ((define-binop (coalton-name lisp-name)
               `(define (,coalton-name left right)
-                   (lisp ,type (left right)
-                         (,lisp-name left right)))))
+                 (lisp ,type (left right)
+                   (,lisp-name left right)))))
     `(coalton-toplevel
-      (define-instance (bits:Bits ,type)
-        ,(define-binop 'bits:and 'cl:logand)
-        ,(define-binop 'bits:or 'cl:logior)
-        ,(define-binop 'bits:xor 'cl:logxor)
-        (define (bits:not bits)
-            (lisp ,type (bits) (unsigned-lognot bits ,width)))
-        (define (bits:shift amount bits)
-            (lisp ,type (amount bits)
-                  (cl:logand (cl:ash bits amount)
-                             (cl:1- (cl:ash 1 ,width)))))))))
+       (define-instance (bits:Bits ,type)
+         ,(define-binop 'bits:and 'cl:logand)
+         ,(define-binop 'bits:or 'cl:logior)
+         ,(define-binop 'bits:xor 'cl:logxor)
+         (define (bits:not bits)
+           (lisp ,type (bits) (unsigned-lognot bits ,width)))
+         (define (bits:shift amount bits)
+           (lisp ,type (amount bits)
+             (cl:logand (cl:ash bits amount)
+                        (cl:1- (cl:ash 1 ,width)))))))))
 
 (define-unsigned-bit-instance U8 8)
 (define-unsigned-bit-instance U16 16)
@@ -919,4 +905,4 @@ Note: This does *not* divide double-float arguments."
     (/= x 0)))
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/ARITH")
+(sb-ext:lock-package "COALTON-LIBRARY/MATH/ARITH")

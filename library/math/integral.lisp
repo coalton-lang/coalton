@@ -2,12 +2,12 @@
 ;;;;
 ;;;; Integral domains and operations on integers
 
-(coalton-library/utils::defstdlib-package #:coalton-library/integral
+(coalton-library/utils::defstdlib-package #:coalton-library/math/integral
     (:use
      #:coalton
      #:coalton-library/classes
      #:coalton-library/builtin
-     #:coalton-library/arith)
+     #:coalton-library/math/arith)
   (:import-from
    #:coalton-library/bits
    #:Bits)
@@ -33,7 +33,7 @@
 #+coalton-release
 (cl:declaim #.coalton-impl:*coalton-optimize-library*)
 
-(in-package #:coalton-library/integral)
+(in-package #:coalton-library/math/integral)
 
 (coalton-toplevel
   (define-class (Num :a => Remainder :a)
@@ -263,4 +263,4 @@ are floored and truncated division, respectively."
 (%define-native-expt Double-Float)
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/INTEGRAL")
+(sb-ext:lock-package "COALTON-LIBRARY/MATH/INTEGRAL")

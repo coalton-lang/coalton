@@ -122,7 +122,20 @@ does not have that suffix."
       (lisp String (lst)
         (cl:coerce lst 'cl:string))))
 
-  (define-instance (Iso (List Char) String)))
+  (define-instance (Iso (List Char) String))
+
+  (define-instance (Into Integer String)
+    (define (into z)
+      (lisp String (z)
+        (cl:format cl:nil "~D" z))))
+
+  (define-instance (TryInto String Integer)
+    (define (tryInto s)
+      (lisp (Result String Integer) (s)
+        (cl:let ((z (cl:ignore-errors (cl:parse-integer s))))
+          (cl:if (cl:null z)
+                 (Err (concat "Cannot parse string as integer: " s))
+                 (Ok z)))))))
 
 (define-sxhash-hasher String)
 

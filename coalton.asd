@@ -119,9 +119,11 @@
                (:file "functions")
                (:file "boolean")
                (:file "bits")
-               (:file "arith")
-               (:file "complex")
-               (:file "integral")
+               (:module "math"
+                :serial t
+                :components ((:file "arith")
+                             (:file "integral")
+                             (:file "complex")))
                (:file "char")
                (:file "string")
                (:file "tuple")

@@ -5,7 +5,7 @@
 (coalton-library/utils:defstdlib-package #:coalton-library/big-float
   (:use #:coalton
         #:coalton-library/classes
-        #:coalton-library/arith)
+        #:coalton-library/math)
 
   (:export
    #:RoundingMode
@@ -300,7 +300,7 @@
         (mpfr->rational (sb-mpfr::mpfr-float-ref x)))))
 )                                       ; COALTON-TOPLEVEL
 
-(coalton-library/complex::%define-standard-complex-instances Big-Float)
+(coalton-library/math/complex::%define-standard-complex-instances Big-Float)
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/BIG-FLOAT")
