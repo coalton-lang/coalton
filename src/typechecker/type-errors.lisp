@@ -379,3 +379,18 @@
      (let ((*print-circle* nil) ; Prevent printing using reader macros
            )
        (format s "Unexpected return statement")))))
+
+(define-condition duplicate-ctor (coalton-type-error)
+  ((ctor-name :initarg :ctor-name
+              :reader duplicate-ctor-ctor-name
+              :type symbol)
+   (ty-name   :initarg :ty-name
+              :reader duplicate-ctor-ty-name
+              :type symbol))
+  (:report
+   (lambda (c s)
+     (let ((*print-circle* nil) ; Prevent printing using reader macros
+           )
+       (format s "Constructor ~A is already used in type ~A"
+               (duplicate-ctor-ctor-name c)
+               (duplicate-ctor-ty-name c))))))

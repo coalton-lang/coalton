@@ -163,17 +163,33 @@
                            :for args_ := (apply-ksubstitution ksubs_ args)
                            :for type := (make-function-type* args_ applied-type)
                            :for scheme := (quantify-using-tvar-order (mapcar #'tvar-tyvar tyvar-types) (qualify nil type))
-                           :collect
-                           (cons
-                            scheme
-                            (make-constructor-entry
-                             :name ctor-name
-                             :arity arity
-                             :constructs name
-                             :classname classname
-                             :compressed-repr nil)))))
+
+                           :for entry := (make-constructor-entry
+                                          :name ctor-name
+                                          :arity arity
+                                          :constructs name
+                                          :classname classname
+                                          :compressed-repr nil)
+
+                           :do (check-constructor name ctor-name env)
+
+                           :do (setf env (set-constructor env ctor-name entry))
+
+                           :collect (cons scheme entry))))
      env)))
 
+(defun check-constructor (ty-name ctor-name env)
+  "Verify that a given constructor isn't used by another type"
+  (declare (type symbol ty-name)
+           (type symbol ctor-name)
+           (type environment env))
+  
+   (with-type-context ("define-type of ~S" ty-name)
+    (let ((ctor-entry (lookup-constructor env ctor-name :no-error t)))
+      (when (and ctor-entry (not (eq ty-name (constructor-entry-constructs ctor-entry))))
+        (error 'duplicate-ctor
+               :ctor-name ctor-name
+               :ty-name (constructor-entry-constructs ctor-entry))))))
 
 (defun parse-type-definitions (forms repr-table env)
   "Parse the type defintion FORM in the ENVironment
