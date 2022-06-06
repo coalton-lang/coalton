@@ -36,10 +36,18 @@
 (in-package #:coalton-library/big-float)
 
 #-sbcl (error "This file is hopelessly SBCL specific.")
-#-sb-mpfr (error "SB-MPFR failed to load, for some reason. ~
-                  This is probably due to the shared library ~
-                  not existing, or the system being unable ~
-                  to find it.")
+#+sbcl
+cl-user::
+(eval-when (:compile-toplevel :load-toplevel)
+  (loop :until (uiop:featurep :sb-mpfr)
+        :do (restart-case (error "SB-MPFR failed to load, for some reason. ~
+                                  This is probably due to the shared library ~
+                                  not existing, or the system being unable ~
+                                  to find it.")
+              (reload-sb-mpfr ()
+                :report "Reload the MPFR library"
+                (handler-case (sb-mpfr::load-mpfr)
+                  (simple-warning (e) (declare (ignore e))))))))
 
 ;;; Preliminary patched functionality for SB-MPFR
 ;;;
