@@ -167,6 +167,10 @@
    #:time))
 
 (cl:defpackage #:coalton-user
+  (:import-from
+   #:common-lisp
+   #:describe
+   #:disassemble)
   (:use
    #:coalton
    #:coalton-prelude)
