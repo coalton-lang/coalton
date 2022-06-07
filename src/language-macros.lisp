@@ -179,17 +179,15 @@ Coalton boolean."
                                ((cl:and
                                  (cl:listp form)
                                  (cl:eql 'coalton:let (cl:first form))
-                                 (cl:eql 'coalton:= (cl:third form))
-                                 (cl:symbolp (cl:second form)))
+                                 (cl:eql 'coalton:= (cl:third form)))
                                 (cl:progn
                                   (cl:assert
                                    (cl:< (cl:+ 1 (cl:length before-let)) (cl:length forms)) ()  "Progn cannot be terminated by let")
                                   (cl:return-from process
                                     `(coalton::seq
                                       ,@(cl:reverse before-let)
-                                      (coalton::bind ,(cl:second form) ,(cl:fourth form)
-                                        ,(process (cl:nthcdr (cl:+ 1 (cl:length before-let)) forms)))))))
-
+                                      (coalton:match  ,(cl:fourth form)
+                                        (,(cl:second form) ,(process (cl:nthcdr (cl:+ 1 (cl:length before-let)) forms))))))))
                                (cl:t (cl:push form before-let)))))
 
                          ;; There was never a let generate a simple seq
