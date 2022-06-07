@@ -156,7 +156,10 @@
                 `(,(codegen-pattern (match-branch-pattern b) env)
                   ,(codegen-expression (match-branch-body b) current-function env)))
               (node-match-branches expr))))
-      `(trivia:match (the ,(lisp-type (node-type (node-match-expr expr)) env) ,subexpr)
+      `(trivia:match
+           ,(if coalton-impl:*emit-type-annotations*
+             `(the ,(lisp-type (node-type (node-match-expr expr)) env) ,subexpr)
+             subexpr)
          ,@branches
          (_ (error "Pattern match not exaustive error")))))
 
