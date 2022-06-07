@@ -46,8 +46,11 @@
 
   (let ((bindings (optimize-bindings-initial bindings package env)))
 
+    ;; Make code and environment data avaliable to the monomorphizer
     (loop :for (name . node) :in bindings
           :do (setf env (tc:set-code env name node)))
+
+    (setf env (update-function-env bindings env))
 
     (let* ((manager (candidate-manager))
 
