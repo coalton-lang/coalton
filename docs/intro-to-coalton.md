@@ -470,11 +470,22 @@ Coalton's `progn` can have flattened `let` syntax.
 ```lisp
 (coalton-toplevel
  (declare f (Integer -> Integer -> String))
-  (define (f x y)
-    (progn
-      (let x_ = (into x))
-      (let y_ = (into y))
-      (<> x_ y_))))
+ (define (f x y)
+   (progn
+     (let x_ = (into x))
+     (let y_ = (into y))
+     (<> x_ y_))))
+```
+
+Flattened let expressions support pattern matching:
+
+```lisp
+(coalton-toplevel
+  (declare f (Tuple Integer Integer -> Integer))
+  (define (f t)
+    (let (Tuple fst snd) = t)
+    (+ fst snd)))
+
 ```
 
 Flattened let expression are non recursive, and do not support let polymorhpism. Thus the following is invalid:
