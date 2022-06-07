@@ -186,8 +186,12 @@ Coalton boolean."
                                   (cl:return-from process
                                     `(coalton::seq
                                       ,@(cl:reverse before-let)
-                                      (coalton:match  ,(cl:fourth form)
-                                        (,(cl:second form) ,(process (cl:nthcdr (cl:+ 1 (cl:length before-let)) forms))))))))
+                                      ,(cl:if (cl:symbolp (cl:second form))
+                                              `(coalton::bind ,(cl:second form) ,(cl:fourth form)
+                                                             ,(process (cl:nthcdr (cl:+ 1 (cl:length before-let)) forms)))
+                                              `(coalton:match ,(cl:fourth form)
+                                                 (,(cl:second form)
+                                                  ,(process (cl:nthcdr (cl:+ 1 (cl:length before-let)) forms)))))))))
                                (cl:t (cl:push form before-let)))))
 
                          ;; There was never a let generate a simple seq
