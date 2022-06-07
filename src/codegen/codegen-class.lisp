@@ -53,10 +53,11 @@
 
 
         :append (mapcan (lambda (m)
-                          (make-method-fun m package class))
+                          (make-method-fun m package class env))
                         (tc:ty-class-unqualified-methods class))))
 
-(defun make-method-fun (m package class)
+(defun make-method-fun (m package class env)
+  (declare (type tc:environment env))
   (let* ((qual-ty (tc:fresh-inst (cdr m)))
 
          (method-contraint-args
@@ -78,10 +79,14 @@
         ,(if (null params)
              `(,method-accessor dict)
              `(funcall (the (function ,(make-list (length params) :initial-element t)) (,method-accessor dict)) ,@params)))
-    ;; Generate the wrapper functions
-    (coalton-impl:define-global-lexical ,(car m)
-        ,(construct-function-entry
-          `#',(car m)
-          (+ arity 1) ; We need a function of arity + 1 to account for DICT
-          )))))
+      ;; Generate the wrapper functions
+      (coalton-impl:define-global-lexical ,(car m)
+          ,(construct-function-entry
+            `#',(car m)
+            (+ arity 1) ; We need a function of arity + 1 to account for DICT
+            ))
+      (setf (documentation ',(car m) 'variable)
+            ,(format nil "~A :: ~A" (car m) (tc:lookup-value-type env (car m))))
+      (setf (documentation ',(car m) 'function)
+            ,(format nil "~A :: ~A" (car m) (tc:lookup-value-type env (car m)))))))
 
