@@ -802,14 +802,13 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                                              (not (entail env expr-preds p)))
                                            (apply-substitution local-subs preds))))
 
-        ;; NOTE: This is where defaulting happens
-
-        (unless allow-deferred-predicates
-          (setf local-subs (compose-substitution-lists (default-subs env nil reduced-preds) local-subs))
-          (setf reduced-preds (apply-substitution local-subs reduced-preds)))
-
         (multiple-value-bind (deferred-preds retained-preds)
             (split-context env env-tvars local-tvars reduced-preds local-subs)
+
+          ;; NOTE: This is where defaulting happens
+
+          (unless allow-deferred-predicates
+            (setf local-subs (compose-substitution-lists (default-subs env nil reduced-preds) local-subs)))
 
           (with-type-context ("definition of ~A" (car binding))
             (when (and returns (not allow-returns))
