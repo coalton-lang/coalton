@@ -74,9 +74,31 @@
              context
              methods))))))
 
+(defun check-for-orphan-instance (predicate package)
+  ;; Instances defined on predeclared types violate the orphan rule
+  (unless coalton-impl::*coalton-stage-1-complete*
+    (return-from check-for-orphan-instance))
+
+  (when (equalp (symbol-package (ty-predicate-class predicate)) package)
+    (return-from check-for-orphan-instance))
+
+  (let ((foreign-type nil))
+    (loop :for ty :in (type-constructors (ty-predicate-types predicate))
+          :when (equalp (symbol-package ty) package)
+            :do (return-from check-for-orphan-instance)
+
+          :do (setf foreign-type t))
+
+    (when foreign-type
+      (warn "Instance ~A defined in package ~A violates the orphan rule.~%    Instances can only be defined when the class~%    or at least one type is defined in the current package."
+            predicate
+            (package-name package)))))
+
 (defun parse-instance-definition (form package env)
   (multiple-value-bind (predicate context methods)
       (parse-instance-decleration form env)
+
+    (check-for-orphan-instance predicate package)
 
     (with-pprint-variable-context ()
       (with-parsing-context ("definition of ~A" predicate)
