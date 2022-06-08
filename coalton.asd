@@ -132,6 +132,7 @@
                (:file "optional")
                (:file "list")
                (:file "result")
+               (:file "stage-1")
                (:file "cell")
                (:file "vector")
                (:file "slice")
