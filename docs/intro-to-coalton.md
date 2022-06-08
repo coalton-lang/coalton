@@ -490,7 +490,7 @@ Flattened let expressions support pattern matching:
 
 Flattened let expression are non recursive, and do not support let polymorhpism. Thus the following is invalid:
 
-````
+```
 (coalton
   (progn
     (let id = (fn (x) x))
