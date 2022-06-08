@@ -86,6 +86,12 @@
      '((coalton:declare x :a)
        (coalton:define x coalton:Unit))))
 
+  ;; Missing explicit predicates cannot be defualted
+  (signals coalton-impl::coalton-type-error
+    (run-coalton-typechecker
+     '((coalton:declare x :a)
+       (coalton:define x 1))))
+
   ;; Implicitly typed functions should only infer types from the declared type signature of an explicitly typed functions
   ;; http://jeremymikkola.com/posts/2019_01_12_type_inference_for_haskell_part_12.html
   (check-coalton-types
