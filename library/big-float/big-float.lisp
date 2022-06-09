@@ -5,6 +5,7 @@
 (coalton-library/utils:defstdlib-package #:coalton-library/big-float
   (:use #:coalton
         #:coalton-library/classes
+        #:coalton-library/functions
         #:coalton-library/math)
 
   (:export
@@ -249,6 +250,23 @@
     (define (best-approx x)
       (real-approx (get-precision) x)))
 
+  (define-instance (Transfinite Big-Float)
+    (define infinity (/ 1 0))
+    (define (infinite? x)
+      (lisp Boolean (x)
+            (to-boolean (sb-mpfr:infinityp x))))
+    (define nan (/ 0 0))
+    (define (nan? x)
+      (lisp Boolean (x)
+            (to-boolean (sb-mpfr:nan-p x)))))
+
+  (define-instance (Dividable Integer Big-Float)
+    (define (general/ a b)
+      (into (exact/ a b)))))
+
+(coalton-library/math/complex::%define-standard-complex-instances Big-Float)
+
+(coalton-toplevel
   ;; Trig
   (define-instance (Trigonometric Big-Float)
     (define (sin x)
@@ -272,22 +290,48 @@
 
   ;; Exp/Log
   (define-instance (Exponentiable Big-Float)
-    (define (expt x n)
+    (define (exp x)
+      (lisp Big-Float (x)
+        (cl:values (sb-mpfr:exp x))))
+    (define (pow x n)
       (lisp Big-Float (x n)
         (cl:values (sb-mpfr:power x n))))
     (define (log n x)
-      (lisp Big-Float (x n)
-        (cl:values (sb-mpfr:div (sb-mpfr:log x) (sb-mpfr:log n))))))
+      (cond
+        ((<= n 0) nan)
+        ((== n 2)
+         (lisp Big-Float (x)
+           (cl:values (sb-mpfr:log2 x))))
+        ((== n 10)
+         (lisp Big-Float (x)
+           (cl:values (sb-mpfr:log10 x))))
+        (True (/ (ln x) (ln n)))))
+    (define (ln x)
+      (lisp Big-Float (x)
+        (cl:values (sb-mpfr:log x)))))
 
-  (declare bf-sqrt (Big-Float -> Big-Float))
-  (define (bf-sqrt x)
-    (lisp Big-Float (x)
-      (cl:values (sb-mpfr:sqrt x))))
+  (define-instance (Radical Big-Float)
+    (define (sqrt x)
+      (lisp Big-Float (x)
+        (cl:values (sb-mpfr:sqrt x))))
+    (define (nth-root n x)
+      (coalton-library/math/elementary::canonical-nth-root n x)))
 
-  (specialize sqrt bf-sqrt (Big-Float -> Big-Float))
+  (define-instance (Polar Big-Float)
+    (define (phase z)
+      (let x = (real-part z))
+      (let y = (imag-part z))
+      (match (Tuple (<=> x 0) (<=> y 0))
+        ((Tuple (GT) _)    (atan (/ y x)))
+        ((Tuple (LT) (LT)) (- (atan (/ y x)) (bf-pi)))
+        ((Tuple (LT) _)    (+ (atan (/ y x)) (bf-pi)))
+        ((Tuple (EQ) (GT)) (/ (bf-pi) 2))
+        ((Tuple (EQ) (LT)) (/ (bf-pi) -2))
+        ((Tuple (EQ) (EQ)) 0)))
+    (define (polar z)
+      (Tuple (magnitude z) (phase z))))
 
-  ;; Float
-  ;;
+  ;; Elementary
   (define (bf-pi _)
     "Return the value of pi to the currently set precision."
     (lisp Big-Float ()
@@ -299,12 +343,10 @@
 
   ;; BUG: These are calculated just once, so if we change precision,
   ;; these will *NOT* get updated.
-  (define-instance (Float Big-Float)
+  (define-instance (Elementary Big-Float)
     (define pi (bf-pi))
     (define ee (bf-ee)))
 )                                       ; COALTON-TOPLEVEL
-
-(coalton-library/math/complex::%define-standard-complex-instances Big-Float)
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/BIG-FLOAT")
