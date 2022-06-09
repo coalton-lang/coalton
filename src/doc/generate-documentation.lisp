@@ -68,7 +68,7 @@
                                               coalton-library/builtin
                                               coalton-library/boolean
                                               coalton-library/bits
-                                              coalton-library/arith
+                                              coalton-library/math
                                               coalton-library/char
                                               coalton-library/string
                                               coalton-library/tuple
@@ -181,11 +181,10 @@
     ;; Sort the entires by package
     (fset:do-map (sym entry (immutable-map-data (coalton-impl/typechecker::environment-name-environment env)))
       ;; Only include exported symbols from our package
-      (when (and (equalp (symbol-package sym) package)
-                 (multiple-value-bind (symbol status)
-                     (find-symbol (symbol-name sym) package)
-                   (declare (ignore symbol))
-                   (eql :external status)))
+      (when (multiple-value-bind (symbol status)
+                (find-symbol (symbol-name sym) package)
+              (declare (ignore symbol))
+              (eql :external status))
         (push (cons sym entry) values)))
 
     (mapcar
@@ -210,11 +209,10 @@
     ;; Sort the entires by package
     (fset:do-map (sym entry (immutable-map-data (coalton-impl/typechecker::environment-type-environment env)))
       ;; Only include exported symbols from our packages
-      (when (and (equalp (symbol-package sym) package)
-                 (multiple-value-bind (symbol status)
-                     (find-symbol (symbol-name sym) package)
-                   (declare (ignore symbol))
-                   (eql :external status)))
+      (when (multiple-value-bind (symbol status)
+                (find-symbol (symbol-name sym) package)
+              (declare (ignore symbol))
+              (eql :external status))
         (push (cons sym entry) types)))
     (fset:do-map (sym entry (immutable-map-data (coalton-impl/typechecker::environment-constructor-environment env)))
       (when (equalp (symbol-package sym) package)
@@ -282,11 +280,11 @@
     ;; Sort the entires by package
     (fset:do-map (sym entry (immutable-map-data (coalton-impl/typechecker::environment-class-environment env)))
       ;; Only include exported symbols from our package
-      (when (and (equalp (symbol-package sym) package)
-                 (multiple-value-bind (symbol status)
-                     (find-symbol (symbol-name sym) package)
-                   (declare (ignore symbol))
-                   (eql :external status)))
+      (when 
+          (multiple-value-bind (symbol status)
+              (find-symbol (symbol-name sym) package)
+            (declare (ignore symbol))
+            (eql :external status))
         (push entry values)))
 
     (mapcar (lambda (e)
