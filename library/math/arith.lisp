@@ -17,8 +17,6 @@
    #:reciprocal
    #:Dividable
    #:general/
-   #:Quantization
-   #:Quantizable #:quantize
    #:integer->single-float
    #:integer->double-float
    #:single-float->integer
@@ -40,20 +38,7 @@
    #:log #:expt #:sqrt #:exp #:ln
    #:Float
    #:pi #:ee
-   #:RealFloat
    #:atan2
-   #:rationalize
-   #:floor
-   #:ceiling
-   #:round
-   #:save/
-   #:exact/
-   #:inexact/
-   #:floor/
-   #:ceiling/
-   #:round/
-   #:single/
-   #:double/
    #:1+
    #:1-
    #:positive?
@@ -107,38 +92,7 @@ The function general/ is partial, and will error produce a run-time error if the
     (general/ (:arg-type -> :arg-type -> :res-type)))
 
   (define-instance (Reciprocable :a => (Dividable :a :a))
-    (define (general/ a b) (/ a b)))
-
-  ;;
-  ;; Quantizable
-  ;;
-
-  (define-type (Quantization :a)
-    "Represents an integer quantization of `:a`. See the `Quantizable` typeclass.
-
-The fields are defined as follows:
-
-1. A value of type `:a`.
-
-2. The greatest integer less than or equal to a particular value.
-
-3. The remainder of this as a value of type `:a`.
-
-4. The least integer greater than or equal to a particular value.
-
-5. The remainder of this as a value of type `:a`.
-"
-    (Quantization :a Integer :a Integer :a))
-
-  (define-class ((Ord :a) (Num :a) => Quantizable :a)
-    "The representation of a type that allows \"quantizing\", \"snapping to integers\", or \"rounding.\" (All of these concepts are roughly equivalent.)
-"
-    ;; Given a X of type :A, (QUANTIZE X) will return the least
-    ;; integer greater or equal to X, and the greatest integer less
-    ;; than or equal to X, along with their respective remainders
-    ;; expressed as values of type :T.
-    (quantize (:a -> (Quantization :a)))))
-
+    (define (general/ a b) (/ a b))))
 
 (cl:declaim (cl:inline %unsigned->signed))
 (cl:defun %unsigned->signed (bits x)
@@ -586,11 +540,7 @@ The fields are defined as follows:
   (define (atanh x)
     (/ (- (ln (+ 1 x)) (ln (- 1 x))) (fromInt 2)))
 
-  (define-class ((Float :f) (Ord :f) => RealFloat :f)
-    "Finite, floating-point approximations of real numbers"
-    (rationalize (:f -> Fraction)))
-
-  (declare atan2 ((RealFloat :f) => :f -> :f -> :f))
+  (declare atan2 ((Ord :f) (Float :f) => :f -> :f -> :f))
   (define (atan2 y x)
     "Computes the two-argument arctangent of y and x, which is roughly the same as (atan (/ y x)) when defined and accounting for the quadrant of the point (x, y)."
     (match (Tuple (<=> x 0) (<=> y 0))
@@ -641,12 +591,7 @@ The fields are defined as follows:
 
        (define pi
          (lisp ,coalton-type ()
-           (cl:coerce cl:pi ',underlying-type))))
-
-     (define-instance (RealFloat ,coalton-type)
-       (define (rationalize x)
-         (lisp Fraction (x)
-           (cl:rationalize x))))))
+           (cl:coerce cl:pi ',underlying-type))))))
 
 (%define-real-float-instance Single-Float cl:single-float)
 (%define-real-float-instance Double-Float cl:double-float)
@@ -778,110 +723,6 @@ The fields are defined as follows:
 (define-sxhash-hasher UFix)
 (define-sxhash-hasher Single-Float)
 (define-sxhash-hasher Double-Float)
-
-
-;;; `Quantization'
-
-(coalton-toplevel
-  (define-instance (Quantizable Integer)
-    (define (quantize x)
-      (Quantization x x 0 x 0))))
-
-(cl:macrolet ((define-integer-quantizations (cl:&rest int-types)
-                `(coalton-toplevel
-                   ,@(cl:loop :for ty :in int-types :collect
-                        `(define-instance (Quantizable ,ty)
-                           (define (quantize x)
-                             (let ((n (into x)))
-                               (Quantization x n 0 n 0))))))))
-  (define-integer-quantizations I32 I64 U8 U32 U64))
-
-(coalton-toplevel
-  (define-instance (Quantizable Single-Float)
-    (define (quantize f)
-      (lisp (Quantization Single-Float) (f)
-        (uiop:nest
-         (cl:multiple-value-bind (fl-quo fl-rem) (cl:floor f))
-         (cl:multiple-value-bind (ce-quo ce-rem) (cl:ceiling f))
-         (Quantization f fl-quo fl-rem ce-quo ce-rem)))))
-
-  (define-instance (Quantizable Double-Float)
-    (define (quantize f)
-      (lisp (Quantization Double-Float) (f)
-        (uiop:nest
-         (cl:multiple-value-bind (fl-quo fl-rem) (cl:floor f))
-         (cl:multiple-value-bind (ce-quo ce-rem) (cl:ceiling f))
-         (Quantization f fl-quo fl-rem ce-quo ce-rem)))))
-
-  (define-instance (Quantizable Fraction)
-    (define (quantize q)
-      (let ((n (numerator q))
-            (d (denominator q)))
-        (lisp (Quantization Fraction) (n d)
-          ;; Not the most efficient... just relying on CL to do the
-          ;; work.
-          (cl:flet ((to-frac (f)
-                      (mkFraction (cl:numerator f) (cl:denominator f))))
-            (cl:let ((f (cl:/ n d)))
-              (uiop:nest
-               (cl:multiple-value-bind (fl-quo fl-rem) (cl:floor f))
-               (cl:multiple-value-bind (ce-quo ce-rem) (cl:ceiling f))
-               (Quantization f
-                             fl-quo (to-frac fl-rem)
-                             ce-quo (to-frac ce-rem)))))))))
-
-  (define (floor x)
-    "Return the greatest integer less than or equal to X."
-    (match (quantize x)
-      ((Quantization _ z _ _ _) z)))
-
-  (define (ceiling x)
-    "Return the least integer greater than or equal to X."
-    (match (quantize x)
-      ((Quantization _ _ _ z _) z)))
-
-  (define (round x)
-    "Return the nearest integer to X, with ties breaking toward positive infinity."
-    (match (quantize x)
-      ((Quantization _ a ar b br)
-       (match (<=> (abs ar) (abs br))
-         ((LT) a)
-         ((GT) b)
-         ((EQ) (max a b))))))
-
-  (declare safe/ ((Num :a) (Dividable :a :b) => (:a -> :a -> (Optional :b))))
-  (define (safe/ x y)
-    "Safely divide X by Y, returning None if Y is zero."
-    (if (== y 0)
-        None
-        (Some (general/ x y))))
-
-  (declare exact/ (Integer -> Integer -> Fraction))
-  (define (exact/ a b)
-    "Exactly divide two integers and produce a fraction."
-    (general/ a b))
-
-  (declare inexact/ (Integer -> Integer -> Double-Float))
-  (define (inexact/ a b)
-    "Compute the quotient of integers as a double-precision float.
-
-Note: This does *not* divide double-float arguments."
-    (general/ a b))
-
-  (declare floor/ (Integer -> Integer -> Integer))
-  (define (floor/ a b)
-    "Divide two integers and compute the floor of the quotient."
-    (floor (exact/ a b)))
-
-  (declare ceiling/ (Integer -> Integer -> Integer))
-  (define (ceiling/ a b)
-    "Divide two integers and compute the ceiling of the quotient."
-    (ceiling (exact/ a b)))
-
-  (declare round/ (Integer -> Integer -> Integer))
-  (define (round/ a b)
-    "Divide two integers and round the quotient."
-    (round (exact/ a b))))
 
 ;;; `Num' extensions
 (coalton-toplevel

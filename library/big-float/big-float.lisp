@@ -214,26 +214,22 @@
       (lisp Big-Float (a)
         (sb-mpfr:coerce a 'sb-mpfr:mpfr-float))))
 
-  ;; Quantization and division
-  (declare bf-floor (Big-Float -> (Tuple Integer Big-Float)))
-  (define (bf-floor f)
-    (lisp (Tuple Integer Big-Float) (f)
-      (cl:let ((x (sb-mpfr:floor f)))
-        (Tuple (sb-mpfr:coerce x 'cl:integer)
-               (sb-mpfr:sub x f)))))
-
-  (declare bf-ceiling (Big-Float -> (Tuple Integer Big-Float)))
-  (define (bf-ceiling f)
-    (lisp (Tuple Integer Big-Float) (f)
-      (cl:let ((x (sb-mpfr::ceil f)))   ; SBCL bug: not exported correctly
-        (Tuple (sb-mpfr:coerce x 'cl:integer)
-               (sb-mpfr:sub x f)))))
-
+  ;; quantization and division
   (define-instance (Quantizable Big-Float)
-    (define (quantize f)
-      (match (Tuple (bf-floor f) (bf-ceiling f))
-        ((Tuple (Tuple fl flr) (Tuple ce cer))
-         (Quantization f fl flr ce cer)))))
+    (define (floor f)
+      (lisp Integer (f)
+        (cl:let ((x (sb-mpfr:floor f)))
+          (sb-mpfr:coerce x 'cl:integer))))
+    (define (ceiling f)
+      (lisp Integer (f)
+        (cl:let ((x (sb-mpfr::ceil f)))   ; SBCL bug: not exported correctly
+          (sb-mpfr:coerce x 'cl:integer))))
+    (define (proper f)
+      (lisp (Tuple Integer Big-Float) (f)
+        (cl:let ((x (sb-mpfr:truncate f)))
+          (Tuple
+           (sb-mpfr:coerce x 'cl:integer)
+           (sb-mpfr:sub f x))))))
 
   (define-instance (Reciprocable Big-Float)
     (define (/ a b)
@@ -241,6 +237,17 @@
         (cl:values (sb-mpfr:div a b))))
     (define (reciprocal a)
       (/ 1 a)))
+
+  (define-instance (Real Big-Float)
+    (define (real-approx prec x)
+      (coalton-library/math/real::rational-approx prec x)))
+
+  (define-instance (Rational Big-Float)
+    (define (to-fraction x)
+      (lisp Fraction (x)
+        (mpfr->rational (sb-mpfr::mpfr-float-ref x))))
+    (define (best-approx x)
+      (real-approx (get-precision) x)))
 
   ;; Trig
   (define-instance (Trigonometric Big-Float)
@@ -295,11 +302,6 @@
   (define-instance (Float Big-Float)
     (define pi (bf-pi))
     (define ee (bf-ee)))
-
-  (define-instance (RealFloat Big-Float)
-    (define (rationalize x)
-      (lisp Fraction (x)
-        (mpfr->rational (sb-mpfr::mpfr-float-ref x)))))
 )                                       ; COALTON-TOPLEVEL
 
 (coalton-library/math/complex::%define-standard-complex-instances Big-Float)
