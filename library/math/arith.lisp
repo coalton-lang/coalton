@@ -17,10 +17,15 @@
    #:reciprocal
    #:Dividable
    #:general/
-   #:integer->single-float
-   #:integer->double-float
-   #:single-float->integer
-   #:double-float->integer
+   #:/
+   #:Transfinite
+   #:infinity
+   #:infinite?
+   #:finite?
+   #:negative-infinity
+   #:nan
+   #:nan?
+   #:integer->float
    #:negate
    #:abs
    #:sign
@@ -28,17 +33,6 @@
    #:mkFraction
    #:numerator
    #:denominator
-   #:Trigonometric
-   #:sin #:cos #:tan
-   #:sinh #:cosh #:tanh
-   #:asin #:acos #:atan
-   #:asinh #:acosh #:atanh
-   #:sincos
-   #:Exponentiable
-   #:log #:expt #:sqrt #:exp #:ln
-   #:Float
-   #:pi #:ee
-   #:atan2
    #:1+
    #:1-
    #:positive?
@@ -92,7 +86,19 @@ The function general/ is partial, and will error produce a run-time error if the
     (general/ (:arg-type -> :arg-type -> :res-type)))
 
   (define-instance (Reciprocable :a => (Dividable :a :a))
-    (define (general/ a b) (/ a b))))
+    (define (general/ a b) (/ a b)))
+
+  (define-class (Transfinite :a)
+    "Numberic type with a value for (positive) 'infinity' and/or 'NaN'"
+    (infinity :a)
+    (infinite? (:a -> Boolean))
+    (nan :a)
+    (nan? (:a -> Boolean)))
+
+  (declare finite? ((Transfinite :a) => :a -> Boolean))
+  (define (finite? x)
+    "Neither infinite or NaN."
+    (or (infinite? x) (nan? x))))
 
 (cl:declaim (cl:inline %unsigned->signed))
 (cl:defun %unsigned->signed (bits x)
@@ -313,42 +319,6 @@ The function general/ is partial, and will error produce a run-time error if the
 (%define-unsigned-num-instance UFix #.+unsigned-fixnum-bits+ Integer)
 
 (coalton-toplevel
-  (declare integer->single-float (Integer -> Single-Float))
-  (define (integer->single-float z)
-    (lisp Single-Float (z)
-      (cl:let ((x (cl:ignore-errors
-                   (cl:coerce z 'cl:single-float))))
-        (cl:if (cl:null x)
-               float-features:single-float-nan
-               x))))
-
-  (declare integer->double-float (Integer -> Double-Float))
-  (define (integer->double-float z)
-    (lisp Double-Float (z)
-      (cl:let ((x (cl:ignore-errors
-                   (cl:coerce z 'cl:double-float))))
-        (cl:if (cl:null x)
-               float-features:double-float-nan
-               x))))
-
-  (declare single-float->integer (Single-Float -> Optional Integer))
-  (define (single-float->integer x)
-    "Round a Single-Float to the nearest Integer."
-    (lisp (Optional Integer) (x)
-      (cl:if (cl:or (float-features:float-infinity-p x)
-                    (float-features:float-nan-p x))
-             None
-             (Some (cl:round x)))))
-
-  (declare double-float->integer (Double-Float -> Optional Integer))
-  (define (double-float->integer x)
-    "Round a Double-Float to the nearest Integer."
-    (lisp (Optional Integer) (x)
-      (cl:if (cl:or (float-features:float-infinity-p x)
-                    (float-features:float-nan-p x))
-             None
-             (Some (cl:round x)))))
-
   (define-instance (Num Integer)
     (define (+ a b)
       (lisp Integer (a b) (cl:+ a b)))
@@ -358,26 +328,6 @@ The function general/ is partial, and will error produce a run-time error if the
       (lisp Integer (a b) (cl:* a b)))
     (define (fromInt x)
       x))
-
-  (define-instance (Num Single-Float)
-    (define (+ a b)
-      (lisp Single-Float (a b) (cl:+ a b)))
-    (define (- a b)
-      (lisp Single-Float (a b) (cl:- a b)))
-    (define (* a b)
-      (lisp Single-Float (a b) (cl:* a b)))
-    (define (fromInt x)
-      (integer->single-float x)))
-
-  (define-instance (Num Double-Float)
-    (define (+ a b)
-      (lisp Double-Float (a b) (cl:+ a b)))
-    (define (- a b)
-      (lisp Double-Float (a b) (cl:- a b)))
-    (define (* a b)
-      (lisp Double-Float (a b) (cl:* a b)))
-    (define (fromInt x)
-      (integer->double-float x)))
 
   (declare negate (Num :a => :a -> :a))
   (define (negate x)
@@ -400,9 +350,12 @@ The function general/ is partial, and will error produce a run-time error if the
   (declare ash (Integer -> Integer -> Integer))
   (define (ash x n)
     "Compute the \"arithmetic shift\" of X by N. "
-    (lisp Integer (x n) (cl:ash x n))))
+    (lisp Integer (x n) (cl:ash x n)))
 
-(coalton-toplevel
+  (declare negative-infinity ((Transfinite :a) (Num :a) => :a))
+  (define negative-infinity
+    (negate infinity))
+
   ;; We avoid "Rational" or "Ratio" since those might be a more
   ;; generic concept than a humble fraction of integers. This
   ;; fraction is always assumed to be in reduced terms.
@@ -435,9 +388,8 @@ The function general/ is partial, and will error produce a run-time error if the
       (lisp Fraction (p q)
         (cl:* p q)))
     (define (fromInt z)
-      (lisp Fraction (z) z))))
+      (lisp Fraction (z) z)))
 
-(coalton-toplevel
   (define-instance (Reciprocable Fraction)
     (define (/ a b)
       (lisp Fraction (a b)
@@ -446,199 +398,104 @@ The function general/ is partial, and will error produce a run-time error if the
       (lisp Fraction (q)
         (cl:/ q))))
 
-  (define-instance (Reciprocable Single-Float)
-    (define (/ x y)
-      (lisp Single-Float (x y)
-        (cl:/ x y)))
-    (define (reciprocal x)
-      (lisp Single-Float (x)
-        (cl:/ x))))
-
-  (define-instance (Reciprocable Double-Float)
-    (define (/ x y)
-      (lisp Double-Float (x y)
-        (cl:/ x y)))
-    (define (reciprocal x)
-      (lisp Double-Float (x)
-        (cl:/ x))))
-
   (define-instance (Dividable Integer Fraction)
     (define (general/ x y)
-      (mkFraction x y)))
+      (mkFraction x y))))
 
-  (define-instance (Dividable Integer Single-Float)
-    (define (general/ x y)
-      (lisp Single-Float (x y)
-        (cl:coerce (cl:/ x y) 'cl:single-float))))
-
-  (define-instance (Dividable Integer Double-Float)
-    (define (general/ x y)
-      (lisp Double-Float (x y)
-        (cl:coerce (cl:/ x y) 'cl:double-float)))))
+(cl:defun %optional-coerce (z cl-type)
+  "Attempts to coerce Z to an Optional CL-TYPE, returns NONE if failed."
+  (cl:let ((x (cl:ignore-errors
+               (cl:coerce z cl-type))))
+    (cl:if (cl:null x)
+           None
+           (Some x))))
 
 (coalton-toplevel
-  (define-class (Trigonometric :a)
-    (sin   (:a -> :a))
-    (cos   (:a -> :a))
-    (tan   (:a -> :a))
-    (asin  (:a -> :a))
-    (acos  (:a -> :a))
-    (atan  (:a -> :a)))
+  (define-instance (Transfinite Single-Float)
+    (define infinity
+      (lisp Single-Float ()
+        float-features:single-float-positive-infinity))
+    (define nan
+      (lisp Single-Float ()
+        float-features:single-float-nan))
+    (define (nan? x)
+      (Lisp Boolean (x)
+        (float-features:float-NaN-p x)))
+    (define (infinite? x)
+      (Lisp Boolean (x)
+        (float-features:float-infinity-p x))))
 
-  (declare sincos (Trigonometric :a => :a -> (Tuple :a :a)))
-  (define (sincos x)
-    (Tuple (sin x) (cos x)))
+  (define-instance (Transfinite Double-Float)
+    (define infinity
+      (lisp Double-Float ()
+        float-features:double-float-positive-infinity))
+    (define nan
+      (lisp Double-Float ()
+        float-features:double-float-nan))
+    (define (nan? x)
+      (Lisp Boolean (x)
+        (float-features:float-NaN-p x)))
+    (define (infinite? x)
+      (Lisp Boolean (x)
+        (float-features:float-infinity-p x)))))
 
-  (define-class (Exponentiable :a)
-    (expt (:a -> :a -> :a))
-    (log  (:a -> :a -> :a)))
-
-  (declare sqrt ((Into Fraction :a) (Exponentiable :a) => :a -> :a))
-  (define (sqrt x)
-    "Returns the square root of the input"
-    (expt x (into 1/2)))
-
-  (define-class ((Into Fraction :a) (Reciprocable :a) (Trigonometric :a) (Exponentiable :a)
-                 => Float :a)
-    "A finite, floating-point approximation of a real or imaginary number"
-    (ee :a)
-    (pi :a))
-
-  (declare exp ((Float :f) => :f -> :f))
-  (define exp
-    "Raise ee to the power of X"
-    (expt ee))
-
-  (declare ln ((Float :f) => :f -> :f))
-  (define ln
-    "The natural logarithm of a given value"
-    (log ee))
-
-  ;; See http://clhs.lisp.se/Body/f_sinh_.htm
-
-  (declare sinh ((Float :f) => :f -> :f))
-  (define (sinh x)
-    (/ (- (exp x) (exp (negate x))) 2))
-
-  (declare cosh ((Float :f) => :f -> :f))
-  (define (cosh x)
-    (/ (+ (exp x) (exp (negate x))) 2))
-
-  (declare tanh ((Float :f) => :f -> :f))
-  (define (tanh x)
-    (/ (sinh x) (cosh x)))
-
-  (declare asinh ((Float :f) => :f -> :f))
-  (define (asinh x)
-    (ln (+ x (sqrt (+ 1 (expt x 2))))))
-
-  (declare acosh ((Float :f) => :f -> :f))
-  (define (acosh x)
-    (* 2 (ln (+ (sqrt (/ (+ x 1) 2)) (sqrt (/ (- x 1) 2))))))
-
-  (declare atanh ((Float :f) => :f -> :f))
-  (define (atanh x)
-    (/ (- (ln (+ 1 x)) (ln (- 1 x))) (fromInt 2)))
-
-  (declare atan2 ((Ord :f) (Float :f) => :f -> :f -> :f))
-  (define (atan2 y x)
-    "Computes the two-argument arctangent of y and x, which is roughly the same as (atan (/ y x)) when defined and accounting for the quadrant of the point (x, y)."
-    (match (Tuple (<=> x 0) (<=> y 0))
-      ((Tuple (GT) _)    (atan (/ y x)))
-      ((Tuple (LT) (LT)) (- (atan (/ y x)) pi))
-      ((Tuple (LT) _)    (+ (atan (/ y x)) pi))
-      ((Tuple (EQ) (GT)) (/ pi (fromint 2)))
-      ((Tuple (EQ) (LT)) (/ pi (fromint -2)))
-      ((Tuple (EQ) (EQ)) 0))))
-
-
-(cl:defmacro %define-real-float-instance (coalton-type underlying-type)
-  "Defines the float instances for a lisp floating-point type"
+(cl:defmacro %define-real-float-arith (coalton-type underlying-type)
+  "Defines the arithmetic instances for a lisp floating-point type"
   `(coalton-toplevel
-     (define-instance (Trigonometric ,coalton-type)
-       ,(generate-unary-wrapper coalton-type 'sin  'cl:sin)
-       ,(generate-unary-wrapper coalton-type 'cos  'cl:cos)
-       ,(generate-unary-wrapper coalton-type 'tan  'cl:tan)
-       ,(generate-unary-wrapper coalton-type 'asin 'cl:asin :domain '(cl:lambda (x) (cl:<= -1 x 1)))
-       ,(generate-unary-wrapper coalton-type 'acos 'cl:acos :domain '(cl:lambda (x) (cl:<= -1 x 1)))
-       ,(generate-unary-wrapper coalton-type 'atan 'cl:atan))
-
-     (define-instance (Exponentiable ,coalton-type)
-       (define (expt base power)
-         (lisp ,coalton-type (base power)
-           (cl:when (cl:minusp base)
-             (cl:error "Cannot exponentiate with a negative base ~a" base))
-           (cl:unless (cl:or (cl:plusp base) (cl:plusp power))
-             (cl:error "Either the base (~a) or the power (~a) must be positive" base power))
-           (cl:expt base power)))
-       (define (log base number)
-         (lisp ,coalton-type (base number)
-           (cl:when (cl:minusp base)
-             (cl:error "Cannot take a logarithm with the non-positive real base ~a" base))
-           (cl:when (cl:minusp number)
-             (cl:error "Cannot take the logarithm of the non-positive real number ~a" number))
-           (cl:log number base))))
+     (define-instance (Num ,coalton-type)
+       (define (+ a b)
+         (lisp ,coalton-type (a b)
+           (float-features:with-float-traps-masked cl:t
+             (cl:+ a b))))
+       (define (- a b)
+         (lisp ,coalton-type (a b)
+           (float-features:with-float-traps-masked cl:t
+             (cl:- a b))))
+       (define (* a b)
+         (lisp ,coalton-type (a b)
+           (float-features:with-float-traps-masked cl:t
+             (cl:* a b))))
+       (define (fromInt x)
+         (match (lisp (Optional ,coalton-type) (x)
+                  (%optional-coerce x ,underlying-type))
+           ((Some x) x)
+           ((None) (if (< 0 x)
+                       negative-infinity
+                       infinity)))))
 
      (define-instance (Into Fraction ,coalton-type)
        (define (into x)
+         (general/ (numerator x)
+                   (denominator x))))
+
+     (define-instance (Reciprocable ,coalton-type)
+       (define (/ x y)
+         (lisp ,coalton-type (x y)
+           (float-features:with-float-traps-masked cl:t
+             (cl:/ x y))))
+       (define (reciprocal x)
          (lisp ,coalton-type (x)
-           (cl:coerce x ',underlying-type))))
-     
-     (define-instance (Float ,coalton-type)
-       (define ee
-         (lisp ,coalton-type ()
-           (cl:exp (cl:coerce 1 ',underlying-type))))
+           (float-features:with-float-traps-masked cl:t
+             (cl:/ x)))))
 
-       (define pi
-         (lisp ,coalton-type ()
-           (cl:coerce cl:pi ',underlying-type))))))
+     (define-instance (Dividable Integer ,coalton-type)
+       (define (general/ x y)
+         (match (lisp (Optional ,coalton-type) (x y)
+                  (%to-optional-float (cl:/ x y) ,underlying-type))
+           ((Some x) x)
+           ((None) (cond
+                     ((> (* x y) 0) infinity)
+                     ((==  y 0) nan)
+                     (True negative-infinity))))))
 
-(%define-real-float-instance Single-Float cl:single-float)
-(%define-real-float-instance Double-Float cl:double-float)
+     (define-instance (TryInto ,coalton-type Fraction)
+       (define (tryInto x)
+         (if (finite? x)
+             (Ok (lisp Fraction (x) (cl:rational x)))
+             (Err "Could not convert NaN or infinity into a Fraction"))))))
 
-(cl:defmacro %define-integer-expt-instance (coalton-type)
-  `(coalton-toplevel
-     (define-instance (Exponentiable ,coalton-type)
-       (define (expt base power)
-         (lisp ,coalton-type (base power)
-           (cl:when (cl:minusp power)
-             (cl:error "Cannot exponentiate to the power of the negative integer ~a" power))
-           (cl:expt base power)))
-       (define (log b x)
-         ;; The floor of the logarithm with base B > 1 of X >= 1.
-         ;; See GHC's wordLogBase#
-         (let ((quot 
-                  (fn (n m)
-                    (lisp ,coalton-type (n m)
-                      (cl:values (cl:truncate n m)))))
-
-               (ilog-rec 
-                 (fn (y)
-                   (if (< x y)
-                       (the (Tuple :a :a) (Tuple x 0))
-                       (match (ilog-rec (* y y))
-                         ((Tuple a b)
-                          (if (< a y)
-                              (Tuple a (* 2 b))
-                              (Tuple (quot a y) (+ (* 2 b) 1)))))))))
-         (cond
-           ((== x 1) 0)
-           ((< x 1)  (error "Power of ILOG must be greater than or equal to 1."))
-           ((<= b 1) (error "Base of ILOG must be greater than 1."))
-           ((== b 2) (- (lisp ,coalton-type (x) (cl:integer-length x)) 1))
-           (True     (match (ilog-rec b) ((Tuple _ b) b)))))))))
-
-(%define-integer-expt-instance Integer)
-(%define-integer-expt-instance U8) 
-(%define-integer-expt-instance I8) 
-(%define-integer-expt-instance U16) 
-(%define-integer-expt-instance I16) 
-(%define-integer-expt-instance U32) 
-(%define-integer-expt-instance I32) 
-(%define-integer-expt-instance U64) 
-(%define-integer-expt-instance I64) 
-(%define-integer-expt-instance Ifix) 
-(%define-integer-expt-instance Ufix) 
+(%define-real-float-arith Single-Float 'cl:single-float)
+(%define-real-float-arith Double-Float 'cl:double-float)
 
 ;;;; `Bits' instances
 ;;; signed

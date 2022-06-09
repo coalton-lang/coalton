@@ -7,7 +7,8 @@
    #:coalton-library/math/arith
    #:coalton-library/math/integral
    #:coalton-library/math/real
-   #:coalton-library/math/complex))
+   #:coalton-library/math/complex
+   #:coalton-library/math/elementary))
 
 (uiop:define-package #:coalton-prelude
   (:use-reexport
@@ -21,7 +22,6 @@
    #:Fraction
    #:negate
    #:abs
-   #:expt
    #:1+
    #:1-)
   (:export
@@ -29,7 +29,6 @@
    #:Fraction
    #:negate
    #:abs
-   #:expt
    #:1+
    #:1-)
 

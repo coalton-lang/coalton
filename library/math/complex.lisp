@@ -201,35 +201,5 @@
          (match a
            ((%Complex _ b) b))))))
 
-(cl:macrolet
-    ((%define-builtin-complex-float-instances (coalton-type)
-       (cl:let ((complex-type `(Complex ,coalton-type)))
-         `(coalton-toplevel
-            (define-instance (Exponentiable ,complex-type)
-              (define (expt base power)
-                (lisp ,complex-type (base power)
-                  (cl:expt base power)))
-              (define (log base number)
-                (lisp ,complex-type (base number)
-                  (cl:log number base))))
-            (define-instance (Trigonometric ,complex-type)
-              ,(generate-unary-wrapper complex-type 'sin  'cl:sin)
-              ,(generate-unary-wrapper complex-type 'cos  'cl:cos)
-              ,(generate-unary-wrapper complex-type 'tan  'cl:tan)
-              ,(generate-unary-wrapper complex-type 'asin 'cl:asin)
-              ,(generate-unary-wrapper complex-type 'acos 'cl:acos)
-              ,(generate-unary-wrapper complex-type 'atan 'cl:atan))
-
-            (define-instance (Into Fraction ,complex-type)
-              (define (into x)
-                (into (the ,coalton-type (into x)))))
-
-            (define-instance (Float ,complex-type)
-              (define ee (into (the ,coalton-type ee)))
-              (define pi (into (the ,coalton-type pi))))))))
-
-  (%define-builtin-complex-float-instances Single-Float)
-  (%define-builtin-complex-float-instances Double-Float))
-
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/MATH/COMPLEX")
