@@ -3,6 +3,9 @@
 (defvar *include-type-error-context* t
   "Whether to rethrow type errors with their enclosing context. This can be disabled for easier debugging of the compiler.")
 
+(defvar *type-error-context-depth* 5
+  "The number of contexts that should be nested by in an error context")
+
 (define-condition coalton-type-error (error)
   ()
   (:documentation "A type error from Coalton code."))
@@ -30,10 +33,13 @@
 (defmacro with-type-context ((context &rest args) &body body)
   `(handler-bind ((coalton-type-error
                     #'(lambda (c)
-                        (error 'coalton-type-error-context
-                               :context-form ,context
-                               :context-args (list ,@args)
-                               :suberror c))))
+                        (if (and (plusp *type-error-context-depth*) *include-type-error-context*)
+                            (let ((*type-error-context-depth* (1- *type-error-context-depth*)))
+                              (error 'coalton-type-error-context
+                                      :context-form ,context
+                                      :context-args (list ,@args)
+                                      :suberror c))
+                            (error c)))))
        (progn ,@body)))
 
 (define-condition unknown-binding-error (coalton-type-error)
