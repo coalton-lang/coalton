@@ -52,24 +52,22 @@
 
 (defmethod write-documentation ((backend (eql ':markdown)) stream (object documentation-package-entries))
   (with-slots (packages asdf-system documentation-by-package) object
-    (dolist (package packages)
-      (let ((docs-for-package (gethash package documentation-by-package)))
-        (when docs-for-package
-          (write-documentation backend stream
-                               docs-for-package))))))
+    (maphash
+     (lambda (key docs-for-package)
+       (declare (ignore key))
+       (write-documentation backend stream docs-for-package))
+     documentation-by-package)))
 
 (defmethod write-documentation ((backend (eql ':markdown)) stream (object documentation-package-entry))
   (let* ((file-entries (documentation-package-entry-documentation-entries-by-file object))
-         (valid-files (documentation-package-entry-valid-files object))
          (package (documentation-package-entry-package object)))
     (format stream "# Package `~(~A~)`<a name=\"~:*~(~A-package~)\"></a>~%~%" package)
 
-    ;; NOTE: We are including the empty filename here to allow for
-    ;;       symbols without file information to be included.
-    (dolist (pathname (append '("") valid-files))
-      (let ((file-entry (gethash pathname file-entries)))
-        (when file-entry
-          (write-documentation :markdown stream file-entry))))))
+    (maphash
+     (lambda (key file-entry)
+       (declare (ignore key))
+       (write-documentation :markdown stream file-entry))
+     file-entries)))
 
 (defmethod write-documentation ((backend (eql ':markdown)) stream (object documentation-file-entry))
   (with-slots (filename package value-entries type-entries class-entries link-prefix)
