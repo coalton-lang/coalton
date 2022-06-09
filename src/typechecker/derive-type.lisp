@@ -18,6 +18,11 @@
   (:documentation "Derive the TYPE and generate a TYPED-NODE for expression VALUE
 
 Returns (VALUES type predicate-list typed-node subs)")
+  (:method :around ((value node) env substs)
+    (when (next-method-p)
+      (with-type-context ("~A" (node-unparsed value))
+        (call-next-method))))
+
   (:method ((value node-literal) env substs)
     (declare (type substitution-list substs)
              (values ty ty-predicate-list typed-node substitution-list ty-list &optional))
@@ -99,7 +104,9 @@ Returns (VALUES type predicate-list typed-node subs)")
                            (make-function-type arg-ty (build-function (cdr args)))))))
             (let* ((ftype (build-function rands))
                    (preds (append fun-preds arg-preds))
-                   (substs (unify substs ftype fun-ty)))
+                   (substs (unify substs ftype fun-ty 
+                                  (format nil "function implied by the operand~P" (length rands))
+                                  "function type implied by the operator")))
               (values ret-ty
                       preds
                       (typed-node-application
@@ -134,7 +141,7 @@ Returns (VALUES type predicate-list typed-node subs)")
             ;; Unify the functions return type against early return
             ;; statements
             (loop :for return :in returns
-                  :do (setf substs (unify substs ret-ty return)))
+                  :do (setf substs (unify substs ret-ty return "function return type" "early return statement")))
 
             (values out-ty
                     ret-preds
@@ -662,8 +669,8 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                                  :key #'type-variables)) ; vss
              (local-tvars (set-difference expr-tvars
                                           env-tvars
-                                          :test #'equalp)) ; gs
-             )
+                                          :test #'equalp))) ; gs
+             
 
         (multiple-value-bind (deferred-preds retained-preds defaultable-preds)
             (split-context env env-tvars local-tvars expr-preds local-subs)
@@ -857,7 +864,10 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
     (with-type-context ("definition of ~A" name)
       (multiple-value-bind (new-type preds typed-node new-subs returns)
           (derive-expression-type expr env subs)
-        (values typed-node preds (unify new-subs type new-type) returns)))))
+        (values typed-node
+                preds
+                (unify new-subs type new-type "type of binding" "type of variable")
+                returns)))))
 
 
 ;;;
@@ -1021,5 +1031,5 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
             (setf typed-branches (append typed-branches (list typed-branch)))
             (setf returns (append new-returns returns))))))
     (dolist (typ types)
-      (setf subs (unify subs t_ typ)))
+      (setf subs (unify subs t_ typ "match expression" "branch")))
     (values typed-branches preds subs returns)))
