@@ -6,6 +6,7 @@
   (:use-reexport
    #:coalton-library/math/arith
    #:coalton-library/math/integral
+   #:coalton-library/math/real
    #:coalton-library/math/complex))
 
 (uiop:define-package #:coalton-prelude
@@ -21,9 +22,6 @@
    #:negate
    #:abs
    #:expt
-   #:floor
-   #:ceiling
-   #:round
    #:1+
    #:1-)
   (:export
@@ -32,11 +30,22 @@
    #:negate
    #:abs
    #:expt
+   #:1+
+   #:1-)
+
+  (:import-from
+   #:coalton-library/math/real
    #:floor
    #:ceiling
    #:round
-   #:1+
-   #:1-)
+   #:Real
+   #:Rational)
+  (:export
+   #:floor
+   #:ceiling
+   #:round
+   #:Real
+   #:Rational)
 
   (:import-from
    #:coalton-library/math/complex

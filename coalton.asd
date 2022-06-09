@@ -123,6 +123,7 @@
                 :serial t
                 :components ((:file "arith")
                              (:file "integral")
+                             (:file "real")
                              (:file "complex")))
                (:file "char")
                (:file "string")
