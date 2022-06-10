@@ -97,7 +97,7 @@
 
   (declare decrement! (Num :counter => (Cell :counter) -> :counter))
   (define (decrement! cel)
-    "Add one to the contents of CEL, storing and returning the new value"
+    "Subtract one from the contents of CEL, storing and returning the new value"
     (update! (- 1) cel))
 
   ;; i am very skeptical of these instances
