@@ -146,13 +146,13 @@ in FORMS that begin with that operator."
   "Returns the lisp code generated from coalton code. Intended for debugging."
   `(let ((*emit-type-annotations* nil)
          (*coalton-skip-update* t))
-     (process-coalton-toplevel ',toplevel-forms *package* *global-environment*)))
+     (values (process-coalton-toplevel ',toplevel-forms *package* *global-environment*))))
 
 (defmacro coalton:coalton-codegen-types (&body toplevel-forms)
   "Returns the lisp code generated from coalton code with lisp type annotations. Intended for debugging."
   `(let ((*emit-type-annotations* t)
          (*coalton-skip-update* t))
-     (process-coalton-toplevel ',toplevel-forms *package* *global-environment*)))
+     (values (process-coalton-toplevel ',toplevel-forms *package* *global-environment*))))
 
 (defmacro coalton:coalton-codegen-ast (&body toplevel-forms)
   "Prints the AST of the typechecked coalton code. Intended for debugging."
