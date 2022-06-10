@@ -26,10 +26,6 @@
    #:coalton-impl/codegen/codegen-type-definition
    #:codegen-type-definition)
   (:import-from
-   #:coalton-impl/codegen/function-entry
-   #:construct-function-entry
-   #:apply-function-entry)
-  (:import-from
    #:coalton-impl/codegen/optimizer
    #:optimize-bindings)
   (:local-nicknames
