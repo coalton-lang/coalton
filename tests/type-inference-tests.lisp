@@ -448,13 +448,13 @@
        a))
    `((f . (String -> String))))
 
-  (signals coalton-impl/typechecker::coalton-type-error-context
+  (signals coalton-impl/typechecker::coalton-type-error
     (run-coalton-typechecker
      '((coalton:define (f a)
          (coalton:return "hello")
          Unit))))
 
-  (signals coalton-impl/typechecker::coalton-type-error-context
+  (signals coalton-impl/typechecker::coalton-type-error
     (run-coalton-typechecker
      '((coalton:define x (coalton:return "hello"))))))
 
