@@ -3,38 +3,22 @@
 (defvar *include-type-error-context* t
   "Whether to rethrow type errors with their enclosing context. This can be disabled for easier debugging of the compiler.")
 
+(defvar *type-error-context-stack* '()
+  "The stack of context frames for the current type operation")
+
 (define-condition coalton-type-error (error)
   ()
   (:documentation "A type error from Coalton code."))
 
-(define-condition coalton-type-error-context (coalton-type-error)
-  ((context-form :initarg :context-form
-                 :reader coalton-type-error-context-form
-                 :type string)
-   (context-args :initarg :context-args
-                 :reader coalton-type-error-context-args
-                 :type list)
-   (suberror :initarg :suberror
-             :reader coalton-type-error-suberror
-             :type coalton-type-error))
-  (:documentation "A coalton type error with additional context")
-  (:report
-   (lambda (c s)
-     (let ((*print-circle* nil))
-       (format s "~A~%in ~A"
-               (coalton-type-error-suberror c)
-               (apply #'format nil
-                      (coalton-type-error-context-form c)
-                      (coalton-type-error-context-args c)))))))
+(defmethod print-object :after ((er coalton-type-error) stream)
+  (dolist (ctx *type-error-context-stack*)
+    (format stream "~%In ~A" ctx)))
 
 (defmacro with-type-context ((context &rest args) &body body)
-  `(handler-bind ((coalton-type-error
-                    #'(lambda (c)
-                        (error 'coalton-type-error-context
-                               :context-form ,context
-                               :context-args (list ,@args)
-                               :suberror c))))
-       (progn ,@body)))
+  `(let ((*type-error-context-stack* (if *include-type-error-context*
+                                         (cons (format nil ,context ,@args) *type-error-context-stack*)
+                                         *type-error-context-stack*)))
+     (progn ,@body)))
 
 (define-condition unknown-binding-error (coalton-type-error)
   ((symbol :initarg :symbol

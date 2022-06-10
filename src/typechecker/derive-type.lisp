@@ -216,7 +216,7 @@ Returns (VALUES type predicate-list typed-node subs)")
     (let ((tvar (make-variable)))
       (multiple-value-bind (ty preds typed-expr new-subs returns)
           (derive-expression-type (node-match-expr value) env subs)
-        (with-type-context ("match on ~A" (node-unparsed (node-match-expr value)))
+        (with-type-context ("match on ~W" (node-unparsed (node-match-expr value)))
           (multiple-value-bind (typed-branches match-preds new-subs new-returns)
               (derive-match-branches-type
                (make-function-type ty tvar)
