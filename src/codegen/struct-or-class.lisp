@@ -47,7 +47,7 @@
                       (:predicate nil))
             ,@(loop :for field :in fields
                     :for name := (struct-or-class-field-name field)
-                    :collect `(,name (error "") :read-only t)))))
+                    :collect `(,name (error ""))))))
 
        (:class
         (list 

@@ -254,16 +254,68 @@
                (weak-context-error-name c)
                (weak-context-error-preds c))))))
 
-(define-condition self-recursive-variable-definition (coalton-type-error)
-    ((name :initarg :name
-           :reader self-recursive-variable-definition-name))
-  (:report
-   (lambda (c s)
-     (let ((*print-circle* nil) ; Prevent printing using reader macros
-           )
-       (format s "Variable ~A cannot be defined recursively."
-               (self-recursive-variable-definition-name c))))))
+(define-condition recursive-binding-error (coalton-type-error) ())
 
+(define-condition self-recursive-variable-definition (recursive-binding-error)
+    ((name :initarg :name
+           :reader self-recursive-variable-definition-name)))
+
+(defparameter *self-recursive-binding-requirements-message*
+  "Recursive data bindings may only be fully-applied direct applications of constructors for default-repr types, or `Cons'.")
+
+(define-condition self-recursive-non-constructor-call (self-recursive-variable-definition)
+  ((function :initarg :function
+             :reader self-recursive-non-constructor-call-function))
+  (:report (lambda (c s)
+             (format s "Cannot recursively bind ~S to non-constructor function ~S.
+
+~A"
+                     (self-recursive-variable-definition-name c)
+                     (self-recursive-non-constructor-call-function c)
+                     *self-recursive-binding-requirements-message*))))
+
+(define-condition self-recursive-partial-application (self-recursive-variable-definition)
+  ((function :initarg :function
+             :reader self-recursive-partial-application-function)
+   (required-arg-count :initarg :required-arg-count
+                       :reader self-recursive-partial-application-required-arg-count)
+   (supplied-args :initarg :supplied-args
+                  :reader self-recursive-partial-application-supplied-args))
+  (:report (lambda (c s)
+             (format s "Cannot recursively bind ~S to partial application of constructor ~S.
+
+Wanted ~D arguments, but found only ~D: ~S.
+
+~A"
+                     (self-recursive-variable-definition-name c)
+                     (self-recursive-partial-application-function c)
+                     (self-recursive-partial-application-required-arg-count c)
+                     (length (self-recursive-partial-application-supplied-args c))
+                     (self-recursive-partial-application-supplied-args c)
+                     *self-recursive-binding-requirements-message*))))
+
+(define-condition self-recursive-non-default-repr (self-recursive-variable-definition)
+  ((function :initarg :function
+             :reader self-recursive-non-default-repr-function)
+   (type :initarg :type
+         :reader self-recursive-non-default-repr-type))
+  (:report (lambda (c s)
+             (format s "Cannot recursively bind ~S to application of constructor ~S for non-default-repr type ~S.
+
+~A"
+                     (self-recursive-variable-definition-name c)
+                     (self-recursive-non-default-repr-function c)
+                     (self-recursive-non-default-repr-type c)
+                     *self-recursive-binding-requirements-message*))))
+
+(define-condition mutually-recursive-function-and-data (coalton-type-error)
+  ((names :initarg :names
+          :reader mutually-recursive-function-and-data-names))
+  (:report (lambda (c s)
+             (format s "Cannot bind mutually recursive mixture of functions and data to names ~S.
+
+Mutually recursive bindings must be either all functions or all constructor applications, never a mixture."
+                     (mutually-recursive-function-and-data-names c)))))
 
 (define-condition declared-type-missing-predicates (coalton-type-error)
   ((preds :initarg :preds

@@ -17,120 +17,123 @@
   (:local-nicknames
    (#:tc #:coalton-impl/typechecker))
   (:export
-   #:codegen-type-definition))
+   #:codegen-type-definition
+   #:constructor-slot-name))
 
 (in-package #:coalton-impl/codegen/codegen-type-definition)
 
+(defun constructor-slot-name (constructor-entry i)
+  (alexandria:format-symbol (symbol-package (tc:constructor-entry-classname constructor-entry))
+                            "_~D" i))
+
 (defun codegen-type-definition (def env)
-  (let ((package (symbol-package (tc:type-definition-name def))))
+  (append
+   (cond
+     ((tc:type-definition-enum-repr def)
+      (loop :for constructor :in (tc:type-definition-constructors def)
+            :append
+            (list `(coalton-impl:define-global-lexical
+                       ,(tc:constructor-entry-name constructor)
+                       ',(tc:constructor-entry-compressed-repr constructor))
+                  `(deftype ,(tc:constructor-entry-classname constructor) ()
+                     (quote (member ,(tc:constructor-entry-compressed-repr constructor)))))))
 
-    (append
-     (cond
-       ((tc:type-definition-enum-repr def)
-        (loop :for constructor :in (tc:type-definition-constructors def)
-              :append
-              (list `(coalton-impl:define-global-lexical
-                         ,(tc:constructor-entry-name constructor)
-                         ',(tc:constructor-entry-compressed-repr constructor))
-                    `(deftype ,(tc:constructor-entry-classname constructor) ()
-                       (quote (member ,(tc:constructor-entry-compressed-repr constructor)))))))
+     ((tc:type-definition-newtype def)
+      (let ((constructor (first (tc:type-definition-constructors def))))
+        (list `(declaim (inline ,(tc:constructor-entry-name constructor)))
+              `(defun ,(tc:constructor-entry-name constructor) (x) x)
+              `(coalton-impl:define-global-lexical
+                   ,(tc:constructor-entry-name constructor)
+                   (F1 #',(tc:constructor-entry-name constructor))))))
 
-       ((tc:type-definition-newtype def)
-        (let ((constructor (first (tc:type-definition-constructors def))))
-          (list `(declaim (inline ,(tc:constructor-entry-name constructor)))
-                `(defun ,(tc:constructor-entry-name constructor) (x) x)
-                `(coalton-impl:define-global-lexical
-                     ,(tc:constructor-entry-name constructor)
-                     (F1 #',(tc:constructor-entry-name constructor))))))
+     (t
+      `(,(if (coalton-impl:coalton-release-p)
+             `(defstruct (,(tc:type-definition-name def)
+                          (:constructor nil)
+                          (:predicate nil))
+                ,@(when (tc:type-definition-docstring def)
+                    (list (tc:type-definition-docstring def))))
 
-       (t
-        `(,(if (coalton-impl:coalton-release-p)
-               `(defstruct (,(tc:type-definition-name def)
-                            (:constructor nil)
-                            (:predicate nil))
-                  ,@(when (tc:type-definition-docstring def)
-                      (list (tc:type-definition-docstring def))))
+             `(defclass ,(tc:type-definition-name def) ()
+                ()
+                ,@(when (tc:type-definition-docstring def)
+                    `((:documentation ,(tc:type-definition-docstring def))))))
 
-               `(defclass ,(tc:type-definition-name def) ()
-                  ()
-                  ,@(when (tc:type-definition-docstring def)
-                      `((:documentation ,(tc:type-definition-docstring def))))))
+        (defmethod make-load-form ((obj ,(tc:type-definition-name def)) &optional env)
+          (make-load-form-saving-slots obj :environment env))
 
-          (defmethod make-load-form ((obj ,(tc:type-definition-name def)) &optional env)
-            (make-load-form-saving-slots obj :environment env))
+        ,@(loop
+            :for constructor :in (tc:type-definition-constructors def)
+            :for classname := (tc:constructor-entry-classname constructor)
+            :for superclass := (tc:type-definition-name def)
+            :for constructor-name :=  (tc:constructor-entry-name constructor)
+            :for fields
+              := (loop :for field :in (tc:constructor-arguments constructor-name env)
+                       :for runtime-type := (lisp-type field env)
+                       :for i :from 0
+                       :for name := (constructor-slot-name constructor i)
+                       :collect (make-struct-or-class-field
+                                 :name name
+                                 :type runtime-type))
 
-          ,@(loop
-              :for constructor :in (tc:type-definition-constructors def)
-              :for classname := (tc:constructor-entry-classname constructor)
-              :for superclass := (tc:type-definition-name def)
-              :for constructor-name :=  (tc:constructor-entry-name constructor)
-              :for fields
-                := (loop :for field :in (tc:constructor-arguments constructor-name env)
-                         :for runtime-type := (lisp-type field env)
-                         :for i :from 0
-                         :for name := (alexandria:format-symbol package "_~D" i)
-                         :collect (make-struct-or-class-field
-                                   :name name
-                                   :type runtime-type))
+            :for field-names := (mapcar #'struct-or-class-field-name fields)
 
-              :for field-names := (mapcar #'struct-or-class-field-name fields)
+            ;; Declare the constructor as inline in release mode
+            :append
+            (when (coalton-impl:coalton-release-p)
+              (list `(declaim (inline ,constructor-name))))
 
-              ;; Declare the constructor as inline in release mode
-              :append
-              (when (coalton-impl:coalton-release-p)
-                (list `(declaim (inline ,constructor-name))))
+            :append (struct-or-class
+                     :classname classname
+                     :constructor constructor-name
+                     :superclass superclass
+                     :fields fields
+                     :mode (if (coalton-impl:coalton-release-p)
+                               :struct
+                               :class))
 
-              :append (struct-or-class
-                       :classname classname
-                       :constructor constructor-name
-                       :superclass superclass
-                       :fields fields
-                       :mode (if (coalton-impl:coalton-release-p)
-                                 :struct
-                                 :class))
+            :collect (cond
+                       ((zerop (tc:constructor-entry-arity constructor))
+                        `(defmethod print-object ((self ,classname) stream)
+                           (declare (type stream stream)
+                                    (type ,classname self)
+                                    (values ,classname))
+                           (format stream "#.~s" ',(tc:constructor-entry-name constructor))
+                           self))
+                       (t
+                        `(defmethod print-object ((self ,classname) stream)
+                           (declare (type stream stream)
+                                    (type ,classname self)
+                                    (values ,classname))
+                           (format stream "#.(~s~{ ~s~})"
+                                   ',(tc:constructor-entry-name constructor)
+                                   (list ,@(mapcar (lambda (slot) `(slot-value self ',slot)) field-names)))
+                           self)))
 
-              :collect (cond
-                         ((zerop (tc:constructor-entry-arity constructor))
-                          `(defmethod print-object ((self ,classname) stream)
-                             (declare (type stream stream)
-                                      (type ,classname self)
-                                      (values ,classname))
-                             (format stream "#.~s" ',(tc:constructor-entry-name constructor))
-                             self))
-                         (t
-                          `(defmethod print-object ((self ,classname) stream)
-                             (declare (type stream stream)
-                                      (type ,classname self)
-                                      (values ,classname))
-                             (format stream "#.(~s~{ ~s~})"
-                                     ',(tc:constructor-entry-name constructor)
-                                     (list ,@(mapcar (lambda (slot) `(slot-value self ',slot)) field-names)))
-                             self)))
-
-              :append (cond
-                        ((zerop (tc:constructor-entry-arity constructor))
+            :append (cond
+                      ((zerop (tc:constructor-entry-arity constructor))
+                       (list `(coalton-impl:define-global-lexical
+                                  ,(tc:constructor-entry-name constructor)
+                                  (,(tc:constructor-entry-name constructor)))))
+                      (t
+                       (let* ((arity (length field-names))
+                              (entry (construct-function-entry
+                                      `#',(tc:constructor-entry-name constructor)
+                                      arity)))
                          (list `(coalton-impl:define-global-lexical
                                     ,(tc:constructor-entry-name constructor)
-                                    (,(tc:constructor-entry-name constructor)))))
-                        (t
-                         (let* ((arity (length field-names))
-                                (entry (construct-function-entry
-                                        `#',(tc:constructor-entry-name constructor)
-                                        arity)))
-                           (list `(coalton-impl:define-global-lexical
-                                      ,(tc:constructor-entry-name constructor)
-                                    ,entry))))))
+                                  ,entry))))))
 
-          ,@(when (coalton-impl:coalton-release-p)
-              (list
-               #+sbcl
-               `(declaim (sb-ext:freeze-type ,(tc:type-definition-name def))))))))
+        ,@(when (coalton-impl:coalton-release-p)
+            (list
+             #+sbcl
+             `(declaim (sb-ext:freeze-type ,(tc:type-definition-name def))))))))
 
-     (loop :for constructor :in (tc:type-definition-constructors def)
-           :for name := (tc:constructor-entry-name constructor)
-           :for ty := (tc:lookup-value-type env name) 
-           :collect `(setf (documentation ',name 'variable)
-                           ,(format nil "~A :: ~A" name ty))
-           :when (> (tc:constructor-entry-arity constructor) 0)
-             :collect `(setf (documentation ',name 'function)
-                             ,(format nil "~A :: ~A" name ty))))))
+   (loop :for constructor :in (tc:type-definition-constructors def)
+         :for name := (tc:constructor-entry-name constructor)
+         :for ty := (tc:lookup-value-type env name) 
+         :collect `(setf (documentation ',name 'variable)
+                         ,(format nil "~A :: ~A" name ty))
+         :when (> (tc:constructor-entry-arity constructor) 0)
+           :collect `(setf (documentation ',name 'function)
+                           ,(format nil "~A :: ~A" name ty)))))
