@@ -695,12 +695,12 @@ The fields are defined as follows:
   (define-instance (Into Single-Float String)
     (define (into z)
       (lisp String (z)
-        (cl:format cl:nil "~D" z))))
+        (cl:prin1-to-string z))))
 
   (define-instance (Into Double-Float String)
     (define (into z)
       (lisp String (z)
-        (cl:format cl:nil "~D" z))))
+        (cl:prin1-to-string z))))
    
 
   (define-instance (TryInto String Integer)
