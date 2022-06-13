@@ -30,3 +30,29 @@
 
 (defun run-coalton-typechecker (toplevel)
   (coalton-impl::process-coalton-toplevel toplevel *package* coalton-impl::*global-environment*))
+
+(defun compile-and-load-forms (coalton-forms)
+  "Write the COALTON-FORMS to a temporary file, compile it to a fasl, then load the compiled file.
+
+Returns (values SOURCE-PATHNAME COMPILED-PATHNAME)."
+  (uiop:with-temporary-file (:stream out-stream
+                             :pathname input-file
+                             :suffix "lisp"
+                             :direction :output
+                             :keep t)
+    (dolist (expr coalton-forms)
+      (prin1 expr out-stream)
+      (terpri out-stream))
+    :close-stream
+    (uiop:with-temporary-file (:pathname output-file
+                               :suffix "fasl"
+                               :keep t)
+      (compile-file input-file :output-file output-file)
+      (load output-file)
+      (values input-file output-file))))
+
+(defmacro with-coalton-compilation ((&key package (muffle 'cl:style-warning)) &body coalton-code)
+  `(handler-bind
+       ((,muffle #'muffle-warning))
+     (compile-and-load-forms '(,@(when package `((cl:in-package ,package)))
+                               ,@coalton-code))))

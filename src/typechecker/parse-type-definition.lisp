@@ -358,8 +358,7 @@ Returns TYPE-DEFINITIONS"
                     :constructor-types ctor-types
                     :docstring docstring))
 
-                  ((or (and newtype (eql repr :transparent))
-                       (and newtype (coalton-impl:coalton-release-p)))
+                  ((and newtype (eql repr :transparent))
                    (let (;; The runtime type of a newtype is the runtime type of it's only constructor's only argument
                          (runtime-type (function-type-from
                                         (qualified-ty-type

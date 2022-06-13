@@ -14,6 +14,9 @@
   (:import-from
    #:coalton-impl/codegen/codegen-pattern
    #:codegen-pattern)
+  (:import-from
+   #:coalton-impl/codegen/codegen-type-definition
+   #:constructor-slot-name)
   (:local-nicknames
    (#:tc #:coalton-impl/typechecker)
    (#:ast #:coalton-impl/ast))
@@ -42,7 +45,6 @@
 
            (function-applicator
              (aref *function-application-functions* arity)))
-
       `(,function-applicator
         ,(codegen-expression (node-application-rator node) current-function env)
         ,@(mapcar
@@ -221,6 +223,28 @@
             (declare (ignorable ,name))
             ,(codegen-expression (node-bind-body expr) current-function env)))))))
 
+(defun find-constructor (initform env)
+  (and (node-direct-application-p initform)
+       (tc:lookup-constructor env (node-direct-application-rator initform) :no-error t)))
+
+(defun data-letrec-able-p (initform env)
+  (let ((ctor-ent (find-constructor initform env)))
+    (and ctor-ent
+         (let* ((type-name (tc:constructor-entry-constructs ctor-ent))
+                (type-ent (tc:lookup-type env type-name)))
+           (not (or (tc:type-entry-enum-repr type-ent)
+                    (tc:type-entry-newtype type-ent)))))))
+
+(declaim (ftype (function (tc:constructor-entry unsigned-byte symbol)
+                          (values list &optional))
+                setf-accessor))
+(defun setf-accessor (ctor-ent nth-slot instance)
+  (if (eq (tc:constructor-entry-name ctor-ent) 'coalton:Cons)
+      (ecase nth-slot
+        (0 `(car ,instance))
+        (1 `(cdr ,instance)))
+      `(slot-value ,instance ',(constructor-slot-name ctor-ent nth-slot))))
+
 (defun codegen-let (node sccs current-function local-vars env)
   (declare (type node-let node)
            (type list sccs)
@@ -277,6 +301,28 @@
                        ,inner)
                     inner)))
          node))
+
+      ((every (lambda (pair)
+                (data-letrec-able-p (cdr pair)
+                                                env))
+              scc-bindings)
+       (let* ((inner (codegen-let node (cdr sccs) current-function local-vars env))
+              (assignments (loop :for (name . initform) :in scc-bindings
+                                 :for ctor-info := (find-constructor initform env)
+                                 :appending (loop :for arg :in (node-direct-application-rands initform)
+                                                  :for i :from 0
+                                                  :collect `(setf ,(setf-accessor ctor-info i name)
+                                                                  ,(codegen-expression arg current-function env)))))
+              (allocations (loop :for (name . initform) :in scc-bindings
+                                 :for ctor-info := (find-constructor initform env)
+                                 :collect `(,(node-direct-application-rator initform)
+                                            ,@(mapcar (constantly nil) (node-direct-application-rands initform))))))
+         `(let ,(mapcar (lambda (scc-binding allocation)
+                          (list (car scc-binding) allocation))
+                        scc-bindings allocations)
+            ,@assignments
+            ,inner)
+         ))
 
       ;; Single variable binding
       ((= 1 (length scc-bindings))

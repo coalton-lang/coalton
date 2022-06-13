@@ -435,7 +435,7 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
 
             (setf (gethash (car binding) explicit-types) qual-ty)))
 
-        (validate-bindings-for-codegen typed-bindings)
+        (validate-bindings-for-codegen typed-bindings env)
 
         ;;
         ;; Binding groups are typechecked before predicates are
@@ -459,6 +459,108 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
            subs
            returns
            explicit-types))))))
+
+(defun length>1p (list)
+  (cdr list))
+
+(defun typed-node-binding-sccs (bindings)
+  (declare (typed-binding-list bindings)
+           (values list &optional))
+  (let ((binding-names (mapcar #'car bindings)))
+    (reverse
+     (tarjan-scc
+      (loop :for (name . node) :in bindings
+            :collect (cons name (intersection binding-names (collect-variable-namespace node))))))))
+
+(defun recursive-binding-p (name initform)
+  "If (NAME . INITFORM) were a binding, would it be recursive? I.e. does INITFORM read from NAME?"
+  (declare (symbol name)
+           (typed-node initform)
+           (values list &optional))
+  (member name (collect-variable-namespace initform) :test #'equalp))
+
+(defun type-recursively-constructable-p (type-entry env)
+  (declare (type-entry type-entry)
+           (environment env)
+           (values boolean &optional))
+  (or
+   ;; special case: `List' is recursively constructable
+   (eq type-entry (lookup-type env 'coalton:List))
+   ;; a type is recursively constructable if it has `repr :lisp' or the default repr
+   (and (not (type-entry-enum-repr type-entry))
+        (not (type-entry-newtype type-entry))
+        (or (eq (type-entry-explicit-repr type-entry) :lisp)
+            (null (type-entry-explicit-repr type-entry))))))
+
+(defun check-recursive-binding-is-recursively-constructable (name initform env)
+  (declare (symbol name)
+           (typed-node-application initform)
+           (environment env))
+  (let* ((ctor (typed-node-application-rator initform)))
+    (unless (typed-node-variable-p ctor)
+      (error 'self-recursive-non-constructor-call
+             :name name
+             :function ctor))
+    (let* ((ctor-name (typed-node-variable-name ctor))
+           (ctor-entry (lookup-constructor env ctor-name :no-error t)))
+      (unless ctor-entry
+        (error 'self-recursive-non-constructor-call
+               :name name
+               :function ctor))
+      (let* ((type-name (constructor-entry-constructs ctor-entry))
+             (type-entry (lookup-type env type-name :no-error t)))
+        (unless type-entry
+          (coalton-bug "Constructor ~S with entry ~S but no corresponding type-entry"
+                       ctor-name ctor-entry))
+        (unless (type-recursively-constructable-p type-entry env)
+          (error 'self-recursive-non-default-repr
+                 :name name
+                 :function ctor-name
+                 :type type-name))
+        (let* ((needed-arity (constructor-entry-arity ctor-entry))
+               (found-arity (length (typed-node-application-rands initform))))
+          (unless (= needed-arity found-arity)
+            (error 'self-recursive-partial-application
+                   :name name
+                   :function ctor-name
+                   :required-arg-count needed-arity
+                   :supplied-args (typed-node-application-rands initform))))))))
+
+(defun validate-single-binding-for-codegen (name initform env)
+  (cond ((typed-node-abstraction-p initform) (values))
+        ((recursive-binding-p name initform) (check-recursive-binding-is-recursively-constructable name initform env))
+        (t (values))))
+
+(defun validate-mutually-recursive-scc-for-codegen (names names-to-initforms env)
+  (let* ((initforms (loop :for name :in names
+                          :collect (gethash name names-to-initforms))))
+    (cond ((every #'typed-node-abstraction-p initforms)
+           (values))
+          ((every #'typed-node-application-p initforms)
+           (loop :for name :in names
+                 :for initform :in initforms
+                 :do (check-recursive-binding-is-recursively-constructable name initform env)))
+          (t (error 'mutually-recursive-function-and-data
+                    :names names)))))
+
+(defun validate-binding-scc-for-codegen (scc names-to-initforms env)
+  (declare (list scc)
+           (hash-table names-to-initforms)
+           (environment env))
+  (if (length>1p scc)
+      (validate-mutually-recursive-scc-for-codegen scc names-to-initforms env)
+      (let* ((name (first scc))
+             (initform (gethash name names-to-initforms)))
+        (validate-single-binding-for-codegen name initform env))))
+
+(defun validate-bindings-for-codegen (bindings env)
+  "Disallow recursive bindings except for `repr :default' constructors or for `fn' abstractions."
+  (declare (typed-binding-list bindings))
+
+  (let* ((scc-names (typed-node-binding-sccs bindings))
+         (names-to-initforms (alexandria:alist-hash-table bindings :test 'eq)))
+    (loop :for scc :in scc-names
+          :do (validate-binding-scc-for-codegen scc names-to-initforms env))))
 
 (defgeneric rewrite-recursive-calls (node bindings)
   (:method ((node typed-node-literal) bindings)
@@ -578,15 +680,6 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
      (typed-node-bind-name node)
      (rewrite-recursive-calls (typed-node-bind-expr node) bindings)
      (rewrite-recursive-calls (typed-node-bind-body node) bindings))))
-
-(defun validate-bindings-for-codegen (bindings)
-  "Some coalton forms can be typechecked but cannot currently be codegened into valid lisp."
-  (declare (type typed-binding-list bindings))
-
-  (loop :for (name . node) :in bindings :do
-    (unless (typed-node-abstraction-p node)
-      (when (member name (collect-variable-namespace node) :test #'equalp)
-        (error 'self-recursive-variable-definition :name name)))))
 
 (defun derive-binding-type-seq (names tvars exprs env subs name-map
                                 &key (allow-deferred-predicates t)
