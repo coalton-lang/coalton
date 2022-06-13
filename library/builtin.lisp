@@ -10,7 +10,8 @@
    #:boolean-not
    #:boolean-or
    #:boolean-and
-   #:boolean-xor))
+   #:boolean-xor
+   #:eql))
 
 #+coalton-release
 (cl:declaim #.coalton-impl:*coalton-optimize-library*)
@@ -56,8 +57,13 @@
     "Are X or Y True, but not both?"
     (match x
       ((True) (boolean-not y))
-      ((False) y))))
+      ((False) y)))
 
+  (declare eql (:a -> :a -> Boolean))
+  (define (eql a b)
+    "Returns True iff A is the same object as B"
+    (lisp Boolean (a b)
+      (to-boolean (cl:eql a b)))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/BUILTIN")
