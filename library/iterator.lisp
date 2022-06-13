@@ -26,6 +26,7 @@
    #:next!
    #:fold!
    #:empty
+   #:last!
    #:list-iter
    #:vector-iter
    #:string-chars
@@ -119,6 +120,11 @@ STATE, using INIT as the first STATE."
   (define empty
     "Yields nothing; stops immediately"
     (%Iterator (fn () None)))
+
+  (declare last! ((Iterator :a) -> (Optional :a)))
+  (define (last! iter)
+    "Yields the last element of ITER, completely consuming it."
+    (fold! (fn (s e) (Some e)) None iter))
   
   (declare list-iter ((List :elt) -> (Iterator :elt)))
   (define (list-iter lst)
