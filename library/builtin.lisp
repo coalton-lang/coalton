@@ -61,7 +61,7 @@
 
   (declare eql (:a -> :a -> Boolean))
   (define (eql a b)
-    "Returns True iff A is the same object as B"
+    "Returns True iff A is the same object, number, or character as B"
     (lisp Boolean (a b)
       (to-boolean (cl:eql a b)))))
 
