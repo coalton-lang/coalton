@@ -138,6 +138,9 @@
                (:file "hashtable")
                (:file "monad/state")
                (:file "iterator")
+               (:file "resource")
+               (:file "char-io")
+               (:file "file")
                (:file "system")
                (:file "prelude")))
 
@@ -256,4 +259,5 @@
                (:file "float-tests")
                (:file "quantize-tests")
                (:file "hashtable-tests")
-               (:file "iterator-tests")))
+               (:file "iterator-tests")
+               (:file "file-tests")))
