@@ -522,14 +522,14 @@
               x xs)))))
 
   (declare maximum (Ord :a => ((List :a) -> (Optional :a))))
-  (define maximum
+  (define (maximum l)
     "Returns a greatest element of a list, or None."
-    (optimumBy >))
+    (optimumBy > l))
 
   (declare minimum (Ord :a => ((List :a) -> (Optional :a))))
-  (define minimum
+  (define (minimum l)
     "Returns a least element of a list, or None."
-    (optimumBy <))
+    (optimumBy < l))
 
   (declare sum (Num :a => ((List :a) -> :a)))
   (define (sum xs)

@@ -54,41 +54,37 @@
 
     (let* ((manager (candidate-manager))
 
-           (resolve-table (alexandria:alist-hash-table bindings))
+           (resolve-table (alexandria:alist-hash-table bindings)))
 
-           (bindings
-             (loop :for (name . node) :in bindings
-                   :for attrs := (gethash name attr-table)
+      (setf bindings (direct-application bindings (make-function-table env)))
+      (loop :for (name . node) :in bindings
+            :do (typecheck-node node env)
+            :do (setf env (tc:set-code env name node)))
 
-                   :for monomorphize := (find :monomorphize attrs)
+      (setf bindings
+            (loop :for (name . node) :in bindings
+                  :for attrs := (gethash name attr-table)
 
-                   :if monomorphize
-                     :append (optimize-bindings-initial
-                              (monomorphize
-                               name
-                               manager
-                               package
-                               resolve-table
-                               #'optimize-node
-                               env)
-                              package env)
-                   :else
-                     :collect (cons name node))))
+                  :for monomorphize := (find :monomorphize attrs)
 
+                  :if monomorphize
+                    :append (optimize-bindings-initial
+                             (monomorphize
+                              name
+                              manager
+                              package
+                              resolve-table
+                              #'optimize-node
+                              env)
+                             package env)
+                  :else
+                    :collect (cons name node)))
       (loop :for (name . node) :in bindings
             :do (typecheck-node node env))
 
       (setf env (update-function-env bindings env))
 
-      (let ((bindings (direct-application bindings (make-function-table env))))
-
-        (loop :for (name . node) :in bindings
-              :do (typecheck-node node env)
-              :do (setf env (tc:set-code env name node)))
-
-        (values
-         bindings
-         env)))))
+      (values bindings env))))
 
 (defun direct-application (bindings table)
   (declare (type binding-list bindings)
