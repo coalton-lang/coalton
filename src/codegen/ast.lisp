@@ -462,6 +462,12 @@ both CL namespaces appearing in NODE"
    (node-abstraction-vars node)
    (tc:apply-substitution subs (node-abstraction-subexpr node))))
 
+(defmethod tc:apply-substitution (subs (node node-bare-abstraction))
+  (node-bare-abstraction
+   (tc:apply-substitution subs (node-type node))
+   (node-bare-abstraction-vars node)
+   (tc:apply-substitution subs (node-bare-abstraction-subexpr node))))
+
 (defmethod tc:apply-substitution (subs (node node-let))
   (node-let
    (tc:apply-substitution subs (node-type node))

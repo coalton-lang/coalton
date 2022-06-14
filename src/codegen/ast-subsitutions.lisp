@@ -34,6 +34,12 @@
              (values node))
     node)
 
+  (:method (subs (node node-lisp))
+    (declare (type ast-substitution-list subs)
+             (ignore subs)
+             (values node))
+    node)
+
   (:method (subs (node node-variable))
     (declare (type ast-substitution-list subs)
              (values node))
