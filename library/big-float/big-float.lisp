@@ -79,6 +79,14 @@
     (cl:prog1 (mpq->rational q)
       (__gmpq_clear (sb-alien:addr q)))))
 
+;; Whether the mpfr ceiling function is properly exported
+(cl:eval-when (:compile-toplevel :load-toplevel)
+  (cl:if (uiop:featurep :sbcl)
+         (cl:pushnew
+          (cl:if (uiop:version< (cl:lisp-implementation-version) "2.2.5")
+                 :sbcl-pre-2-2-5
+                 :sbcl-post-2-2-5)
+          cl:*features*)))
 
 ;;; Coalton Implementation
 
@@ -222,8 +230,11 @@
         (cl:let ((x (sb-mpfr:floor f)))
           (sb-mpfr:coerce x 'cl:integer))))
     (define (ceiling f)
+      #+sbcl-pre-2-2-5
+      (negate (floor (negate f)))
+      #+sbcl-post-2-2-5
       (lisp Integer (f)
-        (cl:let ((x (sb-mpfr::ceil f)))   ; SBCL bug: not exported correctly
+        (cl:let ((x (sb-mpfr:ceiling f)))
           (sb-mpfr:coerce x 'cl:integer))))
     (define (proper f)
       (lisp (Tuple Integer Big-Float) (f)
@@ -254,15 +265,17 @@
     (define infinity (/ 1 0))
     (define (infinite? x)
       (lisp Boolean (x)
-            (to-boolean (sb-mpfr:infinityp x))))
+        (to-boolean (sb-mpfr:infinityp x))))
     (define nan (/ 0 0))
     (define (nan? x)
       (lisp Boolean (x)
-            (to-boolean (sb-mpfr:nan-p x)))))
+        (to-boolean (sb-mpfr:nan-p x)))))
 
   (define-instance (Dividable Integer Big-Float)
     (define (general/ a b)
-      (into (exact/ a b)))))
+      (if (== 0 b)
+          (/ (fromInt a) (fromInt b))
+          (into (exact/ a b))))))
 
 (coalton-library/math/complex::%define-standard-complex-instances Big-Float)
 
