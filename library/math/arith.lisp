@@ -480,13 +480,14 @@ The function general/ is partial, and will error produce a run-time error if the
 
      (define-instance (Dividable Integer ,coalton-type)
        (define (general/ x y)
-         (match (lisp (Optional ,coalton-type) (x y)
-                  (%to-optional-float (cl:/ x y) ,underlying-type))
-           ((Some x) x)
-           ((None) (cond
-                     ((> (* x y) 0) infinity)
-                     ((==  y 0) nan)
-                     (True negative-infinity))))))
+         (if (== y 0)
+             (/ (fromInt x) (fromInt y))
+             (match (lisp (Optional ,coalton-type) (x y)
+                      (%optional-coerce (cl:/ x y) ,underlying-type))
+               ((Some x) x)
+               ((None) (if (and (> x 0) (> y 0))
+                           infinity
+                           negative-infinity))))))
 
      (define-instance (TryInto ,coalton-type Fraction)
        (define (tryInto x)
