@@ -129,6 +129,16 @@ does not have that suffix."
       (lisp String (z)
         (cl:format cl:nil "~D" z))))
 
+  (define-instance (Into Single-Float String)
+    (define (into z)
+      (lisp String (z)
+        (cl:prin1-to-string z))))
+
+  (define-instance (Into Double-Float String)
+    (define (into z)
+      (lisp String (z)
+        (cl:prin1-to-string z))))
+
   (define-instance (TryInto String Integer)
     (define (tryInto s)
       (lisp (Result String Integer) (s)
