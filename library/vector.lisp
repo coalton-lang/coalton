@@ -6,7 +6,8 @@
    #:coalton-library/classes)
   (:local-nicknames
    (#:list #:coalton-library/list)
-   (#:cell #:coalton-library/cell))
+   (#:cell #:coalton-library/cell)
+   (#:addr #:coalton-library/addressable))
   (:export
    #:Vector
    #:new
@@ -302,7 +303,10 @@
                     (Cons (index-unsafe index v) (inner v (+ 1 index)))))))
         (inner v 0))))
 
-  (define-instance (Iso (Vector :a) (List :a))))
+  (define-instance (Iso (Vector :a) (List :a)))
+
+  (define-instance (addr:Addressable (Vector :elt))
+    (define addr:eq? addr::unsafe-internal-eq?)))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/VECTOR")

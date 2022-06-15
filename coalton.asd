@@ -114,6 +114,8 @@
   :pathname "library/"
   :serial t
   :components ((:file "utils")
+               (:file "early-classes")
+               (:file "early-types")
                (:file "classes")
                (:file "builtin")
                (:file "functions")
@@ -132,6 +134,7 @@
                (:file "optional")
                (:file "list")
                (:file "result")
+               (:file "addressable")
                (:file "stage-1")
                (:file "cell")
                (:file "vector")
@@ -257,4 +260,5 @@
                (:file "float-tests")
                (:file "quantize-tests")
                (:file "hashtable-tests")
-               (:file "iterator-tests")))
+               (:file "iterator-tests")
+               (:file "addressable-tests")))

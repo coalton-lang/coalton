@@ -4,6 +4,7 @@
    #:coalton-library/builtin
    #:coalton-library/classes
    #:coalton-library/list)
+  (:local-nicknames (#:addr #:coalton-library/addressable))
   (:export
    #:Cell
    #:new
@@ -132,7 +133,10 @@
     (define into new))
 
   (define-instance (Into (Cell :a) :a)
-    (define into read)))
+    (define into read))
+
+  (define-instance (addr:Addressable (Cell :a))
+    (define addr:eq? addr::unsafe-internal-eq?)))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/CELL")

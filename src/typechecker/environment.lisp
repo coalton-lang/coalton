@@ -25,10 +25,34 @@
 ;;; Type environments
 ;;;
 
+(deftype explicit-repr ()
+  '(or null
+    (member :enum :lisp :transparent)
+    (cons (eql :native) (cons t null))))
+
+(defun explicit-repr-auto-addressable-p (explicit-repr)
+  (declare (explicit-repr explicit-repr)
+           (values list &optional))
+  (member explicit-repr
+          '(:lisp :enum)
+          :test #'eq))
+
+(defun explicit-repr-explicit-addressable-p (explicit-repr)
+  (declare (explicit-repr explicit-repr)
+           (values boolean &optional))
+  (and (consp explicit-repr)
+       (eq (first explicit-repr) :native)))
+
 (defstruct (type-entry (:constructor type-entry))
   (name         (required 'name)         :type symbol  :read-only t)
   (runtime-type (required 'runtime-type) :type t       :read-only t)
   (type         (required 'type)         :type ty      :read-only t)
+
+  ;; An explicit repr defined in the source, or nil if none was supplied. Computed repr will be reflected in
+  ;; ENUM-REPR, NEWTYPE, and/or RUNTIME-TYPE.
+  (explicit-repr (required 'explicit-repr)
+                                         :type explicit-repr
+                                                       :read-only t)
 
   ;; If this is true then the type is compiled to a more effecient
   ;; enum representation at runtime
@@ -76,6 +100,7 @@
             :name 'coalton:Boolean
             :runtime-type 'cl:boolean
             :type *boolean-type*
+            :explicit-repr '(:native cl:boolean)
             :enum-repr t
             :newtype nil
             :docstring "Either true or false represented by `t` and `nil` respectively."))
@@ -85,6 +110,7 @@
             :name 'coalton:Char
             :runtime-type 'cl:character
             :type *char-type*
+            :explicit-repr '(:native cl:character)
             :enum-repr nil
             :newtype nil
             :docstring "A single character represented as a `character` type."))
@@ -94,6 +120,7 @@
             :name 'coalton:U8
             :runtime-type '(cl:unsigned-byte 8)
             :type *u8-type*
+            :explicit-repr '(:native (cl:unsigned-byte 8))
             :enum-repr nil
             :newtype nil
             :docstring "Unsigned 8-bit integer capable of storing values in `[0, 255]`. Uses `(unsigned-byte 8)`."))
@@ -103,6 +130,7 @@
             :name 'coalton:U16
             :runtime-type '(cl:unsigned-byte 16)
             :type *u16-type*
+            :explicit-repr '(:native (cl:unsigned-byte 16))
             :enum-repr nil
             :newtype nil
             :docstring "Unsigned 16-bit integer capable of storing values in `[0, 65535]`. Uses `(unsigned-byte 16)`."))
@@ -112,6 +140,7 @@
             :name 'coalton:U32
             :runtime-type '(cl:unsigned-byte 32)
             :type *u32-type*
+            :explicit-repr '(:native (cl:unsigned-byte 32))
             :enum-repr nil
             :newtype nil
             :docstring "Unsigned 32-bit integer capable of storing values in `[0, 4294967295]`. Uses `(unsigned-byte 32)`."))
@@ -121,6 +150,7 @@
             :name 'coalton:U64
             :runtime-type '(cl:unsigned-byte 64)
             :type *u64-type*
+            :explicit-repr '(:native (cl:unsigned-byte 64))
             :enum-repr nil
             :newtype nil
             :docstring "Unsigned 64-bit integer capable of storing values in `[0, 18446744073709551615]`. Uses `(unsigned-byte 64)`."))
@@ -130,6 +160,7 @@
             :name 'coalton:I8
             :runtime-type '(cl:signed-byte 8)
             :type *i8-type*
+            :explicit-repr '(:native (cl:signed-byte 8))
             :enum-repr nil
             :newtype nil
             :docstring "Signed 8-bit integer capable of storing values in `[-128, 127]`. Uses `(signed-byte 8)`."))
@@ -139,6 +170,7 @@
             :name 'coalton:I16
             :runtime-type '(cl:signed-byte 16)
             :type *i16-type*
+            :explicit-repr '(:native (cl:signed-byte 16))
             :enum-repr nil
             :newtype nil
             :docstring "Signed 16-bit integer capable of storing values in `[-32768, 32767]`. Uses `(signed-byte 16)`."))
@@ -148,6 +180,7 @@
             :name 'coalton:I32
             :runtime-type '(cl:signed-byte 32)
             :type *i32-type*
+            :explicit-repr '(:native (cl:signed-byte 32))
             :enum-repr nil
             :newtype nil
             :docstring "Signed 32-bit integer capable of storing values in `[-2147483648, 2147483647]`. Uses `(signed-byte 32)`."))
@@ -157,6 +190,7 @@
             :name 'coalton:I64
             :runtime-type '(cl:signed-byte 64)
             :type *i64-type*
+            :explicit-repr '(:native (cl:signed-byte 64))
             :enum-repr nil
             :newtype nil
             :docstring "Signed 64-bit integer capable of storing values in `[-9223372036854775808, 9223372036854775807]`. Uses `(signed-byte 64)`."))
@@ -166,6 +200,7 @@
             :name 'coalton:Integer
             :runtime-type 'cl:integer
             :type *integer-type*
+            :explicit-repr '(:native cl:integer)
             :enum-repr nil
             :newtype nil
             :docstring "Unbound integer. Uses `integer`."))
@@ -175,6 +210,7 @@
             :name 'coalton:IFix
             :runtime-type 'cl:fixnum
             :type *ifix-type*
+            :explicit-repr '(:native cl:fixnum)
             :enum-repr nil
             :newtype nil
             :docstring "Non-allocating tagged integer; range is platform-dependent. Uses `fixnum`."))
@@ -184,6 +220,7 @@
             :name 'coalton:UFix
             :runtime-type '(cl:and cl:fixnum cl:unsigned-byte)
             :type *ufix-type*
+            :explicit-repr '(:native (cl:and cl:fixnum cl:unsigned-byte))
             :enum-repr nil
             :newtype nil
             :docstring "Non-allocating tagged non-negative integer; range is platform-dependent. Uses `(and fixnum unsigned-byte)`."))
@@ -193,6 +230,7 @@
             :name 'coalton:Single-Float
             :runtime-type 'cl:single-float
             :type *single-float-type*
+            :explicit-repr '(:native cl:single-float)
             :enum-repr nil
             :newtype nil
             :docstring "Single precision floating point numer. Uses `single-float`."))
@@ -202,6 +240,7 @@
             :name 'coalton:Double-Float
             :runtime-type 'cl:double-float
             :type *double-float-type*
+            :explicit-repr '(:native cl:double-float)
             :enum-repr nil
             :newtype nil
             :docstring "Double precision floating point numer. Uses `double-float`."))
@@ -211,6 +250,7 @@
             :name 'coalton:String
             :runtime-type 'cl:string
             :type *string-type*
+            :explicit-repr '(:native cl:string)
             :enum-repr nil
             :newtype nil
             :docstring "String of characters represented by Common Lisp `string`."))
@@ -220,6 +260,7 @@
             :name 'coalton:Fraction
             :runtime-type 'cl:rational
             :type *fraction-type*
+            :explicit-repr '(:native cl:rational)
             :enum-repr nil
             :newtype nil
             :docstring "A ratio of integers always in reduced form."))
@@ -229,6 +270,7 @@
             :name 'coalton:Arrow
             :runtime-type nil
             :type *arrow-type*
+            :explicit-repr nil
             :enum-repr nil
             :newtype nil
             :docstring "Type constructor for function types."))
@@ -238,6 +280,7 @@
             :name 'coalton:List
             :runtime-type 'cl:list
             :type *list-type*
+            :explicit-repr '(:native cl:list)
             :enum-repr nil
             :newtype nil
             :docstring "Homogeneous list of objects represented as a Common Lisp `list`.")))))

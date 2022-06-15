@@ -271,15 +271,12 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
 (defun parse-atom (atom)
   ;; Convert integer literals into fromInt calls. This allows for
   ;; "overloaded" number literals. Other literals are left as is.
-  (let ((fromInt
-          (alexandria:ensure-symbol
-           "FROMINT"
-           (find-package "COALTON-LIBRARY/CLASSES"))))
+  (let ((fromInt 'coalton-impl/early-library-defs:fromint))
     (etypecase atom
       (integer (node-application
-         atom
-         (node-variable fromInt fromInt)
-         (list (node-literal atom atom))))
+                atom
+                (node-variable fromInt fromInt)
+                (list (node-literal atom atom))))
       (t (node-literal atom atom)))))
 
 (defun parse-seq (expr subnodes m package)
