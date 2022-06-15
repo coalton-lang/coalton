@@ -4,7 +4,8 @@
    #:coalton-library/builtin
    #:coalton-library/classes)
   (:local-nicknames
-   (#:cell #:coalton-library/cell))
+   (#:cell #:coalton-library/cell)
+   (#:addr #:coalton-library/addressable))
   (:export
    #:Hashtable
    #:new
@@ -138,7 +139,10 @@
     (foreach (fn (_ val)
                (cell:push! lst val))
              table)
-    (cell:read lst)))
+    (cell:read lst))
+
+  (define-instance (addr:Addressable (Hashtable :key :value))
+    (define addr:eq? addr::unsafe-internal-eq?)))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/HASHTABLE")

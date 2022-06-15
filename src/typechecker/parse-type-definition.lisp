@@ -11,6 +11,7 @@
   (runtime-type      (required 'runtime-type)      :type t                      :read-only t)
 
   ;; See the fields with the same name on type-entry
+  (explicit-repr     (required 'explicit-repr)     :type explicit-repr          :read-only t)
   (enum-repr         (required 'enum-repr)         :type boolean                :read-only t)
   (newtype           (required 'newtype)           :type boolean                :read-only t)
 
@@ -44,7 +45,6 @@
 
 (deftype type-definition-list ()
   '(satisfies type-definition-list-p))
-
 
 (defun parse-type-definition (partial-type self-type type-vars ksubs env)
   (declare (type partial-define-type partial-type)
@@ -148,6 +148,7 @@
                   :name name
                   :runtime-type name
                   :type type__
+                  :explicit-repr nil
                   :enum-repr nil
                   :newtype nil
                   :docstring nil)))
@@ -334,6 +335,7 @@ Returns TYPE-DEFINITIONS"
                     :name tycon-name
                     :type tcon
                     :runtime-type tycon-name
+                    :explicit-repr :lisp
                     :enum-repr nil
                     :newtype nil
                     :constructors parsed-ctors
@@ -348,6 +350,7 @@ Returns TYPE-DEFINITIONS"
                     :name tycon-name
                     :type tcon
                     :runtime-type repr-arg
+                    :explicit-repr (list repr repr-arg)
                     :enum-repr nil
                     :newtype nil
                     :constructors parsed-ctors
@@ -364,6 +367,7 @@ Returns TYPE-DEFINITIONS"
                       :name tycon-name
                       :type tcon
                       :runtime-type runtime-type
+                      :explicit-repr repr
                       :enum-repr nil
                       :newtype t
                       :constructors parsed-ctors
@@ -380,6 +384,7 @@ Returns TYPE-DEFINITIONS"
                       :name tycon-name
                       :type tcon
                       :runtime-type `(member ,@(mapcar #'constructor-entry-compressed-repr parsed-ctors))
+                      :explicit-repr repr
                       :enum-repr t
                       :newtype nil
                       :constructors parsed-ctors
@@ -389,12 +394,15 @@ Returns TYPE-DEFINITIONS"
                   ((and (eql repr :enum) (not enum-type))
                    (error "Type ~A cannot be repr enum. To be repr enum a type must only have constructors without fields." tycon-name))
 
+                  (repr
+                   (error "Type ~A supplied an unknown or incompatable repr ~A" tycon-name repr))
 
-                  (t
+                  ((not repr)
                    (make-type-definition
                     :name tycon-name
                     :type tcon
                     :runtime-type tycon-name
+                    :explicit-repr nil
                     :enum-repr nil
                     :newtype nil
                     :constructors parsed-ctors

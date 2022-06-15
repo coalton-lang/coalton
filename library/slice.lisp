@@ -7,7 +7,8 @@
   (:local-nicknames
    (#:list #:coalton-library/list)
    (#:cell #:coalton-library/cell)
-   (#:vector #:coalton-library/vector))
+   (#:vector #:coalton-library/vector)
+   (#:addr #:coalton-library/addressable))
   (:shadowing-import-from #:coalton-library/vector #:Vector)
   (:export
    #:Slice
@@ -191,7 +192,10 @@
     (define (into v)
       (new 0 (vector:length v) v)))
 
-  (define-instance (Iso (Slice :a) (Vector :a))))
+  (define-instance (Iso (Slice :a) (Vector :a)))
+
+  (define-instance (addr:Addressable (Slice :elt))
+    (define addr:eq? addr::unsafe-internal-eq?)))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/SLICE")
