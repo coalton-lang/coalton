@@ -15,7 +15,7 @@
   (initp cl:nil :type cl:boolean)
   inner)
 #+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type %cycle))
+(cl:declaim (sb-ext:freeze-type %cycle))
 
 (coalton-toplevel
   (repr :native %cycle)
