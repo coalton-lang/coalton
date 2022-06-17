@@ -36,6 +36,7 @@ either (INDICATOR VALUE) or just INDICATOR; the short form means (INDICATOR T)."
  (coalton:define-type       :toplevel)
  (coalton:define-class      :toplevel)
  (coalton:define-instance   :toplevel)
+ (coalton:define-alias      :toplevel)
 
  (coalton:repr              :toplevel
                             (:must-precede-one-of (coalton:define-type)))
@@ -224,6 +225,7 @@ in FORMS that begin with that operator."
                          ((coalton:define-type type-defines))
                          ((coalton:define-class class-defines))
                          ((coalton:define-instance instance-defines))
+                         ((coalton:define-alias alias-defines))
                          ((repr-table repr-table))
                          ((attr-table attr-table))
                          ((coalton:specialize specializations))

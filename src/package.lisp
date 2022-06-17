@@ -520,6 +520,7 @@
    #:define-type
    #:define-class
    #:define-instance
+   #:define-alias
    #:repr
    #:monomorphize
    #:specialize

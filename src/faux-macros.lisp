@@ -36,6 +36,9 @@
 (define-coalton-editor-macro coalton:define-instance (instance &body method-definitions)
   "Define an instance of a type class. (Coalton top-level operator.)")
 
+(define-coalton-editor-macro coalton:define-alias (alias type)
+  "Define a new type alias. (Coalton top-level operator.)")
+
 
 ;;; Other Constructions
 
