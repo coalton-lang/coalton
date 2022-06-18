@@ -4,14 +4,32 @@
   (is (= 0 (coalton:coalton (coalton-prelude:floor 0.1))))
   (is (= 1 (coalton:coalton (coalton-prelude:ceiling 0.1))))
   (is (= 0 (coalton:coalton (coalton-prelude:round 0.1))))
-  
+  (is (= 0 (coalton:coalton (coalton-library/math:round-half-up 0.1))))
+  (is (= 0 (coalton:coalton (coalton-library/math:round-half-down 0.1))))
+  (is (= 0 (coalton:coalton (coalton-library/math:truncate 0.1))))
+
   (is (= -1 (coalton:coalton (coalton-prelude:floor -0.1))))
   (is (= 0 (coalton:coalton (coalton-prelude:ceiling -0.1))))
   (is (= 0 (coalton:coalton (coalton-prelude:round -0.1))))
+  (is (= 0 (coalton:coalton (coalton-library/math:round-half-up -0.1))))
+  (is (= 0 (coalton:coalton (coalton-library/math:round-half-down -0.1))))
+  (is (= 0 (coalton:coalton (coalton-library/math:truncate -0.1))))
   
   (is (= 0 (coalton:coalton (coalton-prelude:floor 0.0))))
   (is (= 0 (coalton:coalton (coalton-prelude:ceiling 0.0))))
   (is (= 0 (coalton:coalton (coalton-prelude:round 0.0))))
-  
-  (is (= 1 (coalton:coalton (coalton-prelude:round 0.5))))
-  (is (= 0 (coalton:coalton (coalton-prelude:round -0.5)))))
+  (is (= 0 (coalton:coalton (coalton-library/math:round-half-up 0.0))))
+  (is (= 0 (coalton:coalton (coalton-library/math:round-half-down 0.0))))
+  (is (= 0 (coalton:coalton (coalton-library/math:truncate 0.0))))
+
+  (is (= 1 (coalton:coalton (coalton-library/math:round-half-up 0.5))))
+  (is (= 0 (coalton:coalton (coalton-library/math:round-half-down 0.5))))
+  (is (= 0 (coalton:coalton (coalton-library/math:round-half-up -0.5))))
+  (is (= -1 (coalton:coalton (coalton-library/math:round-half-down -0.5))))
+
+  (is (= (cl:round 2.5) (coalton:coalton (coalton-prelude:round 2.5))))
+  (is (= (cl:round -2.5) (coalton:coalton (coalton-prelude:round -2.5))))
+  (is (= (cl:round 1.5) (coalton:coalton (coalton-prelude:round 1.5))))
+  (is (= (cl:round -1.5) (coalton:coalton (coalton-prelude:round -1.5))))
+  (is (= (cl:round 0.5) (coalton:coalton (coalton-prelude:round 0.5))))
+  (is (= (cl:round -0.5) (coalton:coalton (coalton-prelude:round -0.5)))))

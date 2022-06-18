@@ -13,9 +13,10 @@
 
 (in-package #:coalton-impl/codegen/hoister)
 
-(defstruct (hoist-point (:constructor make-hoist-point (bound-variables)))
-  (bound-variables (required 'bound-variables)                :type symbol-list :read-only nil)
-  (definitions     (make-hash-table :test #'equalp)           :type hash-table  :read-only t))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defstruct (hoist-point (:constructor make-hoist-point (bound-variables)))
+    (bound-variables (required 'bound-variables)                :type symbol-list :read-only nil)
+    (definitions     (make-hash-table :test #'equalp)           :type hash-table  :read-only t)))
 
 (defun hoist-point-blocks (node hoist-point)
   (declare (type node node)
@@ -40,9 +41,10 @@
                              (gentemp "hoisted_" package)))
         (values (gethash node (hoist-point-definitions hoist-point))))))
 
-(defun hoist-point-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'hoist-point-p x)))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun hoist-point-list-p (x)
+    (and (alexandria:proper-list-p x)
+         (every #'hoist-point-p x))))
 
 (deftype hoist-point-list ()
   `(satisfies hoist-point-list-p))

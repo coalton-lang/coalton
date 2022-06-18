@@ -26,10 +26,6 @@
    #:coalton-impl/codegen/codegen-type-definition
    #:codegen-type-definition)
   (:import-from
-   #:coalton-impl/codegen/function-entry
-   #:construct-function-entry
-   #:apply-function-entry)
-  (:import-from
    #:coalton-impl/codegen/optimizer
    #:optimize-bindings)
   (:local-nicknames
@@ -55,11 +51,10 @@
             (loop :for (name . node) :in (tc:translation-unit-definitions translation-unit)
                   :for compiled-node := (compile-toplevel (tc:fresh-inst (tc:lookup-value-type env name)) node env)
                   :do (when coalton-impl::*coalton-dump-ast*
-                        (format t "~A :: ~A~%~A~%~%~A~%~%"
+                        (format t "~A :: ~A~%~A~%~%~%"
                                 name
                                 (tc:lookup-value-type env name)
-                                node
-                                compiled-node))
+                                node))
                   :collect (cons name compiled-node))
             (loop :for instance :in (tc:translation-unit-instances translation-unit)
                   :append (compile-instance instance add-inline env))))

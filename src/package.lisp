@@ -93,6 +93,10 @@
    #:node-the-subnode                   ; ACCESSOR
    #:node-return                        ; STRUCT
    #:node-return-expr                   ; ACCESSOR
+   #:node-bind                          ; STRUCT
+   #:node-bind-name                     ; ACCESSOR
+   #:node-bind-expr                     ; ACCESSOR
+   #:node-bind-body                     ; ACCESSOR
    #:match-branch-pattern               ; ACCESSOR
    #:match-branch-subexpr               ; ACCESSOR
    #:match-branch-unparsed              ; ACCESOR
@@ -140,6 +144,7 @@
    #:tyvar-list                         ; TYPE
    #:tvar                               ; STRUCT
    #:%make-tvar                         ; CONSTRUCTOR
+   #:make-variable                      ; FUNCTION
    #:tvar-tyvar                         ; ACCESSOR
    #:tycon                              ; STRUCT
    #:%make-tycon                        ; CONSTRUCTOR
@@ -192,6 +197,7 @@
    #:*list-type*)
   (:export
    #:kstar                              ; VARIABLE
+   #:kind-arity                         ; FUNCTION
    #:ty-scheme                          ; STRUCT
    #:qualified-ty                       ; STRUCT
    #:scheme-predicates                  ; FUNCTION
@@ -261,6 +267,10 @@
    #:typed-node-seq-subnodes              ; ACCESSOR
    #:typed-node-return                    ; STRUCT
    #:typed-node-return-expr               ; ACCESSSOR
+   #:typed-node-bind                      ; STRUCT
+   #:typed-node-bind-name                 ; ACCESSOR
+   #:typed-node-bind-expr                 ; ACCESSOR
+   #:typed-node-bind-body                 ; ACCESSOR
    )
   (:export
    #:environment                        ; STRUCT
@@ -343,9 +353,12 @@
    #:type-definition-constructor-types  ; ACCESSOR
    #:type-definition-list               ; TYPE
    #:type-definition-runtime-type       ; ACCESSOR
+   #:type-definition-explicit-repr      ; ACCESSOR
    #:type-definition-enum-repr          ; ACCESSOR
    #:type-definition-newtype            ; ACCESSOR
    #:type-definition-docstring          ; ACCESSOR
+   #:explicit-repr-auto-addressable-p   ; FUNCTION
+   #:explicit-repr-explicit-addressable-p ; FUNCTION
    )
   (:export
    #:coalton-type-error                 ; SIGNAL
@@ -537,6 +550,7 @@
    #:Fraction
    #:Arrow
    #:List #:Cons #:Nil)
+  ;; Primitive Syntax
   (:export
    #:fn #:λ
    #:match
@@ -546,7 +560,6 @@
    #:<-                                 ; Syntax
    #:_
    #:return
-   #:seq
    #:the)
   ;; Macros
   (:export
@@ -581,5 +594,21 @@
    #:type-of
    #:kind-of)
   (:intern
+   #:seq
+   #:bind
    #:Boolean/True
    #:Boolean/False))
+
+;;
+;; Internal again (but uses coalton)
+;;
+
+(uiop:define-package #:coalton-impl/early-library-defs
+  (:use #:coalton)
+  (:export
+   #:Addressable #:eq?
+   #:Eq #:==
+   #:Num #:fromInt #:+ #:- #:*)
+  (:intern
+   #:class/addressable
+   #:class/eq))

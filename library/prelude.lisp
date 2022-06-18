@@ -1,3 +1,15 @@
+;;;; prelude.lisp
+;;;;
+;;;; Collections of packages
+
+(uiop:define-package #:coalton-library/math
+  (:use-reexport
+   #:coalton-library/math/arith
+   #:coalton-library/math/integral
+   #:coalton-library/math/real
+   #:coalton-library/math/complex
+   #:coalton-library/math/elementary))
+
 (uiop:define-package #:coalton-prelude
   (:use-reexport
    #:coalton-library/classes
@@ -5,31 +17,37 @@
    #:coalton-library/functions)
 
   (:import-from
-   #:coalton-library/arith
-   #:Dividable #:/
+   #:coalton-library/math/arith
+   #:Reciprocable #:/
    #:Fraction
    #:negate
    #:abs
-   #:expt
-   #:floor
-   #:ceiling
-   #:round
    #:1+
    #:1-)
   (:export
-   #:Dividable #:/
+   #:Reciprocable #:/
    #:Fraction
    #:negate
    #:abs
-   #:expt
-   #:floor
-   #:ceiling
-   #:round
    #:1+
    #:1-)
 
   (:import-from
-   #:coalton-library/complex
+   #:coalton-library/math/real
+   #:floor
+   #:ceiling
+   #:round
+   #:Real
+   #:Rational)
+  (:export
+   #:floor
+   #:ceiling
+   #:round
+   #:Real
+   #:Rational)
+
+  (:import-from
+   #:coalton-library/math/complex
    #:Complex
    #:real-part
    #:imag-part)
@@ -39,7 +57,7 @@
    #:imag-part)
 
   (:import-from
-   #:coalton-library/integral
+   #:coalton-library/math/integral
    #:Integral
    #:^
    #:^^
@@ -167,14 +185,16 @@
    #:time))
 
 (cl:defpackage #:coalton-user
+  (:import-from
+   #:common-lisp
+   #:describe
+   #:disassemble)
   (:use
    #:coalton
    #:coalton-prelude)
   (:local-nicknames
    (#:bits #:coalton-library/bits)
-   (#:arith #:coalton-library/arith)
-   (#:complex #:coalton-library/complex)
-   (#:integral #:coalton-library/integral)
+   (#:math #:coalton-library/math)
    (#:char #:coalton-library/char)
    (#:string #:coalton-library/string)
    (#:tuple #:coalton-library/tuple)
@@ -193,3 +213,6 @@
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-PRELUDE")
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON-LIBRARY/MATH")

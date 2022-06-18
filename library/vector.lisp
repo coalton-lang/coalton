@@ -6,7 +6,8 @@
    #:coalton-library/classes)
   (:local-nicknames
    (#:list #:coalton-library/list)
-   (#:cell #:coalton-library/cell))
+   (#:cell #:coalton-library/cell)
+   (#:addr #:coalton-library/addressable))
   (:export
    #:Vector
    #:new
@@ -153,7 +154,7 @@
       (lisp (Optional Integer) (v test)
         (cl:let ((pos (cl:position-if
                        (cl:lambda (x)
-                           (cl:equalp True (coalton-impl/codegen::A1 test x)))
+                         (cl:equalp True (coalton-impl/codegen::A1 test x)))
                        v)))
           (cl:if pos
                  (Some pos)
@@ -264,33 +265,34 @@
   (define-instance (Foldable Vector)
     (define (fold f init vec)
       (lisp :a (f init vec)
-          (cl:reduce
-           (cl:lambda (b a)
-             (coalton-impl/codegen::A2 f b a))
-           vec
-           :initial-value init)))
+        (cl:reduce
+         (cl:lambda (b a)
+           (coalton-impl/codegen::A2 f b a))
+         vec
+         :initial-value init)))
     (define (foldr f init vec)
       (lisp :a (f init vec)
-          (cl:reduce
-           (cl:lambda (a b)
-             (coalton-impl/codegen::A2 f a b))
-           vec
-           :initial-value init
-           :from-end cl:t)))) 
+        (cl:reduce
+         (cl:lambda (a b)
+           (coalton-impl/codegen::A2 f a b))
+         vec
+         :initial-value init
+         :from-end cl:t)))) 
 
   (define-instance (Into (List :a) (Vector :a))
     (define (into lst)
-      (let out = (with-capacity (list:length lst)))
-      (let inner =
-        (fn (lst)
-          (match lst
-            ((Cons x xs)
-             (progn
-               (push! x out)
-               (inner xs)))
-            ((Nil) Unit))))
-      (inner lst)
-      out))
+      (let ((out (with-capacity (list:length lst)))
+            (inner 
+              (fn (lst)
+                (match lst
+                  ((Cons x xs)
+                   (progn
+                     (push! x out)
+                     (inner xs)))
+                  ((Nil) Unit)))))
+        (progn
+          (inner lst)
+          out))))
 
   (define-instance (Into (Vector :a) (List :a))
     (define (into v)
@@ -301,7 +303,10 @@
                     (Cons (index-unsafe index v) (inner v (+ 1 index)))))))
         (inner v 0))))
 
-  (define-instance (Iso (Vector :a) (List :a))))
+  (define-instance (Iso (Vector :a) (List :a)))
+
+  (define-instance (addr:Addressable (Vector :elt))
+    (define addr:eq? addr::unsafe-internal-eq?)))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/VECTOR")

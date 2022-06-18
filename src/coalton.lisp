@@ -146,13 +146,13 @@ in FORMS that begin with that operator."
   "Returns the lisp code generated from coalton code. Intended for debugging."
   `(let ((*emit-type-annotations* nil)
          (*coalton-skip-update* t))
-     (process-coalton-toplevel ',toplevel-forms *package* *global-environment*)))
+     (values (process-coalton-toplevel ',toplevel-forms *package* *global-environment*))))
 
 (defmacro coalton:coalton-codegen-types (&body toplevel-forms)
   "Returns the lisp code generated from coalton code with lisp type annotations. Intended for debugging."
   `(let ((*emit-type-annotations* t)
          (*coalton-skip-update* t))
-     (process-coalton-toplevel ',toplevel-forms *package* *global-environment*)))
+     (values (process-coalton-toplevel ',toplevel-forms *package* *global-environment*))))
 
 (defmacro coalton:coalton-codegen-ast (&body toplevel-forms)
   "Prints the AST of the typechecked coalton code. Intended for debugging."
@@ -230,7 +230,7 @@ in FORMS that begin with that operator."
                        &allow-other-keys)
       (collect-toplevel-forms toplevel-forms)
 
-    (multiple-value-bind (defined-types env)
+    (multiple-value-bind (defined-types env added-instances)
         (process-toplevel-type-definitions type-defines repr-table env)
 
       ;; Class definitions must be checked after types are defined
@@ -242,6 +242,7 @@ in FORMS that begin with that operator."
         ;; Methods need to be added to the environment before we can
         ;; check value types.
         (setf env (predeclare-toplevel-instance-definitions instance-defines package env))
+        (setf env (predeclare-toplevel-instance-definitions added-instances package env))
 
         (let ((declared-types (process-toplevel-declarations declares env)))
           (multiple-value-bind (env toplevel-bindings)
@@ -253,7 +254,13 @@ in FORMS that begin with that operator."
                     (process-toplevel-instance-definitions
                      instance-defines
                      package
-                     env)))
+                     env))
+                  (added-instance-definitions
+                    (process-toplevel-instance-definitions
+                     added-instances
+                     package
+                     env
+                     :compiler-generated t)))
 
               (multiple-value-bind (specializations env)
                   (process-toplevel-specializations specializations env)
@@ -263,7 +270,7 @@ in FORMS that begin with that operator."
                         (make-translation-unit
                          :types defined-types
                          :definitions toplevel-bindings
-                         :instances instance-definitions
+                         :instances (append added-instance-definitions instance-definitions)
                          :classes classes
                          :attr-table (or attr-table (make-hash-table)) ; "fix" style warning
                          :package package
