@@ -86,6 +86,12 @@
      '((coalton:declare x :a)
        (coalton:define x coalton:Unit))))
 
+  ;; Missing explicit predicates cannot be defualted
+  (signals coalton-impl::coalton-type-error
+    (run-coalton-typechecker
+     '((coalton:declare x :a)
+       (coalton:define x 1))))
+
   ;; Implicitly typed functions should only infer types from the declared type signature of an explicitly typed functions
   ;; http://jeremymikkola.com/posts/2019_01_12_type_inference_for_haskell_part_12.html
   (check-coalton-types
@@ -390,7 +396,7 @@
      (coalton:define (show x) "not impl")
 
      (coalton:define (f x)
-       (coalton:seq
+       (coalton::seq
         (coalton-prelude:Ok "hello")
         (coalton-prelude:map (coalton-prelude:+ 1) (coalton:make-list 1 2 3 4))
         (show x))))
@@ -442,13 +448,13 @@
        a))
    `((f . (String -> String))))
 
-  (signals coalton-impl/typechecker::coalton-type-error-context
+  (signals coalton-impl/typechecker::coalton-type-error
     (run-coalton-typechecker
      '((coalton:define (f a)
          (coalton:return "hello")
          Unit))))
 
-  (signals coalton-impl/typechecker::coalton-type-error-context
+  (signals coalton-impl/typechecker::coalton-type-error
     (run-coalton-typechecker
      '((coalton:define x (coalton:return "hello"))))))
 
@@ -492,3 +498,22 @@
   (check-coalton-types
    '((coalton:define x (coalton-prelude:even? 2)))
    '((x . coalton:Boolean))))
+
+(deftest test-bind ()
+  (check-coalton-types
+   '((coalton:define x
+       (coalton::bind x 5 (coalton-prelude:+ x 1))))
+   '((x . Integer)))
+
+  (check-coalton-types
+   '((coalton:define (f x)
+       (coalton::bind x (coalton-prelude:+ x 1) x)))
+   '((f . (coalton-prelude:Num :a => :a -> :a))))
+
+  (signals coalton-impl::coalton-type-error
+    (run-coalton-typechecker
+     '((coalton:define _
+         (coalton::bind id (coalton:fn (x) x)
+                        (coalton::seq
+                         (id coalton:Unit)
+                         (id "hello"))))))))

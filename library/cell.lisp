@@ -4,6 +4,7 @@
    #:coalton-library/builtin
    #:coalton-library/classes
    #:coalton-library/list)
+  (:local-nicknames (#:addr #:coalton-library/addressable))
   (:export
    #:Cell
    #:new
@@ -97,7 +98,7 @@
 
   (declare decrement! (Num :counter => (Cell :counter) -> :counter))
   (define (decrement! cel)
-    "Add one to the contents of CEL, storing and returning the new value"
+    "Subtract one from the contents of CEL, storing and returning the new value"
     (update! (- 1) cel))
 
   ;; i am very skeptical of these instances
@@ -132,7 +133,10 @@
     (define into new))
 
   (define-instance (Into (Cell :a) :a)
-    (define into read)))
+    (define into read))
+
+  (define-instance (addr:Addressable (Cell :a))
+    (define addr:eq? addr::unsafe-internal-eq?)))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/CELL")

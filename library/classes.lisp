@@ -1,6 +1,9 @@
 (coalton-library/utils:defstdlib-package #:coalton-library/classes
   (:use
    #:coalton)
+  (:import-from #:coalton-impl/early-library-defs
+                #:Eq #:==
+                #:Num #:+ #:- #:* #:fromInt)
   (:export
    #:Tuple
    #:Optional #:Some #:None
@@ -31,41 +34,8 @@
    #:combine-hashes
    #:define-sxhash-hasher))
 
-(in-package #:coalton)
-
 #+coalton-release
 (cl:declaim #.coalton-impl:*coalton-optimize-library*)
-
-(coalton-toplevel
-  ;;
-  ;; All definitions in this block must have explicit type
-  ;; declerations. Implicit declerations are unavaliable until Num is
-  ;; defined.
-  ;;
-
-  (repr :enum)
-  (define-type Unit Unit)
-
-  (repr :native cl:t)
-  (define-type Void)
-
-  ;; Boolean is an early type
-  (declare True Boolean)
-  (define True (lisp Boolean ()  cl:t))
-
-  (declare False Boolean)
-  (define False (lisp Boolean ()  cl:nil))
-
-  ;; List is an early type
-  (declare Cons (:a -> (List :a) -> (List :a)))
-  (define (Cons x xs)
-    (lisp (List :a) (x xs)
-      (cl:cons x xs)))
-
-  (declare Nil (List :a))
-  (define Nil
-    (lisp (List :a) ()
-      cl:nil)))
 
 (cl:in-package #:coalton-library/classes)
 
@@ -87,14 +57,6 @@
     ;; types; we want to implement Functor on this.
     (Ok :good)
     (Err :bad))
-
-  ;;
-  ;; Eq
-  ;;
-
-  (define-class (Eq :a)
-    "Types which have equality defined."
-    (== (:a -> :a -> Boolean)))
 
   (define-instance (Eq Unit)
     (define (== _ _) True))
@@ -175,17 +137,6 @@
     (if (< x y)
         x
         y))
-
-  ;;
-  ;; Num
-  ;;
-
-  (define-class ((Eq :a) => (Num :a))
-    "Types which have numeric operations defined."
-    (+ (:a -> :a -> :a))
-    (- (:a -> :a -> :a))
-    (* (:a -> :a -> :a))
-    (fromInt (Integer -> :a)))
 
   ;;
   ;; Haskell

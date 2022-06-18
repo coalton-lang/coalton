@@ -141,7 +141,7 @@ recompilation, and also maintains a stack of uncompiled candidates."
            (values))
 
   (when (candidate-manager-get candidate-manager candidate)
-    (return-from candidate-manager-push))
+    (return-from candidate-manager-push nil))
 
   (let ((new-name
           (gentemp (concatenate 'string (symbol-name (compile-candidate-name candidate)) "#")
@@ -164,11 +164,12 @@ recompilation, and also maintains a stack of uncompiled candidates."
   (declare (type symbol name)
            (type node-list args)
            (type symbol-list bound-variables)
+           (type tc:environment env)
            (values (or compile-candidate null) &optional))
 
   ;; Only functions with known code are valid candidates
   (unless (tc:lookup-code env name :no-error t)
-    (return-from valid-candidate-p))
+    (return-from valid-candidate-p nil))
 
   (let ((new-args (loop :for node :in args
                     :if (and (node-can-be-propidated node env) (node-free-p node bound-variables))
@@ -178,12 +179,18 @@ recompilation, and also maintains a stack of uncompiled candidates."
 
     ;; Candidates must have at least one propagatable argument
     (unless (some #'propagatable-p new-args)
-      (return-from valid-candidate-p))
+      (return-from valid-candidate-p nil))
 
     ;; Fully propigating arguments could change the ordering of side effects
     ;; Exit early to avoid this
+    ;;
+    ;; Unless the function is known to have more arguments than are being applied
     (when (every #'propagatable-p new-args)
-      (return-from valid-candidate-p))
+      (let ((function (tc:lookup-function env name :no-error t)))
+        (unless function
+          (return-from valid-candidate-p nil))
+        (unless (> (tc:function-env-entry-arity function) (length new-args))
+          (return-from valid-candidate-p nil))))
 
     (make-compile-candidate
      :name name
@@ -225,42 +232,64 @@ their known values."
                nil))
 
          (new-node
-           (if (null new-vars)
-               ;; If new-vars is null then the abstraction has been
-               ;; over applied. generate a new abstraction with extra
-               ;; arguments so that it can be direct called.
-               ;;
-               ;; NOTE: the following is only valid when propigating dicts
-               (let* ((over-args (- (length (compile-candidate-args candidate)) (length (node-abstraction-vars node))))
-                      (arg-tys (subseq (tc:function-type-arguments (node-type node))
-                                       (1- over-args)
-                                       (length (compile-candidate-args candidate))))
-                      (args (mapcar (lambda (_) (declare (ignore _)) (gensym)) arg-tys))
+           (let* ((candidate-args (compile-candidate-args candidate))
 
-                      (node (tc:apply-substitution
-                             subs
-                             (apply-ast-substitution
-                              ast-subs
-                              (node-abstraction
-                               (node-type (node-abstraction-subexpr node))
-                               args
-                               (node-application
-                                (tc:make-function-type*
-                                 (subseq (tc:function-type-arguments (node-type (node-abstraction-subexpr node))) (length args))
-                                 (tc:function-return-type (node-type (node-abstraction-subexpr node))))
-                                (node-abstraction-subexpr node)
-                                (loop :for ty :in arg-tys
-                                      :for arg :in args
-                                      :collect (node-variable ty arg))))))))
-                 node)
-               (tc:apply-substitution
-                subs
-                (node-abstraction
-                 (tc:make-function-type*
-                  (reverse arg-tys)
-                  new-type)
-                 (append new-vars retained-args)
-                 (apply-ast-substitution ast-subs (node-abstraction-subexpr node)))))))
+                  (abstraction-vars (node-abstraction-vars node)))
+
+             (cond
+               ;; Function is over applied
+               ((and (null new-vars)
+                     (> (length candidate-args) (length abstraction-vars)))
+                (let* ((over-args (- (length (compile-candidate-args candidate)) (length (node-abstraction-vars node))))
+                       (arg-tys (subseq (tc:function-type-arguments (node-type node))
+                                        (1- over-args)
+                                        (length (compile-candidate-args candidate))))
+                       (args (mapcar (lambda (_) (declare (ignore _)) (gensym)) arg-tys))
+
+                       (node (tc:apply-substitution
+                              subs
+                              (apply-ast-substitution
+                               ast-subs
+                               (node-abstraction
+                                (node-type (node-abstraction-subexpr node))
+                                args
+                                (node-application
+                                 (tc:make-function-type*
+                                  (subseq (tc:function-type-arguments (node-type (node-abstraction-subexpr node))) (length args))
+                                  (tc:function-return-type (node-type (node-abstraction-subexpr node))))
+                                 (node-abstraction-subexpr node)
+                                 (loop :for ty :in arg-tys
+                                       :for arg :in args
+                                       :collect (node-variable ty arg))))))))
+                  node))
+
+               ;; Function is under applied
+               ((and (null new-vars)
+                     (< (length candidate-args) (length abstraction-vars)))
+                (let* ((remaining-args (subseq abstraction-vars (length candidate-args)))
+
+                       (node-ty (node-type node))
+
+                       (arg-tys (subseq (tc:function-type-arguments node-ty) (length candidate-args)))
+
+                       (ret-ty (tc:function-return-type node-ty)))
+                  (tc:apply-substitution
+                   subs
+                   (node-abstraction
+                    (tc:make-function-type* arg-tys ret-ty)
+                    remaining-args
+                    (apply-ast-substitution ast-subs (node-abstraction-subexpr node))))))
+
+               ;; Function is applied
+               (t
+                (tc:apply-substitution
+                 subs
+                 (node-abstraction
+                  (tc:make-function-type*
+                   (reverse arg-tys)
+                   new-type)
+                  (append new-vars retained-args)
+                  (apply-ast-substitution ast-subs (node-abstraction-subexpr node)))))))))
 
     (typecheck-node new-node env)
 
@@ -293,7 +322,7 @@ propigate dictionaries that have been moved by the hoister."
                    (rands (node-rands node)))
 
                (unless name
-                 (return-from validate-candidate))
+                 (return-from validate-candidate nil))
 
                (let ((candidate
                        (valid-candidate-p
@@ -304,7 +333,7 @@ propigate dictionaries that have been moved by the hoister."
                         env)))
 
                  (unless candidate
-                   (return-from validate-candidate))
+                   (return-from validate-candidate nil))
 
                  (candidate-manager-push candidate-manager candidate package)
 
@@ -331,7 +360,7 @@ propigate dictionaries that have been moved by the hoister."
                    (rands (node-rands node)))
 
                (unless name
-                 (return-from apply-candidate))
+                 (return-from apply-candidate nil))
 
                (let ((candidate (valid-candidate-p
                                  name
@@ -341,7 +370,7 @@ propigate dictionaries that have been moved by the hoister."
                                  env)))
 
                  (unless candidate
-                   (return-from apply-candidate))
+                   (return-from apply-candidate nil))
 
                  (let* ((function-name (candidate-manager-get candidate-manager candidate))
 
@@ -360,14 +389,18 @@ propigate dictionaries that have been moved by the hoister."
 
                                 :do (setf new-type (tc:function-type-to new-type)))))
 
-                   (node-application
-                    (node-type node)
-                    (node-variable
-                     (tc:make-function-type*
-                      (reverse arg-tys)
-                      new-type)
-                     function-name)
-                    args))))))
+                   (if (null args)
+                       (node-variable
+                        new-type
+                        function-name)
+                       (node-application
+                        (node-type node)
+                        (node-variable
+                         (tc:make-function-type*
+                          (reverse arg-tys)
+                          new-type)
+                         function-name)
+                        args)))))))
 
     (traverse
      node

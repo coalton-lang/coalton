@@ -21,11 +21,12 @@
 
 (defun parse-instance-decleration (form env)
   (declare (type list form)
-           (type environment env))
+           (type environment env)
+           (values ty-predicate ty-predicate-list list &optional))
 
     (unless (and (listp form)
                  (<= 2 (length form))
-                 (eql 'coalton:define-instance (first form)))
+                 (eq (first form) 'coalton:define-instance))
       (error-parsing form "malformed DEFINE-INSTANCE form"))
 
     (multiple-value-bind (unparsed-predicate unparsed-context)
@@ -74,9 +75,62 @@
              context
              methods))))))
 
-(defun parse-instance-definition (form package env)
+(defun check-for-orphan-instance (predicate package)
+  ;; Instances defined on predeclared types violate the orphan rule
+  (unless coalton-impl::*coalton-stage-1-complete*
+    (return-from check-for-orphan-instance))
+
+  (when (equalp (symbol-package (ty-predicate-class predicate)) package)
+    (return-from check-for-orphan-instance))
+
+  (let ((foreign-type nil))
+    (loop :for ty :in (type-constructors (ty-predicate-types predicate))
+          :when (equalp (symbol-package ty) package)
+            :do (return-from check-for-orphan-instance)
+
+          :do (setf foreign-type t))
+
+    (when foreign-type
+      (warn "Instance ~A defined in package ~A violates the orphan rule.~%    Instances can only be defined when the class~%    or at least one type is defined in the current package."
+            predicate
+            (package-name package)))))
+
+(defun ty-underlying-type-name (ty)
+  (declare (ty ty)
+           (values symbol &optional))
+  (etypecase ty
+    (tcon (tycon-name (tcon-tycon ty)))
+    (tapp (ty-underlying-type-name (tapp-from ty)))))
+
+(defun ty-find-type-entry (env ty)
+  (lookup-type env (ty-underlying-type-name ty)))
+
+(defun check-for-addressable-on-non-repr-native-type (form predicate class-name env)
+  "User code is not allowed to define instances of `Addressable' except for types which specify `repr :native'.
+
+`process-coalton-toplevel' will bypass this check for compiler-generated `Addressable' instances returned from
+`process-toplevel-type-definitions' will by passing `:compiler-generated t' through
+`process-toplevel-instance-definitions' to `parse-instance-definition'."
+  (when (eq class-name 'coalton-impl/early-library-defs:Addressable)
+    (let* ((ty-args (ty-predicate-types predicate)))
+      (unless (= (length ty-args) 1)
+        (error-parsing
+         form
+         "Bad number of type arguments ~d for instance of Addressable"
+         (length ty-args)))
+      (let* ((type-entry (ty-find-type-entry env (first ty-args))))
+        (unless (explicit-repr-explicit-addressable-p (type-entry-explicit-repr type-entry))
+          (error-parsing
+           form
+           "Cannot explicitly define Addressable instance for type ~s with explicit repr ~s"
+           (type-entry-name type-entry)
+           (type-entry-explicit-repr type-entry)))))))
+
+(defun parse-instance-definition (form package env &key compiler-generated)
   (multiple-value-bind (predicate context methods)
       (parse-instance-decleration form env)
+
+    (check-for-orphan-instance predicate package)
 
     (with-pprint-variable-context ()
       (with-parsing-context ("definition of ~A" predicate)
@@ -89,6 +143,9 @@
 
                (instance-subs (predicate-match (ty-class-predicate class-entry)
                                                predicate)))
+
+          (unless compiler-generated
+            (check-for-addressable-on-non-repr-native-type form predicate class-name env))
 
           ;; Check that constraints defined on the class are resolvable
           (loop :for superclass :in (ty-class-superclasses class-entry)

@@ -1,26 +1,26 @@
-;;;; Complex
+;;;; complex.lisp
 ;;;;
 ;;;; Complex numbers
 
-(coalton-library/utils:defstdlib-package #:coalton-library/complex
+(coalton-library/utils:defstdlib-package #:coalton-library/math/complex
     (:use #:coalton
           #:coalton-library/classes
-          #:coalton-library/arith
-          #:coalton-library/utils)
+          #:coalton-library/utils
+          #:coalton-library/math/arith)
   (:local-nicknames
-   (#:arith #:coalton-library/arith))
+   (#:arith #:coalton-library/math/arith))
   (:export
    #:complex
    #:real-part
    #:imag-part
    #:conjugate
-   #:magnitude
+   #:square-magnitude
    #:ii))
 
 #+coalton-release
 (cl:declaim #.coalton-impl:*coalton-optimize-library*)
 
-(in-package #:coalton-library/complex)
+(in-package #:coalton-library/math/complex)
 
 (coalton-toplevel
   (repr :native (cl:or cl:number complex))
@@ -42,8 +42,8 @@
     "The complex conjugate."
     (complex (real-part n) (negate (imag-part n))))
 
-  (declare magnitude (Complex :a => Complex :a -> :a))
-  (define (magnitude a)
+  (declare square-magnitude (Complex :a => Complex :a -> :a))
+  (define (square-magnitude a)
     "The length of a complex number."
     (+ (* (real-part a) (real-part a))
        (* (imag-part a) (imag-part a))))
@@ -63,9 +63,20 @@
     (define (fromInt n)
       (complex (fromInt n) 0)))
 
-  (define-instance ((Complex :num) (Complex :frac) (Dividable :num :frac)
-                    => (Dividable (Complex :num) (Complex :frac)))
-    (define (general/ a b) (complex-divide a b)))
+  ;; BUG: This shouldn't be overlapping
+  ;; (define-instance ((Complex :num) (Complex :frac) (Dividable :num :frac)
+  ;;                   => (Dividable (Complex :num) (Complex :frac)))
+  ;;   (define (general/ a b) (complex-divide a b)))
+
+  (define-instance ((Complex :a) (Reciprocable :a) => Reciprocable (Complex :a))
+    (define (reciprocal x)
+      (let a = (real-part x))
+      (let b = (imag-part x))
+      (let divisor = (reciprocal (square-magnitude x)))
+      ;; z^-1 = z*/|z|^2
+      (complex (* a divisor) (negate (* b divisor))))
+    (define (/ a b)
+      (complex-divide a b)))
 
   (define-instance (Complex :a => Complex (Complex :a))
     (define (complex a b)
@@ -103,7 +114,7 @@
                            => Complex :a -> Complex :a -> Complex :b))
   (define (complex-divide a b)
     (let dividend = (* a (conjugate b)))
-    (let divisor = (magnitude b))
+    (let divisor = (square-magnitude b))
     (complex (general/ (real-part dividend) divisor)
              (general/ (imag-part dividend) divisor))))
 
@@ -190,32 +201,5 @@
          (match a
            ((%Complex _ b) b))))))
 
-(cl:macrolet
-    ((%define-builtin-complex-float-instances (coalton-type)
-       (cl:let ((complex-type `(Complex ,coalton-type)))
-         `(coalton-toplevel
-            (define-instance (Exponentiable ,complex-type)
-              (define (expt base power)
-                (lisp ,complex-type (base power)
-                  (cl:expt base power)))
-              (define (log base number)
-                (lisp ,complex-type (base number)
-                  (cl:log number base))))
-            (define-instance (Trigonometric ,complex-type)
-              ,(generate-unary-wrapper complex-type 'sin  'cl:sin)
-              ,(generate-unary-wrapper complex-type 'cos  'cl:cos)
-              ,(generate-unary-wrapper complex-type 'tan  'cl:tan)
-              ,(generate-unary-wrapper complex-type 'asin 'cl:asin)
-              ,(generate-unary-wrapper complex-type 'acos 'cl:acos)
-              ,(generate-unary-wrapper complex-type 'atan 'cl:atan))
-
-            (define-instance (Into Fraction ,complex-type)
-              (define (into x)
-                (into (the ,coalton-type (into x)))))
-
-            (define-instance (Float ,complex-type)
-              (define ee (into (the ,coalton-type ee)))
-              (define pi (into (the ,coalton-type pi))))))))
-
-  (%define-builtin-complex-float-instances Single-Float)
-  (%define-builtin-complex-float-instances Double-Float))
+#+sb-package-locks
+(sb-ext:lock-package "COALTON-LIBRARY/MATH/COMPLEX")

@@ -4,12 +4,14 @@
 ;;; Type unification
 ;;;
 
-(defun unify (substs type1 type2)
+(defun unify (substs type1 type2 &optional desc1 desc2)
   "Unify TYPE1 and TYPE2 under given substitutions, returning an updated substitution list"
-  (with-type-context ("unification of types ~A and ~A" (apply-substitution substs type1) (apply-substitution substs type2))
-    (let ((new-substs (mgu (apply-substitution substs type1)
-                           (apply-substitution substs type2))))
-      (compose-substitution-lists new-substs substs))))
+  (let ((desc1 (if desc1 (format nil " (type of ~A)" desc1) ""))
+        (desc2 (if desc2 (format nil " (type of ~A)" desc2) "")))
+    (with-type-context ("unification of types ~A~A and ~A~A" (apply-substitution substs type1) desc1 (apply-substitution substs type2) desc2)
+      (let ((new-substs (mgu (apply-substitution substs type1)
+                             (apply-substitution substs type2))))
+        (compose-substitution-lists new-substs substs)))))
 
 (defgeneric mgu (type1 type2)
   (:documentation "Returns a SUBSTITUTION-LIST of the most general substitutions required to unify TYPE1 and TYPE2.")
@@ -84,7 +86,8 @@ apply s type1 == type2")
                                      (compose-substitution-lists
                                       (mgu (apply-substitution subs pred-type1)
                                            (apply-substitution subs pred-type2))
-                                      subs)))))
+                                      subs)))
+                :initial-value nil))
     (coalton-type-error ()
       (error 'predicate-unification-error :pred1 pred1 :pred2 pred2))))
 
@@ -108,7 +111,8 @@ apply s type1 == type2")
                                     (compose-substitution-lists
                                      (match (apply-substitution subs pred-type1)
                                        (apply-substitution subs pred-type2))
-                                     subs))))
+                                     subs)))
+               :initial-value nil)
        subs)
     (coalton-type-error ()
       (error 'predicate-unification-error :pred1 pred1 :pred2 pred2))))

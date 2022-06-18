@@ -2,12 +2,12 @@
 
 ;;; Handling of toplevel COALTON:DEFINE-INSTANCE.
 
-(defun process-toplevel-instance-definitions (definstance-forms package env)
+(defun process-toplevel-instance-definitions (definstance-forms package env &key compiler-generated)
   (declare  (values instance-definition-list))
 
   (mapcar
      (lambda (form)
-       (parse-instance-definition form package env))
+       (parse-instance-definition form package env :compiler-generated compiler-generated))
      definstance-forms))
 
 (defun predeclare-toplevel-instance-definitions (definstance-forms package env)

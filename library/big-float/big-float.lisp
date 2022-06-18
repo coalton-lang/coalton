@@ -5,7 +5,8 @@
 (coalton-library/utils:defstdlib-package #:coalton-library/big-float
   (:use #:coalton
         #:coalton-library/classes
-        #:coalton-library/arith)
+        #:coalton-library/functions
+        #:coalton-library/math)
 
   (:export
    #:RoundingMode
@@ -78,6 +79,14 @@
     (cl:prog1 (mpq->rational q)
       (__gmpq_clear (sb-alien:addr q)))))
 
+;; Whether the mpfr ceiling function is properly exported
+(cl:eval-when (:compile-toplevel :load-toplevel)
+  (cl:if (uiop:featurep :sbcl)
+         (cl:pushnew
+          (cl:if (uiop:version< (cl:lisp-implementation-version) "2.2.5")
+                 :sbcl-pre-2-2-5
+                 :sbcl-post-2-2-5)
+          cl:*features*)))
 
 ;;; Coalton Implementation
 
@@ -214,32 +223,63 @@
       (lisp Big-Float (a)
         (sb-mpfr:coerce a 'sb-mpfr:mpfr-float))))
 
-  ;; Quantization and division
-  (declare bf-floor (Big-Float -> (Tuple Integer Big-Float)))
-  (define (bf-floor f)
-    (lisp (Tuple Integer Big-Float) (f)
-      (cl:let ((x (sb-mpfr:floor f)))
-        (Tuple (sb-mpfr:coerce x 'cl:integer)
-               (sb-mpfr:sub x f)))))
-
-  (declare bf-ceiling (Big-Float -> (Tuple Integer Big-Float)))
-  (define (bf-ceiling f)
-    (lisp (Tuple Integer Big-Float) (f)
-      (cl:let ((x (sb-mpfr::ceil f)))   ; SBCL bug: not exported correctly
-        (Tuple (sb-mpfr:coerce x 'cl:integer)
-               (sb-mpfr:sub x f)))))
-
+  ;; quantization and division
   (define-instance (Quantizable Big-Float)
-    (define (quantize f)
-      (match (Tuple (bf-floor f) (bf-ceiling f))
-        ((Tuple (Tuple fl flr) (Tuple ce cer))
-         (Quantization f fl flr ce cer)))))
+    (define (floor f)
+      (lisp Integer (f)
+        (cl:let ((x (sb-mpfr:floor f)))
+          (sb-mpfr:coerce x 'cl:integer))))
+    (define (ceiling f)
+      #+sbcl-pre-2-2-5
+      (negate (floor (negate f)))
+      #+sbcl-post-2-2-5
+      (lisp Integer (f)
+        (cl:let ((x (sb-mpfr:ceiling f)))
+          (sb-mpfr:coerce x 'cl:integer))))
+    (define (proper f)
+      (lisp (Tuple Integer Big-Float) (f)
+        (cl:let ((x (sb-mpfr:truncate f)))
+          (Tuple
+           (sb-mpfr:coerce x 'cl:integer)
+           (sb-mpfr:sub f x))))))
 
-  (define-instance (Dividable Big-Float Big-Float)
+  (define-instance (Reciprocable Big-Float)
+    (define (/ a b)
+      (lisp big-float (a b)
+        (cl:values (sb-mpfr:div a b))))
+    (define (reciprocal a)
+      (/ 1 a)))
+
+  (define-instance (Real Big-Float)
+    (define (real-approx prec x)
+      (coalton-library/math/real::rational-approx prec x)))
+
+  (define-instance (Rational Big-Float)
+    (define (to-fraction x)
+      (lisp Fraction (x)
+        (mpfr->rational (sb-mpfr::mpfr-float-ref x))))
+    (define (best-approx x)
+      (real-approx (get-precision) x)))
+
+  (define-instance (Transfinite Big-Float)
+    (define infinity (/ 1 0))
+    (define (infinite? x)
+      (lisp Boolean (x)
+        (to-boolean (sb-mpfr:infinityp x))))
+    (define nan (/ 0 0))
+    (define (nan? x)
+      (lisp Boolean (x)
+        (to-boolean (sb-mpfr:nan-p x)))))
+
+  (define-instance (Dividable Integer Big-Float)
     (define (general/ a b)
-      (lisp Big-Float (a b)
-        (cl:values (sb-mpfr:div a b)))))
+      (if (== 0 b)
+          (/ (fromInt a) (fromInt b))
+          (into (exact/ a b))))))
 
+(coalton-library/math/complex::%define-standard-complex-instances Big-Float)
+
+(coalton-toplevel
   ;; Trig
   (define-instance (Trigonometric Big-Float)
     (define (sin x)
@@ -263,22 +303,48 @@
 
   ;; Exp/Log
   (define-instance (Exponentiable Big-Float)
-    (define (expt x n)
+    (define (exp x)
+      (lisp Big-Float (x)
+        (cl:values (sb-mpfr:exp x))))
+    (define (pow x n)
       (lisp Big-Float (x n)
         (cl:values (sb-mpfr:power x n))))
     (define (log n x)
-      (lisp Big-Float (x n)
-        (cl:values (sb-mpfr:div (sb-mpfr:log x) (sb-mpfr:log n))))))
+      (cond
+        ((<= n 0) nan)
+        ((== n 2)
+         (lisp Big-Float (x)
+           (cl:values (sb-mpfr:log2 x))))
+        ((== n 10)
+         (lisp Big-Float (x)
+           (cl:values (sb-mpfr:log10 x))))
+        (True (/ (ln x) (ln n)))))
+    (define (ln x)
+      (lisp Big-Float (x)
+        (cl:values (sb-mpfr:log x)))))
 
-  (declare bf-sqrt (Big-Float -> Big-Float))
-  (define (bf-sqrt x)
-    (lisp Big-Float (x)
-      (cl:values (sb-mpfr:sqrt x))))
+  (define-instance (Radical Big-Float)
+    (define (sqrt x)
+      (lisp Big-Float (x)
+        (cl:values (sb-mpfr:sqrt x))))
+    (define (nth-root n x)
+      (coalton-library/math/elementary::canonical-nth-root n x)))
 
-  (specialize sqrt bf-sqrt (Big-Float -> Big-Float))
+  (define-instance (Polar Big-Float)
+    (define (phase z)
+      (let x = (real-part z))
+      (let y = (imag-part z))
+      (match (Tuple (<=> x 0) (<=> y 0))
+        ((Tuple (GT) _)    (atan (/ y x)))
+        ((Tuple (LT) (LT)) (- (atan (/ y x)) (bf-pi)))
+        ((Tuple (LT) _)    (+ (atan (/ y x)) (bf-pi)))
+        ((Tuple (EQ) (GT)) (/ (bf-pi) 2))
+        ((Tuple (EQ) (LT)) (/ (bf-pi) -2))
+        ((Tuple (EQ) (EQ)) 0)))
+    (define (polar z)
+      (Tuple (magnitude z) (phase z))))
 
-  ;; Float
-  ;;
+  ;; Elementary
   (define (bf-pi _)
     "Return the value of pi to the currently set precision."
     (lisp Big-Float ()
@@ -290,17 +356,10 @@
 
   ;; BUG: These are calculated just once, so if we change precision,
   ;; these will *NOT* get updated.
-  (define-instance (Float Big-Float)
+  (define-instance (Elementary Big-Float)
     (define pi (bf-pi))
     (define ee (bf-ee)))
-
-  (define-instance (RealFloat Big-Float)
-    (define (rationalize x)
-      (lisp Fraction (x)
-        (mpfr->rational (sb-mpfr::mpfr-float-ref x)))))
 )                                       ; COALTON-TOPLEVEL
-
-(coalton-library/complex::%define-standard-complex-instances Big-Float)
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/BIG-FLOAT")

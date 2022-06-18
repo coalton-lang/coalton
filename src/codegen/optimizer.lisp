@@ -46,46 +46,45 @@
 
   (let ((bindings (optimize-bindings-initial bindings package env)))
 
+    ;; Make code and environment data avaliable to the monomorphizer
     (loop :for (name . node) :in bindings
           :do (setf env (tc:set-code env name node)))
 
+    (setf env (update-function-env bindings env))
+
     (let* ((manager (candidate-manager))
 
-           (resolve-table (alexandria:alist-hash-table bindings))
+           (resolve-table (alexandria:alist-hash-table bindings)))
 
-           (bindings
-             (loop :for (name . node) :in bindings
-                   :for attrs := (gethash name attr-table)
+      (setf bindings (direct-application bindings (make-function-table env)))
+      (loop :for (name . node) :in bindings
+            :do (typecheck-node node env)
+            :do (setf env (tc:set-code env name node)))
 
-                   :for monomorphize := (find :monomorphize attrs)
+      (setf bindings
+            (loop :for (name . node) :in bindings
+                  :for attrs := (gethash name attr-table)
 
-                   :if monomorphize
-                     :append (optimize-bindings-initial
-                              (monomorphize
-                               name
-                               manager
-                               package
-                               resolve-table
-                               #'optimize-node
-                               env)
-                              package env)
-                   :else
-                     :collect (cons name node))))
+                  :for monomorphize := (find :monomorphize attrs)
 
+                  :if monomorphize
+                    :append (optimize-bindings-initial
+                             (monomorphize
+                              name
+                              manager
+                              package
+                              resolve-table
+                              #'optimize-node
+                              env)
+                             package env)
+                  :else
+                    :collect (cons name node)))
       (loop :for (name . node) :in bindings
             :do (typecheck-node node env))
 
       (setf env (update-function-env bindings env))
 
-      (let ((bindings (direct-application bindings (make-function-table env))))
-
-        (loop :for (name . node) :in bindings
-              :do (typecheck-node node env)
-              :do (setf env (tc:set-code env name node)))
-
-        (values
-         bindings
-         env)))))
+      (values bindings env))))
 
 (defun direct-application (bindings table)
   (declare (type binding-list bindings)
@@ -107,16 +106,25 @@
                       (node-application-rands node)))))))
 
            (add-local-funs (node &rest rest)
-             (declare (ignore rest))
+             (declare (ignore rest)
+                      (dynamic-extent rest))
              (loop :for (name . node) :in (node-let-bindings node)
                    :when (node-abstraction-p node) :do
-                     (setf (gethash name table) (length (node-abstraction-vars node))))))
+                     (setf (gethash name table) (length (node-abstraction-vars node)))))
+
+           (add-bind-fun (node &rest rest)
+             (declare (ignore rest)
+                      (dynamic-extent rest))
+             (when (node-abstraction-p (node-bind-expr node))
+               (setf (gethash (node-bind-name node) table) (length (node-abstraction-vars (node-bind-expr node)))))
+             nil))
 
     (traverse-bindings
      bindings
      (list
       (cons :application #'rewrite-direct-application)
-      (cons :before-let #'add-local-funs)))))
+      (cons :before-let #'add-local-funs)
+      (cons :before-bind #'add-bind-fun)))))
 
 (defun optimize-bindings-initial (bindings package env)
   (declare (type binding-list bindings)

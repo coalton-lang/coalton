@@ -2,12 +2,12 @@
 ;;;;
 ;;;; Integral domains and operations on integers
 
-(coalton-library/utils::defstdlib-package #:coalton-library/integral
+(coalton-library/utils::defstdlib-package #:coalton-library/math/integral
     (:use
      #:coalton
      #:coalton-library/classes
      #:coalton-library/builtin
-     #:coalton-library/arith)
+     #:coalton-library/math/arith)
   (:import-from
    #:coalton-library/bits
    #:Bits)
@@ -33,7 +33,7 @@
 #+coalton-release
 (cl:declaim #.coalton-impl:*coalton-optimize-library*)
 
-(in-package #:coalton-library/integral)
+(in-package #:coalton-library/math/integral)
 
 (coalton-toplevel
   (define-class (Num :a => Remainder :a)
@@ -65,29 +65,30 @@ are floored and truncated division, respectively."
   (declare ^ ((Num :a) (Integral :int) => (:a -> :int -> :a)))
   (define (^ base power)
     "Exponentiate BASE to a non-negative POWER."
-    ;; (g x n b) = (* (x ^ n) b)
-    (let g =
-      (fn (a n b)
-        (cond
-          ((even? n) (g (* a a) (quot n 2) b))
-          ((> n 1) (g (* a a) (quot n 2) (* a b)))
-          (True (* a b)))))
-    ;; (f a n) = (a ^ n)
-    (let f =
-      (fn (a n)
-        (cond
-          ((even? n) (f (* a a) (quot n 2)))
-          ((> n 1) (g (* a a) (quot n 2) a))
-          (True a))))
-    (cond
-      ((> power 3) (f base power))
-      ((== power 3) (* (* base base) base))
-      ((== power 2) (* base base))
-      ((== power 1) base)
-      ((== power 0) 1)
-      (True (error "Can't exponentiate with a negative exponent."))))
+    (let (
+          ;; (g x n b) = (* (x ^ n) b)
+          (g 
+            (fn (a n b)
+              (cond
+                ((even? n) (g (* a a) (quot n 2) b))
+                ((> n 1) (g (* a a) (quot n 2) (* a b)))
+                (True (* a b)))))
+          ;; (f a n) = (a ^ n)
+          (f
+            (fn (a n)
+              (cond
+                ((even? n) (f (* a a) (quot n 2)))
+                ((> n 1) (g (* a a) (quot n 2) a))
+                (True a)))))
+      (cond
+        ((> power 3) (f base power))
+        ((== power 3) (* (* base base) base))
+        ((== power 2) (* base base))
+        ((== power 1) base)
+        ((== power 0) 1)
+        (True (error "Can't exponentiate with a negative exponent.")))))
 
-  (declare ^^ ((Dividable :a :a) (Num :a) (Integral :int) => (:a -> :int -> :a)))
+  (declare ^^ ((Reciprocable :a) (Integral :int) => (:a -> :int -> :a)))
   (define (^^ base power)
     "Exponentiate BASE to a signed POWER."
     (if (< power 0)
@@ -110,48 +111,48 @@ are floored and truncated division, respectively."
   (declare factorial ((Integral :int) => :int -> :int))
   (define (factorial n)
     "The factorial of N."
-    (let factorial-rec =
-      (fn (a)
-        (if (> a 0)
-            (* a (factorial-rec (- a 1)))
-            1)))
-    (if (< n 0)
-        (error "Cannot FACTORIAL a negative number.")
-        (factorial-rec n)))
+    (let ((factorial-rec 
+            (fn (a)
+              (if (> a 0)
+                  (* a (factorial-rec (- a 1)))
+                  1))))
+      (if (< n 0)
+          (error "Cannot FACTORIAL a negative number.")
+          (factorial-rec n))))
 
   (declare ilog ((Integral :int) => :int -> :int -> :int))
   (define (ilog b x)
     "The floor of the logarithm with base B > 1 of X >= 1."
     ;; See GHC's wordLogBase#
-    (let ilog-rec =
-      (fn (y)
-        (if (< x y)
-            (the (Tuple :a :a) (Tuple x 0))
-            (match (ilog-rec (* y y))
-              ((Tuple a b)
-               (if (< a y)
-                   (Tuple a (* 2 b))
-                   (Tuple (quot a y) (+ (* 2 b) 1))))))))
-    (cond
-      ((== x 1) 0)
-      ((< x 1) (error "Power of ILOG must be greater than or equal to 1."))
-      ((<= b 1) (error "Base of ILOG must be greater than 1."))
-      (True (match (ilog-rec b) ((Tuple _ b) b)))))
+    (let ((ilog-rec 
+            (fn (y)
+              (if (< x y)
+                  (the (Tuple :a :a) (Tuple x 0))
+                  (match (ilog-rec (* y y))
+                    ((Tuple a b)
+                     (if (< a y)
+                         (Tuple a (* 2 b))
+                         (Tuple (quot a y) (+ (* 2 b) 1)))))))))
+      (cond
+        ((== x 1) 0)
+        ((< x 1) (error "Power of ILOG must be greater than or equal to 1."))
+        ((<= b 1) (error "Base of ILOG must be greater than 1."))
+        (True (match (ilog-rec b) ((Tuple _ b) b))))))
 
   (declare isqrt ((Integral :int) => :int -> :int))
   (define (isqrt x)
     "The floor of the square root of N > 0."
-    (let isqrt-rec =
-      (fn (a)
-        (let b = (quot (+ (* a a) x) (* 2 a)))
-        (if (> a b)
-            (isqrt-rec b)
-            a)))
-    (cond
-      ((> x 1) (isqrt-rec x))
-      ((== x 1) 1)
-      ((== x 0) 0)
-      ((< x 0) (error "Cannot take ISQRT of a negative number.")))))
+    (let ((isqrt-rec 
+            (fn (a)
+              (let b = (quot (+ (* a a) x) (* 2 a)))
+              (if (> a b)
+                  (isqrt-rec b)
+                  a))))
+      (cond
+        ((> x 1) (isqrt-rec x))
+        ((== x 1) 1)
+        ((== x 0) 0)
+        ((< x 0) (error "Cannot take ISQRT of a negative number."))))))
 
 (cl:defmacro %define-integral-native (type signed)
   (cl:let ((even? (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-EVEN?")))
@@ -263,4 +264,4 @@ are floored and truncated division, respectively."
 (%define-native-expt Double-Float)
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/INTEGRAL")
+(sb-ext:lock-package "COALTON-LIBRARY/MATH/INTEGRAL")

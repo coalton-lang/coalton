@@ -212,6 +212,25 @@
    (kind-variables (tapp-to type))
    (kind-variables (tapp-from type))))
 
+(defun type-constructors (type)
+  (declare (values symbol-list &optional))
+  (remove-duplicates (type-constructors-g type)))
+
+(defgeneric type-constructors-g (type)
+  (:method ((type tvar))
+    nil)
+
+  (:method ((type tcon))
+    (list (tycon-name (tcon-tycon type))))
+
+  (:method ((type tapp))
+    (append
+     (type-constructors-g (tapp-from type))
+     (type-constructors-g (tapp-to type))))
+
+  (:method ((lst list))
+    (mapcan #'type-constructors-g lst)))
+
 ;;;
 ;;; Early types
 ;;;
