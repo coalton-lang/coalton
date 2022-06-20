@@ -3,6 +3,9 @@
    #:coalton
    #:coalton-library/builtin
    #:coalton-library/classes)
+  (:import-from
+   #:coalton-library/list
+   #:fold)
   (:export
    #:concat
    #:reverse
@@ -121,6 +124,10 @@ does not have that suffix."
     (define (into lst)
       (lisp String (lst)
         (cl:coerce lst 'cl:string))))
+
+ (define-instance (Into (List String) String)
+  (define (into lst)
+    (fold concat "" lst)))
 
   (define-instance (Iso (List Char) String))
 
