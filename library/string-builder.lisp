@@ -2,11 +2,13 @@
   (:use
    #:coalton
    #:coalton-library/builtin
+   #:coalton-library/functions
    #:coalton-library/classes)
   (:local-nicknames (#:addr #:coalton-library/addressable)
                     (#:str #:coalton-library/string)
                     (#:real #:coalton-library/math/real)
-                    (#:iter #:coalton-library/iterator))
+                    (#:iter #:coalton-library/iterator)
+                    (#:list #:coalton-library/list))
   (:export
    #:new
    #:with-capacity
@@ -141,3 +143,27 @@ way, it remains safe to reference SB after finalization."
 
   (define-instance (Into StringBuilder String)
     (define into finalize)))
+
+;; an example usage of `StringBuilder'
+
+(coalton-toplevel
+  (declare join (String -> (List String) -> String))
+  (define (join separator strs)
+    (match strs
+      ((Nil) "")
+      ((Cons fst rst)
+       (let sep-len = (into (str:length separator)))
+       (let strs-len = (iter:sum! (map (compose into str:length) (iter:list-iter strs))))
+       (let sep-count = (into (list:length rst)))
+       (let total-len = (+ strs-len (* sep-count sep-len)))
+       (let sb = (with-capacity total-len))
+       ;; put the first str in without a separator
+       (push-str! sb fst)
+       ;; put a separator before each remaining str
+       (fold (fn (sb str)
+               (push-str! sb separator)
+               (push-str! sb str))
+             sb
+             rst)
+       ;; we know sb isn't referenced anywhere else, so no need to copy
+       (non-copying-finalize! sb)))))
