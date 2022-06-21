@@ -28,7 +28,8 @@
                         package "INSTANCE/~A"
                         (with-output-to-string (s)
                           (with-pprint-variable-context ()
-                            (pprint-predicate s predicate)))))
+                            (let* ((*print-escape* t))
+                              (pprint-predicate s predicate))))))
 
                      (method-names (mapcar
                                     #'car
@@ -41,7 +42,7 @@
                                :do (setf (gethash method-name table)
                                          (alexandria:format-symbol
                                           package
-                                          "~A-~A"
+                                          "~A-~S"
                                           instance-codegen-sym
                                           method-name)))
                          table))

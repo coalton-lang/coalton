@@ -239,6 +239,9 @@
 ;;; Pretty printing
 ;;;
 
+(defvar *coalton-print-unicode* t
+  "Whether to print coalton info using unicode symbols")
+
 (defun pprint-kind (stream kind &optional colon-p at-sign-p)
   (declare (type stream stream)
            (type kind kind)
@@ -247,25 +250,29 @@
            (values kind))
   (etypecase kind
     (kstar
-     (format stream "*"))
+     (write-char #\* stream))
     (kfun
      (let ((from (kfun-from kind))
            (to (kfun-to kind)))
        (when (kfun-p from)
-         (format stream "("))
+         (write-char #\( stream))
        (pprint-kind stream from)
        (when (kfun-p from)
-         (format stream ")"))
+         (write-char #\) stream))
 
-       (format stream " -> ")
+       (write-string (if *coalton-print-unicode*
+                         " → "
+                         " -> ")
+                     stream)
 
        (when (kfun-p to)
-         (format stream "("))
+         (write-char #\( stream))
        (pprint-kind stream to)
        (when (kfun-p to)
-         (format stream ")"))))
+         (write-char #\) stream))))
     (kvar
-     (format stream "#K~A" (kyvar-id (kvar-kyvar kind)))))
+     (write-string "#K" stream)
+     (write (kyvar-id (kvar-kyvar kind)) :stream stream)))
   kind)
 
 (set-pprint-dispatch 'kind 'pprint-kind)
