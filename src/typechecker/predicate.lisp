@@ -139,9 +139,10 @@
            (ignore colon-p)
            (ignore at-sign-p)
            (values ty-predicate &optional))
-  (format stream "~S ~{~A~^ ~}"
-          (ty-predicate-class predicate)
-          (ty-predicate-types predicate))
+  (write (ty-predicate-class predicate) :stream stream)
+  (loop :for ty :in (ty-predicate-types predicate)
+        :do (write-char #\space stream)
+            (write ty :stream stream))
   predicate)
 
 (set-pprint-dispatch 'ty-predicate 'pprint-predicate)
@@ -152,25 +153,27 @@
            (ignore at-sign-p))
   (cond
     ((= 0 (length (qualified-ty-predicates qualified-ty)))
-     (format stream "~A" (qualified-ty-type qualified-ty)))
+     (write (qualified-ty-type qualified-ty) :stream stream))
 
     ((= 1 (length (qualified-ty-predicates qualified-ty)))
-     (format stream "~A" (first (qualified-ty-predicates qualified-ty)))
+     (write (first (qualified-ty-predicates qualified-ty))
+            :stream stream)
      (write-string (if *coalton-print-unicode*
                           " ⇒ "
                           " => ")
                    stream)
-     (format stream "~A" (qualified-ty-type qualified-ty)))
+     (write (qualified-ty-type qualified-ty)
+            :stream stream))
     (t
      (dolist (pred (qualified-ty-predicates qualified-ty))
        (write-string "(" stream)
-       (format stream "~A" pred)
+       (write pred :stream stream)
        (write-string ") " stream))
      (write-string (if *coalton-print-unicode*
                           "⇒ "
                           "=> ")
                    stream)
-     (format stream "~A" (qualified-ty-type qualified-ty))))
+     (write (qualified-ty-type qualified-ty) :stream stream)))
   nil)
 
 (set-pprint-dispatch 'qualified-ty 'pprint-qualified-ty)

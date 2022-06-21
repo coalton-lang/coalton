@@ -346,9 +346,6 @@
 ;;; Pretty printing
 ;;;
 
-(defvar *coalton-print-unicode* t
-  "Whether to print coalton info using unicode symbols")
-
 (defvar *coalton-pretty-print-tyvars* nil
   "Whether to print all tyvars using type variable syntax
 
@@ -365,9 +362,11 @@ This requires a valid PPRINT-VARIABLE-CONTEXT")
      (if *coalton-pretty-print-tyvars*
          ;; Print the tvar using the current printing context. Requires use of PPRINT-VARIABLE-CONTEXT
          (pprint-ty stream (pprint-tvar ty))
-         (format stream "#T~A" (tyvar-id (tvar-tyvar ty)))))
+         (progn
+           (write-string "#T" stream)
+           (write (tyvar-id (tvar-tyvar ty)) :stream stream))))
     (tcon
-     (format stream "~A" (tycon-name (tcon-tycon ty))))
+     (write (tycon-name (tcon-tycon ty)) :stream stream))
     (tapp
      (cond
        ((function-type-p ty) ;; Print function types
@@ -413,7 +412,8 @@ This requires a valid PPRINT-VARIABLE-CONTEXT")
              (pprint-ty stream (tapp-to ty))
              (write-string ")" stream)))))))
     (tgen
-     (format stream "#GEN~A" (tgen-id ty))))
+     (write-string "#GEN" stream)
+     (write (tgen-id ty) :stream stream)))
   ty)
 
 (set-pprint-dispatch 'ty 'pprint-ty)

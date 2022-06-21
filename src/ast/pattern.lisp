@@ -109,12 +109,16 @@
            (ignore colon-p at-sign-p)
            (values pattern))
   (etypecase pattern
-    (pattern-var (format stream "~A" (string (pattern-var-id pattern))))
-    (pattern-wildcard (format stream "_"))
-    (pattern-literal (format stream "~A" (pattern-literal-value pattern)))
-    (pattern-constructor (format stream "(~A~{ ~A~})"
-                                 (pattern-constructor-name pattern)
-                                 (pattern-constructor-patterns pattern))))
+    (pattern-var (write (pattern-var-id pattern) :stream stream))
+    (pattern-wildcard (write-char #\_ stream))
+    (pattern-literal (write (pattern-literal-value pattern) :stream stream))
+    (pattern-constructor
+     (write-char #\( stream)
+     (write (pattern-constructor-name pattern) :stream stream)
+     (loop :for pat :in (pattern-constructor-patterns pattern)
+           :do (write-char #\space stream)
+               (write pat :stream stream))
+     (write-char #\) stream)))
   pattern)
 
 (set-pprint-dispatch 'pattern 'pprint-pattern)

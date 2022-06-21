@@ -75,9 +75,10 @@
 (defun pprint-substution (stream sub &optional colon-p at-sign-p)
   (declare (ignore colon-p)
            (ignore at-sign-p))
-  (format stream "#T~a" (tyvar-id (substitution-from sub)))
-  (format stream " +-> ")
-  (format stream "~a" (substitution-to sub))
+  (write-string "#T" stream)
+  (write (tyvar-id (substitution-from sub)) :stream stream)
+  (write-string " +-> " stream)
+  (write (substitution-to sub) :stream stream)
   nil)
 
 (set-pprint-dispatch 'substitution 'pprint-substution)
