@@ -41,7 +41,9 @@ Enable release mode either by setting the UNIX environment variable COALTON_ENV 
 
 ;; Set to t when base types are defined
 (declaim (type boolean *coalton-stage-1-complete*))
-(defvar *coalton-stage-1-complete* nil)
+;; this has to be a `defparameter', not a `defvar', or else re-loading coalton in an image where it's already
+;; been compiled once will fail.
+(defparameter *coalton-stage-1-complete* nil)
 
 (defvar *coalton-optimize* '(optimize (speed 3) (safety 0)))
 
