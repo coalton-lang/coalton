@@ -1,24 +1,47 @@
 (in-package #:coalton-impl)
 
-;;; Allow the definition of global lexical values in Common
-;;; Lisp. Based off of Ron Garret's GLOBALS.
+;;;; Global environments:
 
-(define-symbol-property lexical-cell)
+;;; The global environment contains top level bindings.
+(defstruct (global-environment
+            (:constructor make-empty-global-environment ()))
+  ;; A map from variable names to their top level bindings.
+  (bindings (make-hash-table :test #'eq) :type hash-table))
 
-(defun get-lexical-cell (symbol)
-  (or (lexical-cell symbol)
-      ;; Stash away the symbol so we don't have to cons up a new
-      ;; string every time.
-      (setf (lexical-cell symbol)
-            ;; Intentionally obtuse name.
-            (alexandria:format-symbol '#:coalton-global-symbols
-                                      "(lexical) ~A::~A"
-                                      (package-name (symbol-package symbol))
-                                      symbol))))
+
+(defvar *top-level-environment* (make-empty-global-environment)
+  "The current global top level environment.")
+
+(declaim (type global-environment *top-level-environment*))
+
+;;;; Top level bindings:
+;;;;
+;;;; We represent top level bindings as conses as they are usually
+;;;; only two words on most Lisp implementations. The NAME is supplied
+;;;; purely for debugging purposes, which is convenient because we get
+;;;; an extra word for it in a CONS cell anyway.
+
+;;; Get the top level binding for NAME in ENVIRONMENT.
+(defun get-top-level-binding (name environment)
+  (let ((bindings (global-environment-bindings environment)))
+    (or (gethash name bindings)
+        (setf (gethash name bindings)
+              (cons ':|@@unbound@@| name)))))
+
+(declaim (inline top-level-binding-value
+                 top-level-binding-name
+                 (setf top-level-binding-value)))
+
+(defun top-level-binding-value (binding) (car binding))
+(defun top-level-binding-name (binding) (cdr binding))
+
+(defun (setf top-level-binding-value) (new-value binding)
+  (setf (car binding) new-value))
 
 (defmacro define-global-lexical (var val)
-  (let ((cell (get-lexical-cell var)))
-    `(progn
-       (global-vars:define-global-var ,cell ':|@@unbound@@|)
-       (define-symbol-macro ,var ,cell)
-       (setf ,var (load-time-value ,val)))))
+  `(progn
+     (define-symbol-macro ,var
+         (top-level-binding-value
+          (load-time-value
+           (get-top-level-binding ',var *top-level-environment*))))
+     (setf ,var (load-time-value ,val))))

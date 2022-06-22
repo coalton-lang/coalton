@@ -20,7 +20,6 @@
                           #+sbcl (sb-ext:*block-compile-default* :specified))
                       (funcall compile)))
   :depends-on (#:alexandria
-               #:global-vars
                #:trivia
                #:fset
                #:float-features

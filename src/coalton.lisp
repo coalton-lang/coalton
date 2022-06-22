@@ -9,8 +9,9 @@
 ;;; be generated at macroexpansion time of the ambient Common Lisp
 ;;; compiler. See the COALTON macro.
 
-(define-global-var **repr-specifiers** '(:lisp :transparent :native :enum)
-  "(repr ...) specifiers that the compiler is known to understand.")
+(alexandria:define-constant **repr-specifiers** '(:lisp :transparent :native :enum)
+  :test #'equal
+  :documentation "(repr ...) specifiers that the compiler is known to understand.")
 
 (defmacro install-operator-metadata (&rest directives)
   "Associate metadata with symbols as described by DIRECTIVES.
