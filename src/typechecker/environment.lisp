@@ -551,6 +551,18 @@
 
 (defstruct (specialization-environment (:include immutable-listmap)))
 
+
+;;;
+;;; Alias Environment
+;;;
+
+(defstruct (alias-entry (:constructor alias-entry (alias docstring aliased)))
+  (alias     (required 'alias)     :type symbol)
+  (docstring (required 'docstring) :type (or null string))
+  (aliased   (required 'aliased)   :type t))
+
+(defstruct (alias-environment (:include immutable-map)))
+
 ;;;
 ;;; Environment
 ;;;
@@ -567,7 +579,8 @@
           name-environment
           method-inline-environment
           code-environment
-          specialization-environment)))
+          specialization-environment
+          alias-environment)))
   (value-environment         (required 'value-environment)         :type value-environment         :read-only t)
   (type-environment          (required 'type-environment)          :type type-environment          :read-only t)
   (constructor-environment   (requried 'constructor-environment)   :type constructor-environment   :read-only t)
@@ -577,7 +590,8 @@
   (name-environment          (required 'name-environment)          :type name-environment          :read-only t)
   (method-inline-environment (required 'method-inline-environment) :type method-inline-environment :read-only t)
   (code-environment          (required 'code-environment)          :type code-environment          :read-only t)
-  (specialization-environment (required 'specialization-environment) :type specialization-environment :read-only t))
+  (specialization-environment (required 'specialization-environment) :type specialization-environment :read-only t)
+  (alias-environment         (required 'alias-environment)         :type alias-environment         :read-only t))
 
 
 (defmethod make-load-form ((self environment) &optional env)
@@ -598,7 +612,8 @@
    (make-name-environment)
    (make-method-inline-environment)
    (make-code-environment)
-   (make-specialization-environment)))
+   (make-specialization-environment)
+   (make-alias-environment)))
 
 (defun update-environment (env
                            &key
@@ -611,7 +626,8 @@
                              (name-environment (environment-name-environment env))
                              (method-inline-environment (environment-method-inline-environment env))
                              (code-environment (environment-code-environment env))
-                             (specialization-environment (environment-specialization-environment env)))
+                             (specialization-environment (environment-specialization-environment env))
+                             (alias-environment (environment-alias-environment env)))
   (declare (type environment env)
            (type value-environment value-environment)
            (type constructor-environment constructor-environment)
@@ -622,6 +638,7 @@
            (type method-inline-environment method-inline-environment)
            (type code-environment code-environment)
            (type specialization-environment specialization-environment)
+           (type alias-environment alias-environment)
            (values environment))
   (make-environment
    value-environment
@@ -633,7 +650,8 @@
    name-environment
    method-inline-environment
    code-environment
-   specialization-environment))
+   specialization-environment
+   alias-environment))
 
 ;;;
 ;;; Methods
@@ -641,8 +659,8 @@
 
 (defmethod apply-substitution (subst-list (env environment))
   (declare (type substitution-list subst-list)
-           (type environment env)
-           (values environment &optional))
+           (type environment env))
+  
   (update-environment env
                       :value-environment
                       (apply-substitution
@@ -1061,6 +1079,26 @@
           (return-from lookup-specialization-by-type elem))
       (coalton-type-error (e)
         (declare (ignore e))))))
+
+;;;
+;;; Aliases
+;;;
+
+(defun lookup-alias (env name)
+  "Returns the alias-entry which is given by `name`"
+  (immutable-map-lookup (environment-alias-environment env) name))
+
+(defun set-alias (env alias-name alias-entry)
+  (declare (type environment env)
+           (type symbol alias-name)
+           (type alias-entry alias-entry)
+           (values environment &optional))
+  (assert (eq alias-name (alias-entry-alias alias-entry)))
+  (update-environment env
+                      :alias-environment (immutable-map-set (environment-alias-environment env)
+                                                            alias-name
+                                                            alias-entry
+                                                            #'make-alias-environment)))
 
 ;;;
 ;;; Pretty printing

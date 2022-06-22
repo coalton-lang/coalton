@@ -88,6 +88,7 @@
                              (:file "program")
                              (:file "package")))
                (:file "toplevel-define-type")
+               (:file "toplevel-define-alias")
                (:file "toplevel-declare")
                (:file "toplevel-define")
                (:file "toplevel-define-instance")

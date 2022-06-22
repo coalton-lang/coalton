@@ -40,6 +40,7 @@
    #:immutable-map-lookup               ; FUNCTION
    #:immutable-map-diff                 ; FUNCTION
    #:immutable-map-remove               ; FUNCTION
+   #:immutable-map-keys                 ; FUNCTION
    #:immutable-listmap                  ; STRUCT
    #:make-immutable-listmap             ; CONSTRUCTOR
    #:immutable-listmap-data             ; ACCESSOR
@@ -276,6 +277,12 @@
    #:environment                        ; STRUCT
    #:make-default-environment           ; FUNCTION
    #:environment-function-environment   ; ACCESSOR
+   #:lookup-alias                       ; FUNCTION
+   #:set-alias                          ; FUNCTION
+   #:alias-entry                        ; STRUCT
+   #:alias-entry-alias                  ; ACCESSOR
+   #:alias-entry-docstring              ; ACCESSOR
+   #:alias-entry-aliased                ; ACCESSOR
    #:set-value-type                     ; FUNCTION
    #:set-type                           ; FUNCTION
    #:set-function                       ; FUNCTION

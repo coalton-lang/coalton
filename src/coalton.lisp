@@ -232,69 +232,66 @@ in FORMS that begin with that operator."
                        &allow-other-keys)
       (collect-toplevel-forms toplevel-forms)
 
-    (multiple-value-bind (defined-types env added-instances)
-        (process-toplevel-type-definitions type-defines repr-table env)
+    (let ((env (process-alias-definitions alias-defines env)))
 
-      ;; Class definitions must be checked after types are defined
-      ;; but before values are typechecked.
+      ;; Type aliases must be parsed before types, so they can be expanded correctly
 
-      (multiple-value-bind (classes env)
-          (parse-class-definitions class-defines env)
+      (multiple-value-bind (defined-types env)
+          (process-toplevel-type-definitions type-defines repr-table env)
 
-        ;; Methods need to be added to the environment before we can
-        ;; check value types.
-        (setf env (predeclare-toplevel-instance-definitions instance-defines package env))
-        (setf env (predeclare-toplevel-instance-definitions added-instances package env))
+        ;; Class definitions must be checked after types are defined
+        ;; but before values are typechecked.
 
-        (let ((declared-types (process-toplevel-declarations declares env)))
-          (multiple-value-bind (env toplevel-bindings)
-              (process-toplevel-value-definitions defines declared-types package env)
+        (multiple-value-bind (classes env)
+            (parse-class-definitions class-defines env)
 
-            ;; Methods must be typechecked after the types of values
-            ;; are determined since instances may reference them.
-            (let ((instance-definitions
-                    (process-toplevel-instance-definitions
-                     instance-defines
-                     package
-                     env))
-                  (added-instance-definitions
-                    (process-toplevel-instance-definitions
-                     added-instances
-                     package
-                     env
-                     :compiler-generated t)))
+          ;; Methods need to be added to the environment before we can
+          ;; check value types.
+          (setf env (predeclare-toplevel-instance-definitions instance-defines package env))
 
-              (multiple-value-bind (specializations env)
-                  (process-toplevel-specializations specializations env)
+          (let ((declared-types (process-toplevel-declarations declares env)))
+            (multiple-value-bind (env toplevel-bindings)
+                (process-toplevel-value-definitions defines declared-types package env)
+
+              ;; Methods must be typechecked after the types of values
+              ;; are determined since instances may reference them.
+              (let ((instance-definitions
+                      (process-toplevel-instance-definitions
+                       instance-defines
+                       package
+                       env)))
+
+                (multiple-value-bind (specializations env)
+                    (process-toplevel-specializations specializations env)
 
 
-                (let ((translation-unit
-                        (make-translation-unit
-                         :types defined-types
-                         :definitions toplevel-bindings
-                         :instances (append added-instance-definitions instance-definitions)
-                         :classes classes
-                         :attr-table (or attr-table (make-hash-table)) ; "fix" style warning
-                         :package package
-                         :specializations specializations)))
+                  (let ((translation-unit
+                          (make-translation-unit
+                           :types defined-types
+                           :definitions toplevel-bindings
+                           :instances instance-definitions
+                           :classes classes
+                           :attr-table (or attr-table (make-hash-table)) ; "fix" style warning
+                           :package package
+                           :specializations specializations)))
 
-                  (multiple-value-bind (program env)
-                      (coalton-impl/codegen:compile-translation-unit
-                       translation-unit
-                       env)
+                    (multiple-value-bind (program env)
+                        (coalton-impl/codegen:compile-translation-unit
+                         translation-unit
+                         env)
 
-                    (values
-                     (if *coalton-skip-update*
-                         program
-                         `(progn
-                            (eval-when (:load-toplevel)
-                              (unless (eq (coalton-release-p) ,(coalton-release-p))
-                                ,(if (coalton-release-p)
-                                     `(error "~A was compiled in release mode but loaded in development." ,(or *compile-file-pathname* *load-truename*))
-                                     `(error "~A was compiled in development mode but loaded in release." ,(or *compile-file-pathname* *load-truename*)))))
-                            ,(coalton-impl/typechecker::generate-diff
-                              translation-unit
-                              env
-                              '*global-environment*)
-                            ,program))
-                     env)))))))))))
+                      (values
+                       (if *coalton-skip-update*
+                           program
+                           `(progn
+                              (eval-when (:load-toplevel)
+                                (unless (eq (coalton-release-p) ,(coalton-release-p))
+                                  ,(if (coalton-release-p)
+                                       `(error "~A was compiled in release mode but loaded in development." ,(or *compile-file-pathname* *load-truename*))
+                                       `(error "~A was compiled in development mode but loaded in release." ,(or *compile-file-pathname* *load-truename*)))))
+                              ,(coalton-impl/typechecker::generate-diff
+                                translation-unit
+                                env
+                                '*global-environment*)
+                              ,program))
+                       env))))))))))))
