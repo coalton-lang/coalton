@@ -449,9 +449,6 @@
         #:coalton-impl/algorithm
         #:coalton-impl/ast
         #:coalton-impl/typechecker)
-  (:import-from #:global-vars
-                #:define-global-var
-                #:define-global-var*)
   (:local-nicknames
    (#:tc #:coalton-impl/typechecker))
   ;; settings
