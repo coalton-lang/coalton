@@ -60,16 +60,19 @@
 
         (quantify (type-variables type) type)))))
 
-(defun rewrite-type-expr (expr)
+(defun rewrite-type-expr (expr env)
   (etypecase expr
-    (symbol expr)
+    (symbol (let ((alias-ent (lookup-alias env expr)))
+              (if alias-ent
+                  (rewrite-type-expr (alias-entry-aliased alias-ent) env)
+                  expr)))
     (list
      (let ((arrow-index (position-if #'coalton-arrow-p expr)))
        (if arrow-index
            (list 'coalton:Arrow
-                 (rewrite-type-expr (subseq expr 0 arrow-index))
-                 (rewrite-type-expr (subseq expr (1+ arrow-index))))
-           (mapcar #'rewrite-type-expr expr))))))
+                 (rewrite-type-expr (subseq expr 0 arrow-index) env)
+                 (rewrite-type-expr (subseq expr (1+ arrow-index)) env))
+           (mapcar (lambda (x) (rewrite-type-expr x env)) expr))))))
 
 (defun parse-type-expr-inner (env expr type-vars ksubs)
   (declare (type environment env)
@@ -104,7 +107,7 @@
 
 (defun parse-type-expr (env expr type-vars ksubs)
   (multiple-value-bind (ty ksubs)
-      (parse-type-expr-inner env (rewrite-type-expr expr) type-vars ksubs)
+      (parse-type-expr-inner env (rewrite-type-expr expr env) type-vars ksubs)
     (values
      (apply-ksubstitution ksubs ty)
      ksubs)))
