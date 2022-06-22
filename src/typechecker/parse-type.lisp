@@ -60,19 +60,25 @@
 
         (quantify (type-variables type) type)))))
 
-(defun rewrite-type-expr (expr env)
+(defun rewrite-arrows (expr)
+  "Rewrites a type expression to remove -> notation"
   (etypecase expr
-    (symbol (let ((alias-ent (lookup-alias env expr)))
-              (if alias-ent
-                  (rewrite-type-expr (alias-entry-aliased alias-ent) env)
-                  expr)))
+    (symbol expr)
     (list
      (let ((arrow-index (position-if #'coalton-arrow-p expr)))
        (if arrow-index
            (list 'coalton:Arrow
-                 (rewrite-type-expr (subseq expr 0 arrow-index) env)
-                 (rewrite-type-expr (subseq expr (1+ arrow-index)) env))
-           (mapcar (lambda (x) (rewrite-type-expr x env)) expr))))))
+                 (rewrite-arrows (subseq expr 0 arrow-index))
+                 (rewrite-arrows (subseq expr (1+ arrow-index))))
+           (mapcar #'rewrite-arrows expr))))))
+
+(defun expand-aliases (expr env)
+  "Expand all of the type aliases of a type expression"
+  (etypecase expr
+    (symbol (or (alexandria:when-let (alias-entry (lookup-alias env expr))
+                  (alias-entry-aliased alias-entry))
+                expr))
+    (list   (mapcar (lambda (x) (expand-aliases x env)) expr))))
 
 (defun parse-type-expr-inner (env expr type-vars ksubs)
   (declare (type environment env)
@@ -106,11 +112,10 @@
           :ksubs ksubs))))))
 
 (defun parse-type-expr (env expr type-vars ksubs)
-  (multiple-value-bind (ty ksubs)
-      (parse-type-expr-inner env (rewrite-type-expr expr env) type-vars ksubs)
-    (values
-     (apply-ksubstitution ksubs ty)
-     ksubs)))
+  (let* ((expr (expand-aliases expr env))
+         (expr (rewrite-arrows expr)))
+    (multiple-value-bind (ty ksubs) (parse-type-expr-inner env expr type-vars ksubs)
+      (values (apply-ksubstitution ksubs ty) ksubs))))
 
 (defun collect-type-vars (expr)
   (let ((type-vars nil))
