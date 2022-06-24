@@ -13,18 +13,12 @@
 (deftype ty-list ()
   '(satisfies ty-list-p))
 
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type ty-list))
-
 (defun ty-binding-list-p (x)
   (and (alexandria:proper-list-p x)
        (every (lambda (b) (typep b '(cons symbol ty))) x)))
 
 (deftype ty-binding-list ()
   `(satisfies ty-binding-list-p))
-
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type ty-binding-list))
 
 (defstruct (tyvar (:constructor %make-tyvar))
   (id   (required 'id)   :type fixnum :read-only t)
@@ -46,9 +40,6 @@
 (deftype tyvar-list ()
   '(satisfies tyvar-list-p))
 
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type tyvar-list))
-
 (defstruct
     (tvar (:include ty)
           (:constructor %make-tvar (tyvar)))
@@ -69,9 +60,6 @@
 
 (deftype tvar-list ()
   '(satisfies tvar-list-p))
-
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type tvar-list))
 
 (defstruct (tycon (:constructor %make-tycon))
   (name (required 'name) :type symbol :read-only t)

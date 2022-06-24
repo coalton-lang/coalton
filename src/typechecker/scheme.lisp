@@ -24,18 +24,12 @@
 (deftype scheme-list ()
   '(satisfies scheme-list-p))
 
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type scheme-list))
-
 (defun scheme-binding-list-p (x)
   (and (alexandria:proper-list-p x)
        (every (lambda (b) (typep b '(cons symbol ty-scheme))) x)))
 
 (deftype scheme-binding-list ()
   `(satisfies scheme-binding-list-p))
-
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type scheme-binding-list))
 
 (defun quantify (tyvars type)
   (let* ((vars (remove-if

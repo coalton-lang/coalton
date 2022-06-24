@@ -65,18 +65,12 @@
 
 (defun sexp-fmt (stream object &optional colon-modifier at-modifier)
   "A formatter for qualified S-expressions. Use like
-
     (format t \"~/coalton-impl::sexp-fmt/\" '(:x y 5))
-
 and it will print a flat S-expression with all symbols qualified."
   (declare (ignore colon-modifier at-modifier))
   (let ((*print-pretty* nil)
         (*package* (find-package "KEYWORD")))
     (prin1 object stream)))
-
-(defmacro include-if (condition &body body)
-  `(when ,condition
-     (list ,@ (remove nil body))))
 
 (defun symbol-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -85,12 +79,6 @@ and it will print a flat S-expression with all symbols qualified."
 (deftype symbol-list ()
   '(satisfies symbol-list-p))
 
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type symbol-list))
-
 (deftype literal-value ()
   "Allowed literal values as Lisp objects."
   '(or integer ratio single-float double-float string character))
-
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type literal-value))
