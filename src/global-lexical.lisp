@@ -21,6 +21,8 @@
 ;;;; purely for debugging purposes, which is convenient because we get
 ;;;; an extra word for it in a CONS cell anyway.
 
+(declaim (ftype (function (symbol global-environment) cons) get-top-level-binding))
+
 ;;; Get the top level binding for NAME in ENVIRONMENT.
 (defun get-top-level-binding (name environment)
   (let ((bindings (global-environment-bindings environment)))
