@@ -78,25 +78,6 @@ and it will print a flat S-expression with all symbols qualified."
   `(when ,condition
      (list ,@ (remove nil body))))
 
-(defmacro define-symbol-property (property-accessor)
-  "Define an accessor for a symbol property.
-
-Implementation notes: These notes aren't relevant to users of this macro, but are Good To Know.
-
-    * The symbol's property is stored as a part of the symbol's plist.
-
-    * The plist key is just the name of the accessor.
-    "
-  (check-type property-accessor symbol)
-  (let ((symbol (gensym "SYMBOL"))
-        (new-value (gensym "NEW-VALUE")))
-    `(progn
-       (declaim (inline ,property-accessor (setf ,property-accessor)))
-       (defun ,property-accessor (,symbol)
-         (get ,symbol ',property-accessor))
-       (defun (setf ,property-accessor) (,new-value ,symbol)
-         (setf (get ,symbol ',property-accessor) ,new-value)))))
-
 (defun symbol-list-p (x)
   (and (alexandria:proper-list-p x)
        (every #'symbolp x)))
