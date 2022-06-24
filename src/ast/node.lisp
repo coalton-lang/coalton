@@ -10,18 +10,12 @@
 (deftype node-list ()
   '(satisfies node-list-p))
 
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type node-list))
-
 (defun binding-list-p (x)
   (and (alexandria:proper-list-p x)
        (every (lambda (b) (typep b '(cons symbol node))) x)))
 
 (deftype binding-list ()
   `(satisfies binding-list-p))
-
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type binding-list))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;; The types of nodes ;;;;;;;;;;;;;;;;;;;;;;;;;
 

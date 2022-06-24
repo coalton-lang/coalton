@@ -15,8 +15,6 @@
    #:required                           ; FUNCTION
    #:unreachable                        ; MACRO
    #:coalton-bug                        ; FUNCTION
-   #:sexp-fmt                           ; FUNCTION
-   #:include-if                         ; MACRO
    #:debug-log                          ; MACRO
    #:debug-tap                          ; MACRO
    #:symbol-list                        ; TYPE

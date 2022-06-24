@@ -312,10 +312,6 @@
 (deftype constructor-entry-list ()
   '(satisfies constructor-entry-list-p))
 
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type constructor-entry-list))
-
-
 (defstruct (constructor-environment (:include immutable-map)))
 
 (defun make-default-constructor-environment ()
@@ -389,9 +385,6 @@
 
 (deftype ty-class-list ()
   '(satisfies ty-class-list-p))
-
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type ty-class-list))
 
 (defmethod apply-substitution (subst-list (class ty-class))
   (declare (type substitution-list subst-list)
@@ -482,9 +475,6 @@
 
 (deftype function-env-entry-list ()
   `(satisfies function-env-entry-list-p))
-
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type function-env-entry-list))
 
 (defstruct (function-environment (:include immutable-map)))
 

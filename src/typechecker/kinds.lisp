@@ -35,7 +35,6 @@
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type kfun))
 
-
 (defstruct (kyvar (:constructor %make-kyvar))
   (id (required 'id) :type fixnum :read-only t))
 
@@ -54,9 +53,6 @@
 
 (deftype kyvar-list ()
   '(satisfies kyvar-list-p))
-
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type kyvar-list))
 
 (defstruct (kvar (:include kind)
                  (:constructor %make-kvar (kyvar)))

@@ -13,9 +13,6 @@
 (deftype pattern-list ()
   '(satisfies pattern-list-p))
 
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type pattern-list))
-
 (defstruct
     (pattern-var
      (:include pattern)

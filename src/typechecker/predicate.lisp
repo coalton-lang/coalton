@@ -32,9 +32,6 @@
   "Is PRED a static predicate (no type variables)"
   (endp (coalton-impl/typechecker::type-variables (ty-predicate-types pred))))
 
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type ty-predicate-list))
-
 ;;;
 ;;; Qualified types
 ;;;

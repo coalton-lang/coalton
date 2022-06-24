@@ -15,18 +15,12 @@
 (deftype typed-node-list ()
   '(satisfies typed-node-list-p))
 
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type typed-node-list))
-
 (defun typed-binding-list-p (x)
   (and (alexandria:proper-list-p x)
        (every (lambda (b) (typep b '(cons symbol typed-node))) x)))
 
 (deftype typed-binding-list ()
   `(satisfies typed-binding-list-p))
-
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type typed-binding-list))
 
 (defstruct
     (typed-node-literal
@@ -128,9 +122,6 @@
 
 (deftype typed-match-branch-list ()
   '(satisfies typed-match-branch-list-p))
-
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type typed-match-branch-list))
 
 (defstruct
     (typed-node-match
