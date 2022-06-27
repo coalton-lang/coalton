@@ -51,22 +51,21 @@
 ;;;
 
 (defmethod write-documentation ((backend (eql ':markdown)) stream (object documentation-package-entries))
-  (with-slots (packages asdf-system documentation-by-package) object
+  (with-slots (packages asdf-system by-package) object
     (dolist (package packages)
-      (let ((docs-for-package (gethash package documentation-by-package)))
+      (let ((docs-for-package (gethash package by-package)))
         (when docs-for-package
           (write-documentation backend stream
                                docs-for-package))))))
 
 (defmethod write-documentation ((backend (eql ':markdown)) stream (object documentation-package-entry))
-  (let* ((file-entries (documentation-package-entry-documentation-entries-by-file object))
-         (valid-files (documentation-package-entry-valid-files object))
+  (let* ((file-entries (documentation-package-entry-entries object))
          (package (documentation-package-entry-package object)))
     (format stream "# Package `~(~A~)`<a name=\"~:*~(~A-package~)\"></a>~%~%" package)
 
     ;; NOTE: We are including the empty filename here to allow for
     ;;       symbols without file information to be included.
-    (dolist (pathname (append '("") valid-files))
+    (dolist (pathname (append '("") (alexandria:hash-table-keys file-entries)))
       (let ((file-entry (gethash pathname file-entries)))
         (when file-entry
           (write-documentation :markdown stream file-entry))))))

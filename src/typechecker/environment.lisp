@@ -1058,13 +1058,8 @@
 
 ;; Print the environment as an undreadable object because otherwise
 ;; it is too big
-(defun pprint-env (stream env &optional colon-p at-sign-p)
+(defmethod print-object (stream (env environment))
   (declare (type stream stream)
-           (type environment env)
-           (ignore colon-p)
-           (ignore at-sign-p)
-           (values environment))
-  (print-unreadable-object (env stream :type t :identity t))
-  env)
+           (type environment env))
+  (print-unreadable-object (env stream :type t :identity t)))
 
-(set-pprint-dispatch 'environment 'pprint-env)

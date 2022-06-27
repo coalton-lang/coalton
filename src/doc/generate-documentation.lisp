@@ -1,58 +1,74 @@
 (in-package #:coalton-impl/doc)
 
 (defstruct (documentation-entry
-            (:constructor nil))
-  (name (required 'name) :type symbol)
-  (documentation nil :type (or null string))
-  location)
+            (:constructor nil)
+            (:predicate nil))
+  (name          (required 'name)          :type symbol           :read-only t)
+  (documentation (required 'documentation) :type (or null string) :read-only t)
+  (location      (required 'location)      :type t                :read-only t))
 
 (defstruct (documentation-type-entry
-            (:include documentation-entry)
-            (:constructor make-documentation-type-entry
-                (name type constructors constructor-types instances documentation location)))
-  (type (required 'type) :type ty)
-  constructors
-  constructor-types
-  instances)
+            (:include documentation-entry))
+  (type              (required 'type)              :type ty :read-only t)
+  (constructors      (required 'constructors)      :type t  :read-only t)
+  (constructor-types (required 'constructor-types) :type t  :read-only t)
+  (instances         (required 'instances)         :type t  :read-only t))
+
+(defun documentation-type-entry-list-p (x)
+  (and (every #'documentation-type-entry-p x)
+       (alexandria:proper-list-p x)))
+
+(deftype documentation-type-entry-list ()
+  '(satisfies documentation-type-entry-list-p))
 
 (defstruct (documentation-class-entry
-            (:include documentation-entry)
-            (:constructor make-documentation-class-entry
-                (name context predicate methods instances documentation location)))
-  context
-  predicate
-  methods
-  instances)
+            (:include documentation-entry))
+  (context   (required 'context)   :type t :read-only t)
+  (predicate (required 'predicate) :type t :read-only t)
+  (methods   (required 'methods)   :type t :read-only t)
+  (instances (required 'instances) :type t :read-only t))
+
+(defun documentation-class-entry-list-p (x)
+  (and (every #'documentation-class-entry-p x)
+       (alexandria:proper-list-p x)))
+
+(deftype documentation-class-entry-list ()
+  '(satisfies documentation-class-entry-list-p))
 
 (defstruct (documentation-value-entry
-            (:include documentation-entry)
-            (:constructor make-documentation-value-entry
-                (name type documentation location)))
+            (:include documentation-entry))
   (type (required 'type) :type ty-scheme))
 
-(defstruct (documentation-file-entry
-            (:constructor make-documentation-file-entry
-                (filename package value-entries type-entries class-entries link-prefix)))
-  filename
-  package
-  value-entries
-  type-entries
-  class-entries
-  link-prefix)
+(defun documentation-value-entry-list-p (x)
+  (and (every #'documentation-value-entry-p x)
+       (alexandria:proper-list-p x)))
 
-(defstruct (documentation-package-entry
-            (:constructor make-documentation-package-entry
-                (package valid-files documentation-entries-by-file)))
-  package
-  valid-files
-  documentation-entries-by-file)
+(deftype documentation-value-entry-list ()
+  '(satisfies documentation-value-entry-list-p))
 
-(defstruct (documentation-package-entries
-            (:constructor make-documentation-package-entries
-                (packages asdf-system documentation-by-package)))
-  packages
-  asdf-system
-  documentation-by-package)
+(defstruct documentation-file-entry
+  (filename      (required 'filename)      :type t                              :read-only t)
+  (package       (required 'package)       :type symbol                         :read-only t)
+  (value-entries (required 'value-entries) :type documentation-value-entry-list :read-only nil)
+  (type-entries  (required 'type-entries)  :type documentation-type-entry-list  :read-only nil)
+  (class-entries (required 'class-entries) :type documentation-class-entry-list :read-only nil)
+  (link-prefix   (required 'link-prefix)   :type string                         :read-only t))
+
+(defun documentation-file-entry-list-p (x)
+  (and (every #'documentation-file-entry-p x)
+       (alexandria:proper-list-p x)))
+
+(deftype documentation-file-entry-list ()
+  '(satisfies documentation-file-entry-list-p))
+
+(defstruct documentation-package-entry
+  (package (required 'package) :type symbol     :read-only t)
+  (entries (required 'entries) :type hash-table :read-only t))
+
+(defstruct documentation-package-entries
+  (packages    (required 'packages)    :type list       :read-only t)
+  (asdf-system (required 'asdf-system) :type t          :read-only t)
+  (by-package  (required 'by-package)  :type hash-table :read-only t))
 
 (defgeneric write-documentation (backend stream object)
   (:documentation "Write the given OBJECT to output STREAM. This is
@@ -66,16 +82,21 @@
                                             '(coalton
                                               coalton-library/classes
                                               coalton-library/builtin
+                                              coalton-library/functions
+                                              coalton-library/math
+                                              coalton-library/math/arith
+                                              coalton-library/math/integral
+                                              coalton-library/math/real
+                                              coalton-library/math/complex
+                                              coalton-library/math/elementary
                                               coalton-library/boolean
                                               coalton-library/bits
-                                              coalton-library/arith
                                               coalton-library/char
                                               coalton-library/string
                                               coalton-library/tuple
                                               coalton-library/optional
                                               coalton-library/list
                                               coalton-library/result
-                                              coalton-library/functions
                                               coalton-library/cell
                                               coalton-library/vector
                                               coalton-library/slice
@@ -87,56 +108,65 @@
                                            (file-link-prefix ""))
   (let* ((component (asdf:find-system asdf-system))
          (component-path (asdf:component-pathname component))
-         (filenames (mapcar (lambda (file)
-                              (file-namestring (asdf:component-relative-pathname file)))
-                            (asdf:component-children component)))
-
          (*package* (find-package base-package)))
 
     ;; For each package, we just need to collect the require
     ;; documentation and call out to the backend.
-    (let ((documentation-by-package (make-hash-table)))
+    (let ((documentation-by-package (make-hash-table :test #'eq)))
       (loop :for package :in packages
             :for documentation-entries
               := (collect-documentation-by-file
                   (truename component-path)
                   file-link-prefix
-                  env package)
+                  env
+                  package)
             :do (unless (zerop (hash-table-count documentation-entries))
                   (setf (gethash package documentation-by-package)
                         (make-documentation-package-entry
-                         package filenames
-                         documentation-entries))))
+                         :package package
+                         :entries documentation-entries))))
 
       (write-documentation
        backend
        stream
        (make-documentation-package-entries
-        (loop :for package :in packages
-              :if (gethash package documentation-by-package)
-                :collect package)
-        asdf-system
-        documentation-by-package)))))
+        :packages (loop :for package :in packages
+                        :if (gethash package documentation-by-package)
+                          :collect package)
+        :asdf-system asdf-system
+        :by-package documentation-by-package)))))
 
-(defun collect-documentation (&optional
-                                (env coalton-impl::*global-environment*)
-                                (package "COALTON-LIBRARY"))
+(defun collect-documentation (env package)
   "Collect all documentation entries related to coalton code in PACKAGE."
+  (declare (type environment env)
+           (type symbol package)
+           (values
+            documentation-value-entry-list
+            documentation-type-entry-list
+            documentation-class-entry-list))
   (values (get-doc-value-info env package)
           (get-doc-type-info env package)
           (get-doc-class-info env package)))
 
-(defun collect-documentation-by-file (&optional
-                                        basepath
-                                        link-prefix
-                                        (env coalton-impl::*global-environment*)
-                                        (package "COALTON-LIBRARY"))
+(defun collect-documentation-by-file (basepath link-prefix env package)
+  (declare (type t basepath)
+           (type string link-prefix)
+           (type environment env)
+           (type symbol package)
+           (values hash-table &optional))
   (multiple-value-bind (value-entries type-entries class-entries)
       (collect-documentation env package)
     (sort-documentation-by-file basepath link-prefix package value-entries type-entries class-entries)))
 
 ;; TODO: We should sort everything here
 (defun sort-documentation-by-file (basepath link-prefix package value-entries type-entries class-entries)
+  (declare (type t basepath )
+           (type string link-prefix)
+           (type symbol package)
+           (type documentation-value-entry-list value-entries)
+           (type documentation-type-entry-list type-entries)
+           (type documentation-class-entry-list class-entries)
+           (values hash-table))
   (let ((file-entries (make-hash-table :test #'equalp)))
     ;; Sort the functions by file
     (loop :for entry :in value-entries
@@ -147,7 +177,12 @@
                     filename
                     file-entries
                     (make-documentation-file-entry
-                     filename package nil nil nil link-prefix)))))
+                     :filename filename
+                     :package package
+                     :value-entries nil
+                     :type-entries nil
+                     :class-entries nil
+                     :link-prefix link-prefix)))))
 
     ;; Sort the types by file
     (loop :for entry :in type-entries
@@ -158,7 +193,12 @@
                     filename
                     file-entries
                     (make-documentation-file-entry
-                     filename package nil nil nil link-prefix)))))
+                     :filename filename
+                     :package package
+                     :value-entries nil
+                     :type-entries nil
+                     :class-entries nil
+                     :link-prefix link-prefix)))))
 
     ;; Sort the classes by file
     (loop :for entry :in class-entries
@@ -169,13 +209,21 @@
                     filename
                     file-entries
                     (make-documentation-file-entry
-                     filename package nil nil nil link-prefix)))))
+                     :filename filename
+                     :package package
+                     :value-entries nil
+                     :type-entries nil
+                     :class-entries nil
+                     :link-prefix link-prefix)))))
 
     file-entries))
 
 
 
 (defun get-doc-value-info (env package)
+  (declare (type environment env)
+           (type symbol package)
+           (values documentation-value-entry-list))
   (let ((values nil)
         (package (find-package package)))
     ;; Sort the entires by package
@@ -191,10 +239,10 @@
     (mapcar
      (lambda (e)
        (make-documentation-value-entry
-        (car e)
-        (lookup-value-type env (car e))
-        (coalton-impl/typechecker::name-entry-docstring (cdr e))
-        (coalton-impl/typechecker::name-entry-location (cdr e))))
+        :name (car e)
+        :type (lookup-value-type env (car e))
+        :documentation (coalton-impl/typechecker::name-entry-docstring (cdr e))
+        :location (coalton-impl/typechecker::name-entry-location (cdr e))))
      (remove-if
       (lambda (x)
         (coalton-impl/typechecker::lookup-constructor env (car x) :no-error t))
@@ -204,6 +252,9 @@
        values)))))
 
 (defun get-doc-type-info (env package)
+  (declare (type environment env)
+           (type symbol package)
+           (values documentation-type-entry-list))
   (let ((types nil)
         (ctors nil)
         (package (find-package package)))
@@ -259,24 +310,27 @@
                                             (ty-predicate-types (ty-class-instance-predicate instance)))
                                        (list instance))))))
                   (make-documentation-type-entry
-                   (car e)
-                   (type-entry-type (cdr e))
-                   exported-ctors
-                   (mapcar
-                    (lambda (ctor)
-                      (lookup-value-type env (car ctor)))
-                    exported-ctors)
-                   applicable-instances
-                   (type-entry-docstring (cdr e))
+                   :name (car e)
+                   :type (type-entry-type (cdr e))
+                   :constructors exported-ctors
+                   :constructor-types (mapcar
+                                       (lambda (ctor)
+                                         (lookup-value-type env (car ctor)))
+                                       exported-ctors)
+                   :instances applicable-instances
+                   :documentation (type-entry-docstring (cdr e))
                    ;; Here we will assume that all constructors
                    ;; share the same location as the type.
-                   (if (first ctors)
-                       (coalton-impl/typechecker::name-entry-location
-                        (lookup-name env (car (first ctors))))
-                       ""))))
+                   :location (if (first ctors)
+                                 (coalton-impl/typechecker::name-entry-location
+                                  (lookup-name env (car (first ctors))))
+                                 ""))))
               types))))
 
 (defun get-doc-class-info (env package)
+  (declare (type environment env)
+           (type symbol package)
+           (values documentation-class-entry-list))
   (let ((values nil)
         (package (find-package package)))
     ;; Sort the entires by package
@@ -291,11 +345,11 @@
 
     (mapcar (lambda (e)
               (make-documentation-class-entry
-               (ty-class-name e)
-               (ty-class-superclasses e)
-               (ty-class-predicate e)
-               (ty-class-unqualified-methods e)
-               (reverse (fset:convert 'list (lookup-class-instances env (ty-class-name e) :no-error t)))
-               (coalton-impl/typechecker::ty-class-docstring e)
-               (coalton-impl/typechecker::ty-class-location e)))
+               :name (ty-class-name e)
+               :context (ty-class-superclasses e)
+               :predicate (ty-class-predicate e)
+               :methods (ty-class-unqualified-methods e)
+               :instances (reverse (fset:convert 'list (lookup-class-instances env (ty-class-name e) :no-error t)))
+               :documentation (coalton-impl/typechecker::ty-class-docstring e)
+               :location (coalton-impl/typechecker::ty-class-location e)))
             values)))
