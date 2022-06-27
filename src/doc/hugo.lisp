@@ -7,7 +7,7 @@
 (defvar *coalton-docs-hugo-page-identifier* "Reference")
 
 (defmethod write-documentation ((backend (eql ':hugo)) stream (object documentation-package-entries))
-  (with-slots (packages asdf-system documentation-by-package) object
+  (with-slots (packages asdf-system by-package) object
 
     ;; Write out title of page
     (format stream "---~%identifier: ~A~%---~%" *coalton-docs-hugo-page-identifier*)
@@ -40,7 +40,7 @@
 
     ;; For the main content, just render as markdown
     (dolist (package packages)
-      (let ((docs-for-package (gethash package documentation-by-package)))
+      (let ((docs-for-package (gethash package by-package)))
         (when docs-for-package
           (write-documentation ':markdown stream
                                docs-for-package))))
