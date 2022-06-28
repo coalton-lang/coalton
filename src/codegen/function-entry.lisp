@@ -12,6 +12,8 @@
 
 (in-package #:coalton-impl/codegen/function-entry)
 
+(defconstant function-arity-limit 50)
+
 ;; We need to evaluate this early so the macro below can inline calls
 (eval-when (:load-toplevel)
   (defstruct function-entry
@@ -21,8 +23,8 @@
   #+sbcl
   (declaim (sb-ext:freeze-type function-entry)))
 
-(defvar *function-constructor-functions* (make-hash-table))
-(defvar *function-application-functions* (make-hash-table))
+(defvar *function-constructor-functions* (make-array function-arity-limit))
+(defvar *function-application-functions* (make-array function-arity-limit))
 
 (defmacro define-function-macros ()
   (labels ((define-function-macros-with-arity (arity)
@@ -59,7 +61,7 @@
                              (funcall (function-entry-function ,applied-function-sym)
                                       ,@arg-syms)
                              ,(build-curried-function-call `(function-entry-curried ,applied-function-sym) arg-syms)))))
-                    (setf (gethash ,arity *function-application-functions*) ',application-sym)
+                    (setf (aref *function-application-functions* ,arity) ',application-sym)
 
                     (declaim (inline ,constructor-sym))
                     (defun ,constructor-sym (,function-sym)
@@ -72,10 +74,10 @@
                        :function ,function-sym
                        ;; Build up a curried function to be called for partial application
                        :curried ,(build-curried-function arg-syms)))
-                    (setf (gethash ,arity *function-constructor-functions*) ',constructor-sym))))))
+                    (setf (aref *function-constructor-functions* ,arity) ',constructor-sym))))))
     (let ((body nil)
           (funs nil))
-      (loop :for i :of-type fixnum :from 1 :below 50
+      (loop :for i :of-type fixnum :from 1 :below function-arity-limit
             :do (push (define-function-macros-with-arity i) body)
             :do (setf funs
                       (append (list (alexandria:format-symbol *package* "F~D" i)
@@ -99,7 +101,7 @@
   "Construct a FUNCTION-ENTRY object with ARITY
 
 NOTE: There is no FUNCTION-ENTRY for arity 1 and the function will be returned"
-       (let ((function-constructor (gethash arity *function-constructor-functions*)))
+       (let ((function-constructor (aref *function-constructor-functions* arity)))
          (unless function-constructor
            (error "Unable to construct function of arity ~A" arity))
          `(,function-constructor ,function)))
@@ -107,7 +109,7 @@ NOTE: There is no FUNCTION-ENTRY for arity 1 and the function will be returned"
 (defun apply-function-entry (function &rest args)
 "Apply a function (OR FUNCTION-ENTRY FUNCTION) constructed by coalton"
 (let* ((arity (length args))
-       (function-application (gethash arity *function-application-functions*)))
+       (function-application (aref *function-application-functions* arity)))
   (unless function-application
     (error "Unable to apply function of arity ~A" arity))
   `(,function-application ,function ,@args)))
