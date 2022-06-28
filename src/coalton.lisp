@@ -83,7 +83,15 @@ in FORMS that begin with that operator."
          (handle-monomorphize (definition-name)
            (push :monomorphize (gethash definition-name (getf plist 'attr-table))))
 
+         (expand-progn (forms)
+           (loop :for form :in forms
+                 :if (eql (operator form) 'coalton:progn)
+                   :nconc (expand-progn (cdr form))
+                 :else
+                   :nconc (list form))) 
+
          (walk (forms)
+           (setf forms (expand-progn forms))
            (loop
              :until (null forms)
              :for form := (pop forms)
