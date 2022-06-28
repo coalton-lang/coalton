@@ -9,7 +9,7 @@
 ;;; be generated at macroexpansion time of the ambient Common Lisp
 ;;; compiler. See the COALTON macro.
 
-(alexandria:define-constant **repr-specifiers** '(:lisp :transparent :native :enum)
+(alexandria:define-constant +repr-specifiers+ '(:lisp :transparent :native :enum)
   :test #'equal
   :documentation "(repr ...) specifiers that the compiler is known to understand.")
 
@@ -70,7 +70,7 @@ in FORMS that begin with that operator."
              (simple-error () (error-parsing form "A toplevel form must begin ~
                                                    with a symbol."))))
          (establish-repr (specifier type arg)
-           (unless (member specifier **repr-specifiers**)
+           (unless (member specifier +repr-specifiers+)
              (error
               "The compiler does not understand (repr ~S)."
               specifier))
