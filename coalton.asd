@@ -113,8 +113,6 @@
   :pathname "library/"
   :serial t
   :components ((:file "utils")
-               (:file "early-classes")
-               (:file "early-types")
                (:file "classes")
                (:file "builtin")
                (:file "functions")

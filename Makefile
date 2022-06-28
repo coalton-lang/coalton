@@ -33,7 +33,7 @@ web-docs:
 		 --non-interactive \
 		 --eval "(ql:quickload :coalton/doc :silent t)" \
 		 --eval "(with-open-file (out \"../coalton-website/content/reference.md\" :direction :output :if-exists :supersede) \
-		           (coalton-impl/doc::write-documentation-for-packages :env coalton-impl::*global-environment* :stream out :backend :hugo))"
+		           (coalton-impl/doc::write-documentation-for-packages :env coalton-impl::*global-environment* :stream out :backend :hugo :file-link-prefix \"https://github.com/coalton-lang/coalton/tree/main/library/\"))"
 
 
 .PHONY: bench

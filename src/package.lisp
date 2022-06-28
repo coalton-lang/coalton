@@ -593,17 +593,3 @@
    #:bind
    #:Boolean/True
    #:Boolean/False))
-
-;;
-;; Internal again (but uses coalton)
-;;
-
-(uiop:define-package #:coalton-impl/early-library-defs
-  (:use #:coalton)
-  (:export
-   #:Addressable #:eq?
-   #:Eq #:==
-   #:Num #:fromInt #:+ #:- #:*)
-  (:intern
-   #:class/addressable
-   #:class/eq))

@@ -1,7 +1,7 @@
 (coalton-library/utils:defstdlib-package #:coalton-library/addressable
-  (:use #:coalton)
-  (:import-from #:coalton-impl/early-library-defs
-                #:Addressable #:eq?)
+  (:use
+   #:coalton
+   #:coalton-library/classes)
   (:export
    #:Addressable #:eq?))
 (cl:in-package #:coalton-library/addressable)

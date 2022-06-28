@@ -111,7 +111,7 @@
 `process-coalton-toplevel' will bypass this check for compiler-generated `Addressable' instances returned from
 `process-toplevel-type-definitions' will by passing `:compiler-generated t' through
 `process-toplevel-instance-definitions' to `parse-instance-definition'."
-  (when (eq class-name 'coalton-impl/early-library-defs:Addressable)
+  (when (eq class-name (alexandria:ensure-symbol "ADDRESSABLE" (find-package "COALTON-LIBRARY/CLASSES")))
     (let* ((ty-args (ty-predicate-types predicate)))
       (unless (= (length ty-args) 1)
         (error-parsing

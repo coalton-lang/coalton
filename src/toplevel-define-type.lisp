@@ -10,9 +10,14 @@
                       :collect (alexandria:format-symbol :keyword "~d" i)))
          (full-type (if tvars
                         `(,name ,@tvars)
-                        name)))
-    `(coalton:define-instance (coalton-impl/early-library-defs:Addressable ,full-type)
-       (coalton:define (coalton-impl/early-library-defs:eq? a b)
+                        name))
+         (addressable-class
+           (alexandria:ensure-symbol "ADDRESSABLE" (find-package "COALTON-LIBRARY/CLASSES")))
+
+         (eq?
+           (alexandria:ensure-symbol "EQ?" (find-package "COALTON-LIBRARY/CLASSES"))))
+    `(coalton:define-instance (,addressable-class ,full-type)
+       (coalton:define (,eq? a b)
          (coalton:lisp coalton:Boolean (a b)
            (eq a b))))))
 
