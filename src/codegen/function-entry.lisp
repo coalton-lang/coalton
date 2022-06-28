@@ -14,14 +14,12 @@
 
 (defconstant function-arity-limit 50)
 
-;; We need to evaluate this early so the macro below can inline calls
-(eval-when (:load-toplevel)
-  (defstruct function-entry
+(defstruct function-entry
     (arity    (required 'arity)    :type fixnum   :read-only t)
     (function (required 'function) :type function :read-only t)
     (curried  (required 'curried)  :type function :read-only t))
-  #+sbcl
-  (declaim (sb-ext:freeze-type function-entry)))
+#+sbcl
+(declaim (sb-ext:freeze-type function-entry))
 
 (defvar *function-constructor-functions* (make-array function-arity-limit))
 (defvar *function-application-functions* (make-array function-arity-limit))
