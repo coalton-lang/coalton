@@ -302,6 +302,7 @@
    #:type-entry-enum-repr               ; ACCESSOR
    #:type-entry-newtype                 ; ACCESSOR
    #:type-entry-docstring               ; ACCESSOR
+   #:type-entry-location                ; ACCESSOR
    #:constructor-entry                  ; STRUCT
    #:constructor-entry-name             ; ACCESSOR
    #:constructor-entry-arity            ; ACCESSOR
@@ -342,19 +343,19 @@
    #:parse-instance-definition          ; FUNCTION
    )
   (:export
-   #:parse-type-definitions             ; FUNCTION
-   #:type-definition                    ; STRUCT
-   #:type-definition-name               ; ACCESSOR
-   #:type-definition-type               ; ACCESSOR
-   #:type-definition-constructors       ; ACCESSOR
-   #:type-definition-constructor-types  ; ACCESSOR
-   #:type-definition-list               ; TYPE
-   #:type-definition-runtime-type       ; ACCESSOR
-   #:type-definition-explicit-repr      ; ACCESSOR
-   #:type-definition-enum-repr          ; ACCESSOR
-   #:type-definition-newtype            ; ACCESSOR
-   #:type-definition-docstring          ; ACCESSOR
-   #:explicit-repr-auto-addressable-p   ; FUNCTION
+   #:parse-type-definitions               ; FUNCTION
+   #:type-definition                      ; STRUCT
+   #:type-definition-name                 ; ACCESSOR
+   #:type-definition-type                 ; ACCESSOR
+   #:type-definition-constructors         ; ACCESSOR
+   #:type-definition-constructor-types    ; ACCESSOR
+   #:type-definition-list                 ; TYPE
+   #:type-definition-runtime-type         ; ACCESSOR
+   #:type-definition-explicit-repr        ; ACCESSOR
+   #:type-definition-enum-repr            ; ACCESSOR
+   #:type-definition-newtype              ; ACCESSOR
+   #:type-definition-docstring            ; ACCESSOR
+   #:explicit-repr-auto-addressable-p     ; FUNCTION
    #:explicit-repr-explicit-addressable-p ; FUNCTION
    )
   (:export

@@ -23,7 +23,7 @@
 </style>
 
 <div class=\"sidebar\" style=\"height: 0; position: sticky; top: 10px\">
-<div style=\"position: relative; right: 40%; width: 40%;\">
+<div style=\"position: relative; right: 50%; width: 50%;\">
 
 ### Reference
 ~{~A~}

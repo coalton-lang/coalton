@@ -80,6 +80,7 @@
                                            (backend ':markdown)
                                            (packages
                                             '(coalton
+                                              coalton-impl/early-library-defs
                                               coalton-library/classes
                                               coalton-library/builtin
                                               coalton-library/functions
@@ -321,10 +322,7 @@
                    :documentation (type-entry-docstring (cdr e))
                    ;; Here we will assume that all constructors
                    ;; share the same location as the type.
-                   :location (if (first ctors)
-                                 (coalton-impl/typechecker::name-entry-location
-                                  (lookup-name env (car (first ctors))))
-                                 ""))))
+                   :location (type-entry-location (cdr e)))))
               types))))
 
 (defun get-doc-class-info (env package)

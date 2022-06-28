@@ -28,14 +28,14 @@
 (coalton-toplevel
   (declare trace (String -> Unit))
   (define (trace str)
-    "Print a line to *STANDARD-OUTPUT*"
+    "Print a line to `*STANDARD-OUTPUT*`"
     (progn
       (lisp :a (str) (cl:format cl:t"~A~%" str))
       Unit))
 
   (declare traceObject (String -> :a -> Unit))
   (define (traceObject str item)
-    "Print a line to *STANDARD-OUTPUT* in the form \"{STR}: {ITEM}\""
+    "Print a line to `*STANDARD-OUTPUT*` in the form \"{STR}: {ITEM}\""
     (progn
       (lisp :a (str item) (cl:format cl:t "~A: ~A~%" str item))
       Unit))
@@ -48,15 +48,12 @@
   (define (fix f n)
     "Compute the fixed point of a unary function. This is equivalent to the Y-combinator of the lambda calculus. This combinator allows recursion without specific assignment of names. For example, the factorial function can be written
 
-
-    ```
     (define fact
       (fix
         (fn (f n)
           (if (== n 0)
             1
-            (* n (f (- n 1)))))))
-    ```"
+            (* n (f (- n 1)))))))"
     (f (fix f) n))
 
   (declare id (:a -> :a))
