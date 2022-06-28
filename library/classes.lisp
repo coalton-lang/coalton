@@ -1,9 +1,10 @@
 (coalton-library/utils:defstdlib-package #:coalton-library/classes
   (:use
    #:coalton)
-  (:import-from #:coalton-impl/early-library-defs
-                #:Eq #:==
-                #:Num #:+ #:- #:* #:fromInt)
+  (:export
+   #:Addressable #:eq?
+   #:Eq #:==
+   #:Num #:+ #:- #:* #:fromInt)
   (:export
    #:Tuple
    #:Optional #:Some #:None
@@ -37,7 +38,69 @@
 #+coalton-release
 (cl:declaim #.coalton-impl:*coalton-optimize-library*)
 
-(cl:in-package #:coalton-library/classes)
+(in-package #:coalton-library/classes)
+
+(coalton-toplevel
+
+  (define-class (Addressable :obj)
+    "Types for which object identity is meaningful.
+
+`eq?` should correspond exactly to the Common Lisp function `eq`, testing object identity (aka pointer
+equality).
+
+The compiler will auto-generate instances of `Addressable` for types which specify `repr :enum` or `repr
+:lisp`.
+
+Types with `repr :native` may manually implement `Addressable`, but programmers are encouraged to check the
+[Common Lisp Hyperspec](http://www.lispworks.com/documentation/HyperSpec/Body/f_eq.htm) to determine what
+guarantees, if any, are imposed on the behavior of `eq`. Types represented by `cl:character` or
+`cl:number` (or sub- or supertypes thereof) should not implement `Addressable`, as those objects may be
+implicitly copied.
+
+No other types may implement `Addressable`. Defining an `Addressable` instance manually for a type which does
+not specify `repr :native` will error. If you need an `Addressable` instance for a non-`repr :native` type,
+specify `repr :lisp`."
+    (eq? (:obj -> :obj -> Boolean)))
+
+  (define-class (Eq :a)
+    "Types which have equality defined."
+    (== (:a -> :a -> Boolean)))
+
+  (define-class ((Eq :a) => (Num :a))
+    "Types which have numeric operations defined."
+    (+ (:a -> :a -> :a))
+    (- (:a -> :a -> :a))
+    (* (:a -> :a -> :a))
+    (fromInt (Integer -> :a))))
+
+(in-package #:coalton)
+
+(coalton-toplevel
+  (repr :enum)
+  (define-type Unit Unit)
+
+  (repr :native cl:t)
+  (define-type Void)
+
+  ;; Boolean is an early type
+  (declare True Boolean)
+  (define True (lisp Boolean ()  cl:t))
+
+  (declare False Boolean)
+  (define False (lisp Boolean ()  cl:nil))
+
+  ;; List is an early type
+  (declare Cons (:a -> (List :a) -> (List :a)))
+  (define (Cons x xs)
+    (lisp (List :a) (x xs)
+      (cl:cons x xs)))
+
+  (declare Nil (List :a))
+  (define Nil
+    (lisp (List :a) ()
+      cl:nil)))
+
+(in-package #:coalton-library/classes)
 
 (coalton-toplevel
  

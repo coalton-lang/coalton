@@ -80,7 +80,6 @@
                                            (backend ':markdown)
                                            (packages
                                             '(coalton
-                                              coalton-impl/early-library-defs
                                               coalton-library/classes
                                               coalton-library/builtin
                                               coalton-library/functions
