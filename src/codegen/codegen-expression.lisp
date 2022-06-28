@@ -41,7 +41,7 @@
     (let* ((arity (length (node-application-rands node)))
 
            (function-applicator
-             (gethash arity *function-application-functions*)))
+             (aref *function-application-functions* arity)))
 
       `(,function-applicator
         ,(codegen-expression (node-application-rator node) current-function env)
@@ -67,7 +67,7 @@
            (arity (length var-names))
 
            (function-constructor
-             (gethash arity *function-constructor-functions*))
+             (aref *function-constructor-functions* arity))
 
            (type-decs
              (when coalton-impl:*emit-type-annotations*
@@ -197,7 +197,7 @@
               (find name (node-variables (node-bind-body expr) :variable-namespace-only t)))
          (let* ((arity (length (node-abstraction-vars (node-bind-expr expr))))
 
-                (function-constructor (gethash arity *function-constructor-functions*)))
+                (function-constructor (aref *function-constructor-functions* arity)))
            `(let ((,name))
               (declare (ignorable ,name))
               (labels ((,name
@@ -251,7 +251,7 @@
                     (append
                      (loop :for (name . node) :in scc-bindings
                            :for arity := (length (node-abstraction-vars node))
-                           :for function-constructor := (gethash arity *function-constructor-functions*)
+                           :for function-constructor := (aref *function-constructor-functions* arity)
                            :if (find name binding-names-vars :test #'equalp)
                              :collect `(setf
                                         ,name
