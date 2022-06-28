@@ -224,10 +224,10 @@
   (define-class (Unwrappable :container)
     "Containers which can be unwrapped to get access to their contents.
 
-The first argument to `unwrap-or-else' is a continuation, usually named `fail'. Methods should call `fail' and
+The first argument to `unwrap-or-else` is a continuation, usually named `fail`. Methods should call `fail` and
 return its value if they are unable to unwrap a value.
 
-Typical `fail' continuations are:
+Typical `fail` continuations are:
 - Return a default value, or
 - Signal an error."
     (unwrap-or-else ((Unit -> :elt)

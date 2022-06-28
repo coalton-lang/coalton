@@ -151,7 +151,8 @@
                   :explicit-repr nil
                   :enum-repr nil
                   :newtype nil
-                  :docstring nil)))
+                  :docstring nil
+                  :location nil)))
 
            :collect (list
                      name

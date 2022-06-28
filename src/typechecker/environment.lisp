@@ -73,7 +73,8 @@
   ;; recursive newtypes.
   (newtype (required 'newtype)           :type boolean :read-only t)
 
-  (docstring (required 'docstring)       :type (or null string) :read-only t))
+  (docstring (required 'docstring)       :type (or null string) :read-only t)
+  (location  (required 'location)        :type t                :read-only t))
 
 (defmethod make-load-form ((self type-entry) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -103,7 +104,8 @@
             :explicit-repr '(:native cl:boolean)
             :enum-repr t
             :newtype nil
-            :docstring "Either true or false represented by `t` and `nil` respectively."))
+            :docstring "Either true or false represented by `t` and `nil` respectively."
+            :location ""))
 
           ('coalton:Char
            (type-entry
@@ -113,7 +115,8 @@
             :explicit-repr '(:native cl:character)
             :enum-repr nil
             :newtype nil
-            :docstring "A single character represented as a `character` type."))
+            :docstring "A single character represented as a `character` type."
+            :location ""))
 
           ('coalton:U8
            (type-entry
@@ -123,7 +126,8 @@
             :explicit-repr '(:native (cl:unsigned-byte 8))
             :enum-repr nil
             :newtype nil
-            :docstring "Unsigned 8-bit integer capable of storing values in `[0, 255]`. Uses `(unsigned-byte 8)`."))
+            :docstring "Unsigned 8-bit integer capable of storing values in `[0, 255]`. Uses `(unsigned-byte 8)`."
+            :location ""))
 
           ('coalton:U16
            (type-entry
@@ -133,7 +137,8 @@
             :explicit-repr '(:native (cl:unsigned-byte 16))
             :enum-repr nil
             :newtype nil
-            :docstring "Unsigned 16-bit integer capable of storing values in `[0, 65535]`. Uses `(unsigned-byte 16)`."))
+            :docstring "Unsigned 16-bit integer capable of storing values in `[0, 65535]`. Uses `(unsigned-byte 16)`."
+            :location ""))
 
           ('coalton:U32
            (type-entry
@@ -143,7 +148,8 @@
             :explicit-repr '(:native (cl:unsigned-byte 32))
             :enum-repr nil
             :newtype nil
-            :docstring "Unsigned 32-bit integer capable of storing values in `[0, 4294967295]`. Uses `(unsigned-byte 32)`."))
+            :docstring "Unsigned 32-bit integer capable of storing values in `[0, 4294967295]`. Uses `(unsigned-byte 32)`."
+            :location ""))
 
           ('coalton:U64
            (type-entry
@@ -153,7 +159,8 @@
             :explicit-repr '(:native (cl:unsigned-byte 64))
             :enum-repr nil
             :newtype nil
-            :docstring "Unsigned 64-bit integer capable of storing values in `[0, 18446744073709551615]`. Uses `(unsigned-byte 64)`."))
+            :docstring "Unsigned 64-bit integer capable of storing values in `[0, 18446744073709551615]`. Uses `(unsigned-byte 64)`."
+            :location ""))
 
           ('coalton:I8
            (type-entry
@@ -163,7 +170,8 @@
             :explicit-repr '(:native (cl:signed-byte 8))
             :enum-repr nil
             :newtype nil
-            :docstring "Signed 8-bit integer capable of storing values in `[-128, 127]`. Uses `(signed-byte 8)`."))
+            :docstring "Signed 8-bit integer capable of storing values in `[-128, 127]`. Uses `(signed-byte 8)`."
+            :location ""))
 
           ('coalton:I16
            (type-entry
@@ -173,7 +181,8 @@
             :explicit-repr '(:native (cl:signed-byte 16))
             :enum-repr nil
             :newtype nil
-            :docstring "Signed 16-bit integer capable of storing values in `[-32768, 32767]`. Uses `(signed-byte 16)`."))
+            :docstring "Signed 16-bit integer capable of storing values in `[-32768, 32767]`. Uses `(signed-byte 16)`."
+            :location ""))
 
           ('coalton:I32
            (type-entry
@@ -183,7 +192,8 @@
             :explicit-repr '(:native (cl:signed-byte 32))
             :enum-repr nil
             :newtype nil
-            :docstring "Signed 32-bit integer capable of storing values in `[-2147483648, 2147483647]`. Uses `(signed-byte 32)`."))
+            :docstring "Signed 32-bit integer capable of storing values in `[-2147483648, 2147483647]`. Uses `(signed-byte 32)`."
+            :location ""))
 
           ('coalton:I64
            (type-entry
@@ -193,7 +203,8 @@
             :explicit-repr '(:native (cl:signed-byte 64))
             :enum-repr nil
             :newtype nil
-            :docstring "Signed 64-bit integer capable of storing values in `[-9223372036854775808, 9223372036854775807]`. Uses `(signed-byte 64)`."))
+            :docstring "Signed 64-bit integer capable of storing values in `[-9223372036854775808, 9223372036854775807]`. Uses `(signed-byte 64)`."
+            :location ""))
 
           ('coalton:Integer
            (type-entry
@@ -203,7 +214,8 @@
             :explicit-repr '(:native cl:integer)
             :enum-repr nil
             :newtype nil
-            :docstring "Unbound integer. Uses `integer`."))
+            :docstring "Unbound integer. Uses `integer`."
+            :location ""))
 
           ('coalton:IFix
            (type-entry
@@ -213,7 +225,8 @@
             :explicit-repr '(:native cl:fixnum)
             :enum-repr nil
             :newtype nil
-            :docstring "Non-allocating tagged integer; range is platform-dependent. Uses `fixnum`."))
+            :docstring "Non-allocating tagged integer; range is platform-dependent. Uses `fixnum`."
+            :location ""))
 
           ('coalton:UFix
            (type-entry
@@ -223,7 +236,8 @@
             :explicit-repr '(:native (cl:and cl:fixnum cl:unsigned-byte))
             :enum-repr nil
             :newtype nil
-            :docstring "Non-allocating tagged non-negative integer; range is platform-dependent. Uses `(and fixnum unsigned-byte)`."))
+            :docstring "Non-allocating tagged non-negative integer; range is platform-dependent. Uses `(and fixnum unsigned-byte)`."
+            :location ""))
 
           ('coalton:Single-Float
            (type-entry
@@ -233,7 +247,8 @@
             :explicit-repr '(:native cl:single-float)
             :enum-repr nil
             :newtype nil
-            :docstring "Single precision floating point numer. Uses `single-float`."))
+            :docstring "Single precision floating point numer. Uses `single-float`."
+            :location ""))
 
           ('coalton:Double-Float
            (type-entry
@@ -243,7 +258,8 @@
             :explicit-repr '(:native cl:double-float)
             :enum-repr nil
             :newtype nil
-            :docstring "Double precision floating point numer. Uses `double-float`."))
+            :docstring "Double precision floating point numer. Uses `double-float`."
+            :location ""))
 
           ('coalton:String
            (type-entry
@@ -253,7 +269,8 @@
             :explicit-repr '(:native cl:string)
             :enum-repr nil
             :newtype nil
-            :docstring "String of characters represented by Common Lisp `string`."))
+            :docstring "String of characters represented by Common Lisp `string`."
+            :location ""))
 
           ('coalton:Fraction
            (type-entry
@@ -263,7 +280,8 @@
             :explicit-repr '(:native cl:rational)
             :enum-repr nil
             :newtype nil
-            :docstring "A ratio of integers always in reduced form."))
+            :docstring "A ratio of integers always in reduced form."
+            :location ""))
 
           ('coalton:Arrow
            (type-entry
@@ -273,7 +291,8 @@
             :explicit-repr nil
             :enum-repr nil
             :newtype nil
-            :docstring "Type constructor for function types."))
+            :docstring "Type constructor for function types."
+            :location ""))
 
           ('coalton:List
            (type-entry
@@ -283,7 +302,8 @@
             :explicit-repr '(:native cl:list)
             :enum-repr nil
             :newtype nil
-            :docstring "Homogeneous list of objects represented as a Common Lisp `list`.")))))
+            :docstring "Homogeneous list of objects represented as a Common Lisp `list`."
+            :location "")))))
 
 ;;;
 ;;; Constructor environment

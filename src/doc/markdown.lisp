@@ -63,9 +63,7 @@
          (package (documentation-package-entry-package object)))
     (format stream "# Package `~(~A~)`<a name=\"~:*~(~A-package~)\"></a>~%~%" package)
 
-    ;; NOTE: We are including the empty filename here to allow for
-    ;;       symbols without file information to be included.
-    (dolist (pathname (append '("") (alexandria:hash-table-keys file-entries)))
+    (dolist (pathname (alexandria:hash-table-keys file-entries))
       (let ((file-entry (gethash pathname file-entries)))
         (when file-entry
           (write-documentation :markdown stream file-entry))))))
@@ -120,7 +118,7 @@
         (format stream
                 "#### <code>~A~A</code> <sup><sub>[TYPE]</sub></sup><a name=\"~(~A-type~)\"></a>~%"
                 (html-entities:encode-entities (symbol-name name))
-                (html-entities:encode-entities (format nil "~{ ~A~}" type-vars))
+                (html-entities:encode-entities (format nil "~{ ~S~}" type-vars))
                 (html-entities:encode-entities (symbol-name name)))
 
         (loop :for (ctor-name . entry) :in constructors
@@ -310,7 +308,7 @@
                     (if *coalton-print-unicode*
                         "∀"
                         "FORALL"))
-                   (html-entities:encode-entities (format nil "~{ ~A~}" types))
+                   (html-entities:encode-entities (format nil "~{ ~S~}" types))
                    (to-markdown new-type)))))))
 
   (:method ((object ty-predicate))
