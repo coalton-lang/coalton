@@ -1,4 +1,4 @@
-(in-package #:coalton-impl/doc)
+(in-package #:coalton-doc)
 
 ;;
 ;; Hugo docs generator for coalton-lang.github.io

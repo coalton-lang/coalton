@@ -38,11 +38,9 @@ jobs:
           (sb-ext:restrict-compiler-policy 'safety ${{ matrix.SAFETY }})
           (defun main (&rest args)
             (asdf:load-system :coalton/doc)
-            (with-open-file (out "coalton-website/content/reference.md" :direction :output :if-exists :supersede)
-              (uiop:symbol-call :coalton-impl/doc :write-documentation-for-packages
-                :stream out
-                :file-link-prefix "https://github.com/coalton-lang/coalton/tree/main/library/"
-                :backend ':hugo)))
+            (uiop:symbol-call :coalton-doc :write-stdlib-documentation-to-file
+              "coalton-website/content/reference.md" 
+              :backend :hugo)))
           EOF
           qlot exec ros -- run-tests.lisp
 

@@ -1,4 +1,4 @@
-(in-package #:coalton-impl/doc)
+(in-package #:coalton-doc)
 
 ;;
 ;; The format for the output markdown document is as follows
