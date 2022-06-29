@@ -24,16 +24,14 @@ docs:
 	sbcl --noinform \
 		 --non-interactive \
 		 --eval "(ql:quickload :coalton/doc :silent t)" \
-		 --eval "(with-open-file (out \"docs/reference.md\" :direction :output :if-exists :supersede) \
-	               (coalton-impl/doc::write-documentation-for-packages :env coalton-impl::*global-environment* :stream out))"
+		 --eval "(coalton-doc:write-stdlib-documentation-to-file \"docs/reference.md\")"
 
 .PHONY: web-docs
 web-docs:
 	sbcl --noinform \
 		 --non-interactive \
 		 --eval "(ql:quickload :coalton/doc :silent t)" \
-		 --eval "(with-open-file (out \"../coalton-website/content/reference.md\" :direction :output :if-exists :supersede) \
-		           (coalton-impl/doc::write-documentation-for-packages :env coalton-impl::*global-environment* :stream out :backend :hugo :file-link-prefix \"https://github.com/coalton-lang/coalton/tree/main/library/\"))"
+		 --eval "(coalton-doc:write-stdlib-documentation-to-file \"../coalton-website/content/reference.md\" :backend :hugo)"
 
 
 .PHONY: bench

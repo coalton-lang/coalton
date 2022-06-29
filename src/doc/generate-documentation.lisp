@@ -1,4 +1,4 @@
-(in-package #:coalton-impl/doc)
+(in-package #:coalton-doc)
 
 (defstruct (documentation-entry
             (:constructor nil)
@@ -67,44 +67,68 @@
 
 (defstruct documentation-package-entries
   (packages    (required 'packages)    :type list       :read-only t)
-  (asdf-system (required 'asdf-system) :type t          :read-only t)
   (by-package  (required 'by-package)  :type hash-table :read-only t))
 
 (defgeneric write-documentation (backend stream object)
   (:documentation "Write the given OBJECT to output STREAM. This is
   specialized on the given BACKEND."))
 
+(defun write-stdlib-documentation-to-file (filename &key (backend :markdown))
+  (write-documentation-to-file
+   filename
+   :backend backend
+   :packages '(coalton
+               coalton-library/classes
+               coalton-library/builtin
+               coalton-library/functions
+               coalton-library/math
+               coalton-library/math/arith
+               coalton-library/math/integral
+               coalton-library/math/real
+               coalton-library/math/complex
+               coalton-library/math/elementary
+               coalton-library/boolean
+               coalton-library/bits
+               coalton-library/char
+               coalton-library/string
+               coalton-library/tuple
+               coalton-library/optional
+               coalton-library/list
+               coalton-library/result
+               coalton-library/cell
+               coalton-library/vector
+               coalton-library/slice
+               coalton-library/hashtable
+               coalton-library/monad/state
+               coalton-library/iterator)
+   :asdf-system :coalton/library
+   :file-link-prefix "https://github.com/coalton-lang/coalton/tree/main/library/"))
+
+(defun write-documentation-to-file (filename &key
+                                               (backend :markdown)
+                                                packages
+                                                asdf-system
+                                                (file-link-prefix ""))
+  (declare (type (or pathname symbol string) filename)
+           (type t backend)
+           (type symbol-list packages)
+           (type (or symbol string) asdf-system)
+           (type string file-link-prefix))
+  (with-open-file (out filename :direction :output :if-exists :supersede :if-does-not-exist :create)
+    (write-documentation-for-packages
+     :stream out
+     :backend backend
+     :packages packages
+     :asdf-system asdf-system
+     :file-link-prefix file-link-prefix)))
+
 (defun write-documentation-for-packages (&key
                                            (env coalton-impl::*global-environment*)
                                            (stream t)
-                                           (backend ':markdown)
-                                           (packages
-                                            '(coalton
-                                              coalton-library/classes
-                                              coalton-library/builtin
-                                              coalton-library/functions
-                                              coalton-library/math
-                                              coalton-library/math/arith
-                                              coalton-library/math/integral
-                                              coalton-library/math/real
-                                              coalton-library/math/complex
-                                              coalton-library/math/elementary
-                                              coalton-library/boolean
-                                              coalton-library/bits
-                                              coalton-library/char
-                                              coalton-library/string
-                                              coalton-library/tuple
-                                              coalton-library/optional
-                                              coalton-library/list
-                                              coalton-library/result
-                                              coalton-library/cell
-                                              coalton-library/vector
-                                              coalton-library/slice
-                                              coalton-library/hashtable
-                                              coalton-library/monad/state
-                                              coalton-library/iterator))
+                                           backend
+                                           packages
                                            (base-package 'coalton-prelude)
-                                           (asdf-system ':COALTON/LIBRARY)
+                                           asdf-system
                                            (file-link-prefix ""))
   (let* ((component (asdf:find-system asdf-system))
          (component-path (asdf:component-pathname component))
@@ -133,7 +157,6 @@
         :packages (loop :for package :in packages
                         :if (gethash package documentation-by-package)
                           :collect package)
-        :asdf-system asdf-system
         :by-package documentation-by-package)))))
 
 (defun collect-documentation (env package)
