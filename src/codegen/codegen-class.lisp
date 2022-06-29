@@ -11,7 +11,6 @@
    #:lisp-type)
   (:import-from
    #:coalton-impl/codegen/function-entry
-   #:apply-function-entry
    #:construct-function-entry)
   (:local-nicknames
    (#:tc #:coalton-impl/typechecker))
