@@ -5,10 +5,7 @@
   (:export
    #:*function-constructor-functions*
    #:*function-application-functions*
-   #:construct-function-entry
-   #:apply-function-entry
-   #:f1 #:f2 #:f3 #:f4 #:f5 #:f6 #:f7 #:f8 #:f9
-   #:a1 #:a2 #:a3 #:a4 #:a5 #:a6 #:a7 #:a8 #:a9))
+   #:construct-function-entry))
 
 (in-package #:coalton-impl/codegen/function-entry)
 
@@ -103,11 +100,3 @@ NOTE: There is no FUNCTION-ENTRY for arity 1 and the function will be returned"
          (unless function-constructor
            (error "Unable to construct function of arity ~A" arity))
          `(,function-constructor ,function)))
-
-(defun apply-function-entry (function &rest args)
-"Apply a function (OR FUNCTION-ENTRY FUNCTION) constructed by coalton"
-(let* ((arity (length args))
-       (function-application (aref *function-application-functions* arity)))
-  (unless function-application
-    (error "Unable to apply function of arity ~A" arity))
-  `(,function-application ,function ,@args)))

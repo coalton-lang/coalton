@@ -8,8 +8,7 @@
    #:lisp-type)
   (:import-from
    #:coalton-impl/codegen/function-entry
-   #:construct-function-entry
-   #:apply-function-entry)
+   #:construct-function-entry)
   (:import-from
    #:coalton-impl/codegen/compile-expression
    #:compile-toplevel)
