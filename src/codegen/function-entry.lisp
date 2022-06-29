@@ -9,36 +9,66 @@
 
 (in-package #:coalton-impl/codegen/function-entry)
 
-(defconstant function-arity-limit 50)
+(defconstant function-arity-limit 45)
 
+;;; A FUNCTION-ENTRY represents a partially applicable function.
 (defstruct function-entry
-    (arity    (required 'arity)    :type fixnum   :read-only t)
-    (function (required 'function) :type function :read-only t)
-    (curried  (required 'curried)  :type function :read-only t))
+  ;; The arity of the partially applicable function.
+  (arity    (required 'arity)    :type fixnum        :read-only t)
+  ;; A reference to the full arity Lisp function. We put this in its
+  ;; own slot to avoid an extra indirection.
+  (function (required 'function) :type function      :read-only t)
+  ;; A jump table, where the index of each entry determines the number
+  ;; of arguments to partially apply.
+  (curried  (required 'curried)  :type simple-vector :read-only t))
 #+sbcl
 (declaim (sb-ext:freeze-type function-entry))
+
+(defmethod print-object ((function-entry function-entry) stream)
+  (print-unreadable-object (function-entry stream :type t)
+    (format stream
+            ":ARITY ~a"
+            (function-entry-arity function-entry))))
 
 (defvar *function-constructor-functions* (make-array function-arity-limit))
 (defvar *function-application-functions* (make-array function-arity-limit))
 
+(defun unreachable-fun ()
+  (error "This should be unreachable."))
+
 (defmacro define-function-macros ()
-  (labels ((define-function-macros-with-arity (arity)
+  (labels ((sub-application-sym (arity)
+             (alexandria:format-symbol t "A~D" arity))
+           (constructor-sym (arity)
+             (alexandria:format-symbol t "F~D" arity))
+           (define-function-macros-with-arity (arity)
              (declare (type fixnum arity))
-             (let ((constructor-sym (alexandria:format-symbol t "F~D" arity))
+             (let ((constructor-sym (constructor-sym arity))
                    (application-sym (alexandria:format-symbol t "A~D" arity))
-                   (sub-application-sym (alexandria:format-symbol t "A~D" (1- arity)))
                    (function-sym (alexandria:make-gensym "F"))
                    (applied-function-sym (alexandria:make-gensym "F"))
                    (arg-syms (alexandria:make-gensym-list arity)))
 
-               (labels ((build-curried-function (args)
-                          (if (null (car args))
-                              `(funcall ,function-sym ,@arg-syms)
-                              `(lambda (,(car args)) ,(build-curried-function (cdr args)))))
-                        (build-curried-function-call (fun args)
-                          (if (= 1 arity)
-                              `(funcall ,fun ,(car args))
-                              `(,sub-application-sym (funcall ,fun ,(car args)) ,@(cdr args)))))
+               (flet ((build-curried-function (applied-arity args)
+                        (let ((fun (gensym "FUN")))
+                          (cond ((> applied-arity (length args))
+                                 ;; For oversaturated functions, we saturate repeatedly.
+                                 (let ((temps (alexandria:make-gensym-list applied-arity)))
+                                   `(lambda (,fun ,@temps)
+                                      (declare (type function fun))
+                                      (,(sub-application-sym (- applied-arity arity))
+                                       (funcall ,fun ,@(subseq temps 0 arity))
+                                       ,@(subseq temps arity)))))
+                                ;; This is special case is handled in
+                                ;; the application logic.
+                                ((= applied-arity (length args))
+                                 `#'unreachable-fun)
+                                (t
+                                 `(lambda (,fun ,@(subseq args 0 applied-arity))
+                                    (declare (type function fun))
+                                    (,(constructor-sym (- arity applied-arity))
+                                     (lambda ,(subseq args applied-arity)
+                                       (funcall ,fun ,@args)))))))))
 
                  ;; NOTE: Since we are only calling these functions
                  ;; from already typechecked coalton, we can use the
@@ -46,29 +76,39 @@
                  `(progn
                     (defun ,application-sym (,applied-function-sym ,@arg-syms)
                       (declare #.coalton-impl:*coalton-optimize*
-                               (type (or function function-entry) ,applied-function-sym)
+                               (type function-entry ,applied-function-sym)
                                (values t))
-                      (etypecase ,applied-function-sym
-                        (function
-                         ,(build-curried-function-call applied-function-sym arg-syms))
-                        (function-entry
-                         (if (= (the fixnum (function-entry-arity ,applied-function-sym)) ,arity)
-                             (funcall (function-entry-function ,applied-function-sym)
-                                      ,@arg-syms)
-                             ,(build-curried-function-call `(function-entry-curried ,applied-function-sym) arg-syms)))))
+                      (let ((function-arity (function-entry-arity ,applied-function-sym))
+                            (raw-function (function-entry-function ,applied-function-sym)))
+                        (declare (type (mod ,function-arity-limit) function-arity))
+                        ;; Fully saturated is the most common case,
+                        ;; so we special case it.
+                        (if (= ,arity function-arity)
+                            (funcall raw-function ,@arg-syms)
+                            ;; Partially apply or overapply some
+                            ;; of the arguments by looking up
+                            ;; what to do in the jump table.
+                            (funcall
+                             (the function
+                                  (aref (function-entry-curried ,applied-function-sym) ,arity))
+                             raw-function
+                             ,@arg-syms))))
                     (setf (aref *function-application-functions* ,arity) ',application-sym)
 
-                    (declaim (inline ,constructor-sym))
                     (defun ,constructor-sym (,function-sym)
                       (declare (type (function ,(loop :for i :below arity :collect 't) t) ,function-sym)
                                #.coalton-impl:*coalton-optimize*
                                (values function-entry))
                       (make-function-entry
                        :arity ,arity
-                       ;; Store a reference to the original function for full application
                        :function ,function-sym
-                       ;; Build up a curried function to be called for partial application
-                       :curried ,(build-curried-function arg-syms)))
+                       :curried
+                       (load-time-value
+                        (vector
+                         #'unreachable-fun
+                         ,@(loop for applied-arity from 1 below function-arity-limit
+                                 collect (build-curried-function applied-arity arg-syms)))
+                        t)))
                     (setf (aref *function-constructor-functions* ,arity) ',constructor-sym))))))
     (let ((body nil)
           (funs nil))
