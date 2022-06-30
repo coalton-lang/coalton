@@ -589,6 +589,11 @@
   (code-environment          (required 'code-environment)          :type code-environment          :read-only t)
   (specialization-environment (required 'specialization-environment) :type specialization-environment :read-only t))
 
+(defmethod print-object ((env environment) stream)
+  (declare (type stream stream)
+           (type environment env))
+  (print-unreadable-object (env stream :type t :identity t)))
+
 
 (defmethod make-load-form ((self environment) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -1071,15 +1076,3 @@
           (return-from lookup-specialization-by-type elem))
       (coalton-type-error (e)
         (declare (ignore e))))))
-
-;;;
-;;; Pretty printing
-;;;
-
-;; Print the environment as an undreadable object because otherwise
-;; it is too big
-(defmethod print-object (stream (env environment))
-  (declare (type stream stream)
-           (type environment env))
-  (print-unreadable-object (env stream :type t :identity t)))
-
