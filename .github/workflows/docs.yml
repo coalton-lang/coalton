@@ -40,7 +40,7 @@ jobs:
             (asdf:load-system :coalton/doc)
             (uiop:symbol-call :coalton-doc :write-stdlib-documentation-to-file
               "coalton-website/content/reference.md" 
-              :backend :hugo)))
+              :backend :hugo))
           EOF
           qlot exec ros -- run-tests.lisp
 
