@@ -99,7 +99,7 @@
   (declare decrement! (Num :counter => (Cell :counter) -> :counter))
   (define (decrement! cel)
     "Subtract one from the contents of CEL, storing and returning the new value"
-    (update! (- 1) cel))
+    (update! (+ -1) cel))
 
   ;; i am very skeptical of these instances
   (define-instance (Eq :a => Eq (Cell :a))
