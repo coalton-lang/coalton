@@ -39,7 +39,7 @@
 
   (declare test-list-double (List Double-Float))
   (define test-list-double
-    (make-list math:infinity math:nan 0.0d0 1 math:pi math:ee (negate math:pi)
+    (make-list math:infinity 0.0d0 1 math:pi math:ee (negate math:pi)
                (math:sqrt 2) (/ math:pi (math:sqrt 3)) (math:general/ 1 2) 10 100))
 
   (declare test-list-complex-single (List (Complex Single-Float)))
