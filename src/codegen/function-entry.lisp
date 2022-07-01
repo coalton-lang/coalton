@@ -1,12 +1,3 @@
-(defpackage #:coalton-impl/codegen/function-entry
-  (:use
-   #:cl
-   #:coalton-impl/util)
-  (:export
-   #:*function-constructor-functions*
-   #:*function-application-functions*
-   #:construct-function-entry))
-
 (in-package #:coalton-impl/codegen/function-entry)
 
 (defconstant function-arity-limit 45)
@@ -140,3 +131,42 @@ NOTE: There is no FUNCTION-ENTRY for arity 1 and the function will be returned"
          (unless function-constructor
            (error "Unable to construct function of arity ~A" arity))
          `(,function-constructor ,function)))
+
+(define-condition too-many-arguments-to-coalton-function (error)
+  ((function :initarg :function
+             :accessor too-many-arguments-function)
+   (arg-count :initarg :arg-count
+              :accessor too-many-arguments-count)
+   (arguments :initarg :arguments
+              :accessor too-many-arguments-arguments))
+  (:report (lambda (err stream)
+             (with-slots (function arg-count) err
+               (format stream
+                       "Attempt to apply ~s to ~d arguments, but ~s is ~d."
+                       function arg-count 'function-arity-limit function-arity-limit)))))
+
+(declaim (ftype (function ((or function function-entry) &rest t)
+                          (values t &optional))
+                call-coalton-function))
+(defun call-coalton-function (function &rest args)
+  "Apply a Coalton function object FUNCTION to ARGS from Common Lisp."
+  (let ((arg-count (length args)))
+    (if (>= arg-count function-arity-limit)
+        (error 'too-many-arguments-to-coalton-function
+               :function function
+               :arg-count arg-count
+               :arguments args)
+        (apply (aref *function-application-functions* arg-count)
+               function
+               args))))
+
+(define-compiler-macro call-coalton-function (function &rest args)
+  (let ((arg-count (length args)))
+    (if (>= arg-count function-arity-limit)
+        (error 'too-many-arguments-to-coalton-function
+               :function function
+               :arg-count arg-count
+               :arguments args)
+        `(,(aref *function-application-functions* arg-count)
+          ,function
+          ,@args))))

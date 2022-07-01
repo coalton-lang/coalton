@@ -258,4 +258,5 @@
                (:file "quantize-tests")
                (:file "hashtable-tests")
                (:file "iterator-tests")
-               (:file "addressable-tests")))
+               (:file "addressable-tests")
+               (:file "call-coalton-from-lisp")))

@@ -439,6 +439,19 @@
    #:*coalton-print-unicode*
    #:*coalton-pretty-print-tyvars*))
 
+(defpackage #:coalton-impl/codegen/function-entry
+  (:use
+   #:cl
+   #:coalton-impl/util)
+  (:export
+   #:*function-constructor-functions*
+   #:*function-application-functions*
+   #:construct-function-entry
+   #:call-coalton-function
+   #:too-many-arguments-to-coalton-function
+   #:too-many-arguments-function
+   #:too-many-arguments-count
+   #:too-many-arguments-arguments))
 
 (defpackage #:coalton-impl
     (:documentation "Implementation and runtime for COALTON. This is a package private to the COALTON system and is not intended for public use.")
@@ -503,6 +516,11 @@
    #:in-package)
   (:export
    #:in-package)
+
+  (:import-from
+   #:coalton-impl/codegen/function-entry
+   #:call-coalton-function)
+  (:export #:call-coalton-function)
 
   (:export
    #:coalton-toplevel
