@@ -109,7 +109,8 @@
                       (funcall compile)))
   :depends-on (#:coalton/compiler
                #:coalton/hashtable-shim
-               #:trivial-garbage)
+               #:trivial-garbage
+               #:alexandria)
   :pathname "library/"
   :serial t
   :components ((:file "utils")

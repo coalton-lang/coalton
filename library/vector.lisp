@@ -34,7 +34,8 @@
    #:swap-remove!
    #:swap-remove-unsafe!
    #:sort!
-   #:sort-by!))
+   #:sort-by!
+   #:make))
 
 #+coalton-release
 (cl:declaim #.coalton-impl:*coalton-optimize-library*)
@@ -307,6 +308,16 @@
 
   (define-instance (addr:Addressable (Vector :elt))
     (define addr:eq? addr::unsafe-internal-eq?)))
+
+(cl:defmacro make (cl:&rest elements)
+  "Construct a `Vector' containing the ELEMENTS, in the order listed."
+  (cl:let* ((length (cl:length elements))
+            (vec (cl:gensym "VEC-")))
+    `(progn
+      (let ,vec = (with-capacity ,length))
+      ,@(cl:loop :for elt :in elements
+           :collect `(push! ,elt ,vec))
+      ,vec)))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/VECTOR")
