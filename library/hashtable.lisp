@@ -17,7 +17,8 @@
    #:foreach
    #:entries
    #:keys
-   #:values))
+   #:values
+   #:make))
 
 #+coalton-release
 (cl:declaim #.coalton-impl:*coalton-optimize-library*)
@@ -143,6 +144,67 @@
 
   (define-instance (addr:Addressable (Hashtable :key :value))
     (define addr:eq? addr::unsafe-internal-eq?)))
+
+(cl:define-condition make-hash-table-static-duplicate-keys (cl:error)
+  ((offending-key :initarg :offending-key
+                  :reader duplicate-offending-key)
+   (entry-a :initarg :entry-a
+            :reader duplicate-entry-a)
+   (entry-b :initarg :entry-b
+            :reader duplicate-entry-b))
+  (:report (cl:lambda (c s)
+             (cl:format s "Statically-detected duplicate keys in `make-hash-table': key ~S applies to both ~S and ~S"
+                        (duplicate-offending-key c)
+                        (duplicate-entry-a c)
+                        (duplicate-entry-b c)))))
+
+(cl:defun find-duplicate-entry (elements cl:&key (test #'cl:equal) (key #'cl:first))
+  (cl:let* ((ht (cl:make-hash-table :test test)))
+    (cl:dolist (entry elements (cl:values cl:nil cl:nil cl:nil))
+      (cl:let* ((keyed (cl:funcall key entry)))
+        (cl:multiple-value-bind (old-entry presentp)
+            (cl:gethash keyed ht)
+          (cl:if presentp (cl:return-from find-duplicate-entry
+                            (cl:values cl:t old-entry entry))
+                 (cl:setf (cl:gethash keyed ht) entry)))))))
+
+(cl:defmacro make (cl:&rest pairs)
+  "Construct a `HashTable' containing the PAIRS as initial entries.
+
+Each of the PAIRS should be a two-element list of the form (KEY VALUE). The resulting table will map KEY to
+VALUE.
+
+Listing duplicate keys is disallowed. This macro will attempt to detect duplicate keys at compile-time, and
+signal an error if duplicate keys are found. If the macro doesn't detect a pair of duplicate keys, the
+resulting table will map the KEY to exactly one of the listed VALUEs, but which VALUE is chosen is undefined.
+
+Examples:
+
+(make (\"zero\" 0)
+      (\"one\" 1)
+      (\"two\" 2))
+
+(let ((zero \"zero\")
+      (one \"one\"))
+  (make (zero 0)
+        (one 1)
+        (\"two\" 2)))"
+  (cl:let* ((keys (cl:mapcar #'cl:first pairs))
+            (values (cl:mapcar #'cl:second pairs))
+            (ht (cl:gensym "HASH-TABLE-")))
+    (cl:multiple-value-bind (duplicatep dup-a dup-b)
+        (find-duplicate-entry pairs)
+      (cl:if duplicatep
+             (cl:error 'make-hash-table-static-duplicate-keys
+                       :offending-key (cl:first dup-a)
+                       :entry-a dup-a
+                       :entry-b dup-b)
+             `(progn
+                (let ,ht = (with-capacity ,(cl:length keys)))
+                ,@(cl:mapcar (cl:lambda (key val)
+                               `(set! ,ht ,key ,val))
+                             keys values)
+                ,ht)))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/HASHTABLE")
