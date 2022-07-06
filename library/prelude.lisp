@@ -5,10 +5,17 @@
 (uiop:define-package #:coalton-library/math
   (:use-reexport
    #:coalton-library/math/arith
+   #:coalton-library/math/num
+   #:coalton-library/math/bounded
+   #:coalton-library/math/conversions
+   #:coalton-library/math/fraction
    #:coalton-library/math/integral
    #:coalton-library/math/real
    #:coalton-library/math/complex
    #:coalton-library/math/elementary))
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON-LIBRARY/MATH")
 
 (uiop:define-package #:coalton-prelude
   (:use-reexport
@@ -184,7 +191,10 @@
   (:export
    #:time))
 
-(cl:defpackage #:coalton-user
+#+sb-package-locks
+(sb-ext:lock-package "COALTON-PRELUDE")
+
+(defpackage #:coalton-user
   (:import-from
    #:common-lisp
    #:describe
@@ -209,10 +219,3 @@
    (#:iter #:coalton-library/iterator)
    (#:sys #:coalton-library/system)))
 
-(cl:in-package #:coalton-prelude)
-
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-PRELUDE")
-
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MATH")

@@ -177,7 +177,8 @@
 
                            :do (setf env (set-constructor env ctor-name entry))
 
-                           :collect (cons scheme entry))))
+                           :collect (cons scheme entry))
+                     (partial-define-type-docstring partial-type)))
      env)))
 
 (defun check-constructor (ty-name ctor-name env)

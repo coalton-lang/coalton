@@ -118,94 +118,6 @@
             :docstring "A single character represented as a `character` type."
             :location ""))
 
-          ('coalton:U8
-           (type-entry
-            :name 'coalton:U8
-            :runtime-type '(cl:unsigned-byte 8)
-            :type *u8-type*
-            :explicit-repr '(:native (cl:unsigned-byte 8))
-            :enum-repr nil
-            :newtype nil
-            :docstring "Unsigned 8-bit integer capable of storing values in `[0, 255]`. Uses `(unsigned-byte 8)`."
-            :location ""))
-
-          ('coalton:U16
-           (type-entry
-            :name 'coalton:U16
-            :runtime-type '(cl:unsigned-byte 16)
-            :type *u16-type*
-            :explicit-repr '(:native (cl:unsigned-byte 16))
-            :enum-repr nil
-            :newtype nil
-            :docstring "Unsigned 16-bit integer capable of storing values in `[0, 65535]`. Uses `(unsigned-byte 16)`."
-            :location ""))
-
-          ('coalton:U32
-           (type-entry
-            :name 'coalton:U32
-            :runtime-type '(cl:unsigned-byte 32)
-            :type *u32-type*
-            :explicit-repr '(:native (cl:unsigned-byte 32))
-            :enum-repr nil
-            :newtype nil
-            :docstring "Unsigned 32-bit integer capable of storing values in `[0, 4294967295]`. Uses `(unsigned-byte 32)`."
-            :location ""))
-
-          ('coalton:U64
-           (type-entry
-            :name 'coalton:U64
-            :runtime-type '(cl:unsigned-byte 64)
-            :type *u64-type*
-            :explicit-repr '(:native (cl:unsigned-byte 64))
-            :enum-repr nil
-            :newtype nil
-            :docstring "Unsigned 64-bit integer capable of storing values in `[0, 18446744073709551615]`. Uses `(unsigned-byte 64)`."
-            :location ""))
-
-          ('coalton:I8
-           (type-entry
-            :name 'coalton:I8
-            :runtime-type '(cl:signed-byte 8)
-            :type *i8-type*
-            :explicit-repr '(:native (cl:signed-byte 8))
-            :enum-repr nil
-            :newtype nil
-            :docstring "Signed 8-bit integer capable of storing values in `[-128, 127]`. Uses `(signed-byte 8)`."
-            :location ""))
-
-          ('coalton:I16
-           (type-entry
-            :name 'coalton:I16
-            :runtime-type '(cl:signed-byte 16)
-            :type *i16-type*
-            :explicit-repr '(:native (cl:signed-byte 16))
-            :enum-repr nil
-            :newtype nil
-            :docstring "Signed 16-bit integer capable of storing values in `[-32768, 32767]`. Uses `(signed-byte 16)`."
-            :location ""))
-
-          ('coalton:I32
-           (type-entry
-            :name 'coalton:I32
-            :runtime-type '(cl:signed-byte 32)
-            :type *i32-type*
-            :explicit-repr '(:native (cl:signed-byte 32))
-            :enum-repr nil
-            :newtype nil
-            :docstring "Signed 32-bit integer capable of storing values in `[-2147483648, 2147483647]`. Uses `(signed-byte 32)`."
-            :location ""))
-
-          ('coalton:I64
-           (type-entry
-            :name 'coalton:I64
-            :runtime-type '(cl:signed-byte 64)
-            :type *i64-type*
-            :explicit-repr '(:native (cl:signed-byte 64))
-            :enum-repr nil
-            :newtype nil
-            :docstring "Signed 64-bit integer capable of storing values in `[-9223372036854775808, 9223372036854775807]`. Uses `(signed-byte 64)`."
-            :location ""))
-
           ('coalton:Integer
            (type-entry
             :name 'coalton:Integer
@@ -215,28 +127,6 @@
             :enum-repr nil
             :newtype nil
             :docstring "Unbound integer. Uses `integer`."
-            :location ""))
-
-          ('coalton:IFix
-           (type-entry
-            :name 'coalton:IFix
-            :runtime-type 'cl:fixnum
-            :type *ifix-type*
-            :explicit-repr '(:native cl:fixnum)
-            :enum-repr nil
-            :newtype nil
-            :docstring "Non-allocating tagged integer; range is platform-dependent. Uses `fixnum`."
-            :location ""))
-
-          ('coalton:UFix
-           (type-entry
-            :name 'coalton:UFix
-            :runtime-type '(cl:and cl:fixnum cl:unsigned-byte)
-            :type *ufix-type*
-            :explicit-repr '(:native (cl:and cl:fixnum cl:unsigned-byte))
-            :enum-repr nil
-            :newtype nil
-            :docstring "Non-allocating tagged non-negative integer; range is platform-dependent. Uses `(and fixnum unsigned-byte)`."
             :location ""))
 
           ('coalton:Single-Float
