@@ -1,6 +1,6 @@
 (in-package #:coalton-impl/codegen/function-entry)
 
-(defconstant function-arity-limit 45)
+(defconstant function-arity-limit 32)
 
 ;;; A FUNCTION-ENTRY represents a partially applicable function.
 (defstruct function-entry
