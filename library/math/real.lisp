@@ -6,6 +6,7 @@
     (:use
      #:coalton
      #:coalton-library/math/arith
+     #:coalton-library/math/fraction
      #:coalton-library/math/integral
      #:coalton-library/classes
      #:coalton-library/functions)

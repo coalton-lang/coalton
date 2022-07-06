@@ -83,6 +83,10 @@
                coalton-library/functions
                coalton-library/math
                coalton-library/math/arith
+               coalton-library/math/num
+               coalton-library/math/bounded
+               coalton-library/math/conversions
+               coalton-library/math/fraction
                coalton-library/math/integral
                coalton-library/math/real
                coalton-library/math/complex

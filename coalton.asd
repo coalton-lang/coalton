@@ -114,6 +114,7 @@
   :pathname "library/"
   :serial t
   :components ((:file "utils")
+               (:file "fixed-size-numbers")
                (:file "classes")
                (:file "builtin")
                (:file "functions")
@@ -122,6 +123,10 @@
                (:module "math"
                 :serial t
                 :components ((:file "arith")
+                             (:file "num")
+                             (:file "bounded") 
+                             (:file "conversions")
+                             (:file "fraction")
                              (:file "integral")
                              (:file "real")
                              (:file "complex")
