@@ -65,7 +65,7 @@
   (define (length v)
     "Returns the length of V"
     (lisp Integer (v)
-      (cl:fill-pointer v)))
+      (cl:length v)))
 
   (declare capacity (Vector :a -> Integer))
   (define (capacity v)
