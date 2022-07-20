@@ -158,7 +158,8 @@
             (foreach2
              (fn (e1 e2)
                (unless (== e1 e2)
-                 (cell:write! out False)))
+                 (cell:write! out False)
+                 Unit))
              s1 s2)
             (cell:read out)))))
 
