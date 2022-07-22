@@ -138,7 +138,7 @@ The function general/ is partial, and will error produce a run-time error if the
         (negate x)
         x))
 
-  (declare sign ((Ord :a) (Num :a) => :a -> :a))
+  (declare sign ((Ord :a) (Num :a) (Num :b) => :a -> :b))
   (define (sign x)
     "The sign of X."
     (if (< x 0)

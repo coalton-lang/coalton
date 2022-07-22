@@ -9,8 +9,9 @@
      #:coalton-library/builtin
      #:coalton-library/math/arith)
   (:import-from
-   #:coalton-library/bits
-   #:Bits)
+   #:coalton-library/bits #:Bits)
+  (:local-nicknames
+   (#:bits #:coalton-library/bits))
   (:export
    #:Remainder
    #:Integral
@@ -21,6 +22,8 @@
    #:rem
    #:quotRem
    #:toInteger
+   #:lsh
+   #:rsh
    #:even?
    #:odd?
    #:^
@@ -51,6 +54,16 @@
     "Integral is a number that is either even or odd where `div' and `quot'
 are floored and truncated division, respectively."
     (toInteger (:int -> Integer)))
+
+  (declare rsh ((Integral :n) (Bits :b) => :b -> :n -> :b))
+  (define (rsh x n)
+    "Right shift X by N"
+    (bits:shift (negate (toInteger n)) x))
+
+  (declare lsh ((Integral :n) (Bits :b) => :b -> :n -> :b))
+  (define (lsh x n)
+    "Left shift X by N"
+    (bits:shift (toInteger n) x))
 
   (declare even? (Integral :a => :a -> Boolean))
   (define (even? n)
