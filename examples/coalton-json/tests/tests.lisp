@@ -33,7 +33,16 @@
            (coalton-json:parse-json "[[]]"))
   (is-type 'coalton-json::json/json-array
            (coalton-json:parse-json "[1, 1.0, true, false, [], \"x\"]"))
+  (is-type 'coalton-json::json/json-array
+           (coalton-json::parse-json 
+            (coalton-json::json->string 
+             (coalton-json:parse-json "[1, 1.0, true, false, [], \"x\"]"))))
   (is-type 'coalton-json::json/json-object
            (coalton-json:parse-json "{}"))
   (is-type 'coalton-json::json/json-object
-           (coalton-json:parse-json "{\"x\":0, \"y\":{\"z\":\"z\"}}")))
+           (coalton-json:parse-json "{\"x\":0, \"y\":{\"z\":\"z\"}}"))
+  (is-type 'coalton-json::json/json-object
+           (coalton-json::parse-json 
+            (coalton-json::json->string
+             (coalton-json:parse-json "{\"x\":0, \"y\":{\"z\":\"z\"}}")))))
+  
