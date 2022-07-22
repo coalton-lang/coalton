@@ -2,35 +2,6 @@
 ;;;;
 ;;;; Arbitrary precision floats using SBCL's MPFR library.
 
-(coalton-library/utils:defstdlib-package #:coalton-library/big-float
-  (:use #:coalton
-        #:coalton-library/classes
-        #:coalton-library/functions
-        #:coalton-library/math)
-
-  (:export
-   #:RoundingMode
-   #:rndna
-   #:rndn
-   #:rndz
-   #:rndu
-   #:rndd
-   #:rnda
-   #:rndf
-   #:set-rounding-mode!
-   #:get-rounding-mode
-   #:with-rounding
-
-   #:set-precision!
-   #:get-precision
-   #:with-precision
-
-   #:Big-Float
-   #:with-precision-rounding
-
-   #:bf-pi
-   #:bf-e))
-
 #+coalton-release
 (cl:declaim #.coalton-impl:*coalton-optimize-library*)
 
@@ -40,7 +11,9 @@
 #-sb-mpfr (error "SB-MPFR failed to load, for some reason. ~
                   This is probably due to the shared library ~
                   not existing, or the system being unable ~
-                  to find it.")
+                  to find it. ~
+                  Set COALTON_PORTABLE_BIGFLOAT=1 or ~
+                  add the feature :coalton-portable-bigfloat.")
 
 ;;; Preliminary patched functionality for SB-MPFR
 ;;;

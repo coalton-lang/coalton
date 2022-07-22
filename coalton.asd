@@ -130,7 +130,8 @@
                              (:file "integral")
                              (:file "real")
                              (:file "complex")
-                             (:file "elementary")))
+                             (:file "elementary")
+                             (:file "dyadic")))
                (:file "char")
                (:file "string")
                (:file "tuple")
@@ -148,8 +149,11 @@
                (:file "system")
                (:file "prelude")))
 
+(when (member (getenv "COALTON_PORTABLE_BIGFLOAT") '("1" "true" "t") :test 'equalp)
+  (pushnew :coalton-portable-bigfloat *features*))
+
 (asdf:defsystem #:coalton/library/big-float
-  :description "An arbitrary precision floating point library that uses SB-MPFR."
+  :description "An arbitrary precision floating point library."
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
   :license "MIT"
   :version (:read-file-form "VERSION.txt")
@@ -159,11 +163,15 @@
                       (funcall compile)))
   :depends-on (#:coalton
                #:coalton/library
-               #:sb-gmp
-               #:sb-mpfr)
+               (:feature (:and (:not :coalton-portable-bigfloat) :sbcl) #:sb-mpfr)
+               (:feature (:and (:not :coalton-portable-bigfloat) :sbcl) #:sb-gmp))
   :pathname "library/big-float/"
   :serial t
-  :components ((:file "big-float")))
+  :components ((:file "package")
+               (:file "impl-sbcl"
+                :if-feature (:and (:not :coalton-portable-bigfloat) :sbcl))
+               (:file "impl-default"
+                :if-feature (:or :coalton-portable-bigfloat (:not :sbcl)))))
 
 (asdf:defsystem #:coalton/testing
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
@@ -186,11 +194,14 @@
                       (funcall compile)))
 
   :depends-on (#:coalton
+               #:coalton/library/big-float
                #:trivial-benchmark
                #:yason)
   :pathname "benchmarks"
   :serial t
-  :components ((:file "package")))
+  :components ((:file "package")
+               (:file "fibonacci")
+               (:file "big-float")))
 
 ;;; we need to inspect the sbcl version in order to decide which version of the hashtable shim to load,
 ;;; because 2.1.12 includes (or will include) a bugfix that allows a cleaner, more maintainable
@@ -222,7 +233,7 @@
   :license "MIT"
   :version (:read-file-form "VERSION.txt")
   :depends-on (#:coalton
-               (:feature :sbcl #:coalton/library/big-float)
+               #:coalton/library/big-float
                #:html-entities
                #:yason
                #:uiop)
@@ -241,7 +252,7 @@
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
   :license "MIT"
   :depends-on (#:coalton
-               (:feature :sbcl #:coalton/library/big-float)
+               #:coalton/library/big-float
                #:coalton/testing
                #:fiasco
                #:coalton-json/tests
