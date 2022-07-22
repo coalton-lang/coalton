@@ -19,6 +19,7 @@
    #:Json-Object
    #:Json-Array)
   (:export
+   #:json->string
    #:parse-json))
 
 (defpackage #:json-streams-binding
