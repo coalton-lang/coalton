@@ -103,7 +103,7 @@
       ((Json-Boolean b) (if b "true" "false"))
       ((Json-Number n) 
        (lisp String (n)
-         (cl:format cl:nil "~$" n)))
+         (cl:format cl:nil "~f" n)))
       ((Json-String s) (concat3 "\"" s "\""))
       ((Json-Object sm)
        (string-map->string sm))
