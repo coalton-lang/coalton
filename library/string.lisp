@@ -37,13 +37,13 @@
     "Reverse a string."
     (lisp String (s) (cl:reverse s)))
 
-  (declare length (String -> Integer))
+  (declare length (String -> UFix))
   (define (length str)
     "The length of a string STR."
-    (lisp Integer (str)
+    (lisp UFix (str)
       (cl:length str)))
 
-  (declare substring (String -> Integer -> Integer -> String))
+  (declare substring (String -> UFix -> UFix -> String))
   (define (substring str start end)
     "Compute a substring of a string bounded by given indices."
     (let ((real-start (max 0 (min start end)))
@@ -88,7 +88,7 @@ does not have that suffix."
 
   (declare ref (String -> UFix -> (Optional Char)))
   (define (ref str idx)
-    (if (< idx (fromInt (length str)))
+    (if (< idx (length str))
         (Some (ref-unchecked str idx))
         None))
 

@@ -56,22 +56,22 @@
     "Create a new empty vector"
     (with-capacity 0))
 
-  (declare with-capacity (Integer -> Vector :a))
+  (declare with-capacity (UFix -> Vector :a))
   (define (with-capacity n)
     "Create a new vector with N elements preallocated"
     (lisp (Vector :a) (n)
       (cl:make-array n :fill-pointer 0 :adjustable cl:t)))
 
-  (declare length (Vector :a -> Integer))
+  (declare length (Vector :a -> UFix))
   (define (length v)
     "Returns the length of V"
-    (lisp Integer (v)
+    (lisp UFix (v)
       (cl:length v)))
 
-  (declare capacity (Vector :a -> Integer))
+  (declare capacity (Vector :a -> UFix))
   (define (capacity v)
     "Returns the number of elements that V can store without resizing"
-    (lisp Integer (v)
+    (lisp UFix (v)
       (cl:array-dimension v 0)))
 
   (declare empty? (Vector :a -> Boolean))
@@ -85,10 +85,10 @@
     (lisp (Vector :a) (v)
       (alexandria:copy-array v)))
 
-  (declare push! (:a -> Vector :a -> Integer))
+  (declare push! (:a -> Vector :a -> UFix))
   (define (push! item v)
     "Append ITEM to V and resize V if necessary"
-    (lisp Integer (item v)
+    (lisp UFix (item v)
       (cl:progn
 	(cl:vector-push-extend item v)
 	(cl:1- (cl:fill-pointer v)))))
@@ -106,20 +106,20 @@
     (lisp :a (v)
       (cl:vector-pop v)))
 
-  (declare index (Integer -> Vector :a -> Optional :a))
+  (declare index (UFix -> Vector :a -> Optional :a))
   (define (index index v)
     "Return the INDEXth element of V"
     (if (>= index (length v))
         None
         (Some (index-unsafe index v))))
 
-  (declare index-unsafe (Integer -> Vector :a -> :a))
+  (declare index-unsafe (UFix -> Vector :a -> :a))
   (define (index-unsafe index v)
     "Return the INDEXth element of V without checking if the element exists"
     (lisp :a (index v)
       (cl:aref v index)))
 
-  (declare set! (Integer -> :a -> Vector :a -> Unit))
+  (declare set! (UFix -> :a -> Vector :a -> Unit))
   (define (set! index item v)
     "Set the INDEXth element of V to ITEM. This function left intentionally unsafe because it does not have a return value to check."
     (lisp Void (index item v)
@@ -146,13 +146,13 @@
     "Return the last element of V without first checking if V is empty"
     (index-unsafe (- (length v) 1) v))
 
-  (declare find-elem (Eq :a => :a -> Vector :a -> Optional Integer))
+  (declare find-elem (Eq :a => :a -> Vector :a -> Optional UFix))
   (define (find-elem e v)
     "Find the index of element E in V"
     (let ((test (fn (elem)
                   (== elem e))))
 
-      (lisp (Optional Integer) (v test)
+      (lisp (Optional UFix) (v test)
         (cl:let ((pos (cl:position-if
                        (cl:lambda (x)
                          (cl:equalp True (coalton-impl/codegen::A1 test x)))
@@ -169,7 +169,7 @@
          :do (coalton-impl/codegen::A1 f elem)))
     Unit)
 
-  (declare foreach-index ((Integer -> :a -> :b) -> Vector :a -> Unit))
+  (declare foreach-index ((UFix -> :a -> :b) -> Vector :a -> Unit))
   (define (foreach-index f v)
     "Call the function F once for each item in V with its index"
     (lisp Void (f v)
@@ -201,14 +201,14 @@
     (foreach f v2)
     out)
 
-  (declare swap-remove! (Integer -> Vector :a -> Optional :a))
+  (declare swap-remove! (UFix -> Vector :a -> Optional :a))
   (define (swap-remove! idx vec)
     "Remove the element IDX from VEC and replace it with the last element in VEC. Then return the removed element."
     (if (>= idx (length vec))
         None
         (Some (swap-remove-unsafe! idx vec))))
 
-  (declare swap-remove-unsafe! (Integer -> Vector :a -> :a))
+  (declare swap-remove-unsafe! (UFix -> Vector :a -> :a))
   (define (swap-remove-unsafe! idx vec)
     "Remove the element IDX from VEC and replace it with the last element in VEC without bounds checking. Then return the removed element."
     (if (== (+ 1 idx) (length vec))

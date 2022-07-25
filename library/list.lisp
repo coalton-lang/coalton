@@ -133,7 +133,7 @@
     "Returns a list containting one element."
     (Cons x Nil))
 
-  (declare repeat (Integer -> :a -> List :a))
+  (declare repeat (UFix -> :a -> List :a))
   (define (repeat n x)
     "Returns a list with the same value repeated multiple times."
     (if (== 0 n)
@@ -151,7 +151,7 @@
     ;; like (fold (flip Cons) Nil xs)
     (%reverse xs Nil))
 
-  (declare drop (Integer -> List :a -> List :a))
+  (declare drop (UFix -> List :a -> List :a))
   (define (drop n xs)
     "Returns a list with the first N elements removed."
     (if (== n 0)
@@ -161,7 +161,7 @@
            (drop (- n 1) xs))
           ((Nil) Nil))))
 
-  (declare take (Integer -> List :a -> List :a))
+  (declare take (UFix -> List :a -> List :a))
   (define (take n xs)
     "Returns the first N elements of a list."
     (if (== n 0)
@@ -194,7 +194,7 @@
                         (fun xs ys)))))))
       (fun xs Nil)))
 
-  (declare length (List :a -> Integer))
+  (declare length (List :a -> UFix))
   (define (length l)
     "Returns the length of a list."
     (fold (fn (a b)
@@ -202,7 +202,7 @@
           0
           l))
 
-  (declare index (Integer -> List :a -> Optional :a))
+  (declare index (UFix -> List :a -> Optional :a))
   (define (index i xs)
     "Returns the Ith element of a list."
     (match xs
@@ -213,16 +213,16 @@
            (Some x)
            (index (- i 1) xs)))))
 
-  (declare nth (Integer -> List :t -> :t))
+  (declare nth (UFix -> List :t -> :t))
   (define (nth n l)
     "Like INDEX, but errors if the index is not found."
     (fromSome "There is no NTH" (index n l)))
 
-  (declare elemIndex (Eq :a => :a -> List :a -> Optional Integer))
+  (declare elemIndex (Eq :a => :a -> List :a -> Optional UFix))
   (define (elemIndex x xs)
     (findIndex (== x) xs))
 
-  (declare findIndex ((:a -> Boolean) -> List :a -> Optional Integer))
+  (declare findIndex ((:a -> Boolean) -> List :a -> Optional UFix))
   (define (findIndex f xs)
     "Returns the index of the first element matching the predicate function F."
     (let ((find (fn (xs n)
@@ -235,9 +235,9 @@
                          (find xs (+ n 1))))))))
       (find xs 0)))
 
-  (declare range (Integer -> Integer -> List Integer))
+  (declare range ((Num :int) (Ord :int) => :int -> :int -> List :int))
   (define (range start end)
-    "Returns a list containing the numbers from START to END inclusive.
+    "Returns a list containing the numbers from START to END inclusive, counting by 1.
 
 
     ```
@@ -394,7 +394,7 @@
     "Builds a list of tuples with the elements of XS and YS."
     (zipWith Tuple xs ys))
 
-  (declare countBy ((:a -> Boolean) -> (List :a) -> Integer))
+  (declare countBy ((:a -> Boolean) -> (List :a) -> UFix))
   (define (countBy f things)
     "Count the number of items in THINGS that satisfy the predicate F."
     (fold (fn (sum x)
@@ -584,7 +584,7 @@ The ordering of elements of L is preserved in the ordering of elements in each l
       ((Cons x xs)
        (concatMap (fn (y) (make-list y (Cons x y))) (combs xs)))))
 
-  (declare combsOf (Integer -> List :a -> (List (List :a))))
+  (declare combsOf (UFix -> List :a -> (List (List :a))))
   (define (combsOf n l)
     "Produce a list of size-N subsets of L.
 
@@ -592,13 +592,14 @@ The ordering of elements of L is preserved in the ordering of elements in each l
 
 This function is equivalent to all size-N elements of `(COMBS L)`."
 
-    (match (Tuple n l)
-      ((Tuple 0 _)           (make-list Nil))
-      ((Tuple 1 _)           (map singleton l))
-      ((Tuple _ (Nil))       Nil)
-      ((Tuple _ (Cons x xs)) (append
+    (cond ((== 0 n) (make-list Nil))
+          ((== 1 n) (map singleton l))
+          (True (match l
+                  ((Nil) Nil)
+                  ((Cons x xs) (append
                               (map (Cons x) (combsOf (- n 1) xs)) ; combs with X
-                              (combsOf n xs)))))                  ; and without X
+                              (combsOf n xs)                      ; and without x
+                              ))))))
 
   ;;
   ;; List instances
