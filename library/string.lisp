@@ -12,7 +12,9 @@
    #:strip-suffix
    #:parse-int
    #:ref
-   #:ref-unchecked))
+   #:ref-unchecked
+   #:substring-index
+   #:substring?))
 
 #+coalton-release
 (cl:declaim #.coalton-impl:*coalton-optimize-library*)
@@ -89,6 +91,22 @@ does not have that suffix."
     (if (< idx (fromInt (length str)))
         (Some (ref-unchecked str idx))
         None))
+
+  (declare substring-index (String -> String -> (Optional UFix)))
+  (define (substring-index small big)
+    "If the first argument appears as a substring within the second argument, return the starting index into the second argument."
+    (lisp (Optional UFix) (small big)
+      (alexandria:if-let (idx (cl:search small big))
+        (Some idx)
+        None)))
+
+  (declare substring? (String -> String -> Boolean))
+  (define (substring? small big)
+    "Return true if the first argument appears as a substring within the second argument."
+    ;; not a call to `optional:isSome' because this file is loaded before optional.lisp
+    (match (substring-index small big)
+      ((None) False)
+      ((Some _) True)))
 
   ;;
   ;; String Instances
