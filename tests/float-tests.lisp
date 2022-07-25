@@ -97,7 +97,7 @@
   (declare float-checklist ((math:Dividable Integer :a) => (List :a)))
   (define float-checklist
     (coalton-prelude:zipWith
-     math:general/ (coalton-prelude:range -100 100) (coalton-prelude:range 200 1))))
+     math:general/ (coalton:the (coalton:List coalton:Integer) (coalton-prelude:range -100 100)) (coalton-prelude:range 200 1))))
 
 (coalton-toplevel
   (define (check-against-double x y)

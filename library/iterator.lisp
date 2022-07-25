@@ -138,14 +138,14 @@ Behavior is undefined if the iterator is advanced after a destructive modificati
     "Yield successive elements of VEC.
 Behavior is undefined if the iterator is advanced after a destructive modification of VEC."
     (map ((flip vector:index-unsafe) vec)
-         (up-to (fromInt (vector:length vec)))))
+         (up-to (vector:length vec))))
 
   (declare string-chars (String -> Iterator Char))
   (define (string-chars str)
     "Yield successive `Char`s from STR.
 Behavior is undefined if the iterator is advanced after a destructive modification of STR."
     (map (string:ref-unchecked str)
-         (up-to (fromInt (string:length str)))))
+         (up-to (string:length str))))
 
   (declare recursive-iter ((:elt -> :elt) -> (:elt -> Boolean) -> :elt -> Iterator :elt))
   (define (recursive-iter succ done? start)
@@ -356,7 +356,7 @@ In the case one iterator terminates before the other, the other is exhausted bef
     "Add together all the elements of ITER."
     (fold! + 0 iter))
 
-  (declare count! (Iterator :elt -> Integer))
+  (declare count! (Iterator :elt -> UFix))
   (define (count! iter)
     "Return the number of elements in ITER.
 This operation could be called `length!`, but `count!` emphasizes the fact that it consumes ITER, and
@@ -434,7 +434,7 @@ Returns `False` if ITER is empty."
     "Construct a `List` containing all the elements from ITER in order."
     (list:reverse (fold! (flip Cons) Nil iter)))
 
-  (declare collect-vector-size-hint! (Integer -> Iterator :elt -> Vector :elt))
+  (declare collect-vector-size-hint! (UFix -> Iterator :elt -> Vector :elt))
   (define (collect-vector-size-hint! size iter)
     "Construct a `Vector` with initial allocation for SIZE elements, and fill it with all the elements from ITER in order.
 

@@ -37,7 +37,7 @@
   (repr :native (cl:vector cl:t))
   (define-type (Slice :a))
 
-  (declare new (Integer -> Integer -> (Vector :a) -> (Slice :a)))
+  (declare new (UFix -> UFix -> (Vector :a) -> (Slice :a)))
   (define (new start length v)
     (when (< start 0)
       (error "Start of slice cannot be less than 0."))
@@ -55,10 +55,10 @@
        :displaced-to v
        :displaced-index-offset start)))
 
-  (declare length ((Slice :a) -> Integer))
+  (declare length ((Slice :a) -> UFix))
   (define (length s)
     "Returns the length of S"
-    (lisp Integer (s)
+    (lisp UFix (s)
       (cl:array-dimension s 0)))
 
   (declare copy ((Slice :a) -> (Slice :a)))
@@ -67,21 +67,21 @@
     (lisp (Slice :a) (s)
       (alexandria:copy-array s)))
 
-  (declare set! (Integer -> :a -> (Slice :a) -> Unit))
+  (declare set! (UFix -> :a -> (Slice :a) -> Unit))
   (define (set! index item s)
     "Set the element at INDEX in S to ITEM"
     (lisp :a (index item s)
       (cl:setf (cl:aref s index) item))
     Unit)
 
-  (declare index (Integer -> (Slice :a) -> (Optional :a)))
+  (declare index (UFix -> (Slice :a) -> (Optional :a)))
   (define (index idx s)
     "Lookup the element at INDEX in S"
     (if (>= idx (length s))
         None
         (Some (index-unsafe idx s))))
 
-  (declare index-unsafe (Integer -> (Slice :a) -> :a))
+  (declare index-unsafe (UFix -> (Slice :a) -> :a))
   (define (index-unsafe idx s)
     "Lookup the element at INDEX in S without bounds checking"
     (lisp :a (idx s)
@@ -95,7 +95,7 @@
          :do (coalton-impl/codegen::A1 f elem)))
     Unit)
 
-  (declare foreach-index ((Integer -> :a -> :b) -> (Slice :a) -> Unit))
+  (declare foreach-index ((UFix -> :a -> :b) -> (Slice :a) -> Unit))
   (define (foreach-index f s)
     "Call the function F once for each item in S with its index"
     (lisp :a (f s)
@@ -119,7 +119,7 @@
   ;; Vector functions
   ;;
 
-  (declare iter-sliding (((Slice :a) -> :b) -> Integer -> (Vector :a) -> Unit))
+  (declare iter-sliding (((Slice :a) -> :b) -> UFix -> (Vector :a) -> Unit))
   (define (iter-sliding f size v)
     "Sliding iteration over a vector"
     (let ((inner
@@ -132,7 +132,7 @@
                     (inner (+ offset 1)))))))
       (inner 0)))
 
-  (declare iter-chunked (((Slice :a) -> :b) -> Integer -> (Vector :a) -> Unit))
+  (declare iter-chunked (((Slice :a) -> :b) -> UFix -> (Vector :a) -> Unit))
   (define (iter-chunked f size v)
     "Chunked iteration over a vector. Ignores elements at the end if the vector does not evenly divide by the chunk size."
     (let ((inner

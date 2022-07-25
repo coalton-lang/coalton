@@ -54,7 +54,7 @@
     (TVar Tyvar)
     (TCon Tycon)
     (TAp Type Type)
-    (TGen Integer))
+    (TGen UFix))
 
   (define-instance (Eq Type)
       (define (== t1 t2)
