@@ -18,537 +18,81 @@
 
 (in-package #:coalton-library/math/conversions)
 
-(coalton-toplevel
-  ;;
-  ;; Conversions from U8
-  ;;
-
-  (define-instance (TryInto U8 I8)
-    (define (tryInto x)
-      (when (> (into x) (the Integer (into (the I8 maxBound))))
-        (return (Err "value out of range")))
-
-      (Ok (lisp I8 (x) x))))
-
-  (define-instance (Into U8 U16)
-    (define (into x)
-      (lisp U16 (x) x)))
-
-  (define-instance (Into U8 I16)
-    (define (into x)
-      (lisp I16 (x) x)))
-
-  (define-instance (Into U8 U32)
-    (define (into x)
-      (lisp U32 (x) x)))
-
-  (define-instance (Into U8 I32)
-    (define (into x)
-      (lisp I32 (x) x)))
-
-  (define-instance (Into U8 U64)
-    (define (into x)
-      (lisp U64 (x) x)))
-
-  (define-instance (Into U8 I64)
-    (define (into x)
-      (lisp I64 (x) x)))
-
-  (define-instance (Into U8 Integer)
-    (define (into x)
-      (lisp Integer (x) x)))
-
-  ;;
-  ;; Conversions from I8
-  ;;
-
-  (define-instance (TryInto I8 U8)
-    (define (tryInto x)
-      (when (< x 0)
-        (return (Err "value out of range")))
-
-      (Ok (lisp U8 (x) x))))
-
-  (define-instance (TryInto I8 U16)
-    (define (tryInto x)
-      (when (< x 0)
-        (return (Err "value out of range")))
-
-      (Ok (lisp U16 (x) x))))
-
-  (define-instance (Into I8 I16)
-    (define (into x)
-      (lisp I16 (x) x)))
-
-  (define-instance (TryInto I8 U32)
-    (define (tryInto x)
-      (when (< x 0)
-        (return (Err "value out of range")))
-
-      (Ok (lisp U32 (x) x))))
-
-  (define-instance (Into I8 I32)
-    (define (into x)
-      (lisp I32 (x) x)))
-
-  (define-instance (TryInto I8 U64)
-    (define (tryInto x)
-      (when (< x 0)
-        (return (Err "value out of range")))
-
-      (Ok (lisp U64 (x) x))))
-
-  (define-instance (Into I8 I64)
-    (define (into x)
-      (lisp I64 (x) x)))
-
-  (define-instance (Into I8 Integer)
-    (define (into x)
-      (lisp Integer (x) x)))
-
-  ;;
-  ;; Conversions from U16
-  ;;
-
-  (define-instance (TryInto U16 U8)
-    (define (tryInto x)
-      (when (> x (into (the U8 maxBound)))
-        (return (Err "value out of range")))
-
-      (Ok (lisp U8 (x) x))))
-
-  (define-instance (TryInto U16 I8)
-    (define (tryInto x)
-      (when (> (into x) (the Integer (into (the I8 maxBound))))
-        (return (Err "value out of range")))
-
-      (Ok (lisp I8 (x) x))))
-
-  (define-instance (TryInto U16 I16)
-    (define (tryInto x)
-      (when (> (into x) (the Integer (into (the I16 maxBound))))
-        (return (Err "value out of range")))
-
-      (Ok (lisp I16 (x) x))))
-
-  (define-instance (Into U16 U32)
-    (define (into x)
-      (lisp U32 (x) x)))
-
-  (define-instance (Into U16 I32)
-    (define (into x)
-      (lisp I32 (x) x)))
-
-  (define-instance (Into U16 U64)
-    (define (into x)
-      (lisp U64 (x) x)))
-
-  (define-instance (Into U16 I64)
-    (define (into x)
-      (lisp I64 (x) x)))
-
-  (define-instance (Into U16 Integer)
-    (define (into x)
-      (lisp Integer (x) x)))
-
-  ;;
-  ;; Conversions from I16
-  ;;
-
-  (define-instance (TryInto I16 U8)
-    (define (tryInto x)
-      (when (> x (into (the U8 maxBound)))
-        (return (Err "value out of range")))
-
-      (when (< x 0)
-        (return (Err "value out of range")))
-
-      (Ok (lisp U8 (x) x))))
-
-  (define-instance (TryInto I16 I8)
-    (define (tryInto x)
-      (when (> x (into (the I8 maxBound)))
-        (return (Err "value out of range")))
-
-      (when (< x (into (the I8 minBound)))
-        (return (Err "valut out of range")))
-
-      (Ok (lisp I8 (x) x))))
-
-  (define-instance (TryInto I16 U16)
-    (define (tryInto x)
-      (when (< x 0)
-        (return (Err "value out of range")))
-
-      (Ok (lisp U16 (x) x))))
-
-  (define-instance (TryInto I16 U32)
-    (define (tryInto x)
-      (when (< x 0)
-        (return (Err "value out of range")))
-
-      (Ok (lisp U32 (x) x))))
-
-  (define-instance (Into I16 I32)
-    (define (into x)
-      (lisp I32 (x) x)))
-
-  (define-instance (TryInto I16 U64)
-    (define (tryInto x)
-      (when (< x 0)
-        (return (Err "value out of range")))
-
-      (Ok (lisp U64 (x) x))))
-
-  (define-instance (Into I16 I64)
-    (define (into x)
-      (lisp I64 (x) x)))
-
-  (define-instance (Into I16 Integer)
-    (define (into x)
-      (lisp Integer (x) x)))
-
-  ;;
-  ;; Conversions from U32
-  ;;
-
-  (define-instance (TryInto U32 U8)
-    (define (tryInto x)
-      (when (> x (into (the U8 maxBound)))
-        (return (Err "value out of range")))
-
-      (Ok (lisp U8 (x) x))))
-
-  (define-instance (TryInto U32 I8)
-    (define (tryInto x)
-      (when (> (into x) (the Integer (into (the I8 maxBound))))
-        (return (Err "value out of range")))
-
-      (Ok (lisp I8 (x) x))))
-
-  (define-instance (TryInto U32 U16)
-    (define (tryInto x)
-      (when (> x (into (the U16 maxBound)))
-        (return (Err "value out of range")))
-
-      (Ok (lisp U16 (x) x))))
-
-  (define-instance (TryInto U32 I16)
-    (define (tryInto x)
-      (when (> (into x) (the Integer (into (the I16 maxBound))))
-        (return (Err "value out of range")))
-
-      (Ok (lisp I16 (x) x))))
-
-  (define-instance (TryInto U32 I32)
-    (define (tryInto x)
-      (when (> (into x) (the Integer (into (the I32 maxBound))))
-        (return (Err "value out of range")))
-
-      (Ok (lisp I32 (x) x))))
-
-  (define-instance (Into U32 U64)
-    (define (into x)
-      (lisp U64 (x) x)))
-
-  (define-instance (Into U32 I64)
-    (define (into x)
-      (lisp I64 (x) x)))
-
-  (define-instance (Into U32 Integer)
-    (define (into x)
-      (lisp Integer (x) x)))
-
-  ;;
-  ;; Conversions from I32
-  ;;
-
-  (define-instance (TryInto I32 U8)
-    (define (tryInto x)
-      (when (> x (into (the U8 maxBound)))
-        (return (Err "value out of range")))
-
-      (when (< x 0)
-        (return (Err "value out of range")))
-
-      (Ok (lisp U8 (x) x))))
-
-  (define-instance (TryInto I32 I8)
-    (define (tryInto x)
-      (when (> x (into (the I8 maxBound)))
-        (return (Err "value out of range")))
-
-      (when (< x (into (the I8 minBound)))
-        (return (Err "value out of range")))
-
-      (Ok (lisp I8 (x) x))))
-
-  (define-instance (TryInto I32 U16)
-    (define (tryInto x)
-      (when (> x (into (the U16 maxBound)))
-        (return (Err "value out of range")))
-
-      (when (< x 0)
-        (return (Err "value out of range")))
-
-      (Ok (lisp U16 (x) x))))
-
-  (define-instance (TryInto I32 I16)
-    (define (tryInto x)
-      (when (> x (into (the I16 maxBound)))
-        (return (Err "value out of range")))
-
-      (when (< x (into (the I16 minBound)))
-        (return (Err "value out of range")))
-
-      (Ok (lisp I16 (x) x))))
-
-  (define-instance (TryInto I32 U32)
-    (define (tryInto x)
-      (when (< x 0)
-        (return (Err "value out of range")))
-
-      (Ok (lisp U32 (x) x))))
-
-  (define-instance (TryInto I32 U64)
-    (define (tryInto x)
-      (when (< x 0)
-        (return (Err "value out of range")))
-
-        (Ok (lisp U64 (x) x))))
-
-  (define-instance (Into I32 I64)
-    (define (into x)
-      (lisp I64 (x) x)))
-
-  (define-instance (Into I32 Integer)
-    (define (into x)
-      (lisp Integer (x) x)))
-
-  ;;
-  ;; Conversions from U64
-  ;;
-
-  (define-instance (TryInto U64 U8)
-    (define (tryInto x)
-      (when (> x (into (the U8 maxBound)))
-        (return (Err "value out of range")))
-
-      (Ok (lisp U8 (x) x))))
-
-  (define-instance (TryInto U64 I8)
-    (define (tryInto x)
-      (when (> (into x) (the Integer (into (the I8 maxBound))))
-        (return (Err "value out of range")))
-
-      (Ok (lisp I8 (x) x))))
-
-  (define-instance (TryInto U64 U16)
-    (define (tryInto x)
-      (when (> x (into (the U16 maxBound)))
-        (return (Err "value out of range")))
-
-      (Ok (lisp U16 (x) x))))
-
-  (define-instance (TryInto U64 I16)
-    (define (tryInto x)
-      (when (> (into x) (the Integer (into (the I16 maxBound))))
-        (return (Err "value out of range")))
-
-      (Ok (lisp I16 (x) x))))
-
-  (define-instance (TryInto U64 U32)
-    (define (tryInto x)
-      (when (> x (into (the U32 maxBound)))
-        (return (Err "value out of range")))
-
-      (Ok (lisp U32 (x) x))))
-
-  (define-instance (TryInto U64 I32)
-    (define (tryInto x)
-      (when (> (into x) (the Integer (into (the I32 maxBound))))
-        (return (Err "value out of range")))
-
-      (Ok (lisp I32 (x) x))))
-
-  (define-instance (TryInto U64 I64)
-    (define (tryInto x)
-      (when (> (into x) (the Integer (into (the I64 maxBound))))
-        (return (Err "value out of range")))
-
-      (Ok (lisp I64 (x) x))))
-
-  (define-instance (Into U64 Integer)
-    (define (into x)
-      (lisp Integer (x) x)))
-
-  ;;
-  ;; Conversions from I64
-  ;;
-
-  (define-instance (TryInto I64 U8)
-    (define (tryInto x)
-      (when (> x (into (the U8 maxBound)))
-        (return (Err "value out of range")))
-
-      (when (< x 0)
-        (return (Err "value out of range")))
-
-      (Ok (lisp U8 (x) x))))
-
-  (define-instance (TryInto I64 I8)
-    (define (tryInto x)
-      (when (> x (into (the I8 maxBound)))
-        (return (Err "value out of range")))
-
-      (when (< x (into (the I8 minBound)))
-        (return (Err "value out of range")))
-
-      (Ok (lisp I8 (x) x))))
-
-  (define-instance (TryInto I64 U16)
-    (define (tryInto x)
-      (when (> x (into (the U16 maxBound)))
-        (return (Err "value out of range")))
-
-      (when (< x 0)
-        (return (Err "value out of range")))
-
-      (Ok (lisp U16 (x) x))))
-
-  (define-instance (TryInto I64 I16)
-    (define (tryInto x)
-      (when (> x (into (the I16 maxBound)))
-        (return (Err "value out of range")))
-
-      (when (< x (into (the I16 minBound)))
-        (return (Err "value out of range")))
-
-      (Ok (lisp I16 (x) x))))
-
-  (define-instance (TryInto I64 U32)
-    (define (tryInto x)
-      (when (> x (into (the U32 maxBound)))
-        (return (Err "value out of range")))
-
-      (when (< x 0)
-        (return (Err "value out of range")))
-
-      (Ok (lisp U32 (x) x))))
-
-  (define-instance (TryInto I64 I32)
-    (define (tryInto x)
-      (when (> x (into (the I32 maxBound)))
-        (return (Err "value out of range")))
-
-      (when (< x (into (the I32 minBound)))
-        (return (Err "value out of range")))
-
-      (Ok (lisp I32 (x) x))))
-
-  (define-instance (TryInto I64 U64)
-    (define (tryInto x)
-      (when (< x 0)
-        (return (Err "value out of range")))
-
-      (Ok (lisp U64 (x) x))))
-
-  (define-instance (Into I64 Integer)
-    (define (into x)
-      (lisp Integer (x) x)))
-
-  ;;
-  ;; Conversions from Integer
-  ;;
-
-  (define-instance (TryInto Integer U8)
-    (define (tryInto x)
-      (when (> x (into (the U8 maxBound)))
-        (return (Err "value out of range")))
-
-      (when (< x 0)
-        (return (Err "value out of range")))
-
-      (Ok (lisp U8 (x) x))))
-
-  (define-instance (TryInto Integer I8)
-    (define (tryInto x)
-      (when (> x (into (the I8 maxBound)))
-        (return (Err "value out of range")))
-
-      (when (< x (into (the I8 minBound)))
-        (return (Err "value out of range")))
-
-      (Ok (lisp I8 (x) x))))
-
-  (define-instance (TryInto Integer U16)
-    (define (tryInto x)
-      (when (> x (into (the U16 maxBound)))
-        (return (Err "value out of range")))
-
-      (when (< x 0)
-        (return (Err "value out of range")))
-
-      (Ok (lisp U16 (x) x))))
-
-  (define-instance (TryInto Integer I16)
-    (define (tryInto x)
-      (when (> x (into (the I16 maxBound)))
-        (return (Err "value out of range")))
-
-      (when (< x (into (the I16 minBound)))
-        (return (Err "value out of range")))
-
-      (Ok (lisp I16 (x) x))))
-
-  (define-instance (TryInto Integer U32)
-    (define (tryInto x)
-      (when (> x (into (the U32 maxBound)))
-        (return (Err "value out of range")))
-
-      (when (< x 0)
-        (return (Err "value out of range")))
-
-      (Ok (lisp U32 (x) x))))
-
-  (define-instance (TryInto Integer I32)
-    (define (tryInto x)
-      (when (> x (into (the I32 maxBound)))
-        (return (Err "value out of range")))
-
-      (when (< x (into (the I32 minBound)))
-        (return (Err "value out of range")))
-
-      (Ok (lisp I32 (x) x))))
-
-  (define-instance (TryInto Integer U64)
-    (define (tryInto x)
-      (when (> x (into (the U64 maxBound)))
-        (return (Err "value out of range")))
-
-      (when (< x 0)
-        (return (Err "value out of range")))
-
-      (Ok (lisp U64 (x) x))))
-
-  (define-instance (TryInto Integer I64)
-    (define (tryInto x)
-      (when (> x (into (the I64 maxBound)))
-        (return (Err "value out of range")))
-
-      (when (< x (into (the I64 minBound)))
-        (return (Err "value out of range")))
-
-      (Ok (lisp I64 (x) x)))))
+(cl:eval-when (:compile-toplevel :load-toplevel)
+  (cl:defparameter *integer-types*
+    '((U8 . (cl:unsigned-byte 8))
+      (I8 . (cl:signed-byte 8))
+      (U16 . (cl:unsigned-byte 16))
+      (I16 . (cl:signed-byte 16))
+      (U32 . (cl:unsigned-byte 32))
+      (I32 . (cl:signed-byte 32))
+      (U64 . (cl:unsigned-byte 64))
+      (I64 . (cl:signed-byte 64))
+      (UFix . (cl:and cl:fixnum cl:unsigned-byte))
+      (IFix . cl:fixnum)
+      (Integer . cl:integer))))
 
 (coalton-toplevel
-  (define-instance (Into IFix Integer)
-    (define (into x)
-      (lisp Integer (x) x)))
+  (declare unsafe-cast (:any -> :other))
+  (define (unsafe-cast x)
+    "Both :ANY and :OTHER must be natively represented by a subtype of `cl:integer', and X must be a valid member of :OTHER."
+    (lisp :other (x) x))
 
-  (define-instance (Into UFix Integer)
-    (define (into x)
-      (lisp Integer (x) x))))
+  (declare unify (:ty -> :ty -> :ty))
+  (define (unify _ use)
+    "Declare a constraint that two values are of the same type.
+
+Used in `cast-if-inbounds' to force the type inference engine to read minBound and maxBound from the correct
+`Bounded' instance."
+    use)
+
+  (declare cast-if-inbounds ((Ord :src) (Bounded :target) =>
+                             :src -> (Result String :target)))
+  (define (cast-if-inbounds x)
+    "Cast X, minBound and maxBound to `Integer', and compare them. If X is within the bounds, `unsafe-cast' it to the result type."
+    (let max-bound = maxBound)
+    (let min-bound = minBound)
+    (let int = (the Integer (unsafe-cast x)))
+    (if (or (< (unsafe-cast min-bound) int) (> (unsafe-cast max-bound) int))
+                (Err "value out of range")
+                (Ok
+                 ;; type hackery to get the minBound and maxBound from the Bounded instance of :target. if we
+                 ;; removed the two `unfiy' calls, type inference would compute extra type variables for
+                 ;; minBound and maxBound, each with the contstraints `Bounded _' and `Into _ Integer', but
+                 ;; without unifying them with :target.
+                 (unify max-bound (unify min-bound
+                                         (unsafe-cast x)))))))
+
+(cl:defmacro define-integer-conversions (from-type)
+  "For each element of *INTEGER-TYPES* other than FROM-TYPE, define an `Into' or `TryInto' instance as appropriate."
+  (cl:let* ((from-repr (cl:or (cl:cdr (cl:assoc from-type *integer-types*))
+                              (cl:error "Attempt to define integer conversions for unknown type ~s" from-type))))
+    (cl:flet ((repr-subtypep? (sub super)
+                (cl:multiple-value-bind (subtypep determinedp)
+                    (cl:subtypep sub super)
+                  (cl:if determinedp
+                         subtypep
+                         (cl:error "Unable to determine subtype relationship between ~s and ~s" sub super)))))
+      (cl:cons 'coalton-toplevel
+               (cl:loop :for (into-type . into-repr) :in *integer-types*
+                  :when (cl:not (cl:eq into-type from-type))
+                    :collect (cl:if (repr-subtypep? from-repr into-repr)
+                                    `(define-instance (Into ,from-type ,into-type)
+                                       (define into unsafe-cast))
+                                    `(define-instance (TryInto ,from-type ,into-type)
+                                       (define tryInto cast-if-inbounds))))))))
+
+(define-integer-conversions U8)
+(define-integer-conversions I8)
+(define-integer-conversions U16)
+(define-integer-conversions I16)
+(define-integer-conversions U32)
+(define-integer-conversions I32)
+(define-integer-conversions U64)
+(define-integer-conversions I64)
+(define-integer-conversions UFix)
+(define-integer-conversions IFix)
+(define-integer-conversions Integer)
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/MATH/CONVERSIONS")
