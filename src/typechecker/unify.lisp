@@ -40,8 +40,7 @@
      nil)
     ((find tyvar (type-variables type))
      (error 'infinite-type-unification-error :type type))
-    ((not (equalp (kind-of tyvar)
-                  (kind-of type)))
+    ((not (kind= (kind-of tyvar) (kind-of type)))
      (error 'kind-mismatch-error
             :type tyvar
             :kind (kind-of type)))
@@ -56,7 +55,7 @@ apply s type1 == type2")
           (s2 (match (tapp-to type1) (tapp-to type2))))
       (merge-substitution-lists s1 s2)))
   (:method ((type1 tvar) (type2 ty))
-    (if (equalp (kind-of (tvar-tyvar type1)) (kind-of type2))
+    (if (kind= (kind-of (tvar-tyvar type1)) (kind-of type2))
         (list (%make-substitution (tvar-tyvar type1) type2))
         (error 'type-kind-mismatch-error :type1 type1 :type2 type2)))
   (:method ((type1 tcon) (type2 tcon))
