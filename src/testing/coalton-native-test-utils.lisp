@@ -15,25 +15,20 @@ BODY within a `coalton' expression."
           (coalton
            (progn ,@body))))))
 
-(cl:define-condition coalton-is-assertion (fiasco::test-assertion)
-  ((form :initarg :form
-         :accessor coalton-is-assertion-form))
-  (:documentation "Signaled before evaluating an IS assertion"))
+(cl:define-condition coalton-test-assertion (fiasco::test-assertion)
+  ()
+  (:documentation "Signaled when an assertion such as IS is encountered from coalton"))
 
-(cl:define-condition coalton-failed-assertion (fiasco::failure)
-  ((form :initarg :form
-         :accessor coalton-is-assertion-form))
-  (:documentation "Signaled when an IS assertion fails")
-  (:report (cl:lambda (failure stream)
-             (cl:format stream "IS assertion ~a failed" (coalton-is-assertion-form failure)))))
+(cl:define-condition coalton-failure (fiasco::failure)
+  ()
+  (:documentation "Signaled when an assertion such as IS fails from coalton"))
 
 (coalton-toplevel
-  (declare %register-assertion (:a -> Unit))
-  (define (%register-assertion form)
+  (declare %register-assertion (Unit -> Unit))
+  (define (%register-assertion)
     (progn 
-      (lisp :any (form)
-        (cl:warn 'coalton-is-assertion
-                 :form form))
+      (lisp :any ()
+        (cl:warn 'coalton-test-assertion))
       Unit))
 
   (declare %register-success (Unit -> Unit))
@@ -41,28 +36,37 @@ BODY within a `coalton' expression."
     (progn 
       (lisp :any ()
         (fiasco::register-assertion-was-successful))
-      Unit))
-
-  (declare %register-failure (:a -> String -> Unit))
-  (define (%register-failure form message)
-    (progn
-      (lisp :any (form message)
-        (fiasco::record-failure 'coalton-failed-assertion
-                                :form form
-                                :format-control "~a"
-                                :format-arguments message))
-      Unit))
-
-  (declare %is (:a -> (Unit -> Boolean) -> String -> Unit))
-  (define (%is form ok? message)
-    (progn
-      (%register-assertion form)
-      (if (ok?)
-          (%register-success)
-          (%register-failure form message))
       Unit)))
 
-(cl:defmacro is (check cl:&optional (message (cl:format cl:nil "assertion failed: ~a" check)))
-  `(%is (lisp :a () ',check)
-        (fn (_) ,check)
-        ,message))
+(cl:defmacro is (check cl:&optional (message "")) 
+  ;; What I'm doing here is a simplified version of what fiasco does,
+  ;; which is check if try to expand one layer of function application
+  (trivia:match check
+    ((cl:list* (trivia:guard rator
+                             (cl:or (cl:not (cl:symbolp rator))
+                                    (cl:and (cl:not (cl:macro-function rator))
+                                            (cl:not (cl:eql rator 'coalton:if)))))
+               rands)
+     (cl:let* ((name-els (cl:loop :for rand :in (cl:cons rator rands) :collect (cl:list (cl:gensym) rand)))
+               (names (cl:mapcar #'cl:first name-els)))
+       `(progn
+          (%register-assertion) 
+          (let ,name-els
+            (if ,names
+                (%register-success)
+                (lisp :a ,names
+                  (fiasco::record-failure
+                   'coalton-failure
+                   :format-control "IS assertion ~A~%Evaluates to application ~A~%Evaluates to False~%~A"
+                   :format-arguments (cl:list ',check ,(cons 'cl:list names) ,message))))))))
+    (_
+     `(progn
+        (%register-assertion)
+        (if ,check
+            (%register-success)
+            (lisp :a ()
+              (fiasco::record-failure
+               'coalton-failure
+               :format-control "IS assertion ~A~%Evaluates to False~%~A"
+               :format-arguments (cl:list ',check ,message))))))))
+
