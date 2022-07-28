@@ -25,8 +25,8 @@
   (:use #:coalton-testing)
   (:local-nicknames
    (#:math #:coalton-library/math)
-   #+sbcl
    (#:big-float #:coalton-library/big-float)
+   (#:type #:coalton-library/typeable)
    (#:string #:coalton-library/string)
    (#:vector #:coalton-library/vector)
    (#:slice #:coalton-library/slice)

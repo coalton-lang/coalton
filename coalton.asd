@@ -114,6 +114,7 @@
   :pathname "library/"
   :serial t
   :components ((:file "utils")
+               (:file "typeable")
                (:file "fixed-size-numbers")
                (:file "classes")
                (:file "builtin")

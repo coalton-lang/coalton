@@ -19,11 +19,7 @@
   (declare-type Fixed ((* -> *) -> *))
   (repr :transparent)
   (define-type (Fixed :f)
-    (In (:f (Fixed :f))))
-
-  (declare-type Proxy (:a -> *))
-  (define-type (Proxy :f)
-    Proxy))
+    (In (:f (Fixed :f)))))
 
 (cl:defmacro the-kind (kind type)
   `(check-kind
@@ -31,8 +27,8 @@
     (lisp Expr () (cl:quote ,kind))))
 
 (define-test kind-check ()
-  (is (the-kind (:b -> *) Proxy))
-  (is (the-kind (* -> *) Proxy))
+  (is (the-kind (:b -> *) type:Proxy))
+  (is (the-kind (* -> *) type:Proxy))
 
   (is (the-kind ((* -> *) -> *) Fixed))
   (is (not (the-kind (* -> * -> *) Fixed)))
@@ -45,6 +41,14 @@
   (is (the-kind (* -> :b) Arrow))
   (is (the-kind (:a -> :b) Arrow))
   (is (not (the-kind (:a -> :a) Arrow))))
+
+(define-test kind-poly-instances ()
+  (is (==
+       (lisp type:TypeRep () coalton-impl::*list-type*)
+       (type:typeRep (the (type:Proxy List) type:Proxy))))
+  (is (== (type:typeRep (the (type:Proxy (Integer -> Integer))
+                        type:Proxy))
+          (type:typeOf (fn (x) (the Integer x))))))
 
 (in-package #:coalton-tests)
 

@@ -111,20 +111,21 @@
 `process-coalton-toplevel' will bypass this check for compiler-generated `Addressable' instances returned from
 `process-toplevel-type-definitions' will by passing `:compiler-generated t' through
 `process-toplevel-instance-definitions' to `parse-instance-definition'."
-  (when (eq class-name (alexandria:ensure-symbol "ADDRESSABLE" (find-package "COALTON-LIBRARY/CLASSES")))
-    (let* ((ty-args (ty-predicate-types predicate)))
-      (unless (= (length ty-args) 1)
-        (error-parsing
-         form
-         "Bad number of type arguments ~d for instance of Addressable"
-         (length ty-args)))
-      (let* ((type-entry (ty-find-type-entry env (first ty-args))))
-        (unless (explicit-repr-explicit-addressable-p (type-entry-explicit-repr type-entry))
+  (let ((classes (find-package "COALTON-LIBRARY/CLASSES")))
+    (when (and classes (eq class-name (alexandria:ensure-symbol "ADDRESSABLE" classes)))
+      (let* ((ty-args (ty-predicate-types predicate)))
+        (unless (= (length ty-args) 1)
           (error-parsing
            form
-           "Cannot explicitly define Addressable instance for type ~s with explicit repr ~s"
-           (type-entry-name type-entry)
-           (type-entry-explicit-repr type-entry)))))))
+           "Bad number of type arguments ~d for instance of Addressable"
+           (length ty-args)))
+        (let* ((type-entry (ty-find-type-entry env (first ty-args))))
+          (unless (explicit-repr-explicit-addressable-p (type-entry-explicit-repr type-entry))
+            (error-parsing
+             form
+             "Cannot explicitly define Addressable instance for type ~s with explicit repr ~s"
+             (type-entry-name type-entry)
+             (type-entry-explicit-repr type-entry))))))))
 
 (defun parse-instance-definition (form package env &key compiler-generated)
   (multiple-value-bind (predicate context methods)
