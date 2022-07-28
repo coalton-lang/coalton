@@ -146,6 +146,7 @@
                (:file "hashtable")
                (:file "monad/state")
                (:file "iterator")
+               (:file "string-builder")
                (:file "system")
                (:file "prelude")))
 
