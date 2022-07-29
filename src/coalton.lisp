@@ -46,7 +46,7 @@ either (INDICATOR VALUE) or just INDICATOR; the short form means (INDICATOR T)."
  (coalton:monomorphize      :toplevel
                             (:must-precede-one-of (coalton:declare
                                                    coalton:define)))
- (coalton:specialize :toplevel))
+ (coalton:specialize        :toplevel))
 
 ;;; Entry Point
 
@@ -85,27 +85,23 @@ in FORMS that begin with that operator."
          (handle-monomorphize (definition-name)
            (push :monomorphize (gethash definition-name (getf plist 'attr-table))))
 
-         (expand-progn (forms)
+         (expand (forms)
            (loop :for form :in forms
-                 :if (eql (operator form) 'coalton:progn)
-                   :nconc (expand-progn (cdr form))
-                 :else
-                   :nconc (list form))) 
-
+                 :for op := (operator form)
+                 :nconc
+                 (cond ((eql op 'coalton:progn) (expand (cdr form)))
+                       ((get op :toplevel)      (list form))
+                       ((macro-function op)     (expand (list (macroexpand-1 form))))
+                       (T                       (error-parsing form "The form ~
+(~A ...) is not valid at toplevel." op)))))
          (walk (forms)
-           (setf forms (expand-progn forms))
+           (setf forms (expand forms))
            (loop
              :until (null forms)
              :for form := (pop forms)
              :for next-form := (first forms)
              :for op := (operator form)
              :for must-precede-list := (get op :must-precede-one-of)
-
-             :unless (get op :toplevel)
-               :do (error-parsing form
-                                  "The form (~A ...) is not valid at toplevel."
-                                  op)
-
              :when must-precede-list
                :unless (member (operator next-form) must-precede-list)
                  :do (error-parsing form
