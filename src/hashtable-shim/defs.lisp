@@ -2,6 +2,8 @@
   (:documentation "A Common Lisp interface for generic mutable hash tables, for use in COALTON-LIBRARY's hash tables.")
   (:use #:cl)
   (:export
+   #:custom-test-name
+   #:custom-hash-table
    #:make-custom-hash-table
    #:custom-hash-table-get
    #:custom-hash-table-set
@@ -16,6 +18,9 @@
 
 (deftype val ()
   't)
+
+(deftype hash-name ()
+  'symbol)
 
 (deftype custom-hash-table (&optional key val)
   (declare (ignore key val))
@@ -33,7 +38,7 @@
 (deftype size ()
   '(and fixnum unsigned-byte))
 
-(declaim (ftype (function (size hash-function test-function)
+(declaim (ftype (function (hash-name size hash-function test-function)
                           (values custom-hash-table &optional))
                 make-custom-hash-table))
 
@@ -63,3 +68,7 @@
 (declaim (ftype (function (custom-hash-table visitor-function)
                           (values &optional))
                 custom-hash-table-foreach))
+
+(defun custom-test-name (rep)
+  "Comes up with a symbol naming a hashtable given some printable REP."
+  (intern (format nil "HASH-TEST: ~A" rep) :coalton/hashtable-shim))

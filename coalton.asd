@@ -204,17 +204,8 @@
                (:file "fibonacci")
                (:file "big-float")))
 
-;;; we need to inspect the sbcl version in order to decide which version of the hashtable shim to load,
-;;; because 2.1.12 includes (or will include) a bugfix that allows a cleaner, more maintainable
-;;; implementation.
-
-(cl:if (uiop:featurep :sbcl)
-       (cl:pushnew
-        (cl:if (uiop:version< (cl:lisp-implementation-version)
-                              "2.2.2")
-               :sbcl-pre-2-2-2
-               :sbcl-post-2-2-2)
-        cl:*features*))
+(when (member (getenv "COALTON_GENHASH") '("1" "true" "t") :test 'equalp)
+  (pushnew :coalton-genhash *features*))
 
 (asdf:defsystem #:coalton/hashtable-shim
   :description "Shim over Common Lisp hash tables with custom hash functions, for use by the Coalton standard library."
@@ -222,11 +213,13 @@
   :license "MIT"
   :version (:read-file-form "VERSION.txt")
   :pathname "src/hashtable-shim"
+  :depends-on ((:feature (:or (:not :sbcl) :coalton-genhash) #:genhash))
   :serial t
   :components ((:file "defs")
-               (:file "impl-sbcl-pre-2-2-2" :if-feature :sbcl-pre-2-2-2)
-               (:file "impl-sbcl-post-2-2-2" :if-feature :sbcl-post-2-2-2)
-               (:file "impl-fail" :if-feature (:not :sbcl))))
+               (:file "impl-sbcl"
+                :if-feature (:and (:not :coalton-genthash) :sbcl))
+               (:file "impl-genhash"
+                :if-feature (:or (:not :sbcl) :coalton-genhash))))
 
 (asdf:defsystem #:coalton/doc
   :description "Documentation generator for Coalton"

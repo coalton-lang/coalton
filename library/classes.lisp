@@ -330,7 +330,7 @@ Typical `fail` continuations are:
   ;; hashing
   ;;
 
-  (define-class (Eq :a => (Hash :a))
+  (define-class ((Eq :a) (Typeable :a) => (Hash :a))
     "Types which can be hashed for storage in hash tables.
 
 Invariant (== left right) implies (== (hash left) (hash right))."

@@ -28,6 +28,7 @@
    (#:big-float #:coalton-library/big-float)
    (#:type #:coalton-library/typeable)
    (#:string #:coalton-library/string)
+   (#:list #:coalton-library/list)
    (#:vector #:coalton-library/vector)
    (#:slice #:coalton-library/slice)
    (#:hashtable #:coalton-library/hashtable)

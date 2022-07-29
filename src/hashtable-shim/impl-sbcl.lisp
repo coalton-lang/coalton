@@ -1,9 +1,16 @@
 (cl:in-package #:coalton/hashtable-shim)
 
-(defun make-custom-hash-table (size hash-function test-function)
-  (make-hash-table :size size
-                   :test test-function
-                   :hash-function hash-function))
+(deftype custom-hash-table (&optional key val)
+  (declare (ignore key val))
+  'hash-table)
+
+(defun make-custom-hash-table (name size hash-function test-function)
+  (when (not (fboundp name))
+    (setf (symbol-function name) test-function)
+    (eval
+     `(sb-ext:define-hash-table-test ,name
+          (lambda (x) (funcall ,hash-function x)))))
+  (make-hash-table :size size :test name))
 
 (defun custom-hash-table-get (table key)
   (gethash key table))
