@@ -22,6 +22,7 @@
    #:rem
    #:quotRem
    #:toInteger
+   #:integral->num
    #:lsh
    #:rsh
    #:even?
@@ -54,6 +55,11 @@
     "Integral is a number that is either even or odd where `div' and `quot'
 are floored and truncated division, respectively."
     (toInteger (:int -> Integer)))
+
+  (declare integral->num ((Integral :a) (Num :b) => :a -> :b))
+  (define (integral->num n)
+    "Converts any Integral N into any Num."
+    (fromInt (toInteger n)))
 
   (declare rsh ((Integral :n) (Bits :b) => :b -> :n -> :b))
   (define (rsh x n)

@@ -23,7 +23,6 @@
    #:negative-infinity
    #:nan
    #:nan?
-   #:integer->float
    #:negate
    #:abs
    #:sign
