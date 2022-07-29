@@ -8,10 +8,7 @@
    #:coalton-library/builtin
    #:coalton-library/classes
    #:coalton-library/functions
-   #:coalton-library/math/bounded)
-  (:export
-   #:integer->double-float
-   #:integer->single-float))
+   #:coalton-library/math/bounded))
 
 #+coalton-release
 (cl:declaim #.coalton-impl:*coalton-optimize-library*)
@@ -142,6 +139,27 @@ cannot be represented in :TO. These fall into a few categories:
 (define-integer-conversions UFix)
 (define-integer-conversions IFix)
 (define-integer-conversions Integer)
+
+(cl:defmacro integer-into-float (integer coalton-float lisp-float)
+  `(coalton-toplevel
+     (define-instance (Into ,integer ,coalton-float)
+       (define (into x)
+         (lisp ,coalton-float (x)
+           (cl:coerce x (cl:quote ,lisp-float)))))))
+
+;; Only exact conversions
+;; Single-Float: 24 bit mantissa (not including sign)
+(integer-into-float U8 Single-Float cl:single-float)
+(integer-into-float I8 Single-Float cl:single-float)
+(integer-into-float U16 Single-Float cl:single-float)
+(integer-into-float I16 Single-Float cl:single-float)
+;; Double-Float: 53 bit mantissa (not including sign)
+(integer-into-float U8 Double-Float cl:double-float)
+(integer-into-float I8 Double-Float cl:double-float)
+(integer-into-float U16 Double-Float cl:double-float)
+(integer-into-float I16 Double-Float cl:double-float)
+(integer-into-float U32 Double-Float cl:double-float)
+(integer-into-float I32 Double-Float cl:double-float)
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/MATH/CONVERSIONS")
