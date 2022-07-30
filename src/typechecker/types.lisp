@@ -281,9 +281,9 @@
 (defun make-function-type (from to)
   (declare (type ty from to)
            (values ty))
-  (unless (value-kind-p (kind-of from))
+  (unless (kstar-p (kind-of from))
     (error "Unable to construct function with type ~A of kind ~A" from (kind-of from)))
-  (unless (value-kind-p (kind-of to))
+  (unless (kstar-p (kind-of to))
     (error "Unable to construct function with type ~A of kind ~A" to (kind-of to)))
   (%make-tapp (%make-tapp *arrow-type* from) to))
 

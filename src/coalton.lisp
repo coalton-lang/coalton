@@ -34,14 +34,12 @@ either (INDICATOR VALUE) or just INDICATOR; the short form means (INDICATOR T)."
 
  (coalton:declare           :toplevel)
  (coalton:define            :toplevel)
- (coalton:declare-type      :toplevel)
  (coalton:define-type       :toplevel)
  (coalton:define-class      :toplevel)
  (coalton:define-instance   :toplevel)
 
  (coalton:repr              :toplevel
-                            (:must-precede-one-of (coalton:define-type
-                                                   coalton:declare-type)))
+                            (:must-precede-one-of (coalton:define-type)))
 
  (coalton:monomorphize      :toplevel
                             (:must-precede-one-of (coalton:declare
@@ -228,7 +226,6 @@ in FORMS that begin with that operator."
   (destructuring-bind (&key
                          ((coalton:declare declares))
                          ((coalton:define defines))
-                         ((coalton:declare-type type-declares))
                          ((coalton:define-type type-defines))
                          ((coalton:define-class class-defines))
                          ((coalton:define-instance instance-defines))
@@ -239,10 +236,7 @@ in FORMS that begin with that operator."
       (collect-toplevel-forms toplevel-forms)
 
     (multiple-value-bind (defined-types env added-instances)
-        (process-toplevel-type-definitions
-         type-defines
-         (process-toplevel-type-declarations type-declares env)
-         repr-table env)
+        (process-toplevel-type-definitions type-defines repr-table env)
 
       ;; Class definitions must be checked after types are defined
       ;; but before values are typechecked.

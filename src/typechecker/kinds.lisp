@@ -67,21 +67,6 @@
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type kvar))
 
-(defstruct (kpoly
-            (:include kind)
-            (:constructor %make-kpoly (name kyvar)))
-  (name  (required 'name)  :type (or keyword null) :read-only t)
-  (kyvar (required 'kyvar) :type kyvar             :read-only t))
-
-(defmethod make-load-form ((self kpoly) &optional env)
-  (make-load-form-saving-slots
-   self
-   :slot-names '(id kyvar)
-   :environment env))
-
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type kpoly))
-
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type kind))
 
@@ -90,23 +75,10 @@
 #+sbcl
 (declaim (sb-ext:always-bound *next-kvar-id*))
 
-(defun next-kyvar ()
-  (%make-kyvar :id (incf *next-kvar-id*)))
-
-(declaim (inline kpoly))
-(defun kpoly (&optional name kyvar)
-  (cond
-    ((integerp kyvar)
-     (setf kyvar (%make-kyvar :id kyvar)))
-    ((null kyvar) (setf kyvar (next-kyvar))))
-  (%make-kpoly name kyvar))
-
-(defun kpoly-id (kind)
-  (kyvar-id (kpoly-kyvar kind)))
-
 (declaim (inline make-kvariable))
 (defun make-kvariable ()
-  (%make-kvar (next-kyvar)))
+  (prog1 (%make-kvar (%make-kyvar :id *next-kvar-id*))
+    (incf *next-kvar-id*)))
 
 (defstruct (ksubstitution (:constructor %make-ksubstitution (from to)))
   (from (required 'from) :type kyvar :read-only t)
@@ -142,14 +114,6 @@
              (values kind &optional))
     kind)
 
-  (:method (subs (kind kpoly))
-    (declare (type ksubstitution-list subs)
-             (values kind &optional))
-    (let ((elem (find (kpoly-kyvar kind) subs :key #'ksubstitution-from :test #'equalp)))
-      (if elem
-          (ksubstitution-to elem)
-          kind)))
-
   (:method (subs (kind kfun))
     (declare (type ksubstitution-list subs)
              (values kind &optional))
@@ -176,7 +140,7 @@
            (type ksubstitution-list subs)
            (values ksubstitution-list &optional))
   (let ((new-subs (kmgu (apply-ksubstitution subs kind1)
-                        (apply-ksubstitution subs kind2))))
+                       (apply-ksubstitution subs kind2))))
     (compose-ksubstution-lists new-subs subs)))
 
 (defgeneric kmgu (kind1 kind2)
@@ -196,34 +160,6 @@
     (list
      (%make-ksubstitution
       (kvar-kyvar kind2)
-      kind1)))
-
-  (:method ((kind1 kvar) (kind2 kpoly))
-    (declare (values ksubstitution-list &optional))
-    (list
-     (%make-ksubstitution
-      (kvar-kyvar kind1)
-      kind2)))
-
-  (:method ((kind1 kpoly) (kind2 kvar))
-    (declare (values ksubstitution-list &optional))
-    (list
-     (%make-ksubstitution
-      (kvar-kyvar kind2)
-      kind1)))
-
-  (:method ((kind1 kpoly) (kind2 kind))
-    (declare (values ksubstitution-list &optional))
-    (list
-     (%make-ksubstitution
-      (kpoly-kyvar kind1)
-      kind2)))
-
-  (:method ((kind1 kind) (kind2 kpoly))
-    (declare (values ksubstitution-list &optional))
-    (list
-     (%make-ksubstitution
-      (kpoly-kyvar kind2)
       kind1)))
 
   (:method ((kind1 kfun) (kind2 kfun))
@@ -246,9 +182,6 @@
   (:method ((kind kstar))
     nil)
 
-  (:method ((kind kpoly))
-    nil)
-
   (:method ((kind kvar))
     (list (kvar-kyvar kind)))
 
@@ -265,6 +198,7 @@
          :collect (%make-ksubstitution kvar kstar))
    ksubs))
 
+
 (defun simple-kind-p (kind)
   "Whether KIND is a simple kind (either * or a function from many * to *)"
   (declare (type kind kind)
@@ -273,16 +207,6 @@
     (kstar t)
     (kfun (and (kstar-p (kfun-from kind))
                (simple-kind-p (kfun-to kind))))))
-
-(defun value-kind-p (kind)
-  "Whether the types that inhabit KIND can have inhabited values."
-  (etypecase kind
-    (kfun nil)
-    (kvar nil)
-    (kind t)
-    (t nil)))
-
-(value-kind-p (make-kvariable))
 
 (defun kind-arity (kind)
   "The arity of the simple kind KIND (number of type arguments)"
@@ -311,23 +235,8 @@
 ;;; Pretty printing
 ;;;
 
-(defun kind-poly-vars (kind)
-  (declare (type kind kind)
-           (values list))
-  (etypecase kind
-    (kfun
-     (union (kind-poly-vars (kfun-to kind))
-            (kind-poly-vars (kfun-from kind))))
-    (kpoly
-     (list (or (kpoly-name kind)
-               (intern (princ-to-string (kpoly-id kind)) 'keyword))))
-    (t nil)))
-
 (defvar *coalton-print-unicode* t
   "Whether to print coalton info using unicode symbols")
-
-(defvar *coalton-pretty-print-kind-forall* t
-  "Whether to print all poly kind names in a forall statement")
 
 (defun pprint-kind (stream kind &optional colon-p at-sign-p)
   (declare (type stream stream)
@@ -335,55 +244,31 @@
            (ignore colon-p)
            (ignore at-sign-p)
            (values kind))
-  (let ((vars (when *coalton-pretty-print-kind-forall*
-                (sort
-                 (kind-poly-vars kind)
-                 #'(lambda (x y)
-                     (string-lessp (symbol-name x) (symbol-name y))))))
-        (forall (if *coalton-print-unicode*
-                    "∀" "FORALL"))
-        (*coalton-pretty-print-kind-forall* nil))
+  (etypecase kind
+    (kstar
+     (write-char #\* stream))
+    (kfun
+     (let ((from (kfun-from kind))
+           (to (kfun-to kind)))
+       (when (kfun-p from)
+         (write-char #\( stream))
+       (pprint-kind stream from)
+       (when (kfun-p from)
+         (write-char #\) stream))
 
-    (when vars
-      (write-string forall stream)
-      (loop :for var :in vars
-            :do (write-string " " stream)
-                (write-string (prin1-to-string var) stream))
-      (write-string ". " stream))
+       (write-string (if *coalton-print-unicode*
+                         " → "
+                         " -> ")
+                     stream)
 
-    (etypecase kind
-      (kstar
-       (write-char #\* stream))
-      (kpoly
-       (if (kpoly-name kind)
-           (write (kpoly-name kind) :stream stream)
-           (progn
-             (write-char #\: stream)
-             (write (kyvar-id (kpoly-kyvar kind)) :stream stream))))
-      (kfun
-       (let ((from (kfun-from kind))
-             (to (kfun-to kind)))
-         (when (kfun-p from)
-           (write-char #\( stream))
-         (pprint-kind stream from)
-         (when (kfun-p from)
-           (write-char #\) stream))
-
-         (write-string (if *coalton-print-unicode*
-                           " → "
-                           " -> ")
-                       stream)
-
-         (when (kfun-p to)
-           (write-char #\( stream))
-         (pprint-kind stream to)
-         (when (kfun-p to)
-           (write-char #\) stream))))
-      (kvar
-       (write-string "#K" stream)
-       (write (kyvar-id (kvar-kyvar kind)) :stream stream))
-      (kind
-       (write-string "KIND" stream)))
-    kind))
+       (when (kfun-p to)
+         (write-char #\( stream))
+       (pprint-kind stream to)
+       (when (kfun-p to)
+         (write-char #\) stream))))
+    (kvar
+     (write-string "#K" stream)
+     (write (kyvar-id (kvar-kyvar kind)) :stream stream)))
+  kind)
 
 (set-pprint-dispatch 'kind 'pprint-kind)
