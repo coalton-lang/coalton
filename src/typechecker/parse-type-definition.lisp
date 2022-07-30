@@ -27,7 +27,6 @@
   (name         (required 'name)         :type symbol           :read-only t)
   (tyvar-names  (required 'tyvar-names)  :type symbol-list      :read-only t)
   (constructors (required 'constructors) :type list             :read-only t)
-  (kind         (required 'kind)         :type (or null kind)   :read-only t)
   (docstring    (required 'docstring)    :type (or null string) :read-only t))
 
 #+(and sbcl coalton-release)
@@ -58,19 +57,10 @@
   (let* ((tyvar-names (partial-define-type-tyvar-names partial-type))
 
          (unparsed-ctors (partial-define-type-constructors partial-type))
-         (kind (partial-define-type-kind partial-type))
 
          (local-type-vars
-           (if kind
-               ;; Match declared kind with tyvar kinds
-               (let ((k kind))
-                 (loop :for tyvar-name :in tyvar-names
-                       ;; Arity should have already been checked
-                       :do (unless (kfun-p k) (error "Kind arity mismatch."))
-                       :collect (list tyvar-name (make-variable (kfun-from k)))
-                       :do (setf k (kfun-to k))))
-               (loop :for tyvar-name :in tyvar-names
-                     :collect (list tyvar-name (make-variable (make-kvariable))))))
+           (loop :for tyvar-name :in tyvar-names
+                 :collect (list tyvar-name (make-variable (make-kvariable)))))
 
          (tyvars
            (append
@@ -110,16 +100,15 @@
   (declare (type partial-define-type-list partial-types)
            (type environment env))
 
-  (let* ((type-vars
-           (loop :for partial-type :in partial-types
-                 :collect
+  (let* ((type-names (mapcar #'partial-define-type-name partial-types))
 
-                 (list (partial-define-type-name partial-type)
+         (type-vars
+           (loop :for type-name :in type-names
+                 :collect (list type-name
                                 (%make-tcon
                                  (%make-tycon
-                                  :name (partial-define-type-name partial-type)
-                                  :kind (or (partial-define-type-kind partial-type)
-                                            (make-kvariable)))))))
+                                  :name type-name
+                                  :kind (make-kvariable))))))
 
          (ksubs nil)
 
@@ -130,7 +119,6 @@
                               (parse-type-definition partial-type self-type type-vars ksubs env)
                             (setf ksubs new-ksubs)
                             (cons constructors local-tyvars)))))
-
 
     (values
      (loop :for partial-type :in partial-types
@@ -206,29 +194,24 @@
                :ctor-name ctor-name
                :ty-name (constructor-entry-constructs ctor-entry))))))
 
-(defun parse-type-definitions (forms declares repr-table env)
+(defun parse-type-definitions (forms repr-table env)
   "Parse the type defintion FORM in the ENVironment
 
 Returns TYPE-DEFINITIONS"
   (declare (type list forms)
-           (type hash-table declares)
            (type environment env)
            (values type-definition-list))
 
   ;; Pull out and verify DEFINE-TYPE and type
   (let ((type-definitions nil) ; list (name tvars constructors docstring)
         (type-dependencies)    ; list (name dependencies*)
-        ;; Keep track of possible duplicate/orphan definitions
-        (defn-names nil)
-        (decl-names (alexandria:hash-table-keys declares)))
-
+        )
     (dolist (form forms)
       (assert (and (eql 'coalton:define-type (first form))
                    (<= 2 (length form))
                    (or (listp (second form))
                        (symbolp (second form))))
           () "Malformed DEFINE-TYPE form ~A" form)
-
       (destructuring-bind (def-type type &rest ctors) form
         (declare (ignore def-type))
         ;; Pull bare symbols into a list for easier parsing
@@ -241,24 +224,17 @@ Returns TYPE-DEFINITIONS"
               () "Malformed DEFINE-TYPE type ~A" type)
 
           ;; Push this tycon onto the list
-          (let* (;; Pull out the docstring if it exists
-                 (docstring
-                   (when (stringp (car ctors))
-                     (car ctors)))
-                 (kind (gethash tycon-name declares))
-                 (constructors
-                   (mapcar #'alexandria:ensure-list
-                           (if docstring
-                               ;; If the first ctor is a string then it is the docstring and we should skip it.
-                               (cdr ctors)
-                               ctors))))
+          (let (;; If the first ctor is a string then it is the docstring and we should skip it.
+                (constructors
+                  (mapcar #'alexandria:ensure-list
+                          (if (stringp (car ctors))
+                              (cdr ctors)
+                              ctors)))
 
-            (coalton-impl/typechecker::with-type-context ("COALTON-TOPLEVEL")
-              (when (member tycon-name defn-names)
-                (error 'duplicate-type-definition
-                       :name tycon-name)))
-
-            (push tycon-name defn-names)
+                ;; Pull out the docstring if it exists
+                (docstring
+                  (when (stringp (car ctors))
+                    (car ctors))))
 
             (with-parsing-context ("definition of type ~A" tycon-name)
               ;; Check for invalid type variables
@@ -267,9 +243,6 @@ Returns TYPE-DEFINITIONS"
                                        keyword-package))
                              tyvar-names)
                 (error-parsing form "type variables must all be in the KEYWORD package."))
-
-              (when (and kind (not (eql (kind-arity kind) (length tyvar-names))))
-                (error-parsing form "kind arity does not match the amount of type variables"))
 
               ;; Check for duplicate constructors
               (labels ((check-for-duplicate-constructors (ctors)
@@ -304,7 +277,6 @@ Returns TYPE-DEFINITIONS"
               :name tycon-name
               :tyvar-names tyvar-names
               :constructors constructors
-              :kind kind
               :docstring docstring)
              type-definitions)
 
@@ -317,9 +289,6 @@ Returns TYPE-DEFINITIONS"
                :test #'equalp))
              type-dependencies)))))
 
-    (loop :for name :in decl-names :do
-      (assert (member name defn-names)
-          () "Orphan declaration for type ~A" name))
 
     (let* ((translation-unit-types (mapcar #'car type-dependencies))
 

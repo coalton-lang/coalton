@@ -407,26 +407,6 @@ Mutually recursive bindings must be either all functions or all constructor appl
        (format s "Duplicate definition of ~A"
                (duplicate-definition-name c))))))
 
-(define-condition duplicate-type-definition (coalton-type-error)
-  ((name :initarg :name
-         :reader duplicate-type-definition-name))
-  (:report
-   (lambda (c s)
-     (let ((*print-circle* nil) ; Prevent printing using reader macros
-           )
-       (format s "Duplicate type definition of ~A"
-               (duplicate-type-definition-name c))))))
-
-(define-condition duplicate-type-declaration (coalton-type-error)
-  ((name :initarg :name
-         :reader duplicate-type-declaration-name))
-  (:report
-   (lambda (c s)
-     (let ((*print-circle* nil) ; Prevent printing using reader macros
-           )
-       (format s "Duplicate declaration of type ~A"
-               (duplicate-type-declaration-name c))))))
-
 (define-condition unexpected-return (coalton-type-error)
   ()
   (:report

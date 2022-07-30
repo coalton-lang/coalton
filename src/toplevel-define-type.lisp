@@ -92,10 +92,9 @@
                       (constructor-entry-name ctor)))))
   (values env (maybe-auto-addressable-instance parsed-deftype)))
 
-(defun process-toplevel-type-definitions (deftype-forms declares repr-table env)
-  "Returns a list of TYPE-DEFINITIONs, a new ENVIRONMENT, and a list of INSTANCE-DEFINITIONs for auto-defined instances."
+(defun process-toplevel-type-definitions (deftype-forms repr-table env)
+  "Returns a list of TYPE-DEFINITIONs, a new ENVIRONMENT, and a list of INSTANCE-DEFINITIONs for Addressable instances."
   (declare (type list deftype-forms)
-           (type hash-table declare-forms)
            (type environment env)
            (values type-definition-list
                    environment
@@ -103,12 +102,11 @@
                    &optional))
 
   ;; Parse type definitions into a list of TYPE-DEFINITION objects
-  (let ((parsed-deftypes (parse-type-definitions deftype-forms declares repr-table env))
-        all-instances)
+  (let ((parsed-deftypes (parse-type-definitions deftype-forms repr-table env))
+        addressable-instances)
     (declare (type type-definition-list parsed-deftypes))
-    (dolist (parsed-deftype parsed-deftypes (values parsed-deftypes env all-instances))
-      (multiple-value-bind (new-env instance)
-          (process-parsed-toplevel-type-definition env parsed-deftype)
+    (dolist (parsed-deftype parsed-deftypes (values parsed-deftypes env addressable-instances))
+      (multiple-value-bind (new-env addressable) (process-parsed-toplevel-type-definition env parsed-deftype)
         (setf env new-env)
-        (when instance
-          (push instance all-instances))))))
+        (when addressable
+          (push addressable addressable-instances))))))

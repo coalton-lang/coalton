@@ -267,33 +267,3 @@
 
 (defun coalton-double-arrow-p (symbol)
   (arrow-p symbol +coalton-double-arrows+))
-
-;;;
-;;; Kinds
-;;;
-
-(defun parse-kind (env expr)
-  "Parse the kind expression EXPR in environment ENV returning a KIND"
-  (declare (type environment env)
-           (values kind &optional))
-  (let ((kpoly-table (make-hash-table)))
-    (cond ((not (listp expr))
-           (cond
-             ;; Use of symbol name so we don't have to clash with Num's *
-             ((equal (symbol-name expr) "*") kstar)
-             ((keywordp expr)
-              (or (gethash expr kpoly-table)
-                  (progn
-                    (setf (gethash expr kpoly-table) (kpoly expr))
-                    (kpoly expr))))
-             (t (error-parsing-type expr "invalid kind ~S" expr))))
-          ((and (= 3 (length expr)) (coalton-arrow-p (nth 1 expr)))
-           (kfun (parse-kind env (nth 0 expr))
-                 (parse-kind env (nth 2 expr))))
-          ((and (<= 4 (length expr)) (coalton-arrow-p (nth 3 expr)))
-           (kfun
-            (parse-kind env (car expr))
-            (parse-kind env (subseq expr 2))))
-          ((and (listp expr) (null (cdr expr)))
-           (parse-kind env (car expr)))
-          (t (error-parsing-type expr "malformed kind signature")))))
