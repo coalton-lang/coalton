@@ -16,6 +16,7 @@
   '(satisfies typed-node-list-p))
 
 (defun typed-binding-list-p (x)
+  "Returns true if the elements of the list X are TYPED-BINDINGs."
   (and (alexandria:proper-list-p x)
        (every (lambda (b) (typep b '(cons symbol typed-node))) x)))
 
