@@ -915,7 +915,7 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
               (error 'unexpected-return))
             
             ;; Make sure the declared scheme is not too general
-            (when (not (equalp output-scheme declared-ty))
+            (when (not (type-scheme= output-scheme declared-ty))
               (error 'type-declaration-too-general-error
                      :name (car binding)
                      :declared-type declared-ty

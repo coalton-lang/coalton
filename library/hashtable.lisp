@@ -2,7 +2,8 @@
   (:use
    #:coalton
    #:coalton-library/builtin
-   #:coalton-library/classes)
+   #:coalton-library/classes
+   #:coalton-library/typeable)
   (:local-nicknames
    (#:cell #:coalton-library/cell)
    (#:addr #:coalton-library/addressable))
@@ -30,7 +31,7 @@
   ;; Hashtable
   ;;
 
-  (repr :native cl:hash-table)
+  (repr :native coalton/hashtable-shim:custom-hash-table)
   (define-type (Hashtable :key :value))
 
   (declare %get-hash-test-funcs
@@ -42,20 +43,22 @@
 
   (declare %make-hashtable
            ((Hash :key) =>
-            (:key -> :key -> Boolean)
+            (Proxy :key)
+            -> (:key -> :key -> Boolean)
             -> (:key -> UFix)
             -> Integer
             -> (Hashtable :key :value)))
-  (define (%make-hashtable test hash_ cap)
+  (define (%make-hashtable prox test hash_ cap)
     "Inner function: allocate a hash table using the COALTON/HASHTABLE-SHIM interface"
-    (lisp (Hashtable :key :value) (cap test hash_)
+    (let key-rep = (typeRep prox))
+    (lisp (Hashtable :key :value) (key-rep cap test hash_)
       (cl:flet ((coalton-hashtable-test (a b)
                   (coalton-impl/codegen:a2 test a b))
                 (coalton-hashtable-hash (key)
                   (coalton-impl/codegen:a1 hash_ key)))
-        (coalton/hashtable-shim:make-custom-hash-table cap
-                                                       #'coalton-hashtable-hash
-                                                       #'coalton-hashtable-test))))
+        (coalton/hashtable-shim:make-custom-hash-table
+         (coalton/hashtable-shim:custom-test-name key-rep)
+         cap #'coalton-hashtable-hash #'coalton-hashtable-test))))
   (declare default-hash-table-capacity UFix)
   (define default-hash-table-capacity
     ;; same as SBCL's
@@ -65,7 +68,7 @@
   (define (with-capacity capacity)
     "Crate a new empty hashtable with a given capacity"
     (match (%get-hash-test-funcs)
-      ((Tuple test hash) (%make-hashtable test hash capacity))))
+      ((Tuple test hash) (%make-hashtable Proxy test hash capacity))))
 
   (declare new ((Hash :key) => Unit -> (Hashtable :key :value)))
   (define (new _)

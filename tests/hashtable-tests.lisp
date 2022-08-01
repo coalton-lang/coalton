@@ -20,9 +20,10 @@
       (is (== 3 (hashtable:count ht))))))
 
 (define-test hashtable-constructor-equivalencies ()
+  (let sort-ht = (list:sortBy (fn (x y) (<=> (snd x) (snd y)))))
   (let ht-eq? = (fn (ht-a ht-b)
-                  (== (hashtable:entries ht-a)
-                      (hashtable:entries ht-b))))
+                  (== (sort-ht (hashtable:entries ht-a))
+                      (sort-ht (hashtable:entries ht-b)))))
   (let ht = (hashtable:new))
   (hashtable:set! ht "zero" 0)
   (hashtable:set! ht "one" 1)

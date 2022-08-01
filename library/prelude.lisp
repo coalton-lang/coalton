@@ -210,6 +210,7 @@
    (#:tuple #:coalton-library/tuple)
    (#:optional #:coalton-library/optional)
    (#:list #:coalton-library/list)
+   (#:type #:coalton-library/typeable)
    (#:result #:coalton-library/result)
    (#:cell #:coalton-library/cell)
    (#:vector #:coalton-library/vector)
