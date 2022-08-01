@@ -5,6 +5,7 @@
 ;;;
 
 (defun derive-literal-type (value)
+  "Derive the type of a given literal VALUE. Return two values, the type (a TY) and a list of predicates (a TY-PREDICATE-LIST)."
   (declare (values ty ty-predicate-list))
   (etypecase value
     (integer      (values *integer-type*      nil))
