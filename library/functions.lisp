@@ -82,7 +82,8 @@
   ;; considered to be "saturated".
   (declare compose ((:b -> :c) -> (:a -> :b) -> (:a -> :c)))
   (define (compose f g)
-    "Consumes two procedures and returns a procedure of one arg that composes F and G."
+    "Produces a function equivalent to applying G then F in succession."
+    ;; Note: ((compose f g) x) behaves like (f (g x))
     (fn (x)
       (f (g x))))
 
