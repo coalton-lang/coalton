@@ -9,6 +9,7 @@
   (:export
    #:isOk
    #:isErr
+   #:mapErr
    #:flatten))
 
 #+coalton-release
