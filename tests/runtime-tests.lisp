@@ -131,3 +131,10 @@
 
 (define-test test-defaulting-propigation ()
     (is (== True gh-526)))
+
+;; Check that defaulted monomorphized bindings work
+(coalton-toplevel
+  (define gh-654 +))
+
+(define-test test-monomorphized-defaulting ()
+  (is (== 2 (gh-654 1 1))))

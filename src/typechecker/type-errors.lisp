@@ -345,16 +345,21 @@ Mutually recursive bindings must be either all functions or all constructor appl
 
 (define-condition toplevel-monomorphism-restriction (coalton-type-error)
   ((name :initarg :name
-         :reader toplevel-monomorphism-restriction-name)
+         :reader toplevel-monomorphism-restriction-name
+         :type symbol)
    (type :initarg :type
-         :reader toplevel-monomorphism-restriction-type))
+         :reader toplevel-monomorphism-restriction-type
+         :type ty-scheme)
+   (preds :initarg :preds
+          :reader toplevel-monomorphism-restriction-preds
+          :type ty-predicate-list))
   (:report
    (lambda (c s)
      (declare (notinline qualified-ty-predicates))
      (let* ((*print-circle* nil) ; Prevent printing using reader macros
             (name (toplevel-monomorphism-restriction-name c))
             (type (toplevel-monomorphism-restriction-type c))
-            (preds (qualified-ty-predicates type)))
+            (preds (toplevel-monomorphism-restriction-preds c)))
        (format s "Unable to resolve ambiguous constraint~p~{ ~A~} in definition of ~A~%   with type ~A~%~%This can be resolved by giving ~A an explicit type declaration.~%"
                (length preds)
                preds
