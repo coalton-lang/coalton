@@ -54,9 +54,14 @@
 
     (let* ((manager (candidate-manager))
 
-           (resolve-table (alexandria:alist-hash-table bindings)))
+           (resolve-table (alexandria:alist-hash-table bindings))
 
-      (setf bindings (direct-application bindings (make-function-table env)))
+           (function-table (make-function-table env))
+
+           (bindings
+             (loop :for (name . node) :in bindings
+                   :collect (cons name (direct-application node function-table)))))
+
       (loop :for (name . node) :in bindings
             :do (typecheck-node node env)
             :do (setf env (tc:set-code env name node)))
@@ -86,10 +91,10 @@
 
       (values bindings env))))
 
-(defun direct-application (bindings table)
-  (declare (type binding-list bindings)
+(defun direct-application (node table)
+  (declare (type node node)
            (type hash-table table)
-           (values binding-list &optional))
+           (values node &optional))
   (labels ((rewrite-direct-application (node &rest rest)
              (declare (ignore rest)
                       (dynamic-extent rest))
@@ -119,12 +124,13 @@
                (setf (gethash (node-bind-name node) table) (length (node-abstraction-vars (node-bind-expr node)))))
              nil))
 
-    (traverse-bindings
-     bindings
+    (traverse
+     node
      (list
       (cons :application #'rewrite-direct-application)
       (cons :before-let #'add-local-funs)
-      (cons :before-bind #'add-bind-fun)))))
+      (cons :before-bind #'add-bind-fun))
+     nil)))
 
 (defun optimize-bindings-initial (bindings package env)
   (declare (type binding-list bindings)

@@ -224,8 +224,10 @@
             ,(codegen-expression (node-bind-body expr) current-function env)))))))
 
 (defun find-constructor (initform env)
-  (and (node-direct-application-p initform)
-       (tc:lookup-constructor env (node-direct-application-rator initform) :no-error t)))
+  (if (or (node-application-p initform) (node-direct-application-p initform))
+      (and (node-rator-name initform)
+           (tc:lookup-constructor env (node-rator-name initform) :no-error t))
+      nil))
 
 (defun data-letrec-able-p (initform env)
   (let ((ctor-ent (find-constructor initform env)))
@@ -309,13 +311,13 @@
        (let* ((inner (codegen-let node (cdr sccs) current-function local-vars env))
               (assignments (loop :for (name . initform) :in scc-bindings
                                  :for ctor-info := (find-constructor initform env)
-                                 :appending (loop :for arg :in (node-direct-application-rands initform)
+                                 :appending (loop :for arg :in (node-rands initform)
                                                   :for i :from 0
                                                   :collect `(setf ,(setf-accessor ctor-info i name)
                                                                   ,(codegen-expression arg current-function env)))))
               (allocations (loop :for (name . initform) :in scc-bindings
                                  :for ctor-info := (find-constructor initform env)
-                                 :collect `(,(node-direct-application-rator initform)
+                                 :collect `(,(node-rator-name initform)
                                             ,@(mapcar (constantly nil) (node-direct-application-rands initform))))))
          `(let ,(mapcar (lambda (scc-binding allocation)
                           (list (car scc-binding) allocation))

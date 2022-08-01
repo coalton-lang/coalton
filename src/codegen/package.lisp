@@ -6,10 +6,18 @@
    #:codegen-expression)
 
   (:import-from
-   #:coalton-impl/codegen/optimizer
-   #:optimize-node)
+   #:coalton-impl/codegen/transformations
+   #:make-function-table)
   (:export
-   #:optimize-node)
+   #:make-function-table)
+
+  (:import-from
+   #:coalton-impl/codegen/optimizer
+   #:optimize-node
+   #:direct-application)
+  (:export
+   #:optimize-node
+   #:direct-application)
 
   (:import-from
    #:coalton-impl/codegen/compile-expression

@@ -185,17 +185,22 @@ in FORMS that begin with that operator."
 
           (cond
             ((null preds)
-             (setf *global-environment* env)
-             (values
-              (coalton-impl/codegen::codegen-expression
-               (coalton-impl/codegen::optimize-node
-                (coalton-impl/codegen::compile-expression
-                 typed-node
+             (let ((node
+                     (coalton-impl/codegen::optimize-node
+                      (coalton-impl/codegen::compile-expression
+                       typed-node
+                       nil
+                       *global-environment*)
+                      *global-environment*)))
+
+               (setf *global-environment* env)
+               (values
+                (coalton-impl/codegen::codegen-expression
+                 (coalton-impl/codegen::direct-application
+                  node
+                  (coalton-impl/codegen::make-function-table *global-environment*))
                  nil
-                 *global-environment*)
-                *global-environment*)
-               nil
-               *global-environment*)))
+                 *global-environment*))))
 
             (t
              (coalton-impl/typechecker::with-pprint-variable-context ()
