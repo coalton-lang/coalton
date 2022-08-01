@@ -9,7 +9,7 @@
   (unparsed (required 'unparsed) :type t         :read-only t))
 
 (defun typed-node-list-p (x)
-  "Returns True if every element in the list X is of TYPED-NODE."
+  "Is every element of the list X a TYPED-NODE?"
   (and (alexandria:proper-list-p x)
        (every #'typed-node-p x)))
 
