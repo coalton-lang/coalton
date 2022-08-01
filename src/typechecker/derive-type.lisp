@@ -362,7 +362,6 @@ Returns (VALUES type predicate-list typed-node subs)")
 
 (defun derive-bindings-type (impl-bindings expl-bindings expl-declarations env subs name-map
                              &key
-                               (disable-monomorphism-restriction nil)
                                (allow-deferred-predicates t)
                                (allow-returns t))
   "IMPL-BINDINGS and EXPL-BINDIGNS are of form (SYMBOL . EXPR)
@@ -397,7 +396,6 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                env
                subs
                name-map
-               :disable-monomorphism-restriction disable-monomorphism-restriction
                :allow-deferred-predicates allow-deferred-predicates
                :allow-returns allow-returns)
 
@@ -728,7 +726,6 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
 
 (defun derive-impls-type (bindings env subs name-map
                           &key
-                            (disable-monomorphism-restriction nil)
                             (allow-deferred-predicates t)
                             (allow-returns nil))
   (declare (type binding-list bindings)
@@ -808,7 +805,7 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
 
             ;; NOTE: This is where the monomorphism restriction happens
 
-            (if (and (not disable-monomorphism-restriction) (restricted bindings))
+            (if (restricted bindings)
                 (let* ((allowed-tvars (set-difference local-tvars (type-variables retained-preds)))
                        ;; Quantify local type variables
                        (output-schemes (mapcar (lambda (type)
@@ -820,25 +817,34 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                                     env
                                     (mapcar (lambda (b sch)
                                               (cons (first b) sch))
-                                            bindings output-schemes))))
+                                            bindings output-schemes)))
+
+                       ;; Restricted bindings cannot retain predicates
+                       (deferred-preds (append deferred-preds retained-preds)))
+
+                  ;; If a restricted binding group would defer
+                  ;; predicates, generate a monomorphism error
+                  (when (and (not allow-deferred-predicates) deferred-preds)
+                    (let* ((name (car (first bindings)))
+                           (qual-ty (qualify nil (first expr-types))))
+                      (error 'toplevel-monomorphism-restriction
+                             :name name
+                             :type (quantify (type-variables qual-ty) qual-ty)
+                             :preds deferred-preds)))
+
                   (values
                    (mapcar
                     (lambda (b typed)
                       (cons (car b) typed))
                     bindings
                     typed-bindings)
-                   (append
-                    deferred-preds
-                    retained-preds)
+                   deferred-preds
                    output-env
                    local-subs
                    returns))
                 (let* (;; Quantify local type variables
                        (output-schemes
                          (mapcar (lambda (type)
-                                   ;; Here we need to manually qualify the
-                                   ;; type (without calling QUALIFY) since the
-                                   ;; substitutions have not been fully applied yet.
                                    (quantify
                                     local-tvars
                                     (qualified-ty
@@ -852,10 +858,12 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                                     (mapcar (lambda (b sch)
                                               (cons (first b) sch))
                                             bindings output-schemes))))
+
                   (values
-                   ;; Strip off any retained predicates from bindings
-                   ;; so that bindings don't have unnecessary parameters
-                   ;; for predicates
+                   ;; Rewrite the predicates on lambda forms to match
+                   ;; retained predicates. This will remove deferred
+                   ;; predicates, and attach predicates retained from
+                   ;; a subexpression.
                    (mapcar (lambda (b node)
                              (let* ((node-qual-type (fresh-inst (typed-node-type node)))
                                     (node-type (qualified-ty-type node-qual-type)))
