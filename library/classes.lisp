@@ -1,6 +1,7 @@
 (coalton-library/utils:defstdlib-package #:coalton-library/classes
   (:use
-   #:coalton)
+   #:coalton
+   #:coalton-library/typeable)
   (:export
    #:Addressable #:eq?
    #:Eq #:==
@@ -340,6 +341,15 @@ Invariant (== left right) implies (== (hash left) (hash right))."
     (lisp UFix (left right)
       (#+sbcl sb-int:mix
        #-sbcl cl:logxor left right))))
+
+(coalton-toplevel
+  (define-instance (Eq TypeRep)
+    (define (== a b)
+      (lisp Boolean (a b)
+        (to-boolean (coalton-impl/typechecker:type= a b)))))
+
+  (define-instance (Eq (Proxy :a))
+    (define (== _ _) True)))
 
 (cl:defmacro define-sxhash-hasher (type)
   `(coalton-toplevel

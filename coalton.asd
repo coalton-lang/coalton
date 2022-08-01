@@ -114,6 +114,7 @@
   :pathname "library/"
   :serial t
   :components ((:file "utils")
+               (:file "typeable")
                (:file "fixed-size-numbers")
                (:file "classes")
                (:file "builtin")
@@ -268,6 +269,7 @@
                (:file "toplevel-walker-tests")
                (:file "tarjan-scc-tests")
                (:file "type-inference-tests")
+               (:file "kind-tests")
                (:file "runtime-tests")
                (:file "environment-persist-tests")
                (:file "slice-tests")

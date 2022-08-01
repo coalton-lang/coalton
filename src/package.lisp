@@ -341,6 +341,7 @@
    #:parse-class-signature              ; FUNCTION
    #:parse-class-definitions            ; FUNCTION
    #:parse-instance-definition          ; FUNCTION
+   #:parse-kind
    )
   (:export
    #:parse-type-definitions               ; FUNCTION
@@ -530,6 +531,7 @@
    #:coalton
    #:declare
    #:define
+   #:declare-type
    #:define-type
    #:define-class
    #:define-instance

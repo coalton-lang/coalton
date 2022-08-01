@@ -21,11 +21,25 @@
          (coalton:lisp coalton:Boolean (a b)
            (eq a b))))))
 
-(defun maybe-auto-addressable-instance (type-def)
+(defun make-auto-typeable-instance (type-def)
   (declare (type-definition type-def)
            (values list &optional))
-  (when (explicit-repr-auto-addressable-p (type-definition-explicit-repr type-def))
-    (make-auto-addressable-instance type-def)))
+  (let* ((name (type-definition-name type-def))
+         (type (type-definition-type type-def))
+         (typeable-class
+           (alexandria:ensure-symbol "TYPEABLE" (find-package "COALTON-LIBRARY/TYPEABLE")))
+         (TypeRep
+           (alexandria:ensure-symbol "TYPEREP" (find-package "COALTON-LIBRARY/TYPEABLE"))))
+    `(coalton:define-instance (,typeable-class ,name)
+       (coalton:define (,typeRep coalton:_)
+         (coalton:lisp ,TypeRep () ,type)))))
+
+(defun maybe-auto-instances (type-def)
+  (declare (type-definition type-def)
+           (values list &optional))
+  (cons (make-auto-typeable-instance type-def)
+        (when (explicit-repr-auto-addressable-p (type-definition-explicit-repr type-def))
+          (list (make-auto-addressable-instance type-def)))))
 
 (defun process-parsed-toplevel-type-definition (env parsed-deftype &aux (type-name (type-definition-name parsed-deftype)))
   (declare (environment env)
@@ -90,11 +104,12 @@
                      (unset-function
                       env
                       (constructor-entry-name ctor)))))
-  (values env (maybe-auto-addressable-instance parsed-deftype)))
+  (values env (maybe-auto-instances parsed-deftype)))
 
-(defun process-toplevel-type-definitions (deftype-forms repr-table env)
-  "Returns a list of TYPE-DEFINITIONs, a new ENVIRONMENT, and a list of INSTANCE-DEFINITIONs for Addressable instances."
+(defun process-toplevel-type-definitions (deftype-forms declares repr-table env)
+  "Returns a list of TYPE-DEFINITIONs, a new ENVIRONMENT, and a list of INSTANCE-DEFINITIONs for auto-defined instances."
   (declare (type list deftype-forms)
+           (type hash-table declare-forms)
            (type environment env)
            (values type-definition-list
                    environment
@@ -102,11 +117,12 @@
                    &optional))
 
   ;; Parse type definitions into a list of TYPE-DEFINITION objects
-  (let ((parsed-deftypes (parse-type-definitions deftype-forms repr-table env))
-        addressable-instances)
+  (let ((parsed-deftypes (parse-type-definitions deftype-forms declares repr-table env))
+        all-instances)
     (declare (type type-definition-list parsed-deftypes))
-    (dolist (parsed-deftype parsed-deftypes (values parsed-deftypes env addressable-instances))
-      (multiple-value-bind (new-env addressable) (process-parsed-toplevel-type-definition env parsed-deftype)
+    (dolist (parsed-deftype parsed-deftypes (values parsed-deftypes env all-instances))
+      (multiple-value-bind (new-env instances)
+          (process-parsed-toplevel-type-definition env parsed-deftype)
         (setf env new-env)
-        (when addressable
-          (push addressable addressable-instances))))))
+        (when instances
+          (mapcar #'(lambda (x) (push x all-instances)) instances))))))
