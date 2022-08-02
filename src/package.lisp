@@ -21,6 +21,7 @@
    #:literal-value                      ; TYPE
    #:maphash-values-new                 ; FUNCTION
    #:find-symbol?                       ; FUNCTION
+   #:sexp-fmt                           ; FUNCTION
    ))
 
 (uiop:define-package #:coalton-impl/algorithm
