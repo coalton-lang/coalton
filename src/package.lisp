@@ -495,6 +495,7 @@
    #:print-type-db
    #:print-class-db
    #:print-instance-db
+   #:print-specializations
    )
   (:export
    #:*emit-type-annotations*
@@ -597,12 +598,14 @@
    #:print-value-db
    #:print-type-db
    #:print-class-db
-   #:print-instance-db)
+   #:print-instance-db
+   #:print-specializations)
   (:export
    #:print-value-db
    #:print-type-db
    #:print-class-db
    #:print-instance-db
+   #:print-specializations
    #:lookup-code)
   (:export
    #:type-of

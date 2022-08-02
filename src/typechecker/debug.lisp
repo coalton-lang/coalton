@@ -129,3 +129,22 @@
               (error "Invalid package ~A" package))
             (print-package p (gethash p sorted-by-package)))
           (maphash #'print-package sorted-by-package)))))
+
+(defun print-specializations (env &optional package)
+  (check-type env environment)
+  (let ((sorted-by-package (make-hash-table)))
+    (fset:do-map (sym entry (immutable-listmap-data (environment-specialization-environment env)))
+      (push (cons sym entry) (gethash (symbol-package sym) sorted-by-package)))
+
+    (labels ((print-package (package entries)
+               (format t "[package ~A]~%~%" (package-name package))
+               (loop :for (name . specs) :in entries
+                     :do (progn
+                           (format t "  ~A :: ~A~%" name (lookup-value-type env name))
+                           (fset:do-seq (spec specs)
+                             (format t "    ~A :: ~A~%"
+                                     (specialization-entry-to spec)
+                                     (specialization-entry-to-ty spec)))
+                           (format t "~%")))
+               (format t "~%")))
+      (maphash #'print-package sorted-by-package))))

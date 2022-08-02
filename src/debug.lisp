@@ -16,6 +16,10 @@
   "Print the global instance environment"
   (coalton-impl/typechecker::print-instance-db *global-environment* package))
 
+(defun print-specializations (&optional package)
+  "Print all specializations"
+  (coalton-impl/typechecker::print-specializations *global-environment* package))
+
 (defun coalton:type-of (symbol)
   "Lookup the type of value SYMBOL in the global environment"
   (coalton-impl::lookup-value-type *global-environment* symbol))
