@@ -365,7 +365,7 @@ Type declarations can also be added in let expressions
   (define (f a b)
     (let ((declare g (Integer -> Integer -> Integer))
           (g +))
-      (g a b)))) 
+      (g a b))))
 ```
 
 ## Pattern Matching
@@ -465,7 +465,7 @@ Coalton has a `coalton-library:progn` construct similar to lisp.
       (Tuple x y))))
 ```
 
-Coalton's `progn` can have flattened `let` syntax. 
+Coalton's `progn` can have flattened `let` syntax.
 
 ```lisp
 (coalton-toplevel
@@ -684,8 +684,56 @@ The following functions all take an optional package parameter.
 
 ## Instance Defaulting
 
-Coalton has a similar [type defaulting system](https://www.haskell.org/onlinereport/decls.html#sect4.3.4) as Haskell. It is not currently extensible, and only resolves `Num :a` to `Num Integer`. Type defaulting is invoked on implicitly typed definitions and code compiled with the `coalton` macro.
+Coalton has a similar [type defaulting system](https://www.haskell.org/onlinereport/decls.html#sect4.3.4) as Haskell. Type defaulting is invoked on implicitly typed definitions and code compiled with the `coalton` macro.
 
+## Specialization
+
+Coalton supports optimistic type based function specialization. Function specializations are declared with a `specialize` form:
+
+```
+(coalton-toplevel
+  (declare inc (Num :a => :a -> :a))
+  (define (inc x)
+    (trace "standard call")
+    (+ x 1))
+
+  (declare inc-int (Integer -> Integer))
+  (define (inc-int x)
+    (trace "int specialized call")
+    (+ x 1))
+
+  (specialize inc inc-int (Integer -> Integer)))
+```
+
+When `inc` is called with an integer, the call will be transparently rewritten to call `inc-int`.
+
+```
+COALTON-USER> (coalton (inc 1.2))
+standard call
+2.2
+COALTON-USER> (coalton (inc 1))
+int specialized call
+2
+```
+
+Specialization can only apply when the argument types at a callsite are known. Because specialization is not guarenteed, specialized functions must have the same behavior as their unspecilized variants. Specialization should only be used for performance. See the following example:
+
+```
+(coalton-toplevel
+  (declare inc2 (Num :a => :a -> :a))
+  (define (inc2 x)
+    (inc x)))
+```
+
+Because the type of `x` in the body of `inc2` is not known, specialization will not apply.
+
+```
+COALTON-USER> (coalton (inc2 1))
+standard call
+2
+```
+
+Specialization can be listed in the repl with `print-specializations`.
 
 ## Quirks and Differences from Common Lisp
 

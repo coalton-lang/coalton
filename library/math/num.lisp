@@ -52,7 +52,7 @@
   (cl:let* ((ops   '(cl:< cl:<= cl:>= cl:>))
             (specs (cl:loop
                       :for op :in ops
-                      :collect (cl:gentemp (cl:symbol-name op)))))
+                      :collect (alexandria:format-symbol cl:*package* "~A-~A" coalton-type op))))
     `(cl:progn
        ;; Inline these functions unconditionally.
        (cl:declaim (cl:inline ,@specs))
