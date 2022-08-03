@@ -30,7 +30,7 @@
    #:TryInto
    #:Iso
    #:error
-   #:Unwrappable #:unwrap-or-else #:with-default #:unwrap #:expect
+   #:Unwrappable #:unwrap-or-else #:with-default #:unwrap #:expect #:as-optional
    #:Hash #:hash
    #:combine-hashes
    #:define-sxhash-hasher))
@@ -324,6 +324,17 @@ Typical `fail` continuations are:
     "Unwrap CONTAINER, returning DEFAULT on failure."
     (unwrap-or-else (fn () default)
                     container))
+
+  (declare as-optional ((Unwrappable :container) => (:container :elt) -> (Optional :elt)))
+  (define (as-optional container)
+    (let unwrap-or-else = (fn (callback) (unwrap-or-else callback container)))
+    (lisp (Optional :elt) (unwrap-or-else)
+      (cl:block cl:nil
+        (cl:flet ((return-none (unt)
+                    (cl:declare (cl:ignore unt))
+                    (cl:return None)))
+          (cl:declare (cl:dynamic-extent #'return-none))
+          (Some (call-coalton-function unwrap-or-else (coalton-impl/codegen:f1 #'return-none)))))))
 
   ;;
   ;; hashing
