@@ -82,6 +82,8 @@
   ;; considered to be "saturated".
   (declare compose ((:b -> :c) -> (:a -> :b) -> (:a -> :c)))
   (define (compose f g)
+    "Produces a function equivalent to applying G then F in succession."
+    ;; Note: ((compose f g) x) behaves like (f (g x))
     (fn (x)
       (f (g x))))
 
