@@ -45,6 +45,7 @@
    #:zipWith!
    #:enumerate!
    #:filter!
+   #:unwrapped!
    #:take!
    #:flatten!
    #:chain!
@@ -289,6 +290,17 @@ In the case one iterator terminates before the other, the other is exhausted bef
                                                  (Some candidate)
                                                  (filter-iter u)))))))
       (%Iterator filter-iter)))
+
+  (declare unwrapped! ((Unwrappable :wrapper) => Iterator (:wrapper :elt) -> Iterator :elt))
+  (define (unwrapped! iter)
+    (let ((next (fn ()
+                  (match (next! iter)
+                    ((None) None)
+                    ((Some container)
+                     (match (as-optional container)
+                       ((None) (next))
+                       ((Some elt) (Some elt))))))))
+      (new next)))
 
   (declare take! (UFix -> Iterator :elt -> Iterator :elt))
   (define (take! count iter)
