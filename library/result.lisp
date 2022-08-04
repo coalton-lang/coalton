@@ -117,9 +117,9 @@
   (define-instance (Iso (Result Unit :a) (Optional :a)))
 
   (define-instance (Unwrappable (Result :a))
-    (define (unwrap-or-else fail res)
+    (define (unwrap-or-else succeed fail res)
       (match res
-        ((Ok elt) elt)
+        ((Ok elt) (succeed elt))
         ((Err _) (fail))))))
 
 #+sb-package-locks
