@@ -306,3 +306,50 @@ in FORMS that begin with that operator."
                               '*global-environment*)
                             ,program))
                      env)))))))))))
+
+(defun translate-coalton-file (input-path output-path &key (env *global-environment*))
+  "Translate the Coalton source file INPUT-PATH into a Lisp file at OUTPUT-PATH suitable for `compile-file' and `load-file'."
+  (with-open-file (input-stream input-path :direction :input
+                                           :if-does-not-exist :error
+                                           :external-format :utf8)
+    (let* ((*package* (find-package '#:coalton-user))
+           (empty-sentinel '#:read-none)
+           (first-form (read input-stream nil empty-sentinel))
+           defpackage-form
+           in-package-form)
+      (when (eq first-form empty-sentinel)
+        ;; empty file; do nothing
+        (return-from translate-coalton-file))
+      (labels ((handle-defpackage (form)
+                 (typecase form
+                   ((cons (member defpackage uiop:define-package))
+                    (eval form)
+                    (setf defpackage-form form)
+                    (handle-in-package (read input-stream t)))
+                   ((cons (eql in-package))
+                    (handle-in-package form))
+                   (t (error "First form in coalton file ~s is neither an in-package or defpackage form!"
+                             input-path))))
+               (handle-in-package (form)
+                 (unless (typep form '(cons (eql in-package)))
+                   (error "Expected IN-PACKAGE form in ~s but found ~s"
+                          input-path form))
+                 (setf *package* (find-package (second form))
+                       in-package-form form)))
+        (handle-defpackage first-form)
+        (let* ((toplevel-forms (loop :for form := (read input-stream nil empty-sentinel)
+                            :until (eq form empty-sentinel)
+                            :collect form))
+               (compiled-forms (process-coalton-toplevel toplevel-forms *package* env))
+
+               ;; ensure that what we write can be read back in
+               (*print-readably* t))
+          (with-open-file (output-stream output-path :direction :output
+                                                     :if-exists :supersede
+                                                     :external-format :default)
+            (write defpackage-form :stream output-stream)
+            (terpri output-stream)
+            (write in-package-form :stream output-stream)
+            (terpri output-stream)
+            (write compiled-forms :stream output-stream))))))
+  (values))
