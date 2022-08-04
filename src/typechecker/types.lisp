@@ -339,69 +339,74 @@
 
 This requires a valid PPRINT-VARIABLE-CONTEXT")
 
-(defun pprint-ty (stream ty &optional colon-p at-sign-p)
-  (declare (type stream stream)
-           (type ty ty)
-           (ignore colon-p)
-           (ignore at-sign-p)
-           (values ty))
-  (etypecase ty
-    (tvar
-     (if *coalton-pretty-print-tyvars*
-         ;; Print the tvar using the current printing context. Requires use of PPRINT-VARIABLE-CONTEXT
-         (pprint-ty stream (pprint-tvar ty))
-         (progn
-           (write-string "#T" stream)
-           (write (tyvar-id (tvar-tyvar ty)) :stream stream))))
-    (tcon
-     (write (tycon-name (tcon-tycon ty)) :stream stream))
-    (tapp
-     (cond
-       ((function-type-p ty) ;; Print function types
-        (write-string "(" stream)
-        (pprint-ty stream (tapp-to (tapp-from ty)))
-        (write-string (if *coalton-print-unicode*
-                          " → "
-                          " -> ")
-                      stream)
-        ;; Avoid printing extra parenthesis on curried functions
-        (labels ((print-subfunction (to)
-                   (cond
-                     ((function-type-p to)
-                      (pprint-ty stream (tapp-to (tapp-from to)))
-                      (write-string (if *coalton-print-unicode*
-                                        " → "
-                                        " -> ")
-                                    stream)
-                      (print-subfunction (tapp-to to)))
-                     (t (pprint-ty stream to)))))
-          (print-subfunction (tapp-to ty)))
-        (write-string ")" stream))
-       (t ;; Print type constructors
-        (let* ((tcon ty)
-               (tcon-args (loop :while (tapp-p tcon)
-                                :collect (tapp-to tcon)
-                                :do (setf tcon (tapp-from tcon)))))
-          (cond
-            ((and (tcon-p tcon)
-                  (simple-kind-p (tycon-kind (tcon-tycon tcon)))
-                  (<= (length tcon-args)
-                      (kind-arity (tycon-kind (tcon-tycon tcon)))))
-             (write-string "(" stream)
-             (pprint-ty stream tcon)
-             (dolist (arg (reverse tcon-args))
-               (write-string " " stream)
-               (pprint-ty stream arg))
-             (write-string ")" stream))
-            (t
-             (write-string "(" stream)
-             (pprint-ty stream (tapp-from ty))
-             (write-string " " stream)
-             (pprint-ty stream (tapp-to ty))
-             (write-string ")" stream)))))))
-    (tgen
-     (write-string "#GEN" stream)
-     (write (tgen-id ty) :stream stream)))
+(defmethod print-object ((ty tvar) stream)
+  (if *print-readably*
+      (call-next-method)
+      (if *coalton-pretty-print-tyvars*
+          ;; Print the tvar using the current printing context. Requires use of PPRINT-VARIABLE-CONTEXT
+          (write (pprint-tvar ty) :stream stream)
+          (progn
+            (write-string "#T" stream)
+            (write (tyvar-id (tvar-tyvar ty)) :stream stream))))
   ty)
 
-(set-pprint-dispatch 'ty 'pprint-ty)
+(defmethod print-object ((ty tcon) stream)
+  (if *print-readably*
+      (call-next-method)
+      (write (tycon-name (tcon-tycon ty)) :stream stream))
+  ty)
+
+(defmethod print-object ((ty tapp) stream)
+  (if *print-readably*
+      (call-next-method)
+      (cond
+        ((function-type-p ty) ;; Print function types
+         (write-string "(" stream)
+         (write (tapp-to (tapp-from ty)) :stream stream)
+         (write-string (if *coalton-print-unicode*
+                           " → "
+                           " -> ")
+                       stream)
+         ;; Avoid printing extra parenthesis on curried functions
+         (labels ((print-subfunction (to)
+                    (cond
+                      ((function-type-p to)
+                       (write (tapp-to (tapp-from to)) :stream stream)
+                       (write-string (if *coalton-print-unicode*
+                                         " → "
+                                         " -> ")
+                                     stream)
+                       (print-subfunction (tapp-to to)))
+                      (t (write to :stream stream)))))
+           (print-subfunction (tapp-to ty)))
+         (write-string ")" stream))
+        (t ;; Print type constructors
+         (let* ((tcon ty)
+                (tcon-args (loop :while (tapp-p tcon)
+                                 :collect (tapp-to tcon)
+                                 :do (setf tcon (tapp-from tcon)))))
+           (cond
+             ((and (tcon-p tcon)
+                   (simple-kind-p (tycon-kind (tcon-tycon tcon)))
+                   (<= (length tcon-args)
+                       (kind-arity (tycon-kind (tcon-tycon tcon)))))
+              (write-string "(" stream)
+              (write tcon :stream stream)
+              (dolist (arg (reverse tcon-args))
+                (write-string " " stream)
+                (write arg :stream stream))
+              (write-string ")" stream))
+             (t
+              (write-string "(" stream)
+              (write (tapp-from ty) :stream stream)
+              (write-string " " stream)
+              (write (tapp-to ty) :stream stream)
+              (write-string ")" stream)))))))
+  ty)
+
+(defmethod print-object ((ty tgen) stream)
+  (if *print-readably*
+      (call-next-method)
+      (progn (write-string "#GEN" stream)
+             (write (tgen-id ty) :stream stream)))
+  ty)

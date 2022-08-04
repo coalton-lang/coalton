@@ -28,8 +28,8 @@
                         package "INSTANCE/~A"
                         (with-output-to-string (s)
                           (with-pprint-variable-context ()
-                            (let* ((*print-escape* t))
-                              (pprint-predicate s predicate))))))
+                            (write predicate :stream s
+                                             :escape t)))))
 
                      (method-names (mapcar
                                     #'car

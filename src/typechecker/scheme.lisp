@@ -90,30 +90,25 @@
 ;;; Pretty printing
 ;;;
 
-(defun pprint-scheme (stream scheme &optional colon-p at-sign-p)
-  (declare (type stream stream)
-           (type ty-scheme scheme)
-           (ignore colon-p)
-           (ignore at-sign-p)
-           (values ty-scheme))
-  (cond
-    ((null (ty-scheme-kinds scheme))
-     (write (ty-scheme-type scheme) :stream stream))
-    (t
-     (with-pprint-variable-scope ()
-       (let* ((types (mapcar (lambda (k) (next-pprint-variable-as-tvar k))
-                             (ty-scheme-kinds scheme)))
-              (new-type (instantiate types (ty-scheme-type scheme))))
-         (write-string (if *coalton-print-unicode*
-                           "∀"
-                           "FORALL")
-                       stream)
-         (loop :for ty :in types
-               :do (write-char #\space stream)
-                   (write ty :stream stream))
-         (write-string ". " stream)
-         (write new-type :stream stream)))
-     ))
+(defmethod print-object ((scheme ty-scheme) stream)
+  (if *print-readably*
+      (call-next-method)
+      (cond
+        ((null (ty-scheme-kinds scheme))
+         (write (ty-scheme-type scheme) :stream stream))
+        (t
+         (with-pprint-variable-scope ()
+           (let* ((types (mapcar (lambda (k) (next-pprint-variable-as-tvar k))
+                                 (ty-scheme-kinds scheme)))
+                  (new-type (instantiate types (ty-scheme-type scheme))))
+             (write-string (if *coalton-print-unicode*
+                               "∀"
+                               "FORALL")
+                           stream)
+             (loop :for ty :in types
+                   :do (write-char #\space stream)
+                       (write ty :stream stream))
+             (write-string ". " stream)
+             (write new-type :stream stream)))
+         )))
   scheme)
-
-(set-pprint-dispatch 'ty-scheme 'pprint-scheme)

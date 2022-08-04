@@ -72,13 +72,12 @@
   (:method ((type-list list))
     (remove-duplicates (mapcan #'type-variables type-list) :test #'equalp :from-end t)))
 
-(defun pprint-substution (stream sub &optional colon-p at-sign-p)
-  (declare (ignore colon-p)
-           (ignore at-sign-p))
-  (write-string "#T" stream)
-  (write (tyvar-id (substitution-from sub)) :stream stream)
-  (write-string " +-> " stream)
-  (write (substitution-to sub) :stream stream)
-  nil)
-
-(set-pprint-dispatch 'substitution 'pprint-substution)
+(defmethod print-object ((sub substitution) stream)
+  (if *print-readably*
+      (call-next-method)
+      (progn
+        (write-string "#T" stream)
+        (write (tyvar-id (substitution-from sub)) :stream stream)
+        (write-string " +-> " stream)
+        (write (substitution-to sub) :stream stream)
+        sub)))

@@ -434,7 +434,6 @@
   (:export
    #:with-pprint-variable-context       ; MACRO
    #:with-pprint-variable-scope         ; MACRO
-   #:pprint-predicate                   ; FUNCTION
    )
   (:export
    #:*coalton-print-unicode*

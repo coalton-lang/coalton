@@ -130,24 +130,15 @@
 ;;; Pretty printing
 ;;;
 
-(defun pprint-predicate (stream predicate &optional colon-p at-sign-p)
-  (declare (type stream stream)
-           (type ty-predicate predicate)
-           (ignore colon-p)
-           (ignore at-sign-p)
-           (values ty-predicate &optional))
+(defmethod print-object ((predicate ty-predicate) stream)
   (write (ty-predicate-class predicate) :stream stream)
   (loop :for ty :in (ty-predicate-types predicate)
         :do (write-char #\space stream)
             (write ty :stream stream))
   predicate)
 
-(set-pprint-dispatch 'ty-predicate 'pprint-predicate)
 
-
-(defun pprint-qualified-ty (stream qualified-ty &optional colon-p at-sign-p)
-  (declare (ignore colon-p)
-           (ignore at-sign-p))
+(defmethod print-object ((qualified-ty qualified-ty) stream)
   (cond
     ((= 0 (length (qualified-ty-predicates qualified-ty)))
      (write (qualified-ty-type qualified-ty) :stream stream))
@@ -172,5 +163,3 @@
                    stream)
      (write (qualified-ty-type qualified-ty) :stream stream)))
   nil)
-
-(set-pprint-dispatch 'qualified-ty 'pprint-qualified-ty)

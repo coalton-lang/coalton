@@ -100,22 +100,18 @@
     (pattern-constructor (mapcan #'pattern-variables
                                  (pattern-constructor-patterns pattern)))))
 
-(defun pprint-pattern (stream pattern &optional colon-p at-sign-p)
-  (declare (type stream stream)
-           (type pattern pattern)
-           (ignore colon-p at-sign-p)
-           (values pattern))
-  (etypecase pattern
-    (pattern-var (write (pattern-var-id pattern) :stream stream))
-    (pattern-wildcard (write-char #\_ stream))
-    (pattern-literal (write (pattern-literal-value pattern) :stream stream))
-    (pattern-constructor
-     (write-char #\( stream)
-     (write (pattern-constructor-name pattern) :stream stream)
-     (loop :for pat :in (pattern-constructor-patterns pattern)
-           :do (write-char #\space stream)
-               (write pat :stream stream))
-     (write-char #\) stream)))
+(defmethod print-object ((pattern pattern) stream)
+  (if *print-readably*
+      (call-next-method)
+      (etypecase pattern
+        (pattern-var (write (pattern-var-id pattern) :stream stream))
+        (pattern-wildcard (write-char #\_ stream))
+        (pattern-literal (write (pattern-literal-value pattern) :stream stream))
+        (pattern-constructor
+         (write-char #\( stream)
+         (write (pattern-constructor-name pattern) :stream stream)
+         (loop :for pat :in (pattern-constructor-patterns pattern)
+               :do (write-char #\space stream)
+                   (write pat :stream stream))
+         (write-char #\) stream))))
   pattern)
-
-(set-pprint-dispatch 'pattern 'pprint-pattern)

@@ -238,37 +238,32 @@
 (defvar *coalton-print-unicode* t
   "Whether to print coalton info using unicode symbols")
 
-(defun pprint-kind (stream kind &optional colon-p at-sign-p)
-  (declare (type stream stream)
-           (type kind kind)
-           (ignore colon-p)
-           (ignore at-sign-p)
-           (values kind))
-  (etypecase kind
-    (kstar
-     (write-char #\* stream))
-    (kfun
-     (let ((from (kfun-from kind))
-           (to (kfun-to kind)))
-       (when (kfun-p from)
-         (write-char #\( stream))
-       (pprint-kind stream from)
-       (when (kfun-p from)
-         (write-char #\) stream))
+(defmethod print-object ((kind kind) stream)
+  (if *print-readably*
+      (call-next-method)
+      (etypecase kind
+        (kstar
+         (write-char #\* stream))
+        (kfun
+         (let ((from (kfun-from kind))
+               (to (kfun-to kind)))
+           (when (kfun-p from)
+             (write-char #\( stream))
+           (write from :stream stream)
+           (when (kfun-p from)
+             (write-char #\) stream))
 
-       (write-string (if *coalton-print-unicode*
-                         " → "
-                         " -> ")
-                     stream)
+           (write-string (if *coalton-print-unicode*
+                             " → "
+                             " -> ")
+                         stream)
 
-       (when (kfun-p to)
-         (write-char #\( stream))
-       (pprint-kind stream to)
-       (when (kfun-p to)
-         (write-char #\) stream))))
-    (kvar
-     (write-string "#K" stream)
-     (write (kyvar-id (kvar-kyvar kind)) :stream stream)))
+           (when (kfun-p to)
+             (write-char #\( stream))
+           (write to :stream stream)
+           (when (kfun-p to)
+             (write-char #\) stream))))
+        (kvar
+         (write-string "#K" stream)
+         (write (kyvar-id (kvar-kyvar kind)) :stream stream))))
   kind)
-
-(set-pprint-dispatch 'kind 'pprint-kind)
