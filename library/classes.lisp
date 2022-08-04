@@ -287,15 +287,20 @@ specify `repr :lisp`."
   (define-class (Unwrappable :container)
     "Containers which can be unwrapped to get access to their contents.
 
-The first argument to `unwrap-or-else` is a continuation, usually named `fail`. Methods should call `fail` and
-return its value if they are unable to unwrap a value.
+(unwrap-or-else SUCCEED FAIL CONTAINER) should invoke the SUCCEED continuation on the unwrapped contents of
+CONTAINER when successful, or invoke the FAIL continuation with no arguments (i.e. with Unit as an argument)
+when unable to unwrap a value.
+
+The SUCCEED continuation will often, but not always, be the identity function. `as-optional` passes Some to
+construct an Optional.
 
 Typical `fail` continuations are:
 - Return a default value, or
 - Signal an error."
-    (unwrap-or-else ((Unit -> :elt)
+    (unwrap-or-else ((:elt -> :result)
+                     -> (Unit -> :result)
                      -> (:container :elt)
-                     -> :elt)))
+                     -> :result)))
 
   (declare expect ((Unwrappable :container) =>
                    String
@@ -303,7 +308,8 @@ Typical `fail` continuations are:
                    -> :element))
   (define (expect reason container)
     "Unwrap CONTAINER, signaling an error with the description REASON on failure."
-    (unwrap-or-else (fn () (error reason))
+    (unwrap-or-else (fn (elt) elt)
+                    (fn () (error reason))
                     container))
 
   (declare unwrap ((Unwrappable :container) =>
@@ -311,7 +317,8 @@ Typical `fail` continuations are:
                    -> :element))
   (define (unwrap container)
     "Unwrap CONTAINER, signaling an error on failure."
-    (unwrap-or-else (fn () (error (lisp String (container)
+    (unwrap-or-else (fn (elt) elt)
+                    (fn () (error (lisp String (container)
                                     (cl:format cl:nil "Unexpected ~a in UNWRAP"
                                                container))))
                     container))
@@ -322,19 +329,16 @@ Typical `fail` continuations are:
                          -> :element))
   (define (with-default default container)
     "Unwrap CONTAINER, returning DEFAULT on failure."
-    (unwrap-or-else (fn () default)
+    (unwrap-or-else (fn (elt) elt)
+                    (fn () default)
                     container))
 
   (declare as-optional ((Unwrappable :container) => (:container :elt) -> (Optional :elt)))
   (define (as-optional container)
-    (let unwrap-or-else = (fn (callback) (unwrap-or-else callback container)))
-    (lisp (Optional :elt) (unwrap-or-else)
-      (cl:block cl:nil
-        (cl:flet ((return-none (unt)
-                    (cl:declare (cl:ignore unt))
-                    (cl:return None)))
-          (cl:declare (cl:dynamic-extent #'return-none))
-          (Some (call-coalton-function unwrap-or-else (coalton-impl/codegen:f1 #'return-none)))))))
+    "Convert any Unwrappable container into an Optional, constructing Some on a successful unwrap and None on a failed unwrap."
+    (unwrap-or-else Some
+                    (fn () None)
+                    container))
 
   ;;
   ;; hashing

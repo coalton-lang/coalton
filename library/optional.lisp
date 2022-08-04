@@ -117,9 +117,9 @@
         (_ y))))
 
   (define-instance (Unwrappable Optional)
-    (define (unwrap-or-else fail opt)
+    (define (unwrap-or-else succeed fail opt)
       (match opt
-        ((Some elt) elt)
+        ((Some elt) (succeed elt))
         ((None) (fail))))))
 
 #+sb-package-locks
