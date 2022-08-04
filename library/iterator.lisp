@@ -297,9 +297,9 @@ In the case one iterator terminates before the other, the other is exhausted bef
                   (match (next! iter)
                     ((None) None)
                     ((Some container)
-                     (match (as-optional container)
-                       ((None) (next))
-                       ((Some elt) (Some elt))))))))
+                     (unwrap-or-else Some
+                                     next
+                                     container))))))
       (new next)))
 
   (declare take! (UFix -> Iterator :elt -> Iterator :elt))
