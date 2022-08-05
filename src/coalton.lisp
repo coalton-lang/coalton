@@ -353,3 +353,28 @@ in FORMS that begin with that operator."
             (terpri output-stream)
             (write compiled-forms :stream output-stream))))))
   (values))
+
+(defclass coalton-source-file (asdf:cl-source-file)
+  ((asdf::type :initform "coalton")))
+
+(defclass translate-coalton-operation (asdf:selfward-operation)
+  ((asdf:selfward-operation :initform 'asdf:prepare-op))
+  (:documentation "Operation to run `translate-coalton-file' on a .coalton source file before compiling."))
+
+(defmethod asdf:output-files ((op translate-coalton-operation) (file coalton-source-file))
+  (list (merge-pathnames (make-pathname :type "lisp")
+                         (asdf:component-pathname file))))
+
+(defmethod asdf:input-files ((op asdf:compile-op) (file coalton-source-file))
+  (values (asdf:output-files (asdf:make-operation 'translate-coalton-operation) file)))
+
+(defmethod asdf:perform ((op translate-coalton-operation) (file coalton-source-file))
+  (destructuring-bind (in-path) (asdf:input-files op file)
+    (let* ((out-path (asdf:output-file op file)))
+      (translate-coalton-file in-path out-path))))
+
+(defmethod asdf:component-depends-on ((op asdf:compile-op) (file coalton-source-file))
+  `((,(asdf:make-operation 'translate-coalton-operation)
+     ,file)))
+
+(import '(coalton-source-file) (find-package "ASDF-USER"))
