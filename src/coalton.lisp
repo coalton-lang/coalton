@@ -377,4 +377,9 @@ in FORMS that begin with that operator."
   `((,(asdf:make-operation 'translate-coalton-operation)
      ,file)))
 
-(import '(coalton-source-file) (find-package "ASDF-USER"))
+(defclass coalton-system (asdf:system)
+  ((asdf/component:default-component-class :initform 'coalton-source-file))
+  (:documentation "ASDF system where :FILE components are `coalton-source-file's"))
+
+(import '(coalton-source-file coalton-system)
+        (find-package "ASDF-USER"))
