@@ -104,11 +104,11 @@
                             (equalp (gethash name table)
                                     (length (node-application-rands node))))
                    (return-from rewrite-direct-application
-                     (node-direct-application
-                      (node-type node)
-                      (node-type (node-application-rator node))
-                      name
-                      (node-application-rands node)))))))
+                     (make-node-direct-application
+                      :type (node-type node)
+                      :rator-type (node-type (node-application-rator node))
+                      :rator name
+                      :rands (node-application-rands node)))))))
 
            (add-local-funs (node &rest rest)
              (declare (ignore rest)
@@ -179,15 +179,16 @@
          (argument-names (loop :for argument :in arguments
                                :collect (gensym))))
 
-         (node-abstraction
-           (node-type node)
-           argument-names
-           (node-application
-            (tc:function-return-type (node-type node))
-            node
-            (loop :for ty :in arguments
-                  :for name :in argument-names
-                  :collect (node-variable ty name))))))
+         (make-node-abstraction
+           :type (node-type node)
+           :vars argument-names
+           :subexpr (make-node-application
+                     :type (tc:function-return-type (node-type node))
+                     :rator node
+                     :rands (loop :for ty :in arguments
+                                  :for name :in argument-names
+                                  :collect (make-node-variable :type ty
+                                                               :value name))))))
 
 (defun canonicalize (node)
   (declare (type node node)
@@ -198,12 +199,12 @@
              (let ((rator (node-application-rator node))
                    (rands (node-application-rands node)))
                (when (node-application-p rator)
-                 (node-application
-                  (node-type node)
-                  (node-application-rator rator)
-                  (append
-                   (node-application-rands rator)
-                   rands))))))
+                 (make-node-application
+                  :type (node-type node)
+                  :rator (node-application-rator rator)
+                  :rands (append
+                          (node-application-rands rator)
+                          rands))))))
     (traverse
      node
      (list
@@ -240,18 +241,18 @@
 
                      (when inline-method-name
                        (if (null rands_)
-                           (node-variable
-                            (node-type node)
-                            inline-method-name)
+                           (make-node-variable
+                            :type (node-type node)
+                            :value inline-method-name)
 
-                           (node-application
-                            (node-type node)
-                            (node-variable
-                             (tc:make-function-type*
-                              (mapcar #'node-type rands_)
-                              (node-type node))
-                             inline-method-name)
-                            rands_))))))))
+                           (make-node-application
+                            :type (node-type node)
+                            :rator (make-node-variable
+                                    :type (tc:make-function-type*
+                                           (mapcar #'node-type rands_)
+                                           (node-type node))
+                                    :value inline-method-name)
+                            :rands rands_))))))))
 
            (inline-direct-method (node &rest rest)
              (declare (ignore rest)
@@ -275,18 +276,18 @@
                         (inline-method-name (tc:lookup-method-inline env method-name dict :no-error t)))
                    (when inline-method-name
                      (if (null rands_)
-                         (node-variable
-                          (node-type node)
-                          inline-method-name)
+                         (make-node-variable
+                          :type (node-type node)
+                          :value inline-method-name)
 
-                         (node-application
-                          (node-type node)
-                          (node-variable
-                           (tc:make-function-type*
-                            (mapcar #'node-type rands_)
-                            (node-type node))
-                           inline-method-name)
-                          rands_)))))))) 
+                         (make-node-application
+                          :type (node-type node)
+                          :rator (make-node-variable
+                                  :type (tc:make-function-type*
+                                         (mapcar #'node-type rands_)
+                                         (node-type node))
+                                  :value inline-method-name)
+                          :rands rands_)))))))) 
 
     (traverse
      node
@@ -336,13 +337,13 @@
              ;; then add them to the ast
              (let ((hoisted (pop-hoist-point hoister)))
                (if hoisted
-                   (node-abstraction
-                    (node-type node)
-                    (node-abstraction-vars node)
-                    (node-let
-                     (node-type (node-abstraction-subexpr node))
-                     hoisted
-                     (node-abstraction-subexpr node)))
+                   (make-node-abstraction
+                    :type (node-type node)
+                    :vars (node-abstraction-vars node)
+                    :subexpr (make-node-let
+                              :type (node-type (node-abstraction-subexpr node))
+                              :bindings hoisted
+                              :subexpr (node-abstraction-subexpr node)))
 
                    node)))
 
@@ -351,13 +352,13 @@
                       (dynamic-extent rest))
              (let ((hoisted (pop-hoist-point hoister)))
                (if hoisted
-                   (node-bare-abstraction
-                    (node-type node)
-                    (node-bare-abstraction-vars node)
-                    (node-let
-                     (node-type (node-bare-abstraction-subexpr node))
-                     hoisted
-                     (node-bare-abstraction-subexpr node)))
+                   (make-node-bare-abstraction
+                    :type (node-type node)
+                    :vars (node-bare-abstraction-vars node)
+                    :subexpr (make-node-let
+                              :type (node-type (node-bare-abstraction-subexpr node))
+                              :bindings hoisted
+                              :subexpr (node-bare-abstraction-subexpr node)))
 
                    node))))
 
@@ -491,17 +492,17 @@
 
                    (cond
                      ((= num-preds (length (node-rands node)))
-                      (node-variable
-                       rator-type
-                       (tc:specialization-entry-to specialization)))
+                      (make-node-variable
+                       :type rator-type
+                       :value (tc:specialization-entry-to specialization)))
 
                      ((< num-preds (length (node-rands node)))
-                      (node-application
-                       (node-type node)
-                       (node-variable
-                        rator-type
-                        (tc:specialization-entry-to specialization))
-                       (subseq (node-rands node) num-preds)))
+                      (make-node-application
+                       :type (node-type node)
+                       :rator (make-node-variable
+                               :type rator-type
+                               :value (tc:specialization-entry-to specialization))
+                       :rands (subseq (node-rands node) num-preds)))
 
                      (t
                       (coalton-bug "Invalid specialization ~A~%" specialization))))))))
@@ -553,14 +554,16 @@
                        (return-from apply-lift nil))
 
                      (let ((name (gensym)))
-                       (node-dynamic-extent
-                        (node-type node)
-                        name
-                        (node-match-expr node)
-                        (node-match
-                         (node-type node)
-                         (node-variable (node-type (node-match-expr node)) name)
-                         (node-match-branches node))))))))))
+                       (make-node-dynamic-extent
+                        :type (node-type node)
+                        :name name
+                        :node (node-match-expr node)
+                        :body (make-node-match
+                               :type (node-type node)
+                               :expr (make-node-variable
+                                      :type (node-type (node-match-expr node))
+                                      :value name)
+                               :branches (node-match-branches node))))))))))
 
     (traverse
      node

@@ -37,8 +37,8 @@
       (values (gethash node (hoist-point-definitions hoist-point)))
       (progn
         (setf (gethash node (hoist-point-definitions hoist-point))
-              (node-variable (node-type node)
-                             (gentemp "hoisted_" package)))
+              (make-node-variable :type (node-type node)
+                                  :value (gentemp "hoisted_" package)))
         (values (gethash node (hoist-point-definitions hoist-point))))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)

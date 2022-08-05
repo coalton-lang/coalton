@@ -141,22 +141,22 @@
    #:tyvar-kind                         ; ACCESSOR
    #:tyvar-list                         ; TYPE
    #:tvar                               ; STRUCT
-   #:%make-tvar                         ; CONSTRUCTOR
+   #:make-tvar                          ; CONSTRUCTOR
    #:make-variable                      ; FUNCTION
    #:tvar-tyvar                         ; ACCESSOR
    #:tycon                              ; STRUCT
-   #:%make-tycon                        ; CONSTRUCTOR
+   #:make-tycon                         ; CONSTRUCTOR
    #:tycon-name                         ; ACCESSOR
    #:tycon-kind                         ; ACCESSOR
    #:tcon                               ; STRUCT
-   #:%make-tcon                         ; CONSTRUCTOR
+   #:make-tcon                         ; CONSTRUCTOR
    #:tcon-tycon                         ; ACCESSOR
    #:tapp                               ; STRUCT
-   #:%make-tapp                         ; CONSTRUCTOR
+   #:make-tapp                         ; CONSTRUCTOR
    #:tapp-from                          ; ACCESSOR
    #:tapp-to                            ; ACCESSOR
    #:tgen                               ; STRUCT
-   #:%make-tgen                         ; CONSTRUCTOR
+   #:make-tgen                         ; CONSTRUCTOR
    #:tgen-id                            ; ACCESSOR
    #:kind-of                            ; FUNCTION
    #:apply-type-argument                ; FUNCTION
@@ -522,6 +522,10 @@
    #:coalton-impl/codegen/function-entry
    #:call-coalton-function)
   (:export #:call-coalton-function)
+
+  ;; asdf stuff
+  (:export
+   #:coalton-source-file)
 
   (:export
    #:coalton-toplevel

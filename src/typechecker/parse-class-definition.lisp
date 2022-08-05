@@ -245,12 +245,12 @@
                                (setf ksubs (kunify (kind-of type) kstar ksubs))
                                (cons name (apply-ksubstitution ksubs type)))))
 
-            (predicate (ty-predicate
-                        class-name
+            (predicate (make-ty-predicate
+                        :class class-name
                         ;; Collect type variables in the order they were defined on the unparsed predicate
-                        (loop :for var :in (rest unparsed-predicate)
-                              :for tyvar := (second (find var class-tyvars :key #'car :test #'equalp))
-                              :collect (apply-ksubstitution ksubs tyvar)))))
+                        :types (loop :for var :in (rest unparsed-predicate)
+                                     :for tyvar := (second (find var class-tyvars :key #'car :test #'equalp))
+                                     :collect (apply-ksubstitution ksubs tyvar)))))
 
       (setf ksubs (kind-monomorphize-subs (kind-variables predicate) ksubs))
       (setf predicate (apply-ksubstitution ksubs predicate))

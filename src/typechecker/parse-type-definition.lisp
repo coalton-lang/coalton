@@ -105,10 +105,10 @@
          (type-vars
            (loop :for type-name :in type-names
                  :collect (list type-name
-                                (%make-tcon
-                                 (%make-tycon
-                                  :name type-name
-                                  :kind (make-kvariable))))))
+                                (make-tcon
+                                 :tycon (make-tycon
+                                         :name type-name
+                                         :kind (make-kvariable))))))
 
          (ksubs nil)
 
@@ -426,8 +426,9 @@ Returns TYPE-DEFINITIONS"
          (kinds (mapcar #'kind-of vars))
          (subst (loop :for var :in vars
                       :for id :from 0
-                      :collect (%make-substitution var (%make-tgen id)))))
-    (%make-ty-scheme kinds (apply-substitution subst type))))
+                      :collect (%make-substitution var (make-tgen :id id)))))
+    (make-ty-scheme :kinds kinds
+                    :type (apply-substitution subst type))))
 
 (defun tvar-count-to-kind (tvar-count)
   "Create a KIND from the number of type variables"

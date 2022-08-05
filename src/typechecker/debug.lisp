@@ -131,6 +131,7 @@
           (maphash #'print-package sorted-by-package)))))
 
 (defun print-specializations (env &optional package)
+  (declare (ignore package))
   (check-type env environment)
   (let ((sorted-by-package (make-hash-table)))
     (fset:do-map (sym entry (immutable-listmap-data (environment-specialization-environment env)))

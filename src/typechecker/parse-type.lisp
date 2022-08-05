@@ -238,7 +238,7 @@
                    (length (ty-predicate-types (ty-class-predicate class-entry)))
                    (length (cdr expr))))))
 
-      (values (ty-predicate pred-class pred-types)
+      (values (make-ty-predicate :class pred-class :types pred-types)
               ksubs))))
 
 

@@ -32,10 +32,10 @@
       (setf pred-kind (tc:kfun (tc:kind-of type) pred-kind)))
 
     (tc:apply-type-argument-list
-     (tc:%make-tcon
-      (tc:%make-tycon
-       :name (tc:ty-class-codegen-sym class-entry)
-       :kind pred-kind))
+     (tc:make-tcon
+      :tycon (tc:make-tycon
+              :name (tc:ty-class-codegen-sym class-entry)
+              :kind pred-kind))
      (tc:ty-predicate-types pred))))
 
 (defun resolve-static-dict (pred context env)
@@ -67,17 +67,17 @@
 
       (if (null subdicts)
           ;; If the instance has no superclasses return a variable
-          (node-variable
-           (pred-type pred env)
-           (tc:ty-class-instance-codegen-sym instance))
+          (make-node-variable
+           :type (pred-type pred env)
+           :value (tc:ty-class-instance-codegen-sym instance))
 
           ;; Otherwise create a new dict at runtime
-          (node-application
-           (pred-type pred env) 
-           (node-variable
-            (tc:make-function-type* arg-types (pred-type pred env))
-            (tc:ty-class-instance-codegen-sym instance))
-           subdicts)))))
+          (make-node-application
+           :type (pred-type pred env) 
+           :rator (make-node-variable
+                   :type (tc:make-function-type* arg-types (pred-type pred env))
+                   :value (tc:ty-class-instance-codegen-sym instance))
+           :rands subdicts)))))
 
 
 (defun superclass-accessors (pred ctx-pred env)
@@ -111,27 +111,27 @@
            (values list &optional))
 
   (when (equalp pred ctx-pred)
-    (return-from lookup-pred (list (node-variable
-                                    (tc:make-function-type
-                                     (pred-type sub-pred env)
-                                     (pred-type pred env))
-                                    method-accessor))))
+    (return-from lookup-pred (list (make-node-variable
+                                    :type (tc:make-function-type
+                                           (pred-type sub-pred env)
+                                           (pred-type pred env))
+                                    :value method-accessor))))
 
   (let ((superclass-ret (superclass-accessors pred ctx-pred env)))
 
     (when superclass-ret
       (cons
-       (node-variable
-        (tc:make-function-type
-         (pred-type sub-pred env)
-         (pred-type ctx-pred env))
-        method-accessor)
+       (make-node-variable
+        :type (tc:make-function-type
+               (pred-type sub-pred env)
+               (pred-type ctx-pred env))
+        :value method-accessor)
        superclass-ret))))
 
 (defun lookup-pred-base (pred ctx-pred ctx-name env)
-  (let ((node (node-variable
-               (pred-type ctx-pred env)
-               ctx-name)))
+  (let ((node (make-node-variable
+               :type (pred-type ctx-pred env)
+               :value ctx-name)))
     (when (equalp pred ctx-pred)
       (return-from lookup-pred-base (list node)))
 
@@ -152,10 +152,10 @@
 (defun build-call (args)
   (if (= 1 (length args))
       (car args)
-      (node-field
-       (tc:function-type-to (node-type (car args)))
-       (node-variable-value (car args))
-       (build-call (cdr args)))))
+      (make-node-field
+       :type (tc:function-type-to (node-type (car args)))
+       :name (node-variable-value (car args))
+       :dict (build-call (cdr args)))))
 
 (defun resolve-context-super (pred context env)
   "Search for PRED in all CONTEXT preds and return a node"

@@ -80,35 +80,35 @@
 
          ;; Initial node
          (var-node
-           (node-variable
-            (tc:make-function-type*
-             (append
-              superclass-ty
-              method-ty)
-             (pred-type (tc:instance-definition-predicate instance) env))
-            (tc:ty-class-codegen-sym class)))
+           (make-node-variable
+            :type (tc:make-function-type*
+                   (append
+                    superclass-ty
+                    method-ty)
+                   (pred-type (tc:instance-definition-predicate instance) env))
+            :value (tc:ty-class-codegen-sym class)))
 
          ;; If the instance has methods then apply them
          (app-node
            (if unqualified-method-definitions
-               (node-application
-                (pred-type (tc:instance-definition-predicate instance) env)
-                var-node
-                (append
-                 (loop :for pred :in superclass-preds
-                       :collect (resolve-dict pred ctx env))
-                 unqualified-method-definitions))
+               (make-node-application
+                :type (pred-type (tc:instance-definition-predicate instance) env)
+                :rator var-node
+                :rands (append
+                        (loop :for pred :in superclass-preds
+                              :collect (resolve-dict pred ctx env))
+                        unqualified-method-definitions))
                var-node))
 
          ;; If the instances has context then wrap it in a function
          (dict-node
            (if ctx
-               (node-abstraction
-                (tc:make-function-type*
-                 ctx-ty
-                 (pred-type (tc:instance-definition-predicate instance) env))
-                (mapcar #'cdr ctx)
-                app-node)
+               (make-node-abstraction
+                :type (tc:make-function-type*
+                       ctx-ty
+                       (pred-type (tc:instance-definition-predicate instance) env))
+                :vars (mapcar #'cdr ctx)
+                :subexpr app-node)
                app-node))
 
          (bindings

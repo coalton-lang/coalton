@@ -161,7 +161,8 @@ Returns (VALUES deferred-preds retained-preds defaultable-preds)"
                  ;; Check that the variable would be defaulted to a valid type
                  ;; for the given predicates
                  (every (lambda (name)
-                          (entail env nil (ty-predicate name (list type))))
+                          (entail env nil (make-ty-predicate :class name
+                                                             :types (list type))))
                         pred-names))
 
             :collect type)))

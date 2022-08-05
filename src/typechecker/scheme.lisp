@@ -4,7 +4,7 @@
 ;;; Type schemes
 ;;;
 
-(defstruct (ty-scheme (:constructor %make-ty-scheme (kinds type)))
+(defstruct ty-scheme
   (kinds (required 'kinds) :type list         :read-only t)
   (type  (required 'type)  :type qualified-ty :read-only t))
 
@@ -38,12 +38,12 @@
          (kinds (mapcar #'kind-of vars))
          (subst (loop :for var :in vars
                       :for id :from 0
-                      :collect (%make-substitution var (%make-tgen id)))))
-    (%make-ty-scheme kinds (apply-substitution subst type))))
+                      :collect (%make-substitution var (make-tgen :id id)))))
+    (make-ty-scheme :kinds kinds :type (apply-substitution subst type))))
 
 (declaim (inline to-scheme))
 (defun to-scheme (type)
-  (%make-ty-scheme nil type))
+  (make-ty-scheme :kinds nil :type type))
 
 (defun fresh-inst (ty-scheme)
   (let ((types (mapcar (lambda (k) (make-variable k))
@@ -59,7 +59,7 @@
   (declare (type ty-predicate pred)
            (values ty-predicate))
   (let* ((var (make-variable))
-         (qual-ty (qualified-ty (list pred) var))
+         (qual-ty (make-qualified-ty :predicates (list pred) :type var))
          (scheme (quantify (type-variables (list pred var)) qual-ty)))
     (car (qualified-ty-predicates (fresh-inst scheme)))))
 
@@ -68,8 +68,8 @@
 ;;;
 
 (defmethod apply-substitution (subst-list (type ty-scheme))
-  (%make-ty-scheme (ty-scheme-kinds type)
-                   (apply-substitution subst-list (ty-scheme-type type))))
+  (make-ty-scheme :kinds (ty-scheme-kinds type)
+                  :type (apply-substitution subst-list (ty-scheme-type type))))
 
 (defmethod type-variables ((type ty-scheme))
   (type-variables (ty-scheme-type type)))

@@ -147,7 +147,8 @@ Returns (VALUES type predicate-list typed-node subs)")
             (values out-ty
                     ret-preds
                     (typed-node-abstraction
-                     (to-scheme (qualified-ty nil out-ty))
+                     (to-scheme (make-qualified-ty :predicates nil
+                                                   :type out-ty))
                      (node-unparsed value)
                      (mapcar (lambda (var)
                                (cons var (lookup-value-type new-env var)))
@@ -809,7 +810,9 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                 (let* ((allowed-tvars (set-difference local-tvars (type-variables retained-preds)))
                        ;; Quantify local type variables
                        (output-schemes (mapcar (lambda (type)
-                                                 (quantify allowed-tvars (qualified-ty nil type)))
+                                                 (quantify allowed-tvars (make-qualified-ty
+                                                                          :predicates nil
+                                                                          :type type)))
                                                expr-types))
 
                        ;; Build new env
@@ -847,9 +850,9 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                          (mapcar (lambda (type)
                                    (quantify
                                     local-tvars
-                                    (qualified-ty
-                                     retained-preds
-                                     type)))
+                                    (make-qualified-ty
+                                     :predicates retained-preds
+                                     :type type)))
                                  expr-types))
 
                        ;; Build new env

@@ -250,17 +250,19 @@ their known values."
                               subs
                               (apply-ast-substitution
                                ast-subs
-                               (node-abstraction
-                                (node-type (node-abstraction-subexpr node))
-                                args
-                                (node-application
-                                 (tc:make-function-type*
-                                  (subseq (tc:function-type-arguments (node-type (node-abstraction-subexpr node))) (length args))
-                                  (tc:function-return-type (node-type (node-abstraction-subexpr node))))
-                                 (node-abstraction-subexpr node)
-                                 (loop :for ty :in arg-tys
-                                       :for arg :in args
-                                       :collect (node-variable ty arg))))))))
+                               (make-node-abstraction
+                                :type (node-type (node-abstraction-subexpr node))
+                                :vars args
+                                :subexpr (make-node-application
+                                          :type (tc:make-function-type*
+                                                 (subseq (tc:function-type-arguments (node-type (node-abstraction-subexpr node))) (length args))
+                                                 (tc:function-return-type (node-type (node-abstraction-subexpr node))))
+                                          :rator (node-abstraction-subexpr node)
+                                          :rands (loop :for ty :in arg-tys
+                                                       :for arg :in args
+                                                       :collect (make-node-variable
+                                                                 :type ty
+                                                                 :value arg))))))))
                   node))
 
                ;; Function is under applied
@@ -275,21 +277,21 @@ their known values."
                        (ret-ty (tc:function-return-type node-ty)))
                   (tc:apply-substitution
                    subs
-                   (node-abstraction
-                    (tc:make-function-type* arg-tys ret-ty)
-                    remaining-args
-                    (apply-ast-substitution ast-subs (node-abstraction-subexpr node))))))
+                   (make-node-abstraction
+                    :type (tc:make-function-type* arg-tys ret-ty)
+                    :vars remaining-args
+                    :subexpr (apply-ast-substitution ast-subs (node-abstraction-subexpr node))))))
 
                ;; Function is applied
                (t
                 (tc:apply-substitution
                  subs
-                 (node-abstraction
-                  (tc:make-function-type*
-                   (reverse arg-tys)
-                   new-type)
-                  (append new-vars retained-args)
-                  (apply-ast-substitution ast-subs (node-abstraction-subexpr node)))))))))
+                 (make-node-abstraction
+                  :type (tc:make-function-type*
+                         (reverse arg-tys)
+                         new-type)
+                  :vars (append new-vars retained-args)
+                  :subexpr (apply-ast-substitution ast-subs (node-abstraction-subexpr node)))))))))
 
     (typecheck-node new-node env)
 
@@ -390,17 +392,17 @@ propigate dictionaries that have been moved by the hoister."
                                 :do (setf new-type (tc:function-type-to new-type)))))
 
                    (if (null args)
-                       (node-variable
-                        new-type
-                        function-name)
-                       (node-application
-                        (node-type node)
-                        (node-variable
-                         (tc:make-function-type*
-                          (reverse arg-tys)
-                          new-type)
-                         function-name)
-                        args)))))))
+                       (make-node-variable
+                        :type new-type
+                        :value function-name)
+                       (make-node-application
+                        :type (node-type node)
+                        :rator (make-node-variable
+                                :type (tc:make-function-type*
+                                       (reverse arg-tys)
+                                       new-type)
+                                :value function-name)
+                        :rands args)))))))
 
     (traverse
      node

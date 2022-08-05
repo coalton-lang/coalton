@@ -4,9 +4,7 @@
 ;;; Type predicates
 ;;;
 
-(defstruct
-    (ty-predicate
-     (:constructor ty-predicate (class types)))
+(defstruct ty-predicate
   "A type predicate indicating that TYPE is of the CLASS"
   (class (required 'class) :type symbol  :read-only t)
   (types (required 'types) :type ty-list :read-only t))
@@ -36,9 +34,7 @@
 ;;; Qualified types
 ;;;
 
-(defstruct
-    (qualified-ty
-     (:constructor qualified-ty (predicates type)))
+(defstruct qualified-ty
   (predicates (required 'predicates) :type ty-predicate-list :read-only t)
   (type       (required 'type)       :type ty                :read-only t))
 
@@ -56,8 +52,8 @@
   (declare (type ty type)
            (type ty-predicate-list predicates)
            (values qualified-ty &optional))
-  (qualified-ty predicates type))
-
+  (make-qualified-ty :predicates predicates
+                     :type type))
 
 ;;;
 ;;; Methods
@@ -66,14 +62,14 @@
 (defmethod apply-substitution (subst-list (type ty-predicate))
   (declare (type substitution-list subst-list)
            (values ty-predicate &optional))
-  (ty-predicate (ty-predicate-class type)
-                      (apply-substitution subst-list (ty-predicate-types type))))
+  (make-ty-predicate :class (ty-predicate-class type)
+                     :types (apply-substitution subst-list (ty-predicate-types type))))
 
 (defmethod apply-ksubstitution (subs (type ty-predicate))
   (declare (type ksubstitution-list subs))
-  (ty-predicate
-   (ty-predicate-class type)
-   (apply-ksubstitution subs (ty-predicate-types type))))
+  (make-ty-predicate
+   :class (ty-predicate-class type)
+   :types (apply-ksubstitution subs (ty-predicate-types type))))
 
 (defmethod type-variables ((type ty-predicate))
   (type-variables (ty-predicate-types type)))
@@ -83,20 +79,20 @@
   (mapcan #'kind-variables (ty-predicate-types type)))
 
 (defmethod instantiate (types (type ty-predicate))
-  (ty-predicate (ty-predicate-class type)
-                      (instantiate types (ty-predicate-types type))))
+  (make-ty-predicate :class (ty-predicate-class type)
+                      :types (instantiate types (ty-predicate-types type))))
 
 
 (defmethod apply-substitution (subst-list (type qualified-ty))
   (declare (type substitution-list subst-list))
-  (qualified-ty (apply-substitution subst-list (qualified-ty-predicates type))
-                      (apply-substitution subst-list (qualified-ty-type type))))
+  (make-qualified-ty :predicates (apply-substitution subst-list (qualified-ty-predicates type))
+                     :type (apply-substitution subst-list (qualified-ty-type type))))
 
 (defmethod apply-ksubstitution (subs (type qualified-ty))
   (declare (type ksubstitution-list subs))
-  (qualified-ty
-   (apply-ksubstitution subs (qualified-ty-predicates type))
-   (apply-ksubstitution subs (qualified-ty-type type))))
+  (make-qualified-ty
+   :predicates (apply-ksubstitution subs (qualified-ty-predicates type))
+   :type (apply-ksubstitution subs (qualified-ty-type type))))
 
 (defmethod type-variables ((type qualified-ty))
   (remove-duplicates
@@ -111,8 +107,8 @@
    (mapcan #'kind-variables (qualified-ty-predicates type))))
 
 (defmethod instantiate (types (type qualified-ty))
-  (qualified-ty (instantiate types (qualified-ty-predicates type))
-                      (instantiate types (qualified-ty-type type))))
+  (make-qualified-ty :predicates (instantiate types (qualified-ty-predicates type))
+                     :type (instantiate types (qualified-ty-type type))))
 
 (defmethod kind-of ((type qualified-ty))
   (kind-of (qualified-ty-type type)))
@@ -131,35 +127,40 @@
 ;;;
 
 (defmethod print-object ((predicate ty-predicate) stream)
-  (write (ty-predicate-class predicate) :stream stream)
-  (loop :for ty :in (ty-predicate-types predicate)
-        :do (write-char #\space stream)
-            (write ty :stream stream))
+  (if *print-readably*
+      (call-next-method)
+      (progn
+        (write (ty-predicate-class predicate) :stream stream)
+        (loop :for ty :in (ty-predicate-types predicate)
+              :do (write-char #\space stream)
+                  (write ty :stream stream))))
   predicate)
 
 
 (defmethod print-object ((qualified-ty qualified-ty) stream)
-  (cond
-    ((= 0 (length (qualified-ty-predicates qualified-ty)))
-     (write (qualified-ty-type qualified-ty) :stream stream))
+  (if *print-readably*
+      (call-next-method)
+      (cond
+        ((= 0 (length (qualified-ty-predicates qualified-ty)))
+         (write (qualified-ty-type qualified-ty) :stream stream))
 
-    ((= 1 (length (qualified-ty-predicates qualified-ty)))
-     (write (first (qualified-ty-predicates qualified-ty))
-            :stream stream)
-     (write-string (if *coalton-print-unicode*
-                          " ⇒ "
-                          " => ")
-                   stream)
-     (write (qualified-ty-type qualified-ty)
-            :stream stream))
-    (t
-     (dolist (pred (qualified-ty-predicates qualified-ty))
-       (write-string "(" stream)
-       (write pred :stream stream)
-       (write-string ") " stream))
-     (write-string (if *coalton-print-unicode*
-                          "⇒ "
-                          "=> ")
-                   stream)
-     (write (qualified-ty-type qualified-ty) :stream stream)))
-  nil)
+        ((= 1 (length (qualified-ty-predicates qualified-ty)))
+         (write (first (qualified-ty-predicates qualified-ty))
+                :stream stream)
+         (write-string (if *coalton-print-unicode*
+                           " ⇒ "
+                           " => ")
+                       stream)
+         (write (qualified-ty-type qualified-ty)
+                :stream stream))
+        (t
+         (dolist (pred (qualified-ty-predicates qualified-ty))
+           (write-string "(" stream)
+           (write pred :stream stream)
+           (write-string ") " stream))
+         (write-string (if *coalton-print-unicode*
+                           "⇒ "
+                           "=> ")
+                       stream)
+         (write (qualified-ty-type qualified-ty) :stream stream))))
+  qualified-ty)

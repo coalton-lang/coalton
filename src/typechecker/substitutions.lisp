@@ -19,7 +19,8 @@
   "Merge substitution lists S1 and S2 together, erroring on disagreeing entries."
   (let ((overlap (intersection s1 s2 :key #'substitution-from :test #'equalp)))
     (if (every (lambda (x)
-                 (equalp (apply-substitution s1 (%make-tvar x)) (apply-substitution s2 (%make-tvar x))))
+                 (equalp (apply-substitution s1 (make-tvar :tyvar x))
+                         (apply-substitution s2 (make-tvar :tyvar x))))
                (mapcar #'substitution-from overlap))
         (concatenate 'list s1 s2)
         (error 'coalton-type-error))))
@@ -45,8 +46,8 @@
           type)))
   ;; For a type application, recurse down into all the types
   (:method (subst-list (type tapp))
-    (%make-tapp (apply-substitution subst-list (tapp-from type))
-                (apply-substitution subst-list (tapp-to type))))
+    (make-tapp :from (apply-substitution subst-list (tapp-from type))
+               :to (apply-substitution subst-list (tapp-to type))))
   ;; Otherwise, do nothing
   (:method (subst-list (type ty))
     type)
