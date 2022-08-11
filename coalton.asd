@@ -279,4 +279,5 @@
                (:file "call-coalton-from-lisp")
                (:file "vector-tests")
                (:file "string-tests")
-               (:file "recursive-let-tests")))
+               (:file "recursive-let-tests")
+               (:file "class-tests")))
