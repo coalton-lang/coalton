@@ -634,9 +634,7 @@ This function is equivalent to all size-N elements of `(COMBS L)`."
 
   (define-instance (Functor List)
     (define (map f l)
-      (match l
-        ((Cons x xs) (Cons (f x) (map f xs)))
-        ((Nil) Nil))))
+      (reverse (fold (fn (a x) (Cons (f x) a)) Nil l))))
 
   (define-instance (Applicative List)
     (define (pure x) (Cons x Nil))
