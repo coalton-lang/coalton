@@ -24,6 +24,7 @@
   (:documentation "Tests for the COALTON system, written in Coalton.")
   (:use #:coalton-testing)
   (:local-nicknames
+   (#:fun  #:coalton-library/functions)
    (#:math #:coalton-library/math)
    #+sbcl
    (#:big-float #:coalton-library/big-float)
@@ -31,7 +32,8 @@
    (#:vector #:coalton-library/vector)
    (#:slice #:coalton-library/slice)
    (#:hashtable #:coalton-library/hashtable)
-   (#:iter #:coalton-library/iterator)))
+   (#:iter #:coalton-library/iterator)
+   (#:list #:coalton-library/list)))
 
 (in-package #:coalton-native-tests)
 
