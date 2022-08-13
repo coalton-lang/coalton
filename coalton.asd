@@ -280,4 +280,5 @@
                (:file "vector-tests")
                (:file "string-tests")
                (:file "recursive-let-tests")
-               (:file "class-tests")))
+               (:file "class-tests")
+               (:file "list-tests")))
