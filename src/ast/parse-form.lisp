@@ -32,9 +32,11 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
 
        ;; Let
        ((coalton:let &rest args)
-        (unless (= 2 (length args))
-          (error-parsing expr "Invalid binding expression."))
-        (parse-let expr (first args) (second args) m package))
+        (when (null args)
+          (error-parsing
+           expr
+           "Let forms must include a binding list"))
+        (parse-let expr (first args) (rest args) m package))
 
        ;; Lisp
        ((coalton:lisp &rest args)
@@ -199,7 +201,7 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
              :collect (cons
                        (lookup-or-key new-m bind-var)
                        bind-type))
-       (parse-form subexpr new-m package)
+       (parse-form (cons 'coalton:progn subexpr) new-m package)
        (invert-alist binding-local-names)))))
 
 (defun parse-lisp (unparsed type variables lisp-exprs m)

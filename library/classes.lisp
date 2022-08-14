@@ -23,7 +23,7 @@
    #:>>
    #:MonadFail #:fail
    #:Alternative #:alt #:empty
-   #:Foldable #:fold #:foldr
+   #:Foldable #:fold #:foldr #:mconcat
    #:Traversable #:traverse
    #:sequence
    #:Into
@@ -246,6 +246,9 @@ specify `repr :lisp`."
 `foldr` is a right non tail recursive fold"
     (fold ((:b -> :a -> :b) -> :b -> :t :a -> :b))
     (foldr ((:a -> :b -> :b) -> :b -> :t :a -> :b)))
+
+  (declare mconcat ((Foldable :f) (Monoid :a) => (:f :a) -> :a))
+  (define  mconcat (fold <> mempty))
 
   (define-class (Traversable :t)
     (traverse (Applicative :f => (:a -> :f :b) -> :t :a -> :f (:t :b))))
