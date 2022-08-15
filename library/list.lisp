@@ -157,7 +157,7 @@
   ;; This is only for internal usage
   (declare %reverse! (List :a -> List :a))
   (define (%reverse! xs)
-    "A mutating reverse operation"
+    "A mutating reverse operation. After (%reverse! LST), LST must not be referenced; the original list, and all its sublists, should be treated as consumed by this operation. Callers should use the return value and only the return value."
     (lisp (List :a) (xs)
       (cl:nreverse xs)))
 
@@ -264,15 +264,15 @@
           (%reverse! (inner start end Nil))
           (inner end start Nil))))
 
-  (define (%append list result)
+  (define (append-rev list result)
     (match list
       ((Nil) result)
-      ((Cons x xs) (%append xs (Cons x result)))))
+      ((Cons x xs) (append-rev xs (Cons x result)))))
 
   (declare append (List :a -> List :a -> List :a))
   (define (append xs ys)
     "Appends two lists together and returns a new list."
-    (%reverse! (%append ys (%append xs Nil))))
+    (%reverse! (append-rev ys (append-rev xs Nil))))
 
   (declare concat (List (List :a) -> List :a))
   (define (concat xs)
@@ -282,7 +282,7 @@
   (declare concatMap ((:a -> (List :b)) -> List :a -> List :b))
   (define (concatMap f xs)
     "Apply F to each element in XS and concatenate the results."
-    (%reverse! (fold (fn (a b) (%append (f b) a)) Nil xs)))
+    (%reverse! (fold (fn (a b) (append-rev (f b) a)) Nil xs)))
 
   (declare member (Eq :a => (:a -> (List :a) -> Boolean)))
   (define (member e xs)
@@ -306,7 +306,7 @@
                          (member x ys))
                      (rec xs acc)
                      (rec xs (Cons x acc))))))))
-      (%reverse! (%remove-duplicates ys (rec xs Nil)))))
+      (%reverse! (remove-duplicates-rev ys (rec xs Nil)))))
 
   (declare intersection (Eq :a => ((List :a) -> (List :a) -> (List :a))))
   (define (intersection xs ys)
@@ -318,7 +318,7 @@
                           (inner xs ys (Cons x acc))
                           (inner xs ys acc)))
                      ((Nil) acc)))))
-      (%reverse! (inner (%remove-duplicates xs Nil) (%remove-duplicates ys Nil) Nil))))
+      (%reverse! (inner (remove-duplicates-rev xs Nil) (remove-duplicates-rev ys Nil) Nil))))
 
   (declare lookup (Eq :a => (:a -> (List (Tuple :a :b)) -> (Optional :b))))
   (define (lookup e xs)
@@ -332,33 +332,33 @@
               (lookup e xs)))))
       ((Nil) None)))
 
-  (declare %remove-duplicates (Eq :a => ((List :a) -> (List :a) -> (List :a))))
-  (define (%remove-duplicates xs acc)
+  (declare remove-duplicates-rev (Eq :a => ((List :a) -> (List :a) -> (List :a))))
+  (define (remove-duplicates-rev xs acc)
     (match xs
       ((Nil) acc)
       ((Cons x xs)
        (if (member x xs)
-           (%remove-duplicates xs acc)
-           (%remove-duplicates xs (Cons x acc))))))
+           (remove-duplicates-rev xs acc)
+           (remove-duplicates-rev xs (Cons x acc))))))
         
   (declare remove-duplicates (Eq :a => ((List :a) -> (List :a))))
   (define (remove-duplicates xs)
     "Returns a new list without duplicate elements."
-    (%reverse! (%remove-duplicates xs Nil)))
+    (%reverse! (remove-duplicates-rev xs Nil)))
 
-  (declare %delete (Eq :a => (:a -> (List :a) -> (List :a) -> (List :a))))
-  (define (%delete x ys acc)
+  (declare delete-rev (Eq :a => (:a -> (List :a) -> (List :a) -> (List :a))))
+  (define (delete-rev x ys acc)
     (match ys
       ((Nil) acc)
       ((Cons y ys)
        (if (== x y)
-           (%append ys acc)
-           (%delete x ys (Cons y acc))))))
+           (append-rev ys acc)
+           (delete-rev x ys (Cons y acc))))))
 
   (declare delete (Eq :a => (:a -> (List :a) -> (List :a))))
   (define (delete x ys)
     "Return a new list with the first element equal to X removed."
-    (%reverse! (%delete x ys Nil)))
+    (%reverse! (delete-rev x ys Nil)))
 
   (declare difference (Eq :a => ((List :a) -> (List :a) -> (List :a))))
   (define (difference xs ys)
@@ -373,8 +373,8 @@
                (match (Tuple xs ys)
                  ((Tuple (Cons x xs) (Cons y ys))
                   (rec xs ys (Cons (f x y) acc)))
-                 (_ (%reverse! acc))))))
-      (rec xs ys nil)))
+                 (_ acc)))))
+      (%reverse! (rec xs ys nil))))
 
   (declare zipWith3 ((:a -> :b -> :c -> :d) -> (List :a) -> (List :b) -> (List :c) -> (List :d)))
   (define (zipWith3 f xs ys zs)
@@ -384,8 +384,8 @@
                (match (Tuple3 xs ys zs)
                  ((Tuple3 (Cons x xs) (Cons y ys) (Cons z zs))
                   (rec xs ys zs (Cons (f x y z) acc)))
-                 (_ (%reverse! acc))))))
-      (rec xs ys zs nil)))
+                 (_ acc)))))
+      (%reverse! (rec xs ys zs nil))))
 
   (declare zipWith4 ((:a -> :b -> :c -> :d -> :e) -> (List :a) -> (List :b) -> (List :c) -> (List :d) -> (List :e)))
   (define (zipWith4 f as bs cs ds)
@@ -395,8 +395,8 @@
                (match (Tuple4 as bs cs ds)
                  ((Tuple4 (Cons a as) (Cons b bs) (Cons c cs) (Cons d ds))
                   (rec as bs cs ds (Cons (f a b c d) acc)))
-                 (_ (%reverse! acc))))))
-      (rec as bs cs ds nil)))
+                 (_ acc)))))
+      (%reverse! (rec as bs cs ds nil))))
 
   (declare zipWith5 ((:a -> :b -> :c -> :d -> :e -> :f) -> (List :a) -> (List :b) -> (List :c) -> (List :d) -> (List :e) -> (List :f)))
   (define (zipWith5 f as bs cs ds es)
@@ -406,8 +406,8 @@
                (match (Tuple5 as bs cs ds es)
                  ((Tuple5 (Cons a as) (Cons b bs) (Cons c cs) (Cons d ds) (Cons e es))
                   (rec as bs cs ds es (Cons (f a b c d e) acc)))
-                 (_ (%reverse! acc))))))
-      (rec as bs cs ds es nil)))
+                 (_ acc)))))
+      (%reverse! (rec as bs cs ds es nil))))
 
   (declare zip ((List :a) -> (List :b) -> (List (Tuple :a :b))))
   (define (zip xs ys)
@@ -439,7 +439,7 @@
                 ((Cons y yss)
                  (match (cmp x y)
                    ((GT) (rec yss (Cons y acc)))
-                   (_    (%append ys (Cons x acc)))))))))
+                   (_    (append-rev ys (Cons x acc)))))))))
       (%reverse! (rec ys Nil))))
 
   (declare sort (Ord :a => ((List :a) -> (List :a))))
@@ -616,7 +616,7 @@ This function is equivalent to all size-N elements of `(COMBS L)`."
                   ((Nil) Nil)
                   ((Cons x xs) (append
                                 (map (Cons x) (combsOf (- n 1) xs)) ; combs with X
-                                (combsOf n xs)))))))                      ; and without x
+                                (combsOf n xs)))))))                ; and without x
                               
 
   ;;
