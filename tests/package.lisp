@@ -24,7 +24,6 @@
   (:documentation "Tests for the COALTON system, written in Coalton.")
   (:use #:coalton-testing)
   (:local-nicknames
-   (#:fun  #:coalton-library/functions)
    (#:math #:coalton-library/math)
    #+sbcl
    (#:big-float #:coalton-library/big-float)
