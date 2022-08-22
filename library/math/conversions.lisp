@@ -63,7 +63,7 @@ Used in `cast-if-inbounds' to force the type inference engine to read minBound a
     (let max-bound = maxBound)
     (let min-bound = minBound)
     (let int = (the Integer (unsafe-cast x)))
-    (if (or (< (unsafe-cast min-bound) int) (> (unsafe-cast max-bound) int))
+    (if (or (< int (unsafe-cast min-bound)) (> int (unsafe-cast max-bound)))
                 (Err "value out of range")
                 (Ok
                  ;; type hackery to get the minBound and maxBound from the Bounded instance of :target. if we
