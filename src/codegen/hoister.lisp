@@ -4,17 +4,18 @@
    #:coalton-impl/util
    #:coalton-impl/codegen/ast)
   (:export
-   #:hoister
-   #:make-hoister
-   #:push-hoist-point
-   #:pop-hoist-point
-   #:pop-final-hoist-point
-   #:hoist-definition))
+   #:hoister                            ; STRUCT
+   #:make-hoister                       ; CONSTRUCTOR
+   #:push-hoist-point                   ; FUNCTION
+   #:pop-hoist-point                    ; FUNCTION
+   #:pop-final-hoist-point              ; FUNCTION
+   #:hoist-definition                   ; FUNCTION
+   ))
 
 (in-package #:coalton-impl/codegen/hoister)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (defstruct (hoist-point (:constructor make-hoist-point (bound-variables)))
+  (defstruct hoist-point
     (bound-variables (required 'bound-variables)                :type symbol-list :read-only nil)
     (definitions     (make-hash-table :test #'equalp)           :type hash-table  :read-only t)))
 
@@ -37,8 +38,9 @@
       (values (gethash node (hoist-point-definitions hoist-point)))
       (progn
         (setf (gethash node (hoist-point-definitions hoist-point))
-              (node-variable (node-type node)
-                             (gentemp "hoisted_" package)))
+              (make-node-variable
+               :type (node-type node)
+               :value (gentemp "hoisted_" package)))
         (values (gethash node (hoist-point-definitions hoist-point))))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
@@ -49,9 +51,9 @@
 (deftype hoist-point-list ()
   `(satisfies hoist-point-list-p))
 
-(defstruct (hoister (:constructor make-hoister ()))
-  (hoist-points    nil                    :type hoist-point-list :read-only nil)
-  (top-hoist-point (make-hoist-point nil) :type hoist-point      :read-only t))
+(defstruct hoister
+  (hoist-points    nil                                     :type hoist-point-list :read-only nil)
+  (top-hoist-point (make-hoist-point :bound-variables nil) :type hoist-point      :read-only t))
 
 (defun definitions-to-bindings (definitions)
   (declare (type hash-table definitions))
@@ -62,7 +64,7 @@
 (defun push-hoist-point (bound-variables hoister)
   (declare (type symbol-list bound-variables)
            (type hoister hoister))
-  (push (make-hoist-point bound-variables) (hoister-hoist-points hoister)))
+  (push (make-hoist-point :bound-variables bound-variables) (hoister-hoist-points hoister)))
 
 (defun pop-hoist-point (hoister)
   (declare (type hoister hoister))

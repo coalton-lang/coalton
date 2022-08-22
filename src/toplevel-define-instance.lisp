@@ -48,7 +48,7 @@
                          table))
 
                      (instance
-                       (ty-class-instance
+                       (make-ty-class-instance
                         :constraints context
                         :predicate predicate
                         :codegen-sym instance-codegen-sym

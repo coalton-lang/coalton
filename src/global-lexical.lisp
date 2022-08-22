@@ -3,13 +3,12 @@
 ;;;; Global environments:
 
 ;;; The global environment contains top level bindings.
-(defstruct (global-environment
-            (:constructor make-empty-global-environment ()))
+(defstruct global-environment
   ;; A map from variable names to their top level bindings.
   (bindings (make-hash-table :test #'eq) :type hash-table))
 
 
-(defvar *top-level-environment* (make-empty-global-environment)
+(defvar *top-level-environment* (make-global-environment)
   "The current global top level environment.")
 
 (declaim (type global-environment *top-level-environment*))

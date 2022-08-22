@@ -20,15 +20,12 @@
 (deftype ty-binding-list ()
   `(satisfies ty-binding-list-p))
 
-(defstruct (tyvar (:constructor %make-tyvar))
+(defstruct tyvar 
   (id   (required 'id)   :type fixnum :read-only t)
   (kind (required 'kind) :type kind   :read-only t))
 
 (defmethod make-load-form ((self tyvar) &optional env)
-  (make-load-form-saving-slots
-   self
-   :slot-names '(id kind)
-   :environment env))
+  (make-load-form-saving-slots self :environment env))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type tyvar))
@@ -40,16 +37,11 @@
 (deftype tyvar-list ()
   '(satisfies tyvar-list-p))
 
-(defstruct
-    (tvar (:include ty)
-          (:constructor %make-tvar (tyvar)))
+(defstruct (tvar (:include ty))
   (tyvar (required 'tyvar) :type tyvar :read-only t))
 
 (defmethod make-load-form ((self tvar) &optional env)
-  (make-load-form-saving-slots
-   self
-   :slot-names '(tyvar)
-   :environment env))
+  (make-load-form-saving-slots self :environment env))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type tvar))
@@ -61,58 +53,40 @@
 (deftype tvar-list ()
   '(satisfies tvar-list-p))
 
-(defstruct (tycon (:constructor %make-tycon))
+(defstruct tycon
   (name (required 'name) :type symbol :read-only t)
   (kind (required 'kind) :type kind   :read-only t))
 
 (defmethod make-load-form ((self tycon) &optional env)
-  (make-load-form-saving-slots
-   self
-   :slot-names '(name kind)
-   :environment env))
+  (make-load-form-saving-slots self :environment env))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type tycon))
 
-(defstruct
-    (tcon (:include ty)
-          (:constructor %make-tcon (tycon)))
+(defstruct (tcon (:include ty))
   (tycon (required 'tycon) :type tycon :read-only t))
 
 (defmethod make-load-form ((self tcon) &optional env)
-  (make-load-form-saving-slots
-   self
-   :slot-names '(tycon)
-   :environment env))
+  (make-load-form-saving-slots self :environment env))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type tcon))
 
-(defstruct
-    (tapp (:include ty)
-          (:constructor %make-tapp (from to)))
+(defstruct (tapp (:include ty))
   (from (required 'from) :type ty :read-only t)
   (to   (required 'to)   :type ty :read-only t))
 
 (defmethod make-load-form ((self tapp) &optional env)
-  (make-load-form-saving-slots
-   self
-   :slot-names '(from to)
-   :environment env))
+  (make-load-form-saving-slots self :environment env))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type tapp))
 
-(defstruct
-    (tgen (:include ty)
-          (:constructor %make-tgen (id)))
+(defstruct (tgen (:include ty))
   (id (required 'id) :type fixnum :read-only t))
 
 (defmethod make-load-form ((self tgen) &optional env)
-  (make-load-form-saving-slots
-   self
-   :slot-names '(id)
-   :environment env))
+  (make-load-form-saving-slots self :environment env))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type tgen))
@@ -128,7 +102,7 @@
 
 (declaim (inline make-variable))
 (defun make-variable (&optional (kind kstar))
-  (prog1 (%make-tvar (%make-tyvar :id *next-variable-id* :kind kind))
+  (prog1 (make-tvar :tyvar (make-tyvar :id *next-variable-id* :kind kind))
     (incf *next-variable-id*)))
 
 ;;;
@@ -137,8 +111,9 @@
 
 (defgeneric instantiate (types type)
   (:method (types (type tapp))
-    (%make-tapp (instantiate types (tapp-from type))
-                (instantiate types (tapp-to type))))
+    (make-tapp
+     :from (instantiate types (tapp-from type))
+     :to (instantiate types (tapp-to type))))
   (:method (types (type tgen))
     (nth (tgen-id type) types))
   (:method (types (type ty))
@@ -163,25 +138,25 @@
           (error "Malformed type application")))))
 
 (defmethod apply-ksubstitution (subs (type tyvar))
-  (%make-tyvar
+  (make-tyvar
    :id (tyvar-id type)
    :kind (apply-ksubstitution subs (tyvar-kind type))))
 
 (defmethod apply-ksubstitution (subs (type tycon))
-  (%make-tycon
+  (make-tycon
    :name (tycon-name type)
    :kind (apply-ksubstitution subs (tycon-kind type))))
 
 (defmethod apply-ksubstitution (subs (type tcon))
-  (%make-tcon (apply-ksubstitution subs (tcon-tycon type))))
+  (make-tcon :tycon (apply-ksubstitution subs (tcon-tycon type))))
 
 (defmethod apply-ksubstitution (subs (type tvar))
-  (%make-tvar (apply-ksubstitution subs (tvar-tyvar type))))
+  (make-tvar :tyvar (apply-ksubstitution subs (tvar-tyvar type))))
 
 (defmethod apply-ksubstitution (subs (type tapp))
-  (%make-tapp
-   (apply-ksubstitution subs (tapp-from type))
-   (apply-ksubstitution subs (tapp-to type))))
+  (make-tapp
+   :from (apply-ksubstitution subs (tapp-from type))
+   :to (apply-ksubstitution subs (tapp-to type))))
 
 (defmethod kind-variables ((type tyvar))
   (kind-variables (kind-of type)))
@@ -223,30 +198,25 @@
 ;;; Early types
 ;;;
 
-(defvar *boolean-type* (%make-tcon (%make-tycon :name 'coalton:Boolean     :kind kstar)))
-(defvar *char-type*    (%make-tcon (%make-tycon :name 'coalton:Char        :kind kstar)))
-(defvar *u8-type*      (%make-tcon (%make-tycon :name 'coalton:U8          :kind kstar)))
-(defvar *u16-type*     (%make-tcon (%make-tycon :name 'coalton:U16         :kind kstar)))
-(defvar *u32-type*     (%make-tcon (%make-tycon :name 'coalton:U32         :kind kstar)))
-(defvar *u64-type*     (%make-tcon (%make-tycon :name 'coalton:U64         :kind kstar)))
-(defvar *i8-type*      (%make-tcon (%make-tycon :name 'coalton:I8          :kind kstar)))
-(defvar *i16-type*     (%make-tcon (%make-tycon :name 'coalton:I16         :kind kstar)))
-(defvar *i32-type*     (%make-tcon (%make-tycon :name 'coalton:I32         :kind kstar)))
-(defvar *i64-type*     (%make-tcon (%make-tycon :name 'coalton:I64         :kind kstar)))
-(defvar *integer-type* (%make-tcon (%make-tycon :name 'coalton:Integer     :kind kstar)))
-(defvar *ifix-type*    (%make-tcon (%make-tycon :name 'coalton:IFix        :kind kstar)))
-(defvar *ufix-type*    (%make-tcon (%make-tycon :name 'coalton:UFix        :kind kstar)))
-(defvar *single-float-type*
-  (%make-tcon (%make-tycon :name 'coalton:Single-Float :kind kstar)))
-(defvar *double-float-type*
-  (%make-tcon (%make-tycon :name 'coalton:Double-Float :kind kstar)))
-(defvar *string-type*  (%make-tcon (%make-tycon :name 'coalton:String      :kind kstar)))
-(defvar *fraction-type*
-  (%make-tcon (%make-tycon :name 'coalton:Fraction :kind kstar)))
-
-(defvar *arrow-type* (%make-tcon (%make-tycon :name 'coalton:-> :kind (kfun kstar (kfun kstar kstar)))))
-
-(defvar *list-type* (%make-tcon (%make-tycon :name 'coalton:List :kind (kfun kstar kstar))))
+(defvar *boolean-type*      (make-tcon :tycon (make-tycon :name 'coalton:Boolean     :kind kstar)))
+(defvar *char-type*         (make-tcon :tycon (make-tycon :name 'coalton:Char        :kind kstar)))
+(defvar *u8-type*           (make-tcon :tycon (make-tycon :name 'coalton:U8          :kind kstar)))
+(defvar *u16-type*          (make-tcon :tycon (make-tycon :name 'coalton:U16         :kind kstar)))
+(defvar *u32-type*          (make-tcon :tycon (make-tycon :name 'coalton:U32         :kind kstar)))
+(defvar *u64-type*          (make-tcon :tycon (make-tycon :name 'coalton:U64         :kind kstar)))
+(defvar *i8-type*           (make-tcon :tycon (make-tycon :name 'coalton:I8          :kind kstar)))
+(defvar *i16-type*          (make-tcon :tycon (make-tycon :name 'coalton:I16         :kind kstar)))
+(defvar *i32-type*          (make-tcon :tycon (make-tycon :name 'coalton:I32         :kind kstar)))
+(defvar *i64-type*          (make-tcon :tycon (make-tycon :name 'coalton:I64         :kind kstar)))
+(defvar *integer-type*      (make-tcon :tycon (make-tycon :name 'coalton:Integer     :kind kstar)))
+(defvar *ifix-type*         (make-tcon :tycon (make-tycon :name 'coalton:IFix        :kind kstar)))
+(defvar *ufix-type*         (make-tcon :tycon (make-tycon :name 'coalton:UFix        :kind kstar)))
+(defvar *single-float-type* (make-tcon :tycon (make-tycon :name 'coalton:Single-Float :kind kstar)))
+(defvar *double-float-type* (make-tcon :tycon (make-tycon :name 'coalton:Double-Float :kind kstar)))
+(defvar *string-type*       (make-tcon :tycon (make-tycon :name 'coalton:String      :kind kstar)))
+(defvar *fraction-type*     (make-tcon :tycon (make-tycon :name 'coalton:Fraction :kind kstar)))
+(defvar *arrow-type*        (make-tcon :tycon (make-tycon :name 'coalton:-> :kind (make-kfun :from kstar :to (make-kfun :from kstar :to kstar)))))
+(defvar *list-type*         (make-tcon :tycon (make-tycon :name 'coalton:List :kind (make-kfun :from kstar :to kstar))))
 
 
 (defun apply-type-argument (tcon arg &key ksubs)
@@ -256,10 +226,10 @@
   (handler-case
       (let ((ksubs (kunify
                     (kind-of (apply-ksubstitution ksubs tcon))
-                    (kfun (kind-of (apply-ksubstitution ksubs arg)) (make-kvariable))
+                    (make-kfun :from (kind-of (apply-ksubstitution ksubs arg)) :to (make-kvariable))
                     ksubs)))
         (values
-         (%make-tapp tcon arg)
+         (make-tapp :from tcon :to arg)
          ksubs))
     (kunify-error (e)
       (declare (ignore e))
@@ -285,7 +255,7 @@
     (error "Unable to construct function with type ~A of kind ~A" from (kind-of from)))
   (unless (kstar-p (kind-of to))
     (error "Unable to construct function with type ~A of kind ~A" to (kind-of to)))
-  (%make-tapp (%make-tapp *arrow-type* from) to))
+  (make-tapp :from (make-tapp :from *arrow-type* :to from) :to to))
 
 (defun make-function-type* (args to)
   (declare (type ty-list args)

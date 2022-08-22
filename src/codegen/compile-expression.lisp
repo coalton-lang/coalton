@@ -10,8 +10,9 @@
   (:local-nicknames
    (#:tc #:coalton-impl/typechecker))
   (:export
-   #:compile-toplevel
-   #:compile-expression))
+   #:compile-toplevel                   ; FUNCTION
+   #:compile-expression                 ; FUNCTION
+   ))
 
 (in-package #:coalton-impl/codegen/compile-expression)
 
@@ -43,8 +44,8 @@
 
          (node-abstraction_
            (if bare-abstraction
-               'node-bare-abstraction
-               'node-abstraction)))
+               'make-node-bare-abstraction
+               'make-node-abstraction)))
 
     (let ((node
             (cond
@@ -54,41 +55,41 @@
               ((tc:typed-node-abstraction-p expr)
                (let ((subnode (compile-expression (tc:typed-node-abstraction-subexpr expr) full-ctx env)))
                  (funcall node-abstraction_
-                  (tc:make-function-type*
-                   (append
-                    (loop :for pred :in preds
-                          :collect (pred-type pred env))
-                    (loop :for (name . scheme) :in (tc:typed-node-abstraction-vars expr)
-                          :collect (tc:qualified-ty-type (tc:ty-scheme-type scheme))))
-                   (node-type subnode))
-                  (append
-                   (mapcar #'cdr ctx)
-                   (mapcar #'car (tc:typed-node-abstraction-vars expr)))
-                  subnode)))
+                          :type (tc:make-function-type*
+                                 (append
+                                  (loop :for pred :in preds
+                                        :collect (pred-type pred env))
+                                  (loop :for (name . scheme) :in (tc:typed-node-abstraction-vars expr)
+                                        :collect (tc:qualified-ty-type (tc:ty-scheme-type scheme))))
+                                 (node-type subnode))
+                          :vars (append
+                                 (mapcar #'cdr ctx)
+                                 (mapcar #'car (tc:typed-node-abstraction-vars expr)))
+                          :subexpr subnode)))
 
               ;; Nodes that are not abstractions but are compiled to bare abstractions must be wrapped
               ((and bare-abstraction (tc:function-type-p inferred-type))
                (let* ((ty-args (tc:function-type-arguments inferred-type-ty))
                       (args (alexandria:make-gensym-list (length ty-args))))
-                 (node-bare-abstraction
-                  inferred-type-ty
-                  args
-                  (node-application
-                   (tc:function-return-type inferred-type-ty)
-                   (compile-expression expr full-ctx env)
-                   (loop :for arg :in args
-                         :for ty :in (tc:function-type-arguments inferred-type-ty)
-                         :collect (node-variable ty arg))))))
+                 (make-node-bare-abstraction
+                  :type inferred-type-ty
+                  :vars args
+                  :subexpr (make-node-application
+                            :type (tc:function-return-type inferred-type-ty)
+                            :rator (compile-expression expr full-ctx env)
+                            :rands (loop :for arg :in args
+                                         :for ty :in (tc:function-type-arguments inferred-type-ty)
+                                         :collect (make-node-variable :type ty :value arg))))))
 
               (ctx
                (let ((inner (compile-expression expr full-ctx env)))
                  (funcall node-abstraction_
-                  (tc:make-function-type*
-                   (loop :for pred :in preds
-                         :collect (pred-type pred env))
-                   (node-type inner))
-                  (mapcar #'cdr ctx)
-                  inner)))
+                          :type (tc:make-function-type*
+                                 (loop :for pred :in preds
+                                       :collect (pred-type pred env))
+                                 (node-type inner))
+                          :vars (mapcar #'cdr ctx)
+                          :subexpr inner)))
 
               (t
                (compile-expression expr full-ctx env)))))
@@ -116,15 +117,15 @@
 
          (inner-node
            (typecase expr
-             (tc:typed-node-variable (node-variable var-type (tc:typed-node-variable-name expr)))
+             (tc:typed-node-variable (make-node-variable :type var-type :value (tc:typed-node-variable-name expr)))
              (t (compile-expression expr ctx env)))))
 
     (if (null dicts)
         inner-node
-        (node-application
-         (tc:qualified-ty-type qual-ty)
-         inner-node
-         dicts))))
+        (make-node-application
+         :type (tc:qualified-ty-type qual-ty)
+         :rator inner-node
+         :rands dicts))))
 
 (defgeneric compile-expression (expr ctx env)
   (:method ((expr tc:typed-node-literal) ctx env)
@@ -133,9 +134,9 @@
              (values node))
     (let ((qual-ty (tc:fresh-inst (tc:typed-node-type expr))))
       (assert (null (tc:qualified-ty-predicates qual-ty)))
-      (node-literal
-       (tc:qualified-ty-type qual-ty)
-       (tc:typed-node-literal-value expr))))
+      (make-node-literal
+       :type (tc:qualified-ty-type qual-ty)
+       :value (tc:typed-node-literal-value expr))))
 
   (:method ((expr tc:typed-node-variable) ctx env)
     (declare (type pred-context ctx)
@@ -149,13 +150,13 @@
              (values node))
     (let ((qual-ty (tc:fresh-inst (tc:typed-node-type expr))))
       (assert (null (tc:qualified-ty-predicates qual-ty)))
-      (node-application
-       (tc:qualified-ty-type qual-ty)
-       (compile-expression (tc:typed-node-application-rator expr) ctx env)
-       (mapcar
-        (lambda (expr)
-          (apply-dicts expr ctx env))
-        (tc:typed-node-application-rands expr)))))
+      (make-node-application
+       :type (tc:qualified-ty-type qual-ty)
+       :rator (compile-expression (tc:typed-node-application-rator expr) ctx env)
+       :rands (mapcar
+               (lambda (expr)
+                 (apply-dicts expr ctx env))
+               (tc:typed-node-application-rands expr)))))
 
   (:method ((expr tc:typed-node-abstraction) ctx env)
     (declare (type pred-context ctx)
@@ -185,10 +186,10 @@
                           name)))))
 
       (assert (not (some #'tc:static-predicate-p preds)))
-      (node-abstraction
-       (tc:make-function-type* dict-types (tc:qualified-ty-type qual-ty))
-       vars
-       (compile-expression (tc:typed-node-abstraction-subexpr expr) ctx env))))
+      (make-node-abstraction
+       :type (tc:make-function-type* dict-types (tc:qualified-ty-type qual-ty))
+       :vars vars
+       :subexpr (compile-expression (tc:typed-node-abstraction-subexpr expr) ctx env))))
 
   (:method ((expr tc:typed-node-let) ctx env)
     (declare (type pred-context ctx)
@@ -197,15 +198,15 @@
     (let ((qual-ty (tc:fresh-inst (tc:typed-node-type expr))))
       (assert (null (tc:qualified-ty-predicates qual-ty)))
 
-      (node-let
-       (tc:qualified-ty-type qual-ty)
-       (loop :for (name . node) :in (tc:typed-node-let-bindings expr)
-             :for explicit-type := (gethash name (tc:typed-node-let-explicit-types expr))
-             :if explicit-type
-               :collect (cons name (compile-toplevel explicit-type node env :extra-context ctx))
-             :else
-               :collect (cons name (compile-expression node ctx env)))
-       (compile-expression (tc:typed-node-let-subexpr expr) ctx env))))
+      (make-node-let
+       :type (tc:qualified-ty-type qual-ty)
+       :bindings (loop :for (name . node) :in (tc:typed-node-let-bindings expr)
+                       :for explicit-type := (gethash name (tc:typed-node-let-explicit-types expr))
+                       :if explicit-type
+                         :collect (cons name (compile-toplevel explicit-type node env :extra-context ctx))
+                       :else
+                         :collect (cons name (compile-expression node ctx env)))
+       :subexpr (compile-expression (tc:typed-node-let-subexpr expr) ctx env))))
 
   (:method ((expr tc:typed-node-lisp) ctx env)
     (declare (type pred-context ctx)
@@ -214,23 +215,23 @@
     (let ((qual-ty (tc:fresh-inst (tc:typed-node-type expr))))
       (assert (null (tc:qualified-ty-predicates qual-ty)))
 
-      (node-lisp
-       (tc:qualified-ty-type qual-ty)
-       (tc:typed-node-lisp-variables expr)
-       (tc:typed-node-lisp-form expr))))
+      (make-node-lisp
+       :type (tc:qualified-ty-type qual-ty)
+       :vars (tc:typed-node-lisp-variables expr)
+       :form (tc:typed-node-lisp-form expr))))
 
   (:method ((expr tc:typed-match-branch) ctx env)
     (declare (type pred-context ctx)
              (type tc:environment env)
              (values match-branch))
-    (match-branch
-     (tc:typed-match-branch-pattern expr)
-     (loop :for (name . scheme) :in (tc:typed-match-branch-bindings expr)
-           :collect
-           (let ((qual-ty (tc:fresh-inst scheme)))
-             (assert (null (tc:qualified-ty-predicates qual-ty)))
-             (cons name (tc:qualified-ty-type qual-ty))))
-     (compile-expression (tc:typed-match-branch-subexpr expr) ctx env)))
+    (make-match-branch
+     :pattern (tc:typed-match-branch-pattern expr)
+     :bindings (loop :for (name . scheme) :in (tc:typed-match-branch-bindings expr)
+                     :collect
+                     (let ((qual-ty (tc:fresh-inst scheme)))
+                       (assert (null (tc:qualified-ty-predicates qual-ty)))
+                       (cons name (tc:qualified-ty-type qual-ty))))
+     :body (compile-expression (tc:typed-match-branch-subexpr expr) ctx env)))
 
   (:method ((expr tc:typed-node-match) ctx env)
     (declare (type pred-context ctx)
@@ -238,13 +239,13 @@
              (values node-match))
     (let ((qual-ty (tc:fresh-inst (tc:typed-node-type expr))))
       (assert (null (tc:qualified-ty-predicates qual-ty)))
-      (node-match
-       (tc:qualified-ty-type qual-ty)
-       (compile-expression (tc:typed-node-match-expr expr) ctx env)
-       (mapcar
-        (lambda (branch)
-          (compile-expression branch ctx env))
-        (tc:typed-node-match-branches expr)))))
+      (make-node-match
+       :type (tc:qualified-ty-type qual-ty)
+       :expr (compile-expression (tc:typed-node-match-expr expr) ctx env)
+       :branches (mapcar
+                  (lambda (branch)
+                    (compile-expression branch ctx env))
+                  (tc:typed-node-match-branches expr)))))
 
   (:method ((expr tc:typed-node-seq) ctx env)
     (declare (type pred-context ctx)
@@ -253,12 +254,12 @@
     (assert (not (null (tc:typed-node-seq-subnodes expr))))
     (let ((qual-ty (tc:fresh-inst (tc:typed-node-type expr))))
       (assert (null (tc:qualified-ty-predicates qual-ty)))
-      (node-seq
-       (tc:qualified-ty-type qual-ty)
-       (mapcar
-        (lambda (node)
-          (compile-expression node ctx env))
-        (tc:typed-node-seq-subnodes expr)))))
+      (make-node-seq
+       :type (tc:qualified-ty-type qual-ty)
+       :nodes (mapcar
+               (lambda (node)
+                 (compile-expression node ctx env))
+               (tc:typed-node-seq-subnodes expr)))))
 
   (:method ((expr tc:typed-node-return) ctx env)
     (declare (type pred-context ctx)
@@ -266,9 +267,9 @@
              (values node))
     (let ((qual-ty (tc:fresh-inst (tc:typed-node-type expr))))
       (assert (null (tc:qualified-ty-predicates qual-ty)))
-      (node-return
-       (tc:qualified-ty-type qual-ty)
-       (compile-expression (tc:typed-node-return-expr expr) ctx env))))
+      (make-node-return
+       :type (tc:qualified-ty-type qual-ty)
+       :expr (compile-expression (tc:typed-node-return-expr expr) ctx env))))
 
   (:method ((expr tc:typed-node-bind) ctx env)
     (declare (type pred-context ctx)
@@ -276,9 +277,9 @@
              (values node))
     (let ((qual-ty (tc:fresh-inst (tc:typed-node-type expr))))
       (assert (null (tc:qualified-ty-predicates qual-ty)))
-      (node-bind
-       (tc:qualified-ty-type qual-ty)
-       (tc:typed-node-bind-name expr)
-       (compile-expression (tc:typed-node-bind-expr expr) ctx env)
-       (compile-expression (tc:typed-node-bind-body expr) ctx env)))))
+      (make-node-bind
+       :type (tc:qualified-ty-type qual-ty)
+       :name (tc:typed-node-bind-name expr)
+       :expr (compile-expression (tc:typed-node-bind-expr expr) ctx env)
+       :body (compile-expression (tc:typed-node-bind-body expr) ctx env)))))
 

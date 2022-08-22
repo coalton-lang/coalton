@@ -16,54 +16,69 @@
    #:node-list                          ; TYPE
    #:binding-list                       ; TYPE
    #:node-literal                       ; STRUCT
+   #:make-node-literal                  ; CONSTRUCTOR
    #:node-literal-value                 ; ACCESSOR
    #:node-variable                      ; STRUCT
+   #:make-node-variable                 ; CONSTRUCTOR
    #:node-variable-p                    ; FUNCTION
    #:node-variable-value                ; ACCESSOR
    #:node-application                   ; STRUCT
+   #:make-node-application              ; CONSTRUCTOR
    #:node-application-p                 ; FUNCTION
    #:node-application-rator             ; ACCESSOR
    #:node-application-rands             ; ACCESSOR
    #:node-direct-application            ; STRUCT
+   #:make-node-direct-application       ; CONSTRUCTOR
    #:node-direct-application-rator-type ; ACCESSOR
    #:node-direct-application-rator      ; ACCESSOR
    #:node-direct-application-rands      ; ACCESSOR
    #:node-direct-application-p          ; FUNCTION
    #:node-abstraction                   ; STRUCT
+   #:make-node-abstraction              ; CONSTRUCTOR
    #:node-abstraction-vars              ; ACCESSOR
    #:node-abstraction-subexpr           ; ACCESSOR
    #:node-abstraction-p                 ; FUNCTION
    #:node-bare-abstraction              ; STRUCT
+   #:make-node-bare-abstraction         ; CONSTRUCTOR
    #:node-bare-abstraction-vars         ; ACCESSOR
    #:node-bare-abstraction-subexpr      ; ACCESSOR
    #:node-let                           ; STRUCT
+   #:make-node-let                      ; CONSTRUCTOR
    #:node-let-p                         ; FUNCTION
    #:node-let-bindings                  ; ACCESSOR
    #:node-let-subexpr                   ; ACCESSOR
    #:node-lisp                          ; STRUCT
+   #:make-node-lisp                     ; CONSTRUCTOR
    #:node-lisp-vars                     ; ACCESOR
    #:node-lisp-form                     ; ACCESOR
    #:match-branch                       ; STRUCT
+   #:make-match-branch                  ; CONSTRUCTOR
    #:match-branch-pattern               ; ACCESSOR
    #:match-branch-bindings              ; ACCESSOR
    #:match-branch-body                  ; ACCESSOR
    #:branch-list                        ; TYPE
    #:node-match                         ; STRUCT
+   #:make-node-match                    ; CONSTRUCTOR
    #:node-match-expr                    ; ACCESSOR
    #:node-match-branches                ; ACCESSOR
    #:node-seq                           ; STRUCT
+   #:make-node-seq                      ; CONSTRUCTOR
    #:node-seq-nodes                     ; ACCESSOR
    #:node-return                        ; STRUCT
+   #:make-node-return                   ; CONSTRUCTOR
    #:node-return-expr                   ; ACCESSOR
    #:node-field                         ; STRUCT
+   #:make-node-field                    ; CONSTRUCTOR
    #:node-field-name                    ; ACCESSOR
    #:node-field-dict                    ; ACCESSOR
    #:node-field-p                       ; FUNCTION
    #:node-dynamic-extent                ; STRUCT
+   #:make-node-dynamic-extent           ; CONSTRUCTOR
    #:node-dynamic-extent-name           ; ACCESSOR
    #:node-dynamic-extent-node           ; ACCESSOR
    #:node-dynamic-extent-body           ; ACCESSOR
    #:node-bind                          ; STRUCT
+   #:make-node-bind                     ; CONSTRUCTOR
    #:node-bind-name                     ; ACCESSOR
    #:node-bind-expr                     ; ACCESSOR
    #:node-bind-body                     ; ACCESOR
@@ -99,27 +114,21 @@
 (deftype binding-list ()
   '(satisfies binding-list-p))
 
-(defstruct (node-literal
-            (:include node)
-            (:constructor node-literal (type value)))
+(defstruct (node-literal (:include node))
   "Literal values like 1 or \"hello\""
   (value (required 'value) :type literal-value :read-only t))
 
 (defmethod make-load-form ((self node-literal) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-(defstruct (node-variable
-            (:include node)
-            (:constructor node-variable (type value)))
+(defstruct (node-variable (:include node))
   "Variables like x or y"
   (value (required 'value) :type symbol :read-only t))
 
 (defmethod make-load-form ((self node-variable) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-(defstruct (node-application
-            (:include node)
-            (:constructor node-application (type rator rands)))
+(defstruct (node-application (:include node))
   "Function application (f x)"
   (rator (required 'rator) :type node      :read-only t)
   (rands (required 'rands) :type node-list :read-only t))
@@ -127,9 +136,7 @@
 (defmethod make-load-form ((self node-application) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-(defstruct (node-direct-application
-            (:include node)
-            (:constructor node-direct-application (type rator-type rator rands)))
+(defstruct (node-direct-application (:include node))
   "Fully saturated function application of a known function"
   (rator-type (required 'rator-type) :type tc:ty     :read-only t)
   (rator      (required 'rator)      :type symbol    :read-only t)
@@ -138,9 +145,7 @@
 (defmethod make-load-form ((self node-direct-application) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-(defstruct (node-abstraction
-            (:include node)
-            (:constructor node-abstraction (type vars subexpr)))
+(defstruct (node-abstraction (:include node))
   "Lambda literals (fn (x) x)"
   (vars    (required 'vars)    :type symbol-list        :read-only t)
   (subexpr (required 'subexpr) :type node               :read-only t))
@@ -148,9 +153,7 @@
 (defmethod make-load-form ((self node-abstraction) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-(defstruct (node-bare-abstraction
-            (:include node)
-            (:constructor node-bare-abstraction (type vars subexpr)))
+(defstruct (node-bare-abstraction (:include node))
   "Lambda literals which do not need be wrapped in function-entries.
 This is used to speedup method calls. This can be done because
 although method calls are to an unknown function, they should always
@@ -161,19 +164,15 @@ be a fully saturated call."
 (defmethod make-load-form ((self node-bare-abstraction) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-(defstruct (node-let
-            (:include node)
-            (:constructor node-let (type bindings subexpr)))
+(defstruct (node-let (:include node))
   "Introduction of local mutually-recursive bindings (let ((x 2)) (+ x x))"
-  (bindings (requried 'bindings) :type binding-list :read-only t)
+  (bindings (required 'bindings) :type binding-list :read-only t)
   (subexpr  (required 'subexpr)  :type node         :read-only t))
 
 (defmethod make-load-form ((self node-let) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-(defstruct (node-lisp
-            (:include node)
-            (:constructor node-lisp (type vars form)))
+(defstruct (node-lisp (:include node))
   "An embedded lisp form"
   (vars (required 'vars) :type list :read-only t)
   (form (required 'form) :type t    :read-only t))
@@ -181,8 +180,7 @@ be a fully saturated call."
 (defmethod make-load-form ((self node-lisp) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-(defstruct (match-branch
-            (:constructor match-branch (pattern bindings body)))
+(defstruct match-branch
   "A branch of a match statement"
   (pattern  (required 'pattern)  :type pattern            :read-only t)
   (bindings (required 'bindings) :type tc:ty-binding-list :read-only t)
@@ -198,9 +196,7 @@ be a fully saturated call."
 (deftype branch-list ()
   '(satisfies branch-list-p))
 
-(defstruct (node-match
-            (:include node)
-            (:constructor node-match (type expr branches)))
+(defstruct (node-match (:include node))
   "A pattern matching construct. Uses MATCH-BRANCH to represent branches"
   (expr (required 'expr) :type node :read-only t)
   (branches (required 'branches) :type branch-list :read-only t))
@@ -208,27 +204,21 @@ be a fully saturated call."
 (defmethod make-load-form ((self node-match) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-(defstruct (node-seq
-            (:include node)
-            (:constructor node-seq (type nodes)))
+(defstruct (node-seq (:include node))
   "A series of statements to be executed sequentially"
   (nodes (required 'nodes) :type node-list :read-only t))
 
 (defmethod make-load-form ((self node-seq) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-(defstruct (node-return
-            (:include node)
-            (:constructor node-return (type expr)))
+(defstruct (node-return (:include node))
   "A return statement, used for early returns in functions"
   (expr (required 'expr) :type node :read-only t))
 
 (defmethod make-load-form ((self node-return) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-(defstruct (node-field
-            (:include node)
-            (:constructor node-field (type name dict)))
+(defstruct (node-field (:include node))
   "Accessing a superclass on a typeclass dictionary"
   (name (required 'field) :type symbol :read-only t)
   (dict (required 'dict)  :type node   :read-only t))
@@ -236,9 +226,7 @@ be a fully saturated call."
 (defmethod make-load-form ((self node-field) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-(defstruct (node-dynamic-extent
-            (:include node)
-            (:constructor node-dynamic-extent (type name node body)))
+(defstruct (node-dynamic-extent (:include node))
   "A single stack allocated binding"
   (name (required 'name) :type symbol :read-only t)
   (node (required 'node) :type node   :read-only t)
@@ -247,9 +235,7 @@ be a fully saturated call."
 (defmethod make-load-form ((self node-dynamic-extent) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-(defstruct (node-bind
-            (:include node)
-            (:constructor node-bind (type name expr body)))
+(defstruct (node-bind (:include node))
   "A single non-recursive binding"
   (name (required 'name) :type symbol :read-only t)
   (expr (required 'expr) :type node   :read-only t)
@@ -428,104 +414,104 @@ both CL namespaces appearing in NODE"
      (node-variables-g (node-bind-body node) :variable-namespace-only variable-namespace-only))))
 
 (defmethod tc:apply-substitution (subs (node node-literal))
-    (node-literal
-     (tc:apply-substitution subs (node-type node))
-     (node-literal-value node)))
+  (make-node-literal
+   :type (tc:apply-substitution subs (node-type node))
+   :value (node-literal-value node)))
 
 (defmethod tc:apply-substitution (subs (node node-variable))
-  (node-variable
-   (tc:apply-substitution subs (node-type node))
-   (node-variable-value node)))
+  (make-node-variable
+   :type (tc:apply-substitution subs (node-type node))
+   :value (node-variable-value node)))
 
 (defmethod tc:apply-substitution (subs (node node-application))
-  (node-application
-   (tc:apply-substitution subs (node-type node))
-   (tc:apply-substitution subs (node-application-rator node))
-   (mapcar
-    (lambda (node)
-      (tc:apply-substitution subs node))
-    (node-application-rands node))))
+  (make-node-application
+   :type (tc:apply-substitution subs (node-type node))
+   :rator (tc:apply-substitution subs (node-application-rator node))
+   :rands (mapcar
+           (lambda (node)
+             (tc:apply-substitution subs node))
+           (node-application-rands node))))
 
 (defmethod tc:apply-substitution (subs (node node-direct-application))
-  (node-direct-application
-   (tc:apply-substitution subs (node-type node))
-   (tc:apply-substitution subs (node-direct-application-rator-type node))
-   (node-direct-application-rator node)
-   (mapcar
-    (lambda (node)
-      (tc:apply-substitution subs node))
-    (node-direct-application-rands node))))
+  (make-node-direct-application
+   :type (tc:apply-substitution subs (node-type node))
+   :rator-type (tc:apply-substitution subs (node-direct-application-rator-type node))
+   :rator (node-direct-application-rator node)
+   :rands (mapcar
+           (lambda (node)
+             (tc:apply-substitution subs node))
+           (node-direct-application-rands node))))
 
 (defmethod tc:apply-substitution (subs (node node-abstraction))
-  (node-abstraction
-   (tc:apply-substitution subs (node-type node))
-   (node-abstraction-vars node)
-   (tc:apply-substitution subs (node-abstraction-subexpr node))))
+  (make-node-abstraction
+   :type (tc:apply-substitution subs (node-type node))
+   :vars (node-abstraction-vars node)
+   :subexpr (tc:apply-substitution subs (node-abstraction-subexpr node))))
 
 (defmethod tc:apply-substitution (subs (node node-bare-abstraction))
-  (node-bare-abstraction
-   (tc:apply-substitution subs (node-type node))
-   (node-bare-abstraction-vars node)
-   (tc:apply-substitution subs (node-bare-abstraction-subexpr node))))
+  (make-node-bare-abstraction
+   :type (tc:apply-substitution subs (node-type node))
+   :vars (node-bare-abstraction-vars node)
+   :subexpr (tc:apply-substitution subs (node-bare-abstraction-subexpr node))))
 
 (defmethod tc:apply-substitution (subs (node node-let))
-  (node-let
-   (tc:apply-substitution subs (node-type node))
-   (loop :for (name . node) :in (node-let-bindings node)
-         :collect (cons name (tc:apply-substitution subs node)))
-   (tc:apply-substitution subs (node-let-subexpr node))))
+  (make-node-let
+   :type (tc:apply-substitution subs (node-type node))
+   :bindings (loop :for (name . node) :in (node-let-bindings node)
+                   :collect (cons name (tc:apply-substitution subs node)))
+   :subexpr (tc:apply-substitution subs (node-let-subexpr node))))
 
 (defmethod tc:apply-substitution (subs (node node-lisp))
-  (node-lisp
-   (tc:apply-substitution subs (node-type node))
-   (node-lisp-vars node)
-   (node-lisp-form node)))
+  (make-node-lisp
+   :type (tc:apply-substitution subs (node-type node))
+   :vars (node-lisp-vars node)
+   :form (node-lisp-form node)))
 
 (defmethod tc:apply-substitution (subs (node match-branch))
-  (match-branch
-   (match-branch-pattern node)
-   (loop :for (name . ty) :in (match-branch-bindings node)
-         :collect (cons name (tc:apply-substitution subs ty)))
-   (tc:apply-substitution subs (match-branch-body node))))
+  (make-match-branch
+   :pattern (match-branch-pattern node)
+   :bindings (loop :for (name . ty) :in (match-branch-bindings node)
+                   :collect (cons name (tc:apply-substitution subs ty)))
+   :body (tc:apply-substitution subs (match-branch-body node))))
 
 (defmethod tc:apply-substitution (subs (node node-match))
-  (node-match
-   (tc:apply-substitution subs (node-type node))
-   (tc:apply-substitution subs (node-match-expr node))
-   (mapcar
-    (lambda (node)
-      (tc:apply-substitution subs node))
-    (node-match-branches node))))
+  (make-node-match
+   :type (tc:apply-substitution subs (node-type node))
+   :expr (tc:apply-substitution subs (node-match-expr node))
+   :branches (mapcar
+              (lambda (node)
+                (tc:apply-substitution subs node))
+              (node-match-branches node))))
 
 (defmethod tc:apply-substitution (subs (node node-seq))
-  (node-seq
-   (tc:apply-substitution subs (node-type node))
-   (mapcar
-    (lambda (node)
-      (tc:apply-substitution subs node))
-    (node-seq-nodes node))))
+  (make-node-seq
+   :type (tc:apply-substitution subs (node-type node))
+   :nodes (mapcar
+           (lambda (node)
+             (tc:apply-substitution subs node))
+           (node-seq-nodes node))))
 
 (defmethod tc:apply-substitution (subs (node node-return))
-  (node-return
-   (tc:apply-substitution subs (node-type node))
-   (tc:apply-substitution subs (node-return-expr node))))
+  (make-node-return
+   :type (tc:apply-substitution subs (node-type node))
+   :expr (tc:apply-substitution subs (node-return-expr node))))
 
 (defmethod tc:apply-substitution (subs (node node-field))
-  (node-field
-   (tc:apply-substitution subs (node-type node))
-   (node-field-name node)
-   (tc:apply-substitution subs (node-field-dict node))))
+  (make-node-field
+   :type (tc:apply-substitution subs (node-type node))
+   :name (node-field-name node)
+   :dict (tc:apply-substitution subs (node-field-dict node))))
 
 (defmethod tc:apply-substitution (subs (node node-dynamic-extent))
-  (node-dynamic-extent
-   (tc:apply-substitution subs (node-type node))
-   (node-dynamic-extent-name node)
-   (tc:apply-substitution subs (node-dynamic-extent-node node))
-   (tc:apply-substitution subs (node-dynamic-extent-body node))))
+  (make-node-dynamic-extent
+   :type (tc:apply-substitution subs (node-type node))
+   :name (node-dynamic-extent-name node)
+   :node (tc:apply-substitution subs (node-dynamic-extent-node node))
+   :body (tc:apply-substitution subs (node-dynamic-extent-body node))))
 
 (defmethod tc:apply-substitution (subs (node node-bind))
-  (node-bind
-   (tc:apply-substitution subs (node-type node))
-   (node-bind-name node)
-   (tc:apply-substitution subs (node-bind-expr node))
-   (tc:apply-substitution subs (node-bind-body node))))
+  (make-node-bind
+   :type (tc:apply-substitution subs (node-type node))
+   :name (node-bind-name node)
+   :expr (tc:apply-substitution subs (node-bind-expr node))
+   :body (tc:apply-substitution subs (node-bind-body node))))

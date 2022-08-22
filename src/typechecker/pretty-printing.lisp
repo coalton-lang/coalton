@@ -21,7 +21,7 @@
 (defun next-pprint-variable-as-tvar (&optional (kind kStar))
   "Get the next type variable as a TVAR"
   ;; This is an awful awful hack
-  (%make-tcon (%make-tycon :name (next-pprint-variable) :kind kind)))
+  (make-tcon :tycon (make-tycon :name (next-pprint-variable) :kind kind)))
 
 (defmacro with-pprint-variable-scope (() &body body)
   "If there is no pretty printing variable scope then create one for BODY"

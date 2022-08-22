@@ -107,6 +107,7 @@
    #:pattern-literal                    ; STRUCT
    #:pattern-literal-value              ; ACCESSOR
    #:pattern-constructor                ; STRUCT
+   #:make-pattern-constructor           ; CONSTRUCTOR
    #:pattern-constructor-name           ; ACCESSOR
    #:pattern-constructor-patterns       ; ACCESSOR
    #:pattern-variables                  ; FUNCTION
@@ -141,22 +142,22 @@
    #:tyvar-kind                         ; ACCESSOR
    #:tyvar-list                         ; TYPE
    #:tvar                               ; STRUCT
-   #:%make-tvar                         ; CONSTRUCTOR
+   #:make-tvar                          ; CONSTRUCTOR
    #:make-variable                      ; FUNCTION
    #:tvar-tyvar                         ; ACCESSOR
    #:tycon                              ; STRUCT
-   #:%make-tycon                        ; CONSTRUCTOR
+   #:make-tycon                         ; CONSTRUCTOR
    #:tycon-name                         ; ACCESSOR
    #:tycon-kind                         ; ACCESSOR
    #:tcon                               ; STRUCT
-   #:%make-tcon                         ; CONSTRUCTOR
+   #:make-tcon                          ; CONSTRUCTOR
    #:tcon-tycon                         ; ACCESSOR
    #:tapp                               ; STRUCT
-   #:%make-tapp                         ; CONSTRUCTOR
+   #:make-tapp                          ; CONSTRUCTOR
    #:tapp-from                          ; ACCESSOR
    #:tapp-to                            ; ACCESSOR
    #:tgen                               ; STRUCT
-   #:%make-tgen                         ; CONSTRUCTOR
+   #:make-tgen                          ; CONSTRUCTOR
    #:tgen-id                            ; ACCESSOR
    #:kind-of                            ; FUNCTION
    #:apply-type-argument                ; FUNCTION
@@ -203,8 +204,8 @@
    #:apply-substitution                 ; FUNCTION
    #:predicate-match                    ; FUNCTION
    #:make-function-type                 ; FUNCTION
-   #:make-kind-of-arity                 ; FUNCTION
-   #:kfun                               ; FUNCTION
+   #:kfun                               ; STRUCT
+   #:make-kfun                          ; CONSTRUCTOR
    #:fresh-inst                         ; FUNCTION
    #:qualified-ty-predicates            ; ACCESSOR
    #:qualified-ty-type                  ; ACCESSOR
@@ -213,14 +214,6 @@
    #:qualify                            ; FUNCTION
    #:to-scheme                          ; FUNCTION
    #:replace-node-type                  ; FUNCTION
-   #:pattern-var-id                     ; ACCESSOR
-   #:pattern-wildcard                   ; STRUCT
-   #:pattern-literal                    ; STRUCT
-   #:pattern-constructor                ; STRUCT
-   #:pattern-var                        ; STRUCT
-   #:pattern-literal-value              ; ACCESSOR
-   #:pattern-constructor-name           ; ACCESSOR
-   #:pattern-constructor-patterns       ; ACCESSOR
    )
   (:export
    #:typed-node                           ; STRUCT
@@ -297,6 +290,7 @@
    #:lookup-specialization              ; FUNCTION
    #:lookup-specialization-by-type      ; FUNCTION
    #:type-entry                         ; STRUCT
+   #:make-type-entry                    ; CONSTRUCTOR
    #:type-entry-name                    ; ACCESSOR
    #:type-entry-runtime-type            ; ACCESSOR
    #:type-entry-type                    ; ACCESSOR
@@ -389,6 +383,7 @@
    #:ty-class-superclass-map            ; ACCESSOR
    #:ty-class-list                      ; TYPE
    #:ty-class-instance                  ; STRUCT
+   #:make-ty-class-instance             ; CONSTRUCTOR
    #:ty-class-instance-predicate        ; ACCESSOR
    #:ty-class-instance-constraints      ; ACCESSOR
    #:ty-class-instance-codegen-sym      ; ACCESSOR

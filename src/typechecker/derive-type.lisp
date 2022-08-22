@@ -33,10 +33,10 @@ Returns (VALUES type predicate-list typed-node subs)")
         (values
          type
          preds
-         (typed-node-literal
-          (to-scheme (qualify nil type))
-          (node-unparsed value)
-          literal-value)
+         (make-typed-node-literal
+          :type (to-scheme (qualify nil type))
+          :unparsed (node-unparsed value)
+          :value literal-value)
          substs
          nil))))
 
@@ -50,11 +50,11 @@ Returns (VALUES type predicate-list typed-node subs)")
            (preds (qualified-ty-predicates qual-type)))
       (values type
               preds
-              (typed-node-lisp
-               (to-scheme qual-type)
-               (node-unparsed value)
-               (node-lisp-variables value)
-               (node-lisp-form value))
+              (make-typed-node-lisp
+               :type (to-scheme qual-type)
+               :unparsed (node-unparsed value)
+               :variables (node-lisp-variables value)
+               :form (node-lisp-form value))
               substs
               nil)))
 
@@ -67,10 +67,10 @@ Returns (VALUES type predicate-list typed-node subs)")
            (preds (qualified-ty-predicates qual-type)))
       (values type
               preds
-              (typed-node-variable
-               (to-scheme qual-type)
-               (node-unparsed value)
-               (node-variable-name value))
+              (make-typed-node-variable
+               :type (to-scheme qual-type)
+               :unparsed (node-unparsed value)
+               :name (node-variable-name value))
               substs
               nil)))
 
@@ -110,11 +110,11 @@ Returns (VALUES type predicate-list typed-node subs)")
                                   "function type implied by the operator")))
               (values ret-ty
                       preds
-                      (typed-node-application
-                       (to-scheme (qualify nil ret-ty))
-                       (node-unparsed value)
-                       typed-rator
-                       (reverse typed-rands))
+                      (make-typed-node-application
+                       :type (to-scheme (qualify nil ret-ty))
+                       :unparsed (node-unparsed value)
+                       :rator typed-rator
+                       :rands (reverse typed-rands))
                       substs
                       returns)))))))
 
@@ -146,14 +146,14 @@ Returns (VALUES type predicate-list typed-node subs)")
 
             (values out-ty
                     ret-preds
-                    (typed-node-abstraction
-                     (to-scheme (qualified-ty nil out-ty))
-                     (node-unparsed value)
-                     (mapcar (lambda (var)
-                               (cons var (lookup-value-type new-env var)))
-                             vars)
-                     typed-subexpr
-                     (node-abstraction-name-map value))
+                    (make-typed-node-abstraction
+                     :type (to-scheme (make-qualified-ty :predicates nil :type out-ty))
+                     :unparsed (node-unparsed value)
+                     :vars (mapcar (lambda (var)
+                                     (cons var (lookup-value-type new-env var)))
+                                   vars)
+                     :subexpr typed-subexpr
+                     :name-map (node-abstraction-name-map value))
                     substs
                     nil))))))
 
@@ -200,13 +200,13 @@ Returns (VALUES type predicate-list typed-node subs)")
           (let ((preds (append ret-preds bindings-preds)))
             (values type
                     preds
-                    (typed-node-let
-                     (to-scheme (qualify nil type))
-                     (node-unparsed value)
-                     typed-bindings
-                     typed-subexpr
-                     explicit-types
-                     (node-let-name-map value))
+                    (make-typed-node-let
+                     :type (to-scheme (qualify nil type))
+                     :unparsed (node-unparsed value)
+                     :bindings typed-bindings
+                     :subexpr typed-subexpr
+                     :explicit-types explicit-types
+                     :name-map (node-let-name-map value))
                     new-subs
                     returns))))))
 
@@ -229,11 +229,11 @@ Returns (VALUES type predicate-list typed-node subs)")
               (values
                tvar
                preds
-               (typed-node-match
-                (to-scheme (qualify nil tvar))
-                (node-unparsed value)
-                typed-expr
-                typed-branches)
+               (make-typed-node-match
+                :type (to-scheme (qualify nil tvar))
+                :unparsed (node-unparsed value)
+                :expr typed-expr
+                :branches typed-branches)
                new-subs
                returns)))))))
 
@@ -246,7 +246,6 @@ Returns (VALUES type predicate-list typed-node subs)")
            (preds nil)
            (nodes nil)
            (returns nil))
-
 
       (loop :for elem :in initial-elements :do
         (multiple-value-bind (tyvar preds_ node subs_ new-returns)
@@ -271,10 +270,10 @@ Returns (VALUES type predicate-list typed-node subs)")
         (values
          tyvar
          preds
-         (typed-node-seq
-          (to-scheme (qualify nil tyvar))
-          (node-unparsed value)
-          (reverse nodes))
+         (make-typed-node-seq
+          :type (to-scheme (qualify nil tyvar))
+          :unparsed (node-unparsed value)
+          :subnodes (reverse nodes))
          subs
          returns))))
 
@@ -319,10 +318,10 @@ Returns (VALUES type predicate-list typed-node subs)")
         (values
          return-ty
          preds
-         (typed-node-return
-          (to-scheme (qualify nil return-ty))
-          (node-unparsed value)
-          node)
+         (make-typed-node-return
+          :type (to-scheme (qualify nil return-ty))
+          :unparsed (node-unparsed value)
+          :expr node)
          subs
          (cons
           type
@@ -347,12 +346,12 @@ Returns (VALUES type predicate-list typed-node subs)")
         (values
          body-type
          preds
-         (typed-node-bind
-          (quantify nil (qualify nil body-type))
-          (node-unparsed value)
-          (node-bind-name value)
-          expr-node
-          body-node)
+         (make-typed-node-bind
+          :type (quantify nil (qualify nil body-type))
+          :unparsed (node-unparsed value)
+          :name (node-bind-name value)
+          :expr expr-node
+          :body body-node)
          subs
          returns)))))
 
@@ -561,125 +560,6 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
     (loop :for scc :in scc-names
           :do (validate-binding-scc-for-codegen scc names-to-initforms env))))
 
-(defgeneric rewrite-recursive-calls (node bindings)
-  (:method ((node typed-node-literal) bindings)
-    (declare (type typed-node node)
-             (type scheme-binding-list bindings)
-             (ignore bindings))
-    node)
-
-  (:method ((node typed-node-variable) bindings)
-    (declare (type typed-node node)
-             (type scheme-binding-list bindings))
-    (let* ((name (typed-node-variable-name node))
-           (binding (find name bindings :key #'car)))
-      (unless binding
-        (return-from rewrite-recursive-calls node))
-      (let* ((node-type (qualified-ty-type (fresh-inst (typed-node-type node))))
-             (new-type (fresh-inst (cdr binding)))
-             (new-type-unqualified (qualified-ty-type new-type))
-             (subs (match new-type-unqualified node-type))
-             (new-type (to-scheme (apply-substitution subs new-type))))
-        (replace-node-type node new-type))))
-
-  (:method ((node typed-node-application) bindings)
-    (declare (type typed-node node)
-             (type scheme-binding-list bindings))
-    (typed-node-application
-     (typed-node-type node)
-     (typed-node-unparsed node)
-     (rewrite-recursive-calls
-      (typed-node-application-rator node)
-      bindings)
-     (mapcar
-      (lambda (node)
-        (rewrite-recursive-calls node bindings))
-      (typed-node-application-rands node))))
-
-  (:method ((node typed-node-abstraction) bindings)
-    (declare (type typed-node node)
-             (type scheme-binding-list bindings))
-    (typed-node-abstraction
-     (typed-node-type node)
-     (typed-node-unparsed node)
-     (typed-node-abstraction-vars node)
-     (rewrite-recursive-calls (typed-node-abstraction-subexpr node) bindings)
-     (typed-node-abstraction-name-map node)))
-
-  (:method ((node typed-node-let) bindings)
-    (declare (type typed-node node)
-             (type scheme-binding-list bindings))
-
-    (typed-node-let
-     (typed-node-type node)
-     (typed-node-unparsed node)
-     (loop :for (name . node) :in (typed-node-let-bindings node)
-           :collect (cons
-                     name
-                     (rewrite-recursive-calls node bindings)))
-     (rewrite-recursive-calls (typed-node-let-subexpr node) bindings)
-     (typed-node-let-explicit-types node)
-     (typed-node-let-name-map node)))
-
-  (:method ((node typed-node-lisp) bindings)
-    (declare (type typed-node node)
-             (type scheme-binding-list bindings)
-             (ignore bindings))
-    node)
-
-  (:method ((branch typed-match-branch) bindings)
-    (declare (type typed-match-branch branch)
-             (type scheme-binding-list bindings))
-    (typed-match-branch
-     (typed-match-branch-unparsed branch)
-     (typed-match-branch-pattern branch)
-     (rewrite-recursive-calls
-      (typed-match-branch-subexpr branch)
-      bindings)
-     (typed-match-branch-bindings branch)
-     (typed-match-branch-name-map branch)))
-
-  (:method ((node typed-node-match) bindings)
-    (declare (type typed-node node)
-             (type scheme-binding-list bindings))
-    (typed-node-match
-     (typed-node-type node)
-     (typed-node-unparsed node)
-     (rewrite-recursive-calls (typed-node-match-expr node) bindings)
-     (mapcar
-      (lambda (branch)
-        (rewrite-recursive-calls branch bindings))
-      (typed-node-match-branches node))))
-
-  (:method ((node typed-node-seq) bindings)
-    (declare (type typed-node node)
-             (type scheme-binding-list bindings))
-    (typed-node-seq
-     (typed-node-type node)
-     (typed-node-unparsed node)
-     (mapcar
-      (lambda (node)
-        (rewrite-recursive-calls node bindings))
-      (typed-node-seq-subnodes node))))
-
-  (:method ((node typed-node-return) bindings)
-    (declare (type typed-node node)
-             (type scheme-binding-list bindings))
-    (typed-node-return
-     (typed-node-type node)
-     (typed-node-unparsed node)
-     (rewrite-recursive-calls (typed-node-return-expr node) bindings)))
-
-  (:method ((node typed-node-bind) bindings)
-    (declare (type typed-node node)
-             (type scheme-binding-list bindings))
-    (typed-node-bind
-     (typed-node-type node)
-     (typed-node-unparsed node)
-     (typed-node-bind-name node)
-     (rewrite-recursive-calls (typed-node-bind-expr node) bindings)
-     (rewrite-recursive-calls (typed-node-bind-body node) bindings))))
-
 (defun derive-binding-type-seq (names tvars exprs env subs name-map
                                 &key (allow-deferred-predicates t)
                                   (allow-returns t))
@@ -809,7 +689,11 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                 (let* ((allowed-tvars (set-difference local-tvars (type-variables retained-preds)))
                        ;; Quantify local type variables
                        (output-schemes (mapcar (lambda (type)
-                                                 (quantify allowed-tvars (qualified-ty nil type)))
+                                                 (quantify
+                                                  allowed-tvars
+                                                  (make-qualified-ty
+                                                   :predicates nil
+                                                   :type type)))
                                                expr-types))
 
                        ;; Build new env
@@ -847,9 +731,9 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                          (mapcar (lambda (type)
                                    (quantify
                                     local-tvars
-                                    (qualified-ty
-                                     retained-preds
-                                     type)))
+                                    (make-qualified-ty
+                                     :predicates retained-preds
+                                     :type type)))
                                  expr-types))
 
                        ;; Build new env
@@ -1097,12 +981,12 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
         (values
          (make-function-type var expr-type)
          (append pat-preds expr-preds)
-         (typed-match-branch
-          unparsed
-          pattern
-          typed-subexpr
-          bindings-schemes
-          name-map)
+         (make-typed-match-branch
+          :unparsed unparsed
+          :pattern pattern
+          :subexpr typed-subexpr
+          :bindings bindings-schemes
+          :name-map name-map)
          new-subs
          returns)))))
 

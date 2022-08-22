@@ -43,7 +43,7 @@
   (and (consp explicit-repr)
        (eq (first explicit-repr) :native)))
 
-(defstruct (type-entry (:constructor type-entry))
+(defstruct type-entry 
   (name         (required 'name)         :type symbol  :read-only t)
   (runtime-type (required 'runtime-type) :type t       :read-only t)
   (type         (required 'type)         :type ty      :read-only t)
@@ -97,7 +97,7 @@
    :data (fset:map
           ;; Early Types
           ('coalton:Boolean
-           (type-entry
+           (make-type-entry
             :name 'coalton:Boolean
             :runtime-type 'cl:boolean
             :type *boolean-type*
@@ -108,7 +108,7 @@
             :location ""))
 
           ('coalton:Char
-           (type-entry
+           (make-type-entry
             :name 'coalton:Char
             :runtime-type 'cl:character
             :type *char-type*
@@ -119,7 +119,7 @@
             :location ""))
 
           ('coalton:Integer
-           (type-entry
+           (make-type-entry
             :name 'coalton:Integer
             :runtime-type 'cl:integer
             :type *integer-type*
@@ -130,7 +130,7 @@
             :location ""))
 
           ('coalton:Single-Float
-           (type-entry
+           (make-type-entry
             :name 'coalton:Single-Float
             :runtime-type 'cl:single-float
             :type *single-float-type*
@@ -141,7 +141,7 @@
             :location ""))
 
           ('coalton:Double-Float
-           (type-entry
+           (make-type-entry
             :name 'coalton:Double-Float
             :runtime-type 'cl:double-float
             :type *double-float-type*
@@ -152,7 +152,7 @@
             :location ""))
 
           ('coalton:String
-           (type-entry
+           (make-type-entry
             :name 'coalton:String
             :runtime-type 'cl:string
             :type *string-type*
@@ -163,7 +163,7 @@
             :location ""))
 
           ('coalton:Fraction
-           (type-entry
+           (make-type-entry
             :name 'coalton:Fraction
             :runtime-type 'cl:rational
             :type *fraction-type*
@@ -174,7 +174,7 @@
             :location ""))
 
           ('coalton:Arrow
-           (type-entry
+           (make-type-entry
             :name 'coalton:Arrow
             :runtime-type nil
             :type *arrow-type*
@@ -185,7 +185,7 @@
             :location ""))
 
           ('coalton:List
-           (type-entry
+           (make-type-entry
             :name 'coalton:List
             :runtime-type 'cl:list
             :type *list-type*
@@ -268,9 +268,7 @@
 ;;; Class environment
 ;;;
 
-(defstruct
-    (ty-class
-     (:constructor ty-class))
+(defstruct ty-class
   (name                (required 'name)                :type symbol              :read-only t)
   (predicate           (required 'predicate)           :type ty-predicate        :read-only t)
   (superclasses        (required 'superclasses)        :type ty-predicate-list   :read-only t)
@@ -299,7 +297,7 @@
 (defmethod apply-substitution (subst-list (class ty-class))
   (declare (type substitution-list subst-list)
            (values ty-class &optional))
-  (ty-class
+  (make-ty-class
    :name (ty-class-name class)
    :predicate (apply-substitution subst-list (ty-class-predicate class))
    :superclasses (apply-substitution subst-list (ty-class-superclasses class))
@@ -325,9 +323,7 @@
 ;;; Instance environment
 ;;;
 
-(defstruct
-    (ty-class-instance
-     (:constructor ty-class-instance))
+(defstruct ty-class-instance
   (constraints         (required 'constraints)         :type ty-predicate-list :read-only t)
   (predicate           (required 'predicate)           :type ty-predicate      :read-only t)
   (codegen-sym         (required 'codegen-sym)         :type symbol            :read-only t)
@@ -352,7 +348,7 @@
 (defmethod apply-substitution (subst-list (instance ty-class-instance))
   (declare (type substitution-list subst-list)
            (values ty-class-instance &optional))
-  (ty-class-instance
+  (make-ty-class-instance
    :constraints (apply-substitution subst-list (ty-class-instance-constraints instance))
    :predicate (apply-substitution subst-list (ty-class-instance-predicate instance))
    :codegen-sym (ty-class-instance-codegen-sym instance)
@@ -435,9 +431,9 @@
 ;;;
 
 (defstruct specialization-entry
-  (from (required 'from) :type symbol :read-only t)
-  (to (required 'to)     :type symbol :read-only t)
-  (to-ty (required 'to-ty) :type ty :read-only t))
+  (from (required 'from)   :type symbol :read-only t)
+  (to (required 'to)       :type symbol :read-only t)
+  (to-ty (required 'to-ty) :type ty     :read-only t))
 
 (defmethod make-load-form ((self specialization-entry) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -455,28 +451,16 @@
 ;;; Environment
 ;;;
 
-(defstruct
-    (environment
-     (:constructor make-environment
-         (value-environment
-          type-environment
-          constructor-environment
-          class-environment
-          instance-environment
-          function-environment
-          name-environment
-          method-inline-environment
-          code-environment
-          specialization-environment)))
-  (value-environment         (required 'value-environment)         :type value-environment         :read-only t)
-  (type-environment          (required 'type-environment)          :type type-environment          :read-only t)
-  (constructor-environment   (requried 'constructor-environment)   :type constructor-environment   :read-only t)
-  (class-environment         (required 'class-environment)         :type class-environment         :read-only t)
-  (instance-environment      (required 'instance-environment)      :type instance-environment      :read-only t)
-  (function-environment      (required 'function-environment)      :type function-environment      :read-only t)
-  (name-environment          (required 'name-environment)          :type name-environment          :read-only t)
-  (method-inline-environment (required 'method-inline-environment) :type method-inline-environment :read-only t)
-  (code-environment          (required 'code-environment)          :type code-environment          :read-only t)
+(defstruct environment
+  (value-environment          (required 'value-environment)          :type value-environment          :read-only t)
+  (type-environment           (required 'type-environment)           :type type-environment           :read-only t)
+  (constructor-environment    (required 'constructor-environment)    :type constructor-environment    :read-only t)
+  (class-environment          (required 'class-environment)          :type class-environment          :read-only t)
+  (instance-environment       (required 'instance-environment)       :type instance-environment       :read-only t)
+  (function-environment       (required 'function-environment)       :type function-environment       :read-only t)
+  (name-environment           (required 'name-environment)           :type name-environment           :read-only t)
+  (method-inline-environment  (required 'method-inline-environment)  :type method-inline-environment  :read-only t)
+  (code-environment           (required 'code-environment)           :type code-environment           :read-only t)
   (specialization-environment (required 'specialization-environment) :type specialization-environment :read-only t))
 
 (defmethod print-object ((env environment) stream)
@@ -494,16 +478,16 @@
 (defun make-default-environment ()
   (declare (values environment))
   (make-environment
-   (make-value-environment)
-   (make-default-type-environment)
-   (make-default-constructor-environment)
-   (make-class-environment)
-   (make-instance-environment)
-   (make-function-environment)
-   (make-name-environment)
-   (make-method-inline-environment)
-   (make-code-environment)
-   (make-specialization-environment)))
+   :value-environment (make-value-environment)
+   :type-environment (make-default-type-environment)
+   :constructor-environment (make-default-constructor-environment)
+   :class-environment (make-class-environment)
+   :instance-environment (make-instance-environment)
+   :function-environment (make-function-environment)
+   :name-environment (make-name-environment)
+   :method-inline-environment (make-method-inline-environment)
+   :code-environment (make-code-environment)
+   :specialization-environment (make-specialization-environment)))
 
 (defun update-environment (env
                            &key
@@ -529,16 +513,16 @@
            (type specialization-environment specialization-environment)
            (values environment))
   (make-environment
-   value-environment
-   type-environment
-   constructor-environment
-   class-environment
-   instance-environment
-   function-environment
-   name-environment
-   method-inline-environment
-   code-environment
-   specialization-environment))
+   :value-environment value-environment
+   :type-environment type-environment
+   :constructor-environment constructor-environment
+   :class-environment class-environment
+   :instance-environment instance-environment
+   :function-environment function-environment
+   :name-environment name-environment
+   :method-inline-environment method-inline-environment
+   :code-environment code-environment
+   :specialization-environment specialization-environment))
 
 ;;;
 ;;; Methods

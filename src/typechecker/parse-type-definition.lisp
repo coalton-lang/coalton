@@ -22,7 +22,7 @@
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type type-definition))
 
-(defstruct (partial-define-type (:constructor partial-define-type))
+(defstruct partial-define-type
   (name         (required 'name)         :type symbol           :read-only t)
   (tyvar-names  (required 'tyvar-names)  :type symbol-list      :read-only t)
   (constructors (required 'constructors) :type list             :read-only t)
@@ -104,10 +104,10 @@
          (type-vars
            (loop :for type-name :in type-names
                  :collect (list type-name
-                                (%make-tcon
-                                 (%make-tycon
-                                  :name type-name
-                                  :kind (make-kvariable))))))
+                                (make-tcon
+                                 :tycon (make-tycon
+                                         :name type-name
+                                         :kind (make-kvariable))))))
 
          (ksubs nil)
 
@@ -143,7 +143,7 @@
                 (set-type
                  env
                  name 
-                 (type-entry
+                 (make-type-entry
                   :name name
                   :runtime-type name
                   :type type__
@@ -273,7 +273,7 @@ Returns TYPE-DEFINITIONS"
 
             ;; Push the partialy parsed define-type form
             (push
-             (partial-define-type
+             (make-partial-define-type
               :name tycon-name
               :tyvar-names tyvar-names
               :constructors constructors
@@ -422,7 +422,7 @@ Returns TYPE-DEFINITIONS"
                        (set-type
                         env
                         tycon-name
-                        (type-entry
+                        (make-type-entry
                          :name tycon-name
                          :runtime-type (type-definition-runtime-type type-definition)
                          :type (type-definition-type type-definition)
@@ -503,11 +503,7 @@ Returns TYPE-DEFINITIONS"
          (kinds (mapcar #'kind-of vars))
          (subst (loop :for var :in vars
                       :for id :from 0
-                      :collect (%make-substitution var (%make-tgen id)))))
-    (%make-ty-scheme kinds (apply-substitution subst type))))
-
-(defun tvar-count-to-kind (tvar-count)
-  "Create a KIND from the number of type variables"
-  (if (= 0 tvar-count)
-      kStar
-      (kFun kStar (tvar-count-to-kind (1- tvar-count)))))
+                      :collect (make-substitution :from var :to (make-tgen :id id)))))
+    (make-ty-scheme
+     :kinds kinds
+     :type (apply-substitution subst type))))

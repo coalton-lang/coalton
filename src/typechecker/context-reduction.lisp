@@ -105,7 +105,7 @@ Returns (VALUES deferred-preds retained-preds defaultable-preds)"
       (let ((retained_ (default-preds env (append environment-vars local-vars) retained)))
         (values deferred (set-difference retained retained_ :test #'equalp) retained_)))))
 
-(defstruct (ambiguity (:constructor ambiguity (var preds)))
+(defstruct ambiguity
   (var   (required 'var)   :type tyvar             :read-only t)
   (preds (required 'preds) :type ty-predicate-list :read-only t))
 
@@ -127,7 +127,7 @@ Returns (VALUES deferred-preds retained-preds defaultable-preds)"
                         (lambda (pred)
                           (find v (type-variables pred) :test #'equalp))
                         preds)
-        :collect (ambiguity v preds_)))
+        :collect (make-ambiguity :var v :preds preds_)))
 
 (defun candidates (env ambig)
   (declare (type environment env)
@@ -161,7 +161,7 @@ Returns (VALUES deferred-preds retained-preds defaultable-preds)"
                  ;; Check that the variable would be defaulted to a valid type
                  ;; for the given predicates
                  (every (lambda (name)
-                          (entail env nil (ty-predicate name (list type))))
+                          (entail env nil (make-ty-predicate :class name :types (list type))))
                         pred-names))
 
             :collect type)))
@@ -204,4 +204,4 @@ Returns (VALUES deferred-preds retained-preds defaultable-preds)"
   (loop :for ambig :in (ambiguities env tvars preds)
         :for candidates := (candidates env ambig)
         :when candidates
-          :collect (%make-substitution (ambiguity-var ambig) (first candidates))))
+          :collect (make-substitution :from (ambiguity-var ambig) :to (first candidates))))

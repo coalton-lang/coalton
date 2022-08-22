@@ -4,7 +4,7 @@
 ;;; Type substitutions
 ;;;
 
-(defstruct (substitution (:constructor %make-substitution (from to)))
+(defstruct substitution
   (from (required 'from) :type tyvar :read-only t)
   (to   (required 'to)   :type ty    :read-only t))
 
@@ -19,7 +19,7 @@
   "Merge substitution lists S1 and S2 together, erroring on disagreeing entries."
   (let ((overlap (intersection s1 s2 :key #'substitution-from :test #'equalp)))
     (if (every (lambda (x)
-                 (equalp (apply-substitution s1 (%make-tvar x)) (apply-substitution s2 (%make-tvar x))))
+                 (equalp (apply-substitution s1 (make-tvar :tyvar x)) (apply-substitution s2 (make-tvar :tyvar x))))
                (mapcar #'substitution-from overlap))
         (concatenate 'list s1 s2)
         (error 'coalton-type-error))))
@@ -29,9 +29,9 @@
   (append
    (mapcar
     (lambda (s)
-      (%make-substitution
-       (substitution-from s)
-       (apply-substitution s1 (substitution-to s))))
+      (make-substitution
+       :from (substitution-from s)
+       :to (apply-substitution s1 (substitution-to s))))
     s2)
    s1))
 
@@ -45,8 +45,9 @@
           type)))
   ;; For a type application, recurse down into all the types
   (:method (subst-list (type tapp))
-    (%make-tapp (apply-substitution subst-list (tapp-from type))
-                (apply-substitution subst-list (tapp-to type))))
+    (make-tapp
+     :from (apply-substitution subst-list (tapp-from type))
+     :to (apply-substitution subst-list (tapp-to type))))
   ;; Otherwise, do nothing
   (:method (subst-list (type ty))
     type)
