@@ -6,4 +6,5 @@
    #:coalton-fiasco-init
    #:coalton-is-assertion
    #:coalton-failed-assertion
-   #:is))
+   #:is
+   #:matches))
