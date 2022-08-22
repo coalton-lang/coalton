@@ -4,7 +4,6 @@
 ;;; Parsing type defintions
 ;;;
 
-
 (defstruct type-definition
   (name              (required 'name)              :type symbol                 :read-only t)
   (type              (required 'type)              :type ty                     :read-only t)
@@ -200,11 +199,11 @@
 Returns TYPE-DEFINITIONS"
   (declare (type list forms)
            (type environment env)
-           (values type-definition-list))
+           (values type-definition-list environment))
 
   ;; Pull out and verify DEFINE-TYPE and type
   (let ((type-definitions nil) ; list (name tvars constructors docstring)
-        (type-dependencies)    ; list (name dependencies*)
+        (type-dependencies nil)         ; list (name dependencies*)
         )
     (dolist (form forms)
       (assert (and (eql 'coalton:define-type (first form))
@@ -272,6 +271,7 @@ Returns TYPE-DEFINITIONS"
                                                field-tyvar
                                                ctor-name))))))
 
+            ;; Push the partialy parsed define-type form
             (push
              (partial-define-type
               :name tycon-name
@@ -280,6 +280,7 @@ Returns TYPE-DEFINITIONS"
               :docstring docstring)
              type-definitions)
 
+            ;; Push the types dependencies for computing SCCs
             (push
              (cons
               tycon-name
@@ -289,128 +290,204 @@ Returns TYPE-DEFINITIONS"
                :test #'equalp))
              type-dependencies)))))
 
-
     (let* ((translation-unit-types (mapcar #'car type-dependencies))
 
+           ;; Remove types from type-dependencies that are not
+           ;; currently being defined. This is required for tarjan-scc.
            (type-dependencies
              (loop :for (name . deps) :in type-dependencies
                    :collect (cons name (intersection deps translation-unit-types))))
 
            (parsed-tcons
-             (loop :for scc :in (reverse (tarjan-scc type-dependencies))
-                   :for partial-types
-                     := (loop :for type-name :in scc
-                              :collect (find type-name type-definitions :test #'equalp :key #'partial-define-type-name))
-                   :append (multiple-value-bind (data new-env)
-                               (parse-type-impls partial-types env)
-                             (setf env new-env)
-                             data))))
+             ;; Temporary env to allow referencing partially defined types in parse-type
+             (let ((env env))
+               (loop :for scc :in (reverse (tarjan-scc type-dependencies))
+                     :for partial-types
+                       := (loop :for type-name :in scc
+                                :collect (find type-name type-definitions :test #'equalp :key #'partial-define-type-name))
+                     :append (multiple-value-bind (data new-env)
+                                 (parse-type-impls partial-types env)
+                               (setf env new-env)
+                               data)))))
 
-      (loop :for (tycon-name tcon ctor-data docstring) :in parsed-tcons
-            :collect
-            (with-parsing-context ("definition of type ~A" tycon-name)
-              
-              ;; Parse out the ctors
-              (let* ((parsed-ctors (mapcar #'cdr ctor-data))
+      (values
+       (loop :for (tycon-name tcon ctor-data docstring) :in parsed-tcons
+             :collect
+             (with-parsing-context ("definition of type ~A" tycon-name)
+               
+               ;; Parse out the ctors
+               (let* ((parsed-ctors (mapcar #'cdr ctor-data))
 
-                     (ctor-types (mapcar #'car ctor-data))
+                      (ctor-types (mapcar #'car ctor-data))
 
-                     ;; If every constructor entry has an arity of 0
-                     ;; then this type can be compiled as an enum
-                     (enum-type (every (lambda (ctor)
-                                         (= 0 (constructor-entry-arity ctor)))
-                                       parsed-ctors))
+                      ;; If every constructor entry has an arity of 0
+                      ;; then this type can be compiled as an enum
+                      (enum-type (every (lambda (ctor)
+                                          (= 0 (constructor-entry-arity ctor)))
+                                        parsed-ctors))
 
-                     ;; If there is a single constructor with a single
-                     ;; field then this type can be compiled as a
-                     ;; newtype
-                     (newtype (and (= 1 (length parsed-ctors))
-                                   (= 1 (constructor-entry-arity (first parsed-ctors)))))
+                      ;; If there is a single constructor with a single
+                      ;; field then this type can be compiled as a
+                      ;; newtype
+                      (newtype (and (= 1 (length parsed-ctors))
+                                    (= 1 (constructor-entry-arity (first parsed-ctors)))))
 
-                     (repr (car (gethash tycon-name repr-table)))
-                     (repr-arg (cdr (gethash tycon-name repr-table))))
-                (cond
-                  ;; If the type is repr lisp then do *not* attempt to
-                  ;; generate an optimized implementation
-                  ((eql repr :lisp)
-                   (make-type-definition
-                    :name tycon-name
-                    :type tcon
-                    :runtime-type tycon-name
-                    :explicit-repr :lisp
-                    :enum-repr nil
-                    :newtype nil
-                    :constructors parsed-ctors
-                    :constructor-types ctor-types
-                    :docstring docstring))
+                      (repr (car (gethash tycon-name repr-table)))
+                      (repr-arg (cdr (gethash tycon-name repr-table)))
 
-                  ((eql repr :native)
-                   (progn
-                     (unless repr-arg
-                       (error "Type ~A cannot have native repr of NIL" tycon-name)))
-                   (make-type-definition
-                    :name tycon-name
-                    :type tcon
-                    :runtime-type repr-arg
-                    :explicit-repr (list repr repr-arg)
-                    :enum-repr nil
-                    :newtype nil
-                    :constructors parsed-ctors
-                    :constructor-types ctor-types
-                    :docstring docstring))
+                      (type-definition
+                        (cond
+                          ;; If the type is repr lisp then do *not* attempt to
+                          ;; generate an optimized implementation
+                          ((eql repr :lisp)
+                           (make-type-definition
+                            :name tycon-name
+                            :type tcon
+                            :runtime-type tycon-name
+                            :explicit-repr :lisp
+                            :enum-repr nil
+                            :newtype nil
+                            :constructors parsed-ctors
+                            :constructor-types ctor-types
+                            :docstring docstring))
 
-                  ((and newtype (eql repr :transparent))
-                   (let (;; The runtime type of a newtype is the runtime type of it's only constructor's only argument
-                         (runtime-type (function-type-from
-                                        (qualified-ty-type
-                                         (fresh-inst (first ctor-types))))))
-                     (make-type-definition
-                      :name tycon-name
-                      :type tcon
-                      :runtime-type runtime-type
-                      :explicit-repr repr
-                      :enum-repr nil
-                      :newtype t
-                      :constructors parsed-ctors
-                      :constructor-types ctor-types
-                      :docstring docstring)))
+                          ((eql repr :native)
+                           (progn
+                             (unless repr-arg
+                               (error "Type ~A cannot have native repr of NIL" tycon-name)))
+                           (make-type-definition
+                            :name tycon-name
+                            :type tcon
+                            :runtime-type repr-arg
+                            :explicit-repr (list repr repr-arg)
+                            :enum-repr nil
+                            :newtype nil
+                            :constructors parsed-ctors
+                            :constructor-types ctor-types
+                            :docstring docstring))
 
-                  ((and (eql repr :transparent) (not newtype))
-                   (error "Type ~A cannot be repr transparent. To be repr transparent a type must have a single constructor with a single field." tycon-name))
+                          ((and newtype (eql repr :transparent))
+                           (let (;; The runtime type of a newtype is the runtime type of it's only constructor's only argument
+                                 (runtime-type (function-type-from
+                                                (qualified-ty-type
+                                                 (fresh-inst (first ctor-types))))))
+                             (make-type-definition
+                              :name tycon-name
+                              :type tcon
+                              :runtime-type runtime-type
+                              :explicit-repr repr
+                              :enum-repr nil
+                              :newtype t
+                              :constructors parsed-ctors
+                              :constructor-types ctor-types
+                              :docstring docstring)))
 
-                  ((or (and enum-type (eql repr :enum))
-                       (and enum-type (coalton-impl:coalton-release-p)))
-                   (let ((parsed-ctors (mapcar #'rewrite-ctor parsed-ctors)))
-                     (make-type-definition
-                      :name tycon-name
-                      :type tcon
-                      :runtime-type `(member ,@(mapcar #'constructor-entry-compressed-repr parsed-ctors))
-                      :explicit-repr repr
-                      :enum-repr t
-                      :newtype nil
-                      :constructors parsed-ctors
-                      :constructor-types ctor-types
-                      :docstring docstring)))
+                          ((and (eql repr :transparent) (not newtype))
+                           (error "Type ~A cannot be repr transparent. To be repr transparent a type must have a single constructor with a single field." tycon-name))
 
-                  ((and (eql repr :enum) (not enum-type))
-                   (error "Type ~A cannot be repr enum. To be repr enum a type must only have constructors without fields." tycon-name))
+                          ((or (and enum-type (eql repr :enum))
+                               (and enum-type (coalton-impl:coalton-release-p)))
+                           (let ((parsed-ctors (mapcar #'rewrite-ctor parsed-ctors)))
+                             (make-type-definition
+                              :name tycon-name
+                              :type tcon
+                              :runtime-type `(member ,@(mapcar #'constructor-entry-compressed-repr parsed-ctors))
+                              :explicit-repr repr
+                              :enum-repr t
+                              :newtype nil
+                              :constructors parsed-ctors
+                              :constructor-types ctor-types
+                              :docstring docstring)))
 
-                  (repr
-                   (error "Type ~A supplied an unknown or incompatable repr ~A" tycon-name repr))
+                          ((and (eql repr :enum) (not enum-type))
+                           (error "Type ~A cannot be repr enum. To be repr enum a type must only have constructors without fields." tycon-name))
 
-                  ((not repr)
-                   (make-type-definition
-                    :name tycon-name
-                    :type tcon
-                    :runtime-type tycon-name
-                    :explicit-repr nil
-                    :enum-repr nil
-                    :newtype nil
-                    :constructors parsed-ctors
-                    :constructor-types ctor-types
-                    :docstring docstring)))))))))
+                          (repr
+                           (error "Type ~A supplied an unknown or incompatable repr ~A" tycon-name repr))
+
+                          ((not repr)
+                           (make-type-definition
+                            :name tycon-name
+                            :type tcon
+                            :runtime-type tycon-name
+                            :explicit-repr nil
+                            :enum-repr nil
+                            :newtype nil
+                            :constructors parsed-ctors
+                            :constructor-types ctor-types
+                            :docstring docstring)))))
+
+                 ;; Define the parsed type in the environment
+                 (setf env
+                       (set-type
+                        env
+                        tycon-name
+                        (type-entry
+                         :name tycon-name
+                         :runtime-type (type-definition-runtime-type type-definition)
+                         :type (type-definition-type type-definition)
+                         :explicit-repr (type-definition-explicit-repr type-definition)
+                         :enum-repr (type-definition-enum-repr type-definition)
+                         :newtype (type-definition-newtype type-definition)
+                         :docstring (type-definition-docstring type-definition)
+                         :location (or *compile-file-pathname* *load-truename*))))
+
+                 ;; Define the types constructors in the environment
+                 (loop :for ctor :in (type-definition-constructors type-definition)
+                       :for ctor-type :in (type-definition-constructor-types type-definition)
+                       :for ctor-name := (constructor-entry-name ctor) :do
+
+                         (progn
+                           ;; Add the constructors to the constructor environment
+                           (setf env
+                                 (set-constructor
+                                  env
+                                  (constructor-entry-name ctor) ctor))
+
+                           ;; Add the constructor as a value to the value environment
+                           (setf env
+                                 (set-value-type
+                                  env
+                                  ctor-name
+                                  ctor-type))
+
+                           ;; Register the constructor in the name environment
+                           (setf env
+                                 (set-name
+                                  env
+                                  (constructor-entry-name ctor)
+                                  (make-name-entry
+                                   :name (constructor-entry-name ctor)
+                                   :type :constructor
+                                   :docstring nil
+                                   :location (or *compile-file-pathname*
+                                                 *load-truename*))))
+
+                           ;; If the constructor takes paramaters then
+                           ;; add it to the function environment
+                           (if (not (= (constructor-entry-arity ctor) 0))
+                               (setf env
+                                     (set-function
+                                      env
+                                      (constructor-entry-name ctor)
+                                      (make-function-env-entry
+                                       :name (constructor-entry-name ctor)
+                                       :arity (constructor-entry-arity ctor))))
+
+                               ;; If the constructor does not take
+                               ;; parameters then remove it from the
+                               ;; function environment
+                               (setf env
+                                     (unset-function
+                                      env
+                                      (constructor-entry-name ctor))))))
+
+                 type-definition)))
+       env))))
 
 (defun rewrite-ctor (ctor)
+  (declare (type constructor-entry ctor)
+           (values constructor-entry))
   (assert (= 0 (constructor-entry-arity ctor)))
   (make-constructor-entry
    :name (constructor-entry-name ctor)
