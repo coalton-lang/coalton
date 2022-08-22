@@ -48,7 +48,7 @@
 
     ;; Create a substitution list from the variables
     (let ((subs-list (mapcar (lambda (s)
-                               (%make-substitution (tvar-tyvar (car s)) (cdr s)))
+                               (make-substitution :from (tvar-tyvar (car s)) :to (cdr s)))
                              var-table)))
 
       ;; Now check that all constraints in type1 exist in type2, mapping type variables

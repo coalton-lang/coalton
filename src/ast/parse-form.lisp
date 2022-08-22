@@ -100,7 +100,9 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
   (declare (type symbol var)
            (type immutable-map m)
            (values node-variable))
-  (node-variable var (lookup-or-key m var)))
+  (make-node-variable
+   :unparsed var
+   :name (lookup-or-key m var)))
 
 (defun make-local-vars (vars package)
   (declare (type symbol-list vars)
@@ -132,22 +134,22 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
                      new-m
                      package)))
 
-       (node-abstraction
-        unparsed
-        (mapcar #'cdr binding-local-names)
-        (if nullary-fn
-            (node-seq
-             unparsed
-             (list
-              (node-the
-               `(the Unit ,var)
-               `coalton:Unit
-               (node-variable
-                var
-                (immutable-map-lookup new-m var)))
-              subform))
-            subform)
-        (invert-alist binding-local-names)))))
+      (make-node-abstraction
+       :unparsed unparsed
+       :vars (mapcar #'cdr binding-local-names)
+       :subexpr (if nullary-fn
+                    (make-node-seq
+                     :unparsed unparsed
+                     :subnodes (list
+                                (make-node-the
+                                 :unparsed `(the Unit ,var)
+                                 :type `coalton:Unit
+                                 :subnode (make-node-variable
+                                           :unparsed var
+                                           :name (immutable-map-lookup new-m var)))
+                                subform))
+                    subform)
+       :name-map (invert-alist binding-local-names)))))
 
 (defun parse-let (unparsed binding-forms subexpr m package)
   (declare (type t unparsed)
@@ -191,42 +193,42 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
            (binding-local-names (make-local-vars binding-names package))
            (new-m (immutable-map-set-multiple m binding-local-names)))
 
-      (node-let
-       unparsed
-       (loop :for (bind-var . bind-val) :in bindings
-             :collect (cons
-                       (lookup-or-key new-m bind-var)
-                       (parse-form bind-val new-m package)))
-       (loop :for (bind-var . bind-type) :in declared-types
-             :collect (cons
-                       (lookup-or-key new-m bind-var)
-                       bind-type))
-       (parse-form (cons 'coalton:progn subexpr) new-m package)
-       (invert-alist binding-local-names)))))
+      (make-node-let
+       :unparsed unparsed
+       :bindings (loop :for (bind-var . bind-val) :in bindings
+                       :collect (cons
+                                 (lookup-or-key new-m bind-var)
+                                 (parse-form bind-val new-m package)))
+       :declared-types (loop :for (bind-var . bind-type) :in declared-types
+                             :collect (cons
+                                       (lookup-or-key new-m bind-var)
+                                       bind-type))
+       :subexpr (parse-form (cons 'coalton:progn subexpr) new-m package)
+       :name-map (invert-alist binding-local-names)))))
 
 (defun parse-lisp (unparsed type variables lisp-exprs m)
   (declare (type immutable-map m))
-  (node-lisp
-   unparsed
-   type
-   (loop :for var :in variables
-         :collect (cons
-                   var
-                   (or (immutable-map-lookup m var)
-                       (error-parsing unparsed "Unknown variable ~A in lisp node~%" var))))
-   ;; Do *NOT* parse LISP-EXPR!
-   lisp-exprs))
+  (make-node-lisp
+   :unparsed unparsed
+   :type type
+   :variables (loop :for var :in variables
+                    :collect (cons
+                              var
+                              (or (immutable-map-lookup m var)
+                                  (error-parsing unparsed "Unknown variable ~A in lisp node~%" var))))
+   ;; Do *NOT* parse LISP-EXPRS!
+   :form lisp-exprs))
 
 (defun parse-application (unparsed rator rands m package)
   (declare (type immutable-map m)
            (type package package))
-     (node-application
-      unparsed
-      (parse-form rator m package)
-      (mapcar
-       (lambda (rand)
-         (parse-form rand m package))
-       rands)))
+  (make-node-application
+   :unparsed unparsed
+   :rator (parse-form rator m package)
+   :rands (mapcar
+           (lambda (rand)
+             (parse-form rand m package))
+           rands)))
 
 (defun parse-match-branch (branch m package)
   (declare (type immutable-map m)
@@ -254,32 +256,44 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
            (lambda (branch)
              (parse-match-branch branch m package))
            branches)))
-    (node-match unparsed parsed-expr parsed-branches)))
+    (make-node-match
+     :unparsed unparsed
+     :expr parsed-expr
+     :branches parsed-branches)))
 
 (defun parse-pattern (pattern)
   (cond
     ((typep pattern 'literal-value)
-     (pattern-literal pattern))
+     (make-pattern-literal :value pattern))
     ((and (symbolp pattern)
           (eql 'coalton:_ pattern))
-     (pattern-wildcard))
+     (make-pattern-wildcard))
     ((symbolp pattern)
-     (pattern-var pattern))
+     (make-pattern-var :id pattern))
     ((listp pattern)
      (let ((ctor (first pattern))
            (args (rest pattern)))
-       (pattern-constructor ctor (mapcar #'parse-pattern args))))))
+       (make-pattern-constructor
+        :name ctor
+        :patterns (mapcar #'parse-pattern args))))))
 
 (defun parse-atom (atom)
   ;; Convert integer literals into fromInt calls. This allows for
   ;; "overloaded" number literals. Other literals are left as is.
   (let ((fromInt (alexandria:ensure-symbol "FROMINT" (find-package "COALTON-LIBRARY/CLASSES"))))
     (etypecase atom
-      (integer (node-application
-                atom
-                (node-variable fromInt fromInt)
-                (list (node-literal atom atom))))
-      (t (node-literal atom atom)))))
+      (integer (make-node-application
+                :unparsed atom
+                :rator (make-node-variable
+                        :unparsed fromInt
+                        :name fromInt)
+                :rands (list
+                        (make-node-literal
+                         :unparsed atom
+                         :value atom))))
+      (t (make-node-literal
+          :unparsed atom
+          :value atom)))))
 
 (defun parse-seq (expr subnodes m package)
   (declare (type t expr)
@@ -287,12 +301,12 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
            (type immutable-map m)
            (type package package))
   (assert (< 0 (length subnodes))
-          ()  "Seq form must have at least one node")
-  (node-seq
-   expr
-   (mapcar (lambda (node)
-             (parse-form node m package))
-           subnodes)))
+      ()  "Seq form must have at least one node")
+  (make-node-seq
+   :unparsed expr
+   :subnodes (mapcar (lambda (node)
+                       (parse-form node m package))
+                     subnodes)))
 
 (defun parse-the (expr type form m package)
   (declare (type t expr)
@@ -300,10 +314,10 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
            (type t form)
            (type immutable-map m)
            (type package package))
-  (node-the
-   expr
-   type
-   (parse-form form m package)))
+  (make-node-the
+   :unparsed expr
+   :type type
+   :subnode (parse-form form m package)))
 
 
 (defun parse-return (expr form m package)
@@ -311,9 +325,9 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
            (type t form)
            (type immutable-map m)
            (type package package))
-  (node-return
-   expr
-   (parse-form form m package)))
+  (make-node-return
+   :unparsed expr
+   :expr (parse-form form m package)))
 
 (defun parse-bind (expr name node body m package)
   (declare (type t expr)
@@ -324,8 +338,8 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
            (type package package))
   (let* ((name (first (make-local-vars (list name) package)))
          (new-m (immutable-map-set m (car name) (cdr name))))
-    (node-bind
-     expr
-     (cdr name)
-     (parse-form node m package)
-     (parse-form body new-m package))))
+    (make-node-bind
+     :unparsed expr
+     :name (cdr name)
+     :expr (parse-form node m package)
+     :body (parse-form body new-m package))))

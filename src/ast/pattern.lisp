@@ -13,10 +13,7 @@
 (deftype pattern-list ()
   '(satisfies pattern-list-p))
 
-(defstruct
-    (pattern-var
-     (:include pattern)
-     (:constructor pattern-var (id)))
+(defstruct (pattern-var (:include pattern))
   (id (required 'id) :type symbol :read-only t))
 
 (defmethod make-load-form ((self pattern-var) &optional env)
@@ -25,10 +22,7 @@
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type pattern-var))
 
-(defstruct
-    (pattern-wildcard
-     (:include pattern)
-     (:constructor pattern-wildcard)))
+(defstruct (pattern-wildcard (:include pattern)))
 
 (defmethod make-load-form ((self pattern-wildcard) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -36,10 +30,7 @@
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type pattern-wildcard))
 
-(defstruct
-    (pattern-literal
-     (:include pattern)
-     (:constructor pattern-literal (value)))
+(defstruct (pattern-literal (:include pattern))
   (value (required 'value) :type literal-value :read-only t))
 
 (defmethod make-load-form ((self pattern-literal) &optional env)
@@ -48,10 +39,7 @@
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type pattern-literal))
 
-(defstruct
-    (pattern-constructor
-     (:include pattern)
-     (:constructor pattern-constructor (name patterns)))
+(defstruct (pattern-constructor (:include pattern))
   (name      (required 'name) :type symbol       :read-only t)
   (patterns  (required 'type) :type pattern-list :read-only t))
 
@@ -77,17 +65,17 @@
     (pattern-wildcard pattern)
 
     (pattern-constructor
-     (pattern-constructor
-      (pattern-constructor-name pattern)
-      (mapcar
-       (lambda (pattern)
-         (rewrite-pattern-vars pattern m))
-       (pattern-constructor-patterns pattern))))
+     (make-pattern-constructor
+      :name (pattern-constructor-name pattern)
+      :patterns (mapcar
+                 (lambda (pattern)
+                   (rewrite-pattern-vars pattern m))
+                 (pattern-constructor-patterns pattern))))
 
     (pattern-var
-     (pattern-var
-      (or (immutable-map-lookup m (pattern-var-id pattern))
-          (coalton-impl::coalton-bug "Invalid state reached in rewrite-pattern-vars"))))))
+     (make-pattern-var
+      :id (or (immutable-map-lookup m (pattern-var-id pattern))
+              (coalton-impl::coalton-bug "Invalid state reached in rewrite-pattern-vars"))))))
 
 
 (defun pattern-variables (pattern)

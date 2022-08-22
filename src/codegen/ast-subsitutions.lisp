@@ -5,6 +5,7 @@
    #:coalton-impl/codegen/ast)
   (:export
    #:ast-substitution                   ; STRUCT
+   #:make-ast-substitution              ; CONSTRUCTOR
    #:ast-substitution-from              ; ACCESSOR
    #:ast-substitution-to                ; ACCESSOR
    #:ast-substitution-list              ; TYPE
@@ -12,7 +13,7 @@
 
 (in-package #:coalton-impl/codegen/ast-substitutions)
 
-(defstruct (ast-substitution (:constructor ast-substitution (from to)))
+(defstruct ast-substitution
   (from (required 'from) :type symbol :read-only t)
   (to   (required 'to)   :type node   :read-only t))
 
@@ -51,10 +52,10 @@
   (:method (subs (node node-application))
     (declare (type ast-substitution-list subs)
              (values node))
-    (node-application
-     (node-type node)
-     (apply-ast-substitution subs (node-application-rator node))
-     (apply-ast-substitution subs (node-application-rands node))))
+    (make-node-application
+     :type (node-type node)
+     :rator (apply-ast-substitution subs (node-application-rator node))
+     :rands (apply-ast-substitution subs (node-application-rands node))))
 
   (:method (subs (node node-direct-application))
     (declare (type ast-substitution-list subs)
@@ -65,95 +66,95 @@
        "Failure to apply ast substitution on variable ~A to node-direct-application"
        (node-direct-application-rator node)))
 
-    (node-direct-application
-     (node-type node)
-     (node-direct-application-rator-type node)
-     (node-direct-application-rator node)
-     (apply-ast-substitution subs (node-direct-application-rands node))))
+    (make-node-direct-application
+     :type (node-type node)
+     :rator-type (node-direct-application-rator-type node)
+     :rator (node-direct-application-rator node)
+     :rands (apply-ast-substitution subs (node-direct-application-rands node))))
 
   (:method (subs (node node-abstraction))
     (declare (type ast-substitution-list subs)
              (values node))
 
-    (node-abstraction
-     (node-type node)
-     (node-abstraction-vars node)
-     (apply-ast-substitution subs (node-abstraction-subexpr node))))
+    (make-node-abstraction
+     :type (node-type node)
+     :vars (node-abstraction-vars node)
+     :subexpr (apply-ast-substitution subs (node-abstraction-subexpr node))))
 
   (:method (subs (node node-bare-abstraction))
     (declare (type ast-substitution-list subs)
              (values node))
-    (node-bare-abstraction
-     (node-type node)
-     (node-bare-abstraction-vars node)
-     (apply-ast-substitution subs (node-bare-abstraction-subexpr node))))
+    (make-node-bare-abstraction
+     :type (node-type node)
+     :vars (node-bare-abstraction-vars node)
+     :subexpr (apply-ast-substitution subs (node-bare-abstraction-subexpr node))))
 
   (:method (subs (node node-let))
     (declare (type ast-substitution-list subs)
              (values node))
 
-    (node-let
-     (node-type node)
-     (loop :for (name . node) :in (node-let-bindings node)
-           :do (when (find name subs :key #'ast-substitution-from)
-                 (coalton-bug
-                  "Failure to apply ast substitution on variable ~A to node-let"
-                  name))
-           :collect (cons name (apply-ast-substitution subs node)))
-     (apply-ast-substitution subs (node-let-subexpr node))))
+    (make-node-let
+     :type (node-type node)
+     :bindings (loop :for (name . node) :in (node-let-bindings node)
+                     :do (when (find name subs :key #'ast-substitution-from)
+                           (coalton-bug
+                            "Failure to apply ast substitution on variable ~A to node-let"
+                            name))
+                     :collect (cons name (apply-ast-substitution subs node)))
+     :subexpr (apply-ast-substitution subs (node-let-subexpr node))))
 
   (:method (subs (node match-branch))
     (declare (type ast-substitution-list subs)
              (values match-branch))
-    (match-branch
-     (match-branch-pattern node)
-     (match-branch-bindings node)
-     (apply-ast-substitution subs (match-branch-body node))))
+    (make-match-branch
+     :pattern (match-branch-pattern node)
+     :bindings (match-branch-bindings node)
+     :body (apply-ast-substitution subs (match-branch-body node))))
 
   (:method (subs (node node-match))
     (declare (type ast-substitution-list subs)
              (values node))
-    (node-match
-     (node-type node)
-     (apply-ast-substitution subs (node-match-expr node))
-     (apply-ast-substitution subs (node-match-branches node))))
+    (make-node-match
+     :type (node-type node)
+     :expr (apply-ast-substitution subs (node-match-expr node))
+     :branches (apply-ast-substitution subs (node-match-branches node))))
 
   (:method (subs (node node-seq))
     (declare (type ast-substitution-list subs)
              (values node))
-    (node-seq
-     (node-type node)
-     (apply-ast-substitution subs (node-seq-nodes node))))
+    (make-node-seq
+     :type (node-type node)
+     :nodes (apply-ast-substitution subs (node-seq-nodes node))))
 
   (:method (subs (node node-return))
     (declare (type ast-substitution-list subs)
              (values node))
-    (node-return
-     (node-type node)
-     (apply-ast-substitution subs (node-return-expr node))))
+    (make-node-return
+     :type (node-type node)
+     :expr (apply-ast-substitution subs (node-return-expr node))))
 
   (:method (subs (node node-field))
     (declare (type ast-substitution-list subs)
              (values node))
-    (node-field
-     (node-type node)
-     (node-field-name node)
-     (apply-ast-substitution subs (node-field-dict node))))
+    (make-node-field
+     :type (node-type node)
+     :name (node-field-name node)
+     :dict (apply-ast-substitution subs (node-field-dict node))))
 
   (:method (subs (node node-dynamic-extent))
     (declare (type ast-substitution-list subs)
              (values node))
-    (node-dynamic-extent
-     (node-type node)
-     (node-dynamic-extent-name node)
-     (apply-ast-substitution subs (node-dynamic-extent-node node))
-     (apply-ast-substitution subs (node-dynamic-extent-body node))))
+    (make-node-dynamic-extent
+     :type (node-type node)
+     :name (node-dynamic-extent-name node)
+     :node (apply-ast-substitution subs (node-dynamic-extent-node node))
+     :body (apply-ast-substitution subs (node-dynamic-extent-body node))))
 
   (:method (subs (node node-bind))
     (declare (type ast-substitution-list subs)
              (values node))
-    (node-bind
-     (node-type node)
-     (node-bind-name node)
-     (apply-ast-substitution subs (node-bind-expr node))
-     (apply-ast-substitution subs (node-bind-body node)))))
+    (make-node-bind
+     :type (node-type node)
+     :name (node-bind-name node)
+     :expr (apply-ast-substitution subs (node-bind-expr node))
+     :body (apply-ast-substitution subs (node-bind-body node)))))

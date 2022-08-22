@@ -141,9 +141,9 @@
     (when (and (equalp (node-type (node-match-expr expr)) tc:*boolean-type*)
                (= 2 (length (node-match-branches expr)))
                (equalp (match-branch-pattern (first (node-match-branches expr)))
-                       (ast:pattern-constructor 'coalton:True nil))
+                       (ast:make-pattern-constructor :name 'coalton:True :patterns nil))
                (equalp (match-branch-pattern (second (node-match-branches expr)))
-                       (ast:pattern-constructor 'coalton:False nil)))
+                       (ast:make-pattern-constructor :name 'coalton:False :patterns nil)))
       (return-from codegen-expression
         `(if ,(codegen-expression (node-match-expr expr) current-function env)
              ,(codegen-expression (match-branch-body (first (node-match-branches expr))) current-function env)

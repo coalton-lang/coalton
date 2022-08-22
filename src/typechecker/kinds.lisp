@@ -9,40 +9,28 @@
 (defstruct (kstar (:include kind)))
 
 (defmethod make-load-form ((self kstar) &optional env)
-  (make-load-form-saving-slots
-   self
-   :slot-names nil
-   :environment env))
+  (make-load-form-saving-slots self :environment env))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type kstar))
 
 (alexandria:define-constant kstar (make-instance 'kstar) :test #'equalp)
 
-(defstruct
-    (kfun
-     (:include kind)
-     (:constructor kfun (from to)))
+(defstruct (kfun (:include kind))
   (from (required 'from) :type kind :read-only t)
   (to   (required 'to)   :type kind :read-only t))
 
 (defmethod make-load-form ((self kfun) &optional env)
-  (make-load-form-saving-slots
-   self
-   :slot-names '(from to)
-   :environment env))
+  (make-load-form-saving-slots self :environment env))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type kfun))
 
-(defstruct (kyvar (:constructor %make-kyvar))
+(defstruct kyvar 
   (id (required 'id) :type fixnum :read-only t))
 
 (defmethod make-load-form ((self kyvar) &optional env)
-  (make-load-form-saving-slots
-   self
-   :slot-names '(id)
-   :environment env))
+  (make-load-form-saving-slots self :environment env))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type kyvar))
@@ -54,15 +42,11 @@
 (deftype kyvar-list ()
   '(satisfies kyvar-list-p))
 
-(defstruct (kvar (:include kind)
-                 (:constructor %make-kvar (kyvar)))
+(defstruct (kvar (:include kind))
   (kyvar (required 'kyvar) :type kyvar :read-only t))
 
 (defmethod make-load-form ((self kvar) &optional env)
-  (make-load-form-saving-slots
-   self
-   :slot-names '(kyvar)
-   :environment env))
+  (make-load-form-saving-slots self :environment env))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type kvar))
@@ -77,10 +61,10 @@
 
 (declaim (inline make-kvariable))
 (defun make-kvariable ()
-  (prog1 (%make-kvar (%make-kyvar :id *next-kvar-id*))
+  (prog1 (make-kvar :kyvar (make-kyvar :id *next-kvar-id*))
     (incf *next-kvar-id*)))
 
-(defstruct (ksubstitution (:constructor %make-ksubstitution (from to)))
+(defstruct ksubstitution 
   (from (required 'from) :type kyvar :read-only t)
   (to   (required 'to)   :type kind  :read-only t))
 
@@ -100,9 +84,9 @@
   (append
    (mapcar
     (lambda (s)
-      (%make-ksubstitution
-       (ksubstitution-from s)
-       (apply-ksubstitution s1 (ksubstitution-to s))))
+      (make-ksubstitution
+       :from (ksubstitution-from s)
+       :to (apply-ksubstitution s1 (ksubstitution-to s))))
     s2)
    s1))
 
@@ -117,9 +101,9 @@
   (:method (subs (kind kfun))
     (declare (type ksubstitution-list subs)
              (values kind &optional))
-    (kfun
-     (apply-ksubstitution subs (kfun-from kind))
-     (apply-ksubstitution subs (kfun-to kind))))
+    (make-kfun
+     :from (apply-ksubstitution subs (kfun-from kind))
+     :to (apply-ksubstitution subs (kfun-to kind))))
 
   (:method (subs (kind kvar))
     (declare (type ksubstitution-list subs)
@@ -151,16 +135,16 @@
   (:method ((kind1 kvar) (kind2 kind))
     (declare (values ksubstitution-list &optional))
     (list
-     (%make-ksubstitution
-      (kvar-kyvar kind1)
-      kind2)))
+     (make-ksubstitution
+      :from (kvar-kyvar kind1)
+      :to kind2)))
 
   (:method ((kind1 kind) (kind2 kvar))
     (declare (values ksubstitution-list &optional))
     (list
-     (%make-ksubstitution
-      (kvar-kyvar kind2)
-      kind1)))
+     (make-ksubstitution
+      :from (kvar-kyvar kind2)
+      :to kind1)))
 
   (:method ((kind1 kfun) (kind2 kfun))
     (declare (values ksubstitution-list &optional))
@@ -195,7 +179,7 @@
            (values ksubstitution-list &optional))
   (compose-ksubstution-lists
    (loop :for kvar :in kvars
-         :collect (%make-ksubstitution kvar kstar))
+         :collect (make-ksubstitution :from kvar :to kstar))
    ksubs))
 
 
@@ -216,20 +200,12 @@
         :sum 1
         :do (setf kind (kfun-to kind))))
 
-(defun make-kind-of-arity (arity)
-  "Make a simple kind of arity ARITY"
-  (declare (type fixnum arity)
-           (values kind))
-  (assert (<= 0 arity))
-  (let ((kind kStar))
-    (loop :for i :below arity
-          :do (setf kind (kFun kStar kind)))
-    kind))
-
 (defun make-kind-function* (from to)
   (if (null from)
       to
-      (kfun (car from) (make-kind-function* (cdr from) to))))
+      (make-kfun
+       :from (car from)
+       :to (make-kind-function* (cdr from) to))))
 
 ;;;
 ;;; Pretty printing

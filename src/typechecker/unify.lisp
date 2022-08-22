@@ -45,7 +45,7 @@
      (error 'kind-mismatch-error
             :type tyvar
             :kind (kind-of type)))
-    (t (list (%make-substitution tyvar type)))))
+    (t (list (make-substitution :from tyvar :to type)))))
 
 (defgeneric match (type1 type2)
   (:documentation "Returns a SUBSTITUTION-LIST which unifies TYPE1 to TYPE2
@@ -57,7 +57,7 @@ apply s type1 == type2")
       (merge-substitution-lists s1 s2)))
   (:method ((type1 tvar) (type2 ty))
     (if (equalp (kind-of (tvar-tyvar type1)) (kind-of type2))
-        (list (%make-substitution (tvar-tyvar type1) type2))
+        (list (make-substitution :from (tvar-tyvar type1) :to type2))
         (error 'type-kind-mismatch-error :type1 type1 :type2 type2)))
   (:method ((type1 tcon) (type2 tcon))
     (if (equalp type1 type2)
