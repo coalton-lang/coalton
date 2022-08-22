@@ -41,6 +41,7 @@ BODY within a `coalton' expression."
 (cl:defmacro is (check cl:&optional (message "")) 
   ;; What I'm doing here is a simplified version of what fiasco does,
   ;; which is check if try to expand one layer of function application
+  (cl:check-type message cl:string)
   (trivia:match check
     ((cl:list* (trivia:guard rator
                              (cl:or (cl:not (cl:symbolp rator))
@@ -70,3 +71,16 @@ BODY within a `coalton' expression."
                :format-control "IS assertion ~A~%Evaluates to False~%~A"
                :format-arguments (cl:list ',check ,message))))))))
 
+(cl:defmacro matches (pattern expr cl:&optional (message ""))
+  (cl:check-type message cl:string)
+  (cl:let ((result (cl:gensym)))
+    `(progn
+       (%register-assertion)
+       (let ,result = ,expr)
+       (match ,result
+         (,pattern (%register-success))
+         (_ (lisp Unit (,result)
+              (fiasco::record-failure
+               'coalton-failure
+               :format-control "~A => ~A does not match pattern ~A~%~A"
+               :format-arguments (cl:list ',expr ,result ',pattern ,message))))))))
