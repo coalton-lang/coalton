@@ -32,10 +32,9 @@
       (setf pred-kind (tc:make-kfun :from (tc:kind-of type) :to pred-kind)))
 
     (tc:apply-type-argument-list
-     (tc:make-tcon
-      :tycon (tc:make-tycon
-             :name (tc:ty-class-codegen-sym class-entry)
-             :kind pred-kind))
+     (tc:make-tycon
+      :name (tc:ty-class-codegen-sym class-entry)
+      :kind pred-kind)
      (tc:ty-predicate-types pred))))
 
 (defun resolve-static-dict (pred context env)

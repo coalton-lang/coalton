@@ -19,7 +19,7 @@
   "Merge substitution lists S1 and S2 together, erroring on disagreeing entries."
   (let ((overlap (intersection s1 s2 :key #'substitution-from :test #'equalp)))
     (if (every (lambda (x)
-                 (equalp (apply-substitution s1 (make-tvar :tyvar x)) (apply-substitution s2 (make-tvar :tyvar x))))
+                 (equalp (apply-substitution s1 x) (apply-substitution s2 x)))
                (mapcar #'substitution-from overlap))
         (concatenate 'list s1 s2)
         (error 'coalton-type-error))))
@@ -38,8 +38,8 @@
 (defgeneric apply-substitution (subst-list type)
   (:documentation "Apply the substitutions defined in SUBST-LIST on TYPE.")
   ;; For a type variable, substitute if it is in SUBST-LIST, otherwise return the original type
-  (:method (subst-list (type tvar))
-    (let ((subst (find (tvar-tyvar type) subst-list :key #'substitution-from :test #'equalp)))
+  (:method (subst-list (type tyvar))
+    (let ((subst (find type subst-list :key #'substitution-from :test #'equalp)))
       (if subst
           (substitution-to subst)
           type)))
@@ -58,8 +58,8 @@
 (defgeneric type-variables (type)
   (:documentation "Get a list containing the type variables in TYPE.")
   ;; For any type variable, simply return a list containing itself
-  (:method ((type tvar))
-    (list (tvar-tyvar type)))
+  (:method ((type tyvar))
+    (list type))
   ;; For a type application, return the union of the tyvars of all the contained types
   (:method ((type tapp))
     (remove-duplicates (append (type-variables (tapp-from type))

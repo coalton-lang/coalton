@@ -141,17 +141,11 @@
    #:tyvar-id                           ; ACCESSOR
    #:tyvar-kind                         ; ACCESSOR
    #:tyvar-list                         ; TYPE
-   #:tvar                               ; STRUCT
-   #:make-tvar                          ; CONSTRUCTOR
    #:make-variable                      ; FUNCTION
-   #:tvar-tyvar                         ; ACCESSOR
    #:tycon                              ; STRUCT
    #:make-tycon                         ; CONSTRUCTOR
    #:tycon-name                         ; ACCESSOR
    #:tycon-kind                         ; ACCESSOR
-   #:tcon                               ; STRUCT
-   #:make-tcon                          ; CONSTRUCTOR
-   #:tcon-tycon                         ; ACCESSOR
    #:tapp                               ; STRUCT
    #:make-tapp                          ; CONSTRUCTOR
    #:tapp-from                          ; ACCESSOR

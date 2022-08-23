@@ -21,7 +21,7 @@
 (defun next-pprint-variable-as-tvar (&optional (kind kStar))
   "Get the next type variable as a TVAR"
   ;; This is an awful awful hack
-  (make-tcon :tycon (make-tycon :name (next-pprint-variable) :kind kind)))
+  (make-tycon :name (next-pprint-variable) :kind kind))
 
 (defmacro with-pprint-variable-scope (() &body body)
   "If there is no pretty printing variable scope then create one for BODY"
@@ -38,9 +38,9 @@
 (defun pprint-tvar (tvar)
   (unless (boundp '*pprint-tyvar-dict*)
     (error "Unable to pretty print tvar outside pprint variable context"))
-  (let ((value (gethash (tyvar-id (tvar-tyvar tvar)) *pprint-tyvar-dict*)))
+  (let ((value (gethash (tyvar-id tvar) *pprint-tyvar-dict*)))
     (or value
-        (setf (gethash (tyvar-id (tvar-tyvar tvar)) *pprint-tyvar-dict*)
+        (setf (gethash (tyvar-id tvar) *pprint-tyvar-dict*)
               (next-pprint-variable-as-tvar)))))
 
 (defmacro with-pprint-variable-context (() &body body)

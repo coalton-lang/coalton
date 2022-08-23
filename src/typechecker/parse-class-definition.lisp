@@ -240,7 +240,7 @@
                                 name
                                 unparsed-type
                                 type
-                                (mapcar (alexandria:compose #'tvar-tyvar #'second) class-tyvars))
+                                (mapcar #'second class-tyvars))
                                (setf ksubs new-ksubs)
                                (setf ksubs (kunify (kind-of type) kstar ksubs))
                                (cons name (apply-ksubstitution ksubs type)))))

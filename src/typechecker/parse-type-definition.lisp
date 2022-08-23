@@ -104,10 +104,9 @@
          (type-vars
            (loop :for type-name :in type-names
                  :collect (list type-name
-                                (make-tcon
-                                 :tycon (make-tycon
-                                         :name type-name
-                                         :kind (make-kvariable))))))
+                                (make-tycon
+                                 :name type-name
+                                 :kind (make-kvariable)))))
 
          (ksubs nil)
 
@@ -163,7 +162,7 @@
                                               "~A/~A" name ctor-name)
                            :for args_ := (apply-ksubstitution ksubs_ args)
                            :for type := (make-function-type* args_ applied-type)
-                           :for scheme := (quantify-using-tvar-order (mapcar #'tvar-tyvar tyvar-types) (qualify nil type))
+                           :for scheme := (quantify-using-tvar-order tyvar-types (qualify nil type))
 
                            :for entry := (make-constructor-entry
                                           :name ctor-name

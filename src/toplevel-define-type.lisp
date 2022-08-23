@@ -30,7 +30,7 @@
   (declare (type-definition type-def)
            (values list &optional))
   (let* ((name (type-definition-name type-def))
-         (tvars (loop :for i :below (kind-arity (tycon-kind (tcon-tycon (type-definition-type type-def))))
+         (tvars (loop :for i :below (kind-arity (tycon-kind (type-definition-type type-def)))
                       :collect (alexandria:format-symbol :keyword "~d" i)))
          (full-type (if tvars
                         `(,name ,@tvars)
