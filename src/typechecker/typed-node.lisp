@@ -5,8 +5,8 @@
 ;;;
 
 (defstruct (typed-node (:constructor nil))
-  (type     (required 'type)     :type ty-scheme :read-only t)
-  (unparsed (required 'unparsed) :type t         :read-only t))
+  (type     (util:required 'type)     :type ty-scheme :read-only t)
+  (unparsed (util:required 'unparsed) :type t         :read-only t))
 
 (defun typed-node-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -23,38 +23,38 @@
   `(satisfies typed-binding-list-p))
 
 (defstruct (typed-node-literal (:include typed-node))
-  (value (required 'value) :type literal-value :read-only t))
+  (value (util:required 'value) :type util:literal-value :read-only t))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type typed-node-literal))
 
 (defstruct (typed-node-variable (:include typed-node))
   ;; The name of the variable
-  (name (required 'name) :type symbol :read-only t))
+  (name (util:required 'name) :type symbol :read-only t))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type typed-node-variable))
 
 (defstruct (typed-node-application (:include typed-node))
   ;; The function
-  (rator (required 'rator) :type typed-node :read-only t)
+  (rator (util:required 'rator) :type typed-node :read-only t)
 
   ;; The arguments
-  (rands (required 'rands) :type typed-node-list :read-only t))
+  (rands (util:required 'rands) :type typed-node-list :read-only t))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type typed-node-application))
 
 (defstruct (typed-node-abstraction (:include typed-node))
   ;; The functions arguments and their types
-  (vars (required 'vars)         :type scheme-binding-list :read-only t)
+  (vars (util:required 'vars)         :type scheme-binding-list :read-only t)
 
   ;; The body of the function
-  (subexpr (required 'subexpr)   :type typed-node          :read-only t)
+  (subexpr (util:required 'subexpr)   :type typed-node          :read-only t)
 
   ;; An alist mapping of the current paramater names
   ;; to their origional names
-  (name-map (required 'name-map) :type list                :read-only t))
+  (name-map (util:required 'name-map) :type list                :read-only t))
 
 (defun typed-node-abstraction-source-parameter-names (node)
   (declare (type typed-node-abstraction node)
@@ -66,37 +66,37 @@
 
 (defstruct (typed-node-let (:include typed-node))
   ;; Bindings declared in the let
-  (bindings (required 'bindings) :type typed-binding-list :read-only t)
+  (bindings (util:required 'bindings) :type typed-binding-list :read-only t)
 
   ;; The body of the let expression
-  (subexpr  (required 'subexpr)  :type typed-node         :read-only t)
+  (subexpr  (util:required 'subexpr)  :type typed-node         :read-only t)
 
   ;; Mapping from binding name to declared explicit types (if applicable)
-  (explicit-types (required 'explicit-types) :type hash-table :read-only t)
+  (explicit-types (util:required 'explicit-types) :type hash-table :read-only t)
 
   ;; An alist mapping the current binding names
   ;; to their origional names
-  (name-map (required 'name-map) :type list               :read-only t))
+  (name-map (util:required 'name-map) :type list               :read-only t))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type typed-node-let))
 
 (defstruct (typed-node-lisp (:include typed-node))
   ;; Local variables used in the lisp block
-  (variables (required 'variables) :type list :read-only t)
+  (variables (util:required 'variables) :type list :read-only t)
 
   ;; The lisp block
-  (form      (required 'form)      :type t :read-only t))
+  (form      (util:required 'form)      :type t :read-only t))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type typed-node-lisp))
 
 (defstruct typed-match-branch
-  (unparsed (required 'unparsed) :type t                   :read-only t)
-  (pattern  (required 'pattern)  :type pattern             :read-only t)
-  (subexpr  (required 'subexpr)  :type typed-node          :read-only t)
-  (bindings (required 'bindings) :type scheme-binding-list :read-only t)
-  (name-map (required 'name-map) :type list                :read-only t))
+  (unparsed (util:required 'unparsed) :type t                   :read-only t)
+  (pattern  (util:required 'pattern)  :type pattern             :read-only t)
+  (subexpr  (util:required 'subexpr)  :type typed-node          :read-only t)
+  (bindings (util:required 'bindings) :type scheme-binding-list :read-only t)
+  (name-map (util:required 'name-map) :type list                :read-only t))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type typed-match-branch))
@@ -109,28 +109,28 @@
   '(satisfies typed-match-branch-list-p))
 
 (defstruct (typed-node-match (:include typed-node))
-  (expr     (required 'expr)     :type typed-node              :read-only t)
-  (branches (required 'branches) :type typed-match-branch-list :read-only t))
+  (expr     (util:required 'expr)     :type typed-node              :read-only t)
+  (branches (util:required 'branches) :type typed-match-branch-list :read-only t))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type typed-node-match))
 
 (defstruct (typed-node-seq (:include typed-node))
-  (subnodes (required 'subnodes) :type typed-node-list :read-only t))
+  (subnodes (util:required 'subnodes) :type typed-node-list :read-only t))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type typed-node-seq))
 
 (defstruct (typed-node-return (:include typed-node))
-  (expr (required 'expr) :type typed-node :read-only t))
+  (expr (util:required 'expr) :type typed-node :read-only t))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type typed-node-return))
 
 (defstruct (typed-node-bind (:include typed-node))
-  (name (required 'name) :type symbol     :read-only t)
-  (expr (required 'expr) :type typed-node :read-only t)
-  (body (required 'body) :type typed-node :read-only t))
+  (name (util:required 'name) :type symbol     :read-only t)
+  (expr (util:required 'expr) :type typed-node :read-only t)
+  (body (util:required 'body) :type typed-node :read-only t))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type typed-node-bind))
@@ -189,7 +189,7 @@
               (lambda (binding) (cons (car binding) (apply-substitution subs (cdr binding))))
               (typed-node-let-bindings node))
    :subexpr (apply-substitution subs (typed-node-let-subexpr node))
-   :explicit-types (maphash-values-new
+   :explicit-types (util:maphash-values-new
                     (lambda (type)
                       (apply-substitution subs type))
                     (typed-node-let-explicit-types node))
@@ -326,7 +326,7 @@
 (defun collect-variable-namespace (node)
   "Returns the name of every variable that will be referenced in the variable namespace in the generated code."
   (declare (type typed-node node)
-           (values symbol-list &optional))
+           (values util:symbol-list &optional))
   (remove-duplicates (collect-variable-namespace-g node) :test #'equalp))
 
 (defgeneric collect-variable-namespace-g (node)

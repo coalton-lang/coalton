@@ -5,28 +5,28 @@
 ;;;
 
 (defstruct type-definition
-  (name              (required 'name)              :type symbol                 :read-only t)
-  (type              (required 'type)              :type ty                     :read-only t)
-  (runtime-type      (required 'runtime-type)      :type t                      :read-only t)
+  (name              (util:required 'name)              :type symbol                 :read-only t)
+  (type              (util:required 'type)              :type ty                     :read-only t)
+  (runtime-type      (util:required 'runtime-type)      :type t                      :read-only t)
 
   ;; See the fields with the same name on type-entry
-  (explicit-repr     (required 'explicit-repr)     :type explicit-repr          :read-only t)
-  (enum-repr         (required 'enum-repr)         :type boolean                :read-only t)
-  (newtype           (required 'newtype)           :type boolean                :read-only t)
+  (explicit-repr     (util:required 'explicit-repr)     :type explicit-repr          :read-only t)
+  (enum-repr         (util:required 'enum-repr)         :type boolean                :read-only t)
+  (newtype           (util:required 'newtype)           :type boolean                :read-only t)
 
-  (constructors      (required 'constructors)      :type constructor-entry-list :read-only t)
-  (constructor-types (required 'constructor-types) :type scheme-list            :read-only t)
+  (constructors      (util:required 'constructors)      :type constructor-entry-list :read-only t)
+  (constructor-types (util:required 'constructor-types) :type scheme-list            :read-only t)
 
-  (docstring         (required 'docstring)         :type (or null string)       :read-only t))
+  (docstring         (util:required 'docstring)         :type (or null string)       :read-only t))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type type-definition))
 
 (defstruct partial-define-type
-  (name         (required 'name)         :type symbol           :read-only t)
-  (tyvar-names  (required 'tyvar-names)  :type symbol-list      :read-only t)
-  (constructors (required 'constructors) :type list             :read-only t)
-  (docstring    (required 'docstring)    :type (or null string) :read-only t))
+  (name         (util:required 'name)         :type symbol                :read-only t)
+  (tyvar-names  (util:required 'tyvar-names)  :type util:symbol-list      :read-only t)
+  (constructors (util:required 'constructors) :type list                  :read-only t)
+  (docstring    (util:required 'docstring)    :type (or null string)      :read-only t))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type partial-define-type))
@@ -292,7 +292,7 @@ Returns TYPE-DEFINITIONS"
     (let* ((translation-unit-types (mapcar #'car type-dependencies))
 
            ;; Remove types from type-dependencies that are not
-           ;; currently being defined. This is required for tarjan-scc.
+           ;; currently being defined. This is util:required for tarjan-scc.
            (type-dependencies
              (loop :for (name . deps) :in type-dependencies
                    :collect (cons name (intersection deps translation-unit-types))))
@@ -385,7 +385,7 @@ Returns TYPE-DEFINITIONS"
                            (error "Type ~A cannot be repr transparent. To be repr transparent a type must have a single constructor with a single field." tycon-name))
 
                           ((or (and enum-type (eql repr :enum))
-                               (and enum-type (coalton-impl:coalton-release-p)))
+                               (and enum-type (coalton-impl/settings:coalton-release-p)))
                            (let ((parsed-ctors (mapcar #'rewrite-ctor parsed-ctors)))
                              (make-type-definition
                               :name tycon-name

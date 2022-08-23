@@ -21,8 +21,8 @@
   `(satisfies ty-binding-list-p))
 
 (defstruct (tyvar (:include ty)) 
-  (id   (required 'id)   :type fixnum :read-only t)
-  (kind (required 'kind) :type kind   :read-only t))
+  (id   (util:required 'id)   :type fixnum :read-only t)
+  (kind (util:required 'kind) :type kind   :read-only t))
 
 (defmethod make-load-form ((self tyvar) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -38,8 +38,8 @@
   '(satisfies tyvar-list-p))
 
 (defstruct (tycon (:include ty))
-  (name (required 'name) :type symbol :read-only t)
-  (kind (required 'kind) :type kind   :read-only t))
+  (name (util:required 'name) :type symbol :read-only t)
+  (kind (util:required 'kind) :type kind   :read-only t))
 
 (defmethod make-load-form ((self tycon) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -48,8 +48,8 @@
 (declaim (sb-ext:freeze-type tycon))
 
 (defstruct (tapp (:include ty))
-  (from (required 'from) :type ty :read-only t)
-  (to   (required 'to)   :type ty :read-only t))
+  (from (util:required 'from) :type ty :read-only t)
+  (to   (util:required 'to)   :type ty :read-only t))
 
 (defmethod make-load-form ((self tapp) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -58,7 +58,7 @@
 (declaim (sb-ext:freeze-type tapp))
 
 (defstruct (tgen (:include ty))
-  (id (required 'id) :type fixnum :read-only t))
+  (id (util:required 'id) :type fixnum :read-only t))
 
 (defmethod make-load-form ((self tgen) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -135,7 +135,7 @@
    (kind-variables (tapp-from type))))
 
 (defun type-constructors (type)
-  (declare (values symbol-list &optional))
+  (declare (values util:symbol-list &optional))
   (remove-duplicates (type-constructors-g type)))
 
 (defgeneric type-constructors-g (type)

@@ -5,8 +5,8 @@
 ;;;
 
 (defstruct ty-scheme 
-  (kinds (required 'kinds) :type list         :read-only t)
-  (type  (required 'type)  :type qualified-ty :read-only t))
+  (kinds (util:required 'kinds) :type list         :read-only t)
+  (type  (util:required 'type)  :type qualified-ty :read-only t))
 
 (defmethod make-load-form ((self ty-scheme) &optional env)
   (make-load-form-saving-slots self :environment env))

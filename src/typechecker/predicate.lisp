@@ -6,8 +6,8 @@
 
 (defstruct ty-predicate
   "A type predicate indicating that TYPE is of the CLASS"
-  (class (required 'class) :type symbol  :read-only t)
-  (types (required 'types) :type ty-list :read-only t))
+  (class (util:required 'class) :type symbol  :read-only t)
+  (types (util:required 'types) :type ty-list :read-only t))
 
 (defmethod make-load-form ((self ty-predicate) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -32,8 +32,8 @@
 ;;;
 
 (defstruct (qualified-ty)
-  (predicates (required 'predicates) :type ty-predicate-list :read-only t)
-  (type       (required 'type)       :type ty                :read-only t))
+  (predicates (util:required 'predicates) :type ty-predicate-list :read-only t)
+  (type       (util:required 'type)       :type ty                :read-only t))
 
 (defmethod make-load-form ((self qualified-ty) &optional env)
   (make-load-form-saving-slots self :environment env))

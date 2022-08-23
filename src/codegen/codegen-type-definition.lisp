@@ -15,6 +15,8 @@
    #:construct-function-entry
    #:F1)
   (:local-nicknames
+   (#:settings #:coalton-impl/settings)
+   (#:global-lexical #:coalton-impl/global-lexical)
    (#:tc #:coalton-impl/typechecker))
   (:export
    #:codegen-type-definition
@@ -32,7 +34,7 @@
      ((tc:type-definition-enum-repr def)
       (loop :for constructor :in (tc:type-definition-constructors def)
             :append
-            (list `(coalton-impl:define-global-lexical
+            (list `(global-lexical:define-global-lexical
                        ,(tc:constructor-entry-name constructor)
                        ',(tc:constructor-entry-compressed-repr constructor))
                   `(deftype ,(tc:constructor-entry-classname constructor) ()
@@ -42,12 +44,12 @@
       (let ((constructor (first (tc:type-definition-constructors def))))
         (list `(declaim (inline ,(tc:constructor-entry-name constructor)))
               `(defun ,(tc:constructor-entry-name constructor) (x) x)
-              `(coalton-impl:define-global-lexical
+              `(global-lexical:define-global-lexical
                    ,(tc:constructor-entry-name constructor)
                    (F1 #',(tc:constructor-entry-name constructor))))))
 
      (t
-      `(,(if (coalton-impl:coalton-release-p)
+      `(,(if (settings:coalton-release-p)
              `(defstruct (,(tc:type-definition-name def)
                           (:constructor nil)
                           (:predicate nil))
@@ -80,7 +82,7 @@
 
             ;; Declare the constructor as inline in release mode
             :append
-            (when (coalton-impl:coalton-release-p)
+            (when (settings:coalton-release-p)
               (list `(declaim (inline ,constructor-name))))
 
             :append (struct-or-class
@@ -88,7 +90,7 @@
                      :constructor constructor-name
                      :superclass superclass
                      :fields fields
-                     :mode (if (coalton-impl:coalton-release-p)
+                     :mode (if (settings:coalton-release-p)
                                :struct
                                :class))
 
@@ -112,7 +114,7 @@
 
             :append (cond
                       ((zerop (tc:constructor-entry-arity constructor))
-                       (list `(coalton-impl:define-global-lexical
+                       (list `(global-lexical:define-global-lexical
                                   ,(tc:constructor-entry-name constructor)
                                   (,(tc:constructor-entry-name constructor)))))
                       (t
@@ -120,11 +122,11 @@
                               (entry (construct-function-entry
                                       `#',(tc:constructor-entry-name constructor)
                                       arity)))
-                         (list `(coalton-impl:define-global-lexical
+                         (list `(global-lexical:define-global-lexical
                                     ,(tc:constructor-entry-name constructor)
                                   ,entry))))))
 
-        ,@(when (coalton-impl:coalton-release-p)
+        ,@(when (settings:coalton-release-p)
             (list
              #+sbcl
              `(declaim (sb-ext:freeze-type ,(tc:type-definition-name def))))))))

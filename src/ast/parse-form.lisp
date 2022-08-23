@@ -1,4 +1,16 @@
-(in-package #:coalton-impl/ast)
+(defpackage #:coalton-impl/ast/parse-form
+  (:use
+   #:cl
+   #:coalton-impl/algorithm
+   #:coalton-impl/ast/pattern
+   #:coalton-impl/ast/node
+   #:coalton-impl/ast/parse-error)
+  (:local-nicknames
+   (:util #:coalton-impl/util))
+  (:export
+   #:parse-form))
+
+(in-package #:coalton-impl/ast/parse-form)
 
 (defun parse-form (expr m package)
   "Parse the value form FORM into a NODE structure. This also performs macro-expansion.
@@ -16,7 +28,7 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
                  COMMON-LISP:NIL, is not valid in Coalton.~&~%This error is ~
                  often triggered by expanding a buggy macro."))
        (symbol  (parse-variable expr m))
-       (literal-value
+       (util:literal-value
         (parse-atom expr))))
     ((alexandria:proper-list-p expr)
      (alexandria:destructuring-case expr
@@ -84,7 +96,7 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
     ((listp expr) ;; EXPR already flunked PROPER-LIST-P, so it's a dotted list.
      (error-parsing expr "Dotted lists are not valid Coalton syntax."))
     (t
-     (unreachable))))
+     (util:unreachable))))
 
 (defun invert-alist (alist)
   (loop :for (key . value) :in alist
@@ -105,7 +117,7 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
    :name (lookup-or-key m var)))
 
 (defun make-local-vars (vars package)
-  (declare (type symbol-list vars)
+  (declare (type util:symbol-list vars)
            (type package package))
   (loop :for var :in vars
         :collect
@@ -115,7 +127,7 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
 
 (defun parse-abstraction (unparsed vars subexprs m package)
   (declare (type t unparsed)
-           (type symbol-list vars)
+           (type util:symbol-list vars)
            (type list subexprs)
            (type immutable-map m)
            (type package package))
@@ -263,7 +275,7 @@ This does not attempt to do any sort of analysis whatsoever. It is suitable for 
 
 (defun parse-pattern (pattern)
   (cond
-    ((typep pattern 'literal-value)
+    ((typep pattern 'util:literal-value)
      (make-pattern-literal :value pattern))
     ((and (symbolp pattern)
           (eql 'coalton:_ pattern))

@@ -35,17 +35,19 @@
                 :serial t
                 :components ((:file "tarjan-scc")
                              (:file "immutable-map")
-                             (:file "immutable-listmap")))
+                             (:file "immutable-listmap")
+                             (:file "package")))
                (:module "ast"
                 :serial t
                 :components ((:file "pattern")
                              (:file "node")
                              (:file "parse-error")
                              (:file "parse-form")
-                             (:file "free-variables")))
+                             (:file "package")))
                (:module "typechecker"
                 :serial t
-                :components ((:file "kinds")
+                :components ((:file "package")
+                             (:file "kinds")
                              (:file "type-errors")
                              (:file "types")
                              (:file "pretty-printing")
@@ -60,6 +62,7 @@
                              (:file "type-parse-error")
                              (:file "parse-type")
                              (:file "parse-type-definition")
+                             (:file "parse-define")
                              (:file "parse-class-definition")
                              (:file "parse-instance-definition")
                              (:file "derive-type")
@@ -86,6 +89,7 @@
                              (:file "optimizer")
                              (:file "program")
                              (:file "package")))
+               (:file "impl-package")
                (:file "toplevel-define-type")
                (:file "toplevel-declare")
                (:file "toplevel-define")

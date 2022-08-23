@@ -13,6 +13,8 @@
    #:coalton-impl/codegen/function-entry
    #:construct-function-entry)
   (:local-nicknames
+   (#:settings #:coalton-impl/settings)
+   (#:global-lexical #:coalton-impl/global-lexical)
    (#:tc #:coalton-impl/typechecker))
   (:export
    #:codegen-class-definitions))
@@ -45,7 +47,7 @@
                   :classname codegen-name
                   :constructor codegen-name
                   :fields fields
-                  :mode (if (coalton-impl:coalton-release-p)
+                  :mode (if (settings:coalton-release-p)
                             :struct
                             :class))
 
@@ -74,12 +76,12 @@
     ;; TODO: add type annotations
     `((declaim (inline ,(car m)))
       (defun ,(car m) (dict ,@params)
-        (declare #.coalton-impl:*coalton-optimize*)
+        (declare #.settings:*coalton-optimize*)
         ,(if (null params)
              `(,method-accessor dict)
              `(funcall (the (function ,(make-list (length params) :initial-element t)) (,method-accessor dict)) ,@params)))
       ;; Generate the wrapper functions
-      (coalton-impl:define-global-lexical ,(car m)
+      (global-lexical:define-global-lexical ,(car m)
           ,(construct-function-entry
             `#',(car m)
             (+ arity 1) ; We need a function of arity + 1 to account for DICT

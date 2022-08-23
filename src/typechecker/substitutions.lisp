@@ -5,8 +5,8 @@
 ;;;
 
 (defstruct substitution
-  (from (required 'from) :type tyvar :read-only t)
-  (to   (required 'to)   :type ty    :read-only t))
+  (from (util:required 'from) :type tyvar :read-only t)
+  (to   (util:required 'to)   :type ty    :read-only t))
 
 (defun substitution-list-p (thing)
   (and (alexandria:proper-list-p thing)

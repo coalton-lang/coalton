@@ -6,7 +6,7 @@
 (defvar *type-error-context-stack* '()
   "The stack of context frames for the current type operation")
 
-(define-condition coalton-type-error (error)
+(define-condition coalton-type-error (util:coalton-error)
   ()
   (:documentation "A type error from Coalton code."))
 

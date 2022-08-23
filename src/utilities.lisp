@@ -1,6 +1,30 @@
 ;;;; utilities.lisp
 
+(defpackage #:coalton-impl/util
+  (:documentation "Utility functions and methods used throughout COALTON.")
+  (:use #:cl)
+  (:export
+   #:required                           ; FUNCTION
+   #:unreachable                        ; MACRO
+   #:coalton-error                      ; CONDITION
+   #:coalton-bug                        ; FUNCTION
+   #:debug-log                          ; MACRO
+   #:debug-tap                          ; MACRO
+   #:symbol-list                        ; TYPE
+   #:literal-value                      ; TYPE
+   #:maphash-values-new                 ; FUNCTION
+   #:find-symbol?                       ; FUNCTION
+   #:sexp-fmt                           ; FUNCTION
+   ))
+
 (in-package #:coalton-impl/util)
+
+(defun symbol-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'symbolp x)))
+
+(deftype symbol-list ()
+  '(satisfies symbol-list-p))
 
 (defmacro debug-log (&rest vars)
   "Log names and values of VARS to standard output"
@@ -13,6 +37,10 @@
     `(let ((,var-name ,var))
        (format t ,(format nil "~A: ~~A~~%" var) ,var-name)
        ,var-name)))
+
+(define-condition coalton-error (error)
+  ()
+  (:documentation "Supertype for coalton errors"))
 
 (define-condition coalton-bug (error)
   ((reason :initarg :reason
@@ -71,13 +99,6 @@ and it will print a flat S-expression with all symbols qualified."
   (let ((*print-pretty* nil)
         (*package* (find-package "KEYWORD")))
     (prin1 object stream)))
-
-(defun symbol-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'symbolp x)))
-
-(deftype symbol-list ()
-  '(satisfies symbol-list-p))
 
 (deftype literal-value ()
   "Allowed literal values as Lisp objects."

@@ -1,6 +1,24 @@
-(in-package #:coalton-impl/ast)
+(defpackage #:coalton-impl/ast/parse-error
+  (:use #:cl)
+  (:local-nicknames
+   (#:util #:coalton-impl/util))
+  (:export
+   #:coalton-parse-error                ; CONDITION
+   #:coalton-parse-error-form           ; ACCESSOR
+   #:coalton-parse-error-reason-control ; ACCESSOR
+   #:coalton-parse-error-reason-args    ; ACCESSOR
+   #:coalton-parse-error-context        ; CONDITION
+   #:with-parsing-context               ; MACRO
+   #:error-parsing                      ; FUNCTION
+   #:coalton-unknown-instance           ; CONDITION
+   #:error-unknown-instance             ; FUNCTION
+   #:coalton-inherited-symbol           ; CONDITION
+   #:error-inherited-symbol             ; FUNCTION
+   ))
 
-(define-condition coalton-parse-error (error)
+(in-package #:coalton-impl/ast/parse-error)
+
+(define-condition coalton-parse-error (util:coalton-error)
   ((form :initarg :form
          :reader coalton-parse-error-form)
    (reason-control :initarg :reason-control
@@ -31,10 +49,7 @@
 (defmacro with-parsing-context ((context &rest args) &body body)
   `(handler-case
        (progn ,@body)
-     (coalton-parse-error (c) (error 'coalton-parse-error-context
-                                     :context (format nil ,context ,@args)
-                                     :suberror c))
-     (coalton-impl/typechecker::coalton-type-error (c)
+     (util:coalton-error (c)
        (error 'coalton-parse-error-context
               :context (format nil ,context ,@args)
               :suberror c))))

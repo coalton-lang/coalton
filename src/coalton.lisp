@@ -292,12 +292,12 @@ in FORMS that begin with that operator."
                        env)
 
                     (values
-                     (if *coalton-skip-update*
+                     (if settings:*coalton-skip-update*
                          program
                          `(progn
                             (eval-when (:load-toplevel)
-                              (unless (eq (coalton-release-p) ,(coalton-release-p))
-                                ,(if (coalton-release-p)
+                              (unless (eq (settings:coalton-release-p) ,(settings:coalton-release-p))
+                                ,(if (settings:coalton-release-p)
                                      `(error "~A was compiled in release mode but loaded in development." ,(or *compile-file-pathname* *load-truename*))
                                      `(error "~A was compiled in development mode but loaded in release." ,(or *compile-file-pathname* *load-truename*)))))
                             ,(coalton-impl/typechecker::generate-diff
