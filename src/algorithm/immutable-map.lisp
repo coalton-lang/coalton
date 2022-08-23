@@ -1,4 +1,18 @@
-(in-package #:coalton-impl/algorithm)
+(defpackage #:coalton-impl/algorithm/immutable-map
+  (:use #:cl)
+  (:export
+   #:immutable-map                      ; STRUCT
+   #:make-immutable-map                 ; CONSTRUCTOR
+   #:immutable-map-data                 ; ACCESSOR
+   #:immutable-map-lookup               ; FUNCTION
+   #:immutable-map-set                  ; FUNCTION
+   #:immutable-map-set-multiple         ; FUNCTION
+   #:immutable-map-keys                 ; FUNCTION
+   #:immutable-map-diff                 ; FUNCTION
+   #:immutable-map-remove               ; FUNCTION
+   ))
+
+(in-package #:coalton-impl/algorithm/immutable-map)
 
 
 ;;
@@ -10,10 +24,7 @@
   (data (fset:empty-map) :type fset:map :read-only t))
 
 (defmethod make-load-form ((self immutable-map) &optional env)
-  (make-load-form-saving-slots
-   self
-   :slot-names '(data)
-   :environment env))
+  (make-load-form-saving-slots self :environment env))
 
 (defun immutable-map-lookup (m key)
   "Lookup KEY in M"

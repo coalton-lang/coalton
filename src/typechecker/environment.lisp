@@ -44,19 +44,19 @@
        (eq (first explicit-repr) :native)))
 
 (defstruct type-entry 
-  (name         (required 'name)         :type symbol  :read-only t)
-  (runtime-type (required 'runtime-type) :type t       :read-only t)
-  (type         (required 'type)         :type ty      :read-only t)
+  (name         (util:required 'name)         :type symbol  :read-only t)
+  (runtime-type (util:required 'runtime-type) :type t       :read-only t)
+  (type         (util:required 'type)         :type ty      :read-only t)
 
   ;; An explicit repr defined in the source, or nil if none was supplied. Computed repr will be reflected in
   ;; ENUM-REPR, NEWTYPE, and/or RUNTIME-TYPE.
-  (explicit-repr (required 'explicit-repr)
+  (explicit-repr (util:required 'explicit-repr)
                                          :type explicit-repr
                                                        :read-only t)
 
   ;; If this is true then the type is compiled to a more effecient
   ;; enum representation at runtime
-  (enum-repr (required 'enum-repr)       :type boolean :read-only t)
+  (enum-repr (util:required 'enum-repr)       :type boolean :read-only t)
 
   ;; If this is true then the type does not exist at runtime
   ;; See https://wiki.haskell.org/Newtype
@@ -71,10 +71,10 @@
   ;; A type that is a newtype has another Coalton type as it's
   ;; runtime-type instead of a lisp type. This is to avoid issues with
   ;; recursive newtypes.
-  (newtype (required 'newtype)           :type boolean :read-only t)
+  (newtype (util:required 'newtype)           :type boolean :read-only t)
 
-  (docstring (required 'docstring)       :type (or null string) :read-only t)
-  (location  (required 'location)        :type t                :read-only t))
+  (docstring (util:required 'docstring)       :type (or null string) :read-only t)
+  (location  (util:required 'location)        :type t                :read-only t))
 
 (defmethod make-load-form ((self type-entry) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -200,14 +200,14 @@
 ;;;
 
 (defstruct constructor-entry
-  (name            (required 'name)            :type symbol                         :read-only t)
-  (arity           (required 'arity)           :type alexandria:non-negative-fixnum :read-only t)
-  (constructs      (required 'constructs)      :type symbol                         :read-only t)
-  (classname       (required 'classname)       :type symbol                         :read-only t)
+  (name            (util:required 'name)            :type symbol                         :read-only t)
+  (arity           (util:required 'arity)           :type alexandria:non-negative-fixnum :read-only t)
+  (constructs      (util:required 'constructs)      :type symbol                         :read-only t)
+  (classname       (util:required 'classname)       :type symbol                         :read-only t)
 
   ;; If this constructor constructs a compressed-repr type then
   ;; compressed-repr is the runtime value of this nullary constructor
-  (compressed-repr (required 'compressed-repr) :type t                              :read-only t))
+  (compressed-repr (util:required 'compressed-repr) :type t                              :read-only t))
 
 (defmethod make-load-form ((self constructor-entry) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -269,17 +269,17 @@
 ;;;
 
 (defstruct ty-class
-  (name                (required 'name)                :type symbol              :read-only t)
-  (predicate           (required 'predicate)           :type ty-predicate        :read-only t)
-  (superclasses        (required 'superclasses)        :type ty-predicate-list   :read-only t)
+  (name                (util:required 'name)                :type symbol              :read-only t)
+  (predicate           (util:required 'predicate)           :type ty-predicate        :read-only t)
+  (superclasses        (util:required 'superclasses)        :type ty-predicate-list   :read-only t)
   ;; Methods of the class containing the same tyvars in PREDICATE for
   ;; use in pretty printing
-  (unqualified-methods (required 'unqualified-methods) :type scheme-binding-list :read-only t)
-  (codegen-sym         (required 'codegen-sym)         :type symbol              :read-only t)
-  (superclass-dict     (required 'superclass-dict)     :type list                :read-only t)
-  (superclass-map      (required 'superclass-map)      :type hash-table          :read-only t)
-  (docstring           (required 'docstring)           :type (or null string)    :read-only t)
-  (location            (required 'location)            :type t                   :read-only t))
+  (unqualified-methods (util:required 'unqualified-methods) :type scheme-binding-list :read-only t)
+  (codegen-sym         (util:required 'codegen-sym)         :type symbol              :read-only t)
+  (superclass-dict     (util:required 'superclass-dict)     :type list                :read-only t)
+  (superclass-map      (util:required 'superclass-map)      :type hash-table          :read-only t)
+  (docstring           (util:required 'docstring)           :type (or null string)    :read-only t)
+  (location            (util:required 'location)            :type t                   :read-only t))
 
 (defmethod make-load-form ((self ty-class) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -324,10 +324,10 @@
 ;;;
 
 (defstruct ty-class-instance
-  (constraints         (required 'constraints)         :type ty-predicate-list :read-only t)
-  (predicate           (required 'predicate)           :type ty-predicate      :read-only t)
-  (codegen-sym         (required 'codegen-sym)         :type symbol            :read-only t)
-  (method-codegen-syms (required 'method-codegen-syms) :type hash-table        :read-only t))
+  (constraints         (util:required 'constraints)         :type ty-predicate-list :read-only t)
+  (predicate           (util:required 'predicate)           :type ty-predicate      :read-only t)
+  (codegen-sym         (util:required 'codegen-sym)         :type symbol            :read-only t)
+  (method-codegen-syms (util:required 'method-codegen-syms) :type hash-table        :read-only t))
 
 (defmethod make-load-form ((self ty-class-instance) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -366,8 +366,8 @@
 ;;;
 
 (defstruct function-env-entry
-  (name  (required 'name)  :type symbol :read-only t)
-  (arity (required 'arity) :type fixnum :read-only t))
+  (name  (util:required 'name)  :type symbol :read-only t)
+  (arity (util:required 'arity) :type fixnum :read-only t))
 
 (defmethod make-load-form ((self function-env-entry) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -392,10 +392,10 @@
 ;;;
 
 (defstruct name-entry
-  (name      (required 'name)      :type symbol                               :read-only t)
-  (type      (required 'type)      :type (member :value :method :constructor) :read-only t)
-  (docstring (required 'docstring) :type (or null string)                     :read-only t)
-  (location  (required 'location)  :type t                                    :read-only t))
+  (name      (util:required 'name)      :type symbol                               :read-only t)
+  (type      (util:required 'type)      :type (member :value :method :constructor) :read-only t)
+  (docstring (util:required 'docstring) :type (or null string)                     :read-only t)
+  (location  (util:required 'location)  :type t                                    :read-only t))
 
 (defmethod make-load-form ((self name-entry) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -431,9 +431,9 @@
 ;;;
 
 (defstruct specialization-entry
-  (from (required 'from)   :type symbol :read-only t)
-  (to (required 'to)       :type symbol :read-only t)
-  (to-ty (required 'to-ty) :type ty     :read-only t))
+  (from (util:required 'from)   :type symbol :read-only t)
+  (to (util:required 'to)       :type symbol :read-only t)
+  (to-ty (util:required 'to-ty) :type ty     :read-only t))
 
 (defmethod make-load-form ((self specialization-entry) &optional env)
   (make-load-form-saving-slots self :environment env))

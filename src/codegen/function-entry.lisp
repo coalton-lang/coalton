@@ -1,3 +1,17 @@
+(defpackage #:coalton-impl/codegen/function-entry
+  (:use
+   #:cl
+   #:coalton-impl/util)
+  (:export
+   #:*function-constructor-functions*
+   #:*function-application-functions*
+   #:construct-function-entry
+   #:call-coalton-function
+   #:too-many-arguments-to-coalton-function
+   #:too-many-arguments-function
+   #:too-many-arguments-count
+   #:too-many-arguments-arguments))
+
 (in-package #:coalton-impl/codegen/function-entry)
 
 (defconstant function-arity-limit 32)
@@ -66,7 +80,7 @@
                  ;; OPTIMIZE flags to remove type checks.
                  `(progn
                     (defun ,application-sym (,applied-function-sym ,@arg-syms)
-                      (declare #.coalton-impl:*coalton-optimize*
+                      (declare #.coalton-impl/settings:*coalton-optimize*
                                (type function-entry ,applied-function-sym)
                                (values t))
                       (let ((function-arity (function-entry-arity ,applied-function-sym))
@@ -88,7 +102,7 @@
 
                     (defun ,constructor-sym (,function-sym)
                       (declare (type (function ,(loop :for i :below arity :collect 't) t) ,function-sym)
-                               #.coalton-impl:*coalton-optimize*
+                               #.coalton-impl/settings:*coalton-optimize*
                                (values function-entry))
                       (make-function-entry
                        :arity ,arity
@@ -148,7 +162,7 @@ NOTE: There is no FUNCTION-ENTRY for arity 1 and the function will be returned"
 (declaim (ftype (function ((or function function-entry) &rest t)
                           (values t &optional))
                 call-coalton-function))
-(defun call-coalton-function (function &rest args)
+(defun coalton:call-coalton-function (function &rest args)
   "Apply a Coalton function object FUNCTION to ARGS from Common Lisp."
   (let ((arg-count (length args)))
     (if (>= arg-count function-arity-limit)
@@ -160,7 +174,7 @@ NOTE: There is no FUNCTION-ENTRY for arity 1 and the function will be returned"
                function
                args))))
 
-(define-compiler-macro call-coalton-function (function &rest args)
+(define-compiler-macro coalton:call-coalton-function (function &rest args)
   (let ((arg-count (length args)))
     (if (>= arg-count function-arity-limit)
         (error 'too-many-arguments-to-coalton-function

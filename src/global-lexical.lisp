@@ -1,4 +1,10 @@
-(in-package #:coalton-impl)
+(defpackage #:coalton-impl/global-lexical
+  (:use #:cl)
+  (:export
+   #:get-top-level-binding
+   #:define-global-lexical))
+
+(in-package #:coalton-impl/global-lexical)
 
 ;;;; Global environments:
 

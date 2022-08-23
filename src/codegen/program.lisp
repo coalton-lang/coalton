@@ -28,6 +28,8 @@
    #:coalton-impl/codegen/optimizer
    #:optimize-bindings)
   (:local-nicknames
+   (#:settings #:coalton-impl/settings)
+   (#:global-lexical #:coalton-impl/global-lexical)
    (#:tc #:coalton-impl/typechecker))
   (:export
    #:compile-translation-unit))
@@ -49,7 +51,7 @@
            (append
             (loop :for (name . node) :in (tc:translation-unit-definitions translation-unit)
                   :for compiled-node := (compile-toplevel (tc:fresh-inst (tc:lookup-value-type env name)) node env)
-                  :do (when coalton-impl::*coalton-dump-ast*
+                  :do (when settings:*coalton-dump-ast*
                         (format t "~A :: ~A~%~A~%~%~%"
                                 name
                                 (tc:lookup-value-type env name)
@@ -114,7 +116,7 @@
            (type node-abstraction node)
            (type tc:environment env))
   (let ((type-decs
-           (when coalton-impl:*emit-type-annotations*
+           (when settings:*emit-type-annotations*
              (append
               (loop :for name :in (node-abstraction-vars node)
                     :for i :from 0
@@ -134,7 +136,7 @@
   (append
    ;; Predeclare symbol macros
    (loop :for (name . node) :in bindings
-         :collect `(coalton-impl:define-global-lexical ,name ':|@@unbound@@|))
+         :collect `(global-lexical:define-global-lexical ,name ':|@@unbound@@|))
 
    ;; Compile functions
    (loop :for (name . node) :in bindings
@@ -166,9 +168,9 @@
 
                 (type
                  (format nil "~A :: ~A" name type)))
-        :append (when (and docstring (not coalton-impl::*coalton-skip-update*))
+        :append (when (and docstring (not settings:*coalton-skip-update*))
                   (list `(setf (documentation ',name 'variable)
                                ,docstring)))
-        :append (when (and entry (node-abstraction-p node) (not coalton-impl::*coalton-skip-update*))
+        :append (when (and entry (node-abstraction-p node) (not settings:*coalton-skip-update*))
                   (list `(setf (documentation ',name 'function)
                                ,docstring))))))

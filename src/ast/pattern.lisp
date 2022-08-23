@@ -1,4 +1,33 @@
-(in-package #:coalton-impl/ast)
+(defpackage #:coalton-impl/ast/pattern
+  (:use
+   #:cl
+   #:coalton-impl/algorithm)
+  (:local-nicknames
+   (#:util #:coalton-impl/util))
+  (:export
+   #:pattern                            ; STRUCT
+   #:pattern-list                       ; TYPE
+   #:pattern-var                        ; STRUCT
+   #:make-pattern-var                   ; CONSTRUCTOR
+   #:pattern-var-id                     ; ACCESSOR
+   #:pattern-var-p                      ; FUNCTION
+   #:pattern-wildcard                   ; STRUCT
+   #:make-pattern-wildcard              ; CONSTRUCTOR
+   #:pattern-wildcard-p                 ; FUNCTION
+   #:pattern-literal                    ; STRUCT
+   #:make-pattern-literal               ; CONSTRUCTOR
+   #:pattern-literal-value              ; ACCESSOR
+   #:pattern-literal-p                  ; FUNCTION
+   #:pattern-constructor                ; STRUCT
+   #:make-pattern-constructor           ; CONSTRUCTOR
+   #:pattern-constructor-name           ; ACCESSOR
+   #:pattern-constructor-patterns       ; ACCESSOR
+   #:pattern-constructor-p              ; FUNCTION
+   #:rewrite-pattern-vars               ; FUNCTION
+   #:pattern-variables                  ; FUNCTION
+   ))
+
+(in-package #:coalton-impl/ast/pattern)
 
 ;;;
 ;;; Patterns
@@ -14,7 +43,7 @@
   '(satisfies pattern-list-p))
 
 (defstruct (pattern-var (:include pattern))
-  (id (required 'id) :type symbol :read-only t))
+  (id (util:required 'id) :type symbol :read-only t))
 
 (defmethod make-load-form ((self pattern-var) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -31,7 +60,7 @@
 (declaim (sb-ext:freeze-type pattern-wildcard))
 
 (defstruct (pattern-literal (:include pattern))
-  (value (required 'value) :type literal-value :read-only t))
+  (value (util:required 'value) :type util:literal-value :read-only t))
 
 (defmethod make-load-form ((self pattern-literal) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -40,8 +69,8 @@
 (declaim (sb-ext:freeze-type pattern-literal))
 
 (defstruct (pattern-constructor (:include pattern))
-  (name      (required 'name) :type symbol       :read-only t)
-  (patterns  (required 'type) :type pattern-list :read-only t))
+  (name      (util:required 'name) :type symbol       :read-only t)
+  (patterns  (util:required 'type) :type pattern-list :read-only t))
 
 (defmethod make-load-form ((self pattern-constructor) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -75,7 +104,7 @@
     (pattern-var
      (make-pattern-var
       :id (or (immutable-map-lookup m (pattern-var-id pattern))
-              (coalton-impl::coalton-bug "Invalid state reached in rewrite-pattern-vars"))))))
+              (util:coalton-bug "Invalid state reached in rewrite-pattern-vars"))))))
 
 
 (defun pattern-variables (pattern)

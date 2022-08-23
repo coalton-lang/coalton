@@ -5,12 +5,12 @@
 ;;;
 
 (defstruct instance-definition
-  (class-name          (required 'class-name)          :type symbol             :read-only t)
-  (predicate           (required 'predicate)           :type ty-predicate       :read-only t)
-  (context             (required 'context)             :type ty-predicate-list  :read-only t)
-  (methods             (required 'methods)             :type hash-table         :read-only t)
-  (codegen-sym         (required 'codegen-sym)         :type symbol             :read-only t)
-  (method-codegen-syms (required 'method-codegen-syms) :type hash-table         :read-only t))
+  (class-name          (util:required 'class-name)          :type symbol             :read-only t)
+  (predicate           (util:required 'predicate)           :type ty-predicate       :read-only t)
+  (context             (util:required 'context)             :type ty-predicate-list  :read-only t)
+  (methods             (util:required 'methods)             :type hash-table         :read-only t)
+  (codegen-sym         (util:required 'codegen-sym)         :type symbol             :read-only t)
+  (method-codegen-syms (util:required 'method-codegen-syms) :type hash-table         :read-only t))
 
 (defun instance-definition-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -77,7 +77,7 @@
 
 (defun check-for-orphan-instance (predicate package)
   ;; Instances defined on predeclared types violate the orphan rule
-  (unless coalton-impl::*coalton-stage-1-complete*
+  (unless coalton-impl/settings:*coalton-stage-1-complete*
     (return-from check-for-orphan-instance))
 
   (when (equalp (symbol-package (ty-predicate-class predicate)) package)
@@ -158,7 +158,7 @@
             ;; Parse and typecheck all method definitions
             (loop :for method :in methods
                   :do (multiple-value-bind (method-name parsed-method-form)
-                          (coalton-impl::parse-define-form method package env :skip-inherited-symbol-checks t)
+                          (parse-define-form method package env :skip-inherited-symbol-checks t)
 
                         (when (gethash method-name method-bindings)
                           (error-parsing method "duplicate method definition for method ~S" method-name))
@@ -199,7 +199,7 @@
 
                               ;; Predicates should never be here
                               (unless (null preds)
-                                (coalton-impl::coalton-bug "Instance definition predicates should be nil"))
+                                (util:coalton-bug "Instance definition predicates should be nil"))
 
                               ;; Unify the resulting typed node
                               ;; type's predicates with our above

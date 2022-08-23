@@ -3,6 +3,7 @@
    #:cl
    #:coalton-impl/util)
   (:local-nicknames
+   (#:util #:coalton-impl/util)
    (#:ast #:coalton-impl/ast)
    (#:tc #:coalton-impl/typechecker))
   (:export
@@ -37,7 +38,7 @@
         ((tc:type-entry-newtype type)
          (progn
            (unless (= 1 (length (ast:pattern-constructor-patterns pattern)))
-             (coalton-impl::coalton-bug "Unexpected number of fields in newtype pattern.~%    Expected: 1~%    Received: ~A~%"
+             (util:coalton-bug "Unexpected number of fields in newtype pattern.~%    Expected: 1~%    Received: ~A~%"
                                         (length (ast:pattern-constructor-patterns pattern))))
            (codegen-pattern (first (ast:pattern-constructor-patterns pattern)) env)))
 

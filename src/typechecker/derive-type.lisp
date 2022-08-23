@@ -85,7 +85,7 @@ Returns (VALUES type predicate-list typed-node subs)")
            (typed-rands nil))
 
       (when (null rands)
-        (coalton-impl::coalton-bug "Invalid application with 0 arguments ~A." rator))
+        (util:coalton-bug "Invalid application with 0 arguments ~A." rator))
 
       (multiple-value-bind (fun-ty fun-preds typed-rator substs returns)
           (derive-expression-type rator env substs)
@@ -508,7 +508,7 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
       (let* ((type-name (constructor-entry-constructs ctor-entry))
              (type-entry (lookup-type env type-name :no-error t)))
         (unless type-entry
-          (coalton-bug "Constructor ~S with entry ~S but no corresponding type-entry"
+          (util:coalton-bug "Constructor ~S with entry ~S but no corresponding type-entry"
                        ctor-name ctor-entry))
         (unless (type-recursively-constructable-p type-entry env)
           (error 'self-recursive-non-default-repr
@@ -845,7 +845,7 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
            (values typed-node ty-predicate-list substitution-list ty-list &optional))
   (let ((name (if name-map
                   (or (cdr (find name name-map :key #'car :test #'equalp))
-                      (coalton-impl::coalton-bug "Invalid state. Unable to find name in name map"))
+                      (util:coalton-bug "Invalid state. Unable to find name in name map"))
                   name)))
     (with-type-context ("definition of ~A" name)
       (multiple-value-bind (new-type preds typed-node new-subs returns)

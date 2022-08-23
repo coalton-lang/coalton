@@ -1,4 +1,10 @@
-(in-package #:coalton-impl/algorithm)
+(defpackage #:coalton-impl/algorithm/tarjan-scc
+  (:use #:cl)
+  (:export
+   #:tarjan-scc ; FUNCTION
+   ))
+
+(in-package #:coalton-impl/algorithm/tarjan-scc)
 
 (defstruct tarjan-node
   (index    nil :type (or null integer))

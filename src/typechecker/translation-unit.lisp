@@ -1,13 +1,13 @@
 (in-package #:coalton-impl/typechecker)
 
 (defstruct translation-unit
-  (types       nil                 :type type-definition-list     :read-only t)
-  (definitions nil                 :type typed-binding-list       :read-only t)
-  (instances   nil                 :type instance-definition-list :read-only t)
-  (classes     nil                 :type ty-class-list            :read-only t)
-  (attr-table  (make-hash-table)   :type hash-table               :read-only t)
-  (package     (required 'package) :type package                  :read-only t)
-  (specializations nil             :type specialization-entry-list :read-only t))
+  (types       nil                      :type type-definition-list     :read-only t)
+  (definitions nil                      :type typed-binding-list       :read-only t)
+  (instances   nil                      :type instance-definition-list :read-only t)
+  (classes     nil                      :type ty-class-list            :read-only t)
+  (attr-table  (make-hash-table)        :type hash-table               :read-only t)
+  (package     (util:required 'package) :type package                  :read-only t)
+  (specializations nil                  :type specialization-entry-list :read-only t))
 
 ;; FUNCTION ENV
 

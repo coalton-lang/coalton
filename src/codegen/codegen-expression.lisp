@@ -18,6 +18,7 @@
    #:coalton-impl/codegen/codegen-type-definition
    #:constructor-slot-name)
   (:local-nicknames
+   (#:settings #:coalton-impl/settings)
    (#:tc #:coalton-impl/typechecker)
    (#:ast #:coalton-impl/ast))
   (:export
@@ -72,7 +73,7 @@
              (aref *function-constructor-functions* arity))
 
            (type-decs
-             (when coalton-impl:*emit-type-annotations*
+             (when settings:*emit-type-annotations*
                (append
                 (loop :for name :in (node-abstraction-vars expr)
                       :for i :from 0
@@ -93,7 +94,7 @@
     (let* ((var-names (node-bare-abstraction-vars expr))
 
            (type-decs
-             (when coalton-impl:*emit-type-annotations*
+             (when settings:*emit-type-annotations*
                (append
                 (loop :for name :in (node-bare-abstraction-vars expr)
                       :for i :from 0
@@ -128,7 +129,7 @@
                     (node-lisp-vars expr))
                ,@(node-lisp-form expr))))
 
-      (if coalton-impl:*emit-type-annotations*
+      (if settings:*emit-type-annotations*
           `(the (values ,(lisp-type (node-type expr) env) &optional)
                 ,inner)
           inner)))
@@ -159,7 +160,7 @@
                   ,(codegen-expression (match-branch-body b) current-function env)))
               (node-match-branches expr))))
       `(trivia:match
-           ,(if coalton-impl:*emit-type-annotations*
+           ,(if settings:*emit-type-annotations*
              `(the ,(lisp-type (node-type (node-match-expr expr)) env) ,subexpr)
              subexpr)
          ,@branches

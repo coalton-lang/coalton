@@ -29,6 +29,7 @@
    #:update-function-env
    #:make-function-table)
   (:local-nicknames
+   (#:settings #:coalton-impl/settings)
    (#:tc #:coalton-impl/typechecker)
    (#:ast #:coalton-impl/ast))
   (:export
@@ -519,7 +520,7 @@
 
   ;; CLOS classes generated in development mode cannot be stack
   ;; allocated
-  (unless (coalton-impl:coalton-release-p)
+  (unless (settings:coalton-release-p)
     (return-from match-dynamic-extent-lift node))
 
   (labels ((apply-lift (node &rest rest)

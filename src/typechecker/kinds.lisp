@@ -17,8 +17,8 @@
 (alexandria:define-constant kstar (make-instance 'kstar) :test #'equalp)
 
 (defstruct (kfun (:include kind))
-  (from (required 'from) :type kind :read-only t)
-  (to   (required 'to)   :type kind :read-only t))
+  (from (util:required 'from) :type kind :read-only t)
+  (to   (util:required 'to)   :type kind :read-only t))
 
 (defmethod make-load-form ((self kfun) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -27,7 +27,7 @@
 (declaim (sb-ext:freeze-type kfun))
 
 (defstruct kyvar 
-  (id (required 'id) :type fixnum :read-only t))
+  (id (util:required 'id) :type fixnum :read-only t))
 
 (defmethod make-load-form ((self kyvar) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -43,7 +43,7 @@
   '(satisfies kyvar-list-p))
 
 (defstruct (kvar (:include kind))
-  (kyvar (required 'kyvar) :type kyvar :read-only t))
+  (kyvar (util:required 'kyvar) :type kyvar :read-only t))
 
 (defmethod make-load-form ((self kvar) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -65,8 +65,8 @@
     (incf *next-kvar-id*)))
 
 (defstruct ksubstitution 
-  (from (required 'from) :type kyvar :read-only t)
-  (to   (required 'to)   :type kind  :read-only t))
+  (from (util:required 'from) :type kyvar :read-only t)
+  (to   (util:required 'to)   :type kind  :read-only t))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type ksubstitution))

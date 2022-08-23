@@ -1,4 +1,16 @@
-(in-package #:coalton-impl/algorithm)
+(defpackage #:coalton-impl/algorithm/immutable-listmap
+  (:use #:cl)
+  (:export
+   #:immutable-listmap                  ; STRUCT
+   #:make-immutable-listmap             ; CONSTRUCTOR
+   #:immutable-listmap-data             ; ACCESSOR
+   #:immutable-listmap-lookup           ; FUNCTION
+   #:immutable-listmap-push             ; FUNCTION
+   #:immutable-listmap-replace          ; FUNCTION
+   #:immutable-listmap-diff             ; FUNCTION
+   ))
+
+(in-package #:coalton-impl/algorithm/immutable-listmap)
 
 ;;
 ;; Immutable Listmap

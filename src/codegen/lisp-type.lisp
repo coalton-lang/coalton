@@ -6,7 +6,8 @@
    #:coalton-impl/codegen/function-entry
    #:function-entry)
   (:local-nicknames
-   (#:tc #:coalton-impl/typechecker)))
+   (#:tc #:coalton-impl/typechecker)
+   (#:util #:coalton-impl/util)))
 
 (in-package #:coalton-impl/codegen/lisp-type)
 
@@ -55,7 +56,7 @@
 
   (:method ((ty tc:ty) env)
     (declare (ignore env))
-    (coalton-impl::coalton-bug "Unable to produce lisp type for ~A" ty))
+    (util:coalton-bug "Unable to produce lisp type for ~A" ty))
 
   ;; Allow for calling with other types
   (:method ((ty tc:ty-scheme) env)
