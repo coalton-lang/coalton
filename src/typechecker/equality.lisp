@@ -11,7 +11,7 @@
     (labels ((%type= (type1 type2)
       (cond
         ;; Type variables
-        ((and (tvar-p type1)  (tvar-p type2))
+        ((and (tyvar-p type1)  (tyvar-p type2))
          (let* ((pair1 (find type1 var-table :key #'car :test #'equalp))
                 (pair2 (find type2 var-table :key #'car :test #'equalp)))
            (cond
@@ -27,7 +27,7 @@
 
 
         ;; Type constants
-        ((and (tcon-p type1) (tcon-p type2)) (equalp type1 type2))
+        ((and (tycon-p type1) (tycon-p type2)) (equalp type1 type2))
 
         ;; Type application
         ((and (tapp-p type1) (tapp-p type2))
@@ -48,7 +48,7 @@
 
     ;; Create a substitution list from the variables
     (let ((subs-list (mapcar (lambda (s)
-                               (make-substitution :from (tvar-tyvar (car s)) :to (cdr s)))
+                               (make-substitution :from (car s) :to (cdr s)))
                              var-table)))
 
       ;; Now check that all constraints in type1 exist in type2, mapping type variables

@@ -17,14 +17,14 @@
 (defgeneric lisp-type (ty env)
   (:documentation "Returns the corresponding lisp type for the type of the given node")
 
-  (:method ((ty tc:tvar) env)
+  (:method ((ty tc:tyvar) env)
     (declare (ignore env))
     ;; Since lisp does not have the notion of type variables, emit a top type
     't)
 
-  (:method ((ty tc:tcon) env)
+  (:method ((ty tc:tycon) env)
     (let*
-        ((tcon-name (tc:tycon-name (tc:tcon-tycon ty)))
+        ((tcon-name (tc:tycon-name ty))
          (type-entry (tc:lookup-type env tcon-name :no-error t)))
 
       (cond

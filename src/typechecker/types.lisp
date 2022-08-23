@@ -20,7 +20,7 @@
 (deftype ty-binding-list ()
   `(satisfies ty-binding-list-p))
 
-(defstruct tyvar 
+(defstruct (tyvar (:include ty)) 
   (id   (required 'id)   :type fixnum :read-only t)
   (kind (required 'kind) :type kind   :read-only t))
 
@@ -37,23 +37,7 @@
 (deftype tyvar-list ()
   '(satisfies tyvar-list-p))
 
-(defstruct (tvar (:include ty))
-  (tyvar (required 'tyvar) :type tyvar :read-only t))
-
-(defmethod make-load-form ((self tvar) &optional env)
-  (make-load-form-saving-slots self :environment env))
-
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type tvar))
-
-(defun tvar-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'tvar-p x)))
-
-(deftype tvar-list ()
-  '(satisfies tvar-list-p))
-
-(defstruct tycon
+(defstruct (tycon (:include ty))
   (name (required 'name) :type symbol :read-only t)
   (kind (required 'kind) :type kind   :read-only t))
 
@@ -62,15 +46,6 @@
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type tycon))
-
-(defstruct (tcon (:include ty))
-  (tycon (required 'tycon) :type tycon :read-only t))
-
-(defmethod make-load-form ((self tcon) &optional env)
-  (make-load-form-saving-slots self :environment env))
-
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type tcon))
 
 (defstruct (tapp (:include ty))
   (from (required 'from) :type ty :read-only t)
@@ -102,7 +77,7 @@
 
 (declaim (inline make-variable))
 (defun make-variable (&optional (kind kstar))
-  (prog1 (make-tvar :tyvar (make-tyvar :id *next-variable-id* :kind kind))
+  (prog1 (make-tyvar :id *next-variable-id* :kind kind)
     (incf *next-variable-id*)))
 
 ;;;
@@ -127,10 +102,6 @@
     (tyvar-kind type))
   (:method ((type tycon))
     (tycon-kind type))
-  (:method ((type tcon))
-    (kind-of (tcon-tycon type)))
-  (:method ((type tvar))
-    (kind-of (tvar-tyvar type)))
   (:method ((type tapp))
     (let ((from-kind (kind-of (tapp-from type))))
       (if (kfun-p from-kind)
@@ -147,12 +118,6 @@
    :name (tycon-name type)
    :kind (apply-ksubstitution subs (tycon-kind type))))
 
-(defmethod apply-ksubstitution (subs (type tcon))
-  (make-tcon :tycon (apply-ksubstitution subs (tcon-tycon type))))
-
-(defmethod apply-ksubstitution (subs (type tvar))
-  (make-tvar :tyvar (apply-ksubstitution subs (tvar-tyvar type))))
-
 (defmethod apply-ksubstitution (subs (type tapp))
   (make-tapp
    :from (apply-ksubstitution subs (tapp-from type))
@@ -161,14 +126,8 @@
 (defmethod kind-variables ((type tyvar))
   (kind-variables (kind-of type)))
 
-(defmethod kind-variables ((type tvar))
-  (kind-variables (tvar-tyvar type)))
-
 (defmethod kind-variables ((type tycon))
   (kind-variables (kind-of type)))
-
-(defmethod kind-variables ((type tcon))
-  (kind-variables (tcon-tycon type)))
 
 (defmethod kind-variables ((type tapp))
   (append
@@ -180,11 +139,11 @@
   (remove-duplicates (type-constructors-g type)))
 
 (defgeneric type-constructors-g (type)
-  (:method ((type tvar))
+  (:method ((type tyvar))
     nil)
 
-  (:method ((type tcon))
-    (list (tycon-name (tcon-tycon type))))
+  (:method ((type tycon))
+    (list (tycon-name type)))
 
   (:method ((type tapp))
     (append
@@ -198,29 +157,29 @@
 ;;; Early types
 ;;;
 
-(defvar *boolean-type*      (make-tcon :tycon (make-tycon :name 'coalton:Boolean     :kind kstar)))
-(defvar *char-type*         (make-tcon :tycon (make-tycon :name 'coalton:Char        :kind kstar)))
-(defvar *u8-type*           (make-tcon :tycon (make-tycon :name 'coalton:U8          :kind kstar)))
-(defvar *u16-type*          (make-tcon :tycon (make-tycon :name 'coalton:U16         :kind kstar)))
-(defvar *u32-type*          (make-tcon :tycon (make-tycon :name 'coalton:U32         :kind kstar)))
-(defvar *u64-type*          (make-tcon :tycon (make-tycon :name 'coalton:U64         :kind kstar)))
-(defvar *i8-type*           (make-tcon :tycon (make-tycon :name 'coalton:I8          :kind kstar)))
-(defvar *i16-type*          (make-tcon :tycon (make-tycon :name 'coalton:I16         :kind kstar)))
-(defvar *i32-type*          (make-tcon :tycon (make-tycon :name 'coalton:I32         :kind kstar)))
-(defvar *i64-type*          (make-tcon :tycon (make-tycon :name 'coalton:I64         :kind kstar)))
-(defvar *integer-type*      (make-tcon :tycon (make-tycon :name 'coalton:Integer     :kind kstar)))
-(defvar *ifix-type*         (make-tcon :tycon (make-tycon :name 'coalton:IFix        :kind kstar)))
-(defvar *ufix-type*         (make-tcon :tycon (make-tycon :name 'coalton:UFix        :kind kstar)))
-(defvar *single-float-type* (make-tcon :tycon (make-tycon :name 'coalton:Single-Float :kind kstar)))
-(defvar *double-float-type* (make-tcon :tycon (make-tycon :name 'coalton:Double-Float :kind kstar)))
-(defvar *string-type*       (make-tcon :tycon (make-tycon :name 'coalton:String      :kind kstar)))
-(defvar *fraction-type*     (make-tcon :tycon (make-tycon :name 'coalton:Fraction :kind kstar)))
-(defvar *arrow-type*        (make-tcon :tycon (make-tycon :name 'coalton:-> :kind (make-kfun :from kstar :to (make-kfun :from kstar :to kstar)))))
-(defvar *list-type*         (make-tcon :tycon (make-tycon :name 'coalton:List :kind (make-kfun :from kstar :to kstar))))
+(defvar *boolean-type*      (make-tycon :name 'coalton:Boolean     :kind kstar))
+(defvar *char-type*         (make-tycon :name 'coalton:Char        :kind kstar))
+(defvar *u8-type*           (make-tycon :name 'coalton:U8          :kind kstar))
+(defvar *u16-type*          (make-tycon :name 'coalton:U16         :kind kstar))
+(defvar *u32-type*          (make-tycon :name 'coalton:U32         :kind kstar))
+(defvar *u64-type*          (make-tycon :name 'coalton:U64         :kind kstar))
+(defvar *i8-type*           (make-tycon :name 'coalton:I8          :kind kstar))
+(defvar *i16-type*          (make-tycon :name 'coalton:I16         :kind kstar))
+(defvar *i32-type*          (make-tycon :name 'coalton:I32         :kind kstar))
+(defvar *i64-type*          (make-tycon :name 'coalton:I64         :kind kstar))
+(defvar *integer-type*      (make-tycon :name 'coalton:Integer     :kind kstar))
+(defvar *ifix-type*         (make-tycon :name 'coalton:IFix        :kind kstar))
+(defvar *ufix-type*         (make-tycon :name 'coalton:UFix        :kind kstar))
+(defvar *single-float-type* (make-tycon :name 'coalton:Single-Float :kind kstar))
+(defvar *double-float-type* (make-tycon :name 'coalton:Double-Float :kind kstar))
+(defvar *string-type*       (make-tycon :name 'coalton:String      :kind kstar))
+(defvar *fraction-type*     (make-tycon :name 'coalton:Fraction :kind kstar))
+(defvar *arrow-type*        (make-tycon :name 'coalton:-> :kind (make-kfun :from kstar :to (make-kfun :from kstar :to kstar))))
+(defvar *list-type*         (make-tycon :name 'coalton:List :kind (make-kfun :from kstar :to kstar)))
 
 
 (defun apply-type-argument (tcon arg &key ksubs)
-  (declare (type (or tcon tapp tvar) tcon)
+  (declare (type (or tycon tapp tyvar) tcon)
            (type ty arg)
            (values tapp ksubstitution-list))
   (handler-case
@@ -316,15 +275,15 @@ This requires a valid PPRINT-VARIABLE-CONTEXT")
            (ignore at-sign-p)
            (values ty))
   (etypecase ty
-    (tvar
+    (tyvar
      (if *coalton-pretty-print-tyvars*
          ;; Print the tvar using the current printing context. Requires use of PPRINT-VARIABLE-CONTEXT
          (pprint-ty stream (pprint-tvar ty))
          (progn
            (write-string "#T" stream)
-           (write (tyvar-id (tvar-tyvar ty)) :stream stream))))
-    (tcon
-     (write (tycon-name (tcon-tycon ty)) :stream stream))
+           (write (tyvar-id ty) :stream stream))))
+    (tycon
+     (write (tycon-name ty) :stream stream))
     (tapp
      (cond
        ((function-type-p ty) ;; Print function types
@@ -353,10 +312,10 @@ This requires a valid PPRINT-VARIABLE-CONTEXT")
                                 :collect (tapp-to tcon)
                                 :do (setf tcon (tapp-from tcon)))))
           (cond
-            ((and (tcon-p tcon)
-                  (simple-kind-p (tycon-kind (tcon-tycon tcon)))
+            ((and (tycon-p tcon)
+                  (simple-kind-p (tycon-kind tcon))
                   (<= (length tcon-args)
-                      (kind-arity (tycon-kind (tcon-tycon tcon)))))
+                      (kind-arity (tycon-kind tcon))))
              (write-string "(" stream)
              (pprint-ty stream tcon)
              (dolist (arg (reverse tcon-args))

@@ -89,7 +89,7 @@ Returns (VALUES type predicate-list typed-node subs)")
 
       (multiple-value-bind (fun-ty fun-preds typed-rator substs returns)
           (derive-expression-type rator env substs)
-        (unless (or (tvar-p fun-ty)
+        (unless (or (tyvar-p fun-ty)
                     (function-type-p fun-ty))
           (error 'invalid-operator-type-error :type fun-ty))
         (let ((arg-preds nil))
@@ -563,7 +563,7 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
 (defun derive-binding-type-seq (names tvars exprs env subs name-map
                                 &key (allow-deferred-predicates t)
                                   (allow-returns t))
-  (declare (type tvar-list tvars)
+  (declare (type tyvar-list tvars)
            (type node-list exprs)
            (type environment env)
            (type substitution-list subs)

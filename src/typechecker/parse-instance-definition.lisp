@@ -99,7 +99,7 @@
   (declare (ty ty)
            (values symbol &optional))
   (etypecase ty
-    (tcon (tycon-name (tcon-tycon ty)))
+    (tycon (tycon-name ty))
     (tapp (ty-underlying-type-name (tapp-from ty)))))
 
 (defun ty-find-type-entry (env ty)
