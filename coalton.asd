@@ -149,6 +149,8 @@
                (:file "hashtable")
                (:file "monad/state")
                (:file "iterator")
+               (:file "ord-tree")
+               (:file "ord-map")
                (:file "system")
                (:file "prelude")))
 
@@ -284,4 +286,5 @@
                (:file "string-tests")
                (:file "recursive-let-tests")
                (:file "class-tests")
-               (:file "list-tests")))
+               (:file "list-tests")
+               (:file "red-black-tests")))
