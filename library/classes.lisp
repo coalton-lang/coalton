@@ -238,14 +238,14 @@ specify `repr :lisp`."
     (alt ((:f :a) -> (:f :a) -> (:f :a)))
     (empty (:f :a)))
 
-  (define-class (Foldable :t)
+  (define-class (Foldable :container)
     "Types which can be folded into a single element.
 
 `fold` is a left tail recursive fold
 
 `foldr` is a right non tail recursive fold"
-    (fold ((:b -> :a -> :b) -> :b -> :t :a -> :b))
-    (foldr ((:a -> :b -> :b) -> :b -> :t :a -> :b)))
+    (fold ((:accum -> :elt -> :accum) -> :accum -> :container :elt -> :accum))
+    (foldr ((:elt -> :accum -> :accum) -> :accum -> :container :elt -> :accum)))
 
   (declare mconcat ((Foldable :f) (Monoid :a) => (:f :a) -> :a))
   (define  mconcat (fold <> mempty))

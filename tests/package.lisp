@@ -36,7 +36,10 @@
    (#:slice #:coalton-library/slice)
    (#:hashtable #:coalton-library/hashtable)
    (#:iter #:coalton-library/iterator)
-   (#:list #:coalton-library/list)))
+   (#:list #:coalton-library/list)
+   (#:red-black/tree #:coalton-library/ord-tree)
+   (#:red-black/map #:coalton-library/ord-map)
+   (#:result #:coalton-library/result)))
 
 (in-package #:coalton-native-tests)
 

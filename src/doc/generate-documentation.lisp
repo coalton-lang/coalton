@@ -108,7 +108,9 @@
                coalton-library/slice
                coalton-library/hashtable
                coalton-library/monad/state
-               coalton-library/iterator)
+               coalton-library/iterator
+               coalton-library/ord-tree
+               coalton-library/ord-map)
    :asdf-system :coalton/library
    :file-link-prefix "https://github.com/coalton-lang/coalton/tree/main/library/"))
 

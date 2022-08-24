@@ -167,6 +167,13 @@
                              (iter:list-iter (make-list 2 4 6))))
           (the (List Integer) (make-list 1 2 3 4 5 6 7 8 9 10)))))
 
+(define-test elementwise-match-/= ()
+  (is (not (iter:elementwise==! (iter:list-iter (make-list 0 1 2))
+                                (iter:list-iter (make-list 0 1)))))
+  (is (not (iter:elementwise-match! <
+                                    (iter:list-iter (make-list 0 1 2))
+                                    (iter:list-iter (make-list 0 1))))))
+
 ;;; FIXME: define more tests
 ;; - vector-iter
 ;; - recursive-iter

@@ -64,6 +64,9 @@
    #:min!
    #:every!
    #:any!
+   #:elementwise-match!
+   #:elementwise==!
+   #:elementwise-hash!
    #:collect-list!
    #:collect-vector-size-hint!
    #:collect-vector!
@@ -438,6 +441,38 @@ Returns `True` if ITER is empty."
 
 Returns `False` if ITER is empty."
     (isSome (find! good? iter)))
+
+  (declare elementwise-match! ((:elt -> :elt -> Boolean) -> (Iterator :elt) -> (Iterator :elt) -> Boolean))
+  (define (elementwise-match! same? left right)
+    "Are LEFT and RIGHT elementwise-identical under SAME?
+
+True if, for every pair of elements (A B) in (LEFT RIGHT), (same? A B) is True, and LEFT and RIGHT have the
+same length."
+    (match (Tuple (next! left) (next! right))
+      ((Tuple (None) (None)) True)
+      ((Tuple (Some l) (Some r)) (and (same? l r)
+                                      (elementwise-match! same? left right)))
+      (_ False)))
+
+  (declare elementwise==! ((Eq :elt) => ((Iterator :elt) -> (Iterator :elt) -> Boolean)))
+  (define elementwise==!
+    "Is every element of the first iterator `==' to the corresponding element of the second?
+
+True if two iterators have the same length, and for every N, the Nth element of the first iterator is `==' to
+the Nth element of the second iterator."
+    (elementwise-match! ==))
+
+  (declare elementwise-hash! ((Hash :elt) => ((Iterator :elt) -> UFix)))
+  (define (elementwise-hash! iter)
+    "Hash an iterator by combining the hashes of all its elements.
+
+The empty iterator will hash as 0."
+    (match (next! iter)
+      ((Some first) (fold! (fn (current new)
+                             (combine-hashes current (hash new)))
+                           (hash first)
+                           iter))
+        ((None) 0)))
 
 ;;; collecting
   ;; as with `IntoIterator`, these will one day be abstracted into a class `(FromIterator :collection :item)'.
