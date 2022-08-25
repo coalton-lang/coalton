@@ -56,6 +56,11 @@
   ;; to their origional names
   (name-map (required 'name-map) :type list                :read-only t))
 
+(defun typed-node-abstraction-source-parameter-names (node)
+  (declare (type typed-node-abstraction node)
+           (values symbol-list &optional))
+  (mapcar #'cdr (typed-node-abstraction-name-map node)))
+
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type typed-node-abstraction))
 

@@ -227,6 +227,7 @@
    #:typed-node-abstraction-vars          ; ACCESSOR
    #:typed-node-abstraction-subexpr       ; ACCESSOR
    #:typed-node-abstraction-name-map      ; ACCESSOR
+   #:typed-node-abstraction-source-parameter-names ; FUNCTION
    #:typed-node-bound-abstraction         ; STRUCT
    #:typed-node-bound-abstraction-vars    ; ACCESSOR
    #:typed-node-bound-abstraction-subexpr ; ACCESSSOR
@@ -280,6 +281,9 @@
    #:lookup-name                        ; FUNCTION
    #:lookup-method-inline               ; FUNCTION
    #:lookup-code                        ; FUNCTION
+   #:lookup-function-source-parameter-names ; FUNCTION
+   #:set-function-source-parameter-names ; FUNCTION
+   #:unset-function-source-parameter-names ; FUNCTION
    #:add-specialization                 ; FUNCTION
    #:lookup-specialization              ; FUNCTION
    #:lookup-specialization-by-type      ; FUNCTION

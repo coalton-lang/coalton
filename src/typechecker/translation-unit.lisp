@@ -35,7 +35,12 @@
         :collect `(set-code env ',name ,(lookup-code env name))
         :collect (if function-entry
                      `(set-function env ',name ,function-entry)
-                     `(unset-function env ',name))))
+                     `(unset-function env ',name))
+        :collect (if (typed-node-abstraction-p def)
+                     `(set-function-source-parameter-names env
+                                                           ',name
+                                                           ',(typed-node-abstraction-source-parameter-names def))
+                     `(unset-function-source-parameter-names env ',name))))
 
 (defun generate-instance-diff (instances env)
   (declare (type instance-definition-list instances))

@@ -448,6 +448,14 @@
 (defstruct (specialization-environment (:include immutable-listmap)))
 
 ;;;
+;;; Source name environment
+;;;
+;; maps the names of user-defined functions to a list of their user-supplied parameter names, for
+;; documentation generation.
+
+(defstruct (source-name-environment (:include immutable-map)))
+
+;;;
 ;;; Environment
 ;;;
 
@@ -461,7 +469,8 @@
   (name-environment           (required 'name-environment)           :type name-environment           :read-only t)
   (method-inline-environment  (required 'method-inline-environment)  :type method-inline-environment  :read-only t)
   (code-environment           (required 'code-environment)           :type code-environment           :read-only t)
-  (specialization-environment (required 'specialization-environment) :type specialization-environment :read-only t))
+  (specialization-environment (required 'specialization-environment) :type specialization-environment :read-only t)
+  (source-name-environment    (required 'source-name-environment)    :type source-name-environment    :read-only t))
 
 (defmethod print-object ((env environment) stream)
   (declare (type stream stream)
@@ -487,7 +496,8 @@
    :name-environment (make-name-environment)
    :method-inline-environment (make-method-inline-environment)
    :code-environment (make-code-environment)
-   :specialization-environment (make-specialization-environment)))
+   :specialization-environment (make-specialization-environment)
+   :source-name-environment (make-source-name-environment)))
 
 (defun update-environment (env
                            &key
@@ -500,7 +510,8 @@
                              (name-environment (environment-name-environment env))
                              (method-inline-environment (environment-method-inline-environment env))
                              (code-environment (environment-code-environment env))
-                             (specialization-environment (environment-specialization-environment env)))
+                             (specialization-environment (environment-specialization-environment env))
+                             (source-name-environment (environment-source-name-environment env)))
   (declare (type environment env)
            (type value-environment value-environment)
            (type constructor-environment constructor-environment)
@@ -511,6 +522,7 @@
            (type method-inline-environment method-inline-environment)
            (type code-environment code-environment)
            (type specialization-environment specialization-environment)
+           (type source-name-environment source-name-environment)
            (values environment))
   (make-environment
    :value-environment value-environment
@@ -522,7 +534,8 @@
    :name-environment name-environment
    :method-inline-environment method-inline-environment
    :code-environment code-environment
-   :specialization-environment specialization-environment))
+   :specialization-environment specialization-environment
+   :source-name-environment source-name-environment))
 
 ;;;
 ;;; Methods
@@ -721,6 +734,34 @@
   (or (immutable-map-lookup (instance-environment-codegen-syms (environment-instance-environment env)) codegen-sym)
    (unless no-error
      (error "Unknown instance with codegen-sym ~A" codegen-sym))))
+
+(defun lookup-function-source-parameter-names (env function-name)
+  (declare (type environment env)
+           (type symbol function-name)
+           (values symbol-list &optional))
+  (immutable-map-lookup (environment-source-name-environment env) function-name))
+
+(defun set-function-source-parameter-names (env function-name source-parameter-names)
+  (declare (type environment env)
+           (type symbol function-name)
+           (type symbol-list source-parameter-names)
+           (values environment &optional))
+  (update-environment
+   env
+   :source-name-environment (immutable-map-set (environment-source-name-environment env)
+                                               function-name
+                                               source-parameter-names
+                                               #'make-source-name-environment)))
+
+(defun unset-function-source-parameter-names (env function-name)
+  (declare (type environment env)
+           (type symbol function-name)
+           (values environment &optional))
+  (update-environment
+   env
+   :source-name-environment (immutable-map-remove (environment-source-name-environment env)
+                                                  function-name
+                                                  #'make-source-name-environment)))
 
 
 (defun push-value-environment (env value-types)
