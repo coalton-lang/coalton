@@ -160,7 +160,7 @@
     (with-pprint-variable-context ()
       (format stream "<code>~A</code>~%~%"
               (to-markdown
-               (ty-class-instance
+               (make-ty-class-instance
                 :constraints context
                 :predicate predicate
                 :codegen-sym nil
@@ -215,13 +215,13 @@
   ;; Type printing (modification of pprint-type)
   ;;
 
-  (:method ((ty coalton-impl/typechecker::tvar))
+  (:method ((ty coalton-impl/typechecker::tyvar))
     (html-entities:encode-entities
      (with-output-to-string (stream)
        (coalton-impl/typechecker::pprint-ty stream (coalton-impl/typechecker::pprint-tvar ty)))))
 
-  (:method ((ty coalton-impl/typechecker::tcon))
-    (let ((tcon-name (coalton-impl/typechecker::tycon-name (coalton-impl/typechecker::tcon-tycon ty))))
+  (:method ((ty coalton-impl/typechecker::tycon))
+    (let ((tcon-name (coalton-impl/typechecker::tycon-name ty)))
       (if (string= "KEYWORD" (package-name (symbol-package tcon-name)))
           (html-entities:encode-entities (format nil "~S" tcon-name))
           (format nil "<a href=\"#~(~A-type~)\">~:*~A</a>" (html-entities:encode-entities (symbol-name tcon-name))))))
@@ -261,12 +261,12 @@
                                  :collect (coalton-impl/typechecker::tapp-to tcon)
                                  :do (setf tcon (coalton-impl/typechecker::tapp-from tcon)))))
            (cond
-             ((and (coalton-impl/typechecker::tcon-p tcon)
+             ((and (coalton-impl/typechecker::tycon-p tcon)
                    (coalton-impl/typechecker::simple-kind-p
-                    (coalton-impl/typechecker::tycon-kind (coalton-impl/typechecker::tcon-tycon tcon)))
+                    (coalton-impl/typechecker::tycon-kind tcon))
                    (<= (length tcon-args)
                        (coalton-impl/typechecker::kind-arity
-                        (coalton-impl/typechecker::tycon-kind (coalton-impl/typechecker::tcon-tycon tcon)))))
+                        (coalton-impl/typechecker::tycon-kind tcon))))
               (write-string "(" stream)
               (write-string (to-markdown tcon) stream)
               (dolist (arg (reverse tcon-args))
