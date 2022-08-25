@@ -508,7 +508,7 @@ It does however work with standard let expressions:
       (id "hello"))))
 ```
 
-Function defintions create an implicit `progn` block
+Function definitions create an implicit `progn` block
 
 ```lisp
 (coalton-toplevel
@@ -660,7 +660,7 @@ Inline type annotations can be added to resolve ambiguities when using typeclass
 
 Coalton does not have nullary functions. However, a function with the type signature `Unit -> *` can be called in Coalton without explicitly passing `Unit`. For instance, the Coalton form `(make-vector)` is a shorthand for `(make-vector Unit)`.
 
-Functions can also be defined with an implicit paramater using `(fn () 5)`. This creates a function with a single implicit paramater of type `Unit`.
+Functions can also be defined with an implicit parameter using `(fn () 5)`. This creates a function with a single implicit parameter of type `Unit`.
 
 ## Inspecting the Coalton System
 
@@ -716,7 +716,7 @@ int specialized call
 2
 ```
 
-Specialization can only apply when the argument types at a callsite are known. Because specialization is not guarenteed, specialized functions must have the same behavior as their unspecilized variants. Specialization should only be used for performance. See the following example:
+Specialization can only apply when the argument types at a callsite are known. Because specialization is not guaranteed, specialized functions must have the same behavior as their unspecilized variants. Specialization should only be used for performance. See the following example:
 
 ```
 (coalton-toplevel
