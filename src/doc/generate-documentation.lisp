@@ -46,6 +46,10 @@
 (deftype documentation-value-entry-list ()
   '(satisfies documentation-value-entry-list-p))
 
+(defstruct (documentation-function-entry
+            (:include documentation-value-entry))
+  (param-names (required 'param-names) :type list :read-only t))
+
 (defstruct documentation-file-entry
   (filename      (required 'filename)      :type t                              :read-only t)
   (package       (required 'package)       :type symbol                         :read-only t)
@@ -246,6 +250,22 @@
     file-entries))
 
 
+(defun name-entry->documentation-value-entry (env name name-entry)
+  (let ((documentation (coalton-impl/typechecker::name-entry-docstring name-entry))
+        (location (coalton-impl/typechecker::name-entry-location name-entry))
+        (type (lookup-value-type env name)))
+    (alexandria:if-let ((source-param-names
+                         (coalton-impl/typechecker:lookup-function-source-parameter-names env name)))
+      (make-documentation-function-entry :name name
+                                         :type type
+                                         :documentation documentation
+                                         :location location
+                                         :param-names source-param-names)
+      (make-documentation-value-entry :name name
+                                      :type type
+                                      :documentation documentation
+                                      :location location))))
+
 
 (defun get-doc-value-info (env package)
   (declare (type environment env)
@@ -265,11 +285,8 @@
 
     (mapcar
      (lambda (e)
-       (make-documentation-value-entry
-        :name (car e)
-        :type (lookup-value-type env (car e))
-        :documentation (coalton-impl/typechecker::name-entry-docstring (cdr e))
-        :location (coalton-impl/typechecker::name-entry-location (cdr e))))
+       (destructuring-bind (name . name-entry) e
+         (name-entry->documentation-value-entry env name name-entry)))
      (remove-if
       (lambda (x)
         (coalton-impl/typechecker::lookup-constructor env (car x) :no-error t))

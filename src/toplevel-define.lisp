@@ -167,11 +167,16 @@ Returns new environment, binding list of declared nodes, and a DAG of dependenci
           (progn
             (setf env
                   (set-name env name
-                            (make-name-entry
-                             :name name
-                             :type :value
-                             :docstring (second (find name docstrings :key #'car))
-                             :location (or *compile-file-pathname* *load-truename*))))))
+                            (make-name-entry :name name
+                                             :type :value
+                                             :docstring (second (find name docstrings :key #'car))
+                                             :location (or *compile-file-pathname* *load-truename*))))
+            (when (typed-node-abstraction-p node)
+              ;; for functions, stash the original parameter names so documentation generation can get at them
+              (setf env
+                    (set-function-source-parameter-names env
+                                                         name
+                                                         (typed-node-abstraction-source-parameter-names node))))))
 
         (values
          env

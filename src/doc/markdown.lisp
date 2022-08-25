@@ -186,6 +186,24 @@
           (format stream "- <code>~A</code>~%" (to-markdown instance))))
       (format stream "~%</details>~%~%"))))
 
+(defmethod write-documentation ((backend (eql ':markdown)) stream (object documentation-function-entry))
+  (with-slots (name type documentation location param-names)
+      object
+    (let ((encoded-name (html-entities:encode-entities (symbol-name name))))
+      (format stream "#### <code>(~A~{ ~A~})/code> <sup><sub>FUNCTION</sub></sup><a name=\"~(~A-value~)\"></a>~%"
+              encoded-name
+              param-names
+              encoded-name)
+
+      (with-pprint-variable-context ()
+        (format stream "<code>~A</code>~%" (to-markdown type)))
+
+      (when documentation
+        (format stream "~%~A~%~%"
+                (html-entities:encode-entities
+                 documentation
+                 :regex "[<>&]"))))))
+
 (defmethod write-documentation ((backend (eql ':markdown)) stream (object documentation-value-entry))
   (with-slots (name type documentation location)
       object
