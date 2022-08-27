@@ -190,7 +190,7 @@
   (with-slots (name type documentation location param-names)
       object
     (let ((encoded-name (html-entities:encode-entities (symbol-name name))))
-      (format stream "#### <code>(~A~{ ~A~})/code> <sup><sub>FUNCTION</sub></sup><a name=\"~(~A-value~)\"></a>~%"
+      (format stream "#### <code>(~A~{ ~A~})</code> <sup><sub>FUNCTION</sub></sup><a name=\"~(~A-value~)\"></a>~%"
               encoded-name
               param-names
               encoded-name)
