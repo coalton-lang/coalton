@@ -46,9 +46,12 @@
   ;;
 
   (define-class (Num :a  => Reciprocable :a)
-    "Any number with a multplicative inverse (reciprocal) where:
+    "Any number with a multiplicative inverse (reciprocal) where:
+
+
     1 = (* (reciprocal x) x) = (* x (reciprocal x))
     (/ x y) = (* x (reciprocal y))
+
 
 If no reciprocal exists for an element, produce a run-time error (e.g. zero).
 "
@@ -128,18 +131,19 @@ The function general/ is partial, and will error produce a run-time error if the
 
   (declare negate (Num :a => :a -> :a))
   (define (negate x)
+    "The negation, or additive inverse, of `x`."
     (- 0 x))
 
   (declare abs ((Ord :a) (Num :a) => :a -> :a))
   (define (abs x)
-    "Absolute value of X."
+    "Absolute value of `x`."
     (if (< x 0)
         (negate x)
         x))
 
   (declare sign ((Ord :a) (Num :a) (Num :b) => :a -> :b))
   (define (sign x)
-    "The sign of X."
+    "The sign of `x`, where `(sign 0) = 1`."
     (if (< x 0)
         -1
         1))
@@ -151,30 +155,37 @@ The function general/ is partial, and will error produce a run-time error if the
 
   (declare 1+ ((Num :num) => :num -> :num))
   (define (1+ num)
+    "Increment `num`."
     (+ num 1))
 
   (declare 1- ((Num :num) => :num -> :num))
   (define (1- num)
+    "Decrement `num`."
     (- num 1))
 
   (declare positive? ((Num :a) (Ord :a) => :a -> Boolean))
   (define (positive? x)
+    "Is `x` positive?"
     (> x 0))
 
   (declare negative? ((Num :a) (Ord :a) => :a -> Boolean))
   (define (negative? x)
+    "Is `x` negative?"
     (< x 0))
 
   (declare nonpositive? ((Num :a) (Ord :a) => :a -> Boolean))
   (define (nonpositive? x)
+    "Is `x` not positive?"
     (<= x 0))
 
   (declare nonnegative? ((Num :a) (Ord :a) => :a -> Boolean))
   (define (nonnegative? x)
+    "Is `x` not negative?"
     (>= x 0))
 
   (declare nonzero? (Num :a => :a -> Boolean))
   (define (nonzero? x)
+    "Is `x` not zero?"
     (/= x 0)))
 
 #+sb-package-locks

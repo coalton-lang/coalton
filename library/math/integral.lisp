@@ -42,8 +42,12 @@
 (coalton-toplevel
   (define-class (Num :a => Remainder :a)
     "Remainder is typically an integral domain satisfying:
-    a = (+ (* b (quot a b)) (rem a b))
-    a = (+ (* b (div a b)) (mod a b))"
+
+```
+a = (+ (* b (quot a b)) (rem a b))
+a = (+ (* b (div a b)) (mod a b))
+```
+"
     (quot (:a -> :a -> :a))
     (rem (:a -> :a -> :a))
     (quotRem (:a -> :a -> (Tuple :a :a)))
@@ -52,7 +56,7 @@
     (divMod (:a -> :a -> (Tuple :a :a))))
 
   (define-class ((Remainder :int) (Ord :int) => (Integral :int))
-    "Integral is a number that is either even or odd where `div' and `quot'
+    "Integral is a number that is either even or odd where `div` and `quot`
 are floored and truncated division, respectively."
     (toInteger (:int -> Integer)))
 

@@ -43,10 +43,21 @@
 (coalton-toplevel
   (define-class (Quantizable :a)
     "The representation of a type that allows for rounding operations
-max x such that (floor x) <= x
-min x such that (ceiling x) <= x
-And (proper x) = (Tuple (truncate x) (- x (truncate x)))
-where (truncate x) = (* (sign x) (floor (abs x))
+
+
+    max x such that (floor x) <= x
+    min x such that (ceiling x) <= x
+
+And
+
+
+    (proper x) = (Tuple (truncate x) (- x (truncate x)))
+
+
+where
+
+
+    (truncate x) = (* (sign x) (floor (abs x))
 "
     (proper (:a -> (Tuple Integer :a)))
     (floor (:a -> Integer))
@@ -58,19 +69,22 @@ where (truncate x) = (* (sign x) (floor (abs x))
 
   (define-class ((Real :a) (Ord :a) => Rational :a)
     "Any number that can be exactly represented by a fraction, or is not finite.
+
 If a rational can be converted from a fraction it must satisfy:
 
-(into (to-fraction x)) = x
-(into (best-approx x)) = x
 
-Furthermore, best-approx returns the simplest fraction, and both functions may be partial.
+    (into (to-fraction x)) = x
+    (into (best-approx x)) = x
+
+
+Furthermore, `best-approx` returns the simplest fraction, and both functions may be partial.
 "
     (to-fraction (:a -> Fraction))
     (best-approx (:a -> Fraction)))
 
   (declare truncate ((Quantizable :a) => :a -> Integer))
   (define (truncate x)
-    "Returns the integer closest/equal to X that is within 0 and X."
+    "Returns the integer closest/equal to `x` that is within `0` and `x`."
     (match (proper x)
       ((Tuple t _) t)))
 

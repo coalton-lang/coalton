@@ -66,12 +66,15 @@
     (log  (:a -> :a -> :a)))
 
   (define-class (Radical :a)
-    "Obeys (^ (sqrt x) 2) = x = (^^ (nth-root n x) n)"
+    "Obeys:
+
+    (^ (sqrt x) 2) = x = (^^ (nth-root n x) n)"
     (nth-root (Integer -> :a -> :a))
     (sqrt (:a -> :a)))
 
   (define-class ((Complex :a) (Num :a) => Polar :a)
-    "For a complex number z = (complex x y)
+    "For a complex number `z = (complex x y)`, the following identities hold:
+
     z = (* (magnitude z) (exp (* ii (phase z))))
     (polar z) = (Tuple (magnitude z) (phase z))
     (phase z) = (atan2 y x)
@@ -80,12 +83,20 @@
     (polar ((Complex :a) -> (Tuple :a :a))))
 
   (define (magnitude z)
-    "For z = x + yi, (magnitude z) = (sqrt (+ (^ x 2) (^ y 2)))"
+    "For `z = x + yi`,
+
+
+    (magnitude z) = (sqrt (+ (^ x 2) (^ y 2)))"
     (sqrt (square-magnitude z)))
 
   (declare cis ((Trigonometric :a) (Complex :a) => :a -> (Complex :a)))
   (define (cis z)
-    "(cis z) = (exp (complex 0 z)) = (+ (cos z) (sin z))"
+    "A point on the complex unit circle:
+
+
+    (cis z) := (exp (complex 0 z))
+             = (complex (cos z) (sin z))
+"
     (complex (cos z) (sin z)))
 
   (define-class
