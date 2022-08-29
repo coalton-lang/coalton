@@ -1,6 +1,27 @@
-;;;; parse-type.lisp
+(defpackage #:coalton-impl/typechecker/parse-type
+  (:use
+   #:cl
+   #:coalton-impl/ast
+   #:coalton-impl/typechecker/kinds
+   #:coalton-impl/typechecker/types
+   #:coalton-impl/typechecker/type-errors
+   #:coalton-impl/typechecker/substitutions
+   #:coalton-impl/typechecker/predicate
+   #:coalton-impl/typechecker/scheme
+   #:coalton-impl/typechecker/context-reduction
+   #:coalton-impl/typechecker/environment)
+  (:export
+   #:parse-and-resolve-type             ; FUNCTION
+   #:parse-type-expr                    ; FUNCTION
+   #:collect-type-vars                  ; FUNCTION
+   #:collect-types                      ; FUNCTION
+   #:parse-qualified-type-expr          ; FUNCTION
+   #:parse-type-predicate               ; FUNCTION
+   #:coalton-arrow-p                    ; FUNCTION
+   #:coalton-double-arrow-p             ; FUNCTION
+   ))
 
-(in-package #:coalton-impl/typechecker)
+(in-package #:coalton-impl/typechecker/parse-type)
 
 ;;;
 ;;; Type parsing
@@ -27,7 +48,7 @@
 ;; tyvar := symbol in the keyword package (e.g. :a, :b, etc.)
 ;;
 
-(alexandria:define-constant keyword-package (find-package "KEYWORD") :test #'equalp)
+(alexandria:define-constant +keyword-package+ (find-package "KEYWORD") :test #'equalp)
 
 (defun parse-and-resolve-type (env expr)
   "Parse the type expression EXPR in environment ENV returning a TY-SCHEME"
@@ -114,7 +135,7 @@
     (labels ((inner (expr)
                (etypecase expr
                  (symbol
-                  (when (equalp keyword-package (symbol-package expr))
+                  (when (equalp +keyword-package+ (symbol-package expr))
                     (push expr type-vars)))
 
                  (list
@@ -128,7 +149,7 @@
     (labels ((inner (expr)
                (etypecase expr
                  (symbol
-                  (when (not (equalp keyword-package (symbol-package expr)))
+                  (when (not (equalp +keyword-package+ (symbol-package expr)))
                     (push expr types)))
 
                  (list

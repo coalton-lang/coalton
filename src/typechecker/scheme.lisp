@@ -1,4 +1,28 @@
-(in-package #:coalton-impl/typechecker)
+(defpackage #:coalton-impl/typechecker/scheme
+  (:use
+   #:cl
+   #:coalton-impl/typechecker/kinds
+   #:coalton-impl/typechecker/types
+   #:coalton-impl/typechecker/substitutions
+   #:coalton-impl/typechecker/predicate)
+  (:local-nicknames
+   (#:util #:coalton-impl/util))
+  (:export
+   #:ty-scheme                          ; STRUCT
+   #:make-ty-scheme                     ; CONSTRUCTOR
+   #:ty-scheme-kinds                    ; ACCESSOR
+   #:ty-scheme-type                     ; ACCESSOR
+   #:ty-scheme-p                        ; FUNCTION
+   #:scheme-list                        ; TYPE
+   #:scheme-binding-list                ; TYPE
+   #:quantify                           ; FUNCTION
+   #:to-scheme                          ; FUNCTION
+   #:fresh-inst                         ; FUNCTION
+   #:scheme-predicates                  ; FUNCTION
+   #:fresh-pred                         ; FUNCTION
+   ))
+
+(in-package #:coalton-impl/typechecker/scheme)
 
 ;;;
 ;;; Type schemes
@@ -29,6 +53,9 @@
   `(satisfies scheme-binding-list-p))
 
 (defun quantify (tyvars type)
+  (declare (type tyvar-list tyvars)
+           (type qualified-ty ty)
+           (values ty-scheme))
   (let* ((vars (remove-if
                 (lambda (x) (not (find x tyvars :test #'equalp)))
                 (type-variables type)))
@@ -42,11 +69,15 @@
 
 (declaim (inline to-scheme))
 (defun to-scheme (type)
+  (declare (type qualified-ty type)
+           (values ty-scheme))
   (make-ty-scheme
    :kinds nil
    :type type))
 
 (defun fresh-inst (ty-scheme)
+  (declare (type ty-scheme ty-scheme)
+           (values qualified-ty &optional))
   (let ((types (mapcar (lambda (k) (make-variable k))
                        (ty-scheme-kinds ty-scheme))))
     (instantiate types (ty-scheme-type ty-scheme))))

@@ -1,8 +1,28 @@
-(in-package #:coalton-impl/typechecker)
+(defpackage #:coalton-impl/typechecker/parse-class-definition
+  (:use
+   #:cl
+   #:coalton-impl/ast
+   #:coalton-impl/typechecker/kinds
+   #:coalton-impl/typechecker/types
+   #:coalton-impl/typechecker/predicate
+   #:coalton-impl/typechecker/scheme
+   #:coalton-impl/typechecker/type-errors
+   #:coalton-impl/typechecker/environment
+   #:coalton-impl/typechecker/parse-type)
+  (:local-nicknames
+   (#:algo #:coalton-impl/algorithm))
+  (:export
+   #:parse-class-definitions            ; FUNCTION
+   #:split-class-signature              ; FUNCTION
+   ))
+
+(in-package #:coalton-impl/typechecker/parse-class-definition)
 
 ;;;
 ;;; Parsing class defintions
 ;;;
+
+(alexandria:define-constant +keyword-package+ (find-package "KEYWORD") :test #'equalp)
 
 (defun parse-method-predicates (name type)
   (declare (type symbol name))
@@ -131,7 +151,7 @@
                                        (cdr class-dep)))))
 
     ;; Perform a topological sort of classes to ensure contexts can be resolved
-    (let* ((sorted-classes (reverse (tarjan-scc class-deps)))
+    (let* ((sorted-classes (reverse (algo:tarjan-scc class-deps)))
            (sorted-forms
              (loop :for class-group :in sorted-classes
                    :collect (progn
@@ -202,7 +222,7 @@
     ;; Check for invalid elements in the context
     (loop :for elem :in (rest unparsed-predicate)
           :do (unless (and (symbolp elem)
-                           (equalp (symbol-package elem) keyword-package))
+                           (equalp (symbol-package elem) +keyword-package+))
                 (error-parsing unparsed-predicate "invalid type class predicate")))
 
     ;; Check for type variables that appear in context but not in the predicate

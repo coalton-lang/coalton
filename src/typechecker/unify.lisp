@@ -1,4 +1,18 @@
-(in-package #:coalton-impl/typechecker)
+(defpackage #:coalton-impl/typechecker/unify
+  (:use
+   #:cl
+   #:coalton-impl/typechecker/type-errors
+   #:coalton-impl/typechecker/types
+   #:coalton-impl/typechecker/substitutions
+   #:coalton-impl/typechecker/predicate)
+  (:export
+   #:unify                              ; FUNCTION
+   #:match                              ; FUNCTION
+   #:predicate-mgu                      ; FUNCTION
+   #:predicate-match                    ; FUNCTION
+   ))
+
+(in-package #:coalton-impl/typechecker/unify)
 
 ;;;
 ;;; Type unification

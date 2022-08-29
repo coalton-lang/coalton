@@ -46,10 +46,10 @@
    '((f . (Integer -> Integer))))
 
   ;; Check that you can only call callable things
-  (signals coalton-impl::coalton-type-error
+  (signals tc:coalton-type-error
     (run-coalton-typechecker
      '((coalton:define x (0 1)))))
-  (signals coalton-impl::coalton-type-error
+  (signals tc:coalton-type-error
     (run-coalton-typechecker
      '((coalton:define x 5)
        (coalton:define y (x 1))))))
@@ -81,13 +81,13 @@
    '((f . Integer)))
 
   ;; Declerations cannot be less specefic than their associated definition
-  (signals coalton-impl::coalton-type-error
+  (signals tc:coalton-type-error
     (run-coalton-typechecker
      '((coalton:declare x :a)
        (coalton:define x coalton:Unit))))
 
   ;; Missing explicit predicates cannot be defualted
-  (signals coalton-impl::coalton-type-error
+  (signals tc:coalton-type-error
     (run-coalton-typechecker
      '((coalton:declare x :a)
        (coalton:define x 1))))
@@ -150,13 +150,13 @@
 
 (deftest test-kind-system ()
   ;; Check that types of kind * cannot be applied to
-  (signals coalton-impl::coalton-parse-error
+  (signals ast:coalton-parse-error
     (run-coalton-typechecker
      '((coalton:declare x (Integer Integer))
        (coalton:define x x))))
 
   ;; Check that variables can not be declared to have kind (* -> *)
-  (signals coalton-impl::coalton-type-error
+  (signals tc:coalton-type-error
     (run-coalton-typechecker
      '((coalton:define-type (Maybe :a)
          (Just :a)
@@ -178,7 +178,7 @@
            ((Just 6) "hello"))))))
 
   ;; Match branches must match the same type
-  (signals coalton-impl::coalton-type-error
+  (signals tc:coalton-type-error
     (run-coalton-typechecker
      '((coalton:define-type (Maybe :a)
          (Just :a)
@@ -199,7 +199,7 @@
            ((g a) 5))))))
 
   ;; Constructors in match branches must be fully applied
-  (signals coalton-impl::coalton-type-error
+  (signals tc:coalton-type-error
     (run-coalton-typechecker
      '((coalton:define (g x)
          (coalton:match x
@@ -256,7 +256,7 @@
      (h . (Eq_ (coalton:List :a) => :a -> :a -> coalton:Boolean))))
 
 
-  (signals coalton-impl::coalton-type-error
+  (signals tc:coalton-type-error
     (run-coalton-typechecker
      '((coalton:define-class (Eq_ :a)
         (== (:a -> :a -> coalton:Boolean)))
@@ -289,7 +289,7 @@
    '((f . (Eq_ :a => (:a -> :a -> coalton:Boolean)))))
 
   ;; Check that polymorphic recursion is not possible without an explicit binding
-  (signals coalton-impl::coalton-type-error
+  (signals tc:coalton-type-error
     (run-coalton-typechecker
      '((coalton:define-class (Eq_ :a)
         (== (:a -> :a -> coalton:Boolean)))
@@ -308,7 +308,7 @@
   ;; Check that typeclasses cannot have additional constrains defined in a method
   ;;
   ;; this is a stylistic decision and not a technical limitation
-  (signals coalton-impl::coalton-parse-error
+  (signals ast:coalton-parse-error
     (run-coalton-typechecker
     '((coalton:define-class (Test :a)
        (test (coalton-prelude::Eq :a => (:a -> :a)))))))
@@ -339,7 +339,7 @@
 
 (deftest test-typeclass-overlapping-checks ()
   ;; Check than non overlapping instances can be defined
-  (signals coalton-impl::overlapping-instance-error
+  (signals tc:overlapping-instance-error
     (run-coalton-typechecker
      '((coalton:define-class (Eq_ :a)
         (== (:a -> :a -> coalton:Boolean)))
@@ -351,19 +351,19 @@
         (coalton:define (== a b) coalton:False))))))
 
 (deftest test-typeclass-cyclic-superclass-checks ()
-  (signals coalton-impl::cyclic-class-definitions-error
+  (signals tc:cyclic-class-definitions-error
     (run-coalton-typechecker
      '((coalton:define-class ((TestClassA :a) => (TestClassB :a)))
        (coalton:define-class ((TestClassB :a) => (TestClassA :a))))))
 
-  (signals coalton-impl::cyclic-class-definitions-error
+  (signals tc:cyclic-class-definitions-error
     (run-coalton-typechecker
      '((coalton:define-class (TestClassB :b)
         (example-method ((TestClassA :a) => (:a -> :b))))
        (coalton:define-class ((TestClassB :a) => (TestClassA :a))))))
 
   ;; NOTE: This is allowed in Haskell 98
-  (signals coalton-impl::cyclic-class-definitions-error
+  (signals tc:cyclic-class-definitions-error
     (run-coalton-typechecker
      '((coalton:define-class (TestClassA :a)
         (example-method ((TestClassA :b) => (:a -> :b))))))))
@@ -481,7 +481,7 @@
    '((f . (:a -> coalton:Single-Float))))
 
   ;; Check that the monomorphism restriction still applies to defaulted bindings
-  (signals coalton-impl::coalton-type-error
+  (signals tc:coalton-type-error
     (run-coalton-typechecker
      '((coalton:define (f x)
          (coalton:let y coalton:= 1)
@@ -489,7 +489,7 @@
          (coalton-library/classes:+ 0.5d0 y)))))
 
   ;; Check that ambigious predicates are detected
-  (signals coalton-impl::coalton-type-error
+  (signals tc:coalton-type-error
     (run-coalton-typechecker
      '((coalton:define (f x)
          (coalton-library/classes:into (coalton-library/classes:into x))))))
@@ -510,7 +510,7 @@
        (coalton::bind x (coalton-prelude:+ x 1) x)))
    '((f . (coalton-prelude:Num :a => :a -> :a))))
 
-  (signals coalton-impl::coalton-type-error
+  (signals tc:coalton-type-error
     (run-coalton-typechecker
      '((coalton:define _
          (coalton::bind id (coalton:fn (x) x)

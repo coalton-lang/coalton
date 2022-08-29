@@ -1,4 +1,28 @@
-(in-package #:coalton-impl/typechecker)
+(defpackage #:coalton-impl/typechecker/predicate
+  (:use
+   #:cl
+   #:coalton-impl/typechecker/kinds
+   #:coalton-impl/typechecker/types
+   #:coalton-impl/typechecker/substitutions)
+  (:local-nicknames
+   (#:util #:coalton-impl/util))
+  (:export
+   #:ty-predicate                       ; STRUCT
+   #:make-ty-predicate                  ; CONSTRUCTOR
+   #:ty-predicate-class                 ; ACCESSOR
+   #:ty-predicate-types                 ; ACCESSOR
+   #:ty-predicate-p                     ; FUNCTION
+   #:ty-predicate-list                  ; TYPE
+   #:qualified-ty                       ; STRUCT
+   #:make-qualified-ty                  ; CONSTRUCTOR
+   #:qualified-ty-predicates            ; ACCESSOR
+   #:qualified-ty-type                  ; ACCESSOR
+   #:static-predicate-p                 ; FUNCTION
+   #:qualify                            ; FUNCTION
+   #:pprint-predicate                   ; FUNCTION
+   ))
+
+(in-package #:coalton-impl/typechecker/predicate)
 
 ;;;
 ;;; Type predicates
@@ -25,7 +49,7 @@
 
 (defun static-predicate-p (pred)
   "Is PRED a static predicate (no type variables)"
-  (endp (coalton-impl/typechecker::type-variables (ty-predicate-types pred))))
+  (endp (type-variables (ty-predicate-types pred))))
 
 ;;;
 ;;; Qualified types

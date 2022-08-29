@@ -3,33 +3,33 @@
 ;;; Handling of toplevel COALTON:DEFINE-INSTANCE.
 
 (defun process-toplevel-instance-definitions (definstance-forms package env &key compiler-generated)
-  (declare  (values instance-definition-list))
+  (declare  (values tc:instance-definition-list))
 
   (mapcar
      (lambda (form)
-       (parse-instance-definition form package env :compiler-generated compiler-generated))
+       (tc:parse-instance-definition form package env :compiler-generated compiler-generated))
      definstance-forms))
 
 (defun predeclare-toplevel-instance-definitions (definstance-forms package env)
   "Predeclare all instance definitions in the environment so values can be typechecked"
   (declare (type list definstance-forms)
            (type package package)
-           (type environment env)
-           (values environment))
+           (type tc:environment env)
+           (values tc:environment))
 
   (loop :for form :in definstance-forms
         :do (multiple-value-bind (predicate context methods)
                 (coalton-impl/typechecker::parse-instance-decleration form env)
               (declare (ignore methods))
-              (let* ((class-name (ty-predicate-class predicate))
+              (let* ((class-name (tc:ty-predicate-class predicate))
 
                      (instance-codegen-sym
                        (alexandria:format-symbol
                         package "INSTANCE/~A"
                         (with-output-to-string (s)
-                          (with-pprint-variable-context ()
+                          (tc:with-pprint-variable-context ()
                             (let* ((*print-escape* t))
-                              (pprint-predicate s predicate))))))
+                              (tc:pprint-predicate s predicate))))))
 
                      (method-names (mapcar
                                     #'car
@@ -48,7 +48,7 @@
                          table))
 
                      (instance
-                       (make-ty-class-instance
+                       (tc:make-ty-class-instance
                         :constraints context
                         :predicate predicate
                         :codegen-sym instance-codegen-sym
@@ -57,16 +57,16 @@
                 (loop :for key :being :the :hash-keys :of method-codegen-syms
                       :for value :being :the :hash-values :of method-codegen-syms
                       :for codegen-sym := (coalton-impl/typechecker::ty-class-instance-codegen-sym instance)
-                      :do (setf env (coalton-impl/typechecker::set-method-inline env key codegen-sym value)))
+                      :do (setf env (tc:set-method-inline env key codegen-sym value)))
 
                 (when context
-                  (setf env (set-function
+                  (setf env (tc:set-function
                              env
                              instance-codegen-sym
-                             (coalton-impl/typechecker::make-function-env-entry
+                             (tc:make-function-env-entry
                               :name instance-codegen-sym
                               :arity (length context)))))
 
-                (setf env (add-instance env class-name instance)))))
+                (setf env (tc:add-instance env class-name instance)))))
 
   env)

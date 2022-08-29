@@ -1,4 +1,89 @@
-(in-package #:coalton-impl/typechecker)
+(defpackage #:coalton-impl/typechecker/typed-node
+  (:use
+   #:cl
+   #:coalton-impl/typechecker/predicate
+   #:coalton-impl/typechecker/unify
+   #:coalton-impl/typechecker/scheme)
+  (:import-from
+   #:coalton-impl/typechecker/substitutions
+   #:apply-substitution
+   #:substitution-list)
+  (:local-nicknames
+   (#:util #:coalton-impl/util)
+   (#:ast #:coalton-impl/ast))
+  (:export
+   #:typed-node                                    ; STRUCT
+   #:typed-node-type                               ; ACCESSOR
+   #:typed-node-unparsed                           ; ACCESSOR
+   #:typed-node-unparsed                           ; ACCESSOR
+   #:typed-node-list                               ; TYPE
+   #:typed-binding-list                            ; TYPE
+   #:typed-node-literal                            ; STRUCT
+   #:make-typed-node-literal                       ; CONSTRUCTOR
+   #:typed-node-literal-value                      ; ACCESSOR
+   #:type-node-literal-p                           ; FUNCTION
+   #:typed-node-variable                           ; STRUCT
+   #:make-typed-node-variable                      ; CONSTRUCTOR
+   #:typed-node-variable-name                      ; ACCESSOR
+   #:typed-node-variable-p                         ; FUNCTION
+   #:typed-node-application                        ; STRUCT
+   #:make-typed-node-application                   ; CONSTRUCTOR
+   #:typed-node-application-rator                  ; ACCESSOR
+   #:typed-node-application-rands                  ; ACCESSOR
+   #:typed-node-application-p                      ; FUNCTION
+   #:typed-node-abstraction                        ; STRUCT
+   #:make-typed-node-abstraction                   ; CONSTRUCTOR
+   #:typed-node-abstraction-vars                   ; ACCESSOR
+   #:typed-node-abstraction-subexpr                ; ACCESSOR
+   #:typed-node-abstraction-name-map               ; ACCESSOR
+   #:typed-node-abstraction-p                      ; FUNCTION
+   #:typed-node-abstraction-source-parameter-names ; FUNCTION
+   #:typed-node-let                                ; STRUCT
+   #:make-typed-node-let                           ; CONSTRUCTOR
+   #:typed-node-let-bindings                       ; ACCESSOR
+   #:typed-node-let-subexpr                        ; ACCESSOR
+   #:typed-node-let-explicit-types                 ; ACCESSOR
+   #:typed-node-let-name-map                       ; ACCESSOR
+   #:typed-node-let-p                              ; FUNCTION
+   #:typed-node-lisp                               ; STRUCT
+   #:make-typed-node-lisp                          ; CONSTRUCTOR
+   #:typed-node-lisp-variables                     ; ACCESSOR
+   #:typed-node-lisp-form                          ; ACCESSOR
+   #:typed-node-lisp-p                             ; FUNCTION
+   #:typed-match-branch                            ; STRUCT
+   #:make-typed-match-branch                       ; CONSTRUCTOR
+   #:typed-match-branch-unparsed                   ; ACCESSOR
+   #:typed-match-branch-pattern                    ; ACCESSOR
+   #:typed-match-branch-subexpr                    ; ACCESSOR
+   #:typed-match-branch-bindings                   ; ACCESSOR
+   #:typed-match-branch-name-map                   ; ACCESSOR
+   #:typed-match-branch-list                       ; TYPE
+   #:typed-node-match                              ; STRUCT
+   #:make-typed-node-match                         ; CONSTRUCTOR
+   #:typed-node-match-expr                         ; ACCESSOR
+   #:typed-node-match-branches                     ; ACCESSOR
+   #:typed-node-match-p                            ; FUNCTION
+   #:typed-node-seq                                ; STRUCT
+   #:make-typed-node-seq                           ; CONSTRUCTOR
+   #:typed-node-seq-subnodes                       ; ACCESSOR
+   #:typed-node-seq-p                              ; FUNCTION
+   #:typed-node-return                             ; STRUCT
+   #:make-typed-node-return                        ; CONSTRUCTOR
+   #:typed-node-return-expr                        ; ACCESSOR
+   #:typed-node-return-p                           ; FUNCTION
+   #:typed-node-bind                               ; STRUCT
+   #:make-typed-node-bind                          ; CONSTRUCTOR
+   #:typed-node-bind-name                          ; ACCESSOR
+   #:typed-node-bind-expr                          ; ACCESSOR
+   #:typed-node-bind-body                          ; ACCESSOR
+   #:typed-node-bind-p                             ; FUNCTION
+   #:replace-node-type                             ; FUNCTION
+   #:collect-variable-namespace                    ; FUNCTION
+   #:remove-static-preds                           ; FUNCTION
+   #:rewrite-recursive-calls                       ; FUNCTION
+   ))
+
+(in-package #:coalton-impl/typechecker/typed-node)
 
 ;;;
 ;;; Typed AST nodes
@@ -58,7 +143,7 @@
 
 (defun typed-node-abstraction-source-parameter-names (node)
   (declare (type typed-node-abstraction node)
-           (values symbol-list &optional))
+           (values util:symbol-list &optional))
   (mapcar #'cdr (typed-node-abstraction-name-map node)))
 
 #+(and sbcl coalton-release)
@@ -93,7 +178,7 @@
 
 (defstruct typed-match-branch
   (unparsed (util:required 'unparsed) :type t                   :read-only t)
-  (pattern  (util:required 'pattern)  :type pattern             :read-only t)
+  (pattern  (util:required 'pattern)  :type ast:pattern         :read-only t)
   (subexpr  (util:required 'subexpr)  :type typed-node          :read-only t)
   (bindings (util:required 'bindings) :type scheme-binding-list :read-only t)
   (name-map (util:required 'name-map) :type list                :read-only t))

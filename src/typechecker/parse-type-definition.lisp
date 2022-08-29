@@ -1,8 +1,44 @@
-(in-package #:coalton-impl/typechecker)
+(defpackage #:coalton-impl/typechecker/parse-type-definition
+  (:use
+   #:cl
+   #:coalton-impl/ast
+   #:coalton-impl/typechecker/kinds
+   #:coalton-impl/typechecker/type-errors
+   #:coalton-impl/typechecker/types
+   #:coalton-impl/typechecker/substitutions
+   #:coalton-impl/typechecker/predicate
+   #:coalton-impl/typechecker/scheme
+   #:coalton-impl/typechecker/environment
+   #:coalton-impl/typechecker/parse-type)
+  (:import-from
+   #:coalton-impl/typechecker/substitutions
+   #:apply-substitution)
+  (:local-nicknames
+   (#:util #:coalton-impl/util)
+   (#:algo #:coalton-impl/algorithm))
+  (:export
+   #:type-definition                    ; STRUCT
+   #:make-type-definition               ; CONSTRUCTOR
+   #:type-definition-name               ; ACCESSOR
+   #:type-definition-type               ; ACCESSOR
+   #:type-definition-runtime-type       ; ACCESSOR
+   #:type-definition-explicit-repr      ; ACCESSOR
+   #:type-definition-enum-repr          ; ACCESSOR
+   #:type-definition-newtype            ; ACCESSOR
+   #:type-definition-constructors       ; ACCESSOR
+   #:type-definition-constructor-types  ; ACCESSOR
+   #:type-definition-docstring          ; ACCESSOR
+   #:type-definition-list               ; TYPE
+   #:parse-type-definitions             ; FUNCTION
+   ))
+
+(in-package #:coalton-impl/typechecker/parse-type-definition)
 
 ;;;
 ;;; Parsing type defintions
 ;;;
+
+(alexandria:define-constant +keyword-package+ (find-package "KEYWORD") :test #'equalp)
 
 (defstruct type-definition
   (name              (util:required 'name)              :type symbol                 :read-only t)
@@ -22,6 +58,13 @@
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type type-definition))
 
+(defun type-definition-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'type-definition-p x)))
+
+(deftype type-definition-list ()
+  '(satisfies type-definition-list-p))
+
 (defstruct partial-define-type
   (name         (util:required 'name)         :type symbol                :read-only t)
   (tyvar-names  (util:required 'tyvar-names)  :type util:symbol-list      :read-only t)
@@ -37,13 +80,6 @@
 
 (deftype partial-define-type-list ()
   '(satisfies partial-define-type-list-p))
-
-(defun type-definition-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'type-definition-p x)))
-
-(deftype type-definition-list ()
-  '(satisfies type-definition-list-p))
 
 (defun parse-type-definition (partial-type self-type type-vars ksubs env)
   (declare (type partial-define-type partial-type)
@@ -238,7 +274,7 @@ Returns TYPE-DEFINITIONS"
               ;; Check for invalid type variables
               (unless (every (lambda (var)
                                (equalp (symbol-package var)
-                                       keyword-package))
+                                       +keyword-package+))
                              tyvar-names)
                 (error-parsing form "type variables must all be in the KEYWORD package."))
 
@@ -300,7 +336,7 @@ Returns TYPE-DEFINITIONS"
            (parsed-tcons
              ;; Temporary env to allow referencing partially defined types in parse-type
              (let ((env env))
-               (loop :for scc :in (reverse (tarjan-scc type-dependencies))
+               (loop :for scc :in (reverse (algo:tarjan-scc type-dependencies))
                      :for partial-types
                        := (loop :for type-name :in scc
                                 :collect (find type-name type-definitions :test #'equalp :key #'partial-define-type-name))
