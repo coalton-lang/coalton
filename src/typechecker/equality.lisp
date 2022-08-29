@@ -1,4 +1,17 @@
-(in-package #:coalton-impl/typechecker)
+(defpackage #:coalton-impl/typechecker/equality
+  (:use
+   #:cl
+   #:coalton-impl/typechecker/types
+   #:coalton-impl/typechecker/substitutions
+   #:coalton-impl/typechecker/predicate
+   #:coalton-impl/typechecker/scheme)
+  (:export
+   #:type=
+   #:qualified-type=
+   #:type-scheme=
+   #:type-predicate=))
+
+(in-package #:coalton-impl/typechecker/equality)
 
 ;;;
 ;;; Type equality

@@ -26,7 +26,7 @@
 
 (defun coalton:kind-of (symbol)
   "Lookup the kind of type SYMBOL in the global environment"
-  (tc:kind-of (coalton-impl/typechecker::type-entry-type (coalton-impl::lookup-type *global-environment* symbol))))
+  (tc:kind-of (coalton-impl/typechecker::type-entry-type (tc:lookup-type *global-environment* symbol))))
 
 (defun coalton:lookup-code (name)
   "Lookup the compiled code of a given definition"

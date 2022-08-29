@@ -22,8 +22,8 @@
 
     (loop :for (symbol . type) :in expected-types
           :do (is (coalton-impl/typechecker::type-scheme=
-                   (coalton-impl::lookup-value-type env symbol)
-                   (coalton-impl/typechecker::parse-and-resolve-type env type))))))
+                   (tc:lookup-value-type env symbol)
+                   (tc:parse-and-resolve-type env type))))))
 
 (defun run-coalton-toplevel-walker (toplevel)
   (coalton-impl::collect-toplevel-forms toplevel))

@@ -1,10 +1,17 @@
-(in-package #:coalton-impl/typechecker)
+(defpackage #:coalton-impl/typechecker/parse-define
+  (:use
+   #:cl
+   #:coalton-impl/algorithm
+   #:coalton-impl/ast)
+  (:export
+   #:parse-define-form))
 
-(defun parse-define-form (form package env &key (skip-inherited-symbol-checks nil))
+(in-package #:coalton-impl/typechecker/parse-define)
+
+(defun parse-define-form (form package &key (skip-inherited-symbol-checks nil))
   "Parse a COALTON:DEFINE form."
   (declare (type list form)
            (type package package)
-           (type environment env)
            (values symbol node (or null string) &optional))
   (unless (and (eql (first form) 'coalton:define)
                (or (<= 3 (length form))   ; Without docstring
@@ -46,7 +53,6 @@
           (third form))
       docstring
       package
-      env
       :skip-inherited-symbol-checks skip-inherited-symbol-checks))
 
     ((and (listp var-thing)
@@ -59,18 +65,15 @@
           (nthcdr 2 form))
       docstring
       package
-      env
       :skip-inherited-symbol-checks skip-inherited-symbol-checks))
 
     (t
      (error-parsing form "Invalid define form.")))))
 
-(defun parse-define-form-variable (var val docstring package env &key (skip-inherited-symbol-checks nil))
+(defun parse-define-form-variable (var val docstring package &key (skip-inherited-symbol-checks nil))
   (declare (type symbol var)
            (type t val)
            (type package package)
-           (type environment env)
-           (ignore env)
            (values symbol node (or null string)))
   ;; The (DEFINE <var> <val>) case.
   ;; XXX: Should this be LETREC too? Probably for something like F = x => ... F.
@@ -82,13 +85,11 @@
           (parse-form val (make-immutable-map) package)
           docstring))
 
-(defun parse-define-form-function (fvar args forms docstring package env &key (skip-inherited-symbol-checks nil))
+(defun parse-define-form-function (fvar args forms docstring package &key (skip-inherited-symbol-checks nil))
   (declare (type symbol fvar)
            (type list args)
            (type list forms)
            (type package package)
-           (type environment env)
-           (ignore env)
            (values symbol node (or null string)))
   ;; The (DEFINE (<fvar> <arg>*) <val>+) case.
   (unless (or skip-inherited-symbol-checks (equalp package (symbol-package fvar)))

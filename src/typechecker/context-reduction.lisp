@@ -1,4 +1,27 @@
-(in-package #:coalton-impl/typechecker)
+(defpackage #:coalton-impl/typechecker/context-reduction
+  (:use
+   #:cl
+   #:coalton-impl/typechecker/type-errors
+   #:coalton-impl/typechecker/types
+   #:coalton-impl/typechecker/substitutions
+   #:coalton-impl/typechecker/predicate
+   #:coalton-impl/typechecker/unify
+   #:coalton-impl/typechecker/environment)
+  (:import-from
+   #:coalton-impl/typechecker/substitutions
+   #:apply-substitution
+   #:substitution-list)
+  (:local-nicknames
+   (#:util #:coalton-impl/util))
+  (:export
+   #:entail                             ; FUNCTION
+   #:reduce-context                     ; FUNCTION
+   #:split-context                      ; FUNCTION
+   #:default-preds                      ; FUNCTION
+   #:default-subs                       ; FUNCTION
+   ))
+
+(in-package #:coalton-impl/typechecker/context-reduction)
 
 ;;
 ;; Context reduction

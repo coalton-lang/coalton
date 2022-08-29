@@ -1,4 +1,134 @@
-(in-package #:coalton-impl/typechecker)
+(defpackage #:coalton-impl/typechecker/environment
+  (:use
+   #:cl
+   #:coalton-impl/algorithm
+   #:coalton-impl/typechecker/type-errors
+   #:coalton-impl/typechecker/types
+   #:coalton-impl/typechecker/predicate
+   #:coalton-impl/typechecker/scheme
+   #:coalton-impl/typechecker/unify
+   #:coalton-impl/typechecker/equality)
+  (:import-from
+   #:coalton-impl/typechecker/substitutions
+   #:apply-substitution
+   #:substitution-list)
+  (:local-nicknames
+   (#:util #:coalton-impl/util))
+  (:export
+   #:value-environment                      ; STRUCT
+   #:explicit-repr                          ; TYPE
+   #:explicit-repr-auto-addressable-p       ; FUNCTION
+   #:explicit-repr-explicit-addressable-p   ; FUNCTION
+   #:type-entry                             ; STRUCT
+   #:make-type-entry                        ; CONSTRUCTOR
+   #:type-entry-name                        ; ACCESSOR
+   #:type-entry-runtime-type                ; ACCESSOR
+   #:type-entry-type                        ; ACCESSOR
+   #:type-entry-explicit-repr               ; ACCESSOR
+   #:type-entry-enum-repr                   ; ACCESSOR
+   #:type-entry-newtype                     ; ACCESSOR
+   #:type-entry-docstring                   ; ACCESSOR 
+   #:type-entry-location                    ; ACCESSOR
+   #:type-environment                       ; STRUCT
+   #:constructor-entry                      ; STRUCT
+   #:make-constructor-entry                 ; ACCESSOR
+   #:constructor-entry-name                 ; ACCESSOR
+   #:constructor-entry-arity                ; ACCESSOR
+   #:constructor-entry-constructs           ; ACCESSOR
+   #:constructor-entry-classname            ; ACCESSOR
+   #:constructor-entry-compressed-repr      ; ACCESSOR
+   #:constructor-entry-list                 ; TYPE
+   #:constructor-environment                ; STRUCT
+   #:ty-class                               ; STRUCT
+   #:make-ty-class                          ; CONSTRUCTOR
+   #:ty-class-name                          ; ACCESSOR
+   #:ty-class-predicate                     ; ACCESSOR
+   #:ty-class-superclasses                  ; ACCESSOR
+   #:ty-class-unqualified-methods           ; ACCESSOR
+   #:ty-class-codegen-sym                   ; ACCESSOR
+   #:ty-class-superclass-dict               ; ACCESSOR
+   #:ty-class-superclass-map                ; ACCESSOR
+   #:ty-class-docstring                     ; ACCESSOR
+   #:ty-class-location                      ; ACCESSOR
+   #:ty-class-list                          ; TYPE
+   #:class-environment                      ; STRUCT
+   #:ty-class-instance                      ; STRUCT
+   #:make-ty-class-instance                 ; CONSTRUCTOR
+   #:ty-class-instance-constraints          ; ACCESSOR
+   #:ty-class-instance-predicate            ; ACCESSOR
+   #:ty-class-instance-codegen-sym          ; ACCESSOR
+   #:ty-class-instance-method-codegen-syms  ; ACCESSOR
+   #:ty-class-instance-list                 ; TYPE
+   #:instance-environment                   ; STRUCT
+   #:function-env-entry                     ; STRUCT
+   #:make-function-env-entry                ; CONSTRUCTOR
+   #:function-env-entry-name                ; ACCESSOR
+   #:function-env-entry-arity               ; ACCESSOR
+   #:function-environment                   ; STRUCT
+   #:name-entry                             ; STRUCT
+   #:make-name-entry                        ; CONSTRUCTOR
+   #:name-entry-name                        ; ACCESSOR
+   #:name-entry-type                        ; ACCESSOR
+   #:name-entry-docstring                   ; ACCESSOR
+   #:name-entry-location                    ; ACCESSOR
+   #:name-environment                       ; STRUCT
+   #:method-inline-environment              ; STRUCT
+   #:code-environment                       ; STRUCT
+   #:specialization-entry                   ; STRUCT
+   #:make-specialization-entry              ; CONSTRUCTOR
+   #:specialization-entry-from              ; ACCESSOR
+   #:specialization-entry-to                ; ACCESSOR
+   #:specialization-entry-to-ty             ; ACCESSOR
+   #:specialization-entry-list              ; TYPE
+   #:specialization-environment             ; STRUCT
+   #:environment                            ; STRUCT
+   #:make-default-environment               ; FUNCTION
+   #:environment-value-environment          ; ACCESSOR
+   #:environment-type-environment           ; ACCESSOR
+   #:environment-constructor-environment    ; ACCESSOR
+   #:environment-class-environment          ; ACCESSOR
+   #:environment-instance-environment       ; ACCESSOR
+   #:environment-function-environment       ; ACCESSOR
+   #:environment-name-environment           ; ACCESSOR
+   #:environment-method-inline-environment  ; ACCESSOR
+   #:environment-code-environment           ; ACCESSOR
+   #:environment-specialization-environment ; ACCESSOR
+   #:lookup-value-type                      ; FUNCTION
+   #:set-value-type                         ; FUNCTION
+   #:lookup-type                            ; FUNCTION
+   #:set-type                               ; FUNCTION
+   #:lookup-constructor                     ; FUNCTION
+   #:set-constructor                        ; FUNCTION
+   #:lookup-class                           ; FUNCTION
+   #:set-class                              ; FUNCTION
+   #:lookup-function                        ; FUNCTION
+   #:set-function                           ; FUNCTION
+   #:unset-function                         ; FUNCTION
+   #:lookup-name                            ; FUNCTION
+   #:set-name                               ; FUNCTION
+   #:lookup-class-instances                 ; FUNCTION
+   #:lookup-class-instance                  ; FUNCTION
+   #:lookup-instance-by-codegen-sym         ; FUNCTION
+   #:lookup-function-source-parameter-names ; FUNCTION
+   #:set-function-source-parameter-names    ; FUNCTION
+   #:unset-function-source-parameter-names  ; FUNCTION
+   #:push-value-environment                 ; FUNCTION
+   #:push-type-environment                  ; FUNCTION
+   #:push-constructor-environment           ; FUNCTION
+   #:push-function-environment              ; FUNCTION
+   #:constructor-arguments                  ; FUNCTION
+   #:add-class                              ; FUNCTION
+   #:add-instance                           ; FUNCTION
+   #:set-method-inline                      ; FUNCTION
+   #:lookup-method-inline                   ; FUNCTION
+   #:set-code                               ; FUNCTION
+   #:lookup-code                            ; FUNCTION
+   #:add-specialization                     ; FUNCTION
+   #:lookup-specialization                  ; FUNCTION
+   #:lookup-specialization-by-type          ; FUNCTION
+   ))
+
+(in-package #:coalton-impl/typechecker/environment)
 
 ;;;
 ;;; Value type environments
@@ -60,11 +190,6 @@
 
   ;; If this is true then the type does not exist at runtime
   ;; See https://wiki.haskell.org/Newtype
-  ;;
-  ;; Because Haskell is a lazy language there is an observable
-  ;; difference between a boxed wrapper type and a newtype. Because
-  ;; Coalton is strict there is no observable difference in Coalton
-  ;; code between the two.
   ;;
   ;; A type cannot be both enum repr and a newtype
   ;;
@@ -460,17 +585,17 @@
 ;;;
 
 (defstruct environment
-  (value-environment          (required 'value-environment)          :type value-environment          :read-only t)
-  (type-environment           (required 'type-environment)           :type type-environment           :read-only t)
-  (constructor-environment    (required 'constructor-environment)    :type constructor-environment    :read-only t)
-  (class-environment          (required 'class-environment)          :type class-environment          :read-only t)
-  (instance-environment       (required 'instance-environment)       :type instance-environment       :read-only t)
-  (function-environment       (required 'function-environment)       :type function-environment       :read-only t)
-  (name-environment           (required 'name-environment)           :type name-environment           :read-only t)
-  (method-inline-environment  (required 'method-inline-environment)  :type method-inline-environment  :read-only t)
-  (code-environment           (required 'code-environment)           :type code-environment           :read-only t)
-  (specialization-environment (required 'specialization-environment) :type specialization-environment :read-only t)
-  (source-name-environment    (required 'source-name-environment)    :type source-name-environment    :read-only t))
+  (value-environment          (util:required 'value-environment)          :type value-environment          :read-only t)
+  (type-environment           (util:required 'type-environment)           :type type-environment           :read-only t)
+  (constructor-environment    (util:required 'constructor-environment)    :type constructor-environment    :read-only t)
+  (class-environment          (util:required 'class-environment)          :type class-environment          :read-only t)
+  (instance-environment       (util:required 'instance-environment)       :type instance-environment       :read-only t)
+  (function-environment       (util:required 'function-environment)       :type function-environment       :read-only t)
+  (name-environment           (util:required 'name-environment)           :type name-environment           :read-only t)
+  (method-inline-environment  (util:required 'method-inline-environment)  :type method-inline-environment  :read-only t)
+  (code-environment           (util:required 'code-environment)           :type code-environment           :read-only t)
+  (specialization-environment (util:required 'specialization-environment) :type specialization-environment :read-only t)
+  (source-name-environment    (util:required 'source-name-environment)    :type source-name-environment    :read-only t))
 
 (defmethod print-object ((env environment) stream)
   (declare (type stream stream)
@@ -738,13 +863,13 @@
 (defun lookup-function-source-parameter-names (env function-name)
   (declare (type environment env)
            (type symbol function-name)
-           (values symbol-list &optional))
+           (values util:symbol-list &optional))
   (immutable-map-lookup (environment-source-name-environment env) function-name))
 
 (defun set-function-source-parameter-names (env function-name source-parameter-names)
   (declare (type environment env)
            (type symbol function-name)
-           (type symbol-list source-parameter-names)
+           (type util:symbol-list source-parameter-names)
            (values environment &optional))
   (update-environment
    env

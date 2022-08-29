@@ -1,4 +1,46 @@
-(in-package #:coalton-impl/typechecker)
+(defpackage #:coalton-impl/typechecker/kinds
+  (:use
+   #:cl
+   #:coalton-impl/typechecker/errors)
+  (:local-nicknames
+   (#:util #:coalton-impl/util))
+  (:export
+   #:kind                               ; STRUCT
+   #:kstar                              ; STRUCT
+   #:kfun                               ; STRUCT
+   #:make-kfun                          ; CONSTRUCTOR
+   #:kfun-from                          ; ACCESSOR
+   #:kfun-to                            ; ACCESSOR
+   #:kyvar                              ; STRUCT
+   #:make-kyvar                         ; CONSTRUCTOR
+   #:kyvar-id                           ; ACCESSOR
+   #:kyvar-list                         ; TYPE
+   #:kvar                               ; STRUCT
+   #:make-kvar                          ; CONSTRUCTOR
+   #:kvar-kyvar                         ; ACCESSOR
+   #:make-kvariable                     ; FUNCTION
+   #:ksubstitution                      ; STRUCT
+   #:make-ksubstution                   ; CONSTRUCTOR
+   #:ksubstitution-from                 ; ACCESSOR
+   #:ksubstitution-to                   ; ACCESSOR
+   #:ksubstitution-list                 ; TYPE
+   #:compose-ksubstitution-list         ; FUNCTION
+   #:apply-ksubstitution                ; FUNCTION
+   #:kunify                             ; FUNCTION
+   #:kmgu                               ; FUNCTION
+   #:kind-return-type                   ; FUNCTION
+   #:kind-variables                     ; FUNCTION
+   #:kind-monomorphize-subs             ; FUNCTION
+   #:simple-kind-p                      ; FUNCTION
+   #:kind-arity                         ; FUNCTION
+   #:make-kind-function*                ; FUNCTION
+   #:kfun-p                             ; FUNCTION
+   #:kstar-p                            ; FUNCTION
+   #:*coalton-print-unicode*            ; VARIABLE
+   #:kunify-error                       ; CONDITION
+   ))
+
+(in-package #:coalton-impl/typechecker/kinds)
 
 ;;;
 ;;; Kinds
@@ -78,7 +120,7 @@
 (deftype ksubstitution-list ()
   '(satisfies ksubstitution-list-p))
 
-(defun compose-ksubstution-lists (s1 s2)
+(defun compose-ksubstitution-lists (s1 s2)
   (declare (type ksubstitution-list s1 s2)
            (values ksubstitution-list))
   (append
@@ -125,7 +167,7 @@
            (values ksubstitution-list &optional))
   (let ((new-subs (kmgu (apply-ksubstitution subs kind1)
                        (apply-ksubstitution subs kind2))))
-    (compose-ksubstution-lists new-subs subs)))
+    (compose-ksubstitution-lists new-subs subs)))
 
 (defgeneric kmgu (kind1 kind2)
   (:method ((kind1 kstar) (kind2 kstar))
@@ -177,7 +219,7 @@
 (defun kind-monomorphize-subs (kvars ksubs)
   (declare (type kyvar-list kvars)
            (values ksubstitution-list &optional))
-  (compose-ksubstution-lists
+  (compose-ksubstitution-lists
    (loop :for kvar :in kvars
          :collect (make-ksubstitution :from kvar :to kstar))
    ksubs))
@@ -248,3 +290,23 @@
   kind)
 
 (set-pprint-dispatch 'kind 'pprint-kind)
+
+
+;;;
+;;; Conditions
+;;;
+
+(define-condition kunify-error (coalton-type-error)
+  ((kind1 :initarg :kind1
+          :reader kunify-errror-kind1
+          :type kind)
+   (kind2 :initarg :kind2
+          :reader kunify-error-kind2
+          :type kind))
+  (:report
+   (lambda (c s)
+     (let ((*print-circle* nil) ; Prevent printing using reader macros
+           )
+       (format s "Unable to unify kinds ~A and ~A"
+               (kunify-errror-kind1 c)
+               (kunify-error-kind2 c))))))

@@ -1,4 +1,36 @@
-(in-package #:coalton-impl/typechecker)
+(defpackage #:coalton-impl/typechecker/parse-instance-definition
+  (:use
+   #:cl
+   #:coalton-impl/ast
+   #:coalton-impl/typechecker/kinds
+   #:coalton-impl/typechecker/types
+   #:coalton-impl/typechecker/substitutions
+   #:coalton-impl/typechecker/predicate
+   #:coalton-impl/typechecker/scheme
+   #:coalton-impl/typechecker/unify
+   #:coalton-impl/typechecker/typed-node
+   #:coalton-impl/typechecker/environment
+   #:coalton-impl/typechecker/parse-define
+   #:coalton-impl/typechecker/parse-type
+   #:coalton-impl/typechecker/derive-type
+   #:coalton-impl/typechecker/parse-class-definition)
+  (:local-nicknames
+   (#:util #:coalton-impl/util))
+  (:export
+   #:instance-definition                     ; STRUCT
+   #:make-instance-definition                ; CONSTRUCTOR
+   #:instance-definition-class-name          ; ACCESSOR
+   #:instance-definition-predicate           ; ACCESSOR
+   #:instance-definition-context             ; ACCESSOR
+   #:instance-definition-methods             ; ACCESSOR
+   #:instance-definition-codegen-sym         ; ACCESSOR
+   #:instance-definition-method-codegen-syms ; ACCESSOR
+   #:instance-definition-list                ; TYPE
+   #:parse-instance-decleration              ; FUNCTION
+   #:parse-instance-definition               ; FUNCTION
+   ))
+
+(in-package #:coalton-impl/typechecker/parse-instance-definition)
 
 ;;;
 ;;; Parsing instance defintions
@@ -158,7 +190,7 @@
             ;; Parse and typecheck all method definitions
             (loop :for method :in methods
                   :do (multiple-value-bind (method-name parsed-method-form)
-                          (parse-define-form method package env :skip-inherited-symbol-checks t)
+                          (parse-define-form method package :skip-inherited-symbol-checks t)
 
                         (when (gethash method-name method-bindings)
                           (error-parsing method "duplicate method definition for method ~S" method-name))

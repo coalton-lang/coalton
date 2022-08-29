@@ -1,4 +1,79 @@
-(in-package #:coalton-impl/typechecker)
+(defpackage #:coalton-impl/typechecker/types
+  (:use
+   #:cl
+   #:coalton-impl/typechecker/errors
+   #:coalton-impl/typechecker/kinds)
+  (:local-nicknames
+   (#:util #:coalton-impl/util))
+  (:export
+   #:ty                                 ; STRUCT
+   #:ty-list                            ; TYPE
+   #:ty-binding-list                    ; TYPE
+   #:tyvar                              ; STRUCT
+   #:make-tyvar                         ; CONSTRUCTOR
+   #:tyvar-id                           ; ACCESSOR
+   #:tyvar-kind                         ; ACCESSOR
+   #:tyvar-p                            ; FUNCTION
+   #:tyvar-list                         ; TYPE
+   #:tycon                              ; STRUCT
+   #:make-tycon                         ; CONSTRUCTOR
+   #:tycon-name                         ; ACCESSOR
+   #:tycon-kind                         ; ACCESSOR
+   #:tycon-p                            ; FUNCTION
+   #:tapp                               ; STRUCT
+   #:make-tapp                          ; CONSTRUCTOR
+   #:tapp-from                          ; ACCESSOR
+   #:tapp-to                            ; ACCESSOR
+   #:tapp-p                             ; FUNCTION
+   #:tget                               ; STRUCT
+   #:make-tgen                          ; CONSTRUCTOR
+   #:tgen-id                            ; ACCESOR
+   #:tgen-p                             ; FUNCTION
+   #:make-variable                      ; FUNCTION
+   #:instantiate                        ; FUNCTION
+   #:kind-of                            ; FUNCTION
+   #:kind-variables                     ; FUNCTION
+   #:type-constructors                  ; FUNCTION
+   #:*boolean-type*                     ; VARIABLE
+   #:*char-type*                        ; VARIABLE
+   #:*u8-type*                          ; VARIABLE
+   #:*u16-type*                         ; VARIABLE
+   #:*u32-type*                         ; VARIABLE
+   #:*u64-type*                         ; VARIABLE
+   #:*i8-type*                          ; VARIABLE
+   #:*i16-type*                         ; VARIABLE
+   #:*132-type*                         ; VARIABLE
+   #:*164-type*                         ; VARIABLE
+   #:*integer-type*                     ; VARIABLE
+   #:*ifix-type*                        ; VARIABLE
+   #:*ufix-type*                        ; VARIABLE
+   #:*single-float-type*                ; VARIABLE
+   #:*double-float-type*                ; VARIABLE
+   #:*string-type*                      ; VARIABLE
+   #:*fraction-type*                    ; VARIABLE
+   #:*arrow-type*                       ; VARIABLE
+   #:*list-type*                        ; VARIABLE
+   #:apply-type-argument                ; FUNCTION
+   #:apply-type-argument-list           ; FUNCTION
+   #:make-function-type                 ; FUNCTION
+   #:make-function-type*                ; FUNCTION
+   #:function-type-p                    ; FUNCTION
+   #:function-type-from                 ; FUNCTION
+   #:function-type-to                   ; FUNCTION
+   #:function-type-arity                ; FUNCTION
+   #:function-type-arguments            ; FUNCTION
+   #:function-return-type               ; FUNCTION
+   #:type-variables                     ; FUNCTION
+   #:*coalton-pretty-print-tyvars*      ; VARIABLE
+   #:with-pprint-variable-scope         ; MACRO
+   #:with-pprint-variable-context       ; MACRO
+   #:next-pprint-variable               ; FUNCTION
+   #:next-pprint-variable-as-tvar       ; FUNCTION
+   #:pprint-tvar                        ; FUNCTION
+   #:type-application-error             ; CONDITION
+   ))
+
+(in-package #:coalton-impl/typechecker/types)
 
 ;;;
 ;;; Types
@@ -106,7 +181,7 @@
     (let ((from-kind (kind-of (tapp-from type))))
       (if (kfun-p from-kind)
           (kfun-to from-kind)
-          (error "Malformed type application")))))
+          (util:coalton-bug "Malformed type application")))))
 
 (defmethod apply-ksubstitution (subs (type tyvar))
   (make-tyvar
@@ -181,7 +256,7 @@
 (defun apply-type-argument (tcon arg &key ksubs)
   (declare (type (or tycon tapp tyvar) tcon)
            (type ty arg)
-           (values tapp ksubstitution-list))
+           (values tapp ksubstitution-list &optional))
   (handler-case
       (let ((ksubs (kunify
                     (kind-of (apply-ksubstitution ksubs tcon))
@@ -211,9 +286,9 @@
   (declare (type ty from to)
            (values ty))
   (unless (kstar-p (kind-of from))
-    (error "Unable to construct function with type ~A of kind ~A" from (kind-of from)))
+    (util:coalton-bug "Unable to construct function with type ~A of kind ~A" from (kind-of from)))
   (unless (kstar-p (kind-of to))
-    (error "Unable to construct function with type ~A of kind ~A" to (kind-of to)))
+    (util:coalton-bug "Unable to construct function with type ~A of kind ~A" to (kind-of to)))
   (make-tapp :from (make-tapp :from *arrow-type* :to from) :to to))
 
 (defun make-function-type* (args to)
@@ -259,9 +334,76 @@
         (function-return-type (tapp-to ty))
         ty)))
 
+(defgeneric type-variables (type)
+  (:documentation "Get a list containing the type variables in TYPE.")
+  ;; For any type variable, simply return a list containing itself
+  (:method ((type tyvar))
+    (list type))
+  ;; For a type application, return the union of the tyvars of all the contained types
+  (:method ((type tapp))
+    (remove-duplicates (append (type-variables (tapp-from type))
+                               (type-variables (tapp-to type)))
+                       :test #'equalp
+                       :from-end t))
+  ;; Otherwise, return nothing
+  (:method ((type ty))
+    nil)
+  ;; Allow for calling on lists
+  (:method ((type-list list))
+    (remove-duplicates (mapcan #'type-variables type-list) :test #'equalp :from-end t)))
+
 ;;;
 ;;; Pretty printing
 ;;;
+(defvar *pprint-variable-symbol-code*)
+(defvar *pprint-variable-symbol-suffix*)
+
+(defun next-pprint-variable ()
+  "Get the next type variable symbol interned in the keyword package"
+  (prog1
+      (intern
+       (if (= 0 *pprint-variable-symbol-suffix*)
+           (format nil "~A" (code-char *pprint-variable-symbol-code*))
+           (format nil "~A~A"
+                   (code-char *pprint-variable-symbol-code*)
+                   *pprint-variable-symbol-suffix*))
+       'keyword)
+    (incf *pprint-variable-symbol-code*)
+    (when (< (char-code #\Z) *pprint-variable-symbol-code*)
+      (setf *pprint-variable-symbol-code* (char-code #\A))
+      (incf *pprint-variable-symbol-suffix*))))
+
+(defun next-pprint-variable-as-tvar (&optional (kind kStar))
+  "Get the next type variable as a TVAR"
+  ;; This is an awful awful hack
+  (make-tycon :name (next-pprint-variable) :kind kind))
+
+(defmacro with-pprint-variable-scope (() &body body)
+  "If there is no pretty printing variable scope then create one for BODY"
+  `(if (boundp '*pprint-variable-symbol-code*)
+       (let ((*pprint-variable-symbol-code* *pprint-variable-symbol-code*)
+             (*pprint-variable-symbol-suffix* *pprint-variable-symbol-suffix*))
+         ,@body)
+       (let ((*pprint-variable-symbol-code* (char-code #\A))
+             (*pprint-variable-symbol-suffix* 0))
+         ,@body)))
+
+(defvar *pprint-tyvar-dict*)
+
+(defun pprint-tvar (tvar)
+  (unless (boundp '*pprint-tyvar-dict*)
+    (util:coalton-bug "Unable to pretty print tvar outside pprint variable context"))
+  (let ((value (gethash (tyvar-id tvar) *pprint-tyvar-dict*)))
+    (or value
+        (setf (gethash (tyvar-id tvar) *pprint-tyvar-dict*)
+              (next-pprint-variable-as-tvar)))))
+
+(defmacro with-pprint-variable-context (() &body body)
+  "Create a variable context which can be used with PPRINT-TVAR"
+  `(let ((*pprint-tyvar-dict* (make-hash-table :test #'equalp))
+         (*coalton-pretty-print-tyvars* t))
+     (with-pprint-variable-scope ()
+       ,@body)))
 
 (defvar *coalton-pretty-print-tyvars* nil
   "Whether to print all tyvars using type variable syntax
@@ -334,3 +476,22 @@ This requires a valid PPRINT-VARIABLE-CONTEXT")
   ty)
 
 (set-pprint-dispatch 'ty 'pprint-ty)
+
+;;;
+;;; Conditions
+;;;
+
+(define-condition type-application-error (coalton-type-error)
+  ((type :initarg :type
+         :reader type-application-error-type)
+   (argument :initarg :argument
+             :reader type-application-error-argument))
+  (:report
+   (lambda (c s)
+     (let ((*print-circle* nil) ; Prevent printing using reader macros
+           )
+       (format s "Cannot apply ~A of kind ~A to ~A of kind ~A"
+               (type-application-error-argument c)
+               (kind-of (type-application-error-argument c))
+               (type-application-error-type c)
+               (kind-of (type-application-error-type c)))))))

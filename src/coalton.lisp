@@ -66,8 +66,8 @@ in FORMS that begin with that operator."
                (prog1
                    (car form)
                  (assert (symbolp (car form))))
-             (type-error () (error-parsing form "Non-list form at toplevel"))
-             (simple-error () (error-parsing form "A toplevel form must begin ~
+             (type-error () (ast:error-parsing form "Non-list form at toplevel"))
+             (simple-error () (ast:error-parsing form "A toplevel form must begin ~
                                                    with a symbol."))))
          (establish-repr (specifier type arg)
            (unless (member specifier +repr-specifiers+)
@@ -90,7 +90,7 @@ in FORMS that begin with that operator."
                  (cond ((eql op 'coalton:progn) (expand (cdr form)))
                        ((get op :toplevel)      (list form))
                        ((macro-function op)     (expand (list (macroexpand-1 form))))
-                       (T                       (error-parsing form "The form ~
+                       (T                       (ast:error-parsing form "The form ~
 (~A ...) is not valid at toplevel." op)))))
          (walk (forms)
            (setf forms (expand forms))
@@ -102,26 +102,26 @@ in FORMS that begin with that operator."
              :for must-precede-list := (get op :must-precede-one-of)
              :when must-precede-list
                :unless (member (operator next-form) must-precede-list)
-                 :do (error-parsing form
-                                    "The ~A form must precede one of: ~
+                 :do (ast:error-parsing form
+                                        "The ~A form must precede one of: ~
                                      ~{~A~^, ~}."
-                                    op must-precede-list)
+                                        op must-precede-list)
 
              :do (push form (getf plist op))
                  ;; Specific behaviors for particular operators
                  (case op
                    (coalton:repr
                     (unless (or (= (length form) 2) (= 3 (length form)))
-                      (error-parsing form "Wrong number of arguments"))
+                      (ast:error-parsing form "Wrong number of arguments"))
 
                     (when (and (not (eq (cadr form) :native)) (caddr form))
-                      (error-parsing form "Wrong number of arguments"))
+                      (ast:error-parsing form "Wrong number of arguments"))
 
                     (establish-repr (cadr form) (cadr next-form) (caddr form)))
 
                    (coalton:monomorphize
                     (unless (= (length form) 1)
-                      (error-parsing form "Wrong number of arguments"))
+                      (ast:error-parsing form "Wrong number of arguments"))
 
                     (if (listp (cadr next-form))
                         (handle-monomorphize (first (cadr next-form)))
@@ -136,7 +136,7 @@ in FORMS that begin with that operator."
                     element))
               plist))))
 
-(defparameter *global-environment* (make-default-environment))
+(defparameter *global-environment* (tc:make-default-environment))
 
 
 ;;; Coalton Macros
@@ -166,10 +166,10 @@ in FORMS that begin with that operator."
      (values)))
 
 (defmacro coalton:coalton (form)
-  (let ((parsed-form (parse-form form (make-immutable-map) *package*)))
-    (coalton-impl/typechecker::with-type-context ("COALTON")
+  (let ((parsed-form (ast:parse-form form (algo:make-immutable-map) *package*)))
+    (tc:with-type-context ("COALTON")
       (multiple-value-bind (type preds typed-node substs)
-          (derive-expression-type parsed-form *global-environment* nil)
+          (tc:derive-expression-type parsed-form *global-environment* nil)
 
         (let* ((env (coalton-impl/typechecker::apply-substitution substs *global-environment*))
                (preds (coalton-impl/typechecker::reduce-context env preds substs))
@@ -212,7 +212,7 @@ in FORMS that begin with that operator."
                                   (coalton-impl/typechecker::ty-scheme-type scheme))))
                  (warn "The expression ~A~%    of type ~A~{ ~A~}. ~A => ~A~%    has unresolved constraint~A ~A~%    add a type assertion with THE to resolve it"
                        form
-                       (if *coalton-print-unicode*
+                       (if tc:*coalton-print-unicode*
                            "∀"
                            "FORALL")
                        tvars
@@ -227,7 +227,7 @@ in FORMS that begin with that operator."
 (defun process-coalton-toplevel (toplevel-forms package &optional (env *global-environment*))
   "Top-level definitions for use within Coalton."
   (declare (type package package)
-           (values t environment))
+           (values t tc:environment))
   (destructuring-bind (&key
                          ((coalton:declare declares))
                          ((coalton:define defines))
@@ -247,7 +247,7 @@ in FORMS that begin with that operator."
       ;; but before values are typechecked.
 
       (multiple-value-bind (classes env)
-          (parse-class-definitions class-defines env)
+          (tc:parse-class-definitions class-defines env)
 
         ;; Methods need to be added to the environment before we can
         ;; check value types.
@@ -277,7 +277,7 @@ in FORMS that begin with that operator."
 
 
                 (let ((translation-unit
-                        (make-translation-unit
+                        (tc:make-translation-unit
                          :types defined-types
                          :definitions toplevel-bindings
                          :instances (append added-instance-definitions instance-definitions)

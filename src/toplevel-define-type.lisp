@@ -7,12 +7,12 @@
 (defun process-toplevel-type-definitions (deftype-forms repr-table env)
   "Returns a list of TYPE-DEFINITIONs, a new ENVIRONMENT, and a list of INSTANCE-DEFINITIONs for Addressable instances."
   (declare (type list deftype-forms)
-           (type environment env)
-           (values type-definition-list environment list &optional))
+           (type tc:environment env)
+           (values tc:type-definition-list tc:environment list &optional))
 
   ;; Parse type definitions into a list of TYPE-DEFINITION objects
   (multiple-value-bind (parsed-deftypes env)
-      (parse-type-definitions deftype-forms repr-table env)
+      (tc:parse-type-definitions deftype-forms repr-table env)
 
     (values
      parsed-deftypes
@@ -27,10 +27,10 @@
 ;;;
 
 (defun make-auto-addressable-instance (type-def)
-  (declare (type-definition type-def)
+  (declare (type tc:type-definition type-def)
            (values list &optional))
-  (let* ((name (type-definition-name type-def))
-         (tvars (loop :for i :below (kind-arity (tycon-kind (type-definition-type type-def)))
+  (let* ((name (tc:type-definition-name type-def))
+         (tvars (loop :for i :below (tc:kind-arity (tc:tycon-kind (tc:type-definition-type type-def)))
                       :collect (alexandria:format-symbol :keyword "~d" i)))
          (full-type (if tvars
                         `(,name ,@tvars)
@@ -46,7 +46,7 @@
            (eq a b))))))
 
 (defun maybe-auto-addressable-instance (type-def)
-  (declare (type-definition type-def)
+  (declare (type tc:type-definition type-def)
            (values list &optional))
-  (when (explicit-repr-auto-addressable-p (type-definition-explicit-repr type-def))
+  (when (tc:explicit-repr-auto-addressable-p (tc:type-definition-explicit-repr type-def))
     (make-auto-addressable-instance type-def)))

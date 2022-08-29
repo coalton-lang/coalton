@@ -1,4 +1,36 @@
-(in-package #:coalton-impl/typechecker)
+(defpackage #:coalton-impl/typechecker/derive-type
+  (:use
+   #:cl
+   #:coalton-impl/algorithm
+   #:coalton-impl/ast
+   #:coalton-impl/typechecker/types
+   #:coalton-impl/typechecker/type-errors
+   #:coalton-impl/typechecker/substitutions
+   #:coalton-impl/typechecker/predicate
+   #:coalton-impl/typechecker/scheme
+   #:coalton-impl/typechecker/typed-node
+   #:coalton-impl/typechecker/environment
+   #:coalton-impl/typechecker/parse-type)
+  (:import-from
+   #:coalton-impl/typechecker/unify
+   #:unify
+   #:match)
+  (:import-from
+   #:coalton-impl/typechecker/context-reduction
+   #:entail
+   #:reduce-context
+   #:default-preds
+   #:default-subs
+   #:split-context)
+  (:local-nicknames
+   (#:util #:coalton-impl/util))
+  (:export
+   #:derive-expression-type             ; FUNCTION
+   #:derive-bindings-type               ; FUNCTION
+   #:derive-expl-type                   ; FUNCTION
+   ))
+
+(in-package #:coalton-impl/typechecker/derive-type)
 
 ;;;
 ;;; Expressions
@@ -13,7 +45,7 @@
     (double-float (values *double-float-type* nil))
     (string       (values *string-type*       nil))
     (character    (values *char-type*         nil))
-    (ratio        (values *fraction-type* nil))))
+    (ratio        (values *fraction-type*     nil))))
 
 (defgeneric derive-expression-type (value env substs)
   (:documentation "Derive the TYPE and generate a TYPED-NODE for expression VALUE

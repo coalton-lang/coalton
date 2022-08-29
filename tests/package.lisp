@@ -17,6 +17,10 @@
                           #:Integer
                           #:Char
                           #:Unit)
+  (:local-nicknames
+   (#:ast #:coalton-impl/ast)
+   (#:tc #:coalton-impl/typechecker))
+
   (:export
    #:run-coalton-tests))
 

@@ -1,4 +1,23 @@
-(in-package #:coalton-impl/typechecker)
+(defpackage #:coalton-impl/typechecker/substitutions
+  (:use
+   #:cl
+   #:coalton-impl/typechecker/errors
+   #:coalton-impl/typechecker/types)
+  (:local-nicknames
+   (#:util #:coalton-impl/util))
+  (:export
+   #:substitution                       ; STRUCT
+   #:make-substitution                  ; CONSTRUCTOR
+   #:substitution-from                  ; ACCESSOR
+   #:substitution-to                    ; ACCESSOR
+   #:substitution-p                     ; FUNCTION
+   #:substitution-list                  ; TYPE
+   #:merge-substitution-lists           ; FUNCTION
+   #:compose-substitution-lists         ; FUNCTION
+   #:apply-substitution                 ; FUNCTION
+   ))
+
+(in-package #:coalton-impl/typechecker/substitutions)
 
 ;;;
 ;;; Type substitutions
@@ -17,6 +36,9 @@
 
 (defun merge-substitution-lists (s1 s2)
   "Merge substitution lists S1 and S2 together, erroring on disagreeing entries."
+  (declare (type substitution-list s1)
+           (type substitution-list s2)
+           (values substitution-list))
   (let ((overlap (intersection s1 s2 :key #'substitution-from :test #'equalp)))
     (if (every (lambda (x)
                  (equalp (apply-substitution s1 x) (apply-substitution s2 x)))
@@ -26,6 +48,9 @@
 
 (defun compose-substitution-lists (s1 s2)
   "Compose substitution lists S1 and S2 together, applying S1 to S2."
+  (declare (type substitution-list s1)
+           (type substitution-list s2)
+           (values substitution-list))
   (append
    (mapcar
     (lambda (s)
@@ -55,23 +80,7 @@
   (:method (subst-list (type-list list))
     (mapcar (lambda (x) (apply-substitution subst-list x)) type-list)))
 
-(defgeneric type-variables (type)
-  (:documentation "Get a list containing the type variables in TYPE.")
-  ;; For any type variable, simply return a list containing itself
-  (:method ((type tyvar))
-    (list type))
-  ;; For a type application, return the union of the tyvars of all the contained types
-  (:method ((type tapp))
-    (remove-duplicates (append (type-variables (tapp-from type))
-                               (type-variables (tapp-to type)))
-                       :test #'equalp
-                       :from-end t))
-  ;; Otherwise, return nothing
-  (:method ((type ty))
-    nil)
-  ;; Allow for calling on lists
-  (:method ((type-list list))
-    (remove-duplicates (mapcan #'type-variables type-list) :test #'equalp :from-end t)))
+
 
 (defun pprint-substution (stream sub &optional colon-p at-sign-p)
   (declare (ignore colon-p)

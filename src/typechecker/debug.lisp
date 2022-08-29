@@ -1,4 +1,21 @@
-(in-package #:coalton-impl/typechecker)
+(defpackage #:coalton-impl/typechecker/debug
+  (:use
+   #:cl
+   #:coalton-impl/algorithm
+   #:coalton-impl/typechecker/kinds
+   #:coalton-impl/typechecker/types
+   #:coalton-impl/typechecker/predicate
+   #:coalton-impl/typechecker/scheme
+   #:coalton-impl/typechecker/environment)
+  (:export
+   #:print-value-db                     ; FUNCTION
+   #:print-type-db                      ; FUNCTION
+   #:print-class-db                     ; FUNCTION
+   #:print-instance-db                  ; FUNCTION
+   #:print-specializations              ; FUNCTION
+   ))
+
+(in-package #:coalton-impl/typechecker/debug)
 
 (defun print-value-db (env &optional package)
   (check-type env environment)

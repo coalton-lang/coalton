@@ -1,24 +1,54 @@
-(in-package #:coalton-impl/typechecker)
+(defpackage #:coalton-impl/typechecker/type-errors
+  (:use
+   #:cl
+   #:coalton-impl/ast
+   #:coalton-impl/typechecker/types
+   #:coalton-impl/typechecker/predicate
+   #:coalton-impl/typechecker/errors)
+  (:local-nicknames
+   (#:util #:coalton-impl/util)
+   (#:ast #:coalton-impl/ast))
+  (:export
+   #:coalton-type-error                 ; CONDITION
+   #:with-type-context                  ; MACRO
+   )
+  (:export
+   #:unknown-binding-error                ; CONDITION
+   #:unification-error                    ; CONDITION
+   #:infinite-type-unification-error      ; CONDITION
+   #:type-declaration-too-general-error   ; CONDITION
+   #:type-construction-error              ; CONDITION
+   #:kind-mismatch-error                  ; CONDITION
+   #:type-kind-mismatch-error             ; CONDITION
+   #:invalid-operator-type-error          ; CONDITION
+   #:predicate-unification-error          ; CONDITION
+   #:overlapping-instance-error           ; CONDITION
+   #:cyclic-class-definitions-error       ; CONDITION
+   #:invalid-typed-node-type              ; CONDITION
+   #:unknown-type-variable                ; CONDITION
+   #:unknown-constructor                  ; CONDITION
+   #:invalid-constructor-arguments        ; CONDITION
+   #:context-reduction-failure            ; CONDITION
+   #:weak-context-error                   ; CONDITION
+   #:recursive-binding-error              ; CONDITION
+   #:self-recursive-non-constructor-call  ; CONDITION
+   #:self-recursive-partial-application   ; CONDITION
+   #:self-recursive-non-default-repr      ; CONDITION
+   #:mutually-recursive-function-and-data ; CONDITION
+   #:declared-type-missing-predicates     ; CONDITION
+   #:declared-type-additional-predicates  ; CONDITION
+   #:toplevel-monomorphism-restriction    ; CONDITION
+   #:ambigious-constraint                 ; CONDITION
+   #:unresolvable-constraint              ; CONDITION
+   #:duplicate-definition                 ; CONDITION
+   #:unexpected-return                    ; CONDITION
+   #:duplicate-ctor                       ; CONDITION
+   #:coalton-type-parse-error             ; CONDITION
+   #:error-parsing-type                   ; FUNCTION
+   ))
 
-(defvar *include-type-error-context* t
-  "Whether to rethrow type errors with their enclosing context. This can be disabled for easier debugging of the compiler.")
+(in-package #:coalton-impl/typechecker/type-errors)
 
-(defvar *type-error-context-stack* '()
-  "The stack of context frames for the current type operation")
-
-(define-condition coalton-type-error (util:coalton-error)
-  ()
-  (:documentation "A type error from Coalton code."))
-
-(defmethod print-object :after ((er coalton-type-error) stream)
-  (dolist (ctx *type-error-context-stack*)
-    (format stream "~%In ~A" ctx)))
-
-(defmacro with-type-context ((context &rest args) &body body)
-  `(let ((*type-error-context-stack* (if *include-type-error-context*
-                                         (cons (format nil ,context ,@args) *type-error-context-stack*)
-                                         *type-error-context-stack*)))
-     (progn ,@body)))
 
 (define-condition unknown-binding-error (coalton-type-error)
   ((symbol :initarg :symbol
@@ -74,20 +104,7 @@
                (type-declaration-too-general-error-declared-type c)
                (type-declaration-too-general-error-derived-type c))))))
 
-(define-condition type-application-error (coalton-type-error)
-  ((type :initarg :type
-         :reader type-application-error-type)
-   (argument :initarg :argument
-             :reader type-application-error-argument))
-  (:report
-   (lambda (c s)
-     (let ((*print-circle* nil) ; Prevent printing using reader macros
-           )
-       (format s "Cannot apply ~A of kind ~A to ~A of kind ~A"
-               (type-application-error-argument c)
-               (kind-of (type-application-error-argument c))
-               (type-application-error-type c)
-               (kind-of (type-application-error-type c)))))))
+
 
 (define-condition type-construction-error (coalton-type-error)
   ((type :initarg :type
@@ -387,20 +404,7 @@ Mutually recursive bindings must be either all functions or all constructor appl
        (format s "Unresolvable constraint ~A"
                (unresolvable-constraint-pred c))))))
 
-(define-condition kunify-error (coalton-type-error)
-  ((kind1 :initarg :kind1
-          :reader kunify-errror-kind1
-          :type kind)
-   (kind2 :initarg :kind2
-          :reader kunify-error-kind2
-          :type kind))
-  (:report
-   (lambda (c s)
-     (let ((*print-circle* nil) ; Prevent printing using reader macros
-           )
-       (format s "Unable to unify kinds ~A and ~A"
-               (kunify-errror-kind1 c)
-               (kunify-error-kind2 c))))))
+
 
 (define-condition duplicate-definition (coalton-type-error)
   ((name :initarg :name
@@ -435,3 +439,19 @@ Mutually recursive bindings must be either all functions or all constructor appl
        (format s "Constructor ~A is already used in type ~A"
                (duplicate-ctor-ctor-name c)
                (duplicate-ctor-ty-name c))))))
+
+(define-condition coalton-type-parse-error (ast:coalton-parse-error)
+  ()
+  (:report (lambda (c s)
+             (let ((*print-circle* nil)  ; Prevent printing using reader macros
+                   (*print-pretty* nil)) ; Prevent newlines in the middle of our lists
+               (format s "Failed to parse type ~S because~%~?"
+                       (coalton-parse-error-form c)
+                       (coalton-parse-error-reason-control c)
+                       (coalton-parse-error-reason-args c))))))
+
+(defun error-parsing-type (form reason-control &rest reason-args)
+  (error 'coalton-type-parse-error
+         :form form
+         :reason-control reason-control
+         :reason-args reason-args))

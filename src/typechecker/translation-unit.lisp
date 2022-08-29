@@ -1,15 +1,39 @@
-(in-package #:coalton-impl/typechecker)
+(defpackage #:coalton-impl/typechecker/translation-unit
+  (:use
+   #:cl
+   #:coalton-impl/typechecker/types
+   #:coalton-impl/typechecker/environment
+   #:coalton-impl/typechecker/typed-node
+   #:coalton-impl/typechecker/parse-type-definition
+   #:coalton-impl/typechecker/parse-instance-definition)
+  (:import-from
+   #:coalton-impl/typechecker/parse-instance-definition
+   #:instance-definition-list)
+  (:local-nicknames
+   (#:util #:coalton-impl/util))
+  (:export
+   #:translation-unit                   ; STRUCT
+   #:make-translation-unit              ; CONSTRUCTOR
+   #:translation-unit-types             ; ACCESSOR
+   #:translation-unit-definitions       ; ACCESSOR
+   #:translation-unit-instances         ; ACCESSOR
+   #:translation-unit-classes           ; ACCESSOR
+   #:translation-unit-attr-table        ; ACCESSOR
+   #:translation-unit-package           ; ACCESSOR
+   #:translation-unit-specializations   ; ACCESSOR
+   #:generate-diff                      ; FUNCTION
+   ))
+
+(in-package #:coalton-impl/typechecker/translation-unit)
 
 (defstruct translation-unit
-  (types       nil                      :type type-definition-list     :read-only t)
-  (definitions nil                      :type typed-binding-list       :read-only t)
-  (instances   nil                      :type instance-definition-list :read-only t)
-  (classes     nil                      :type ty-class-list            :read-only t)
-  (attr-table  (make-hash-table)        :type hash-table               :read-only t)
-  (package     (util:required 'package) :type package                  :read-only t)
-  (specializations nil                  :type specialization-entry-list :read-only t))
-
-;; FUNCTION ENV
+  (types           nil                      :type type-definition-list      :read-only t)
+  (definitions     nil                      :type typed-binding-list        :read-only t)
+  (instances       nil                      :type instance-definition-list  :read-only t)
+  (classes         nil                      :type ty-class-list             :read-only t)
+  (attr-table      (make-hash-table)        :type hash-table                :read-only t)
+  (package         (util:required 'package) :type package                   :read-only t)
+  (specializations nil                      :type specialization-entry-list :read-only t))
 
 (defun generate-type-diff (types env)
   (declare (type type-definition-list types))
