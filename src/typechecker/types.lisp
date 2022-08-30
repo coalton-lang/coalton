@@ -151,7 +151,7 @@
 (declaim (sb-ext:always-bound *next-variable-id*))
 
 (declaim (inline make-variable))
-(defun make-variable (&optional (kind kstar))
+(defun make-variable (&optional (kind +kstar+))
   (prog1 (make-tyvar :id *next-variable-id* :kind kind)
     (incf *next-variable-id*)))
 
@@ -232,25 +232,25 @@
 ;;; Early types
 ;;;
 
-(defvar *boolean-type*      (make-tycon :name 'coalton:Boolean     :kind kstar))
-(defvar *char-type*         (make-tycon :name 'coalton:Char        :kind kstar))
-(defvar *u8-type*           (make-tycon :name 'coalton:U8          :kind kstar))
-(defvar *u16-type*          (make-tycon :name 'coalton:U16         :kind kstar))
-(defvar *u32-type*          (make-tycon :name 'coalton:U32         :kind kstar))
-(defvar *u64-type*          (make-tycon :name 'coalton:U64         :kind kstar))
-(defvar *i8-type*           (make-tycon :name 'coalton:I8          :kind kstar))
-(defvar *i16-type*          (make-tycon :name 'coalton:I16         :kind kstar))
-(defvar *i32-type*          (make-tycon :name 'coalton:I32         :kind kstar))
-(defvar *i64-type*          (make-tycon :name 'coalton:I64         :kind kstar))
-(defvar *integer-type*      (make-tycon :name 'coalton:Integer     :kind kstar))
-(defvar *ifix-type*         (make-tycon :name 'coalton:IFix        :kind kstar))
-(defvar *ufix-type*         (make-tycon :name 'coalton:UFix        :kind kstar))
-(defvar *single-float-type* (make-tycon :name 'coalton:Single-Float :kind kstar))
-(defvar *double-float-type* (make-tycon :name 'coalton:Double-Float :kind kstar))
-(defvar *string-type*       (make-tycon :name 'coalton:String      :kind kstar))
-(defvar *fraction-type*     (make-tycon :name 'coalton:Fraction :kind kstar))
-(defvar *arrow-type*        (make-tycon :name 'coalton:-> :kind (make-kfun :from kstar :to (make-kfun :from kstar :to kstar))))
-(defvar *list-type*         (make-tycon :name 'coalton:List :kind (make-kfun :from kstar :to kstar)))
+(defvar *boolean-type*      (make-tycon :name 'coalton:Boolean     :kind +kstar+))
+(defvar *char-type*         (make-tycon :name 'coalton:Char        :kind +kstar+))
+(defvar *u8-type*           (make-tycon :name 'coalton:U8          :kind +kstar+))
+(defvar *u16-type*          (make-tycon :name 'coalton:U16         :kind +kstar+))
+(defvar *u32-type*          (make-tycon :name 'coalton:U32         :kind +kstar+))
+(defvar *u64-type*          (make-tycon :name 'coalton:U64         :kind +kstar+))
+(defvar *i8-type*           (make-tycon :name 'coalton:I8          :kind +kstar+))
+(defvar *i16-type*          (make-tycon :name 'coalton:I16         :kind +kstar+))
+(defvar *i32-type*          (make-tycon :name 'coalton:I32         :kind +kstar+))
+(defvar *i64-type*          (make-tycon :name 'coalton:I64         :kind +kstar+))
+(defvar *integer-type*      (make-tycon :name 'coalton:Integer     :kind +kstar+))
+(defvar *ifix-type*         (make-tycon :name 'coalton:IFix        :kind +kstar+))
+(defvar *ufix-type*         (make-tycon :name 'coalton:UFix        :kind +kstar+))
+(defvar *single-float-type* (make-tycon :name 'coalton:Single-Float :kind +kstar+))
+(defvar *double-float-type* (make-tycon :name 'coalton:Double-Float :kind +kstar+))
+(defvar *string-type*       (make-tycon :name 'coalton:String      :kind +kstar+))
+(defvar *fraction-type*     (make-tycon :name 'coalton:Fraction :kind +kstar+))
+(defvar *arrow-type*        (make-tycon :name 'coalton:-> :kind (make-kfun :from +kstar+ :to (make-kfun :from +kstar+ :to +kstar+))))
+(defvar *list-type*         (make-tycon :name 'coalton:List :kind (make-kfun :from +kstar+ :to +kstar+)))
 
 
 (defun apply-type-argument (tcon arg &key ksubs)
@@ -373,7 +373,7 @@
       (setf *pprint-variable-symbol-code* (char-code #\A))
       (incf *pprint-variable-symbol-suffix*))))
 
-(defun next-pprint-variable-as-tvar (&optional (kind kStar))
+(defun next-pprint-variable-as-tvar (&optional (kind +kstar+))
   "Get the next type variable as a TVAR"
   ;; This is an awful awful hack
   (make-tycon :name (next-pprint-variable) :kind kind))

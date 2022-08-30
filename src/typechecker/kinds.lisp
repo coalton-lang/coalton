@@ -7,6 +7,7 @@
   (:export
    #:kind                               ; STRUCT
    #:kstar                              ; STRUCT
+   #:+kstar+                            ; CONSTANT
    #:kfun                               ; STRUCT
    #:make-kfun                          ; CONSTRUCTOR
    #:kfun-from                          ; ACCESSOR
@@ -15,9 +16,6 @@
    #:make-kyvar                         ; CONSTRUCTOR
    #:kyvar-id                           ; ACCESSOR
    #:kyvar-list                         ; TYPE
-   #:kvar                               ; STRUCT
-   #:make-kvar                          ; CONSTRUCTOR
-   #:kvar-kyvar                         ; ACCESSOR
    #:make-kvariable                     ; FUNCTION
    #:ksubstitution                      ; STRUCT
    #:make-ksubstution                   ; CONSTRUCTOR
@@ -56,7 +54,7 @@
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type kstar))
 
-(alexandria:define-constant kstar (make-instance 'kstar) :test #'equalp)
+(alexandria:define-constant +kstar+ (make-instance 'kstar) :test #'equalp)
 
 (defstruct (kfun (:include kind))
   (from (util:required 'from) :type kind :read-only t)
@@ -68,7 +66,7 @@
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type kfun))
 
-(defstruct kyvar 
+(defstruct (kyvar (:include kind)) 
   (id (util:required 'id) :type fixnum :read-only t))
 
 (defmethod make-load-form ((self kyvar) &optional env)
@@ -84,15 +82,6 @@
 (deftype kyvar-list ()
   '(satisfies kyvar-list-p))
 
-(defstruct (kvar (:include kind))
-  (kyvar (util:required 'kyvar) :type kyvar :read-only t))
-
-(defmethod make-load-form ((self kvar) &optional env)
-  (make-load-form-saving-slots self :environment env))
-
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type kvar))
-
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type kind))
 
@@ -103,7 +92,7 @@
 
 (declaim (inline make-kvariable))
 (defun make-kvariable ()
-  (prog1 (make-kvar :kyvar (make-kyvar :id *next-kvar-id*))
+  (prog1 (make-kyvar :id *next-kvar-id*)
     (incf *next-kvar-id*)))
 
 (defstruct ksubstitution 
@@ -147,10 +136,10 @@
      :from (apply-ksubstitution subs (kfun-from kind))
      :to (apply-ksubstitution subs (kfun-to kind))))
 
-  (:method (subs (kind kvar))
+  (:method (subs (kind kyvar))
     (declare (type ksubstitution-list subs)
              (values kind &optional))
-    (let ((elem (find (kvar-kyvar kind) subs :key #'ksubstitution-from :test #'equalp)))
+    (let ((elem (find kind subs :key #'ksubstitution-from :test #'equalp)))
       (if elem
           (ksubstitution-to elem)
           kind)))
@@ -174,18 +163,18 @@
     (declare (values ksubstitution-list &optional))
     nil)
 
-  (:method ((kind1 kvar) (kind2 kind))
+  (:method ((kind1 kyvar) (kind2 kind))
     (declare (values ksubstitution-list &optional))
     (list
      (make-ksubstitution
-      :from (kvar-kyvar kind1)
+      :from kind1
       :to kind2)))
 
-  (:method ((kind1 kind) (kind2 kvar))
+  (:method ((kind1 kind) (kind2 kyvar))
     (declare (values ksubstitution-list &optional))
     (list
      (make-ksubstitution
-      :from (kvar-kyvar kind2)
+      :from kind2
       :to kind1)))
 
   (:method ((kind1 kfun) (kind2 kfun))
@@ -208,8 +197,8 @@
   (:method ((kind kstar))
     nil)
 
-  (:method ((kind kvar))
-    (list (kvar-kyvar kind)))
+  (:method ((kind kyvar))
+    (list kind))
 
   (:method ((kind kfun))
     (append
@@ -221,7 +210,7 @@
            (values ksubstitution-list &optional))
   (compose-ksubstitution-lists
    (loop :for kvar :in kvars
-         :collect (make-ksubstitution :from kvar :to kstar))
+         :collect (make-ksubstitution :from kvar :to +kstar+))
    ksubs))
 
 
@@ -284,9 +273,9 @@
        (pprint-kind stream to)
        (when (kfun-p to)
          (write-char #\) stream))))
-    (kvar
+    (kyvar
      (write-string "#K" stream)
-     (write (kyvar-id (kvar-kyvar kind)) :stream stream)))
+     (write (kyvar-id kind) :stream stream)))
   kind)
 
 (set-pprint-dispatch 'kind 'pprint-kind)

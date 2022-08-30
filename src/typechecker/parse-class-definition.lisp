@@ -262,7 +262,7 @@
                                 type
                                 (mapcar #'second class-tyvars))
                                (setf ksubs new-ksubs)
-                               (setf ksubs (kunify (kind-of type) kstar ksubs))
+                               (setf ksubs (kunify (kind-of type) +kstar+ ksubs))
                                (cons name (apply-ksubstitution ksubs type)))))
 
             (predicate (make-ty-predicate
