@@ -60,6 +60,7 @@
    #:ty-class-instance-method-codegen-syms  ; ACCESSOR
    #:ty-class-instance-list                 ; TYPE
    #:instance-environment                   ; STRUCT
+   #:instance-environment-instances         ; ACCESSOR
    #:function-env-entry                     ; STRUCT
    #:make-function-env-entry                ; CONSTRUCTOR
    #:function-env-entry-name                ; ACCESSOR

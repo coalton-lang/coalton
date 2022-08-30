@@ -70,6 +70,7 @@
    #:next-pprint-variable               ; FUNCTION
    #:next-pprint-variable-as-tvar       ; FUNCTION
    #:pprint-tvar                        ; FUNCTION
+   #:pprint-ty                          ; FUNCTION
    #:type-application-error             ; CONDITION
    ))
 
