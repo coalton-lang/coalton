@@ -20,7 +20,7 @@ HASH-TABLE mapping from the names to the declared type"
         (type-expr (third declaration))
         (declared-type (tc:parse-and-resolve-type env type-expr)))
     (unless (equalp
-             (coalton-impl/typechecker::kind-of declared-type)
-             coalton-impl/typechecker::kstar)
+             (tc:kind-of declared-type)
+             tc:+kstar+)
       (error 'tc:type-construction-error :type declared-type))
     (values name declared-type)))

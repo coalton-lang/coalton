@@ -112,7 +112,7 @@
                                  :collect (multiple-value-bind (type new-ksubs)
                                               (parse-type-expr env field tyvars ksubs)
                                             (setf ksubs new-ksubs)
-                                            (setf ksubs (kunify (kind-of type) kstar ksubs))
+                                            (setf ksubs (kunify (kind-of type) +kstar+ ksubs))
                                             type))))))
 
     ;; Unify the kind of the type with the kind:
@@ -122,7 +122,7 @@
                  (make-kind-function*
                   (loop :for (name type) :in local-type-vars
                         :collect (kind-of type))
-                  kstar)
+                  +kstar+)
                  ksubs))
 
     (values
