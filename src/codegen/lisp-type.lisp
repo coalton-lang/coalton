@@ -44,8 +44,7 @@
     (cond
       ;; If we are a function, emit a function type
       ((tc:function-type-p ty)
-       `(or function-entry (function (,(lisp-type (tc:function-type-from ty) env))
-                                     ,(lisp-type (tc:function-type-to ty) env))))
+       'function-entry)
 
       ;; Otherwise, emit the applied type
       (t
