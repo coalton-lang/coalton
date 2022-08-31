@@ -9,7 +9,11 @@
    #:coalton-impl/typechecker/predicate
    #:coalton-impl/typechecker/scheme
    #:coalton-impl/typechecker/context-reduction
+   #:coalton-impl/typechecker/fundeps
    #:coalton-impl/typechecker/environment)
+  (:local-nicknames
+   (#:util #:coalton-impl/util)
+   (#:error #:coalton-impl/error))
   (:export
    #:parse-and-resolve-type             ; FUNCTION
    #:parse-type-expr                    ; FUNCTION
@@ -164,7 +168,7 @@
            (type list type-vars)
            (values qualified-ty ksubstitution-list))
 
-  (with-parsing-context ("qualified type expression ~S" expr)
+  (error:with-context ("qualified type expression ~S" expr)
     (let ((unparsed-type nil)
           (unparsed-preds nil))
 
@@ -194,17 +198,6 @@
                          (check-for-duplicate-preds rest))))))
         (check-for-duplicate-preds unparsed-preds))
 
-      (let ((unparsed-type-vars (collect-type-vars unparsed-type)))
-        (loop :for pred :in unparsed-preds
-              :for pred-vars := (collect-type-vars pred)
-              :do (loop :for var :in pred-vars
-                        :unless (find var unparsed-type-vars :test #'equalp)
-                          :do (error-parsing
-                               expr
-                               "type variable ~S appears in predicate ~S but not in type."
-                               var
-                               pred))))
-
       (let ((preds
               (loop :for unparsed-pred :in unparsed-preds
                     :collect (multiple-value-bind (pred new-ksubs)
@@ -216,6 +209,8 @@
             (parse-type-expr env unparsed-type type-vars ksubs)
           (setf ksubs new-ksubs)
 
+          (check-for-ambigious-variables (apply-ksubstitution ksubs preds) (apply-ksubstitution ksubs type) env)
+
           (values
            (apply-ksubstitution ksubs (qualify preds type))
            ksubs))))))
@@ -226,7 +221,7 @@
            (type list type-vars)
            (type ksubstitution-list ksubs)
            (values ty-predicate ksubstitution-list))
-  (with-parsing-context ("type predicate ~S" expr)
+  (error:with-context ("type predicate ~S" expr)
     (unless (and (listp expr)
                  (>= (length expr) 2)
                  (symbolp (first expr)))
@@ -264,6 +259,40 @@
         :class pred-class
         :types pred-types)
        ksubs))))
+
+(defun check-for-ambigious-variables (preds type env)
+  (declare (type ty-predicate-list preds)
+           (type ty type)
+           (type environment env))
+
+  (let* ((old-unambigious-vars (type-variables type))
+         (unambigious-vars old-unambigious-vars)) 
+
+    (block fundep-fixpoint
+      (loop :for i :below +fundep-max-depth+
+            :do (setf old-unambigious-vars unambigious-vars)
+            :do (loop :for pred :in preds
+                      :for pred-tys := (ty-predicate-types pred)
+                      :for class-name := (ty-predicate-class pred)
+                      :for class := (lookup-class env class-name)
+                      :for map := (ty-class-class-variable-map class)
+                      :when (ty-class-fundeps class) :do
+                        (loop :for fundep :in (ty-class-fundeps class)
+                              :for from-vars := (util:project-map (fundep-from fundep) map pred-tys)
+                              :do (when (subsetp from-vars unambigious-vars :test #'equalp)
+                                    (let ((to-vars (util:project-map (fundep-to fundep) map pred-tys)))
+                                      (setf unambigious-vars
+                                            (remove-duplicates (append to-vars unambigious-vars) :test #'equalp))))))
+
+            :when (equalp unambigious-vars old-unambigious-vars) ; Exit when progress stops
+              :do (return-from fundep-fixpoint)
+
+            :finally (util:coalton-bug "Fundep solving failed to fixpoint")))
+
+    (unless (subsetp (type-variables preds) unambigious-vars :test #'equalp)
+      (error 'ambigious-constraint-variables
+             :type (qualify preds type)
+             :variables (set-difference (type-variables preds) unambigious-vars :test #'equalp)))))
 
 ;;;
 ;;; Arrows

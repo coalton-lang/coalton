@@ -150,7 +150,7 @@
 
 (deftest test-kind-system ()
   ;; Check that types of kind * cannot be applied to
-  (signals ast:coalton-parse-error
+  (signals tc:coalton-type-error
     (run-coalton-typechecker
      '((coalton:declare x (Integer Integer))
        (coalton:define x x))))

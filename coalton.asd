@@ -37,6 +37,7 @@
                              (:file "immutable-map")
                              (:file "immutable-listmap")
                              (:file "package")))
+               (:file "error")
                (:module "ast"
                 :serial t
                 :components ((:file "pattern")
@@ -50,8 +51,7 @@
                              (:file "package")))
                (:module "typechecker"
                 :serial t
-                :components ((:file "errors")
-                             (:file "kinds")
+                :components ((:file "kinds")
                              (:file "types")
                              (:file "substitutions")
                              (:file "predicate")
@@ -60,6 +60,7 @@
                              (:file "unify")
                              (:file "equality")
                              (:file "typed-node")
+                             (:file "fundeps")
                              (:file "environment")
                              (:file "lisp-type")
                              (:file "context-reduction")
@@ -277,6 +278,7 @@
                (:file "toplevel-walker-tests")
                (:file "tarjan-scc-tests")
                (:file "type-inference-tests")
+               (:file "fundep-tests")
                (:file "runtime-tests")
                (:file "environment-persist-tests")
                (:file "slice-tests")

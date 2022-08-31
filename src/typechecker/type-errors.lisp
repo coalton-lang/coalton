@@ -3,15 +3,16 @@
    #:cl
    #:coalton-impl/ast
    #:coalton-impl/typechecker/types
-   #:coalton-impl/typechecker/predicate
-   #:coalton-impl/typechecker/errors)
+   #:coalton-impl/typechecker/predicate)
   (:local-nicknames
    (#:util #:coalton-impl/util)
-   (#:ast #:coalton-impl/ast))
+   (#:ast #:coalton-impl/ast)
+   (#:error #:coalton-impl/error))
+  (:import-from
+   #:coalton-impl/error
+   #:coalton-type-error)
   (:export
-   #:coalton-type-error                 ; CONDITION
-   #:with-type-context                  ; MACRO
-   )
+   #:coalton-type-error)
   (:export
    #:unknown-binding-error                ; CONDITION
    #:unification-error                    ; CONDITION
@@ -46,6 +47,10 @@
    #:duplicate-ctor                       ; CONDITION
    #:coalton-type-parse-error             ; CONDITION
    #:error-parsing-type                   ; FUNCTION
+   #:fundep-conflict                      ; CONDITION
+   #:fundep-variable-error                ; CONDITION
+   #:ambigious-constraint-variables       ; CONDITION
+   #:invalid-fundep-change                ; CONDITION
    ))
 
 (in-package #:coalton-impl/typechecker/type-errors)
@@ -462,3 +467,126 @@ Mutually recursive bindings must be either all functions or all constructor appl
          :form form
          :reason-control reason-control
          :reason-args reason-args))
+
+(define-condition fundep-conflict (coalton-type-error)
+  ((new-pred :initarg :new-pred
+             :reader fundep-conflict-new-pred
+             :type ty-predicate)
+   (old-pred :initarg :old-pred
+             :reader fundep-conflict-old-pred
+             :type ty-predicate)
+   (fundep   :initarg :fundep
+             :reader fundep-conflict-fundep
+             :type t)
+   (class    :initarg :class
+             :reader fundep-conflict-class
+             :type symbol)
+   (class-vars :initarg :class-vars
+               :reader fundep-conflict-class-vars
+               :type util:symbol-list)
+   (class-fundeps :initarg :class-fundeps
+                  :reader fundep-conflict-class-fundeps
+                  :type t)
+   (old-from-tys :initarg :old-from-tys
+                 :reader fundep-conflict-old-from-tys
+                 :type ty-list)
+   (new-from-tys :initarg :new-from-tys
+                 :reader fundep-conflict-new-from-tys
+                 :type ty-list)
+   (old-to-tys :initarg :old-to-tys
+               :reader fundep-conflict-old-to-tys
+               :type ty-list)
+   (new-to-tys :initarg :new-to-tys
+               :reader fundep-conflict-new-to-tys
+               :type ty-list))
+  (:report
+   (lambda (c s)
+     (let ((*print-circle* nil) ; Prevent printing using reader macros
+           )
+       (with-pprint-variable-context ()
+         (format s "Instance ~A conflicts previous instance ~A~%the fundep ~S on class ~S~{ ~S~}~{ ~S~}~%binds~{ ~A~} to~{ ~A~}~%which conflicts with the previous binding of~{ ~A~} to~{ ~A~}"
+                 (fundep-conflict-new-pred c)
+                 (fundep-conflict-old-pred c)
+                 (fundep-conflict-fundep c)
+                 (fundep-conflict-class c)
+                 (fundep-conflict-class-vars c)
+                 (fundep-conflict-class-fundeps c)
+                 (fundep-conflict-new-from-tys c)
+                 (fundep-conflict-new-to-tys c)
+                 (fundep-conflict-old-from-tys c)
+                 (fundep-conflict-old-to-tys c)))))))
+
+(define-condition fundep-variable-error (coalton-type-error)
+  ((pred :initarg :pred
+         :reader fundep-variable-error-pred
+         :type ty-predicate)
+   (vars :initarg :vars
+         :reader fundep-variable-error-vars
+         :type ty-list)
+   (type :initarg :type
+         :reader fundep-variable-error-type
+         :type ty)
+   (class :initarg :class
+          :reader fundep-variable-error-class
+          :type symbol)
+   (class-vars :initarg :class-vars
+               :reader fundep-variable-error-class-vars
+               :type util:symbol-list)
+   (class-fundeps :initarg :class-fundeps
+                  :reader fundep-variable-error-class-fundeps
+                  :type t)
+   (fundep :initarg :fundep
+         :reader fundep-variable-error-fundep
+         :type t)
+   (closure :initarg :closure
+            :reader fundep-variable-error-closure
+            :type util:symbol-list))
+  (:report
+   (lambda (c s)
+     (let ((*print-circle* nil) ; Prevent printing using reader macros
+           )
+       (with-pprint-variable-context ()
+         (format s "The type variable~p~{ ~S~} do~A not appear in the type~p~{ ~S~}~%in the predicate ~S~%in definition of class ~S~{ ~S~}~{ ~S~}~%the fundep ~S binds class variables~{ ~S~}"
+                 (length (fundep-variable-error-vars c))
+                 (fundep-variable-error-vars c)
+                 (if (= 1 (length (fundep-variable-error-vars c)))
+                     "es"
+                     "")
+                 (length (fundep-variable-error-type c))
+                 (fundep-variable-error-type c)
+                 (fundep-variable-error-pred c)
+                 (fundep-variable-error-class c)
+                 (fundep-variable-error-class-vars c)
+                 (fundep-variable-error-class-fundeps c)
+                 (fundep-variable-error-fundep c)
+                 (fundep-variable-error-closure c)))))))
+
+(define-condition ambigious-constraint-variables (coalton-type-error)
+  ((type :initarg :type
+                  :reader ambigious-method-variables-type
+                  :type (or symbol list qualified-ty))
+   (variables :initarg :variables
+              :reader ambigious-method-variables-variables))
+  (:report
+   (lambda (c s)
+     (let ((*print-circle* nil) ; Prevent printing using reader macros
+           )
+       (with-pprint-variable-context ()
+         (format s "The variable~p~{ ~S~} ~A ambigious in the type ~S"
+                 (length (ambigious-method-variables-variables c))
+                 (ambigious-method-variables-variables c)
+                 (if (= 1 (length (ambigious-method-variables-variables c)))
+                     "is"
+                     "are")
+                 (ambigious-method-variables-type c)))))))
+
+(define-condition invalid-fundep-change (error:coalton-error)
+  ((name :initarg :name
+         :reader invalid-fundep-change-name
+         :type symbol))
+  (:report
+   (lambda (c s)
+     (let ((*print-circle* nil) ; Prevent printing using reader macros
+           )
+       (format s "Unable to change the functional dependencies on already defined class ~S"
+               (invalid-fundep-change-name c))))))

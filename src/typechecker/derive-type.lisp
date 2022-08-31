@@ -22,8 +22,12 @@
    #:default-preds
    #:default-subs
    #:split-context)
+  (:import-from
+   #:coalton-impl/typechecker/fundeps
+   #:+fundep-max-depth+)
   (:local-nicknames
-   (#:util #:coalton-impl/util))
+   (#:util #:coalton-impl/util)
+   (#:error #:coalton-impl/error))
   (:export
    #:derive-expression-type             ; FUNCTION
    #:derive-bindings-type               ; FUNCTION
@@ -53,7 +57,7 @@
 Returns (VALUES type predicate-list typed-node subs)")
   (:method :around ((value node) env substs)
     (when (next-method-p)
-      (with-type-context ("~A" (node-unparsed value))
+      (error:with-context ("~A" (node-unparsed value))
         (call-next-method))))
 
   (:method ((value node-literal) env substs)
@@ -249,7 +253,7 @@ Returns (VALUES type predicate-list typed-node subs)")
     (let ((tvar (make-variable)))
       (multiple-value-bind (ty preds typed-expr new-subs returns)
           (derive-expression-type (node-match-expr value) env subs)
-        (with-type-context ("match on ~W" (node-unparsed (node-match-expr value)))
+        (error:with-context ("match on ~W" (node-unparsed (node-match-expr value)))
           (multiple-value-bind (typed-branches match-preds new-subs new-returns)
               (derive-match-branches-type
                (make-function-type ty tvar)
@@ -619,7 +623,7 @@ TOPLEVEL is set to indicate additional checks should be completed in COALTON-TOP
                    (setf subs new-subs)
                    (setf returns (append new-returns returns))
 
-                   (with-type-context ("definition of ~A" name)
+                   (error:with-context ("definition of ~A" name)
                      (when (and new-returns (not allow-returns))
                        (error 'unexpected-return))
                      (when (not allow-deferred-predicates)
@@ -679,7 +683,31 @@ TOPLEVEL is set to indicate additional checks should be completed in COALTON-TOP
              (local-tvars (set-difference expr-tvars
                                           env-tvars
                                           :test #'equalp))) ; gs
+        ;;
+        ;; NOTE: this is where functional dependency substitutions are generated
+        ;;
 
+        (block fundep-fixpoint
+          ;; If no predicates have fundeps, then exit early
+          (unless (loop :for pred :in expr-preds
+                        :for class-name := (ty-predicate-class pred)
+                        :for class := (lookup-class env class-name)
+                        :when (ty-class-fundeps class)
+                          :collect class)
+            (return-from fundep-fixpoint))
+
+          (loop :for i :below +fundep-max-depth+
+                :do
+                   (loop :for pred :in expr-preds
+                         :for class-name := (ty-predicate-class pred)
+                         :for class := (lookup-class env class-name)
+                         :when (ty-class-fundeps class)
+                           :do (let ((new-subs (generate-fundep-subs env pred local-subs)))
+                                 (if (equalp new-subs local-subs)
+                                     (return-from fundep-fixpoint)
+                                     (setf local-subs new-subs))))
+                   (setf expr-preds (apply-substitution local-subs expr-preds))
+                :finally (util:coalton-bug "Fundep solving failed to fixpoint")))
 
         (multiple-value-bind (deferred-preds retained-preds defaultable-preds)
             (split-context env env-tvars local-tvars expr-preds local-subs)
@@ -688,14 +716,15 @@ TOPLEVEL is set to indicate additional checks should be completed in COALTON-TOP
           (setf local-subs (compose-substitution-lists (default-subs env nil defaultable-preds) local-subs))
 
           (labels ((restricted (bindings)
-                     (some (lambda (b) (not (coalton-impl/ast::node-abstraction-p (cdr b))))
+                     (some (lambda (b) (not (node-abstraction-p (cdr b))))
                            bindings)))
+
 
             ;;
             ;; NOTE: This is where defaulting happens
             ;;
 
-            (with-type-context ("definition~p of ~{~S~^, ~}" (length bindings) (mapcar #'car bindings))
+            (error:with-context ("definition~p of ~{~S~^, ~}" (length bindings) (mapcar #'car bindings))
               ;; Defaulting only applies to top level bindings
               (unless allow-deferred-predicates
                 (if (restricted bindings)
@@ -825,7 +854,10 @@ TOPLEVEL is set to indicate additional checks should be completed in COALTON-TOP
 
              ;; Extract local type variables
              (env-tvars (type-variables (apply-substitution local-subs env)))
-             (local-tvars (set-difference (type-variables expr-type) env-tvars))
+             (local-tvars (set-difference
+                           (append (type-variables expr-preds) (type-variables expr-type))
+                           env-tvars
+                           :test #'equalp))
 
              (output-qual-type (qualify expr-preds expr-type))
              (output-scheme (quantify local-tvars output-qual-type))
@@ -841,7 +873,7 @@ TOPLEVEL is set to indicate additional checks should be completed in COALTON-TOP
           (unless allow-deferred-predicates
             (setf local-subs (compose-substitution-lists (default-subs env nil reduced-preds) local-subs)))
 
-          (with-type-context ("definition of ~A" (car binding))
+          (error:with-context ("definition of ~A" (car binding))
             (when (and returns (not allow-returns))
               (error 'unexpected-return))
 
@@ -885,7 +917,7 @@ TOPLEVEL is set to indicate additional checks should be completed in COALTON-TOP
                   (or (cdr (find name name-map :key #'car :test #'equalp))
                       (util:coalton-bug "Invalid state. Unable to find name in name map"))
                   name)))
-    (with-type-context ("definition of ~A" name)
+    (error:with-context ("definition of ~A" name)
       (multiple-value-bind (new-type preds typed-node new-subs returns)
           (derive-expression-type expr env subs)
         (values typed-node
@@ -1046,7 +1078,7 @@ TOPLEVEL is set to indicate additional checks should be completed in COALTON-TOP
              (m (immutable-map-set-multiple (make-immutable-map) name-map))
              (pattern (coalton-impl/ast::rewrite-pattern-vars pattern m)))
 
-        (with-type-context ("branch ~A" pattern)
+        (error:with-context ("branch ~A" pattern)
           (multiple-value-bind (ty branch-preds typed-branch new-subs new-returns)
               (derive-match-branch-type (match-branch-unparsed alt) (match-branch-pattern alt) (match-branch-subexpr alt) (match-branch-name-map alt) env subs)
             (setf subs new-subs)

@@ -24,7 +24,7 @@ Returns new environment, binding list of declared nodes, and a DAG of dependenci
          (expl-bindings nil)
          (name-table (make-hash-table)))
 
-    (tc:with-type-context ("COALTON-TOPLEVEL")
+    (error:with-context ("COALTON-TOPLEVEL")
       (loop :for (name . node) :in parsed
             :do (progn
                   (when (gethash name name-table)
@@ -44,7 +44,7 @@ Returns new environment, binding list of declared nodes, and a DAG of dependenci
       (assert (member name expl-bindings :key #'car)
           () "Orphan type declaration for variable ~A" name))
 
-    (tc:with-type-context ("COALTON-TOPLEVEL")
+    (error:with-context ("COALTON-TOPLEVEL")
       (multiple-value-bind (typed-bindings preds new-env subs returns)
           (coalton-impl/typechecker::derive-bindings-type
            impl-bindings expl-bindings declared-types env nil nil

@@ -1,14 +1,14 @@
 (defpackage #:coalton-impl/ast/parse-error
   (:use #:cl)
   (:local-nicknames
-   (#:util #:coalton-impl/util))
+   (#:util #:coalton-impl/util)
+   (#:error #:coalton-impl/error))
   (:export
    #:coalton-parse-error                ; CONDITION
    #:coalton-parse-error-form           ; ACCESSOR
    #:coalton-parse-error-reason-control ; ACCESSOR
    #:coalton-parse-error-reason-args    ; ACCESSOR
    #:coalton-parse-error-context        ; CONDITION
-   #:with-parsing-context               ; MACRO
    #:error-parsing                      ; FUNCTION
    #:coalton-unknown-instance           ; CONDITION
    #:error-unknown-instance             ; FUNCTION
@@ -18,7 +18,7 @@
 
 (in-package #:coalton-impl/ast/parse-error)
 
-(define-condition coalton-parse-error (util:coalton-error)
+(define-condition coalton-parse-error (error:coalton-error)
   ((form :initarg :form
          :reader coalton-parse-error-form)
    (reason-control :initarg :reason-control
@@ -32,35 +32,13 @@
                        (coalton-parse-error-reason-control c)
                        (coalton-parse-error-reason-args c))))))
 
-(define-condition coalton-parse-error-context (coalton-parse-error)
-  ((context :initarg :context
-            :reader coalton-parse-error-context
-            :type string)
-   (suberror :initarg :suberror
-             :reader coalton-parse-error-suberror
-             :type coalton-parse-error))
-  (:documentation "A coalton parse error with additional context")
-  (:report
-   (lambda (c s)
-     (format s "~A~%in ~A"
-             (coalton-parse-error-suberror c)
-             (coalton-parse-error-context c)))))
-
-(defmacro with-parsing-context ((context &rest args) &body body)
-  `(handler-case
-       (progn ,@body)
-     (util:coalton-error (c)
-       (error 'coalton-parse-error-context
-              :context (format nil ,context ,@args)
-              :suberror c))))
-
 (defun error-parsing (form reason-control &rest reason-args)
   (error 'coalton-parse-error
          :form form
          :reason-control reason-control
          :reason-args reason-args))
 
-(define-condition coalton-unknown-instance (coalton-parse-error)
+(define-condition coalton-unknown-instance (error:coalton-error)
   ((instance :initarg :instance
              :reader coalton-unknown-instance-instance))
   (:report (lambda (c s)
@@ -72,7 +50,7 @@
   (error 'coalton-unknown-instance
          :instance instance))
 
-(define-condition coalton-inherited-symbol (error)
+(define-condition coalton-inherited-symbol (error:coalton-error)
   ((symbol :initarg :symbol
            :reader coalton-inherited-symbol-symbol
            :type symbol)

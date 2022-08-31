@@ -1,10 +1,10 @@
 (defpackage #:coalton-impl/typechecker/types
   (:use
    #:cl
-   #:coalton-impl/typechecker/errors
    #:coalton-impl/typechecker/kinds)
   (:local-nicknames
-   (#:util #:coalton-impl/util))
+   (#:util #:coalton-impl/util)
+   (#:error #:coalton-impl/error))
   (:export
    #:ty                                 ; STRUCT
    #:ty-list                            ; TYPE
@@ -482,7 +482,7 @@ This requires a valid PPRINT-VARIABLE-CONTEXT")
 ;;; Conditions
 ;;;
 
-(define-condition type-application-error (coalton-type-error)
+(define-condition type-application-error (error:coalton-type-error)
   ((type :initarg :type
          :reader type-application-error-type)
    (argument :initarg :argument

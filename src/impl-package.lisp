@@ -6,6 +6,7 @@
    (#:settings #:coalton-impl/settings)
    (#:util #:coalton-impl/util)
    (#:algo #:coalton-impl/algorithm)
+   (#:error #:coalton-impl/error)
    (#:ast #:coalton-impl/ast)
    (#:rt #:coalton-impl/runtime)
    (#:tc #:coalton-impl/typechecker))

@@ -30,6 +30,7 @@
    #:make-function-table)
   (:local-nicknames
    (#:settings #:coalton-impl/settings)
+   (#:util #:coalton-impl/util)
    (#:tc #:coalton-impl/typechecker)
    (#:ast #:coalton-impl/ast))
   (:export
@@ -85,6 +86,11 @@
                              package env)
                   :else
                     :collect (cons name node)))
+
+      ;; Update code db
+      (loop :for (name . node) :in bindings
+            :do (setf env (tc:set-code env name node)))
+
       (loop :for (name . node) :in bindings
             :do (typecheck-node node env))
 

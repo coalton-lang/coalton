@@ -32,3 +32,13 @@
   "Lookup the compiled code of a given definition"
   (declare (type symbol name))
   (tc:lookup-code *global-environment* name))
+
+(defun coalton:lookup-class (name)
+  "Lookup a given class"
+  (declare (type symbol name))
+  (tc:lookup-class *global-environment* name))
+
+(defun coalton:lookup-fundeps (name)
+  "Lookup the fundep structure for a given class"
+  (declare (type symbol name))
+  (tc:lookup-fundep-environment *global-environment* name))
