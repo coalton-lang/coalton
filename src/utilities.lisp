@@ -6,7 +6,6 @@
   (:export
    #:required                           ; FUNCTION
    #:unreachable                        ; MACRO
-   #:coalton-error                      ; CONDITION
    #:coalton-bug                        ; FUNCTION
    #:debug-log                          ; MACRO
    #:debug-tap                          ; MACRO
@@ -15,6 +14,9 @@
    #:maphash-values-new                 ; FUNCTION
    #:find-symbol?                       ; FUNCTION
    #:sexp-fmt                           ; FUNCTION
+   #:take-until                         ; FUNCTION
+   #:project-indicies                   ; FUNCTION
+   #:project-map                        ; FUNCTION
    ))
 
 (in-package #:coalton-impl/util)
@@ -37,10 +39,6 @@
     `(let ((,var-name ,var))
        (format t ,(format nil "~A: ~~A~~%" var) ,var-name)
        ,var-name)))
-
-(define-condition coalton-error (error)
-  ()
-  (:documentation "Supertype for coalton errors"))
 
 (define-condition coalton-bug (error)
   ((reason :initarg :reason
@@ -103,3 +101,60 @@ and it will print a flat S-expression with all symbols qualified."
 (deftype literal-value ()
   "Allowed literal values as Lisp objects."
   '(or integer ratio single-float double-float string character))
+
+
+(defun take-until (pred list)
+  "Splits LIST into two lists on the element where PRED first returns true"
+  (declare (type list list)
+           (values list list))
+  (let (out)
+    (labels ((inner (xs)
+               (cond
+                 ((null xs) nil)
+                 ((funcall pred (car xs)) xs)
+                 (t
+                  (push (car xs) out)
+                  (inner (cdr xs))))))
+      (declare (dynamic-extent #'inner))
+      (let ((result (inner list)))
+        (values
+         (nreverse out)
+         result)))))
+
+(defun project-indicies (indices data)
+  (declare (type list indices data)
+           (values list))
+  (labels ((inner (is xs pos out)
+             (cond
+               ;; Data is done, indices are not
+               ((and is (null xs))
+                (error "Indices ~A extend past data" is))
+
+               ;; Data or indicies are done
+               ((or (null is)
+                    (null xs))
+                out)
+
+               ;; match
+               ((eql (car is) pos)
+                (inner (cdr is) (cdr xs) (1+ pos) (cons (car xs) out)))
+
+               ;; indicie is past pos
+               ((> pos (car is))
+                (inner (cdr is) xs pos out))
+
+               (t
+                (inner is (cdr xs) (1+ pos) out)))))
+    (declare (dynamic-extent #'inner))
+    (nreverse (inner indices data 0 nil))))
+
+(defun project-map (indicies map data)
+  (declare (type symbol-list indicies)
+           (type hash-table map)
+           (type list data))
+  (project-indicies
+   (sort 
+    (loop :for key :in indicies
+          :collect (gethash key map))
+    #'<)
+   data))

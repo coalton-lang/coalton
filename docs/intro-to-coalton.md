@@ -686,6 +686,20 @@ The following functions all take an optional package parameter.
 
 Coalton has a similar [type defaulting system](https://www.haskell.org/onlinereport/decls.html#sect4.3.4) as Haskell. Type defaulting is invoked on implicitly typed definitions and code compiled with the `coalton` macro.
 
+## Functional Dependencies
+
+Functional dependencies allow enforcing relations on the type variables of a class to improve type inference.
+
+A class `C` can be given a functional dependency `(:a -> :b)` like so:
+
+`(define-class (C :a :b (:a -> :b)))`
+
+`(:a -> :b)` can be read as: foreach `:a` there will be only one `:b` or alternativly the value of `:b` is uniquely determined by `:a`. 
+
+If the instance `(C String Integer)` was defined, then it would be invalid to define `(C String Char)` because there are multiple values of `:b` for the same value of `:a`.
+
+Classes can have multiple functional dependencies, each dependency can list multiple class variables on each side `(:a :b -> :c :d :e)`, and dependencies can be recursive `(:a -> :b) (:b -> :a)`.
+
 ## Specialization
 
 Coalton supports optimistic type based function specialization. Function specializations are declared with a `specialize` form:

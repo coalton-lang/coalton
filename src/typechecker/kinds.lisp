@@ -1,9 +1,9 @@
 (defpackage #:coalton-impl/typechecker/kinds
   (:use
-   #:cl
-   #:coalton-impl/typechecker/errors)
+   #:cl)
   (:local-nicknames
-   (#:util #:coalton-impl/util))
+   (#:util #:coalton-impl/util)
+   (#:error #:coalton-impl/error))
   (:export
    #:kind                               ; STRUCT
    #:kstar                              ; STRUCT
@@ -285,7 +285,7 @@
 ;;; Conditions
 ;;;
 
-(define-condition kunify-error (coalton-type-error)
+(define-condition kunify-error (error:coalton-type-error)
   ((kind1 :initarg :kind1
           :reader kunify-errror-kind1
           :type kind)

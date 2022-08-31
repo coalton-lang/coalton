@@ -9,8 +9,16 @@
    #:coalton-impl/typechecker/type-errors
    #:coalton-impl/typechecker/environment
    #:coalton-impl/typechecker/parse-type)
+  (:import-from
+   #:coalton-impl/typechecker/fundeps
+   #:fundep
+   #:closure
+   #:make-fundep
+   #:fundep-list)
   (:local-nicknames
-   (#:algo #:coalton-impl/algorithm))
+   (#:util #:coalton-impl/util)
+   (#:algo #:coalton-impl/algorithm)
+   (#:error #:coalton-impl/error))
   (:export
    #:parse-class-definitions            ; FUNCTION
    #:split-class-signature              ; FUNCTION
@@ -27,7 +35,7 @@
 (defun parse-method-predicates (name type)
   (declare (type symbol name))
 
-  (with-parsing-context ("method ~A" name)
+  (error:with-context ("method ~A" name)
     (unless (some #'coalton-double-arrow-p type)
       (return-from parse-method-predicates nil))
 
@@ -42,7 +50,7 @@
               (error-parsing type "malformed method type"))
             (first subseqs))))))
 
-(defun split-class-signature (signature error-message)
+(defun split-class-signature (signature error-message &key parse-fundeps)
   (declare (type string error-message))
 
   (let (predicate context)
@@ -76,9 +84,48 @@
       (t
        (error-parsing signature error-message)))
 
-    (values
-     predicate
-     context)))
+    ;; If parse-fundeps then the predicate is a class predicate. Every
+    ;; member must be a symbol, and everything after is a functional
+    ;; dependency.
+    (if parse-fundeps
+        (multiple-value-bind (l r)
+            (util:take-until #'listp predicate)
+          (values
+           l
+           context
+           r))
+        (values
+         predicate
+         context
+         nil))))
+
+(defun parse-fundep (unparsed valid-variables)
+  (declare (type list unparsed)
+           (type util:symbol-list valid-variables)
+           (values fundep))
+  (let ((result (split-sequence:split-sequence-if #'coalton-arrow-p unparsed)))
+    (unless (= (length result) 2)
+      (error-parsing unparsed "invalid functional dependency"))
+    
+    (let* ((from (first result))
+           (to (second result)))
+
+      (when (or (null from) (null to))
+        (error-parsing unparsed "invalid functional dependency"))
+
+
+      (error:with-context ("dependency ~S" unparsed)
+        (loop :for var :in (union from to)
+
+              :unless (and (symbolp var) (equalp (symbol-package var) +keyword-package+))
+                :do (error-parsing var "invalid dependency variable")
+
+              :unless (find var valid-variables)
+                :do (error-parsing var "is not a valid class variable")))
+
+      (make-fundep
+       :from from
+       :to to))))
 
 (defun parse-class-definitions (forms env)
   (declare (type list forms)
@@ -97,25 +144,40 @@
       (unless (and (listp form)
                    (<= 2 (length form))
                    (eql 'coalton:define-class (first form)))
-        (error-parsing form "Malformed DEFINE-CLASS"))
+        (error-parsing form "malformed DEFINE-CLASS"))
 
       (let ((name nil)
             (context nil)
             (predicate nil)
+            (fundeps nil)
             (method-predicates nil)
             (methods nil)
             (docstring nil))
+        (declare (type symbol name)
+                 (type list context)
+                 (type util:symbol-list predicate)
+                 (type fundep-list fundeps)
+                 (type list method-predicates)
+                 (type list methods)
+                 (type (or null string) docstring))
 
-        (multiple-value-setq (predicate context) (split-class-signature (second form) "malformed DEFINE-CLASS"))
+        (multiple-value-bind (predicate_ context_ fundeps_)
+            (split-class-signature (second form) "malformed DEFINE-CLASS" :parse-fundeps t)
+          (setf predicate predicate_)
+          (setf context context_)
+          (setf name (car predicate))
 
-        (setf name (car predicate))
+          (error:with-context ("DEFINE-CLASS for class ~A" name)
+            (loop :for unparsed :in fundeps_
+                  :for fundep := (parse-fundep unparsed (cdr predicate))
+                  :do (push fundep fundeps))))
 
         (if (stringp (first (nthcdr 2 form)))
             (setf docstring (first (nthcdr 2 form))
                   methods (nthcdr 3 form))
             (setf methods (nthcdr 2 form)))
 
-        (with-parsing-context ("DEFINE-CLASS for class ~A" (car predicate))
+        (error:with-context ("DEFINE-CLASS for class ~A" name)
           (loop :for method :in methods
                 :do (unless (= 2 (length method))
                       (error-parsing method "invalid method definition"))
@@ -127,7 +189,7 @@
                     (remove-duplicates
                      (append (mapcar #'car context) (mapcar #'car method-predicates))))
               class-deps)
-        (push (list name predicate context methods docstring) class-forms)))
+        (push (list name predicate context methods docstring fundeps) class-forms)))
 
     ;; Ensure we know about all of the superclasses and remove any
     ;; references to known classes from the DAG (tarjan scc will fail
@@ -161,42 +223,56 @@
 
       ;; Now we can go through to parse and then add classes to the environment
       (let ((classes
-              (loop :for (name unparsed-predicate unparsed-context unparsed-methods docstring) :in sorted-forms
-                    :collect (with-parsing-context ("DEFINE-CLASS for class ~A" name)
+              (loop :for (name unparsed-predicate unparsed-context unparsed-methods docstring fundeps) :in sorted-forms
+                    :collect (error:with-context ("DEFINE-CLASS for class ~A" name)
                                (multiple-value-bind (class methods)
-                                   (parse-class-definition name unparsed-predicate unparsed-context unparsed-methods docstring env)
-                                 (setf env (set-class env (ty-class-name class) class))
+                                   (parse-class-definition name unparsed-predicate unparsed-context unparsed-methods docstring fundeps env)
 
-                                 ;; Add the class constructor function to the function env
-                                 (let ((class-arity (+ (length (ty-class-superclasses class))
-                                                       (length (ty-class-unqualified-methods class)))))
-                                   (if (not (zerop class-arity))
-                                       (setf env (set-function env
-                                                               (ty-class-codegen-sym class)
-                                                               (make-function-env-entry
-                                                                :name (ty-class-codegen-sym class)
-                                                                :arity class-arity)))
-                                       (setf env (unset-function env (ty-class-codegen-sym class)))))
+                                 (let ((prev-class (lookup-class env (ty-class-name class) :no-error t)))
 
-                                 (dolist (method methods)
-                                   (setf env (set-value-type env (car method) (cdr method)))
+                                   ;; If the class was previously defined, then the fundeps must not change
+                                   (if prev-class
+                                     (unless (and
+                                              (equalp (ty-class-fundeps class) (ty-class-fundeps prev-class)))
+                                       (error 'invalid-fundep-change
+                                              :name (ty-class-name class)))
 
-                                   (setf env (set-name env (car method)
-                                                       (make-name-entry
-                                                        :name (car method)
-                                                        :type :method
-                                                        :docstring nil
-                                                        :location (or *compile-file-pathname* *load-truename*))))
+                                     ;; If this is the first definition of the class, and it has fundeps, then initialize the fundep environment
+                                     (when (ty-class-fundeps class)
+                                       (setf env (initialize-fundep-environment env name))))
 
-                                   (if (function-type-p (qualified-ty-type (fresh-inst (cdr method))))
-                                       (let ((arity (+ (function-type-arity
-                                                        (qualified-ty-type (fresh-inst (cdr method))))
-                                                       (length (qualified-ty-predicates (fresh-inst (cdr method)))))))
-                                         (setf env (set-function env (car method)
+                                   (setf env (set-class env (ty-class-name class) class))
+
+                                   ;; Add the class constructor function to the function env
+                                   (let ((class-arity (+ (length (ty-class-superclasses class))
+                                                         (length (ty-class-unqualified-methods class)))))
+                                     (if (not (zerop class-arity))
+                                         (setf env (set-function env
+                                                                 (ty-class-codegen-sym class)
                                                                  (make-function-env-entry
-                                                                  :name (car method)
-                                                                  :arity arity))))
-                                       (setf env (unset-function env (car method)))))
+                                                                  :name (ty-class-codegen-sym class)
+                                                                  :arity class-arity)))
+                                         (setf env (unset-function env (ty-class-codegen-sym class)))))
+
+                                   (dolist (method methods)
+                                     (setf env (set-value-type env (car method) (cdr method)))
+
+                                     (setf env (set-name env (car method)
+                                                         (make-name-entry
+                                                          :name (car method)
+                                                          :type :method
+                                                          :docstring nil
+                                                          :location (or *compile-file-pathname* *load-truename*))))
+
+                                     (if (function-type-p (qualified-ty-type (fresh-inst (cdr method))))
+                                         (let ((arity (+ (function-type-arity
+                                                          (qualified-ty-type (fresh-inst (cdr method))))
+                                                         (length (qualified-ty-predicates (fresh-inst (cdr method)))))))
+                                           (setf env (set-function env (car method)
+                                                                   (make-function-env-entry
+                                                                    :name (car method)
+                                                                    :arity arity))))
+                                         (setf env (unset-function env (car method))))))
 
                                  class)))))
 
@@ -204,10 +280,11 @@
          classes
          env)))))
 
-(defun parse-class-definition (class-name unparsed-predicate unparsed-context unparsed-methods docstring env)
+(defun parse-class-definition (class-name unparsed-predicate unparsed-context unparsed-methods docstring fundeps env)
   (declare (type symbol class-name)
            (type list unparsed-predicate unparsed-context unparsed-methods)
            (type (or null string) docstring)
+           (type fundep-list fundeps)
            (type environment env)
            (values ty-class scheme-binding-list))
 
@@ -254,16 +331,23 @@
                            (lambda (tvar)
                              (list tvar (make-variable (make-kvariable))))
                            method-only-tyvars))
-                    :collect (multiple-value-bind (type new-ksubs)
-                                 (parse-qualified-type-expr env unparsed-type method-tvars ksubs)
-                               (check-for-invalid-method-preds
-                                name
-                                unparsed-type
-                                type
-                                (mapcar #'second class-tyvars))
-                               (setf ksubs new-ksubs)
-                               (setf ksubs (kunify (kind-of type) +kstar+ ksubs))
-                               (cons name (apply-ksubstitution ksubs type)))))
+                    :collect (error:with-context ("method ~S" name)
+                               (multiple-value-bind (type new-ksubs)
+                                   (parse-qualified-type-expr env unparsed-type method-tvars ksubs)
+                                 (check-for-invalid-method-preds
+                                  name
+                                  unparsed-type
+                                  type
+                                  (mapcar #'second class-tyvars))
+                                 (check-for-ambigious-method
+                                  name
+                                  unparsed-type
+                                  method-tyvars
+                                  class-tyvar-names
+                                  fundeps)
+                                 (setf ksubs new-ksubs)
+                                 (setf ksubs (kunify (kind-of type) +kstar+ ksubs))
+                                 (cons name (apply-ksubstitution ksubs type))))))
 
             (predicate (make-ty-predicate
                         :class class-name
@@ -291,13 +375,23 @@
                                      (format nil "SUPER-~D" i)))))
 
              (codegen-sym
-               (alexandria:format-symbol (symbol-package class-name) "CLASS/~A" class-name)))
+               (alexandria:format-symbol (symbol-package class-name) "CLASS/~A" class-name))
+
+             (class-variable-map (make-hash-table)))
+
+        ;; Build the class variable map
+        (loop :for var :in (cdr unparsed-predicate)
+              :for i :from 0
+              :do (setf (gethash var class-variable-map) i))
 
         (values
          (make-ty-class
           :name class-name
           :predicate predicate
           :superclasses superclasses
+          :class-variables (cdr unparsed-predicate)
+          :class-variable-map class-variable-map
+          :fundeps fundeps
           :unqualified-methods (loop :for (name . type) :in  unqualifed-methods
                                      :collect (cons name (quantify nil (apply-ksubstitution ksubs type))))
           :codegen-sym codegen-sym
@@ -330,3 +424,12 @@
                            (mapcar #'tyvar-id class-tyvars)
                            :test #'equalp)
               (error-parsing (list name unparsed-type) "predicate in method decleration only constrains class variables"))))
+
+
+(defun check-for-ambigious-method (name unparsed-type method-tyvars class-tyvars fundeps)
+  (declare (ignore name))
+  (let ((method-closure (closure method-tyvars fundeps)))
+    (unless (subsetp class-tyvars method-closure :test #'equalp)
+      (error 'ambigious-constraint-variables
+             :type unparsed-type
+             :variables (set-difference class-tyvars method-closure :test #'equalp)))))

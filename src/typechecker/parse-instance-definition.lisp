@@ -15,7 +15,8 @@
    #:coalton-impl/typechecker/derive-type
    #:coalton-impl/typechecker/parse-class-definition)
   (:local-nicknames
-   (#:util #:coalton-impl/util))
+   (#:util #:coalton-impl/util)
+   (#:error #:coalton-impl/error))
   (:export
    #:instance-definition                     ; STRUCT
    #:make-instance-definition                ; CONSTRUCTOR
@@ -73,7 +74,7 @@
                      :collect (list tyvar-name (make-variable (make-kvariable))))))
 
         ;; Check for type variables that appear in context but not in the predicate
-        (with-parsing-context ("instance definition ~S" unparsed-predicate)
+        (error:with-context ("instance definition ~S" unparsed-predicate)
           (loop :for unparsed-ctx :in unparsed-context
                 :for ctx-tyvar-names := (collect-type-vars unparsed-ctx)
                 :do (loop :for ctx-tyvar :in ctx-tyvar-names
@@ -183,7 +184,7 @@
     (check-for-orphan-instance predicate package)
 
     (with-pprint-variable-context ()
-      (with-parsing-context ("definition of ~A" predicate)
+      (error:with-context ("definition of ~A" predicate)
         (let* (;; Lookup the predeclared instance-entry for this instance
                (instance-entry (lookup-class-instance env predicate))
 

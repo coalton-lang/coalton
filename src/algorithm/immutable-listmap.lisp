@@ -23,7 +23,7 @@
 (defun immutable-listmap-lookup (m key &key no-error)
   "Lookup key in M"
   (declare (type immutable-listmap m)
-           (type symbol key)
+           (type (or fixnum symbol) key)
            (type boolean no-error)
            (values fset:seq))
   (multiple-value-bind (value present-p)
@@ -35,7 +35,7 @@
 (defun immutable-listmap-push (m key value &optional (constructor #'make-immutable-listmap))
   "Push value to the list at KEY in M"
   (declare (type immutable-listmap m)
-           (type symbol key)
+           (type (or fixnum symbol) key)
            (values immutable-listmap &optional))
 
   (let ((map (immutable-listmap-data m)))
@@ -44,7 +44,7 @@
 (defun immutable-listmap-replace (m key index value &optional (constructor #'make-immutable-listmap))
   "Replace value at INDEX with VALUE in the map at KEY in M."
   (declare (type immutable-listmap m)
-           (type symbol key)
+           (type (or fixnum symbol) key)
            (type fixnum index)
            (values immutable-listmap &optional))
   (let ((map (immutable-listmap-data m)))

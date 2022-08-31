@@ -8,6 +8,7 @@
    #:coalton-impl/typechecker/predicate
    #:coalton-impl/typechecker/scheme
    #:coalton-impl/typechecker/typed-node
+   #:coalton-impl/typechecker/fundeps
    #:coalton-impl/typechecker/unify
    #:coalton-impl/typechecker/equality
    #:coalton-impl/typechecker/environment

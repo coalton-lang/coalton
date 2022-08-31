@@ -70,12 +70,15 @@
   (declare (type instance-definition-list instances))
   (loop :for inst :in instances
         :for class-name := (instance-definition-class-name inst)
+        :for class := (lookup-class env class-name)
         :for pred := (instance-definition-predicate inst)
         :for codegen-sym := (instance-definition-codegen-sym inst)
         :for method-codegen-syms := (instance-definition-method-codegen-syms inst)
         :collect `(add-instance env ',class-name ,(lookup-class-instance env pred))
         :if (instance-definition-context inst)
           :collect `(set-function env ',codegen-sym ,(lookup-function env codegen-sym))
+        :if (ty-class-fundeps class)
+          :collect `(update-instance-fundeps env ,pred)
         :append (loop :for key :being :the :hash-keys :of method-codegen-syms
                       :for value :being :the :hash-values :of method-codegen-syms
                       :for function-entry := (lookup-function env value :no-error t)
@@ -92,6 +95,8 @@
         :collect `(set-class env ',name ,(lookup-class env name))
         :if (lookup-function env (ty-class-codegen-sym class) :no-error t)
           :collect `(set-function env ',name ,(lookup-function env (ty-class-codegen-sym class)))
+        :if (ty-class-fundeps class)
+          :collect `(initialize-fundep-environment env ,name)
         :append (loop :for (name . node) :in (ty-class-unqualified-methods class)
                       :for function-entry := (lookup-function env name :no-error t)
                       :collect `(set-value-type env ',name ,(lookup-value-type env name))

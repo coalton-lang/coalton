@@ -92,6 +92,8 @@
    #:print-instance-db
    #:print-specializations
    #:lookup-code
+   #:lookup-class
+   #:lookup-fundeps
    #:type-of
    #:kind-of)
 

@@ -18,7 +18,8 @@
    #:lisp-type)
   (:local-nicknames
    (#:util #:coalton-impl/util)
-   (#:algo #:coalton-impl/algorithm))
+   (#:algo #:coalton-impl/algorithm)
+   (#:error #:coalton-impl/error))
   (:export
    #:type-definition                    ; STRUCT
    #:make-type-definition               ; CONSTRUCTOR
@@ -224,7 +225,7 @@
            (type symbol ctor-name)
            (type environment env))
   
-   (with-type-context ("define-type of ~S" ty-name)
+   (error:with-context ("define-type of ~S" ty-name)
     (let ((ctor-entry (lookup-constructor env ctor-name :no-error t)))
       (when (and ctor-entry (not (eq ty-name (constructor-entry-constructs ctor-entry))))
         (error 'duplicate-ctor
@@ -273,7 +274,7 @@ Returns TYPE-DEFINITIONS"
                   (when (stringp (car ctors))
                     (car ctors))))
 
-            (with-parsing-context ("definition of type ~A" tycon-name)
+            (error:with-context ("definition of type ~A" tycon-name)
               ;; Check for invalid type variables
               (unless (every (lambda (var)
                                (equalp (symbol-package var)
@@ -351,7 +352,7 @@ Returns TYPE-DEFINITIONS"
       (values
        (loop :for (tycon-name tcon ctor-data docstring) :in parsed-tcons
              :collect
-             (with-parsing-context ("definition of type ~A" tycon-name)
+             (error:with-context ("definition of type ~A" tycon-name)
                
                ;; Parse out the ctors
                (let* ((parsed-ctors (mapcar #'cdr ctor-data))

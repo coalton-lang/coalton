@@ -61,6 +61,7 @@
    #:make-hoister
    #:pop-final-hoist-point)
   (:local-nicknames
+   (#:util #:coalton-impl/util)
    (#:tc #:coalton-impl/typechecker))
   (:export
    #:make-candidate-manager

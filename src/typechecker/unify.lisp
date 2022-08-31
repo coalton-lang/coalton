@@ -5,11 +5,15 @@
    #:coalton-impl/typechecker/types
    #:coalton-impl/typechecker/substitutions
    #:coalton-impl/typechecker/predicate)
+  (:local-nicknames
+   (#:error #:coalton-impl/error))
   (:export
    #:unify                              ; FUNCTION
    #:match                              ; FUNCTION
    #:predicate-mgu                      ; FUNCTION
    #:predicate-match                    ; FUNCTION
+   #:match-list                         ; FUNCTION
+   #:unify-list                         ; FUNCTION
    ))
 
 (in-package #:coalton-impl/typechecker/unify)
@@ -22,7 +26,7 @@
   "Unify TYPE1 and TYPE2 under given substitutions, returning an updated substitution list"
   (let ((desc1 (if desc1 (format nil " (type of ~A)" desc1) ""))
         (desc2 (if desc2 (format nil " (type of ~A)" desc2) "")))
-    (with-type-context ("unification of types ~A~A and ~A~A" (apply-substitution substs type1) desc1 (apply-substitution substs type2) desc2)
+    (error:with-context ("unification of types ~A~A and ~A~A" (apply-substitution substs type1) desc1 (apply-substitution substs type2) desc2)
       (let ((new-substs (mgu (apply-substitution substs type1)
                              (apply-substitution substs type2))))
         (compose-substitution-lists new-substs substs)))))
@@ -130,3 +134,30 @@ apply s type1 == type2")
        subs)
     (coalton-type-error ()
       (error 'predicate-unification-error :pred1 pred1 :pred2 pred2))))
+
+(defun match-list (list1 list2)
+  "Returns true if all of the types in LIST2 match the types in LIST1 pairwise"
+  (declare (type ty-list list1)
+           (type ty-list list2))
+  (handler-case
+      (progn
+        (reduce #'merge-substitution-lists
+                (loop :for t1 :in list1
+                      :for t2 :in list2
+
+                      :collect (match t2 t1)))
+        (return-from match-list t))
+
+    (coalton-type-error ()
+      (return-from match-list nil))))
+
+(defun unify-list (subs list1 list2)
+  (declare (type substitution-list subs)
+           (type ty-list list1)
+           (type ty-list list2))
+  (loop :for t1 :in list1
+        :for t2 :in list2
+
+        :collect (setf subs (unify subs t1 t2)))
+
+  subs)

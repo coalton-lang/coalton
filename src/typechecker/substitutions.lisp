@@ -1,10 +1,10 @@
 (defpackage #:coalton-impl/typechecker/substitutions
   (:use
    #:cl
-   #:coalton-impl/typechecker/errors
    #:coalton-impl/typechecker/types)
   (:local-nicknames
-   (#:util #:coalton-impl/util))
+   (#:util #:coalton-impl/util)
+   (#:error #:coalton-impl/error))
   (:export
    #:substitution                       ; STRUCT
    #:make-substitution                  ; CONSTRUCTOR
@@ -44,7 +44,7 @@
                  (equalp (apply-substitution s1 x) (apply-substitution s2 x)))
                (mapcar #'substitution-from overlap))
         (concatenate 'list s1 s2)
-        (error 'coalton-type-error))))
+        (error 'error:coalton-type-error))))
 
 (defun compose-substitution-lists (s1 s2)
   "Compose substitution lists S1 and S2 together, applying S1 to S2."

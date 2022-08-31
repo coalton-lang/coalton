@@ -149,25 +149,25 @@ in FORMS that begin with that operator."
 
 (defmacro coalton:coalton-codegen (&body toplevel-forms)
   "Returns the lisp code generated from coalton code. Intended for debugging."
-  `(let ((*emit-type-annotations* nil)
-         (*coalton-skip-update* t))
+  `(let ((settings:*emit-type-annotations* nil)
+         (settings:*coalton-skip-update* t))
      (values (process-coalton-toplevel ',toplevel-forms *package* *global-environment*))))
 
 (defmacro coalton:coalton-codegen-types (&body toplevel-forms)
   "Returns the lisp code generated from coalton code with lisp type annotations. Intended for debugging."
-  `(let ((*emit-type-annotations* t)
-         (*coalton-skip-update* t))
+  `(let ((settings:*emit-type-annotations* t)
+         (settings:*coalton-skip-update* t))
      (values (process-coalton-toplevel ',toplevel-forms *package* *global-environment*))))
 
 (defmacro coalton:coalton-codegen-ast (&body toplevel-forms)
   "Prints the AST of the typechecked coalton code. Intended for debugging."
-  `(let ((*coalton-dump-ast* t))
+  `(let ((settings:*coalton-dump-ast* t))
      (process-coalton-toplevel ',toplevel-forms *package* *global-environment*)
      (values)))
 
 (defmacro coalton:coalton (form)
   (let ((parsed-form (ast:parse-form form (algo:make-immutable-map) *package*)))
-    (tc:with-type-context ("COALTON")
+    (error:with-context ("COALTON")
       (multiple-value-bind (type preds typed-node substs)
           (tc:derive-expression-type parsed-form *global-environment* nil)
 
@@ -210,7 +210,7 @@ in FORMS that begin with that operator."
                       (qual-type (coalton-impl/typechecker::instantiate
                                   tvars
                                   (coalton-impl/typechecker::ty-scheme-type scheme))))
-                 (warn "The expression ~A~%    of type ~A~{ ~A~}. ~A => ~A~%    has unresolved constraint~A ~A~%    add a type assertion with THE to resolve it"
+                 (warn "The expression ~A~%    of type ~A~{ ~S~}. ~S => ~S~%    has unresolved constraint~A ~S~%    add a type assertion with THE to resolve it"
                        form
                        (if tc:*coalton-print-unicode*
                            "∀"

@@ -12,6 +12,12 @@
    #:coalton-impl/typechecker/substitutions
    #:apply-substitution
    #:substitution-list)
+  (:import-from
+   #:coalton-impl/typechecker/fundeps
+   #:fundep
+   #:fundep-from
+   #:fundep-to
+   #:fundep-list)
   (:local-nicknames
    (#:util #:coalton-impl/util))
   (:export
@@ -44,6 +50,9 @@
    #:ty-class-name                          ; ACCESSOR
    #:ty-class-predicate                     ; ACCESSOR
    #:ty-class-superclasses                  ; ACCESSOR
+   #:ty-class-class-variables               ; ACCESSOR
+   #:ty-class-class-variable-map            ; ACCESSOR
+   #:ty-class-fundeps                       ; ACCESSOR
    #:ty-class-unqualified-methods           ; ACCESSOR
    #:ty-class-codegen-sym                   ; ACCESSOR
    #:ty-class-superclass-dict               ; ACCESSOR
@@ -88,6 +97,7 @@
    #:environment-type-environment           ; ACCESSOR
    #:environment-constructor-environment    ; ACCESSOR
    #:environment-class-environment          ; ACCESSOR
+   #:environment-fundep-environment         ; ACCESSOR
    #:environment-instance-environment       ; ACCESSOR
    #:environment-function-environment       ; ACCESSOR
    #:environment-name-environment           ; ACCESSOR
@@ -127,6 +137,10 @@
    #:add-specialization                     ; FUNCTION
    #:lookup-specialization                  ; FUNCTION
    #:lookup-specialization-by-type          ; FUNCTION
+   #:lookup-fundep-environment              ; FUNCTION
+   #:initialize-fundep-environment          ; FUNCTION
+   #:update-instance-fundeps                ; FUNCTION
+   #:generate-fundep-subs                   ; FUNCTION
    ))
 
 (in-package #:coalton-impl/typechecker/environment)
@@ -398,6 +412,12 @@
   (name                (util:required 'name)                :type symbol              :read-only t)
   (predicate           (util:required 'predicate)           :type ty-predicate        :read-only t)
   (superclasses        (util:required 'superclasses)        :type ty-predicate-list   :read-only t)
+  (class-variables     (util:required 'class-variables)     :type util:symbol-list    :read-only t)
+
+  ;; Hash table mapping variable symbols to their index in the predicate
+  (class-variable-map  (util:required 'class-variable-map)  :type hash-table          :read-only t)
+  (fundeps             (util:required 'fundeps)             :type fundep-list         :read-only t)
+
   ;; Methods of the class containing the same tyvars in PREDICATE for
   ;; use in pretty printing
   (unqualified-methods (util:required 'unqualified-methods) :type scheme-binding-list :read-only t)
@@ -427,6 +447,9 @@
    :name (ty-class-name class)
    :predicate (apply-substitution subst-list (ty-class-predicate class))
    :superclasses (apply-substitution subst-list (ty-class-superclasses class))
+   :class-variables (ty-class-class-variables class)
+   :class-variable-map (ty-class-class-variable-map class)
+   :fundeps (ty-class-fundeps class)
    :unqualified-methods (mapcar (lambda (entry)
                                   (cons (car entry)
                                         (apply-substitution subst-list (cdr entry))))
@@ -444,6 +467,15 @@
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type class-environment))
+
+;;;
+;;; Fundep Environment
+;;;
+
+(defstruct (fundep-environment (:include immutable-map)))
+
+#+(and sbcl coalton-release)
+(declaim (sb-ext:freeze-type fundep-environment))
 
 ;;;
 ;;; Instance environment
@@ -590,6 +622,7 @@
   (type-environment           (util:required 'type-environment)           :type type-environment           :read-only t)
   (constructor-environment    (util:required 'constructor-environment)    :type constructor-environment    :read-only t)
   (class-environment          (util:required 'class-environment)          :type class-environment          :read-only t)
+  (fundep-environment         (util:required 'fundep-environment)         :type fundep-environment         :read-only t)
   (instance-environment       (util:required 'instance-environment)       :type instance-environment       :read-only t)
   (function-environment       (util:required 'function-environment)       :type function-environment       :read-only t)
   (name-environment           (util:required 'name-environment)           :type name-environment           :read-only t)
@@ -617,6 +650,7 @@
    :type-environment (make-default-type-environment)
    :constructor-environment (make-default-constructor-environment)
    :class-environment (make-class-environment)
+   :fundep-environment (make-fundep-environment)
    :instance-environment (make-instance-environment)
    :function-environment (make-function-environment)
    :name-environment (make-name-environment)
@@ -631,6 +665,7 @@
                              (type-environment (environment-type-environment env))
                              (constructor-environment (environment-constructor-environment env))
                              (class-environment (environment-class-environment env))
+                             (fundep-environment (environment-fundep-environment env))
                              (instance-environment (environment-instance-environment env))
                              (function-environment (environment-function-environment env))
                              (name-environment (environment-name-environment env))
@@ -642,6 +677,7 @@
            (type value-environment value-environment)
            (type constructor-environment constructor-environment)
            (type class-environment class-environment)
+           (type fundep-environment fundep-environment)
            (type instance-environment instance-environment)
            (type function-environment function-environment)
            (type name-environment name-environment)
@@ -655,6 +691,7 @@
    :type-environment type-environment
    :constructor-environment constructor-environment
    :class-environment class-environment
+   :fundep-environment fundep-environment
    :instance-environment instance-environment
    :function-environment function-environment
    :name-environment name-environment
@@ -679,7 +716,6 @@
 
 (defmethod type-variables ((env environment))
   (type-variables (environment-value-environment env)))
-
 
 ;;;
 ;;; Functions
@@ -1117,3 +1153,205 @@
           (return-from lookup-specialization-by-type elem))
       (coalton-type-error (e)
         (declare (ignore e))))))
+
+(defun lookup-fundep-environment (env class &key (no-error nil))
+  (declare (type environment env)
+           (type symbol class)
+           (values (or null immutable-listmap) &optional))
+  (let ((result (immutable-map-lookup (environment-fundep-environment env) class)))
+    (when (and (not result) (not no-error))
+      (util:coalton-bug "Unable to find fundep environment for class ~A" class))
+
+    result))
+
+(defun initialize-fundep-environment (env class)
+  (declare (type environment env)
+           (type symbol class)
+           (values environment &optional))
+  (let ((result (lookup-fundep-environment env class :no-error t)))
+    (when result
+      (util:coalton-bug "Fundep environment is already initialized for class ~A" class))
+    (update-environment
+     env
+     :fundep-environment (immutable-map-set
+                          (environment-fundep-environment env)
+                          class
+                          (make-immutable-listmap)
+                          #'make-fundep-environment))))
+
+(defstruct fundep-entry
+  (from      (util:required 'from) :type ty-list :read-only t)
+  (to        (util:required 'to)   :type ty-list :read-only t))
+
+(defmethod make-load-form ((self fundep-entry) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
+(defun insert-fundep-entry% (env class fundep entry)
+  (declare (type environment env)
+           (type symbol class)
+           (type fixnum fundep)
+           (type fundep-entry entry))
+
+  (let ((result (lookup-fundep-environment env class)))
+    (update-environment
+     env
+     :fundep-environment
+     (immutable-map-set
+      (environment-function-environment env)
+      class
+      (immutable-listmap-push
+       result
+       fundep
+       entry)
+      #'make-fundep-environment))))
+
+
+(defun update-instance-fundeps (env pred)
+  (declare (type environment env)
+           (type ty-predicate pred)
+           (values environment))
+
+  (let* ((class (lookup-class env (ty-predicate-class pred)))
+         (fundep-env (lookup-fundep-environment env (ty-predicate-class pred)))
+         (class-variable-map (ty-class-class-variable-map class)))
+
+    (loop :for fundep :in (ty-class-fundeps class)
+          :for i :from 0 
+          ;; Lookup the state for the ith fundep
+          :for state := (immutable-listmap-lookup fundep-env i :no-error t) 
+
+          :for from-tys
+            := (mapcar
+                (lambda (var)
+                  (nth (gethash var class-variable-map) (ty-predicate-types pred)))
+                (fundep-from fundep))
+
+          :for to-tys
+            := (mapcar
+                (lambda (var)
+                  (nth (gethash var class-variable-map) (ty-predicate-types pred)))
+                (fundep-to fundep))
+
+          :do (block nil
+                ;; Try to find a matching relation for the current fundep
+                (fset:do-seq (s state)
+                  ;; If the left side matches
+                  (when (or (match-list (fundep-entry-from s) from-tys)
+                            (match-list from-tys (fundep-entry-from s)))
+                    ;; The right side must match
+                    (unless (match-list (fundep-entry-to s) to-tys)
+                      (error-fundep-conflict
+                       env
+                       class
+                       pred
+                       fundep
+                       (fundep-entry-from s)
+                       from-tys
+                       (fundep-entry-to s)
+                       to-tys))
+
+                    ;; Exit upon finding a match
+                    (return)))
+
+                ;; Insert a new relation if there wasn't a match
+                (setf env
+                      (insert-fundep-entry%
+                       env
+                       (ty-class-name class)
+                       i
+                       (make-fundep-entry
+                        :from from-tys
+                        :to to-tys))))))
+
+  env)
+
+(defun error-fundep-conflict (env class pred fundep old-from-tys new-from-tys old-to-tys new-to-tys)
+  "Finds a conflicting instance and signals an error"
+  (declare (type environment env)
+           (type ty-class class)
+           (type ty-predicate pred)
+           (type fundep fundep)
+           (type ty-list from-tys old-to-tys new-to-tys))
+  (let* ((class-name (ty-class-name class))
+
+         (from-tys_ (copy-list new-from-tys))
+
+         (vars
+           (loop :for v :in (ty-class-class-variables class)
+                 :if (find v (fundep-from fundep))
+                   :collect (prog1
+                              (car from-tys_)
+                              (setf from-tys_ (cdr from-tys_)))
+                 :else
+                   :collect (make-variable)))
+
+         (new-pred (make-ty-predicate :class class-name :types vars)))
+
+    (fset:do-seq (inst (lookup-class-instances env class-name))
+      (handler-case
+          (progn
+            (predicate-mgu new-pred (ty-class-instance-predicate inst))
+            (error 'fundep-conflict
+                   :new-pred pred
+                   :old-pred (ty-class-instance-predicate inst)
+                   :fundep fundep
+                   :class class-name
+                   :class-vars (ty-class-class-variables class)
+                   :class-fundeps (ty-class-fundeps class)
+                   :old-from-tys old-from-tys
+                   :new-from-tys new-from-tys
+                   :old-to-tys old-to-tys
+                   :new-to-tys new-to-tys))
+        (predicate-unification-error () nil)))
+
+    ;; If there was a fundep conflict, one of the instances should have matched
+    (util:unreachable)))
+
+
+(defun generate-fundep-subs (env pred subs)
+  (declare (type environment env)
+           (type ty-predicate pred)
+           (type substitution-list subs))
+  (let* ((class-name (ty-predicate-class pred))
+
+         (class (lookup-class env class-name))
+
+         (class-variable-map (ty-class-class-variable-map class))
+
+         (fundep-env (lookup-fundep-environment env class-name)))
+
+    (loop :for fundep :in (ty-class-fundeps class)
+          :for i :from 0
+
+          :for state := (immutable-listmap-lookup fundep-env i :no-error t)
+
+          :when state
+            :do (setf subs (generate-fundep-subs-for-pred% pred state class-variable-map fundep subs)))
+
+    subs))
+
+(defun generate-fundep-subs-for-pred% (pred state class-variable-map fundep subs)
+  (declare (type ty-predicate pred)
+           (type fset:seq state)
+           (type hash-table class-variable-map)
+           (type fundep fundep)
+           (type substitution-list subs)
+           (values substitution-list &optional))
+
+  (let* ((from-tys
+           (mapcar
+            (lambda (var)
+              (nth (gethash var class-variable-map) (ty-predicate-types pred)))
+            (fundep-from fundep)))
+
+         (to-tys
+           (mapcar
+            (lambda (var)
+              (nth (gethash var class-variable-map) (ty-predicate-types pred)))
+            (fundep-to fundep))))
+
+    (fset:do-seq (s state)
+      (when (match-list from-tys (fundep-entry-from s))
+        (return-from generate-fundep-subs-for-pred% (unify-list subs to-tys (fundep-entry-to s))))))
+
+  subs)
