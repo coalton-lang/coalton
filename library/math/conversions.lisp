@@ -162,5 +162,23 @@ cannot be represented in :TO. These fall into a few categories:
 (integer-into-float U32 Double-Float cl:double-float)
 (integer-into-float I32 Double-Float cl:double-float)
 
+;; Allow Integer -> {Single,Double}-Float conversions
+(coalton-toplevel
+  (define-instance (TryInto Integer Single-Float)
+    (define (tryInto x)
+      (lisp (Result String Single-Float) (x)
+        (cl:let ((y (cl:ignore-errors (cl:coerce x 'cl:single-float))))
+          (cl:if (cl:null y)
+                 (Err "Integer to Single-Float conversion out-of-range")
+                 (Ok y))))))
+
+  (define-instance (TryInto Integer Double-Float)
+    (define (tryInto x)
+      (lisp (Result String Double-Float) (x)
+        (cl:let ((y (cl:ignore-errors (cl:coerce x 'cl:double-float))))
+          (cl:if (cl:null y)
+                 (Err "Integer to Double-Float conversion out-of-range")
+                 (Ok y)))))))
+
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/MATH/CONVERSIONS")
