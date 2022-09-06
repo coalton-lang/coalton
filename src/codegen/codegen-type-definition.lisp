@@ -110,21 +110,7 @@
                            (format stream "#.(~s~{ ~s~})"
                                    ',(tc:constructor-entry-name constructor)
                                    (list ,@(mapcar (lambda (slot) `(slot-value self ',slot)) field-names)))
-                           self)))
-
-            :append (cond
-                      ((zerop (tc:constructor-entry-arity constructor))
-                       (list `(global-lexical:define-global-lexical
-                                  ,(tc:constructor-entry-name constructor)
-                                  (,(tc:constructor-entry-name constructor)))))
-                      (t
-                       (let* ((arity (length field-names))
-                              (entry (construct-function-entry
-                                      `#',(tc:constructor-entry-name constructor)
-                                      arity)))
-                         (list `(global-lexical:define-global-lexical
-                                    ,(tc:constructor-entry-name constructor)
-                                  ,entry))))))
+                           self))))
 
         ,@(when (settings:coalton-release-p)
             (list

@@ -43,43 +43,52 @@
         (list
          `(defstruct (,classname
                       (:copier nil)
+                      (:predicate nil)
                       ,@(when superclass
                           (list `(:include ,superclass)))
-                      (:constructor ,constructor ,field-names)
-                      (:predicate nil))
+                      (:constructor ,constructor ,field-names)) 
             ,@(loop :for field :in fields
                     :for name := (struct-or-class-field-name field)
                     :collect `(,name (error ""))))))
 
        (:class
-        (list 
-         `(defclass ,classname
-              ,(if superclass
-                   (list superclass)
-                   (list))
-            ,(loop :for field :in fields
-                   :for name := (struct-or-class-field-name field)
-                   :for package := (symbol-package classname)
-                   :for accessor
-                     := (alexandria:format-symbol package "~A-~A" classname name)
-                   :collect `(,name
-                              :initform (error "")
-                              :initarg ,name
-                              :accessor ,accessor)))
+        (append 
+         (list
+          `(defclass ,classname
+               ,(if superclass
+                    (list superclass)
+                    (list))
+             ,(loop :for field :in fields
+                    :for name := (struct-or-class-field-name field)
+                    :for package := (symbol-package classname)
+                    :for accessor
+                      := (alexandria:format-symbol package "~A-~A" classname name)
+                    :collect `(,name
+                               :initarg ,name
+                               :accessor ,accessor))
+             (:default-initargs
+              ,@(loop :for field :in fields
+                      :for name := (struct-or-class-field-name field)
+                      :append `(,name (error ""))))))
 
-         `(defun ,constructor ,field-names
-            (make-instance ',classname ,@(mapcan
-                                          (lambda (field)
-                                            `(',field ,field))
-                                          field-names))))))
-     (when (not (null fields))
-       (cons
-        `(global-lexical:define-global-lexical ,constructor
-             ,(construct-function-entry `#',constructor (length fields)))
-        (loop :for field :in fields
-              :for package := (symbol-package classname)
-              :for field-name := (alexandria:format-symbol package "~A-~A" classname (struct-or-class-field-name field))
-              :collect `(global-lexical:define-global-lexical ,field-name
-                          ,(construct-function-entry `#',field-name 1))))))))
+         (list
+          `(declaim (inline ,constructor))
+          `(defun ,constructor ,field-names
+             (make-instance ',classname ,@(mapcan
+                                           (lambda (field)
+                                             `(',field ,field))
+                                           field-names)))))))
+     (if (not (null fields))
+         (cons
+          `(global-lexical:define-global-lexical ,constructor
+               ,(construct-function-entry `#',constructor (length fields)))
+          (loop :for field :in fields
+                :for package := (symbol-package classname)
+                :for field-name := (alexandria:format-symbol package "~A-~A" classname (struct-or-class-field-name field))
+                :collect `(global-lexical:define-global-lexical ,field-name
+                              ,(construct-function-entry `#',field-name 1))))
+
+         (list
+          `(global-lexical:define-global-lexical ,constructor (,constructor)))))))
 
 
