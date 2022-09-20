@@ -65,7 +65,7 @@
                                  ;; For oversaturated functions, we saturate repeatedly.
                                  (let ((temps (alexandria:make-gensym-list applied-arity)))
                                    `(lambda (,fun ,@temps)
-                                      (declare (type function fun))
+                                      (declare (type function ,fun))
                                       (,(sub-application-sym (- applied-arity arity))
                                        (funcall ,fun ,@(subseq temps 0 arity))
                                        ,@(subseq temps arity)))))

@@ -212,7 +212,7 @@
 
 
 (defun inline-methods (node env)
-  (declare (type binding-list bindings)
+  (declare (type node node)
            (type tc:environment env)
            (values node &optional))
   (labels ((inline-method (node &rest rest)
@@ -296,7 +296,7 @@
      nil)))
 
 (defun static-dict-lift (node hoister package env)
-  (declare (type binding-list bindings)
+  (declare (type node node)
            (type hoister hoister)
            (type package package)
            (type tc:environment env)
