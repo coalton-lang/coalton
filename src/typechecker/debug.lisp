@@ -164,4 +164,9 @@
                                      (specialization-entry-to-ty spec)))
                            (format t "~%")))
                (format t "~%")))
-      (maphash #'print-package sorted-by-package))))
+      (if package
+          (let ((p (find-package package)))
+            (unless p
+              (error "Invalid package ~A" package))
+            (print-package p (gethash p sorted-by-package)))
+          (maphash #'print-package sorted-by-package)))))

@@ -6,15 +6,10 @@
    #:coalton-impl/codegen/struct-or-class
    #:struct-or-class
    #:make-struct-or-class-field)
-  (:import-from
-   #:coalton-impl/codegen/lisp-type
-   #:lisp-type)
-  (:import-from
-   #:coalton-impl/codegen/function-entry
-   #:construct-function-entry)
   (:local-nicknames
    (#:settings #:coalton-impl/settings)
    (#:global-lexical #:coalton-impl/global-lexical)
+   (#:rt #:coalton-impl/runtime)
    (#:tc #:coalton-impl/typechecker))
   (:export
    #:codegen-class-definitions))
@@ -41,7 +36,7 @@
               (loop :for method :in (tc:ty-class-unqualified-methods class)
                     :collect (make-struct-or-class-field
                               :name (car method)
-                              :type (lisp-type (cdr method) env))))
+                              :type (tc:lisp-type (cdr method) env))))
 
         :append (struct-or-class
                   :classname codegen-name
@@ -82,7 +77,7 @@
              `(funcall (the (function ,(make-list (length params) :initial-element t)) (,method-accessor dict)) ,@params)))
       ;; Generate the wrapper functions
       (global-lexical:define-global-lexical ,(car m)
-          ,(construct-function-entry
+          ,(rt:construct-function-entry
             `#',(car m)
             (+ arity 1) ; We need a function of arity + 1 to account for DICT
             ))

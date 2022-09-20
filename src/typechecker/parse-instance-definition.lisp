@@ -138,12 +138,14 @@
   (lookup-type env (ty-underlying-type-name ty)))
 
 (defun check-for-addressable-on-non-repr-native-type (form predicate class-name env)
-  "User code is not allowed to define instances of `Addressable' except for types which specify `repr :native'.
+  "User code is not allowed to define instances of `Addressable' except for types which specify `repr :native' or in package COALTON-LIBRARY/TYPES.
 
 `process-coalton-toplevel' will bypass this check for compiler-generated `Addressable' instances returned from
 `process-toplevel-type-definitions' will by passing `:compiler-generated t' through
 `process-toplevel-instance-definitions' to `parse-instance-definition'."
-  (when (eq class-name (alexandria:ensure-symbol "ADDRESSABLE" (find-package "COALTON-LIBRARY/CLASSES")))
+  (when (and (not (equalp cl:*package*
+                          (find-package "COALTON-LIBRARY/TYPES")))
+             (eq class-name (alexandria:ensure-symbol "ADDRESSABLE" (find-package "COALTON-LIBRARY/CLASSES"))))
     (let* ((ty-args (ty-predicate-types predicate)))
       (unless (= (length ty-args) 1)
         (error-parsing
@@ -157,6 +159,22 @@
            "Cannot explicitly define Addressable instance for type ~s with explicit repr ~s"
            (type-entry-name type-entry)
            (type-entry-explicit-repr type-entry)))))))
+
+(defun check-for-manual-runtime-repr  (form predicate class-name env)
+  "User code is not allowed to define instances of `RuntimeRepr' except in package COALTON-LIBRARY/TYPES.
+
+`process-coalton-toplevel' will bypass this check for compiler-generated `RuntimeRepr' instances returned from
+`process-toplevel-type-definitions' will by passing `:compiler-generated t' through
+`process-toplevel-instance-definitions' to `parse-instance-definition'."
+  (when (eq class-name (alexandria:ensure-symbol "RUNTIMEREPR" (find-package "COALTON-LIBRARY/TYPES")))
+    (let* ((ty-args (ty-predicate-types predicate))
+           (type-entry (ty-find-type-entry env (first ty-args))))
+      (unless (equalp cl:*package*
+                      (find-package "COALTON-LIBRARY/TYPES"))
+        (error-parsing
+         form
+         "Cannot explicitly define RuntimeRepr instance for type ~s.~%  The compiler will automatically generate this instance for any defined types."
+         (type-entry-name type-entry))))))
 
 (defun parse-instance-definition (form package env &key compiler-generated)
   (multiple-value-bind (predicate context methods)
@@ -177,7 +195,8 @@
                                                predicate)))
 
           (unless compiler-generated
-            (check-for-addressable-on-non-repr-native-type form predicate class-name env))
+            (check-for-addressable-on-non-repr-native-type form predicate class-name env)
+            (check-for-manual-runtime-repr form predicate class-name env))
 
           ;; Check that constraints defined on the class are resolvable
           (loop :for superclass :in (ty-class-superclasses class-entry)

@@ -93,7 +93,7 @@
     (lisp :a (f prec-bits rnd)
       (cl:let ((*bf-precision* prec-bits)
                (*bf-rounding-mode* rnd))
-        (coalton-impl/codegen::A1 f Unit))))
+        (call-coalton-function f Unit))))
 
   (declare with-precision (UFix -> (Unit -> :a) -> :a))
   (define (with-precision prec-bits f)

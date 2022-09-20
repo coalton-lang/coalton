@@ -1,10 +1,15 @@
-(defpackage #:coalton-impl/codegen/function-entry
+(defpackage #:coalton-impl/runtime/function-entry
   (:use
    #:cl
    #:coalton-impl/util)
+  (:import-from
+   #:coalton
+   #:call-coalton-function)
   (:export
-   #:*function-constructor-functions*
-   #:*function-application-functions*
+   #:function-entry
+   #:function-entry-arity
+   #:function-entry-function
+   #:function-entry-curried
    #:construct-function-entry
    #:call-coalton-function
    #:too-many-arguments-to-coalton-function
@@ -12,7 +17,7 @@
    #:too-many-arguments-count
    #:too-many-arguments-arguments))
 
-(in-package #:coalton-impl/codegen/function-entry)
+(in-package #:coalton-impl/runtime/function-entry)
 
 (defconstant function-arity-limit 32)
 

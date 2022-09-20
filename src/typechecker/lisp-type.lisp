@@ -1,15 +1,19 @@
-(defpackage #:coalton-impl/codegen/lisp-type
+(defpackage #:coalton-impl/typechecker/lisp-type
   (:use
    #:cl
-   #:coalton-impl/util)
+   #:coalton-impl/typechecker/types
+   #:coalton-impl/typechecker/predicate
+   #:coalton-impl/typechecker/scheme
+   #:coalton-impl/typechecker/environment)
   (:import-from
-   #:coalton-impl/codegen/function-entry
+   #:coalton-impl/runtime
    #:function-entry)
   (:local-nicknames
-   (#:tc #:coalton-impl/typechecker)
-   (#:util #:coalton-impl/util)))
+   (#:util #:coalton-impl/util))
+  (:export
+   #:lisp-type))
 
-(in-package #:coalton-impl/codegen/lisp-type)
+(in-package #:coalton-impl/typechecker/lisp-type)
 
 ;;;
 ;;; Lisp types for coalton types
@@ -18,32 +22,28 @@
 (defgeneric lisp-type (ty env)
   (:documentation "Returns the corresponding lisp type for the type of the given node")
 
-  (:method ((ty tc:tyvar) env)
+  (:method ((ty tyvar) env)
     (declare (ignore env))
     ;; Since lisp does not have the notion of type variables, emit a top type
     't)
 
-  (:method ((ty tc:tycon) env)
+  (:method ((ty tycon) env)
     (let*
-        ((tcon-name (tc:tycon-name ty))
-         (type-entry (tc:lookup-type env tcon-name :no-error t)))
+        ((tcon-name (tycon-name ty))
+         (type-entry (lookup-type env tcon-name :no-error t)))
 
       (cond
         ;; If the type is unknown then assume it exists at runtime
         ((null type-entry)
          tcon-name)
 
-        ;; If the type is a newtype then resolve the type runtime type
-        ((tc:type-entry-newtype type-entry)
-         (lisp-type (tc:type-entry-runtime-type type-entry) env))
-
         (t
-         (tc:type-entry-runtime-type type-entry)))))
+         (type-entry-runtime-type type-entry)))))
 
-  (:method ((ty tc:tapp) env)
+  (:method ((ty tapp) env)
     (cond
       ;; If we are a function, emit a function type
-      ((tc:function-type-p ty)
+      ((function-type-p ty)
        'function-entry)
 
       ;; Otherwise, emit the applied type
@@ -51,15 +51,15 @@
        ;; Our underlying representation of types does not have any
        ;; parameterization on coalton type paramters so we can just
        ;; recurse down to the base tycon.
-       (lisp-type (coalton-impl/typechecker::tapp-from ty) env))))
+       (lisp-type (tapp-from ty) env))))
 
-  (:method ((ty tc:ty) env)
+  (:method ((ty ty) env)
     (declare (ignore env))
     (util:coalton-bug "Unable to produce lisp type for ~A" ty))
 
   ;; Allow for calling with other types
-  (:method ((ty tc:ty-scheme) env)
-    (lisp-type (tc:fresh-inst ty) env))
-  (:method ((ty tc:qualified-ty) env)
-    (lisp-type (tc:qualified-ty-type ty) env)))
+  (:method ((ty ty-scheme) env)
+    (lisp-type (fresh-inst ty) env))
+  (:method ((ty qualified-ty) env)
+    (lisp-type (qualified-ty-type ty) env)))
 

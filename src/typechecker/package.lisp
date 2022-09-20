@@ -11,6 +11,7 @@
    #:coalton-impl/typechecker/unify
    #:coalton-impl/typechecker/equality
    #:coalton-impl/typechecker/environment
+   #:coalton-impl/typechecker/lisp-type
    #:coalton-impl/typechecker/context-reduction
    #:coalton-impl/typechecker/parse-type
    #:coalton-impl/typechecker/parse-type-definition

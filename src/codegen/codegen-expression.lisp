@@ -4,14 +4,6 @@
    #:coalton-impl/util
    #:coalton-impl/codegen/ast)
   (:import-from
-   #:coalton-impl/codegen/lisp-type
-   #:lisp-type)
-  (:import-from
-   #:coalton-impl/codegen/function-entry
-   #:construct-function-entry
-   #:*function-application-functions*
-   #:*function-constructor-functions*)
-  (:import-from
    #:coalton-impl/codegen/codegen-pattern
    #:codegen-pattern)
   (:import-from
@@ -19,6 +11,7 @@
    #:constructor-slot-name)
   (:local-nicknames
    (#:settings #:coalton-impl/settings)
+   (#:rt #:coalton-impl/runtime)
    (#:tc #:coalton-impl/typechecker)
    (#:ast #:coalton-impl/ast))
   (:export
@@ -42,16 +35,12 @@
   (:method ((node node-application) current-function env)
     (declare (type tc:environment env)
              (type (or null symbol) current-function))
-    (let* ((arity (length (node-application-rands node)))
-
-           (function-applicator
-             (aref *function-application-functions* arity)))
-      `(,function-applicator
-        ,(codegen-expression (node-application-rator node) current-function env)
-        ,@(mapcar
-           (lambda (node)
-             (codegen-expression node current-function env))
-           (node-application-rands node)))))
+    `(rt:call-coalton-function
+      ,(codegen-expression (node-application-rator node) current-function env)
+      ,@(mapcar
+         (lambda (node)
+           (codegen-expression node current-function env))
+         (node-application-rands node))))
 
   (:method ((node node-direct-application) current-function env)
     (declare (type tc:environment env)
@@ -69,24 +58,22 @@
 
            (arity (length var-names))
 
-           (function-constructor
-             (aref *function-constructor-functions* arity))
-
            (type-decs
              (when settings:*emit-type-annotations*
                (append
                 (loop :for name :in (node-abstraction-vars expr)
                       :for i :from 0
                       :for arg-ty := (nth i (tc:function-type-arguments (node-type expr)))
-                      :collect `(type ,(lisp-type arg-ty env) ,name))
-                (list `(values ,(lisp-type (node-type (node-abstraction-subexpr expr)) env) &optional))))))
+                      :collect `(type ,(tc:lisp-type arg-ty env) ,name))
+                (list `(values ,(tc:lisp-type (node-type (node-abstraction-subexpr expr)) env) &optional))))))
 
-      `(,function-constructor
-        (lambda ,var-names
+      (rt:construct-function-entry
+       `(lambda ,var-names
           (declare ,@type-decs
                    (ignorable ,@var-names))
           (block @@local
-            ,(codegen-expression (node-abstraction-subexpr expr) '@@local env))))))
+            ,(codegen-expression (node-abstraction-subexpr expr) '@@local env)))
+       arity)))
 
   (:method ((expr node-bare-abstraction) current-function env)
     (declare (type tc:environment env)
@@ -99,8 +86,8 @@
                 (loop :for name :in (node-bare-abstraction-vars expr)
                       :for i :from 0
                       :for arg-ty := (nth i (tc:function-type-arguments (node-type expr)))
-                      :collect `(type ,(lisp-type arg-ty env) ,name))
-                (list `(values ,(lisp-type (node-type (node-bare-abstraction-subexpr expr)) env) &optional))))))
+                      :collect `(type ,(tc:lisp-type arg-ty env) ,name))
+                (list `(values ,(tc:lisp-type (node-type (node-bare-abstraction-subexpr expr)) env) &optional))))))
 
       `(lambda ,var-names
          (declare ,@type-decs
@@ -130,7 +117,7 @@
                ,@(node-lisp-form expr))))
 
       (if settings:*emit-type-annotations*
-          `(the (values ,(lisp-type (node-type expr) env) &optional)
+          `(the (values ,(tc:lisp-type (node-type expr) env) &optional)
                 ,inner)
           inner)))
 
@@ -161,8 +148,8 @@
               (node-match-branches expr))))
       `(trivia:match
            ,(if settings:*emit-type-annotations*
-             `(the ,(lisp-type (node-type (node-match-expr expr)) env) ,subexpr)
-             subexpr)
+                `(the ,(tc:lisp-type (node-type (node-match-expr expr)) env) ,subexpr)
+                subexpr)
          ,@branches
          (_ (error "Pattern match not exaustive error")))))
 
@@ -198,9 +185,7 @@
       (cond
         ((and (node-abstraction-p (node-bind-expr expr))
               (find name (node-variables (node-bind-body expr) :variable-namespace-only t)))
-         (let* ((arity (length (node-abstraction-vars (node-bind-expr expr))))
-
-                (function-constructor (aref *function-constructor-functions* arity)))
+         (let ((arity (length (node-abstraction-vars (node-bind-expr expr)))))
            `(let ((,name))
               (declare (ignorable ,name))
               (labels ((,name
@@ -208,7 +193,7 @@
                          ;; TODO: add type annotations
                          (declare (ignorable ,@(node-abstraction-vars (node-bind-expr expr))))
                          ,(codegen-expression (node-abstraction-subexpr (node-bind-expr expr)) name env)))
-                (setf ,name (,function-constructor #',name))
+                (setf ,name ,(rt:construct-function-entry `#',name arity))
                 ,(codegen-expression (node-bind-body expr) current-function env)))))
 
         ((node-abstraction-p (node-bind-expr expr))
@@ -278,11 +263,10 @@
                     (append
                      (loop :for (name . node) :in scc-bindings
                            :for arity := (length (node-abstraction-vars node))
-                           :for function-constructor := (aref *function-constructor-functions* arity)
                            :if (find name binding-names-vars :test #'equalp)
                              :collect `(setf
                                         ,name
-                                        (,function-constructor #',name)))
+                                        ,(rt:construct-function-entry `#',name arity)))
                      (list inner))
                     (list inner)))
 

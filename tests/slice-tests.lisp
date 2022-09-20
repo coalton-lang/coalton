@@ -54,7 +54,7 @@
          (out nil))
 
     (coalton-library/slice:iter-sliding
-     (coalton-impl/codegen::F1
+     (coalton-impl/runtime/function-entry::F1
       (lambda (s)
         (push
          (list (coalton-library/slice:index-unsafe 0 s)
@@ -82,7 +82,7 @@
          (out nil))
 
     (coalton-library/slice:iter-chunked
-     (coalton-impl/codegen::F1
+     (coalton-impl/runtime/function-entry::F1
       (lambda (s)
         (push
          (list (coalton-library/slice:index-unsafe 0 s)

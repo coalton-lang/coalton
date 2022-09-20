@@ -155,7 +155,7 @@
       (lisp (Optional UFix) (v test)
         (cl:let ((pos (cl:position-if
                        (cl:lambda (x)
-                         (cl:equalp True (coalton-impl/codegen::A1 test x)))
+                         (cl:eq cl:t (call-coalton-function test x)))
                        v)))
           (cl:if pos
                  (Some pos)
@@ -166,7 +166,7 @@
     "Call the function F once for each item in V"
     (lisp Void (f v)
       (cl:loop :for elem :across v
-         :do (coalton-impl/codegen::A1 f elem)))
+         :do (call-coalton-function f elem)))
     Unit)
 
   (declare foreach-index ((UFix -> :a -> :b) -> Vector :a -> Unit))
@@ -176,7 +176,7 @@
       (cl:loop
          :for elem :across v
          :for i :from 0
-         :do (coalton-impl/codegen::A2 f i elem)))
+         :do (call-coalton-function f i elem)))
     Unit)
 
   (declare foreach2 ((:a -> :b -> :c) -> Vector :a -> Vector :b -> Unit))
@@ -186,7 +186,7 @@
       (cl:loop
          :for e1 :across v1
          :for e2 :across v2
-         :do (coalton-impl/codegen::A2 f e1 e2)))
+         :do (call-coalton-function f e1 e2)))
     Unit)
 
   (declare append (Vector :a -> Vector :a -> Vector :a))
@@ -225,7 +225,7 @@
       (cl:sort
        v
        (cl:lambda (a b)
-         (coalton-impl/codegen::A2 f a b))))
+         (call-coalton-function f a b))))
     Unit)
 
   (declare sort! (Ord :a => Vector :a -> Unit))
@@ -269,14 +269,14 @@
       (lisp :a (f init vec)
         (cl:reduce
          (cl:lambda (b a)
-           (coalton-impl/codegen::A2 f b a))
+           (call-coalton-function f b a))
          vec
          :initial-value init)))
     (define (foldr f init vec)
       (lisp :a (f init vec)
         (cl:reduce
          (cl:lambda (a b)
-           (coalton-impl/codegen::A2 f a b))
+           (call-coalton-function f a b))
          vec
          :initial-value init
          :from-end cl:t)))) 

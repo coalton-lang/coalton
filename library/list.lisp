@@ -453,7 +453,7 @@
     (lisp (List :a) (cmp xs)
       (cl:sort (cl:copy-list xs)
                (cl:lambda (a b)
-                 (cl:eq 'coalton-library/classes::ord/lt (coalton-impl/codegen:a2 cmp a b))))))
+                 (cl:eq 'coalton-library/classes::ord/lt (call-coalton-function cmp a b))))))
 
   (declare intersperse (:a -> (List :a) -> (List :a)))
   (define (intersperse e xs)

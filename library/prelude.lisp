@@ -203,6 +203,7 @@
    #:coalton
    #:coalton-prelude)
   (:local-nicknames
+   (#:types #:coalton-library/types)
    (#:bits #:coalton-library/bits)
    (#:math #:coalton-library/math)
    (#:char #:coalton-library/char)

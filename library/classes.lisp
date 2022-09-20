@@ -2,7 +2,8 @@
   (:use
    #:coalton)
   (:export
-   #:Addressable #:eq?
+   #:Addressable #:eq?)
+  (:export
    #:Eq #:==
    #:Num #:+ #:- #:* #:fromInt)
   (:export
@@ -41,7 +42,6 @@
 (in-package #:coalton-library/classes)
 
 (coalton-toplevel
-
   (define-class (Addressable :obj)
     "Types for which object identity is meaningful.
 

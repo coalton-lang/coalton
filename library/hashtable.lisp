@@ -50,9 +50,9 @@
     "Inner function: allocate a hash table using the COALTON/HASHTABLE-SHIM interface"
     (lisp (Hashtable :key :value) (cap test hash_)
       (cl:flet ((coalton-hashtable-test (a b)
-                  (coalton-impl/codegen:a2 test a b))
+                  (call-coalton-function test a b))
                 (coalton-hashtable-hash (key)
-                  (coalton-impl/codegen:a1 hash_ key)))
+                  (call-coalton-function hash_ key)))
         (coalton/hashtable-shim:make-custom-hash-table cap
                                                        #'coalton-hashtable-hash
                                                        #'coalton-hashtable-test))))
@@ -113,7 +113,7 @@
         (coalton/hashtable-shim:custom-hash-table-foreach
          table
          (cl:lambda (key value)
-           (coalton-impl/codegen:A2 f key value)))
+           (call-coalton-function f key value)))
         Unit)))
 
   (declare entries ((Hashtable :key :value) -> (List (Tuple :key :value))))

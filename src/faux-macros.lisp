@@ -41,7 +41,7 @@
 
 (defmacro coalton:fn (vars &body form)
   "A lambda abstraction callable within coalton."
-  (coalton-impl/codegen/function-entry:construct-function-entry `(lambda ,vars ,@form) (length vars)))
+  (rt:construct-function-entry `(lambda ,vars ,@form) (length vars)))
 
 (define-coalton-editor-macro coalton:match (expr &body patterns)
   "Pattern matching construct.")
