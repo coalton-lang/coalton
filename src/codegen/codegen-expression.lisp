@@ -190,8 +190,9 @@
               (declare (ignorable ,name))
               (labels ((,name
                            ,(node-abstraction-vars (node-bind-expr expr))
-                         ;; TODO: add type annotations
-                         (declare (ignorable ,@(node-abstraction-vars (node-bind-expr expr))))
+                         (declare (ignorable ,@(node-abstraction-vars (node-bind-expr expr)))
+                                  ,@(argument-types (node-bind-expr expr) env)
+                                  (values ,(tc:lisp-type (tc:function-return-type (node-type (node-bind-expr expr))) env) &optional))
                          ,(codegen-expression (node-abstraction-subexpr (node-bind-expr expr)) name env)))
                 (setf ,name ,(rt:construct-function-entry `#',name arity))
                 ,(codegen-expression (node-bind-body expr) current-function env)))))
@@ -199,8 +200,9 @@
         ((node-abstraction-p (node-bind-expr expr))
          `(labels ((,name
                        ,(node-abstraction-vars (node-bind-expr expr))
-                     ;; TODO: add type annotations
-                     (declare (ignorable ,@(node-abstraction-vars (node-bind-expr expr))))
+                     (declare (ignorable ,@(node-abstraction-vars (node-bind-expr expr)))
+                              ,@(argument-types (node-bind-expr expr) env)
+                              (values ,(tc:lisp-type (tc:function-return-type (node-type (node-bind-expr expr))) env) &optional))
                      ,(codegen-expression (node-abstraction-subexpr (node-bind-expr expr)) name env)))
             ,(codegen-expression (node-bind-body expr) current-function env)))
 
@@ -274,8 +276,9 @@
                 `(labels ,(loop :for (name . node) :in scc-bindings
                                 :collect `(,name
                                            ,(node-abstraction-vars node)
-                                           ;; TODO: add type annotations
-                                           (declare (ignorable ,@(node-abstraction-vars node)))
+                                           (declare (ignorable ,@(node-abstraction-vars node))
+                                                    ,@(argument-types node env)
+                                                    (values ,(tc:lisp-type (tc:function-return-type (node-type node)) env) &optional))
                                            ,(codegen-expression (node-abstraction-subexpr node) name env)))
                    ,@inner))
 
@@ -320,3 +323,11 @@
             ,(codegen-let node (cdr sccs) current-function local-vars env))))
 
       (t (error "Invalid scc binding group. This should have been detected during typechecking.")))))
+
+
+(defun argument-types (node env)
+  (declare (type node-abstraction node)
+           (type tc:environment env))
+  (loop :for var :in (node-abstraction-vars node)
+        :for ty :in (tc:function-type-arguments (node-type node))
+        :collect `(type ,(tc:lisp-type ty env) ,var)))
