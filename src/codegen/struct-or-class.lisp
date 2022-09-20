@@ -22,11 +22,11 @@
 (declaim (sb-ext:freeze-type struct-or-class-field))
 
 (defun struct-or-class (&key
-                          (classname (error "Class Name required"))
-                          (constructor (error "Constructor required"))
-                          (superclass nil)
-                          (fields nil)
-                          mode)
+                              (classname (error "Class Name required"))
+                              (constructor (error "Constructor required"))
+                              (superclass nil)
+                              (fields nil)
+                              mode)
   (declare (type symbol classname)
            (type symbol constructor)
            (type symbol superclass)
@@ -47,7 +47,8 @@
                       (:constructor ,constructor ,field-names)) 
             ,@(loop :for field :in fields
                     :for name := (struct-or-class-field-name field)
-                    :collect `(,name (error ""))))))
+                    :for lisp-type := (struct-or-class-field-type field)
+                    :collect `(,name (error "") :type ,lisp-type)))))
 
        (:class
         (append 
@@ -58,10 +59,12 @@
                     (list))
              ,(loop :for field :in fields
                     :for name := (struct-or-class-field-name field)
+                    :for lisp-type := (struct-or-class-field-type field)
                     :for package := (symbol-package classname)
                     :for accessor
                       := (alexandria:format-symbol package "~A-~A" classname name)
                     :collect `(,name
+                               :type ,lisp-type
                                :initarg ,name
                                :accessor ,accessor))
              (:default-initargs

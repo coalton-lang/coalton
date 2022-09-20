@@ -159,6 +159,7 @@
                         (duplicate-entry-b c)))))
 
 (cl:defun find-duplicate-entry (elements cl:&key (test #'cl:equal) (key #'cl:first))
+  (cl:declare (cl:type cl:function test key))
   (cl:let* ((ht (cl:make-hash-table :test test)))
     (cl:dolist (entry elements (cl:values cl:nil cl:nil cl:nil))
       (cl:let* ((keyed (cl:funcall key entry)))

@@ -36,17 +36,15 @@
               (loop :for method :in (tc:ty-class-unqualified-methods class)
                     :collect (make-struct-or-class-field
                               :name (car method)
-                              :type (tc:lisp-type (cdr method) env))))
+                              :type (tc:lisp-type (cdr method) env :use-function-entries nil))))
 
         :append (struct-or-class
-                  :classname codegen-name
-                  :constructor codegen-name
-                  :fields fields
-                  :mode (if (settings:coalton-release-p)
-                            :struct
-                            :class))
-
-
+                 :classname codegen-name
+                 :constructor codegen-name
+                 :fields fields
+                 :mode (if (settings:coalton-release-p)
+                           :struct
+                           :class))
 
         :append (mapcan (lambda (m)
                           (make-method-fun m package class env))
@@ -85,4 +83,3 @@
             ,(format nil "~A :: ~A" (car m) (tc:lookup-value-type env (car m))))
       (setf (documentation ',(car m) 'function)
             ,(format nil "~A :: ~A" (car m) (tc:lookup-value-type env (car m)))))))
-
