@@ -92,7 +92,7 @@
     "Call the function F once for each item in S"
     (lisp :a (f s)
       (cl:loop :for elem :across s
-         :do (coalton-impl/codegen::A1 f elem)))
+         :do (call-coalton-function f elem)))
     Unit)
 
   (declare foreach-index ((UFix -> :a -> :b) -> (Slice :a) -> Unit))
@@ -102,7 +102,7 @@
       (cl:loop
          :for elem :across s
          :for i :from 0
-         :do (coalton-impl/codegen::A2 f i elem)))
+         :do (call-coalton-function f i elem)))
     Unit)
 
   (declare foreach2 ((:a -> :b -> :c) -> (Slice :a) -> (Slice :b) -> Unit))
@@ -112,7 +112,7 @@
       (cl:loop
          :for e1 :across s1
          :for e2 :across s2
-         :do (coalton-impl/codegen::A2 f e1 e2)))
+         :do (call-coalton-function f e1 e2)))
     Unit)
 
   ;;
@@ -168,14 +168,14 @@
       (lisp :a (f init s)
         (cl:reduce
          (cl:lambda (b a)
-           (coalton-impl/codegen::A2 f b a))
+           (call-coalton-function f b a))
          s
          :initial-value init)))
     (define (foldr f init s)
       (lisp :a (f init s)
         (cl:reduce
          (cl:lambda (a b)
-           (coalton-impl/codegen::A2 f a b))
+           (call-coalton-function f a b))
          s
          :initial-value init
          :from-end cl:t))))

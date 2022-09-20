@@ -3,21 +3,15 @@
    #:cl
    #:coalton-impl/util)
   (:import-from
-   #:coalton-impl/codegen/lisp-type
-   #:lisp-type)
-  (:import-from
    #:coalton-impl/codegen/struct-or-class
    #:struct-or-class
    #:make-struct-or-class-field
    #:struct-or-class-field-name)
-  (:import-from
-   #:coalton-impl/codegen/function-entry
-   #:construct-function-entry
-   #:F1)
   (:local-nicknames
    (#:settings #:coalton-impl/settings)
    (#:global-lexical #:coalton-impl/global-lexical)
-   (#:tc #:coalton-impl/typechecker))
+   (#:tc #:coalton-impl/typechecker)
+   (#:rt #:coalton-impl/runtime))
   (:export
    #:codegen-type-definition
    #:constructor-slot-name))
@@ -46,7 +40,7 @@
               `(defun ,(tc:constructor-entry-name constructor) (x) x)
               `(global-lexical:define-global-lexical
                    ,(tc:constructor-entry-name constructor)
-                   (F1 #',(tc:constructor-entry-name constructor))))))
+                   ,(rt:construct-function-entry `#',(tc:constructor-entry-name constructor) 1)))))
 
      (t
       `(,(if (settings:coalton-release-p)
@@ -71,7 +65,7 @@
             :for constructor-name :=  (tc:constructor-entry-name constructor)
             :for fields
               := (loop :for field :in (tc:constructor-arguments constructor-name env)
-                       :for runtime-type := (lisp-type field env)
+                       :for runtime-type := (tc:lisp-type field env)
                        :for i :from 0
                        :for name := (constructor-slot-name constructor i)
                        :collect (make-struct-or-class-field

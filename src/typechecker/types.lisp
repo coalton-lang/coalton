@@ -250,7 +250,7 @@
 (defvar *double-float-type* (make-tycon :name 'coalton:Double-Float :kind +kstar+))
 (defvar *string-type*       (make-tycon :name 'coalton:String      :kind +kstar+))
 (defvar *fraction-type*     (make-tycon :name 'coalton:Fraction :kind +kstar+))
-(defvar *arrow-type*        (make-tycon :name 'coalton:-> :kind (make-kfun :from +kstar+ :to (make-kfun :from +kstar+ :to +kstar+))))
+(defvar *arrow-type*        (make-tycon :name 'coalton:Arrow :kind (make-kfun :from +kstar+ :to (make-kfun :from +kstar+ :to +kstar+))))
 (defvar *list-type*         (make-tycon :name 'coalton:List :kind (make-kfun :from +kstar+ :to +kstar+)))
 
 

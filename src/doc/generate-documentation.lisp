@@ -83,6 +83,7 @@
    :backend backend
    :packages '(coalton
                coalton-library/classes
+               coalton-library/types
                coalton-library/builtin
                coalton-library/functions
                coalton-library/math

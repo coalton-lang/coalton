@@ -2,11 +2,9 @@
   (:use
    #:cl
    #:coalton-impl/util)
-  (:import-from
-   #:coalton-impl/codegen/function-entry
-   #:construct-function-entry)
   (:local-nicknames
-   (#:global-lexical #:coalton-impl/global-lexical))
+   (#:global-lexical #:coalton-impl/global-lexical)
+   (#:rt #:coalton-impl/runtime))
   (:export
    #:struct-or-class
    #:struct-or-class-field
@@ -81,14 +79,13 @@
      (if (not (null fields))
          (cons
           `(global-lexical:define-global-lexical ,constructor
-               ,(construct-function-entry `#',constructor (length fields)))
+               ,(rt:construct-function-entry `#',constructor (length fields)))
           (loop :for field :in fields
                 :for package := (symbol-package classname)
                 :for field-name := (alexandria:format-symbol package "~A-~A" classname (struct-or-class-field-name field))
                 :collect `(global-lexical:define-global-lexical ,field-name
-                              ,(construct-function-entry `#',field-name 1))))
+                              ,(rt:construct-function-entry `#',field-name 1))))
 
          (list
           `(global-lexical:define-global-lexical ,constructor (,constructor)))))))
-
 

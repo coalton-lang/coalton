@@ -13,6 +13,9 @@
   (:import-from
    #:coalton-impl/typechecker/substitutions
    #:apply-substitution)
+  (:import-from
+   #:coalton-impl/typechecker/lisp-type
+   #:lisp-type)
   (:local-nicknames
    (#:util #:coalton-impl/util)
    (#:algo #:coalton-impl/algorithm))
@@ -409,7 +412,7 @@ Returns TYPE-DEFINITIONS"
                              (make-type-definition
                               :name tycon-name
                               :type tcon
-                              :runtime-type runtime-type
+                              :runtime-type (lisp-type runtime-type env)
                               :explicit-repr repr
                               :enum-repr nil
                               :newtype t

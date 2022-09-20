@@ -126,7 +126,7 @@
     (lisp :a (f prec-bits rnd)
       (cl:let ((sb-mpfr:+mpfr-precision+ prec-bits)
                (sb-mpfr:*mpfr-rnd* rnd))
-        (coalton-impl/codegen::A1 f Unit))))
+        (call-coalton-function f Unit))))
 
   (declare with-precision (UFix -> (Unit -> :a) -> :a))
   (define (with-precision prec-bits f)

@@ -44,6 +44,10 @@
                              (:file "parse-error")
                              (:file "parse-form")
                              (:file "package")))
+               (:module "runtime"
+                :serial t
+                :components ((:file "function-entry")
+                             (:file "package")))
                (:module "typechecker"
                 :serial t
                 :components ((:file "errors")
@@ -57,6 +61,7 @@
                              (:file "equality")
                              (:file "typed-node")
                              (:file "environment")
+                             (:file "lisp-type")
                              (:file "context-reduction")
                              (:file "parse-type")
                              (:file "derive-type")
@@ -77,8 +82,6 @@
                              (:file "transformations")
                              (:file "compile-expression")
                              (:file "compile-instance")
-                             (:file "function-entry")
-                             (:file "lisp-type")
                              (:file "struct-or-class")
                              (:file "codegen-pattern")
                              (:file "codegen-type-definition")
@@ -117,6 +120,7 @@
   :pathname "library/"
   :serial t
   :components ((:file "utils")
+               (:file "types")
                (:file "fixed-size-numbers")
                (:file "classes")
                (:file "builtin")

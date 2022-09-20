@@ -4,12 +4,6 @@
    #:coalton-impl/util
    #:coalton-impl/codegen/ast)
   (:import-from
-   #:coalton-impl/codegen/lisp-type
-   #:lisp-type)
-  (:import-from
-   #:coalton-impl/codegen/function-entry
-   #:construct-function-entry)
-  (:import-from
    #:coalton-impl/codegen/compile-expression
    #:compile-toplevel)
   (:import-from
@@ -30,6 +24,7 @@
   (:local-nicknames
    (#:settings #:coalton-impl/settings)
    (#:global-lexical #:coalton-impl/global-lexical)
+   (#:rt #:coalton-impl/runtime)
    (#:tc #:coalton-impl/typechecker))
   (:export
    #:compile-translation-unit))
@@ -121,8 +116,8 @@
               (loop :for name :in (node-abstraction-vars node)
                     :for i :from 0
                     :for arg-ty := (nth i (tc:function-type-arguments (node-type node)))
-                    :collect `(type ,(lisp-type arg-ty env) ,name))
-              (list `(values ,(lisp-type (node-type (node-abstraction-subexpr node)) env)
+                    :collect `(type ,(tc:lisp-type arg-ty env) ,name))
+              (list `(values ,(tc:lisp-type (node-type (node-abstraction-subexpr node)) env)
                              &optional))))))
 
     `(defun ,name ,(node-abstraction-vars node)
@@ -145,7 +140,7 @@
                     (compile-function name node env)
                     `(setf
                       ,name
-                      ,(construct-function-entry
+                      ,(rt:construct-function-entry
                        `#',name (length (node-abstraction-vars node))))))
 
   ;; Compile variables

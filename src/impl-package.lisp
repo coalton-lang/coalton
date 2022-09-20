@@ -7,6 +7,7 @@
    (#:util #:coalton-impl/util)
    (#:algo #:coalton-impl/algorithm)
    (#:ast #:coalton-impl/ast)
+   (#:rt #:coalton-impl/runtime)
    (#:tc #:coalton-impl/typechecker))
 
   (:import-from
