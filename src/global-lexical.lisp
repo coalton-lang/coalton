@@ -45,10 +45,9 @@
 (defun (setf top-level-binding-value) (new-value binding)
   (setf (car binding) new-value))
 
-(defmacro define-global-lexical (var val)
+(defmacro define-global-lexical (var type)
   `(progn
      (define-symbol-macro ,var
-         (top-level-binding-value
-          (load-time-value
-           (get-top-level-binding ',var *top-level-environment*))))
-     (setf ,var (load-time-value ,val))))
+         (the ,type
+              (top-level-binding-value (load-time-value
+                                        (get-top-level-binding ',var *top-level-environment*)))))))

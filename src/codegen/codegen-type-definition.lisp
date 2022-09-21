@@ -28,19 +28,19 @@
      ((tc:type-definition-enum-repr def)
       (loop :for constructor :in (tc:type-definition-constructors def)
             :append
-            (list `(global-lexical:define-global-lexical
-                       ,(tc:constructor-entry-name constructor)
-                       ',(tc:constructor-entry-compressed-repr constructor))
-                  `(deftype ,(tc:constructor-entry-classname constructor) ()
-                     (quote (member ,(tc:constructor-entry-compressed-repr constructor)))))))
+            `((global-lexical:define-global-lexical ,(tc:constructor-entry-name constructor)
+                  (member ,(tc:constructor-entry-compressed-repr constructor)))
+              (setf ,(tc:constructor-entry-name constructor) ',(tc:constructor-entry-compressed-repr constructor))
+              (deftype ,(tc:constructor-entry-classname constructor) ()
+                (quote (member ,(tc:constructor-entry-compressed-repr constructor)))))))
 
      ((tc:type-definition-newtype def)
       (let ((constructor (first (tc:type-definition-constructors def))))
-        (list `(declaim (inline ,(tc:constructor-entry-name constructor)))
-              `(defun ,(tc:constructor-entry-name constructor) (x) x)
-              `(global-lexical:define-global-lexical
-                   ,(tc:constructor-entry-name constructor)
-                   ,(rt:construct-function-entry `#',(tc:constructor-entry-name constructor) 1)))))
+        `((declaim (inline ,(tc:constructor-entry-name constructor)))
+          (defun ,(tc:constructor-entry-name constructor) (x) x)
+          (global-lexical:define-global-lexical ,(tc:constructor-entry-name constructor) rt:function-entry)
+          (setf ,(tc:constructor-entry-name constructor)
+                ,(rt:construct-function-entry `#',(tc:constructor-entry-name constructor) 1)))))
 
      (t
       `(,(if (settings:coalton-release-p)

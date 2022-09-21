@@ -31,6 +31,7 @@
    #:context-reduction-failure            ; CONDITION
    #:weak-context-error                   ; CONDITION
    #:recursive-binding-error              ; CONDITION
+   #:self-recursive-toplevel-form         ; CONDITION
    #:self-recursive-non-constructor-call  ; CONDITION
    #:self-recursive-partial-application   ; CONDITION
    #:self-recursive-non-default-repr      ; CONDITION
@@ -276,6 +277,12 @@
 (define-condition self-recursive-variable-definition (recursive-binding-error)
     ((name :initarg :name
            :reader self-recursive-variable-definition-name)))
+
+(define-condition self-recursive-toplevel-form (self-recursive-variable-definition)
+  ()
+  (:report (lambda (c s)
+             (format s "Cannot recursively bind ~S in a toplevel form."
+                     (self-recursive-variable-definition-name c)))))
 
 (defparameter *self-recursive-binding-requirements-message*
   "Recursive data bindings may only be fully-applied direct applications of constructors for default-repr types, or `Cons'.")

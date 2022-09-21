@@ -74,11 +74,11 @@
              `(,method-accessor dict)
              `(funcall (the (function ,(make-list (length params) :initial-element t)) (,method-accessor dict)) ,@params)))
       ;; Generate the wrapper functions
-      (global-lexical:define-global-lexical ,(car m)
-          ,(rt:construct-function-entry
-            `#',(car m)
-            (+ arity 1) ; We need a function of arity + 1 to account for DICT
-            ))
+      (global-lexical:define-global-lexical ,(car m) rt:function-entry)
+      (setf ,(car m) ,(rt:construct-function-entry
+                       `#',(car m)
+                       (+ arity 1) ; We need a function of arity + 1 to account for DICT
+                       ))
       (setf (documentation ',(car m) 'variable)
             ,(format nil "~A :: ~A" (car m) (tc:lookup-value-type env (car m))))
       (setf (documentation ',(car m) 'function)
