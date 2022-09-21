@@ -20,7 +20,9 @@
 ;;;
 
 (defgeneric lisp-type (ty env &key use-function-entries)
-  (:documentation "Returns the corresponding lisp type for the type of the given node")
+  (:documentation "Returns the corresponding lisp type for the type of the given node.
+
+USE-FUNCTION-ENTRIES specifies whether to emit FUNCTION-ENTRY for functions, emitting FUNCTION when NIL. Defaults to T.")
 
   (:method ((ty tyvar) env &key (use-function-entries t))
     (declare (ignore env use-function-entries))
