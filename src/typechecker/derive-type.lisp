@@ -137,7 +137,7 @@ Returns (VALUES type predicate-list typed-node subs)")
                            (make-function-type arg-ty (build-function (cdr args)))))))
             (let* ((ftype (build-function rands))
                    (preds (append fun-preds arg-preds))
-                   (substs (unify substs ftype fun-ty 
+                   (substs (unify substs ftype fun-ty
                                   (format nil "function implied by the operand~P" (length rands))
                                   "function type implied by the operator")))
               (values ret-ty
@@ -396,7 +396,7 @@ Returns (VALUES type predicate-list typed-node subs)")
                                (allow-deferred-predicates t)
                                (allow-returns t))
   "IMPL-BINDINGS and EXPL-BINDIGNS are of form (SYMBOL . EXPR)
-EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
+EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME."
   (declare (type environment env)
            (type substitution-list subs)
            (type list name-map)
@@ -465,7 +465,7 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
 
             (setf (gethash (car binding) explicit-types) qual-ty)))
 
-        (validate-bindings-for-codegen typed-bindings env)
+        (validate-bindings-for-codegen typed-bindings env (not allow-deferred-predicates))
 
         ;;
         ;; Binding groups are typechecked before predicates are
@@ -522,21 +522,25 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
         (or (eq (type-entry-explicit-repr type-entry) :lisp)
             (null (type-entry-explicit-repr type-entry))))))
 
-(defun check-recursive-binding-is-recursively-constructable (name initform env)
+(defun check-recursive-binding-is-recursively-constructable (name initform env &optional toplevel)
   (declare (symbol name)
            (typed-node-application initform)
            (environment env))
+  (when toplevel
+    (error 'self-recursive-toplevel-form
+           :name name))
+
   (let* ((ctor (typed-node-application-rator initform)))
     (unless (typed-node-variable-p ctor)
       (error 'self-recursive-non-constructor-call
              :name name
-             :function ctor))
+             :function (typed-node-unparsed ctor)))
     (let* ((ctor-name (typed-node-variable-name ctor))
            (ctor-entry (lookup-constructor env ctor-name :no-error t)))
       (unless ctor-entry
         (error 'self-recursive-non-constructor-call
                :name name
-               :function ctor))
+               :function (typed-node-unparsed ctor)))
       (let* ((type-name (constructor-entry-constructs ctor-entry))
              (type-entry (lookup-type env type-name :no-error t)))
         (unless type-entry
@@ -556,12 +560,12 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                    :required-arg-count needed-arity
                    :supplied-args (typed-node-application-rands initform))))))))
 
-(defun validate-single-binding-for-codegen (name initform env)
+(defun validate-single-binding-for-codegen (name initform env toplevel)
   (cond ((typed-node-abstraction-p initform) (values))
-        ((recursive-binding-p name initform) (check-recursive-binding-is-recursively-constructable name initform env))
+        ((recursive-binding-p name initform) (check-recursive-binding-is-recursively-constructable name initform env toplevel))
         (t (values))))
 
-(defun validate-mutually-recursive-scc-for-codegen (names names-to-initforms env)
+(defun validate-mutually-recursive-scc-for-codegen (names names-to-initforms env toplevel)
   (let* ((initforms (loop :for name :in names
                           :collect (gethash name names-to-initforms))))
     (cond ((every #'typed-node-abstraction-p initforms)
@@ -569,28 +573,30 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
           ((every #'typed-node-application-p initforms)
            (loop :for name :in names
                  :for initform :in initforms
-                 :do (check-recursive-binding-is-recursively-constructable name initform env)))
+                 :do (check-recursive-binding-is-recursively-constructable name initform env toplevel)))
           (t (error 'mutually-recursive-function-and-data
                     :names names)))))
 
-(defun validate-binding-scc-for-codegen (scc names-to-initforms env)
+(defun validate-binding-scc-for-codegen (scc names-to-initforms env toplevel)
   (declare (list scc)
            (hash-table names-to-initforms)
            (environment env))
   (if (length>1p scc)
-      (validate-mutually-recursive-scc-for-codegen scc names-to-initforms env)
+      (validate-mutually-recursive-scc-for-codegen scc names-to-initforms env toplevel)
       (let* ((name (first scc))
              (initform (gethash name names-to-initforms)))
-        (validate-single-binding-for-codegen name initform env))))
+        (validate-single-binding-for-codegen name initform env toplevel))))
 
-(defun validate-bindings-for-codegen (bindings env)
-  "Disallow recursive bindings except for `repr :default' constructors or for `fn' abstractions."
+(defun validate-bindings-for-codegen (bindings env toplevel)
+  "Disallow recursive bindings except for `repr :default' constructors or for `fn' abstractions.
+
+TOPLEVEL is set to indicate additional checks should be completed in COALTON-TOPLEVEL forms."
   (declare (typed-binding-list bindings))
 
   (let* ((scc-names (typed-node-binding-sccs bindings))
          (names-to-initforms (alexandria:alist-hash-table bindings :test 'eq)))
     (loop :for scc :in scc-names
-          :do (validate-binding-scc-for-codegen scc names-to-initforms env))))
+          :do (validate-binding-scc-for-codegen scc names-to-initforms env toplevel))))
 
 (defun derive-binding-type-seq (names tvars exprs env subs name-map
                                 &key (allow-deferred-predicates t)
@@ -673,7 +679,7 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
              (local-tvars (set-difference expr-tvars
                                           env-tvars
                                           :test #'equalp))) ; gs
-             
+
 
         (multiple-value-bind (deferred-preds retained-preds defaultable-preds)
             (split-context env env-tvars local-tvars expr-preds local-subs)
@@ -709,7 +715,7 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
                              (default-subs env nil deferred-preds)
                              local-subs))
                       (setf deferred-preds (reduce-context env deferred-preds local-subs))
-                      (setf expr-types (apply-substitution local-subs expr-types))))) 
+                      (setf expr-types (apply-substitution local-subs expr-types)))))
 
               ;; Error when predicates cannot be deferred
               (unless (or allow-deferred-predicates (null deferred-preds))
@@ -838,7 +844,7 @@ EXPL-DECLARATIONS is a HASH-TABLE from SYMBOL to SCHEME"
           (with-type-context ("definition of ~A" (car binding))
             (when (and returns (not allow-returns))
               (error 'unexpected-return))
-            
+
             ;; Make sure the declared scheme is not too general
             (when (not (equalp output-scheme declared-ty))
               (error 'type-declaration-too-general-error

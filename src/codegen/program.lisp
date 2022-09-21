@@ -131,7 +131,7 @@
   (append
    ;; Predeclare symbol macros
    (loop :for (name . node) :in bindings
-         :collect `(global-lexical:define-global-lexical ,name ':|@@unbound@@|))
+         :collect `(global-lexical:define-global-lexical ,name ,(tc:lisp-type (node-type node) env)))
 
    ;; Compile functions
    (loop :for (name . node) :in bindings
@@ -141,14 +141,15 @@
                     `(setf
                       ,name
                       ,(rt:construct-function-entry
-                       `#',name (length (node-abstraction-vars node))))))
+                        `#',name (length (node-abstraction-vars node))))))
 
   ;; Compile variables
   (loop :for (name . node) :in bindings
         :if (not (node-abstraction-p node))
           :collect `(setf
-                     ,name
-                     ,(codegen-expression node nil env)))
+                      ,name
+                      ,(codegen-expression node nil env)))
+
   ;; Docstrings
   (loop :for (name . node) :in bindings
         :for entry := (tc:lookup-name env name :no-error t)
