@@ -255,7 +255,7 @@
     (cond
       ;; Function binding group
       ((every #'node-abstraction-p (mapcar #'cdr scc-bindings))
-       (let* ( ;; functions in this scc referenced in the variable namespace
+       (let* (;; functions in this scc referenced in the variable namespace
               (binding-names-vars (intersection (mapcar #'car scc-bindings) local-vars))
 
               (inner (codegen-let node (cdr sccs) current-function local-vars env))
@@ -294,7 +294,7 @@
 
       ((every (lambda (pair)
                 (data-letrec-able-p (cdr pair)
-                                                env))
+                                    env))
               scc-bindings)
        (let* ((inner (codegen-let node (cdr sccs) current-function local-vars env))
               (assignments (loop :for (name . initform) :in scc-bindings
@@ -305,11 +305,15 @@
                                                                   ,(codegen-expression arg current-function env)))))
               (allocations (loop :for (name . initform) :in scc-bindings
                                  :for ctor-info := (find-constructor initform env)
-                                 :collect `(,(node-rator-name initform)
-                                            ,@(mapcar (constantly nil) (node-direct-application-rands initform))))))
+                                 :for ctor-classname := (tc:constructor-entry-classname ctor-info)
+                                 :collect
+                                 (if ctor-classname
+                                     `(allocate-instance (find-class ',ctor-classname))
+                                     `(,(node-rator-name initform)
+                                       ,@(mapcar (constantly nil) (node-direct-application-rands initform)))))))
          `(let ,(mapcar (lambda (scc-binding allocation)
                           (list (car scc-binding) allocation))
-                        scc-bindings allocations)
+                 scc-bindings allocations)
             ,@assignments
             ,inner)
          ))
