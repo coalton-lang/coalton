@@ -58,7 +58,7 @@
            (values util:symbol-list))
   (let ((olddep nil)
         (newdep x))
-    (loop :until (equalp newdep olddep)
+    (loop :until (null (set-exclusive-or newdep olddep :test #'equalp))
           :do (setf olddep newdep)
           :do (loop :for fd :in f
                     :for w := (fundep-from fd)
