@@ -5,6 +5,7 @@
    #:coalton-library/functions
    #:coalton-library/classes)
   (:local-nicknames
+   (#:types #:coalton-library/types)
    (#:list #:coalton-library/list)
    (#:cell #:coalton-library/cell)
    (#:vector #:coalton-library/vector)
@@ -180,7 +181,7 @@
          :initial-value init
          :from-end cl:t))))
 
-  (define-instance (Into (Slice :a) (Vector :a))
+  (define-instance (types:RuntimeRepr :a => Into (Slice :a) (Vector :a))
     (define (into s)
       (let v = (vector:with-capacity (length s)))
       (foreach
@@ -193,7 +194,7 @@
     (define (into v)
       (new 0 (vector:length v) v)))
 
-  (define-instance (Iso (Slice :a) (Vector :a)))
+  (define-instance (types:RuntimeRepr :a => Iso (Slice :a) (Vector :a)))
 
   (define-instance (addr:Addressable (Slice :elt))
     (define addr:eq? addr::unsafe-internal-eq?)))

@@ -9,6 +9,7 @@
    #:coalton-library/tuple
    #:coalton-library/char)
   (:local-nicknames
+   (#:types #:coalton-library/types)
    (#:list #:coalton-library/list)
    (#:string #:coalton-library/string)
    (#:cell #:coalton-library/cell)
@@ -481,7 +482,7 @@ The empty iterator will hash as 0."
     "Construct a `List` containing all the elements from ITER in order."
     (list:reverse (fold! (flip Cons) Nil iter)))
 
-  (declare collect-vector-size-hint! (UFix -> Iterator :elt -> Vector :elt))
+  (declare collect-vector-size-hint! (types:RuntimeRepr :elt => UFix -> Iterator :elt -> Vector :elt))
   (define (collect-vector-size-hint! size iter)
     "Construct a `Vector` with initial allocation for SIZE elements, and fill it with all the elements from ITER in order.
 
@@ -490,7 +491,7 @@ The vector will be resized if ITER contains more than SIZE elements."
     (for-each! ((flip vector:push!) v) iter)
     v)
 
-  (declare collect-vector! (Iterator :elt -> Vector :elt))
+  (declare collect-vector! (types:RuntimeRepr :elt => Iterator :elt -> Vector :elt))
   (define (collect-vector! iter)
     "Construct a `Vector` containing all the elements from ITER in order."
     (collect-vector-size-hint! 0 iter))

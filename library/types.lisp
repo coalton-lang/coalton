@@ -4,6 +4,7 @@
   (:export
    #:Proxy
    #:proxy-of
+   #:as-proxy-of
    #:LispType
    #:RuntimeRepr #:runtime-repr
    #:runtime-repr-of))
@@ -23,6 +24,11 @@
   (define (proxy-of _)
     "Returns a Proxy containing the type of the parameter."
     Proxy)
+
+  (declare as-proxy-of (:a -> Proxy :a -> :a))
+  (define (as-proxy-of x _)
+    "Returns the parameter, forcing the proxy to have the same type as the parameter."
+    x)
 
   (repr :native (cl:or cl:symbol cl:list))
   (define-type LispType
