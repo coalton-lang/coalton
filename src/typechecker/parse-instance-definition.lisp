@@ -13,7 +13,9 @@
    #:coalton-impl/typechecker/parse-define
    #:coalton-impl/typechecker/parse-type
    #:coalton-impl/typechecker/derive-type
-   #:coalton-impl/typechecker/parse-class-definition)
+   #:coalton-impl/typechecker/parse-class-definition
+   #:coalton-impl/typechecker/type-errors
+   #:coalton-impl/typechecker/context-reduction)
   (:local-nicknames
    (#:util #:coalton-impl/util)
    (#:error #:coalton-impl/error))
@@ -199,11 +201,25 @@
             (check-for-addressable-on-non-repr-native-type form predicate class-name env)
             (check-for-manual-runtime-repr form predicate class-name env))
 
-          ;; Check that constraints defined on the class are resolvable
+          ;; Check that constraints defined on the class are
+          ;; resolvable and grab any additional constraints
           (loop :for superclass :in (ty-class-superclasses class-entry)
-                :do (or (lookup-class-instance env (apply-substitution instance-subs superclass) :no-error t)
-                        (error-unknown-instance
-                         (apply-substitution instance-subs superclass))))
+                :for superclass-instance
+                  :=
+                  (or (lookup-class-instance env (apply-substitution instance-subs superclass) :no-error t)
+                      (error-unknown-instance
+                       (apply-substitution instance-subs superclass)))
+                :for additional-context
+                  := (apply-substitution
+                      (predicate-match
+                       (apply-substitution instance-subs (ty-class-instance-predicate superclass-instance))
+                       (apply-substitution instance-subs superclass))
+                      (ty-class-instance-constraints superclass-instance))
+                :do (loop :for pred :in additional-context
+                          :do (unless (entail env context pred)
+                                (error 'instance-missing-context-error
+                                       :pred pred
+                                       :super (apply-substitution instance-subs superclass)))))
 
           (let ((method-bindings (make-hash-table)))
 

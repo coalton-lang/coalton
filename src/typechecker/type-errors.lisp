@@ -24,6 +24,7 @@
    #:invalid-operator-type-error          ; CONDITION
    #:predicate-unification-error          ; CONDITION
    #:overlapping-instance-error           ; CONDITION
+   #:instance-missing-context-error       ; CONDITION
    #:cyclic-class-definitions-error       ; CONDITION
    #:invalid-typed-node-type              ; CONDITION
    #:unknown-type-variable                ; CONDITION
@@ -188,6 +189,19 @@
        (format s "Instance ~A overlaps with instance ~A"
                (overlapping-instance-error-inst1 c)
                (overlapping-instance-error-inst2 c))))))
+
+(define-condition instance-missing-context-error (coalton-type-error)
+  ((pred :initarg :pred
+         :reader instance-missing-context-error-pred)
+   (super :initarg :super
+          :reader instance-missing-context-error-super))
+  (:report
+   (lambda (c s)
+     (let ((*print-circle* nil) ; Prevent printing using reader macros
+           )
+       (format s "No instance for ~A~%arising from context of superclass ~A"
+               (instance-missing-context-error-pred c)
+               (instance-missing-context-error-super c))))))
 
 (define-condition cyclic-class-definitions-error (coalton-type-error)
   ((classes :initarg :classes
