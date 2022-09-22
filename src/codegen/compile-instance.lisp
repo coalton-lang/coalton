@@ -106,7 +106,7 @@
                (make-node-abstraction
                 :type (tc:make-function-type*
                        ctx-ty
-                       (pred-type (tc:instance-definition-predicate instance) env))
+                       (node-type app-node))
                 :vars (mapcar #'cdr ctx)
                 :subexpr app-node)
                app-node))
