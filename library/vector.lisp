@@ -5,6 +5,7 @@
    #:coalton-library/functions
    #:coalton-library/classes)
   (:local-nicknames
+   (#:types #:coalton-library/types)
    (#:list #:coalton-library/list)
    (#:cell #:coalton-library/cell)
    (#:addr #:coalton-library/addressable))
@@ -48,19 +49,29 @@
   ;; Vector
   ;;
 
-  (repr :native (cl:vector cl:t))
+  (repr :native (cl:vector cl:*))
   (define-type (Vector :a))
 
-  (declare new (Unit -> Vector :a))
+  (declare new (types:RuntimeRepr :a => Unit -> Vector :a))
   (define (new _)
     "Create a new empty vector"
     (with-capacity 0))
 
-  (declare with-capacity (UFix -> Vector :a))
+  (declare %with-capacity-specialized (types:LispType -> UFix -> Vector :a))
+  (define (%with-capacity-specialized t n)
+    "Create a new vector with N elements preallocated"
+    (lisp (Vector :a) (n t)
+      (cl:make-array n :fill-pointer 0 :adjustable cl:t :element-type t)))
+
+  (declare with-capacity (types:RuntimeRepr :a => UFix -> Vector :a))
   (define (with-capacity n)
     "Create a new vector with N elements preallocated"
-    (lisp (Vector :a) (n)
-      (cl:make-array n :fill-pointer 0 :adjustable cl:t)))
+    (let p = types:Proxy)
+    (let ((declare %proxy-helper (types:Proxy (Vector :a) -> types:Proxy :a))
+          (%proxy-helper (fn (_) types:Proxy)))
+      (let p_ = (%proxy-helper p))
+      (let t = (types:runtime-repr p_))
+      (types:as-proxy-of (%with-capacity-specialized t n) p)))
 
   (declare length (Vector :a -> UFix))
   (define (length v)
@@ -189,7 +200,7 @@
          :do (call-coalton-function f e1 e2)))
     Unit)
 
-  (declare append (Vector :a -> Vector :a -> Vector :a))
+  (declare append (types:RuntimeRepr :a => Vector :a -> Vector :a -> Vector :a))
   (define (append v1 v2)
     "Create a new VECTOR containing the elements of v1 followed by the elements of v2"
     (let out = (with-capacity (+ (length v1) (length v2))))
@@ -252,12 +263,15 @@
              v1 v2)
             (cell:read out)))))
 
-  (define-instance (Semigroup (Vector :a))
+  (define-instance (types:RuntimeRepr :a => Semigroup (Vector :a))
     (define <> append))
 
   (define-instance (Functor Vector)
     (define (map f v)
-      (let out = (with-capacity (length v)))
+      (let out = (%with-capacity-specialized
+                  (lisp types:LispType (v)
+                    (cl:array-element-type v))
+                  (length v)))
       (foreach
        (fn (item)
          (push! (f item) out))
@@ -279,12 +293,13 @@
            (call-coalton-function f a b))
          vec
          :initial-value init
-         :from-end cl:t)))) 
+         :from-end cl:t))))
 
-  (define-instance (Into (List :a) (Vector :a))
+
+  (define-instance (types:RuntimeRepr :a => Into (List :a) (Vector :a))
     (define (into lst)
       (let ((out (with-capacity (list:length lst)))
-            (inner 
+            (inner
               (fn (lst)
                 (match lst
                   ((Cons x xs)
@@ -296,7 +311,7 @@
           (inner lst)
           out))))
 
-  (define-instance (Into (Vector :a) (List :a))
+  (define-instance (types:RuntimeRepr :a => Into (Vector :a) (List :a))
     (define (into v)
       (let ((inner
               (fn (v index)
@@ -305,9 +320,9 @@
                     (Cons (index-unsafe index v) (inner v (+ 1 index)))))))
         (inner v 0))))
 
-  (define-instance (Iso (Vector :a) (List :a)))
+  (define-instance (types:RuntimeRepr :a => Iso (Vector :a) (List :a)))
 
-  (define-instance (addr:Addressable (Vector :elt))
+  (define-instance (addr:Addressable (Vector :a))
     (define addr:eq? addr::unsafe-internal-eq?)))
 
 (cl:defmacro make (cl:&rest elements)
