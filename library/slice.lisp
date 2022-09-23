@@ -35,10 +35,10 @@
   ;; Slice
   ;;
 
-  (repr :native (cl:vector cl:t))
+  (repr :native (cl:vector cl:*))
   (define-type (Slice :a))
 
-  (declare new (UFix -> UFix -> (Vector :a) -> (Slice :a)))
+  (declare new (types:RuntimeRepr :a => UFix -> UFix -> (Vector :a) -> (Slice :a)))
   (define (new start length v)
     (when (< start 0)
       (error "Start of slice cannot be less than 0."))
@@ -50,11 +50,19 @@
     (when (> end (vector:length v))
       (error "Slice cannot extend beyond length of backing vector."))
 
-    (lisp (Slice :a) (v start length)
-      (cl:make-array
-       length
-       :displaced-to v
-       :displaced-index-offset start)))
+    (let p = types:Proxy)
+    (let ((declare %proxy-helper (types:Proxy (Slice :a) -> types:Proxy :a))
+          (%proxy-helper (fn (_) types:Proxy)))
+      (let p_ = (%proxy-helper p))
+      (let t = (types:runtime-repr p_))
+      (types:as-proxy-of
+       (lisp (Slice :a) (v start length t)
+         (cl:make-array
+          length
+          :element-type t
+          :displaced-to v
+          :displaced-index-offset start))
+       p)))
 
   (declare length ((Slice :a) -> UFix))
   (define (length s)
@@ -120,7 +128,7 @@
   ;; Vector functions
   ;;
 
-  (declare iter-sliding (((Slice :a) -> :b) -> UFix -> (Vector :a) -> Unit))
+  (declare iter-sliding (types:RuntimeRepr :a => ((Slice :a) -> :b) -> UFix -> (Vector :a) -> Unit))
   (define (iter-sliding f size v)
     "Sliding iteration over a vector"
     (let ((inner
@@ -133,7 +141,7 @@
                     (inner (+ offset 1)))))))
       (inner 0)))
 
-  (declare iter-chunked (((Slice :a) -> :b) -> UFix -> (Vector :a) -> Unit))
+  (declare iter-chunked (types:RuntimeRepr :a => ((Slice :a) -> :b) -> UFix -> (Vector :a) -> Unit))
   (define (iter-chunked f size v)
     "Chunked iteration over a vector. Ignores elements at the end if the vector does not evenly divide by the chunk size."
     (let ((inner
@@ -190,7 +198,7 @@
        s)
       v))
 
-  (define-instance (Into (Vector :a) (Slice :a))
+  (define-instance (types:RuntimeRepr :a => Into (Vector :a) (Slice :a))
     (define (into v)
       (new 0 (vector:length v) v)))
 
