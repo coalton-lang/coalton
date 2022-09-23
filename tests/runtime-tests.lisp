@@ -138,3 +138,9 @@
 
 (define-test test-monomorphized-defaulting ()
   (is (== 2 (gh-654 1 1))))
+
+
+;; Check that codegen for fundep classes works
+(coalton-toplevel
+  (define-class (Mult :a :b :c (:a :b -> :c))
+    (.* (:a -> :b -> :c))))

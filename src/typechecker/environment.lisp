@@ -1170,7 +1170,7 @@
            (values environment &optional))
   (let ((result (lookup-fundep-environment env class :no-error t)))
     (when result
-      (util:coalton-bug "Fundep environment is already initialized for class ~A" class))
+      (return-from initialize-fundep-environment env))
     (update-environment
      env
      :fundep-environment (immutable-map-set

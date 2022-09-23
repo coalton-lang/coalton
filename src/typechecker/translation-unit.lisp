@@ -96,7 +96,7 @@
         :if (lookup-function env (ty-class-codegen-sym class) :no-error t)
           :collect `(set-function env ',name ,(lookup-function env (ty-class-codegen-sym class)))
         :if (ty-class-fundeps class)
-          :collect `(initialize-fundep-environment env ,name)
+          :collect `(initialize-fundep-environment env ',name)
         :append (loop :for (name . node) :in (ty-class-unqualified-methods class)
                       :for function-entry := (lookup-function env name :no-error t)
                       :collect `(set-value-type env ',name ,(lookup-value-type env name))
