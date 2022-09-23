@@ -1,95 +1,95 @@
-(in-package #:coalton-tests)
+(in-package #:coalton-native-tests)
 
-(deftest test-slice-basic ()
-  (let* ((v (coalton:coalton
-            (coalton:the
-             (coalton-prelude:Vector coalton:Integer)
-             (coalton-prelude:into
-              (coalton:the
-               (coalton:List coalton:Integer)
-               (coalton:make-list 1 2 3 4 5 6 7 8))))))
+(define-test test-slice-basic ()
+  (let ((v (the
+            (Vector Integer)
+            (into
+             (the
+              (List Integer)
+              (make-list 1 2 3 4 5 6 7 8)))))
 
-         (s (coalton-library/slice:new 0 3 v)))
+        (s (slice:new 0 3 v)))
 
     ;; Length should be correct
-    (is (equal 3 (coalton-library/slice:length s)))
+    (is (== 3 (slice:length s)))
 
     ;; Indexing should work
-    (is (equal 1 (coalton-library/slice:index-unsafe 0 s)))
-    (is (equal 2 (coalton-library/slice:index-unsafe 1 s)))
-    (is (equal 3 (coalton-library/slice:index-unsafe 2 s)))
+    (is (== 1 (slice:index-unsafe 0 s)))
+    (is (== 2 (slice:index-unsafe 1 s)))
+    (is (== 3 (slice:index-unsafe 2 s)))
 
     ;; Writes to the backing array should be visible in the slice
-    (coalton-library/vector:set! 0 25 v)
-    (is (equal 25 (coalton-library/slice:index-unsafe 0 s)))
+    (vector:set! 0 25 v)
+    (is (== 25 (slice:index-unsafe 0 s)))
 
     ;; Writes to the slice should be visible in the backing array
-    (coalton-library/slice:set! 0 26 s)
-    (is (equal 26 (coalton-library/vector:index-unsafe 0 v)))))
+    (slice:set! 0 26 s)
+    (is (== 26 (vector:index-unsafe 0 v)))))
 
-(deftest test-slice-offset ()
-  (let* ((v (coalton:coalton
-            (coalton:the
-             (coalton-prelude:Vector coalton:Integer)
-             (coalton-prelude:into
-              (coalton:the
-               (coalton:List coalton:Integer)
-               (coalton:make-list 1 2 3 4 5 6 7 8))))))
+(define-test test-slice-offset ()
+  (let ((v (the
+            (Vector Integer)
+            (into
+             (the
+              (List Integer)
+              (make-list 1 2 3 4 5 6 7 8)))))
 
-         (s (coalton-library/slice:new 2 3 v)))
+        (s (slice:new 2 3 v)))
 
-    (is (equal 3 (coalton-library/slice:index-unsafe 0 s)))
-    (is (equal 4 (coalton-library/slice:index-unsafe 1 s)))
-    (is (equal 5 (coalton-library/slice:index-unsafe 2 s)))))
+    (is (== 3 (slice:index-unsafe 0 s)))
+    (is (== 4 (slice:index-unsafe 1 s)))
+    (is (== 5 (slice:index-unsafe 2 s)))))
 
-(deftest test-slice-sliding-iteration ()
-  (let* ((v (coalton:coalton
-             (coalton:the
-              (coalton-prelude:Vector coalton:Integer)
-              (coalton-prelude:into
-               (coalton:the
-                (coalton:List coalton:Integer)
-                (coalton:make-list 1 2 3 4 5 6 7 8))))))
+(define-test test-slice-sliding-iteration ()
+  (let ((v (the
+            (Vector Integer)
+            (into
+             (the
+              (List Integer)
+              (make-list 1 2 3 4 5 6 7 8)))))
 
-         (out nil))
+        (out (vector:new)))
 
-    (coalton-library/slice:iter-sliding
-     (coalton-impl/runtime/function-entry::F1
-      (lambda (s)
-        (push
-         (list (coalton-library/slice:index-unsafe 0 s)
-               (coalton-library/slice:index-unsafe 1 s)
-               (coalton-library/slice:index-unsafe 2 s))
-         out)))
+    (slice:iter-sliding
+     (fn (s)
+       (vector:push!
+        (make-list
+         (slice:index-unsafe 0 s)
+         (slice:index-unsafe 1 s)
+         (slice:index-unsafe 2 s))
+        out))
      3 v)
 
-    (is (equal (reverse out) '((1 2 3)
-                               (2 3 4)
-                               (3 4 5)
-                               (4 5 6)
-                               (5 6 7)
-                               (6 7 8))))))
+    (is (== (into out)
+            (make-list
+             (make-list 1 2 3)
+             (make-list 2 3 4)
+             (make-list 3 4 5)
+             (make-list 4 5 6)
+             (make-list 5 6 7)
+             (make-list 6 7 8))))))
 
-(deftest test-slice-chunked-iteration ()
-  (let* ((v (coalton:coalton
-             (coalton:the
-              (coalton-prelude:Vector coalton:Integer)
-              (coalton-prelude:into
-               (coalton:the
-                (coalton:List coalton:Integer)
-                (coalton:make-list 1 2 3 4 5 6 7 8))))))
+(define-test test-slice-chunked-iteration ()
+  (let ((v (the
+            (Vector Integer)
+            (into
+             (the
+              (List Integer)
+              (make-list 1 2 3 4 5 6 7 8)))))
 
-         (out nil))
+        (out (vector:new)))
 
-    (coalton-library/slice:iter-chunked
-     (coalton-impl/runtime/function-entry::F1
-      (lambda (s)
-        (push
-         (list (coalton-library/slice:index-unsafe 0 s)
-               (coalton-library/slice:index-unsafe 1 s)
-               (coalton-library/slice:index-unsafe 2 s))
-         out)))
+    (slice:iter-chunked
+     (fn (s)
+       (vector:push!
+        (make-list
+         (slice:index-unsafe 0 s)
+         (slice:index-unsafe 1 s)
+         (slice:index-unsafe 2 s))
+        out))
      3 v)
 
-    (is (equal (reverse out) '((1 2 3)
-                               (4 5 6))))))
+    (is (== (into out)
+            (make-list
+             (make-list 1 2 3)
+             (make-list 4 5 6))))))
