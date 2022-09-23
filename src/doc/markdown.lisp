@@ -63,6 +63,10 @@
          (package (documentation-package-entry-package object)))
     (format stream "# Package `~(~A~)`<a name=\"~:*~(~A-package~)\"></a>~%~%" package)
 
+    (when (documentation-package-entry-documentation object)
+      (format stream "~A~%~%"
+              (documentation-package-entry-documentation object)))
+
     (dolist (pathname (alexandria:hash-table-keys file-entries))
       (let ((file-entry (gethash pathname file-entries)))
         (when file-entry

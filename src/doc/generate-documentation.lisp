@@ -66,8 +66,9 @@
   '(satisfies documentation-file-entry-list-p))
 
 (defstruct documentation-package-entry
-  (package (required 'package) :type symbol     :read-only t)
-  (entries (required 'entries) :type hash-table :read-only t))
+  (package       (required 'package)       :type symbol           :read-only t)
+  (documentation (required 'documentation) :type (or null string) :read-only t)
+  (entries       (required 'entries)       :type hash-table       :read-only t))
 
 (defstruct documentation-package-entries
   (packages    (required 'packages)    :type list       :read-only t)
@@ -149,6 +150,7 @@
     ;; documentation and call out to the backend.
     (let ((documentation-by-package (make-hash-table :test #'eq)))
       (loop :for package :in packages
+            :for package-documentation := (documentation (find-package package) t)
             :for documentation-entries
               := (collect-documentation-by-file
                   (truename component-path)
@@ -159,6 +161,7 @@
                   (setf (gethash package documentation-by-package)
                         (make-documentation-package-entry
                          :package package
+                         :documentation package-documentation
                          :entries documentation-entries))))
 
       (write-documentation
