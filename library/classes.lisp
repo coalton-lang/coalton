@@ -257,6 +257,13 @@ specify `repr :lisp`."
   (define sequence (traverse (fn (x) x)))
 
   ;;
+  ;; Testing
+  ;;
+
+  (define-class (Mult :a :b :c (:a :b -> :c))
+    (.* (:a -> :b -> :c)))
+
+  ;;
   ;; Conversions
   ;;
 
