@@ -1197,7 +1197,7 @@
      env
      :fundep-environment
      (immutable-map-set
-      (environment-function-environment env)
+      (environment-fundep-environment env)
       class
       (immutable-listmap-push
        result
