@@ -15,6 +15,7 @@
    #:Slice
    #:new
    #:length
+   #:element-type
    #:copy
    #:set!
    #:index
@@ -49,7 +50,6 @@
     (let end = (+ start length))
     (when (> end (vector:length v))
       (error "Slice cannot extend beyond length of backing vector."))
-
     (let p = types:Proxy)
     (let ((declare %proxy-helper (types:Proxy (Slice :a) -> types:Proxy :a))
           (%proxy-helper (fn (_) types:Proxy)))
@@ -69,6 +69,12 @@
     "Returns the length of S"
     (lisp UFix (s)
       (cl:array-dimension s 0)))
+
+  (declare element-type (Slice :a -> types:LispType))
+  (define (element-type s)
+    "Returns the element type of S as a LispType"
+    (lisp types:LispType (s)
+      (cl:array-element-type s)))
 
   (declare copy ((Slice :a) -> (Slice :a)))
   (define (copy s)
