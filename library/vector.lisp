@@ -15,6 +15,7 @@
    #:with-capacity
    #:length
    #:capacity
+   #:element-type
    #:empty?
    #:copy
    #:push!
@@ -84,6 +85,12 @@
     "Returns the number of elements that V can store without resizing"
     (lisp UFix (v)
       (cl:array-dimension v 0)))
+
+  (declare element-type (Vector :a -> types:LispType))
+  (define (element-type v)
+    "Returns the element type of V as a LispType"
+    (lisp types:LispType (v)
+      (cl:array-element-type v)))
 
   (declare empty? (Vector :a -> Boolean))
   (define (empty? v)

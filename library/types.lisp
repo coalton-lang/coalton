@@ -33,7 +33,7 @@
   (repr :native (cl:or cl:symbol cl:list))
   (define-type LispType
     "The runtime representation of a Coalton type as a lisp type.")
-  
+
   (define-class (RuntimeRepr :a)
     "Types which have a runtime LispType representation.
 

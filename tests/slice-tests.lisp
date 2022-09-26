@@ -93,3 +93,35 @@
             (make-list
              (make-list 1 2 3)
              (make-list 4 5 6))))))
+
+(define-test slice-specialize-element-type ()
+  (is (== (slice:element-type
+           (slice:new 0 1
+                      (the (Vector (Optional Integer))
+                           (into (the (List (Optional Integer))
+                                      (make-list (Some 97)))))))
+          (lisp types:LispType () 'cl:t)))
+  (is (== (slice:element-type
+           (slice:new 0 1
+                      (the (Vector IFix)
+                           (into (the (List IFix)
+                                      (make-list 97))))))
+          (lisp types:LispType () 'cl:fixnum)))
+  (is (== (slice:element-type
+           (slice:new 0 1
+                      (the (Vector UFix)
+                           (into (the (List UFix)
+                                      (make-list 97))))))
+          (lisp types:LispType () '(cl:unsigned-byte 62))))
+  (is (== (slice:element-type
+           (slice:new 0 1
+                      (the (Vector String)
+                           (into (the (List String)
+                                      (make-list "a"))))))
+          (lisp types:LispType () 'cl:t)))
+  (is (== (slice:element-type
+           (slice:new 0 1
+                      (the (Vector Char)
+                           (into (the (List Char)
+                                      (make-list #\a))))))
+          (lisp types:LispType () 'cl:character))))

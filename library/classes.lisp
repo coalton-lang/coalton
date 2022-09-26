@@ -1,6 +1,9 @@
 (coalton-library/utils:defstdlib-package #:coalton-library/classes
   (:use
    #:coalton)
+  (:local-nicknames
+   (#:types #:coalton-library/types)
+   )
   (:export
    #:Addressable #:eq?)
   (:export
@@ -65,6 +68,11 @@ specify `repr :lisp`."
   (define-class (Eq :a)
     "Types which have equality defined."
     (== (:a -> :a -> Boolean)))
+
+  (define-instance (Eq types:LispType)
+    (define (== a b)
+      (lisp Boolean (a b)
+        (cl:equalp a b))))
 
   (define-class ((Eq :a) => (Num :a))
     "Types which have numeric operations defined."
