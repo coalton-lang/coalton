@@ -105,11 +105,9 @@
 
   (declare push! (:a -> Vector :a -> UFix))
   (define (push! item v)
-    "Append ITEM to V and resize V if necessary"
+    "Append ITEM to V and resize V if necessary, returning the index of the new item."
     (lisp UFix (item v)
-      (cl:progn
-	(cl:vector-push-extend item v)
-	(cl:1- (cl:fill-pointer v)))))
+      (cl:vector-push-extend item v)))
 
   (declare pop! (Vector :a -> Optional :a))
   (define (pop! v)
