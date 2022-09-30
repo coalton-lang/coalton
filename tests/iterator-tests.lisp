@@ -2,6 +2,8 @@
 
 (define-test iter-list-iter-collect-list-id ()
   (is (== (the (List Integer) (make-list 0 1 2 3))
+          ;; FIXME: changing this to `iter:collect! (iter:into-iter (make-list 0 1 2 3))' breaks type
+          ;; inference. i don't know why.
           (iter:collect-list! (iter:list-iter (make-list 0 1 2 3))))))
 
 (define-test iter-empty-iter-none ()
@@ -13,6 +15,7 @@
           (iter:next! iter:empty))))
 
 (define-test iter-string-chars ()
+  ;; FIXME: changing `string-chars' to `into-iter' here breaks type inference. i don't know why.
   (let ((iter (iter:string-chars "abcdef")))
     (progn
       (is (== (Some #\a)
@@ -35,7 +38,7 @@
                  (iter:and! 
                   (iter:zipWith!
                    ==
-                   (iter:string-chars expected-str)
+                   (iter:into-iter expected-str)
                    (iter:char-range range-start range-end))))))
     (progn (is (same? "abcdef" #\a #\f))
            (is (same? "0123456789" #\0 #\9))
@@ -44,14 +47,16 @@
 (define-test iter-take-10-filter-even ()
   (is (== (the (List Integer) (make-list 0 2 4 6 8))
           (iter:collect-list! (iter:filter! even?
-                                  (iter:take! 10
-                                         (iter:count-forever))))))
+                                            (iter:take! 10
+                                                        (iter:count-forever))))))
   (is (== (the (List Integer) (make-list 0 2 4 6 8 10 12 14 16 18))
           (iter:collect-list! (iter:take! 10
-                                (iter:filter! even?
-                                         (iter:count-forever)))))))
+                                          (iter:filter! even?
+                                                        (iter:count-forever)))))))
 
 (define-test iter-concat-collect-list ()
+  ;; FIXME: changing any of the below `collect-list!' to `collect!' or `list-iter' to `into-iter' breaks type
+  ;; inference. i don't know why.
   (is (== (the (List Integer) (make-list 0 1 2 3 4 5 6 7 8 9))
           (iter:collect-list! (iter:concat! (iter:up-to 5)
                                   (iter:range-increasing 1 5 10)))))
@@ -61,22 +66,25 @@
                                                          (iter:list-iter (make-list 10 11 12 13 14)))))))))
 
 (define-test iter-remove-duplicates-collect-list ()
+  ;; FIXME: changing `collect-list!' to `collect!' or `list-iter' or `string-chars' to `into-iter' breaks type
+  ;; inference. i don't know why.
   (is (== (the (List Integer) (make-list 0 1 2 3 4))
           (iter:collect-list! (iter:remove-duplicates! (iter:list-iter (make-list 0
-                                                                   1 1
-                                                                   2 2 2
-                                                                   3 3 3 3
-                                                                   4 4 4 4 4))))))
+                                                                                  1 1
+                                                                                  2 2 2
+                                                                                  3 3 3 3
+                                                                                  4 4 4 4 4))))))
   (is (== (make-list #\a #\b #\c #\d #\e)
-          (iter:collect-list! (iter:remove-duplicates! (iter:string-chars "abbcccddddeeeee"))))))
+          ;; but changing this `collect-list!' to `collect!' is fine.
+          (iter:collect! (iter:remove-duplicates! (iter:string-chars "abbcccddddeeeee"))))))
 
 (define-test iter-index-of ()
   (is (== (Some 0)
-          (iter:index-of! (== #\a) (iter:string-chars "abcde"))))
+          (iter:index-of! (== #\a) (iter:into-iter "abcde"))))
   (is (== (Some 4)
-          (iter:index-of! (== #\e) (iter:string-chars "abcde"))))
+          (iter:index-of! (== #\e) (iter:into-iter "abcde"))))
   (is (== None
-          (iter:index-of! (== #\f) (iter:string-chars "abcde"))))
+          (iter:index-of! (== #\f) (iter:into-iter "abcde"))))
   (is (== (Some 0)
           (iter:index-of! (== 0) (iter:count-forever))))
   (is (== (Some 5)
@@ -95,11 +103,12 @@
 
 (define-test iter-repeat-item-every ()
   (is (iter:every! (== "foo")
-              (iter:repeat-item "foo" 10)))
+                   (iter:repeat-item "foo" 10)))
   (is (not (iter:any! (/= "foo")
-                 (iter:repeat-item "foo" 10)))))
+                      (iter:repeat-item "foo" 10)))))
 
 (define-test iter-downfrom ()
+  ;; FIXME: changing `collect-list!' to `collect!' breaks type inference
   (is (== (the (List Integer) (make-list 9 8 7 6 5 4 3 2 1 0))
           (iter:collect-list! (iter:down-from 10))))
   (is (== (the (List Integer) (make-list 9 8 7 6 5 4 3 2 1 0))
@@ -126,12 +135,13 @@
         (strings (make-list "a" "aa" "aaa" "aa" "a")))
     (progn
       (is (== (Some "aaa")
-              (iter:optimize! longer? (iter:list-iter strings))))
+              (iter:optimize! longer? (iter:into-iter strings))))
       (is (== (Some "a")
               (iter:optimize! (fn (short long) (not (longer? short long)))
-                         (iter:list-iter strings)))))))
+                              (iter:into-iter strings)))))))
 
 (define-test iter-enumerate ()
+  ;; FIXME: changing `string-chars' to `into-iter' breaks type inference
   (let ((iter (iter:enumerate! (iter:string-chars "abcde")))
         (expect (fn (idx c)
                   (is (== (Some (Tuple idx c))
@@ -146,6 +156,7 @@
               (iter:next! iter))))))
 
 (define-test iter-interleave ()
+  ;; FIXME: changing `list-iter' to `into-iter' or `collect-list!' to `collect!' breaks type inference
   (is (== (iter:collect-list!
            (iter:interleave! (iter:list-iter (make-list 1 2 3 4 5 6))
                              iter:empty))
@@ -168,6 +179,7 @@
           (the (List Integer) (make-list 1 2 3 4 5 6 7 8 9 10)))))
 
 (define-test elementwise-match-/= ()
+  ;; FIXME: changing `list-iter' to `into-iter' breaks type inference
   (is (not (iter:elementwise==! (iter:list-iter (make-list 0 1 2))
                                 (iter:list-iter (make-list 0 1)))))
   (is (not (iter:elementwise-match! <

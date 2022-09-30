@@ -458,6 +458,9 @@ The result tree may be in an intermediate state with a double-black node."
     "Iterate the elements of a tree, starting with the greatest by `<=>' and ending with the least."
     (tree-iterator stack-for-decreasing-order-traversal))
 
+  (define-instance (iter:IntoIterator (Tree :elt) :elt)
+    (define iter:into-iter increasing-order))
+
   (define-instance ((Eq :elt) => (Eq (Tree :elt)))
     (define (== left right)
       (iter:elementwise==! (increasing-order left) (increasing-order right))))
@@ -472,6 +475,9 @@ The result tree may be in an intermediate state with a double-black node."
 
 If ITER contains duplicates, later elements will overwrite earlier elements."
     (iter:fold! insert-or-replace Empty iter))
+
+  (define-instance (Ord :elt => iter:FromIterator (Tree :elt) :elt)
+    (define iter:collect! collect!))
 
   (declare merge (Ord :elt => Tree :elt -> Tree :elt -> Tree :elt))
   (define (merge a b)

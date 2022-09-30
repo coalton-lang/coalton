@@ -28,6 +28,8 @@
    #:fold!
    #:empty
    #:last!
+   #:IntoIterator
+   #:into-iter
    #:list-iter
    #:vector-iter
    #:string-chars
@@ -68,6 +70,8 @@
    #:elementwise-match!
    #:elementwise==!
    #:elementwise-hash!
+   #:FromIterator
+   #:collect!
    #:collect-list!
    #:collect-vector-size-hint!
    #:collect-vector!
@@ -122,12 +126,21 @@ STATE, using INIT as the first STATE."
     "Yields nothing; stops immediately"
     (%Iterator (fn () None)))
 
+  (define-class (IntoIterator :container :elt (:container -> :elt))
+    "Containers which can be converted into iterators.
+
+`into-iter' must not mutate its argument, only produce a \"view\" into it."
+    (into-iter (:container -> Iterator :elt)))
+
   (declare list-iter ((List :elt) -> (Iterator :elt)))
   (define (list-iter lst)
     "Yield successive elements of LST.
 Behavior is undefined if the iterator is advanced after a destructive modification of LST."
     (let ((remaining (cell:new lst)))
       (%Iterator (fn () (cell:pop! remaining)))))
+
+  (define-instance (IntoIterator (List :elt) :elt)
+    (define into-iter list-iter))
 
   (declare vector-iter (Vector :elt -> Iterator :elt))
   (define (vector-iter vec)
@@ -136,12 +149,18 @@ Behavior is undefined if the iterator is advanced after a destructive modificati
     (map ((flip vector:index-unsafe) vec)
          (up-to (vector:length vec))))
 
+  (define-instance (IntoIterator (Vector :elt) :elt)
+    (define into-iter vector-iter))
+
   (declare string-chars (String -> Iterator Char))
   (define (string-chars str)
     "Yield successive `Char`s from STR.
 Behavior is undefined if the iterator is advanced after a destructive modification of STR."
     (map (string:ref-unchecked str)
          (up-to (string:length str))))
+
+  (define-instance (IntoIterator String Char)
+    (define into-iter string-chars))
 
   (declare recursive-iter ((:elt -> :elt) -> (:elt -> Boolean) -> :elt -> Iterator :elt))
   (define (recursive-iter succ done? start)
@@ -476,11 +495,16 @@ The empty iterator will hash as 0."
         ((None) 0)))
 
 ;;; collecting
-  ;; as with `IntoIterator`, these will one day be abstracted into a class `(FromIterator :collection :item)'.
+  (define-class (FromIterator :container :elt (:container -> :elt))
+    (collect! (Iterator :elt -> :container)))
+  
   (declare collect-list! (Iterator :elt -> List :elt))
   (define (collect-list! iter)
     "Construct a `List` containing all the elements from ITER in order."
     (list:reverse (fold! (flip Cons) Nil iter)))
+
+  (define-instance (FromIterator (List :elt) :elt)
+    (define collect! collect-list!))
 
   (declare collect-vector-size-hint! (types:RuntimeRepr :elt => UFix -> Iterator :elt -> Vector :elt))
   (define (collect-vector-size-hint! size iter)
@@ -495,6 +519,9 @@ The vector will be resized if ITER contains more than SIZE elements."
   (define (collect-vector! iter)
     "Construct a `Vector` containing all the elements from ITER in order."
     (collect-vector-size-hint! 0 iter))
+
+  (define-instance (types:RuntimeRepr :elt => FromIterator (Vector :elt) :elt)
+    (define collect! collect-vector!))
 
   (declare collect-hashtable-size-hint!
            ((Hash :key) =>
@@ -518,7 +545,10 @@ The table will be resized if ITER contains more than SIZE unique keys."
     "Construct a `HashTable` containing all the key/value pairs from ITER.
 
 If a key appears in ITER multiple times, the resulting table will contain its last corresponding value."
-    (collect-hashtable-size-hint! coalton-library/hashtable::default-hash-table-capacity iter)))
+    (collect-hashtable-size-hint! coalton-library/hashtable::default-hash-table-capacity iter))
+
+  (define-instance (Hash :key => FromIterator (hashtable:HashTable :key :value) (Tuple :key :value))
+    (define collect! collect-hashtable!)))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/ITERATOR")
