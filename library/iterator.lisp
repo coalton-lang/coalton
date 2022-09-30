@@ -117,20 +117,11 @@ STATE, using INIT as the first STATE."
       (%Iterator (fn () (map func (next! iter))))))
 
 ;;; constructors
-  ;; once coalton gets functional dependencies, associated types or type families, much of this will be
-  ;; abstracted into a class `(IntoIterator :collection :item)', with instances like `(IntoIterator (List :elt)
-  ;; :elt)' and `(IntoIterator String Char)'. It's currently not possible for Coalton to do useful type
-  ;; inference on these classes, so we're stuck with monomorphic constructors like `list-iter`.
   (declare empty (Iterator :any))
   (define empty
     "Yields nothing; stops immediately"
     (%Iterator (fn () None)))
 
-  (declare last! ((Iterator :a) -> (Optional :a)))
-  (define (last! iter)
-    "Yields the last element of ITER, completely consuming it."
-    (fold! (fn (s e) (Some e)) None iter))
-  
   (declare list-iter ((List :elt) -> (Iterator :elt)))
   (define (list-iter lst)
     "Yield successive elements of LST.
@@ -252,7 +243,9 @@ Equivalent to reversing `range-increasing`"
   (declare interleave! (Iterator :a -> Iterator :a -> Iterator :a))
   (define (interleave! left right)
     "Return an interator of interleaved elements from LEFT and RIGHT which terminates as soon as both LEFT and RIGHT do.
-In the case one iterator terminates before the other, the other is exhausted before terminating."
+
+If one iterator terminates before the other, elements from the longer iterator will be yielded without
+interleaving. (interleave empty ITER) is equivalent to (id ITER)."
     (let flag = (cell:new False))
     (%Iterator
      (fn ()
@@ -313,6 +306,7 @@ In the case one iterator terminates before the other, the other is exhausted bef
          (zip! iter
                (up-to count))))
 
+  ;; this appears to be a synonym for `concat!'. i would like to remove it - gefjon
   (declare chain! (Iterator :elt -> Iterator :elt -> Iterator :elt))
   (define (chain! iter1 iter2)
     (%iterator
@@ -361,6 +355,12 @@ In the case one iterator terminates before the other, the other is exhausted bef
          keys))
 
 ;;; consumers
+  (declare last! ((Iterator :a) -> (Optional :a)))
+  (define (last! iter)
+    "Yields the last element of ITER, completely consuming it."
+    (fold! (fn (s e) (Some e)) None iter))
+
+  ;; this and `or!' appear to be inefficent (fully forcing) synonyms for `every! id' and `any! id' respectively
   (declare and! (Iterator Boolean -> Boolean))
   (define and! (fold! boolean-and True))
 
