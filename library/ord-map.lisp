@@ -121,6 +121,9 @@ Like `replace-or-insert', but prioritizing insertion as a use case."
     (match mp
       ((%Map tre) (coalton-library/classes:map into (tree:increasing-order tre)))))
 
+  (define-instance (iter:IntoIterator (Map :key :value) (Tuple :key :value))
+    (define iter:into-iter entries))
+
   (declare keys ((Map :key :value) -> (iter:Iterator :key)))
   (define (keys mp)
     "Iterate over the keys in MP, sorted least-to-greatest."
@@ -150,6 +153,9 @@ If ITER contains duplicate keys, later values will overwrite earlier values."
                   (uncurry (insert-or-replace mp) tpl))
                 empty
                 iter))
+
+  (define-instance (Ord :key => iter:FromIterator (Map :key :value) (Tuple :key :value))
+    (define iter:collect! collect!))
 
   (declare update ((Ord :key) => (:value -> :value) -> (Map :key :value) -> :key -> (Optional (Map :key :value))))
   (define (update func mp key)
