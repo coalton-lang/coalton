@@ -52,14 +52,15 @@ BODY within a `coalton' expression."
                (names (cl:mapcar #'cl:first name-els)))
        `(progn
           (%register-assertion) 
-          (let ,name-els
-            (if ,names
-                (%register-success)
-                (lisp :a ,names
-                  (fiasco::record-failure
-                   'coalton-failure
-                   :format-control "IS assertion ~A~%Evaluates to application ~A~%Evaluates to False~%~A"
-                   :format-arguments (cl:list ',check ,(cons 'cl:list names) ,message))))))))
+          ,@(cl:loop :for (name value) :in name-els
+               :collect `(let ,name = ,value))
+          (if ,names
+              (%register-success)
+              (lisp :a ,names
+                (fiasco::record-failure
+                 'coalton-failure
+                 :format-control "IS assertion ~A~%Evaluates to application ~A~%Evaluates to False~%~A"
+                 :format-arguments (cl:list ',check ,(cons 'cl:list names) ,message)))))))
     (_
      `(progn
         (%register-assertion)
