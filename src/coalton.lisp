@@ -171,23 +171,24 @@ in FORMS that begin with that operator."
       (multiple-value-bind (type preds typed-node substs)
           (tc:derive-expression-type parsed-form *global-environment* nil)
 
-        (let* ((env (coalton-impl/typechecker::apply-substitution substs *global-environment*))
-               (preds (coalton-impl/typechecker::reduce-context env preds substs))
-               (substs (coalton-impl/typechecker::compose-substitution-lists
-                        (coalton-impl/typechecker::default-subs env nil preds)
+        (let* ((env (tc:apply-substitution substs *global-environment*))
+               (substs (tc:solve-fundeps env (tc:apply-substitution substs preds) substs))
+               (preds (tc:reduce-context env preds substs))
+               (substs (tc:compose-substitution-lists
+                        (tc:default-subs env nil preds)
                         substs))
-               (preds (coalton-impl/typechecker::reduce-context env preds substs))
-               (typed-node (coalton-impl/typechecker::remove-static-preds
-                            (coalton-impl/typechecker::apply-substitution substs typed-node)))
-               (type (coalton-impl/typechecker::apply-substitution substs type))
-               (qual-type (coalton-impl/typechecker::qualify preds type))
-               (scheme (coalton-impl/typechecker::quantify (coalton-impl/typechecker::type-variables qual-type) qual-type)))
+               (preds (tc:reduce-context env preds substs))
+               (typed-node (tc:remove-static-preds
+                            (tc:apply-substitution substs typed-node)))
+               (type (tc:apply-substitution substs type))
+               (qual-type (tc:qualify preds type))
+               (scheme (tc:quantify (tc:type-variables qual-type) qual-type)))
 
           (cond
             ((null preds)
              (let ((node
-                     (coalton-impl/codegen::optimize-node
-                      (coalton-impl/codegen::compile-expression
+                     (codegen:optimize-node
+                      (codegen:compile-expression
                        typed-node
                        nil
                        *global-environment*)
@@ -195,33 +196,34 @@ in FORMS that begin with that operator."
 
                (setf *global-environment* env)
                (values
-                (coalton-impl/codegen::codegen-expression
-                 (coalton-impl/codegen::direct-application
+                (codegen:codegen-expression
+                 (codegen:direct-application
                   node
-                  (coalton-impl/codegen::make-function-table *global-environment*))
+                  (codegen:make-function-table *global-environment*))
                  nil
                  *global-environment*))))
 
             (t
-             (coalton-impl/typechecker::with-pprint-variable-context ()
-               (let* ((tvars (loop :for i :to (1- (length (remove-duplicates (coalton-impl/typechecker::type-variables qual-type)
-                                                                             :test #'equalp)))
-                                   :collect (coalton-impl/typechecker::make-variable)))
-                      (qual-type (coalton-impl/typechecker::instantiate
+             (tc:with-pprint-variable-context ()
+               (let* ((tvars
+                        (loop :for i :to (1- (length (remove-duplicates (tc:type-variables qual-type)
+                                                                        :test #'equalp)))
+                              :collect (tc:make-variable)))
+                      (qual-type (tc:instantiate
                                   tvars
-                                  (coalton-impl/typechecker::ty-scheme-type scheme))))
+                                  (tc:ty-scheme-type scheme))))
                  (warn "The expression ~A~%    of type ~A~{ ~S~}. ~S => ~S~%    has unresolved constraint~A ~S~%    add a type assertion with THE to resolve it"
                        form
                        (if tc:*coalton-print-unicode*
                            "∀"
                            "FORALL")
                        tvars
-                       (coalton-impl/typechecker::qualified-ty-predicates qual-type)
-                       (coalton-impl/typechecker::qualified-ty-type qual-type)
-                       (if (= (length (coalton-impl/typechecker::qualified-ty-predicates qual-type)) 1)
+                       (tc:qualified-ty-predicates qual-type)
+                       (tc:qualified-ty-type qual-type)
+                       (if (= (length (tc:qualified-ty-predicates qual-type)) 1)
                            ""
                            "s")
-                       (coalton-impl/typechecker::qualified-ty-predicates qual-type))))
+                       (tc:qualified-ty-predicates qual-type))))
              ''coalton::unable-to-codegen)))))))
 
 (defun process-coalton-toplevel (toplevel-forms package &optional (env *global-environment*))

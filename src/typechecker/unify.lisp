@@ -139,17 +139,11 @@ apply s type1 == type2")
   "Returns true if all of the types in LIST2 match the types in LIST1 pairwise"
   (declare (type ty-list list1)
            (type ty-list list2))
-  (handler-case
-      (progn
-        (reduce #'merge-substitution-lists
-                (loop :for t1 :in list1
-                      :for t2 :in list2
+  (reduce #'merge-substitution-lists
+          (loop :for t1 :in list1
+                :for t2 :in list2
 
-                      :collect (match t2 t1)))
-        (return-from match-list t))
-
-    (coalton-type-error ()
-      (return-from match-list nil))))
+                :collect (match t2 t1))))
 
 (defun unify-list (subs list1 list2)
   (declare (type substitution-list subs)
