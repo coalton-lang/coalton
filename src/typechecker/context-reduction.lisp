@@ -100,7 +100,8 @@ Returns (PREDS FOUNDP)"
 
 (defun reduce-context (env preds subs &key (allow-deferred-predicates t))
   (declare (ignore allow-deferred-predicates))
-  (let ((env (apply-substitution subs env)))
+  (let ((env (apply-substitution subs env))
+        (preds (apply-substitution subs preds)))
     (simplify-context
      (lambda (preds pred)
        (super-entail env preds pred))

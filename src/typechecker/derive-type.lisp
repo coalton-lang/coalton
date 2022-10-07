@@ -685,6 +685,7 @@ TOPLEVEL is set to indicate additional checks should be completed in COALTON-TOP
         ;;
 
         (setf local-subs (solve-fundeps env expr-preds local-subs)) 
+        (setf expr-types (apply-substitution local-subs expr-types))
 
         (multiple-value-bind (deferred-preds retained-preds defaultable-preds)
             (split-context env env-tvars local-tvars expr-preds local-subs)
