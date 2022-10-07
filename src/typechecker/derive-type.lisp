@@ -22,9 +22,6 @@
    #:default-preds
    #:default-subs
    #:split-context)
-  (:import-from
-   #:coalton-impl/typechecker/fundeps
-   #:+fundep-max-depth+)
   (:local-nicknames
    (#:util #:coalton-impl/util)
    (#:error #:coalton-impl/error))
@@ -687,27 +684,7 @@ TOPLEVEL is set to indicate additional checks should be completed in COALTON-TOP
         ;; NOTE: this is where functional dependency substitutions are generated
         ;;
 
-        (block fundep-fixpoint
-          ;; If no predicates have fundeps, then exit early
-          (unless (loop :for pred :in expr-preds
-                        :for class-name := (ty-predicate-class pred)
-                        :for class := (lookup-class env class-name)
-                        :when (ty-class-fundeps class)
-                          :collect class)
-            (return-from fundep-fixpoint))
-
-          (loop :for i :below +fundep-max-depth+
-                :do
-                   (loop :for pred :in expr-preds
-                         :for class-name := (ty-predicate-class pred)
-                         :for class := (lookup-class env class-name)
-                         :when (ty-class-fundeps class)
-                           :do (let ((new-subs (generate-fundep-subs env pred local-subs)))
-                                 (if (equalp new-subs local-subs)
-                                     (return-from fundep-fixpoint)
-                                     (setf local-subs new-subs))))
-                   (setf expr-preds (apply-substitution local-subs expr-preds))
-                :finally (util:coalton-bug "Fundep solving failed to fixpoint")))
+        (setf local-subs (solve-fundeps env expr-preds local-subs)) 
 
         (multiple-value-bind (deferred-preds retained-preds defaultable-preds)
             (split-context env env-tvars local-tvars expr-preds local-subs)

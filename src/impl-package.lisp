@@ -9,7 +9,8 @@
    (#:error #:coalton-impl/error)
    (#:ast #:coalton-impl/ast)
    (#:rt #:coalton-impl/runtime)
-   (#:tc #:coalton-impl/typechecker))
+   (#:tc #:coalton-impl/typechecker)
+   (#:codegen #:coalton-impl/codegen))
 
   (:import-from
    #:coalton-impl/settings

@@ -17,7 +17,8 @@
    #:fundep
    #:fundep-from
    #:fundep-to
-   #:fundep-list)
+   #:fundep-list
+   #:+fundep-max-depth+)
   (:local-nicknames
    (#:util #:coalton-impl/util))
   (:export
@@ -140,7 +141,7 @@
    #:lookup-fundep-environment              ; FUNCTION
    #:initialize-fundep-environment          ; FUNCTION
    #:update-instance-fundeps                ; FUNCTION
-   #:generate-fundep-subs                   ; FUNCTION
+   #:solve-fundeps                          ; FUNCTION
    ))
 
 (in-package #:coalton-impl/typechecker/environment)
@@ -1232,36 +1233,50 @@
                   (nth (gethash var class-variable-map) (ty-predicate-types pred)))
                 (fundep-to fundep))
 
-          :do (block nil
+          :do (block update-block
                 ;; Try to find a matching relation for the current fundep
                 (fset:do-seq (s state)
-                  ;; If the left side matches
-                  (when (or (match-list (fundep-entry-from s) from-tys)
-                            (match-list from-tys (fundep-entry-from s)))
-                    ;; The right side must match
-                    (unless (match-list (fundep-entry-to s) to-tys)
-                      (error-fundep-conflict
-                       env
-                       class
-                       pred
-                       fundep
-                       (fundep-entry-from s)
-                       from-tys
-                       (fundep-entry-to s)
-                       to-tys))
+                  ;; If the left side matches checking either direction
+                  (when (or (handler-case
+                                (progn
+                                  (match-list (fundep-entry-from s) from-tys)
+                                  t)
+                              (unification-error ()
+                                nil))
+                            (handler-case
+                                (progn
+                                  (match-list from-tys (fundep-entry-from s))
+                                  t)
+                              (unification-error ()
+                                nil)))
+                    (handler-case
+                        (progn
+                          (match-list (fundep-entry-to s) to-tys)
+                          ;; Exit upon finding a match
+                          (return-from update-block))
 
-                    ;; Exit upon finding a match
-                    (return)))
+                      ;; If the right side does not match
+                      ;; signal an error
+                      (unification-error ()
+                        (error-fundep-conflict
+                         env
+                         class
+                         pred
+                         fundep
+                         (fundep-entry-from s)
+                         from-tys
+                         (fundep-entry-to s)
+                         to-tys))))))
 
-                ;; Insert a new relation if there wasn't a match
-                (setf env
-                      (insert-fundep-entry%
-                       env
-                       (ty-class-name class)
-                       i
-                       (make-fundep-entry
-                        :from from-tys
-                        :to to-tys))))))
+              ;; Insert a new relation if there wasn't a match
+              (setf env
+                    (insert-fundep-entry%
+                     env
+                     (ty-class-name class)
+                     i
+                     (make-fundep-entry
+                      :from from-tys
+                      :to to-tys)))))
 
   env)
 
@@ -1307,8 +1322,34 @@
     ;; If there was a fundep conflict, one of the instances should have matched
     (util:unreachable)))
 
+(defun solve-fundeps (env preds subs)
+  (declare (type environment env)
+           (type ty-predicate-list preds)
+           (type substitution-list subs)
+           (values substitution-list &optional))
+  ;; If no predicates have fundeps, then exit early
+  (unless (loop :for pred :in preds
+                :for class-name := (ty-predicate-class pred)
+                :for class := (lookup-class env class-name)
+                :when (ty-class-fundeps class)
+                  :collect class)
+    (return-from solve-fundeps subs))
 
-(defun generate-fundep-subs (env pred subs)
+  (loop :for i :below +fundep-max-depth+
+        :do
+           (loop :for pred :in preds
+                 :for class-name := (ty-predicate-class pred)
+                 :for class := (lookup-class env class-name)
+                 :when (ty-class-fundeps class)
+                   :do (let ((new-subs (generate-fundep-subs% env pred subs)))
+                         (if (equalp new-subs subs)
+                             (return-from solve-fundeps subs)
+                             (setf subs new-subs))))
+           (setf preds (apply-substitution subs preds))
+        :finally (util:coalton-bug "Fundep solving failed to fixpoint")))
+
+
+(defun generate-fundep-subs% (env pred subs)
   (declare (type environment env)
            (type ty-predicate pred)
            (type substitution-list subs))
@@ -1351,7 +1392,11 @@
             (fundep-to fundep))))
 
     (fset:do-seq (s state)
-      (when (match-list from-tys (fundep-entry-from s))
-        (return-from generate-fundep-subs-for-pred% (unify-list subs to-tys (fundep-entry-to s))))))
+      (handler-case
+          (let* ((left-subs (match-list from-tys (fundep-entry-from s)))
+
+                 (right-side (apply-substitution left-subs (fundep-entry-to s))))
+            (return-from generate-fundep-subs-for-pred% (unify-list subs to-tys right-side)))
+        (unification-error () nil))))
 
   subs)
