@@ -13,8 +13,7 @@
           (iter:next! iter:empty))))
 
 (define-test iter-string-chars ()
-  ;; FIXME: changing `string-chars' to `into-iter' here breaks type inference. i don't know why.
-  (let ((iter (iter:string-chars "abcdef")))
+  (let ((iter (iter:into-iter "abcdef")))
     (progn
       (is (== (Some #\a)
               (iter:next! iter)))
@@ -133,8 +132,7 @@
                               (iter:into-iter strings)))))))
 
 (define-test iter-enumerate ()
-  ;; FIXME: changing `string-chars' to `into-iter' breaks type inference
-  (let ((iter (iter:enumerate! (iter:string-chars "abcde")))
+  (let ((iter (iter:enumerate! (iter:into-iter "abcde")))
         (expect (fn (idx c)
                   (is (== (Some (Tuple idx c))
                           (iter:next! iter))))))
