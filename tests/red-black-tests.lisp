@@ -62,7 +62,8 @@
                                                     5)
                   11)
                  2))
-  (let iterated = (red-black/tree:collect! (iter:list-iter (make-list 5 11 2))))
+  ;; FIXME: replacing `red-black/tree:collect!' with `iter:collect!' below fails type inference
+  (let iterated = (red-black/tree:collect! (iter:into-iter (make-list 5 11 2))))
   (is (== manual iterated))
   (is (== (hash manual) (hash iterated))))
 
@@ -70,11 +71,12 @@
   (let increasing? = (fn (lst)
                        (== (list:sort lst) lst)))
   (let random-tree! = (fn (size)
+                        ;; FIXME: replacing `red-black/tree:collect!' with `iter:collect!' below fails type inference
                         (red-black/tree:collect! (random-iter! size))))
   (let increasing-list = (fn (tree)
-                           (iter:collect-list! (red-black/tree:increasing-order tree))))
+                           (iter:collect! (red-black/tree:increasing-order tree))))
   (let decreasing-list = (fn (tree)
-                           (iter:collect-list! (red-black/tree:decreasing-order tree))))
+                           (iter:collect! (red-black/tree:decreasing-order tree))))
   (let tree-good? = (fn (tree)
                       (let increasing = (increasing-list tree))
                       (let decreasing = (decreasing-list tree))
@@ -106,19 +108,22 @@
     (collect-tree-checking-invariants (iter:down-from 1024)))
   (is (== up-to-1024 down-from-1024))
   (is (== (hash up-to-1024) (hash down-from-1024)))
-  (let range-1024 = (iter:collect-list! (iter:up-to 1024)))
+  (let range-1024 = (the (List Integer)
+                         (iter:collect! (iter:up-to 1024))))
   (let range-shuffled = (lisp (List Integer) (range-1024)
                           (alexandria:shuffle range-1024)))
   (let shuffled =
-    (collect-tree-checking-invariants (iter:list-iter range-shuffled)))
+    (collect-tree-checking-invariants (iter:into-iter range-shuffled)))
   (is (== up-to-1024 shuffled))
   (is (== (hash up-to-1024) (hash shuffled))))
 
 (coalton-toplevel
   (declare tree-4 (red-black/tree:Tree Integer))
+  ;; FIXME: changing `red-black/tree:collect!' to `iter:collect!' below breaks type inference
   (define tree-4 (red-black/tree:collect! (iter:up-to 4)))
 
   (declare tree-1024 (red-black/tree:Tree Integer))
+  ;; FIXME: changing `red-black/tree:collect!' to `iter:collect!' below breaks type inference
   (define tree-1024 (red-black/tree:collect! (iter:up-to 1024)))
 
   (declare remove-and-check-invariants ((red-black/tree:Tree Integer) -> Integer -> (red-black/tree:Tree Integer)))
@@ -147,10 +152,12 @@
   (destroy-tree-checking-invariants tree-1024 (iter:down-from 1024)))
 
 (define-test removal-upholds-invariants-shuffled ()
-  (let range-1024 = (iter:collect-list! (iter:up-to 1024)))
+  (let range-1024 = (the (List Integer)
+                         ;; FIXME: changing `collect-list!' to `collect!' below breaks type inference
+                         (iter:collect-list! (iter:up-to 1024))))
   (let range-shuffled = (lisp (List Integer) (range-1024)
                           (alexandria:shuffle range-1024)))
-  (destroy-tree-checking-invariants tree-1024 (iter:list-iter range-shuffled)))
+  (destroy-tree-checking-invariants tree-1024 (iter:into-iter range-shuffled)))
 
 (define-test detect-bad-tree ()
   (let red-with-red-child = (red-black/tree::Branch red-black/tree::Red
@@ -171,6 +178,7 @@
                   (red-black/map:insert-or-replace red-black/map:empty 0 "zero")
                   11 "eleven")
                  5 "five"))
+  ;; FIXME: changing `red-black/map:collect!' to `iter:collect!' below breaks type inference
   (let iterated = (red-black/map:collect! (iter:list-iter (make-list (Tuple 0 "zero")
                                                                      (Tuple 11 "eleven")
                                                                      (Tuple 5 "five")))))
@@ -178,12 +186,13 @@
   (is (== (hash manual) (hash iterated))))
 
 (define-test map-non-equal ()
-  (let map-012 = (red-black/map:collect! (iter:list-iter (make-list (Tuple 0 "zero")
+  ;; FIXME: changing `red-black/map:collect!' to `iter:collect!' below breaks type inference
+  (let map-012 = (red-black/map:collect! (iter:into-iter (make-list (Tuple 0 "zero")
                                                                     (Tuple 1 "one")
                                                                     (Tuple 2 "two")))))
-  (let map-01 = (red-black/map:collect! (iter:list-iter (make-list (Tuple 0 "zero")
+  (let map-01 = (red-black/map:collect! (iter:into-iter (make-list (Tuple 0 "zero")
                                                                    (Tuple 1 "one")))))
-  (let map-wrong-names = (red-black/map:collect! (iter:list-iter (make-list (Tuple 0 "one")
+  (let map-wrong-names = (red-black/map:collect! (iter:into-iter (make-list (Tuple 0 "one")
                                                                             (Tuple 1 "zero")))))
 
   (is (/= map-012 map-01))
