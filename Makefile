@@ -41,6 +41,22 @@ bench:
 		 --eval "(ql:quickload :coalton/benchmarks :silent t)" \
 		 --eval "(sb-ext::without-gcing (coalton-benchmarks:run-benchmarks))"
 
+.PHONY: parser-coverage
+parser-coverage:
+	mkdir coverage-report || true
+	sbcl --noinform \
+		--non-interactive \
+		--eval "(require :sb-cover)" \
+		--eval "(declaim (optimize sb-cover:store-coverage-data))" \
+		--eval "(asdf:test-system :coalton :force '(:coalton :coalton/tests))" \
+		--eval "(sb-cover:report \
+	              \"coverage-report/\" \
+	              :if-matches (lambda (pathname) \
+                                (string= (directory-namestring pathname) \
+                                         (directory-namestring (merge-pathnames \"src/parser/\" (asdf:system-source-directory \"coalton\"))))))"
+	open coverage-report/cover-index.html
+
+
 ###############################################################################
 # CLEAN
 ###############################################################################

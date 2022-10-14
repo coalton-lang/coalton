@@ -27,6 +27,7 @@
 ;; Context reduction
 ;;
 
+
 (defun true (x)
   (if x
       t
@@ -60,7 +61,7 @@ Returns (PREDS FOUNDP)"
     (handler-case
         (let* ((subs (predicate-match (ty-class-instance-predicate inst) pred))
                (resulting-preds (mapcar (lambda (p) (apply-substitution subs p))
-                                         (ty-class-instance-constraints inst))))
+                                        (ty-class-instance-constraints inst))))
           (return-from by-inst (values resulting-preds t)))
       (predicate-unification-error () nil)))
   (values nil nil))
@@ -73,7 +74,7 @@ Returns (PREDS FOUNDP)"
            (values boolean))
   (let* ((super (mapcan (lambda (p) (by-super env p)) preds))
         (value
-          (or (true (member pred super :test #'equalp))
+          (or (true (member pred super :test #'type-predicate=))
               (true (multiple-value-bind (inst-preds found)
                         (by-inst env pred)
                       (and found
@@ -86,7 +87,7 @@ Returns (PREDS FOUNDP)"
            (type ty-predicate-list preds)
            (type ty-predicate pred)
            (values boolean &optional))
-  (true (member pred (mapcan (lambda (p) (by-super env p)) preds) :test #'equalp)))
+  (true (member pred (mapcan (lambda (p) (by-super env p)) preds) :test #'type-predicate=)))
 
 (defun simplify-context (f preds)
   "Simplify PREDS to head-normal form"
@@ -98,8 +99,7 @@ Returns (PREDS FOUNDP)"
                      (simp-loop (append (list (first ps)) rs) (rest ps))))))
     (simp-loop nil preds)))
 
-(defun reduce-context (env preds subs &key (allow-deferred-predicates t))
-  (declare (ignore allow-deferred-predicates))
+(defun reduce-context (env preds subs)
   (let ((env (apply-substitution subs env))
         (preds (apply-substitution subs preds)))
     (simplify-context
@@ -109,25 +109,20 @@ Returns (PREDS FOUNDP)"
           :unless (entail env nil pred)
             :collect pred))))
 
-(defun split-context (env environment-vars local-vars preds subs)
+(defun split-context (env environment-vars preds subs)
   "Split PREDS into retained predicates and deferred predicates
 
 Returns (VALUES deferred-preds retained-preds defaultable-preds)"
-  (declare (values ty-predicate-list ty-predicate-list ty-predicate-list))
+  (declare (values ty-predicate-list ty-predicate-list))
   (let ((reduced-preds (reduce-context env preds subs)))
 
-    (multiple-value-bind (deferred retained)
-        (loop :for p :in reduced-preds
-              :if (every (lambda (tv) (member tv environment-vars :test #'equalp))
-                         (type-variables p))
-                :collect p :into deferred
-              :else
-                :collect p :into retained
-              :finally (return (values deferred retained)))
-
-
-      (let ((retained_ (default-preds env (append environment-vars local-vars) retained)))
-        (values deferred (set-difference retained retained_ :test #'equalp) retained_)))))
+    (loop :for p :in reduced-preds
+          :if (every (lambda (tv) (member tv environment-vars :test #'equalp))
+                     (type-variables p))
+            :collect p :into deferred
+          :else
+            :collect p :into retained
+          :finally (return (values deferred retained)))))
 
 (defstruct ambiguity
   (var   (util:required 'var)   :type tyvar             :read-only t)
@@ -162,7 +157,6 @@ Returns (VALUES deferred-preds retained-preds defaultable-preds)"
          (pred-names (mapcar #'ty-predicate-class preds)) ; is
          (pred-heads (mapcar #'ty-predicate-types preds)) ; ts
          )
-
     (loop :for type :in (defaults env)
 
           :when (and
@@ -211,6 +205,7 @@ Returns (VALUES deferred-preds retained-preds defaultable-preds)"
            (type tyvar-list tvars)
            (type ty-predicate-list preds)
            (values ty-predicate-list &optional))
+  
   (loop :for ambig :in (ambiguities env tvars preds)
         :for candidates := (candidates env ambig)
 

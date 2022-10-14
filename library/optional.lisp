@@ -10,10 +10,12 @@
    #:some?
    #:none?))
 
-#+coalton-release
-(cl:declaim #.coalton-impl:*coalton-optimize-library*)
-
 (in-package #:coalton-library/optional)
+
+(named-readtables:in-readtable coalton:coalton)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (coalton-toplevel
   ;;
@@ -47,14 +49,14 @@
   ;; Optional instances
   ;;
 
-  (define-instance (Eq :a => (Eq (Optional :a)))
+  (define-instance (Eq :a => Eq (Optional :a))
     (define (== x y)
       (match (Tuple x y)
         ((Tuple (Some x) (Some y)) (== x y))
         ((Tuple (None) (None)) True)
         (_ False))))
 
-  (define-instance (Ord :a => (Ord (Optional :a)))
+  (define-instance (Ord :a => Ord (Optional :a))
     (define (<=> x y)
       (match x
         ((Some a)
@@ -72,13 +74,13 @@
     (define (* a b) (liftA2 * a b))
     (define (fromInt x) (pure (fromInt x))))
 
-  (define-instance (Semigroup :a => (Semigroup (Optional :a)))
+  (define-instance (Semigroup :a => Semigroup (Optional :a))
     (define (<> a b)
       (match (Tuple a b)
         ((Tuple (Some a) (Some b)) (Some (<> a b)))
         (_ None))))
 
-  (define-instance (Monoid :a => (Monoid (Optional :a)))
+  (define-instance (Monoid :a => Monoid (Optional :a))
     (define mempty (Some mempty)))
 
   (define-instance (Functor Optional)

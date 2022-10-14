@@ -34,10 +34,13 @@
    #:isqrt
    #:ilog))
 
-#+coalton-release
-(cl:declaim #.coalton-impl:*coalton-optimize-library*)
 
 (in-package #:coalton-library/math/integral)
+
+(named-readtables:in-readtable coalton:coalton)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (coalton-toplevel
   (define-class (Num :a => Remainder :a)
@@ -55,7 +58,7 @@ a = (+ (* b (div a b)) (mod a b))
     (mod (:a -> :a -> :a))
     (divMod (:a -> :a -> (Tuple :a :a))))
 
-  (define-class ((Remainder :int) (Ord :int) => (Integral :int))
+  (define-class ((Remainder :int) (Ord :int) => Integral :int)
     "Integral is a number that is either even or odd where `div` and `quot`
 are floored and truncated division, respectively."
     (toInteger (:int -> Integer)))

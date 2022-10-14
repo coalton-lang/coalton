@@ -5,8 +5,7 @@
    #:coalton-library/classes
    #:coalton-library/hash)
   (:local-nicknames
-   (#:cell #:coalton-library/cell)
-   (#:addr #:coalton-library/addressable))
+   (#:cell #:coalton-library/cell))
   (:export
    #:Hashtable
    #:new
@@ -21,10 +20,12 @@
    #:values
    #:make))
 
-#+coalton-release
-(cl:declaim #.coalton-impl:*coalton-optimize-library*)
-
 (in-package #:coalton-library/hashtable)
+
+(named-readtables:in-readtable coalton:coalton)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (coalton-toplevel
   ;;
@@ -143,10 +144,7 @@
     (foreach (fn (_ val)
                (cell:push! lst val))
              table)
-    (cell:read lst))
-
-  (define-instance (addr:Addressable (Hashtable :key :value))
-    (define addr:eq? addr::unsafe-internal-eq?)))
+    (cell:read lst)))
 
 (cl:define-condition make-hash-table-static-duplicate-keys (cl:error)
   ((offending-key :initarg :offending-key

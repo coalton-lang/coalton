@@ -1,9 +1,9 @@
 (defpackage #:coalton-impl/codegen/typecheck-node
   (:use
    #:cl
-   #:coalton-impl/util
    #:coalton-impl/codegen/ast)
   (:local-nicknames
+   (#:util #:coalton-impl/util)
    (#:tc #:coalton-impl/typechecker))
   (:export
    #:typecheck-node ; FUNCTION
@@ -75,23 +75,6 @@
         (setf subs (tc:unify subs subexpr-ty type))
         (node-type expr))))
 
-  (:method ((expr node-bare-abstraction) env)
-    (declare (type tc:environment env)
-             (values tc:ty))
-    (assert (not (null (node-bare-abstraction-vars expr))))
-
-    (let ((type (node-type expr))
-
-          (subs nil))
-      (loop :for name :in (node-bare-abstraction-vars expr) :do
-        (progn
-          (setf type (tc:function-type-to type))))
-
-      (let ((subexpr-ty (typecheck-node (node-bare-abstraction-subexpr expr) env)))
-        (setf subs (tc:unify subs type subexpr-ty))
-        (setf subs (tc:unify subs subexpr-ty type))
-        (node-type expr))))
-
   (:method ((expr node-let) env)
     (declare (type tc:environment env)
              (values tc:ty))
@@ -122,6 +105,7 @@
     (let ((type (node-type expr))
 
           (subs nil))
+
       (loop :for branch :in (node-match-branches expr)
             :for subexpr-ty := (typecheck-node branch env) :do
               (progn

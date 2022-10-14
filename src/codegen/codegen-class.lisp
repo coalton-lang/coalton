@@ -1,7 +1,6 @@
 (defpackage #:coalton-impl/codegen/codegen-class
   (:use
-   #:cl
-   #:coalton-impl/util)
+   #:cl)
   (:import-from
    #:coalton-impl/codegen/struct-or-class
    #:struct-or-class
@@ -36,7 +35,7 @@
               (loop :for method :in (tc:ty-class-unqualified-methods class)
                     :collect (make-struct-or-class-field
                               :name (car method)
-                              :type (tc:lisp-type (cdr method) env :use-function-entries nil))))
+                              :type (tc:lisp-type (cdr method) env))))
 
         :append (struct-or-class
                  :classname codegen-name
@@ -66,13 +65,12 @@
          (class-codegen-sym (tc:ty-class-codegen-sym class))
          (method-accessor (alexandria:format-symbol (symbol-package class-codegen-sym) "~A-~A" class-codegen-sym (car m))))
 
-    ;; TODO: add type annotations
     `((declaim (inline ,(car m)))
       (defun ,(car m) (dict ,@params)
         (declare #.settings:*coalton-optimize*)
         ,(if (null params)
              `(,method-accessor dict)
-             `(funcall (the (function ,(make-list (length params) :initial-element t)) (,method-accessor dict)) ,@params)))
+             `(rt:call-coalton-function (,method-accessor dict) ,@params)))
       ;; Generate the wrapper functions
       (global-lexical:define-global-lexical ,(car m) rt:function-entry)
       (setf ,(car m) ,(rt:construct-function-entry

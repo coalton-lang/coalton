@@ -1,0 +1,4 @@
+;; BAD: Parse Let
+(package test-package)
+
+(define f (let x 5))

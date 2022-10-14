@@ -11,10 +11,12 @@
    #:Tuple4
    #:Tuple5))
 
-#+coalton-release
-(cl:declaim #.coalton-impl:*coalton-optimize-library*)
-
 (in-package #:coalton-library/tuple)
+
+(named-readtables:in-readtable coalton:coalton)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (coalton-toplevel
 
@@ -47,12 +49,12 @@
   ;; Tuple instances
   ;;
 
-  (define-instance ((Eq :a) (Eq :b) => (Eq (Tuple :a :b)))
+  (define-instance ((Eq :a) (Eq :b) => Eq (Tuple :a :b))
     (define (== a b)
       (and (== (fst a) (fst b))
            (== (snd a) (snd b)))))
 
-  (define-instance ((Ord :a) (Ord :b) => (Ord (Tuple :a :b)))
+  (define-instance ((Ord :a) (Ord :b) => Ord (Tuple :a :b))
     (define (<=> a b)
       (let (Tuple a1 a2) = a)
       (let (Tuple b1 b2) = b)
@@ -68,7 +70,7 @@
 
   (define-instance (Iso (Tuple :a :b) (Tuple :b :a)))
 
-  (define-instance ((Hash :a) (Hash :b) => (Hash (Tuple :a :b)))
+  (define-instance ((Hash :a) (Hash :b) => Hash (Tuple :a :b))
     (define (hash item)
       (match item
         ((Tuple a b)
@@ -86,7 +88,7 @@
   ;; Larger Tuple Instances
   ;;
 
-  (define-instance ((Eq :a) (Eq :b) (Eq :c) => (Eq (Tuple3 :a :b :c)))
+  (define-instance ((Eq :a) (Eq :b) (Eq :c) => Eq (Tuple3 :a :b :c))
     (define (== a b)
       (match (Tuple a b)
         ((Tuple (Tuple3 a1 b1 c1)
@@ -95,7 +97,7 @@
               (== b1 b2)
               (== c1 c2))))))
 
-  (define-instance ((Hash :a) (Hash :b) (Hash :c) => (Hash (Tuple3 :a :b :c)))
+  (define-instance ((Hash :a) (Hash :b) (Hash :c) => Hash (Tuple3 :a :b :c))
     (define (hash item)
       (match item
         ((Tuple3 a b c)
@@ -105,7 +107,7 @@
            (hash b)
            (hash c)))))))
 
-  (define-instance ((Eq :a) (Eq :b) (Eq :c) (Eq :d) => (Eq (Tuple4 :a :b :c :d)))
+  (define-instance ((Eq :a) (Eq :b) (Eq :c) (Eq :d) => Eq (Tuple4 :a :b :c :d))
     (define (== a b)
       (match (Tuple a b)
         ((Tuple (Tuple4 a1 b1 c1 d1)
@@ -115,7 +117,7 @@
               (== c1 c2)
               (== d1 d2))))))
 
-  (define-instance ((Hash :a) (Hash :b) (Hash :c) (Hash :d) => (Hash (Tuple4 :a :b :c :d)))
+  (define-instance ((Hash :a) (Hash :b) (Hash :c) (Hash :d) => Hash (Tuple4 :a :b :c :d))
     (define (hash item)
       (match item
         ((Tuple4 a b c d)
@@ -127,7 +129,7 @@
             (hash c)
             (hash d))))))))
 
-  (define-instance ((Eq :a) (Eq :b) (Eq :c) (Eq :d) (Eq :e) => (Eq (Tuple5 :a :b :c :d :e)))
+  (define-instance ((Eq :a) (Eq :b) (Eq :c) (Eq :d) (Eq :e) => Eq (Tuple5 :a :b :c :d :e))
     (define (== a b)
       (match (Tuple a b)
         ((Tuple (Tuple5 a1 b1 c1 d1 e1)
@@ -143,7 +145,7 @@
                     (Hash :c)
                     (Hash :d)
                     (Hash :e)
-                    => (Hash (Tuple5 :a :b :c :d :e)))
+                    => Hash (Tuple5 :a :b :c :d :e))
     (define (hash item)
       (match item
         ((Tuple5 a b c d e)

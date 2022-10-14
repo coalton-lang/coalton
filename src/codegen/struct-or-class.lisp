@@ -1,25 +1,24 @@
 (defpackage #:coalton-impl/codegen/struct-or-class
   (:use
-   #:cl
-   #:coalton-impl/util)
+   #:cl)
   (:local-nicknames
+   (#:settings #:coalton-impl/settings)
+   (#:util #:coalton-impl/util)
    (#:global-lexical #:coalton-impl/global-lexical)
    (#:rt #:coalton-impl/runtime))
   (:export
-   #:struct-or-class
-   #:struct-or-class-field
-   #:make-struct-or-class-field
-   #:struct-or-class-field-name
-   #:struct-or-class-field-type))
+   #:struct-or-class                    ; FUNCTION
+   #:struct-or-class-field              ; STRUCT
+   #:make-struct-or-class-field         ; CONSTRUCTOR
+   #:struct-or-class-field-name         ; ACCESSOR
+   #:struct-or-class-field-type         ; ACCESSOR
+   ))
 
 (in-package #:coalton-impl/codegen/struct-or-class)
 
 (defstruct struct-or-class-field
-  (name (required 'name) :type symbol :read-only t)
-  (type (required 'type) :type t      :read-only t))
-
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type struct-or-class-field))
+  (name (util:required 'name) :type symbol :read-only t)
+  (type (util:required 'type) :type t      :read-only t))
 
 (defun struct-or-class (&key
                               (classname (error "Class Name required"))
@@ -73,8 +72,12 @@
                       :append `(,name (error ""))))))
 
          (list
-          `(declaim (inline ,constructor))
+          ;; NOTE: We are omitting the inline call because this causes SBCL IR1 bugs for instance definitions.
+          ;; `(declaim (inline ,constructor))
           `(defun ,constructor ,field-names
+             ,@(when settings:*emit-type-annotations*
+                 `((declare ,@(loop :for field :in fields
+                                    :collect `(type ,(struct-or-class-field-type field) ,(struct-or-class-field-name field))))))
              (make-instance ',classname ,@(mapcan
                                            (lambda (field)
                                              `(',field ,field))

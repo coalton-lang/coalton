@@ -5,22 +5,30 @@
    #:coalton-library/hash
    :coalton-library/tuple
    :coalton-library/functions)
-  (:local-nicknames (#:iter :coalton-library/iterator)
-                    (#:cell :coalton-library/cell))
+  (:local-nicknames
+   (#:iter :coalton-library/iterator)
+   (#:cell :coalton-library/cell))
   (:shadow #:empty)
   (:export
    #:Tree #:Empty
    #:lookup
    #:insert
    #:replace
-   #:replace-or-insert #:insert-or-replace
+   #:replace-or-insert
+   #:insert-or-replace
    #:remove
    #:increasing-order
    #:decreasing-order
    #:collect!
    #:merge
    #:make))
-(cl:in-package :coalton-library/ord-tree)
+
+(in-package :coalton-library/ord-tree)
+
+(named-readtables:in-readtable coalton:coalton)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 ;; adapted from https://matt.might.net/articles/red-black-delete/
 
@@ -474,11 +482,11 @@ The result tree may be in an intermediate state with a double-black node."
   (define-instance (iter:IntoIterator (Tree :elt) :elt)
     (define iter:into-iter increasing-order))
 
-  (define-instance ((Eq :elt) => (Eq (Tree :elt)))
+  (define-instance ((Eq :elt) => Eq (Tree :elt))
     (define (== left right)
       (iter:elementwise==! (increasing-order left) (increasing-order right))))
 
-  (define-instance ((Hash :elt) => (Hash (Tree :elt)))
+  (define-instance ((Hash :elt) => Hash (Tree :elt))
     (define (hash tre)
       (iter:elementwise-hash! (increasing-order tre))))
 

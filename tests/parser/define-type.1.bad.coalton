@@ -1,0 +1,4 @@
+;; BAD: Invalid define type
+(package test-package)
+
+(define-type)

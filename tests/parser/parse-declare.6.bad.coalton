@@ -1,0 +1,6 @@
+;; BAD: Parse Declare
+(package test-pacakage)
+
+(monomorphize)
+(monomorphize)
+(declare f T)

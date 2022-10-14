@@ -1,5 +1,7 @@
 (in-package #:coalton-native-tests)
 
+(named-readtables:in-readtable coalton:coalton)
+
 (coalton-toplevel
   (define-class (LooseCompare :a)
     "Loosely compares floats"
@@ -9,7 +11,7 @@
     (define (~ a b)
       (if (and (math:nan? a) (math:nan? b))
           True
-          (or (== a b) (< (abs (- a b)) 0.0001)))))
+          (or (== a b) (< (abs (- a b)) 0.0001f0)))))
 
   (define-instance (LooseCompare Double-Float)
     (define (~ a b)
@@ -36,12 +38,12 @@
 
   (declare test-list-single (List Single-Float))
   (define test-list-single
-    (make-list math:infinity 0.0 1 math:pi math:ee (negate math:pi)
+    (make-list math:infinity 0f0 1 math:pi math:ee (negate math:pi)
                (math:sqrt 2) (/ math:pi (math:sqrt 3)) (math:general/ 1 2) 10))
 
   (declare test-list-double (List Double-Float))
   (define test-list-double
-    (make-list math:infinity 0.0d0 1 math:pi math:ee (negate math:pi)
+    (make-list math:infinity 0d0 1 math:pi math:ee (negate math:pi)
                (math:sqrt 2) (/ math:pi (math:sqrt 3)) (math:general/ 1 2) 10 100))
 
   (declare test-list-complex-single (List (Complex Single-Float)))

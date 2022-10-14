@@ -3,16 +3,16 @@
 (defstruct (documentation-entry
             (:constructor nil)
             (:predicate nil))
-  (name          (required 'name)          :type symbol           :read-only t)
-  (documentation (required 'documentation) :type (or null string) :read-only t)
-  (location      (required 'location)      :type t                :read-only t))
+  (name          (util:required 'name)          :type symbol           :read-only t)
+  (documentation (util:required 'documentation) :type (or null string) :read-only t)
+  (location      (util:required 'location)      :type t                :read-only t))
 
 (defstruct (documentation-type-entry
             (:include documentation-entry))
-  (type              (required 'type)              :type ty :read-only t)
-  (constructors      (required 'constructors)      :type t  :read-only t)
-  (constructor-types (required 'constructor-types) :type t  :read-only t)
-  (instances         (required 'instances)         :type t  :read-only t))
+  (type              (util:required 'type)              :type tc:ty :read-only t)
+  (constructors      (util:required 'constructors)      :type t     :read-only t)
+  (constructor-types (util:required 'constructor-types) :type t     :read-only t)
+  (instances         (util:required 'instances)         :type t     :read-only t))
 
 (defun documentation-type-entry-list-p (x)
   (and (every #'documentation-type-entry-p x)
@@ -23,10 +23,10 @@
 
 (defstruct (documentation-class-entry
             (:include documentation-entry))
-  (context   (required 'context)   :type t :read-only t)
-  (predicate (required 'predicate) :type t :read-only t)
-  (methods   (required 'methods)   :type t :read-only t)
-  (instances (required 'instances) :type t :read-only t))
+  (context   (util:required 'context)   :type t :read-only t)
+  (predicate (util:required 'predicate) :type t :read-only t)
+  (methods   (util:required 'methods)   :type t :read-only t)
+  (instances (util:required 'instances) :type t :read-only t))
 
 (defun documentation-class-entry-list-p (x)
   (and (every #'documentation-class-entry-p x)
@@ -37,7 +37,7 @@
 
 (defstruct (documentation-value-entry
             (:include documentation-entry))
-  (type (required 'type) :type ty-scheme))
+  (type (util:required 'type) :type tc:ty-scheme))
 
 (defun documentation-value-entry-list-p (x)
   (and (every #'documentation-value-entry-p x)
@@ -48,15 +48,15 @@
 
 (defstruct (documentation-function-entry
             (:include documentation-value-entry))
-  (param-names (required 'param-names) :type list :read-only t))
+  (param-names (util:required 'param-names) :type list :read-only t))
 
 (defstruct documentation-file-entry
-  (filename      (required 'filename)      :type t                              :read-only t)
-  (package       (required 'package)       :type symbol                         :read-only t)
-  (value-entries (required 'value-entries) :type documentation-value-entry-list :read-only nil)
-  (type-entries  (required 'type-entries)  :type documentation-type-entry-list  :read-only nil)
-  (class-entries (required 'class-entries) :type documentation-class-entry-list :read-only nil)
-  (link-prefix   (required 'link-prefix)   :type string                         :read-only t))
+  (filename      (util:required 'filename)      :type t                              :read-only t)
+  (package       (util:required 'package)       :type symbol                         :read-only t)
+  (value-entries (util:required 'value-entries) :type documentation-value-entry-list :read-only nil)
+  (type-entries  (util:required 'type-entries)  :type documentation-type-entry-list  :read-only nil)
+  (class-entries (util:required 'class-entries) :type documentation-class-entry-list :read-only nil)
+  (link-prefix   (util:required 'link-prefix)   :type string                         :read-only t))
 
 (defun documentation-file-entry-list-p (x)
   (and (every #'documentation-file-entry-p x)
@@ -66,13 +66,13 @@
   '(satisfies documentation-file-entry-list-p))
 
 (defstruct documentation-package-entry
-  (package       (required 'package)       :type symbol           :read-only t)
-  (documentation (required 'documentation) :type (or null string) :read-only t)
-  (entries       (required 'entries)       :type hash-table       :read-only t))
+  (package       (util:required 'package)       :type symbol           :read-only t)
+  (documentation (util:required 'documentation) :type (or null string) :read-only t)
+  (entries       (util:required 'entries)       :type hash-table       :read-only t))
 
 (defstruct documentation-package-entries
-  (packages    (required 'packages)    :type list       :read-only t)
-  (by-package  (required 'by-package)  :type hash-table :read-only t))
+  (packages    (util:required 'packages)    :type list       :read-only t)
+  (by-package  (util:required 'by-package)  :type hash-table :read-only t))
 
 (defgeneric write-documentation (backend stream object)
   (:documentation "Write the given OBJECT to output STREAM. This is
@@ -124,7 +124,7 @@
                                                 (file-link-prefix ""))
   (declare (type (or pathname symbol string) filename)
            (type t backend)
-           (type symbol-list packages)
+           (type util:symbol-list packages)
            (type (or symbol string) asdf-system)
            (type string file-link-prefix))
   (with-open-file (out filename :direction :output :if-exists :supersede :if-does-not-exist :create)
@@ -136,7 +136,7 @@
      :file-link-prefix file-link-prefix)))
 
 (defun write-documentation-for-packages (&key
-                                           (env coalton-impl::*global-environment*)
+                                           (env entry:*global-environment*)
                                            (stream t)
                                            backend
                                            packages
@@ -176,7 +176,7 @@
 
 (defun collect-documentation (env package)
   "Collect all documentation entries related to coalton code in PACKAGE."
-  (declare (type environment env)
+  (declare (type tc:environment env)
            (type symbol package)
            (values
             documentation-value-entry-list
@@ -189,14 +189,14 @@
 (defun collect-documentation-by-file (basepath link-prefix env package)
   (declare (type t basepath)
            (type string link-prefix)
-           (type environment env)
+           (type tc:environment env)
            (type symbol package)
            (values hash-table &optional))
   (multiple-value-bind (value-entries type-entries class-entries)
       (collect-documentation env package)
     (sort-documentation-by-file basepath link-prefix package value-entries type-entries class-entries)))
 
-;; TODO: We should sort everything here
+;; HACK: We should sort everything here
 (defun sort-documentation-by-file (basepath link-prefix package value-entries type-entries class-entries)
   (declare (type t basepath )
            (type string link-prefix)
@@ -258,11 +258,11 @@
 
 
 (defun name-entry->documentation-value-entry (env name name-entry)
-  (let ((documentation (coalton-impl/typechecker::name-entry-docstring name-entry))
-        (location (coalton-impl/typechecker::name-entry-location name-entry))
-        (type (lookup-value-type env name)))
+  (let ((documentation (tc:name-entry-docstring name-entry))
+        (location (tc:name-entry-location name-entry))
+        (type (tc:lookup-value-type env name)))
     (alexandria:if-let ((source-param-names
-                         (coalton-impl/typechecker:lookup-function-source-parameter-names env name)))
+                         (tc:lookup-function-source-parameter-names env name)))
       (make-documentation-function-entry :name name
                                          :type type
                                          :documentation documentation
@@ -275,13 +275,13 @@
 
 
 (defun get-doc-value-info (env package)
-  (declare (type environment env)
+  (declare (type tc:environment env)
            (type symbol package)
            (values documentation-value-entry-list))
   (let ((values nil)
         (package (find-package package)))
     ;; Sort the entires by package
-    (fset:do-map (sym entry (immutable-map-data (coalton-impl/typechecker::environment-name-environment env)))
+    (fset:do-map (sym entry (algo:immutable-map-data (tc:environment-name-environment env)))
       ;; Only include exported symbols from our package
       (when (and (equalp (symbol-package sym) package)
                  (multiple-value-bind (symbol status)
@@ -296,21 +296,21 @@
          (name-entry->documentation-value-entry env name name-entry)))
      (remove-if
       (lambda (x)
-        (coalton-impl/typechecker::lookup-constructor env (car x) :no-error t))
+        (tc:lookup-constructor env (car x) :no-error t))
       (remove-if-not
        (lambda (x)
-         (eql :value (name-entry-type (cdr x))))
+         (eql :value (tc:name-entry-type (cdr x))))
        values)))))
 
 (defun get-doc-type-info (env package)
-  (declare (type environment env)
+  (declare (type tc:environment env)
            (type symbol package)
            (values documentation-type-entry-list))
   (let ((types nil)
         (ctors nil)
         (package (find-package package)))
     ;; Sort the entires by package
-    (fset:do-map (sym entry (immutable-map-data (coalton-impl/typechecker::environment-type-environment env)))
+    (fset:do-map (sym entry (algo:immutable-map-data (tc:environment-type-environment env)))
       ;; Only include exported symbols from our packages
       (when (and (equalp (symbol-package sym) package)
                  (multiple-value-bind (symbol status)
@@ -318,20 +318,20 @@
                    (declare (ignore symbol))
                    (eql :external status)))
         (push (cons sym entry) types)))
-    (fset:do-map (sym entry (immutable-map-data (coalton-impl/typechecker::environment-constructor-environment env)))
+    (fset:do-map (sym entry (algo:immutable-map-data (tc:environment-constructor-environment env)))
       (when (equalp (symbol-package sym) package)
         (push (cons sym entry) ctors)))
 
     (let ((instance-list
             (fset:convert 'list
-                          (coalton-impl/algorithm::immutable-listmap-data
-                           (coalton-impl/typechecker::instance-environment-instances
-                            (coalton-impl/typechecker::environment-instance-environment env))))))
+                          (algo:immutable-listmap-data
+                           (tc:instance-environment-instances
+                            (tc:environment-instance-environment env))))))
 
       (mapcar (lambda (e)
                 (let* ((ctors (remove-if-not
                                (lambda (ctor)
-                                 (and (eql (constructor-entry-constructs (cdr ctor))
+                                 (and (eql (tc:constructor-entry-constructs (cdr ctor))
                                            (car e))))
                                ctors))
 
@@ -353,36 +353,36 @@
                                             (lambda (pred-type)
                                               (labels ((check (pred)
                                                          (typecase pred
-                                                           (coalton-impl/typechecker::tapp
-                                                            (check (coalton-impl/typechecker::tapp-from pred)))
+                                                           (tc:tapp
+                                                            (check (tc:tapp-from pred)))
                                                            (t
-                                                            (equalp (type-entry-type (cdr e)) pred)))))
+                                                            (equalp (tc:type-entry-type (cdr e)) pred)))))
                                                 (check pred-type)))
-                                            (ty-predicate-types (ty-class-instance-predicate instance)))
+                                            (tc:ty-predicate-types (tc:ty-class-instance-predicate instance)))
                                        (list instance))))))
                   (make-documentation-type-entry
                    :name (car e)
-                   :type (type-entry-type (cdr e))
+                   :type (tc:type-entry-type (cdr e))
                    :constructors exported-ctors
                    :constructor-types (mapcar
                                        (lambda (ctor)
-                                         (lookup-value-type env (car ctor)))
+                                         (tc:lookup-value-type env (car ctor)))
                                        exported-ctors)
                    :instances applicable-instances
-                   :documentation (type-entry-docstring (cdr e))
+                   :documentation (tc:type-entry-docstring (cdr e))
                    ;; Here we will assume that all constructors
                    ;; share the same location as the type.
-                   :location (type-entry-location (cdr e)))))
+                   :location (tc:type-entry-location (cdr e)))))
               types))))
 
 (defun get-doc-class-info (env package)
-  (declare (type environment env)
+  (declare (type tc:environment env)
            (type symbol package)
            (values documentation-class-entry-list))
   (let ((values nil)
         (package (find-package package)))
     ;; Sort the entires by package
-    (fset:do-map (sym entry (immutable-map-data (coalton-impl/typechecker::environment-class-environment env)))
+    (fset:do-map (sym entry (algo:immutable-map-data (tc:environment-class-environment env)))
       ;; Only include exported symbols from our package
       (when (and (equalp (symbol-package sym) package)
                  (multiple-value-bind (symbol status)
@@ -393,11 +393,11 @@
 
     (mapcar (lambda (e)
               (make-documentation-class-entry
-               :name (ty-class-name e)
-               :context (ty-class-superclasses e)
-               :predicate (ty-class-predicate e)
-               :methods (ty-class-unqualified-methods e)
-               :instances (reverse (fset:convert 'list (lookup-class-instances env (ty-class-name e) :no-error t)))
-               :documentation (coalton-impl/typechecker::ty-class-docstring e)
-               :location (coalton-impl/typechecker::ty-class-location e)))
+               :name (tc:ty-class-name e)
+               :context (tc:ty-class-superclasses e)
+               :predicate (tc:ty-class-predicate e)
+               :methods (tc:ty-class-unqualified-methods e)
+               :instances (reverse (fset:convert 'list (tc:lookup-class-instances env (tc:ty-class-name e) :no-error t)))
+               :documentation (tc:ty-class-docstring e)
+               :location (tc:ty-class-location e)))
             values)))

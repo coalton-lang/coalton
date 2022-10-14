@@ -1,8 +1,9 @@
 (defpackage #:coalton-impl/codegen/hoister
   (:use
    #:cl
-   #:coalton-impl/util
    #:coalton-impl/codegen/ast)
+  (:local-nicknames
+   (#:util #:coalton-impl/util))
   (:export
    #:hoister                            ; STRUCT
    #:make-hoister                       ; CONSTRUCTOR
@@ -16,8 +17,8 @@
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defstruct hoist-point
-    (bound-variables (required 'bound-variables)                :type symbol-list :read-only nil)
-    (definitions     (make-hash-table :test #'equalp)           :type hash-table  :read-only t)))
+    (bound-variables (util:required 'bound-variables) :type util:symbol-list :read-only nil)
+    (definitions     (make-hash-table :test #'equalp) :type hash-table  :read-only t)))
 
 (defun hoist-point-blocks (node hoist-point)
   (declare (type node node)
@@ -62,7 +63,7 @@
         :collect (cons (node-variable-value var) node)))
 
 (defun push-hoist-point (bound-variables hoister)
-  (declare (type symbol-list bound-variables)
+  (declare (type util:symbol-list bound-variables)
            (type hoister hoister))
   (push (make-hoist-point :bound-variables bound-variables) (hoister-hoist-points hoister)))
 

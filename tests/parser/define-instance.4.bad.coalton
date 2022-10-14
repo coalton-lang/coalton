@@ -1,0 +1,5 @@
+;; BAD: Parse Instance
+(package test-package)
+
+(define-instance (C :a)
+  (define))

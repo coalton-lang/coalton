@@ -50,7 +50,7 @@
       (cl:random limit)))
 
   (declare random! (Unit -> UFix))
-  (define (random!)
+  (define (random! _)
     (random-below! (lisp UFix () cl:most-positive-fixnum)))
 
   (declare random-iter! (UFix -> (iter:Iterator UFix)))

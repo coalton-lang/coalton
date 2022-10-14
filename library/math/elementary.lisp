@@ -33,10 +33,12 @@
    #:pi #:ee
    #:atan2))
 
-#+coalton-release
-(cl:declaim #.coalton-impl:*coalton-optimize-library*)
-
 (in-package #:coalton-library/math/elementary)
+
+(named-readtables:in-readtable coalton:coalton)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (coalton-toplevel
   (define-class (Trigonometric :a)
@@ -348,7 +350,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
            ((%Complex _ b) b))))))
 
 (coalton-toplevel
-  (define-instance ((Elementary :a) => (Exponentiable (Complex :a)))
+  (define-instance ((Elementary :a) => Exponentiable (Complex :a))
     (define (ln z)
       ;; The principal natural log of a complex number
       (match (polar z)
@@ -367,7 +369,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
     (define (log b x)
       (/ (ln x) (ln b))))
 
-  (define-instance ((Elementary :a) => (Radical (Complex :a)))
+  (define-instance ((Elementary :a) => Radical (Complex :a))
     (define (sqrt z)
       (match (polar z)
         ((Tuple r theta)
@@ -384,7 +386,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
          ;; sqrt(z) = sqrt(r) (cos theta/2 + i sin theta/2)
          (complex (* nth-root-r (cos phi)) (* nth-root-r (sin phi)))))))
 
-  (define-instance ((Elementary :a) => (Trigonometric (Complex :a)))
+  (define-instance ((Elementary :a) => Trigonometric (Complex :a))
     (define (sin z)
       (let x = (real-part z))
       (let y = (imag-part z))
@@ -422,7 +424,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
                 (+ ii z))))))
 
   ;; This doesn't have much mathematical meaning
-  (define-instance ((Elementary :a) => (Polar (Complex :a)))
+  (define-instance ((Elementary :a) => Polar (Complex :a))
     (define (phase zz)
       (match (polar zz)
         ((Tuple _ p) p)))
@@ -436,7 +438,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
             (* 2 (atan (/ y (+ r x))))))
       (Tuple r p)))
 
-  (define-instance ((Elementary :a) => (Elementary (Complex :a)))
+  (define-instance ((Elementary :a) => Elementary (Complex :a))
     (define ee (complex ee 0))
     (define pi (complex pi 0))))
 

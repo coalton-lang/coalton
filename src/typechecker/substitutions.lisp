@@ -34,6 +34,9 @@
 (deftype substitution-list ()
   '(satisfies substitution-list-p))
 
+(define-condition substitution-list-merge-error (error:coalton-internal-type-error)
+  ())
+
 (defun merge-substitution-lists (s1 s2)
   "Merge substitution lists S1 and S2 together, erroring on disagreeing entries."
   (declare (type substitution-list s1)
@@ -44,7 +47,7 @@
                  (equalp (apply-substitution s1 x) (apply-substitution s2 x)))
                (mapcar #'substitution-from overlap))
         (concatenate 'list s1 s2)
-        (error 'error:coalton-type-error))))
+        (error 'substitution-list-merge-error))))
 
 (defun compose-substitution-lists (s1 s2)
   "Compose substitution lists S1 and S2 together, applying S1 to S2."

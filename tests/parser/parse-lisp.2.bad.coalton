@@ -1,0 +1,4 @@
+;; BAD: Parse Lisp
+(package test-package)
+
+(define f (lisp (T -> T)))

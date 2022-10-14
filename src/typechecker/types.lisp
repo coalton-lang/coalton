@@ -35,6 +35,7 @@
    #:kind-of
    #:type-constructors                  ; FUNCTION
    #:*boolean-type*                     ; VARIABLE
+   #:*unit-type*                        ; VARIABLE
    #:*char-type*                        ; VARIABLE
    #:*u8-type*                          ; VARIABLE
    #:*u16-type*                         ; VARIABLE
@@ -63,6 +64,7 @@
    #:function-type-arity                ; FUNCTION
    #:function-type-arguments            ; FUNCTION
    #:function-return-type               ; FUNCTION
+   #:function-remove-arguments          ; FUNCTION
    #:type-variables                     ; FUNCTION
    #:*coalton-pretty-print-tyvars*      ; VARIABLE
    #:with-pprint-variable-scope         ; MACRO
@@ -216,6 +218,7 @@
 ;;;
 
 (defvar *boolean-type*      (make-tycon :name 'coalton:Boolean      :kind +kstar+))
+(defvar *unit-type*         (make-tycon :name 'coalton:Unit         :kind +kstar+))
 (defvar *char-type*         (make-tycon :name 'coalton:Char         :kind +kstar+))
 (defvar *u8-type*           (make-tycon :name 'coalton:U8           :kind +kstar+))
 (defvar *u16-type*          (make-tycon :name 'coalton:U16          :kind +kstar+))
@@ -319,6 +322,16 @@
     (if (function-type-p ty)
         (function-return-type (tapp-to ty))
         ty)))
+
+(defun function-remove-arguments (ty num)
+  (declare (type ty ty)
+           (type fixnum num))
+
+  (assert (>= num (length (function-type-arguments ty))))
+
+  (make-function-type*
+   (subseq (function-type-arguments ty) num)
+   (function-return-type ty)))
 
 (defgeneric type-variables (type)
   (:documentation "Get a list containing the type variables in TYPE.")
@@ -469,7 +482,7 @@ This requires a valid PPRINT-VARIABLE-CONTEXT")
 ;;; Conditions
 ;;;
 
-(define-condition type-application-error (error:coalton-type-error)
+(define-condition type-application-error (error:coalton-internal-type-error)
   ((type :initarg :type
          :reader type-application-error-type)
    (argument :initarg :argument

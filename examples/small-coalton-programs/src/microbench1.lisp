@@ -41,9 +41,12 @@
 
 (cl:in-package #:coalton-microbench1)
 
+(named-readtables:in-readtable coalton:coalton)
+
 (cl:declaim (cl:optimize cl:speed (cl:safety 0) (cl:debug 0)))
 
 (coalton-toplevel
+  (declare f (Single-Float -> Single-Float))
   (define (f x)
     (- (* x x) (* 2.0f0 x))))
 

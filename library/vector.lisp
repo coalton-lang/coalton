@@ -7,8 +7,7 @@
   (:local-nicknames
    (#:types #:coalton-library/types)
    (#:list #:coalton-library/list)
-   (#:cell #:coalton-library/cell)
-   (#:addr #:coalton-library/addressable))
+   (#:cell #:coalton-library/cell))
   (:export
    #:Vector
    #:new
@@ -39,10 +38,12 @@
    #:sort-by!
    #:make))
 
-#+coalton-release
-(cl:declaim #.coalton-impl:*coalton-optimize-library*)
-
 (in-package #:coalton-library/vector)
+
+(named-readtables:in-readtable coalton:coalton)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (coalton-toplevel
 
@@ -254,7 +255,7 @@
   ;; Vector Instances
   ;;
 
-  (define-instance (Eq :a => (Eq (Vector :a)))
+  (define-instance (Eq :a => Eq (Vector :a))
     (define (== v1 v2)
       (if (/= (length v1) (length v2))
           False
@@ -327,18 +328,17 @@
 
   (define-instance (types:RuntimeRepr :a => Iso (Vector :a) (List :a)))
 
-  (define-instance (addr:Addressable (Vector :a))
-    (define addr:eq? addr::unsafe-internal-eq?)))
+  )
 
 (cl:defmacro make (cl:&rest elements)
   "Construct a `Vector' containing the ELEMENTS, in the order listed."
   (cl:let* ((length (cl:length elements))
             (vec (cl:gensym "VEC-")))
     `(progn
-      (let ,vec = (with-capacity ,length))
-      ,@(cl:loop :for elt :in elements
-           :collect `(push! ,elt ,vec))
-      ,vec)))
+       (let ,vec = (with-capacity ,length))
+       ,@(cl:loop :for elt :in elements
+            :collect `(push! ,elt ,vec))
+       ,vec)))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/VECTOR")

@@ -47,19 +47,20 @@
 
 (deftest hashtable-static-duplicate-keys ()
   (signals coalton-library/hashtable::make-hash-table-static-duplicate-keys
-    (run-coalton-typechecker
-     '((coalton:define my-ht
-         (coalton-library/hashtable:make ("zero" 0)
-                                         ("one" 1)
-                                         ("two" 2)
-                                         ("zero" 3))))))
+    (check-coalton-types
+     "(define my-ht
+        (coalton-library/hashtable:make (\"zero\" 0)
+                                         (\"one\" 1)
+                                         (\"two\" 2)
+                                         (\"zero\" 3)))"))
+
   (signals coalton-library/hashtable::make-hash-table-static-duplicate-keys
-    (run-coalton-typechecker
-     '((coalton:define my-ht
-         (coalton:let ((zero "zero")
-                       (one "one")
-                       (two "two"))
+    (check-coalton-types
+     "(define my-ht
+        (let ((zero \"zero\")
+                       (one \"one\")
+                       (two \"two\"))
            (coalton-library/hashtable:make (zero 0)
                                            (one 1)
                                            (two 2)
-                                           (zero 3))))))))
+                                           (zero 3))))")))

@@ -4,7 +4,6 @@
    #:coalton-library/builtin
    #:coalton-library/classes
    #:coalton-library/list)
-  (:local-nicknames (#:addr #:coalton-library/addressable))
   (:export
    #:Cell
    #:new
@@ -18,11 +17,13 @@
    #:increment!
    #:decrement!))
 
-#+coalton-release
-(cl:declaim #.coalton-impl:*coalton-optimize-library*)
-
 (in-package #:coalton-library/cell)
- 
+
+(named-readtables:in-readtable coalton:coalton)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
 (cl:declaim (cl:inline make-cell-internal))
 
 (cl:defstruct cell-internal
@@ -135,10 +136,7 @@
     (define into new))
 
   (define-instance (Into (Cell :a) :a)
-    (define into read))
-
-  (define-instance (addr:Addressable (Cell :a))
-    (define addr:eq? addr::unsafe-internal-eq?)))
+    (define into read)))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/CELL")

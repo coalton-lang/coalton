@@ -1,0 +1,4 @@
+;; BAD: Parse type
+(package test-package)
+
+(declare f (=>))

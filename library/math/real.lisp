@@ -35,10 +35,12 @@
    #:single/
    #:double/))
 
-#+coalton-release
-(cl:declaim #.coalton-impl:*coalton-optimize-library*)
+(in-package #:coalton-library/math/real)
 
-(cl:in-package #:coalton-library/math/real)
+(named-readtables:in-readtable coalton:coalton)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (coalton-toplevel
   (define-class (Quantizable :a)

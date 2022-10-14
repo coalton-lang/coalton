@@ -1,0 +1,4 @@
+;; BAD: Parse Cond
+(package test-package)
+
+(define x (cond (y)))

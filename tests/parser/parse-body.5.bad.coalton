@@ -1,0 +1,7 @@
+;; BAD: Parse Body
+(package test-package)
+
+(define x
+  (progn
+    (let x = 1 2)
+    x))

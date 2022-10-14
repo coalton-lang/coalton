@@ -1,0 +1,4 @@
+;; BAD: Parse Fn
+(package test-package)
+
+(define f (fn ()))

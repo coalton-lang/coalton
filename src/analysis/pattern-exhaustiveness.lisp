@@ -4,12 +4,11 @@
    (#:settings #:coalton-impl/settings)
    (#:rt #:coalton-impl/runtime)
    (#:tc #:coalton-impl/typechecker)
-   (#:ast #:coalton-impl/ast)
    (#:util #:coalton-impl/util)
    (#:error #:coalton-impl/error))
   (:export
-   #:coalton-non-exhaustive-match-warning
-   #:coalton-useless-pattern-warning
+   #:non-exhaustive-match-warning
+   #:useless-pattern-warning
    #:exhaustive-patterns-p
    #:useful-pattern-p
    #:find-non-matching-value))
@@ -23,34 +22,14 @@
 ;;;
 
 
-(define-condition coalton-non-exhaustive-match-warning (error:coalton-warning)
-  ((missing-clause :initarg :missing-clause
-                   :initform nil
-                   :reader coalton-non-exhaustive-match-warning-missing-clause))
-  (:report
-   (lambda (c s)
-     (let ((*print-circle* nil) ; Prevent printing using reader macros
-           (missing-clause (coalton-non-exhaustive-match-warning-missing-clause c)))
-       (if (null missing-clause)
-           (format s "Match patterns are non-exhaustive.")
-           (format s "Match patterns are non-exhaustive. Missing pattern ~W" missing-clause))))))
-
-(define-condition coalton-useless-pattern-warning (error:coalton-warning)
-  ((pattern :initarg :pattern
-            :initform (util:required 'pattern)
-            :reader coalton-useless-pattern-warning-pattern))
-  (:report
-   (lambda (c s)
-     (let ((*print-circle* nil) ; Prevent printing using reader macros
-           (pattern (coalton-useless-pattern-warning-pattern c)))
-       (format s "Useless match pattern ~W" pattern)))))
-
 (defun exhaustive-patterns-p (patterns env)
   "Are PATTERNS exhaustive?"
   (not
    (useful-pattern-clause-p
     (mapcar #'list patterns)
-    (list (ast:make-pattern-wildcard))
+    (list (tc:make-pattern-wildcard
+           :type (tc:qualify nil (tc:make-variable))
+           :source (cons nil nil)))
     env)))
 
 (defun useful-pattern-p (patterns pattern env)
@@ -63,9 +42,13 @@
    env))
 
 (defun pattern-matrix-p (x)
-  ;; TODO: Check that all lengths are equal
   (and (alexandria:proper-list-p x)
-       (every #'ast:pattern-list-p x)))
+       (every #'tc:pattern-list-p x)
+       (or (null x)
+           (every
+            (lambda (l)
+              (= (length l) (length (first x))))
+            (cdr x)))))
 
 (deftype pattern-matrix ()
   '(satisfies pattern-matrix-p))
@@ -76,7 +59,7 @@
 PATTERN-MATRIX is a list of lists representing a pattern matrix in row-major format.
 CLAUSE is a list representing a row-vector of patterns."
   (declare (type pattern-matrix pattern-matrix)
-           (type ast:pattern-list clause)
+           (type tc:pattern-list clause)
            (type tc:environment env)
            (values boolean &optional))
 
@@ -98,22 +81,22 @@ CLAUSE is a list representing a row-vector of patterns."
     ;;
 
     ;; Sub-case 1: The first member of CLAUSE is a constructor (or literal).
-    ((or (ast:pattern-literal-p (first clause))
-         (ast:pattern-constructor-p (first clause)))
+    ((or (tc:pattern-literal-p (first clause))
+         (tc:pattern-constructor-p (first clause)))
      (useful-pattern-clause-p
       (specialize-matrix pattern-matrix (first clause))
       (first (specialize-matrix (list clause) (first clause)))
       env))
 
     ;; Sub-case 2: The first member of CLAUSE is a wildcard (or variable)
-    ((or (ast:pattern-wildcard-p (first clause))
-         (ast:pattern-var-p (first clause)))
+    ((or (tc:pattern-wildcard-p (first clause))
+         (tc:pattern-var-p (first clause)))
 
      (let ((first-column-constructors
              (loop :for row :in pattern-matrix
                    :for elem := (first row)
-                   :when (or (ast:pattern-literal-p elem)
-                             (ast:pattern-constructor-p elem))
+                   :when (or (tc:pattern-literal-p elem)
+                             (tc:pattern-constructor-p elem))
                      :collect elem)))
        (cond
          ;; If the constructors form a complete signature then CLAUSE
@@ -140,7 +123,7 @@ CLAUSE is a list representing a row-vector of patterns."
 (defun specialize-matrix (pattern-matrix pattern)
   "Specialize the given PATTERN-MATRIX to the constructor given in PATTERN."
   (declare (type pattern-matrix pattern-matrix)
-           (type (or ast:pattern-literal ast:pattern-constructor) pattern)
+           (type (or tc:pattern-literal tc:pattern-constructor) pattern)
            (values pattern-matrix))
   (loop :for row :in pattern-matrix
         ;; Only specialize on the first component of each row.
@@ -149,43 +132,46 @@ CLAUSE is a list representing a row-vector of patterns."
         ;;       constructor nor the other way around.
         :append (cond
                   ;; If ELEM is the same literal then remove this pattern.
-                  ((and (ast:pattern-literal-p elem)
-                        ;; TODO: Figure out a better equality check
-                        (equal (ast:pattern-literal-value pattern)
-                               (ast:pattern-literal-value elem)))
+                  ((and (tc:pattern-literal-p elem)
+                        (util:literal-equal
+                         (tc:pattern-literal-value pattern)
+                         (tc:pattern-literal-value elem)))
                    (list (rest row)))
                   ;; If ELEM is not the same literal then emit nothing.
-                  ((ast:pattern-literal-p elem)
+                  ((tc:pattern-literal-p elem)
                    nil)
 
                   ;; If ELEM is the same constructor then expand the inner patterns.
-                  ((and (ast:pattern-constructor-p elem)
-                        (eq (ast:pattern-constructor-name pattern)
-                            (ast:pattern-constructor-name elem)))
-                   (list (append (ast:pattern-constructor-patterns elem)
+                  ((and (tc:pattern-constructor-p elem)
+                        (eq (tc:pattern-constructor-name pattern)
+                            (tc:pattern-constructor-name elem)))
+                   (list (append (tc:pattern-constructor-patterns elem)
                                  (rest row))))
                   ;; If ELEM is not the same constructor then emit nothing.
-                  ((ast:pattern-constructor-p elem)
+                  ((tc:pattern-constructor-p elem)
                    nil)
 
                   ;; If ELEM is a wildcard (or variable) then emit
                   ;; wildcards for each pattern in the constructor (or
                   ;; literal).
-                  ((or (ast:pattern-wildcard-p elem)
-                       (ast:pattern-var-p elem))
+                  ((or (tc:pattern-wildcard-p elem)
+                       (tc:pattern-var-p elem))
                    (etypecase pattern
-                     (ast:pattern-literal
+                     (tc:pattern-literal
                       (list (rest row)))
-                     (ast:pattern-constructor
-                      (list (append (mapcar (constantly (ast:make-pattern-wildcard))
-                                            (ast:pattern-constructor-patterns pattern))
+                     (tc:pattern-constructor
+                      (list (append (mapcar (lambda (pattern)
+                                              (tc:make-pattern-wildcard
+                                               :type (tc:pattern-type pattern)
+                                               :source (cons nil nil)))
+                                            (tc:pattern-constructor-patterns pattern))
                                     (rest row))))))
                   (t
                    (util:coalton-bug "Not reachable.")))))
 
 (defun complete-signature-p (patterns env)
   "Do the set of PATTERNS form a complete signature of the constructed type?"
-  (declare (type ast:pattern-list patterns)
+  (declare (type tc:pattern-list patterns)
            (type tc:environment env)
            (values boolean))
   (cond
@@ -195,12 +181,12 @@ CLAUSE is a list representing a row-vector of patterns."
 
     ;; Literals cannot have complete signatures.
     ;; NOTE: This will change when we allow number literals to take on finite types.
-    ((some #'ast:pattern-literal-p patterns)
+    ((some #'tc:pattern-literal-p patterns)
      nil)
 
     ;; Otherwise ensure that all constructors are accounted for in PATTERNS.
     (t
-     (let* ((constructor-names (mapcar #'ast:pattern-constructor-name patterns))
+     (let* ((constructor-names (mapcar #'tc:pattern-constructor-name patterns))
             (constructed-type (tc:constructor-entry-constructs (tc:lookup-constructor env (first constructor-names))))
             (type-constructors (tc:type-entry-constructors (tc:lookup-type env constructed-type))))
        (null (set-difference type-constructors constructor-names :test #'eq))))))
@@ -214,12 +200,12 @@ CLAUSE is a list representing a row-vector of patterns."
         :for elem := (first row)
         :append (cond
                   ;; If ELEM is a constructor (or literal) then don't emit a row.
-                  ((or (ast:pattern-literal-p elem)
-                       (ast:pattern-constructor-p elem))
+                  ((or (tc:pattern-literal-p elem)
+                       (tc:pattern-constructor-p elem))
                    nil)
                   ;; If ELEM is a wildcard (or variable) then remove ELEM.
-                  ((or (ast:pattern-wildcard-p elem)
-                       (ast:pattern-var-p elem))
+                  ((or (tc:pattern-wildcard-p elem)
+                       (tc:pattern-var-p elem))
                    (list (rest row)))
                   (t
                    (util:coalton-bug "Not reachable.")))))
@@ -232,7 +218,10 @@ CLAUSE is a list representing a row-vector of patterns."
   (cond
     ;; An empty pattern generates n wildcards.
     ((and (zerop (length pattern-matrix)))
-     (loop :for i :below n :collect (ast:make-pattern-wildcard)))
+     (loop :for i :below n
+           :collect (tc:make-pattern-wildcard
+                     :type (tc:qualify nil (tc:make-variable))
+                     :source (cons nil nil))))
     ;; Zero wildcards with a pattern matrix that has zero columns indicates the matrix is exhaustive.
     ((and (zerop n)
           (zerop (length (first pattern-matrix))))
@@ -241,7 +230,7 @@ CLAUSE is a list representing a row-vector of patterns."
      (let ((first-column-constructors
              (loop :for row :in pattern-matrix
                    :for elem := (first row)
-                   :when (ast:pattern-constructor-p elem)
+                   :when (tc:pattern-constructor-p elem)
                      :collect elem)))
        (cond
          ;; If the constructors in the PATTERN-MATRIX form a complete
@@ -249,14 +238,16 @@ CLAUSE is a list representing a row-vector of patterns."
          ;; non-matching sub-value.
          ((complete-signature-p first-column-constructors env)
           (loop :for ctor :in first-column-constructors
-                :for ctor-arity := (length (ast:pattern-constructor-patterns ctor))
+                :for ctor-arity := (length (tc:pattern-constructor-patterns ctor))
                 :for val := (find-non-matching-value
                              (specialize-matrix pattern-matrix ctor)
                              (+ ctor-arity n -1)
                              env)
                 :unless (eq val t)
-                  :do (return (cons (ast:make-pattern-constructor
-                                     :name (ast:pattern-constructor-name ctor)
+                  :do (return (cons (tc:make-pattern-constructor
+                                     :type (tc:pattern-type ctor)
+                                     :source (cons nil nil)
+                                     :name (tc:pattern-constructor-name ctor)
                                      :patterns (subseq val 0 ctor-arity))
                                     (subseq val ctor-arity (+ ctor-arity n -1))))
                 :finally (return t)))
@@ -272,7 +263,10 @@ CLAUSE is a list representing a row-vector of patterns."
                t)
               ;; If there are no constructors then emit a wildcard.
               ((null first-column-constructors)
-               (cons (ast:make-pattern-wildcard) val))
+               (cons (tc:make-pattern-wildcard
+                      :type (tc:qualify nil (tc:make-variable))
+                      :source (cons nil nil))
+                     val))
               ;; Or emit a constructor which was not named in this pattern.
               (t
                (cons (find-unnamed-constructor first-column-constructors env)
@@ -280,10 +274,10 @@ CLAUSE is a list representing a row-vector of patterns."
 
 (defun find-unnamed-constructor (patterns env)
   "Find and create a pattern constructor with the type of, but not named in PATTERNS."
-  (declare (type ast:pattern-list patterns)
+  (declare (type tc:pattern-list patterns)
            (type tc:environment env)
-           (values ast:pattern))
-  (let* ((constructor-names (mapcar #'ast:pattern-constructor-name patterns))
+           (values tc:pattern))
+  (let* ((constructor-names (mapcar #'tc:pattern-constructor-name patterns))
          (constructed-type (tc:constructor-entry-constructs (tc:lookup-constructor env (first constructor-names))))
          (type-constructors (tc:type-entry-constructors (tc:lookup-type env constructed-type)))
          (unnamed-constructor (first (set-difference type-constructors constructor-names :test #'eq)))
@@ -291,8 +285,14 @@ CLAUSE is a list representing a row-vector of patterns."
     (unless unnamed-constructor
       (util:coalton-bug "Not reachable."))
 
-    ;; TODO: Return all constructors?
-    (ast:make-pattern-constructor
+    ;; NOTE: Here we _could_ reasonably return all missing
+    ;; constructors, however that would require additional support in
+    ;; the error generation. Instead we just select the first one.
+    (tc:make-pattern-constructor
+     :type (tc:pattern-type (first patterns))
+     :source (cons nil nil)
      :name unnamed-constructor
      :patterns (loop :for i :below (tc:constructor-entry-arity unnamed-constructor-entry)
-                     :collect (ast:make-pattern-wildcard)))))
+                     :collect (tc:make-pattern-wildcard
+                               :type (tc:qualify nil (tc:make-variable))
+                               :source (cons nil nil))))))

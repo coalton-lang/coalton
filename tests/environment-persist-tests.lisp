@@ -28,33 +28,33 @@
             ((style-warning (lambda (c)
                               (declare (ignore c))
                               (invoke-restart 'muffle-warning))))
-          (let ((coalton-impl::*global-environment* (make-default-environment)))
+          (let ((entry:*global-environment* (tc:make-default-environment)))
             ;; Be sure that the environment is clean
-            (is (null (tc:lookup-value-type coalton-impl::*global-environment* 'coalton-native-tests::test-id :no-error t)))
+            (is (null (tc:lookup-value-type entry:*global-environment* 'coalton-native-tests::test-id :no-error t)))
 
             ;; Load our coalton code and check for function availability
             (load input-file :verbose nil)
 
             ;; Be sure that we have the correct function type
-            (is (tc:lookup-value-type coalton-impl::*global-environment* 'coalton-native-tests::test-id :no-error t))
+            (is (tc:lookup-value-type entry:*global-environment* 'coalton-native-tests::test-id :no-error t))
 
             ;; Ok, now clean the environment
-            (setf coalton-impl::*global-environment* (make-default-environment))
-            (is (null (tc:lookup-value-type coalton-impl::*global-environment* 'coalton-native-tests::test-id :no-error t)))
+            (setf entry:*global-environment* (tc:make-default-environment))
+            (is (null (tc:lookup-value-type entry:*global-environment* 'coalton-native-tests::test-id :no-error t)))
 
             ;; And compile the file
             (compile-file input-file :output-file output-file :verbose nil :print nil)
 
             ;; After compiling we should have the function available
-            (is (not (null (tc:lookup-value-type coalton-impl::*global-environment* 'coalton-native-tests::test-id :no-error t))))
+            (is (not (null (tc:lookup-value-type entry:*global-environment* 'coalton-native-tests::test-id :no-error t))))
             ;; Clean
-            (setf coalton-impl::*global-environment* (make-default-environment))
-            (is (null (tc:lookup-value-type coalton-impl::*global-environment* 'coalton-native-tests::test-id :no-error t)))
+            (setf entry:*global-environment* (tc:make-default-environment))
+            (is (null (tc:lookup-value-type entry:*global-environment* 'coalton-native-tests::test-id :no-error t)))
 
             ;; Now load the fasl
             (load output-file :verbose nil)
 
             ;; Now we should have our function
-            (is (not (null (tc:lookup-value-type coalton-impl::*global-environment* 'coalton-native-tests::test-id :no-error t))))
+            (is (not (null (tc:lookup-value-type entry:*global-environment* 'coalton-native-tests::test-id :no-error t))))
 
             t))))))

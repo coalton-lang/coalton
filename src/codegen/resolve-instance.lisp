@@ -1,9 +1,9 @@
-(cl:defpackage #:coalton-impl/codegen/resolve-instance
+(defpackage #:coalton-impl/codegen/resolve-instance
   (:use
    #:cl
-   #:coalton-impl/util
    #:coalton-impl/codegen/ast)
   (:local-nicknames
+   (#:util #:coalton-impl/util)
    (#:tc #:coalton-impl/typechecker))
   (:export
    #:pred-context                       ; TYPE
@@ -12,7 +12,7 @@
    #:resolve-static-dict                ; FUNCTION
    ))
 
-(cl:in-package #:coalton-impl/codegen/resolve-instance)
+(in-package #:coalton-impl/codegen/resolve-instance)
 
 (defun pred-context-p (x)
   (and (alexandria:proper-list-p x)
@@ -113,7 +113,7 @@
            (type tc:environment env)
            (values list &optional))
 
-  (when (equalp pred ctx-pred)
+  (when (tc:type-predicate= pred ctx-pred)
     (return-from lookup-pred (list (make-node-variable
                                     :type (tc:make-function-type
                                            (pred-type sub-pred env)
@@ -135,7 +135,7 @@
   (let ((node (make-node-variable
                :type (pred-type ctx-pred env)
                :value ctx-name)))
-    (when (equalp pred ctx-pred)
+    (when (tc:type-predicate= pred ctx-pred)
       (return-from lookup-pred-base (list node)))
 
     (let ((superclass-ret (superclass-accessors pred ctx-pred env)))

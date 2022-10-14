@@ -27,12 +27,12 @@
 
   (define-class (Add :a :b :c (:a :b -> :c)))
   (define-instance (Add Z :a :a))
-  (define-instance ((Add :a :b :c) => (Add (S :a) :b (S :c))))
+  (define-instance ((Add :a :b :c) => Add (S :a) :b (S :c)))
 
   (define-class (Fib :a :b (:a -> :b)))
   (define-instance (Fib Z Z))
   (define-instance (Fib (S Z) (S Z)))
-  (define-instance ((Fib :a :b) (Fib (S :a) :c) (Add :b :c :d) => (Fib (S (S :a)) :d)))
+  (define-instance ((Fib :a :b) (Fib (S :a) :c) (Add :b :c :d) => Fib (S (S :a)) :d))
 
   (declare fib (Fib :a :b => Proxy :a -> Proxy :b))
   (define (fib _)

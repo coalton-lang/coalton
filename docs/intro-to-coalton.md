@@ -37,6 +37,9 @@ Note that one _cannot_ make new definitions in a `coalton` form, only evaluate e
 
 Whereas `coalton-toplevel` expects one or more toplevel definitions or declarations, the `coalton` form takes a single expression, evaluates it relative to the current environment, and returns its (underlying) Lisp value. This can be useful for working with Coalton from a Lisp REPL.
 
+Coalton can integrate with named readtables to provide better error messages. Files containing Coalton code should start with `(named-readtables:in-readtable coalton:coalton)`. Using Coalton's reader allow for compiler errors to accurately refer to source code and provide correct line numbers.
+
+
 ## Variables and Functions
 
 Variables and functions are defined with `define`. Here are some variable definitions.

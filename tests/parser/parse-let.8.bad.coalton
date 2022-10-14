@@ -1,0 +1,6 @@
+;; BAD: Parse Let
+(package test-package)
+
+(define x
+  (let ((declare x (T -> T) 5))
+   "x"))

@@ -1,0 +1,4 @@
+;; BAD: Define Instance
+(package test-package)
+
+(define-instance (C :a => (C (List :a)) :b))
