@@ -117,7 +117,8 @@
   :depends-on (#:coalton/compiler
                #:coalton/hashtable-shim
                #:trivial-garbage
-               #:alexandria)
+               #:alexandria
+               #:trivial-gray-streams)
   :pathname "library/"
   :serial t
   :components ((:file "utils")
@@ -156,6 +157,7 @@
                (:file "iterator")
                (:file "ord-tree")
                (:file "ord-map")
+               (:file "char-stream")
                (:file "system")
                (:file "prelude")))
 
