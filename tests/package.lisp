@@ -19,6 +19,7 @@
                           #:Unit)
   (:local-nicknames
    (#:util #:coalton-impl/util)
+   (#:parser #:coalton-impl/parser)
    (#:ast #:coalton-impl/ast)
    (#:tc #:coalton-impl/typechecker))
 

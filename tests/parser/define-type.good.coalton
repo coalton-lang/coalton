@@ -1,0 +1,15 @@
+;; GOOD: Define Type
+(package test-package)
+
+(define-type T)
+(define-type (T :a))
+
+(define-type T T1)
+
+(define-type T (T1 :a) (T2 :b :c))
+
+(repr :native cl:t)
+(define-type T)
+
+(repr :enum)
+(define-type T)

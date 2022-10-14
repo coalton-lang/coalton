@@ -1,0 +1,4 @@
+;; BAD: Invalid nullary function
+(package test-package)
+
+(define (f) (+ x 2))

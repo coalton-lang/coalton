@@ -24,6 +24,7 @@
                #:fset
                #:float-features
                #:split-sequence
+               #:eclector-concrete-syntax-tree
                #:uiop)
   :pathname "src/"
   :serial t
@@ -44,6 +45,14 @@
                              (:file "node")
                              (:file "parse-error")
                              (:file "parse-form")
+                             (:file "package")))
+               (:module "parser"
+                :serial t
+                :components ((:file "base")
+                             (:file "types")
+                             (:file "pattern")
+                             (:file "expression")
+                             (:file "parser")
                              (:file "package")))
                (:module "runtime"
                 :serial t
@@ -293,4 +302,5 @@
                (:file "recursive-let-tests")
                (:file "class-tests")
                (:file "list-tests")
-               (:file "red-black-tests")))
+               (:file "red-black-tests")
+               (:file "parser-tests")))

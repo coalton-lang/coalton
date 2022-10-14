@@ -1,0 +1,20 @@
+;; GOOD: Define Class
+(package test-package)
+
+(define-class (C :a))
+
+(define-class (C1 :a :b))
+
+(define-class (C1 :a :b => C2 :a :b))
+
+(define-class ((C1 :a :b) (C2 :a :b) => C3 :a :b))
+
+(define-class (C4 :a)
+  (m1 :a)
+  (m2 (:a -> :b)))
+
+(define-class (C :a :b (:a -> :b)))
+
+(define-class (C :a :b :c :d (:a :b -> :c :d)))
+
+(define-class (C :a :b (:a -> :b) (:b -> :a)))

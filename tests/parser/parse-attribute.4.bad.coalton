@@ -1,0 +1,5 @@
+;; BAD: Parse Attribute
+(package test-package)
+
+(repr :enum 5)
+(define-type T)

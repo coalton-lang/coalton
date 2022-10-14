@@ -1,0 +1,13 @@
+;; GOOD: Parse Type
+(package test-package)
+
+(declare f (T))
+(declare g (T :a))
+(declare h (T :a :b :c))
+(declare j (T -> T))
+(declare k (T :a -> T :b -> T :c))
+(declare l (T (:a -> :b) -> T :d))
+
+(declare m (T :a => T))
+(declare n ((T :a) => T))
+(declare o ((T :a) (T :b) => T)) 

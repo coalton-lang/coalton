@@ -1,0 +1,86 @@
+;; GOOD: Parse Expression
+(package test-package)
+(define f 5)
+
+(define (f x) 5)
+
+(define (f x y) 5)
+
+(define f
+  (fn (x)
+    (+ x x)))
+
+(define f
+  (fn () (+ 1 2)))
+
+(define f
+  (let ((x 1)
+        (declare y (T -> T))
+        (y (+ 1 2)))
+    (f x y)))
+
+(define f
+  (lisp (Integer -> Integer) (a b c)
+    (cl:+ 1 2)))
+
+(define (f x)
+  (match x
+    ((Some (Some x)) x)
+    ((Some x) x)
+    (y 1)
+    (1 z)
+    (_ 2)))
+
+(define f
+  (let x = 1)
+  (let (Some y) = 2)
+  (+ x y))
+
+(define f
+  (the String 5))
+
+(define x (return))
+
+(define y (return 5))
+
+(define z (+ 1 (+ 2 (* 3 5))))
+
+(define f
+  (progn
+    (let x = 1)
+    (f x)
+    (let y = 2)
+    (+ x y)))
+
+(define f
+  (if (== x y)
+    1
+    2))
+
+(define f
+  (when (== x y)
+    (let z = 3)
+    (print "hello"))
+
+  (unless (== x y)
+    (let z = 4)
+    (print "hello")))
+
+(define x (and 1 2 3))
+
+(define y (or 1 2))
+
+(define x
+  (do
+    (x <- mx)
+    (let y = 5)
+    (z 1 2 3)
+    z
+    (z)
+    (z x)
+    (x (y) z)))
+
+(define x
+  (cond
+    (1 1)
+    ((+ 1 2) 3)))

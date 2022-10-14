@@ -1,0 +1,4 @@
+;; BAD: Define Type invalid variable
+(package test-package)
+
+(define-type (T a))

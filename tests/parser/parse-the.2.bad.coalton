@@ -1,0 +1,4 @@
+;; BAD: Parse The
+(package test-package)
+
+(define x (the (T -> T)))
