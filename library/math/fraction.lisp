@@ -14,10 +14,13 @@
    #:numerator
    #:denominator))
 
-#+coalton-release
-(cl:declaim #.coalton-impl:*coalton-optimize-library*)
-
 (in-package #:coalton-library/math/fraction)
+
+(named-readtables:in-readtable coalton:coalton)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
 (coalton-toplevel
   ;; We avoid "Rational" or "Ratio" since those might be a more
   ;; generic concept than a humble fraction of integers. This

@@ -10,10 +10,12 @@
    #:coalton-library/functions
    #:coalton-library/math/bounded))
 
-#+coalton-release
-(cl:declaim #.coalton-impl:*coalton-optimize-library*)
-
 (in-package #:coalton-library/math/conversions)
+
+(named-readtables:in-readtable coalton:coalton)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (cl:eval-when (:compile-toplevel :load-toplevel)
   (cl:unless (cl:and (cl:subtypep '(cl:signed-byte 32) 'cl:fixnum)

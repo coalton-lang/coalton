@@ -1,0 +1,5 @@
+;; BAD: Parse Do
+(package test-package)
+
+(define x
+  (do (let x = 5)))

@@ -1,7 +1,7 @@
 (defpackage #:coalton-impl/codegen/optimizer
   (:use
    #:cl
-   #:coalton-impl/util
+   #:coalton-impl/codegen/pattern
    #:coalton-impl/codegen/ast)
   (:import-from
    #:coalton-impl/codegen/typecheck-node
@@ -31,20 +31,20 @@
   (:local-nicknames
    (#:settings #:coalton-impl/settings)
    (#:util #:coalton-impl/util)
-   (#:tc #:coalton-impl/typechecker)
-   (#:ast #:coalton-impl/ast))
+   (#:tc #:coalton-impl/typechecker))
   (:export
    #:optimize-bindings
    #:optimize-node))
 
 (in-package #:coalton-impl/codegen/optimizer)
 
-(defun optimize-bindings (bindings package attr-table env)
+(defun optimize-bindings (bindings monomorphize-table package env)
   (declare (type binding-list bindings)
+           (type hash-table monomorphize-table)
            (type package package)
-           (type hash-table attr-table)
            (type tc:environment env)
            (values binding-list tc:environment))
+
 
   (let ((bindings (optimize-bindings-initial bindings package env)))
 
@@ -70,11 +70,8 @@
 
       (setf bindings
             (loop :for (name . node) :in bindings
-                  :for attrs := (gethash name attr-table)
 
-                  :for monomorphize := (find :monomorphize attrs)
-
-                  :if monomorphize
+                  :if (gethash name monomorphize-table)
                     :append (optimize-bindings-initial
                              (monomorphize
                               name
@@ -329,12 +326,6 @@
              (push-hoist-point (node-abstraction-vars node) hoister)
              nil)
 
-           (handle-push-bare-hoist-point (node &rest rest)
-             (declare (ignore rest)
-                      (dynamic-extent rest))
-             (push-hoist-point (node-bare-abstraction-vars node) hoister)
-             nil)
-
            (handle-pop-hoist-point (node &rest rest)
              (declare (ignore rest)
                       (dynamic-extent rest))
@@ -350,21 +341,6 @@
                               :bindings hoisted
                               :subexpr (node-abstraction-subexpr node)))
 
-                   node)))
-
-           (handle-pop-bare-hoist-point (node &rest rest)
-             (declare (ignore rest)
-                      (dynamic-extent rest))
-             (let ((hoisted (pop-hoist-point hoister)))
-               (if hoisted
-                   (make-node-bare-abstraction
-                    :type (node-type node)
-                    :vars (node-bare-abstraction-vars node)
-                    :subexpr (make-node-let
-                              :type (node-type (node-bare-abstraction-subexpr node))
-                              :bindings hoisted
-                              :subexpr (node-bare-abstraction-subexpr node)))
-
                    node))))
 
     (traverse
@@ -372,9 +348,7 @@
      (list
       (cons :application #'lift-static-dict)
       (cons :before-abstraction #'handle-push-hoist-point)
-      (cons :abstraction #'handle-pop-hoist-point)
-      (cons :before-bare-abstraction #'handle-push-bare-hoist-point)
-      (cons :bare-abstraction #'handle-pop-bare-hoist-point))
+      (cons :abstraction #'handle-pop-hoist-point))
      nil)))
 
 (defun resolve-compount-superclass (node env)
@@ -387,7 +361,7 @@
 
   (let ((rator (node-rator-name node)))
     (unless rator
-      (coalton-bug "Expected rator to be a symbol."))
+      (util:coalton-bug "Expected rator to be a symbol."))
 
     (let* (;; Lookup the instance
            (instance (tc:lookup-instance-by-codegen-sym env rator))
@@ -407,7 +381,7 @@
 
       (unless (= (length constraints)
                  (length args))
-        (coalton-bug "Expected the number of arguments (~D) to match the number of constraints (~D)."
+        (util:coalton-bug "Expected the number of arguments (~D) to match the number of constraints (~D)."
                      (length args)
                      (length constraints)))
 
@@ -423,7 +397,7 @@
            (type tc:environment env)
            (values node &optional))
   (labels ((handle-static-superclass (node &key bound-variables &allow-other-keys)
-             (declare (type symbol-list bound-variables))
+             (declare (type util:symbol-list bound-variables))
 
              (unless (or (node-variable-p (node-field-dict node))
                          (node-application-p (node-field-dict node))
@@ -493,7 +467,7 @@
                      (return-from apply-specialization))
 
                    (unless (>= (length (node-rands node)) num-preds)
-                     (coalton-bug "Expected function ~A to have at least ~A args when applying specialization." rator-name (length preds)))
+                     (util:coalton-bug "Expected function ~A to have at least ~A args when applying specialization." rator-name (length preds)))
 
                    (cond
                      ((= num-preds (length (node-rands node)))
@@ -510,7 +484,7 @@
                        :rands (subseq (node-rands node) num-preds)))
 
                      (t
-                      (coalton-bug "Invalid specialization ~A~%" specialization))))))))
+                      (util:coalton-bug "Invalid specialization ~A~%" specialization))))))))
     (traverse
      node 
      (list
@@ -537,7 +511,7 @@
              ;; pattern, then it can escape the match branches scope,
              ;; and thus cannot be safely stack allocated.
              (loop :for branch :in (node-match-branches node)
-                   :when (ast:pattern-var-p (match-branch-pattern branch)) :do
+                   :when (typep (match-branch-pattern branch) 'pattern-var) :do
                      (return-from apply-lift nil))
 
              (let ((expr (node-match-expr node)))

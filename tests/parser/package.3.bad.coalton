@@ -1,0 +1,2 @@
+;; BAD: invalid package decleration
+(pancake test)

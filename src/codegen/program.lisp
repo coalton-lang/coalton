@@ -1,17 +1,16 @@
 (defpackage #:coalton-impl/codegen/program
   (:use
    #:cl
-   #:coalton-impl/util
    #:coalton-impl/codegen/ast)
   (:import-from
-   #:coalton-impl/codegen/compile-expression
-   #:compile-toplevel)
+   #:coalton-impl/codegen/translate-expression
+   #:translate-toplevel)
+  (:import-from
+   #:coalton-impl/codegen/translate-instance
+   #:translate-instance)
   (:import-from
    #:coalton-impl/codegen/codegen-class
    #:codegen-class-definitions)
-  (:import-from
-   #:coalton-impl/codegen/compile-instance
-   #:compile-instance)
   (:import-from
    #:coalton-impl/codegen/codegen-expression
    #:codegen-expression)
@@ -22,6 +21,7 @@
    #:coalton-impl/codegen/optimizer
    #:optimize-bindings)
   (:local-nicknames
+   (#:util #:coalton-impl/util)
    (#:settings #:coalton-impl/settings)
    (#:global-lexical #:coalton-impl/global-lexical)
    (#:rt #:coalton-impl/runtime)
@@ -31,29 +31,28 @@
 
 (in-package #:coalton-impl/codegen/program)
 
-(defun compile-translation-unit (translation-unit env)
+(defun compile-translation-unit (translation-unit monomorphize-table env)
   (declare (type tc:translation-unit translation-unit)
+           (type hash-table monomorphize-table)
            (type tc:environment env))
 
-  (let* ((inline-funs nil)
-
-         (add-inline
-           (lambda (name)
-             (declare (type symbol name))
-             (push name inline-funs)))
-
-         (definitions
+  (let* ((definitions
            (append
-            (loop :for (name . node) :in (tc:translation-unit-definitions translation-unit)
-                  :for compiled-node := (compile-toplevel (tc:fresh-inst (tc:lookup-value-type env name)) node env)
+            (loop :for define :in (tc:translation-unit-definitions translation-unit)
+                  :for name := (tc:node-variable-name (tc:toplevel-define-name define))
+
+                  :for compiled-node := (translate-toplevel define env)
+
                   :do (when settings:*coalton-dump-ast*
                         (format t "~A :: ~A~%~A~%~%~%"
                                 name
                                 (tc:lookup-value-type env name)
-                                node))
+                                (tc:binding-value define)))
                   :collect (cons name compiled-node))
-            (loop :for instance :in (tc:translation-unit-instances translation-unit)
-                  :append (compile-instance instance add-inline env))))
+
+            ;; HACK: this load bearing reverse should be replaced with an actual solution
+            (loop :for instance :in (reverse (tc:translation-unit-instances translation-unit))
+                  :append (translate-instance instance env))))
 
          (definition-names
            (mapcar #'car definitions)))
@@ -61,50 +60,55 @@
     (multiple-value-bind (definitions env)
         (optimize-bindings
          definitions
-         (tc:translation-unit-package translation-unit)
-         (tc:translation-unit-attr-table translation-unit)
+         monomorphize-table
+         *package*
          env)
 
       (let ((sccs (node-binding-sccs definitions)))
 
-            (values
-              `(progn
-                 ,@(loop :for name :in inline-funs
-                         :collect `(declaim (inline ,name)))
+        (values
+         `(progn
+            ;; Muffle redefinition warnings in SBCL. A corresponding
+            ;; SB-EXT:UNMUFFLE-CONDITIONS appears at the bottom.
+            #+sbcl ,@(when settings:*emit-type-annotations*
+                       (list '(declaim (sb-ext:muffle-conditions sb-kernel:redefinition-warning))))
 
-                 ,@(when (tc:translation-unit-types translation-unit)
-                     (list
-                      `(eval-when (:compile-toplevel :load-toplevel :execute)
-                         ,@(loop :for type :in (tc:translation-unit-types translation-unit)
-                                 :append (codegen-type-definition type env)))))
+            ,@(when (tc:translation-unit-types translation-unit)
+                (list
+                 `(eval-when (:compile-toplevel :load-toplevel :execute)
+                    ,@(loop :for type :in (tc:translation-unit-types translation-unit)
+                            :append (codegen-type-definition type env)))))
 
-                 ,@(when (tc:translation-unit-classes translation-unit)
-                     (list
-                      `(eval-when (:compile-toplevel :load-toplevel :execute)
-                         ,@(codegen-class-definitions
-                            (tc:translation-unit-classes translation-unit)
-                            env))))
+            ,@(when (tc:translation-unit-classes translation-unit)
+                (list
+                 `(eval-when (:compile-toplevel :load-toplevel :execute)
+                    ,@(codegen-class-definitions
+                       (tc:translation-unit-classes translation-unit)
+                       env))))
 
-                 #+sbcl
-                 ,@(when (eq sb-ext:*block-compile-default* :specified)
-                     (list
-                      `(declaim (sb-ext:start-block ,@definition-names))))
+            #+sbcl
+            ,@(when (eq sb-ext:*block-compile-default* :specified)
+                (list
+                 `(declaim (sb-ext:start-block ,@definition-names))))
 
-                 ,@(loop :for scc :in sccs
-                         :for bindings
-                           := (remove-if-not
-                               (lambda (binding)
-                                 (find (car binding) scc))
-                               definitions)
-                         :append (compile-scc bindings env))
+            ,@(loop :for scc :in sccs
+                    :for bindings
+                      := (remove-if-not
+                          (lambda (binding)
+                            (find (car binding) scc))
+                          definitions)
+                    :append (compile-scc bindings env))
 
-                 #+sbcl
-                 ,@(when (eq sb-ext:*block-compile-default* :specified)
-                     (list
-                      `(declaim (sb-ext:end-block))))
+            #+sbcl
+            ,@(when (eq sb-ext:*block-compile-default* :specified)
+                (list
+                 `(declaim (sb-ext:end-block))))
 
-                 (values))
-              env)))))
+            #+sbcl ,@(when settings:*emit-type-annotations*
+                       (list '(declaim (sb-ext:unmuffle-conditions sb-kernel:redefinition-warning))))
+
+            (values))
+         env)))))
 
 (defun compile-function (name node env)
   (declare (type symbol name)

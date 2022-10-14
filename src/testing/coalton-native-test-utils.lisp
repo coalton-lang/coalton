@@ -25,7 +25,7 @@ BODY within a `coalton' expression."
 
 (coalton-toplevel
   (declare %register-assertion (Unit -> Unit))
-  (define (%register-assertion)
+  (define (%register-assertion _)
     (progn 
       (lisp :any ()
         (cl:warn 'coalton-test-assertion))

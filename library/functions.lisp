@@ -6,6 +6,7 @@
   (:export
    #:trace
    #:traceObject
+   #:unsafe-pointer-eq?
    #:fix
    #:id
    #:const
@@ -20,10 +21,12 @@
    #:asum
    #:/=))
 
-#+coalton-release
-(cl:declaim #.coalton-impl:*coalton-optimize-library*)
-
 (in-package #:coalton-library/functions)
+
+(named-readtables:in-readtable coalton:coalton)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (coalton-toplevel
   (declare trace (String -> Unit))
@@ -39,6 +42,11 @@
     (progn
       (lisp :a (str item) (cl:format cl:t "~A: ~A~%" str item))
       Unit))
+
+  (declare unsafe-pointer-eq? (:a -> :a -> Boolean))
+  (define (unsafe-pointer-eq? a b)
+    (lisp Boolean (a b)
+      (to-boolean (cl:eq a b))))
 
   ;;
   ;; Function combinators

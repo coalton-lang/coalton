@@ -1,0 +1,5 @@
+;; BAD: Parse Attribute
+(package test-package)
+
+(repr :native :native :native)
+(define-type T)

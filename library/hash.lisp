@@ -7,10 +7,12 @@
    #:combine-hashes
    #:define-sxhash-hasher))
 
-#+coalton-release
-(cl:declaim #.coalton-impl:*coalton-optimize-library*)
-
 (in-package #:coalton-library/hash)
+
+(named-readtables:in-readtable coalton:coalton)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (coalton-toplevel
   #+sbcl
@@ -29,7 +31,7 @@
   (define-type Hash
     "Implementation dependent hash code")
 
-  (define-class (Eq :a => (Hash :a))
+  (define-class (Eq :a => Hash :a)
     "Types which can be hashed for storage in hash tables.
 
 Invariant (== left right) implies (== (hash left) (hash right))."

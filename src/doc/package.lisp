@@ -1,14 +1,14 @@
 (in-package #:cl-user)
 
-(uiop:define-package #:coalton-doc
+(defpackage #:coalton-doc
   (:documentation "Implementation of documentation generation for COALTON. This is a package private to the COALTON system and is not intended for public use.")
-  (:use #:cl
-        #:coalton-impl/util
-        #:coalton-impl/settings
-        #:coalton-impl/algorithm
-        #:coalton-impl/ast
-        #:coalton-impl/typechecker
-        #:coalton-impl/codegen)
+  (:use #:cl)
+  (:local-nicknames
+   (#:util #:coalton-impl/util)
+   (#:settings #:coalton-impl/settings)
+   (#:algo #:coalton-impl/algorithm)
+   (#:tc #:coalton-impl/typechecker)
+   (#:entry #:coalton-impl/entry))
   (:export
    #:write-stdlib-documentation-to-file
    #:write-documentation-to-file))

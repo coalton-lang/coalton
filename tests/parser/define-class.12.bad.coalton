@@ -1,0 +1,5 @@
+;; BAD: Define Class
+(package test-package)
+
+(define-class (C :a)
+  (0.5 (:a -> :a)))

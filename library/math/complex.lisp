@@ -17,10 +17,12 @@
    #:square-magnitude
    #:ii))
 
-#+coalton-release
-(cl:declaim #.coalton-impl:*coalton-optimize-library*)
-
 (in-package #:coalton-library/math/complex)
+
+(named-readtables:in-readtable coalton:coalton)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (coalton-toplevel
   (repr :native (cl:or cl:number complex))
@@ -33,7 +35,7 @@
     (real-part (Complex :a -> :a))
     (imag-part (Complex :a -> :a)))
 
-  (define-instance ((Complex :a) => (Into :a (Complex :a)))
+  (define-instance ((Complex :a) => Into :a (Complex :a))
     (define (into a)
       (complex a 0)))
 

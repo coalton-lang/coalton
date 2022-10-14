@@ -3,23 +3,34 @@
 (defpackage #:coalton-impl/util
   (:documentation "Utility functions and methods used throughout COALTON.")
   (:use #:cl)
+  (:shadow #:find-symbol)
+  (:local-nicknames
+   (#:cst #:concrete-syntax-tree))
   (:export
+   #:+keyword-package+                  ; CONSTANT
    #:required                           ; FUNCTION
    #:unreachable                        ; MACRO
    #:coalton-bug                        ; FUNCTION
    #:debug-log                          ; MACRO
    #:debug-tap                          ; MACRO
+   #:runtime-quote                      ; FUNCTION
    #:symbol-list                        ; TYPE
+   #:cst-list                           ; TYPE
+   #:cst-source-range                   ; FUNCTION
    #:literal-value                      ; TYPE
+   #:literal-equal                      ; FUNCTION
    #:maphash-values-new                 ; FUNCTION
+   #:find-symbol                        ; FUNCTION
    #:find-symbol?                       ; FUNCTION
-   #:sexp-fmt                           ; FUNCTION
    #:take-until                         ; FUNCTION
    #:project-indicies                   ; FUNCTION
    #:project-map                        ; FUNCTION
+   #:maybe-read-form                    ; FUNCTION
    ))
 
 (in-package #:coalton-impl/util)
+
+(alexandria:define-constant +keyword-package+ (find-package "KEYWORD") :test #'eq)
 
 (defun symbol-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -28,10 +39,24 @@
 (deftype symbol-list ()
   '(satisfies symbol-list-p))
 
+(defun cst-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every (lambda (x) (typep x 'cst:cst)) x)))
+
+(deftype cst-list ()
+  '(satisfies cst-list-p))
+
+(defun cst-source-range (csts)
+  (declare (type cst-list csts)
+           (values cons))
+  (cons
+   (car (cst:source (first csts)))
+   (cdr (cst:source (car (last csts))))))
+
 (defmacro debug-log (&rest vars)
   "Log names and values of VARS to standard output"
   `(format t
-           ,(format nil "~{~A: ~~A~~%~}" vars)
+           ,(format nil "~&~{~A: ~~A~~%~}" vars)
            ,@vars))
 
 (defmacro debug-tap (var)
@@ -39,6 +64,19 @@
     `(let ((,var-name ,var))
        (format t ,(format nil "~A: ~~A~~%" var) ,var-name)
        ,var-name)))
+
+(defun runtime-quote (x)
+  `',x)
+
+(defun find-symbol (name package)
+  (declare (type string name)
+           (type package package)
+           (values symbol))
+
+  (let ((sym (cl:find-symbol name package)))
+    (unless sym
+      (coalton-bug "Unable to find symbol with name ~A in package ~A" name package))
+    sym))
 
 (define-condition coalton-bug (error)
   ((reason :initarg :reason
@@ -89,18 +127,15 @@
   (declare (type symbol name))
   (coalton-bug "A slot ~S (of package ~S) is required but not supplied" name (symbol-package name)))
 
-(defun sexp-fmt (stream object &optional colon-modifier at-modifier)
-  "A formatter for qualified S-expressions. Use like
-    (format t \"~/coalton-impl::sexp-fmt/\" '(:x y 5))
-and it will print a flat S-expression with all symbols qualified."
-  (declare (ignore colon-modifier at-modifier))
-  (let ((*print-pretty* nil)
-        (*package* (find-package "KEYWORD")))
-    (prin1 object stream)))
-
 (deftype literal-value ()
   "Allowed literal values as Lisp objects."
   '(or integer ratio single-float double-float string character))
+
+(defun literal-equal (x y)
+  "Are coalton literal values equal?"
+  (declare (type literal-value x y)
+           (values boolean))
+  (equal x y))
 
 
 (defun take-until (pred list)
@@ -153,8 +188,40 @@ and it will print a flat S-expression with all symbols qualified."
            (type hash-table map)
            (type list data))
   (project-indicies
-   (sort 
+   (sort
     (loop :for key :in indicies
           :collect (gethash key map))
     #'<)
    data))
+
+(defun maybe-read-form (stream &optional (eclector-client eclector.base:*client*))
+  "Read the next form or return if there is no next form.
+
+Returns (VALUES FORM PRESENTP EOFP)"
+  (loop :do
+    ;; On empty lists report nothing
+    (when (eq #\) (peek-char t stream nil))
+      (read-char stream)
+      (return (values nil nil nil)))
+
+    ;; Otherwise, try to read in the next form
+    (eclector.reader:call-as-top-level-read
+     eclector-client
+     (lambda ()
+       (multiple-value-call
+           (lambda (form type &optional parse-result)
+
+             ;; Return the read form when valid
+             (when (eq :object type)
+               (return (values (or parse-result form) t nil)))
+
+             (when (eq :eof type)
+               (return (values nil nil t))))
+
+         (eclector.reader:read-maybe-nothing
+          eclector-client
+          stream
+          nil 'eof)))
+     stream
+     nil 'eof
+     nil)))

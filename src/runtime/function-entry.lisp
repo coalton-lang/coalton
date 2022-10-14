@@ -1,10 +1,11 @@
 (defpackage #:coalton-impl/runtime/function-entry
   (:use
-   #:cl
-   #:coalton-impl/util)
+   #:cl)
   (:import-from
    #:coalton
    #:call-coalton-function)
+  (:local-nicknames
+   (#:util #:coalton-impl/util))
   (:export
    #:function-entry
    #:function-entry-arity
@@ -25,13 +26,14 @@
 ;;; A FUNCTION-ENTRY represents a partially applicable function.
 (defstruct function-entry
   ;; The arity of the partially applicable function.
-  (arity    (required 'arity)    :type fixnum        :read-only t)
+  (arity    (util:required 'arity)    :type fixnum        :read-only t)
   ;; A reference to the full arity Lisp function. We put this in its
   ;; own slot to avoid an extra indirection.
-  (function (required 'function) :type function      :read-only t)
+  (function (util:required 'function) :type function      :read-only t)
   ;; A jump table, where the index of each entry determines the number
   ;; of arguments to partially apply.
-  (curried  (required 'curried)  :type simple-vector :read-only t))
+  (curried  (util:required 'curried)  :type simple-vector :read-only t))
+
 #+sbcl
 (declaim (sb-ext:freeze-type function-entry))
 

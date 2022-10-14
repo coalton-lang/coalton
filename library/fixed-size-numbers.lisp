@@ -4,6 +4,11 @@
 
 (in-package #:coalton)
 
+(named-readtables:in-readtable coalton:coalton)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
 (coalton-toplevel
   (repr :native (cl:unsigned-byte 8))
   (define-type U8

@@ -1,0 +1,5 @@
+;; BAD: Define Instance
+(package test-package)
+
+(repr :enum)
+(define-instance (C :a))

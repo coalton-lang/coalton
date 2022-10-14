@@ -122,7 +122,7 @@
 
   (is (== (list:insert 2 (make-list 1 3)) x))
 
-  (is (== (list:insertBy (fn (_ _) LT) 2 (make-list 1 3)) (make-list 2 1 3)))
+  (is (== (list:insertBy (fn (_a _b) LT) 2 (make-list 1 3)) (make-list 2 1 3)))
 
   (is (== (list:sort (list:append x x)) (make-list 1 1 2 2 3 3)))
 

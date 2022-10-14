@@ -2,26 +2,14 @@
 
 (fiasco:define-test-package #:coalton-tests
   (:documentation "Tests for the COALTON system.")
-  (:use #:cl #:coalton-impl/typechecker)
-  (:shadowing-import-from #:coalton
-                          #:fn
-                          #:->
-                          #:=>)
-  (:import-from #:coalton-impl/ast
-                #:pattern-var
-                #:pattern-wildcard
-                #:pattern-literal
-                #:pattern-constructor)
-  (:shadowing-import-from #:coalton
-                          #:String
-                          #:Integer
-                          #:Char
-                          #:Unit)
+  (:use
+   #:cl)
   (:local-nicknames
    (#:util #:coalton-impl/util)
-   (#:ast #:coalton-impl/ast)
-   (#:tc #:coalton-impl/typechecker))
-
+   (#:error #:coalton-impl/error)
+   (#:parser #:coalton-impl/parser)
+   (#:tc #:coalton-impl/typechecker)
+   (#:entry #:coalton-impl/entry))
   (:export
    #:run-coalton-tests))
 

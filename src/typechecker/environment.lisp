@@ -1,3 +1,17 @@
+;;;;
+;;;; Central environment managment. Coalton stores all persistent
+;;;; state in a single immutable struct. State is partitioned into a
+;;;; series of sub-environments. Each sub-environment is analogous to
+;;;; a database table, and holds multiple entries which function like
+;;;; database rows. The process of compiling Coalton code will require
+;;;; many "writes" to the environment. Each write is an immutable
+;;;; update which returns a new environment. The writes preformed when
+;;;; compiling a single coalton-toplevel form are tracked in a log.
+;;;; After compilation is finished the write log is added to the
+;;;; generated lisp code. This allows replaying the environment
+;;;; updates when the compiled fasl is loaded.
+;;;;
+
 (defpackage #:coalton-impl/typechecker/environment
   (:use
    #:cl
@@ -6,8 +20,7 @@
    #:coalton-impl/typechecker/types
    #:coalton-impl/typechecker/predicate
    #:coalton-impl/typechecker/scheme
-   #:coalton-impl/typechecker/unify
-   #:coalton-impl/typechecker/equality)
+   #:coalton-impl/typechecker/unify)
   (:import-from
    #:coalton-impl/typechecker/substitutions
    #:apply-substitution
@@ -21,12 +34,12 @@
    #:fundep-list
    #:+fundep-max-depth+)
   (:local-nicknames
-   (#:util #:coalton-impl/util))
+   (#:util #:coalton-impl/util)
+   (#:error #:coalton-impl/error))
   (:export
+   #:*env-update-log*                       ; VARIABLE
    #:value-environment                      ; STRUCT
    #:explicit-repr                          ; TYPE
-   #:explicit-repr-auto-addressable-p       ; FUNCTION
-   #:explicit-repr-explicit-addressable-p   ; FUNCTION
    #:type-entry                             ; STRUCT
    #:make-type-entry                        ; CONSTRUCTOR
    #:type-entry-name                        ; ACCESSOR
@@ -126,10 +139,6 @@
    #:lookup-function-source-parameter-names ; FUNCTION
    #:set-function-source-parameter-names    ; FUNCTION
    #:unset-function-source-parameter-names  ; FUNCTION
-   #:push-value-environment                 ; FUNCTION
-   #:push-type-environment                  ; FUNCTION
-   #:push-constructor-environment           ; FUNCTION
-   #:push-function-environment              ; FUNCTION
    #:constructor-arguments                  ; FUNCTION
    #:add-class                              ; FUNCTION
    #:add-instance                           ; FUNCTION
@@ -147,6 +156,18 @@
    ))
 
 (in-package #:coalton-impl/typechecker/environment)
+
+(defvar *env-update-log* nil)
+
+(defun make-update-record (name arg-list)
+  `(setf env (,name env ,@(loop :for arg :in (cdr arg-list)
+                                :collect (util:runtime-quote arg)))))
+
+(defmacro define-env-updater (name arg-list &body body)
+  `(defun ,name (&rest args)
+     (declare (values environment &optional))
+     (push (make-update-record ',name args) *env-update-log*)
+     (destructuring-bind ,arg-list args ,@body)))
 
 ;;;
 ;;; Value type environments
@@ -177,19 +198,6 @@
   '(or null
     (member :enum :lisp :transparent)
     (cons (eql :native) (cons t null))))
-
-(defun explicit-repr-auto-addressable-p (explicit-repr)
-  (declare (explicit-repr explicit-repr)
-           (values list &optional))
-  (member explicit-repr
-          '(:lisp :enum)
-          :test #'eq))
-
-(defun explicit-repr-explicit-addressable-p (explicit-repr)
-  (declare (explicit-repr explicit-repr)
-           (values boolean &optional))
-  (and (consp explicit-repr)
-       (eq (first explicit-repr) :native)))
 
 (defstruct type-entry
   (name         (util:required 'name)         :type symbol  :read-only t)
@@ -248,6 +256,18 @@
             :enum-repr t
             :newtype nil
             :docstring "Either true or false represented by `t` and `nil` respectively."
+            :location ""))
+
+          ('coalton:Unit
+           (make-type-entry
+            :name 'coalton:Unit
+            :runtime-type '(member coalton::Unit/Unit)
+            :type *unit-type*
+            :constructors '(coalton:Unit)
+            :explicit-repr :enum
+            :enum-repr t
+            :newtype nil
+            :docstring ""
             :location ""))
 
           ('coalton:Char
@@ -395,6 +415,14 @@
             :constructs 'coalton:Boolean
             :classname 'coalton::Boolean/False
             :compressed-repr 'nil))
+
+          ('coalton:Unit
+           (make-constructor-entry
+            :name 'coalton:Unit
+            :arity 0
+            :constructs 'coalton:Unit
+            :classname 'coalton::Unit/Unit
+            :compressed-repr 'coalton::Unit/Unit))
 
           ('coalton:Cons
            (make-constructor-entry
@@ -737,16 +765,17 @@
            (type symbol symbol))
   (or (immutable-map-lookup (environment-value-environment env) symbol)
       (unless no-error
-        (let* ((sym-name (symbol-name symbol))
-               (valid-bindings (coalton-impl/algorithm::immutable-map-keys (environment-value-environment env)))
-               (matches (remove-if-not (lambda (s) (string= (symbol-name s) sym-name)) valid-bindings)))
-          (error 'unknown-binding-error :symbol symbol :alternatives matches)))))
+        (util:coalton-bug "Unknown binding ~S" symbol))))
 
-(defun set-value-type (env symbol value)
+(define-env-updater set-value-type (env symbol value)
   (declare (type environment env)
            (type symbol symbol)
-           (type ty-scheme value)
-           (values environment &optional))
+           (type ty-scheme value))
+
+  ;; Schemes stored in the environment are not allowed to have any free variables.
+  (when (type-variables value)
+    (util:coalton-bug "Unable to add type with free variables to environment ~A" value))
+
   (update-environment
    env
    :value-environment (immutable-map-set
@@ -760,42 +789,31 @@
            (type symbol symbol))
   (or (immutable-map-lookup (environment-type-environment env) symbol)
       (unless no-error
-        (let* ((sym-name (symbol-name symbol))
-               (valid-types (coalton-impl/algorithm::immutable-map-keys (environment-type-environment env)))
-               (matches (remove-if-not (lambda (s) (string= (symbol-name s) sym-name)) valid-types)))
-          (cond
-            ((= 1 (length sym-name))
-             (error "Unknown type ~S. Did you mean the type variable ~S?" symbol (intern sym-name 'keyword)))
-            (matches
-             (error "Unknown type ~S. Did you mean ~{~S~^, ~}?" symbol matches))
-            (t
-             (error "Unknown type ~S" symbol)))))))
+        (util:coalton-bug "Unknown type ~S" symbol))))
 
-(defun set-type (env symbol value)
+(define-env-updater set-type (env symbol value)
   (declare (type environment env)
            (type symbol symbol)
-           (type type-entry value)
-           (values environment &optional))
+           (type type-entry value))
   (update-environment
    env
    :type-environment (immutable-map-set
-                       (environment-type-environment env)
-                       symbol
-                       value
-                       #'make-type-environment)))
+                      (environment-type-environment env)
+                      symbol
+                      value
+                      #'make-type-environment)))
 
 (defun lookup-constructor (env symbol &key no-error)
   (declare (type environment env)
            (type symbol symbol))
   (or (immutable-map-lookup (environment-constructor-environment env) symbol)
       (unless no-error
-        (error "Unknown constructor ~S." symbol))))
+        (util:coalton-bug "Unknown constructor ~S." symbol))))
 
-(defun set-constructor (env symbol value)
+(define-env-updater set-constructor (env symbol value)
   (declare (type environment env)
            (type symbol symbol)
-           (type constructor-entry value)
-           (values environment &optional))
+           (type constructor-entry value))
   (update-environment
    env
    :constructor-environment (immutable-map-set
@@ -809,13 +827,12 @@
            (type symbol symbol))
   (or (immutable-map-lookup (environment-class-environment env) symbol)
       (unless no-error
-        (error "Unknown class ~S." symbol))))
+        (util:coalton-bug "Unknown class ~S." symbol))))
 
-(defun set-class (env symbol value)
+(define-env-updater set-class (env symbol value)
   (declare (type environment env)
            (type symbol symbol)
-           (type ty-class value)
-           (values environment &optional))
+           (type ty-class value))
   (update-environment
    env
    :class-environment (immutable-map-set
@@ -829,13 +846,12 @@
            (type symbol symbol))
   (or (immutable-map-lookup (environment-function-environment env) symbol)
       (unless no-error
-        (error "Unknown function ~S." symbol))))
+        (util:coalton-bug "Unknown function ~S." symbol))))
 
-(defun set-function (env symbol value)
+(define-env-updater set-function (env symbol value)
   (declare (type environment env)
            (type symbol symbol)
-           (type function-env-entry value)
-           (values environment &optional))
+           (type function-env-entry value))
   (update-environment
    env
    :function-environment (immutable-map-set
@@ -844,7 +860,7 @@
                           value
                           #'make-function-environment)))
 
-(defun unset-function (env symbol)
+(define-env-updater unset-function (env symbol)
   (declare (type environment env)
            (type symbol symbol))
   (update-environment
@@ -861,11 +877,10 @@
       (unless no-error
         (error "Unknown name ~S." symbol))))
 
-(defun set-name (env symbol value)
+(define-env-updater set-name (env symbol value)
   (declare (type environment env)
            (type symbol symbol)
-           (type name-entry value)
-           (values environment &optional))
+           (type name-entry value))
   (let ((old-value (lookup-name env symbol :no-error t)))
     (when (and old-value (not (equalp (name-entry-type old-value) (name-entry-type value))))
       (error "Unable to change the type of name ~S from ~A to ~A."
@@ -914,11 +929,10 @@
            (values util:symbol-list &optional))
   (values (immutable-map-lookup (environment-source-name-environment env) function-name)))
 
-(defun set-function-source-parameter-names (env function-name source-parameter-names)
+(define-env-updater set-function-source-parameter-names (env function-name source-parameter-names)
   (declare (type environment env)
            (type symbol function-name)
-           (type util:symbol-list source-parameter-names)
-           (values environment &optional))
+           (type util:symbol-list source-parameter-names))
   (update-environment
    env
    :source-name-environment (immutable-map-set (environment-source-name-environment env)
@@ -926,60 +940,15 @@
                                                source-parameter-names
                                                #'make-source-name-environment)))
 
-(defun unset-function-source-parameter-names (env function-name)
+(define-env-updater unset-function-source-parameter-names (env function-name)
   (declare (type environment env)
-           (type symbol function-name)
-           (values environment &optional))
+           (type symbol function-name))
   (update-environment
    env
    :source-name-environment (immutable-map-remove (environment-source-name-environment env)
                                                   function-name
                                                   #'make-source-name-environment)))
 
-
-(defun push-value-environment (env value-types)
-  (declare (type environment env)
-           (type scheme-binding-list value-types)
-           (values environment &optional))
-  (update-environment
-   env
-   :value-environment (immutable-map-set-multiple
-                       (environment-value-environment env)
-                       value-types
-                       #'make-value-environment)))
-
-(defun push-type-environment (env types)
-  (declare (type environment env)
-           (type list types)
-           (values environment &optional))
-  (update-environment
-   env
-   :type-environment (immutable-map-set-multiple
-                      (environment-type-environment env)
-                      types
-                      #'make-type-environment)))
-
-(defun push-constructor-environment (env constructors)
-  (declare (type environment env)
-           (type constructor-entry-list constructors)
-           (values environment &optional))
-  (update-environment
-   env
-   :constructor-environment (immutable-map-set-multiple
-                             (environment-constructor-environment env)
-                             constructors
-                             #'make-constructor-environment)))
-
-(defun push-function-environment (env functions)
-  (declare (type environment env)
-           (type function-env-entry-list functions)
-           (values environment &optional))
-  (update-environment
-   env
-   :function-environment (immutable-map-set-multiple
-                          (environment-function-environment env)
-                          functions
-                          #'make-function-environment)))
 
 (defun constructor-arguments (name env)
   (declare (type symbol name)
@@ -988,11 +957,10 @@
   (lookup-constructor env name)
   (function-type-arguments (lookup-value-type env name)))
 
-(defun add-class (env symbol value)
+(define-env-updater add-class (env symbol value)
   (declare (type environment env)
            (type symbol symbol)
-           (type ty-class value)
-           (values environment &optional))
+           (type ty-class value))
   ;; Ensure this class does not already exist
   (when (lookup-class env symbol :no-error t)
     (error "Class ~S already exists." symbol))
@@ -1002,11 +970,10 @@
       (error "Superclass ~S is not defined." sc)))
   (set-class env symbol value))
 
-(defun add-instance (env class value)
+(define-env-updater add-instance (env class value)
   (declare (type environment env)
            (type symbol class)
-           (type ty-class-instance value)
-           (values environment &optional))
+           (type ty-class-instance value))
   ;; Ensure the class is defined
   (unless (lookup-class env class)
     (error "Class ~S does not exist." class))
@@ -1018,24 +985,29 @@
             (predicate-unification-error () nil))
 
       ;; If we have the same instance then simply overwrite the old one
-      (if (type-predicate= (ty-class-instance-predicate value)
-                           (ty-class-instance-predicate inst))
-          (return-from add-instance
-            (update-environment
-             env
-             :instance-environment (make-instance-environment
-                                    :instances (immutable-listmap-replace
-                                                (instance-environment-instances (environment-instance-environment env))
-                                                class
-                                                index
-                                                value)
-                                    :codegen-syms (immutable-map-set
-                                                   (instance-environment-codegen-syms (environment-instance-environment env))
-                                                   (ty-class-instance-codegen-sym value)
-                                                   value))))
+      (handler-case
+          (progn
+            (predicate-match (ty-class-instance-predicate value) (ty-class-instance-predicate inst))
+            (predicate-match (ty-class-instance-predicate value) (ty-class-instance-predicate inst))
+
+            (return-from add-instance
+              (update-environment
+               env
+               :instance-environment (make-instance-environment
+                                      :instances (immutable-listmap-replace
+                                                  (instance-environment-instances (environment-instance-environment env))
+                                                  class
+                                                  index
+                                                  value)
+                                      :codegen-syms (immutable-map-set
+                                                     (instance-environment-codegen-syms (environment-instance-environment env))
+                                                     (ty-class-instance-codegen-sym value)
+                                                     value))))
+            )
+        (predicate-unification-error ()
           (error 'overlapping-instance-error
                  :inst1 (ty-class-instance-predicate value)
-                 :inst2 (ty-class-instance-predicate inst)))))
+                 :inst2 (ty-class-instance-predicate inst))))))
 
   (update-environment
    env
@@ -1045,14 +1017,13 @@
                                       class
                                       value)
                           :codegen-syms (immutable-map-set
-                                        (instance-environment-codegen-syms (environment-instance-environment env))
-                                        (ty-class-instance-codegen-sym value)
-                                        value))))
+                                         (instance-environment-codegen-syms (environment-instance-environment env))
+                                         (ty-class-instance-codegen-sym value)
+                                         value))))
 
-(defun set-method-inline (env method instance codegen-sym)
+(define-env-updater set-method-inline (env method instance codegen-sym)
   (declare (type environment env)
-           (type symbol method instance codegen-sym)
-           (values environment &optional))
+           (type symbol method instance codegen-sym))
   (update-environment
    env
    :method-inline-environment
@@ -1073,11 +1044,10 @@
    (unless no-error
      (error "Unable to find inline method for method ~A on instance ~A." method instance))))
 
-(defun set-code (env name code)
+(define-env-updater set-code (env name code)
   (declare (type environment env)
            (type symbol name)
-           (type t code)
-           (values environment &optional))
+           (type t code))
   (update-environment
    env
    :code-environment
@@ -1098,39 +1068,41 @@
    (unless no-error
      (error "Unable to find code for function ~A." name))))
 
-(defun add-specialization (env entry)
+(define-env-updater add-specialization (env entry)
   (declare (type environment env)
-           (type specialization-entry entry)
-           (values environment &optional))
+           (type specialization-entry entry))
 
   (let* ((from (specialization-entry-from entry))
          (to (specialization-entry-to entry))
-         (to-ty (specialization-entry-to-ty entry)))
+         (to-ty (specialization-entry-to-ty entry))
+
+         (to-scheme (quantify (type-variables to-ty)
+                              (qualify nil to-ty))))
 
     (fset:do-seq (elem (immutable-listmap-lookup (environment-specialization-environment env) from :no-error t) :index index)
-      (when (type= to-ty (specialization-entry-to-ty elem))
-        (return-from add-specialization
-          (update-environment env
-                              :specialization-environment
-                              (immutable-listmap-replace
-                               (environment-specialization-environment env)
-                               from
-                               index
-                               entry
-                               #'make-specialization-environment))))
+      (let* ((type (specialization-entry-to-ty elem))
+             (scheme (quantify (type-variables type)
+                               (qualify nil type))))
+
+        (when (equalp to-scheme scheme)
+          (return-from add-specialization
+            (update-environment env
+                                :specialization-environment
+                                (immutable-listmap-replace
+                                 (environment-specialization-environment env)
+                                 from
+                                 index
+                                 entry
+                                 #'make-specialization-environment)))))
 
       (handler-case
           (progn
             (unify nil to-ty (specialization-entry-to-ty elem))
-            (with-pprint-variable-context ()
-              (error "Invalid overlapping specialization for function ~A.~%Specialization target ~A with type ~A~%overlapps ~A with type ~A"
-                     from
-                     to
-                     to-ty
-                     (specialization-entry-to elem)
-                     (specialization-entry-to-ty elem))))
-        (coalton-type-error (e)
-          (declare (ignore e)))))
+
+            (error 'overlapping-specialization-error
+                   :new to
+                   :existing (specialization-entry-to elem)))
+        (unification-error ())))
 
     (update-environment env
                         :specialization-environment
@@ -1162,7 +1134,7 @@
         (progn
           (match (specialization-entry-to-ty elem) ty)
           (return-from lookup-specialization-by-type elem))
-      (coalton-type-error (e)
+      (error:coalton-internal-type-error (e)
         (declare (ignore e))))))
 
 (defun lookup-fundep-environment (env class &key (no-error nil))
@@ -1175,10 +1147,9 @@
 
     result))
 
-(defun initialize-fundep-environment (env class)
+(define-env-updater initialize-fundep-environment (env class)
   (declare (type environment env)
-           (type symbol class)
-           (values environment &optional))
+           (type symbol class))
   (let ((result (lookup-fundep-environment env class :no-error t)))
     (when result
       (return-from initialize-fundep-environment env))
@@ -1217,10 +1188,9 @@
       #'make-fundep-environment))))
 
 
-(defun update-instance-fundeps (env pred)
+(define-env-updater update-instance-fundeps (env pred)
   (declare (type environment env)
-           (type ty-predicate pred)
-           (values environment))
+           (type ty-predicate pred))
 
   (let* ((class (lookup-class env (ty-predicate-class pred)))
          (fundep-env (lookup-fundep-environment env (ty-predicate-class pred)))
@@ -1310,7 +1280,7 @@
                  :else
                    :collect (make-variable)))
 
-         (new-pred (make-ty-predicate :class class-name :types vars)))
+         (new-pred (make-ty-predicate :class class-name :types vars :source (ty-predicate-source pred))))
 
     (fset:do-seq (inst (lookup-class-instances env class-name))
       (handler-case
@@ -1376,7 +1346,10 @@
 
                               (instance-subs (predicate-match instance-head pred new-subs)))
                          (loop :for new-pred :in instance-context :do
-                           (push (apply-substitution instance-subs new-pred) preds))
+                           (push (make-ty-predicate
+                                  :class (ty-predicate-class new-pred)
+                                  :types (apply-substitution instance-subs (ty-predicate-types new-pred)))
+                                 preds))
 
                          (setf preds (remove pred preds :test #'eq))
                          (setf preds-generated t)

@@ -2,10 +2,12 @@
 ;;;;
 ;;;; Arbitrary precision floats using SBCL's MPFR library.
 
-#+coalton-release
-(cl:declaim #.coalton-impl:*coalton-optimize-library*)
-
 (in-package #:coalton-library/big-float)
+
+(named-readtables:in-readtable coalton:coalton)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 #-sbcl (error "This file is hopelessly SBCL specific.")
 #-sb-mpfr (error "SB-MPFR failed to load, for some reason. ~

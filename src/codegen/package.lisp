@@ -20,10 +20,10 @@
    #:direct-application)
 
   (:import-from
-   #:coalton-impl/codegen/compile-expression
-   #:compile-expression)
+   #:coalton-impl/codegen/translate-expression
+   #:translate-expression)
   (:export
-   #:compile-expression)
+   #:translate-expression)
 
   (:import-from
    #:coalton-impl/codegen/program

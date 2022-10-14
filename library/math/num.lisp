@@ -16,10 +16,12 @@
   (:local-nicknames
    (#:bits #:coalton-library/bits)))
 
-#+coalton-release
-(cl:declaim #.coalton-impl:*coalton-optimize-library*)
-
 (in-package #:coalton-library/math/num)
+
+(named-readtables:in-readtable coalton:coalton)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (cl:declaim (cl:inline %unsigned->signed))
 (cl:defun %unsigned->signed (bits x)

@@ -7,4 +7,6 @@
 # The reference doc is built automatically by a bot
 docs/reference.md
 
+coverage-report/
+
 bench.json

@@ -1,0 +1,4 @@
+;; BAD: Parse Type
+(package test-package)
+
+(declare f (T ->))

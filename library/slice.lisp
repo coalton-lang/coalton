@@ -8,8 +8,7 @@
    (#:types #:coalton-library/types)
    (#:list #:coalton-library/list)
    (#:cell #:coalton-library/cell)
-   (#:vector #:coalton-library/vector)
-   (#:addr #:coalton-library/addressable))
+   (#:vector #:coalton-library/vector))
   (:shadowing-import-from #:coalton-library/vector #:Vector)
   (:export
    #:Slice
@@ -26,10 +25,12 @@
    #:iter-sliding
    #:iter-chunked))
 
-#+coalton-release
-(cl:declaim #.coalton-impl:*coalton-optimize-library*)
-
 (in-package #:coalton-library/slice)
+
+(named-readtables:in-readtable coalton:coalton)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (coalton-toplevel
   ;;
@@ -165,7 +166,7 @@
   ;; Instances
   ;;
 
-  (define-instance (Eq :a => (Eq (Slice :a)))
+  (define-instance (Eq :a => Eq (Slice :a))
     (define (== s1 s2)
       (if (/= (length s1) (length s2))
           False
@@ -209,10 +210,7 @@
     (define (into v)
       (new 0 (vector:length v) v)))
 
-  (define-instance (types:RuntimeRepr :a => Iso (Slice :a) (Vector :a)))
-
-  (define-instance (addr:Addressable (Slice :elt))
-    (define addr:eq? addr::unsafe-internal-eq?)))
+  (define-instance (types:RuntimeRepr :a => Iso (Slice :a) (Vector :a))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/SLICE")

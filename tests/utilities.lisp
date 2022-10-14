@@ -14,21 +14,39 @@
   ;; XXX: This will not check ordering of edges within vertices
   (set-equalp dag1 dag2))
 
-(defun check-coalton-types (toplevel expected-types)
-  (multiple-value-bind (form env)
-      (coalton-impl::process-coalton-toplevel toplevel *package* coalton-impl::*global-environment*)
-    (declare (ignore form))
+(defun check-coalton-types (toplevel-string &rest expected-types)
+  (let ((*package* (make-package (or (and fiasco::*current-test*
+                                          (fiasco::name-of fiasco::*current-test*))
+                                     "COALTON-TEST-COMPILE-PACKAGE")
+                                 :use '("COALTON" "COALTON-PRELUDE"))))
+    (unwind-protect
+         (let* ((stream (make-string-input-stream toplevel-string))
 
-    (loop :for (symbol . type) :in expected-types
-          :do (is (coalton-impl/typechecker::type-scheme=
-                   (tc:lookup-value-type env symbol)
-                   (tc:parse-and-resolve-type env type))))))
+                (file (error:make-coalton-file :stream stream :name "<test>"))
 
-(defun run-coalton-toplevel-walker (toplevel)
-  (coalton-impl::collect-toplevel-forms toplevel))
+                (program (parser:read-program stream file :mode :test)))
 
-(defun run-coalton-typechecker (toplevel)
-  (coalton-impl::process-coalton-toplevel toplevel *package* coalton-impl::*global-environment*))
+           (multiple-value-bind (program env)
+               (entry:entry-point program)
+             (declare (ignore program))
+             
+             (when expected-types
+               (loop :for (unparsed-symbol . unparsed-type) :in expected-types
+                     :for symbol := (intern (string-upcase unparsed-symbol) *package*)
+
+                     :for stream := (make-string-input-stream unparsed-type)
+                     :for file := (error:make-coalton-file :stream stream :name "<unknown>")
+
+                     :for ast-type := (parser:parse-qualified-type
+                                       (eclector.concrete-syntax-tree:read stream)
+                                       file)
+                     :for parsed-type := (tc:parse-ty-scheme ast-type env file)
+                     :do (is (equalp
+                              (tc:lookup-value-type env symbol)
+                              parsed-type)))))
+
+           (values))
+      (delete-package *package*))))
 
 (defun compile-and-load-forms (coalton-forms)
   "Write the COALTON-FORMS to a temporary file, compile it to a fasl, then load the compiled file.

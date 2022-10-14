@@ -22,8 +22,10 @@
   :depends-on (#:alexandria
                #:fset
                #:float-features
-               #:split-sequence
-               #:uiop)
+               #:eclector
+               #:concrete-syntax-tree
+               #:eclector-concrete-syntax-tree
+               #:named-readtables)
   :pathname "src/"
   :serial t
   :components ((:file "package")
@@ -37,12 +39,17 @@
                              (:file "immutable-listmap")
                              (:file "package")))
                (:file "error")
-               (:module "ast"
+               (:module "parser"
                 :serial t
-                :components ((:file "pattern")
-                             (:file "node")
-                             (:file "parse-error")
-                             (:file "parse-form")
+                :components ((:file "base")
+                             (:file "types")
+                             (:file "pattern")
+                             (:file "macro")
+                             (:file "expression")
+                             (:file "toplevel")
+                             (:file "collect")
+                             (:file "renamer")
+                             (:file "binding")
                              (:file "package")))
                (:module "runtime"
                 :serial t
@@ -57,35 +64,43 @@
                              (:file "scheme")
                              (:file "type-errors")
                              (:file "unify")
-                             (:file "equality")
-                             (:file "typed-node")
                              (:file "fundeps")
                              (:file "environment")
                              (:file "lisp-type")
                              (:file "context-reduction")
+                             (:file "stage-1")
+                             (:file "base")
+                             (:file "pattern")
+                             (:file "expression")
+                             (:file "traverse")
+                             (:file "toplevel")
+                             (:file "binding")
+                             (:file "partial-type-env")
                              (:file "parse-type")
-                             (:file "derive-type")
-                             (:file "parse-type-definition")
-                             (:file "parse-define")
-                             (:file "parse-class-definition")
-                             (:file "parse-instance-definition")
-                             (:file "debug")
+                             (:file "define-type")
+                             (:file "define-class")
+                             (:file "tc-env")
+                             (:file "define")
+                             (:file "define-instance")
+                             (:file "specialize")
                              (:file "translation-unit")
                              (:file "package")))
                (:module "analysis"
                 :serial t
                 :components ((:file "pattern-exhaustiveness")
+                             (:file "analysis")
                              (:file "package")))
                (:module "codegen"
                 :serial t
-                :components ((:file "ast")
+                :components ((:file "pattern")
+                             (:file "ast")
                              (:file "ast-subsitutions")
                              (:file "resolve-instance")
                              (:file "typecheck-node")
                              (:file "hoister")
                              (:file "transformations")
-                             (:file "compile-expression")
-                             (:file "compile-instance")
+                             (:file "translate-expression")
+                             (:file "translate-instance")
                              (:file "struct-or-class")
                              (:file "codegen-pattern")
                              (:file "codegen-type-definition")
@@ -95,14 +110,9 @@
                              (:file "optimizer")
                              (:file "program")
                              (:file "package")))
-               (:file "impl-package")
-               (:file "toplevel-define-type")
-               (:file "toplevel-declare")
-               (:file "toplevel-define")
-               (:file "toplevel-define-instance")
-               (:file "toplevel-specializations")
                (:file "unlock-package" :if-feature :sb-package-locks)
-               (:file "coalton")
+               (:file "entry")
+               (:file "reader")
                (:file "debug")
                (:file "faux-macros")
                (:file "language-macros")
@@ -151,7 +161,6 @@
                (:file "optional")
                (:file "list")
                (:file "result")
-               (:file "addressable")
                (:file "stage-1")
                (:file "cell")
                (:file "vector")
@@ -280,8 +289,8 @@
   :serial t
   :components ((:file "package")
                (:file "utilities")
-               (:file "toplevel-walker-tests")
                (:file "tarjan-scc-tests")
+               (:file "parser-tests")
                (:file "type-inference-tests")
                (:file "fundep-tests")
                (:file "fundep-fib-test")
@@ -292,7 +301,6 @@
                (:file "quantize-tests")
                (:file "hashtable-tests")
                (:file "iterator-tests")
-               (:file "addressable-tests")
                (:file "call-coalton-from-lisp")
                (:file "vector-tests")
                (:file "string-tests")

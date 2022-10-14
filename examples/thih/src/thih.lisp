@@ -182,7 +182,7 @@
         (_ Nil))))
 
 
-  (define-instance (Types :a => (Types (List :a)))
+  (define-instance (Types :a => Types (List :a))
     (define (apply s t)
       (map (apply s) t))
     (define (tv t)
@@ -278,14 +278,14 @@
   (define-type (Qual :t)
     (Qual (List Pred) :t))
 
-  (define-instance (Eq :t => (Eq (Qual :t)))
+  (define-instance (Eq :t => Eq (Qual :t))
     (define (== x y)
       (match (Tuple x y)
         ((Tuple (Qual xs t1) (Qual ys t2))
          (and (== xs ys)
               (== t1 t2))))))
 
-  (define-instance (Types :t => (Types (Qual :t)))
+  (define-instance (Types :t => Types (Qual :t))
     (define (apply s q)
       (match q
         ((Qual ps t)
@@ -297,7 +297,7 @@
          (list:union (tv ps) (tv t))))))
 
 
-  (define-type (Pred)
+  (define-type Pred
     (IsIn Id Type))
 
   (define-instance (Eq Pred)
@@ -739,11 +739,11 @@
         ((TGen n)  (from-some "Failed to find TGen type" (list:index n ts)))
         (_ t))))
 
-  (define-instance (Instantiate :a => (Instantiate (List :a)))
+  (define-instance (Instantiate :a => Instantiate (List :a))
     (define (inst ts)
       (map (inst ts))))
 
-  (define-instance (Instantiate :t => (Instantiate (Qual :t)))
+  (define-instance (Instantiate :t => Instantiate (Qual :t))
     (define (inst ts q)
       (match q
         ((Qual ps t) (Qual (inst ts ps)

@@ -34,7 +34,7 @@ not support redefinition.
 Development mode is the default.
 
 Enable release mode either by setting the UNIX environment variable COALTON_ENV to \"release\", or by pushing
-`:release' into `*features*'. Either of these must be done before loading Coalton.
+`:coalton-release' into `*features*'. Either of these must be done before loading Coalton.
 "
   (uiop:featurep :coalton-release))
 

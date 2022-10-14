@@ -12,10 +12,12 @@
    #:boolean-and
    #:boolean-xor))
 
-#+coalton-release
-(cl:declaim #.coalton-impl:*coalton-optimize-library*)
-
 (in-package #:coalton-library/builtin)
+
+(named-readtables:in-readtable coalton:coalton)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (coalton-toplevel
   (define (undefined x)

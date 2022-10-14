@@ -1,0 +1,17 @@
+;; GOOD: Define
+(package test-package)
+
+(define x "hi")
+
+(define x
+  "hello"
+  2)
+
+(define x
+  "hello"
+  1
+  2
+  3)
+
+(monomorphize)
+(define x 5)

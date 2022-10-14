@@ -19,10 +19,13 @@
    #:substring-index
    #:substring?))
 
-#+coalton-release
-(cl:declaim #.coalton-impl:*coalton-optimize-library*)
 
 (in-package #:coalton-library/string)
+
+(named-readtables:in-readtable coalton:coalton)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 ;;;
 ;;; String

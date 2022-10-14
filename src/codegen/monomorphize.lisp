@@ -40,7 +40,6 @@
 (defpackage #:coalton-impl/codegen/monomorphize
   (:use
    #:cl
-   #:coalton-impl/util
    #:coalton-impl/codegen/ast)
   (:import-from
    #:coalton-impl/codegen/transformations
@@ -86,8 +85,8 @@
 (defstruct compile-candidate
   "A COMPILE-CANDIDATE is a compilation of a NAME and a list of
 ARGUMENTS some of which are statically known dictionaries."
-  (name      (required 'name) :type symbol        :read-only t)
-  (args      (required 'args) :type argument-list :read-only t))
+  (name      (util:required 'name) :type symbol        :read-only t)
+  (args      (util:required 'args) :type argument-list :read-only t))
 
 (defun compile-candidate-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -166,7 +165,7 @@ recompilation, and also maintains a stack of uncompiled candidates."
   "Returns the candidate for a given function and arguments. Returns nil if a given application cannot be a candidate."
   (declare (type symbol name)
            (type node-list args)
-           (type symbol-list bound-variables)
+           (type util:symbol-list bound-variables)
            (type tc:environment env)
            (values (or compile-candidate null) &optional))
 

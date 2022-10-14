@@ -1,12 +1,13 @@
 (coalton-library/utils:defstdlib-package :coalton-library/ord-map
-    (:use
-     :coalton
-     :coalton-library/classes
-     :coalton-library/hash
-     :coalton-library/tuple
-     :coalton-library/functions)
-  (:local-nicknames (#:tree :coalton-library/ord-tree)
-                    (#:iter :coalton-library/iterator))
+  (:use
+   :coalton
+   :coalton-library/classes
+   :coalton-library/hash
+   :coalton-library/tuple
+   :coalton-library/functions)
+  (:local-nicknames
+   (#:tree :coalton-library/ord-tree)
+   (#:iter :coalton-library/iterator))
   (:shadow #:Map #:empty)
   (:export
    #:Map
@@ -22,7 +23,13 @@
    #:collect!
    #:update
    #:merge))
-(cl:in-package :coalton-library/ord-map)
+
+(in-package :coalton-library/ord-map)
+
+(named-readtables:in-readtable coalton:coalton)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (coalton-toplevel
   (define-type (MapPair :key :value)
@@ -46,11 +53,11 @@
     (define (into pair)
       (Tuple (key pair) (value pair))))
 
-  (define-instance ((Eq :key) => (Eq (MapPair :key :value)))
+  (define-instance ((Eq :key) => Eq (MapPair :key :value))
     (define (== left right)
       (== (key left) (key right))))
 
-  (define-instance ((Ord :key) => (Ord (MapPair :key :value)))
+  (define-instance ((Ord :key) => Ord (MapPair :key :value))
     (define (<=> left right)
       (<=> (key left) (key right))))
 
@@ -137,11 +144,11 @@ Like `replace-or-insert', but prioritizing insertion as a use case."
     (match mp
       ((%Map tre) (coalton-library/classes:map value (tree:increasing-order tre)))))
 
-  (define-instance ((Eq :key) (Eq :value) => (Eq (Map :key :value)))
+  (define-instance ((Eq :key) (Eq :value) => Eq (Map :key :value))
     (define (== left right)
       (iter:elementwise-match! == (entries left) (entries right))))
 
-  (define-instance ((Hash :key) (Hash :value) => (Hash (Map :key :value)))
+  (define-instance ((Hash :key) (Hash :value) => Hash (Map :key :value))
     (define (hash mp)
       (iter:elementwise-hash! (entries mp))))
 

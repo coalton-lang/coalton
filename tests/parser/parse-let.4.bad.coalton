@@ -1,0 +1,6 @@
+;; BAD: Parse Let
+(package test-package)
+
+(define x
+  (let ((y 2 . 3))
+   (* 2 y)))
