@@ -62,8 +62,8 @@
                                                     5)
                   11)
                  2))
-  ;; FIXME: replacing `red-black/tree:collect!' with `iter:collect!' below fails type inference
-  (let iterated = (red-black/tree:collect! (iter:into-iter (make-list 5 11 2))))
+  (let iterated = (red-black/tree:collect! (iter:into-iter (the (List Integer)
+                                                                (make-list 5 11 2)))))
   (is (== manual iterated))
   (is (== (hash manual) (hash iterated))))
 
@@ -71,8 +71,8 @@
   (let increasing? = (fn (lst)
                        (== (list:sort lst) lst)))
   (let random-tree! = (fn (size)
-                        ;; FIXME: replacing `red-black/tree:collect!' with `iter:collect!' below fails type inference
-                        (red-black/tree:collect! (random-iter! size))))
+                        (the (red-black/tree:Tree Ufix)
+                             (iter:collect! (random-iter! size)))))
   (let increasing-list = (fn (tree)
                            (iter:collect! (red-black/tree:increasing-order tree))))
   (let decreasing-list = (fn (tree)
@@ -119,12 +119,10 @@
 
 (coalton-toplevel
   (declare tree-4 (red-black/tree:Tree Integer))
-  ;; FIXME: changing `red-black/tree:collect!' to `iter:collect!' below breaks type inference
-  (define tree-4 (red-black/tree:collect! (iter:up-to 4)))
+  (define tree-4 (red-black/tree:collect! (iter:up-to (the Integer 4))))
 
   (declare tree-1024 (red-black/tree:Tree Integer))
-  ;; FIXME: changing `red-black/tree:collect!' to `iter:collect!' below breaks type inference
-  (define tree-1024 (red-black/tree:collect! (iter:up-to 1024)))
+  (define tree-1024 (red-black/tree:collect! (iter:up-to (the Integer 1024))))
 
   (declare remove-and-check-invariants ((red-black/tree:Tree Integer) -> Integer -> (red-black/tree:Tree Integer)))
   (define (remove-and-check-invariants tre elt-to-remove)
@@ -153,7 +151,6 @@
 
 (define-test removal-upholds-invariants-shuffled ()
   (let range-1024 = (the (List Integer)
-                         ;; FIXME: changing `collect-list!' to `collect!' below breaks type inference
                          (iter:collect-list! (iter:up-to 1024))))
   (let range-shuffled = (lisp (List Integer) (range-1024)
                           (alexandria:shuffle range-1024)))
@@ -173,27 +170,28 @@
   (matches (Err (DifferentCountToBlack _ _ _ _)) (count-blacks-to-leaf unbalanced)))
 
 (define-test map-from-iter-equiv-to-manual-construction ()
-  (let manual = (red-black/map:insert-or-replace
-                 (red-black/map:insert-or-replace
-                  (red-black/map:insert-or-replace red-black/map:empty 0 "zero")
-                  11 "eleven")
-                 5 "five"))
-  ;; FIXME: changing `red-black/map:collect!' to `iter:collect!' below breaks type inference
-  (let iterated = (red-black/map:collect! (iter:list-iter (make-list (Tuple 0 "zero")
-                                                                     (Tuple 11 "eleven")
-                                                                     (Tuple 5 "five")))))
+  (let manual = (the (red-black/map:Map Integer String)
+                     (red-black/map:insert-or-replace
+                      (red-black/map:insert-or-replace
+                       (red-black/map:insert-or-replace red-black/map:empty 0 "zero")
+                       11 "eleven")
+                      5 "five")))
+  (let iterated = (iter:collect! (iter:into-iter (the (List (Tuple Integer String))
+                                                      (make-list (Tuple 0 "zero")
+                                                                 (Tuple 11 "eleven")
+                                                                 (Tuple 5 "five"))))))
   (is (== manual iterated))
   (is (== (hash manual) (hash iterated))))
 
 (define-test map-non-equal ()
-  ;; FIXME: changing `red-black/map:collect!' to `iter:collect!' below breaks type inference
-  (let map-012 = (red-black/map:collect! (iter:into-iter (make-list (Tuple 0 "zero")
-                                                                    (Tuple 1 "one")
-                                                                    (Tuple 2 "two")))))
-  (let map-01 = (red-black/map:collect! (iter:into-iter (make-list (Tuple 0 "zero")
-                                                                   (Tuple 1 "one")))))
-  (let map-wrong-names = (red-black/map:collect! (iter:into-iter (make-list (Tuple 0 "one")
-                                                                            (Tuple 1 "zero")))))
+  (let map-012 = (the (red-black/map:Map Integer String)
+                      (iter:collect! (iter:into-iter (make-list (Tuple 0 "zero")
+                                                                (Tuple 1 "one")
+                                                                (Tuple 2 "two"))))))
+  (let map-01 = (iter:collect! (iter:into-iter (make-list (Tuple 0 "zero")
+                                                          (Tuple 1 "one")))))
+  (let map-wrong-names = (iter:collect! (iter:into-iter (make-list (Tuple 0 "one")
+                                                                   (Tuple 1 "zero")))))
 
   (is (/= map-012 map-01))
   (is (/= (hash map-012) (hash map-01)))
