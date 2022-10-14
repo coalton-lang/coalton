@@ -1,0 +1,4 @@
+;; BAD: Define type nullary
+(package test-package)
+
+(define-type (T))

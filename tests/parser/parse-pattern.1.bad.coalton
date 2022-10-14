@@ -1,0 +1,6 @@
+;; BAD: Parse Pattern
+(package test-package)
+
+(define f
+  (let #C(1 2) = x)
+  Unit)

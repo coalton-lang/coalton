@@ -1,0 +1,14 @@
+;; GOOD: Define Instance
+(package test-package)
+
+(define-instance (C :a))
+(define-instance (C :a :b))
+(define-instance (C :a => C2 :b :c))
+(define-instance ((C :a) (C :b) => C2 :a :b))
+
+(define-instance (M :a)
+  (define (f x) 1))
+
+(define-instance (M2 :a)
+  (define (f x) 1)
+  (define g 3))

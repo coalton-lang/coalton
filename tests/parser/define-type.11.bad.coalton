@@ -1,0 +1,5 @@
+;; BAD: Define Type
+(package test-package)
+
+(monomorphize)
+(define-type T)

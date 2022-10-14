@@ -1,0 +1,5 @@
+;; BAD: Define Class
+(package test-package)
+
+(repr :enum)
+(define-class (C :a))

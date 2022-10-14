@@ -3,13 +3,18 @@
 (defpackage #:coalton-impl/util
   (:documentation "Utility functions and methods used throughout COALTON.")
   (:use #:cl)
+  (:local-nicknames
+   (#:cst #:concrete-syntax-tree))
   (:export
+   #:+keyword-package+                  ; CONSTANT
    #:required                           ; FUNCTION
    #:unreachable                        ; MACRO
    #:coalton-bug                        ; FUNCTION
    #:debug-log                          ; MACRO
    #:debug-tap                          ; MACRO
    #:symbol-list                        ; TYPE
+   #:cst-list                           ; TYPE
+   #:cst-source-range                   ; FUNCTION
    #:literal-value                      ; TYPE
    #:maphash-values-new                 ; FUNCTION
    #:find-symbol?                       ; FUNCTION
@@ -21,12 +26,28 @@
 
 (in-package #:coalton-impl/util)
 
+(alexandria:define-constant +keyword-package+ (find-package "KEYWORD") :test #'equalp)
+
 (defun symbol-list-p (x)
   (and (alexandria:proper-list-p x)
        (every #'symbolp x)))
 
 (deftype symbol-list ()
   '(satisfies symbol-list-p))
+
+(defun cst-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every (lambda (x) (typep x 'cst:cst)) x)))
+
+(deftype cst-list ()
+  '(satisfies cst-list-p))
+
+(defun cst-source-range (csts)
+  (declare (type cst-list csts)
+           (values cons))
+  (cons
+   (car (cst:source (first csts)))
+   (cdr (cst:source (car (last csts))))))
 
 (defmacro debug-log (&rest vars)
   "Log names and values of VARS to standard output"

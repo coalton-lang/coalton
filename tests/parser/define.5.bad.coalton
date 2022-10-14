@@ -1,0 +1,4 @@
+;; BAD: Define
+(package test-package)
+
+(define (0.5 x y) 2)
