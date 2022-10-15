@@ -52,6 +52,47 @@
    #:finish-output!
    #:force-output!
 
+   ;; opening files
+
+   ;; paths
+   #:Path
+
+   ;; encodings
+   #:Encoding
+   #:ASCII
+   #:UTF-8
+   #:UTF-16
+   #:LATIN-1
+   #:default-encoding
+
+   ;; what to do if opening a file that already exists
+   #:IfExists
+   #:IfExistsError
+   #:IfExistsRename
+   #:IfExistsAppend
+   #:IfExistsOverwrite
+   #:IfExistsSupersede
+
+   ;; what to do if opening a file that does not exist
+   #:IfDoesNotExist
+   #:IfDoesNotExistError
+   #:IfDoesNotExistCreate
+
+   ;; options for opening files, incl. encoding, if-exists and if-does-not-exist
+   #:FileOptions
+   #:default-file-options
+   #:with-encoding
+   #:if-exists
+   #:if-does-not-exist
+
+   ;; errors while opening files
+   #:FileError
+
+   ;; actually opening files
+   #:open-input-file!
+   #:open-output-file!
+   #:open-two-way-file!
+
    ;; passing streams to lisp
    #:wrap-input-stream-for-lisp
    #:wrap-output-stream-for-lisp
@@ -377,12 +418,188 @@ The stream will not be closed after the iterator stops."
   (declare force-output! (Output :stream => :stream -> Result StreamError Unit))
   (define force-output!
     "Causes all pending output on a stream to be written, but returns immediately rather than waiting for the flush to complete."
-    (flush-output! FlushAsync)))
+    (flush-output! FlushAsync))
 
-;;; file streams
+  ;;;; file streams
+
+  ;;; paths
+
+  ;; as of now, i'm not convinced there's a useful way to represent paths as anything other than strings. if
+  ;; it turns out in the future that there is, using an opaque wrapper here allows us to use it without
+  ;; breaking the API.
+  (define-type Path
+    (%Path String))
+
+  (define-instance (Into String Path)
+    (define into %Path))
+
+  (define-instance (Into Path String)
+    (define (into p)
+      (let (%Path str) = p)
+      str)))
+
+;;; options for opening a file
+
+(cl:defmacro define-cl-enum (type-name docstring cl:&body pairs)
+  "Define a type TYPE-NAME to represent a set of keywords, with Coalton constants defined to hold those keywords.
+Each of the PAIRS should be a list (COALTON-NAME KEYWORD), where COALTON-NAME is a name that will be defined
+to hold an instance of TYPE-NAME, and KEYWORD is a literal Common Lisp keyword.
+For example,
+(define-cl-enum Foo \"docstring for Foo\"
+  (Bar :bar)
+  (Baz :baz))
+Will define:
+- a type named `Foo' with an appropriate `repr :native' to hold the keywords `:bar' and `:baz'
+- a constant `Bar' of type `Foo' bound to the keyword `:bar'
+- a constant `Baz' of type `Foo' bound to the keyword `:baz'"
+  `(cl:progn
+     (coalton-toplevel
+       (repr :native (cl:member ,@(cl:mapcar #'cl:second pairs)))
+       (define-type ,type-name ,docstring))
+     ,@(cl:mapcar (cl:lambda (pair)
+                    (cl:destructuring-bind (name keyword) pair
+                      `(coalton-toplevel
+                         (declare ,name ,type-name)
+                         (define ,name (lisp ,type-name () ,keyword)))))
+                  pairs)))
+
+;;; encodings, aka external-formats
+
+(define-cl-enum Encoding
+    "A text encoding; CL calls this an \"external format\".
+Others are allowed; SBCL supports a wealth, listed at http://www.sbcl.org/manual/#Supported-External-Formats .
+To add an external format supported by SBCL as an `Encoding', add a pair (COALTON-NAME LISP-NAME) to the
+`define-encodings' form in coalton/library/file.lisp where LISP-NAME is a keyword which names an encoding, and
+add the same COALTON-NAME to the `:exports' clause in that file's `defstdlib-package' form."
+  (ASCII :ascii)
+  (UTF-8 :utf-8)
+  (UTF-16 :utf-16)
+  (LATIN-1 :latin-1))
 
 (coalton-toplevel
-  )
+  (define default-encoding UTF-8))
+
+;;; actions taken if a file exists
+
+(define-cl-enum IfExists
+    "Behavior taken if a file to be opened for writing exists.
+Supported are a subset of the operators allowed by `cl:open'; see the Hyperspec for more detailed descriptions.
+`IfExistsError' - return an error from `open!'. The default.
+`IfExistsRename' - rename the existing file, and create a new file with the intended name.
+`IfExistsAppend' - open the existing file for writing, with its file pointer initially at the end.
+`IfExistsOverwrite' - open the file anyway, with the initial file pointer at 0. A footgun for write-only
+                      streams, but sensible for two-way streams.
+`IfExistsSupersede' - create a new file with the intended name, deleting the existing file."
+  (IfExistsError :error)
+  (IfExistsRename :rename)
+  (IfExistsAppend :append)
+  (IfExistsOverwrite :overwrite)
+  (IfExistsSupersede :supersede))
+
+;;; actions taken if a file does not exist
+
+(define-cl-enum IfDoesNotExist
+    "Behavior taken if a file to be opened does not exist.
+Applies to files opened for both reading or writing, but with different defaults.
+`IfDoesNotExistError' - return an error from `open!'. The default for files opened only for reading.
+`IfDoesNotExistCreate' - create a new, empty file. The default for files opened for writing."
+  (IfDoesNotExistError :error)
+  (IfDoesNotExistCreate :create))
+
+(coalton-toplevel
+  (define-type FileOptions
+    (%FileOptions Encoding
+                  (Optional IfExists)
+                  (Optional IfDoesNotExist)))
+
+  (declare default-file-options FileOptions)
+  (define default-file-options
+    (%FileOptions default-encoding None None))
+
+  (declare with-encoding (Encoding -> FileOptions -> FileOptions))
+  (define (with-encoding enc opts)
+    (let (%FileOptions _ if-so if-not) = opts)
+    (%FileOptions enc if-so if-not))
+
+  (declare if-exists (IfExists -> FileOptions -> FileOptions))
+  (define (if-exists then opts)
+    (let (%FileOptions enc _ if-not) = opts)
+    (%FileOptions enc (Some then) if-not))
+
+  (declare if-does-not-exist (IfDoesNotExist -> FileOptions -> FileOptions))
+  (define (if-does-not-exist then opts)
+    (let (%FileOptions enc if-so _) = opts)
+    (%FileOptions enc if-so (Some then)))
+
+  (define-instance (Into Encoding FileOptions)
+    (define (into enc) (with-encoding enc default-file-options)))
+
+  (define-instance (Into IfExists FileOptions)
+    (define (into if-so) (if-exists if-so default-file-options)))
+
+  (define-instance (Into IfDoesNotExist FileOptions)
+    (define (into if-not) (if-does-not-exist if-not default-file-options)))
+
+  ;; sbcl has only simple-file-error (and pathname-unparse-error, but... eugh)
+  (define-type FileError
+    (FileError String))
+
+  ;;; opening files
+  (declare open-input-file! (FileOptions -> Path -> (Result FileError %InputStream)))
+  (define (open-input-file! opts path)
+    (let (%FileOptions enc _ if-does-not-exist) = opts)
+    (let if-does-not-exist = (match if-does-not-exist
+                               ((Some if-not) if-not)
+                               ((None) IfDoesNotExistError)))
+    (let (%Path pathname) = path)
+    (lisp (Result FileError %InputStream) (enc if-does-not-exist pathname)
+      (cl:handler-case (cl:open pathname
+                                :direction :input
+                                :element-type 'cl:character
+                                :external-format enc
+                                :if-does-not-exist if-does-not-exist)
+        (cl:file-error (e) (Err (cl:prin1-to-string e)))
+        (:no-error (file) (Ok file)))))
+
+  (declare open-output-file! (FileOptions -> Path -> (Result FileError %OutputStream)))
+  (define (open-output-file! opts path)
+    (let (%FileOptions enc if-exists if-does-not-exist) = opts)
+    (let if-exists = (match if-exists
+                       ((Some if-so) if-so)
+                       ((None) IfExistsError)))
+    (let if-does-not-exist = (match if-does-not-exist
+                               ((Some if-not) if-not)
+                               ((None) IfDoesNotExistCreate)))
+    (let (%Path pathname) = path)
+    (lisp (Result FileError %OutputStream) (enc if-exists if-does-not-exist pathname)
+      (cl:handler-case (cl:open pathname
+                                :direction :output
+                                :element-type 'cl:character
+                                :external-format enc
+                                :if-exists if-exists
+                                :if-does-not-exist if-does-not-exist)
+        (cl:file-error (e) (Err (cl:prin1-to-string e)))
+        (:no-error (file) (Ok file)))))
+
+  (declare open-two-way-file! (FileOptions -> Path -> Result FileError %TwoWayStream))
+  (define (open-two-way-file! opts path)
+    (let (%FileOptions enc if-exists if-does-not-exist) = opts)
+    (let if-exists = (match if-exists
+                       ((Some if-so) if-so)
+                       ((None) IfExistsOverwrite)))
+    (let if-does-not-exist = (match if-does-not-exist
+                               ((Some if-not) if-not)
+                               ((None) IfDoesNotExistCreate)))
+    (let (%Path pathname) = path)
+    (lisp (Result FileError %TwoWayStream) (enc if-exists if-does-not-exist pathname)
+      (cl:handler-case (cl:open pathname
+                                :direction :io
+                                :element-type 'cl:character
+                                :external-format enc
+                                :if-exists if-exists
+                                :if-does-not-exist if-does-not-exist)
+        (cl:file-error (e) (Err (cl:prin1-to-string e)))
+        (:no-error (file) (Ok file))))))
 
 ;;; gray-streams based interface for passing Coalton streams to Common Lisp
 
