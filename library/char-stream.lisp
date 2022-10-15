@@ -62,17 +62,17 @@
   (repr :native cl:stream)
   (define-type %AbstractStream)
   
-  (repr :native (cl:and cl:stream (cl:satisfies cl:input-stream-p)))
+  (repr :native cl:stream)
   (define-type %InputStream)
 
   (%define-into-as-unsafe-coerce %InputStream %AbstractStream)
 
-  (repr :native (cl:and cl:stream (cl:satisfies cl:output-stream-p)))
+  (repr :native cl:stream)
   (define-type %OutputStream)
 
   (%define-into-as-unsafe-coerce %OutputStream %AbstractStream)
 
-  (repr :native (cl:and cl:stream (cl:satisfies cl:input-stream-p) (cl:satisfies cl:output-stream-p)))
+  (repr :native cl:stream)
   (define-type %TwoWayStream)
 
   (%define-into-as-unsafe-coerce %TwoWayStream %AbstractStream)
@@ -115,7 +115,8 @@
   (define (%abstract-stream-close! stream)
     (if (%abstract-stream-open? stream)
         (Ok (lisp Unit (stream)
-              (cl:close stream)))
+              (cl:close stream)
+              Unit))
         (Err StreamErrorClosed))))
 
 (cl:defmacro %define-stream-by-into-abstract-stream (stream-type)
