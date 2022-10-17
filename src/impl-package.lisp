@@ -18,4 +18,10 @@
    #:*coalton-optimize-library*)
   (:export
    #:coalton-release-p
-   #:*coalton-optimize-library*))
+   #:*coalton-optimize-library*)
+
+  (:import-from
+   #:coalton-impl/util
+   #:sexp-fmt)
+  (:export
+   #:sexp-fmt))
