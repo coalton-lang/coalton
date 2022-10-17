@@ -102,9 +102,12 @@
                  (pattern-constructor-patterns pattern))))
 
     (pattern-var
-     (make-pattern-var
-      :id (or (immutable-map-lookup m (pattern-var-id pattern))
-              (util:coalton-bug "Invalid state reached in rewrite-pattern-vars"))))))
+     (multiple-value-bind (id found-p)
+         (immutable-map-lookup m (pattern-var-id pattern))
+       (unless found-p
+         (util:coalton-bug "Invalid state reached in rewrite-pattern-vars"))
+
+       (make-pattern-var :id id)))))
 
 
 (defun pattern-variables (pattern)

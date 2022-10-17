@@ -902,7 +902,7 @@
   (declare (type environment env)
            (type symbol function-name)
            (values util:symbol-list &optional))
-  (immutable-map-lookup (environment-source-name-environment env) function-name))
+  (values (immutable-map-lookup (environment-source-name-environment env) function-name)))
 
 (defun set-function-source-parameter-names (env function-name source-parameter-names)
   (declare (type environment env)

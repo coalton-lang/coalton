@@ -29,7 +29,7 @@
 (defun immutable-map-lookup (m key)
   "Lookup KEY in M"
   (declare (type immutable-map m)
-           (values t))
+           (values t boolean &optional))
   (fset:lookup (immutable-map-data m) key))
 
 (defun immutable-map-set (m key value &optional (constructor #'make-immutable-map))
