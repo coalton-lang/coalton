@@ -75,8 +75,7 @@
              ',(tc:type-definition-runtime-type type-def)))))))
 
 (defun maybe-auto-runtime-repr-instance (type-def)
-  (declare (type tc:environment env)
-           (type tc:type-definition type-def)
+  (declare (type tc:type-definition type-def)
            (values list &optional))
   (unless (equalp (symbol-package (tc:type-definition-name type-def))
                   (find-package "COALTON-LIBRARY/TYPES"))

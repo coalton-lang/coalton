@@ -54,7 +54,7 @@
 
 (defun quantify (tyvars type)
   (declare (type tyvar-list tyvars)
-           (type qualified-ty ty)
+           (type qualified-ty type)
            (values ty-scheme))
   (let* ((vars (remove-if
                 (lambda (x) (not (find x tyvars :test #'equalp)))
