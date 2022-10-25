@@ -1,1 +1,1 @@
-(setf coalton-impl::*coalton-stage-1-complete* t)
+(setf coalton-impl/settings::*coalton-stage-1-complete* t)
