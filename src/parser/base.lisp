@@ -25,9 +25,7 @@
   '(and symbol (not boolean) (not keyword)))
 
 (defun identifier-p (x)
-  (and (symbolp x)
-       (not (null x))
-       (not (keywordp x))))
+  (typep x 'identifier))
 
 (defun get-line-from-index (file index)
   "Get the line number corresponding to the character offset INDEX.
@@ -62,6 +60,7 @@ Returns (VALUES LINE-NUM LINE-START-INDEX LINE-END-INDEX)"
               (- end-index   line-start-index)))))
 
 (defun get-nth-line (file index)
+  "Get the INDEXth line FILE. This function uses 1 based indexing."
   (declare (type sb-sys::fd-stream file)
            (type integer index)
            (values string &optional))
@@ -71,7 +70,7 @@ Returns (VALUES LINE-NUM LINE-START-INDEX LINE-END-INDEX)"
         :when (= i index)
           :do (return-from get-nth-line line))
 
-  (util:unreachable))
+  (util:coalton-bug "Line number ~D out of bounds for file ~A" index file))
 
 (defstruct (coalton-error-note
             (:copier nil))
@@ -121,19 +120,18 @@ NOTES and HELP-NOTES may optionally be supplied notes and help messages."
      ;; TODO: Do we want to change this based on HIGHLIGHT?
      :location (car (cst:source form))
      :message message
-     :notes (append
-             (list
-              (ecase highlight
-                (:all
-                 (make-coalton-error-note
-                  :type :primary
-                  :span (cons start end)
-                  :message primary-note))
-                (:end
-                 (make-coalton-error-note
-                  :type :primary
-                  :span (cons (1- end) end)
-                  :message primary-note))))
+     :notes (list*
+             (ecase highlight
+               (:all
+                (make-coalton-error-note
+                 :type :primary
+                 :span (cons start end)
+                 :message primary-note))
+               (:end
+                (make-coalton-error-note
+                 :type :primary
+                 :span (cons (1- end) end)
+                 :message primary-note)))
              notes)
      :help-notes help-notes)))
 
