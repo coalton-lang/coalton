@@ -214,7 +214,7 @@ in FORMS that begin with that operator."
                                   (tc:ty-scheme-type scheme))))
                  (warn "The expression ~A~%    of type ~A~{ ~S~}. ~S => ~S~%    has unresolved constraint~A ~S~%    add a type assertion with THE to resolve it"
                        form
-                       (if tc:*coalton-print-unicode*
+                       (if settings:*coalton-print-unicode*
                            "∀"
                            "FORALL")
                        tvars

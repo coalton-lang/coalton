@@ -5,7 +5,8 @@
    #:coalton-impl/typechecker/types
    #:coalton-impl/typechecker/substitutions)
   (:local-nicknames
-   (#:util #:coalton-impl/util))
+   (#:util #:coalton-impl/util)
+   (#:settings #:coalton-impl/settings))
   (:export
    #:ty-predicate                       ; STRUCT
    #:make-ty-predicate                  ; CONSTRUCTOR
@@ -36,12 +37,9 @@
 (defmethod make-load-form ((self ty-predicate) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type ty-predicate))
-
 (defun ty-predicate-list-p (x)
   (and (alexandria:proper-list-p x)
-       (every (lambda (b) (typep b 'ty-predicate)) x)))
+       (every #'ty-predicate-p x)))
 
 (deftype ty-predicate-list ()
   "A list of type predicates"
@@ -55,15 +53,12 @@
 ;;; Qualified types
 ;;;
 
-(defstruct (qualified-ty)
+(defstruct qualified-ty
   (predicates (util:required 'predicates) :type ty-predicate-list :read-only t)
   (type       (util:required 'type)       :type ty                :read-only t))
 
 (defmethod make-load-form ((self qualified-ty) &optional env)
   (make-load-form-saving-slots self :environment env))
-
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type qualified-ty))
 
 (defun qualify (predicates type)
   "Qualify TYPE with PREDICATES"
@@ -94,9 +89,9 @@
 (defmethod type-variables ((type ty-predicate))
   (type-variables (ty-predicate-types type)))
 
-(defmethod kind-variables ((type ty-predicate))
+(defmethod kind-variables-generic% ((type ty-predicate))
   (declare (values kyvar-list &optional))
-  (mapcan #'kind-variables (ty-predicate-types type)))
+  (mapcan #'kind-variables (copy-list (ty-predicate-types type))))
 
 (defmethod instantiate (types (type ty-predicate))
   (make-ty-predicate
@@ -121,11 +116,11 @@
            (type-variables (qualified-ty-type type)))
    :test #'equalp))
 
-(defmethod kind-variables ((type qualified-ty))
+(defmethod kind-variables-generic% ((type qualified-ty))
   (declare (values kyvar-list &optional))
-  (append
-   (kind-variables (qualified-ty-type type))
-   (mapcan #'kind-variables (qualified-ty-predicates type))))
+  (nconc
+   (kind-variables-generic% (qualified-ty-type type))
+   (mapcan #'kind-variables (copy-list (qualified-ty-predicates type)))))
 
 (defmethod instantiate (types (type qualified-ty))
   (make-qualified-ty
@@ -148,24 +143,25 @@
 ;;; Pretty printing
 ;;;
 
-(defun pprint-predicate (stream predicate &optional colon-p at-sign-p)
+(defun pprint-predicate (stream predicate)
   (declare (type stream stream)
-           (type ty-predicate predicate)
-           (ignore colon-p)
-           (ignore at-sign-p)
-           (values ty-predicate &optional))
+           (type ty-predicate predicate))
   (write (ty-predicate-class predicate) :stream stream)
   (loop :for ty :in (ty-predicate-types predicate)
         :do (write-char #\space stream)
             (write ty :stream stream))
-  predicate)
 
-(set-pprint-dispatch 'ty-predicate 'pprint-predicate)
+  nil)
+
+(defmethod print-object ((predicate ty-predicate) stream)
+  (if *print-readably*
+      (call-next-method)
+      (pprint-predicate stream predicate)))
 
 
-(defun pprint-qualified-ty (stream qualified-ty &optional colon-p at-sign-p)
-  (declare (ignore colon-p)
-           (ignore at-sign-p))
+(defun pprint-qualified-ty (stream qualified-ty)
+  (declare (type stream stream)
+           (type qualified-ty qualified-ty))
   (cond
     ((= 0 (length (qualified-ty-predicates qualified-ty)))
      (write (qualified-ty-type qualified-ty) :stream stream))
@@ -173,7 +169,7 @@
     ((= 1 (length (qualified-ty-predicates qualified-ty)))
      (write (first (qualified-ty-predicates qualified-ty))
             :stream stream)
-     (write-string (if *coalton-print-unicode*
+     (write-string (if settings:*coalton-print-unicode*
                           " ⇒ "
                           " => ")
                    stream)
@@ -184,11 +180,16 @@
        (write-string "(" stream)
        (write pred :stream stream)
        (write-string ") " stream))
-     (write-string (if *coalton-print-unicode*
+     (write-string (if settings:*coalton-print-unicode*
                           "⇒ "
                           "=> ")
                    stream)
      (write (qualified-ty-type qualified-ty) :stream stream)))
+
   nil)
 
-(set-pprint-dispatch 'qualified-ty 'pprint-qualified-ty)
+
+(defmethod print-object ((qualified-ty qualified-ty) stream)
+  (if *print-readably*
+      (call-next-method)
+      (pprint-qualified-ty stream qualified-ty)))

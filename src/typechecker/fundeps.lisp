@@ -7,11 +7,9 @@
 (defpackage #:coalton-impl/typechecker/fundeps
   (:use
    #:cl)
-  (:import-from
-   #:coalton-impl/typechecker/types
-   #:*coalton-print-unicode*)
   (:local-nicknames
-   (#:util #:coalton-impl/util))
+   (#:util #:coalton-impl/util)
+   (#:settings #:coalton-impl/settings))
   (:export
    #:fundep                             ; STRUCT
    #:make-fundep                        ; CONSTRUCTOR
@@ -32,9 +30,12 @@
   (to   (util:required 'to)   :type util:symbol-list :read-only t))
 
 (defmethod print-object ((self fundep) stream)
+  (when *print-readably*
+    (return-from print-object (call-next-method)))
+
   (write-string "(" stream)
   (format stream "~{~S ~}" (fundep-from self))
-  (if *coalton-print-unicode*
+  (if settings:*coalton-print-unicode*
       (write-string "→" stream)
       (write-string "->" stream))
   (format stream "~{ ~S~}" (fundep-to self))
