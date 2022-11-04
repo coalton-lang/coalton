@@ -7,6 +7,8 @@
    #:coalton-impl/typechecker/predicate
    #:coalton-impl/typechecker/scheme
    #:coalton-impl/typechecker/environment)
+  (:local-nicknames
+   (#:settings #:coalton-impl/settings))
   (:export
    #:print-value-db                     ; FUNCTION
    #:print-type-db                      ; FUNCTION
@@ -130,12 +132,12 @@
                                  ((= 1 (length instance-constraints))
                                   (format t "~A ~A ~A~%"
                                           (first instance-constraints)
-                                          (if *coalton-print-unicode* "⇒" "=>")
+                                          (if settings:*coalton-print-unicode* "⇒" "=>")
                                           instance-predicate))
                                  (t
                                   (format t "~A ~A ~A~%"
                                           instance-constraints
-                                          (if *coalton-print-unicode* "⇒" "=>")
+                                          (if settings:*coalton-print-unicode* "⇒" "=>")
                                           instance-predicate))))))
 
                          (format t "~%")))
