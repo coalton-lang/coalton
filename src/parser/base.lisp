@@ -7,7 +7,7 @@
    (#:util #:coalton-impl/util))
   (:export
    #:identifier                         ; TYPE
-   #:identifier-p                       ; FUNCTION
+   #:identifierp                        ; FUNCTION
    #:get-line-from-index                ; FUNCTION
    #:get-source-line-info               ; FUNCTION
    #:get-nth-line                       ; FUNCTION
@@ -24,7 +24,7 @@
 (deftype identifier ()
   '(and symbol (not boolean) (not keyword)))
 
-(defun identifier-p (x)
+(defun identifierp (x)
   (typep x 'identifier))
 
 (defun get-line-from-index (file index)

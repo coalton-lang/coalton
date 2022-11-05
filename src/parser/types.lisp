@@ -206,7 +206,7 @@
                    :message "remove parentheses")))))
 
   ;; "T" ... => ...
-  (unless (identifier-p (cst:raw (first forms)))
+  (unless (identifierp (cst:raw (first forms)))
     (error 'parse-error
            :err (coalton-error
                  (first forms) file
