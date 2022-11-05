@@ -77,7 +77,7 @@
         (make-pattern-wildcard
          :source (cst:source form))))
 
-    (when (identifier-p (cst:raw form))
+    (when (identifierp (cst:raw form))
       (return-from parse-pattern
         (make-pattern-var
          :name (cst:raw form)
@@ -100,7 +100,7 @@
         (patterns))
 
     (unless (and (cst:atom (cst:first form))
-                 (identifier-p (cst:raw (cst:first form))))
+                 (identifierp (cst:raw (cst:first form))))
       (error 'parse-error
              :err (coalton-error
                    (cst:first form) file

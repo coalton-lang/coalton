@@ -121,8 +121,6 @@
    #:parse-variable                     ; FUNCTION
    ))
 
-;; TODO: declare in let expressions
-
 (in-package #:coalton-impl/parser/expression)
 
 (defstruct (node
@@ -394,207 +392,203 @@
 
   (when (cst:atom (cst:first form))
     (case (cst:raw (cst:first form))
-      (coalton:fn
-          (let ((variables)
-                (body))
+      ((coalton:fn)
+       (let ((variables)
+             (body))
 
-            ;; (fn)
-            (unless (cst:consp (cst:rest form))
-              (error 'parse-error
-                     :err (coalton-error
-                           form file
-                           :highlight :end
-                           :message "Malformed function"
-                           :primary-note "expected function arguments")))
+         ;; (fn)
+         (unless (cst:consp (cst:rest form))
+           (error 'parse-error
+                  :err (coalton-error
+                        form file
+                        :highlight :end
+                        :message "Malformed function"
+                        :primary-note "expected function arguments")))
 
-            ;; (fn (...))
-            (unless (cst:consp (cst:rest (cst:rest form)))
-              (error 'parse-error
-                     :err (coalton-error
-                           form file
-                           :highlight :end
-                           :message "Malformed function"
-                           :primary-note "expected function body")))
+         ;; (fn (...))
+         (unless (cst:consp (cst:rest (cst:rest form)))
+           (error 'parse-error
+                  :err (coalton-error
+                        form file
+                        :highlight :end
+                        :message "Malformed function"
+                        :primary-note "expected function body")))
 
-            ;; (fn x ...)
-            ;;
-            ;; NOTE: (fn () ...) is allowed
-            (when (and (cst:atom (cst:second form))
-                       (not (eq (cst:raw (cst:second form)) nil)))
-              (error 'parse-error
-                     :err (coalton-error
-                           (cst:second form) file
-                           :message "Malformed function"
-                           :primary-note "malformed arugment list"
-                           :help-notes
-                           (list
-                            (make-coalton-error-help
-                             :span (cst:source (cst:second form))
-                             :replacement
-                             (lambda (existing)
-                               (concatenate 'string "(" existing ")"))
-                             :message "add parentheses")))))
+         ;; (fn x ...)
+         ;;
+         ;; NOTE: (fn () ...) is allowed
+         (when (and (cst:atom (cst:second form))
+                    (not (null (cst:raw (cst:second form)))))
+           (error 'parse-error
+                  :err (coalton-error
+                        (cst:second form) file
+                        :message "Malformed function"
+                        :primary-note "malformed arugment list"
+                        :help-notes
+                        (list
+                         (make-coalton-error-help
+                          :span (cst:source (cst:second form))
+                          :replacement
+                          (lambda (existing)
+                            (concatenate 'string "(" existing ")"))
+                          :message "add parentheses")))))
 
-            (setf variables
-                  (loop :for vars := (cst:second form) :then (cst:rest vars)
-                        :while (cst:consp vars)
-                        :collect (parse-variable (cst:first vars) file)))
+         (setf variables
+               (loop :for vars := (cst:second form) :then (cst:rest vars)
+                     :while (cst:consp vars)
+                     :collect (parse-variable (cst:first vars) file)))
 
-            (setf body (parse-body (cst:nthrest 2 form) form file))
+         (setf body (parse-body (cst:nthrest 2 form) form file))
 
-            (return-from parse-expression
-              (make-node-abstraction
-               :vars variables
-               :body body
-               :source (cst:source form)))))
+         (return-from parse-expression
+           (make-node-abstraction
+            :vars variables
+            :body body
+            :source (cst:source form)))))
 
-      (coalton:let
-          (let ((bindings)
-                (body)
-                (declares))
+      ((coalton:let)
+       (let (bindings body declares)
 
-            ;; (let)
-            (unless (cst:consp (cst:rest form))
-              (error 'parse-error
-                     :err (coalton-error
-                           form file
-                           :highlight :end
-                           :message "Malformed let"
-                           :primary-note "expected let binding list")))
+         ;; (let)
+         (unless (cst:consp (cst:rest form))
+           (error 'parse-error
+                  :err (coalton-error
+                        form file
+                        :highlight :end
+                        :message "Malformed let"
+                        :primary-note "expected let binding list")))
 
-            ;; (let (...))
-            (unless (cst:consp (cst:rest (cst:rest form)))
-              (error 'parse-error
-                     :err (coalton-error
-                           form file
-                           :highlight :end
-                           :message "Malformed let"
-                           :primary-note "expected let body")))
+         ;; (let (...))
+         (unless (cst:consp (cst:rest (cst:rest form)))
+           (error 'parse-error
+                  :err (coalton-error
+                        form file
+                        :highlight :end
+                        :message "Malformed let"
+                        :primary-note "expected let body")))
 
-            ;; (let x ...)
-            (unless (cst:consp (cst:second form))
-              (error 'parse-error
-                     :err (coalton-error
-                           (cst:second form) file
-                           :message "Malformed let"
-                           :primary-note "expected binding list")))
+         ;; (let x ...)
+         (unless (cst:consp (cst:second form))
+           (error 'parse-error
+                  :err (coalton-error
+                        (cst:second form) file
+                        :message "Malformed let"
+                        :primary-note "expected binding list")))
 
-            (setf bindings
-                  (loop :for bindings := (cst:second form) :then (cst:rest bindings)
-                        :while (cst:consp bindings)
-                        :for binding := (cst:first bindings)
-                        ;; if binding is in the form (declare x y+)
-                        :if (and (cst:consp binding)
-                                 (cst:consp (cst:rest form))
-                                 (cst:consp (cst:rest (cst:rest form)))
-                                 (cst:atom (cst:first binding))
-                                 (eq (cst:raw (cst:first binding)) 'coalton:declare))
-                          :do (push (parse-let-declare binding file) declares)
-                        :else
-                          :collect (parse-let-binding binding file)))
+         (setf bindings
+               (loop :for bindings := (cst:second form) :then (cst:rest bindings)
+                     :while (cst:consp bindings)
+                     :for binding := (cst:first bindings)
+                     ;; if binding is in the form (declare x y+)
+                     :if (and (cst:consp binding)
+                              (cst:consp (cst:rest form))
+                              (cst:consp (cst:rest (cst:rest form)))
+                              (cst:atom (cst:first binding))
+                              (eq (cst:raw (cst:first binding)) 'coalton:declare))
+                       :do (push (parse-let-declare binding file) declares)
+                     :else
+                       :collect (parse-let-binding binding file)))
 
-            (setf body (parse-body (cst:nthrest 2 form) form file))
-            (setf declares (nreverse declares))
+         (setf body (parse-body (cst:nthrest 2 form) form file))
+         (setf declares (nreverse declares))
 
-            (return-from parse-expression
-              (make-node-let
-               :bindings bindings
-               :declares declares
-               :body body
-               :source (cst:source form)))))
+         (return-from parse-expression
+           (make-node-let
+            :bindings bindings
+            :declares declares
+            :body body
+            :source (cst:source form)))))
 
-      (coalton:lisp
-          (let ((type)
-                (vars)
-                (body))
-
-            ;; (lisp)
-            (unless (cst:consp (cst:rest form))
-              (error 'parse-error
-                     :err (coalton-error
-                           form file
-                           :highlight :end
-                           :message "Malformed lisp expression"
-                           :primary-note "expected expression type")))
-
-            ;; (lisp T)
-            (unless (cst:consp (cst:rest (cst:rest form)))
-              (error 'parse-error
-                     :err (coalton-error
-                           form file
-                           :highlight :end
-                           :message "Malformed lisp expression"
-                           :primary-note "expected binding list")))
-
-            ;; (lisp T (...))
-            (unless (cst:consp (cst:rest (cst:rest (cst:rest form))))
-              (error 'parse-error
-                     :err (coalton-error
-                           form file
-                           :highlight :all
-                           :message "Malformed lisp expression"
-                           :primary-note "expected body")))
-
-            (setf type (parse-type (cst:second form) file))
-
-            (setf vars
-                  (loop :for vars := (cst:third form) :then (cst:rest vars)
-                        :while (cst:consp vars)
-                        :collect (parse-variable (cst:first vars) file)))
-
-            (setf body (cst:nthrest 3 form))
-
-            (return-from parse-expression
-              (make-node-lisp
-               :type type
-               :vars vars
-               :body body
-               :source (cst:source form)))))
-
-      (coalton:match
-          (let ((expr)
-                (branches))
-
-            ;; (match)
-            (unless (cst:consp (cst:rest form))
-              (error 'parse-error
-                     :err (coalton-error
-                           form file
-                           :highlight :end
-                           :message "Malformed match expression"
-                           :primary-note "expected expression")))
-
-            ;; (match x)
-            (unless (cst:consp (cst:rest (cst:rest form)))
-              (error 'parse-error
-                     :err (coalton-error
-                           form file
-                           :highlight :end
-                           :message "Malformed match expression"
-                           :primary-note "expected match arms")))
-
-            (setf expr (parse-expression (cst:second form) file))
-
-            (setf branches
-                  (loop :for branches := (cst:nthrest 2 form) :then (cst:rest branches)
-                        :while (cst:consp branches)
-                        :collect (parse-match-branch (cst:first branches) file)))
-
-            (return-from parse-expression
-              (make-node-match
-               :expr expr
-               :branches branches
-               :source (cst:source form)))))
-
-      (coalton:progn
-        (return-from parse-expression
-          (make-node-progn
-           :body (parse-body (cst:rest form) form file)
-           :source (cst:source form))))
-
-      (coalton:the
+      ((coalton:lisp)
        (let ((type)
-             (expr))
+             (vars)
+             (body))
+
+         ;; (lisp)
+         (unless (cst:consp (cst:rest form))
+           (error 'parse-error
+                  :err (coalton-error
+                        form file
+                        :highlight :end
+                        :message "Malformed lisp expression"
+                        :primary-note "expected expression type")))
+
+         ;; (lisp T)
+         (unless (cst:consp (cst:rest (cst:rest form)))
+           (error 'parse-error
+                  :err (coalton-error
+                        form file
+                        :highlight :end
+                        :message "Malformed lisp expression"
+                        :primary-note "expected binding list")))
+
+         ;; (lisp T (...))
+         (unless (cst:consp (cst:rest (cst:rest (cst:rest form))))
+           (error 'parse-error
+                  :err (coalton-error
+                        form file
+                        :highlight :all
+                        :message "Malformed lisp expression"
+                        :primary-note "expected body")))
+
+         (setf type (parse-type (cst:second form) file))
+
+         (setf vars
+               (loop :for vars := (cst:third form) :then (cst:rest vars)
+                     :while (cst:consp vars)
+                     :collect (parse-variable (cst:first vars) file)))
+
+         (setf body (cst:nthrest 3 form))
+
+         (return-from parse-expression
+           (make-node-lisp
+            :type type
+            :vars vars
+            :body body
+            :source (cst:source form)))))
+
+      ((coalton:match)
+       (let (expr branches)
+
+         ;; (match)
+         (unless (cst:consp (cst:rest form))
+           (error 'parse-error
+                  :err (coalton-error
+                        form file
+                        :highlight :end
+                        :message "Malformed match expression"
+                        :primary-note "expected expression")))
+
+         ;; (match x)
+         (unless (cst:consp (cst:rest (cst:rest form)))
+           (error 'parse-error
+                  :err (coalton-error
+                        form file
+                        :highlight :end
+                        :message "Malformed match expression"
+                        :primary-note "expected match arms")))
+
+         (setf expr (parse-expression (cst:second form) file))
+
+         (setf branches
+               (loop :for branches := (cst:nthrest 2 form) :then (cst:rest branches)
+                     :while (cst:consp branches)
+                     :collect (parse-match-branch (cst:first branches) file)))
+
+         (return-from parse-expression
+           (make-node-match
+            :expr expr
+            :branches branches
+            :source (cst:source form)))))
+
+      ((coalton:progn)
+       (return-from parse-expression
+         (make-node-progn
+          :body (parse-body (cst:rest form) form file)
+          :source (cst:source form))))
+
+      ((coalton:the)
+       (let (type expr)
 
          ;; (the)
          (unless (cst:consp (cst:rest form))
@@ -631,27 +625,27 @@
             :expr expr
             :source (cst:source form)))))
 
-      (coalton:return
-        (let ((expr))
+      ((coalton:return)
+       (let (expr)
 
-          ;; (return ...)
-          (when (cst:consp (cst:rest form))
-            ;; (return a b ...)
-            (when (cst:consp (cst:rest (cst:rest form)))
-              (error 'parse-error
-                     :err (coalton-error
-                           (cst:first (cst:rest (cst:rest form))) file
-                           :message "Malformed return expression"
-                           :primary-note "unexpected trailing form")))
+         ;; (return ...)
+         (when (cst:consp (cst:rest form))
+           ;; (return a b ...)
+           (when (cst:consp (cst:rest (cst:rest form)))
+             (error 'parse-error
+                    :err (coalton-error
+                          (cst:first (cst:rest (cst:rest form))) file
+                          :message "Malformed return expression"
+                          :primary-note "unexpected trailing form")))
 
-            (setf expr (parse-expression (cst:second form) file)))
+           (setf expr (parse-expression (cst:second form) file)))
 
-          (return-from parse-expression
-            (make-node-return
-             :expr expr
-             :source (cst:source form)))))
+         (return-from parse-expression
+           (make-node-return
+            :expr expr
+            :source (cst:source form)))))
 
-      (coalton:or
+      ((coalton:or)
        (unless (cst:consp (cst:rest form))
          (error 'parse-error
                 :err (coalton-error
@@ -668,7 +662,7 @@
                        :collect (parse-expression arg file))
           :source (cst:source form))))
 
-      (coalton:and
+      ((coalton:and)
        (unless (cst:consp (cst:rest form))
          (error 'parse-error
                 :err (coalton-error
@@ -685,7 +679,7 @@
                        :collect (parse-expression arg file))
           :source (cst:source form))))
 
-      (coalton:if
+      ((coalton:if)
        (unless (cst:consp (cst:rest form))
          (error 'parse-error
                 :err (coalton-error
@@ -725,52 +719,52 @@
           :else (parse-expression (cst:fourth form) file)
           :source (cst:source form))))
 
-      (coalton:when
-          (unless (cst:consp (cst:rest form))
-            (error 'parse-error
-                   :err (coalton-error
-                         form file
-                         :highlight :end
-                         :message "Malformed when expression"
-                         :primary-note "expected a predicate")))
+      ((coalton:when)
+       (unless (cst:consp (cst:rest form))
+         (error 'parse-error
+                :err (coalton-error
+                      form file
+                      :highlight :end
+                      :message "Malformed when expression"
+                      :primary-note "expected a predicate")))
 
-        (return-from parse-expression
-          (make-node-when
-           :expr (parse-expression (cst:second form) file)
-           :body (parse-body (cst:rest (cst:rest form)) form file)
-           :source (cst:source form))))
+       (return-from parse-expression
+         (make-node-when
+          :expr (parse-expression (cst:second form) file)
+          :body (parse-body (cst:rest (cst:rest form)) form file)
+          :source (cst:source form))))
 
-      (coalton:unless
-          (unless (cst:consp (cst:rest form))
-            (error 'parse-error
-                   :err (coalton-error
-                         form file
-                         :highlight :end
-                         :message "Malformed unless expression"
-                         :primary-note "expected a predicate")))
+      ((coalton:unless)
+       (unless (cst:consp (cst:rest form))
+         (error 'parse-error
+                :err (coalton-error
+                      form file
+                      :highlight :end
+                      :message "Malformed unless expression"
+                      :primary-note "expected a predicate")))
 
-        (return-from parse-expression
-          (make-node-unless
-           :expr (parse-expression (cst:second form) file)
-           :body (parse-body (cst:rest (cst:rest form)) form file)
-           :source (cst:source form))))
+       (return-from parse-expression
+         (make-node-unless
+          :expr (parse-expression (cst:second form) file)
+          :body (parse-body (cst:rest (cst:rest form)) form file)
+          :source (cst:source form))))
 
-      (coalton:cond
-        (unless (cst:consp (cst:rest form))
-          (error 'parse-error
-                 :err (coalton-error
-                       form file
-                       :highlight :end
-                       :message "Malformed cond expression"
-                       :primary-note "expected one or more clauses")))
+      ((coalton:cond)
+       (unless (cst:consp (cst:rest form))
+         (error 'parse-error
+                :err (coalton-error
+                      form file
+                      :highlight :end
+                      :message "Malformed cond expression"
+                      :primary-note "expected one or more clauses")))
 
-        (return-from parse-expression
-          (make-node-cond
-           :clauses (loop :for clauses := (cst:rest form) :then (cst:rest clauses)
-                          :while (cst:consp clauses)
-                          :for clause := (cst:first clauses)
-                          :collect (parse-cond-clause clause file))
-           :source (cst:source form))))
+       (return-from parse-expression
+         (make-node-cond
+          :clauses (loop :for clauses := (cst:rest form) :then (cst:rest clauses)
+                         :while (cst:consp clauses)
+                         :for clause := (cst:first clauses)
+                         :collect (parse-cond-clause clause file))
+          :source (cst:source form))))
 
       (coalton:do
        (return-from parse-expression
@@ -803,7 +797,7 @@
            (values node-variable &optional))
 
   (unless (and (cst:atom form)
-               (identifier-p (cst:raw form)))
+               (identifierp (cst:raw form)))
     (error 'parse-error
            :err (coalton-error
                  form file
@@ -911,16 +905,10 @@
                  :message "Malformed shorthand let"
                  :primary-note "unexpected trailing form")))
 
-  (let ((pattern)
-        (expr))
-
-    (setf pattern (parse-pattern (cst:second form) file))
-    (setf expr (parse-expression (cst:fourth form) file))
-
-    (make-node-bind
-     :pattern pattern
-     :expr expr
-     :source (cst:source form))))
+  (make-node-bind
+   :pattern (parse-pattern (cst:second form) file)
+   :expr (parse-expression (cst:fourth form) file)
+   :source (cst:source form)))
 
 (defun parse-body-element (form file)
   (declare (type cst:cst form)
@@ -1026,16 +1014,10 @@
                  :message "Malformed match branch"
                  :primary-note "expected body")))
 
-  (let ((pattern)
-        (body))
-
-    (setf pattern (parse-pattern (cst:first form) file))
-    (setf body (parse-body (cst:rest form) form file))
-
-    (make-node-match-branch
-     :pattern pattern
-     :body body
-     :source (cst:source form))))
+  (make-node-match-branch
+   :pattern (parse-pattern (cst:first form) file)
+   :body (parse-body (cst:rest form) form file)
+   :source (cst:source form)))
 
 (defun parse-cond-clause (form file)
   (declare (type cst:cst form)

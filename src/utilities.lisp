@@ -26,7 +26,7 @@
 
 (in-package #:coalton-impl/util)
 
-(alexandria:define-constant +keyword-package+ (find-package "KEYWORD") :test #'equalp)
+(alexandria:define-constant +keyword-package+ (find-package "KEYWORD") :test #'eq)
 
 (defun symbol-list-p (x)
   (and (alexandria:proper-list-p x)

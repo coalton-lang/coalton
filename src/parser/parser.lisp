@@ -318,23 +318,23 @@
       (when (eq package-form 'eof)
         (error "file starts with eof"))
 
-      (setf *package* (parse-package package-form file))
+      (let* ((*package* (parse-package package-form file))
 
-      (let* ((program (make-program :package *package* :file file))
+             (program (make-program :package *package* :file file))
 
              (attributes (make-array 0 :adjustable t :fill-pointer t)))
 
-        (block parse-loop
-          (loop :with elem := nil
-                :do (setf elem (eclector.concrete-syntax-tree:read file nil 'eof))
+        (loop :named parse-loop
+              :with elem := nil
+              :do (setf elem (eclector.concrete-syntax-tree:read file nil 'eof))
 
-                :when (eq elem 'eof)
-                  :do (return-from parse-loop)
+              :when (eq elem 'eof)
+                :do (return-from parse-loop)
 
-                :do (when (and (parse-toplevel-form elem program attributes file)
-                               (plusp (length attributes)))
-                      (util:coalton-bug "parse-toplevel-form indicated that a form was parsed but did not
-consume all attributes"))))
+              :do (when (and (parse-toplevel-form elem program attributes file)
+                             (plusp (length attributes)))
+                    (util:coalton-bug "parse-toplevel-form indicated that a form was parsed but did not
+consume all attributes")))
 
         (unless (zerop (length attributes))
           (error 'parse-error
@@ -357,7 +357,7 @@ consume all attributes"))))
            (values package))
 
   ;; Package declarations must start with "PACKAGE"
-  (unless (equalp (symbol-name (cst:raw (cst:first form))) "PACKAGE")
+  (unless (string= (cst:raw (cst:first form)) "PACKAGE")
     (error 'parse-error
            :err (coalton-error
                  (cst:first form) file
@@ -380,7 +380,7 @@ consume all attributes"))))
                  :message "Malformed package declaration"
                  :primary-note "unexpected forms")))
 
-  (unless (identifier-p (cst:raw (cst:second form)))
+  (unless (identifierp (cst:raw (cst:second form)))
     (error 'parse-error
            :err (coalton-error
                  (cst:second form) file
@@ -413,7 +413,7 @@ consume all attributes"))))
                  :primary-note "unexpected list")))
 
   (case (cst:raw (cst:first form))
-    (coalton:monomorphize
+    ((coalton:monomorphize)
      (vector-push-extend
       (cons
        (parse-monomorhpize form file)
@@ -422,7 +422,7 @@ consume all attributes"))))
 
      (return-from parse-toplevel-form nil))
 
-    (coalton:repr
+    ((coalton:repr)
      (vector-push-extend
       (cons
        (parse-repr form file)
@@ -431,53 +431,53 @@ consume all attributes"))))
 
      (return-from parse-toplevel-form nil))
 
-    (coalton:define
-        (let ((define (parse-define form file))
+    ((coalton:define)
+     (let ((define (parse-define form file))
 
-              (monomorphize)
-              (monomorphize-form))
-          (loop :for (attribute . attribute-form) :across attributes
-                :do (etypecase attribute
-                      (attribute-repr
-                       (error 'parse-error
-                              :err (coalton-error
-                                    attribute-form file
-                                    :message "Invalid target for repr attribute"
-                                    :primary-note "repr must be attached to a define-type"
-                                    :notes
-                                    (list
-                                     (make-coalton-error-note
-                                      :type :secondary
-                                      :span (identifier-src-source (toplevel-define-name define))
-                                      :message "when parsing define")))))
+           (monomorphize)
+           (monomorphize-form))
+       (loop :for (attribute . attribute-form) :across attributes
+             :do (etypecase attribute
+                   (attribute-repr
+                    (error 'parse-error
+                           :err (coalton-error
+                                 attribute-form file
+                                 :message "Invalid target for repr attribute"
+                                 :primary-note "repr must be attached to a define-type"
+                                 :notes
+                                 (list
+                                  (make-coalton-error-note
+                                   :type :secondary
+                                   :span (identifier-src-source (toplevel-define-name define))
+                                   :message "when parsing define")))))
 
-                      (attribute-monomorphize
-                       (when monomorphize
-                         (error 'parse-error
-                                :err (coalton-error
-                                      attribute-form file
-                                      :message "Duplicate monomorphize attribute"
-                                      :primary-note "monomorphize attribute here"
-                                      :notes
-                                      (list
-                                       (make-coalton-error-note
-                                        :type :secondary
-                                        :span (cst:source monomorphize-form)
-                                        :message "previous attribute here")
-                                       (make-coalton-error-note
-                                        :type :secondary
-                                        :span (identifier-src-source (toplevel-define-name define))
-                                        :message "when parsing define")))))
+                   (attribute-monomorphize
+                    (when monomorphize
+                      (error 'parse-error
+                             :err (coalton-error
+                                   attribute-form file
+                                   :message "Duplicate monomorphize attribute"
+                                   :primary-note "monomorphize attribute here"
+                                   :notes
+                                   (list
+                                    (make-coalton-error-note
+                                     :type :secondary
+                                     :span (cst:source monomorphize-form)
+                                     :message "previous attribute here")
+                                    (make-coalton-error-note
+                                     :type :secondary
+                                     :span (identifier-src-source (toplevel-define-name define))
+                                     :message "when parsing define")))))
 
-                       (setf monomorphize attribute)
-                       (setf monomorphize-form attribute-form))))
+                    (setf monomorphize attribute)
+                    (setf monomorphize-form attribute-form))))
 
-          (setf (fill-pointer attributes) 0)
-          (setf (toplevel-define-monomorphize define) monomorphize)
-          (push define (program-defines program))
-          (return-from parse-toplevel-form t)))
+       (setf (fill-pointer attributes) 0)
+       (setf (toplevel-define-monomorphize define) monomorphize)
+       (push define (program-defines program))
+       (return-from parse-toplevel-form t)))
 
-    (coalton:declare
+    ((coalton:declare)
      (let ((declare (parse-declare form file))
 
            (monomorphize)
@@ -524,91 +524,91 @@ consume all attributes"))))
        (push declare (program-declares program))
        (return-from parse-toplevel-form t)))
 
-    (coalton:define-type
-        (let* ((type (parse-define-type form file))
+    ((coalton:define-type)
+     (let* ((type (parse-define-type form file))
 
-               (repr)
-               (repr-form))
+            (repr)
+            (repr-form))
 
-          (loop :for (attribute . attribute-form) :across attributes
-                :do (etypecase attribute
-                      (attribute-repr
-                       (when repr
-                         (error 'parse-error
-                                :err (coalton-error
-                                      attribute-form file
-                                      :message "Duplicate repr atttribute"
-                                      :primary-note "repr attribute here"
-                                      :notes
-                                      (list
-                                       (make-coalton-error-note
-                                        :type :secondary
-                                        :span (cst:source repr-form)
-                                        :message "previous attribute here")
-                                       (make-coalton-error-note
-                                        :type :secondary
-                                        :span (identifier-src-source (toplevel-define-type-name type))
-                                        :message "when parsing define-type")))))
+       (loop :for (attribute . attribute-form) :across attributes
+             :do (etypecase attribute
+                   (attribute-repr
+                    (when repr
+                      (error 'parse-error
+                             :err (coalton-error
+                                   attribute-form file
+                                   :message "Duplicate repr atttribute"
+                                   :primary-note "repr attribute here"
+                                   :notes
+                                   (list
+                                    (make-coalton-error-note
+                                     :type :secondary
+                                     :span (cst:source repr-form)
+                                     :message "previous attribute here")
+                                    (make-coalton-error-note
+                                     :type :secondary
+                                     :span (identifier-src-source (toplevel-define-type-name type))
+                                     :message "when parsing define-type")))))
 
-                       (setf repr attribute)
-                       (setf repr-form attribute-form))
+                    (setf repr attribute)
+                    (setf repr-form attribute-form))
 
-                      (attribute-monomorphize
-                       (error 'parse-error
-                              :err (coalton-error
-                                    attribute-form file
-                                    :message "Invalid target for monomorphize attribute"
-                                    :primary-note "monomorphize must be attached to a define or declare form"
-                                    :notes
-                                    (list
-                                     (make-coalton-error-note
-                                      :type :secondary
-                                      :span (identifier-src-source (toplevel-define-type-name type))
-                                      :message "when parsing define-type"))))))) 
+                   (attribute-monomorphize
+                    (error 'parse-error
+                           :err (coalton-error
+                                 attribute-form file
+                                 :message "Invalid target for monomorphize attribute"
+                                 :primary-note "monomorphize must be attached to a define or declare form"
+                                 :notes
+                                 (list
+                                  (make-coalton-error-note
+                                   :type :secondary
+                                   :span (identifier-src-source (toplevel-define-type-name type))
+                                   :message "when parsing define-type"))))))) 
 
-          (setf (fill-pointer attributes) 0)
-          (setf (toplevel-define-type-repr type) repr)
-          (push type (program-types program))
-          (return-from parse-toplevel-form t)))
+       (setf (fill-pointer attributes) 0)
+       (setf (toplevel-define-type-repr type) repr)
+       (push type (program-types program))
+       (return-from parse-toplevel-form t)))
 
-    (coalton:define-class
-        (let ((class (parse-define-class form file)))
+    ((coalton:define-class)
+     (let ((class (parse-define-class form file)))
 
-          (unless (zerop (length attributes))
-            (error 'parse-error
-                   :err (coalton-error
-                         (cdr (aref attributes 0)) file
-                         :message "Invalid attribute for define-class"
-                         :primary-note "define-class cannot have attributes"
-                         :notes
-                         (list
-                          (make-coalton-error-note
-                           :type :secondary
-                           :span (toplevel-define-class-head-src class)
-                           :message "while parsing define-class")))))
+       (unless (zerop (length attributes))
+         (error 'parse-error
+                :err (coalton-error
+                      (cdr (aref attributes 0)) file
+                      :message "Invalid attribute for define-class"
+                      :primary-note "define-class cannot have attributes"
+                      :notes
+                      (list
+                       (make-coalton-error-note
+                        :type :secondary
+                        :span (toplevel-define-class-head-src class)
+                        :message "while parsing define-class")))))
 
-          (push class (program-classes program))
-          (return-from parse-toplevel-form t)))
+       (push class (program-classes program))
+       (return-from parse-toplevel-form t)))
 
-    (coalton:define-instance
-        (let ((instance (parse-define-instance form file)))
+    ((coalton:define-instance)
+     (let ((instance (parse-define-instance form file)))
 
-          (unless (zerop (length attributes))
-            (error 'parse-error
-                   :err (coalton-error
-                         (cdr (aref attributes 0)) file
-                         :message "Invalid attribute for define-instance"
-                         :primary-note "define-instance cannot have attributes"
-                         :notes
-                         (list
-                          (make-coalton-error-note
-                           :type :secondary
-                           :span (toplevel-define-instance-head-src instance)
-                           :message "while parsing define-instance")))))
+       (unless (zerop (length attributes))
+         (error 'parse-error
+                :err (coalton-error
+                      (cdr (aref attributes 0)) file
+                      :message "Invalid attribute for define-instance"
+                      :primary-note "define-instance cannot have attributes"
+                      :notes
+                      (list
+                       (make-coalton-error-note
+                        :type :secondary
+                        :span (toplevel-define-instance-head-src instance)
+                        :message "while parsing define-instance")))))
       
 
-          (push instance (program-instances program))
-          (return-from parse-toplevel-form t)))
+       (push instance (program-instances program))
+       (return-from parse-toplevel-form t)))
 
     (t
      (error 'parse-error
@@ -689,7 +689,7 @@ consume all attributes"))))
                    :primary-note "unexpected trailing form")))
 
     ;; (declare 0.5 x)
-    (unless (identifier-p (cst:raw (cst:second form)))
+    (unless (identifierp (cst:raw (cst:second form)))
       (error 'parse-error
              :err (coalton-error
                    (cst:second form) file
@@ -728,7 +728,7 @@ consume all attributes"))))
 
     (if (cst:atom (cst:second form))
         (progn                          ; (define-type T ...)
-          (unless (identifier-p (cst:raw (cst:second form)))
+          (unless (identifierp (cst:raw (cst:second form)))
             (error 'parse-error
                    :err (coalton-error
                          (cst:second form) file
@@ -756,7 +756,7 @@ consume all attributes"))))
                            :message "remove parentheses")))))
 
           ;; (define-type (1 ...) ...)
-          (unless (identifier-p (cst:raw (cst:first (cst:second form))))
+          (unless (identifierp (cst:raw (cst:first (cst:second form))))
             (error 'parse-error
                    :err (coalton-error
                          (cst:first (cst:second form)) file
@@ -916,7 +916,7 @@ consume all attributes"))))
                          (subseq existing 1 (1- (length existing))))
                        :message "remove unnecessary parentheses")))))
 
-      (unless (identifier-p (cst:raw unparsed-name))
+      (unless (identifierp (cst:raw unparsed-name))
         (error 'parse-error
                :err (coalton-error
                      unparsed-name file
@@ -1124,7 +1124,7 @@ consume all attributes"))))
 
   ;; (0.5 t ...)
   (unless (and (cst:atom (cst:first method-form))
-               (identifier-p (cst:raw (cst:first method-form))))
+               (identifierp (cst:raw (cst:first method-form))))
     (error 'parse-error
            :err (coalton-error
                  (cst:first method-form) file
@@ -1203,7 +1203,7 @@ consume all attributes"))))
                      :span (cst:source (cst:second enclosing-form))
                      :message "in this type definition")))))
 
-    (unless (identifier-p (cst:raw unparsed-name))
+    (unless (identifierp (cst:raw unparsed-name))
       (error 'parse-error
              :err (coalton-error
                    unparsed-name file
@@ -1235,7 +1235,7 @@ consume all attributes"))))
     (return-from parse-argument-list (values (parse-identifier form file) nil)))
 
   ;; (define (0.5 x y) ...)
-  (unless (identifier-p (cst:raw (cst:first form)))
+  (unless (identifierp (cst:raw (cst:first form)))
     (error 'parse-error
            :err (coalton-error
                  (cst:first form) file
@@ -1271,7 +1271,7 @@ consume all attributes"))))
                  :message "Unexpected list"
                  :primary-note "expected an identifier")))
 
-  (unless (identifier-p (cst:raw form))
+  (unless (identifierp (cst:raw form))
     (error 'parse-error
            :err (coalton-error
                  form file
@@ -1394,7 +1394,7 @@ consume all attributes"))))
                    :message "Malformed functional dependency"
                    :primary-note "expected one or more type variables")))
 
-    (unless (cdr right)
+    (unless (rest right)
       (error 'parse-error
              :err (coalton-error
                    form file
