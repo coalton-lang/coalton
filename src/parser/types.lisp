@@ -92,7 +92,7 @@
 
 (defun parse-qualified-type (form file)
   (declare (type cst:cst form)
-           (type sb-sys::fd-stream file))
+           (type file-stream file))
 
   (when (cst:atom form)
     (return-from parse-qualified-type
@@ -184,7 +184,7 @@
 (defun parse-predicate (forms source file)
   (declare (type util:cst-list forms)
            (type cons source)
-           (type sb-sys::fd-stream file)
+           (type file-stream file)
            (values ty-predicate))
 
   (assert forms)
@@ -231,7 +231,7 @@
 
 (defun parse-type (form file)
   (declare (type cst:cst form)
-           (type sb-sys::fd-stream file)
+           (type file-stream file)
            (values ty &optional))
 
   (when (cst:atom form)
@@ -260,7 +260,7 @@
 (defun parse-type-list (forms source file)
   (declare (type util:cst-list forms)
            (type cons source)
-           (type sb-sys::fd-stream file)
+           (type file-stream file)
            (values ty &optional))
 
   (assert forms)

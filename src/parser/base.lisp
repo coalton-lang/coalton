@@ -31,7 +31,7 @@
   "Get the line number corresponding to the character offset INDEX.
 
 Returns (VALUES LINE-NUM LINE-START-INDEX)"
-  (declare (type sb-sys::fd-stream file)
+  (declare (type file-stream file)
            (type integer index)
            (values integer integer))
   (file-position file 0)
@@ -49,7 +49,7 @@ Returns (VALUES LINE-NUM LINE-START-INDEX)"
   "Get source information about FORM which can be used in errors.
 
 Returns (VALUES LINE-NUM LINE-START-INDEX LINE-END-INDEX)"
-  (declare (type sb-sys::fd-stream file)
+  (declare (type file-stream file)
            (type cst:cst form))
   (let ((start-index (car (cst:source form)))
         (end-index   (cdr (cst:source form))))
@@ -61,7 +61,7 @@ Returns (VALUES LINE-NUM LINE-START-INDEX LINE-END-INDEX)"
 
 (defun get-nth-line (file index)
   "Get the INDEXth line FILE. This function uses 1 based indexing."
-  (declare (type sb-sys::fd-stream file)
+  (declare (type file-stream file)
            (type integer index)
            (values string &optional))
   (file-position file 0)
@@ -88,7 +88,7 @@ Returns (VALUES LINE-NUM LINE-START-INDEX LINE-END-INDEX)"
 (defstruct (coalton-error
             (:copier nil))
   (type            (util:required 'type)         :type (member :error :warn) :read-only t)
-  (file            (util:required 'file)         :type sb-sys::fd-stream     :read-only t)
+  (file            (util:required 'file)         :type file-stream           :read-only t)
   (location        (util:required 'location)     :type integer               :read-only t)
   (message         (util:required 'message)      :type string                :read-only t)
   (notes           (util:required 'notes)        :type list                  :read-only t)
@@ -106,7 +106,7 @@ Returns (VALUES LINE-NUM LINE-START-INDEX LINE-END-INDEX)"
 MESSAGE and PRIMARY-NOTE must be supplied string arguments.
 NOTES and HELP-NOTES may optionally be supplied notes and help messages."
   (declare (type cst:cst form)
-           (type sb-sys::fd-stream file)
+           (type file-stream file)
            (type (member :all :end) highlight)
            (type string message primary-note)
            (type list notes help-notes)
