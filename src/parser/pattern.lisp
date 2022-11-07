@@ -63,7 +63,7 @@
 
 (defun parse-pattern (form file)
   (declare (type cst:cst form)
-           (type sb-sys::fd-stream file))
+           (type file-stream file))
 
   (when (cst:atom form)
     (when (typep (cst:raw form) 'util:literal-value)

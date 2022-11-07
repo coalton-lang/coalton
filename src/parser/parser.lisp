@@ -285,7 +285,7 @@
 (defstruct (program
             (:copier nil))
   (package   (util:required 'package) :type package                       :read-only t)
-  (file      (util:required 'file)    :type sb-sys::fd-stream             :read-only t)
+  (file      (util:required 'file)    :type file-stream                   :read-only t)
   (types     nil                      :type toplevel-define-type-list     :read-only nil)
   (declares  nil                      :type toplevel-declare-list         :read-only nil)
   (defines   nil                      :type toplevel-define-list          :read-only nil)
@@ -297,8 +297,6 @@
 ;;
 (defpackage #:coalton-impl/parser/read
   (:use))
-
-;; TODO: handle trailing attributes
 
 (defun parse-file (filename)
   (with-open-file (file filename :if-does-not-exist :error)
@@ -353,7 +351,7 @@ consume all attributes")))
 (defun parse-package (form file)
   "Parses a coalton package decleration in the form of (package {name})"
   (declare (type cst:cst form)
-           (type sb-sys::fd-stream file)
+           (type file-stream file)
            (values package))
 
   ;; Package declarations must start with "PACKAGE"
@@ -401,7 +399,7 @@ consume all attributes")))
   (declare (type cst:cst form)
            (type program program)
            (type (vector (cons attribute cst:cst)) attributes)
-           (type sb-sys::fd-stream file)
+           (type file-stream file)
            (values boolean &optional))
 
   ;; Toplevel forms must begin with an atom
@@ -620,7 +618,7 @@ consume all attributes")))
 
 (defun parse-define (form file)
   (declare (type cst:cst form)
-           (type sb-sys::fd-stream file)
+           (type file-stream file)
            (values toplevel-define))
 
   (assert (cst:consp form))
@@ -659,7 +657,7 @@ consume all attributes")))
 
 (defun parse-declare (form file)
   (declare (type cst:cst form)
-           (type sb-sys::fd-stream file)
+           (type file-stream file)
            (values toplevel-declare))
 
   (assert (cst:consp form))
@@ -706,7 +704,7 @@ consume all attributes")))
 
 (defun parse-define-type (form file)
   (declare (type cst:cst form)
-           (type sb-sys::fd-stream file)
+           (type file-stream file)
            (values toplevel-define-type))
 
   (assert (cst:consp form))
@@ -799,7 +797,7 @@ consume all attributes")))
 
 (defun parse-define-class (form file)
   (declare (type cst:cst form)
-           (type sb-sys::fd-stream file)
+           (type file-stream file)
            (values toplevel-define-class))
 
   (assert (cst:consp form))
@@ -983,7 +981,7 @@ consume all attributes")))
 
 (defun parse-define-instance (form file)
   (declare (type cst:cst form)
-           (type sb-sys::fd-stream file)
+           (type file-stream file)
            (values toplevel-define-instance))
 
   (assert (cst:consp form))
@@ -1090,7 +1088,7 @@ consume all attributes")))
 
 (defun parse-method (method-form form file)
   (declare (type cst:cst method-form)
-           (type sb-sys::fd-stream file)
+           (type file-stream file)
            (values method-definition))
 
   ;; m or (m)
@@ -1146,7 +1144,7 @@ consume all attributes")))
 
 (defun parse-type-variable (form file)
   (declare (type cst:cst form)
-           (type sb-sys::fd-stream file)
+           (type file-stream file)
            (values keyword-src &optional))
 
   (when (cst:consp form)
@@ -1178,7 +1176,7 @@ consume all attributes")))
 
 (defun parse-constructor (form enclosing-form file)
   (declare (type cst:cst form enclosing-form)
-           (type sb-sys::fd-stream file)
+           (type file-stream file)
            (values constructor))
 
   (let ((unparsed-name)
@@ -1227,7 +1225,7 @@ consume all attributes")))
 
 (defun parse-argument-list (form file)
   (declare (type cst:cst form)
-           (type sb-sys::fd-stream file)
+           (type file-stream file)
            (values identifier-src identifier-src-list))
 
   ;; (define x 1)
@@ -1261,7 +1259,7 @@ consume all attributes")))
 
 (defun parse-identifier (form file)
   (declare (type cst:cst form)
-           (type sb-sys::fd-stream file)
+           (type file-stream file)
            (values identifier-src))
 
   (unless (cst:atom form)
@@ -1285,7 +1283,7 @@ consume all attributes")))
 (defun parse-definition-body (form enclosing-form file)
   (declare (type cst:cst form)
            (type cst:cst enclosing-form)
-           (type sb-sys::fd-stream file)
+           (type file-stream file)
            (values (or null string) node-body))
 
   (let ((docstring)
@@ -1308,7 +1306,7 @@ consume all attributes")))
 (defun parse-instance-method-definition (form parent-form file)
   (declare (type cst:cst form)
            (type cst:cst parent-form)
-           (type sb-sys::fd-stream file)
+           (type file-stream file)
            (values instance-method-definition))
 
   (let* ((name)
@@ -1363,7 +1361,7 @@ consume all attributes")))
 
 (defun parse-fundep (form file)
   (declare (type cst:cst form)
-           (type sb-sys::fd-stream file)
+           (type file-stream file)
            (values fundep))
 
   (unless (cst:consp form)
@@ -1412,7 +1410,7 @@ consume all attributes")))
 
 (defun parse-monomorhpize (form file)
   (declare (type cst:cst form)
-           (type sb-sys::fd-stream file)
+           (type file-stream file)
            (values attribute-monomorphize))
 
   (assert (cst:consp form))
@@ -1429,7 +1427,7 @@ consume all attributes")))
 
 (defun parse-repr (form file)
   (declare (type cst:cst form)
-           (type sb-sys::fd-stream file)
+           (type file-stream file)
            (values attribute-repr))
 
   (assert (cst:consp form))
