@@ -96,6 +96,59 @@
 
 (in-package #:coalton-impl/parser/parser)
 
+;;;; # Toplevel Form Parsing
+;;;;
+;;;; identifier := <a lisp symbol>
+;;;;
+;;;; keyword := <a lisp keyword symbol>
+;;;;
+;;;; ty := <defined in src/parser/types.lisp>
+;;;;
+;;;; ty-predicate := <defined in src/parser/types.lisp>
+;;;;
+;;;; qualified-ty := <defined in src/parser/types.lisp>
+;;;;
+;;;; node-body := <defined in src/parser/expression.lisp>
+;;;;
+;;;; lisp-form := <an arbitrary lisp form>
+;;;;
+;;;; attribute-monomorphize := "(" "monomorphize" ")"
+;;;;
+;;;; attribute-repr := "(" "repr" ( ":enum" | ":lisp" | ":transparent" ) ")"
+;;;;                 | "(" "repr" ":native" lisp-form ")"
+;;;;
+;;;; toplevel := attribute-monomorphize? toplevel-declare
+;;;;           | attribute-monomorphize? toplevel-define
+;;;;           | attribute-repr? toplevel-define-type
+;;;;           | toplevel-define-class
+;;;;           | toplevel-define-instance
+;;;;
+;;;; toplevel-declare := "(" "declare" identifier qualified-ty ")"
+;;;;
+;;;; toplevel-define := "(" "define" identifier node-body ")"
+;;;;                  | "(" "define" "(" identifier identifier+ ")" node-body ")"
+;;;;
+;;;; constructor := identifier
+;;;;              | "(" identifier ty+ ")"
+;;;;
+;;;; toplevel-define-type := "(" "define-type" identifier constructor* ")"
+;;;;                       | "(" "define-type" "(" identifier keyword+ ")" constructor* ")"
+;;;;
+;;;; method-definition := "(" identifier qualified-ty ")"
+;;;;
+;;;; class-head := identifier keyword+
+;;;; ;;;; toplevel-define-class := "(" "define-class" "(" class-head ")" method-definition* ")"
+;;;;                        | "(" "define-class" "(" ty-predicate "=>" class-head ")" method-definition* ")"
+;;;;                        | "(" "define-class" "(" ( "(" ty-predicate ")" )+ "=>" class-head ")" method-definition* ")"
+;;;;
+;;;; instance-method-definiton := "(" "define" identifier body ")"
+;;;;                            | "(" "define" "(" identifier identifier+ ")" body ")"
+;;;;
+;;;; toplevel-define-instance := "(" "define-instance" "(" ty-predicate ")" instance-method-definition* ")"
+;;;;                           | "(" "define-instance" "(" ty-predicate "=>" ty-predicate ")" instance-method-definition ")"
+;;;;                           | "(" "define-instance" "(" ( "(" ty-predicate ")" )+ "=>" ty-predicate ")" instance-method-definition+ ")"
+;;;;
+
 ;;
 ;; Symbols with source information
 ;;

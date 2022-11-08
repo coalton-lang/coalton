@@ -123,6 +123,90 @@
 
 (in-package #:coalton-impl/parser/expression)
 
+;;;; # Expression Parsing
+;;;;
+;;;; Note that "expression" in the EBNF corresponds to the struct "node" in the lisp code.
+;;;;
+;;;; node-literal := <a lisp literal value>
+;;;;
+;;;; node-variable := <a lisp symbol>
+;;;;
+;;;; ty := <defined in src/parser/types.lisp>
+;;;;
+;;;; qualified-ty := <defined in src/parser/types.lisp>
+;;;;
+;;;; pattern := <defined in src/parser/pattern.lisp>
+;;;;
+;;;; lisp-form := <an arbitrary lisp form>
+;;;;
+;;;; expression := node-variable
+;;;;             | node-literal
+;;;;             | node-abstraction
+;;;;             | node-let
+;;;;             | node-lisp 
+;;;;             | node-match
+;;;;             | node-progn
+;;;;             | node-the
+;;;;             | node-return
+;;;;             | node-application
+;;;;             | node-or
+;;;;             | node-and
+;;;;             | node-if
+;;;;             | node-when
+;;;;             | node-unless
+;;;;             | node-cond
+;;;;             | node-do
+;;;;
+;;;; node-bind := "(" "let" pattern "=" expression ")"
+;;;;
+;;;; node-body-element := expression | shorthand-let
+;;;;
+;;;; node-body := node-body-element* expression
+;;;;
+;;;; node-abstraction := "(" "fn" "(" variable* ")" node-body ")"
+;;;;
+;;;; node-let-binding := "(" identifier expression ")"
+;;;;
+;;;; node-let-declare := "(" "declare" identifier qualified-ty ")"
+;;;;
+;;;; node-let := "(" "let" "(" (node-let-binding | node-let-declare)+ ")" body ")"
+;;;;
+;;;; node-lisp := "(" "lisp" type "(" variable* ")" lisp-form+ ")"
+;;;;
+;;;; node-match-branch := "(" pattern body ")"
+;;;;
+;;;; node-match := "(" "match" pattern match-branch* ")"
+;;;;
+;;;; node-progn := "(" "progn" body ")"
+;;;;
+;;;; node-the := "(" "the" type expression ")"
+;;;;
+;;;; node-return := "(" "return" expression? ")"
+;;;;
+;;;; node-application := "(" expression expression* ")"
+;;;;
+;;;; node-or := "(" "or" expression+ ")"
+;;;;
+;;;; node-and := "(" "and" expression+ ")"
+;;;;
+;;;; node-if := "(" "if" expression expression expression ")"
+;;;;
+;;;; node-when := "(" "when" expression body ")"
+;;;;
+;;;; node-unless := "(" "unless" expresson body ")"
+;;;;
+;;;; node-cond-clause := "(" expression body ")"
+;;;;
+;;;; node-cond := "(" "cond" cond-clause+ ")"
+;;;;
+;;;; node-do-bind "(" variable "<-" expression ")"
+;;;;
+;;;; node-do-body-element := expression
+;;;;                       | node-bind
+;;;;                       | node-do-bind
+;;;;
+;;;; node-do := node-do-body-element* expression
+
 (defstruct (node
             (:constructor nil)
             (:copier nil))

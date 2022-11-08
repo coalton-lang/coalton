@@ -31,6 +31,8 @@
     (1 z)
     (_ 2)))
 
+(define g (match x))
+
 (define f
   (let x = 1)
   (let (Some y) = 2)
