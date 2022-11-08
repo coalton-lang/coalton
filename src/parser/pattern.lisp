@@ -29,6 +29,17 @@
 
 (in-package #:coalton-impl/parser/pattern)
 
+;;;; # Pattern Parsing
+;;;;
+;;;; literal := <a lisp literal value>
+;;;;
+;;;; variable := <a lisp symbol>
+;;;;
+;;;; pattern := literal
+;;;;          | variable
+;;;;          | "_"
+;;;;          | "(" variable pattern* ")"
+
 (defstruct (pattern
             (:constructor nil)
             (:copier nil))

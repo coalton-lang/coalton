@@ -44,6 +44,27 @@
 
 (in-package #:coalton-impl/parser/types)
 
+;;;; # Type Parsing
+;;;;
+;;;; tyvar := <a keyword symbol>
+;;;;
+;;;; tycon := <a lisp symbol>
+;;;;
+;;;; class := <a lisp symbol>
+;;;;
+;;;; type-list := ty ty+
+;;;;            | ty+ "->" type-list
+;;;;
+;;;; ty := tyvar
+;;;;     | tycon
+;;;;     | "(" type-list ")"
+;;;;
+;;;; ty-predicate := class ty+ 
+;;;;
+;;;; qualified-ty := ty
+;;;;               | "(" ty-predicate "=>" type-list ")"
+;;;;               | "(" ( "(" ty-predicate ")" )+ "=>" type-list ")"
+
 (defstruct (ty (:constructor nil)
                (:copier nil))
   (source (util:required 'source) :type cons :read-only t))
