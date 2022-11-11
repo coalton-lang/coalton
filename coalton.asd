@@ -238,7 +238,8 @@
   :components ((:file "defs")
                (:file "impl-sbcl-pre-2-2-2" :if-feature :sbcl-pre-2-2-2)
                (:file "impl-sbcl-post-2-2-2" :if-feature :sbcl-post-2-2-2)
-               (:file "impl-fail" :if-feature (:not :sbcl))))
+               (:file "hash-table" :if-feature (:not :sbcl))
+               (:file "impl-custom" :if-feature (:not :sbcl))))
 
 (asdf:defsystem #:coalton/doc
   :description "Documentation generator for Coalton"

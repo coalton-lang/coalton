@@ -48,7 +48,10 @@
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defstruct (kind (:constructor nil)
-                   (:copier nil))))
+                   (:copier nil)))
+
+  (defmethod make-load-form ((self kind) &optional env)
+    (make-load-form-saving-slots self :environment env)))
 
 (defun kind-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -56,9 +59,6 @@
 
 (deftype kind-list ()
   '(satisfies kind-list-p))
-
-(defmethod make-load-form ((self kind) &optional env)
-  (make-load-form-saving-slots self :environment env))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defstruct (kstar (:include kind)
