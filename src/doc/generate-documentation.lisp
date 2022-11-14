@@ -84,6 +84,7 @@
    :backend backend
    :packages '(coalton
                coalton-library/classes
+               coalton-library/hash
                coalton-library/types
                coalton-library/builtin
                coalton-library/functions

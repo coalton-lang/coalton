@@ -92,9 +92,10 @@
            tree-good?))
    (iter:up-to 128)))
 
-(cl:defmacro is-ok (check cl:&optional (message (cl:format cl:nil "~A returned Err" check)))
-  `(is (result:ok? ,check)
-       ,message))
+(cl:eval-when (:compile-toplevel :load-toplevel :execute)
+  (cl:defmacro is-ok (check cl:&optional (message (cl:format cl:nil "~A returned Err" check)))
+    `(is (result:ok? ,check)
+         ,message)))
 
 (define-test insertion-upholds-invariants ()
   (let insert-and-check-invariants =

@@ -35,10 +35,7 @@
    #:TryInto
    #:Iso
    #:error
-   #:Unwrappable #:unwrap-or-else #:with-default #:unwrap #:expect #:as-optional
-   #:Hash #:hash
-   #:combine-hashes
-   #:define-sxhash-hasher))
+   #:Unwrappable #:unwrap-or-else #:with-default #:unwrap #:expect #:as-optional))
 
 #+coalton-release
 (cl:declaim #.coalton-impl:*coalton-optimize-library*)
@@ -367,30 +364,8 @@ Typical `fail` continuations are:
     "Convert any Unwrappable container into an Optional, constructing Some on a successful unwrap and None on a failed unwrap."
     (unwrap-or-else Some
                     (fn () None)
-                    container))
+                    container)))
 
-  ;;
-  ;; hashing
-  ;;
-
-  (define-class (Eq :a => (Hash :a))
-    "Types which can be hashed for storage in hash tables.
-
-Invariant (== left right) implies (== (hash left) (hash right))."
-    (hash (:a -> UFix)))
-
-  (declare combine-hashes (UFix -> UFix -> UFix))
-  (define (combine-hashes left right)
-    (lisp UFix (left right)
-      (#+sbcl sb-int:mix
-       #-sbcl cl:logxor left right))))
-
-(cl:defmacro define-sxhash-hasher (type)
-  `(coalton-toplevel
-     (define-instance (Hash ,type)
-       (define (hash item)
-         (lisp UFix (item)
-           (cl:sxhash item))))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/CLASSES")

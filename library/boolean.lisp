@@ -1,7 +1,10 @@
 (coalton-library/utils:defstdlib-package #:coalton-library/boolean
   (:use
    #:coalton
-   #:coalton-library/classes))
+   #:coalton-library/classes)
+  (:import-from
+   #:coalton-library/hash
+   #:define-sxhash-hasher))
 
 #+coalton-release
 (cl:declaim #.coalton-impl:*coalton-optimize-library*)

@@ -4,8 +4,7 @@
   (run-package-tests
    :packages '(:coalton-tests
                :quil-coalton-tests
-               :thih-coalton-tests
-               :coalton-json-tests)
+               :thih-coalton-tests)
    :interactive t))
 
 (defun set-equalp (set1 set2)
