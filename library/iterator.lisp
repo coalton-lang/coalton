@@ -3,6 +3,7 @@
   (:use
    #:coalton
    #:coalton-library/classes
+   #:coalton-library/hash
    #:coalton-library/builtin
    #:coalton-library/functions
    #:coalton-library/optional
@@ -529,7 +530,7 @@ True if two iterators have the same length, and for every N, the Nth element of 
 the Nth element of the second iterator."
     (elementwise-match! ==))
 
-  (declare elementwise-hash! ((Hash :elt) => ((Iterator :elt) -> UFix)))
+  (declare elementwise-hash! ((Hash :elt) => ((Iterator :elt) -> Hash)))
   (define (elementwise-hash! iter)
     "Hash an iterator by combining the hashes of all its elements.
 
@@ -539,7 +540,7 @@ The empty iterator will hash as 0."
                              (combine-hashes current (hash new)))
                            (hash first)
                            iter))
-      ((None) 0)))
+        ((None) mempty)))
 
 ;;; collecting
   (define-class (FromIterator :container :elt (:container -> :elt))

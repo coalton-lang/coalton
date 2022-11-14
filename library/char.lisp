@@ -3,6 +3,9 @@
    #:coalton
    #:coalton-library/classes
    #:coalton-library/builtin)
+  (:import-from
+   #:coalton-library/hash
+   #:define-sxhash-hasher)
   (:export
    #:char-code
    #:char-code-unchecked
