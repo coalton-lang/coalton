@@ -19,7 +19,8 @@
 
 (in-package #:coalton-impl/runtime/function-entry)
 
-(defconstant function-arity-limit 32)
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defconstant function-arity-limit 32))
 
 ;;; A FUNCTION-ENTRY represents a partially applicable function.
 (defstruct function-entry

@@ -2,7 +2,8 @@
   (:use
    #:coalton
    #:coalton-library/builtin
-   #:coalton-library/classes)
+   #:coalton-library/classes
+   #:coalton-library/hash)
   (:export
    #:fst
    #:snd
@@ -52,7 +53,13 @@
            (== (snd a) (snd b)))))
 
   (define-instance ((Ord :a) (Ord :b) => (Ord (Tuple :a :b)))
-    (define <=> undefined))
+    (define (<=> a b)
+      (let (Tuple a1 a2) = a)
+      (let (Tuple b1 b2) = b)
+      (match (<=> a1 b1)
+        ((LT) LT)
+        ((GT) GT)
+        ((EQ) (<=> a2 b2)))))
 
   (define-instance (Into (Tuple :a :b) (Tuple :b :a))
     (define (into t)
