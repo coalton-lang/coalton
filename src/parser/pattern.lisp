@@ -76,56 +76,50 @@
   (declare (type cst:cst form)
            (type file-stream file))
 
-  (when (cst:atom form)
-    (when (typep (cst:raw form) 'util:literal-value)
-      (return-from parse-pattern
-        (make-pattern-literal
-         :value (cst:raw form)
-         :source (cst:source form))))
+  (cond
+    ((and (cst:atom form)
+          (typep (cst:raw form) 'util:literal-value))
+     (make-pattern-literal
+      :value (cst:raw form)
+      :source (cst:source form)))
 
-    (when (eq (cst:raw form) 'coalton:_)
-      (return-from parse-pattern
-        (make-pattern-wildcard
-         :source (cst:source form))))
+    ((and (cst:atom form)
+          (eq (cst:raw form) 'coalton:_))
+     (make-pattern-wildcard
+      :source (cst:source form)))
 
-    (when (identifierp (cst:raw form))
-      (return-from parse-pattern
-        (make-pattern-var
-         :name (cst:raw form)
-         :source (cst:source form))))
+    ((and (cst:atom form)
+          (identifierp (cst:raw form)))
+     (make-pattern-var
+      :name (cst:raw form)
+      :source (cst:source form)))
 
-    (error 'parse-error
-           :err (coalton-error
-                 form file
-                 :message "Invalid pattern"
-                 :primary-note "unknown pattern literal")))
+    ((cst:atom form)
+     (error 'parse-error
+            :err (coalton-error
+                  form file
+                  :message "Invalid pattern"
+                  :primary-note "unknown pattern literal")))
 
-  (unless (cst:proper-list-p form)
-    (error 'parse-error
-             :err (coalton-error
-                   form file
-                   :message "Invalid match branch"
-                   :primary-note "unexpected dotted list")))
+    ((not (cst:proper-list-p form))
+     (error 'parse-error
+            :err (coalton-error
+                  form file
+                  :message "Invalid match branch"
+                  :primary-note "unexpected dotted list")))
 
-  (let ((name)
-        (patterns))
+    ((not (and (cst:atom (cst:first form))
+               (identifierp (cst:raw (cst:first form)))))
+     (error 'parse-error
+            :err (coalton-error
+                  (cst:first form) file
+                  :message "Invalid pattern"
+                  :primary-note "invalid constructor in pattern")))
 
-    (unless (and (cst:atom (cst:first form))
-                 (identifierp (cst:raw (cst:first form))))
-      (error 'parse-error
-             :err (coalton-error
-                   (cst:first form) file
-                   :message "Invalid pattern"
-                   :primary-note "invalid constructor in pattern")))
-
-    (setf name (cst:raw (cst:first form)))
-
-    (setf patterns
-          (loop :for patterns := (cst:rest form) :then (cst:rest patterns)
-                :while (cst:consp patterns)
-                :collect (parse-pattern (cst:first patterns) file)))
-
-    (make-pattern-constructor
-     :name name
-     :patterns patterns
-     :source (cst:source form))))
+    (t
+     (make-pattern-constructor
+      :name (cst:raw (cst:first form))
+      :patterns (loop :for patterns := (cst:rest form) :then (cst:rest patterns)
+                      :while (cst:consp patterns)
+                      :collect (parse-pattern (cst:first patterns) file))
+      :source (cst:source form)))))
