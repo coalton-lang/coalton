@@ -139,7 +139,8 @@
           ((and (null left) right)
            (error 'parse-error
                   :err (coalton-error
-                        (cst:first form) file
+                        :span (cst:source (cst:first form))
+                        :file file
                         :message "Malformed type"
                         :primary-note "unnecessary `=>`"
                         :help-notes
@@ -171,7 +172,8 @@
           ((null (rest right))
            (error 'parse-error
                   :err (coalton-error
-                        (cst:second form) file
+                        :span (cst:source (cst:second form))
+                        :file file
                         :message "Malformed type"
                         :primary-note "missing type after `=>`")))
 
@@ -188,7 +190,8 @@
                        :unless (cst:consp pred)
                          :do (error 'parse-error
                                     :err (coalton-error
-                                          (cst:second form) file
+                                          :span (cst:source (cst:second form))
+                                          :file file
                                           :message "Malformed type predicate"
                                           :primary-note "expected predicate"))
                        :do (push (parse-predicate (cst:listify pred) (cst:source form) file) predicates)))
@@ -215,7 +218,8 @@
     ((not (cst:atom (first forms)))
      (error 'parse-error
             :err (coalton-error
-                  (first forms) file
+                  :span (cst:source (first forms))
+                  :file file
                   :message "Malformed type predicate"
                   :primary-note "expected class name"
                   :help-notes
@@ -231,7 +235,8 @@
     ((not (identifierp (cst:raw (first forms))))
      (error 'parse-error
             :err (coalton-error
-                  (first forms) file
+                  :span (cst:source (first forms))
+                  :file file
                   :message "Malformed type predicate"
                   :primary-note "expected identifier")))
 
@@ -240,7 +245,8 @@
        (when (= 1 (length forms))
          (error 'parse-error
                 :err (coalton-error
-                      (first forms) file
+                      :span (cst:source (first forms))
+                      :file file
                       :message "Malformed type predicate"
                       :primary-note "expected predicate")))
 
@@ -267,7 +273,8 @@
     ((cst:atom form)
      (error 'parse-error
             :err (coalton-error
-                  form file
+                  :span (cst:source form)
+                  :file file
                   :message "Malformed type"
                   :primary-note "expected identifier")))
 
@@ -275,7 +282,8 @@
     ((cst:atom (cst:rest form))
      (error 'parse-error
             :err (coalton-error
-                  form file
+                  :span (cst:source form)
+                  :file file
                   :message "Malformed type"
                   :primary-note "unexpected nullary type")))
 
@@ -304,7 +312,8 @@
           ((and right (null (rest right)))
            (error 'parse-error
                   :err (coalton-error
-                        (car right) file
+                        :span (cst:source (car right))
+                        :file file
                         :message "Malformed function type"
                         :primary-note "missing return type")))
 
@@ -312,7 +321,8 @@
           ((and (null left) right)
            (error 'parse-error
                   :err (coalton-error
-                        (car right) file
+                        :span (cst:source (car right))
+                        :file file
                         :message "Malformed function type"
                         :primary-note "invalid function syntax")))
 
