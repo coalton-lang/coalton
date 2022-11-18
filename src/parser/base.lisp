@@ -94,8 +94,9 @@ Returns (VALUES LINE-NUM LINE-START-INDEX LINE-END-INDEX)"
   (notes           (util:required 'notes)        :type list                  :read-only t)
   (help-notes      nil                           :type list                  :read-only t))
 
-(defun coalton-error (form file
-                      &key
+(defun coalton-error (&key
+                        span
+                        file
                         (highlight :all)
                         message
                         primary-note
@@ -105,20 +106,20 @@ Returns (VALUES LINE-NUM LINE-START-INDEX LINE-END-INDEX)"
 
 MESSAGE and PRIMARY-NOTE must be supplied string arguments.
 NOTES and HELP-NOTES may optionally be supplied notes and help messages."
-  (declare (type cst:cst form)
+  (declare (type cons span)
            (type file-stream file)
            (type (member :all :end) highlight)
            (type string message primary-note)
            (type list notes help-notes)
            (values coalton-error &optional))
 
-  (let ((start (car (cst:source form)))
-        (end (cdr (cst:source form))))
+  (let ((start (car span))
+        (end (cdr span)))
     (make-coalton-error
      :type :error
      :file file
      ;; TODO: Do we want to change this based on HIGHLIGHT?
-     :location (car (cst:source form))
+     :location (car span) 
      :message message
      :notes (list*
              (ecase highlight

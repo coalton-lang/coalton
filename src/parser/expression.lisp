@@ -450,7 +450,8 @@
        (null
         (error 'parse-error
                :err (coalton-error
-                     form file
+                     :span (cst:source form)
+                     :file file
                      :message "Malformed expression"
                      :primary-note "unexpected `nil` or `()`")))
 
@@ -466,7 +467,8 @@
     ((not (cst:proper-list-p form))
      (error 'parse-error
             :err (coalton-error
-                  form file
+                  :span (cst:source form)
+                  :file file
                   :message "Malformed expression"
                   :primary-note "unexpected dotted list")))
 
@@ -484,7 +486,8 @@
        (unless (cst:consp (cst:rest form))
          (error 'parse-error
                 :err (coalton-error
-                      form file
+                      :span (cst:source form)
+                      :file file
                       :highlight :end
                       :message "Malformed function"
                       :primary-note "expected function arguments")))
@@ -493,7 +496,8 @@
        (unless (cst:consp (cst:rest (cst:rest form)))
          (error 'parse-error
                 :err (coalton-error
-                      form file
+                      :span (cst:source form)
+                      :file file
                       :highlight :end
                       :message "Malformed function"
                       :primary-note "expected function body")))
@@ -505,7 +509,8 @@
                   (not (null (cst:raw (cst:second form)))))
          (error 'parse-error
                 :err (coalton-error
-                      (cst:second form) file
+                      :span (cst:source (cst:second form))
+                      :file file
                       :message "Malformed function"
                       :primary-note "malformed arugment list"
                       :help-notes
@@ -536,7 +541,8 @@
      (unless (cst:consp (cst:rest form))
        (error 'parse-error
               :err (coalton-error
-                    form file
+                    :span (cst:source form)
+                    :file file
                     :highlight :end
                     :message "Malformed let"
                     :primary-note "expected let binding list")))
@@ -545,7 +551,8 @@
      (unless (cst:consp (cst:rest (cst:rest form)))
        (error 'parse-error
               :err (coalton-error
-                    form file
+                    :span (cst:source form)
+                    :file file
                     :highlight :end
                     :message "Malformed let"
                     :primary-note "expected let body")))
@@ -554,7 +561,8 @@
      (unless (cst:consp (cst:second form))
        (error 'parse-error
               :err (coalton-error
-                    (cst:second form) file
+                    :span (cst:source (cst:second form))
+                    :file file
                     :message "Malformed let"
                     :primary-note "expected binding list")))
 
@@ -585,7 +593,8 @@
      (unless (cst:consp (cst:rest form))
        (error 'parse-error
               :err (coalton-error
-                    form file
+                    :span (cst:source form)
+                    :file file
                     :highlight :end
                     :message "Malformed lisp expression"
                     :primary-note "expected expression type")))
@@ -594,7 +603,8 @@
      (unless (cst:consp (cst:rest (cst:rest form)))
        (error 'parse-error
               :err (coalton-error
-                    form file
+                    :span (cst:source form)
+                    :file file
                     :highlight :end
                     :message "Malformed lisp expression"
                     :primary-note "expected binding list")))
@@ -603,7 +613,8 @@
      (unless (cst:consp (cst:rest (cst:rest (cst:rest form))))
        (error 'parse-error
               :err (coalton-error
-                    form file
+                    :span (cst:source form)
+                    :file file
                     :highlight :all
                     :message "Malformed lisp expression"
                     :primary-note "expected body")))
@@ -623,7 +634,8 @@
      (unless (cst:consp (cst:rest form))
        (error 'parse-error
               :err (coalton-error
-                    form file
+                    :span (cst:source form)
+                    :file file
                     :highlight :end
                     :message "Malformed match expression"
                     :primary-note "expected expression")))
@@ -647,7 +659,8 @@
      (unless (cst:consp (cst:rest form))
        (error 'parse-error
               :err (coalton-error
-                    form file
+                    :span (cst:source form)
+                    :file file
                     :highlight :end
                     :message "Malformed the expression"
                     :primary-note "expected type")))
@@ -656,7 +669,8 @@
      (unless (cst:consp (cst:rest (cst:rest form)))
        (error 'parse-error
               :err (coalton-error
-                    form file
+                    :span (cst:source form)
+                    :file file
                     :highlight :end
                     :message "Malformed the expression"
                     :primary-note "expected value")))
@@ -665,7 +679,8 @@
      (when (cst:consp (cst:rest (cst:rest (cst:rest form))))
        (error 'parse-error
               :err (coalton-error
-                    (cst:first (cst:rest (cst:rest (cst:rest form)))) file
+                    :span (cst:source (cst:first (cst:rest (cst:rest (cst:rest form)))))
+                    :file file
                     :message "Malformed the expression"
                     :primary-note "unexpected trailing form")))
 
@@ -684,7 +699,8 @@
          (when (cst:consp (cst:rest (cst:rest form)))
            (error 'parse-error
                   :err (coalton-error
-                        (cst:first (cst:rest (cst:rest form))) file
+                        :span (cst:source (cst:first (cst:rest (cst:rest form))))
+                        :file file
                         :message "Malformed return expression"
                         :primary-note "unexpected trailing form")))
 
@@ -699,7 +715,8 @@
      (unless (cst:consp (cst:rest form))
        (error 'parse-error
               :err (coalton-error
-                    form file
+                    :span (cst:source form)
+                    :file file
                     :highlight :end
                     :message "Malformed or expression"
                     :primary-note "expected one or more arguments")))
@@ -716,7 +733,8 @@
      (unless (cst:consp (cst:rest form))
        (error 'parse-error
               :err (coalton-error
-                    form file
+                    :span (cst:source form)
+                    :file file
                     :highlight :end
                     :message "Malformed and expression"
                     :primary-note "expected one or more arguments")))
@@ -733,7 +751,8 @@
      (unless (cst:consp (cst:rest form))
        (error 'parse-error
               :err (coalton-error
-                    form file
+                    :span (cst:source form)
+                    :file file
                     :highlight :end
                     :message "Malformed if expression"
                     :primary-note "expected a predicate")))
@@ -741,7 +760,8 @@
      (unless (cst:consp (cst:rest (cst:rest form)))
        (error 'parse-error
               :err (coalton-error
-                    form file
+                    :span (cst:source form)
+                    :file file
                     :highlight :end
                     :message "Malformed if expression"
                     :primary-note "expected a form")))
@@ -749,7 +769,8 @@
      (unless (cst:consp (cst:rest (cst:rest (cst:rest form))))
        (error 'parse-error
               :err (coalton-error
-                    form file
+                    :span (cst:source form)
+                    :file file
                     :highlight :end
                     :message "Malformed if expression"
                     :primary-note "expected a form")))
@@ -757,7 +778,8 @@
      (when (cst:consp (cst:rest (cst:rest (cst:rest (cst:rest form)))))
        (error 'parse-error
               :err (coalton-error
-                    (cst:first (cst:rest (cst:rest (cst:rest (cst:rest form))))) file
+                    :span (cst:source (cst:first (cst:rest (cst:rest (cst:rest (cst:rest form))))))
+                    :file file
                     :highlight :end
                     :message "Malformed if expression"
                     :primary-note "unexpected trailing form")))
@@ -773,7 +795,8 @@
      (unless (cst:consp (cst:rest form))
        (error 'parse-error
               :err (coalton-error
-                    form file
+                    :span (cst:source form)
+                    :file file
                     :highlight :end
                     :message "Malformed when expression"
                     :primary-note "expected a predicate")))
@@ -788,7 +811,8 @@
      (unless (cst:consp (cst:rest form))
        (error 'parse-error
               :err (coalton-error
-                    form file
+                    :span (cst:source form)
+                    :file file
                     :highlight :end
                     :message "Malformed unless expression"
                     :primary-note "expected a predicate")))
@@ -803,7 +827,8 @@
      (unless (cst:consp (cst:rest form))
        (error 'parse-error
               :err (coalton-error
-                    form file
+                    :span (cst:source form)
+                    :file file
                     :highlight :end
                     :message "Malformed cond expression"
                     :primary-note "expected one or more clauses")))
@@ -841,7 +866,8 @@
                (identifierp (cst:raw form)))
     (error 'parse-error
            :err (coalton-error
-                 form file
+                 :span (cst:source form)
+                 :file file
                  :message "Invalid variable"
                  :primary-note "expected identifier")))
 
@@ -870,7 +896,8 @@
     (t
      (error 'parse-error
             :err (coalton-error
-                  form file
+                  :span (cst:source form)
+                  :file file
                   :message "Invalid literal"
                   :primary-note "unknown literal type")))))
 
@@ -882,7 +909,8 @@
   (when (cst:atom form)
     (error 'parse-error
            :err (coalton-error
-                 enclosing-form file
+                 :span (cst:source enclosing-form)
+                 :file file
                  :highlight :end
                  :message "Malformed function"
                  :primary-note "expected body")))
@@ -943,7 +971,8 @@
   (when (cst:consp (cst:rest (cst:rest (cst:rest (cst:rest form)))))
     (error 'parse-error
            :err (coalton-error
-                 (cst:first (cst:rest (cst:rest (cst:rest (cst:rest form))))) file
+                 :span (cst:source (cst:first (cst:rest (cst:rest (cst:rest (cst:rest form))))))
+                 :file file
                  :message "Malformed shorthand let"
                  :primary-note "unexpected trailing form")))
 
@@ -964,7 +993,8 @@
   (unless (cst:proper-list-p form)
     (error 'parse-error
            :err (coalton-error
-                 form file
+                 :span (cst:source form)
+                 :file file
                  :message "Malformed body expression"
                  :primary-note "unexpected dotted list")))
 
@@ -981,7 +1011,8 @@
   (when (shorthand-let-p form)
     (error 'parse-error
            :err (coalton-error
-                 form file
+                 :span (cst:source form)
+                 :file file
                  :message "Malformed body expression"
                  :primary-note "body forms cannot be terminated by a shorthand let")))
 
@@ -995,14 +1026,16 @@
   (when (cst:atom form)
     (error 'parse-error
            :err (coalton-error
-                 form file
+                 :span (cst:source form)
+                 :file file
                  :message "Malformed let binding"
                  :primary-note "expected list")))
 
   (unless (cst:proper-list-p form)
     (error 'parse-error
            :err (coalton-error
-                 form file
+                 :span (cst:source form)
+                 :file file
                  :message "Malformed let binding"
                  :primary-note "unexpected dotted list")))
 
@@ -1010,7 +1043,8 @@
   (unless (cst:consp (cst:rest form))
     (error 'parse-error
            :err (coalton-error
-                 form file
+                 :span (cst:source form)
+                 :file file
                  :highlight :end
                  :message "Malformed let binding"
                  :primary-note "let bindings must have a value")))
@@ -1019,7 +1053,8 @@
   (when (cst:consp (cst:rest (cst:rest form)))
     (error 'parse-error
            :err (coalton-error
-                 (cst:first (cst:rest (cst:rest form))) file
+                 :span (cst:source (cst:first (cst:rest (cst:rest form))))
+                 :file file
                  :message "Malformed let binding"
                  :primary-note "unexpected trailing form")))
 
@@ -1036,14 +1071,16 @@
   (when (cst:atom form)
     (error 'parse-error
            :err (coalton-error
-                 form file
+                 :span (cst:source form)
+                 :file file
                  :message "Malformed match branch"
                  :primary-note "expected list")))
 
   (unless (cst:proper-list-p form)
     (error 'parse-error
            :err (coalton-error
-                 form file
+                 :span (cst:source form)
+                 :file file
                  :message "Malformed match branch"
                  :primary-note "unexpected dotted list")) )
 
@@ -1051,7 +1088,8 @@
   (unless (cst:consp (cst:rest form))
     (error 'parse-error
            :err (coalton-error
-                 form file
+                 :span (cst:source form)
+                 :file file
                  :highlight :end
                  :message "Malformed match branch"
                  :primary-note "expected body")))
@@ -1069,14 +1107,16 @@
   (when (cst:atom form)
     (error 'parse-error
            :err (coalton-error
-                 form file
+                 :span (cst:source form)
+                 :file file
                  :message "Malformed cond clause"
                  :primary-note "expected list")))
 
   (unless (cst:proper-list-p form)
     (error 'parse-error
            :err (coalton-error
-                 form file
+                 :span (cst:source form)
+                 :file file
                  :message "Malformed cond clause"
                  :primary-note "unexpected dotted list")))
 
@@ -1094,7 +1134,8 @@
   (unless (cst:consp (cst:rest form))
     (error 'parse-error
            :err (coalton-error
-                 form file
+                 :span (cst:source form)
+                 :file file
                  :highlight :end
                  :message "Malformed do expression"
                  :primary-note "expected one or more forms")))
@@ -1149,7 +1190,8 @@
   (when (cst:consp (cst:rest (cst:rest (cst:rest form))))
     (error 'parse-error
            :err (coalton-error
-                 (cst:first (cst:rest (cst:rest (cst:rest form)))) file
+                 :span (cst:source (cst:first (cst:rest (cst:rest (cst:rest form)))))
+                 :file file
                  :message "Malformed bind form"
                  :primary-note "unexpected trailing form")))
 
@@ -1182,7 +1224,8 @@
   (when (shorthand-let-p form)
     (error 'parse-error
            :err (coalton-error
-                 form file
+                 :span (cst:source form)
+                 :file file
                  :message "Malformed do expression"
                  :primary-note "do expressions cannot be terminated by a shorthand let"
                  :notes
@@ -1195,7 +1238,8 @@
   (when (do-bind-p form)
     (error 'parse-error
            :err (coalton-error
-                 form file
+                 :span (cst:source form)
+                 :file file
                  :message "Malformed do expression"
                  :primary-note "do expression cannot be terminated by a bind"
                  :notes
@@ -1222,7 +1266,8 @@
   (when (cst:consp (cst:rest (cst:rest (cst:rest form))))
     (error 'parse-error
            :err (coalton-error
-                 (cst:fourth form) file
+                 :span (cst:source (cst:fourth form))
+                 :file file
                  :message "Malformed declare"
                  :primary-note "unexpected form")))
 

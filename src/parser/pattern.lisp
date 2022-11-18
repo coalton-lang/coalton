@@ -97,14 +97,16 @@
     ((cst:atom form)
      (error 'parse-error
             :err (coalton-error
-                  form file
+                  :span (cst:source form)
+                  :file file
                   :message "Invalid pattern"
                   :primary-note "unknown pattern literal")))
 
     ((not (cst:proper-list-p form))
      (error 'parse-error
             :err (coalton-error
-                  form file
+                  :span (cst:source form)
+                  :file file
                   :message "Invalid match branch"
                   :primary-note "unexpected dotted list")))
 
@@ -112,7 +114,8 @@
                (identifierp (cst:raw (cst:first form)))))
      (error 'parse-error
             :err (coalton-error
-                  (cst:first form) file
+                  :span (cst:source (cst:first form))
+                  :file file
                   :message "Invalid pattern"
                   :primary-note "invalid constructor in pattern")))
 
