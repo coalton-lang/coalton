@@ -16,10 +16,12 @@
    #:make-tyvar                         ; CONSTRUCTOR
    #:tyvar-p                            ; FUNCTION
    #:tyvar-name                         ; ACCESSOR
+   #:tyvar-list                         ; TYPE
    #:tycon                              ; STRUCT
    #:make-tycon                         ; CONSTRUCTOR
    #:tycon-p                            ; FUNCTION
    #:tycon-name                         ; ACCESSOR
+   #:tycon-list                         ; TYPE
    #:tapp                               ; STRUCT
    #:make-tapp                          ; CONSTRUCTOR
    #:tapp-p                             ; FUNCTION
@@ -80,9 +82,23 @@
                   (:copier nil))
   (name (util:required 'name) :type keyword :read-only t))
 
+(defun tyvar-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'tyvar-p x)))
+
+(deftype tyvar-list ()
+  '(satisfies tyvar-list-p))
+
 (defstruct (tycon (:include ty)
                   (:copier nil))
   (name (util:required 'name) :type identifier :read-only t))
+
+(defun tycon-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'tycon-p x)))
+
+(deftype tycon-list ()
+  '(satisfies tycon-list-p))
 
 (defstruct (tapp (:include ty)
                  (:copier nil))

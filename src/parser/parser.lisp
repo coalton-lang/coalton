@@ -24,7 +24,6 @@
    #:constructor                        ; STRUCT
    #:make-constructor                   ; CONSTRUCTOR
    #:constructor-name                   ; ACCESSOR
-   #:constructor-name                   ; ACCESSOR
    #:constructor-fields                 ; ACCESSOR
    #:constructor-source                 ; ACCESSOR
    #:constructor-list                   ; TYPE
@@ -32,8 +31,10 @@
    #:make-toplevel-define-type          ; CONSTRUCTOR
    #:toplevel-define-type-name          ; ACCESSOR
    #:toplevel-define-type-vars          ; ACCESSOR
+   #:toplevel-define-type-docstring     ; ACCESSOR
    #:toplevel-define-type-ctors         ; ACCESSOR
    #:toplevel-define-type-source        ; ACCESSOR
+   #:toplevel-define-type-head-src      ; ACCESSOR
    #:toplevel-define-type-list          ; TYPE
    #:toplevel-declare                   ; STRUCT
    #:make-toplevel-declare              ; CONSTRUCTOR
@@ -112,6 +113,8 @@
 ;;;;
 ;;;; lisp-form := <an arbitrary lisp form>
 ;;;;
+;;;; docstring := <a lisp string>
+;;;;
 ;;;; attribute-monomorphize := "(" "monomorphize" ")"
 ;;;;
 ;;;; attribute-repr := "(" "repr" ( ":enum" | ":lisp" | ":transparent" ) ")"
@@ -126,13 +129,13 @@
 ;;;; toplevel-declare := "(" "declare" identifier qualified-ty ")"
 ;;;;
 ;;;; toplevel-define := "(" "define" identifier node-body ")"
-;;;;                  | "(" "define" "(" identifier identifier+ ")" node-body ")"
+;;;;                  | "(" "define" "(" identifier identifier+ ")" docstring? node-body ")"
 ;;;;
 ;;;; constructor := identifier
 ;;;;              | "(" identifier ty+ ")"
 ;;;;
-;;;; toplevel-define-type := "(" "define-type" identifier constructor* ")"
-;;;;                       | "(" "define-type" "(" identifier keyword+ ")" constructor* ")"
+;;;; toplevel-define-type := "(" "define-type" identifier docstring? constructor* ")"
+;;;;                       | "(" "define-type" "(" identifier keyword+ ")" docstring? constructor* ")"
 ;;;;
 ;;;; method-definition := "(" identifier qualified-ty ")"
 ;;;;
@@ -213,11 +216,13 @@
 
 (defstruct (toplevel-define-type
             (:copier nil))
-  (name   (util:required 'name)   :type identifier-src           :read-only t)
-  (vars   (util:required 'vars)   :type keyword-src-list         :read-only t)
-  (ctors  (util:required 'ctors)  :type constructor-list         :read-only t)
-  (source (util:required 'source) :type cons                     :read-only t)
-  (repr   (util:required 'repr)   :type (or null attribute-repr) :read-only nil))
+  (name      (util:required 'name)      :type identifier-src           :read-only t)
+  (vars      (util:required 'vars)      :type keyword-src-list         :read-only t)
+  (docstring (util:required 'docstring) :type (or null string)         :read-only t)
+  (ctors     (util:required 'ctors)     :type constructor-list         :read-only t)
+  (source    (util:required 'source)    :type cons                     :read-only t)
+  (repr      (util:required 'repr)      :type (or null attribute-repr) :read-only nil)
+  (head-src  (util:required 'head-src)  :type cons                     :read-only t))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-define-type-list-p (x)
@@ -352,55 +357,56 @@
   (:use))
 
 (defun parse-file (filename)
-  (with-open-file (file filename :if-does-not-exist :error)
-    (let* (;; Setup eclector readtable
-           (eclector.readtable:*readtable*
-             (eclector.readtable:copy-readtable eclector.readtable:*readtable*))
+  (let* ((file (open filename :if-does-not-exist :error))
 
-           ;; Initial package to read (package) forms into
-           (*package* (find-package "COALTON-IMPL/PARSER/READ"))
+         ;; Setup eclector readtable
+         (eclector.readtable:*readtable*
+           (eclector.readtable:copy-readtable eclector.readtable:*readtable*))
 
-           ;; Read unspecified floats as double floats
-           (*read-default-float-format* 'double-float)
+         ;; Initial package to read (package) forms into
+         (*package* (find-package "COALTON-IMPL/PARSER/READ"))
 
-           ;; Read the (package) form
-           (package-form (eclector.concrete-syntax-tree:read file nil 'eof)))
+         ;; Read unspecified floats as double floats
+         (*read-default-float-format* 'double-float)
 
-      (when (eq package-form 'eof)
-        (error "unexpected end of file"))
+         ;; Read the (package) form
+         (package-form (eclector.concrete-syntax-tree:read file nil 'eof)))
 
-      (let* ((*package* (parse-package package-form file))
+    (when (eq package-form 'eof)
+      (error "unexpected end of file"))
 
-             (program (make-program :package *package* :file file))
+    (let* ((*package* (parse-package package-form file))
 
-             (attributes (make-array 0 :adjustable t :fill-pointer t)))
+           (program (make-program :package *package* :file file))
 
-        (loop :named parse-loop
-              :with elem := nil
-              :do (setf elem (eclector.concrete-syntax-tree:read file nil 'eof))
+           (attributes (make-array 0 :adjustable t :fill-pointer t)))
 
-              :when (eq elem 'eof)
-                :do (return-from parse-loop)
+      (loop :named parse-loop
+            :with elem := nil
+            :do (setf elem (eclector.concrete-syntax-tree:read file nil 'eof))
 
-              :do (when (and (parse-toplevel-form elem program attributes file)
-                             (plusp (length attributes)))
-                    (util:coalton-bug "parse-toplevel-form indicated that a form was parsed but did not
+            :when (eq elem 'eof)
+              :do (return-from parse-loop)
+
+            :do (when (and (parse-toplevel-form elem program attributes file)
+                           (plusp (length attributes)))
+                  (util:coalton-bug "parse-toplevel-form indicated that a form was parsed but did not
 consume all attributes")))
 
-        (unless (zerop (length attributes))
-          (error 'parse-error
-                 :err (coalton-error
-                       :span (cst:source (cdr (aref attributes 0)))
-                       :file file
-                       :message "Orphan attribute"
-                       :primary-note "attribute must be attached to another form")))
+      (unless (zerop (length attributes))
+        (error 'parse-error
+               :err (coalton-error
+                     :span (cst:source (cdr (aref attributes 0)))
+                     :file file
+                     :message "Orphan attribute"
+                     :primary-note "attribute must be attached to another form")))
 
-        (setf (program-types program) (nreverse (program-types program)))
-        (setf (program-declares program) (nreverse (program-declares program)))
-        (setf (program-defines program) (nreverse (program-defines program)))
-        (setf (program-classes program) (nreverse (program-classes program)))
+      (setf (program-types program) (nreverse (program-types program)))
+      (setf (program-declares program) (nreverse (program-declares program)))
+      (setf (program-defines program) (nreverse (program-defines program)))
+      (setf (program-classes program) (nreverse (program-classes program)))
 
-        program))))
+      program)))
 
 (defun parse-package (form file)
   "Parses a coalton package decleration in the form of (package {name})"
@@ -781,6 +787,7 @@ consume all attributes")))
   (assert (cst:consp form))
 
   (let (name
+        docstring
         variables)
     (declare (type (or null identifier-src) name)
              (type keyword-src-list variables))
@@ -858,14 +865,21 @@ consume all attributes")))
              :while (cst:consp vars)
              :do (push (parse-type-variable (cst:first vars) file) variables))))
 
+    (when (and (cst:consp (cst:rest (cst:rest form)))
+               (cst:atom (cst:third form))
+               (stringp (cst:raw (cst:third form))))
+      (setf docstring (cst:raw (cst:third form))))
+
     (make-toplevel-define-type
      :name name
      :vars variables
-     :ctors (loop :for constructors_ := (cst:nthrest 2 form) :then (cst:rest constructors_)
+     :docstring docstring
+     :ctors (loop :for constructors_ := (cst:nthrest (if docstring 3 2) form) :then (cst:rest constructors_)
                   :while (cst:consp constructors_)
                   :collect (parse-constructor (cst:first constructors_) form file))
      :repr nil
-     :source (cst:source form))))
+     :source (cst:source form)
+     :head-src (cst:source (cst:second form)))))
 
 (defun parse-define-class (form file)
   (declare (type cst:cst form)
