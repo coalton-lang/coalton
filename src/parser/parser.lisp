@@ -21,6 +21,14 @@
    #:identifier-src-name                ; ACCESSOR
    #:identifier-src-source              ; ACCESSOR
    #:identifier-src-list                ; TYPE
+   #:attribute                          ; TYPE
+   #:attribute-source                   ; ACCESSOR
+   #:attribute-monomorphize             ; STRUCT
+   #:make-attribute-monomorphize        ; CONSTRUCTOR
+   #:attribute-repr                     ; STRUCT
+   #:make-attribute-repr                ; CONSTRUCTOR
+   #:attribute-repr-type                ; ACCESSOR
+   #:attribute-repr-arg                 ; ACCESSOR
    #:constructor                        ; STRUCT
    #:make-constructor                   ; CONSTRUCTOR
    #:constructor-name                   ; ACCESSOR
@@ -34,6 +42,7 @@
    #:toplevel-define-type-docstring     ; ACCESSOR
    #:toplevel-define-type-ctors         ; ACCESSOR
    #:toplevel-define-type-source        ; ACCESSOR
+   #:toplevel-define-type-repr          ; ACCESSOR
    #:toplevel-define-type-head-src      ; ACCESSOR
    #:toplevel-define-type-list          ; TYPE
    #:toplevel-declare                   ; STRUCT
@@ -48,6 +57,7 @@
    #:toplevel-define-vars               ; ACCESSOR
    #:toplevel-define-body               ; ACCESSOR
    #:toplevel-define-source             ; ACCESSOR
+   #:toplevel-define-monomorphize       ; ACCESSOR
    #:toplevel-define-list               ; TYPE
    #:fundep                             ; STRUCT
    #:make-fundep                        ; CONSTRUCTOR
@@ -82,6 +92,7 @@
    #:toplevel-define-instance-pred      ; ACCESSOR
    #:toplevel-define-instance-methods   ; ACCESSOR
    #:toplevel-define-instance-source    ; ACCESSOR
+   #:toplevel-define-instance-head-src  ; ACCESSOR
    #:toplevel-define-instance-list      ; TYPE
    #:program                            ; STRUCT
    #:make-program                       ; CONSTRUCTOR
@@ -250,7 +261,7 @@
 (defstruct (toplevel-define
             (:copier nil))
   (name         (util:required 'name)         :type identifier-src                  :read-only t)
-  (vars         (util:required 'vars)         :type identifier-src-list             :read-only t)
+  (vars         (util:required 'vars)         :type node-variable-list              :read-only t)
   (body         (util:required 'body)         :type node-body                       :read-only t)
   (source       (util:required 'source)       :type cons                            :read-only t)
   (monomorphize (util:required 'monomorphize) :type (or null attribute-monomorphize) :read-only nil))
@@ -311,7 +322,7 @@
 (defstruct (instance-method-definition
             (:copier nil))
   (name   (util:required 'name)   :type identifier-src      :read-only t)
-  (vars   (util:required 'vars)   :type identifier-src-list :read-only t)
+  (vars   (util:required 'vars)   :type node-variable-list  :read-only t)
   (body   (util:required 'body)   :type node-body           :read-only t)
   (source (util:required 'source) :type cons                :read-only t))
 
@@ -1329,7 +1340,7 @@ consume all attributes")))
 (defun parse-argument-list (form file)
   (declare (type cst:cst form)
            (type file-stream file)
-           (values identifier-src identifier-src-list))
+           (values identifier-src node-variable-list))
 
   ;; (define x 1)
   (when (cst:atom form)
@@ -1360,7 +1371,7 @@ consume all attributes")))
 
    (loop :for vars := (cst:rest form) :then (cst:rest vars)
          :while (cst:consp vars)
-         :collect (parse-identifier (cst:first vars) file))))
+         :collect (parse-variable (cst:first vars) file))))
 
 (defun parse-identifier (form file)
   (declare (type cst:cst form)

@@ -25,6 +25,7 @@
    #:pattern-constructor-name           ; ACCESSOR
    #:pattern-constructor-patterns       ; ACCESSOR
    #:parse-pattern                      ; FUNCTION
+   #:pattern-variables                  ; FUNCTION
    ))
 
 (in-package #:coalton-impl/parser/pattern)
@@ -126,3 +127,22 @@
                       :while (cst:consp patterns)
                       :collect (parse-pattern (cst:first patterns) file))
       :source (cst:source form)))))
+
+(defun pattern-variables (pattern)
+  (declare (type pattern pattern)
+           (values util:symbol-list))
+
+  (remove-duplicates (pattern-variables-generic% pattern) :test #'eq))
+
+(defgeneric pattern-variables-generic% (pattern)
+  (:method ((pattern pattern-var))
+    (list (pattern-var-name pattern)))
+
+  (:method ((pattern pattern-literal))
+    nil)
+
+  (:method ((pattern pattern-wildcard))
+    nil)
+
+  (:method ((pattern pattern-constructor))
+    (mapcan #'pattern-variables-generic% (pattern-constructor-patterns pattern))))

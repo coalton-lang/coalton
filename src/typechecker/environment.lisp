@@ -250,6 +250,17 @@
             :docstring "Either true or false represented by `t` and `nil` respectively."
             :location ""))
 
+          ('coalton:Unit
+           (make-type-entry
+            :name 'coalton:Unit
+            :runtime-type '(member coalton::Unit/Unit)
+            :type *unit-type*
+            :explicit-repr :enum
+            :enum-repr t
+            :newtype nil
+            :docstring ""
+            :location ""))
+
           ('coalton:Char
            (make-type-entry
             :name 'coalton:Char
@@ -395,6 +406,14 @@
             :constructs 'coalton:Boolean
             :classname 'coalton::Boolean/False
             :compressed-repr 'nil))
+
+          ('coalton:Unit
+           (make-constructor-entry
+            :name 'coalton:Unit
+            :arity 0
+            :constructs 'coalton:Unit
+            :classname 'coalton::Unit/Unit
+            :compressed-repr 'coalton::Unit/Unit))
 
           ('coalton:Cons
            (make-constructor-entry

@@ -52,6 +52,7 @@
                              (:file "pattern")
                              (:file "expression")
                              (:file "parser")
+                             (:file "renamer")
                              (:file "package")))
                (:module "runtime"
                 :serial t
@@ -85,6 +86,12 @@
                 :serial t
                 :components ((:file "pattern-exhaustiveness")
                              (:file "package")))
+               (:module "typechecker2"
+                :serial t
+                :components ((:file "base")
+                             (:file "parse-type")
+                             (:file "define-type")
+                             (:file "define")))
                (:module "codegen"
                 :serial t
                 :components ((:file "ast")
@@ -115,7 +122,8 @@
                (:file "debug")
                (:file "faux-macros")
                (:file "language-macros")
-               (:file "lock-package" :if-feature :sb-package-locks)))
+               (:file "lock-package" :if-feature :sb-package-locks)
+               (:file "typechecker2/entry")))
 
 (asdf:defsystem #:coalton/library
   :description "The Coalton standard library."

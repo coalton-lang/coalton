@@ -35,6 +35,7 @@
    #:kind-of
    #:type-constructors                  ; FUNCTION
    #:*boolean-type*                     ; VARIABLE
+   #:*unit-type*                        ; VARIABLE
    #:*char-type*                        ; VARIABLE
    #:*u8-type*                          ; VARIABLE
    #:*u16-type*                         ; VARIABLE
@@ -216,6 +217,7 @@
 ;;;
 
 (defvar *boolean-type*      (make-tycon :name 'coalton:Boolean      :kind +kstar+))
+(defvar *unit-type*         (make-tycon :name 'coalton:Unit         :kind +kstar+))
 (defvar *char-type*         (make-tycon :name 'coalton:Char         :kind +kstar+))
 (defvar *u8-type*           (make-tycon :name 'coalton:U8           :kind +kstar+))
 (defvar *u16-type*          (make-tycon :name 'coalton:U16          :kind +kstar+))

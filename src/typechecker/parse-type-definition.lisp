@@ -537,15 +537,3 @@ Returns TYPE-DEFINITIONS"
    :constructs (constructor-entry-constructs ctor)
    :classname (constructor-entry-classname ctor)
    :compressed-repr (constructor-entry-classname ctor)))
-
-(defun quantify-using-tvar-order (tyvars type)
-  (let* ((vars (remove-if
-                (lambda (x) (not (find x (type-variables type) :test #'equalp)))
-                tyvars))
-         (kinds (mapcar #'kind-of vars))
-         (subst (loop :for var :in vars
-                      :for id :from 0
-                      :collect (make-substitution :from var :to (make-tgen :id id)))))
-    (make-ty-scheme
-     :kinds kinds
-     :type (apply-substitution subst type))))

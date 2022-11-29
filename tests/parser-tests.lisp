@@ -14,4 +14,5 @@
          (files (directory glob :resolve-symlinks nil)))
 
     (loop :for file :in files
-          :do (parser:parse-file file))))
+          :for program := (parser:parse-file file)
+          :do (parser:rename-variables program))))

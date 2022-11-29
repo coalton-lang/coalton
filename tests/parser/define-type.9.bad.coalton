@@ -2,4 +2,4 @@
 (package test-package)
 
 (define-type (T :a)
-  "T")
+  0.5)
