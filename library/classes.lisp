@@ -84,9 +84,6 @@ specify `repr :lisp`."
 (in-package #:coalton)
 
 (coalton-toplevel
-  (repr :enum)
-  (define-type Unit Unit)
-
   (repr :native cl:t)
   (define-type Void)
 
@@ -96,6 +93,10 @@ specify `repr :lisp`."
 
   (declare False Boolean)
   (define False (lisp Boolean ()  cl:nil))
+
+  ;; Unit is an early type
+  (declare Unit Unit)
+  (define Unit (lisp Unit () 'coalton::Unit/Unit))
 
   ;; List is an early type
   (declare Cons (:a -> (List :a) -> (List :a)))

@@ -20,6 +20,7 @@
    #:fresh-inst                         ; FUNCTION
    #:scheme-predicates                  ; FUNCTION
    #:fresh-pred                         ; FUNCTION
+   #:quantify-using-tvar-order          ; FUNCTION
    ))
 
 (in-package #:coalton-impl/typechecker/scheme)
@@ -67,13 +68,14 @@
      :kinds kinds
      :type (apply-substitution subst type))))
 
-(declaim (inline to-scheme))
-(defun to-scheme (type)
-  (declare (type qualified-ty type)
-           (values ty-scheme))
-  (make-ty-scheme
-   :kinds nil
-   :type type))
+(defgeneric to-scheme (ty)
+  (:method ((ty qualified-ty))
+    (make-ty-scheme
+     :kinds nil
+     :type ty))
+
+  (:method ((ty ty))
+    (to-scheme (qualify nil ty))))
 
 (defun fresh-inst (ty-scheme)
   (declare (type ty-scheme ty-scheme)
@@ -94,6 +96,18 @@
          (qual-ty (make-qualified-ty :predicates (list pred) :type var))
          (scheme (quantify (type-variables (list pred var)) qual-ty)))
     (car (qualified-ty-predicates (fresh-inst scheme)))))
+
+(defun quantify-using-tvar-order (tyvars type)
+  (let* ((vars (remove-if
+                (lambda (x) (not (find x (type-variables type) :test #'equalp)))
+                tyvars))
+         (kinds (mapcar #'kind-of vars))
+         (subst (loop :for var :in vars
+                      :for id :from 0
+                      :collect (make-substitution :from var :to (make-tgen :id id)))))
+    (make-ty-scheme
+     :kinds kinds
+     :type (apply-substitution subst type))))
 
 ;;;
 ;;; Methods

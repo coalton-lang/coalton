@@ -43,10 +43,18 @@
    #:make-node-let-binding              ; CONSTRUCTOR
    #:node-let-binding-name              ; ACCESSOR
    #:node-let-binding-value             ; ACCESSOR
+   #:node-let-binding-source            ; ACCESSOR
    #:node-let-binding-list              ; TYPE
+   #:node-let-declare                   ; STRUCT
+   #:make-node-let-declare              ; CONSTRUCTOR
+   #:node-let-declare-name              ; ACCESSOR
+   #:node-let-declare-type              ; ACCESSOR
+   #:node-let-declare-source            ; ACCESSOR
+   #:node-let-declare-list              ; TYPE
    #:node-let                           ; STRUCT
    #:make-node-let                      ; CONSTRUCTOR
    #:node-let-bindings                  ; ACCESSOR
+   #:node-let-declares                  ; ACCESSOR
    #:node-let-body                      ; ACCESSOR
    #:node-lisp                          ; STRUCT
    #:make-node-lisp                     ; CONSTRUCTOR
@@ -281,6 +289,7 @@
   (vars (util:required 'vars) :type node-variable-list :read-only t)
   (body (util:required 'body) :type node-body          :read-only t))
 
+;; TODO: handle recursive construction here
 (defstruct (node-let-binding
             (:copier nil))
   (name   (util:required 'name)   :type node-variable :read-only t)
