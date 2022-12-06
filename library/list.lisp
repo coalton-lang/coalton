@@ -102,7 +102,7 @@
 
   (declare cdr (List :a -> List :a))
   (define (cdr xs)
-    "Return the traditional cdr of a list. This function is partial"
+    "Return the traditional cdr of a list."
     (match xs
       ((Cons _ xs) xs)
       ((Nil) Nil)))
