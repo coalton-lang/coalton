@@ -111,14 +111,14 @@
 
   (declare pop! (Vector :a -> Optional :a))
   (define (pop! v)
-    "Remove and return the first item of V"
+    "Remove and return the last item of V"
     (if (== 0 (length v))
         None
         (Some (pop-unsafe! v))))
 
   (declare pop-unsafe! (Vector :a -> :a))
   (define (pop-unsafe! v)
-    "Remove and return the first item of V without checking if the vector is empty"
+    "Remove and return the last item of V without checking if the vector is empty"
     (lisp :a (v)
       (cl:vector-pop v)))
 
