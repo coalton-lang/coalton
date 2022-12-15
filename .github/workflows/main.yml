@@ -23,7 +23,7 @@ jobs:
       CL_SOURCE_REGISTRY: "/home/runner/work/coalton/coalton//"
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: 40ants/setup-lisp@v1
       - name: Install GMP and MPFR dependencies
         run: |
@@ -53,7 +53,7 @@ jobs:
       COALTON_ENV: "release"
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: 40ants/setup-lisp@v1
       - name: Install GMP and MPFR dependencies
         run: |
@@ -69,7 +69,7 @@ jobs:
             (sb-ext::without-gcing (uiop:symbol-call :coalton-benchmarks :run-benchmarks-ci)))
           EOF
           qlot exec ros -- run-benchmarks.lisp
-      - uses: actions/cache@v1
+      - uses: actions/cache@v2
         with:
           path: ./cache
           key: ${{ runner.os }}-benchmarks
