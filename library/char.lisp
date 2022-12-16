@@ -6,7 +6,18 @@
   (:export
    #:char-code
    #:char-code-unchecked
-   #:code-char))
+   #:code-char
+   #:alpha?
+   #:ascii-alpha?
+   #:digit?
+   #:ascii-digit?
+   #:ascii-alphanumeric?
+   #:uppercase?
+   #:ascii-uppercase?
+   #:lowercase?
+   #:ascii-lowercase?
+   #:upcase
+   #:downcase))
 
 #+coalton-release
 (cl:declaim #.coalton-impl:*coalton-optimize-library*)
@@ -16,16 +27,19 @@
 (coalton-toplevel
   (declare char-code (Char -> UFix))
   (define (char-code char)
+    "Convert a character to its ASCII representation."
     (lisp UFix (char)
       (cl:char-code char)))
 
   (declare code-char-unchecked (UFix -> Char))
   (define (code-char-unchecked code)
+    "Convert a number to its ASCII character. This function is partial."
     (lisp Char (code)
       (cl:code-char code)))
 
   (declare code-char (UFix -> (Optional Char)))
   (define (code-char code)
+    "Convert a number to its ASCII character, returning None on failure."
     (lisp (Optional Char) (code)
       ;; not sufficient to compare against `char-code-limit', because the char-code space may be sparse.
       (alexandria:if-let (char (cl:code-char code))

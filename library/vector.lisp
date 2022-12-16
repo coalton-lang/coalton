@@ -197,7 +197,7 @@
 
   (declare foreach2 ((:a -> :b -> :c) -> Vector :a -> Vector :b -> Unit))
   (define (foreach2 f v1 v2)
-    "Like vector-foreach but twice as good"
+    "Iterate in parallel over V1 and V2 calling F once for each pair of elements. Iteration stops when the shorter vector runs out of elements."
     (lisp Void (f v1 v2)
       (cl:loop
          :for e1 :across v1

@@ -50,6 +50,7 @@
 
   (declare sincos (Trigonometric :a => :a -> (Tuple :a :a)))
   (define (sincos x)
+    "Computes the sine and cosine of X."
     (Tuple (sin x) (cos x)))
 
   (define-class (Exponentiable :a)

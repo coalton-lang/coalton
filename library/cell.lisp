@@ -80,10 +80,12 @@
 ;;; operators on cells of lists
   (declare push! (Cell (List :elt) -> :elt -> List :elt))
   (define (push! cel new-elt)
+    "Push NEW-ELT onto the start of the list in CEL."
     (update! (Cons new-elt) cel))
 
   (declare pop! (Cell (List :elt) -> Optional :elt))
   (define (pop! cel)
+    "Remove and return the first element of the list in CEL."
     (match (read cel)
       ((Cons fst rst)
        (progn (write! cel rst)

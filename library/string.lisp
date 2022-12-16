@@ -83,11 +83,13 @@ does not have that suffix."
   
   (declare ref-unchecked (String -> UFix -> Char))
   (define (ref-unchecked str idx)
+    "Return the IDXth character of STR. This function is partial."
     (lisp Char (str idx)
       (cl:char str idx)))
 
   (declare ref (String -> UFix -> (Optional Char)))
   (define (ref str idx)
+    "Return the IDXth character of STR."
     (if (< idx (length str))
         (Some (ref-unchecked str idx))
         None))
