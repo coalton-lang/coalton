@@ -90,7 +90,9 @@
     (%Iterator (Unit -> (Optional :elt))))
 
   (declare new ((Unit -> Optional :elt) -> Iterator :elt))
-  (define new %Iterator)
+  (define new
+    "Create a new iterator from a function that yields elements."
+    %Iterator)
 
   (declare next! (Iterator :elt -> Optional :elt))
   (define (next! iter)
@@ -205,7 +207,7 @@ iterator is empty."
                              :num ->
                              :num ->
                              :num ->
-                            (Iterator :num)))
+                             (Iterator :num)))
   (define (range-decreasing step start end)
     "A range which begins below START and counts down through and including END by STEP.
 
@@ -379,12 +381,32 @@ interleaving. (interleave empty ITER) is equivalent to (id ITER)."
     "Yields the last element of ITER, completely consuming it."
     (fold! (fn (s e) (Some e)) None iter))
 
-  ;; this and `or!' appear to be inefficent (fully forcing) synonyms for `every! id' and `any! id' respectively
   (declare and! (Iterator Boolean -> Boolean))
-  (define and! (fold! boolean-and True))
+  (define (and! iter)
+    "Returns True if all iterator elements are True. May not consume the entire iterator. Returns True on an empty iterator."
+    (let ((inner
+            (fn (state)
+              (when (not state)
+                (return False))
+
+              (match (next! iter)
+                ((Some x) (inner (and state x)))
+                ((None) True)))))
+
+      (inner True)))
 
   (declare or! (Iterator Boolean -> Boolean))
-  (define or! (fold! boolean-or False))
+  (define (or! iter)
+    "Returns True if any iterator elements are True. May not consume the entire iterator. Returns False on an empty iterator."
+    (let ((inner
+            (fn (state)
+              (when state
+                (return True))
+
+              (match (next! iter)
+                ((Some x) (inner (or state x)))
+                ((None) False)))))
+      (inner False)))
 
   (declare sum! (Num :num => Iterator :num -> :num))
   (define (sum! iter)
@@ -492,7 +514,7 @@ The empty iterator will hash as 0."
                              (combine-hashes current (hash new)))
                            (hash first)
                            iter))
-        ((None) 0)))
+      ((None) 0)))
 
 ;;; collecting
   (define-class (FromIterator :container :elt (:container -> :elt))

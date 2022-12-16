@@ -138,6 +138,7 @@ specify `repr :lisp`."
 
   (repr :enum)
   (define-type Ord
+    "The result of an ordered comparison."
     LT
     EQ
     GT)
@@ -256,7 +257,9 @@ specify `repr :lisp`."
     (foldr ((:elt -> :accum -> :accum) -> :accum -> :container :elt -> :accum)))
 
   (declare mconcat ((Foldable :f) (Monoid :a) => (:f :a) -> :a))
-  (define  mconcat (fold <> mempty))
+  (define mconcat
+    "Fold a container of monoids into a single element."
+    (fold <> mempty))
 
   (define-class (Traversable :t)
     (traverse (Applicative :f => (:a -> :f :b) -> :t :a -> :f (:t :b))))

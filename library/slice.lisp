@@ -41,6 +41,7 @@
 
   (declare new (types:RuntimeRepr :a => UFix -> UFix -> (Vector :a) -> (Slice :a)))
   (define (new start length v)
+    "Create a new slice backed by V starting at index START and continuing for LENGTH elements."
     (when (< start 0)
       (error "Start of slice cannot be less than 0."))
 

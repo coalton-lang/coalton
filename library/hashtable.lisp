@@ -31,7 +31,8 @@
   ;;
 
   (repr :native cl:hash-table)
-  (define-type (Hashtable :key :value))
+  (define-type (Hashtable :key :value)
+    "A mutable hash table.")
 
   (declare %get-hash-test-funcs
            ((Hash :key) => Unit -> (Tuple (:key -> :key -> Boolean)
@@ -118,6 +119,7 @@
 
   (declare entries ((Hashtable :key :value) -> (List (Tuple :key :value))))
   (define (entries table)
+    "Returns the key-values pairs as a list."
     (let lst = (cell:new Nil))
     (foreach (fn (key val)
                (cell:push! lst (Tuple key val)))
