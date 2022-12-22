@@ -13,7 +13,9 @@
    #:get-nth-line                       ; FUNCTION
    #:make-coalton-error-note            ; FUNCTION
    #:make-coalton-error-help            ; FUNCTION
+   #:make-coalton-error-context         ; FUNCTION
    #:make-coalton-error                 ; FUNCTION
+   #:*coalton-error-context*            ; VARIABLE
    #:coalton-error                      ; FUNCTION
    #:display-coalton-error              ; FUNCTION
    #:parse-error                        ; CONDITION
@@ -84,15 +86,22 @@ Returns (VALUES LINE-NUM LINE-START-INDEX LINE-END-INDEX)"
   (replacement (util:required 'replacement) :type (function (string) string) :read-only t)
   (message     (util:required 'message)     :type string                     :read-only t))
 
+(defstruct (coalton-error-context
+            (:copier nil))
+  (message (util:required 'message) :type string :read-only t))
+
+(defvar *coalton-error-context* nil)
+
 ;; TODO: specify list type
 (defstruct (coalton-error
             (:copier nil))
-  (type            (util:required 'type)         :type (member :error :warn) :read-only t)
-  (file            (util:required 'file)         :type file-stream           :read-only t)
-  (location        (util:required 'location)     :type integer               :read-only t)
-  (message         (util:required 'message)      :type string                :read-only t)
-  (notes           (util:required 'notes)        :type list                  :read-only t)
-  (help-notes      nil                           :type list                  :read-only t))
+  (type            (util:required 'type)     :type (member :error :warn) :read-only t)
+  (file            (util:required 'file)     :type file-stream           :read-only t)
+  (location        (util:required 'location) :type integer               :read-only t)
+  (message         (util:required 'message)  :type string                :read-only t)
+  (notes           (util:required 'notes)    :type list                  :read-only t)
+  (help-notes      nil                       :type list                  :read-only t)
+  (context         *coalton-error-context*   :type list                  :read-only t))
 
 (defun coalton-error (&key
                         span
@@ -235,7 +244,7 @@ NOTES and HELP-NOTES may optionally be supplied notes and help messages."
                          (print-line-contents (line-number)
                            (print-column-number line-number)
                            (format stream " ~:[~; ~]~A~%"
-                                    contains-multiline-note
+                                   contains-multiline-note
                                    (get-nth-line (coalton-error-file error) line-number))))
                   (cond (;; If we are on the same line then don't reprint.
                          ;; TODO: It would be nice to merge these together if they don't overlap.
@@ -333,7 +342,11 @@ NOTES and HELP-NOTES may optionally be supplied notes and help messages."
                               (1+ (- start start-line-start))
                               '(#\Space)
                               (length replaced-text)
-                              '(#\-)))))))))
+                              '(#\-)))))))
+
+    ;; Print error context
+    (loop :for context :in (coalton-error-context error)
+          :do (format stream "note: ~A~%" (coalton-error-context-message context)))))
 
 (define-condition parse-error (error)
   ((err :reader parse-error-err
