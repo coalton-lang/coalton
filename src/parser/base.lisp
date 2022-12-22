@@ -291,7 +291,7 @@ NOTES and HELP-NOTES may optionally be supplied notes and help messages."
                     (t
                      (format stream
                              "~v{~C~:*~}~v{~C~:*~} ~A~%"
-                             (+ 2 start-offset)
+                             (1+ start-offset)
                              '(#\Space)
                              (- end-offset start-offset)
                              (list note-char)

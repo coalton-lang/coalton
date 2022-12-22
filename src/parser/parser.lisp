@@ -644,7 +644,7 @@ consume all attributes")))
                                   (make-coalton-error-note
                                    :type :secondary
                                    :span (identifier-src-source (toplevel-define-type-name type))
-                                   :message "when parsing define-type"))))))) 
+                                   :message "when parsing define-type")))))))
 
        (setf (fill-pointer attributes) 0)
        (setf (toplevel-define-type-repr type) repr)
@@ -687,7 +687,7 @@ consume all attributes")))
                         :type :secondary
                         :span (toplevel-define-instance-head-src instance)
                         :message "while parsing define-instance")))))
-      
+
 
        (push instance (program-instances program))
        t))
@@ -731,6 +731,7 @@ consume all attributes")))
 
     (multiple-value-bind (docstring body)
         (parse-definition-body (cst:rest (cst:rest form)) form file)
+      (declare (ignore docstring))
 
       (make-toplevel-define
        :name name
@@ -883,7 +884,7 @@ consume all attributes")))
 
     (make-toplevel-define-type
      :name name
-     :vars variables
+     :vars (reverse variables)
      :docstring docstring
      :ctors (loop :for constructors_ := (cst:nthrest (if docstring 3 2) form) :then (cst:rest constructors_)
                   :while (cst:consp constructors_)
@@ -1331,7 +1332,7 @@ consume all attributes")))
     (make-constructor
      :name (make-identifier-src
             :name (cst:raw unparsed-name)
-            :source (cst:source unparsed-name)) 
+            :source (cst:source unparsed-name))
      :fields (loop :for field :in unparsed-fields
                    :collect (parse-type field file))
      :source (cst:source form))))
@@ -1427,9 +1428,7 @@ consume all attributes")))
            (type file-stream file)
            (values instance-method-definition))
 
-  (let (name
-        arguments
-        (context-note
+  (let ((context-note
           (make-coalton-error-note
            :type :secondary
            :span (cst:source parent-form)
