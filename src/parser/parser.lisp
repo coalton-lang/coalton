@@ -151,7 +151,8 @@
 ;;;; method-definition := "(" identifier qualified-ty ")"
 ;;;;
 ;;;; class-head := identifier keyword+
-;;;; ;;;; toplevel-define-class := "(" "define-class" "(" class-head ")" method-definition* ")"
+;;;;
+;;;; toplevel-define-class := "(" "define-class" "(" class-head ")" method-definition* ")"
 ;;;;                        | "(" "define-class" "(" ty-predicate "=>" class-head ")" method-definition* ")"
 ;;;;                        | "(" "define-class" "(" ( "(" ty-predicate ")" )+ "=>" class-head ")" method-definition* ")"
 ;;;;
@@ -477,6 +478,14 @@ consume all attributes")))
            (type file-stream file)
            (values boolean &optional))
 
+  (when (cst:atom form)
+   (error 'parse-error
+          :err (coalton-error
+                :span (cst:source form)
+                :file file
+                :message "Malformed toplevel form"
+                :primary-note "Unexpected atom")))
+
   ;; Toplevel forms must begin with an atom
   (when (cst:consp (cst:first form))
     (error 'parse-error
@@ -485,6 +494,8 @@ consume all attributes")))
                  :file file
                  :message "Malformed toplevel form"
                  :primary-note "unexpected list")))
+
+  
 
   (case (cst:raw (cst:first form))
     ((coalton:monomorphize)
@@ -1274,14 +1285,15 @@ consume all attributes")))
                  :message "Invalid type variable"
                  :primary-note "expected keyword symbol"
                  :help-notes
-                 (when (symbolp (cst:raw form))
-                   (list
-                    (make-coalton-error-help
-                     :span (cst:source form)
-                     :replacement
-                     (lambda (existing)
-                       (concatenate 'string ":" existing))
-                     :message "add `:` to symbol"))))))
+                 (cond
+                   ((eq *package* (symbol-package (cst:raw form)))
+                    (list
+                     (make-coalton-error-help
+                      :span (cst:source form)
+                      :replacement
+                      (lambda (existing)
+                        (concatenate 'string ":" existing))
+                      :message "add `:` to symbol")))))))
 
   (make-keyword-src
    :name (cst:raw form)

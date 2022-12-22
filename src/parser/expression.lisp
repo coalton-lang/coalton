@@ -854,6 +854,24 @@
      (parse-do form file))
 
     ;;
+    ;; Macros
+    ;;
+
+    ;; TODO: Catch and rethrow macro errors with source info
+    ((and (cst:atom (cst:first form))
+          (macro-function (cst:raw (cst:first form))))
+     (let ((*coalton-error-context*
+             (adjoin (make-coalton-error-context
+                      :message "Error occurs within macro context. Source locations may be imprecise")
+                     *coalton-error-context*
+                     :test #'equalp)))
+       (parse-expression
+        (cst:cst-from-expression
+         (macroexpand-1 (cst:raw form))
+         :source (cst:source form))
+        file)))
+
+    ;;
     ;; Function Application
     ;;
 

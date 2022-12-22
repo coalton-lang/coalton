@@ -5,6 +5,7 @@
    #:coalton-impl/typechecker2/parse-type)
   (:local-nicknames
    (#:util #:coalton-impl/util)
+   (#:algo #:coalton-impl/algorithm)
    (#:parser #:coalton-impl/parser)
    (#:error #:coalton-impl/error)
    (#:tc #:coalton-impl/typechecker))
@@ -72,95 +73,142 @@
 
   nil)
 
+(defun tc-env-bound-variables (env)
+  (declare (type tc-env env)
+           (values util:symbol-list &optional))
+
+  (alexandria:hash-table-keys (tc-env-ty-table env)))
+
+(defun tc-env-bindings-variables (env names)
+  (declare (type tc-env env)
+           (type util:symbol-list names)
+           (values tc:tyvar-list))
+
+  (remove-duplicates
+   (loop :with table := (tc-env-ty-table env)
+         :for name :in names
+         :for ty := (gethash name table)
+
+         :unless ty
+           :do (util:coalton-bug "Unknown binding ~A" name)
+
+         :append (tc:type-variables ty))
+   :test #'eq))
+
+(defun tc-env-replace-type (env name scheme)
+  (declare (type tc-env env)
+           (type symbol name)
+           (type tc:ty-scheme scheme)
+           (values null))
+
+  (unless (gethash name (tc-env-ty-table env))
+    (util:coalton-bug "Attempt to replace unknown type ~A" name))
+
+  (setf (gethash name (tc-env-ty-table env)) scheme)
+
+  nil)
+
+(defmethod tc:apply-substitution (subs (env tc-env))
+  "Applies SUBS to the types currently being checked in ENV. Does not update the types in the inner main environment because there should not be substitutions for them."
+  (maphash
+   (lambda (key value)
+     (setf (gethash key (tc-env-ty-table env)) (tc:apply-substitution subs value)))
+   (tc-env-ty-table env)))
+
+(defmethod tc:type-variables ((env tc-env))
+  "Returns all of the type variables of the types being checked in ENV. Does not return type variables from the inner main environment because it should not contain any free type variables."
+  (loop :for ty :being :the :hash-values :of (tc-env-ty-table env)
+        :append (tc:type-variables ty))
+
 ;;;
 ;;; Entrypoint
 ;;;
 
-(defun toplevel-define (defines declares file env)
-  "Entrypoint for typechecking a group of parsed defines and declares."
-  (declare (type parser:toplevel-define-list defines)
-           (type parser:toplevel-declare-list declares)
-           (type file-stream file)
-           (type tc:environment env))
+  (defun toplevel-define (defines declares file env)
+    "Entrypoint for typechecking a group of parsed defines and declares."
+    (declare (type parser:toplevel-define-list defines)
+             (type parser:toplevel-declare-list declares)
+             (type file-stream file)
+             (type tc:environment env))
 
-  (let ((def-table (make-hash-table :test #'eq))
+    (let ((def-table (make-hash-table :test #'eq))
 
-        (dec-table (make-hash-table :test #'eq)))
+          (dec-table (make-hash-table :test #'eq)))
 
-    ;; Ensure that there are no duplicate definitions
-    (loop :for define :in defines
-          :for name := (parser:identifier-src-name (parser:toplevel-define-name define))
+      ;; Ensure that there are no duplicate definitions
+      (loop :for define :in defines
+            :for name := (parser:identifier-src-name (parser:toplevel-define-name define))
 
-          :if (gethash name def-table)
-            :do (error 'tc-error
-                       :err (coalton-error
-                             :span (parser:identifier-src-source (parser:toplevel-define-name define))
-                             :file file
-                             :message "Duplicate definition"
-                             :primary-note "second definition here"
-                             :notes
-                             (list
-                              (make-coalton-error-note
-                               :type :primary
-                               :span (parser:identifier-src-source
-                                      (parser:toplevel-define-name
-                                       (gethash name def-table)))
-                               :message "first defintion here"))))
-          :else
-            :do (setf (gethash name def-table) define))
+            :if (gethash name def-table)
+              :do (error 'tc-error
+                         :err (coalton-error
+                               :span (parser:identifier-src-source (parser:toplevel-define-name define))
+                               :file file
+                               :message "Duplicate definition"
+                               :primary-note "second definition here"
+                               :notes
+                               (list
+                                (make-coalton-error-note
+                                 :type :primary
+                                 :span (parser:identifier-src-source
+                                        (parser:toplevel-define-name
+                                         (gethash name def-table)))
+                                 :message "first defintion here"))))
+            :else
+              :do (setf (gethash name def-table) define))
 
 
-    ;; Ensure that there are no duplicate declerations
-    (loop :for declare :in declares
-          :for name := (parser:identifier-src-name (parser:toplevel-declare-name declare))
-
-          :if (gethash name dec-table)
-            :do (error 'tc-error
-                       :err (coalton-error
-                             :span (parser:identifier-src-source (parser:toplevel-declare-name declare))
-                             :file file
-                             :message "Duplicate decleration"
-                             :primary-note "second decleration here"
-                             :notes
-                             (list
-                              (make-coalton-error-note
-                               :type :primary
-                               :span (parser:identifier-src-source
-                                      (parser:toplevel-declare-name
-                                       (gethash name dec-table)))
-                               :message "first decleration here"))))
-          :else
-            :do (setf (gethash name dec-table) declare))
-
-    ;; Ensure that each decleration has an associated definition
-    (loop :for declare :in declares
-          :for name := (parser:identifier-src-name (parser:toplevel-declare-name declare))
-
-          :unless (gethash name def-table)
-            :do (error 'tc-error
-                       :err (coalton-error
-                             :span (parser:identifier-src-source (parser:toplevel-declare-name declare))
-                             :file file
-                             :message "Orphan decleration"
-                             :primary-note "decleration does not have an associated definition")))
-
-    (let ((parsed-dec-table (make-hash-table :test #'eq)))
-
+      ;; Ensure that there are no duplicate declerations
       (loop :for declare :in declares
             :for name := (parser:identifier-src-name (parser:toplevel-declare-name declare))
-            :for ty := (parse-declare-type declare env file)
-            :do (setf (gethash name parsed-dec-table) ty))
 
-      ;; TODO: add parameters to the environment
-      (loop :for define :in defines
-            :for tc-env := (make-tc-env :env env)
-            :for name := (parser:identifier-src-name (parser:toplevel-define-name define))
-            :for ty := (infer-expression-type
-                        (parser:toplevel-define-body define)
-                        (gethash name parsed-dec-table)
-                        nil
-                        tc-env
-                        file)))))
+            :if (gethash name dec-table)
+              :do (error 'tc-error
+                         :err (coalton-error
+                               :span (parser:identifier-src-source (parser:toplevel-declare-name declare))
+                               :file file
+                               :message "Duplicate decleration"
+                               :primary-note "second decleration here"
+                               :notes
+                               (list
+                                (make-coalton-error-note
+                                 :type :primary
+                                 :span (parser:identifier-src-source
+                                        (parser:toplevel-declare-name
+                                         (gethash name dec-table)))
+                                 :message "first decleration here"))))
+            :else
+              :do (setf (gethash name dec-table) declare))
+
+      ;; Ensure that each decleration has an associated definition
+      (loop :for declare :in declares
+            :for name := (parser:identifier-src-name (parser:toplevel-declare-name declare))
+
+            :unless (gethash name def-table)
+              :do (error 'tc-error
+                         :err (coalton-error
+                               :span (parser:identifier-src-source (parser:toplevel-declare-name declare))
+                               :file file
+                               :message "Orphan decleration"
+                               :primary-note "decleration does not have an associated definition")))
+
+      (let ((parsed-dec-table (make-hash-table :test #'eq)))
+
+        (loop :for declare :in declares
+              :for name := (parser:identifier-src-name (parser:toplevel-declare-name declare))
+              :for ty := (parse-declare-type declare env file)
+              :do (setf (gethash name parsed-dec-table) ty))
+
+        ;; TODO: add parameters to the environment
+        (loop :for define :in defines
+              :for tc-env := (make-tc-env :env env)
+              :for name := (parser:identifier-src-name (parser:toplevel-define-name define))
+              :for ty := (infer-expression-type
+                          (parser:toplevel-define-body define)
+                          (gethash name parsed-dec-table)
+                          nil
+                          tc-env
+                          file)))))
 
 ;; TODO: handle predicates here
 (defun parse-declare-type (dec env file)
@@ -989,19 +1037,174 @@
                              :message "Orphan declare in let"
                              :primary-note "decleration does not have an associated definition")))
 
-    ;; Parse the types of all declares
+    ;;
+    ;; Binding type inference has several steps.
+    ;; 1. Explicit types are parsed and then added to the environment
+    ;; 2. Implicit bindings are grouped by scc and then each scc is type checked
+    ;; 3. Explicitly typed bindings are typechecked and compared against their declared types.
+    ;;
+
+    ;; Parse the types of explicit bindings and then add them to the environment.
     (loop :for declare :in declares
           :for name := (parser:node-variable-name (parser:node-let-declare-name declare))
 
           :for ty := (parse-type (parser:node-let-declare-type declare) (tc-env-env env) file)
           :for tyvars := (tc:type-variables ty)
           :for scheme := (tc:quantify tyvars (tc:qualify nil ty))
-          :do (util:debug-log name scheme)
           :do (tc-env-add-definition env name scheme))
 
-    (let ((expl-bindings (loop :for binding :in bindings
-                               :for name := (parser:node-variable-name (parser:node-let-binding-name binding))
+    (let* ((expl-bindings (loop :for binding :in bindings
+                                :for name := (parser:node-variable-name (parser:node-let-binding-name binding))
 
-                               :when (gethash name dec-table)
-                                 :collect binding))))
-    ))
+                                :when (gethash name dec-table)
+                                  :collect binding))
+
+           (impl-bindings (loop :with table := (make-hash-table :test #'eq)
+                                :for binding :in bindings
+                                :for name := (parser:node-variable-name (parser:node-let-binding-name binding))
+
+                                :unless (gethash name dec-table)
+                                  :do (setf (gethash name table) binding)
+
+                                :finally (return table)))
+
+           (impl-bindings-names (alexandria:hash-table-keys impl-bindings))
+
+           (impl-bindings-deps (loop :for name :in impl-bindings-names
+                                     :for binding := (gethash name impl-bindings)
+                                     :for node := (parser:node-let-binding-value binding)
+
+                                     :for deps := (remove-duplicates
+                                                   (intersection
+                                                    (mapcar #'parser:node-variable-name
+                                                            (collect-variables node))
+                                                    impl-bindings-names
+                                                    :test #'eq)
+                                                   :test #'eq)
+                                     :collect (cons name deps)))
+
+           (sccs (algo:tarjan-scc impl-bindings-deps)))
+
+      (loop :for scc :in sccs
+            :for bindings
+              := (loop :for name :in scc
+                       :collect (gethash name impl-bindings))
+            :do (infer-impls-binding-type bindings subs env file))
+
+      (loop :for binding :in expl-bindings
+
+            ;; TODO: improve this code
+            :for name := (parser:node-variable-name (parser:node-let-binding-name binding))
+            :for scheme := (gethash name (tc-env-ty-table env))
+            
+            :do (setf subs (infer-expl-binding-type
+                            name
+                            (parser:node-let-binding-value binding)
+                            scheme
+                            subs
+                            env
+                            file))))))
+
+(defun infer-expl-binding-type (name node declared-ty subs env file)
+  (declare (type symbol name)
+           (type parser:node node)
+           (type tc:ty-scheme declared-ty)
+           (type tc:substitution-list subs)
+           (type tc-env env)
+           (type file-stream file)
+           (values tc:substitution-list))
+
+  (let* ((bound-variables (remove name (tc-env-bound-variables env)))
+
+         ;; TODO: handle preds here
+         (fresh-qual-type (tc:fresh-inst declared-ty))
+         (fresh-type (tc:qualified-ty-type fresh-qual-type)))
+
+    (multiple-value-bind (expr-ty subs)
+        (infer-expression-type
+         node
+         fresh-type                     ; unify against declared type
+         subs
+         env
+         file)
+
+      (tc:apply-substitution subs env)
+
+      ;; TODO: handle preds here
+      (let* ((expr-type (tc:apply-substitution subs (tc:apply-substitution subs expr-ty)))
+
+             (env-tvars (tc-env-bindings-variables env bound-variables))
+             (local-tvars (set-difference (tc:type-variables expr-type) env-tvars :test #'eq))
+
+             (output-qual-type (tc:qualify nil expr-type))
+             (output-scheme (tc:quantify local-tvars output-qual-type)))
+
+        ;; TODO: this error message could be better
+        (unless (equalp declared-ty output-scheme)
+          (error 'tc-error
+                 :err (coalton-error
+                       :message "Declared type is too general"
+                       :span (parser:node-source node)
+                       :file file
+                       :primary-note (format nil "Declared type ~A is more general than inferred type ~A."
+                                             declared-ty
+                                             output-scheme)))))
+
+      subs)))
+
+(defun infer-impls-binding-type (bindings subs env file)
+  (declare (type parser:node-let-binding-list bindings)
+           (type tc:substitution-list subs)
+           (type tc-env env)
+           (type file-stream file))
+
+  (let* (;; track variables bound before typechecking
+         (bound-variables (tc-env-bound-variables env))
+
+         ;; Add all bindings to the environment
+         (expr-tys
+           (loop :for binding :in bindings
+                 :for name := (parser:node-variable-name (parser:node-let-binding-name binding))
+                 :collect (tc-env-add-variable env name))))
+
+    ;; Derive the type of each binding
+    (loop :for binding :in bindings
+          :for name := (parser:node-let-binding-name binding)
+          :for node := (parser:node-let-binding-value binding)
+
+          :do (multiple-value-bind (ty_ subs_)
+                  (infer-expression-type
+                   node
+                   (tc-env-lookup-value env name file)
+                   subs
+                   env
+                   file)
+                (declare (ignore ty_))
+                (setf subs subs_)))
+
+    ;; Update the environment
+    (tc:apply-substitution subs env)
+
+    (let* ((expr-tys (tc:apply-substitution subs expr-tys))
+
+           (env-tvars (tc-env-bindings-variables env bound-variables))
+
+           (expr-tvars (remove-duplicates (tc:type-variables expr-tys) :test #'eq))
+
+           (local-tvars (set-difference expr-tvars env-tvars :test #'eq)))
+
+      (util:debug-log expr-tys env-tvars expr-tvars local-tvars)
+
+      (let (;; Quantify local type variables
+            (output-schemes
+              (loop :for ty :in expr-tys
+                    :collect (tc:quantify local-tvars (tc:qualify nil ty)))))
+
+        ;; Update the environment with inferred schemes
+        (loop :for scheme :in output-schemes
+              :for binding :in bindings
+
+              :for name := (parser:node-variable-name (parser:node-let-binding-name binding))
+              :do (tc-env-replace-type env name scheme))
+
+        subs))))
