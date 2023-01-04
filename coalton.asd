@@ -50,6 +50,7 @@
                 :components ((:file "base")
                              (:file "types")
                              (:file "pattern")
+                             (:file "macro")
                              (:file "expression")
                              (:file "parser")
                              (:file "renamer")

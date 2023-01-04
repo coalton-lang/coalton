@@ -3,7 +3,8 @@
    #:cl
    #:coalton-impl/parser/base
    #:coalton-impl/parser/types
-   #:coalton-impl/parser/pattern)
+   #:coalton-impl/parser/pattern
+   #:coalton-impl/parser/macro)
   (:shadowing-import-from
    #:coalton-impl/parser/base
    #:parse-error)
@@ -865,11 +866,7 @@
                       :message "Error occurs within macro context. Source locations may be imprecise")
                      *coalton-error-context*
                      :test #'equalp)))
-       (parse-expression
-        (cst:cst-from-expression
-         (macroexpand-1 (cst:raw form))
-         :source (cst:source form))
-        file)))
+       (parse-expression (expand-macro form) file)))
 
     ;;
     ;; Function Application
