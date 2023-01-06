@@ -5,4 +5,5 @@
    #:coalton-impl/parser/pattern
    #:coalton-impl/parser/expression
    #:coalton-impl/parser/parser
-   #:coalton-impl/parser/renamer))
+   #:coalton-impl/parser/renamer
+   #:coalton-impl/parser/binding))

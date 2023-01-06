@@ -307,7 +307,7 @@
 (defstruct (node-let-declare
             (:copier nil))
   (name   (util:required 'name)   :type node-variable :read-only t)
-  (type   (util:required 'type)   :type ty            :read-only t)
+  (type   (util:required 'type)   :type qualified-ty  :read-only t)
   (source (util:required 'source) :type cons          :read-only t))
 
 (defun node-let-declare-list-p (x)
@@ -1298,5 +1298,5 @@
 
   (make-node-let-declare
    :name (parse-variable (cst:second form) file)
-   :type (parse-type (cst:third form) file)
+   :type (parse-qualified-type (cst:third form) file)
    :source (cst:source form)))

@@ -261,7 +261,7 @@
 
 (defstruct (toplevel-define
             (:copier nil))
-  (name         (util:required 'name)         :type identifier-src                  :read-only t)
+  (name         (util:required 'name)         :type node-variable                  :read-only t)
   (vars         (util:required 'vars)         :type node-variable-list              :read-only t)
   (body         (util:required 'body)         :type node-body                       :read-only t)
   (source       (util:required 'source)       :type cons                            :read-only t)
@@ -322,7 +322,7 @@
 
 (defstruct (instance-method-definition
             (:copier nil))
-  (name   (util:required 'name)   :type identifier-src      :read-only t)
+  (name   (util:required 'name)   :type node-variable       :read-only t)
   (vars   (util:required 'vars)   :type node-variable-list  :read-only t)
   (body   (util:required 'body)   :type node-body           :read-only t)
   (source (util:required 'source) :type cons                :read-only t))
@@ -534,7 +534,7 @@ consume all attributes")))
                                  (list
                                   (make-coalton-error-note
                                    :type :secondary
-                                   :span (identifier-src-source (toplevel-define-name define))
+                                   :span (node-source (toplevel-define-name define))
                                    :message "when parsing define")))))
 
                    (attribute-monomorphize
@@ -553,7 +553,7 @@ consume all attributes")))
                                      :message "previous attribute here")
                                     (make-coalton-error-note
                                      :type :secondary
-                                     :span (identifier-src-source (toplevel-define-name define))
+                                     :span (node-source (toplevel-define-name define))
                                      :message "when parsing define")))))
 
                     (setf monomorphize attribute)
@@ -1353,11 +1353,11 @@ consume all attributes")))
 (defun parse-argument-list (form file)
   (declare (type cst:cst form)
            (type file-stream file)
-           (values identifier-src node-variable-list))
+           (values node-variable node-variable-list))
 
   ;; (define x 1)
   (when (cst:atom form)
-    (return-from parse-argument-list (values (parse-identifier form file) nil)))
+    (return-from parse-argument-list (values (parse-variable form file) nil)))
 
   ;; (define (0.5 x y) ...)
   (unless (identifierp (cst:raw (cst:first form)))
@@ -1378,7 +1378,7 @@ consume all attributes")))
                  :primary-note "expected 1 or more arguments")))
 
   (values
-   (make-identifier-src
+   (make-node-variable
     :name (cst:raw (cst:first form))
     :source (cst:source form))
 

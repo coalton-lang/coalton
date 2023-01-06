@@ -1,3 +1,11 @@
+;;;;
+;;;; Type parsing and kind inference. The implementation is a
+;;;; simplified version of the HM type inference used by the type
+;;;; checker. After kind inference all remaining kind variables are
+;;;; subsituted with `tc:+kstar+' in the "kind monomorphization" step
+;;;; because Coalton does not support polykinds.
+;;;;
+
 (defpackage #:coalton-impl/typechecker2/parse-type
   (:use
    #:cl
@@ -18,6 +26,7 @@
    #:partial-type-env-add-type          ; FUNCTION
    #:partial-type-env-lookup-type       ; FUNCTION
    #:parse-type                         ; FUNCTION
+   #:parse-qualified-type               ; FUNCTION
    #:infer-type-kinds                   ; FUNCTION
    #:collect-referenced-types           ; FUNCTION
    #:collect-type-variables             ; FUNCTION
@@ -103,6 +112,33 @@
 
     (multiple-value-bind (ty ksubs)
         (infer-type-kinds ty
+                          tc:+kstar+
+                          nil
+                          nil
+                          partial-env
+                          file)
+
+      (setf ty (tc:apply-ksubstitution ksubs ty))
+      (setf ksubs (tc:kind-monomorphize-subs (tc:kind-variables ty) ksubs))
+      (tc:apply-ksubstitution ksubs ty))))
+
+(defun parse-qualified-type (ty env file)
+  (declare (type parser:qualified-ty ty)
+           (type tc:environment env)
+           (type file-stream file))
+
+  (let ((tvars (collect-type-variables ty))
+
+        (partial-env (make-partial-type-env :env env)))
+
+    (loop :for tvar :in tvars
+          :for tvar-name := (parser:tyvar-name tvar)
+          :do (partial-type-env-add-var partial-env nil tvar-name))
+
+    ;; TODO: handle preds here
+
+    (multiple-value-bind (ty ksubs)
+        (infer-type-kinds (parser:qualified-ty-type ty)
                           tc:+kstar+
                           nil
                           nil
