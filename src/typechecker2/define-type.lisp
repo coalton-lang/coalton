@@ -1,3 +1,9 @@
+;;;;
+;;;; Handling of toplevel define-type forms. Types are split apart by
+;;;; SCC and then type usage in constructors is used to infer the
+;;;; kinds of all type variables.
+;;;;
+
 (defpackage #:coalton-impl/typechecker2/define-type
   (:use
    #:cl
@@ -10,7 +16,8 @@
    (#:error #:coalton-impl/error)
    (#:tc #:coalton-impl/typechecker))
   (:export
-   #:toplevel-define-type))
+   #:toplevel-define-type               ; FUNCTION
+   ))
 
 (in-package #:coalton-impl/typechecker2/define-type)
 

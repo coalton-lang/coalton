@@ -30,7 +30,7 @@
 (defun collect-variables (node)
   "Returns a deduplicated list of all `PARSER:NODE-VARIABLE's referenced
 in expressions. May not include all bound variables."
-  (declare (type parser:node node)
+  (declare (type t node)
            (values parser:node-variable-list &optional))
 
   (delete-duplicates (collect-variables-generic% node) :test #'eq))

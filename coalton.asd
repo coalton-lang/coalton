@@ -55,6 +55,7 @@
                              (:file "expression")
                              (:file "parser")
                              (:file "renamer")
+                             (:file "binding")
                              (:file "package")))
                (:module "runtime"
                 :serial t
