@@ -125,29 +125,45 @@
 (defun parse-qualified-type (ty env file)
   (declare (type parser:qualified-ty ty)
            (type tc:environment env)
-           (type file-stream file))
+           (type file-stream file)
+           (values tc:qualified-ty &optional))
 
   (let ((tvars (collect-type-variables ty))
 
-        (partial-env (make-partial-type-env :env env)))
+        (partial-env (make-partial-type-env :env env))
+
+        (ksubs nil))
 
     (loop :for tvar :in tvars
           :for tvar-name := (parser:tyvar-name tvar)
           :do (partial-type-env-add-var partial-env nil tvar-name))
 
-    ;; TODO: handle preds here
+    (let ((preds (loop :for pred :in (parser:qualified-ty-predicates ty)
+                       :collect (multiple-value-bind (pred ksubs_)
+                                    (infer-predicate-kinds
+                                     pred
+                                     nil
+                                     ksubs
+                                     partial-env
+                                     file)
+                                  (setf ksubs ksubs_)
+                                  pred))))
 
-    (multiple-value-bind (ty ksubs)
-        (infer-type-kinds (parser:qualified-ty-type ty)
-                          tc:+kstar+
-                          nil
-                          nil
-                          partial-env
-                          file)
+      (multiple-value-bind (ty ksubs)
+          (infer-type-kinds (parser:qualified-ty-type ty)
+                            tc:+kstar+
+                            nil
+                            ksubs
+                            partial-env
+                            file)
 
-      (setf ty (tc:apply-ksubstitution ksubs ty))
-      (setf ksubs (tc:kind-monomorphize-subs (tc:kind-variables ty) ksubs))
-      (tc:apply-ksubstitution ksubs ty))))
+        (let ((qual-ty (tc:make-qualified-ty
+                        :predicates preds
+                        :type ty)))
+
+          (setf qual-ty (tc:apply-ksubstitution ksubs qual-ty))
+          (setf ksubs (tc:kind-monomorphize-subs (tc:kind-variables qual-ty) ksubs))
+          (tc:apply-ksubstitution ksubs qual-ty))))))
 
 ;;;
 ;;; Kind Inference
@@ -241,6 +257,59 @@
                                                   :from (tc:apply-ksubstitution ksubs arg-kind)
                                                   :to (tc:apply-ksubstitution ksubs expected-kind))
                                                  (tc:apply-ksubstitution ksubs fun-kind)))))))))))
+
+(defun infer-predicate-kinds (pred current-type ksubs env file)
+  (declare (type parser:ty-predicate pred)
+           (type symbol current-type)
+           (type tc:ksubstitution-list ksubs)
+           (type partial-type-env env)
+           (type file-stream file)
+           (values tc:ty-predicate tc:ksubstitution-list))
+
+  (let* ((class-name (parser:ty-predicate-class pred))
+
+         (class (tc:lookup-class (partial-type-env-env env) class-name :no-error t)))
+
+    ;; Error if the class is unknown
+    (unless class
+      (error 'tc-error
+             :err (coalton-error
+                   :span (parser:ty-predicate-source pred)
+                   :file file
+                   :message "Unknown class"
+                   :primary-note (format nil "Unknown class '~A'" class-name))))
+
+    (let* ((class-pred (tc:ty-class-predicate class))
+
+           (class-arity (length (tc:ty-predicate-types class-pred))))
+
+      ;; Check that pred has the correct number of arguments
+      (unless (= class-arity (length (parser:ty-predicate-types pred)))
+        (error 'tc-error
+               :err (coalton-error
+                     :span (parser:ty-predicate-source pred)
+                     :file file
+                     :message "Predicate arity mismatch"
+                     :primary-note (format nil "Expected ~D arguments but received ~D"
+                                           class-arity
+                                           (length (parser:ty-predicate-types pred))))))
+
+      (let ((types (loop :for ty :in (parser:ty-predicate-types pred)
+                         :for class-ty :in (tc:ty-predicate-types class-pred)
+                         :collect (multiple-value-bind (ty ksubs_)
+                                      (infer-type-kinds ty
+                                                        (tc:kind-of class-ty)
+                                                        current-type
+                                                        ksubs
+                                                        env
+                                                        file)
+                                    (setf ksubs ksubs_)
+                                    ty))))
+        (values
+         (tc:make-ty-predicate
+          :class (parser:ty-predicate-class pred)
+          :types types)
+         ksubs)))))
 
 (defun collect-referenced-types (type)
   "Returns a deduplicated list of all `PARSER:TYCON's in TYPE."

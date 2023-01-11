@@ -14,6 +14,7 @@
    #:value                              ; FUNCTION
    #:source                             ; FUNCTION
    #:parameters                         ; FUNCTION
+   #:toplevel                           ; FUNCTION
    ))
 
 (in-package #:coalton-impl/parser/binding)
@@ -61,3 +62,14 @@
   (:method ((binding toplevel-define))
     (declare (values node-variable-list))
     (toplevel-define-vars binding)))
+
+(defgeneric toplevel (binding)
+  (:documentation "Returns t if BINDING is a toplevel binding.")
+
+  (:method ((binding node-let-binding))
+    (declare (values boolean))
+    nil)
+
+  (:method ((binding toplevel-define))
+    (declare (values boolean))
+    t))
