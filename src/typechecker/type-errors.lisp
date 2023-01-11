@@ -42,6 +42,7 @@
    #:declared-type-additional-predicates  ; CONDITION
    #:toplevel-monomorphism-restriction    ; CONDITION
    #:ambigious-constraint                 ; CONDITION
+   #:ambigious-constraint-pred            ; ACCESSOR
    #:unresolvable-constraint              ; CONDITION
    #:duplicate-definition                 ; CONDITION
    #:unexpected-return                    ; CONDITION

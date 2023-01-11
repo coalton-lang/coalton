@@ -171,6 +171,7 @@
           :name (tc:type-definition-name type)
           :runtime-type (tc:type-definition-runtime-type type)
           :type (tc:type-definition-type type)
+          :constructors (mapcar #'tc:constructor-entry-name (tc:type-definition-constructors type))
           :explicit-repr (tc:type-definition-explicit-repr type)
           :enum-repr (tc:type-definition-enum-repr type)
           :newtype (tc:type-definition-newtype type)

@@ -109,25 +109,20 @@ Returns (PREDS FOUNDP)"
           :unless (entail env nil pred)
             :collect pred))))
 
-(defun split-context (env environment-vars local-vars preds subs)
+(defun split-context (env environment-vars preds subs)
   "Split PREDS into retained predicates and deferred predicates
 
 Returns (VALUES deferred-preds retained-preds defaultable-preds)"
-  (declare (values ty-predicate-list ty-predicate-list ty-predicate-list))
+  (declare (values ty-predicate-list ty-predicate-list))
   (let ((reduced-preds (reduce-context env preds subs)))
 
-    (multiple-value-bind (deferred retained)
-        (loop :for p :in reduced-preds
-              :if (every (lambda (tv) (member tv environment-vars :test #'equalp))
-                         (type-variables p))
-                :collect p :into deferred
-              :else
-                :collect p :into retained
-              :finally (return (values deferred retained)))
-
-
-      (let ((retained_ (default-preds env (append environment-vars local-vars) retained)))
-        (values deferred (set-difference retained retained_ :test #'equalp) retained_)))))
+    (loop :for p :in reduced-preds
+          :if (every (lambda (tv) (member tv environment-vars :test #'equalp))
+                     (type-variables p))
+            :collect p :into deferred
+          :else
+            :collect p :into retained
+          :finally (return (values deferred retained)))))
 
 (defstruct ambiguity
   (var   (util:required 'var)   :type tyvar             :read-only t)

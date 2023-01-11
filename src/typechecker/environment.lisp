@@ -255,6 +255,7 @@
             :name 'coalton:Unit
             :runtime-type '(member coalton::Unit/Unit)
             :type *unit-type*
+            :constructors '(coalton:Unit)
             :explicit-repr :enum
             :enum-repr t
             :newtype nil
