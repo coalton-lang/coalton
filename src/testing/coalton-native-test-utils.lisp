@@ -42,13 +42,14 @@ BODY within a `coalton' expression."
   ;; What I'm doing here is a simplified version of what fiasco does,
   ;; which is check if try to expand one layer of function application
   (cl:check-type message cl:string)
-  (trivia:match check
-    ((cl:list* (trivia:guard rator
-                             (cl:or (cl:not (cl:symbolp rator))
-                                    (cl:and (cl:not (cl:macro-function rator))
-                                            (cl:not (cl:eql rator 'coalton:if)))))
-               rands)
-     (cl:let* ((name-els (cl:loop :for rand :in (cl:cons rator rands) :collect (cl:list (cl:gensym) rand)))
+  (cl:cond
+    ((cl:and (alexandria:proper-list-p check)
+             (cl:or (cl:not (cl:symbolp (cl:first check)))
+                    (cl:and (cl:not (cl:macro-function (cl:first check)))
+                            (cl:not (cl:eql 'coalton:if (cl:first check))))))
+     (cl:let* ((rator (cl:first check))
+               (rands (cl:rest check))
+               (name-els (cl:loop :for rand :in (cl:cons rator rands) :collect (cl:list (cl:gensym) rand)))
                (names (cl:mapcar #'cl:first name-els)))
        `(progn
           (%register-assertion) 
@@ -61,7 +62,7 @@ BODY within a `coalton' expression."
                  'coalton-failure
                  :format-control "IS assertion ~A~%Evaluates to application ~A~%Evaluates to False~%~A"
                  :format-arguments (cl:list ',check ,(cons 'cl:list names) ,message)))))))
-    (_
+    (cl:t
      `(progn
         (%register-assertion)
         (if ,check
