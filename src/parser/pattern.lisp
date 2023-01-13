@@ -75,7 +75,7 @@
 
 (defun parse-pattern (form file)
   (declare (type cst:cst form)
-           (type file-stream file))
+           (type coalton-file file))
 
   (cond
     ((and (cst:atom form)

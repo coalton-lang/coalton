@@ -3,10 +3,12 @@
    #:cl)
   (:import-from
    #:coalton-impl/parser/base
+   #:coalton-file
    #:coalton-error
    #:make-coalton-error-note
    #:make-coalton-error-help)
   (:export
+   #:coalton-file
    #:coalton-error
    #:make-coalton-error-note
    #:make-coalton-error-help)

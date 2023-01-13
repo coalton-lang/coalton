@@ -71,7 +71,7 @@
 (defun partial-type-env-lookup-type (env tycon file)
   (declare (type partial-type-env env)
            (type parser:tycon tycon)
-           (type file-stream file)
+           (type coalton-file file)
            (values tc:ty))
   (let* ((name (parser:tycon-name tycon))
 
@@ -99,7 +99,7 @@
 (defun parse-type (ty env file)
   (declare (type parser:ty ty)
            (type tc:environment env)
-           (type file-stream file)
+           (type coalton-file file)
            (values tc:ty &optional))
 
   (let ((tvars (collect-type-variables ty))
@@ -125,7 +125,7 @@
 (defun parse-qualified-type (ty env file)
   (declare (type parser:qualified-ty ty)
            (type tc:environment env)
-           (type file-stream file)
+           (type coalton-file file)
            (values tc:qualified-ty &optional))
 
   (let ((tvars (collect-type-variables ty))
@@ -174,7 +174,7 @@
     (declare (type tc:kind expected-kind)
              (type symbol current-type)
              (type tc:ksubstitution-list ksubs)
-             (type file-stream file))
+             (type coalton-file file))
     (let* ((tvar (partial-type-env-lookup-var env current-type (parser:tyvar-name type)))
 
            (kvar (tc:kind-of tvar)))
@@ -199,7 +199,7 @@
              (type symbol current-type)
              (type tc:ksubstitution-list ksubs)
              (type partial-type-env env)
-             (type file-stream file)
+             (type coalton-file file)
              (values tc:ty tc:ksubstitution-list))
 
     (let ((type_ (partial-type-env-lookup-type env type file)))
@@ -222,7 +222,7 @@
              (type symbol current-type)
              (type tc:ksubstitution-list ksubs)
              (type partial-type-env env)
-             (type file-stream file)
+             (type coalton-file file)
              (values tc:ty tc:ksubstitution-list &optional))
 
     (let ((fun-kind (tc:make-kvariable))
@@ -263,7 +263,7 @@
            (type symbol current-type)
            (type tc:ksubstitution-list ksubs)
            (type partial-type-env env)
-           (type file-stream file)
+           (type coalton-file file)
            (values tc:ty-predicate tc:ksubstitution-list))
 
   (let* ((class-name (parser:ty-predicate-class pred))
