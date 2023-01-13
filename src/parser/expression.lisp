@@ -447,7 +447,7 @@
 
 (defun parse-expression (form file)
   (declare (type cst:cst form)
-           (type file-stream file)
+           (type coalton-file file)
            (values node &optional))
 
   (cond
@@ -883,7 +883,7 @@
 
 (defun parse-variable (form file)
   (declare (type cst:cst form)
-           (type file-stream file)
+           (type coalton-file file)
            (values node-variable &optional))
 
   (unless (and (cst:atom form)
@@ -901,7 +901,7 @@
 
 (defun parse-literal (form file)
   (declare (type cst:cst form)
-           (type file-stream file)
+           (type coalton-file file)
            (values node &optional))
 
   (assert (cst:atom form))
@@ -927,7 +927,7 @@
 
 (defun parse-body (form enclosing-form file)
   (declare (type cst:cst form)
-           (type file-stream file)
+           (type coalton-file file)
            (values node-body &optional))
 
   (when (cst:atom form)
@@ -989,7 +989,7 @@
 ;; Forms passed to parse-node-bind must be previously verified by `shorthand-let-p'
 (defun parse-node-bind (form file)
   (declare (type cst:cst form)
-           (type file-stream file)
+           (type coalton-file file)
            (values node-bind))
 
   (when (cst:consp (cst:rest (cst:rest (cst:rest (cst:rest form)))))
@@ -1007,7 +1007,7 @@
 
 (defun parse-body-element (form file)
   (declare (type cst:cst form)
-           (type file-stream file)
+           (type coalton-file file)
            (values node-body-element &optional))
 
   (when (cst:atom form)
@@ -1029,7 +1029,7 @@
 
 (defun parse-body-last-node (form file)
   (declare (type cst:cst form)
-           (type file-stream file)
+           (type coalton-file file)
            (values node &optional))
 
   (when (shorthand-let-p form)
@@ -1044,7 +1044,7 @@
 
 (defun parse-let-binding (form file)
   (declare (type cst:cst form)
-           (type file-stream file)
+           (type coalton-file file)
            (values node-let-binding &optional))
 
   (when (cst:atom form)
@@ -1089,7 +1089,7 @@
 
 (defun parse-match-branch (form file)
   (declare (type cst:cst form)
-           (type file-stream file)
+           (type coalton-file file)
            (values node-match-branch &optional))
 
   (when (cst:atom form)
@@ -1125,7 +1125,7 @@
 
 (defun parse-cond-clause (form file)
   (declare (type cst:cst form)
-           (type file-stream file)
+           (type coalton-file file)
            (values node-cond-clause))
 
   (when (cst:atom form)
@@ -1151,7 +1151,7 @@
 
 (defun parse-do (form file)
   (declare (type cst:cst form)
-           (type file-stream))
+           (type coalton-file))
 
   (assert (cst:consp form))
 
@@ -1226,7 +1226,7 @@
 
 (defun parse-do-body-element (form file)
   (declare (type cst:cst form)
-           (type file-stream file)
+           (type coalton-file file)
            (values node-do-body-element &optional))
 
   (cond
@@ -1242,7 +1242,7 @@
 (defun parse-do-body-last-node (form parent-form file)
   (declare (type cst:cst form)
            (type cst:cst parent-form)
-           (type file-stream file)
+           (type coalton-file file)
            (values node &optional))
 
   (when (shorthand-let-p form)
@@ -1277,7 +1277,7 @@
 
 (defun parse-let-declare (form file)
   (declare (type cst:cst form)
-           (type file-stream file)
+           (type coalton-file file)
            (values node-let-declare))
 
   (assert (cst:consp form))

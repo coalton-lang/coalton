@@ -104,6 +104,7 @@
    #:program-classes                    ; ACCESSOR
    #:program-instances                  ; ACCESSOR
    #:parse-file                         ; FUNCTION
+   #:parse-toplevel-form                ; FUNCTION
    ))
 
 (in-package #:coalton-impl/parser/parser)
@@ -355,7 +356,7 @@
 (defstruct (program
             (:copier nil))
   (package   (util:required 'package) :type package                       :read-only t)
-  (file      (util:required 'file)    :type file-stream                   :read-only t)
+  (file      (util:required 'file)    :type coalton-file                  :read-only t)
   (types     nil                      :type toplevel-define-type-list     :read-only nil)
   (declares  nil                      :type toplevel-declare-list         :read-only nil)
   (defines   nil                      :type toplevel-define-list          :read-only nil)
@@ -369,7 +370,7 @@
   (:use))
 
 (defun parse-file (filename)
-  (let* ((file (open filename :if-does-not-exist :error))
+  (let* ((file-stream (open filename :if-does-not-exist :error))
 
          ;; Setup eclector readtable
          (eclector.readtable:*readtable*
@@ -382,12 +383,14 @@
          (*read-default-float-format* 'double-float)
 
          ;; Read the (package) form
-         (package-form (eclector.concrete-syntax-tree:read file nil 'eof)))
+         (package-form (eclector.concrete-syntax-tree:read file-stream nil 'eof)))
 
     (when (eq package-form 'eof)
       (error "unexpected end of file"))
 
-    (let* ((*package* (parse-package package-form file))
+    (let* ((file (make-coalton-file :stream file-stream :name (namestring (pathname file-stream))))
+
+           (*package* (parse-package package-form file))
 
            (program (make-program :package *package* :file file))
 
@@ -395,7 +398,7 @@
 
       (loop :named parse-loop
             :with elem := nil
-            :do (setf elem (eclector.concrete-syntax-tree:read file nil 'eof))
+            :do (setf elem (eclector.concrete-syntax-tree:read file-stream nil 'eof))
 
             :when (eq elem 'eof)
               :do (return-from parse-loop)
@@ -423,7 +426,7 @@ consume all attributes")))
 (defun parse-package (form file)
   "Parses a coalton package decleration in the form of (package {name})"
   (declare (type cst:cst form)
-           (type file-stream file)
+           (type coalton-file file)
            (values package))
 
   ;; Package declarations must start with "PACKAGE"
@@ -475,7 +478,7 @@ consume all attributes")))
   (declare (type cst:cst form)
            (type program program)
            (type (vector (cons attribute cst:cst)) attributes)
-           (type file-stream file)
+           (type coalton-file file)
            (values boolean &optional))
 
   (when (cst:atom form)
@@ -714,7 +717,7 @@ consume all attributes")))
 
 (defun parse-define (form file)
   (declare (type cst:cst form)
-           (type file-stream file)
+           (type coalton-file file)
            (values toplevel-define))
 
   (assert (cst:consp form))
@@ -753,7 +756,7 @@ consume all attributes")))
 
 (defun parse-declare (form file)
   (declare (type cst:cst form)
-           (type file-stream file)
+           (type coalton-file file)
            (values toplevel-declare))
 
   (assert (cst:consp form))
@@ -804,7 +807,7 @@ consume all attributes")))
 
 (defun parse-define-type (form file)
   (declare (type cst:cst form)
-           (type file-stream file)
+           (type coalton-file file)
            (values toplevel-define-type))
 
   (assert (cst:consp form))
@@ -906,7 +909,7 @@ consume all attributes")))
 
 (defun parse-define-class (form file)
   (declare (type cst:cst form)
-           (type file-stream file)
+           (type coalton-file file)
            (values toplevel-define-class))
 
   (assert (cst:consp form))
@@ -1098,7 +1101,7 @@ consume all attributes")))
 
 (defun parse-define-instance (form file)
   (declare (type cst:cst form)
-           (type file-stream file)
+           (type coalton-file file)
            (values toplevel-define-instance))
 
   (assert (cst:consp form))
@@ -1207,7 +1210,7 @@ consume all attributes")))
 
 (defun parse-method (method-form form file)
   (declare (type cst:cst method-form)
-           (type file-stream file)
+           (type coalton-file file)
            (values method-definition))
 
   ;; m or (m)
@@ -1266,7 +1269,7 @@ consume all attributes")))
 
 (defun parse-type-variable (form file)
   (declare (type cst:cst form)
-           (type file-stream file)
+           (type coalton-file file)
            (values keyword-src &optional))
 
   (when (cst:consp form)
@@ -1301,7 +1304,7 @@ consume all attributes")))
 
 (defun parse-constructor (form enclosing-form file)
   (declare (type cst:cst form enclosing-form)
-           (type file-stream file)
+           (type coalton-file file)
            (values constructor))
 
   (let (unparsed-name
@@ -1352,7 +1355,7 @@ consume all attributes")))
 
 (defun parse-argument-list (form file)
   (declare (type cst:cst form)
-           (type file-stream file)
+           (type coalton-file file)
            (values node-variable node-variable-list))
 
   ;; (define x 1)
@@ -1388,7 +1391,7 @@ consume all attributes")))
 
 (defun parse-identifier (form file)
   (declare (type cst:cst form)
-           (type file-stream file)
+           (type coalton-file file)
            (values identifier-src))
 
   (unless (cst:atom form)
@@ -1414,7 +1417,7 @@ consume all attributes")))
 (defun parse-definition-body (form enclosing-form file)
   (declare (type cst:cst form)
            (type cst:cst enclosing-form)
-           (type file-stream file)
+           (type coalton-file file)
            (values (or null string) node-body))
 
   (let (docstring
@@ -1437,7 +1440,7 @@ consume all attributes")))
 (defun parse-instance-method-definition (form parent-form file)
   (declare (type cst:cst form)
            (type cst:cst parent-form)
-           (type file-stream file)
+           (type coalton-file file)
            (values instance-method-definition))
 
   (let ((context-note
@@ -1494,7 +1497,7 @@ consume all attributes")))
 
 (defun parse-fundep (form file)
   (declare (type cst:cst form)
-           (type file-stream file)
+           (type coalton-file file)
            (values fundep))
 
   (unless (cst:consp form)
@@ -1547,7 +1550,7 @@ consume all attributes")))
 
 (defun parse-monomorhpize (form file)
   (declare (type cst:cst form)
-           (type file-stream file)
+           (type coalton-file file)
            (values attribute-monomorphize))
 
   (assert (cst:consp form))
@@ -1565,7 +1568,7 @@ consume all attributes")))
 
 (defun parse-repr (form file)
   (declare (type cst:cst form)
-           (type file-stream file)
+           (type coalton-file file)
            (values attribute-repr))
 
   (assert (cst:consp form))

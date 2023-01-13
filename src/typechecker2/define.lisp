@@ -81,7 +81,7 @@
   "Lookup a variable named VAR in ENV."
   (declare (type tc-env env)
            (type parser:node-variable var)
-           (type file-stream file)
+           (type coalton-file file)
            (values tc:ty tc:ty-predicate-list))
 
   (let* ((scheme (or (gethash (parser:node-variable-name var) (tc-env-ty-table env))
@@ -160,7 +160,7 @@
 (defun tc-env-ambigious-pred (env pred file subs)
   (declare (type tc-env env)
            (type tc:ty-predicate pred)
-           (type file-stream file)
+           (type coalton-file file)
            (type tc:substitution-list subs))
 
   (tc:apply-substitution subs env)
@@ -211,7 +211,7 @@
   "Entrypoint for typechecking a group of parsed defines and declares."
   (declare (type parser:toplevel-define-list defines)
            (type parser:toplevel-declare-list declares)
-           (type file-stream file)
+           (type coalton-file file)
            (type tc:environment env))
 
   (let ((def-table (make-hash-table :test #'eq))
@@ -302,7 +302,7 @@
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type file-stream file)
+             (type coalton-file file)
              (values tc:ty tc:ty-predicate-list tc:substitution-list))
 
     (let ((ty (etypecase (parser:node-literal-value node)
@@ -334,7 +334,7 @@
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type file-stream file)
+             (type coalton-file file)
              (values tc:ty tc:ty-predicate-list tc:substitution-list))
 
     (multiple-value-bind (ty preds)
@@ -361,7 +361,7 @@
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type file-stream file)
+             (type coalton-file file)
              (values tc:ty tc:ty-predicate-list tc:substitution-list))
 
     (when (null (parser:node-application-rands node))
@@ -429,7 +429,7 @@
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type file-stream file)
+             (type coalton-file file)
              (values null tc:ty-predicate-list tc:substitution-list))
 
     (multiple-value-bind (expr-ty preds subs)
@@ -457,7 +457,7 @@
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type file-stream file)
+             (type coalton-file file)
              (values tc:ty tc:ty-predicate-list tc:substitution-list))
 
     (let ((preds nil))
@@ -483,7 +483,7 @@
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type file-stream file)
+             (type coalton-file file)
              (values tc:ty tc:ty-predicate-list tc:substitution-list))
 
     (let (;; Setup return environment
@@ -566,7 +566,7 @@
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type file-stream file)
+             (type coalton-file file)
              (values tc:ty tc:ty-predicate-list tc:substitution-list))
 
     (multiple-value-bind (subs preds)
@@ -588,7 +588,7 @@
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type file-stream file)
+             (type coalton-file file)
              (values tc:ty tc:ty-predicate-list tc:substitution-list))
 
     (let ((declared-ty (parse-type (parser:node-lisp-type node) (tc-env-env env) file)))
@@ -614,7 +614,7 @@
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type file-stream file)
+             (type coalton-file file)
              (values tc:ty tc:ty-predicate-list tc:substitution-list))
 
     ;; Infer the type of the expression being cased on
@@ -654,7 +654,7 @@
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type file-stream file)
+             (type coalton-file file)
              (values tc:ty tc:ty-predicate-list tc:substitution-list &optional))
 
     (infer-expression-type (parser:node-progn-body node)
@@ -668,7 +668,7 @@
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type file-stream file)
+             (type coalton-file file)
              (values tc:ty tc:ty-predicate-list tc:substitution-list))
 
     (let ((declared-ty (parse-type (parser:node-the-type node) (tc-env-env env) file)))
@@ -735,7 +735,7 @@
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type file-stream file)
+             (type coalton-file file)
              (values tc:ty tc:ty-predicate-list tc:substitution-list))
 
     ;; Returns must be inside a lambda
@@ -766,7 +766,7 @@
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type file-stream file)
+             (type coalton-file file)
              (values tc:ty tc:ty-predicate-list tc:substitution-list))
 
     (let ((preds nil))
@@ -803,7 +803,7 @@
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type file-stream file)
+             (type coalton-file file)
              (values tc:ty tc:ty-predicate-list tc:substitution-list))
 
     (let ((preds))
@@ -840,7 +840,7 @@
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type file-stream file)
+             (type coalton-file file)
              (values tc:ty tc:ty-predicate-list tc:substitution-list))
 
     (multiple-value-bind (expr-ty preds subs)
@@ -888,7 +888,7 @@
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type file-stream file)
+             (type coalton-file file)
              (values tc:ty tc:ty-predicate-list tc:substitution-list))
 
     (multiple-value-bind (expr-ty preds subs)
@@ -928,7 +928,7 @@
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type file-stream file)
+             (type coalton-file file)
              (values tc:ty tc:ty-predicate-list tc:substitution-list))
 
     (multiple-value-bind (expr-ty preds subs)
@@ -968,7 +968,7 @@
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type file-stream file)
+             (type coalton-file file)
              (values tc:ty tc:ty-predicate-list tc:substitution-list))
 
     (multiple-value-bind (expr-ty preds subs)
@@ -996,7 +996,7 @@
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type file-stream file)
+             (type coalton-file file)
              (values tc:ty tc:ty-predicate-list tc:substitution-list))
 
     (let ((preds))
@@ -1044,7 +1044,7 @@
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type file-stream file)
+             (type coalton-file file)
              (values tc:ty tc:substitution-list))
 
     (let ((ty (tc-env-add-variable env (parser:pattern-var-name pat))))
@@ -1060,7 +1060,7 @@
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type file-stream file)
+             (type coalton-file file)
              (values tc:ty tc:substitution-list))
 
     (let ((ty (etypecase (parser:pattern-literal-value pat)
@@ -1095,7 +1095,7 @@
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type file-stream file)
+             (type coalton-file file)
              (values tc:ty tc:substitution-list))
 
     (let ((ctor (tc:lookup-constructor (tc-env-env env) (parser:pattern-constructor-name pat) :no-error t)))
@@ -1163,7 +1163,7 @@
            (type parser:node-let-declare-list declares)
            (type tc:substitution-list subs)
            (type tc-env env)
-           (type file-stream file))
+           (type coalton-file file))
 
   (let ((def-table (make-hash-table :test #'eq))
 
@@ -1205,8 +1205,8 @@
                              :primary-note "second decleration here"
                              :notes
                              (list
-                              make-coalton-error-note
-                              (:type :primary
+                              (make-coalton-error-note
+                               :type :primary
                                :span (parser:node-source
                                       (parser:node-let-declare-name
                                        (gethash name dec-table)))
@@ -1240,7 +1240,7 @@
            (type hash-table dec-table)
            (type tc:substitution-list subs)
            (type tc-env env)
-           (type file-stream file)
+           (type coalton-file file)
            (values tc:ty-predicate-list tc:substitution-list))
   ;;
   ;; Binding type inference has several steps.
@@ -1330,7 +1330,7 @@
            (type cons source)
            (type tc:substitution-list subs)
            (type tc-env env)
-           (type file-stream file)
+           (type coalton-file file)
            (values tc:ty-predicate-list tc:substitution-list))
 
   (let* ((name (parser:node-variable-name (parser:name binding)))
@@ -1424,7 +1424,7 @@
   (declare (type (or parser:toplevel-define-list parser:node-let-binding-list) bindings)
            (type tc:substitution-list subs)
            (type tc-env env)
-           (type file-stream file)
+           (type coalton-file file)
            (values tc:ty-predicate-list tc:substitution-list))
 
   (let* (;; track variables bound before typechecking
@@ -1480,7 +1480,7 @@
   (declare (type (or parser:toplevel-define parser:node-let-binding) binding)
            (type tc:ty expected-type)
            (type tc:substitution-list subs)
-           (type file-stream file)
+           (type coalton-file file)
            (values tc:ty-predicate-list tc:substitution-list))
 
   (let ((vars (loop :for var :in (parser:parameters binding)

@@ -25,7 +25,7 @@
 
 (defun toplevel-define-type (types file env)
   (declare (type parser:toplevel-define-type-list types)
-           (type file-stream file)
+           (type coalton-file file)
            (type tc:environment env)
            (values tc:type-definition-list tc:environment))
 
@@ -221,7 +221,7 @@
 (defun infer-define-type-scc-kinds (types env file)
   (declare (type parser:toplevel-define-type-list types)
            (type partial-type-env env)
-           (type file-stream file)
+           (type coalton-file file)
            (values tc:type-definition-list))
 
   (let ((ksubs nil)

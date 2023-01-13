@@ -11,14 +11,20 @@
    #:get-line-from-index                ; FUNCTION
    #:get-source-line-info               ; FUNCTION
    #:get-nth-line                       ; FUNCTION
+   #:coalton-file                       ; TYPE
+   #:coalton-file-stream
+   #:make-coalton-file                  ; FUNCTION
    #:make-coalton-error-note            ; FUNCTION
    #:make-coalton-error-help            ; FUNCTION
    #:make-coalton-error-context         ; FUNCTION
    #:make-coalton-error                 ; FUNCTION
    #:*coalton-error-context*            ; VARIABLE
    #:coalton-error                      ; FUNCTION
+   #:coalton-error-location
+   #:coalton-error-file
    #:display-coalton-error              ; FUNCTION
    #:parse-error                        ; CONDITION
+   #:parse-error-err
    ))
 
 (in-package #:coalton-impl/parser/base)
@@ -33,7 +39,7 @@
   "Get the line number corresponding to the character offset INDEX.
 
 Returns (VALUES LINE-NUM LINE-START-INDEX)"
-  (declare (type file-stream file)
+  (declare (type stream file)
            (type integer index)
            (values integer integer))
   (file-position file 0)
@@ -51,7 +57,7 @@ Returns (VALUES LINE-NUM LINE-START-INDEX)"
   "Get source information about FORM which can be used in errors.
 
 Returns (VALUES LINE-NUM LINE-START-INDEX LINE-END-INDEX)"
-  (declare (type file-stream file)
+  (declare (type stream file)
            (type cst:cst form))
   (let ((start-index (car (cst:source form)))
         (end-index   (cdr (cst:source form))))
@@ -63,7 +69,7 @@ Returns (VALUES LINE-NUM LINE-START-INDEX LINE-END-INDEX)"
 
 (defun get-nth-line (file index)
   "Get the INDEXth line FILE. This function uses 1 based indexing."
-  (declare (type file-stream file)
+  (declare (type stream file)
            (type integer index)
            (values string &optional))
   (file-position file 0)
@@ -92,11 +98,16 @@ Returns (VALUES LINE-NUM LINE-START-INDEX LINE-END-INDEX)"
 
 (defvar *coalton-error-context* nil)
 
+(defstruct (coalton-file
+            (:copier nil))
+  (stream (util:required 'stream) :type stream :read-only t)
+  (name   (util:required 'file)   :type string :read-only t))
+
 ;; TODO: specify list type
 (defstruct (coalton-error
             (:copier nil))
   (type            (util:required 'type)     :type (member :error :warn) :read-only t)
-  (file            (util:required 'file)     :type file-stream           :read-only t)
+  (file            (util:required 'file)     :type coalton-file          :read-only t)
   (location        (util:required 'location) :type integer               :read-only t)
   (message         (util:required 'message)  :type string                :read-only t)
   (notes           (util:required 'notes)    :type list                  :read-only t)
@@ -116,7 +127,7 @@ Returns (VALUES LINE-NUM LINE-START-INDEX LINE-END-INDEX)"
 MESSAGE and PRIMARY-NOTE must be supplied string arguments.
 NOTES and HELP-NOTES may optionally be supplied notes and help messages."
   (declare (type cons span)
-           (type file-stream file)
+           (type coalton-file file)
            (type (member :all :end) highlight)
            (type string message primary-note)
            (type list notes help-notes)
@@ -149,16 +160,16 @@ NOTES and HELP-NOTES may optionally be supplied notes and help messages."
   (declare (type stream stream)
            (type coalton-error error))
 
-  (let ((file (coalton-error-file error)))
+  (let ((file-stream (coalton-file-stream (coalton-error-file error))))
 
     ;; Print the error message and location
     (multiple-value-bind (line-number line-offset)
-        (get-line-from-index file (coalton-error-location error))
+        (get-line-from-index file-stream (coalton-error-location error))
       (format stream
               "~(~A~): ~A~%  --> ~A:~D:~D~%"
               (coalton-error-type error)
               (coalton-error-message error)
-              (pathname (coalton-error-file error))
+              (coalton-file-name (coalton-error-file error))
               line-number
               line-offset))
 
@@ -192,9 +203,9 @@ NOTES and HELP-NOTES may optionally be supplied notes and help messages."
                 (let ((start (car (coalton-error-note-span note)))
                       (end (cdr (coalton-error-note-span note))))
                   (multiple-value-bind (start-line start-line-start)
-                      (get-line-from-index file start)
+                      (get-line-from-index file-stream start)
                     (multiple-value-bind (end-line end-line-start)
-                        (get-line-from-index file (1- end))
+                        (get-line-from-index file-stream (1- end))
                       (let ((start-offset (- start start-line-start))
                             (end-offset (- end end-line-start)))
                         ;; Ensure that spans are valid
@@ -245,7 +256,7 @@ NOTES and HELP-NOTES may optionally be supplied notes and help messages."
                            (print-column-number line-number)
                            (format stream " ~:[~; ~]~A~%"
                                    contains-multiline-note
-                                   (get-nth-line (coalton-error-file error) line-number))))
+                                   (get-nth-line file-stream line-number))))
                   (cond (;; If we are on the same line then don't reprint.
                          ;; TODO: It would be nice to merge these together if they don't overlap.
                          (= start-line last-line)
@@ -311,9 +322,9 @@ NOTES and HELP-NOTES may optionally be supplied notes and help messages."
           :for start := (car (coalton-error-help-span help))
           :for end := (cdr (coalton-error-help-span help))
           :do (multiple-value-bind (start-line start-line-start)
-                  (get-line-from-index file start)
+                  (get-line-from-index file-stream start)
                 (multiple-value-bind (end-line end-line-start)
-                    (get-line-from-index file end)
+                    (get-line-from-index file-stream end)
 
                   (unless (= start-line end-line)
                     (util:coalton-bug "multiline help messages not supported yet."))
@@ -325,15 +336,17 @@ NOTES and HELP-NOTES may optionally be supplied notes and help messages."
                     (format stream " ~vD | ~A"
                             line-number-width
                             start-line
-                            (subseq (get-nth-line file start-line) 0 (- start start-line-start)))
+                            (subseq (get-nth-line file-stream start-line)
+                                    0 (- start start-line-start)))
 
                     (let ((replaced-text (funcall (coalton-error-help-replacement help)
-                                                  (subseq (get-nth-line file start-line)
+                                                  (subseq (get-nth-line file-stream start-line)
                                                           (- start start-line-start)
                                                           (- end end-line-start)))))
                       (format stream "~A~A~%"
                               replaced-text
-                              (subseq (get-nth-line file start-line) (- end end-line-start)))
+                              (subseq (get-nth-line file-stream start-line)
+                                      (- end end-line-start)))
 
                       (format stream
                               " ~v{~C~:*~} |~v{~C~:*~}~v{~C~:*~}~%"
