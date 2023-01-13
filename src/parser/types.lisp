@@ -129,7 +129,7 @@
 
 (defun parse-qualified-type (form file)
   (declare (type cst:cst form)
-           (type file-stream file))
+           (type coalton-file file))
 
   (if (cst:atom form)
 
@@ -224,7 +224,7 @@
 (defun parse-predicate (forms source file)
   (declare (type util:cst-list forms)
            (type cons source)
-           (type file-stream file)
+           (type coalton-file file)
            (values ty-predicate))
 
   (assert forms)
@@ -274,7 +274,7 @@
 
 (defun parse-type (form file)
   (declare (type cst:cst form)
-           (type file-stream file)
+           (type coalton-file file)
            (values ty &optional))
 
   (cond
@@ -309,7 +309,7 @@
 (defun parse-type-list (forms source file)
   (declare (type util:cst-list forms)
            (type cons source)
-           (type file-stream file)
+           (type coalton-file file)
            (values ty &optional))
 
   (assert forms)

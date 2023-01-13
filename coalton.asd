@@ -25,6 +25,7 @@
                #:float-features
                #:split-sequence
                #:eclector-concrete-syntax-tree
+               #:named-readtables
                #:uiop)
   :pathname "src/"
   :serial t
@@ -118,6 +119,7 @@
                (:file "toplevel-specializations")
                (:file "unlock-package" :if-feature :sb-package-locks)
                (:file "coalton")
+               (:file "reader")
                (:file "debug")
                (:file "faux-macros")
                (:file "language-macros")
