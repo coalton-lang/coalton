@@ -1364,16 +1364,21 @@
                                              (not (tc:entail (tc-env-env env) expr-preds p)))
                                            (tc:apply-substitution subs preds))))
 
+        ;; Generate additional substitutions from fundeps
+        (setf subs (tc:solve-fundeps (tc-env-env env) reduced-preds subs))
+
         ;; Split predicates into retained and deferred
         (multiple-value-bind (deferred-preds retained-preds)
             (tc:split-context (tc-env-env env) env-tvars reduced-preds subs)
 
-          (let* ((defaultable-preds
+          (let* (;; Calculate defaultable predicates
+                 (defaultable-preds
                    (handler-case
                        (tc:default-preds (tc-env-env env) (append env-tvars local-tvars) retained-preds)
                      (error:coalton-type-error (e)
                        (tc-env-ambigious-pred env (tc:ambigious-constraint-pred e) file subs))))
 
+                 ;; Defaultable predicates are not retained
                  (retained-preds
                    (set-difference retained-preds defaultable-preds :test #'eq)))
 
