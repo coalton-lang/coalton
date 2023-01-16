@@ -40,6 +40,7 @@
    #:make-node-abstraction              ; CONSTRUCTOR
    #:node-abstraction-vars              ; ACCESSOR
    #:node-abstraction-body              ; ACCESSOR
+   #:node-abstraction-p                 ; FUNCTION
    #:node-let-binding                   ; STRUCT
    #:make-node-let-binding              ; CONSTRUCTOR
    #:node-let-binding-name              ; ACCESSOR

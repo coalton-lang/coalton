@@ -1292,7 +1292,7 @@
          (preds nil))
 
     ;; Infer the types of implicit bindings on scc at a time
-    (loop :for scc :in sccs
+    (loop :for scc :in (reverse sccs)
           :for bindings
             := (loop :for name :in scc
                      :collect (gethash name impl-bindings))
@@ -1464,21 +1464,82 @@
 
            (local-tvars (set-difference expr-tvars env-tvars :test #'eq)))
 
-      (let (;; Quantify local type variables
-            (output-schemes
-              (loop :for ty :in expr-tys
-                    :collect (tc:quantify local-tvars (tc:qualify nil ty)))))
+      (setf subs (tc:solve-fundeps (tc-env-env env) preds subs))
 
-        ;; Update the environment with inferred schemes
-        (loop :for scheme :in output-schemes
-              :for binding :in bindings
+      (multiple-value-bind (deferred-preds retained-preds)
+          (tc:split-context (tc-env-env env) env-tvars preds subs)
 
-              :for name := (parser:node-variable-name (parser:name binding))
-              :do (tc-env-replace-type env name scheme))
+        (let* ((defaultable-preds (tc:default-preds (tc-env-env env) (append env-tvars local-tvars) retained-preds))
 
-        (values
-         preds
-         subs)))))
+               (retained-preds (set-difference retained-preds defaultable-preds :test #'eq))
+
+               ;; Check if the monomorphism restriction applies
+               (restricted (some (lambda (b)
+                                   (not (parser:restricted b)))
+                                 bindings)))
+
+          (setf subs (tc:compose-substitution-lists
+                      (tc:default-subs (tc-env-env env) nil defaultable-preds)
+                      subs))
+
+          (when (parser:toplevel (first bindings))
+            (if restricted
+                ;; Restricted bindings have all predicates defaulted
+                (setf subs (tc:compose-substitution-lists
+                            (tc:default-subs (tc-env-env env) nil (append deferred-preds retained-preds))
+                            subs))
+                ;; Unrestricted bindings have deferred predicates defaulted
+                (setf subs (tc:compose-substitution-lists
+                            (tc:default-subs (tc-env-env env) nil deferred-preds)
+                            subs)))
+
+            (setf deferred-preds (tc:reduce-context (tc-env-env env) deferred-preds subs))
+            (setf retained-preds (tc:reduce-context (tc-env-env env) retained-preds subs))
+            (setf expr-tys (tc:apply-substitution subs expr-tys)))
+
+          (if restricted
+              (let* ((allowed-tvars (set-difference local-tvars (tc:type-variables retained-preds) :test #'eq))
+
+                     (output-schemes
+                       (loop :for ty :in expr-tys
+                             :collect (tc:quantify
+                                       allowed-tvars
+                                       (tc:make-qualified-ty :predicates nil :type ty))))
+
+                     (deferred-preds (append deferred-preds retained-preds)))
+
+                (loop :for scheme :in output-schemes
+                      :for binding :in bindings
+
+                      :for name := (parser:node-variable-name (parser:name binding))
+                      :do (tc-env-replace-type env name scheme))
+
+                (when (and (parser:toplevel (first bindings)) deferred-preds)
+                  (tc-env-ambigious-pred env (first deferred-preds) file subs))
+
+                
+                (values
+                 deferred-preds
+                 subs))
+
+              (let* ((output-schemes
+                       (loop :for ty :in expr-tys
+                             :collect (tc:quantify
+                                       local-tvars
+                                       (tc:make-qualified-ty :predicates retained-preds :type ty)))))
+
+                (loop :for scheme :in output-schemes
+                      :for binding :in bindings
+
+                      :for name := (parser:node-variable-name (parser:name binding))
+                      :do (tc-env-replace-type env name scheme))
+
+                (when (and (parser:toplevel (first bindings)) deferred-preds)
+                  (tc-env-ambigious-pred env (first deferred-preds) file subs))
+
+                (values
+                 deferred-preds
+                 subs))))))))
 
 (defun infer-binding-type (binding expected-type subs env file)
   "Infer the type of BINDING then unify against EXPECTED-TYPE. Adds BINDING's paramaters to the environment."
