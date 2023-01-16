@@ -1,4 +1,3 @@
-;;;; src/parser/binding.lisp
 ;;;;
 ;;;; This file defines a generic protocol for writing code that
 ;;;; operatates on both node-let-binding and toplevel-define structs.
@@ -15,6 +14,7 @@
    #:source                             ; FUNCTION
    #:parameters                         ; FUNCTION
    #:toplevel                           ; FUNCTION
+   #:restricted                         ; FUNCTION
    ))
 
 (in-package #:coalton-impl/parser/binding)
@@ -73,3 +73,16 @@
   (:method ((binding toplevel-define))
     (declare (values boolean))
     t))
+
+(defgeneric restricted (binding)
+  (:documentation "Returns t if BINDING is a lambda.")
+
+  (:method ((binding node-let-binding))
+    (declare (values boolean))
+     (node-abstraction-p (node-let-binding-value binding)))
+
+  (:method ((binding toplevel-define))
+    (or (toplevel-define-vars binding)
+
+        (and (null (node-body-nodes (toplevel-define-body binding)))
+             (node-abstraction-p (node-body-last-node (toplevel-define-body binding)))))))
