@@ -27,6 +27,13 @@
 ;; Context reduction
 ;;
 
+(defun predicate= (pred1 pred2)
+  (declare (type ty-predicate pred1)
+           (type ty-predicate pred2)
+           (values boolean))
+  (and (equalp (ty-predicate-class pred1) (ty-predicate-class pred2))
+       (equalp (ty-predicate-types pred1) (ty-predicate-types pred2))))
+
 (defun true (x)
   (if x
       t
@@ -73,7 +80,7 @@ Returns (PREDS FOUNDP)"
            (values boolean))
   (let* ((super (mapcan (lambda (p) (by-super env p)) preds))
         (value
-          (or (true (member pred super :test #'equalp))
+          (or (true (member pred super :test #'predicate=))
               (true (multiple-value-bind (inst-preds found)
                         (by-inst env pred)
                       (and found
@@ -86,7 +93,7 @@ Returns (PREDS FOUNDP)"
            (type ty-predicate-list preds)
            (type ty-predicate pred)
            (values boolean &optional))
-  (true (member pred (mapcan (lambda (p) (by-super env p)) preds) :test #'equalp)))
+  (true (member pred (mapcan (lambda (p) (by-super env p)) preds) :test #'predicate=)))
 
 (defun simplify-context (f preds)
   "Simplify PREDS to head-normal form"

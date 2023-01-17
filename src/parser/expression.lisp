@@ -861,6 +861,7 @@
 
     ;; TODO: Catch and rethrow macro errors with source info
     ((and (cst:atom (cst:first form))
+          (symbolp (cst:raw (cst:first form)))
           (macro-function (cst:raw (cst:first form))))
      (let ((*coalton-error-context*
              (adjoin (make-coalton-error-context

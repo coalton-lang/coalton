@@ -145,6 +145,11 @@
 (defmethod function-type-arguments ((type ty-scheme))
   (function-type-arguments (fresh-inst type)))
 
+(defmethod remove-source-info ((scheme ty-scheme))
+  (make-ty-scheme
+   :kinds (ty-scheme-kinds scheme)
+   :type (remove-source-info (ty-scheme-type scheme))))
+
 ;;;
 ;;; Pretty printing
 ;;;

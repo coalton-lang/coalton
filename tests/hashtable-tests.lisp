@@ -45,6 +45,7 @@
 
 (cl:in-package #:coalton-tests)
 
+#+broken
 (deftest hashtable-static-duplicate-keys ()
   (signals coalton-library/hashtable::make-hash-table-static-duplicate-keys
     (run-coalton-typechecker

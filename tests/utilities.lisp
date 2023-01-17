@@ -14,7 +14,7 @@
   ;; XXX: This will not check ordering of edges within vertices
   (set-equalp dag1 dag2))
 
-(defun check-coalton-types (toplevel-string &optional expected-types)
+(defun check-coalton-types (toplevel-string &rest expected-types)
   (let ((*package* (make-package (or (and fiasco::*current-test*
                                           (fiasco::name-of fiasco::*current-test*))
                                      "COALTON-TEST-COMPILE-PACKAGE")
@@ -66,7 +66,7 @@
                (coalton-impl/typechecker2/define-type::toplevel-define-type (parser:program-types program) file env)
              (declare (ignore type-definitions))
 
-             (let ((tc-env
+             (let ((env
                      (coalton-impl/typechecker2/define::toplevel-define
                       (parser:program-defines program)
                       (parser:program-declares program)
@@ -80,12 +80,12 @@
                        :for stream := (make-string-input-stream unparsed-type)
                        :for file := (parser:make-coalton-file :stream stream :name "<unknown>")
 
-                       :for ast-type := (parser:parse-type
+                       :for ast-type := (parser:parse-qualified-type
                                          (eclector.concrete-syntax-tree:read stream)
                                          file)
-                       :for parsed-type := (coalton-impl/typechecker2/parse-type::parse-type ast-type env file)
+                       :for parsed-type := (coalton-impl/typechecker2/parse-type::parse-ty-scheme ast-type env file)
                        :do (is (equalp
-                                (gethash symbol (coalton-impl/typechecker2/define::tc-env-ty-table tc-env))
+                                (tc:lookup-value-type env symbol)
                                 parsed-type)))))
 
              (values)))

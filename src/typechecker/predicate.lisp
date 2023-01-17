@@ -12,12 +12,14 @@
    #:make-ty-predicate                  ; CONSTRUCTOR
    #:ty-predicate-class                 ; ACCESSOR
    #:ty-predicate-types                 ; ACCESSOR
+   #:ty-predicate-source                ; ACCESSOR
    #:ty-predicate-p                     ; FUNCTION
    #:ty-predicate-list                  ; TYPE
    #:qualified-ty                       ; STRUCT
    #:make-qualified-ty                  ; CONSTRUCTOR
    #:qualified-ty-predicates            ; ACCESSOR
    #:qualified-ty-type                  ; ACCESSOR
+   #:remove-source-info                 ; FUNCTION
    #:static-predicate-p                 ; FUNCTION
    #:qualify                            ; FUNCTION
    #:pprint-predicate                   ; FUNCTION
@@ -31,8 +33,9 @@
 
 (defstruct ty-predicate
   "A type predicate indicating that TYPE is of the CLASS"
-  (class (util:required 'class) :type symbol  :read-only t)
-  (types (util:required 'types) :type ty-list :read-only t))
+  (class (util:required 'class) :type symbol         :read-only t)
+  (types (util:required 'types) :type ty-list        :read-only t)
+  (source nil                   :type (or cons null) :read-only t))
 
 (defmethod make-load-form ((self ty-predicate) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -69,6 +72,18 @@
    :predicates predicates
    :type type))
 
+(defgeneric remove-source-info (ty)
+  (:method ((pred ty-predicate))
+    (make-ty-predicate
+     :class (ty-predicate-class pred)
+     :types (ty-predicate-types pred)
+     :source nil))
+
+  (:method ((qual-ty qualified-ty))
+    (make-qualified-ty
+     :predicates (mapcar #'remove-source-info (qualified-ty-predicates qual-ty))
+     :type (qualified-ty-type qual-ty))))
+
 ;;;
 ;;; Methods
 ;;;
@@ -78,7 +93,8 @@
            (values ty-predicate &optional))
   (make-ty-predicate
    :class (ty-predicate-class type)
-   :types (apply-substitution subst-list (ty-predicate-types type))))
+   :types (apply-substitution subst-list (ty-predicate-types type))
+   :source (ty-predicate-source type)))
 
 (defmethod apply-ksubstitution (subs (type ty-predicate))
   (declare (type ksubstitution-list subs))

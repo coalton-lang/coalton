@@ -27,6 +27,7 @@
    #:partial-type-env-lookup-type       ; FUNCTION
    #:parse-type                         ; FUNCTION
    #:parse-qualified-type               ; FUNCTION
+   #:parse-ty-scheme                    ; FUNCTION
    #:infer-type-kinds                   ; FUNCTION
    #:collect-referenced-types           ; FUNCTION
    #:collect-type-variables             ; FUNCTION
@@ -164,6 +165,18 @@
           (setf qual-ty (tc:apply-ksubstitution ksubs qual-ty))
           (setf ksubs (tc:kind-monomorphize-subs (tc:kind-variables qual-ty) ksubs))
           (tc:apply-ksubstitution ksubs qual-ty))))))
+
+(defun parse-ty-scheme (ty env file)
+  (declare (type parser:qualified-ty ty)
+           (type tc:environment env)
+           (type coalton-file file)
+           (values tc:ty-scheme &optional))
+
+  (let* ((qual-ty (parse-qualified-type ty env file))
+
+         (tvars (tc:type-variables qual-ty)))
+
+    (tc:quantify tvars qual-ty)))
 
 ;;;
 ;;; Kind Inference

@@ -31,10 +31,11 @@
         (toplevel-define-type (parser:program-types program) file env)
       (declare (ignore type-definitions))
 
-      (toplevel-define (parser:program-defines program)
-                       (parser:program-declares program)
-                       file
-                       env)
+      (setf env (toplevel-define (parser:program-defines program)
+                                 (parser:program-declares program)
+                                 file
+                                 env))
 
       (setf coalton-impl::*global-environment* env)
+
       (values))))
