@@ -14,21 +14,85 @@
   ;; XXX: This will not check ordering of edges within vertices
   (set-equalp dag1 dag2))
 
-(defun check-coalton-types (toplevel expected-types)
-  (multiple-value-bind (form env)
-      (coalton-impl::process-coalton-toplevel toplevel *package* coalton-impl::*global-environment*)
-    (declare (ignore form))
+(defun check-coalton-types (toplevel-string &optional expected-types)
+  (let ((*package* (make-package (or (and fiasco::*current-test*
+                                          (fiasco::name-of fiasco::*current-test*))
+                                     "COALTON-TEST-COMPILE-PACKAGE")
+                                 :use '("COALTON" "COALTON-PRELUDE"))))
+    (unwind-protect
+         (let* ((stream (make-string-input-stream toplevel-string))
 
-    (loop :for (symbol . type) :in expected-types
-          :do (is (coalton-impl/typechecker::type-scheme=
-                   (tc:lookup-value-type env symbol)
-                   (tc:parse-and-resolve-type env type))))))
+                ;; Setup eclector readtable
+                (eclector.readtable:*readtable*
+                  (eclector.readtable:copy-readtable eclector.readtable:*readtable*))
+
+                ;; Read unspecified floats as double floats
+                (*read-default-float-format* 'double-float)
+
+                (env coalton-impl::*global-environment*)
+
+                (file (parser:make-coalton-file :stream stream :name "<unknown>"))
+
+                (program (parser:make-program :package *package* :file file))
+
+                (attributes (make-array 0 :adjustable t :fill-pointer t)))
+           (progn
+             (loop :named parse-loop
+                   :with elem := nil
+
+                   :do (setf elem (eclector.concrete-syntax-tree:read stream nil 'eof))
+
+                   :when (eq elem 'eof)
+                     :do (return-from parse-loop)
+
+                   :do (when (and (parser:parse-toplevel-form elem program attributes file)
+                                  (plusp (length attributes)))
+                         (util:coalton-bug "parse-toplevel-form indicated that a form was parsed but did not consume all attributes")))
+
+             (unless (zerop (length attributes))
+               (error 'parse-error
+                      :err (parser:coalton-error
+                            :span (cst:source (cdr (aref attributes 0)))
+                            :file file
+                            :message "Orphan attribute"
+                            :primary-note "attribute must be attached to another form"))))
+
+           (setf (parser:program-types program) (nreverse (parser:program-types program)))
+           (setf (parser:program-declares program) (nreverse (parser:program-declares program)))
+           (setf (parser:program-defines program) (nreverse (parser:program-defines program)))
+           (setf (parser:program-classes program) (nreverse (parser:program-classes program)))
+
+           (multiple-value-bind (type-definitions env)
+               (coalton-impl/typechecker2/define-type::toplevel-define-type (parser:program-types program) file env)
+             (declare (ignore type-definitions))
+
+             (let ((tc-env
+                     (coalton-impl/typechecker2/define::toplevel-define
+                      (parser:program-defines program)
+                      (parser:program-declares program)
+                      file
+                      env)))
+
+               (when expected-types
+                 (loop :for (unparsed-symbol . unparsed-type) :in expected-types
+                       :for symbol := (intern (string-upcase unparsed-symbol) *package*)
+
+                       :for stream := (make-string-input-stream unparsed-type)
+                       :for file := (parser:make-coalton-file :stream stream :name "<unknown>")
+
+                       :for ast-type := (parser:parse-type
+                                         (eclector.concrete-syntax-tree:read stream)
+                                         file)
+                       :for parsed-type := (coalton-impl/typechecker2/parse-type::parse-type ast-type env file)
+                       :do (is (equalp
+                                (gethash symbol (coalton-impl/typechecker2/define::tc-env-ty-table tc-env))
+                                parsed-type)))))
+
+             (values)))
+      (delete-package *package*))))
 
 (defun run-coalton-toplevel-walker (toplevel)
   (coalton-impl::collect-toplevel-forms toplevel))
-
-(defun run-coalton-typechecker (toplevel)
-  (coalton-impl::process-coalton-toplevel toplevel *package* coalton-impl::*global-environment*))
 
 (defun compile-and-load-forms (coalton-forms)
   "Write the COALTON-FORMS to a temporary file, compile it to a fasl, then load the compiled file.
