@@ -290,7 +290,7 @@
             :for name := (parser:node-variable-name (parser:name define))
             :do (format t "~A :: ~A~%" name (gethash name (tc-env-ty-table tc-env))))
 
-      nil)))
+      tc-env)))
 
 ;;;
 ;;; Expression Type Inference
