@@ -15,6 +15,7 @@
    #:parameters                         ; FUNCTION
    #:toplevel                           ; FUNCTION
    #:restricted                         ; FUNCTION
+   #:last-node                          ; FUNCTION
    ))
 
 (in-package #:coalton-impl/parser/binding)
@@ -86,3 +87,14 @@
 
         (and (null (node-body-nodes (toplevel-define-body binding)))
              (node-abstraction-p (node-body-last-node (toplevel-define-body binding)))))))
+
+(defgeneric last-node (binding)
+  (:documentation "Returns the last node in BINDING")
+
+  (:method ((binding node-let-binding))
+    (declare (values node))
+    (node-let-binding-value binding))
+
+  (:method ((binding toplevel-define))
+    (declare (values node))
+    (node-body-last-node (toplevel-define-body binding))))

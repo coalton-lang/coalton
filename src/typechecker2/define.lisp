@@ -106,7 +106,11 @@
 
     (values
      ty
-     preds)))
+     (loop :for pred :in preds
+           :collect (tc:make-ty-predicate
+                     :class (tc:ty-predicate-class pred)
+                     :types (tc:ty-predicate-types pred)
+                     :source (parser:node-source var))))))
 
 (defun tc-env-add-definition (env name scheme)
   "Add a type named NAME to ENV."
@@ -163,22 +167,15 @@
            (type coalton-file file)
            (type tc:substitution-list subs))
 
-  (tc:apply-substitution subs env)
+  (unless (tc:ty-predicate-source pred)
+    (util:coalton-bug "Predicate ~A does not have source information" pred))
 
-  (let ((tvars (tc:type-variables (tc:apply-substitution subs pred))))
-    (unless tvars
-      (util:coalton-bug "Ambigious predicate ~A does not have any variables." pred))
-
-    (let ((node (gethash (first tvars) (tc-env-var-table env))))
-      (unless node
-        (util:coalton-bug "Unable to find source form for ambigious predicate ~A." pred))
-
-      (error 'tc-error
-             :err (coalton-error
-                   :span (parser:node-source node)
-                   :file file
-                   :message "Ambigious predicate"
-                   :primary-note (format nil "Ambigious predicate ~A" pred))))))
+  (error 'tc-error
+         :err (coalton-error
+               :span (tc:ty-predicate-source pred)
+               :file file
+               :message "Ambigious predicate"
+               :primary-note (format nil "Ambigious predicate ~A" pred))))
 
 (defmethod tc:apply-substitution (subs (env tc-env))
   "Applies SUBS to the types currently being checked in ENV. Does not update the types in the inner main environment because there should not be substitutions for them."
@@ -212,7 +209,8 @@
   (declare (type parser:toplevel-define-list defines)
            (type parser:toplevel-declare-list declares)
            (type coalton-file file)
-           (type tc:environment env))
+           (type tc:environment env)
+           (values tc:environment))
 
   (let ((def-table (make-hash-table :test #'eq))
 
@@ -288,9 +286,23 @@
 
       (loop :for define :in defines
             :for name := (parser:node-variable-name (parser:name define))
-            :do (format t "~A :: ~A~%" name (gethash name (tc-env-ty-table tc-env))))
+            :for scheme := (tc:remove-source-info (gethash name (tc-env-ty-table tc-env)))
 
-      tc-env)))
+            :when (tc:type-variables scheme)
+              :do (util:coalton-bug "Scheme ~A should not have any free type variables." scheme)
+
+            :do (setf env (tc:set-value-type env name scheme))
+
+                ;; TODO: set function source parameter names
+
+            :do (setf env (tc:set-name env name (tc:make-name-entry
+                                                 :name name
+                                                 :type :value
+                                                 ;; TOOD: add docstring here
+                                                 :docstring nil
+                                                 :location (parser:coalton-file-name file)))))
+
+      env)))
 
 ;;;
 ;;; Expression Type Inference
@@ -330,6 +342,42 @@
                                              (tc:apply-substitution subs expected-type)
                                              (tc:apply-substitution subs ty))))))))
 
+  (:method ((node parser:node-integer-literal) expected-type subs env file)
+    (declare (type tc:ty expected-type)
+             (type tc:substitution-list subs)
+             (type tc-env env)
+             (type coalton-file file)
+             (values tc:ty tc:ty-predicate-list tc:substitution-list))
+
+    (let* ((classes-package (find-package "COALTON-LIBRARY/CLASSES"))
+
+           (num (find-symbol "NUM" classes-package))
+
+           (tvar (tc:make-variable))
+
+           (pred (tc:make-ty-predicate :class num :types (list tvar) :source (parser:node-source node))))
+
+      ;; TODO: error out here better if NUM is not defined
+
+      (setf (gethash tvar (tc-env-var-table env)) node)
+
+      (handler-case
+          (progn
+            (setf subs (tc:unify subs tvar expected-type))
+            (values
+             (tc:apply-substitution subs tvar)
+             (list pred)
+             subs))
+        (error:coalton-type-error ()
+          (error 'tc-error
+                 :err (coalton-error
+                       :span (parser:node-source node)
+                       :file file
+                       :message "Type mismatch"
+                       :primary-note (format nil "Expected type '~A' but got type '~A'"
+                                             (tc:apply-substitution subs expected-type)
+                                             (tc:apply-substitution subs tvar))))))))
+
   (:method ((node parser:node-variable) expected-type subs env file)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
@@ -364,6 +412,7 @@
              (type coalton-file file)
              (values tc:ty tc:ty-predicate-list tc:substitution-list))
 
+    ;; TODO: lol lmao
     (when (null (parser:node-application-rands node))
       (error ""))
 
@@ -371,59 +420,77 @@
         (infer-expression-type (parser:node-application-rator node)
                                (tc:make-variable)
                                subs
-                               env file)
+                               env
+                               file)
 
-      (let* ((arg-tys (tc:function-type-arguments fun-ty))
+      (let ((fun-ty_ fun-ty))
 
-             (arity (length arg-tys)))
-
-        ;; Error if the function is over applied
-        (when (> (length (parser:node-application-rands node))
-                 arity)
-          (error 'tc-error
-                 :err (coalton-error
-                       :span (parser:node-source node)
-                       :file file
-                       :message "Argument error"
-                       :primary-note (format nil "Function has ~D arguments but inferred type '~A' only takes ~D"
-                                             (length (parser:node-application-rands node))
-                                             fun-ty
-                                             arity))))
-
+        ;; Apply arguments one at a time for better error messages
         (loop :for rand :in (parser:node-application-rands node)
-              :for arg-ty :in arg-tys
-              :do (multiple-value-bind (rand-ty preds_ subs_)
-                      (infer-expression-type rand
-                                             (tc:apply-substitution subs arg-ty)
-                                             subs
-                                             env
-                                             file)
-                    (declare (ignore rand-ty))
-                    (setf subs subs_)
-                    (setf preds (append preds preds_))))
+              :do (cond
+                    ;; If the rator is a function then unify against it's argument
+                    ((tc:function-type-p fun-ty_)
+                     (multiple-value-bind (ty_ preds_ subs_)
+                         (infer-expression-type rand
+                                                (tc:function-type-from fun-ty_)
+                                                subs
+                                                env
+                                                file)
+                       (declare (ignore ty_))
+                       (setf preds (append preds preds_))
+                       (setf subs subs_)
+                       (setf fun-ty_ (tc:function-type-to fun-ty_))))
 
-        (let* ((ty (tc:make-function-type*
-                    (subseq arg-tys (length (parser:node-application-rands node)))
-                    (tc:function-return-type fun-ty)))
+                    ;; If the rator is  variable then unify against a new function type
+                    ((tc:tyvar-p fun-ty_)
+                     (let* ((new-from (tc:make-variable))
 
-               (ty (tc:apply-substitution subs ty)))
+                            (new-to (tc:make-variable))
 
-          (handler-case
-              (progn
-                (setf subs (tc:unify subs ty expected-type))
-                (values
-                 (tc:apply-substitution subs ty)
-                 preds
-                 subs))
-            (error:coalton-type-error ()
-              (error 'tc-error
-                     :err (coalton-error
-                           :span (parser:node-source node)
-                           :file file
-                           :message "Type mismatch"
-                           :primary-note (format nil "Expected type '~A' but got type '~A'"
-                                                 (tc:apply-substitution subs expected-type)
-                                                 (tc:apply-substitution subs ty))))))))))
+                            (new-ty (tc:make-function-type new-from new-to)))
+
+                       (setf subs (tc:unify subs fun-ty_ new-ty))
+                       (multiple-value-bind (ty_ preds_ subs_)
+                           (infer-expression-type rand
+                                                  new-from
+                                                  subs
+                                                  env
+                                                  file)
+                         (declare (ignore ty_))
+                         (setf preds (append preds preds_))
+                         (setf subs subs_)
+                         (setf fun-ty_ new-to))))
+
+                    ;; Otherwise signal an error
+                    (t
+                     (setf fun-ty (tc:apply-substitution subs fun-ty))
+
+                     (error 'tc-error
+                            :err (coalton-error
+                                  :span (parser:node-source node)
+                                  :file file
+                                  :message "Argument error"
+                                  :primary-note (format nil "Function has ~D arguments but inferred type '~A' only takes ~D"
+                                                        (length (parser:node-application-rands node))
+                                                        fun-ty
+                                                        (length (tc:function-type-arguments fun-ty))))))))
+
+        (handler-case
+            (progn
+              (setf subs (tc:unify subs fun-ty_ expected-type))
+              (values
+               (tc:apply-substitution subs fun-ty_)
+               preds
+               subs))
+          (error:coalton-type-error ()
+            (error 'tc-error
+                   :err (coalton-error
+                         :span (parser:node-source node)
+                         :file file
+                         :message "Type mismatch"
+                         :primary-note (format nil "Expected type '~A' but got type '~A'"
+                                               (tc:apply-substitution subs expected-type)
+                                               (tc:apply-substitution subs fun-ty_)))))))))
 
   (:method ((node parser:node-bind) expected-type subs env file)
     (declare (type tc:ty expected-type)
@@ -439,14 +506,13 @@
                                env
                                file)
 
-      (multiple-value-bind (pat-ty preds_ subs)
+      (multiple-value-bind (pat-ty subs)
           (infer-pattern-type (parser:node-bind-pattern node)
                               expr-ty   ; unify against expr-ty
                               subs
                               env
                               file)
         (declare (ignore pat-ty))
-        (setf preds (append preds preds_))
 
         (values
          nil                ; return nil as this is always thrown away
@@ -471,7 +537,7 @@
                   (setf preds (append preds preds_))))
 
       (multiple-value-bind (ty preds_ subs)
-            (infer-expression-type (parser:node-body-last-node node) expected-type subs env file)
+          (infer-expression-type (parser:node-body-last-node node) expected-type subs env file)
         (setf preds (append preds preds_))
 
         (values
@@ -569,7 +635,7 @@
              (type coalton-file file)
              (values tc:ty tc:ty-predicate-list tc:substitution-list))
 
-    (multiple-value-bind (subs preds)
+    (multiple-value-bind (preds subs)
         (infer-let-bindings (parser:node-let-bindings node) (parser:node-let-declares node) subs env file)
 
       (multiple-value-bind (ty preds_ subs)
@@ -582,6 +648,7 @@
 
         (values
          ty
+         preds
          subs))))
 
   (:method ((node parser:node-lisp) expected-type subs env file)
@@ -628,11 +695,10 @@
       ;; Infer the type of each pattern, unifying against expr-ty
       (loop :for branch :in (parser:node-match-branches node)
             :for pattern := (parser:node-match-branch-pattern branch)
-            :do (multiple-value-bind (pat-ty preds_ subs_)
+            :do (multiple-value-bind (pat-ty subs_)
                     (infer-pattern-type pattern expr-ty subs env file)
                   (declare (ignore pat-ty))
-                  (setf subs subs_)
-                  (setf preds (append preds preds_))))
+                  (setf subs subs_)))
 
       (let ((ret-ty (tc:make-variable)))
 
@@ -643,7 +709,7 @@
                       (infer-expression-type body ret-ty subs env file)
                     (declare (ignore body-ty))
                     (setf subs subs_)
-                    (setf preds preds_)))
+                    (setf preds (append preds preds_))))
 
         (values
          (tc:apply-substitution subs ret-ty)
@@ -712,7 +778,7 @@
         ;; SAFETY: If declared-ty and expr-ty unify, and expr-ty is
         ;; more general than declared-ty then matching should be
         ;; infallible
-        (setf subs (tc:compose-substitution-lists subs (tc:match declared-ty expr-ty)))
+        (setf subs (tc:compose-substitution-lists subs (tc:match expr-ty declared-ty)))
 
         (handler-case
             (progn
@@ -1073,7 +1139,7 @@
 
       (handler-case
           (progn
-            (setf subs (tc:unify ty expected-type subs))
+            (setf subs (tc:unify subs ty expected-type))
             (values
              (tc:apply-substitution subs ty)
              subs))
@@ -1163,7 +1229,8 @@
            (type parser:node-let-declare-list declares)
            (type tc:substitution-list subs)
            (type tc-env env)
-           (type coalton-file file))
+           (type coalton-file file)
+           (values tc:ty-predicate-list tc:substitution-list &optional))
 
   (let ((def-table (make-hash-table :test #'eq))
 
@@ -1453,12 +1520,9 @@
                 (setf subs subs_)
                 (setf preds (append preds preds_))))
 
-    ;; Update the environment
-    (tc:apply-substitution subs env)
-
     (let* ((expr-tys (tc:apply-substitution subs expr-tys))
 
-           (env-tvars (tc-env-bindings-variables env bound-variables))
+           (env-tvars (tc:apply-substitution subs (tc-env-bindings-variables env bound-variables)))
 
            (expr-tvars (remove-duplicates (tc:type-variables expr-tys) :test #'eq))
 
@@ -1469,7 +1533,10 @@
       (multiple-value-bind (deferred-preds retained-preds)
           (tc:split-context (tc-env-env env) env-tvars preds subs)
 
-        (let* ((defaultable-preds (tc:default-preds (tc-env-env env) (append env-tvars local-tvars) retained-preds))
+        (let* ((defaultable-preds (handler-case
+                                      (tc:default-preds (tc-env-env env) (append env-tvars local-tvars) retained-preds)
+                                    (error:coalton-type-error (e)
+                                      (tc-env-ambigious-pred env (tc:ambigious-constraint-pred e) file subs))))
 
                (retained-preds (set-difference retained-preds defaultable-preds :test #'eq))
 
@@ -1477,6 +1544,7 @@
                (restricted (some (lambda (b)
                                    (not (parser:restricted b)))
                                  bindings)))
+
 
           (setf subs (tc:compose-substitution-lists
                       (tc:default-subs (tc-env-env env) nil defaultable-preds)
@@ -1549,16 +1617,82 @@
            (type coalton-file file)
            (values tc:ty-predicate-list tc:substitution-list))
 
-  (let ((vars (loop :for var :in (parser:parameters binding)
-                    :for name := (parser:node-variable-name var)
-                    :collect (tc-env-add-variable env name))))
+  (let* ((vars (loop :for var :in (parser:parameters binding)
+                     :for name := (parser:node-variable-name var)
+                     :collect (tc-env-add-variable env name)))
 
-    (multiple-value-bind (ret-ty preds subs)
-        (infer-expression-type (parser:value binding)
-                               (tc:make-variable)
-                               subs
-                               env
-                               file)
+         (ret-ty (tc:make-variable))
+
+         (preds nil))
+
+    (if vars
+        ;; If the binding has parameters that setup the return state before infering the binding's type
+        (let ((*return-status* :lambda)
+
+              (*returns* nil))
+
+          (multiple-value-bind (ty_ preds_ subs_)
+              (infer-expression-type (parser:value binding)
+                                     ret-ty
+                                     subs
+                                     env
+                                     file)
+            (declare (ignore ty_))
+            (setf subs subs_)
+            (setf preds preds_)
+
+            ;; Ensure that all early returns unify
+            (loop :with returns := (reverse *returns*)
+                  :for (s1 . ty1) :in returns
+                  :for (s2 . ty2) :in (cdr returns)
+                  :do (handler-case
+                          (setf subs (tc:unify subs ty1 ty2))
+                        (error:coalton-type-error ()
+                          (error 'tc-error
+                                 :err (coalton-error
+                                       :span s1
+                                       :file file
+                                       :message "Return type mismatch"
+                                       :primary-note (format nil "First return is of type '~A'"
+                                                             (tc:apply-substitution subs ty1))
+                                       :notes
+                                       (list
+                                        (make-coalton-error-note
+                                         :type :primary
+                                         :span s2
+                                         :message (format nil "Second return is of type '~A'"
+                                                          (tc:apply-substitution subs ty2)))))))))
+
+            ;; Unify the function's inferered type with one of the early returns.
+            (when *returns*
+              (handler-case
+                  (setf subs (tc:unify subs (cdr (first *returns*)) ret-ty))
+                (error:coalton-type-error ()
+                  (error 'tc-error
+                         :err (coalton-error
+                               :span (car (first *returns*))
+                               :file file
+                               :message "Return type mismatch"
+                               :primary-note (format nil "First return is of type '~A'"
+                                                     (tc:apply-substitution subs (cdr (first *returns*))))
+                               :notes
+                               (list
+                                (make-coalton-error-note
+                                 :type :primary
+                                 :span (parser:node-source (parser:last-node binding))
+                                 :message (format nil "Second return is of type '~A'"
+                                                  (tc:apply-substitution subs ret-ty)))))))))))
+
+        ;; If the binding does not have parameters that just infer the binding's type
+        (multiple-value-bind (ty_ preds_ subs_)
+            (infer-expression-type (parser:value binding)
+                                   ret-ty
+                                   subs
+                                   env
+                                   file)
+          (declare (ignore ty_))
+          (setf subs subs_)
+          (setf preds preds_)))
 
       (let ((ty (tc:make-function-type* vars ret-ty)))
         (handler-case
@@ -1575,4 +1709,4 @@
                          :message "Type mismatch"
                          :primary-note (format nil "Expected type '~A' but got type '~A'"
                                                (tc:apply-substitution subs expected-type)
-                                               (tc:apply-substitution subs ty))))))))))
+                                               (tc:apply-substitution subs ty)))))))))

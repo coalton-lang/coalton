@@ -12,7 +12,8 @@
    #:get-source-line-info               ; FUNCTION
    #:get-nth-line                       ; FUNCTION
    #:coalton-file                       ; TYPE
-   #:coalton-file-stream
+   #:coalton-file-stream                ; ACCESSOR
+   #:coalton-file-name                  ; ACCESSOR
    #:make-coalton-file                  ; FUNCTION
    #:make-coalton-error-note            ; FUNCTION
    #:make-coalton-error-help            ; FUNCTION

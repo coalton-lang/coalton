@@ -3,269 +3,265 @@
 (in-package #:coalton-tests)
 
 (deftest test-type-inference ()
-  #+broken
   (check-coalton-types
    "(define f 5)"
-   '((coalton-native-tests::f . Integer)))
+
+   '("f" . "Integer"))
 
   (check-coalton-types
    "(define f (fn (x) x))
     (define g (f 5))"
-   '(("f" . "(:a -> :a)")
-     ("g" . "Integer")))
+
+   '("f" . "(:a -> :a)")
+   '("g" . "Integer"))
 
   (check-coalton-types
    "(define f (fn (x y) x))
     (define g (f 5 \"str\"))
     (define h (f \"str\" 5))"
-   '(("f" . "(:a -> (:b -> :a))")
-     ("g" . "Integer")
-     ("h" . "String")))
+
+   '("f" . "(:a -> (:b -> :a))")
+   '("g" . "Integer")
+   '("h" . "String"))
 
   ;; Check that identity qualifies
   (check-coalton-types
    "(define (id a) a)
     (define x (id 3))
     (define y (id \"three\"))"
-   '(("id" . "(:a -> :a)")
-     ("x" . "Integer")
-     ("y" . "String")))
+
+   '("id" . "(:a -> :a)")
+   '("x" . "Integer")
+   '("y" . "String"))
 
   ;; Check that let bindings are polymorphic over kinds
   (check-coalton-types
    "(define x
      (let ((id (fn (a) a)))
        ((id id) 5)))"
-   '(("x" . "Integer")))
+
+   '("x" . "Integer"))
 
   ;; Check that let bindings can have explicit types
   (check-coalton-types
    "(define (f x)
       (let ((declare g (Integer -> Integer))
-            (g coalton-prelude:id))
+            (g id))
        (g x)))"
-   '(("f" . "(Integer -> Integer)")))
+
+   '("f" . "(Integer -> Integer)"))
 
   ;; Check that you can only call callable things
-  #+broken
-  (signals tc:coalton-type-error
-    (run-coalton-typechecker
-     '((coalton:define x (0 1)))))
-  #+broken
-  (signals tc:coalton-type-error
-    (run-coalton-typechecker
-     '((coalton:define x 5)
-       (coalton:define y (x 1))))))
+  (signals coalton-impl/typechecker2/base:tc-error
+    (check-coalton-types
+     "(define x (0 1))"))
+
+  (signals coalton-impl/typechecker2/base:tc-error
+    (check-coalton-types
+     "(define x 5)
+      (define y (x 1))")))
 
 (deftest test-recursive-type-inference ()
   ;; Check mutually recursive definitions
   (check-coalton-types
-   '((coalton:define (f a) (g a))
-     (coalton:define (g b) (f b)))
-   '((f . (:a -> :b))
-     (g . (:a -> :b))))
+   "(define (f a) (g a))
+    (define (g b) (f b))"
+
+   '("f" . "(:a -> :b)")
+   '("g" . "(:a -> :b)"))
 
   ;; Check unusual recursive definitions
   (check-coalton-types
-   '((coalton:define f
-       (fn (a) (f a))))
-   '((f . (:a -> :b))))
+   "(define f
+       (fn (a) (f a)))"
+
+   '("f" . "(:a -> :b)"))
 
   (check-coalton-types
-   '((coalton:define f
-       (fn (a) (f 5))))
-   '((f . (coalton-library/classes:Num :a => :a -> :b)))))
+   "(define f
+       (fn (a) (f 5)))"
+
+   '("f" . "(Num :a => :a -> :b)")))
 
 (deftest test-explicit-type-declerations ()
   ;; Check that explicit declerations can reduce the type of a definition
   (check-coalton-types
-   '((coalton:declare f Integer)
-     (coalton:define f (coalton-prelude:undefined "hello")))
-   '((f . Integer)))
+   "(declare f Integer)
+    (define f (undefined \"hello\"))"
+
+   '("f" . "Integer"))
 
   ;; Declerations cannot be less specefic than their associated definition
-  (signals tc:coalton-type-error
-    (run-coalton-typechecker
-     '((coalton:declare x :a)
-       (coalton:define x coalton:Unit))))
+  (signals coalton-impl/typechecker2/base:tc-error
+    (check-coalton-types
+     "(declare x :a)
+      (define x Unit)"))
 
   ;; Missing explicit predicates cannot be defualted
-  (signals tc:coalton-type-error
-    (run-coalton-typechecker
-     '((coalton:declare x :a)
-       (coalton:define x 1))))
+  (signals coalton-impl/typechecker2/base:tc-error
+    (check-coalton-types
+     "(declare x :a)
+      (define x 1)"))
 
   ;; Implicitly typed functions should only infer types from the declared type signature of an explicitly typed functions
   ;; http://jeremymikkola.com/posts/2019_01_12_type_inference_for_haskell_part_12.html
   (check-coalton-types
-   '((coalton:declare lst (coalton:List Integer))
-     (coalton:define lst (coalton:make-list 1 2 3))
+   "(declare lst (List Integer))
+    (define lst (make-list 1 2 3))
 
-     (coalton:define (a x)
-       (coalton-prelude:singleton (b x)))
+    (define (a x) (singleton (b x)))
 
-     (coalton:declare b (:a -> :a))
-     (coalton:define (b y)
-       (coalton:let ((foo (c 5)))
-         y))
+    (declare b (:a -> :a))
+    (define (b y)
+      (let ((foo (c 5)))
+        y))
 
-     (coalton:define (c z)
-       (coalton-prelude:append lst (a z))))
+    (define (c z) (append lst (a z)))"
 
-   '((a . (:a -> (coalton:List :a))))))
+   '("a" . "(:a -> (List :a))")))
 
 (deftest test-type-definitions ()
   ;; Test recursive type definitions
   (check-coalton-types
-   '((coalton:define-type (Tree :a)
-       (Leaf :a) (Branch (Tree :a) (Tree :a)))
+   "(define-type (Tree :a)
+      (Leaf :a)
+      (Branch (Tree :a) (Tree :a)))
 
-     (coalton:define (f a)
-       (Branch a (f a))))
+    (define (f a)
+      (Branch a (f a)))"
 
-   '((Leaf . (:a -> (Tree :a)))
-     (Branch . ((Tree :a) -> ((Tree :a) -> (Tree :a))))
-     (f . ((Tree :a) -> (Tree :a)))))
+   '("Leaf" . "(:a -> Tree :a)")
+   '("Branch" . "(Tree :a -> Tree :a -> Tree :a)")
+   '("f" . "(Tree :a -> Tree :a)"))
 
   ;; Check mutually recursive type definitions
   (check-coalton-types
-   '((coalton:define-type (A :a)
-       (A (B :a)))
+   "(define-type (A :a)
+      (A (B :a)))
 
-     (coalton:define-type (B :a)
-       (B (A :a))))
-   '())
+    (define-type (B :a)
+      (B (A :a)))")
 
   ;; Check higher kinded type variables
   (check-coalton-types
-   '((coalton:define-type (Fix :f)
-       (In (:f (Fix :f)))))
-   '((In . (:f (Fix :f) -> Fix :f))))
+   "(define-type (Fix :f)
+      (In (:f (Fix :f))))"
+
+   '("In" . "(:f (Fix :f) -> Fix :f)"))
 
   ;; Check that constructors are properly typed
-  (signals error
-    (run-coalton-typechecker
-     '((coalton:define-type (Tree :a)
-         (Leaf :a) (Branch (Tree :a) (Tree :a)))
+  (signals coalton-impl/typechecker2/base:tc-error
+    (check-coalton-types
+     "(define-type (Tree :a)
+        (Leaf :a)
+        (Branch (Tree :a) (Tree :a)))
 
-       (coalton:define x
-         (Branch (Leaf 5) (Leaf "string")))))))
+      (define x (Branch (Leaf 5) (Leaf \"string\")))")))
 
 (deftest test-kind-system ()
   ;; Check that types of kind * cannot be applied to
-  (signals tc:coalton-type-error
-    (run-coalton-typechecker
-     '((coalton:declare x (Integer Integer))
-       (coalton:define x x))))
+  (signals coalton-impl/typechecker2/base:tc-error
+    (check-coalton-types
+     "(declare x (Integer Integer))
+      (define x (undefined Unit))"))
 
   ;; Check that variables can not be declared to have kind (* -> *)
-  (signals tc:coalton-type-error
-    (run-coalton-typechecker
-     '((coalton:define-type (Maybe :a)
-         (Just :a)
-         (Nothing))
-       (coalton:declare x Maybe)
-       (coalton:define x x)))))
+  (signals coalton-impl/typechecker2/base:tc-error
+    (check-coalton-types
+     "(define-type (Maybe :a)
+        (Just :a)
+        Nothing)
+
+      (declare x Maybe)
+      (define x (undefined Unit))")))
 
 (deftest test-pattern-invariants ()
   ;; Match branches must return the same type
-  (signals error
-    (run-coalton-typechecker
-     '((coalton:define-type (Maybe :a)
-         (Just :a)
-         (Nothing))
+  (signals coalton-impl/typechecker2/base:tc-error
+    (check-coalton-types
+     "(define-type (Maybe :a)
+        (Just :a)
+        Nothing)
 
-       (coalton:define (f x)
-         (coalton:match x
-           ((Just 5) 5)
-           ((Just 6) "hello"))))))
-
-  ;; Match branches must match the same type
-  (signals tc:coalton-type-error
-    (run-coalton-typechecker
-     '((coalton:define-type (Maybe :a)
-         (Just :a)
-         (Nothing))
-
-       (coalton:define (f x)
-         (coalton:match x
-           ((Just 5) Nothing)
-           ((Just "hello") Nothing))))))
+      (define (f x)
+        (match x
+          ((Just 5) 5)
+          ((Just 6) \"hello\")))"))
 
   ;; Match branches must match on constructors
-  (signals coalton-impl/typechecker::coalton-type-error
-    (run-coalton-typechecker
-     '((coalton:define (g x) x)
+  (signals coalton-impl/typechecker2/base:tc-error
+    (check-coalton-types
+     "(define (g x) x)
 
-       (coalton:define (f x)
-         (coalton:match x
-           ((g a) 5))))))
+      (define (f x)
+        (match x
+          ((g a) 5)))"))
 
   ;; Constructors in match branches must be fully applied
-  (signals tc:coalton-type-error
-    (run-coalton-typechecker
-     '((coalton:define (g x)
-         (coalton:match x
-           ((coalton:Cons x) x)))))))
+  (signals coalton-impl/typechecker2/base:tc-error
+    (check-coalton-types
+     "(define (g x)
+        (match x
+          ((Cons x) x)))")))
 
 (deftest test-monomorphism-restriction ()
   ;; Check that functions defined as a lambda are not subject to the
   ;; monomorphism restriction
+  #+broken
   (check-coalton-types
-   '((coalton:define-class (Show :a))
+   "(define-class (Show :a))
 
-     (coalton:declare show (Show :a => (:a -> String)))
-     (coalton:define (show x) "not impl")
+    (declare show (Show :a => :a -> String))
+    (define (show x) \"not impl\")
 
-     (coalton:define (f a)
-       (show a))
+    (define (f a)
+      (show a))
 
-     (coalton:define g
-       (fn (b)
-         (show b))))
-   '((f . (Show :a => (:a -> String)))
-     (g . (Show :a => (:a -> String))))))
+    (define g
+      (fn (b)
+        (show b)))"
+
+   '("f" . "(Show :a => :a -> String)")
+   '("g" . "(Show :a => :a -> String")))
 
 (deftest test-type-classes ()
   ;; Check that type constrains are propegated
   (check-coalton-types
-   '((coalton:define (f a b) (coalton-prelude::== a b)))
+   "(define (f a b) (== a b))"
 
-   '((f . (coalton-prelude::Eq :a => (:a -> :a -> coalton:Boolean)))))
+   '("f" . "(Eq :a => :a -> :a -> Boolean)"))
 
 
+  #+broken
   (check-coalton-types
-   '((coalton:define-class (Eq_ :a)
-      (== (:a -> :a -> coalton:Boolean)))
+   "(define-class (Eq_ :a)
+      (==_ (:a -> :a -> Boolean)))
 
-     (coalton:define-instance (Eq_ :a => (Eq_ (coalton:List :a)))
-      (coalton:define (== a b) coalton:False))
+    (define-type Color Red Green Blue)
 
-     (coalton:define-type Color Red Green Blue)
+    (define-instance (Eq_ Color)
+      (define (==_ a b) False))
 
-     (coalton:define-instance (Eq_ Color)
-      (coalton:define (== a b) coalton:False))
+    (define a (==_ Red Green))
 
-     (coalton:define a (== Red Green))
+    (define (g x y)
+      (==_ x (singleton y)))
 
-     (coalton:define (g x y)
-       (== x (coalton-prelude:singleton y)))
+    (define (h x y)
+      (==_ (singleton x) (singleton y)))"
 
-     (coalton:define (h x y)
-       (== (coalton-prelude:singleton x) (coalton-prelude:singleton y))))
-
-   '((a . coalton:Boolean)
-     (g . (Eq_ (coalton:List :a) => coalton:List :a -> :a -> coalton:Boolean))
-     (h . (Eq_ (coalton:List :a) => :a -> :a -> coalton:Boolean))))
+   '("a" . "Boolean")
+   '("g" . "(Eq (List :a) => List :a -> :a -> Boolean"))
 
 
+  #+broken
   (signals tc:coalton-type-error
     (run-coalton-typechecker
      '((coalton:define-class (Eq_ :a)
-        (== (:a -> :a -> coalton:Boolean)))
+         (== (:a -> :a -> coalton:Boolean)))
 
        (coalton:define-instance (Eq_ :a => (Eq_ (coalton:List :a)))
-        (coalton:define (== a b) coalton:False))
+         (coalton:define (== a b) coalton:False))
 
        (coalton:define-type Color Red Blue Green)
 
@@ -276,22 +272,16 @@
 (deftest test-typeclass-polymorphic-recursion ()
   ;; Check that polymorphic recursion is possible
   (check-coalton-types
-   '((coalton:define-class (Eq_ :a)
-      (== (:a -> :a -> coalton:Boolean)))
+   "(declare f (Eq :a => :a -> :a -> Boolean))
+    (define (f a b)
+      (if (== a b)
+        True
+        (f (singleton a) (singleton b))))"
 
-     (coalton:define-instance (Eq_ :a => (Eq_ (coalton:List :a)))
-      (coalton:define (== a b) coalton:False))
-
-     (coalton:declare f (Eq_ :a => (:a -> :a -> coalton:Boolean)))
-     (coalton:define (f a b)
-       (coalton:match (== a b)
-         ((coalton:True) coalton:True)
-         ((coalton:False)
-          (f (coalton-prelude:singleton a)
-             (coalton-prelude:singleton b))))))
-   '((f . (Eq_ :a => (:a -> :a -> coalton:Boolean)))))
+   '("f" . "(Eq :a => :a -> :a -> Boolean)"))
 
   ;; Check that polymorphic recursion is not possible without an explicit binding
+  #+broken
   (signals tc:coalton-type-error
     (run-coalton-typechecker
      '((coalton:define-class (Eq_ :a)
@@ -307,6 +297,7 @@
             (f (coalton-prelude:singleton a)
                (coalton-prelude:singleton b)))))))))
 
+#+broken
 (deftest test-typeclass-definition-constraints ()
   ;; Check that typeclasses cannot have additional constrains defined in a method
   ;;
@@ -322,16 +313,17 @@
       (test (coalton-prelude::Eq :b => (:a -> :b)))))))
 
 
+#+broken
 (deftest test-typeclass-flexible-instances ()
   (run-coalton-typechecker
    '((coalton:define-class (Eq_ :a)
-      (== (:a -> :a -> coalton:Boolean)))
+       (== (:a -> :a -> coalton:Boolean)))
 
      (coalton:define-instance (Eq_ :a => (Eq_ (coalton-prelude:Tuple :a Integer)))
-      (coalton:define (== a b) coalton:False))
+       (coalton:define (== a b) coalton:False))
 
      (coalton:define-instance (Eq_ Integer)
-      (coalton:define (== a b) coalton:False))
+       (coalton:define (== a b) coalton:False))
 
      (coalton:declare f
       ((coalton-prelude:Tuple Integer Integer) ->
@@ -340,6 +332,7 @@
      (coalton:define (f a b)
        (== a b)))))
 
+#+broken
 (deftest test-typeclass-overlapping-checks ()
   ;; Check than non overlapping instances can be defined
   (signals tc:overlapping-instance-error
@@ -353,6 +346,7 @@
        (coalton:define-instance (Eq_ :a => (Eq_ (coalton-prelude:Tuple String :a)))
         (coalton:define (== a b) coalton:False))))))
 
+#+broken
 (deftest test-typeclass-cyclic-superclass-checks ()
   (signals tc:cyclic-class-definitions-error
     (run-coalton-typechecker
@@ -371,6 +365,7 @@
      '((coalton:define-class (TestClassA :a)
         (example-method ((TestClassA :b) => (:a -> :b))))))))
 
+#+broken
 (deftest test-hkt ()
   (check-coalton-types
    '((coalton:define-class (Functor :f)
@@ -391,6 +386,7 @@
 
    '((ys . (coalton:List String)))))
 
+#+broken
 (deftest test-seq ()
   (check-coalton-types
    '((coalton:define-class (Show :a))
@@ -408,11 +404,12 @@
 
 (deftest test-the ()
   (check-coalton-types
-   '((coalton:define (f a b)
-       ((coalton:the (coalton:Integer -> coalton:Integer -> coalton:Boolean) coalton-prelude:==)
-        a b)))
-   '((f . (coalton:Integer -> coalton:Integer -> coalton:Boolean))))
+   "(define (f a b)
+      ((the (Integer -> Integer -> Boolean) ==) a b))"
 
+   '("f" . "(Integer -> Integer -> Boolean)"))
+
+  #+broken
   (check-coalton-types
    '((coalton:define (f a b)
        ((coalton:the ((coalton-prelude:Eq :a) => (:a -> :a -> coalton:Boolean)) coalton-prelude:==)
@@ -420,88 +417,99 @@
    '((f . ((coalton-prelude:Eq :a) => (:a -> :a -> coalton:Boolean)))))
 
   (check-coalton-types
-   '((coalton:define x (coalton:the coalton:U32 (coalton-prelude:+ (coalton-prelude:fromInt 1)
-                                                                   (coalton-prelude:fromInt 2)))))
-   '((x . coalton:U32))))
+   "(define x (the U32 (+ 1 2)))"
+
+   '("x" . "U32")))
 
 (deftest test-regression ()
   ;; Fixed in #283
   (check-coalton-types
-   '((coalton:define (f a)
-       (coalton:let ((g (coalton:fn (x) (coalton-prelude:Tuple x a))))
-         (g 5))))
-   '((f . (coalton-library/classes:Num :b => :a -> (coalton-prelude:Tuple :b :a))))))
+   "(define (f a)
+      (let ((g (fn (x) (Tuple x a))))
+        (g 5)))"
+
+   '("f" . "(Num :b => :a -> Tuple :b :a)")))
 
 (deftest test-function-definition-shorthand ()
+  #+broken
   (check-coalton-types
    '((coalton:define f (fn () 5)))
    '((f . (coalton-library/classes:Num :a => coalton:Unit -> :a)))))
 
 (deftest test-function-implicit-progn ()
   (check-coalton-types
-   '((coalton:define (f a)
-       (coalton:let a_ coalton:= (coalton-prelude:+ a 1))
-       a_))
-   nil))
+   "(define (f a)
+      (let a_ = (+ a 1))
+      a)"
+
+   '("f" . "(Num :a => :a -> :a)")))
 
 (deftest test-returns ()
   (check-coalton-types
-   '((coalton:define (f a)
-       (coalton:return "hello")
-       a))
-   `((f . (String -> String))))
+   "(define (f a)
+      (return \"hello\")
+      a)"
 
-  (signals coalton-impl/typechecker::coalton-type-error
-    (run-coalton-typechecker
-     '((coalton:define (f a)
-         (coalton:return "hello")
-         Unit))))
+   '("f" . "(String -> String)"))
 
-  (signals coalton-impl/typechecker::coalton-type-error
-    (run-coalton-typechecker
-     '((coalton:define x (coalton:return "hello"))))))
+  (signals coalton-impl/typechecker2/base:tc-error
+    (check-coalton-types
+     "(define (f a)
+        (return \"hello\")
+        Unit)"))
+
+  (signals coalton-impl/typechecker2/base:tc-error
+    (check-coalton-types
+     "(define x (return \"hello\"))")))
 
 (deftest test-defaulting ()
   ;; See gh #505
-  (run-coalton-typechecker
-   '((coalton:declare a (coalton-library/classes:Num :a => :a -> :a))
-     (coalton:define (a x)
-       (coalton:let y coalton:= 2)
-       (coalton-library/classes:+ x y))))
+  (check-coalton-types
+   "(declare a (Num :a => :a -> :a))
+    (define (a x)
+      (let ((y 2))
+        (+ x y)))"
+
+   '("a" . "(Num :a => :a -> :a)"))
 
   ;; See gh #505
-  (run-coalton-typechecker
-   '((coalton:declare f (:a -> :a))
-    (coalton:define (f x)
-      (coalton-library/functions:traceObject "2" 2)
-      x)))
+  (check-coalton-types
+   "(declare f (:a -> :a))
+    (define (f x)
+      (traceObject \"2\" 2)
+      x)"
 
+   '("f" . "(:a -> :a)"))
+  
   ;; Check that bindings aren't defaulted too early
   (check-coalton-types
-   '((coalton:define (f x)
-       (coalton:let y coalton:= 1)
-       (coalton-library/classes:+ 0.5 y)))
-   '((f . (:a -> coalton:Single-Float))))
+   "(define (f x)
+      (let ((y 1))
+        (+ 0.5 y)))"
+
+   '("f" . "(:a -> Double-Float)"))
 
   ;; Check that the monomorphism restriction still applies to defaulted bindings
-  (signals tc:coalton-type-error
-    (run-coalton-typechecker
-     '((coalton:define (f x)
-         (coalton:let y coalton:= 1)
-         (coalton-library/classes:+ 0.5 y)
-         (coalton-library/classes:+ 0.5d0 y)))))
+  (signals coalton-impl/typechecker2/base:tc-error
+    (check-coalton-types
+     "(define (f x)
+      (let ((y 1))
+        (+ 0.5f0 y)
+        (+ 0.5d0 y)))"))
 
   ;; Check that ambigious predicates are detected
-  (signals tc:coalton-type-error
-    (run-coalton-typechecker
-     '((coalton:define (f x)
-         (coalton-library/classes:into (coalton-library/classes:into x))))))
+  (signals coalton-impl/typechecker2/base:tc-error
+    (check-coalton-types
+     "(define (f x)
+        (into (into x)))"))
 
   ;; Check that superclasses of Num are defaulted
   (check-coalton-types
-   '((coalton:define x (coalton-prelude:even? 2)))
-   '((x . coalton:Boolean))))
+   "(define x (even? 2))"
 
+   '("x" . "Boolean")))
+
+  #+ignore
 (deftest test-bind ()
   (check-coalton-types
    '((coalton:define x

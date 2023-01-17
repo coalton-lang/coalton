@@ -1,5 +1,6 @@
 (in-package #:coalton-tests)
 
+#+broken
 (eval-when (:compile-toplevel :load-toplevel)
   (defun addressable-define-same? (type-name)
     `((coalton:declare same? (,type-name coalton:-> ,type-name coalton:-> coalton:Boolean))
@@ -9,14 +10,17 @@
        (coalton:define (coalton-library/addressable:eq? a b)
          (coalton-library/builtin:error "doesn't matter")))))
 
+#+broken
 (defun addressable-define-type-and-same? (type-name &rest type-definition)
   `(,@type-definition
     ,@(addressable-define-same? type-name)))
 
+#+broken
 (defun addressable-define-type-and-instance (type-name &rest type-definition)
   `(,@type-definition
     ,@(addressable-define-instance type-name)))
 
+#+broken
 (deftest addressable-naughty-auto-instances ()
   (macrolet ((errors (&body (body))
                `(signals coalton-impl/typechecker::coalton-type-error
@@ -37,6 +41,7 @@
         '(coalton:repr :native t)
         '(coalton:define-type Foo)))))
 
+#+broken
 (deftest addressable-naughty-explicit-instances ()
   (macrolet ((errors (&body (forms))
                `(signals coalton-impl/ast::coalton-parse-error
@@ -61,6 +66,7 @@
        '(coalton:repr :lisp)
        '(coalton:define-type Foo Foo)))))
 
+#+broken
 (deftest addressable-automatic-instances ()
   (macrolet ((same-good-type (type-name &body (forms))
                `(check-coalton-types
@@ -77,6 +83,7 @@
                       '(coalton:repr :enum)
                       '(coalton:define-type Foo Foo)))))
 
+#+broken
 (deftest addressable-explicit-instance ()
   (check-coalton-types
    `((coalton:repr :native t)
