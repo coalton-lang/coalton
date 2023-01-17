@@ -843,6 +843,17 @@ TOPLEVEL is set to indicate additional checks should be completed in COALTON-TOP
                                              (not (entail env expr-preds p)))
                                            (apply-substitution local-subs preds))))
 
+        ;;
+        ;; NOTE: this is where functional dependency substitutions are generated
+        ;;
+
+        ;; Like implicit bindings, we only need to apply substitutions
+        ;; for the predicates generated from type inference, not
+        ;; including ones in our explicit type.
+        (setf local-subs (solve-fundeps env (apply-substitution local-subs preds) local-subs)) 
+        (setf expr-type (apply-substitution local-subs expr-type))
+
+
         (multiple-value-bind (deferred-preds retained-preds)
             (split-context env env-tvars local-tvars reduced-preds local-subs)
 
