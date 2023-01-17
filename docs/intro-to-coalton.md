@@ -624,6 +624,8 @@ Haskell, aside from meager differences.
 * `Applicative`
 * `Monad` - monad does not have `return`, use `pure` from applicative instead
 * `Alternative` - `<|>` is called `alt` in Coalton
+* `Foldable`
+* `Traversable`
 
 These typeclasses are inspired by traits of the same name in Rust:
 

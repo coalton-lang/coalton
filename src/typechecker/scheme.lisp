@@ -6,7 +6,8 @@
    #:coalton-impl/typechecker/substitutions
    #:coalton-impl/typechecker/predicate)
   (:local-nicknames
-   (#:util #:coalton-impl/util))
+   (#:util #:coalton-impl/util)
+   (#:settings #:coalton-impl/settings))
   (:export
    #:ty-scheme                          ; STRUCT
    #:make-ty-scheme                     ; CONSTRUCTOR
@@ -35,9 +36,6 @@
 (defmethod make-load-form ((self ty-scheme) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type ty-scheme))
-
 (defun scheme-list-p (x)
   (and (alexandria:proper-list-p x)
        (every #'ty-scheme-p x)))
@@ -52,9 +50,13 @@
 (deftype scheme-binding-list ()
   `(satisfies scheme-binding-list-p))
 
+;;;
+;;; Operations on Schemes
+;;;
+
 (defun quantify (tyvars type)
   (declare (type tyvar-list tyvars)
-           (type qualified-ty ty)
+           (type qualified-ty type)
            (values ty-scheme))
   (let* ((vars (remove-if
                 (lambda (x) (not (find x tyvars :test #'equalp)))
@@ -123,12 +125,9 @@
 ;;; Pretty printing
 ;;;
 
-(defun pprint-scheme (stream scheme &optional colon-p at-sign-p)
+(defun pprint-scheme (stream scheme)
   (declare (type stream stream)
-           (type ty-scheme scheme)
-           (ignore colon-p)
-           (ignore at-sign-p)
-           (values ty-scheme))
+           (type ty-scheme scheme))
   (cond
     ((null (ty-scheme-kinds scheme))
      (write (ty-scheme-type scheme) :stream stream))
@@ -137,7 +136,7 @@
        (let* ((types (mapcar (lambda (k) (next-pprint-variable-as-tvar k))
                              (ty-scheme-kinds scheme)))
               (new-type (instantiate types (ty-scheme-type scheme))))
-         (write-string (if *coalton-print-unicode*
+         (write-string (if settings:*coalton-print-unicode*
                            "∀"
                            "FORALL")
                        stream)
@@ -147,6 +146,10 @@
          (write-string ". " stream)
          (write new-type :stream stream)))
      ))
-  scheme)
 
-(set-pprint-dispatch 'ty-scheme 'pprint-scheme)
+  nil)
+
+(defmethod print-object ((scheme ty-scheme) stream)
+  (if *print-readably*
+      (call-next-method)
+      (pprint-scheme stream scheme)))

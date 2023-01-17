@@ -75,7 +75,7 @@
                                  `#'unreachable-fun)
                                 (t
                                  `(lambda (,fun ,@(subseq args 0 applied-arity))
-                                    (declare (type function fun))
+                                    (declare (type function ,fun))
                                     (,(constructor-sym (- arity applied-arity))
                                      (lambda ,(subseq args applied-arity)
                                        (funcall ,fun ,@args)))))))))

@@ -137,21 +137,29 @@
              ,(codegen-expression (match-branch-body (first (node-match-branches expr))) current-function env)
              ,(codegen-expression (match-branch-body (second (node-match-branches expr))) current-function env))))
 
-
-    (let* ((subexpr (codegen-expression (node-match-expr expr) current-function env))
-
-           (branches
-             (mapcar
-              (lambda (b)
-                `(,(codegen-pattern (match-branch-pattern b) env)
-                  ,(codegen-expression (match-branch-body b) current-function env)))
-              (node-match-branches expr))))
-      `(trivia:match
-           ,(if settings:*emit-type-annotations*
-                `(the ,(tc:lisp-type (node-type (node-match-expr expr)) env) ,subexpr)
-                subexpr)
-         ,@branches
-         (_ (error "Pattern match not exaustive error")))))
+    ;; Otherwise do the thing
+    (let ((subexpr (codegen-expression (node-match-expr expr) current-function env))
+          (match-var (gensym "MATCH")))
+      `(let ((,match-var
+               ,(if settings:*emit-type-annotations*
+                    `(the ,(tc:lisp-type (node-type (node-match-expr expr)) env) ,subexpr)
+                    subexpr)))
+         (cond
+           ,@(loop :for branch :in (node-match-branches expr)
+                   :for pattern := (match-branch-pattern branch)
+                   :for expr := (codegen-expression (match-branch-body branch) current-function env)
+                   :collect
+                   (multiple-value-bind (pred bindings)
+                       (codegen-pattern pattern match-var env)
+                     `(,pred
+                       ,(cond
+                          ((null bindings)
+                           expr)
+                          (t
+                           `(let ,bindings
+                              ,expr))))))
+           (t
+            (error "Pattern match not exaustive error"))))))
 
   (:method ((expr node-seq) current-function env)
     (declare (type tc:environment env)

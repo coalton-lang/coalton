@@ -4,6 +4,7 @@
    #:coalton-impl/typechecker/kinds)
   (:local-nicknames
    (#:util #:coalton-impl/util)
+   (#:settings #:coalton-impl/settings)
    (#:error #:coalton-impl/error))
   (:export
    #:ty                                 ; STRUCT
@@ -31,8 +32,7 @@
    #:tgen-p                             ; FUNCTION
    #:make-variable                      ; FUNCTION
    #:instantiate                        ; FUNCTION
-   #:kind-of                            ; FUNCTION
-   #:kind-variables                     ; FUNCTION
+   #:kind-of
    #:type-constructors                  ; FUNCTION
    #:*boolean-type*                     ; VARIABLE
    #:*char-type*                        ; VARIABLE
@@ -82,6 +82,9 @@
 
 (defstruct (ty (:constructor nil)))
 
+(defmethod make-load-form ((self ty) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
 (defun ty-list-p (x)
   (and (alexandria:proper-list-p x)
        (every #'ty-p x)))
@@ -100,12 +103,6 @@
   (id   (util:required 'id)   :type fixnum :read-only t)
   (kind (util:required 'kind) :type kind   :read-only t))
 
-(defmethod make-load-form ((self tyvar) &optional env)
-  (make-load-form-saving-slots self :environment env))
-
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type tyvar))
-
 (defun tyvar-list-p (x)
   (and (alexandria:proper-list-p x)
        (every #'tyvar-p x)))
@@ -117,21 +114,9 @@
   (name (util:required 'name) :type symbol :read-only t)
   (kind (util:required 'kind) :type kind   :read-only t))
 
-(defmethod make-load-form ((self tycon) &optional env)
-  (make-load-form-saving-slots self :environment env))
-
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type tycon))
-
 (defstruct (tapp (:include ty))
   (from (util:required 'from) :type ty :read-only t)
   (to   (util:required 'to)   :type ty :read-only t))
-
-(defmethod make-load-form ((self tapp) &optional env)
-  (make-load-form-saving-slots self :environment env))
-
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type tapp))
 
 (defstruct (tgen (:include ty))
   (id (util:required 'id) :type fixnum :read-only t))
@@ -139,14 +124,11 @@
 (defmethod make-load-form ((self tgen) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type tgen))
+;;;
+;;; Type Variables
+;;;
 
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type ty))
-
-
-(defvar *next-variable-id* 0)
+(defparameter *next-variable-id* 0)
 
 #+sbcl
 (declaim (sb-ext:always-bound *next-variable-id*))
@@ -199,22 +181,22 @@
    :from (apply-ksubstitution subs (tapp-from type))
    :to (apply-ksubstitution subs (tapp-to type))))
 
-(defmethod kind-variables ((type tyvar))
-  (kind-variables (kind-of type)))
+(defmethod kind-variables-generic% ((type tyvar))
+  (kind-variables-generic% (kind-of type)))
 
-(defmethod kind-variables ((type tycon))
-  (kind-variables (kind-of type)))
+(defmethod kind-variables-generic% ((type tycon))
+  (kind-variables-generic% (kind-of type)))
 
-(defmethod kind-variables ((type tapp))
+(defmethod kind-variables-generic% ((type tapp))
   (append
-   (kind-variables (tapp-to type))
-   (kind-variables (tapp-from type))))
+   (kind-variables-generic% (tapp-to type))
+   (kind-variables-generic% (tapp-from type))))
 
 (defun type-constructors (type)
   (declare (values util:symbol-list &optional))
-  (remove-duplicates (type-constructors-g type)))
+  (remove-duplicates (type-constructors-generic% type)))
 
-(defgeneric type-constructors-g (type)
+(defgeneric type-constructors-generic% (type)
   (:method ((type tyvar))
     nil)
 
@@ -223,36 +205,39 @@
 
   (:method ((type tapp))
     (append
-     (type-constructors-g (tapp-from type))
-     (type-constructors-g (tapp-to type))))
+     (type-constructors-generic% (tapp-from type))
+     (type-constructors-generic% (tapp-to type))))
 
   (:method ((lst list))
-    (mapcan #'type-constructors-g lst)))
+    (mapcan #'type-constructors-generic% lst)))
 
 ;;;
 ;;; Early types
 ;;;
 
-(defvar *boolean-type*      (make-tycon :name 'coalton:Boolean     :kind +kstar+))
-(defvar *char-type*         (make-tycon :name 'coalton:Char        :kind +kstar+))
-(defvar *u8-type*           (make-tycon :name 'coalton:U8          :kind +kstar+))
-(defvar *u16-type*          (make-tycon :name 'coalton:U16         :kind +kstar+))
-(defvar *u32-type*          (make-tycon :name 'coalton:U32         :kind +kstar+))
-(defvar *u64-type*          (make-tycon :name 'coalton:U64         :kind +kstar+))
-(defvar *i8-type*           (make-tycon :name 'coalton:I8          :kind +kstar+))
-(defvar *i16-type*          (make-tycon :name 'coalton:I16         :kind +kstar+))
-(defvar *i32-type*          (make-tycon :name 'coalton:I32         :kind +kstar+))
-(defvar *i64-type*          (make-tycon :name 'coalton:I64         :kind +kstar+))
-(defvar *integer-type*      (make-tycon :name 'coalton:Integer     :kind +kstar+))
-(defvar *ifix-type*         (make-tycon :name 'coalton:IFix        :kind +kstar+))
-(defvar *ufix-type*         (make-tycon :name 'coalton:UFix        :kind +kstar+))
+(defvar *boolean-type*      (make-tycon :name 'coalton:Boolean      :kind +kstar+))
+(defvar *char-type*         (make-tycon :name 'coalton:Char         :kind +kstar+))
+(defvar *u8-type*           (make-tycon :name 'coalton:U8           :kind +kstar+))
+(defvar *u16-type*          (make-tycon :name 'coalton:U16          :kind +kstar+))
+(defvar *u32-type*          (make-tycon :name 'coalton:U32          :kind +kstar+))
+(defvar *u64-type*          (make-tycon :name 'coalton:U64          :kind +kstar+))
+(defvar *i8-type*           (make-tycon :name 'coalton:I8           :kind +kstar+))
+(defvar *i16-type*          (make-tycon :name 'coalton:I16          :kind +kstar+))
+(defvar *i32-type*          (make-tycon :name 'coalton:I32          :kind +kstar+))
+(defvar *i64-type*          (make-tycon :name 'coalton:I64          :kind +kstar+))
+(defvar *integer-type*      (make-tycon :name 'coalton:Integer      :kind +kstar+))
+(defvar *ifix-type*         (make-tycon :name 'coalton:IFix         :kind +kstar+))
+(defvar *ufix-type*         (make-tycon :name 'coalton:UFix         :kind +kstar+))
 (defvar *single-float-type* (make-tycon :name 'coalton:Single-Float :kind +kstar+))
 (defvar *double-float-type* (make-tycon :name 'coalton:Double-Float :kind +kstar+))
-(defvar *string-type*       (make-tycon :name 'coalton:String      :kind +kstar+))
-(defvar *fraction-type*     (make-tycon :name 'coalton:Fraction :kind +kstar+))
-(defvar *arrow-type*        (make-tycon :name 'coalton:Arrow :kind (make-kfun :from +kstar+ :to (make-kfun :from +kstar+ :to +kstar+))))
-(defvar *list-type*         (make-tycon :name 'coalton:List :kind (make-kfun :from +kstar+ :to +kstar+)))
+(defvar *string-type*       (make-tycon :name 'coalton:String       :kind +kstar+))
+(defvar *fraction-type*     (make-tycon :name 'coalton:Fraction     :kind +kstar+))
+(defvar *arrow-type*        (make-tycon :name 'coalton:Arrow        :kind (make-kfun :from +kstar+ :to (make-kfun :from +kstar+ :to +kstar+))))
+(defvar *list-type*         (make-tycon :name 'coalton:List         :kind (make-kfun :from +kstar+ :to +kstar+)))
 
+;;;
+;;; Operations on Types
+;;;
 
 (defun apply-type-argument (tcon arg &key ksubs)
   (declare (type (or tycon tapp tyvar) tcon)
@@ -356,6 +341,7 @@
 ;;;
 ;;; Pretty printing
 ;;;
+
 (defvar *pprint-variable-symbol-code*)
 (defvar *pprint-variable-symbol-suffix*)
 
@@ -411,11 +397,9 @@
 
 This requires a valid PPRINT-VARIABLE-CONTEXT")
 
-(defun pprint-ty (stream ty &optional colon-p at-sign-p)
+(defun pprint-ty (stream ty)
   (declare (type stream stream)
            (type ty ty)
-           (ignore colon-p)
-           (ignore at-sign-p)
            (values ty))
   (etypecase ty
     (tyvar
@@ -432,7 +416,7 @@ This requires a valid PPRINT-VARIABLE-CONTEXT")
        ((function-type-p ty) ;; Print function types
         (write-string "(" stream)
         (pprint-ty stream (tapp-to (tapp-from ty)))
-        (write-string (if *coalton-print-unicode*
+        (write-string (if settings:*coalton-print-unicode*
                           " → "
                           " -> ")
                       stream)
@@ -441,7 +425,7 @@ This requires a valid PPRINT-VARIABLE-CONTEXT")
                    (cond
                      ((function-type-p to)
                       (pprint-ty stream (tapp-to (tapp-from to)))
-                      (write-string (if *coalton-print-unicode*
+                      (write-string (if settings:*coalton-print-unicode*
                                         " → "
                                         " -> ")
                                     stream)
@@ -476,7 +460,10 @@ This requires a valid PPRINT-VARIABLE-CONTEXT")
      (write (tgen-id ty) :stream stream)))
   ty)
 
-(set-pprint-dispatch 'ty 'pprint-ty)
+(defmethod print-object ((ty ty) stream)
+  (if *print-readably*
+      (call-next-method)
+      (pprint-ty stream ty)))
 
 ;;;
 ;;; Conditions

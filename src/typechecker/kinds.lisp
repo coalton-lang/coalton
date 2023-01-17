@@ -3,9 +3,11 @@
    #:cl)
   (:local-nicknames
    (#:util #:coalton-impl/util)
+   (#:settings #:coalton-impl/settings)
    (#:error #:coalton-impl/error))
   (:export
    #:kind                               ; STRUCT
+   #:kind-list                          ; TYPE
    #:kstar                              ; STRUCT
    #:+kstar+                            ; CONSTANT
    #:kfun                               ; STRUCT
@@ -28,13 +30,13 @@
    #:kmgu                               ; FUNCTION
    #:kind-return-type                   ; FUNCTION
    #:kind-variables                     ; FUNCTION
+   #:kind-variables-generic%                   ; METHOD
    #:kind-monomorphize-subs             ; FUNCTION
    #:simple-kind-p                      ; FUNCTION
    #:kind-arity                         ; FUNCTION
    #:make-kind-function*                ; FUNCTION
    #:kfun-p                             ; FUNCTION
    #:kstar-p                            ; FUNCTION
-   #:*coalton-print-unicode*            ; VARIABLE
    #:kunify-error                       ; CONDITION
    ))
 
@@ -44,36 +46,32 @@
 ;;; Kinds
 ;;;
 
-(defstruct (kind (:constructor nil)))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defstruct (kind (:constructor nil)
+                   (:copier nil))))
 
-(defstruct (kstar (:include kind)))
+(defun kind-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'kind-p x)))
 
-(defmethod make-load-form ((self kstar) &optional env)
+(deftype kind-list ()
+  '(satisfies kind-list-p))
+
+(defmethod make-load-form ((self kind) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type kstar))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defstruct (kstar (:include kind)
+                    (:copier nil))))
 
-(alexandria:define-constant +kstar+ (make-instance 'kstar) :test #'equalp)
+(alexandria:define-constant +kstar+ (make-kstar) :test #'equalp)
 
 (defstruct (kfun (:include kind))
   (from (util:required 'from) :type kind :read-only t)
   (to   (util:required 'to)   :type kind :read-only t))
 
-(defmethod make-load-form ((self kfun) &optional env)
-  (make-load-form-saving-slots self :environment env))
-
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type kfun))
-
 (defstruct (kyvar (:include kind)) 
   (id (util:required 'id) :type fixnum :read-only t))
-
-(defmethod make-load-form ((self kyvar) &optional env)
-  (make-load-form-saving-slots self :environment env))
-
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type kyvar))
 
 (defun kyvar-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -82,10 +80,12 @@
 (deftype kyvar-list ()
   '(satisfies kyvar-list-p))
 
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type kind))
 
-(defvar *next-kvar-id* 0)
+;;;
+;;; Kind Variables
+;;;
+
+(defparameter *next-kvar-id* 0)
 
 #+sbcl
 (declaim (sb-ext:always-bound *next-kvar-id*))
@@ -95,12 +95,14 @@
   (prog1 (make-kyvar :id *next-kvar-id*)
     (incf *next-kvar-id*)))
 
+
+;;;
+;;; Kind Substitutions
+;;;
+
 (defstruct ksubstitution 
   (from (util:required 'from) :type kyvar :read-only t)
   (to   (util:required 'to)   :type kind  :read-only t))
-
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type ksubstitution))
 
 (defun ksubstitution-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -108,19 +110,6 @@
 
 (deftype ksubstitution-list ()
   '(satisfies ksubstitution-list-p))
-
-(defun compose-ksubstitution-lists (s1 s2)
-  (declare (type ksubstitution-list s1 s2)
-           (values ksubstitution-list))
-  (append
-   (mapcar
-    (lambda (s)
-      (make-ksubstitution
-       :from (ksubstitution-from s)
-       :to (apply-ksubstitution s1 (ksubstitution-to s))))
-    s2)
-   s1))
-
 
 (defgeneric apply-ksubstitution (subs kind)
   (:method (subs (kind kstar))
@@ -149,6 +138,26 @@
      (lambda (kind)
        (apply-ksubstitution subs kind))
      kind)))
+
+(defun compose-ksubstitution-lists (s1 s2)
+  "Returns the composition of S1 and S2.
+
+  (apply-ksubstitution s2 (apply-ksubstitution s1 k)) == (apply-ksubstitution (compose-ksubstitutions s1 s2) k)"
+  (declare (type ksubstitution-list s1)
+           (type ksubstitution-list s2)
+           (values ksubstitution-list &optional))
+  (append
+   (mapcar
+    (lambda (s)
+      (make-ksubstitution
+       :from (ksubstitution-from s)
+       :to (apply-ksubstitution s1 (ksubstitution-to s))))
+    s2)
+   s1))
+
+;;;
+;;; Kind Unification
+;;;
 
 (defun kunify (kind1 kind2 subs)
   (declare (type kind kind1 kind2)
@@ -179,21 +188,32 @@
 
   (:method ((kind1 kfun) (kind2 kfun))
     (declare (values ksubstitution-list &optional))
-    (append
+    (nconc
      (kmgu (kfun-from kind1) (kfun-from kind2))
      (kmgu (kfun-to kind1) (kfun-to kind2))))
 
-  (:method (kind1 kind2)
+  (:method ((kind1 kind) (kind2 kind))
     (error 'kunify-error
            :kind1 kind1
            :kind2 kind2)))
 
+;;;
+;;; Operations on Kinds
+;;;
+
 (defun kind-return-type (kind)
+  (declare (type kind kind)
+           (values kind &optional))
   (if (kfun-p kind)
       (kind-return-type (kfun-to kind))
       kind))
 
-(defgeneric kind-variables (kind)
+(defun kind-variables (x)
+  (declare (type t x)
+           (values kyvar-list &optional))
+  (remove-duplicates (kind-variables-generic% x) :test #'eq))
+
+(defgeneric kind-variables-generic% (kind)
   (:method ((kind kstar))
     nil)
 
@@ -201,7 +221,7 @@
     (list kind))
 
   (:method ((kind kfun))
-    (append
+    (nconc
      (kind-variables (kfun-from kind))
      (kind-variables (kfun-to kind)))))
 
@@ -212,7 +232,6 @@
    (loop :for kvar :in kvars
          :collect (make-ksubstitution :from kvar :to +kstar+))
    ksubs))
-
 
 (defun simple-kind-p (kind)
   "Whether KIND is a simple kind (either * or a function from many * to *)"
@@ -232,6 +251,8 @@
         :do (setf kind (kfun-to kind))))
 
 (defun make-kind-function* (from to)
+  (declare (type kind-list from)
+           (type kind to))
   (if (null from)
       to
       (make-kfun
@@ -242,15 +263,9 @@
 ;;; Pretty printing
 ;;;
 
-(defvar *coalton-print-unicode* t
-  "Whether to print coalton info using unicode symbols")
-
-(defun pprint-kind (stream kind &optional colon-p at-sign-p)
+(defun pprint-kind (stream kind)
   (declare (type stream stream)
-           (type kind kind)
-           (ignore colon-p)
-           (ignore at-sign-p)
-           (values kind))
+           (type kind kind))
   (etypecase kind
     (kstar
      (write-char #\* stream))
@@ -263,7 +278,7 @@
        (when (kfun-p from)
          (write-char #\) stream))
 
-       (write-string (if *coalton-print-unicode*
+       (write-string (if settings:*coalton-print-unicode*
                          " → "
                          " -> ")
                      stream)
@@ -276,9 +291,13 @@
     (kyvar
      (write-string "#K" stream)
      (write (kyvar-id kind) :stream stream)))
-  kind)
 
-(set-pprint-dispatch 'kind 'pprint-kind)
+  nil)
+
+(defmethod print-object ((kind kind) stream)
+  (if *print-readably*
+      (call-next-method)
+      (pprint-kind stream kind)))
 
 
 ;;;

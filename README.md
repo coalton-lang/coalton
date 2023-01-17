@@ -4,7 +4,7 @@
 
 <p align="center" class="badges">
   <a href="https://github.com/coalton-lang/coalton/actions/workflows/main.yml">
-    <img alt="Github Workflow Status" src="https://img.shields.io/github/workflow/status/coalton-lang/coalton/CI?logo=github" />
+    <img alt="Github Workflow Status" src="https://img.shields.io/github/actions/workflow/status/coalton-lang/coalton/main.yml?branch=main" />
   </a>
   <a href="https://discord.gg/cPb6Bc4xAH">
     <img alt="Discord" src="https://img.shields.io/discord/888196168067199046?logo=discord" />

@@ -264,5 +264,17 @@
            x)
           (Some x))))
 
-
-
+(define-test list-lexographic-order ()
+  (let is-lt = (fn (smaller larger)
+                 (is (== LT (<=> smaller larger)))
+                 (is (== GT (<=> larger smaller)))))
+  (let is-eq = (fn (a b)
+                 (is (== EQ (<=> a b)))
+                 (is (== a b))))
+  (is-eq Nil Nil)
+  (is-lt Nil (make-list 0))
+  (is-eq (make-list 0) (make-list 0))
+  (is-lt (make-list 0) (make-list 1))
+  (is-lt (make-list 0 9) (make-list 1))
+  (is-lt (make-list 0 0) (make-list 0 1))
+  (is-lt (make-list 0 0 9) (make-list 0 1 0)))

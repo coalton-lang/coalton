@@ -902,7 +902,7 @@
   (declare (type environment env)
            (type symbol function-name)
            (values util:symbol-list &optional))
-  (immutable-map-lookup (environment-source-name-environment env) function-name))
+  (values (immutable-map-lookup (environment-source-name-environment env) function-name)))
 
 (defun set-function-source-parameter-names (env function-name source-parameter-names)
   (declare (type environment env)
@@ -1286,7 +1286,7 @@
            (type ty-class class)
            (type ty-predicate pred)
            (type fundep fundep)
-           (type ty-list from-tys old-to-tys new-to-tys))
+           (type ty-list old-from-tys new-from-tys old-to-tys new-to-tys))
   (let* ((class-name (ty-class-name class))
 
          (from-tys_ (copy-list new-from-tys))

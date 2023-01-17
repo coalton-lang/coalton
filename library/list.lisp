@@ -102,7 +102,7 @@
 
   (declare cdr (List :a -> List :a))
   (define (cdr xs)
-    "Return the traditional cdr of a list. This function is partial"
+    "Return the traditional cdr of a list."
     (match xs
       ((Cons _ xs) xs)
       ((Nil) Nil)))
@@ -636,6 +636,23 @@ This function is equivalent to all size-N elements of `(COMBS L)`."
          (match b
            ((Nil) True)
            (_ False))))))
+
+  ;; <=> on lists uses lexographic order, like strings.
+  ;; Nil is the smallest list, and is LT any non-nil list.
+  ;; Two Conses with non-EQ cars are ordered based on the ordering of the cars, so (0 ...) is less than (1
+  ;; ...) no matter the ...s.
+  ;; Two Conses with EQ cars recurse into the tails for their ordering, so (0 0 ...) is less than (0 1 ...) no
+  ;; matter the ...s.
+  (define-instance (Ord :elt => Ord (List :elt))
+    (define (<=> left right)
+      (match (Tuple left right)
+        ((Tuple (Nil) (Nil)) Eq)
+        ((Tuple (Nil) _) LT)
+        ((Tuple _ (Nil)) GT)
+        ((Tuple (Cons left-head left-tail) (Cons right-head right-tail))
+         (if (== left-head right-head)
+             (<=> left-tail right-tail)
+             (<=> left-head right-head))))))
 
   (define-instance (Hash :a => (Hash (List :a)))
     (define (hash lst)
