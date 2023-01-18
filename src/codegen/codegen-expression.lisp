@@ -144,6 +144,8 @@
                ,(if settings:*emit-type-annotations*
                     `(the ,(tc:lisp-type (node-type (node-match-expr expr)) env) ,subexpr)
                     subexpr)))
+
+         (declare (ignorable ,match-var))
          (cond
            ,@(loop :for branch :in (node-match-branches expr)
                    :for pattern := (match-branch-pattern branch)

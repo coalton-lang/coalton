@@ -98,7 +98,6 @@
                      :finally (return (values (nreverse preds)
                                               (nreverse bindings))))
 
-             ()
              (values
               `(and
                 (typep ,expr ',(alexandria:format-symbol package "~A" lisp-type-string))
