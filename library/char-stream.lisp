@@ -1,7 +1,7 @@
 (coalton-library/utils:defstdlib-package #:coalton-library/char-stream
-  (:use #:coalton
-        #:coalton-library/classes
-        #:coalton-library/builtin)
+    (:use #:coalton
+          #:coalton-library/classes
+          #:coalton-library/builtin)
   (:local-nicknames (#:gray #:trivial-gray-streams)
                     (#:iter #:coalton-library/iterator))
   (:import-from #:coalton-impl/runtime
@@ -17,16 +17,33 @@
    #:StreamErrorEncoding
    #:StreamErrorTimeout
    #:StreamErrorReader
+   #:StreamErrorNoPosition
 
    ;; Stream class and its methods
    #:Stream
    #:open?
    #:close!
 
+   ;; File class and its methods
+   #:File
+   #:file-length
+   #:file-position
+   #:set-file-position!
+
    ;; Input class and its methods
    #:Input
    #:read-char!
    #:read-line!
+
+   ;; concrete stream types, which users should generally not reference
+   #:AbstractStream
+   #:AbstractFile
+   #:InputStream
+   #:InputFile
+   #:OutputStream
+   #:OutputFile
+   #:TwoWayStream
+   #:TwoWayFile
 
    ;; additional Input non-method operations
    #:input-chars!
@@ -95,8 +112,11 @@
 
    ;; passing streams to lisp
    #:wrap-input-stream-for-lisp
+   #:wrap-input-file-for-lisp
    #:wrap-output-stream-for-lisp
+   #:wrap-output-file-for-lisp
    #:wrap-two-way-stream-for-lisp
+   #:wrap-two-way-file-for-lisp
 
    ;; common lisp condition classes
    #:coalton-stream-error
@@ -125,51 +145,96 @@
   ;; users should interact with streams via the classes `Input' and `Output', rather than explicitly
   ;; referencing these types
   (repr :native cl:stream)
-  (define-type %AbstractStream
+  (define-type AbstractStream
     "A Common Lisp `cl:stream' object, with no claims made as to its direction.
 
 Users should interact with streams via the `Stream' class, rather than explicitly referencing this type.")
+
+  (repr :native cl:file-stream)
+  (define-type AbstractFile
+    "A Common Lisp `cl:file-stream' object, with no claims made as to its direction.
+
+Users should interact with files via the `File' class, rather than explicitly referencing this type.")
+
+  (%define-into-as-unsafe-coerce AbstractFile AbstractStream)
 
   ;; it would be nice if this type could be `(and stream (satisfies input-stream-p))', but on SBCL
   ;; `input-stream-p' and `output-stream-p' return nil for closed input- and output-streams, so that breaks
   ;; after you close a stream.
   (repr :native cl:stream)
-  (define-type %InputStream
+  (define-type InputStream
     "A Common Lisp `cl:stream' object which is an input stream, i.e. which can be read from.
 
 Users should interact with input streams via the `Input' class, rather than explicitly referencing this type.")
 
-  (%define-into-as-unsafe-coerce %InputStream %AbstractStream)
+  (%define-into-as-unsafe-coerce InputStream AbstractStream)
+
+  (repr :native cl:file-stream)
+  (define-type InputFile
+    "A Common Lisp `cl:file-stream' object which is an input stream, i.e. which can be read from.
+
+Users should interact with input files via the `Input' and `File' classes, rather than explicitly
+referencing this type.")
+
+  (%define-into-as-unsafe-coerce InputFile InputStream)
+  (%define-into-as-unsafe-coerce InputFile AbstractFile)
+  (%define-into-as-unsafe-coerce InputFile AbstractStream)
 
   ;; it would be nice if this type could be `(and stream (satisfies output-stream-p))', but on SBCL
   ;; `input-stream-p' and `output-stream-p' return nil for closed input- and output-streams, so that breaks
   ;; after you close a stream.
   (repr :native cl:stream)
-  (define-type %OutputStream
+  (define-type OutputStream
     "A Common Lisp `cl:stream' object which is an output stream, i.e. which can be written to.
 
 Users should interact without output streams via the `Output' class, rather than explicitly referencing this
 type.")
 
-  (%define-into-as-unsafe-coerce %OutputStream %AbstractStream)
+  (%define-into-as-unsafe-coerce OutputStream AbstractStream)
+
+  (repr :native cl:file-stream)
+  (define-type OutputFile
+    "A Common Lisp `cl:file-stream' object which is an output stream, i.e. which can be written to.
+
+Users should interact without output files via the `Output' and `File' class, rather than explicitly
+referencing this type.")
+
+  (%define-into-as-unsafe-coerce OutputFile OutputStream)
+  (%define-into-as-unsafe-coerce OutputFile AbstractFile)
+  (%define-into-as-unsafe-coerce OutputFile AbstractStream)
 
   ;; it would be nice if this type could be
   ;; `(and stream (satisfies input-stream-p) (satisfies output-stream-p))',
   ;; but on SBCL `input-stream-p' and `output-stream-p' return nil for closed input- and output-streams, so
   ;; that breaks after you close a stream.
   (repr :native cl:stream)
-  (define-type %TwoWayStream
+  (define-type TwoWayStream
     "A Common Lisp `cl:stream' object which is a bidirectional stream, i.e. which can be both read from and written to.
 
 Users should interact with two-way streams via the `Input' and `Output' classes, rather than explicitly
 referencing this type.")
 
-  (%define-into-as-unsafe-coerce %TwoWayStream %AbstractStream)
-  (%define-into-as-unsafe-coerce %TwoWayStream %InputStream)
-  (%define-into-as-unsafe-coerce %TwoWayStream %OutputStream)
+  (%define-into-as-unsafe-coerce TwoWayStream AbstractStream)
+  (%define-into-as-unsafe-coerce TwoWayStream InputStream)
+  (%define-into-as-unsafe-coerce TwoWayStream OutputStream)
+
+  (repr :native cl:file-stream)
+  (define-type TwoWayFile
+    "A Common Lisp `cl:file-stream' object which is a bidirectional stream, i.e. which can be both read from and written to.
+
+Users should interact with two-way files via the `Input', `Output' and `File' classes, rather than explicitly
+referencing this type.")
+
+  (%define-into-as-unsafe-coerce TwoWayFile AbstractStream)
+  (%define-into-as-unsafe-coerce TwoWayFile AbstractFile)
+  (%define-into-as-unsafe-coerce TwoWayFile InputStream)
+  (%define-into-as-unsafe-coerce TwoWayFile InputFile)
+  (%define-into-as-unsafe-coerce TwoWayFile OutputStream)
+  (%define-into-as-unsafe-coerce TwoWayFile OutputFile)
+  (%define-into-as-unsafe-coerce TwoWayFile TwoWayStream)
 
   ;;; class definitions
-  
+
   ;; variants of this type correspond 1:1 with subclasses of `cl:stream-error' on SBCL
   ;;
   ;; TODO: add members to variants
@@ -180,7 +245,8 @@ referencing this type.")
     StreamErrorDecoding
     StreamErrorEncoding
     StreamErrorTimeout
-    StreamErrorReader)
+    StreamErrorReader
+    StreamErrorNoPosition)
 
   (define-class (Stream :stream)
     "A character stream which, while open, is potentially readable and/or writeable.
@@ -191,6 +257,23 @@ referencing this type.")
 it (buffers, fds, etc.)."
     (open? (:stream -> Boolean))
     (close! (:stream -> Result StreamError Unit)))
+
+  (define-class (Stream :stream => File :stream)
+    "A stream which corresponds to a file, and supports querying or seeking offset.
+
+(file-length) reads the current length of STREAM in characters.
+
+(file-position STREAM) reads the offset into STREAM from which the next read or to which the next write will
+occur.
+
+(set-file-position! STREAM NEW-POSITION) sets the offset into STREAM from which the next read or to which the
+next write will occur.
+
+Note that, for streams backed by UTF-8 or UTF-16 files, these operations may have runtime proportional to the
+length of the file."
+    (file-length (:stream -> Result StreamError UFix))
+    (file-position (:stream -> Result StreamError UFix))
+    (set-file-position! (:stream -> UFix -> Result StreamError Unit)))
 
   (define-class (Stream :stream => Input :stream)
     "An input stream from which characters can be read.
@@ -226,36 +309,16 @@ stream is ready to accept data.
 `FlushOperation' for available FLUSH-OPs and their meanings."
     (write-char! (:stream -> Char -> Result StreamError Unit))
     (write-string! (:stream -> String -> Result StreamError Unit))
-    (flush-output! (FlushOperation -> :stream -> Result StreamError Unit)))
+    (flush-output! (FlushOperation -> :stream -> Result StreamError Unit))))
 
-  ;;; `Stream', `Input' and `Output' implementations for CL streams
+;; a cl condition type corresponding to StreamErrorNoPosition, so that our inner implementations can throw
+;; this error via `cl:error', and `%with-stream-errors' can catch it.
+(cl:define-condition file-position-error (cl:error)
+  ())
 
-  (declare %abstract-stream-open? (%AbstractStream -> Boolean))
-  (define (%abstract-stream-open? stream)
-    (lisp Boolean (stream)
-      (cl:open-stream-p stream)))
-
-  (declare %abstract-stream-close! (%AbstractStream -> Result StreamError Unit))
-  (define (%abstract-stream-close! stream)
-    (if (%abstract-stream-open? stream)
-        (Ok (lisp Unit (stream)
-              (cl:close stream)
-              Unit))
-        (Err StreamErrorClosed))))
-
-(cl:defmacro %define-stream-by-into-abstract-stream (stream-type)
-  (alexandria:with-gensyms (instance)
-    `(define-instance (Stream ,stream-type)
-       (define (open? ,instance)
-         (%abstract-stream-open? (into ,instance)))
-       (define (close! ,instance)
-         (%abstract-stream-close! (into ,instance))))))
-
+;; helper for error-handling, to allow our various stream function implementations to share error-handling
+;; code, while we write the logic without error-handling.
 (coalton-toplevel
-  (%define-stream-by-into-abstract-stream %InputStream)
-  (%define-stream-by-into-abstract-stream %OutputStream)
-  (%define-stream-by-into-abstract-stream %TwoWayStream)
-
   (declare %with-stream-errors (Stream :stream => :stream -> (:stream -> :success) -> Result StreamError :success))
   (define (%with-stream-errors stream thunk)
     "Invoke (THUNK STREAM) in a dynamic context where Common Lisp stream-related conditions are handled and converted into `StreamError's."
@@ -264,6 +327,7 @@ stream is ready to accept data.
           (cl:handler-case (call-coalton-function thunk stream)
             (cl:reader-error () StreamErrorReader)
             (cl:end-of-file () StreamErrorEndOfFile)
+            (file-position-error () StreamErrorNoPosition)
             #+sbcl
             (sb-int:stream-decoding-error () StreamErrorDecoding)
             #+sbcl
@@ -278,7 +342,93 @@ stream is ready to accept data.
             (:no-error (success) (Ok success))))
         (Err StreamErrorClosed)))
 
-  (define-instance (Input %InputStream)
+  ;;; `Stream' implementations for CL streams
+  ;; we'll be implementing each of the stream classes - `Stream', `File', `Input' and `Output' - for the
+  ;; appropriate types - some subset of `AbstractStream', `AbstractFile', `InputStream', `InputFile',
+  ;; `OutputStream', `OutputFile', `TwoWayStream' and `TwoWayFile', by manually defining a single instance on
+  ;; the most-general/least-powerful type that should implement the class, then using a macro to have all the
+  ;; less-general/more-powerful types defer to it.
+
+  (define-instance (Stream AbstractStream)
+    (define (open? stream)
+      (lisp Boolean (stream)
+        (cl:open-stream-p stream)))
+    (define (close! stream)
+      (if (%abstract-stream-open? stream)
+        (Ok (lisp Unit (stream)
+              (cl:close stream)
+              Unit))
+        (Err StreamErrorClosed)))))
+
+(cl:defmacro %define-stream-by-into-abstract-stream (stream-type)
+  `(define-instance (Stream ,stream-type)
+     (define (open? stream)
+       (open? (the AbstractStream (into stream))))
+     (define (close! stream)
+       (close! (the AbstractStream (into stream))))))
+
+(coalton-toplevel
+  (%define-stream-by-into-abstract-stream InputStream)
+  (%define-stream-by-into-abstract-stream OutputStream)
+  (%define-stream-by-into-abstract-stream TwoWayStream)
+  (%define-stream-by-into-abstract-stream AbstractFile)
+  (%define-stream-by-into-abstract-stream InputFile)
+  (%define-stream-by-into-abstract-stream OutputFile)
+  (%define-stream-by-into-abstract-stream TwoWayFile)
+
+  ;;; `File' implementations for CL streams
+
+  (declare %abstract-file-length (AbstractFile -> Result StreamError UFix))
+  (define (%abstract-file-length file)
+    (%with-stream-errors
+     file
+     (fn (file)
+       (lisp UFix (file)
+         (cl:or (cl:file-length file)
+                (cl:error 'file-position-error))))))
+
+  (declare %abstract-file-position (AbstractFile -> Result StreamError UFix))
+  (define (%abstract-file-position file)
+    (%with-stream-errors
+     file
+     (fn (file)
+       (lisp UFix (file)
+         (cl:or (cl:file-length file)
+                (cl:error 'file-position-error))))))
+
+  (declare %abstract-file-set-position! (AbstractFile -> UFix -> Result StreamError Unit))
+  (define (%abstract-file-set-position! file new-position)
+    (%with-stream-errors
+     file
+     (fn (file)
+       (lisp Unit (file new-position)
+         (cl:if (cl:file-position file new-position)
+                Unit
+                (cl:error 'file-position-error))))))
+
+  (define-instance (File AbstractFile)
+    (define file-length %abstract-file-length)
+    (define file-position %abstract-file-position)
+    (define set-file-position! %abstract-file-set-position!)))
+
+(cl:defmacro %define-file-by-into-abstract-file (file-type)
+  `(define-instance (File ,file-type)
+     (define (file-length file)
+       (file-length (the AbstractFile (into file))))
+     (define (file-position file)
+       (file-position (the AbstractFile (into file))))
+     (define (set-file-position! file new-position)
+       (set-file-position! (the AbstractFile (into file)) new-position))))
+
+(coalton-toplevel
+  (%define-file-by-into-abstract-file InputFile)
+  (%define-file-by-into-abstract-file OutputFile)
+  (%define-file-by-into-abstract-file TwoWayFile))
+
+;;; `Input' implementations for CL streams
+
+(coalton-toplevel
+  (define-instance (Input InputStream)
     (define (read-char! stream)
       (%with-stream-errors
        stream
@@ -290,15 +440,23 @@ stream is ready to accept data.
        stream
        (fn (stream)
          (lisp String (stream)
-           (cl:values (cl:read-line stream)))))))
+           (cl:values (cl:read-line stream))))))))
 
-  (define-instance (Input %TwoWayStream)
-    (define (read-char! stream)
-      (read-char! (the %InputStream (into stream))))
-    (define (read-line! stream)
-      (read-line! (the %InputStream (into stream)))))
+(cl:defmacro %define-input-by-into-input-stream (input-type)
+  `(define-instance (Input ,input-type)
+     (define (read-char! stream)
+       (read-char! (the InputStream (into stream))))
+     (define (read-line! stream)
+       (read-line! (the InputStream (into stream))))))
 
-  (define-instance (Output %OutputStream)
+(coalton-toplevel
+  (%define-input-by-into-input-stream InputFile)
+  (%define-input-by-into-input-stream TwoWayStream)
+  (%define-input-by-into-input-stream TwoWayFile)
+
+  ;;; `Output' implementations for CL streams
+
+  (define-instance (Output OutputStream)
     (define (write-char! stream char)
       (%with-stream-errors
        stream
@@ -323,19 +481,25 @@ stream is ready to accept data.
                               Unit))
            ((FlushAsync) (lisp Unit (stream)
                            (cl:force-output stream)
-                           Unit)))))))
+                           Unit))))))))
 
-  (define-instance (Output %TwoWayStream)
-    (define (write-char! stream char)
-      (write-char! (the %OutputStream (into stream))
-                   char))
-    (define (write-string! stream string)
-      (write-string! (the %OutputStream (into stream))
-                     string))
-    (define (flush-output! flush-op stream)
-      (flush-output! flush-op (the %OutputStream (into stream)))))
+(cl:defmacro %define-output-by-into-output-stream (output-type)
+  `(define-instance (Output ,output-type)
+     (define (write-char! stream char)
+       (write-char! (the OutputStream (into stream))
+                    char))
+     (define (write-string! stream str)
+       (write-string! (the OutputStream (into stream))
+                      str))
+     (define (flush-output! flush-op stream)
+       (flush-output! flush-op (the OutputStream (into stream))))))
 
-  ;;; additional `Input' operations
+(coalton-toplevel
+  (%define-output-by-into-output-stream OutputFile)
+  (%define-output-by-into-output-stream TwoWayStream)
+  (%define-output-by-into-output-stream TwoWayFile)
+
+ ;;; additional `Input' operations
 
   (declare input-iterator! (Input :stream =>
                                   (:stream -> Result StreamError :elt)
@@ -545,14 +709,14 @@ Applies to files opened for both reading or writing, but with different defaults
     (FileError String))
 
   ;;; opening files
-  (declare open-input-file! (FileOptions -> Path -> (Result FileError %InputStream)))
+  (declare open-input-file! (FileOptions -> Path -> (Result FileError InputFile)))
   (define (open-input-file! opts path)
     (let (%FileOptions enc _ if-does-not-exist) = opts)
     (let if-does-not-exist = (match if-does-not-exist
                                ((Some if-not) if-not)
                                ((None) IfDoesNotExistError)))
     (let (%Path pathname) = path)
-    (lisp (Result FileError %InputStream) (enc if-does-not-exist pathname)
+    (lisp (Result FileError InputFile) (enc if-does-not-exist pathname)
       (cl:handler-case (cl:open pathname
                                 :direction :input
                                 :element-type 'cl:character
@@ -561,7 +725,7 @@ Applies to files opened for both reading or writing, but with different defaults
         (cl:file-error (e) (Err (cl:prin1-to-string e)))
         (:no-error (file) (Ok file)))))
 
-  (declare open-output-file! (FileOptions -> Path -> (Result FileError %OutputStream)))
+  (declare open-output-file! (FileOptions -> Path -> (Result FileError OutputFile)))
   (define (open-output-file! opts path)
     (let (%FileOptions enc if-exists if-does-not-exist) = opts)
     (let if-exists = (match if-exists
@@ -571,7 +735,7 @@ Applies to files opened for both reading or writing, but with different defaults
                                ((Some if-not) if-not)
                                ((None) IfDoesNotExistCreate)))
     (let (%Path pathname) = path)
-    (lisp (Result FileError %OutputStream) (enc if-exists if-does-not-exist pathname)
+    (lisp (Result FileError OutputFile) (enc if-exists if-does-not-exist pathname)
       (cl:handler-case (cl:open pathname
                                 :direction :output
                                 :element-type 'cl:character
@@ -581,7 +745,7 @@ Applies to files opened for both reading or writing, but with different defaults
         (cl:file-error (e) (Err (cl:prin1-to-string e)))
         (:no-error (file) (Ok file)))))
 
-  (declare open-two-way-file! (FileOptions -> Path -> Result FileError %TwoWayStream))
+  (declare open-two-way-file! (FileOptions -> Path -> Result FileError TwoWayFile))
   (define (open-two-way-file! opts path)
     (let (%FileOptions enc if-exists if-does-not-exist) = opts)
     (let if-exists = (match if-exists
@@ -591,7 +755,7 @@ Applies to files opened for both reading or writing, but with different defaults
                                ((Some if-not) if-not)
                                ((None) IfDoesNotExistCreate)))
     (let (%Path pathname) = path)
-    (lisp (Result FileError %TwoWayStream) (enc if-exists if-does-not-exist pathname)
+    (lisp (Result FileError TwoWayFile) (enc if-exists if-does-not-exist pathname)
       (cl:handler-case (cl:open pathname
                                 :direction :io
                                 :element-type 'cl:character
@@ -615,6 +779,18 @@ Applies to files opened for both reading or writing, but with different defaults
                      :accessor coalton-close!-function))
   (:documentation "A Coalton implementor of `Stream' wrapped in a CLOS object as a Gray character-stream."))
 
+(cl:defclass coalton-char-file (coalton-char-stream)
+  ((%file-length-function :type coalton-function
+                          :initarg :file-length-function
+                          :accessor coalton-file-length-function)
+   (%file-position-function :type coalton-function
+                            :initarg :file-position-function
+                            :accessor coalton-file-position-function)
+   (%set-file-position!-function :type coalton-function
+                                 :initarg :set-file-position!-function
+                                 :accessor coalton-set-file-position!-function))
+  (:documentation "A Coalton implementor of `File' wrapped in a CLOS object as a Gray character-stream"))
+
 (cl:defclass coalton-char-input-stream (gray:fundamental-character-input-stream coalton-char-stream)
   ((%read-char!-function :type coalton-function
                          :initarg :read-char!-function
@@ -623,6 +799,10 @@ Applies to files opened for both reading or writing, but with different defaults
                          :initarg :read-line!-function
                          :accessor coalton-read-line!-function))
   (:documentation "A Coalton implementor of `Input' wrapped in a CLOS object as a Gray character-input-stream."))
+
+(cl:defclass coalton-char-input-file (coalton-char-input-stream coalton-char-file)
+  ()
+  (:documentation "A Coalton implementor of `Input' and `File' wrapped in a CLOS object as a Gray character-input-stream."))
 
 (cl:defclass coalton-char-output-stream (gray:fundamental-character-output-stream coalton-char-stream)
   ((%write-char!-function :type coalton-function
@@ -639,9 +819,17 @@ Applies to files opened for both reading or writing, but with different defaults
                            :accessor coalton-force-output-function))
   (:documentation "A Coalton implementor of `Output' wrapped in a CLOS object as a Gray character-output-stream."))
 
+(cl:defclass coalton-char-output-file (coalton-char-output-stream coalton-char-file)
+  ()
+  (:documentation "A Coalton implementor of `Output' and `File' wrapped in a CLOS object as a Gray character-output-stream."))
+
 (cl:defclass coalton-char-two-way-stream (coalton-char-input-stream coalton-char-output-stream)
   ()
   (:documentation "A Coalton implementor of both `Input' and `Output' wrapped in a CLOS object as a Gray character-bidirectional-stream."))
+
+(cl:defclass coalton-char-two-way-file (coalton-char-two-way-stream coalton-char-file)
+  ()
+  (:documentation "A Coalton implementor of `Input', `Output' and `File' wrapped in a CLOS object as a Gray character-bidirectional-stream."))
 
 ;; TODO: as with `StreamError', add members
 (cl:define-condition coalton-stream-error (cl:stream-error) ())
@@ -681,7 +869,7 @@ Applies to files opened for both reading or writing, but with different defaults
     (match res
       ((Ok success) success)
       ((Err error) (throw-stream-error error))))
-  
+
   (declare get-open?-function (Stream :stream => :stream -> Unit -> Boolean))
   (define (get-open?-function stream)
     (fn ()
@@ -691,6 +879,21 @@ Applies to files opened for both reading or writing, but with different defaults
   (define (get-close!-function stream)
     (fn ()
       (unwrap-stream-result (close! stream))))
+
+  (declare get-file-length-function (File :stream => :stream -> Unit -> UFix))
+  (define (get-file-length-function file)
+    (fn ()
+      (unwrap-stream-result (file-length file))))
+
+  (declare get-file-position-function (File :stream => :stream -> Unit -> UFix))
+  (define (get-file-position-function file)
+    (fn ()
+      (unwrap-stream-result (file-position file))))
+
+  (declare get-set-file-position!-function (File :stream => :stream -> UFix -> Unit))
+  (define (get-set-file-position!-function file)
+    (fn (new-position)
+      (unwrap-stream-result (set-file-position! file new-position))))
 
   (declare get-read-char!-function (Input :stream => :stream -> Unit -> Char))
   (define (get-read-char!-function stream)
@@ -715,70 +918,99 @@ Applies to files opened for both reading or writing, but with different defaults
   (declare get-flush-output!-function (Output :stream => FlushOperation -> :stream -> Unit -> Unit))
   (define (get-flush-output!-function flush-op stream)
     (fn ()
-      (unwrap-stream-result (flush-output! flush-op stream))))
+      (unwrap-stream-result (flush-output! flush-op stream)))))
 
-  (declare wrap-input-stream-for-lisp (Input :stream => :stream -> %InputStream))
-  (define (wrap-input-stream-for-lisp stream)
-    (let open?-function = (get-open?-function stream))
-    (let close!-function = (get-close!-function stream))
-    (let read-char!-function = (get-read-char!-function stream))
-    (let read-line!-function = (get-read-line!-function stream))
-    (lisp %InputStream (open?-function close!-function read-char!-function read-line!-function)
-      (cl:make-instance 'coalton-char-input-stream
-                        :open?-function open?-function
-                        :close!-function close!-function
-                        :read-char!-function read-char!-function
-                        :read-line!-function read-line!-function)))
+(cl:defmacro %define-stream-wrapper ((name classes cl-class result-type) cl:&body fields)
+  "Define NAME as a function for wrapping a Coalton stream which implements CLASSES to pass to CL.
 
-  (declare wrap-output-stream-for-lisp (Output :stream => :stream -> %OutputStream))
-  (define (wrap-output-stream-for-lisp stream)
-    (let open?-function = (get-open?-function stream))
-    (let close!-function = (get-close!-function stream))
-    (let write-char!-function = (get-write-char!-function stream))
-    (let write-string!-function = (get-write-string!-function stream))
-    (let finish-output-function = (get-flush-output!-function FlushBlocking stream))
-    (let force-output-function = (get-flush-output!-function FlushAsync stream))
-    (lisp %OutputStream (open?-function
-                         close!-function
-                         write-char!-function
-                         write-string!-function
-                         finish-output-function
-                         force-output-function)
-      (cl:make-instance 'coalton-char-output-stream
-                        :open?-function open?-function
-                        :close!-function close!-function
-                        :write-char!-function write-char!-function
-                        :write-string!-function write-string!-function
-                        :finish-output-function finish-output-function
-                        :force-output-function force-output-function)))
+CLASSES should be a list of constraints, like (Input) or (Input Output File).
 
-  (declare wrap-two-way-stream-for-lisp ((Input :stream) (Output :stream) => :stream -> %TwoWayStream))
-  (define (wrap-two-way-stream-for-lisp stream)
-    (let open?-function = (get-open?-function stream))
-    (let close!-function = (get-close!-function stream))
-    (let read-char!-function = (get-read-char!-function stream))
-    (let read-line!-function = (get-read-line!-function stream))
-    (let write-char!-function = (get-write-char!-function stream))
-    (let write-string!-function = (get-write-string!-function stream))
-    (let finish-output-function = (get-flush-output!-function FlushBlocking stream))
-    (let force-output-function = (get-flush-output!-function FlushAsync stream))
-    (lisp %TwoWayStream (open?-function
-                         close!-function
-                         read-char!-function
-                         read-line!-function
-                         write-char!-function
-                         write-string!-function
-                         finish-output-function
-                         force-output-function)
-      (cl:make-instance 'coalton-char-input-stream
-                        :open?-function open?-function
-                        :close!-function close!-function
-                        :read-char!-function read-char!-function
-                        :read-line!-function read-line!-function
-                        :write-char!-function write-char!-function
-                        :write-string!-function write-string!-function
-                        :finish-output-function finish-output-function
-                        :force-output-function force-output-function))))
+CL-CLASS should be a symbol which names one of the coalton- Gray stream classes above.
+
+RESULT-TYPE should be a concrete Coalton stream type, like InputStream.
+
+Each of the FIELDS should be a specifier for a field of the resulting Gray stream, of the form
+  (GETTER-FUNCTION INITARG)
+where GETTER-FUNCTION names one of the get-FOO-function functions above, and
+INITARG is a keyword argument to (make-instance CL-CLASS)."
+  (cl:let* ((constraints (cl:mapcar (cl:lambda (class) `(,class :stream)) classes))
+            (constraints-with-arrow (cl:when constraints `(,@constraints =>)))
+            (type `(,@constraints-with-arrow :stream -> ,result-type))
+            (field-binding-names (alexandria:make-gensym-list (cl:length fields)))
+            (field-getter-functions (cl:mapcar #'cl:first fields))
+            (field-initargs (cl:mapcar #'cl:second fields))
+            (field-binding-lets (cl:mapcar (cl:lambda (binding-name getter-function)
+                                             `(let ,binding-name = (,getter-function stream)))
+                                           field-binding-names
+                                           field-getter-functions))
+            (make-instance-initargs (cl:mapcan (cl:lambda (binding-name initarg)
+                                                 `(,initarg ,binding-name))
+                                               field-binding-names
+                                               field-initargs)))
+    `(coalton-toplevel
+       (declare ,name ,type)
+       (define (,name stream)
+         ,@field-binding-lets
+         (lisp ,result-type ,field-binding-names
+           (cl:make-instance ',cl-class
+                             ,@make-instance-initargs))))))
+
+(%define-stream-wrapper (wrap-input-stream-for-lisp (Input) coalton-char-input-stream InputStream)
+  (get-open?-function :open?-function)
+  (get-close!-function :close!-function)
+  (get-read-char!-function :read-char!-function)
+  (get-read-line!-function :read-line!-function))
+
+(%define-stream-wrapper (wrap-input-file-for-lisp (Input File) coalton-char-input-file InputFile)
+  (get-open?-function :open?-function)
+  (get-close!-function :close!-function)
+  (get-read-char!-function :read-char!-function)
+  (get-read-line!-function :read-line!-function)
+  (get-file-length-function :file-length-function)
+  (get-file-position-function :file-position-function)
+  (get-set-file-position!-function :set-file-position!-function))
+
+(%define-stream-wrapper (wrap-output-stream-for-lisp (Output) coalton-char-output-stream OutputStream)
+  (get-open?-function :open?-function)
+  (get-close!-function :close!-function)
+  (get-write-char!-function :write-char!-function)
+  (get-write-string!-function :write-string!-function)
+  ((get-flush-output!-function FlushBlocking) :finish-output-function)
+  ((get-flush-output!-function FlushAsync) :force-output-function))
+
+(%define-stream-wrapper (wrap-output-file-for-lisp (Output File) coalton-char-output-file OutputFile)
+  (get-open?-function :open?-function)
+  (get-close!-function :close!-function)
+  (get-write-char!-function :write-char!-function)
+  (get-write-string!-function :write-string!-function)
+  ((get-flush-output!-function FlushBlocking) :finish-output-function)
+  ((get-flush-output!-function FlushAsync) :force-output-function)
+  (get-file-length-function :file-length-function)
+  (get-file-position-function :file-position-function)
+  (get-set-file-position!-function :set-file-position!-function))
+
+(%define-stream-wrapper (wrap-two-way-stream-for-lisp (Input Output) coalton-char-two-way-stream TwoWayStream)
+  (get-open?-function :open?-function)
+  (get-close!-function :close!-function)
+  (get-read-char!-function :read-char!-function)
+  (get-read-line!-function :read-line!-function)
+  (get-write-char!-function :write-char!-function)
+  (get-write-string!-function :write-string!-function)
+  ((get-flush-output!-function FlushBlocking) :finish-output-function)
+  ((get-flush-output!-function FlushAsync) :force-output-function))
+
+(%define-stream-wrapper (wrap-two-way-file-for-lisp (Input Output File) coalton-char-two-way-file TwoWayFile)
+  (get-open?-function :open?-function)
+  (get-close!-function :close!-function)
+  (get-read-char!-function :read-char!-function)
+  (get-read-line!-function :read-line!-function)
+  (get-write-char!-function :write-char!-function)
+  (get-write-string!-function :write-string!-function)
+  ((get-flush-output!-function FlushBlocking) :finish-output-function)
+  ((get-flush-output!-function FlushAsync) :force-output-function)
+  (get-file-length-function :file-length-function)
+  (get-file-position-function :file-position-function)
+  (get-set-file-position!-function :set-file-position!-function))
 
 (cl:defmethod cl:open-stream-p ((stream coalton-char-stream))
   (call-coalton-function (coalton-open?-function stream) Unit))
@@ -786,6 +1018,17 @@ Applies to files opened for both reading or writing, but with different defaults
 (cl:defmethod cl:close ((stream coalton-char-stream) cl:&key abort)
   (cl:declare (cl:ignore abort))
   (call-coalton-function (coalton-close!-function stream) Unit))
+
+(cl:defmethod gray:stream-file-position ((stream coalton-char-file))
+  (call-coalton-function (coalton-file-position-function stream) Unit))
+
+(cl:defmethod (cl:setf gray:stream-file-position) (new-position (stream coalton-char-file))
+  ;; FIXME: support :start and :end as NEW-POSITION
+  (cl:check-type new-position (cl:and cl:fixnum cl:unsigned-byte))
+  (call-coalton-function (coalton-set-file-position!-function stream) new-position))
+
+;; NOTE: gray streams don't actually support the file-length operation. (probably a design oversight.) as
+;; such, we have no useful way to expose that functionality to CL callers.
 
 (cl:defmethod gray:stream-read-char ((stream coalton-char-input-stream))
   (call-coalton-function (coalton-read-char!-function stream) Unit))
@@ -815,4 +1058,3 @@ Applies to files opened for both reading or writing, but with different defaults
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/CHAR-STREAM")
-
