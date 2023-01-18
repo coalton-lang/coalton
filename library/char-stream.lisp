@@ -354,7 +354,7 @@ stream is ready to accept data.
       (lisp Boolean (stream)
         (cl:open-stream-p stream)))
     (define (close! stream)
-      (if (%abstract-stream-open? stream)
+      (if (open? stream)
         (Ok (lisp Unit (stream)
               (cl:close stream)
               Unit))
