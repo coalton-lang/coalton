@@ -278,6 +278,7 @@
                (:file "tarjan-scc-tests")
                (:file "type-inference-tests")
                (:file "fundep-tests")
+               (:file "fundep-fib-test")
                (:file "runtime-tests")
                (:file "environment-persist-tests")
                (:file "slice-tests")

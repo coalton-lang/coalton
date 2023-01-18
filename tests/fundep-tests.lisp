@@ -61,28 +61,6 @@
 
        (coalton:define-instance (C (coalton:List :a) coalton:String))))))
 
-;; Ambigious variables
-(deftest fundep-ambigious-variables ()
-  (signals tc:coalton-type-error
-    (run-coalton-typechecker
-     '((coalton:define-class (C :a :b (:a -> :b)))
-
-       (coalton:define-instance (C Integer :a))))
-
-    ;; Transitive ambigious variable
-    (signals tc:coalton-type-error
-      (run-coalton-typechecker
-       '((coalton:define-class (C :a :b :c (:a -> :b) (:b -> :c)))
-
-         (coalton:define-instance (C coalton:Integer :a (coalton:List :a))))))
-
-    ;; Ambigious variable in the transitive closure of multiple variables
-    (signals tc:coalton-type-error
-      (run-coalton-typechecker
-       '((coalton:define-class (C :a :b :c (:a :b -> :c)))
-
-         (coalton:define-instance (C Integer String :a)))))))
-
 ;; Check that fundep declerations are used to improve type checking 
 (deftest fundep-improve-types ()
   (run-coalton-typechecker

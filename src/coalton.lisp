@@ -171,60 +171,63 @@ in FORMS that begin with that operator."
       (multiple-value-bind (type preds typed-node substs)
           (tc:derive-expression-type parsed-form *global-environment* nil)
 
-        (let* ((env (tc:apply-substitution substs *global-environment*))
-               (substs (tc:solve-fundeps env (tc:apply-substitution substs preds) substs))
-               (preds (tc:reduce-context env preds substs))
-               (substs (tc:compose-substitution-lists
-                        (tc:default-subs env nil preds)
-                        substs))
-               (preds (tc:reduce-context env preds substs))
-               (typed-node (tc:remove-static-preds
-                            (tc:apply-substitution substs typed-node)))
-               (type (tc:apply-substitution substs type))
-               (qual-type (tc:qualify preds type))
-               (scheme (tc:quantify (tc:type-variables qual-type) qual-type)))
+        (let ((env (tc:apply-substitution substs *global-environment*)))
 
-          (cond
-            ((null preds)
-             (let ((node
-                     (codegen:optimize-node
-                      (codegen:compile-expression
-                       typed-node
-                       nil
-                       *global-environment*)
-                      *global-environment*)))
+          (multiple-value-bind (preds substs)
+              (tc:solve-fundeps env preds substs)
 
-               (setf *global-environment* env)
-               (values
-                (codegen:codegen-expression
-                 (codegen:direct-application
-                  node
-                  (codegen:make-function-table *global-environment*))
-                 nil
-                 *global-environment*))))
+            (let* ((preds (tc:reduce-context env preds substs))
+                   (substs (tc:compose-substitution-lists
+                            (tc:default-subs env nil preds)
+                            substs))
+                   (preds (tc:reduce-context env preds substs))
+                   (typed-node (tc:remove-static-preds
+                                (tc:apply-substitution substs typed-node)))
+                   (type (tc:apply-substitution substs type))
+                   (qual-type (tc:qualify preds type))
+                   (scheme (tc:quantify (tc:type-variables qual-type) qual-type)))
 
-            (t
-             (tc:with-pprint-variable-context ()
-               (let* ((tvars
-                        (loop :for i :to (1- (length (remove-duplicates (tc:type-variables qual-type)
-                                                                        :test #'equalp)))
-                              :collect (tc:make-variable)))
-                      (qual-type (tc:instantiate
-                                  tvars
-                                  (tc:ty-scheme-type scheme))))
-                 (warn "The expression ~A~%    of type ~A~{ ~S~}. ~S => ~S~%    has unresolved constraint~A ~S~%    add a type assertion with THE to resolve it"
-                       form
-                       (if settings:*coalton-print-unicode*
-                           "∀"
-                           "FORALL")
-                       tvars
-                       (tc:qualified-ty-predicates qual-type)
-                       (tc:qualified-ty-type qual-type)
-                       (if (= (length (tc:qualified-ty-predicates qual-type)) 1)
-                           ""
-                           "s")
-                       (tc:qualified-ty-predicates qual-type))))
-             ''coalton::unable-to-codegen)))))))
+              (cond
+                ((null preds)
+                 (let ((node
+                         (codegen:optimize-node
+                          (codegen:compile-expression
+                           typed-node
+                           nil
+                           *global-environment*)
+                          *global-environment*)))
+
+                   (setf *global-environment* env)
+                   (values
+                    (codegen:codegen-expression
+                     (codegen:direct-application
+                      node
+                      (codegen:make-function-table *global-environment*))
+                     nil
+                     *global-environment*))))
+
+                (t
+                 (tc:with-pprint-variable-context ()
+                   (let* ((tvars
+                            (loop :for i :to (1- (length (remove-duplicates (tc:type-variables qual-type)
+                                                                            :test #'equalp)))
+                                  :collect (tc:make-variable)))
+                          (qual-type (tc:instantiate
+                                      tvars
+                                      (tc:ty-scheme-type scheme))))
+                     (warn "The expression ~A~%    of type ~A~{ ~S~}. ~S => ~S~%    has unresolved constraint~A ~S~%    add a type assertion with THE to resolve it"
+                           form
+                           (if settings:*coalton-print-unicode*
+                               "∀"
+                               "FORALL")
+                           tvars
+                           (tc:qualified-ty-predicates qual-type)
+                           (tc:qualified-ty-type qual-type)
+                           (if (= (length (tc:qualified-ty-predicates qual-type)) 1)
+                               ""
+                               "s")
+                           (tc:qualified-ty-predicates qual-type))))
+                 ''coalton::unable-to-codegen)))))))))
 
 (defun process-coalton-toplevel (toplevel-forms package &optional (env *global-environment*))
   "Top-level definitions for use within Coalton."

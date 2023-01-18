@@ -684,8 +684,11 @@ TOPLEVEL is set to indicate additional checks should be completed in COALTON-TOP
         ;; NOTE: this is where functional dependency substitutions are generated
         ;;
 
-        (setf local-subs (solve-fundeps env expr-preds local-subs)) 
-        (setf expr-types (apply-substitution local-subs expr-types))
+        (multiple-value-bind (fundep-preds fundep-subs)
+            (solve-fundeps env expr-preds local-subs)
+          (setf local-subs fundep-subs)
+          (setf expr-types (apply-substitution local-subs expr-types))
+          (setf expr-preds (apply-substitution local-subs fundep-preds)))
 
         (multiple-value-bind (deferred-preds retained-preds defaultable-preds)
             (split-context env env-tvars local-tvars expr-preds local-subs)
@@ -850,9 +853,11 @@ TOPLEVEL is set to indicate additional checks should be completed in COALTON-TOP
         ;; Like implicit bindings, we only need to apply substitutions
         ;; for the predicates generated from type inference, not
         ;; including ones in our explicit type.
-        (setf local-subs (solve-fundeps env (apply-substitution local-subs preds) local-subs)) 
-        (setf expr-type (apply-substitution local-subs expr-type))
-
+        (multiple-value-bind (fundep-preds fundep-subs)
+            (solve-fundeps env (apply-substitution local-subs preds) local-subs)
+          (setf local-subs fundep-subs)
+          (setf expr-type (apply-substitution local-subs expr-type))
+          (setf expr-preds (apply-substitution local-subs fundep-preds)))
 
         (multiple-value-bind (deferred-preds retained-preds)
             (split-context env env-tvars local-tvars reduced-preds local-subs)
