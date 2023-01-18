@@ -169,3 +169,13 @@
                     (coalton-library/iterator:collect!
                      (coalton-library/iterator:into-iter
                       (coalton:the (coalton:List coalton:Integer) items))))))))
+
+(deftest fundep-explicit-binding ()
+  (run-coalton-typechecker
+   '((coalton:declare fast-evens (coalton-library/iterator:IntoIterator :a coalton:Integer => :a -> coalton:List coalton:Integer))
+     (coalton:define (fast-evens items)
+       (coalton:pipe items
+             coalton-library/iterator:into-iter
+             (coalton-prelude:map (coalton-prelude:* 3))
+             (coalton-library/iterator:filter! coalton-prelude:even?)
+             coalton-library/iterator:collect!)))))

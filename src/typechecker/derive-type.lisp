@@ -841,10 +841,7 @@ TOPLEVEL is set to indicate additional checks should be completed in COALTON-TOP
                            :test #'equalp))
 
              (output-qual-type (qualify expr-preds expr-type))
-             (output-scheme (quantify local-tvars output-qual-type))
-             (reduced-preds (remove-if-not (lambda (p)
-                                             (not (entail env expr-preds p)))
-                                           (apply-substitution local-subs preds))))
+             (output-scheme (quantify local-tvars output-qual-type)))
 
         ;;
         ;; NOTE: this is where functional dependency substitutions are generated
@@ -853,53 +850,58 @@ TOPLEVEL is set to indicate additional checks should be completed in COALTON-TOP
         ;; Like implicit bindings, we only need to apply substitutions
         ;; for the predicates generated from type inference, not
         ;; including ones in our explicit type.
-        (multiple-value-bind (fundep-preds fundep-subs)
+        (multiple-value-bind (fundep-preds local-subs)
             (solve-fundeps env (apply-substitution local-subs preds) local-subs)
-          (setf local-subs fundep-subs)
+          (declare (ignore fundep-preds))
+
           (setf expr-type (apply-substitution local-subs expr-type))
-          (setf expr-preds (apply-substitution local-subs fundep-preds)))
 
-        (multiple-value-bind (deferred-preds retained-preds)
-            (split-context env env-tvars local-tvars reduced-preds local-subs)
+          (let ((reduced-preds
+                  (remove-if-not (lambda (p)
+                                   (not (entail env expr-preds p)))
+                                 (apply-substitution local-subs preds))))
 
-          ;; NOTE: This is where defaulting happens
+            (multiple-value-bind (deferred-preds retained-preds)
+                (split-context env env-tvars local-tvars reduced-preds local-subs)
 
-          (unless allow-deferred-predicates
-            (setf local-subs (compose-substitution-lists (default-subs env nil reduced-preds) local-subs)))
+              ;; NOTE: This is where defaulting happens
 
-          (error:with-context ("definition of ~A" (car binding))
-            (when (and returns (not allow-returns))
-              (error 'unexpected-return))
+              (unless allow-deferred-predicates
+                (setf local-subs (compose-substitution-lists (default-subs env nil reduced-preds) local-subs)))
 
-            ;; Make sure the declared scheme is not too general
-            (when (not (equalp output-scheme declared-ty))
-              (error 'type-declaration-too-general-error
-                     :name (car binding)
-                     :declared-type declared-ty
-                     :derived-type output-scheme))
+              (error:with-context ("definition of ~A" (car binding))
+                (when (and returns (not allow-returns))
+                  (error 'unexpected-return))
 
-            ;; Make sure the declared type includes all the required predicates
-            (when (not (null retained-preds))
-              (error 'weak-context-error
-                     :name (car binding)
-                     :declared-type output-qual-type
-                     :preds retained-preds))
+                ;; Make sure the declared scheme is not too general
+                (when (not (equalp output-scheme declared-ty))
+                  (error 'type-declaration-too-general-error
+                         :name (car binding)
+                         :declared-type declared-ty
+                         :derived-type output-scheme))
 
-            ;; Ensure that we are allowed to defer predicates (this is
-            ;; not allowable in toplevel forms)
-            (when (and (not allow-deferred-predicates)
-                       deferred-preds)
-              (error 'context-reduction-failure
-                     :pred (apply-substitution subs (first deferred-preds)))))
+                ;; Make sure the declared type includes all the required predicates
+                (when (not (null retained-preds))
+                  (error 'weak-context-error
+                         :name (car binding)
+                         :declared-type output-qual-type
+                         :preds retained-preds))
 
-          (values output-scheme
-                  (cons (car binding)
-                        (apply-substitution local-subs typed-node))
-                  deferred-preds
-                  env
-                  local-subs
-                  output-qual-type
-                  returns))))))
+                ;; Ensure that we are allowed to defer predicates (this is
+                ;; not allowable in toplevel forms)
+                (when (and (not allow-deferred-predicates)
+                           deferred-preds)
+                  (error 'context-reduction-failure
+                         :pred (apply-substitution subs (first deferred-preds)))))
+
+              (values output-scheme
+                      (cons (car binding)
+                            (apply-substitution local-subs typed-node))
+                      deferred-preds
+                      env
+                      local-subs
+                      output-qual-type
+                      returns))))))))
 
 (defun derive-binding-type (name type expr env subs name-map)
   (declare (type ty type)
