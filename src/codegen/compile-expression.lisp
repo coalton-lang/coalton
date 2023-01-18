@@ -8,7 +8,9 @@
    #:coalton-impl/codegen/typecheck-node
    #:typecheck-node)
   (:local-nicknames
-   (#:tc #:coalton-impl/typechecker))
+   (#:tc #:coalton-impl/typechecker)
+   (#:analysis #:coalton-impl/analysis)
+   (#:error #:coalton-impl/error))
   (:export
    #:compile-toplevel                   ; FUNCTION
    #:compile-expression                 ; FUNCTION
@@ -224,6 +226,7 @@
     (declare (type pred-context ctx)
              (type tc:environment env)
              (values match-branch))
+
     (make-match-branch
      :pattern (tc:typed-match-branch-pattern expr)
      :bindings (loop :for (name . scheme) :in (tc:typed-match-branch-bindings expr)
@@ -239,6 +242,26 @@
              (values node-match))
     (let ((qual-ty (tc:fresh-inst (tc:typed-node-type expr))))
       (assert (null (tc:qualified-ty-predicates qual-ty)))
+
+      ;; TODO: This should be moved to another place in the
+      ;;       compiler. Luckily patterns stay the same no matter
+      ;;       which AST we are in!
+      (error:with-context ("match on ~W" (tc:typed-node-unparsed (tc:typed-node-match-expr expr)))
+        (let ((patterns (mapcar #'tc:typed-match-branch-pattern (tc:typed-node-match-branches expr))))
+          (let ((exhaustive-or-missing
+                  (analysis:find-non-matching-value
+                   (mapcar #'list patterns)
+                   1
+                   env)))
+            (unless (eq t exhaustive-or-missing)
+              (warn 'analysis:coalton-non-exhaustive-match-warning
+                    :missing-clause (first exhaustive-or-missing))))
+
+          (loop :for pattern :in patterns
+                :unless (analysis:useful-pattern-p patterns pattern env)
+                  :do (warn 'analysis:coalton-useless-pattern-warning
+                            :pattern pattern))))
+
       (make-node-match
        :type (tc:qualified-ty-type qual-ty)
        :expr (compile-expression (tc:typed-node-match-expr expr) ctx env)
@@ -282,4 +305,3 @@
        :name (tc:typed-node-bind-name expr)
        :expr (compile-expression (tc:typed-node-bind-expr expr) ctx env)
        :body (compile-expression (tc:typed-node-bind-body expr) ctx env)))))
-

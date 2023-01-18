@@ -72,6 +72,10 @@
                              (:file "debug")
                              (:file "translation-unit")
                              (:file "package")))
+               (:module "analysis"
+                :serial t
+                :components ((:file "pattern-exhaustiveness")
+                             (:file "package")))
                (:module "codegen"
                 :serial t
                 :components ((:file "ast")

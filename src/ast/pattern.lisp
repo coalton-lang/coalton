@@ -6,6 +6,7 @@
    (#:util #:coalton-impl/util))
   (:export
    #:pattern                            ; STRUCT
+   #:pattern-list-p                     ; FUNCTION
    #:pattern-list                       ; TYPE
    #:pattern-var                        ; STRUCT
    #:make-pattern-var                   ; CONSTRUCTOR

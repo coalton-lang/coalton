@@ -32,6 +32,7 @@
    #:type-entry-name                        ; ACCESSOR
    #:type-entry-runtime-type                ; ACCESSOR
    #:type-entry-type                        ; ACCESSOR
+   #:type-entry-constructors                ; ACCESSOR
    #:type-entry-explicit-repr               ; ACCESSOR
    #:type-entry-enum-repr                   ; ACCESSOR
    #:type-entry-newtype                     ; ACCESSOR
@@ -194,12 +195,11 @@
   (name         (util:required 'name)         :type symbol  :read-only t)
   (runtime-type (util:required 'runtime-type) :type t       :read-only t)
   (type         (util:required 'type)         :type ty      :read-only t)
+  (constructors (util:required 'constructors) :type list    :read-only t)
 
   ;; An explicit repr defined in the source, or nil if none was supplied. Computed repr will be reflected in
   ;; ENUM-REPR, NEWTYPE, and/or RUNTIME-TYPE.
-  (explicit-repr (util:required 'explicit-repr)
-                                         :type explicit-repr
-                                                       :read-only t)
+  (explicit-repr (util:required 'explicit-repr) :type explicit-repr  :read-only t)
 
   ;; If this is true then the type is compiled to a more effecient
   ;; enum representation at runtime
@@ -243,6 +243,7 @@
             :name 'coalton:Boolean
             :runtime-type 'cl:boolean
             :type *boolean-type*
+            :constructors '(coalton:True coalton:False)
             :explicit-repr '(:native cl:boolean)
             :enum-repr t
             :newtype nil
@@ -254,6 +255,7 @@
             :name 'coalton:Char
             :runtime-type 'cl:character
             :type *char-type*
+            :constructors nil
             :explicit-repr '(:native cl:character)
             :enum-repr nil
             :newtype nil
@@ -265,6 +267,7 @@
             :name 'coalton:Integer
             :runtime-type 'cl:integer
             :type *integer-type*
+            :constructors nil
             :explicit-repr '(:native cl:integer)
             :enum-repr nil
             :newtype nil
@@ -276,6 +279,7 @@
             :name 'coalton:Single-Float
             :runtime-type 'cl:single-float
             :type *single-float-type*
+            :constructors nil
             :explicit-repr '(:native cl:single-float)
             :enum-repr nil
             :newtype nil
@@ -287,6 +291,7 @@
             :name 'coalton:Double-Float
             :runtime-type 'cl:double-float
             :type *double-float-type*
+            :constructors nil
             :explicit-repr '(:native cl:double-float)
             :enum-repr nil
             :newtype nil
@@ -298,6 +303,7 @@
             :name 'coalton:String
             :runtime-type 'cl:string
             :type *string-type*
+            :constructors nil
             :explicit-repr '(:native cl:string)
             :enum-repr nil
             :newtype nil
@@ -309,6 +315,7 @@
             :name 'coalton:Fraction
             :runtime-type 'cl:rational
             :type *fraction-type*
+            :constructors nil
             :explicit-repr '(:native cl:rational)
             :enum-repr nil
             :newtype nil
@@ -320,6 +327,7 @@
             :name 'coalton:Arrow
             :runtime-type nil
             :type *arrow-type*
+            :constructors nil
             :explicit-repr nil
             :enum-repr nil
             :newtype nil
@@ -331,6 +339,7 @@
             :name 'coalton:List
             :runtime-type 'cl:list
             :type *list-type*
+            :constructors '(coalton:Cons coalton:Nil)
             :explicit-repr '(:native cl:list)
             :enum-repr nil
             :newtype nil
