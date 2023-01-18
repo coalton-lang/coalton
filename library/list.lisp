@@ -340,7 +340,7 @@
        (if (member x xs)
            (remove-duplicates-rev xs acc)
            (remove-duplicates-rev xs (Cons x acc))))))
-        
+
   (declare remove-duplicates (Eq :a => ((List :a) -> (List :a))))
   (define (remove-duplicates xs)
     "Returns a new list without duplicate elements."
@@ -432,7 +432,7 @@
   (declare insertBy ((:a -> :a -> Ord) -> :a -> (List :a) -> (List :a)))
   (define (insertBy cmp x ys)
     "Generic version of insert"
-    (let ((rec 
+    (let ((rec
             (fn (ys acc)
               (match ys
                 ((Nil) (Cons x acc))
@@ -489,12 +489,15 @@
        (Cons (Cons x (map
                       (fn (ys)
                         (match ys
-                          ((Cons h _) h)))
+                          ((Cons h _) h)
+                          ((Nil) (error "Invalid shape"))))
                       xss))
+
              (transpose (Cons xs (map
                                   (fn (ys)
                                     (match ys
-                                      ((Cons _ t) t)))
+                                      ((Cons _ t) t)
+                                      ((Nil) (error "Invalid shape"))))
                                   xss)))))))
 
   (declare partition ((:a -> Boolean) -> (List :a) -> (Tuple (List :a) (List :a))))
@@ -617,7 +620,7 @@ This function is equivalent to all size-N elements of `(COMBS L)`."
                   ((Cons x xs) (append
                                 (map (Cons x) (combsOf (- n 1) xs)) ; combs with X
                                 (combsOf n xs)))))))                ; and without x
-                              
+
 
   ;;
   ;; List instances

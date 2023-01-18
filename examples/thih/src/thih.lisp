@@ -14,9 +14,9 @@
       ((Id s) s)))
 
   (define-instance (Eq Id)
-      (define (== x y)
-        (== (get-id x)
-            (get-id y))))
+    (define (== x y)
+      (== (get-id x)
+          (get-id y))))
 
   (declare get-id (Id -> String))
   (define (get-id x)
@@ -37,14 +37,14 @@
     (Kfun Kind Kind))
 
   (define-instance (Eq Kind)
-      (define (== k1 k2)
-        (match (Tuple k1 k2)
-          ((Tuple (Star) (Star)) True)
-          ((Tuple (Kfun a1 a2)
-                  (Kfun b1 b2))
-           (and (== a1 b1)
-                (== a2 b2)))
-          (_ False))))
+    (define (== k1 k2)
+      (match (Tuple k1 k2)
+        ((Tuple (Star) (Star)) True)
+        ((Tuple (Kfun a1 a2)
+                (Kfun b1 b2))
+         (and (== a1 b1)
+              (== a2 b2)))
+        (_ False))))
 
   ;;
   ;; Types
@@ -57,37 +57,37 @@
     (TGen UFix))
 
   (define-instance (Eq Type)
-      (define (== t1 t2)
-        (match (Tuple t1 t2)
-          ((Tuple (TVar v1) (TVar v2)) (== v1 v2))
-          ((Tuple (TCon c1) (TCon c2)) (== c1 c2))
-          ((Tuple (TAp a1 a2) (TAp b1 b2))
-           (and (== a1 b1)
-                (== a2 b2)))
-          ((Tuple (TGen g1) (TGen g2)) (== g1 g2))
-          (_ False))))
+    (define (== t1 t2)
+      (match (Tuple t1 t2)
+        ((Tuple (TVar v1) (TVar v2)) (== v1 v2))
+        ((Tuple (TCon c1) (TCon c2)) (== c1 c2))
+        ((Tuple (TAp a1 a2) (TAp b1 b2))
+         (and (== a1 b1)
+              (== a2 b2)))
+        ((Tuple (TGen g1) (TGen g2)) (== g1 g2))
+        (_ False))))
 
 
   (define-type Tyvar
     (Tyvar Id Kind))
 
   (define-instance (Eq Tyvar)
-      (define (== x y)
-        (match (Tuple x y)
-          ((Tuple (Tyvar i1 k1) (Tyvar i2 k2))
-           (and (== i1 i2)
-                (== k1 k2))))))
+    (define (== x y)
+      (match (Tuple x y)
+        ((Tuple (Tyvar i1 k1) (Tyvar i2 k2))
+         (and (== i1 i2)
+              (== k1 k2))))))
 
 
   (define-type Tycon
     (Tycon Id Kind))
 
   (define-instance (Eq Tycon)
-      (define (== x y)
-        (match (Tuple x y)
-          ((Tuple (Tycon i1 k1) (Tycon i2 k2))
-           (and (== i1 i2)
-                (== k1 k2))))))
+    (define (== x y)
+      (match (Tuple x y)
+        ((Tuple (Tycon i1 k1) (Tycon i2 k2))
+         (and (== i1 i2)
+              (== k1 k2))))))
 
 
   (define tUnit (TCon (Tycon (Id "()") Star)))
@@ -118,26 +118,28 @@
 
 
   (define-class (HasKind :t)
-      (kind (:t -> Kind)))
+    (kind (:t -> Kind)))
 
   (define-instance (HasKind Tyvar)
-      (define (kind t)
-        (match t
-          ((Tyvar _ k) k))))
+    (define (kind t)
+      (match t
+        ((Tyvar _ k) k))))
 
   (define-instance (HasKind Tycon)
-      (define (kind t)
-        (match t
-          ((Tycon _ k) k))))
+    (define (kind t)
+      (match t
+        ((Tycon _ k) k))))
 
   (define-instance (HasKind Type)
-      (define (kind t)
-        (match t
-          ((TCon tc) (kind tc))
-          ((TVar u) (kind u))
-          ((TAp t _)
-           (match (kind t)
-             ((Kfun _ k) k))))))
+    (define (kind t)
+      (match t
+        ((TCon tc) (kind tc))
+        ((TVar u) (kind u))
+        ((TAp t _)
+         (match (kind t)
+           ((Kfun _ k) k)
+           (_ (error "unreachable"))))
+        (_ (error "unreachable")))))
 
 
   ;;
@@ -160,19 +162,19 @@
 
 
   (define-class (Types :t)
-      (apply (Subst -> :t -> :t))
+    (apply (Subst -> :t -> :t))
     (tv (:t -> (List Tyvar))))
 
   (define-instance (Types Type)
-      (define (apply s t)
-        (match t
-          ((TVar u)
-           (match (list:lookup u (get-subst s))
-             ((Some t) t)
-             ((None) (Tvar u))))
-          ((TAp l r)
-           (TAp (apply s l) (apply s r)))
-          (x x)))
+    (define (apply s t)
+      (match t
+        ((TVar u)
+         (match (list:lookup u (get-subst s))
+           ((Some t) t)
+           ((None) (Tvar u))))
+        ((TAp l r)
+         (TAp (apply s l) (apply s r)))
+        (x x)))
     (define (tv t)
       (match t
         ((TVar u) (make-list u))
@@ -181,8 +183,8 @@
 
 
   (define-instance (Types :a => (Types (List :a)))
-      (define (apply s t)
-        (map (apply s) t))
+    (define (apply s t)
+      (map (apply s) t))
     (define (tv t)
       (remove-duplicates (fold append Nil (map tv t)))))
 
@@ -277,18 +279,18 @@
     (Qual (List Pred) :t))
 
   (define-instance (Eq :t => (Eq (Qual :t)))
-      (define (== x y)
-        (match (Tuple x y)
-          ((Tuple (Qual xs t1) (Qual ys t2))
-           (and (== xs ys)
-                (== t1 t2))))))
+    (define (== x y)
+      (match (Tuple x y)
+        ((Tuple (Qual xs t1) (Qual ys t2))
+         (and (== xs ys)
+              (== t1 t2))))))
 
   (define-instance (Types :t => (Types (Qual :t)))
-      (define (apply s q)
-        (match q
-          ((Qual ps t)
-           (Qual (apply s ps)
-                 (apply s t)))))
+    (define (apply s q)
+      (match q
+        ((Qual ps t)
+         (Qual (apply s ps)
+               (apply s t)))))
     (define (tv q)
       (match q
         ((Qual ps t)
@@ -299,17 +301,17 @@
     (IsIn Id Type))
 
   (define-instance (Eq Pred)
-      (define (== x y)
-        (match (Tuple x y)
-          ((Tuple (IsIn id1 t1) (IsIn id2 t2))
-           (and (== id1 id2)
-                (== t1 t2))))))
+    (define (== x y)
+      (match (Tuple x y)
+        ((Tuple (IsIn id1 t1) (IsIn id2 t2))
+         (and (== id1 id2)
+              (== t1 t2))))))
 
   (define-instance (Types Pred)
-      (define (apply s p)
-        (match p
-          ((IsIn i t)
-           (IsIn i (apply s t)))))
+    (define (apply s p)
+      (match p
+        ((IsIn i t)
+         (IsIn i (apply s t)))))
     (define (tv p)
       (match p
         ((IsIn _ t)
@@ -368,13 +370,17 @@
   (define (super ce i)
     (match (classes ce i)
       ((Some c)
-       (fst (get-class c)))))
+       (fst (get-class c)))
+      (_
+       (error "unreachable"))))
 
   (declare insts (ClassEnv -> Id -> (List Inst)))
   (define (insts ce i)
     (match (classes ce i)
       ((Some c)
-       (snd (get-class c)))))
+       (snd (get-class c)))
+      (_
+       (error "unreachable"))))
 
   (declare defined ((Optional :a) -> Boolean))
   (define (defined x)
@@ -527,7 +533,8 @@
                  (match t
                    ((TVar _) True)
                    ((TCon _) False)
-                   ((TAp t _) (hnf t))))))
+                   ((TAp t _) (hnf t))
+                   (_ (error "unreachable"))))))
       (match pred
         ((IsIn _ t) (hnf t)))))
 
@@ -579,18 +586,18 @@
     (Forall (List Kind) (Qual Type)))
 
   (define-instance (Eq Scheme)
-      (define (== x y)
-        (match (Tuple x y)
-          ((Tuple (Forall ks1 q1)
-                  (Forall ks2 q2))
-           (and (== ks1 ks2)
-                (== q1 q2))))))
+    (define (== x y)
+      (match (Tuple x y)
+        ((Tuple (Forall ks1 q1)
+                (Forall ks2 q2))
+         (and (== ks1 ks2)
+              (== q1 q2))))))
 
   (define-instance (Types Scheme)
-      (define (apply s t)
-        (match t
-          ((Forall ks qt)
-           (Forall ks (apply s qt)))))
+    (define (apply s t)
+      (match t
+        ((Forall ks qt)
+         (Forall ks (apply s qt)))))
     (define (tv t)
       (match t
         ((Forall _ qt)
@@ -627,10 +634,10 @@
               (== scheme-a scheme-b))))))
 
   (define-instance (Types Assump)
-      (define (apply s a)
-        (match a
-          ((Assump i sc)
-           (Assump i (apply s sc)))))
+    (define (apply s a)
+      (match a
+        ((Assump i sc)
+         (Assump i (apply s sc)))))
     (define (tv a)
       (match a
         ((Assump _ sc)
@@ -660,15 +667,15 @@
       ((TI y) y)))
 
   (define-instance (Functor TI)
-      (define (map f x)
-        (>>= x
-             (fn (x)
-               (pure (f x))))))
+    (define (map f x)
+      (>>= x
+           (fn (x)
+             (pure (f x))))))
 
   (define-instance (Applicative TI)
-      (define (pure x)
-        (TI (fn (s n)
-              (Tuple3 s n x))))
+    (define (pure x)
+      (TI (fn (s n)
+            (Tuple3 s n x))))
     (define (liftA2 f m1 m2)
       (>>= m1
            (fn (a)
@@ -677,15 +684,15 @@
                     (pure (f a b))))))))
 
   (define-instance (Monad TI)
-      (define (>>= f g)
-        (TI (fn (s n)
-              (match ((get-ti f) s n)
-                ((Tuple3 s_ m x)
-                 (let ((gx (get-ti (g x))))
-                   (gx s_ m))))))))
+    (define (>>= f g)
+      (TI (fn (s n)
+            (match ((get-ti f) s n)
+              ((Tuple3 s_ m x)
+               (let ((gx (get-ti (g x))))
+                 (gx s_ m))))))))
 
   (define-instance (MonadFail TI)
-      (define fail error))
+    (define fail error))
 
   (declare runTI ((TI :a) -> :a))
   (define (runTI t)
@@ -723,29 +730,29 @@
 
 
   (define-class (Instantiate :t)
-      (inst ((List Type) -> :t -> :t)))
+    (inst ((List Type) -> :t -> :t)))
 
   (define-instance (Instantiate Type)
-      (define (inst ts t)
-        (match t
-          ((TAp l r) (TAp (inst ts l) (inst ts r)))
-          ((TGen n)  (fromSome "Failed to find TGen type" (list:index n ts)))
-          (_ t))))
+    (define (inst ts t)
+      (match t
+        ((TAp l r) (TAp (inst ts l) (inst ts r)))
+        ((TGen n)  (fromSome "Failed to find TGen type" (list:index n ts)))
+        (_ t))))
 
   (define-instance (Instantiate :a => (Instantiate (List :a)))
-      (define (inst ts)
-        (map (inst ts))))
+    (define (inst ts)
+      (map (inst ts))))
 
   (define-instance (Instantiate :t => (Instantiate (Qual :t)))
-      (define (inst ts q)
-        (match q
-          ((Qual ps t) (Qual (inst ts ps)
-                             (inst ts t))))))
+    (define (inst ts q)
+      (match q
+        ((Qual ps t) (Qual (inst ts ps)
+                           (inst ts t))))))
 
   (define-instance (Instantiate Pred)
-      (define (inst ts p)
-        (match p
-          ((IsIn c t) (IsIn c (inst ts t))))))
+    (define (inst ts p)
+      (match p
+        ((IsIn c t) (IsIn c (inst ts t))))))
 
 
   ;;
@@ -908,10 +915,10 @@
   (define (split ce fs gs ps)
     (do (ps_ <- (reduce ce ps))
         (match (list:partition (fn (x) (all (flip list:member fs) (tv x)))
-                          ps_)
-        ((Tuple ds rs)
-         (do (rs_ <- (defaultedPreds ce (append fs gs) rs))
-             (pure (Tuple ds (list:difference rs rs_))))))))
+                               ps_)
+          ((Tuple ds rs)
+           (do (rs_ <- (defaultedPreds ce (append fs gs) rs))
+               (pure (Tuple ds (list:difference rs rs_))))))))
 
   (define-type Ambiguity
     (Ambiguity Tyvar (List Pred)))
@@ -958,10 +965,10 @@
                        (all (flip list:member stdClasses) is)))
              (let ((ts_ (defaults ce)))
                (if (all (fn (t_)
-                               (all (entail ce Nil)
-                                    (map (fn (i) (IsIn i t_))
-                                         is)))
-                             ts_)
+                          (all (entail ce Nil)
+                               (map (fn (i) (IsIn i t_))
+                                    is)))
+                        ts_)
                    ts_
                    Nil))
              Nil)))))
@@ -1004,23 +1011,23 @@
              ((Qual qs t)
               (do (ps <- (tiAlts ce as alts t))
                   (s <- getSubst)
-                  (let qs_ = (apply s qs))
-                  (let t_  = (apply s t))
-                  (let fs  = (tv (apply s as)))
-                  (let gs  = (list:difference (tv t_) fs))
-                  (let sc_ = (quantify gs (Qual qs_ t_)))
-                  (let ps_ = (filter (fn (p) (not (entail ce qs_ p)))
-                                     (apply s ps)))
-                  (ps <- (split ce fs gs ps_))
-                  (match ps
-                    ((Tuple ds rs)
-                     (cond
-                       ((/= sc sc_)
-                        (fail "Signature too general"))
-                       ((not (list:null? rs))
-                        (fail "Context too weak"))
-                       (True
-                        (pure ds))))))))))))
+                (let qs_ = (apply s qs))
+                (let t_  = (apply s t))
+                (let fs  = (tv (apply s as)))
+                (let gs  = (list:difference (tv t_) fs))
+                (let sc_ = (quantify gs (Qual qs_ t_)))
+                (let ps_ = (filter (fn (p) (not (entail ce qs_ p)))
+                                   (apply s ps)))
+                (ps <- (split ce fs gs ps_))
+                (match ps
+                  ((Tuple ds rs)
+                   (cond
+                     ((/= sc sc_)
+                      (fail "Signature too general"))
+                     ((not (list:null? rs))
+                      (fail "Context too weak"))
+                     (True
+                      (pure ds))))))))))))
 
 
   (define-type Impl
@@ -1044,43 +1051,45 @@
         (let is    = (map (fn (b)
                             (match b
                               ((Impl i _) i)))
-                      bs))
-        (let scs   = (map toScheme ts))
-        (let as_   = (append (zipWith Assump is scs) as))
-        (let altss = (map (fn (b)
-                            (match b
-                              ((Impl _ a) a)))
                           bs))
-        (pss <- (sequence (zipWith (tiAlts ce as_) altss ts)))
-        (s <- getSubst)
-        (let ps_ = (apply s (concat pss)))
-        (let ts_ = (apply s ts))
-        (let fs  = (tv (apply s as)))
-        (let vss = (map tv ts_))
-        (let gs  = (list:difference
+      (let scs   = (map toScheme ts))
+      (let as_   = (append (zipWith Assump is scs) as))
+      (let altss = (map (fn (b)
+                          (match b
+                            ((Impl _ a) a)))
+                        bs))
+      (pss <- (sequence (zipWith (tiAlts ce as_) altss ts)))
+      (s <- getSubst)
+      (let ps_ = (apply s (concat pss)))
+      (let ts_ = (apply s ts))
+      (let fs  = (tv (apply s as)))
+      (let vss = (map tv ts_))
+      (let gs  = (list:difference
+                  (match vss
+                    ((Cons vs vss)
+                     (foldr list:union vs vss))
+                    (_ (error "unreachable")))
+                  fs))
+      (ps <- (split ce fs
                     (match vss
                       ((Cons vs vss)
-                       (foldr list:union vs vss)))
-                    fs))
-        (ps <- (split ce fs
-                      (match vss
-                        ((Cons vs vss)
-                         (foldr list:intersection vs vss)))
-                      ps_))
-        (match ps
-          ((Tuple ds rs)
-           (if (restricted bs)
-               (let ((gs_ (list:difference gs (tv rs)))
-                     (scs_ (map (fn (x)
-                                  (quantify gs_ (Qual Nil x)))
-                                ts_)))
-                 (pure (Tuple (append ds rs)
-                              (zipWith Assump is scs_))))
-               (let ((scs_ (map (fn (x)
-                                  (quantify gs (Qual rs x)))
-                                ts_)))
-                 (pure (Tuple ds
-                              (zipWith Assump is scs_)))))))))
+                       (foldr list:intersection vs vss))
+                      (_ (error "unreachable")))
+                    ps_))
+      (match ps
+        ((Tuple ds rs)
+         (if (restricted bs)
+             (let ((gs_ (list:difference gs (tv rs)))
+                   (scs_ (map (fn (x)
+                                (quantify gs_ (Qual Nil x)))
+                              ts_)))
+               (pure (Tuple (append ds rs)
+                            (zipWith Assump is scs_))))
+             (let ((scs_ (map (fn (x)
+                                (quantify gs (Qual rs x)))
+                              ts_)))
+               (pure (Tuple ds
+                            (zipWith Assump is scs_)))))))))
 
   (define-type BindGroup
     (BindGroup (List Expl) (List (List Impl))))
@@ -1095,11 +1104,11 @@
                                 (Assump v sc))))
                            es))
            (tiI <- (tiSeq tiImpls ce (append as_ as) iss))
-           (match tiI
-             ((Tuple ps as__)
-              (do (qss <- (traverse (tiExpl ce (append as__ (append as_ as))) es))
-                  (pure (Tuple (append ps (concat qss))
-                               (append as__ as_))))))))))
+         (match tiI
+           ((Tuple ps as__)
+            (do (qss <- (traverse (tiExpl ce (append as__ (append as_ as))) es))
+                (pure (Tuple (append ps (concat qss))
+                             (append as__ as_))))))))))
 
   (declare tiSeq ((ClassEnv -> (List Assump) -> :bg -> (TI (Tuple (List Pred) (List Assump)))) ->
                   (ClassEnv -> (List Assump) -> (List :bg) -> (TI (Tuple (List Pred) (List Assump))))))

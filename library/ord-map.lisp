@@ -174,7 +174,9 @@ If ITER contains duplicate keys, later values will overwrite earlier values."
                                                       (helper less)))
                    ((Eq) (Some (tree::Branch clr less (MapPair pivot (func val)) more)))
                    ((GT) (coalton-library/classes:map (tree::Branch clr less (MapPair pivot val))
-                                                      (helper more)))))))))
+                                                      (helper more)))))
+                ((tree::Branch _ _ (JustKey _) _) (error "Map contains `JustKey` rather than `MapPair`"))
+                ((tree::DoubleBlackEmpty) (error "Encountered double-black node in ordered map outside of removal operation"))))))
       (coalton-library/classes:map %Map
                                    (helper tre))))
 
@@ -203,7 +205,9 @@ operation, and therefore Map cannot implement Monoid."
                          (tree::Branch clr
                                        (helper left)
                                        (MapPair key (func value))
-                                       (helper right)))))))
+                                       (helper right)))
+                        ((tree::Branch _ _ (JustKey _) _) (error "Map contains `JustKey` rather than `MapPair`"))
+                        ((tree::DoubleBlackEmpty) (error "Encountered double-black node in ordered map outside of removal operation"))))))
         (%Map (helper tre)))))
 
   ;; As with `tree:Tree', `Map' should probably implement `Traversable'.

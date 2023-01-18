@@ -125,7 +125,8 @@
        (match (<=> needle elt)
          ((LT) (lookup left needle))
          ((EQ) (Some elt))
-         ((GT) (lookup right needle))))))
+         ((GT) (lookup right needle))))
+      ((DoubleBlackEmpty) (error "Found double-black node outside of removal process"))))
 
   ;;; inserting into and replacing elements of trees
 
@@ -278,7 +279,8 @@
                                  (ins left)))
                       ((EQ) None)
                       ((GT) (map (fn (new-right) (balance clr left pivot new-right))
-                                 (ins right)))))))))
+                                 (ins right)))))
+                   ((DoubleBlackEmpty) (error "Found double-black node outside of removal process"))))))
       (ins tre)))
 
   (declare replace ((Ord :elt) => ((Tree :elt) -> :elt -> (Optional (Tuple (Tree :elt) :elt)))))
@@ -298,7 +300,8 @@ If TRE did not have an element `==' to ELT, return None."
                       ((EQ) (Some (Tuple (Branch clr left elt right)
                                          pivot)))
                       ((GT) (map (uncurry (fn (new-right removed-elt) (Tuple (balance clr left pivot new-right) removed-elt)))
-                                 (ins right)))))))))
+                                 (ins right)))))
+                   ((DoubleBlackEmpty) (error "Found double-black node outside of removal process"))))))
       (ins tre)))
 
   (declare replace-or-insert ((Ord :elt) => ((Tree :elt) -> :elt -> (Tuple (Tree :elt) (Optional :elt)))))
@@ -322,7 +325,8 @@ alongside the new tree."
                       ((GT)
                        (let (Tuple new-right removed-elt) = (ins right))
                        (Tuple (balance clr left pivot new-right)
-                              removed-elt))))))))
+                              removed-elt))))
+                   ((DoubleBlackEmpty) (error "Found double-black node outside of removal process"))))))
       (let (Tuple new-tree removed-elt) = (ins tre))
       (Tuple (as-black new-tree) removed-elt)))
 
@@ -357,7 +361,8 @@ Like `replace-or-insert', but prioritizing insertion as a use case."
          ((EQ) (Some (remove-leaving-double-black tre)))
          ((GT)
           (map (fn (new-right) (bubble-double-black clr left pivot new-right))
-               (remove-without-as-black right elt)))))))
+               (remove-without-as-black right elt)))))
+      ((DoubleBlackEmpty) (error "Encountered double-black node early in `remove` while searching for the node to remove."))))
 
   ;; matt might calls this operation `remove'
   (declare remove-leaving-double-black (((Tree :elt) -> (Tree :elt))))
@@ -376,21 +381,24 @@ The result tree may be in an intermediate state with a double-black node."
                _
                (Branch child-clr child-left child-value child-right))
        (assert (== child-clr Red)
-           "Black node with black leaf and black non-empty child violates red-black constraints")
+           "Black node with black leaf and black non-empty child violates red-black constraints.")
        (Branch Black child-left child-value child-right))
       ((Branch (Black)
                (Branch child-clr child-left child-value child-right)
                _
                (Empty))
        (assert (== child-clr Red)
-           "Black node with black leaf and black non-empty child violates red-black constraints")
+           "Black node with black leaf and black non-empty child violates red-black constraints.")
        (Branch Black child-left child-value child-right))
       ;; all other one-child cases should be impossible because they violate red-black constraints
 
       ;; nodes with two subtrees
       ((Branch clr left _ right)
        (let (Tuple new-left new-pivot) = (remove-max left))
-       (bubble-double-black clr new-left new-pivot right))))
+       (bubble-double-black clr new-left new-pivot right))
+
+      ((DoubleBlackEmpty) (error "Encountered double-black node early in `remove` while searching for the node to remove."))
+      ((Empty) (error "Attempt to `remove-leaving-double-black` on an empty tree."))))
 
   ;; matt might calls this operation `bubble'
   (declare bubble-double-black ((Color -> (Tree :elt) -> :elt -> (Tree :elt) -> (Tree :elt))))
@@ -407,7 +415,9 @@ The result tree may be in an intermediate state with a double-black node."
       ((Branch clr left pivot right)
        (let (Tuple new-right removed-max) = (remove-max right))
        (Tuple (bubble-double-black clr left pivot new-right)
-              removed-max))))
+              removed-max))
+      ((DoubleBlackEmpty) (error "Encountered double-black node early in `remove` while searching for the node to remove."))
+      ((Empty) (error "Attempt to `remove-max` on an empty tree."))))
 
   ;;; iterating through trees
 
@@ -436,7 +446,8 @@ The result tree may be in an intermediate state with a double-black node."
        (cell:push! stack (Expand more))
        (cell:push! stack (Yield elt))
        (cell:push! stack (Expand less))
-       Unit)))
+       Unit)
+      ((DoubleBlackEmpty) (error "Found double-black node outside of removal process"))))
 
   (declare increasing-order ((Tree :elt) -> (iter:Iterator :elt)))
   (define increasing-order
@@ -451,7 +462,8 @@ The result tree may be in an intermediate state with a double-black node."
        (cell:push! stack (Expand less))
        (cell:push! stack (Yield elt))
        (cell:push! stack (Expand more))
-       Unit)))
+       Unit)
+      ((DoubleBlackEmpty) (error "Found double-black node outside of removal process"))))
 
   (declare decreasing-order ((Tree :elt) -> (iter:Iterator :elt)))
   (define decreasing-order
