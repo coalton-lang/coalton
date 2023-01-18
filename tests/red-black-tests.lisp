@@ -7,7 +7,8 @@
     (RedWithRedRightChild (red-black/tree:Tree :elt))
     (DifferentCountToBlack UFix (red-black/tree:Tree :elt)
                            UFix (red-black/tree:Tree :elt))
-    (BothChildrenErrors (InvariantError :elt) (InvariantError :elt)))
+    (BothChildrenErrors (InvariantError :elt) (InvariantError :elt))
+    (IllegalColor (red-black/tree:Tree :elt)))
 
   (declare count-blacks-to-leaf ((red-black/tree:Tree :elt) -> (Result (InvariantError :elt) UFix)))
   (define (count-blacks-to-leaf tre)
@@ -34,11 +35,13 @@
           (Err right-err))
          ((Tuple (Ok left-ct) (Ok right-ct))
           (if (== left-ct right-ct)
-              (Ok (+ left-ct (match c
-                               ((red-black/tree::Black) 1)
-                               ((red-black/tree::Red) 0))))
+              (match c
+                ((red-black/tree::Black) (Ok (+ left-ct 1)))
+                ((red-black/tree::Red) (Ok left-ct))
+                (_ (Err (IllegalColor tre))))
               (Err (DifferentCountToBlack left-ct left
-                                          right-ct right)))))))))
+                                          right-ct right))))))
+      (_ (Err (IllegalColor tre))))))
 
 (coalton-toplevel
   (declare random-below! (UFix -> UFix))
