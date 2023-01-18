@@ -144,6 +144,9 @@ Behavior is undefined if the iterator is advanced after a destructive modificati
   (define-instance (IntoIterator (List :elt) :elt)
     (define into-iter list-iter))
 
+  (define-instance (IntoIterator (Iterator :elt) :elt)
+    (define into-iter id))
+
   (declare vector-iter (Vector :elt -> Iterator :elt))
   (define (vector-iter vec)
     "Yield successive elements of VEC.
