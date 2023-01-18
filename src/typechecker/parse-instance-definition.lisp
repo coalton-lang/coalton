@@ -59,56 +59,55 @@
            (type environment env)
            (values ty-predicate ty-predicate-list list &optional))
 
-    (unless (and (listp form)
-                 (<= 2 (length form))
-                 (eq (first form) 'coalton:define-instance))
-      (error-parsing form "malformed DEFINE-INSTANCE form"))
+  (unless (and (listp form)
+               (<= 2 (length form))
+               (eq (first form) 'coalton:define-instance))
+    (error-parsing form "malformed DEFINE-INSTANCE form"))
 
-    (multiple-value-bind (unparsed-predicate unparsed-context)
-        (split-class-signature (second form) "malformed DEFINE-INSTANCE form")
+  (multiple-value-bind (unparsed-predicate unparsed-context)
+      (split-class-signature (second form) "malformed DEFINE-INSTANCE form")
 
-      (let* ((methods (nthcdr 2 form))
+    (let* ((methods (nthcdr 2 form))
 
-             (tyvar-names (collect-type-vars unparsed-predicate))
+           (tyvar-names (collect-type-vars unparsed-predicate))
 
-             (tyvars
-               (loop :for tyvar-name :in tyvar-names
-                     :collect (list tyvar-name (make-variable (make-kvariable))))))
+           (tyvars
+             (mapcar
+              (lambda (var)
+                (list var (make-variable (make-kvariable))))
+              (remove-duplicates
+               (append
+                (loop :for tyvar-name :in tyvar-names
+                      :collect tyvar-name)
+                (loop :for unparsed-ctx :in unparsed-context
+                      :append (collect-type-vars unparsed-ctx)))
+               :test #'eq))))
 
-        ;; Check for type variables that appear in context but not in the predicate
-        (error:with-context ("instance definition ~S" unparsed-predicate)
-          (loop :for unparsed-ctx :in unparsed-context
-                :for ctx-tyvar-names := (collect-type-vars unparsed-ctx)
-                :do (loop :for ctx-tyvar :in ctx-tyvar-names
-                          :do (unless (find ctx-tyvar tyvar-names :test #'equalp)
-                                (error-parsing
-                                 unparsed-ctx
-                                 "type variable ~S appears in constraint but not in instance head"
-                                 ctx-tyvar))))
+      ;; Check for type variables that appear in context but not in the predicate
+      (error:with-context ("instance definition ~S" unparsed-predicate)
+        (let* ((ksubs nil)
 
-          (let* ((ksubs nil)
+               (predicate
+                 (multiple-value-bind (predicate new-ksubs)
+                     (parse-type-predicate env unparsed-predicate tyvars ksubs)
+                   (setf ksubs new-ksubs)
+                   predicate))
 
-                 (predicate
-                   (multiple-value-bind (predicate new-ksubs)
-                       (parse-type-predicate env unparsed-predicate tyvars ksubs)
-                     (setf ksubs new-ksubs)
-                     predicate))
+               (context
+                 (loop :for unparsed-ctx :in unparsed-context
+                       :collect (multiple-value-bind (predicate new-ksubs)
+                                    (parse-type-predicate env unparsed-ctx tyvars ksubs)
+                                  (setf ksubs new-ksubs)
+                                  predicate)))
 
-                 (context
-                   (loop :for unparsed-ctx :in unparsed-context
-                         :collect (multiple-value-bind (predicate new-ksubs)
-                                      (parse-type-predicate env unparsed-ctx tyvars ksubs)
-                                    (setf ksubs new-ksubs)
-                                    predicate)))
+               (predicate (apply-ksubstitution ksubs predicate))
 
-                 (predicate (apply-ksubstitution ksubs predicate))
+               (context (apply-ksubstitution ksubs context)))
 
-                 (context (apply-ksubstitution ksubs context)))
-
-            (values
-             predicate
-             context
-             methods))))))
+          (values
+           predicate
+           context
+           methods))))))
 
 (defun check-for-orphan-instance (predicate package)
   ;; Instances defined on predeclared types violate the orphan rule

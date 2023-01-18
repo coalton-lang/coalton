@@ -84,9 +84,9 @@
                         :for closure-tys := (util:project-map closure map (tc:ty-predicate-types predicate))
                         :for closure-tyvars := (tc:type-variables closure-tys)
 
-                        ;; Check that the type variables of each fundep is a subset of the type variables of it's closure
-                        :unless (subsetp closure-tyvars fundep-tyvars :test #'equalp)
-                          :do (let ((diff-vars (set-difference closure-tyvars fundep-tyvars :test #'equalp)))
+                        ;; Check that the type variables of each fundep is a subset of the type variables of its closure
+                        :unless (subsetp fundep-tyvars closure-tyvars :test #'equalp)
+                          :do (let ((diff-vars (set-difference fundep-tyvars closure-tyvars :test #'equalp)))
                                 (error 'tc:fundep-variable-error
                                        :pred predicate
                                        :vars diff-vars

@@ -22,7 +22,7 @@
 
 (in-package #:coalton-impl/typechecker/fundeps)
 
-(defconstant +fundep-max-depth+ 100
+(defconstant +fundep-max-depth+ 1000
   "Maximum number of times to cycle when waiting for fundeps to fixpoint")
 
 (defstruct fundep

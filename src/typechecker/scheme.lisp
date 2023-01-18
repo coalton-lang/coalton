@@ -21,6 +21,7 @@
    #:fresh-inst                         ; FUNCTION
    #:scheme-predicates                  ; FUNCTION
    #:fresh-pred                         ; FUNCTION
+   #:fresh-preds                        ; FUNCTION
    ))
 
 (in-package #:coalton-impl/typechecker/scheme)
@@ -96,6 +97,15 @@
          (qual-ty (make-qualified-ty :predicates (list pred) :type var))
          (scheme (quantify (type-variables (list pred var)) qual-ty)))
     (car (qualified-ty-predicates (fresh-inst scheme)))))
+
+(defun fresh-preds (preds)
+  "Returns PRED with fresh type variables"
+  (declare (type ty-predicate-list preds)
+           (values ty-predicate-list))
+  (let* ((var (make-variable))
+         (qual-ty (make-qualified-ty :predicates preds :type var))
+         (scheme (quantify (type-variables (cons var preds)) qual-ty)))
+    (qualified-ty-predicates (fresh-inst scheme))))
 
 ;;;
 ;;; Methods

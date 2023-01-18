@@ -54,6 +54,10 @@
             subs
             (tc:ty-class-instance-constraints instance)))
 
+         ;; Apply any fundep substitutions
+         (fundep-subs (nth-value 1 (tc:solve-fundeps env instance-constraints subs)))
+         (instance-constraints (tc:apply-substitution fundep-subs (tc:ty-class-instance-constraints instance)))
+
          ;; Generate dicts from those constraints
          (subdicts
            (mapcar

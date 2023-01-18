@@ -11,7 +11,8 @@
   (:import-from
    #:coalton-impl/typechecker/substitutions
    #:apply-substitution
-   #:substitution-list)
+   #:substitution-list
+   #:compose-substitution-lists)
   (:import-from
    #:coalton-impl/typechecker/fundeps
    #:fundep
@@ -34,7 +35,7 @@
    #:type-entry-explicit-repr               ; ACCESSOR
    #:type-entry-enum-repr                   ; ACCESSOR
    #:type-entry-newtype                     ; ACCESSOR
-   #:type-entry-docstring                   ; ACCESSOR 
+   #:type-entry-docstring                   ; ACCESSOR
    #:type-entry-location                    ; ACCESSOR
    #:type-environment                       ; STRUCT
    #:constructor-entry                      ; STRUCT
@@ -189,7 +190,7 @@
   (and (consp explicit-repr)
        (eq (first explicit-repr) :native)))
 
-(defstruct type-entry 
+(defstruct type-entry
   (name         (util:required 'name)         :type symbol  :read-only t)
   (runtime-type (util:required 'runtime-type) :type t       :read-only t)
   (type         (util:required 'type)         :type ty      :read-only t)
@@ -1217,9 +1218,9 @@
          (class-variable-map (ty-class-class-variable-map class)))
 
     (loop :for fundep :in (ty-class-fundeps class)
-          :for i :from 0 
+          :for i :from 0
           ;; Lookup the state for the ith fundep
-          :for state := (immutable-listmap-lookup fundep-env i :no-error t) 
+          :for state := (immutable-listmap-lookup fundep-env i :no-error t)
 
           :for from-tys
             := (mapcar
@@ -1326,25 +1327,60 @@
   (declare (type environment env)
            (type ty-predicate-list preds)
            (type substitution-list subs)
-           (values substitution-list &optional))
+           (values ty-predicate-list substitution-list &optional))
   ;; If no predicates have fundeps, then exit early
   (unless (loop :for pred :in preds
                 :for class-name := (ty-predicate-class pred)
                 :for class := (lookup-class env class-name)
                 :when (ty-class-fundeps class)
                   :collect class)
-    (return-from solve-fundeps subs))
+    (return-from solve-fundeps (values preds subs)))
 
-  (loop :for i :below +fundep-max-depth+
+  (loop :with new-subs := nil
+        :with preds-generated := nil
+        :for i :below +fundep-max-depth+
         :do
+           (setf new-subs subs)
+
            (loop :for pred :in preds
                  :for class-name := (ty-predicate-class pred)
                  :for class := (lookup-class env class-name)
+                 ;; If there are super-predicates then add those
+                 ;; predicates into the list of preds and remove
+                 ;; this predicate from the list since it will give
+                 ;; us no new type information. Additionally,
+                 ;; restart the current check to avoid terminating
+                 ;; early when no subs are generated.
+                 :for instance := (lookup-class-instance env pred :no-error t)
+
+                 :when instance
+                   ;; Since we allow for type variables in the
+                   ;; constraints which do not appear in the
+                   ;; predicate, we need to create a full fresh set of
+                   ;; predicates, rather than just matching the head.
+                   :do (let* ((fresh-instance-preds
+                                (fresh-preds
+                                 (cons (ty-class-instance-predicate instance)
+                                       (ty-class-instance-constraints instance))))
+                              (instance-head (car fresh-instance-preds))
+                              (instance-context (cdr fresh-instance-preds))
+
+                              (instance-subs (predicate-match instance-head pred new-subs)))
+                         (loop :for new-pred :in instance-context :do
+                           (push (apply-substitution instance-subs new-pred) preds))
+
+                         (setf preds (remove pred preds :test #'eq))
+                         (setf preds-generated t)
+                         (return))
+
                  :when (ty-class-fundeps class)
-                   :do (let ((new-subs (generate-fundep-subs% env pred subs)))
-                         (if (equalp new-subs subs)
-                             (return-from solve-fundeps subs)
-                             (setf subs new-subs))))
+                   :do (setf new-subs (generate-fundep-subs% env (apply-substitution new-subs pred) new-subs)))
+           (if (and (not preds-generated)
+                    (or (equalp new-subs subs)
+                        (null preds)))
+               (return-from solve-fundeps (values preds subs))
+               (setf subs new-subs))
+           (setf preds-generated nil)
            (setf preds (apply-substitution subs preds))
         :finally (util:coalton-bug "Fundep solving failed to fixpoint")))
 
@@ -1391,12 +1427,24 @@
               (nth (gethash var class-variable-map) (ty-predicate-types pred)))
             (fundep-to fundep))))
 
-    (fset:do-seq (s state)
+    (fset:do-seq (entry state)
       (handler-case
-          (let* ((left-subs (match-list from-tys (fundep-entry-from s)))
-
-                 (right-side (apply-substitution left-subs (fundep-entry-to s))))
+          (let* ((fresh-entry (fresh-fundep-entry entry))
+                 (left-subs (match-list from-tys (fundep-entry-from fresh-entry)))
+                 (right-side (apply-substitution left-subs (fundep-entry-to fresh-entry))))
             (return-from generate-fundep-subs-for-pred% (unify-list subs to-tys right-side)))
         (unification-error () nil))))
 
   subs)
+
+(defun fresh-fundep-entry (entry)
+  (let* ((from-pred (make-ty-predicate
+                     :class nil
+                     :types (fundep-entry-from entry)))
+         (to-pred (make-ty-predicate
+                   :class nil
+                   :types (fundep-entry-to entry)))
+         (fresh-preds (fresh-preds (list from-pred to-pred))))
+    (make-fundep-entry
+     :from (ty-predicate-types (first fresh-preds))
+     :to (ty-predicate-types (second fresh-preds)))))
