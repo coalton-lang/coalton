@@ -186,6 +186,7 @@
                   :name name
                   :runtime-type name
                   :type type__
+                  :constructors nil
                   :explicit-repr nil
                   :enum-repr nil
                   :newtype nil
@@ -465,6 +466,7 @@ Returns TYPE-DEFINITIONS"
                          :name tycon-name
                          :runtime-type (type-definition-runtime-type type-definition)
                          :type (type-definition-type type-definition)
+                         :constructors (mapcar #'constructor-entry-name (type-definition-constructors type-definition))
                          :explicit-repr (type-definition-explicit-repr type-definition)
                          :enum-repr (type-definition-enum-repr type-definition)
                          :newtype (type-definition-newtype type-definition)
@@ -481,7 +483,8 @@ Returns TYPE-DEFINITIONS"
                            (setf env
                                  (set-constructor
                                   env
-                                  (constructor-entry-name ctor) ctor))
+                                  ctor-name
+                                  ctor))
 
                            ;; Add the constructor as a value to the value environment
                            (setf env
@@ -494,9 +497,9 @@ Returns TYPE-DEFINITIONS"
                            (setf env
                                  (set-name
                                   env
-                                  (constructor-entry-name ctor)
+                                  ctor-name
                                   (make-name-entry
-                                   :name (constructor-entry-name ctor)
+                                   :name ctor-name
                                    :type :constructor
                                    :docstring nil
                                    :location (or *compile-file-pathname*
@@ -508,9 +511,9 @@ Returns TYPE-DEFINITIONS"
                                (setf env
                                      (set-function
                                       env
-                                      (constructor-entry-name ctor)
+                                      ctor-name
                                       (make-function-env-entry
-                                       :name (constructor-entry-name ctor)
+                                       :name ctor-name
                                        :arity (constructor-entry-arity ctor))))
 
                                ;; If the constructor does not take
@@ -519,7 +522,7 @@ Returns TYPE-DEFINITIONS"
                                (setf env
                                      (unset-function
                                       env
-                                      (constructor-entry-name ctor))))))
+                                      ctor-name)))))
 
                  type-definition)))
        env))))
