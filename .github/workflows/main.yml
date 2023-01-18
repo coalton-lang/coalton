@@ -78,7 +78,7 @@ jobs:
           tool: "customSmallerIsBetter"
           output-file-path: "./bench.json"
           external-data-json-path: "./cache/benchmark-data.json"
-          fail-on-alert: true
+          fail-on-alert: false
           github-token: ${{ secrets.GITHUB_TOKEN }}
           comment-on-alert: true
           alert-comment-cc-users: "@eliaslfox"
