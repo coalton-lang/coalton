@@ -27,7 +27,7 @@
   (:method ((pattern ast:pattern-literal) expr env)
     (declare (type coalton-impl/typechecker::environment env))
     (values
-     `(eql (ast:pattern-literal-value pattern) ,expr)
+     `(eql ,(ast:pattern-literal-value pattern) ,expr)
      nil))
 
   (:method ((pattern ast:pattern-constructor) expr env)
