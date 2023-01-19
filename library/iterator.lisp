@@ -147,6 +147,28 @@ Behavior is undefined if the iterator is advanced after a destructive modificati
   (define-instance (IntoIterator (Iterator :elt) :elt)
     (define into-iter id))
 
+  (define-instance (IntoIterator (Optional :elt) :elt)
+    (define (into-iter opt)
+      "Yield the single value of this OPT, or nothing."
+      (match opt
+        ((Some a) (let ((cell (cell:new True)))
+                    (%Iterator (fn () (if (cell:read cell)
+                                          (progn (cell:write! cell False)
+                                                 (Some a))
+                                          None)))))
+        ((None) (%Iterator (fn () None))))))
+
+  (define-instance (IntoIterator (Result :a :elt) :elt)
+    (define (into-iter result)
+      "Yield the single value of this RESULT, or nothing."
+      (match result
+        ((Ok a) (let ((cell (cell:new True)))
+                  (%Iterator (fn () (if (cell:read cell)
+                                        (progn (cell:write! cell False)
+                                               (Some a))
+                                        None)))))
+        ((Err _) (%Iterator (fn () None))))))
+
   (declare vector-iter (Vector :elt -> Iterator :elt))
   (define (vector-iter vec)
     "Yield successive elements of VEC.
