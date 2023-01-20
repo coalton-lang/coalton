@@ -1,6 +1,6 @@
 (cl:in-package #:thih-coalton-tests)
 
-(cl:defparameter *initial-env* (coalton-prelude:fromSome "Failed to init classenv"
+(cl:defparameter *initial-env* (coalton-prelude:from-some "Failed to init classenv"
                                                          (compose
                                                           addPreludeClasses
                                                           exampleInsts

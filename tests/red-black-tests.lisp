@@ -93,7 +93,7 @@
    (iter:up-to 128)))
 
 (cl:defmacro is-ok (check cl:&optional (message (cl:format cl:nil "~A returned Err" check)))
-  `(is (result:isOk ,check)
+  `(is (result:ok? ,check)
        ,message))
 
 (define-test insertion-upholds-invariants ()

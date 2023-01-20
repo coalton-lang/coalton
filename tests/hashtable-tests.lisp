@@ -13,10 +13,10 @@
       (is (== (Some 1) (get "one")))
       (is (== (Some 2) (get "two")))
       (is (== (Some 3) (get "three")))
-      (is (isNone (get "four")))
+      (is (none? (get "four")))
       (is (== 4 (hashtable:count ht)))
       (hashtable:remove! ht "zero")
-      (is (isNone (get "zero")))
+      (is (none? (get "zero")))
       (is (== 3 (hashtable:count ht))))))
 
 (define-test hashtable-constructor-equivalencies ()

@@ -226,7 +226,7 @@
   (declare nth (UFix -> List :t -> :t))
   (define (nth n l)
     "Like INDEX, but errors if the index is not found."
-    (fromSome "There is no NTH" (index n l)))
+    (from-some "There is no NTH" (index n l)))
 
   (declare elemIndex (Eq :a => :a -> List :a -> Optional UFix))
   (define (elemIndex x xs)

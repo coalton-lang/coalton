@@ -7,9 +7,9 @@
   (:local-nicknames
    (#:classes #:coalton-library/classes))
   (:export
-   #:isOk
-   #:isErr
-   #:mapErr
+   #:ok?
+   #:err?
+   #:map-err
    #:flatten))
 
 #+coalton-release
@@ -22,24 +22,24 @@
   ;; Result
   ;;
 
-  (declare isOk (Result :a :b -> Boolean))
-  (define (isOk x)
+  (declare ok? (Result :a :b -> Boolean))
+  (define (ok? x)
     "Returns TRUE if X is ERR"
     (lisp Boolean (x)
       (cl:etypecase x
         (classes::Result/Ok True)
         (classes::Result/Err False))))
 
-  (declare isErr (Result :a :b -> Boolean))
-  (define (isErr x)
+  (declare err? (Result :a :b -> Boolean))
+  (define (err? x)
     "Returns TRUE if X is ERR"
     (lisp Boolean (x)
       (cl:etypecase x
         (classes::Result/Err True)
         (classes::Result/Ok False))))
 
-  (declare mapErr ((:a -> :b) -> Result :a :c -> Result :b :c))
-  (define (mapErr f x)
+  (declare map-err ((:a -> :b) -> Result :a :c -> Result :b :c))
+  (define (map-err f x)
     "Map over the ERR case"
     (match x
       ((Err x) (Err (f x)))

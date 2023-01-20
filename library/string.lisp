@@ -105,7 +105,7 @@ does not have that suffix."
   (declare substring? (String -> String -> Boolean))
   (define (substring? small big)
     "Return true if the first argument appears as a substring within the second argument."
-    ;; not a call to `optional:isSome' because this file is loaded before optional.lisp
+    ;; not a call to `optional:some?' because this file is loaded before optional.lisp
     (match (substring-index small big)
       ((None) False)
       ((Some _) True)))
