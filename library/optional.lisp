@@ -6,9 +6,9 @@
   (:local-nicknames
    (#:classes #:coalton-library/classes))
   (:export
-   #:fromSome
-   #:isSome
-   #:isNone))
+   #:from-some
+   #:some?
+   #:none?))
 
 #+coalton-release
 (cl:declaim #.coalton-impl:*coalton-optimize-library*)
@@ -20,23 +20,23 @@
   ;; Optional
   ;;
 
-  (declare fromSome (String -> (Optional :a) -> :a))
-  (define (fromSome str opt)
+  (declare from-some (String -> (Optional :a) -> :a))
+  (define (from-some str opt)
     "Get the value of OPT, erroring with the provided string if it is None."
     (match opt
       ((Some x) x)
       ((None) (lisp :a (str) (cl:error str)))))
 
-  (declare isSome ((Optional :a) -> Boolean))
-  (define (isSome x)
+  (declare some? ((Optional :a) -> Boolean))
+  (define (some? x)
     "Is X Some?"
     (lisp Boolean (x)
       (cl:etypecase x
         (classes::Optional/Some True)
         (classes::Optional/None False))))
 
-  (declare isNone ((Optional :a) -> Boolean))
-  (define (isNone x)
+  (declare none? ((Optional :a) -> Boolean))
+  (define (none? x)
     "Is X None?"
     (lisp Boolean (x)
       (cl:etypecase x

@@ -507,7 +507,7 @@ Returns `True` if ITER is empty."
     "Return `True` as soon as any element of ITER is GOOD?, or `False` if none of them are.
 
 Returns `False` if ITER is empty."
-    (isSome (find! good? iter)))
+    (some? (find! good? iter)))
 
   (declare elementwise-match! ((:elt -> :elt -> Boolean) -> (Iterator :elt) -> (Iterator :elt) -> Boolean))
   (define (elementwise-match! same? left right)

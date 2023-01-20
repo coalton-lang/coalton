@@ -736,7 +736,7 @@
     (define (inst ts t)
       (match t
         ((TAp l r) (TAp (inst ts l) (inst ts r)))
-        ((TGen n)  (fromSome "Failed to find TGen type" (list:index n ts)))
+        ((TGen n)  (from-some "Failed to find TGen type" (list:index n ts)))
         (_ t))))
 
   (define-instance (Instantiate :a => (Instantiate (List :a)))
@@ -979,7 +979,7 @@
           (tss (map (candidates ce) vps)))
       (if (any list:null? tss)
           (fail "Cannot resolve ambiguity")
-          (pure (f vps (map (fn (l) (fromSome "" (head l))) tss))))))
+          (pure (f vps (map (fn (l) (from-some "" (head l))) tss))))))
 
   (declare defaultedPreds (MonadFail :m => (ClassEnv -> (List Tyvar) -> (List Pred) -> (:m (List Pred)))))
   (define defaultedPreds
