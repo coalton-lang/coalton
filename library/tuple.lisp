@@ -69,6 +69,12 @@
           (hash a)
           (hash b))))))
 
+  (define-instance (Bifunctor Tuple)
+    (define (bimap f g item)
+      (match item
+        ((Tuple a b)
+         (Tuple (f a) (g b))))))
+
   ;;
   ;; Larger Tuple Instances
   ;;
