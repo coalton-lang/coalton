@@ -2,8 +2,8 @@
   (:use
    #:coalton)
   (:local-nicknames
-   (#:types #:coalton-library/types)
-   )
+   (#:types #:coalton-library/types))
+
   (:export
    #:Addressable #:eq?)
   (:export
@@ -29,6 +29,7 @@
    #:Alternative #:alt #:empty
    #:Foldable #:fold #:foldr #:mconcat
    #:Traversable #:traverse
+   #:Bifunctor #:bimap #:map-fst #:map-snd
    #:sequence
    #:Into
    #:TryInto
@@ -266,6 +267,20 @@ specify `repr :lisp`."
 
   (declare sequence ((Traversable :t) (Applicative :f) => :t (:f :b) -> :f (:t :b)))
   (define sequence (traverse (fn (x) x)))
+
+  (define-class (Bifunctor :f)
+    "Types which take two type arguments and are functors on both."
+    (bimap ((:a -> :b) -> (:c -> :d) -> (:f :a :c) -> (:f :b :d))))
+
+  (declare map-fst ((Bifunctor :f) => (:a -> :b) -> (:f :a :c) -> (:f :b :c)))
+  (define (map-fst f b)
+    "Map over the first argument of a Bifunctor."
+    (bimap f (fn (x) x) b))
+
+  (declare map-snd ((Bifunctor :f) => (:b -> :c) -> (:f :a :b) -> (:f :a :c)))
+  (define (map-snd f b)
+    "Map over the second argument of a Bifunctor."
+    (bimap (fn (x) x) f b))
 
   ;;
   ;; Conversions

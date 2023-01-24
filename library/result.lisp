@@ -102,6 +102,12 @@
         ((Ok x) (f x))
         ((Err e) (Err e)))))
 
+  (define-instance (Bifunctor Result)
+    (define (bimap f g res)
+      (match res
+        ((Ok x) (Ok (g x)))
+        ((Err e) (Err (f e))))))
+
   (define-instance (Into (Result :a :b) (Optional :b))
     (define (into res)
       (match res
