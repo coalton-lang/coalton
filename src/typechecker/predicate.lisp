@@ -18,6 +18,7 @@
    #:make-qualified-ty                  ; CONSTRUCTOR
    #:qualified-ty-predicates            ; ACCESSOR
    #:qualified-ty-type                  ; ACCESSOR
+   #:qualified-ty-list                  ; TYPE
    #:remove-source-info                 ; FUNCTION
    #:static-predicate-p                 ; FUNCTION
    #:qualify                            ; FUNCTION
@@ -44,7 +45,7 @@
 
 (defun ty-predicate-list-p (x)
   (and (alexandria:proper-list-p x)
-       (every (lambda (b) (typep b 'ty-predicate)) x)))
+       (every #'ty-predicate-p x)))
 
 (deftype ty-predicate-list ()
   "A list of type predicates"
@@ -67,6 +68,13 @@
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type qualified-ty))
+
+(defun qualified-ty-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'qualified-ty-p x)))
+
+(deftype qualified-ty-list ()
+  '(satisfies qualified-ty-list-p))
 
 (defun qualify (predicates type)
   "Qualify TYPE with PREDICATES"

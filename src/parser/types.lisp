@@ -109,9 +109,9 @@
 
 (defstruct (ty-predicate
             (:copier nil))
-  (class  (util:required 'class)  :type identifier  :read-only t)
-  (types  (util:required 'types)  :type ty-list     :read-only t)
-  (source (util:required 'source) :type cons        :read-only t))
+  (class  (util:required 'class)  :type identifier-src :read-only t)
+  (types  (util:required 'types)  :type ty-list        :read-only t)
+  (source (util:required 'source) :type cons           :read-only t))
 
 (defun ty-predicate-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -213,7 +213,7 @@
                        :do (push (parse-predicate (cst:listify pred) (cst:source form) file) predicates)))
              
              (make-qualified-ty
-              :predicates predicates
+              :predicates (reverse predicates)
               :type (parse-type-list
                      (cdr right)
                      (cons (car (cst:source (second right)))
@@ -257,7 +257,8 @@
                   :primary-note "expected identifier")))
 
     (t
-     (let ((name (cst:raw (first forms))))
+     (let ((name (cst:raw (first forms)))
+           (name-src (cst:source (first forms))))
        (when (= 1 (length forms))
          (error 'parse-error
                 :err (coalton-error
@@ -267,7 +268,9 @@
                       :primary-note "expected predicate")))
 
        (make-ty-predicate
-        :class name
+        :class (make-identifier-src
+                :name name
+                :source name-src)
         :types (loop :for form :in (cdr forms)
                      :collect (parse-type form file))
         :source source)))))

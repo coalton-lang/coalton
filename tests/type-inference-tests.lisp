@@ -144,10 +144,10 @@
 
   ;; Check higher kinded type variables
   (check-coalton-types
-   "(define-type (Fix :f)
-      (In (:f (Fix :f))))"
+   "(define-type (TFix :f)
+      (In (:f (TFix :f))))"
 
-   '("In" . "(:f (Fix :f) -> Fix :f)"))
+   '("In" . "(:f (TFix :f) -> TFix :f)"))
 
   ;; Check that constructors are properly typed
   (signals coalton-impl/typechecker2/base:tc-error

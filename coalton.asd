@@ -55,6 +55,7 @@
                              (:file "macro")
                              (:file "expression")
                              (:file "parser")
+                             (:file "collect")
                              (:file "renamer")
                              (:file "binding")
                              (:file "package")))
@@ -91,6 +92,7 @@
                 :components ((:file "base")
                              (:file "parse-type")
                              (:file "define-type")
+                             (:file "define-class")
                              (:file "define")))
                (:module "codegen"
                 :serial t

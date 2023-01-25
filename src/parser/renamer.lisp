@@ -1,9 +1,17 @@
 (defpackage #:coalton-impl/parser/renamer
   (:use
    #:cl
+   #:coalton-impl/parser/base
+   #:coalton-impl/parser/types
    #:coalton-impl/parser/pattern
    #:coalton-impl/parser/expression
    #:coalton-impl/parser/parser)
+  (:shadowing-import-from
+   :coalton-impl/parser/base
+   #:parse-error)
+  (:import-from
+   #:coalton-impl/parser/collect
+   #:collect-type-variables)
   (:local-nicknames
    (#:util #:coalton-impl/util)
    (#:algo #:coalton-impl/algorithm))
@@ -13,10 +21,10 @@
 
 (in-package #:coalton-impl/parser/renamer)
 
-(defun make-local-vars (vars)
+(defun make-local-vars (vars &key (package *package*))
   (declare (type util:symbol-list vars))
   (loop :for var :in vars
-        :collect (cons var (gentemp (concatenate 'string (symbol-name var) "-")))))
+        :collect (cons var (gentemp (concatenate 'string (symbol-name var) "-") package))))
 
 (defun rename-variables (node)
   (rename-variables-generic% node (algo:make-immutable-map)))
@@ -408,10 +416,10 @@
      (make-program
       :package (program-package program)
       :file (program-file program)
-      :types (program-types program)
+      :types (rename-type-variables (program-types program))
       :declares (program-declares program)
       :defines (rename-variables-generic% (program-defines program) ctx)
-      :classes (program-classes program)
+      :classes (rename-type-variables (program-classes program))
       :instances (rename-variables-generic% (program-instances program) ctx))
      ctx))
 
@@ -425,3 +433,145 @@
         (rename-variables-generic% node ctx))
       list)
      ctx)))
+
+(defun rename-type-variables (ty)
+  (declare (type t ty))
+  (rename-type-variables-generic% ty (algo:make-immutable-map)))
+
+(defgeneric rename-type-variables-generic% (ty ctx)
+  (:method ((ty tyvar) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values tyvar))
+
+    (let ((new-name (algo:immutable-map-lookup ctx (tyvar-name ty))))
+
+      (if new-name
+          (make-tyvar
+           :name new-name
+           :source (ty-source ty))
+          ty)))
+
+  (:method ((ty tycon) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values tycon))
+
+    ty)
+
+  (:method ((ty tapp) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values tapp))
+
+    (make-tapp
+     :from (rename-type-variables-generic% (tapp-from ty) ctx)
+     :to (rename-type-variables-generic% (tapp-to ty) ctx)
+     :source (ty-source ty)))
+
+  (:method ((pred ty-predicate) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values ty-predicate))
+
+    (make-ty-predicate
+     :class (ty-predicate-class pred)
+     :types (rename-type-variables-generic% (ty-predicate-types pred) ctx)
+     :source (ty-predicate-source pred)))
+
+  (:method ((qual-ty qualified-ty) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values qualified-ty))
+
+    (make-qualified-ty
+     :predicates (rename-type-variables-generic% (qualified-ty-predicates qual-ty) ctx) 
+     :type (rename-type-variables-generic% (qualified-ty-type qual-ty) ctx)
+     :source (qualified-ty-source qual-ty)))
+
+  (:method ((ctor constructor) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values constructor))
+    (make-constructor
+     :name (constructor-name ctor)
+     :fields (rename-type-variables-generic% (constructor-fields ctor) ctx)
+     :source (constructor-source ctor)))
+
+  (:method ((keyword keyword-src) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values keyword-src))
+
+    (let ((new-name (algo:immutable-map-lookup ctx (keyword-src-name keyword))))
+
+      (if new-name
+          (make-keyword-src
+           :name new-name
+           :source (keyword-src-source keyword))
+          keyword)))
+
+  (:method ((toplevel toplevel-define-type) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values toplevel-define-type))
+
+    (let* ((tvars (mapcar #'keyword-src-name (toplevel-define-type-vars toplevel)))
+
+           (new-bindings (make-local-vars tvars :package util:+keyword-package+))
+
+           (new-ctx (algo:immutable-map-set-multiple ctx new-bindings)))
+
+      (make-toplevel-define-type
+       :name (toplevel-define-type-name toplevel)
+       :vars (rename-type-variables-generic% (toplevel-define-type-vars toplevel) new-ctx)
+       :docstring (toplevel-define-type-docstring toplevel)
+       :ctors (rename-type-variables-generic% (toplevel-define-type-ctors toplevel) new-ctx)
+       :source (toplevel-define-type-source toplevel)
+       :repr (toplevel-define-type-repr toplevel)
+       :head-src (toplevel-define-type-head-src toplevel))))
+
+  (:method ((fundep fundep) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values fundep))
+
+    (make-fundep
+     :left (rename-type-variables-generic% (fundep-left fundep) ctx)
+     :right (rename-type-variables-generic% (fundep-right fundep) ctx)
+     :source (fundep-source fundep)))
+
+  (:method ((method method-definition) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values method-definition))
+
+    (let* ((bound-variables (algo:immutable-map-keys ctx))
+
+           (tvars (mapcar #'tyvar-name (collect-type-variables method)))
+
+           (new-tvars (set-difference tvars bound-variables :test #'eq))
+
+           (new-bindings (make-local-vars new-tvars :package util:+keyword-package+))
+
+           (new-ctx (algo:immutable-map-set-multiple ctx new-bindings)))
+
+      (make-method-definition
+       :name (method-definition-name method)
+       :type (rename-type-variables-generic% (method-definition-type method) new-ctx)
+       :source (method-definition-source method))))
+
+  (:method ((toplevel toplevel-define-class) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values toplevel-define-class))
+
+    (let* ((tvars (mapcar #'keyword-src-name (toplevel-define-class-vars toplevel)))
+
+           (new-bindings (make-local-vars tvars :package util:+keyword-package+))
+
+           (new-ctx (algo:immutable-map-set-multiple ctx new-bindings)))
+
+      (make-toplevel-define-class
+       :name (toplevel-define-class-name toplevel)
+       :vars (rename-type-variables-generic% (toplevel-define-class-vars toplevel) new-ctx)
+       :preds (rename-type-variables-generic% (toplevel-define-class-preds toplevel) new-ctx)
+       :fundeps (rename-type-variables-generic% (toplevel-define-class-fundeps toplevel) new-ctx)
+       :methods (rename-type-variables-generic% (toplevel-define-class-methods toplevel) new-ctx)
+       :source (toplevel-define-class-source toplevel)
+       :head-src (toplevel-define-class-head-src toplevel))))
+
+  (:method ((list list) ctx)
+    (mapcar
+     (lambda (ty)
+       (rename-type-variables-generic% ty ctx))
+     list)))

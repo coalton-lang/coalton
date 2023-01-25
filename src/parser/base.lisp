@@ -8,6 +8,16 @@
   (:export
    #:identifier                         ; TYPE
    #:identifierp                        ; FUNCTION
+   #:keyword-src                        ; STRUCT
+   #:make-keyword-src                   ; CONSTRUCTOR
+   #:keyword-src-name                   ; ACCESSOR
+   #:keyword-src-source                 ; ACCESSOR
+   #:keyword-src-list                   ; TYPE
+   #:identifier-src                     ; STRUCT
+   #:make-identifier-src                ; CONSTRUCTOR
+   #:identifier-src-name                ; ACCESSOR
+   #:identifier-src-source              ; ACCESSOR
+   #:identifier-src-list                ; TYPE
    #:get-line-from-index                ; FUNCTION
    #:get-source-line-info               ; FUNCTION
    #:get-nth-line                       ; FUNCTION
@@ -21,20 +31,52 @@
    #:make-coalton-error                 ; FUNCTION
    #:*coalton-error-context*            ; VARIABLE
    #:coalton-error                      ; FUNCTION
-   #:coalton-error-location
-   #:coalton-error-file
+   #:coalton-error-location             ; ACCESSOR
+   #:coalton-error-file                 ; ACCESSOR
    #:display-coalton-error              ; FUNCTION
    #:parse-error                        ; CONDITION
-   #:parse-error-err
+   #:parse-error-err                    ; ACCESSOR
    ))
 
 (in-package #:coalton-impl/parser/base)
+
+;;;
+;;; Shared Definitions
+;;;
 
 (deftype identifier ()
   '(and symbol (not boolean) (not keyword)))
 
 (defun identifierp (x)
   (typep x 'identifier))
+
+(defstruct (keyword-src
+            (:copier nil))
+  (name   (util:required 'name)   :type keyword :read-only t)
+  (source (util:required 'source) :type cons    :read-only t))
+
+(defun keyword-src-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'keyword-src-p x)))
+
+(deftype keyword-src-list ()
+  '(satisfies keyword-src-list-p))
+
+(defstruct (identifier-src
+            (:copier nil))
+  (name   (util:required 'name)   :type identifier :read-only t)
+  (source (util:required 'source) :type cons       :read-only t))
+
+(defun identifier-src-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'identifier-src-p x)))
+
+(deftype identifier-src-list ()
+  '(satisfies identifier-src-list-p))
+
+;;;
+;;; Error Rendering
+;;;
 
 (defun get-line-from-index (file index)
   "Get the line number corresponding to the character offset INDEX.

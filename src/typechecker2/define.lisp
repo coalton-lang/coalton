@@ -28,6 +28,8 @@
    #:toplevel-define                    ; FUNCTION
    ))
 
+;; TODO: ensure patterns don't bind the same variables multiple times
+
 (in-package #:coalton-impl/typechecker2/define)
 
 ;;;
@@ -161,11 +163,9 @@
 
   nil)
 
-(defun tc-env-ambigious-pred (env pred file subs)
-  (declare (type tc-env env)
-           (type tc:ty-predicate pred)
-           (type coalton-file file)
-           (type tc:substitution-list subs))
+(defun error-ambigious-pred (pred file)
+  (declare (type tc:ty-predicate pred)
+           (type coalton-file file))
 
   (unless (tc:ty-predicate-source pred)
     (util:coalton-bug "Predicate ~A does not have source information" pred))
@@ -202,8 +202,6 @@
 ;;; Entrypoint
 ;;;
 
-;; TODO: validate that all definitinos are defined in the current package
-
 (defun toplevel-define (defines declares file env)
   "Entrypoint for typechecking a group of parsed defines and declares."
   (declare (type parser:toplevel-define-list defines)
@@ -212,97 +210,102 @@
            (type tc:environment env)
            (values tc:environment))
 
-  (let ((def-table (make-hash-table :test #'eq))
+  ;; Ensure that all defines are in the current package
+  (check-package
+   defines
+   (alexandria:compose #'parser:node-variable-name #'parser:toplevel-define-name)
+   (alexandria:compose #'parser:node-source #'parser:toplevel-define-name)
+   file)
 
-        (dec-table (make-hash-table :test #'eq)))
+  ;; Ensure that there are no duplicate definitions
+  (check-duplicates
+   defines
+   (alexandria:compose #'parser:node-variable-name #'parser:toplevel-define-name)
+   (lambda (first second)
+     (error 'tc-error
+            :err (coalton-error
+                  :span (parser:node-source (parser:toplevel-define-name first))
+                  :file file
+                  :message "Duplicate definition"
+                  :primary-note "first definition here"
+                  :notes
+                  (list
+                   (make-coalton-error-note
+                    :type :primary
+                    :span (parser:node-source (parser:toplevel-define-name second))
+                    :message "second defintion here"))))))
 
-    ;; Ensure that there are no duplicate definitions
+  ;; Ensure that there are no duplicate declerations
+  (check-duplicates
+   declares
+   (alexandria:compose #'parser:identifier-src-name #'parser:toplevel-declare-name)
+   (lambda (first second)
+     (error 'tc-error
+            :err (coalton-error
+                  :span (parser:identifier-src-source (parser:toplevel-declare-name first))
+                  :file file
+                  :message "Duplicate decleration"
+                  :primary-note "first decleration here"
+                  :notes
+                  (list
+                   (make-coalton-error-note
+                    :type :primary
+                    :span (parser:identifier-src-source (parser:toplevel-declare-name second))
+                    :message "second decleration here"))))))
+
+  ;; Ensure that each decleration has an associated definition
+  (loop :with def-table
+          := (loop :with table := (make-hash-table :test #'eq)
+
+                   :for def :in defines
+                   :for name := (parser:node-variable-name
+                                 (parser:toplevel-define-name def))
+
+                   :do (setf (gethash name table) def)
+
+                   :finally (return table))
+
+        :for declare :in declares
+        :for name := (parser:identifier-src-name (parser:toplevel-declare-name declare))
+
+        :unless (gethash name def-table)
+          :do (error 'tc-error
+                     :err (coalton-error
+                           :span (parser:identifier-src-source (parser:toplevel-declare-name declare))
+                           :file file
+                           :message "Orphan decleration"
+                           :primary-note "decleration does not have an associated definition")))
+
+  (let ((dec-table (make-hash-table :test #'eq))
+
+        (tc-env (make-tc-env :env env)))
+
+    (loop :for declare :in declares
+          :for name := (parser:identifier-src-name (parser:toplevel-declare-name declare))
+          :for ty := (parser:toplevel-declare-type declare)
+          :do (setf (gethash name dec-table) ty))
+
+    (infer-bindings-type defines dec-table nil tc-env file)
+
     (loop :for define :in defines
           :for name := (parser:node-variable-name (parser:name define))
+          :for scheme := (tc:remove-source-info (gethash name (tc-env-ty-table tc-env)))
 
-          :if (gethash name def-table)
-            :do (error 'tc-error
-                       :err (coalton-error
-                             :span (parser:node-source (parser:name define))
-                             :file file
-                             :message "Duplicate definition"
-                             :primary-note "second definition here"
-                             :notes
-                             (list
-                              (make-coalton-error-note
-                               :type :primary
-                               :span (parser:node-source
-                                      (parser:name
-                                       (gethash name def-table)))
-                               :message "first defintion here"))))
-          :else
-            :do (setf (gethash name def-table) define))
+          :when (tc:type-variables scheme)
+            :do (util:coalton-bug "Scheme ~A should not have any free type variables." scheme)
 
+          :do (setf env (tc:set-value-type env name scheme))
 
-    ;; Ensure that there are no duplicate declerations
-    (loop :for declare :in declares
-          :for name := (parser:identifier-src-name (parser:toplevel-declare-name declare))
+              ;; TODO: set function source parameter names
 
-          :if (gethash name dec-table)
-            :do (error 'tc-error
-                       :err (coalton-error
-                             :span (parser:identifier-src-source (parser:toplevel-declare-name declare))
-                             :file file
-                             :message "Duplicate decleration"
-                             :primary-note "second decleration here"
-                             :notes
-                             (list
-                              (make-coalton-error-note
-                               :type :primary
-                               :span (parser:identifier-src-source
-                                      (parser:toplevel-declare-name
-                                       (gethash name dec-table)))
-                               :message "first decleration here"))))
-          :else
-            :do (setf (gethash name dec-table) declare))
+          :do (setf env (tc:set-name env name (tc:make-name-entry
+                                               :name name
+                                               :type :value
+                                               ;; TOOD: add docstring here
+                                               :docstring nil
+                                               :location (parser:coalton-file-name file)))))
 
-    ;; Ensure that each decleration has an associated definition
-    (loop :for declare :in declares
-          :for name := (parser:identifier-src-name (parser:toplevel-declare-name declare))
-
-          :unless (gethash name def-table)
-            :do (error 'tc-error
-                       :err (coalton-error
-                             :span (parser:identifier-src-source (parser:toplevel-declare-name declare))
-                             :file file
-                             :message "Orphan decleration"
-                             :primary-note "decleration does not have an associated definition")))
-
-    (let ((dec-table (make-hash-table :test #'eq))
-
-          (tc-env (make-tc-env :env env)))
-
-      (loop :for declare :in declares
-            :for name := (parser:identifier-src-name (parser:toplevel-declare-name declare))
-            :for ty := (parser:toplevel-declare-type declare)
-            :do (setf (gethash name dec-table) ty))
-
-      (infer-bindings-type defines dec-table nil tc-env file)
-
-      (loop :for define :in defines
-            :for name := (parser:node-variable-name (parser:name define))
-            :for scheme := (tc:remove-source-info (gethash name (tc-env-ty-table tc-env)))
-
-            :when (tc:type-variables scheme)
-              :do (util:coalton-bug "Scheme ~A should not have any free type variables." scheme)
-
-            :do (setf env (tc:set-value-type env name scheme))
-
-                ;; TODO: set function source parameter names
-
-            :do (setf env (tc:set-name env name (tc:make-name-entry
-                                                 :name name
-                                                 :type :value
-                                                 ;; TOOD: add docstring here
-                                                 :docstring nil
-                                                 :location (parser:coalton-file-name file)))))
-
-      env)))
+    env))
 
 ;;;
 ;;; Expression Type Inference
@@ -634,6 +637,24 @@
              (type tc-env env)
              (type coalton-file file)
              (values tc:ty tc:ty-predicate-list tc:substitution-list))
+
+    ;; Ensure that there are no duplicate let bindings
+    (check-duplicates
+     (parser:node-let-bindings node)
+     (alexandria:compose #'parser:node-variable-name #'parser:node-let-binding-name)
+     (lambda (first second)
+       (error 'tc-error
+              :err (coalton-error
+                    :span (parser:node-let-binding-source first)
+                    :file file
+                    :message "Duplicate definition in let"
+                    :primary-note "first definition here"
+                    :notes
+                    (list
+                     (make-coalton-error-note
+                      :type :primary
+                      :span (parser:node-let-binding-source second)
+                      :message "second definition here"))))))
 
     (multiple-value-bind (preds subs)
         (infer-let-bindings (parser:node-let-bindings node) (parser:node-let-declares node) subs env file)
@@ -1348,7 +1369,7 @@
                                    :for deps := (remove-duplicates
                                                  (intersection
                                                   (mapcar #'parser:node-variable-name
-                                                          (collect-variables node))
+                                                          (parser:collect-variables node))
                                                   impl-bindings-names
                                                   :test #'eq)
                                                  :test #'eq)
@@ -1443,7 +1464,7 @@
                    (handler-case
                        (tc:default-preds (tc-env-env env) (append env-tvars local-tvars) retained-preds)
                      (error:coalton-type-error (e)
-                       (tc-env-ambigious-pred env (tc:ambigious-constraint-pred e) file subs))))
+                       (error-ambigious-pred (tc:ambigious-constraint-pred e) file))))
 
                  ;; Defaultable predicates are not retained
                  (retained-preds
@@ -1463,7 +1484,7 @@
 
             ;; Toplevel bindings cannot defer predicates
             (when (and (parser:toplevel binding) deferred-preds)
-              (tc-env-ambigious-pred env (first deferred-preds) file subs))
+              (error-ambigious-pred (first deferred-preds) file))
 
             ;; Check that the declared and inferred schemes match
             (unless (equalp declared-ty output-scheme)
@@ -1536,7 +1557,7 @@
         (let* ((defaultable-preds (handler-case
                                       (tc:default-preds (tc-env-env env) (append env-tvars local-tvars) retained-preds)
                                     (error:coalton-type-error (e)
-                                      (tc-env-ambigious-pred env (tc:ambigious-constraint-pred e) file subs))))
+                                      (error-ambigious-pred (tc:ambigious-constraint-pred e) file))))
 
                (retained-preds (set-difference retained-preds defaultable-preds :test #'eq))
 
@@ -1583,9 +1604,8 @@
                       :do (tc-env-replace-type env name scheme))
 
                 (when (and (parser:toplevel (first bindings)) deferred-preds)
-                  (tc-env-ambigious-pred env (first deferred-preds) file subs))
+                  (error-ambigious-pred (first deferred-preds) file))
 
-                
                 (values
                  deferred-preds
                  subs))
@@ -1603,7 +1623,7 @@
                       :do (tc-env-replace-type env name scheme))
 
                 (when (and (parser:toplevel (first bindings)) deferred-preds)
-                  (tc-env-ambigious-pred env (first deferred-preds) file subs))
+                  (error-ambigious-pred (first deferred-preds) file))
 
                 (values
                  deferred-preds
