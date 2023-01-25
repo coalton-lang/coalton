@@ -223,7 +223,11 @@
   (:method ((kind kfun))
     (nconc
      (kind-variables (kfun-from kind))
-     (kind-variables (kfun-to kind)))))
+     (kind-variables (kfun-to kind))))
+
+  (:method ((list list))
+    (loop :for elem :in list
+          :append (kind-variables elem))))
 
 (defun kind-monomorphize-subs (kvars ksubs)
   (declare (type kyvar-list kvars)

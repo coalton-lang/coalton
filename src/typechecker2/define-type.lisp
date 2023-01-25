@@ -21,89 +21,78 @@
 
 (in-package #:coalton-impl/typechecker2/define-type)
 
-;; TODO: validate that types are defined in the current package
-
 (defun toplevel-define-type (types file env)
   (declare (type parser:toplevel-define-type-list types)
            (type coalton-file file)
            (type tc:environment env)
            (values tc:type-definition-list tc:environment))
 
+  ;; Ensure that all types are defined in the current package
+  (check-package
+   types
+   (alexandria:compose #'parser:identifier-src-name #'parser:toplevel-define-type-name)
+   (alexandria:compose #'parser:identifier-src-source #'parser:toplevel-define-type-name)
+   file)
 
-  ;; Ensure that all type variables are known
-  (loop :for type :in types
-        :for tyvars := (collect-type-variables type)
-        :do (loop :for tyvar :in tyvars
-                  :unless (find (parser:tyvar-name tyvar)
-                                (parser:toplevel-define-type-vars type)
-                                :key #'parser:keyword-src-name)
-                    :do (error 'tc-error
-                               :err (coalton-error
-                                     :span (parser:ty-source tyvar)
-                                     :file file
-                                     :message "Unknown type variable"
-                                     :primary-note (format nil "unknown type variable")))))
+  ;; Ensure that all constructors are defined in the current package
+  (check-package
+   (mapcan (alexandria:compose #'copy-list #'parser:toplevel-define-type-ctors) types)
+   (alexandria:compose #'parser:identifier-src-name #'parser:constructor-name)
+   (alexandria:compose #'parser:identifier-src-source #'parser:constructor-name)
+   file)
 
   ;; Ensure that there are no duplicate type definitions
-  (loop :with table := (make-hash-table :test #'eq)
-        :for type :in types
-        :for name := (parser:identifier-src-name (parser:toplevel-define-type-name type))
-        :if (gethash name table)
-          :do (error 'tc-error
-                     :err (coalton-error
-                           :span (parser:toplevel-define-type-head-src type)
-                           :file file
-                           :message "Duplicate type definitions"
-                           :primary-note "second definition here"
-                           :notes
-                           (list
-                            (make-coalton-error-note
-                             :type :primary
-                             :span (parser:toplevel-define-type-head-src (gethash name table))
-                             :message "first definition here"))))
-        :else
-          :do (setf (gethash name table) type))
+  (check-duplicates
+   types
+   (alexandria:compose #'parser:identifier-src-name #'parser:toplevel-define-type-name)
+   (lambda (first second)
+     (error 'tc-error
+            :err (coalton-error
+                  :span (parser:toplevel-define-type-head-src first)
+                  :file file
+                  :message "Duplicate type definitions"
+                  :primary-note "first definition here"
+                  :notes
+                  (list
+                   (make-coalton-error-note
+                    :type :primary
+                    :span (parser:toplevel-define-type-head-src second)
+                    :message "second definition here"))))))
 
   ;; Ensure that there are no duplicate constructors
-  (loop :with table := (make-hash-table :test #'eq)
-        :for type :in types
-        :do (loop :for ctor :in (parser:toplevel-define-type-ctors type)
-                  :for name := (parser:identifier-src-name (parser:constructor-name ctor))
-                  :if (gethash name table)
-                    :do (error 'tc-error
-                               :err (coalton-error
-                                     :span (parser:constructor-source ctor)
-                                     :file file
-                                     :message "Duplicate constructor definitions"
-                                     :primary-note "second definition here"
-                                     :notes
-                                     (list (make-coalton-error-note
-                                            :type :primary
-                                            :span (parser:constructor-source (gethash name table))
-                                            :message "first definition here"))))
-                  :else
-                    :do (setf (gethash name table) ctor)))
+  (check-duplicates
+   (mapcan (alexandria:compose #'copy-list #'parser:toplevel-define-type-ctors) types)
+   (alexandria:compose #'parser:identifier-src-name #'parser:constructor-name)
+   (lambda (first second)
+     (error 'tc-error
+            :err (coalton-error
+                  :span (parser:constructor-source first)
+                  :file file
+                  :message "Duplicate constructor definitions"
+                  :primary-note "first definition here"
+                  :notes
+                  (list (make-coalton-error-note
+                         :type :primary
+                         :span (parser:constructor-source second)
+                         :message "second definition here"))))))
 
   ;; Ensure that no type has duplicate type variables
-  ;; TODO: does this error render incorectly??
   (loop :for type :in types
-        :do (loop :with table := (make-hash-table :test #'eq)
-                  :for var :in (parser:toplevel-define-type-vars type)
-                  :for name := (parser:keyword-src-name var)
-                  :if (gethash name table)
-                    :do (error 'tc-error
-                               :err (coalton-error
-                                     :span (parser:keyword-src-source var)
-                                     :file file
-                                     :message "Duplicate type variable definitions"
-                                     :primary-note "second definition here"
-                                     :notes
-                                     (list (make-coalton-error-note
-                                            :type :primary
-                                            :span (parser:keyword-src-source (gethash name table))
-                                            :message "first definition here"))))
-                  :else
-                    :do (setf (gethash name table) var)))
+        :do (check-duplicates
+             (parser:toplevel-define-type-vars type)
+             #'parser:keyword-src-name
+             (lambda (first second)
+               (error 'tc-error
+                      :err (coalton-error
+                            :span (parser:keyword-src-source first)
+                            :file file
+                            :message "Duplicate type variable definitions"
+                            :primary-note "first definition here"
+                            :notes
+                            (list (make-coalton-error-note
+                                   :type :primary
+                                   :span (parser:keyword-src-source second)
+                                   :message "second definition here")))))))
 
   (let* ((type-names (mapcar (alexandria:compose #'parser:identifier-src-name
                                                  #'parser:toplevel-define-type-name)
@@ -111,7 +100,7 @@
 
          (type-dependencies
            (loop :for type :in types
-                 :for referenced-types := (collect-referenced-types type)
+                 :for referenced-types := (parser:collect-referenced-types type)
                  :collect (list*
                            (parser:identifier-src-name (parser:toplevel-define-type-name type))
                            (intersection type-names (mapcar #'parser:tycon-name referenced-types)))))
@@ -145,7 +134,7 @@
                      ;; define-types.
                      :for kvars
                        := (loop :for var :in vars
-                                :collect (tc:kind-of (partial-type-env-add-var partial-env name var)))
+                                :collect (tc:kind-of (partial-type-env-add-var partial-env var)))
 
                      :for kind := (tc:make-kind-function* kvars tc:+kstar+)
                      :for ty := (tc:make-tycon :name name :kind kind)
@@ -235,7 +224,7 @@
                     :for ctor-name := (parser:identifier-src-name (parser:constructor-name ctor))
                     :for fields := (loop :for field :in (parser:constructor-fields ctor)
                                          :collect (multiple-value-bind (type ksubs_)
-                                                      (infer-type-kinds field tc:+kstar+ name ksubs env file)
+                                                      (infer-type-kinds field tc:+kstar+ ksubs env file)
                                                     (setf ksubs ksubs_)
                                                     type))
                     :do (setf (gethash ctor-name ctor-table) fields)))
@@ -256,7 +245,7 @@
           :for tvars := (tc:apply-ksubstitution
                          ksubs
                          (mapcar (lambda (var)
-                                   (partial-type-env-lookup-var env name (parser:keyword-src-name var)))
+                                   (partial-type-env-lookup-var env (parser:keyword-src-name var)))
                                  (parser:toplevel-define-type-vars type)))
 
           :for repr := (parser:toplevel-define-type-repr type)

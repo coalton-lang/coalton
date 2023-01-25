@@ -5,6 +5,9 @@
    #:coalton-impl/typechecker2/define-type
    #:toplevel-define-type)
   (:import-from
+   #:coalton-impl/typechecker2/define-class
+   #:toplevel-define-class)
+  (:import-from
    #:coalton-impl/typechecker2/define
    #:toplevel-define)
   (:local-nicknames
@@ -31,11 +34,15 @@
         (toplevel-define-type (parser:program-types program) file env)
       (declare (ignore type-definitions))
 
-      (setf env (toplevel-define (parser:program-defines program)
-                                 (parser:program-declares program)
+      (multiple-value-bind (class-definitions env)
+          (toplevel-define-class (parser:program-classes program)
                                  file
-                                 env))
+                                 env)
+        (declare (ignore class-definitions))
 
-      (setf coalton-impl::*global-environment* env)
+        (setf env (toplevel-define (parser:program-defines program)
+                                   (parser:program-declares program)
+                                   file
+                                   env))
 
-      (values))))
+        (values)))))

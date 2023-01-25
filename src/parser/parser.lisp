@@ -11,16 +11,6 @@
    (#:cst #:concrete-syntax-tree)
    (#:util #:coalton-impl/util))
   (:export
-   #:keyword-src                        ; STRUCT
-   #:make-keyword-src                   ; CONSTRUCTOR
-   #:keyword-src-name                   ; ACCESSOR
-   #:keyword-src-source                 ; ACCESSOR
-   #:keyword-src-list                   ; TYPE
-   #:identifier-src                     ; STRUCT
-   #:make-identifier-src                ; CONSTRUCTOR
-   #:identifier-src-name                ; ACCESSOR
-   #:identifier-src-source              ; ACCESSOR
-   #:identifier-src-list                ; TYPE
    #:attribute                          ; TYPE
    #:attribute-source                   ; ACCESSOR
    #:attribute-monomorphize             ; STRUCT
@@ -76,9 +66,11 @@
    #:toplevel-define-class-name         ; ACCESSOR
    #:toplevel-define-class-vars         ; ACCESSOR
    #:toplevel-define-class-preds        ; ACCESSOR
+   #:toplevel-define-class-fundeps      ; ACCESSOR
    #:toplevel-define-class-methods      ; ACCESSOR
    #:toplevel-define-class-source       ; ACCESSOR
-   #:toplevel-define-class-type         ; TYPE
+   #:toplevel-define-class-head-src     ; ACCESSOR
+   #:toplevel-define-class-list         ; TYPE
    #:instance-method-definition         ; STRUCT
    #:make-instance-method-definition    ; CONSTRUCTOR
    #:instance-method-definition-name    ; ACCESSOR
@@ -164,34 +156,6 @@
 ;;;;                           | "(" "define-instance" "(" ty-predicate "=>" ty-predicate ")" instance-method-definition ")"
 ;;;;                           | "(" "define-instance" "(" ( "(" ty-predicate ")" )+ "=>" ty-predicate ")" instance-method-definition+ ")"
 ;;;;
-
-;;
-;; Symbols with source information
-;;
-
-(defstruct (keyword-src
-            (:copier nil))
-  (name   (util:required 'name)   :type keyword :read-only t)
-  (source (util:required 'source) :type cons    :read-only t))
-
-(defun keyword-src-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'keyword-src-p x)))
-
-(deftype keyword-src-list ()
-  '(satisfies keyword-src-list-p))
-
-(defstruct (identifier-src
-            (:copier nil))
-  (name   (util:required 'name)   :type identifier :read-only t)
-  (source (util:required 'source) :type cons       :read-only t))
-
-(defun identifier-src-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'identifier-src-p x)))
-
-(deftype identifier-src-list ()
-  '(satisfies identifier-src-list-p))
 
 ;;
 ;; Attributes

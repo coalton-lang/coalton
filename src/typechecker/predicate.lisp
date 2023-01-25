@@ -19,6 +19,7 @@
    #:make-qualified-ty                  ; CONSTRUCTOR
    #:qualified-ty-predicates            ; ACCESSOR
    #:qualified-ty-type                  ; ACCESSOR
+   #:qualified-ty-list                  ; TYPE
    #:remove-source-info                 ; FUNCTION
    #:static-predicate-p                 ; FUNCTION
    #:qualify                            ; FUNCTION
@@ -62,6 +63,16 @@
 
 (defmethod make-load-form ((self qualified-ty) &optional env)
   (make-load-form-saving-slots self :environment env))
+
+#+(and sbcl coalton-release)
+(declaim (sb-ext:freeze-type qualified-ty))
+
+(defun qualified-ty-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'qualified-ty-p x)))
+
+(deftype qualified-ty-list ()
+  '(satisfies qualified-ty-list-p))
 
 (defun qualify (predicates type)
   "Qualify TYPE with PREDICATES"
