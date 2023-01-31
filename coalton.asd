@@ -93,9 +93,12 @@
                (:module "typechecker2"
                 :serial t
                 :components ((:file "base")
+                             (:file "node")
+                             (:file "partial-type-env")
                              (:file "parse-type")
                              (:file "define-type")
                              (:file "define-class")
+                             (:file "tc-env")
                              (:file "define")))
                (:module "codegen"
                 :serial t

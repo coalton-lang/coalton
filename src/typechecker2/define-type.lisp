@@ -8,7 +8,8 @@
   (:use
    #:cl
    #:coalton-impl/typechecker2/base
-   #:coalton-impl/typechecker2/parse-type)
+   #:coalton-impl/typechecker2/parse-type
+   #:coalton-impl/typechecker2/partial-type-env)
   (:local-nicknames
    (#:util #:coalton-impl/util)
    (#:algo #:coalton-impl/algorithm)
@@ -237,7 +238,7 @@
           :for kind := (tc:apply-ksubstitution ksubs (tc:tycon-kind ty))
           :for ksubs_ := (tc:kind-monomorphize-subs (tc:kind-variables kind) ksubs)
           :for tycon := (tc:make-tycon :name name :kind (tc:apply-ksubstitution ksubs_ kind))
-          :do (partial-type-env-add-type env name tycon))
+          :do (partial-type-env-replace-type env name tycon))
 
     ;; Build type-definitions for each type in the scc
     (loop :for type :in types

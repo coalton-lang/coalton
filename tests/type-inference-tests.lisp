@@ -26,11 +26,11 @@
 
   ;; Check that identity qualifies
   (check-coalton-types
-   "(define (id a) a)
-    (define x (id 3))
-    (define y (id \"three\"))"
+   "(define (id_ a) a)
+    (define x (id_ 3))
+    (define y (id_ \"three\"))"
 
-   '("id" . "(:a -> :a)")
+   '("id_" . "(:a -> :a)")
    '("x" . "Integer")
    '("y" . "String"))
 
@@ -123,16 +123,16 @@
 (deftest test-type-definitions ()
   ;; Test recursive type definitions
   (check-coalton-types
-   "(define-type (Tree :a)
+   "(define-type (Tree_ :a)
       (Leaf :a)
-      (Branch (Tree :a) (Tree :a)))
+      (Branch (Tree_ :a) (Tree_ :a)))
 
     (define (f a)
       (Branch a (f a)))"
 
-   '("Leaf" . "(:a -> Tree :a)")
-   '("Branch" . "(Tree :a -> Tree :a -> Tree :a)")
-   '("f" . "(Tree :a -> Tree :a)"))
+   '("Leaf" . "(:a -> Tree_ :a)")
+   '("Branch" . "(Tree_ :a -> Tree_ :a -> Tree_ :a)")
+   '("f" . "(Tree_ :a -> Tree_ :a)"))
 
   ;; Check mutually recursive type definitions
   (check-coalton-types
@@ -152,9 +152,9 @@
   ;; Check that constructors are properly typed
   (signals coalton-impl/typechecker2/base:tc-error
     (check-coalton-types
-     "(define-type (Tree :a)
+     "(define-type (Tree_ :a)
         (Leaf :a)
-        (Branch (Tree :a) (Tree :a)))
+        (Branch (Tree_ :a) (Tree_ :a)))
 
       (define x (Branch (Leaf 5) (Leaf \"string\")))")))
 

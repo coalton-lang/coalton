@@ -2,7 +2,8 @@
   (:use
    #:cl
    #:coalton-impl/typechecker2/base
-   #:coalton-impl/typechecker2/parse-type)
+   #:coalton-impl/typechecker2/parse-type
+   #:coalton-impl/typechecker2/partial-type-env)
   (:local-nicknames
    (#:util #:coalton-impl/util)
    (#:algo #:coalton-impl/algorithm)
