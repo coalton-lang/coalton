@@ -1499,7 +1499,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                                            (tc:apply-substitution subs preds))))
 
         ;; Generate additional substitutions from fundeps
-        (setf subs (tc:solve-fundeps (tc-env-env env) reduced-preds subs))
+        (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) reduced-preds subs)))
 
         ;; Split predicates into retained and deferred
         (multiple-value-bind (deferred-preds retained-preds)
@@ -1598,7 +1598,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
            (local-tvars (set-difference expr-tvars env-tvars :test #'eq)))
 
-      (setf subs (tc:solve-fundeps (tc-env-env env) preds subs))
+      (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) preds subs)))
 
       (multiple-value-bind (deferred-preds retained-preds)
           (tc:split-context (tc-env-env env) env-tvars preds subs)

@@ -226,8 +226,7 @@
      (kind-variables (kfun-to kind))))
 
   (:method ((list list))
-    (loop :for elem :in list
-          :append (kind-variables elem))))
+    (mapcan #'kind-variables list)))
 
 (defun kind-monomorphize-subs (kvars ksubs)
   (declare (type kyvar-list kvars)

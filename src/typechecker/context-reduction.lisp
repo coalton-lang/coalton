@@ -67,7 +67,7 @@ Returns (PREDS FOUNDP)"
     (handler-case
         (let* ((subs (predicate-match (ty-class-instance-predicate inst) pred))
                (resulting-preds (mapcar (lambda (p) (apply-substitution subs p))
-                                         (ty-class-instance-constraints inst))))
+                                        (ty-class-instance-constraints inst))))
           (return-from by-inst (values resulting-preds t)))
       (predicate-unification-error () nil)))
   (values nil nil))
@@ -105,6 +105,7 @@ Returns (PREDS FOUNDP)"
                      (simp-loop (append (list (first ps)) rs) (rest ps))))))
     (simp-loop nil preds)))
 
+;; TODO: Remove unused param
 (defun reduce-context (env preds subs &key (allow-deferred-predicates t))
   (declare (ignore allow-deferred-predicates))
   (let ((env (apply-substitution subs env))

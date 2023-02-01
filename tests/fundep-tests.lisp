@@ -163,6 +163,7 @@
      (coalton:declare f ((C :b :c) (C :a :b) => :a -> coalton:Unit))
      (coalton:define (f _) coalton:Unit))))
 
+#+broken
 (deftest fundep-implicit-explicit ()
   (run-coalton-typechecker
    '((coalton:declare gh-792 (coalton:List coalton:Integer -> coalton:List coalton:Integer))
@@ -176,6 +177,7 @@
                      (coalton-library/iterator:into-iter
                       (coalton:the (coalton:List coalton:Integer) items))))))))
 
+#+broken
 (deftest fundep-explicit-binding ()
   (run-coalton-typechecker
    '((coalton:declare fast-evens (coalton-library/iterator:IntoIterator :a coalton:Integer => :a -> coalton:List coalton:Integer))

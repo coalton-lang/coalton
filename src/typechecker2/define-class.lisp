@@ -21,10 +21,10 @@
   (method-tys   (util:required 'method-tys)   :type tc:qualified-ty-list :read-only t)
   (fundeps      (util:required 'fundeps)      :type tc:fundep-list       :read-only t))
 
-(defmethod tc:kind-variables ((partial partial-class))
-  (append
-   (tc:kind-variables (partial-class-superclasses partial))
-   (tc:kind-variables (partial-class-method-tys partial))))
+(defmethod tc:kind-variables-generic% ((partial partial-class))
+  (nconc
+   (tc:kind-variables-generic% (partial-class-superclasses partial))
+   (tc:kind-variables-generic% (partial-class-method-tys partial))))
 
 (defmethod tc:apply-ksubstitution (ksubs (partial partial-class))
   (declare (type tc:ksubstitution-list ksubs)
