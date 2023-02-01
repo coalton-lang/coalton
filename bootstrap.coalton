@@ -1,7 +1,45 @@
 (package coalton-library/classes)
 
-(define-class (Num :a)
-  (fromInt (Integer -> :a)))
+(define-type (Tuple :a :b)
+  (Tuple :a :b))
+
+(define-class (Eq :a)
+  (== (:a -> :a -> Boolean)))
+
+(define-class (Eq :a => Num :a)
+  (fromInt (Integer -> :a))
+  (+ (:a -> :a -> :a)))
+
+(define-instance (Eq Integer)
+  (define (== x y) (undefined "==")))
 
 (define-instance (Num Integer)
-  (define (fromInt x) x))
+  (define (fromInt x) x)
+  (define (+ x y) (undefined "+")))
+
+(define-instance (Eq :a => Eq (List :a))
+  (define (== x y) (undefined "==")))
+
+(define-instance (Eq U32)
+  (define (== x y) (undefined "==")))
+
+(define-instance (Num U32)
+  (define (fromInt x) (undefined "fromInt"))
+  (define (+ x y) (undefined "+")))
+
+(define-instance (Eq Double-Float)
+  (define (== x y) (undefined "==")))
+
+(define-instance (Num Double-Float)
+  (define (fromInt x) (undefined "fromInt"))
+  (define (+ x y) (undefined "+")))
+
+(define (id x) x)
+
+(define (undefined x) (lisp :a () (cl:error "undefined")))
+
+(declare singleton (:a -> List :a))
+(define (singleton x) (undefined "singleton"))
+
+(declare append (List :a -> List :a -> List :a))
+(define (append x y) (undefined "append"))

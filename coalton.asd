@@ -79,6 +79,7 @@
                              (:file "define-class")
                              (:file "tc-env")
                              (:file "define")
+                             (:file "define-instance")
                              (:file "package")))
                #+broken
                (:module "analysis"

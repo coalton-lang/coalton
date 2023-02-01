@@ -102,7 +102,11 @@
     (declare (type tc:kind expected-kind)
              (type tc:ksubstitution-list ksubs)
              (type coalton-file file))
-    (let* ((tvar (partial-type-env-lookup-var env type file))
+    (let* ((tvar (partial-type-env-lookup-var
+                  env
+                  (parser:tyvar-name type)
+                  (parser:ty-source type)
+                  file))
 
            (kvar (tc:kind-of tvar)))
 

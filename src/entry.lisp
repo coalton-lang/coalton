@@ -47,4 +47,16 @@
 ;; TODO: remove this
 ;; Temporary hack to define Num so that integer literals can be
 ;; typechecked.
-(entry-point "./bootstrap.coalton")
+(defpackage #:coalton-library/classes
+  (:use #:coalton)
+  (:export
+   #:Tuple
+   #:Num #:fromInt #:+
+   #:id
+   #:undefined
+   #:singleton
+   #:append
+   #:Eq #:==))
+
+(entry-point "../pre-bootstrap.coalton")
+(entry-point "../bootstrap.coalton")

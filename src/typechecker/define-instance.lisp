@@ -4,7 +4,8 @@
    #:coalton-impl/typechecker/base)
   (:import-from
    #:coalton-impl/typechecker/partial-type-env
-   #:make-partial-type-env)
+   #:make-partial-type-env
+   #:partial-type-env-add-var)
   (:import-from
    #:coalton-impl/typechecker/parse-type
    #:infer-predicate-kinds)
@@ -18,6 +19,7 @@
 
 (in-package #:coalton-impl/typechecker/define-instance)
 
+;;; TODO: check for superclasses
 ;;; TODO: add the orphan check here
 
 (defun toplevel-define-instance (instances env file)
@@ -27,46 +29,12 @@
            (values tc:environment))
 
   (loop :for instance :in instances
-
-        :for unparsed-pred := (parser:toplevel-define-instance-pred instance)
-
-        :for pred := (parse-predicate unparsed-pred env file)
-        :for class-name := (tc:ty-predicate-class pred)
-
-        :for class := (tc:lookup-class env class-name)
-
-        :for context := (loop :for pred :in (parser:toplevel-define-instance-))
-
-        :for instance-codegen-sym
-          := (alexandria:format-symbol
-              *package*
-              "INSTANCE/~A"
-              (with-output-to-string (s)
-                (tc:with-pprint-variable-context ()
-                  (let ((*print-escape* t))
-                    (tc:pprint-predicate s pred)))))
-
-        :for method-names := (mapcar #'car (tc:ty-class-unqualified-methods class))
-
-        :for method-codegen-syms
-          := (loop :with table := (make-hash-table :test #'eq)
-                   :for method-name :in method-naes
-                   :do (setf (gethash method-name table)
-                             (alexandria:format-symbol
-                              *package*
-                              "~A-~S"
-                              instance-codegen-sym
-                              method-name))
-                   :finally (return table))
-
-        :for instance := (tc:make-ty-class-instance
-                          :constraints )
-        )
+        :do (setf env (define-instance-in-environment instance env file)))
 
   env)
 
 (defun define-instance-in-environment (instance env file)
-  (declare (type parser:topelevel-define-instance instance)
+  (declare (type parser:toplevel-define-instance instance)
            (type tc:environment env)
            (type coalton-file file)
            (values tc:environment))
@@ -103,7 +71,7 @@
 
            (method-codegen-syms
              (loop :with table := (make-hash-table :test #'eq)
-                   :for method-name :in method-naes
+                   :for method-name :in method-names
                    :do (setf (gethash method-name table)
                              (alexandria:format-symbol
                               *package*
@@ -111,12 +79,17 @@
                               instance-codegen-sym
                               method-name))
                    :finally (return table)))
+
            (instance-entry
              (tc:make-ty-class-instance
               :constraints context
-              :predicate predicate
+              :predicate pred
               :codegen-sym instance-codegen-sym
               :method-codegen-syms method-codegen-syms)))
 
-      
-      )))))
+      (when (tc:ty-class-fundeps class)
+        (setf env (tc:update-instance-fundeps env pred)))
+
+      (setf env (tc:add-instance env class-name instance-entry))
+
+      env)))

@@ -3,7 +3,9 @@
 (defun run-coalton-tests ()
   (run-package-tests
    :packages '(:coalton-tests
+               #+broken
                :quil-coalton-tests
+               #+broken
                :thih-coalton-tests)
    :interactive t))
 
@@ -18,7 +20,7 @@
   (let ((*package* (make-package (or (and fiasco::*current-test*
                                           (fiasco::name-of fiasco::*current-test*))
                                      "COALTON-TEST-COMPILE-PACKAGE")
-                                 :use '("COALTON" #+broken "COALTON-PRELUDE"))))
+                                 :use '("COALTON" #+broken "COALTON-PRELUDE" "COALTON-LIBRARY/CLASSES"))))
     (unwind-protect
          (let* ((stream (make-string-input-stream toplevel-string))
 
@@ -61,6 +63,9 @@
            (setf (parser:program-declares program) (nreverse (parser:program-declares program)))
            (setf (parser:program-defines program) (nreverse (parser:program-defines program)))
            (setf (parser:program-classes program) (nreverse (parser:program-classes program)))
+
+
+           (setf program (parser:rename-variables program))
 
            (multiple-value-bind (type-definitions env)
                (tc:toplevel-define-type (parser:program-types program) file env)

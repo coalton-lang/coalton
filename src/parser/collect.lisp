@@ -100,7 +100,11 @@
 
   (:method ((method method-definition))
     (declare (values tyvar-list &optional))
-    (collect-type-variables-generic% (method-definition-type method))))
+    (collect-type-variables-generic% (method-definition-type method)))
+
+  (:method ((list list))
+    (declare (values tyvar-list &optional))
+    (mapcan #'collect-type-variables-generic% list)))
 
 (defun collect-variables (node)
   "Returns a deduplicated list of all `NODE-VARIABLE's referenced

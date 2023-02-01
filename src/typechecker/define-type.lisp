@@ -270,7 +270,11 @@
           :for tvars := (tc:apply-ksubstitution
                          ksubs
                          (mapcar (lambda (var)
-                                   (partial-type-env-lookup-var env (parser:keyword-src-name var)))
+                                   (partial-type-env-lookup-var
+                                    env
+                                    (parser:keyword-src-name var)
+                                    (parser:keyword-src-source var)
+                                    file))
                                  (parser:toplevel-define-type-vars type)))
 
           :for repr := (parser:toplevel-define-type-repr type)
