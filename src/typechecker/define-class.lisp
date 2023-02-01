@@ -1,20 +1,20 @@
-(defpackage #:coalton-impl/typechecker2/define-class
+(defpackage #:coalton-impl/typechecker/define-class
   (:use
    #:cl
-   #:coalton-impl/typechecker2/base
-   #:coalton-impl/typechecker2/parse-type
-   #:coalton-impl/typechecker2/partial-type-env)
+   #:coalton-impl/typechecker/base
+   #:coalton-impl/typechecker/parse-type
+   #:coalton-impl/typechecker/partial-type-env)
   (:local-nicknames
    (#:util #:coalton-impl/util)
    (#:algo #:coalton-impl/algorithm)
    (#:parser #:coalton-impl/parser)
    (#:error #:coalton-impl/error)
-   (#:tc #:coalton-impl/typechecker))
+   (#:tc #:coalton-impl/typechecker/stage-1))
   (:export
    #:toplevel-define-class              ; FUNCTION
    ))
 
-(in-package #:coalton-impl/typechecker2/define-class)
+(in-package #:coalton-impl/typechecker/define-class)
 
 (defstruct partial-class
   (superclasses (util:required 'superclasses) :type tc:ty-predicate-list :read-only t)
@@ -283,7 +283,7 @@
                                              :for method-name := (parser:identifier-src-name
                                                                   (parser:method-definition-name method))
 
-                                             :collect (cons method-name method-ty))
+                                             :collect (cons method-name (tc:quantify nil method-ty)))
                   :codegen-sym codegen-sym
                   :superclass-dict superclass-dict
                   :superclass-map superclass-map

@@ -1,12 +1,12 @@
-(defpackage #:coalton-impl/typechecker2/tc-env
+(defpackage #:coalton-impl/typechecker/tc-env
   (:use
    #:cl
-   #:coalton-impl/typechecker2/base
-   #:coalton-impl/typechecker2/parse-type)
+   #:coalton-impl/typechecker/base
+   #:coalton-impl/typechecker/parse-type)
   (:local-nicknames
    (#:util #:coalton-impl/util)
    (#:parser #:coalton-impl/parser)
-   (#:tc #:coalton-impl/typechecker))
+   (#:tc #:coalton-impl/typechecker/stage-1))
   (:export
    #:make-tc-env                        ; CONSTRUCTOR
    #:tc-env                             ; STRUCT
@@ -21,7 +21,7 @@
    #:tc-env-replace-type                ; FUNCTION
    ))
 
-(in-package #:coalton-impl/typechecker2/tc-env)
+(in-package #:coalton-impl/typechecker/tc-env)
 
 ;;;
 ;;; Typechecking Environment

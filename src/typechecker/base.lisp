@@ -1,4 +1,4 @@
-(defpackage #:coalton-impl/typechecker2/base
+(defpackage #:coalton-impl/typechecker/base
   (:use
    #:cl)
   (:import-from
@@ -21,7 +21,7 @@
    #:check-package                      ; FUNCTION
    ))
 
-(in-package #:coalton-impl/typechecker2/base)
+(in-package #:coalton-impl/typechecker/base)
 
 (define-condition tc-error (error)
   ((err :reader tc-error-err

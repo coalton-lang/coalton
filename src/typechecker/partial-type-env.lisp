@@ -1,11 +1,11 @@
-(defpackage #:coalton-impl/typechecker2/partial-type-env
+(defpackage #:coalton-impl/typechecker/partial-type-env
   (:use
    #:cl
-   #:coalton-impl/typechecker2/base)
+   #:coalton-impl/typechecker/base)
   (:local-nicknames
    (#:util #:coalton-impl/util)
    (#:parser #:coalton-impl/parser)
-   (#:tc #:coalton-impl/typechecker))
+   (#:tc #:coalton-impl/typechecker/stage-1))
   (:export
    #:partial-type-env                   ; STRUCT
    #:make-partial-type-env              ; CONSTRUCTOR
@@ -21,7 +21,7 @@
    #:partial-type-env-lookup-class      ; FUNCTION
    ))
 
-(in-package #:coalton-impl/typechecker2/partial-type-env)
+(in-package #:coalton-impl/typechecker/partial-type-env)
 
 ;;;
 ;;; Partial Type Environment

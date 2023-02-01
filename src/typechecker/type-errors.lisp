@@ -1,12 +1,10 @@
 (defpackage #:coalton-impl/typechecker/type-errors
   (:use
    #:cl
-   #:coalton-impl/ast
    #:coalton-impl/typechecker/types
    #:coalton-impl/typechecker/predicate)
   (:local-nicknames
    (#:util #:coalton-impl/util)
-   (#:ast #:coalton-impl/ast)
    (#:error #:coalton-impl/error))
   (:import-from
    #:coalton-impl/error
@@ -466,16 +464,6 @@ Mutually recursive bindings must be either all functions or all constructor appl
        (format s "Constructor ~A is already used in type ~A"
                (duplicate-ctor-ctor-name c)
                (duplicate-ctor-ty-name c))))))
-
-(define-condition coalton-type-parse-error (ast:coalton-parse-error)
-  ()
-  (:report (lambda (c s)
-             (let ((*print-circle* nil)  ; Prevent printing using reader macros
-                   (*print-pretty* nil)) ; Prevent newlines in the middle of our lists
-               (format s "Failed to parse type ~S because~%~?"
-                       (coalton-parse-error-form c)
-                       (coalton-parse-error-reason-control c)
-                       (coalton-parse-error-reason-args c))))))
 
 (defun error-parsing-type (form reason-control &rest reason-args)
   (error 'coalton-type-parse-error

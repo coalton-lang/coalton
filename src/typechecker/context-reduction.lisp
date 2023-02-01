@@ -165,6 +165,7 @@ Returns (VALUES deferred-preds retained-preds defaultable-preds)"
          (pred-names (mapcar #'ty-predicate-class preds)) ; is
          (pred-heads (mapcar #'ty-predicate-types preds)) ; ts
          )
+    :do (util:debug-log (num-classes))
 
     (loop :for type :in (defaults env)
 
@@ -214,6 +215,7 @@ Returns (VALUES deferred-preds retained-preds defaultable-preds)"
            (type tyvar-list tvars)
            (type ty-predicate-list preds)
            (values ty-predicate-list &optional))
+  
   (loop :for ambig :in (ambiguities env tvars preds)
         :for candidates := (candidates env ambig)
 

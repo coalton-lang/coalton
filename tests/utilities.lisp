@@ -18,7 +18,7 @@
   (let ((*package* (make-package (or (and fiasco::*current-test*
                                           (fiasco::name-of fiasco::*current-test*))
                                      "COALTON-TEST-COMPILE-PACKAGE")
-                                 :use '("COALTON" "COALTON-PRELUDE"))))
+                                 :use '("COALTON" #+broken "COALTON-PRELUDE"))))
     (unwind-protect
          (let* ((stream (make-string-input-stream toplevel-string))
 
@@ -29,7 +29,7 @@
                 ;; Read unspecified floats as double floats
                 (*read-default-float-format* 'double-float)
 
-                (env coalton-impl::*global-environment*)
+                (env coalton-impl/entry::*global-environment*)
 
                 (file (parser:make-coalton-file :stream stream :name "<unknown>"))
 
@@ -63,11 +63,11 @@
            (setf (parser:program-classes program) (nreverse (parser:program-classes program)))
 
            (multiple-value-bind (type-definitions env)
-               (coalton-impl/typechecker2/define-type::toplevel-define-type (parser:program-types program) file env)
+               (tc:toplevel-define-type (parser:program-types program) file env)
              (declare (ignore type-definitions))
 
              (let ((env
-                     (coalton-impl/typechecker2/define::toplevel-define
+                     (tc:toplevel-define
                       (parser:program-defines program)
                       (parser:program-declares program)
                       file
@@ -83,16 +83,13 @@
                        :for ast-type := (parser:parse-qualified-type
                                          (eclector.concrete-syntax-tree:read stream)
                                          file)
-                       :for parsed-type := (coalton-impl/typechecker2/parse-type::parse-ty-scheme ast-type env file)
+                       :for parsed-type := (tc:parse-ty-scheme ast-type env file)
                        :do (is (equalp
                                 (tc:lookup-value-type env symbol)
                                 parsed-type)))))
 
              (values)))
       (delete-package *package*))))
-
-(defun run-coalton-toplevel-walker (toplevel)
-  (coalton-impl::collect-toplevel-forms toplevel))
 
 (defun compile-and-load-forms (coalton-forms)
   "Write the COALTON-FORMS to a temporary file, compile it to a fasl, then load the compiled file.

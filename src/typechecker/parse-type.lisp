@@ -1,321 +1,258 @@
+;;;;
+;;;; Type parsing and kind inference. The implementation is a
+;;;; simplified version of the HM type inference used by the type
+;;;; checker. After kind inference all remaining kind variables are
+;;;; subsituted with `tc:+kstar+' in the "kind monomorphization" step
+;;;; because Coalton does not support polykinds.
+;;;;
+
 (defpackage #:coalton-impl/typechecker/parse-type
   (:use
    #:cl
-   #:coalton-impl/ast
-   #:coalton-impl/typechecker/kinds
-   #:coalton-impl/typechecker/types
-   #:coalton-impl/typechecker/type-errors
-   #:coalton-impl/typechecker/substitutions
-   #:coalton-impl/typechecker/predicate
-   #:coalton-impl/typechecker/scheme
-   #:coalton-impl/typechecker/context-reduction
-   #:coalton-impl/typechecker/fundeps
-   #:coalton-impl/typechecker/environment)
+   #:coalton-impl/typechecker/base
+   #:coalton-impl/typechecker/partial-type-env)
   (:local-nicknames
    (#:util #:coalton-impl/util)
-   (#:error #:coalton-impl/error))
+   (#:parser #:coalton-impl/parser)
+   (#:error #:coalton-impl/error)
+   (#:tc #:coalton-impl/typechecker/stage-1))
   (:export
-   #:parse-and-resolve-type             ; FUNCTION
-   #:parse-type-expr                    ; FUNCTION
-   #:collect-type-vars                  ; FUNCTION
-   #:collect-types                      ; FUNCTION
-   #:parse-qualified-type-expr          ; FUNCTION
-   #:parse-type-predicate               ; FUNCTION
-   #:coalton-arrow-p                    ; FUNCTION
-   #:coalton-double-arrow-p             ; FUNCTION
+   #:parse-type                         ; FUNCTION
+   #:parse-qualified-type               ; FUNCTION
+   #:parse-ty-scheme                    ; FUNCTION
+   #:infer-type-kinds                   ; FUNCTION
+   #:infer-predicate-kinds              ; FUNCTION
    ))
 
 (in-package #:coalton-impl/typechecker/parse-type)
 
+;;; TODO
+;;; * warn when context could be reduced
+;;; * warn when a type has ambigious predicate type variables
+
+
 ;;;
-;;; Type parsing
+;;; Entrypoints
 ;;;
 
-;;
-;; A valid type signature is defined as follows:
-;;
-;; type-signature := <type-expr>                ; Type with no constraints
-;;                 | (<pred> => <type-expr>)    ; Type with single constraint
-;;                 | ((<pred>)+ => <type-expr>) ; Type with multiple constraints
-;;
-;; NOTE: either => or ⇒ can be used in type constraint expressions.
-;;
-;; pred := <class> <type-expr>+
-;;
-;; type-expr := <tyvar>                         ; Type variable
-;;            | <0-arity tycon>                 ; Zero arity type constructor
-;;            | (<tycon> <type-expr>+)          ; Applied type constructor
-;;            | (<type-expr> [-> <type-expr>]+) ; Function type
-;;
-;; NOTE: either -> or → can be used in function type expressions.
-;;
-;; tyvar := symbol in the keyword package (e.g. :a, :b, etc.)
-;;
+(defun parse-type (ty env file)
+  (declare (type parser:ty ty)
+           (type tc:environment env)
+           (type coalton-file file)
+           (values tc:ty &optional))
 
-(alexandria:define-constant +keyword-package+ (find-package "KEYWORD") :test #'equalp)
+  (let ((tvars (parser:collect-type-variables ty))
 
-(defun parse-and-resolve-type (env expr)
-  "Parse the type expression EXPR in environment ENV returning a TY-SCHEME"
-  (declare (type environment env)
-           (values ty-scheme &optional))
+        (partial-env (make-partial-type-env :env env)))
 
-  ;; Parse out the expression and quantify over non-disallowed type variables
-  (let ((type-vars
-          (mapcar
-           (lambda (type-var)
-             (list type-var (make-variable (make-kvariable))))
-           (collect-type-vars expr))))
-    (multiple-value-bind (type ksubs)
-        (parse-qualified-type-expr env expr type-vars nil)
-      
-      (let* ((kvars (kind-variables (apply-ksubstitution ksubs type)))
+    (loop :for tvar :in tvars
+          :for tvar-name := (parser:tyvar-name tvar)
+          :do (partial-type-env-add-var partial-env tvar-name))
 
-             (ksubs (kind-monomorphize-subs kvars ksubs))
+    (multiple-value-bind (ty ksubs)
+        (infer-type-kinds ty
+                          tc:+kstar+
+                          nil
+                          partial-env
+                          file)
 
-             (type (apply-ksubstitution ksubs type)))
+      (setf ty (tc:apply-ksubstitution ksubs ty))
+      (setf ksubs (tc:kind-monomorphize-subs (tc:kind-variables ty) ksubs))
+      (tc:apply-ksubstitution ksubs ty))))
 
-        (let* ((preds (qualified-ty-predicates type))
-               (reduced-preds (reduce-context env preds nil :allow-deferred-predicates nil)))
-          (unless (null (set-exclusive-or preds reduced-preds :test #'equalp))
-            (with-pprint-variable-context ()
-              (warn "Context for type ~S~%    can be reduced from ~{~S~^, ~} to ~{~S~^, ~}"
-                    expr
-                    preds
-                    (or reduced-preds '("nothing"))))))
+(defun parse-qualified-type (ty env file)
+  (declare (type parser:qualified-ty ty)
+           (type tc:environment env)
+           (type coalton-file file)
+           (values tc:qualified-ty &optional))
 
-        (quantify (type-variables type) type)))))
+  (let ((tvars (parser:collect-type-variables ty))
 
-(defun rewrite-type-expr (expr)
-  (etypecase expr
-    (symbol expr)
-    (list
-     (let ((arrow-index (position-if #'coalton-arrow-p expr)))
-       (if arrow-index
-           (list 'coalton:Arrow
-                 (rewrite-type-expr (subseq expr 0 arrow-index))
-                 (rewrite-type-expr (subseq expr (1+ arrow-index))))
-           (mapcar #'rewrite-type-expr expr))))))
+        (partial-env (make-partial-type-env :env env)))
 
-(defun parse-type-expr-inner (env expr type-vars ksubs)
-  (declare (type environment env)
-           (type t expr)
-           (type list type-vars)
-           (type ksubstitution-list ksubs)
-           (values ty ksubstitution-list &optional))
-  (labels
-      ((find-tyvar-entry (name)
-         (second (find name type-vars :key #'car))))
+    (loop :for tvar :in tvars
+          :for tvar-name := (parser:tyvar-name tvar)
+          :do (partial-type-env-add-var partial-env tvar-name))
 
-    (etypecase expr
-      (symbol
-       (let ((tyvar (find-tyvar-entry expr)))
-         (values
-          (if tyvar
-              tyvar
-              (type-entry-type (lookup-type env expr)))
-          ksubs)))
+    (multiple-value-bind (qual-ty ksubs)
+        (infer-type-kinds ty tc:+kstar+ nil partial-env file)
 
-      (list
-       (let ((elems
-               (loop :for elem :in expr
-                     :collect (multiple-value-bind (type new-ksubs)
-                                  (parse-type-expr-inner env elem type-vars ksubs)
-                                (setf ksubs new-ksubs)
-                                type))))
-         (apply-type-argument-list
-          (first elems)
-          (rest elems)
-          :ksubs ksubs))))))
+      (setf qual-ty (tc:apply-ksubstitution ksubs qual-ty))
+      (setf ksubs (tc:kind-monomorphize-subs (tc:kind-variables qual-ty) ksubs))
+      (tc:apply-ksubstitution ksubs qual-ty))))
 
-(defun parse-type-expr (env expr type-vars ksubs)
-  (multiple-value-bind (ty ksubs)
-      (parse-type-expr-inner env (rewrite-type-expr expr) type-vars ksubs)
-    (values
-     (apply-ksubstitution ksubs ty)
-     ksubs)))
+(defun parse-ty-scheme (ty env file)
+  (declare (type parser:qualified-ty ty)
+           (type tc:environment env)
+           (type coalton-file file)
+           (values tc:ty-scheme &optional))
 
-(defun collect-type-vars (expr)
-  (let ((type-vars nil))
-    (labels ((inner (expr)
-               (etypecase expr
-                 (symbol
-                  (when (equalp +keyword-package+ (symbol-package expr))
-                    (push expr type-vars)))
+  (let* ((qual-ty (parse-qualified-type ty env file))
 
-                 (list
-                  (loop :for elem :in expr
-                        :do (inner elem))))))
-      (inner expr)
-      (remove-duplicates type-vars :test #'equalp))))
+         (tvars (tc:type-variables qual-ty)))
 
-(defun collect-types (expr)
-  (let ((types nil))
-    (labels ((inner (expr)
-               (etypecase expr
-                 (symbol
-                  (when (not (equalp +keyword-package+ (symbol-package expr)))
-                    (push expr types)))
+    (tc:quantify tvars qual-ty)))
 
-                 (list
-                  (loop :for elem :in expr
-                        :do (inner elem))))))
-      (inner expr)
-      (remove-duplicates types :test #'equalp))))
+;;;
+;;; Kind Inference
+;;;
 
-(defun parse-qualified-type-expr (env expr type-vars ksubs)
-  "Parse qualified type expression EXPR in type environment ENV"
-  (declare (type environment env)
-           (type list type-vars)
-           (values qualified-ty ksubstitution-list))
+(defgeneric infer-type-kinds (type expected-kind ksubs env file)
+  (:method ((type parser:tyvar) expected-kind ksubs env file)
+    (declare (type tc:kind expected-kind)
+             (type tc:ksubstitution-list ksubs)
+             (type coalton-file file))
+    (let* ((tvar (partial-type-env-lookup-var env (parser:tyvar-name type)))
 
-  (error:with-context ("qualified type expression ~S" expr)
-    (let ((unparsed-type nil)
-          (unparsed-preds nil))
+           (kvar (tc:kind-of tvar)))
+      (setf kvar (tc:apply-ksubstitution ksubs kvar))
 
-      ;; If the expression is a list and contains => then it has constraints
-      (if (and (listp expr) (some #'coalton-double-arrow-p expr))
-          ;; Split the expression into parts before and after the arrow
-          (let ((subseqs (split-sequence:split-sequence-if #'coalton-double-arrow-p expr)))
-            (unless (= 2 (length subseqs))
-              (error-parsing-type expr "Malformed constrained type"))
+      (handler-case
+          (progn
+            (setf ksubs (tc:kunify kvar expected-kind ksubs))
+            (values (tc:apply-ksubstitution ksubs tvar) ksubs))
+        (error:coalton-type-error ()
+          (error 'tc-error
+                 :err (coalton-error
+                       :span (parser:ty-source type)
+                       :file file
+                       :message "Kind mismatch"
+                       :primary-note (format nil "Expected kind '~A' but variable is of kind '~A'"
+                                             expected-kind
+                                             kvar)))))))
 
-            (setf unparsed-type (second subseqs))
+  (:method ((type parser:tycon) expected-kind ksubs env file)
+    (declare (type tc:kind expected-kind)
+             (type tc:ksubstitution-list ksubs)
+             (type partial-type-env env)
+             (type coalton-file file)
+             (values tc:ty tc:ksubstitution-list))
 
-            ;; If the first member of the predicates is a list then we can assume there are multiple to parse.
-            (if (listp (car (first subseqs)))
-                (setf unparsed-preds (first subseqs))
-                (setf unparsed-preds (list (first subseqs)))))
+    (let ((type_ (partial-type-env-lookup-type env type file)))
+      (handler-case
+          (progn
+            (setf ksubs (tc:kunify (tc:kind-of type_) expected-kind ksubs))
+            (values (tc:apply-ksubstitution ksubs type_) ksubs))
+        (error:coalton-type-error ()
+          (error 'tc-error
+                 :err (coalton-error
+                       :span (parser:ty-source type)
+                       :file file
+                       :message "Kind mismatch"
+                       :primary-note (format nil "Expected kind '~A' but got kind '~A'"
+                                             expected-kind
+                                             (tc:kind-of type_))))))))
 
-          (setf unparsed-type expr))
+  (:method ((type parser:tapp) expected-kind ksubs env file)
+    (declare (type tc:kind expected-kind)
+             (type tc:ksubstitution-list ksubs)
+             (type partial-type-env env)
+             (type coalton-file file)
+             (values tc:ty tc:ksubstitution-list &optional))
 
-      ;; Check for duplicate predicates before parsing
-      (labels ((check-for-duplicate-preds (preds)
-                 (unless (null preds)
-                   (let ((pred (car preds))
-                         (rest (cdr preds)))
-                     (if (find pred rest :test #'equalp)
-                         (error-parsing pred "duplicate predicate")
-                         (check-for-duplicate-preds rest))))))
-        (check-for-duplicate-preds unparsed-preds))
+    (let ((fun-kind (tc:make-kvariable))
 
-      (let ((preds
-              (loop :for unparsed-pred :in unparsed-preds
-                    :collect (multiple-value-bind (pred new-ksubs)
-                                 (parse-type-predicate env unparsed-pred type-vars ksubs)
-                               (setf ksubs new-ksubs)
-                               pred))))
+          (arg-kind (tc:make-kvariable)))
 
-        (multiple-value-bind (type new-ksubs)
-            (parse-type-expr env unparsed-type type-vars ksubs)
-          (setf ksubs new-ksubs)
+      (multiple-value-bind (fun-ty ksubs)
+          (infer-type-kinds (parser:tapp-from type) fun-kind ksubs env file)
 
-          (check-for-ambigious-variables (apply-ksubstitution ksubs preds) (apply-ksubstitution ksubs type) env)
+        (setf fun-kind (tc:apply-ksubstitution ksubs fun-kind))
 
-          (values
-           (apply-ksubstitution ksubs (qualify preds type))
-           ksubs))))))
+        (when (tc:kfun-p fun-kind)
+          ;; SAFETY: unification against variable will never fail
+          (setf ksubs (tc:kunify arg-kind (tc:kfun-from fun-kind) ksubs))
+          (setf arg-kind (tc:apply-ksubstitution ksubs arg-kind)))
 
-(defun parse-type-predicate (env expr type-vars ksubs)
-  "Parse type predicate EXPR in type environment ENV"
-  (declare (type environment env)
-           (type list type-vars)
-           (type ksubstitution-list ksubs)
-           (values ty-predicate ksubstitution-list))
-  (error:with-context ("type predicate ~S" expr)
-    (unless (and (listp expr)
-                 (>= (length expr) 2)
-                 (symbolp (first expr)))
-      (error-parsing-type expr "Malformed type predicate"))
+        (multiple-value-bind (arg-ty ksubs)
+            (infer-type-kinds (parser:tapp-to type) arg-kind ksubs env file)
 
-    (let* ((pred-class (first expr))
+          (handler-case
+              (progn
+                (setf ksubs (tc:kunify fun-kind (tc:make-kfun :from arg-kind :to expected-kind) ksubs)) 
+                (values
+                 (tc:apply-type-argument fun-ty arg-ty :ksubs ksubs)
+                 ksubs))
+            (error:coalton-type-error ()
+              (error 'tc-error
+                     :err (coalton-error
+                           :span (parser:ty-source (parser:tapp-from type))
+                           :file file
+                           :message "Kind mismatch"
+                           :primary-note (format nil "Expected kind '~A' but got kind '~A'"
+                                                 (tc:make-kfun
+                                                  :from (tc:apply-ksubstitution ksubs arg-kind)
+                                                  :to (tc:apply-ksubstitution ksubs expected-kind))
+                                                 (tc:apply-ksubstitution ksubs fun-kind))))))))))
 
-           (class-entry (lookup-class env pred-class))
+  (:method ((type parser:qualified-ty) expected-kind ksubs env file)
+    (declare (type tc:kind expected-kind)
+             (type tc:ksubstitution-list ksubs)
+             (type partial-type-env env)
+             (type coalton-file file)
+             (values tc:qualified-ty tc:ksubstitution-list))
+    
+    (assert (eq expected-kind tc:+kstar+))
 
-           (pred-types
-             ;; We need two loops so that we can do with or without the kinds
-             (if class-entry
-                 (loop :for pred-expr :in (cdr expr)
-                       :for pred-kind :in (mapcar #'kind-of (ty-predicate-types (ty-class-predicate class-entry)))
-                       :collect (multiple-value-bind (pred-type new-ksubs)
-                                    (parse-type-expr env pred-expr type-vars ksubs)
-                                  (setf ksubs new-ksubs)
-                                  (setf ksubs (kunify pred-kind (kind-of pred-type) ksubs))
-                                  pred-type))
-                 (loop :for pred-expr :in (cdr expr)
-                       :collect (multiple-value-bind (pred-type new-ksubs)
-                                    (parse-type-expr env pred-expr type-vars ksubs)
-                                  (setf ksubs new-ksubs)
-                                  pred-type)))))
-      (when class-entry
-        (unless (= (length (ty-predicate-types (ty-class-predicate class-entry))) (length (cdr expr)))
-          (error-parsing-type
-           expr
-           (format nil "Unexpected number of type variables: Expected ~A Got ~A"
-                   (length (ty-predicate-types (ty-class-predicate class-entry)))
-                   (length (cdr expr))))))
+    (let ((preds (loop :for pred :in (parser:qualified-ty-predicates type)
+                       :collect (multiple-value-bind (pred ksubs_)
+                                    (infer-predicate-kinds
+                                     pred
+                                     ksubs
+                                     env
+                                     file)
+                                  (setf ksubs ksubs_)
+                                  pred))))
 
+      (multiple-value-bind (ty ksubs)
+          (infer-type-kinds (parser:qualified-ty-type type)
+                            tc:+kstar+
+                            ksubs
+                            env
+                            file)
+
+        (values
+         (tc:make-qualified-ty
+          :predicates preds
+          :type ty)
+         ksubs)))))
+
+(defun infer-predicate-kinds (pred ksubs env file)
+  (declare (type parser:ty-predicate pred)
+           (type tc:ksubstitution-list ksubs)
+           (type partial-type-env env)
+           (type coalton-file file)
+           (values tc:ty-predicate tc:ksubstitution-list))
+
+  (let* ((class-name (parser:identifier-src-name (parser:ty-predicate-class pred)))
+
+         (class-pred (partial-type-env-lookup-class env pred file))
+
+         (class-arity (length (tc:ty-predicate-types class-pred))))
+
+    ;; Check that pred has the correct number of arguments
+    (unless (= class-arity (length (parser:ty-predicate-types pred)))
+      (error 'tc-error
+             :err (coalton-error
+                   :span (parser:ty-predicate-source pred)
+                   :file file
+                   :message "Predicate arity mismatch"
+                   :primary-note (format nil "Expected ~D arguments but received ~D"
+                                         class-arity
+                                         (length (parser:ty-predicate-types pred))))))
+
+    (let ((types (loop :for ty :in (parser:ty-predicate-types pred)
+                       :for class-ty :in (tc:ty-predicate-types class-pred)
+                       :collect (multiple-value-bind (ty ksubs_)
+                                    (infer-type-kinds ty
+                                                      (tc:kind-of class-ty)
+                                                      ksubs
+                                                      env
+                                                      file)
+                                  (setf ksubs ksubs_)
+                                  ty))))
       (values
-       (make-ty-predicate
-        :class pred-class
-        :types pred-types)
+       (tc:make-ty-predicate
+        :class class-name
+        :types types)
        ksubs))))
-
-(defun check-for-ambigious-variables (preds type env)
-  (declare (type ty-predicate-list preds)
-           (type ty type)
-           (type environment env))
-
-  (let* ((old-unambigious-vars (type-variables type))
-         (unambigious-vars old-unambigious-vars)) 
-
-    (block fundep-fixpoint
-      (loop :for i :below +fundep-max-depth+
-            :do (setf old-unambigious-vars unambigious-vars)
-            :do (loop :for pred :in preds
-                      :for pred-tys := (ty-predicate-types pred)
-                      :for class-name := (ty-predicate-class pred)
-                      :for class := (lookup-class env class-name)
-                      :for map := (ty-class-class-variable-map class)
-                      :when (ty-class-fundeps class) :do
-                        (loop :for fundep :in (ty-class-fundeps class)
-                              :for from-vars := (util:project-map (fundep-from fundep) map pred-tys)
-                              :do (when (subsetp from-vars unambigious-vars :test #'equalp)
-                                    (let ((to-vars (util:project-map (fundep-to fundep) map pred-tys)))
-                                      (setf unambigious-vars
-                                            (remove-duplicates (append to-vars unambigious-vars) :test #'equalp))))))
-
-            :when (equalp unambigious-vars old-unambigious-vars) ; Exit when progress stops
-              :do (return-from fundep-fixpoint)
-
-            :finally (util:coalton-bug "Fundep solving failed to fixpoint")))
-
-    (unless (subsetp (type-variables preds) unambigious-vars :test #'equalp)
-      (error 'ambigious-constraint-variables
-             :type (qualify preds type)
-             :variables (set-difference (type-variables preds) unambigious-vars :test #'equalp)))))
-
-;;;
-;;; Arrows
-;;;
-
-(alexandria:define-constant +coalton-arrows+ '(coalton:-> coalton:→) :test #'equalp
-  :documentation "Allowed arrows in coalton function type expressions.")
-
-(alexandria:define-constant +coalton-double-arrows+ '(coalton:=> coalton:⇒) :test #'equalp
-  :documentation "Allowed double arrows in coalton type constraint expressions.")
-
-(defun arrow-p (symbol valid-symbols)
-  (or (and (member symbol valid-symbols) t)
-      (and (symbolp symbol)
-           ;; Throw an error if a non-coalton arrow is used.
-           ;; NOTE: This disallows users to declare types with the same name as coalton arrows.
-           (dolist (sym valid-symbols)
-             (when (string= (symbol-name sym) (symbol-name symbol))
-               (error-parsing-type sym "Invalid coalton arrow ~S. Did you mean ~S" sym symbol)))
-           nil)))
-
-(defun coalton-arrow-p (symbol)
-  (arrow-p symbol +coalton-arrows+))
-
-(defun coalton-double-arrow-p (symbol)
-  (arrow-p symbol +coalton-double-arrows+))

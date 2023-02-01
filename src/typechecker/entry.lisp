@@ -1,20 +1,13 @@
-(defpackage #:coalton-impl/typechecker2/entry
+(defpackage #:coalton-impl/entry
   (:use
    #:cl)
-  (:import-from
-   #:coalton-impl/typechecker2/define-type
-   #:toplevel-define-type)
-  (:import-from
-   #:coalton-impl/typechecker2/define-class
-   #:toplevel-define-class)
-  (:import-from
-   #:coalton-impl/typechecker2/define
-   #:toplevel-define)
   (:local-nicknames
    (#:parser #:coalton-impl/parser)
    (#:tc #:coalton-impl/typechecker)))
 
-(in-package #:coalton-impl/typechecker2/entry)
+(in-package #:coalton-impl/entry)
+
+(defparameter *global-environment* (tc:make-default-environment))
 
 (defun entry-point (filename)
   (declare (type string filename)
@@ -28,19 +21,19 @@
 
          (file (parser:program-file program))
 
-         (env coalton-impl::*global-environment*))
+         (env *global-environment*))
 
     (multiple-value-bind (type-definitions env)
-        (toplevel-define-type (parser:program-types program) file env)
+        (tc:toplevel-define-type (parser:program-types program) file env)
       (declare (ignore type-definitions))
 
       (multiple-value-bind (class-definitions env)
-          (toplevel-define-class (parser:program-classes program)
+          (tc:toplevel-define-class (parser:program-classes program)
                                  file
                                  env)
         (declare (ignore class-definitions))
 
-        (setf env (toplevel-define (parser:program-defines program)
+        (setf env (tc:toplevel-define (parser:program-defines program)
                                    (parser:program-declares program)
                                    file
                                    env))

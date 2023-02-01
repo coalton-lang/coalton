@@ -52,11 +52,11 @@
    '("f" . "(Integer -> Integer)"))
 
   ;; Check that you can only call callable things
-  (signals coalton-impl/typechecker2/base:tc-error
+  (signals tc:tc-error
     (check-coalton-types
      "(define x (0 1))"))
 
-  (signals coalton-impl/typechecker2/base:tc-error
+  (signals tc:tc-error
     (check-coalton-types
      "(define x 5)
       (define y (x 1))")))
@@ -92,13 +92,13 @@
    '("f" . "Integer"))
 
   ;; Declerations cannot be less specefic than their associated definition
-  (signals coalton-impl/typechecker2/base:tc-error
+  (signals tc:tc-error
     (check-coalton-types
      "(declare x :a)
       (define x Unit)"))
 
   ;; Missing explicit predicates cannot be defualted
-  (signals coalton-impl/typechecker2/base:tc-error
+  (signals tc:tc-error
     (check-coalton-types
      "(declare x :a)
       (define x 1)"))
@@ -150,7 +150,7 @@
    '("In" . "(:f (TFix :f) -> TFix :f)"))
 
   ;; Check that constructors are properly typed
-  (signals coalton-impl/typechecker2/base:tc-error
+  (signals tc:tc-error
     (check-coalton-types
      "(define-type (Tree_ :a)
         (Leaf :a)
@@ -160,13 +160,13 @@
 
 (deftest test-kind-system ()
   ;; Check that types of kind * cannot be applied to
-  (signals coalton-impl/typechecker2/base:tc-error
+  (signals tc:tc-error
     (check-coalton-types
      "(declare x (Integer Integer))
       (define x (undefined Unit))"))
 
   ;; Check that variables can not be declared to have kind (* -> *)
-  (signals coalton-impl/typechecker2/base:tc-error
+  (signals tc:tc-error
     (check-coalton-types
      "(define-type (Maybe :a)
         (Just :a)
@@ -177,7 +177,7 @@
 
 (deftest test-pattern-invariants ()
   ;; Match branches must return the same type
-  (signals coalton-impl/typechecker2/base:tc-error
+  (signals tc:tc-error
     (check-coalton-types
      "(define-type (Maybe :a)
         (Just :a)
@@ -189,7 +189,7 @@
           ((Just 6) \"hello\")))"))
 
   ;; Match branches must match on constructors
-  (signals coalton-impl/typechecker2/base:tc-error
+  (signals tc:tc-error
     (check-coalton-types
      "(define (g x) x)
 
@@ -198,7 +198,7 @@
           ((g a) 5)))"))
 
   ;; Constructors in match branches must be fully applied
-  (signals coalton-impl/typechecker2/base:tc-error
+  (signals tc:tc-error
     (check-coalton-types
      "(define (g x)
         (match x
@@ -452,13 +452,13 @@
 
    '("f" . "(String -> String)"))
 
-  (signals coalton-impl/typechecker2/base:tc-error
+  (signals tc:tc-error
     (check-coalton-types
      "(define (f a)
         (return \"hello\")
         Unit)"))
 
-  (signals coalton-impl/typechecker2/base:tc-error
+  (signals tc:tc-error
     (check-coalton-types
      "(define x (return \"hello\"))")))
 
@@ -490,7 +490,7 @@
    '("f" . "(:a -> Double-Float)"))
 
   ;; Check that the monomorphism restriction still applies to defaulted bindings
-  (signals coalton-impl/typechecker2/base:tc-error
+  (signals tc:tc-error
     (check-coalton-types
      "(define (f x)
       (let ((y 1))
@@ -498,7 +498,7 @@
         (+ 0.5d0 y)))"))
 
   ;; Check that ambigious predicates are detected
-  (signals coalton-impl/typechecker2/base:tc-error
+  (signals tc:tc-error
     (check-coalton-types
      "(define (f x)
         (into (into x)))"))

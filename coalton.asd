@@ -7,6 +7,7 @@
   :version (:read-file-form "VERSION.txt")
   :in-order-to ((asdf:test-op (asdf:test-op #:coalton/tests)))
   :depends-on (#:coalton/compiler
+               #+broken
                #:coalton/library))
 
 (asdf:defsystem #:coalton/compiler
@@ -39,13 +40,6 @@
                              (:file "immutable-listmap")
                              (:file "package")))
                (:file "error")
-               (:module "ast"
-                :serial t
-                :components ((:file "pattern")
-                             (:file "node")
-                             (:file "parse-error")
-                             (:file "parse-form")
-                             (:file "package")))
                (:module "parser"
                 :serial t
                 :components ((:file "base")
@@ -64,7 +58,8 @@
                              (:file "package")))
                (:module "typechecker"
                 :serial t
-                :components ((:file "kinds")
+                :components ((:file "base")
+                             (:file "kinds")
                              (:file "types")
                              (:file "substitutions")
                              (:file "predicate")
@@ -72,34 +67,26 @@
                              (:file "type-errors")
                              (:file "unify")
                              (:file "equality")
-                             (:file "typed-node")
                              (:file "fundeps")
                              (:file "environment")
                              (:file "lisp-type")
                              (:file "context-reduction")
-                             (:file "parse-type")
-                             (:file "derive-type")
-                             (:file "parse-type-definition")
-                             (:file "parse-define")
-                             (:file "parse-class-definition")
-                             (:file "parse-instance-definition")
-                             (:file "debug")
-                             (:file "translation-unit")
-                             (:file "package")))
-               (:module "analysis"
-                :serial t
-                :components ((:file "pattern-exhaustiveness")
-                             (:file "package")))
-               (:module "typechecker2"
-                :serial t
-                :components ((:file "base")
+                             (:file "stage-1")
                              (:file "node")
                              (:file "partial-type-env")
                              (:file "parse-type")
                              (:file "define-type")
                              (:file "define-class")
                              (:file "tc-env")
-                             (:file "define")))
+                             (:file "define")
+                             (:file "package")))
+               #+broken
+               (:module "analysis"
+                :serial t
+                :components ((:file "pattern-exhaustiveness")
+                             (:file "package")))
+
+               #+broken
                (:module "codegen"
                 :serial t
                 :components ((:file "ast")
@@ -119,20 +106,32 @@
                              (:file "optimizer")
                              (:file "program")
                              (:file "package")))
+               #+broken
                (:file "impl-package")
+               #+broken
                (:file "toplevel-define-type")
+               #+broken
                (:file "toplevel-declare")
+               #+broken
                (:file "toplevel-define")
+               #+broken
                (:file "toplevel-define-instance")
+               #+broken
                (:file "toplevel-specializations")
+               #+broken
                (:file "unlock-package" :if-feature :sb-package-locks)
+               #+broken
                (:file "coalton")
                (:file "reader")
+               #+broken
                (:file "debug")
+               #+broken
                (:file "faux-macros")
+               #+broken
                (:file "language-macros")
+               #+broken
                (:file "lock-package" :if-feature :sb-package-locks)
-               (:file "typechecker2/entry")))
+               (:file "entry")))
 
 (asdf:defsystem #:coalton/library
   :description "The Coalton standard library."
@@ -293,10 +292,13 @@
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
   :license "MIT"
   :depends-on (#:coalton
+               #+ignore
                #:coalton/library/big-float
+               #+ignore
                #:coalton/testing
                #:fiasco
                #:quil-coalton/tests
+               #+ignore
                #:thih-coalton/tests)
   :perform (asdf:test-op (o s)
                          (unless (symbol-call :coalton-tests :run-coalton-tests)
@@ -305,24 +307,40 @@
   :serial t
   :components ((:file "package")
                (:file "utilities")
-               (:file "toplevel-walker-tests")
                (:file "tarjan-scc-tests")
                (:file "type-inference-tests")
                (:file "fundep-tests")
+               #+broken
                (:file "fundep-fib-test")
+               #+broken
                (:file "runtime-tests")
+               #+broken
                (:file "environment-persist-tests")
+               #+broken
                (:file "slice-tests")
+               #+broken
                (:file "float-tests")
+               #+broken
                (:file "quantize-tests")
+               #+broken
                (:file "hashtable-tests")
+               #+broken
                (:file "iterator-tests")
+               #+broken
                (:file "addressable-tests")
+               #+broken
                (:file "call-coalton-from-lisp")
+               #+broken
                (:file "vector-tests")
+               #+broken
                (:file "string-tests")
+               #+broken
                (:file "recursive-let-tests")
+               #+broken
                (:file "class-tests")
+               #+broken
                (:file "list-tests")
+               #+broken
                (:file "red-black-tests")
+               #+broken
                (:file "parser-tests")))

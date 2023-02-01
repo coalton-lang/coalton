@@ -13,26 +13,26 @@
 ;;;; and applying substitutions to it.
 ;;;;
 
-(defpackage #:coalton-impl/typechecker2/define
+(defpackage #:coalton-impl/typechecker/define
   (:use
    #:cl
-   #:coalton-impl/typechecker2/base
-   #:coalton-impl/typechecker2/parse-type
-   #:coalton-impl/typechecker2/node
-   #:coalton-impl/typechecker2/tc-env)
+   #:coalton-impl/typechecker/base
+   #:coalton-impl/typechecker/parse-type
+   #:coalton-impl/typechecker/node
+   #:coalton-impl/typechecker/tc-env)
   (:local-nicknames
    (#:util #:coalton-impl/util)
    (#:algo #:coalton-impl/algorithm)
    (#:parser #:coalton-impl/parser)
    (#:error #:coalton-impl/error)
-   (#:tc #:coalton-impl/typechecker))
+   (#:tc #:coalton-impl/typechecker/stage-1))
   (:export
    #:toplevel-define                    ; FUNCTION
    ))
 
 ;; TODO: ensure patterns don't bind the same variables multiple times
 
-(in-package #:coalton-impl/typechecker2/define)
+(in-package #:coalton-impl/typechecker/define)
 
 (declaim (type (member :toplevel :lambda) *return-status*))
 (defparameter *return-status* :toplevel)
@@ -1631,6 +1631,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                             (tc:default-subs (tc-env-env env) nil deferred-preds)
                             subs)))
 
+            (util:debug-log (tc:default-subs (tc-env-env env) nil (append deferred-preds retained-preds)))
             (setf deferred-preds (tc:reduce-context (tc-env-env env) deferred-preds subs))
             (setf retained-preds (tc:reduce-context (tc-env-env env) retained-preds subs))
             (setf expr-tys (tc:apply-substitution subs expr-tys)))

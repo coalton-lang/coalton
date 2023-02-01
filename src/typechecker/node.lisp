@@ -1,8 +1,8 @@
-(defpackage #:coalton-impl/typechecker2/node
+(defpackage #:coalton-impl/typechecker/node
   (:use #:cl)
   (:local-nicknames
    (#:parser #:coalton-impl/parser)
-   (#:tc #:coalton-impl/typechecker)
+   (#:tc #:coalton-impl/typechecker/stage-1)
    (#:util #:coalton-impl/util))
   (:export
    #:pattern                            ; STRUCT
@@ -148,7 +148,7 @@
    #:toplevel-define-list               ; TYPE
    ))
 
-(in-package #:coalton-impl/typechecker2/node)
+(in-package #:coalton-impl/typechecker/node)
 
 ;;;
 ;;; Typed nodes

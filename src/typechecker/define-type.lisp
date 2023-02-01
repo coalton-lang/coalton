@@ -4,29 +4,51 @@
 ;;;; kinds of all type variables.
 ;;;;
 
-(defpackage #:coalton-impl/typechecker2/define-type
+(defpackage #:coalton-impl/typechecker/define-type
   (:use
    #:cl
-   #:coalton-impl/typechecker2/base
-   #:coalton-impl/typechecker2/parse-type
-   #:coalton-impl/typechecker2/partial-type-env)
+   #:coalton-impl/typechecker/base
+   #:coalton-impl/typechecker/parse-type
+   #:coalton-impl/typechecker/partial-type-env)
   (:local-nicknames
    (#:util #:coalton-impl/util)
    (#:algo #:coalton-impl/algorithm)
    (#:parser #:coalton-impl/parser)
    (#:error #:coalton-impl/error)
-   (#:tc #:coalton-impl/typechecker))
+   (#:tc #:coalton-impl/typechecker/stage-1))
   (:export
    #:toplevel-define-type               ; FUNCTION
    ))
 
-(in-package #:coalton-impl/typechecker2/define-type)
+(in-package #:coalton-impl/typechecker/define-type)
+
+(defstruct type-definition
+  (name              (util:required 'name)              :type symbol                   :read-only t)
+  (type              (util:required 'type)              :type tc:ty                    :read-only t)
+  (runtime-type      (util:required 'runtime-type)      :type t                        :read-only t)
+
+  ;; See the fields with the same name on type-entry
+  (explicit-repr     (util:required 'explicit-repr)     :type tc:explicit-repr          :read-only t)
+  (enum-repr         (util:required 'enum-repr)         :type boolean                   :read-only t)
+  (newtype           (util:required 'newtype)           :type boolean                   :read-only t)
+
+  (constructors      (util:required 'constructors)      :type tc:constructor-entry-list :read-only t)
+  (constructor-types (util:required 'constructor-types) :type tc:scheme-list            :read-only t)
+
+  (docstring         (util:required 'docstring)         :type (or null string)       :read-only t))
+
+(defun type-definition-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'type-definition-p x)))
+
+(deftype type-definition-list ()
+  '(satisfies type-definition-list-p))
 
 (defun toplevel-define-type (types file env)
   (declare (type parser:toplevel-define-type-list types)
            (type coalton-file file)
            (type tc:environment env)
-           (values tc:type-definition-list tc:environment))
+           (values type-definition-list tc:environment))
 
   ;; Ensure that all types are defined in the current package
   (check-package
@@ -148,7 +170,7 @@
      env)))
 
 (defun update-env-for-type-definition (type env)
-  (declare (type tc:type-definition type)
+  (declare (type type-definition type)
            (type tc:environment env)
            (values tc:environment))
 
@@ -156,21 +178,21 @@
   (setf env
         (tc:set-type
          env
-         (tc:type-definition-name type)
+         (type-definition-name type)
          (tc:make-type-entry
-          :name (tc:type-definition-name type)
-          :runtime-type (tc:type-definition-runtime-type type)
-          :type (tc:type-definition-type type)
-          :constructors (mapcar #'tc:constructor-entry-name (tc:type-definition-constructors type))
-          :explicit-repr (tc:type-definition-explicit-repr type)
-          :enum-repr (tc:type-definition-enum-repr type)
-          :newtype (tc:type-definition-newtype type)
-          :docstring (tc:type-definition-docstring type)
+          :name (type-definition-name type)
+          :runtime-type (type-definition-runtime-type type)
+          :type (type-definition-type type)
+          :constructors (mapcar #'tc:constructor-entry-name (type-definition-constructors type))
+          :explicit-repr (type-definition-explicit-repr type)
+          :enum-repr (type-definition-enum-repr type)
+          :newtype (type-definition-newtype type)
+          :docstring (type-definition-docstring type)
           :location (or *compile-file-pathname* *load-truename*))))
 
   ;; Define the type's constructors in the environment
-  (loop :for ctor :in (tc:type-definition-constructors type)
-        :for ctor-type :in (tc:type-definition-constructor-types type)
+  (loop :for ctor :in (type-definition-constructors type)
+        :for ctor-type :in (type-definition-constructor-types type)
         :for ctor-name := (tc:constructor-entry-name ctor) :do
 
           ;; Add the constructor to the constructor environment
@@ -212,7 +234,7 @@
   (declare (type parser:toplevel-define-type-list types)
            (type partial-type-env env)
            (type coalton-file file)
-           (values tc:type-definition-list))
+           (values type-definition-list))
 
   (let ((ksubs nil)
 
@@ -296,7 +318,7 @@
                                :message "Invalid repr :transparent attribute"
                                :primary-note "constructors of repr :transparent types must have a single field")))
 
-          :collect (tc:make-type-definition
+          :collect (make-type-definition
                     :name name
                     :type (gethash name (partial-type-env-ty-table env))
                     :runtime-type (if (eq repr-type :transparent)
