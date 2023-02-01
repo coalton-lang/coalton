@@ -1,0 +1,7 @@
+(package coalton-library/classes)
+
+(define-class (Num :a)
+  (fromInt (Integer -> :a)))
+
+(define-instance (Num Integer)
+  (define (fromInt x) x))

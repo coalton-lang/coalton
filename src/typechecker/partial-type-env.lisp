@@ -40,11 +40,24 @@
 
   (setf (gethash var (partial-type-env-ty-table env)) (tc:make-variable (tc:make-kvariable))))
 
-(defun partial-type-env-lookup-var (env var)
+(defun partial-type-env-lookup-var (env var file)
   (declare (type partial-type-env env)
-           (type symbol var)
+           (type parser:tyvar var)
+           (type coalton-file file)
            (values tc:tyvar))
-  (gethash var (partial-type-env-ty-table env)))
+
+  (let ((ty (gethash (parser:tyvar-name var) (partial-type-env-ty-table env))))
+
+    (unless ty
+      (error 'tc-error
+             :err (coalton-error
+                   :span (parser:ty-source var)
+                   :file file
+                   :message "Unknown type variable"
+                   :primary-note (format nil "Unknown type variable ~S"
+                                         (parser:tyvar-name var)))))
+
+    ty))
 
 (defun partial-type-env-add-type (env name type)
   (declare (type partial-type-env env)

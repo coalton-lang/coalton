@@ -148,6 +148,8 @@
 
 (in-package #:coalton-impl/typechecker/environment)
 
+;;; TODO: instrument environment modifying functions to generate a WAL
+
 ;;;
 ;;; Value type environments
 ;;;

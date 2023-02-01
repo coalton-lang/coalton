@@ -504,6 +504,7 @@
            :source (keyword-src-source keyword))
           keyword)))
 
+  ;; TODO: is this instance working?
   (:method ((toplevel toplevel-define-type) ctx)
     (declare (type algo:immutable-map ctx)
              (values toplevel-define-type))

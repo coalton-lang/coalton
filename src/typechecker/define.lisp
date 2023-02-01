@@ -1631,7 +1631,6 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                             (tc:default-subs (tc-env-env env) nil deferred-preds)
                             subs)))
 
-            (util:debug-log (tc:default-subs (tc-env-env env) nil (append deferred-preds retained-preds)))
             (setf deferred-preds (tc:reduce-context (tc-env-env env) deferred-preds subs))
             (setf retained-preds (tc:reduce-context (tc-env-env env) retained-preds subs))
             (setf expr-tys (tc:apply-substitution subs expr-tys)))

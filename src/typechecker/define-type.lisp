@@ -22,6 +22,8 @@
 
 (in-package #:coalton-impl/typechecker/define-type)
 
+;;; TODO: add autogeneration of RuntimeRepr instances
+
 (defstruct type-definition
   (name              (util:required 'name)              :type symbol                   :read-only t)
   (type              (util:required 'type)              :type tc:ty                    :read-only t)

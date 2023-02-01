@@ -102,9 +102,10 @@
     (declare (type tc:kind expected-kind)
              (type tc:ksubstitution-list ksubs)
              (type coalton-file file))
-    (let* ((tvar (partial-type-env-lookup-var env (parser:tyvar-name type)))
+    (let* ((tvar (partial-type-env-lookup-var env type file))
 
            (kvar (tc:kind-of tvar)))
+
       (setf kvar (tc:apply-ksubstitution ksubs kvar))
 
       (handler-case

@@ -165,8 +165,6 @@ Returns (VALUES deferred-preds retained-preds defaultable-preds)"
          (pred-names (mapcar #'ty-predicate-class preds)) ; is
          (pred-heads (mapcar #'ty-predicate-types preds)) ; ts
          )
-    :do (util:debug-log (num-classes))
-
     (loop :for type :in (defaults env)
 
           :when (and

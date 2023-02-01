@@ -7,4 +7,5 @@
    #:coalton-impl/typechecker/define-type
    #:coalton-impl/typechecker/define-class
    #:coalton-impl/typechecker/tc-env
-   #:coalton-impl/typechecker/define))
+   #:coalton-impl/typechecker/define
+   #:coalton-impl/typechecker/define-instance))

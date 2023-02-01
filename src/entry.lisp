@@ -33,10 +33,12 @@
                                  env)
         (declare (ignore class-definitions))
 
+        (setf env (tc:toplevel-define-instance (parser:program-instances program) env file))
+
         (setf env (tc:toplevel-define (parser:program-defines program)
-                                   (parser:program-declares program)
-                                   file
-                                   env))
+                                      (parser:program-declares program)
+                                      file
+                                      env))
 
         (setf *global-environment* env)
 

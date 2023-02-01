@@ -39,6 +39,8 @@
 ;;; Entrypoint
 ;;;
 
+;;; TODO: check that method predicates are not ambigious
+
 (defun toplevel-define-class (classes file env)
   (declare (type parser:toplevel-define-class-list classes)
            (type parser:coalton-file file)
@@ -454,7 +456,7 @@
                                                 :span (parser:ty-predicate-source pred)
                                                 :file file
                                                 :message "Invalid method predicate"
-                                                :primary-note "method predicates must contain one or more non class type variables.")))
+                                                :primary-note "method predicate contains only class variables")))
                       
                    :do (loop :for tyvar :in new-tyvars
                              :do (partial-type-env-add-var env tyvar))
