@@ -23,16 +23,12 @@
 
 (in-package #:coalton-impl/typechecker/context-reduction)
 
+;; TODO: propicate predicate source information to new predicates
+
 ;;
 ;; Context reduction
 ;;
 
-(defun predicate= (pred1 pred2)
-  (declare (type ty-predicate pred1)
-           (type ty-predicate pred2)
-           (values boolean))
-  (and (equalp (ty-predicate-class pred1) (ty-predicate-class pred2))
-       (equalp (ty-predicate-types pred1) (ty-predicate-types pred2))))
 
 (defun true (x)
   (if x

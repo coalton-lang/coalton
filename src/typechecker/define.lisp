@@ -1382,8 +1382,8 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
   (loop :for name :being :the :hash-keys :of dec-table
         :for unparsed-ty :being :the :hash-values :of dec-table
 
-        :for qual-ty := (parse-qualified-type unparsed-ty (tc-env-env env) file)
-        :do (tc-env-add-definition env name (tc:quantify (tc:type-variables qual-ty) qual-ty)))
+        :for scheme := (parse-ty-scheme unparsed-ty (tc-env-env env) file)
+        :do (tc-env-add-definition env name scheme))
 
   ;; Split apart explicit and implicit bindings
   (let* ((expl-bindings (loop :for binding :in bindings

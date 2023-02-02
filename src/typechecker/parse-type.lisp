@@ -26,11 +26,6 @@
 
 (in-package #:coalton-impl/typechecker/parse-type)
 
-;;; TODO
-;;; * warn when context could be reduced
-;;; * warn when a type has ambigious predicate type variables
-
-
 ;;;
 ;;; Entrypoints
 ;;;
@@ -60,13 +55,13 @@
       (setf ksubs (tc:kind-monomorphize-subs (tc:kind-variables ty) ksubs))
       (tc:apply-ksubstitution ksubs ty))))
 
-(defun parse-qualified-type (ty env file)
-  (declare (type parser:qualified-ty ty)
+(defun parse-qualified-type (unparsed-ty env file)
+  (declare (type parser:qualified-ty unparsed-ty)
            (type tc:environment env)
            (type coalton-file file)
            (values tc:qualified-ty &optional))
 
-  (let ((tvars (parser:collect-type-variables ty))
+  (let ((tvars (parser:collect-type-variables unparsed-ty))
 
         (partial-env (make-partial-type-env :env env)))
 
@@ -75,11 +70,21 @@
           :do (partial-type-env-add-var partial-env tvar-name))
 
     (multiple-value-bind (qual-ty ksubs)
-        (infer-type-kinds ty tc:+kstar+ nil partial-env file)
+        (infer-type-kinds unparsed-ty tc:+kstar+ nil partial-env file)
 
       (setf qual-ty (tc:apply-ksubstitution ksubs qual-ty))
       (setf ksubs (tc:kind-monomorphize-subs (tc:kind-variables qual-ty) ksubs))
-      (tc:apply-ksubstitution ksubs qual-ty))))
+
+      (let* ((qual-ty (tc:apply-ksubstitution ksubs qual-ty))
+
+             (preds (tc:qualified-ty-predicates qual-ty))
+
+             (ty (tc:qualified-ty-type qual-ty)))
+
+        (check-for-ambigious-variables preds ty unparsed-ty file env)
+        (check-for-reducable-context preds unparsed-ty file env)
+
+        qual-ty))))
 
 (defun parse-ty-scheme (ty env file)
   (declare (type parser:qualified-ty ty)
@@ -92,6 +97,75 @@
          (tvars (tc:type-variables qual-ty)))
 
     (tc:quantify tvars qual-ty)))
+
+(defun check-for-ambigious-variables (preds type qual-ty file env)
+  (declare (type tc:ty-predicate-list preds)
+           (type tc:ty type)
+           (type parser:qualified-ty qual-ty)
+           (type coalton-file file)
+           (type tc:environment env))
+
+  (let* ((old-unambigious-vars (tc:type-variables type))
+         (unambigious-vars old-unambigious-vars)) 
+
+    (block fundep-fixpoint
+      (loop :for i :below tc:+fundep-max-depth+
+            :do (setf old-unambigious-vars unambigious-vars)
+            :do (loop :for pred :in preds
+                      :for pred-tys := (tc:ty-predicate-types pred)
+                      :for class-name := (tc:ty-predicate-class pred)
+                      :for class := (tc:lookup-class env class-name)
+                      :for map := (tc:ty-class-class-variable-map class)
+                      :when (tc:ty-class-fundeps class) :do
+                        (loop :for fundep :in (tc:ty-class-fundeps class)
+                              :for from-vars := (util:project-map (tc:fundep-from fundep) map pred-tys)
+                              :do (when (subsetp from-vars unambigious-vars :test #'eq)
+                                    (let ((to-vars (util:project-map (tc:fundep-to fundep) map pred-tys)))
+                                      (setf unambigious-vars
+                                            (remove-duplicates (append to-vars unambigious-vars) :test #'equalp))))))
+
+            :when (equalp unambigious-vars old-unambigious-vars) ; Exit when progress stops
+              :do (return-from fundep-fixpoint)
+
+            :finally (util:coalton-bug "Fundep solving failed to fixpoint")))
+
+    (unless (subsetp (tc:type-variables preds) unambigious-vars :test #'equalp)
+      (let* ((ambigious-vars (set-difference (tc:type-variables preds) unambigious-vars :test #'equalp))
+
+             (single-variable (= 1 (length ambigious-vars))))
+
+        (error 'tc-error
+               :err (coalton-error
+                     :span (parser:qualified-ty-source qual-ty)
+                     :file file
+                     :message "Invalid qualified type"
+                     :primary-note (format nil "The type ~A ~{~S ~}ambigious in the type ~S"
+                                           (if single-variable
+                                               "variable is"
+                                               "variables are")
+                                           ambigious-vars
+                                           (tc:make-qualified-ty
+                                            :predicates preds
+                                            :type type))))))))
+
+;; TODO: this should be a warning
+(defun check-for-reducable-context (preds qual-ty file env)
+  (declare (type tc:ty-predicate-list preds)
+           (type parser:qualified-ty qual-ty)
+           (type coalton-file file)
+           (type tc:environment env))
+
+  (let ((reduced-preds (tc:reduce-context env preds nil)))
+    (unless (null (set-exclusive-or preds reduced-preds :test #'tc:predicate=))
+      (error 'tc-error
+             :err (coalton-error
+                   :span (parser:qualified-ty-source qual-ty)
+                   :file file
+                   :message "Declared context can be reduced"
+                   :primary-note (if (null reduced-preds)
+                                     "declared predicates are redundant"
+                                     (format nil "context can be reduced to ~{ ~S~}"
+                                             reduced-preds)))))))
 
 ;;;
 ;;; Kind Inference
