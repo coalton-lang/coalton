@@ -18,18 +18,21 @@ jobs:
         COALTON_ENV: ["release", "development"]
         SAFETY: ["0", "3"]
 
-    env:
-      # Tell ASDF to look through our repo recursively
-      CL_SOURCE_REGISTRY: "/home/runner/work/coalton/coalton//"
+    permissions:
+      packages: read
+
+    container:
+      image: ghcr.io/coalton-lang/sbcl-base
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      env:
+        # Tell ASDF to look through our repo recursively
+        # See https://github.com/actions/runner/issues/2058
+        CL_SOURCE_REGISTRY: "/__w/coalton/coalton//"
 
     steps:
       - uses: actions/checkout@v3
-      - uses: 40ants/setup-lisp@v1
-      - name: Install GMP and MPFR dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install libgmp10 libmpfr6
-          sudo ln -s /usr/lib/x86_64-linux-gnu/libmpfr.so.6 /usr/lib/libmpfr.so
       - name: Run tests
         env:
           COALTON_ENV: ${{ matrix.COALTON_ENV }}
@@ -38,47 +41,9 @@ jobs:
           (sb-ext:restrict-compiler-policy 'safety ${{ matrix.SAFETY }})
           (defun main (&rest args)
             (declare (ignore args))
-
-            (asdf:test-system :coalton)
+            (ql:quickload :coalton/tests)
+            (asdf:test-system :coalton/tests)
+            ; TODO: Remove this or add tests for these programs.
             (asdf:load-system :small-coalton-programs))
           EOF
-          qlot exec ros -- run-tests.lisp
-  bench:
-    runs-on: ubuntu-latest
-
-    env:
-      # Tell ASDF to look through our repo recursively
-      CL_SOURCE_REGISTRY: "/home/runner/work/coalton/coalton//"
-
-      COALTON_ENV: "release"
-
-    steps:
-      - uses: actions/checkout@v3
-      - uses: 40ants/setup-lisp@v1
-      - name: Install GMP and MPFR dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install libgmp10 libmpfr6
-          sudo ln -s /usr/lib/x86_64-linux-gnu/libmpfr.so.6 /usr/lib/libmpfr.so
-      - name: Run benchmarks
-        run: |
-          cat <<EOF > run-benchmarks.lisp
-          (defun main (&rest args)
-            (declare (ignore args))
-            (asdf:load-system :coalton/benchmarks)
-            (sb-ext::without-gcing (uiop:symbol-call :coalton-benchmarks :run-benchmarks-ci)))
-          EOF
-          qlot exec ros -- run-benchmarks.lisp
-      - uses: actions/cache@v2
-        with:
-          path: ./cache
-          key: ${{ runner.os }}-benchmarks
-      - uses: benchmark-action/github-action-benchmark@v1
-        with:
-          tool: "customSmallerIsBetter"
-          output-file-path: "./bench.json"
-          external-data-json-path: "./cache/benchmark-data.json"
-          fail-on-alert: false
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          comment-on-alert: true
-          alert-comment-cc-users: "@eliaslfox"
+          sbcl --noinform --non-interactive --load run-tests.lisp --eval "(main)"
