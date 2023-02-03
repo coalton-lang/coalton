@@ -3,6 +3,8 @@ name: Docs
 on:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
   workflow_dispatch:
 
@@ -10,9 +12,18 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    env:
-      # Tell ASDF to look through our repo recursively
-      CL_SOURCE_REGISTRY: "/home/runner/work/coalton/coalton//"
+    permissions:
+      packages: read
+
+    container:
+      image: ghcr.io/coalton-lang/sbcl-base
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      env:
+        # Tell ASDF to look through our repo recursively
+        # See https://github.com/actions/runner/issues/2058
+        CL_SOURCE_REGISTRY: "/__w/coalton/coalton/coalton//"
 
     steps:
       # Check out coalton and coalton-website
@@ -26,26 +37,20 @@ jobs:
           path: coalton-website
 
       # Run docs generator targeting website directory
-      - uses: 40ants/setup-lisp@v1
-      - name: Install GMP and MPFR dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install libgmp10 libmpfr6
-          sudo ln -s /usr/lib/x86_64-linux-gnu/libmpfr.so.6 /usr/lib/libmpfr.so
       - name: Run Docs Generator
         run: |
-          cat <<EOF > run-tests.lisp
-          (sb-ext:restrict-compiler-policy 'safety ${{ matrix.SAFETY }})
+          cat <<EOF > run-docs.lisp
           (defun main (&rest args)
-            (asdf:load-system :coalton/doc)
+            (ql:quickload :coalton/doc)
             (uiop:symbol-call :coalton-doc :write-stdlib-documentation-to-file
-              "coalton-website/content/reference.md" 
+              "/__w/coalton/coalton/coalton-website/content/reference.md" 
               :backend :hugo))
           EOF
-          qlot exec ros -- run-tests.lisp
+          sbcl --noinform --non-interactive --load run-docs.lisp --eval "(main)"
 
       # Create PR in website repository for changes2
       - uses: peter-evans/create-pull-request@v3
+        if: ${{ github.event_name == 'push' && github.ref_type == 'branch' && github.ref_name == 'main' }}
         with:
           token: ${{ secrets.DOCS_PAT }}
           path: coalton-website
