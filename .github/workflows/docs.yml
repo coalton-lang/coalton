@@ -53,7 +53,7 @@ jobs:
         if: ${{ github.event_name == 'push' && github.ref_type == 'branch' && github.ref_name == 'main' }}
         with:
           token: ${{ secrets.DOCS_PAT }}
-          path: coalton-website
+          path: /__w/coalton/coalton/coalton-website
           branch: "update-docs/${{ github.sha }}"
           base: main
           author: coalton-docs-bot <coalton-docs-bot@users.noreply.github.com>
