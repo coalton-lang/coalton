@@ -3,6 +3,7 @@
    #:cl
    #:coalton-impl/util)
   (:local-nicknames
+   (#:settings #:coalton-impl/settings)
    (#:global-lexical #:coalton-impl/global-lexical)
    (#:rt #:coalton-impl/runtime))
   (:export
@@ -17,9 +18,6 @@
 (defstruct struct-or-class-field
   (name (required 'name) :type symbol :read-only t)
   (type (required 'type) :type t      :read-only t))
-
-#+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type struct-or-class-field))
 
 (defun struct-or-class (&key
                               (classname (error "Class Name required"))
@@ -75,6 +73,9 @@
          (list
           `(declaim (inline ,constructor))
           `(defun ,constructor ,field-names
+             ,@(when settings:*emit-type-annotations*
+                 `((declare ,@(loop :for field :in fields
+                                    :collect `(type ,(struct-or-class-field-type field) ,(struct-or-class-field-name field))))))
              (make-instance ',classname ,@(mapcan
                                            (lambda (field)
                                              `(',field ,field))

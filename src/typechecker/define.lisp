@@ -18,7 +18,9 @@
    #:cl
    #:coalton-impl/typechecker/base
    #:coalton-impl/typechecker/parse-type
-   #:coalton-impl/typechecker/ast
+   #:coalton-impl/typechecker/pattern
+   #:coalton-impl/typechecker/expression
+   #:coalton-impl/typechecker/toplevel
    #:coalton-impl/typechecker/tc-env)
   (:local-nicknames
    (#:util #:coalton-impl/util)
@@ -36,8 +38,9 @@
    #:toplevel-define-source             ; ACCESSOR
    #:toplevel-define-monomorphize       ; ACCESSOR
    #:toplevel-define-list               ; TYPE
-
    #:toplevel-define                    ; FUNCTION
+   #:infer-expl-binging-type            ; FUNCTION
+   #:attach-explicit-binding-type       ; FUNCTION
    ))
 
 ;; TODO: ensure patterns don't bind the same variables multiple times
@@ -76,33 +79,6 @@
                :file file
                :message "Ambigious predicate"
                :primary-note (format nil "Ambigious predicate ~A" pred))))
-
-
-(defstruct (toplevel-define
-            (:copier nil))
-  (name          (util:required 'name)          :type node-variable             :read-only t)
-  (vars          (util:required 'vars)          :type node-variable-list        :read-only t)
-  (body          (util:required 'body)          :type node-body                 :read-only t)
-  (explicit-type (util:required 'explicit-type) :type (or null tc:qualified-ty) :read-only t)
-  (source        (util:required 'source)        :type cons                      :read-only t))
-
-(eval-when (:load-toplevel :compile-toplevel :execute)
-  (defun toplevel-define-list-p (x)
-    (and (alexandria:proper-list-p x)
-         (every #'toplevel-define-p x))))
-
-(deftype toplevel-define-list ()
-  '(satisfies toplevel-define-list-p))
-
-(defmethod tc:apply-substitution (subs (node toplevel-define))
-  (declare (type tc:substitution-list subs)
-           (values toplevel-define &optional))
-  (make-toplevel-define
-   :name (tc:apply-substitution subs (toplevel-define-name node))
-   :vars (tc:apply-substitution subs (toplevel-define-vars node))
-   :body (tc:apply-substitution subs (toplevel-define-body node))
-   :explicit-type (tc:apply-substitution subs (toplevel-define-explicit-type node))
-   :source (toplevel-define-source node)))
 
 ;;;
 ;;; Entrypoint
@@ -301,7 +277,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                type
                (list pred)
                (make-node-integer-literal
-                :type (tc:qualify (list pred) type)
+                :type (tc:qualify nil type)
                 :source (parser:node-source node)
                 :value (parser:node-integer-literal-value node))
                subs)))
@@ -1514,13 +1490,13 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
 (defun infer-expl-binding-type (binding declared-ty source subs env file)
   "Infer the type of BINDING and then ensure it matches DECLARED-TY."
-  (declare (type (or parser:toplevel-define parser:node-let-binding) binding)
+  (declare (type (or parser:toplevel-define parser:node-let-binding parser:instance-method-definition) binding)
            (type tc:ty-scheme declared-ty)
            (type cons source)
            (type tc:substitution-list subs)
            (type tc-env env)
            (type coalton-file file)
-           (values tc:ty-predicate-list (or toplevel-define node-let-binding) tc:substitution-list &optional))
+           (values tc:ty-predicate-list (or toplevel-define node-let-binding instance-method-definition) tc:substitution-list &optional))
 
   (let* ((name (parser:node-variable-name (parser:name binding)))
 
@@ -1693,11 +1669,13 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
           (if restricted
               (let* ((allowed-tvars (set-difference local-tvars (tc:type-variables retained-preds) :test #'eq))
 
-                     (output-schemes
+                     (output-qual-tys
                        (loop :for ty :in expr-tys
-                             :collect (tc:quantify
-                                       allowed-tvars
-                                       (tc:make-qualified-ty :predicates nil :type ty))))
+                             :collect (tc:make-qualified-ty :predicates nil :type ty)))
+
+                     (output-schemes
+                       (loop :for ty :in output-qual-tys
+                             :collect (tc:quantify allowed-tvars ty)))
 
                      (deferred-preds (append deferred-preds retained-preds)))
 
@@ -1712,14 +1690,18 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
                 (values
                  deferred-preds
-                 binding-nodes
+                 (loop :for binding :in binding-nodes
+                       :for ty :in output-qual-tys
+                       :collect (attach-explicit-binding-type binding ty))
                  subs))
 
-              (let* ((output-schemes
+              (let* ((output-qual-tys
                        (loop :for ty :in expr-tys
-                             :collect (tc:quantify
-                                       local-tvars
-                                       (tc:make-qualified-ty :predicates retained-preds :type ty)))))
+                             :collect (tc:make-qualified-ty :predicates retained-preds :type ty)))
+
+                     (output-schemes
+                       (loop :for ty :in output-qual-tys
+                             :collect (tc:quantify local-tvars ty))))
 
                 (loop :for scheme :in output-schemes
                       :for binding :in bindings
@@ -1732,16 +1714,18 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
                 (values
                  deferred-preds
-                 binding-nodes
+                 (loop :for binding :in binding-nodes
+                       :for ty :in output-qual-tys
+                       :collect (attach-explicit-binding-type binding ty))
                  subs))))))))
 
 (defun infer-binding-type (binding expected-type subs env file)
   "Infer the type of BINDING then unify against EXPECTED-TYPE. Adds BINDING's paramaters to the environment."
-  (declare (type (or parser:toplevel-define parser:node-let-binding) binding)
+  (declare (type (or parser:toplevel-define parser:node-let-binding parser:instance-method-definition) binding)
            (type tc:ty expected-type)
            (type tc:substitution-list subs)
            (type coalton-file file)
-           (values tc:ty-predicate-list (or toplevel-define node-let-binding) tc:substitution-list))
+           (values tc:ty-predicate-list (or toplevel-define node-let-binding instance-method-definition) tc:substitution-list))
 
   (let* ((vars (loop :for var :in (parser:parameters binding)
                      :for name := (parser:node-variable-name var)
@@ -1843,7 +1827,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                                 :type (tc:qualify nil ty)
                                 :source (parser:node-source var)
                                 :name (parser:node-variable-name var)))
-                             (parser:toplevel-define-vars binding)
+                             (parser:parameters binding)
                              vars))
 
                    (typed-binding (build-typed-binding binding name-node value-node var-nodes)))
@@ -1865,45 +1849,76 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
   (:method ((binding parser:toplevel-define) name value vars)
     (declare (type node-variable name)
              (type node-body value)
-             (type node-variable-list vars))
+             (type node-variable-list vars)
+             (values toplevel-define))
     
    (make-toplevel-define
     :source (parser:toplevel-define-source binding)
     :name name
     :body value
-    :vars vars
-    :explicit-type nil))
+    :vars vars))
   
   (:method ((binding parser:node-let-binding) name value vars)
     (declare (type node-variable name)
              (type node value)
-             (type node-variable-list vars))
+             (type node-variable-list vars)
+             (values node-let-binding))
     
     (unless (null vars)
       (util:coalton-bug "Unexpected parameters on let binding"))
     
    (make-node-let-binding
-    :source (parser:node-let-binding-source binding)
     :name name
     :value value
-    :explicit-type nil)))
+    :source (parser:node-let-binding-source binding)))
+
+  (:method ((binding parser:instance-method-definition) name value vars)
+    (declare (type node-variable name)
+             (type node-body value)
+             (type node-variable-list vars)
+             (values instance-method-definition))
+
+    (make-instance-method-definition
+     :name name
+     :vars vars
+     :body value
+     :source (parser:instance-method-definition-source binding))))
 
 (defgeneric attach-explicit-binding-type (binding explicit-type)
   (:method ((binding toplevel-define) explicit-type)
-    (declare (type tc:qualified-ty explicit-type))
+    (declare (type tc:qualified-ty explicit-type)
+             (values toplevel-define))
     
    (make-toplevel-define
-    :source (toplevel-define-source binding)
-    :name (toplevel-define-name binding)
+    :name (make-node-variable
+           :name (node-variable-name (toplevel-define-name binding))
+           :type explicit-type
+           :source (node-source (toplevel-define-name binding)))
     :body (toplevel-define-body binding)
     :vars (toplevel-define-vars binding)
-    :explicit-type explicit-type))
+    :source (toplevel-define-source binding)))
   
   (:method ((binding node-let-binding) explicit-type)
-    (declare (type tc:qualified-ty explicit-type))
+    (declare (type tc:qualified-ty explicit-type)
+             (values node-let-binding))
     
    (make-node-let-binding
-    :source (node-let-binding-source binding)
-    :name (node-let-binding-name binding)
+    :name (make-node-variable
+           :name (node-variable-name (node-let-binding-name binding))
+           :type explicit-type
+           :source (node-source (node-let-binding-name binding)))
     :value (node-let-binding-value binding)
-    :explicit-type explicit-type)))
+    :source (node-let-binding-source binding)))
+
+  (:method ((binding instance-method-definition) explicit-type)
+    (declare (type tc:qualified-ty explicit-type)
+             (values instance-method-definition))
+
+    (make-instance-method-definition
+     :name (make-node-variable
+            :name (node-variable-name (instance-method-definition-name binding))
+            :type explicit-type
+            :source (node-source (instance-method-definition-name binding)))
+     :vars (instance-method-definition-vars binding)
+     :body (instance-method-definition-body binding)
+     :source (instance-method-definition-source binding))))

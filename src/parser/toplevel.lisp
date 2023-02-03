@@ -318,7 +318,6 @@
 (deftype toplevel-define-instance-list ()
   '(satisfies toplevel-define-instance-list-p))
 
-;;; TODO: should package and file slots be removed?
 (defstruct (program
             (:copier nil))
   (package   (util:required 'package) :type package                       :read-only t)

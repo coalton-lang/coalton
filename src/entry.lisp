@@ -30,43 +30,49 @@
                                     file
                                     env)
 
-        (setf env (tc:toplevel-define-instance (parser:program-instances program) env file))
+        (multiple-value-bind (ty-instances env)
+            (tc:toplevel-define-instance (parser:program-instances program) env file)
 
-        (multiple-value-bind (toplevel-definitions env)
-            (tc:toplevel-define (parser:program-defines program)
-                                (parser:program-declares program)
-                                file
-                                env)
+          (multiple-value-bind (toplevel-definitions env)
+              (tc:toplevel-define (parser:program-defines program)
+                                  (parser:program-declares program)
+                                  file
+                                  env)
 
-          (let ((translation-unit
-                  (tc:make-translation-unit
-                   :types type-definitions
-                   :definitions toplevel-definitions
-                   :classes class-definitions
-                   :attr-table (make-hash-table) ;; TODO
-                   :package *package*
-                   :specializations nil ;; TODO
-                   )))
+            (multiple-value-bind (toplevel-instances)
+                (tc:toplevel-typecheck-instance ty-instances (parser:program-instances program) env file)
 
-            (multiple-value-bind (program env)
-                (codegen:compile-translation-unit translation-unit env)
+              (let ((translation-unit
+                      (tc:make-translation-unit
+                       :types type-definitions
+                       :definitions toplevel-definitions
+                       :classes class-definitions
+                       :instances toplevel-instances
+                       :package *package*
+                       :specializations nil ;; TODO
+                       )))
 
-              (values
-               (if settings:*coalton-skip-update*
-                   program
-                   `(progn
-                      (eval-when (:load-toplevel)
-                        (unless (eq (settings:coalton-release-p) ,(settings:coalton-release-p))
-                          ,(if (settings:coalton-release-p)
-                               `(error "~A was compiled in release mode but loaded in development." ,(or *compile-file-pathname* *load-truename*))
-                               `(error "~A was compiled in development mode but loaded in release." ,(or *compile-file-pathname* *load-truename*)))))
-                      #+ignore
-                      ,(coalton-impl/typechecker::generate-diff
-                        translation-unit
-                        env
-                        '*global-environment*)
-                      ,program))
-               env))))))))
+                (multiple-value-bind (program env)
+                    (codegen:compile-translation-unit translation-unit env)
+
+                  (values
+                   (if settings:*coalton-skip-update*
+                       program
+                       `(progn
+                          (eval-when (:load-toplevel)
+                            (unless (eq (settings:coalton-release-p) ,(settings:coalton-release-p))
+                              ,(if (settings:coalton-release-p)
+                                   `(error "~A was compiled in release mode but loaded in development."
+                                           ,(or *compile-file-pathname* *load-truename*))
+                                   `(error "~A was compiled in development mode but loaded in release."
+                                           ,(or *compile-file-pathname* *load-truename*)))))
+                          #+ignore
+                          ,(coalton-impl/typechecker::generate-diff
+                            translation-unit
+                            env
+                            '*global-environment*)
+                          ,program))
+                   env))))))))))
 
 (defun file-entry-point (filename)
   (declare (type string filename))
@@ -75,7 +81,19 @@
     (let ((coalton-file (parser:make-coalton-file
                          :stream file-stream
                          :name filename)))
-      (entry-point (parser:read-program file-stream coalton-file :mode :file)))))
+      (multiple-value-bind (code env)
+          (entry-point (parser:read-program file-stream coalton-file :mode :file))
+
+        (setf *global-environment* env)
+
+        code))))
+
+(defun debug-file-entry-point (filename)
+  (declare (type string filename))
+
+  (let ((settings:*coalton-skip-update* t)
+        (settings:*emit-type-annotations* nil))
+    (file-entry-point filename)))
 
 ;; TODO: remove this
 ;; Temporary hack to define Num so that integer literals can be
@@ -91,7 +109,5 @@
    #:append
    #:Eq #:==))
 
-#+ignroe
-(eval (file-entry-point "../pre-bootstrap.coalton"))
-#+ignroe
-(eval (file-entry-point "../bootstrap.coalton"))
+(eval (file-entry-point "./pre-bootstrap.coalton"))
+(eval (file-entry-point "./bootstrap.coalton"))

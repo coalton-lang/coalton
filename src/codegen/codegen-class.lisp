@@ -36,7 +36,7 @@
               (loop :for method :in (tc:ty-class-unqualified-methods class)
                     :collect (make-struct-or-class-field
                               :name (car method)
-                              :type (tc:lisp-type (cdr method) env :use-function-entries nil))))
+                              :type (tc:lisp-type (cdr method) env))))
 
         :append (struct-or-class
                  :classname codegen-name

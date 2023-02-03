@@ -1,29 +1,17 @@
-(defpackage #:coalton-impl/typechecker/ast
-  (:use #:cl)
+;;;;
+;;;; Mirror of expression nodes in src/parser/expression.lisp with
+;;;; types attached.
+;;;;
+
+(defpackage #:coalton-impl/typechecker/expression
+  (:use
+   #:cl
+   #:coalton-impl/typechecker/pattern)
   (:local-nicknames
    (#:parser #:coalton-impl/parser)
    (#:tc #:coalton-impl/typechecker/stage-1)
    (#:util #:coalton-impl/util))
   (:export
-   #:pattern                            ; STRUCT
-   #:pattern-type                       ; ACCESSOR
-   #:pattern-source                     ; ACCESSOR
-   #:pattern-list                       ; TYPE
-   #:pattern-var                        ; STRUCT
-   #:make-pattern-var                   ; ACCESSOR
-   #:pattern-var-name                   ; ACCESSOR
-   #:pattern-literal                    ; STRUCT
-   #:make-pattern-literal               ; CONSTRUCTOR
-   #:pattern-literal-value              ; ACCESSOR
-   #:pattern-wildcard                   ; STRUCT
-   #:make-pattern-wildcard              ; ACCESSOR
-   #:pattern-constructor                ; STRUCT
-   #:make-pattern-constructor           ; CONSTRUCTOR
-   #:pattern-constructor-name           ; ACCESSOR
-   #:pattern-constructor-patterns       ; ACCESSOR
-   #:parse-pattern                      ; FUNCTION
-   #:pattern-variables                  ; FUNCTION
-   
    #:node                               ; STRUCT
    #:node-type                          ; ACCESSOR
    #:node-source                        ; ACCESSOR
@@ -58,7 +46,6 @@
    #:make-node-let-binding              ; CONSTRUCTOR
    #:node-let-binding-name              ; ACCESSOR
    #:node-let-binding-value             ; ACCESSOR
-   #:node-let-binding-explicit-type     ; ACCESSOR
    #:node-let-binding-source            ; ACCESSOR
    #:node-let-binding-list              ; TYPE
    #:node-let-declare                   ; STRUCT
@@ -142,49 +129,11 @@
    #:node-do-last-node                  ; ACCESSOR
    ))
 
-(in-package #:coalton-impl/typechecker/ast)
+(in-package #:coalton-impl/typechecker/expression)
 
 ;;;
-;;; Typed nodes
+;;; Expression Nodes
 ;;;
-;;; This is a mirror of the parser AST with types attached to all nodes.
-;;;
-
-
-(defstruct (pattern
-            (:constructor nil)
-            (:copier nil))
-  (type   (util:required 'type)   :type tc:qualified-ty :read-only t)
-  (source (util:required 'source) :type cons            :read-only t))
-
-(defun pattern-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'pattern-p x)))
-
-(deftype pattern-list ()
-  '(satisfies pattern-list-p))
-
-(defstruct (pattern-var
-            (:include pattern)
-            (:copier nil))
-  (name (util:required 'name) :type parser:identifier :read-only t))
-
-(defstruct (pattern-literal
-            (:include pattern)
-            (:copier nil))
-  (value (util:required 'value) :type util:literal-value :read-only t))
-
-(defstruct (pattern-wildcard
-            (:include pattern)
-            (:copier nil)))
-
-(defstruct (pattern-constructor
-            (:include pattern)
-            (:copier nil))
-  (name     (util:required 'name)     :type parser:identifier :read-only t)
-  (patterns (util:required 'patterns) :type pattern-list      :read-only t))
-
-;;
 
 (defstruct (node
             (:constructor nil)
@@ -221,8 +170,6 @@
             (:copier nil))
   (value (util:required 'value) :type integer :read-only t))
 
-;; Does not subclass node, can only appear in a node body
-;;
 (defstruct (node-bind
             (:copier nil))
   (pattern (util:required 'pattern) :type pattern         :read-only t)
@@ -242,13 +189,6 @@
 (deftype node-body-element-list ()
   '(satisfies node-body-element-list-p))
 
-;;
-;; Does not subclass node, can only appear directly within some nodes
-;;
-;; - must contain at least one node
-;; - cannot be terminated by a `node-bind'
-;; - does not have source information (but it's children do)
-;;
 (defstruct (node-body
             (:copier nil))
   (nodes     (util:required 'node)      :type node-body-element-list :read-only t)
@@ -260,12 +200,10 @@
   (vars (util:required 'vars) :type node-variable-list :read-only t)
   (body (util:required 'body) :type node-body          :read-only t))
 
-;; TODO: handle recursive construction here
 (defstruct (node-let-binding
             (:copier nil))
   (name          (util:required 'name)          :type node-variable             :read-only t)
   (value         (util:required 'value)         :type node                      :read-only t)
-  (explicit-type (util:required 'explicit-type) :type (or null tc:qualified-ty) :read-only t)
   (source        (util:required 'source)        :type cons                      :read-only t))
 
 (defun node-let-binding-list-p (x)
@@ -397,9 +335,9 @@
   (nodes     (util:required 'nodes)     :type node-do-body-element-list :read-only t)
   (last-node (util:required 'last-node) :type node                      :read-only t))
 
-;;
-;; apply-substitution instances for nodes
-;;
+;;;
+;;; Methods
+;;;
 
 (defmethod tc:apply-substitution (subs (node pattern-var))
   (declare (type tc:substitution-list subs)
@@ -488,7 +426,6 @@
   (make-node-let-binding
    :name (tc:apply-substitution subs (node-let-binding-name node))
    :value (tc:apply-substitution subs (node-let-binding-value node))
-   :explicit-type (tc:apply-substitution subs (node-let-binding-explicit-type node))
    :source (node-let-binding-source node)))
 
 (defmethod tc:apply-substitution (subs (node node-let))

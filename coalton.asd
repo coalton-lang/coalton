@@ -23,10 +23,10 @@
   :depends-on (#:alexandria
                #:fset
                #:float-features
-               #:split-sequence
+               #:eclector
+               #:concrete-syntax-tree
                #:eclector-concrete-syntax-tree
-               #:named-readtables
-               #:uiop)
+               #:named-readtables)
   :pathname "src/"
   :serial t
   :components ((:file "package")
@@ -47,7 +47,7 @@
                              (:file "pattern")
                              (:file "macro")
                              (:file "expression")
-                             (:file "parser")
+                             (:file "toplevel")
                              (:file "collect")
                              (:file "renamer")
                              (:file "binding")
@@ -72,7 +72,10 @@
                              (:file "lisp-type")
                              (:file "context-reduction")
                              (:file "stage-1")
-                             (:file "ast")
+                             (:file "pattern")
+                             (:file "expression")
+                             (:file "toplevel")
+                             (:file "binding")
                              (:file "partial-type-env")
                              (:file "parse-type")
                              (:file "define-type")
@@ -90,7 +93,8 @@
 
                (:module "codegen"
                 :serial t
-                :components ((:file "ast")
+                :components ((:file "pattern")
+                             (:file "ast")
                              (:file "ast-subsitutions")
                              (:file "resolve-instance")
                              (:file "typecheck-node")
@@ -108,21 +112,7 @@
                              (:file "program")
                              (:file "package")))
                #+broken
-               (:file "impl-package")
-               #+broken
-               (:file "toplevel-define-type")
-               #+broken
-               (:file "toplevel-declare")
-               #+broken
-               (:file "toplevel-define")
-               #+broken
-               (:file "toplevel-define-instance")
-               #+broken
-               (:file "toplevel-specializations")
-               #+broken
                (:file "unlock-package" :if-feature :sb-package-locks)
-               #+broken
-               (:file "coalton")
                (:file "entry")
                (:file "reader")
                #+broken

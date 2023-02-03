@@ -1,3 +1,7 @@
 (package coalton)
 
 (define-type U32)
+
+(define True (lisp Boolean () cl:t))
+
+(define False (lisp Boolean () cl:nil))

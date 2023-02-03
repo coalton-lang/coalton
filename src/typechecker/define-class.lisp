@@ -39,8 +39,6 @@
 ;;; Entrypoint
 ;;;
 
-;;; TODO: check that method predicates are not ambigious
-
 (defun toplevel-define-class (classes file env)
   (declare (type parser:toplevel-define-class-list classes)
            (type parser:coalton-file file)

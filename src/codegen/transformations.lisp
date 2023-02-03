@@ -1,12 +1,13 @@
 (defpackage #:coalton-impl/codegen/transformations
   (:use
    #:cl
-   #:coalton-impl/util
+   #:coalton-impl/codegen/pattern
    #:coalton-impl/codegen/ast)
   (:import-from
    #:coalton-impl/algorithm
    #:immutable-map-data)
   (:local-nicknames
+   (#:util #:coalton-impl/util)
    (#:tc #:coalton-impl/typechecker))
   (:export
    #:traverse
@@ -33,17 +34,17 @@
 
 (defgeneric traverse (node funs bound-variables)
   (:method ((node node-literal) funs bound-variables)
-    (declare (type symbol-list bound-variables)
+    (declare (type util:symbol-list bound-variables)
              (values node &optional))
     (call-if node :literal funs bound-variables))
 
   (:method ((node node-variable) funs bound-variables)
-    (declare (type symbol-list bound-variables)
+    (declare (type util:symbol-list bound-variables)
              (values node &optional))
     (call-if node :variable funs bound-variables))
 
   (:method ((node node-application) funs bound-variables)
-    (declare (type symbol-list bound-variables)
+    (declare (type util:symbol-list bound-variables)
              (values node &optional))
     (let ((node
             (make-node-application
@@ -56,7 +57,7 @@
       (call-if node :application funs bound-variables)))
 
   (:method ((node node-direct-application) funs bound-variables)
-    (declare (type symbol-list bound-variables))
+    (declare (type util:symbol-list bound-variables))
     (let ((node
             (make-node-direct-application
              :type (node-type node)
@@ -69,7 +70,7 @@
       (call-if node :direct-application funs bound-variables)))
 
   (:method ((node node-abstraction) funs bound-variables)
-    (declare (type symbol-list bound-variables))
+    (declare (type util:symbol-list bound-variables))
     (call-if node :before-abstraction funs bound-variables)
     (let ((node
             (make-node-abstraction
@@ -82,7 +83,7 @@
       (call-if node :abstraction funs bound-variables)))
 
   (:method ((node node-let) funs bound-variables)
-    (declare (type symbol-list bound-variables))
+    (declare (type util:symbol-list bound-variables))
     (call-if node :before-let funs bound-variables)
     (let* ((new-bound-variables (append (mapcar #'car (node-let-bindings node)) bound-variables))
            (node
@@ -94,20 +95,20 @@
       (call-if node :let funs bound-variables)))
 
   (:method ((node node-lisp) funs bound-variables)
-    (declare (type symbol-list bound-variables))
+    (declare (type util:symbol-list bound-variables))
     (call-if node :lisp funs bound-variables))
 
   (:method ((node match-branch) funs bound-variables)
-    (declare (type symbol-list bound-variables))
+    (declare (type util:symbol-list bound-variables))
     (make-match-branch
      :pattern (match-branch-pattern node)
      :body (traverse
             (match-branch-body node)
             funs
-            (append (mapcar #'car (match-branch-bindings node)) bound-variables))))
+            (append (pattern-variables (match-branch-pattern node)) bound-variables))))
 
   (:method ((node node-match) funs bound-variables)
-    (declare (type symbol-list bound-variables))
+    (declare (type util:symbol-list bound-variables))
     (let ((node
             (make-node-match
              :type (node-type node)
@@ -119,7 +120,7 @@
       (call-if node :match funs bound-variables)))
 
   (:method ((node node-seq) funs bound-variables)
-    (declare (type symbol-list bound-variables))
+    (declare (type util:symbol-list bound-variables))
     (let ((node
             (make-node-seq
              :type (node-type node)
@@ -130,7 +131,7 @@
       (call-if node :seq funs bound-variables)))
 
   (:method ((node node-return) funs bound-variables)
-    (declare (type symbol-list bound-variables))
+    (declare (type util:symbol-list bound-variables))
     (let ((node
             (make-node-return
              :type (node-type node)
@@ -138,7 +139,7 @@
       (call-if node :return funs bound-variables)))
 
   (:method ((node node-field) funs bound-variables)
-    (declare (type symbol-list bound-variables))
+    (declare (type util:symbol-list bound-variables))
     (let ((node
             (make-node-field
              :type (node-type node)
@@ -147,7 +148,7 @@
       (call-if node :field funs bound-variables)))
 
   (:method ((node node-dynamic-extent) funs bound-variables)
-    (declare (type symbol-list bound-variables))
+    (declare (type util:symbol-list bound-variables))
     (let* ((new-bound-variables (cons (node-dynamic-extent-name node) bound-variables))
 
            (node
@@ -159,7 +160,7 @@
       (call-if node :dynamic-extent funs bound-variables)))
 
   (:method ((node node-bind) funs bound-variables)
-    (declare (type symbol-list bound-variables))
+    (declare (type util:symbol-list bound-variables))
     (call-if node :before-bind funs bound-variables)
     (let* ((new-bound-variables (cons (node-bind-name node) bound-variables))
 

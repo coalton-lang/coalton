@@ -22,6 +22,7 @@
    #:coalton-impl/codegen/optimizer
    #:optimize-bindings)
   (:local-nicknames
+   (#:util #:coalton-impl/util)
    (#:settings #:coalton-impl/settings)
    (#:global-lexical #:coalton-impl/global-lexical)
    (#:rt #:coalton-impl/runtime)
@@ -35,53 +36,22 @@
   (declare (type tc:translation-unit translation-unit)
            (type tc:environment env))
 
-  (let* ((inline-funs nil)
-
-         (add-inline
-           (lambda (name)
-             (declare (type symbol name))
-             (push name inline-funs)))
-
-         (definitions
+  (let* ((definitions
            (append
             (loop :for define :in (tc:translation-unit-definitions translation-unit)
                   :for name := (tc:node-variable-name (tc:toplevel-define-name define))
 
-                  ;; TODO: This should probably happen in the typechecker.
-                  :for node
-                    := (cond
-                         ((tc:toplevel-define-vars define)
-                          (tc:make-node-abstraction
-                           :type (tc:qualify
-                                  nil
-                                  (tc:make-function-type*
-                                   (mapcar (lambda (var)
-                                             ;; TODO: lol
-                                             (tc:qualified-ty-type (tc:node-type var)))
-                                           (tc:toplevel-define-vars define))
-                                   ;; TODO????
-                                   (tc:qualified-ty-type (tc:node-type (tc:node-body-last-node (tc:toplevel-define-body define))))))
-                           :source (tc:toplevel-define-source define)
-                           :vars (tc:toplevel-define-vars define)
-                           :body (tc:toplevel-define-body define)))
+                  :for compiled-node := (translate-toplevel define env)
 
-                         (t
-                          (tc:make-node-progn
-                           :type (tc:node-type (tc:node-body-last-node (tc:toplevel-define-body define)))
-                           :source (tc:toplevel-define-source define)
-                           :body (tc:toplevel-define-body define))))
-
-                  :for compiled-node := (translate-toplevel (tc:fresh-inst (tc:lookup-value-type env name)) node env)
                   :do (when settings:*coalton-dump-ast*
                         (format t "~A :: ~A~%~A~%~%~%"
                                 name
                                 (tc:lookup-value-type env name)
-                                node))
+                                (tc:binding-value define)))
                   :collect (cons name compiled-node))
-            ;; TODO: Add instance compilation
-            #+broken
+
             (loop :for instance :in (tc:translation-unit-instances translation-unit)
-                  :append (translate-instance instance add-inline env))))
+                  :append (translate-instance instance env))))
 
          (definition-names
            (mapcar #'car definitions)))
@@ -89,17 +59,13 @@
     (multiple-value-bind (definitions env)
         (optimize-bindings
          definitions
-         (tc:translation-unit-package translation-unit)
-         (tc:translation-unit-attr-table translation-unit)
+         *package*
          env)
 
       (let ((sccs (node-binding-sccs definitions)))
 
         (values
          `(progn
-            ,@(loop :for name :in inline-funs
-                    :collect `(declaim (inline ,name)))
-
             ,@(when (tc:translation-unit-types translation-unit)
                 (list
                  `(eval-when (:compile-toplevel :load-toplevel :execute)

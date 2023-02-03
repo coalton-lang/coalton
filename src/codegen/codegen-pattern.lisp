@@ -1,7 +1,7 @@
 (defpackage #:coalton-impl/codegen/codegen-pattern
   (:use
    #:cl
-   #:coalton-impl/util
+   #:coalton-impl/codegen/pattern
    #:coalton-impl/codegen/ast)
   (:local-nicknames
    (#:util #:coalton-impl/util)
@@ -18,7 +18,7 @@
              (ignore env))
     (values
      `t
-     (list (list (pattern-var-id pattern) expr))))
+     (list (list (pattern-var-name pattern) expr))))
 
   (:method ((pattern pattern-wildcard) expr env)
     (declare (type coalton-impl/typechecker::environment env))

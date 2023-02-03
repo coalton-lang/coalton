@@ -3,6 +3,8 @@
 ;;;; operatates on both node-let-binding and toplevel-define structs.
 ;;;;
 
+;;; TODO: rename name to binding-name and so on
+
 (defpackage #:coalton-impl/parser/binding
   (:use
    #:cl
@@ -29,7 +31,11 @@
 
   (:method ((binding toplevel-define))
     (declare (values node-variable))
-    (toplevel-define-name binding)))
+    (toplevel-define-name binding))
+
+  (:method ((binding instance-method-definition))
+    (declare (values node-variable))
+    (instance-method-definition-name binding)))
 
 (defgeneric value (binding)
   (:documentation "Returns the value that BINDING binds")
@@ -40,7 +46,11 @@
 
   (:method ((binding toplevel-define))
     (declare (values node-body))
-    (toplevel-define-body binding)))
+    (toplevel-define-body binding))
+
+  (:method ((binding instance-method-definition))
+    (declare (values node-body))
+    (instance-method-definition-body binding)))
 
 (defgeneric source (binding)
   (:documentation "Returns the source location of BINDING")
@@ -51,7 +61,11 @@
 
   (:method ((binding toplevel-define))
     (declare (values cons))
-    (toplevel-define-source binding)))
+    (toplevel-define-source binding))
+
+  (:method ((binding instance-method-definition))
+    (declare (values cons))
+    (instance-method-definition-source binding)))
 
 (defgeneric parameters (binding)
   (:documentation "Returns the parameters bound in BINDING")
@@ -62,7 +76,11 @@
 
   (:method ((binding toplevel-define))
     (declare (values node-variable-list))
-    (toplevel-define-vars binding)))
+    (toplevel-define-vars binding))
+
+  (:method ((binding instance-method-definition))
+    (declare (values node-variable-list))
+    (instance-method-definition-vars binding)))
 
 (defgeneric toplevel (binding)
   (:documentation "Returns t if BINDING is a toplevel binding.")
@@ -72,6 +90,10 @@
     nil)
 
   (:method ((binding toplevel-define))
+    (declare (values boolean))
+    t)
+
+  (:method ((binding instance-method-definition))
     (declare (values boolean))
     t))
 
@@ -83,10 +105,20 @@
      (node-abstraction-p (node-let-binding-value binding)))
 
   (:method ((binding toplevel-define))
-    (or (toplevel-define-vars binding)
+    (declare (values boolean))
+    (and (or (toplevel-define-vars binding)
 
-        (and (null (node-body-nodes (toplevel-define-body binding)))
-             (node-abstraction-p (node-body-last-node (toplevel-define-body binding)))))))
+             (and (null (node-body-nodes (toplevel-define-body binding)))
+                  (node-abstraction-p (node-body-last-node (toplevel-define-body binding)))))
+         t))
+
+  (:method ((binding instance-method-definition))
+    (declare (values boolean))
+    (and (or (instance-method-definition-vars binding)
+
+             (and (null (node-body-nodes (instance-method-definition-body binding)))
+                  (node-abstraction-p (node-body-last-node (instance-method-definition-body binding)))))
+         t)))
 
 (defgeneric last-node (binding)
   (:documentation "Returns the last node in BINDING")
@@ -97,4 +129,8 @@
 
   (:method ((binding toplevel-define))
     (declare (values node))
-    (node-body-last-node (toplevel-define-body binding))))
+    (node-body-last-node (toplevel-define-body binding)))
+
+  (:method ((binding instance-method-definition))
+    (declare (values node))
+    (node-body-last-node (instance-method-definition-body binding))))

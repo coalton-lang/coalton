@@ -1,31 +1,12 @@
 (defpackage #:coalton-impl/codegen/ast
   (:use
    #:cl
-   #:coalton-impl/util)
+   #:coalton-impl/codegen/pattern)
   (:local-nicknames
+   (#:util #:coalton-impl/util)
+   (#:algo #:coalton-impl/algorithm)
    (#:tc #:coalton-impl/typechecker))
-  (:import-from
-   #:coalton-impl/algorithm
-   #:tarjan-scc)
   (:export
-   #:pattern                            ; STRUCT
-   #:pattern-source                     ; ACCESSOR
-   #:pattern-list                       ; TYPE
-   #:pattern-var                        ; STRUCT
-   #:make-pattern-var                   ; ACCESSOR
-   #:pattern-var-name                   ; ACCESSOR
-   #:pattern-literal                    ; STRUCT
-   #:make-pattern-literal               ; CONSTRUCTOR
-   #:pattern-literal-value              ; ACCESSOR
-   #:pattern-wildcard                   ; STRUCT
-   #:make-pattern-wildcard              ; ACCESSOR
-   #:pattern-constructor                ; STRUCT
-   #:make-pattern-constructor           ; CONSTRUCTOR
-   #:pattern-constructor-name           ; ACCESSOR
-   #:pattern-constructor-patterns       ; ACCESSOR
-   #:parse-pattern                      ; FUNCTION
-   #:pattern-variables                  ; FUNCTION
-
    #:node                               ; STRUCT
    #:node-type                          ; ACCESSOR
    #:node-list                          ; TYPE
@@ -108,42 +89,14 @@
 ;;; Compiler Backend IR
 ;;;
 
-;; TODO: We should replace all 'symbol' with 'parser:identifier'
+;;; TODO: We should replace all 'symbol' with 'parser:identifier'
 
-(defstruct (pattern
-            (:constructor nil)
-            (:copier nil))
-  (type (required 'type) :type tc:ty :read-only t))
-
-(defun pattern-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'pattern-p x)))
-
-(deftype pattern-list ()
-  '(satisfies pattern-list-p))
-
-(defstruct (pattern-var
-            (:include pattern)
-            (:copier nil))
-  (name (required 'name) :type symbol :read-only t))
-
-(defstruct (pattern-literal
-            (:include pattern)
-            (:copier nil))
-  (value (required 'value) :type literal-value :read-only t))
-
-(defstruct (pattern-wildcard
-            (:include pattern)
-            (:copier nil)))
-
-(defstruct (pattern-constructor
-            (:include pattern)
-            (:copier nil))
-  (name     (required 'name)     :type symbol       :read-only t)
-  (patterns (required 'patterns) :type pattern-list :read-only t))
 
 (defstruct (node (:constructor nil))
-  (type (required 'type) :type tc:ty :read-only t))
+  (type (util:required 'type) :type tc:ty :read-only t))
+
+(defmethod make-load-form ((self node) &optional env)
+  (make-load-form-saving-slots self :environment env))
 
 (defun node-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -161,63 +114,42 @@
 
 (defstruct (node-literal (:include node))
   "Literal values like 1 or \"hello\""
-  (value (required 'value) :type literal-value :read-only t))
-
-(defmethod make-load-form ((self node-literal) &optional env)
-  (make-load-form-saving-slots self :environment env))
+  (value (util:required 'value) :type util:literal-value :read-only t))
 
 (defstruct (node-variable (:include node))
   "Variables like x or y"
-  (value (required 'value) :type symbol :read-only t))
-
-(defmethod make-load-form ((self node-variable) &optional env)
-  (make-load-form-saving-slots self :environment env))
+  (value (util:required 'value) :type symbol :read-only t))
 
 (defstruct (node-application (:include node))
   "Function application (f x)"
-  (rator (required 'rator) :type node      :read-only t)
-  (rands (required 'rands) :type node-list :read-only t))
-
-(defmethod make-load-form ((self node-application) &optional env)
-  (make-load-form-saving-slots self :environment env))
+  (rator (util:required 'rator) :type node      :read-only t)
+  (rands (util:required 'rands) :type node-list :read-only t))
 
 (defstruct (node-direct-application (:include node))
   "Fully saturated function application of a known function"
-  (rator-type (required 'rator-type) :type tc:ty     :read-only t)
-  (rator      (required 'rator)      :type symbol    :read-only t)
-  (rands      (required 'rands)      :type node-list :read-only t))
-
-(defmethod make-load-form ((self node-direct-application) &optional env)
-  (make-load-form-saving-slots self :environment env))
+  (rator-type (util:required 'rator-type) :type tc:ty     :read-only t)
+  (rator      (util:required 'rator)      :type symbol    :read-only t)
+  (rands      (util:required 'rands)      :type node-list :read-only t))
 
 (defstruct (node-abstraction (:include node))
   "Lambda literals (fn (x) x)"
-  (vars    (required 'vars)    :type symbol-list        :read-only t)
-  (subexpr (required 'subexpr) :type node               :read-only t))
-
-(defmethod make-load-form ((self node-abstraction) &optional env)
-  (make-load-form-saving-slots self :environment env))
+  (vars    (util:required 'vars)    :type util:symbol-list        :read-only t)
+  (subexpr (util:required 'subexpr) :type node               :read-only t))
 
 (defstruct (node-let (:include node))
   "Introduction of local mutually-recursive bindings (let ((x 2)) (+ x x))"
-  (bindings (required 'bindings) :type binding-list :read-only t)
-  (subexpr  (required 'subexpr)  :type node         :read-only t))
-
-(defmethod make-load-form ((self node-let) &optional env)
-  (make-load-form-saving-slots self :environment env))
+  (bindings (util:required 'bindings) :type binding-list :read-only t)
+  (subexpr  (util:required 'subexpr)  :type node         :read-only t))
 
 (defstruct (node-lisp (:include node))
   "An embedded lisp form"
-  (vars (required 'vars) :type list :read-only t)
-  (form (required 'form) :type t    :read-only t))
-
-(defmethod make-load-form ((self node-lisp) &optional env)
-  (make-load-form-saving-slots self :environment env))
+  (vars (util:required 'vars) :type list :read-only t)
+  (form (util:required 'form) :type t    :read-only t))
 
 (defstruct match-branch
   "A branch of a match statement"
-  (pattern  (required 'pattern)  :type pattern            :read-only t)
-  (body     (required 'body)     :type node               :read-only t))
+  (pattern  (util:required 'pattern)  :type pattern            :read-only t)
+  (body     (util:required 'body)     :type node               :read-only t))
 
 (defmethod make-load-form ((self match-branch) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -231,51 +163,33 @@
 
 (defstruct (node-match (:include node))
   "A pattern matching construct. Uses MATCH-BRANCH to represent branches"
-  (expr (required 'expr) :type node :read-only t)
-  (branches (required 'branches) :type branch-list :read-only t))
-
-(defmethod make-load-form ((self node-match) &optional env)
-  (make-load-form-saving-slots self :environment env))
+  (expr (util:required 'expr) :type node :read-only t)
+  (branches (util:required 'branches) :type branch-list :read-only t))
 
 (defstruct (node-seq (:include node))
   "A series of statements to be executed sequentially"
-  (nodes (required 'nodes) :type node-list :read-only t))
-
-(defmethod make-load-form ((self node-seq) &optional env)
-  (make-load-form-saving-slots self :environment env))
+  (nodes (util:required 'nodes) :type node-list :read-only t))
 
 (defstruct (node-return (:include node))
   "A return statement, used for early returns in functions"
-  (expr (required 'expr) :type node :read-only t))
-
-(defmethod make-load-form ((self node-return) &optional env)
-  (make-load-form-saving-slots self :environment env))
+  (expr (util:required 'expr) :type node :read-only t))
 
 (defstruct (node-field (:include node))
   "Accessing a superclass on a typeclass dictionary"
-  (name (required 'field) :type symbol :read-only t)
-  (dict (required 'dict)  :type node   :read-only t))
-
-(defmethod make-load-form ((self node-field) &optional env)
-  (make-load-form-saving-slots self :environment env))
+  (name (util:required 'field) :type symbol :read-only t)
+  (dict (util:required 'dict)  :type node   :read-only t))
 
 (defstruct (node-dynamic-extent (:include node))
   "A single stack allocated binding"
-  (name (required 'name) :type symbol :read-only t)
-  (node (required 'node) :type node   :read-only t)
-  (body (required 'body) :type node   :read-only t))
-
-(defmethod make-load-form ((self node-dynamic-extent) &optional env)
-  (make-load-form-saving-slots self :environment env))
+  (name (util:required 'name) :type symbol :read-only t)
+  (node (util:required 'node) :type node   :read-only t)
+  (body (util:required 'body) :type node   :read-only t))
 
 (defstruct (node-bind (:include node))
   "A single non-recursive binding"
-  (name (required 'name) :type symbol :read-only t)
-  (expr (required 'expr) :type node   :read-only t)
-  (body (required 'body) :type node   :read-only t))
-
-(defmethod make-load-form ((self node-bind) &optional env)
-  (make-load-form-saving-slots self :environment env))
+  (name (util:required 'name) :type symbol :read-only t)
+  (expr (util:required 'expr) :type node   :read-only t)
+  (body (util:required 'body) :type node   :read-only t))
 
 ;;;
 ;;; Functions
@@ -286,7 +200,7 @@
 both CL namespaces appearing in NODE"
   (declare (type node node)
            (type boolean variable-namespace-only)
-           (values symbol-list &optional))
+           (values util:symbol-list &optional))
   (remove-duplicates (node-variables-g node :variable-namespace-only variable-namespace-only) :test #'equalp))
 
 (defun node-binding-sccs (bindings)
@@ -294,14 +208,14 @@ both CL namespaces appearing in NODE"
   (declare (type binding-list bindings))
   (let ((binding-names (mapcar #'car bindings)))
     (reverse
-     (tarjan-scc
+     (algo:tarjan-scc
       (loop :for (name . node) :in bindings
             :collect (cons name (intersection binding-names (node-variables node))))))))
 
 (defun node-free-p (node bound-variables)
   "Returns true if every variable in NODE is free with respect to BOUND-VARIABLES"
   (declare (type node node)
-           (type symbol-list bound-variables)
+           (type util:symbol-list bound-variables)
            (values boolean))
   (null (intersection (node-variables node) bound-variables)))
 
@@ -354,19 +268,23 @@ both CL namespaces appearing in NODE"
 ;;; Methods
 ;;;
 
+
+
+;;; TODO: this should use ncnoc and friends
+
 (defgeneric node-variables-g (node &key variable-namespace-only)
   (:method ((node node-literal) &key variable-namespace-only)
     (declare (ignore node variable-namespace-only)
-             (values symbol-list))
+             (values util:symbol-list))
     nil)
 
   (:method ((node node-variable) &key variable-namespace-only)
     (declare (ignore variable-namespace-only)
-             (values symbol-list &optional))
+             (values util:symbol-list &optional))
     (list (node-variable-value node)))
 
   (:method ((node node-application) &key variable-namespace-only)
-    (declare (values symbol-list &optional))
+    (declare (values util:symbol-list &optional))
     (append
      (node-variables-g (node-application-rator node) :variable-namespace-only variable-namespace-only)
      (mapcan
@@ -375,11 +293,11 @@ both CL namespaces appearing in NODE"
       (node-application-rands node))))
 
   (:method ((node node-abstraction) &key variable-namespace-only)
-    (declare (values symbol-list &optional))
+    (declare (values util:symbol-list &optional))
     (node-variables-g (node-abstraction-subexpr node) :variable-namespace-only variable-namespace-only))
 
   (:method ((node node-direct-application) &key variable-namespace-only)
-    (declare (values symbol-list &optional))
+    (declare (values util:symbol-list &optional))
     (if variable-namespace-only
         (mapcan
          (lambda (node)
@@ -392,7 +310,7 @@ both CL namespaces appearing in NODE"
                (node-direct-application-rands node)))))
 
   (:method ((node node-let) &key variable-namespace-only)
-    (declare (values symbol-list))
+    (declare (values util:symbol-list))
     (append
      (loop :for (name . node) :in (node-let-bindings node)
            :append (node-variables-g node :variable-namespace-only variable-namespace-only))
@@ -403,11 +321,11 @@ both CL namespaces appearing in NODE"
     (mapcar #'cdr (node-lisp-vars node)))
 
   (:method ((node match-branch) &key variable-namespace-only)
-    (declare (values symbol-list &optional))
+    (declare (values util:symbol-list &optional))
     (node-variables-g (match-branch-body node) :variable-namespace-only variable-namespace-only))
 
   (:method ((node node-match) &key variable-namespace-only)
-    (declare (values symbol-list &optional))
+    (declare (values util:symbol-list &optional))
     (append
      (node-variables-g (node-match-expr node) :variable-namespace-only variable-namespace-only)
      (mapcan
@@ -416,28 +334,28 @@ both CL namespaces appearing in NODE"
       (node-match-branches node))))
 
   (:method ((node node-seq) &key variable-namespace-only)
-    (declare (values symbol-list &optional))
+    (declare (values util:symbol-list &optional))
     (mapcan
      (lambda (node)
        (node-variables-g node :variable-namespace-only variable-namespace-only))
      (node-seq-nodes node)))
 
   (:method ((node node-return) &key variable-namespace-only)
-    (declare (values symbol-list &optional))
+    (declare (values util:symbol-list &optional))
     (node-variables-g (node-return-expr node) :variable-namespace-only variable-namespace-only))
 
   (:method ((node node-field) &key variable-namespace-only)
-    (declare (values symbol-list &optional))
+    (declare (values util:symbol-list &optional))
     (node-variables-g (node-field-dict node) :variable-namespace-only variable-namespace-only))
 
   (:method ((node node-dynamic-extent) &key variable-namespace-only)
-    (declare (values symbol-list &optional))
+    (declare (values util:symbol-list &optional))
     (append
      (node-variables-g (node-dynamic-extent-node node) :variable-namespace-only variable-namespace-only)
      (node-variables-g (node-dynamic-extent-body node) :variable-namespace-only variable-namespace-only)))
 
   (:method ((node node-bind) &key variable-namespace-only)
-    (declare (values symbol-list &optional))
+    (declare (values util:symbol-list &optional))
     (append
      (node-variables-g (node-bind-expr node) :variable-namespace-only variable-namespace-only)
      (node-variables-g (node-bind-body node) :variable-namespace-only variable-namespace-only))))

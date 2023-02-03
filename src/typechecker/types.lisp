@@ -64,6 +64,7 @@
    #:function-type-arity                ; FUNCTION
    #:function-type-arguments            ; FUNCTION
    #:function-return-type               ; FUNCTION
+   #:function-remove-arguments          ; FUNCTION
    #:type-variables                     ; FUNCTION
    #:*coalton-pretty-print-tyvars*      ; VARIABLE
    #:with-pprint-variable-scope         ; MACRO
@@ -321,6 +322,16 @@
     (if (function-type-p ty)
         (function-return-type (tapp-to ty))
         ty)))
+
+(defun function-remove-arguments (ty num)
+  (declare (type ty ty)
+           (type fixnum num))
+
+  (assert (>= num (length (function-type-arguments ty))))
+
+  (make-function-type*
+   (subseq (function-type-arguments ty) num)
+   (function-return-type ty)))
 
 (defgeneric type-variables (type)
   (:documentation "Get a list containing the type variables in TYPE.")

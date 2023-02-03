@@ -22,6 +22,7 @@
    #:qualified-ty-list                  ; TYPE
    #:remove-source-info                 ; FUNCTION
    #:static-predicate-p                 ; FUNCTION
+   #:type-predicate=                    ; FUNCTION
    #:qualify                            ; FUNCTION
    #:pprint-predicate                   ; FUNCTION
    ))
@@ -52,6 +53,10 @@
 (defun static-predicate-p (pred)
   "Is PRED a static predicate (no type variables)"
   (endp (type-variables (ty-predicate-types pred))))
+
+(defun type-predicate= (pred1 pred2)
+  (and (eq (ty-predicate-class pred1) (ty-predicate-class pred2))
+       (equalp (ty-predicate-types pred1) (ty-predicate-types pred2))))
 
 ;;;
 ;;; Qualified types

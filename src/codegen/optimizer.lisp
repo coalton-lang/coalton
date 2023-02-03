@@ -2,6 +2,7 @@
   (:use
    #:cl
    #:coalton-impl/util
+   #:coalton-impl/codegen/pattern
    #:coalton-impl/codegen/ast)
   (:import-from
    #:coalton-impl/codegen/typecheck-node
@@ -38,10 +39,9 @@
 
 (in-package #:coalton-impl/codegen/optimizer)
 
-(defun optimize-bindings (bindings package attr-table env)
+(defun optimize-bindings (bindings package env)
   (declare (type binding-list bindings)
            (type package package)
-           (type hash-table attr-table)
            (type tc:environment env)
            (values binding-list tc:environment))
 
@@ -69,7 +69,8 @@
 
       (setf bindings
             (loop :for (name . node) :in bindings
-                  :for attrs := (gethash name attr-table)
+                  ;; TODO: check for monomorphize attribute here
+                  :for attrs := nil
 
                   :for monomorphize := (find :monomorphize attrs)
 
@@ -399,7 +400,7 @@
            (type tc:environment env)
            (values node &optional))
   (labels ((handle-static-superclass (node &key bound-variables &allow-other-keys)
-             (declare (type symbol-list bound-variables))
+             (declare (type util:symbol-list bound-variables))
 
              (unless (or (node-variable-p (node-field-dict node))
                          (node-application-p (node-field-dict node))
@@ -513,7 +514,7 @@
              ;; pattern, then it can escape the match branches scope,
              ;; and thus cannot be safely stack allocated.
              (loop :for branch :in (node-match-branches node)
-                   :when (pattern-var-p (match-branch-pattern branch)) :do
+                   :when (typep (match-branch-pattern branch) 'pattern-var) :do
                      (return-from apply-lift nil))
 
              (let ((expr (node-match-expr node)))

@@ -113,7 +113,7 @@
            (type tc:environment env)
            (values list &optional))
 
-  (when (equalp pred ctx-pred)
+  (when (tc:type-predicate= pred ctx-pred)
     (return-from lookup-pred (list (make-node-variable
                                     :type (tc:make-function-type
                                            (pred-type sub-pred env)
@@ -135,7 +135,7 @@
   (let ((node (make-node-variable
                :type (pred-type ctx-pred env)
                :value ctx-name)))
-    (when (equalp pred ctx-pred)
+    (when (tc:type-predicate= pred ctx-pred)
       (return-from lookup-pred-base (list node)))
 
     (let ((superclass-ret (superclass-accessors pred ctx-pred env)))

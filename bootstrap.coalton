@@ -10,6 +10,14 @@
   (fromInt (Integer -> :a))
   (+ (:a -> :a -> :a)))
 
+
+(define-instance (Eq String)
+  (define (== x y)
+    False
+    #+broken
+    (lisp Boolean (x y)
+      (cl:string= x y))))
+
 (define-instance (Eq Integer)
   (define (== x y) (undefined "==")))
 
@@ -20,10 +28,10 @@
 (define-instance (Eq :a => Eq (List :a))
   (define (== x y) (undefined "==")))
 
-(define-instance (Eq U32)
+(define-instance (Eq coalton:U32)
   (define (== x y) (undefined "==")))
 
-(define-instance (Num U32)
+(define-instance (Num coalton:U32)
   (define (fromInt x) (undefined "fromInt"))
   (define (+ x y) (undefined "+")))
 

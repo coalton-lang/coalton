@@ -1,20 +1,12 @@
 (defpackage #:coalton-impl/reader
   (:use
-   #:cl
-   #:coalton-impl/parser/base
-   #:coalton-impl/parser/types
-   #:coalton-impl/parser/expression
-   #:coalton-impl/parser/parser)
-  (:shadowing-import-from
-   #:coalton-impl/parser/base
-   #:parse-error)
+   #:cl)
   (:local-nicknames
    (#:cst #:concrete-syntax-tree)
-   (#:util #:coalton-impl/util)))
+   (#:util #:coalton-impl/util)
+   (#:parser #:coalton-impl/parser)))
 
 (in-package #:coalton-impl/reader)
-
-;; TODO: Stop importing parser stuff directly!!!!
 
 (defun read-coalton-toplevel-open-paren (stream char)
   (labels ((try-read-string (expected-string)
@@ -46,11 +38,11 @@
                    (open (pathname stream)))
                   (t
                    stream)))
-              (file (make-coalton-file :stream file-input-stream :name filename))
+              (file (parser:make-coalton-file :stream file-input-stream :name filename))
 
               (program
                 (handler-case
-                    (read-program stream file :mode :toplevel-macro)
+                    (parser:read-program stream file :mode :toplevel-macro)
 
                   ;; We need some way of setting FILE-POSITION so that
                   ;; when Slime grabs the location of the error it
@@ -66,12 +58,12 @@
                   ;; This is a massive hack and might start breaking
                   ;; with future changes in SBCL.
                   #+sbcl
-                  (parse-error (c)
-                    (let* ((err (parse-error-err c))
+                  (parser:parse-error (c)
+                    (let* ((err (parser:parse-error-err c))
                            (file-offset
                              (- (sb-impl::fd-stream-get-file-position stream)
                                 (file-position stream)))
-                           (loc (coalton-error-location err)))
+                           (loc (parser:coalton-error-location err)))
                       (setf (sb-impl::fd-stream-misc stream)
                             (lambda (stream operation arg1)
                               (if (= (sb-impl::%stream-opcode :get-file-position) operation)
@@ -91,11 +83,11 @@
                    (open (pathname stream)))
                   (t
                    stream)))
-              (file (make-coalton-file :stream file-input-stream :name filename))
+              (file (parser:make-coalton-file :stream file-input-stream :name filename))
 
               (expression
                 (handler-case
-                    (read-expression stream file)
+                    (parser:read-expression stream file)
 
                   ;; We need some way of setting FILE-POSITION so that
                   ;; when Slime grabs the location of the error it
@@ -110,12 +102,12 @@
                   ;;
                   ;; This is a massive hack and might start breaking
                   ;; with future changes in SBCL.
-                  (parse-error (c)
-                    (let* ((err (parse-error-err c))
+                  (parser:parse-error (c)
+                    (let* ((err (parser:parse-error-err c))
                            (file-offset
                              (- (sb-impl::fd-stream-get-file-position stream)
                                 (file-position stream)))
-                           (loc (coalton-error-location err)))
+                           (loc (parser:coalton-error-location err)))
                       (setf (sb-impl::fd-stream-misc stream)
                             (lambda (stream operation arg1)
                               (if (= (sb-impl::%stream-opcode :get-file-position) operation)
