@@ -12,8 +12,7 @@
   (:local-nicknames
    (#:settings #:coalton-impl/settings)
    (#:rt #:coalton-impl/runtime)
-   (#:tc #:coalton-impl/typechecker)
-   (#:ast #:coalton-impl/ast))
+   (#:tc #:coalton-impl/typechecker))
   (:export
    #:codegen-expression))
 
@@ -75,26 +74,6 @@
             ,(codegen-expression (node-abstraction-subexpr expr) '@@local env)))
        arity)))
 
-  (:method ((expr node-bare-abstraction) current-function env)
-    (declare (type tc:environment env)
-             (type (or null symbol) current-function))
-    (let* ((var-names (node-bare-abstraction-vars expr))
-
-           (type-decs
-             (when settings:*emit-type-annotations*
-               (append
-                (loop :for name :in (node-bare-abstraction-vars expr)
-                      :for i :from 0
-                      :for arg-ty := (nth i (tc:function-type-arguments (node-type expr)))
-                      :collect `(type ,(tc:lisp-type arg-ty env) ,name))
-                (list `(values ,(tc:lisp-type (node-type (node-bare-abstraction-subexpr expr)) env) &optional))))))
-
-      `(lambda ,var-names
-         (declare ,@type-decs
-                  (ignorable ,@var-names))
-         (block @@local
-           ,(codegen-expression (node-bare-abstraction-subexpr expr) '@@local env)))))
-
   (:method ((expr node-let) current-function env)
     (declare (type tc:environment env)
              (type (or null symbol) current-function))
@@ -129,9 +108,11 @@
     (when (and (equalp (node-type (node-match-expr expr)) tc:*boolean-type*)
                (= 2 (length (node-match-branches expr)))
                (equalp (match-branch-pattern (first (node-match-branches expr)))
-                       (ast:make-pattern-constructor :name 'coalton:True :patterns nil))
+                       ;; TODO: Grab the symbols dynamically!!!
+                       (make-pattern-constructor :type tc:*boolean-type* :name 'coalton:True :patterns nil))
                (equalp (match-branch-pattern (second (node-match-branches expr)))
-                       (ast:make-pattern-constructor :name 'coalton:False :patterns nil)))
+                       ;; TODO: Same here
+                       (make-pattern-constructor :type tc:*boolean-type* :name 'coalton:False :patterns nil)))
       (return-from codegen-expression
         `(if ,(codegen-expression (node-match-expr expr) current-function env)
              ,(codegen-expression (match-branch-body (first (node-match-branches expr))) current-function env)
@@ -198,22 +179,22 @@
          (let ((arity (length (node-abstraction-vars (node-bind-expr expr)))))
            `(let ((,name))
               (declare (ignorable ,name))
-              (labels ((,name
-                           ,(node-abstraction-vars (node-bind-expr expr))
-                         (declare (ignorable ,@(node-abstraction-vars (node-bind-expr expr)))
-                                  ,@(argument-types (node-bind-expr expr) env)
-                                  (values ,(tc:lisp-type (tc:function-return-type (node-type (node-bind-expr expr))) env) &optional))
-                         ,(codegen-expression (node-abstraction-subexpr (node-bind-expr expr)) name env)))
+              (flet ((,name
+                         ,(node-abstraction-vars (node-bind-expr expr))
+                       (declare (ignorable ,@(node-abstraction-vars (node-bind-expr expr)))
+                                ,@(argument-types (node-bind-expr expr) env)
+                                (values ,(tc:lisp-type (tc:function-return-type (node-type (node-bind-expr expr))) env) &optional))
+                       ,(codegen-expression (node-abstraction-subexpr (node-bind-expr expr)) name env)))
                 (setf ,name ,(rt:construct-function-entry `#',name arity))
                 ,(codegen-expression (node-bind-body expr) current-function env)))))
 
         ((node-abstraction-p (node-bind-expr expr))
-         `(labels ((,name
-                       ,(node-abstraction-vars (node-bind-expr expr))
-                     (declare (ignorable ,@(node-abstraction-vars (node-bind-expr expr)))
-                              ,@(argument-types (node-bind-expr expr) env)
-                              (values ,(tc:lisp-type (tc:function-return-type (node-type (node-bind-expr expr))) env) &optional))
-                     ,(codegen-expression (node-abstraction-subexpr (node-bind-expr expr)) name env)))
+         `(flet ((,name
+                     ,(node-abstraction-vars (node-bind-expr expr))
+                   (declare (ignorable ,@(node-abstraction-vars (node-bind-expr expr)))
+                            ,@(argument-types (node-bind-expr expr) env)
+                            (values ,(tc:lisp-type (tc:function-return-type (node-type (node-bind-expr expr))) env) &optional))
+                   ,(codegen-expression (node-abstraction-subexpr (node-bind-expr expr)) name env)))
             ,(codegen-expression (node-bind-body expr) current-function env)))
 
         (t

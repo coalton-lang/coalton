@@ -81,14 +81,6 @@
      :vars (node-abstraction-vars node)
      :subexpr (apply-ast-substitution subs (node-abstraction-subexpr node))))
 
-  (:method (subs (node node-bare-abstraction))
-    (declare (type ast-substitution-list subs)
-             (values node))
-    (make-node-bare-abstraction
-     :type (node-type node)
-     :vars (node-bare-abstraction-vars node)
-     :subexpr (apply-ast-substitution subs (node-bare-abstraction-subexpr node))))
-
   (:method (subs (node node-let))
     (declare (type ast-substitution-list subs)
              (values node))
@@ -108,7 +100,6 @@
              (values match-branch))
     (make-match-branch
      :pattern (match-branch-pattern node)
-     :bindings (match-branch-bindings node)
      :body (apply-ast-substitution subs (match-branch-body node))))
 
   (:method (subs (node node-match))

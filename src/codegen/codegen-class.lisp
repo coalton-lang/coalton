@@ -72,7 +72,7 @@
         (declare #.settings:*coalton-optimize*)
         ,(if (null params)
              `(,method-accessor dict)
-             `(funcall (the (function ,(make-list (length params) :initial-element t)) (,method-accessor dict)) ,@params)))
+             `(rt:call-coalton-function (,method-accessor dict) ,@params)))
       ;; Generate the wrapper functions
       (global-lexical:define-global-lexical ,(car m) rt:function-entry)
       (setf ,(car m) ,(rt:construct-function-entry

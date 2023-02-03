@@ -81,19 +81,6 @@
                        (append (node-abstraction-vars node) bound-variables)))))
       (call-if node :abstraction funs bound-variables)))
 
-  (:method ((node node-bare-abstraction) funs bound-variables)
-    (declare (type symbol-list bound-variables))
-    (call-if node :before-bare-abstraction funs bound-variables)
-    (let ((node
-            (make-node-bare-abstraction
-             :type (node-type node)
-             :vars (node-bare-abstraction-vars node)
-             :subexpr (traverse
-                       (node-bare-abstraction-subexpr node)
-                       funs
-                       (append (node-bare-abstraction-vars node) bound-variables)))))
-      (call-if node :bare-abstraction funs bound-variables)))
-
   (:method ((node node-let) funs bound-variables)
     (declare (type symbol-list bound-variables))
     (call-if node :before-let funs bound-variables)
@@ -114,7 +101,6 @@
     (declare (type symbol-list bound-variables))
     (make-match-branch
      :pattern (match-branch-pattern node)
-     :bindings (match-branch-bindings node)
      :body (traverse
             (match-branch-body node)
             funs

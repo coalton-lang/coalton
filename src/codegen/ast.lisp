@@ -5,12 +5,27 @@
   (:local-nicknames
    (#:tc #:coalton-impl/typechecker))
   (:import-from
-   #:coalton-impl/ast
-   #:pattern)
-  (:import-from
    #:coalton-impl/algorithm
    #:tarjan-scc)
   (:export
+   #:pattern                            ; STRUCT
+   #:pattern-source                     ; ACCESSOR
+   #:pattern-list                       ; TYPE
+   #:pattern-var                        ; STRUCT
+   #:make-pattern-var                   ; ACCESSOR
+   #:pattern-var-name                   ; ACCESSOR
+   #:pattern-literal                    ; STRUCT
+   #:make-pattern-literal               ; CONSTRUCTOR
+   #:pattern-literal-value              ; ACCESSOR
+   #:pattern-wildcard                   ; STRUCT
+   #:make-pattern-wildcard              ; ACCESSOR
+   #:pattern-constructor                ; STRUCT
+   #:make-pattern-constructor           ; CONSTRUCTOR
+   #:pattern-constructor-name           ; ACCESSOR
+   #:pattern-constructor-patterns       ; ACCESSOR
+   #:parse-pattern                      ; FUNCTION
+   #:pattern-variables                  ; FUNCTION
+
    #:node                               ; STRUCT
    #:node-type                          ; ACCESSOR
    #:node-list                          ; TYPE
@@ -38,10 +53,6 @@
    #:node-abstraction-vars              ; ACCESSOR
    #:node-abstraction-subexpr           ; ACCESSOR
    #:node-abstraction-p                 ; FUNCTION
-   #:node-bare-abstraction              ; STRUCT
-   #:make-node-bare-abstraction         ; CONSTRUCTOR
-   #:node-bare-abstraction-vars         ; ACCESSOR
-   #:node-bare-abstraction-subexpr      ; ACCESSOR
    #:node-let                           ; STRUCT
    #:make-node-let                      ; CONSTRUCTOR
    #:node-let-p                         ; FUNCTION
@@ -96,6 +107,40 @@
 ;;;
 ;;; Compiler Backend IR
 ;;;
+
+;; TODO: We should replace all 'symbol' with 'parser:identifier'
+
+(defstruct (pattern
+            (:constructor nil)
+            (:copier nil))
+  (type (required 'type) :type tc:ty :read-only t))
+
+(defun pattern-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'pattern-p x)))
+
+(deftype pattern-list ()
+  '(satisfies pattern-list-p))
+
+(defstruct (pattern-var
+            (:include pattern)
+            (:copier nil))
+  (name (required 'name) :type symbol :read-only t))
+
+(defstruct (pattern-literal
+            (:include pattern)
+            (:copier nil))
+  (value (required 'value) :type literal-value :read-only t))
+
+(defstruct (pattern-wildcard
+            (:include pattern)
+            (:copier nil)))
+
+(defstruct (pattern-constructor
+            (:include pattern)
+            (:copier nil))
+  (name     (required 'name)     :type symbol       :read-only t)
+  (patterns (required 'patterns) :type pattern-list :read-only t))
 
 (defstruct (node (:constructor nil))
   (type (required 'type) :type tc:ty :read-only t))
@@ -153,17 +198,6 @@
 (defmethod make-load-form ((self node-abstraction) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-(defstruct (node-bare-abstraction (:include node))
-  "Lambda literals which do not need be wrapped in function-entries.
-This is used to speedup method calls. This can be done because
-although method calls are to an unknown function, they should always
-be a fully saturated call."
-  (vars    (required 'vars)    :type symbol-list :read-only t)
-  (subexpr (required 'subexpr) :type node        :read-only t))
-
-(defmethod make-load-form ((self node-bare-abstraction) &optional env)
-  (make-load-form-saving-slots self :environment env))
-
 (defstruct (node-let (:include node))
   "Introduction of local mutually-recursive bindings (let ((x 2)) (+ x x))"
   (bindings (required 'bindings) :type binding-list :read-only t)
@@ -183,7 +217,6 @@ be a fully saturated call."
 (defstruct match-branch
   "A branch of a match statement"
   (pattern  (required 'pattern)  :type pattern            :read-only t)
-  (bindings (required 'bindings) :type tc:ty-binding-list :read-only t)
   (body     (required 'body)     :type node               :read-only t))
 
 (defmethod make-load-form ((self match-branch) &optional env)
@@ -345,10 +378,6 @@ both CL namespaces appearing in NODE"
     (declare (values symbol-list &optional))
     (node-variables-g (node-abstraction-subexpr node) :variable-namespace-only variable-namespace-only))
 
-  (:method ((node node-bare-abstraction) &key variable-namespace-only)
-    (declare (values symbol-list &optional))
-    (node-variables-g (node-bare-abstraction-subexpr node) :variable-namespace-only variable-namespace-only))
-
   (:method ((node node-direct-application) &key variable-namespace-only)
     (declare (values symbol-list &optional))
     (if variable-namespace-only
@@ -448,12 +477,6 @@ both CL namespaces appearing in NODE"
    :vars (node-abstraction-vars node)
    :subexpr (tc:apply-substitution subs (node-abstraction-subexpr node))))
 
-(defmethod tc:apply-substitution (subs (node node-bare-abstraction))
-  (make-node-bare-abstraction
-   :type (tc:apply-substitution subs (node-type node))
-   :vars (node-bare-abstraction-vars node)
-   :subexpr (tc:apply-substitution subs (node-bare-abstraction-subexpr node))))
-
 (defmethod tc:apply-substitution (subs (node node-let))
   (make-node-let
    :type (tc:apply-substitution subs (node-type node))
@@ -470,8 +493,6 @@ both CL namespaces appearing in NODE"
 (defmethod tc:apply-substitution (subs (node match-branch))
   (make-match-branch
    :pattern (match-branch-pattern node)
-   :bindings (loop :for (name . ty) :in (match-branch-bindings node)
-                   :collect (cons name (tc:apply-substitution subs ty)))
    :body (tc:apply-substitution subs (match-branch-body node))))
 
 (defmethod tc:apply-substitution (subs (node node-match))

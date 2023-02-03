@@ -4,14 +4,14 @@
    #:coalton-impl/util
    #:coalton-impl/codegen/ast)
   (:import-from
-   #:coalton-impl/codegen/compile-expression
-   #:compile-toplevel)
+   #:coalton-impl/codegen/translate-expression
+   #:translate-toplevel)
+  (:import-from
+   #:coalton-impl/codegen/translate-instance
+   #:translate-instance)
   (:import-from
    #:coalton-impl/codegen/codegen-class
    #:codegen-class-definitions)
-  (:import-from
-   #:coalton-impl/codegen/compile-instance
-   #:compile-instance)
   (:import-from
    #:coalton-impl/codegen/codegen-expression
    #:codegen-expression)
@@ -44,16 +44,44 @@
 
          (definitions
            (append
-            (loop :for (name . node) :in (tc:translation-unit-definitions translation-unit)
-                  :for compiled-node := (compile-toplevel (tc:fresh-inst (tc:lookup-value-type env name)) node env)
+            (loop :for define :in (tc:translation-unit-definitions translation-unit)
+                  :for name := (tc:node-variable-name (tc:toplevel-define-name define))
+
+                  ;; TODO: This should probably happen in the typechecker.
+                  :for node
+                    := (cond
+                         ((tc:toplevel-define-vars define)
+                          (tc:make-node-abstraction
+                           :type (tc:qualify
+                                  nil
+                                  (tc:make-function-type*
+                                   (mapcar (lambda (var)
+                                             ;; TODO: lol
+                                             (tc:qualified-ty-type (tc:node-type var)))
+                                           (tc:toplevel-define-vars define))
+                                   ;; TODO????
+                                   (tc:qualified-ty-type (tc:node-type (tc:node-body-last-node (tc:toplevel-define-body define))))))
+                           :source (tc:toplevel-define-source define)
+                           :vars (tc:toplevel-define-vars define)
+                           :body (tc:toplevel-define-body define)))
+
+                         (t
+                          (tc:make-node-progn
+                           :type (tc:node-type (tc:node-body-last-node (tc:toplevel-define-body define)))
+                           :source (tc:toplevel-define-source define)
+                           :body (tc:toplevel-define-body define))))
+
+                  :for compiled-node := (translate-toplevel (tc:fresh-inst (tc:lookup-value-type env name)) node env)
                   :do (when settings:*coalton-dump-ast*
                         (format t "~A :: ~A~%~A~%~%~%"
                                 name
                                 (tc:lookup-value-type env name)
                                 node))
                   :collect (cons name compiled-node))
+            ;; TODO: Add instance compilation
+            #+broken
             (loop :for instance :in (tc:translation-unit-instances translation-unit)
-                  :append (compile-instance instance add-inline env))))
+                  :append (translate-instance instance add-inline env))))
 
          (definition-names
            (mapcar #'car definitions)))
@@ -67,44 +95,44 @@
 
       (let ((sccs (node-binding-sccs definitions)))
 
-            (values
-              `(progn
-                 ,@(loop :for name :in inline-funs
-                         :collect `(declaim (inline ,name)))
+        (values
+         `(progn
+            ,@(loop :for name :in inline-funs
+                    :collect `(declaim (inline ,name)))
 
-                 ,@(when (tc:translation-unit-types translation-unit)
-                     (list
-                      `(eval-when (:compile-toplevel :load-toplevel :execute)
-                         ,@(loop :for type :in (tc:translation-unit-types translation-unit)
-                                 :append (codegen-type-definition type env)))))
+            ,@(when (tc:translation-unit-types translation-unit)
+                (list
+                 `(eval-when (:compile-toplevel :load-toplevel :execute)
+                    ,@(loop :for type :in (tc:translation-unit-types translation-unit)
+                            :append (codegen-type-definition type env)))))
 
-                 ,@(when (tc:translation-unit-classes translation-unit)
-                     (list
-                      `(eval-when (:compile-toplevel :load-toplevel :execute)
-                         ,@(codegen-class-definitions
-                            (tc:translation-unit-classes translation-unit)
-                            env))))
+            ,@(when (tc:translation-unit-classes translation-unit)
+                (list
+                 `(eval-when (:compile-toplevel :load-toplevel :execute)
+                    ,@(codegen-class-definitions
+                       (tc:translation-unit-classes translation-unit)
+                       env))))
 
-                 #+sbcl
-                 ,@(when (eq sb-ext:*block-compile-default* :specified)
-                     (list
-                      `(declaim (sb-ext:start-block ,@definition-names))))
+            #+sbcl
+            ,@(when (eq sb-ext:*block-compile-default* :specified)
+                (list
+                 `(declaim (sb-ext:start-block ,@definition-names))))
 
-                 ,@(loop :for scc :in sccs
-                         :for bindings
-                           := (remove-if-not
-                               (lambda (binding)
-                                 (find (car binding) scc))
-                               definitions)
-                         :append (compile-scc bindings env))
+            ,@(loop :for scc :in sccs
+                    :for bindings
+                      := (remove-if-not
+                          (lambda (binding)
+                            (find (car binding) scc))
+                          definitions)
+                    :append (compile-scc bindings env))
 
-                 #+sbcl
-                 ,@(when (eq sb-ext:*block-compile-default* :specified)
-                     (list
-                      `(declaim (sb-ext:end-block))))
+            #+sbcl
+            ,@(when (eq sb-ext:*block-compile-default* :specified)
+                (list
+                 `(declaim (sb-ext:end-block))))
 
-                 (values))
-              env)))))
+            (values))
+         env)))))
 
 (defun compile-function (name node env)
   (declare (type symbol name)

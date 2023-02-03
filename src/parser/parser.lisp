@@ -95,8 +95,9 @@
    #:program-defines                    ; ACCESSOR
    #:program-classes                    ; ACCESSOR
    #:program-instances                  ; ACCESSOR
-   #:parse-file                         ; FUNCTION
    #:parse-toplevel-form                ; FUNCTION
+   #:read-program                       ; FUNCTION
+   #:read-expression                    ; FUNCTION
    ))
 
 (in-package #:coalton-impl/parser/parser)
@@ -333,39 +334,58 @@
 (defpackage #:coalton-impl/parser/read
   (:use))
 
-(defun parse-file (filename)
-  (let* ((file-stream (open filename :if-does-not-exist :error))
+;; TODO: Replace EOF error with coalton error boi
+(defun read-program (stream file &key (mode (error "you must supply this bozo!")))
+  "Read a PROGRAM from the COALTON-FILE."
+  (declare (type coalton-file file)
+           (type (member :file :toplevel-macro :test) mode)
+           (values program))
 
-         ;; Setup eclector readtable
+  (let* (;; Setup eclector readtable
          (eclector.readtable:*readtable*
            (eclector.readtable:copy-readtable eclector.readtable:*readtable*))
 
          ;; Initial package to read (package) forms into
-         (*package* (find-package "COALTON-IMPL/PARSER/READ"))
+         (*package* *package*)
 
          ;; Read unspecified floats as double floats
-         (*read-default-float-format* 'double-float)
+         (*read-default-float-format* 'double-float))
 
-         ;; Read the (package) form
-         (package-form (eclector.concrete-syntax-tree:read file-stream nil 'eof)))
+    ;; Parse package form
+    (when (eq :file mode)
+      (setf *package* (find-package "COALTON-IMPL/PARSER/READ"))
 
-    (when (eq package-form 'eof)
-      (error "unexpected end of file"))
+      ;; Read the (package) form
+      (let ((package-form (eclector.concrete-syntax-tree:read stream nil 'eof)))
 
-    (let* ((file (make-coalton-file :stream file-stream :name (namestring (pathname file-stream))))
+        (when (eq package-form 'eof)
+          (error "unexpected end of file"))
 
-           (*package* (parse-package package-form file))
+        (setf *package* (parse-package package-form file))))
 
-           (program (make-program :package *package* :file file))
+    ;; imma parsin mah program
+    (let* ((program (make-program :package *package* :file file))
 
            (attributes (make-array 0 :adjustable t :fill-pointer t)))
 
       (loop :named parse-loop
             :with elem := nil
-            :do (setf elem (eclector.concrete-syntax-tree:read file-stream nil 'eof))
+
+            ;; Escape on close paren when inside toplevel macro
+            ;; mode. This is the close paren telling us to stop
+            ;; reading.
+            :when (and (eq :toplevel-macro mode)
+                       (eql #\) (peek-char t stream)))
+              :do (read-char stream)
+                  (return-from parse-loop)
+
+
+            :do (setf elem (eclector.concrete-syntax-tree:read stream nil 'eof))
 
             :when (eq elem 'eof)
-              :do (return-from parse-loop)
+              :do (if (eq :toplevel-macro mode)
+                      (error "unexpected EOF")
+                      (return-from parse-loop))
 
             :do (when (and (parse-toplevel-form elem program attributes file)
                            (plusp (length attributes)))
@@ -386,6 +406,33 @@ consume all attributes")))
       (setf (program-classes program) (nreverse (program-classes program)))
 
       program)))
+
+(defun read-expression (stream file)
+  (let* (;; Setup eclector readtable
+         (eclector.readtable:*readtable*
+           (eclector.readtable:copy-readtable eclector.readtable:*readtable*))
+
+         ;; Read unspecified floats as double floats
+         (*read-default-float-format* 'double-float))
+    (let* ((forms
+             (loop :named parse-loop
+                   :with forms := nil
+                   :with elem := nil
+
+                   :when (eql #\) (peek-char t stream))
+                     :do (read-char stream)
+                         (return-from parse-loop (nreverse forms))
+
+                   :do (setf elem (eclector.concrete-syntax-tree:read stream nil 'eof))
+
+                   :when (eq elem 'eof)
+                     :do (error "unexpected EOF")
+
+                   :do (push elem forms)))
+           (form (cst:cstify forms :source (cons (car (cst:source (first forms)))
+                                                 (cdr (cst:source (car (last forms))))))))
+
+      (parse-expression form file))))
 
 (defun parse-package (form file)
   "Parses a coalton package decleration in the form of (package {name})"
@@ -462,7 +509,7 @@ consume all attributes")))
                  :message "Malformed toplevel form"
                  :primary-note "unexpected list")))
 
-  
+
 
   (case (cst:raw (cst:first form))
     ((coalton:monomorphize)

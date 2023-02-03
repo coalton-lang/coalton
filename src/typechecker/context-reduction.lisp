@@ -76,7 +76,7 @@ Returns (PREDS FOUNDP)"
            (values boolean))
   (let* ((super (mapcan (lambda (p) (by-super env p)) preds))
         (value
-          (or (true (member pred super :test #'predicate=))
+          (or (true (member pred super :test #'type-predicate=))
               (true (multiple-value-bind (inst-preds found)
                         (by-inst env pred)
                       (and found
@@ -89,7 +89,7 @@ Returns (PREDS FOUNDP)"
            (type ty-predicate-list preds)
            (type ty-predicate pred)
            (values boolean &optional))
-  (true (member pred (mapcan (lambda (p) (by-super env p)) preds) :test #'predicate=)))
+  (true (member pred (mapcan (lambda (p) (by-super env p)) preds) :test #'type-predicate=)))
 
 (defun simplify-context (f preds)
   "Simplify PREDS to head-normal form"

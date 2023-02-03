@@ -2,20 +2,19 @@
   (:use
    #:cl)
   (:local-nicknames
+   (#:settings #:coalton-impl/settings)
    (#:parser #:coalton-impl/parser)
-   (#:tc #:coalton-impl/typechecker)))
+   (#:tc #:coalton-impl/typechecker)
+   (#:codegen #:coalton-impl/codegen)))
 
 (in-package #:coalton-impl/entry)
 
-(defparameter *global-environment* (tc:make-default-environment))
+(defvar *global-environment* (tc:make-default-environment))
 
-(defun entry-point (filename)
-  (declare (type string filename)
-           (values))
+(defun entry-point (program)
+  (declare (type parser:program program))
 
-  (let* ((program (parser:parse-file filename))
-
-         (*package* (parser:program-package program))
+  (let* ((*package* (parser:program-package program))
 
          (program (parser:rename-variables program))
 
@@ -25,24 +24,58 @@
 
     (multiple-value-bind (type-definitions env)
         (tc:toplevel-define-type (parser:program-types program) file env)
-      (declare (ignore type-definitions))
 
       (multiple-value-bind (class-definitions env)
           (tc:toplevel-define-class (parser:program-classes program)
-                                 file
-                                 env)
-        (declare (ignore class-definitions))
+                                    file
+                                    env)
 
         (setf env (tc:toplevel-define-instance (parser:program-instances program) env file))
 
-        (setf env (tc:toplevel-define (parser:program-defines program)
-                                      (parser:program-declares program)
-                                      file
-                                      env))
+        (multiple-value-bind (toplevel-definitions env)
+            (tc:toplevel-define (parser:program-defines program)
+                                (parser:program-declares program)
+                                file
+                                env)
 
-        (setf *global-environment* env)
+          (let ((translation-unit
+                  (tc:make-translation-unit
+                   :types type-definitions
+                   :definitions toplevel-definitions
+                   :classes class-definitions
+                   :attr-table (make-hash-table) ;; TODO
+                   :package *package*
+                   :specializations nil ;; TODO
+                   )))
 
-        (values)))))
+            (multiple-value-bind (program env)
+                (codegen:compile-translation-unit translation-unit env)
+
+              (values
+               (if settings:*coalton-skip-update*
+                   program
+                   `(progn
+                      (eval-when (:load-toplevel)
+                        (unless (eq (settings:coalton-release-p) ,(settings:coalton-release-p))
+                          ,(if (settings:coalton-release-p)
+                               `(error "~A was compiled in release mode but loaded in development." ,(or *compile-file-pathname* *load-truename*))
+                               `(error "~A was compiled in development mode but loaded in release." ,(or *compile-file-pathname* *load-truename*)))))
+                      #+ignore
+                      ,(coalton-impl/typechecker::generate-diff
+                        translation-unit
+                        env
+                        '*global-environment*)
+                      ,program))
+               env))))))))
+
+(defun file-entry-point (filename)
+  (declare (type string filename))
+
+  (with-open-file (file-stream filename :if-does-not-exist :error)
+    (let ((coalton-file (parser:make-coalton-file
+                         :stream file-stream
+                         :name filename)))
+      (entry-point (parser:read-program file-stream coalton-file :mode :file)))))
 
 ;; TODO: remove this
 ;; Temporary hack to define Num so that integer literals can be
@@ -58,5 +91,7 @@
    #:append
    #:Eq #:==))
 
-(entry-point "../pre-bootstrap.coalton")
-(entry-point "../bootstrap.coalton")
+#+ignroe
+(eval (file-entry-point "../pre-bootstrap.coalton"))
+#+ignroe
+(eval (file-entry-point "../bootstrap.coalton"))

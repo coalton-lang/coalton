@@ -1,0 +1,3 @@
+(package coalton)
+
+(define-type U32)

@@ -18,6 +18,19 @@
    (#:tc #:coalton-impl/typechecker/stage-1))
   (:export
    #:toplevel-define-type               ; FUNCTION
+
+   #:type-definition                    ; STRUCT
+   #:make-type-definition               ; CONSTRUCTOR
+   #:type-definition-name               ; ACCESSOR
+   #:type-definition-type               ; ACCESSOR
+   #:type-definition-runtime-type       ; ACCESSOR
+   #:type-definition-explicit-repr      ; ACCESSOR
+   #:type-definition-enum-repr          ; ACCESSOR
+   #:type-definition-newtype            ; ACCESSOR
+   #:type-definition-constructors       ; ACCESSOR
+   #:type-definition-constructor-types  ; ACCESSOR
+   #:type-definition-docstring          ; ACCESSOR
+   #:type-definition-list               ; TYPE
    ))
 
 (in-package #:coalton-impl/typechecker/define-type)

@@ -72,7 +72,7 @@
                              (:file "lisp-type")
                              (:file "context-reduction")
                              (:file "stage-1")
-                             (:file "node")
+                             (:file "ast")
                              (:file "partial-type-env")
                              (:file "parse-type")
                              (:file "define-type")
@@ -80,6 +80,7 @@
                              (:file "tc-env")
                              (:file "define")
                              (:file "define-instance")
+                             (:file "translation-unit")
                              (:file "package")))
                #+broken
                (:module "analysis"
@@ -87,7 +88,6 @@
                 :components ((:file "pattern-exhaustiveness")
                              (:file "package")))
 
-               #+broken
                (:module "codegen"
                 :serial t
                 :components ((:file "ast")
@@ -96,8 +96,8 @@
                              (:file "typecheck-node")
                              (:file "hoister")
                              (:file "transformations")
-                             (:file "compile-expression")
-                             (:file "compile-instance")
+                             (:file "translate-expression")
+                             (:file "translate-instance")
                              (:file "struct-or-class")
                              (:file "codegen-pattern")
                              (:file "codegen-type-definition")
@@ -123,6 +123,7 @@
                (:file "unlock-package" :if-feature :sb-package-locks)
                #+broken
                (:file "coalton")
+               (:file "entry")
                (:file "reader")
                #+broken
                (:file "debug")
@@ -131,8 +132,7 @@
                #+broken
                (:file "language-macros")
                #+broken
-               (:file "lock-package" :if-feature :sb-package-locks)
-               (:file "entry")))
+               (:file "lock-package" :if-feature :sb-package-locks)))
 
 (asdf:defsystem #:coalton/library
   :description "The Coalton standard library."

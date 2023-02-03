@@ -156,7 +156,7 @@
            (type tc:environment env))
 
   (let ((reduced-preds (tc:reduce-context env preds nil)))
-    (unless (null (set-exclusive-or preds reduced-preds :test #'tc:predicate=))
+    (unless (null (set-exclusive-or preds reduced-preds :test #'tc:type-predicate=))
       (error 'tc-error
              :err (coalton-error
                    :span (parser:qualified-ty-source qual-ty)
