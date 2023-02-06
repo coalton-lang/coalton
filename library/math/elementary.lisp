@@ -220,40 +220,16 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
          (cond
            ((or (nan? x) (nan? y)) nan)
            ((and (== x 0) (== y 0)) nan)
-           ((< x 0) nan)
-
-           ;; Allegro signals overflow and underflow errors when using infinity in exponents
-           #+allegro
-           ((or (== x infinity)
-                (== y infinity))
-            infinity)
-           #+allegro
-           ((or (== x (negate infinity))
-                (== y (negate infinity)))
-            (negate infinity))
-
+           ((and (< x 0) (< y 1)) nan)
            (True
             (lisp ,coalton-type (x y)
               (ff:with-float-traps-masked cl:t
                 (cl:expt x y))))))
 
        (define (exp x)
-         (cond
-           ;; Allegro signals overflow and underflow errors when using infinity in exponents
-           #+allegro
-           ((== x infinity)
-            infinity)
-           #+allegro
-           ((== x (negate infinity))
-            (negate infinity))
-
-           (True
-            (lisp ,coalton-type (x)
-              (ff:with-float-traps-masked cl:t
-                (cl:let ((res (cl:exp x)))
-                  (cl:if (cl:complexp res)
-                         (cl:realpart res)
-                         res)))))))
+         (lisp ,coalton-type (x)
+           (ff:with-float-traps-masked cl:t
+             (cl:exp x))))
 
        (define (log b x)
          (cond

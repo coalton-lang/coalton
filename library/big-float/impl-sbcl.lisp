@@ -280,11 +280,8 @@
       (lisp Big-Float (x)
         (cl:values (sb-mpfr:exp x))))
     (define (pow x n)
-      (cond
-        ((< x 0) nan)
-        (True
-         (lisp Big-Float (x n)
-           (cl:values (sb-mpfr:power x n))))))
+      (lisp Big-Float (x n)
+        (cl:values (sb-mpfr:power x n))))
     (define (log n x)
       (cond
         ((<= n 0) nan)

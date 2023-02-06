@@ -3,9 +3,6 @@
    #:coalton
    #:coalton-library/builtin
    #:coalton-library/classes)
-  (:import-from
-   #:coalton-library/hash
-   #:define-sxhash-hasher)
   (:export
    #:concat
    #:reverse

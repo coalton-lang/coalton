@@ -2,7 +2,6 @@
   (:use
    :coalton
    :coalton-library/classes
-   #:coalton-library/hash
    :coalton-library/tuple
    :coalton-library/functions)
   (:local-nicknames (#:iter :coalton-library/iterator)

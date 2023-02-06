@@ -109,6 +109,12 @@
           (lisp types:LispType () 'cl:fixnum)))
   (is (== (slice:element-type
            (slice:new 0 1
+                      (the (Vector UFix)
+                           (into (the (List UFix)
+                                      (make-list 97))))))
+          (lisp types:LispType () '(cl:unsigned-byte 62))))
+  (is (== (slice:element-type
+           (slice:new 0 1
                       (the (Vector String)
                            (into (the (List String)
                                       (make-list "a"))))))

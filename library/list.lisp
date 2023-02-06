@@ -3,7 +3,6 @@
    #:coalton
    #:coalton-library/builtin
    #:coalton-library/classes
-   #:coalton-library/hash
    #:coalton-library/functions
    #:coalton-library/tuple
    #:coalton-library/optional)
@@ -371,10 +370,10 @@
     "Builds a new list by calling F with elements of XS and YS."
     (let ((rec
             (fn (xs ys acc)
-              (match (Tuple xs ys)
-                ((Tuple (Cons x xs) (Cons y ys))
-                 (rec xs ys (Cons (f x y) acc)))
-                (_ acc)))))
+               (match (Tuple xs ys)
+                 ((Tuple (Cons x xs) (Cons y ys))
+                  (rec xs ys (Cons (f x y) acc)))
+                 (_ acc)))))
       (%reverse! (rec xs ys nil))))
 
   (declare zipWith3 ((:a -> :b -> :c -> :d) -> (List :a) -> (List :b) -> (List :c) -> (List :d)))
@@ -382,10 +381,10 @@
     "Build a new list by calling F with elements of XS, YS and ZS"
     (let ((rec
             (fn (xs ys zs acc)
-              (match (Tuple3 xs ys zs)
-                ((Tuple3 (Cons x xs) (Cons y ys) (Cons z zs))
-                 (rec xs ys zs (Cons (f x y z) acc)))
-                (_ acc)))))
+               (match (Tuple3 xs ys zs)
+                 ((Tuple3 (Cons x xs) (Cons y ys) (Cons z zs))
+                  (rec xs ys zs (Cons (f x y z) acc)))
+                 (_ acc)))))
       (%reverse! (rec xs ys zs nil))))
 
   (declare zipWith4 ((:a -> :b -> :c -> :d -> :e) -> (List :a) -> (List :b) -> (List :c) -> (List :d) -> (List :e)))
@@ -393,10 +392,10 @@
     "Build a new list by calling F with elements of AS, BS, CS and DS"
     (let ((rec
             (fn (as bs cs ds acc)
-              (match (Tuple4 as bs cs ds)
-                ((Tuple4 (Cons a as) (Cons b bs) (Cons c cs) (Cons d ds))
-                 (rec as bs cs ds (Cons (f a b c d) acc)))
-                (_ acc)))))
+               (match (Tuple4 as bs cs ds)
+                 ((Tuple4 (Cons a as) (Cons b bs) (Cons c cs) (Cons d ds))
+                  (rec as bs cs ds (Cons (f a b c d) acc)))
+                 (_ acc)))))
       (%reverse! (rec as bs cs ds nil))))
 
   (declare zipWith5 ((:a -> :b -> :c -> :d -> :e -> :f) -> (List :a) -> (List :b) -> (List :c) -> (List :d) -> (List :e) -> (List :f)))
@@ -404,10 +403,10 @@
     "Build a new list by calling F with elements of AS, BS, CS, DS and ES"
     (let ((rec
             (fn (as bs cs ds es acc)
-              (match (Tuple5 as bs cs ds es)
-                ((Tuple5 (Cons a as) (Cons b bs) (Cons c cs) (Cons d ds) (Cons e es))
-                 (rec as bs cs ds es (Cons (f a b c d e) acc)))
-                (_ acc)))))
+               (match (Tuple5 as bs cs ds es)
+                 ((Tuple5 (Cons a as) (Cons b bs) (Cons c cs) (Cons d ds) (Cons e es))
+                  (rec as bs cs ds es (Cons (f a b c d e) acc)))
+                 (_ acc)))))
       (%reverse! (rec as bs cs ds es nil))))
 
   (declare zip ((List :a) -> (List :b) -> (List (Tuple :a :b))))
@@ -620,7 +619,8 @@ This function is equivalent to all size-N elements of `(COMBS L)`."
                   ((Nil) Nil)
                   ((Cons x xs) (append
                                 (map (Cons x) (combsOf (- n 1) xs)) ; combs with X
-                                (combsOf n xs))))))) ; and without x
+                                (combsOf n xs)))))))                ; and without x
+
 
   ;;
   ;; List instances
@@ -661,7 +661,7 @@ This function is equivalent to all size-N elements of `(COMBS L)`."
     (define (hash lst)
       (fold (fn (so-far elt)
               (combine-hashes so-far (hash elt)))
-            mempty
+            (fromInt 0)
             lst)))
 
   (define-instance (Semigroup (List :a))

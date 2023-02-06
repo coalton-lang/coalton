@@ -127,7 +127,6 @@
                (:file "types")
                (:file "fixed-size-numbers")
                (:file "classes")
-               (:file "hash")
                (:file "builtin")
                (:file "functions")
                (:file "boolean")
@@ -270,6 +269,7 @@
                #:coalton/library/big-float
                #:coalton/testing
                #:fiasco
+               #:coalton-json/tests
                #:quil-coalton/tests
                #:thih-coalton/tests)
   :perform (asdf:test-op (o s)

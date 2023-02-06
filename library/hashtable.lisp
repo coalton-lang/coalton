@@ -2,8 +2,7 @@
   (:use
    #:coalton
    #:coalton-library/builtin
-   #:coalton-library/classes
-   #:coalton-library/hash)
+   #:coalton-library/classes)
   (:local-nicknames
    (#:cell #:coalton-library/cell)
    (#:addr #:coalton-library/addressable))
@@ -37,7 +36,7 @@
 
   (declare %get-hash-test-funcs
            ((Hash :key) => Unit -> (Tuple (:key -> :key -> Boolean)
-                                          (:key -> Hash))))
+                                          (:key -> UFix))))
   (define (%get-hash-test-funcs _)
     "Construct closures over the `Hash' instance for KEY"
     (Tuple == hash))
@@ -45,7 +44,7 @@
   (declare %make-hashtable
            ((Hash :key) =>
             (:key -> :key -> Boolean)
-            -> (:key -> Hash)
+            -> (:key -> UFix)
             -> Integer
             -> (Hashtable :key :value)))
   (define (%make-hashtable test hash_ cap)

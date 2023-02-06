@@ -58,7 +58,7 @@
          l
          (fn (x) (+ 1 (math:tan x)))
          (fn (x)
-           (+ (+ (math:^ (math:sin x) 2) (math:^ (math:cos x) 2))
+           (+ (+ (math:pow (math:sin x) 2) (math:pow (math:cos x) 2))
               (/ (math:sin x) (math:cos x))))))
 
     ;; Inverse Trig
@@ -70,7 +70,7 @@
     (is (test-identity
          l
          (fn (x) (math:asin x))
-         (fn (x) (* 2 (math:atan (/ x (+ 1 (math:sqrt (- 1 (math:^ x 2))))))))))
+         (fn (x) (* 2 (math:atan (/ x (+ 1 (math:sqrt (- 1 (math:pow x 2))))))))))
 
     ;; Logarithm and Exponential
     (is (test-identity
@@ -108,11 +108,10 @@
             ;; 2^-48 is the worst a double-float will compare to a coerced fraction.
             (math:^^ 2 -48)))))
 
-(cl:eval-when (:compile-toplevel :load-toplevel :execute)
-  (cl:defmacro double-check (f)
-    "Syntatic sugar for defining big-float  checks against double-floats"
-    `(map (fn (x) (check-against-double (,f (fst x)) (fn () (,f (snd x)))))
-          (zipWith Tuple float-checklist float-checklist))))
+(cl:defmacro double-check (f)
+  "Syntatic sugar for defining big-float  checks against double-floats"
+  `(map (fn (x) (check-against-double (,f (fst x)) (fn () (,f (snd x)))))
+        (zipWith Tuple float-checklist float-checklist)))
 
 (define-test float-double-to-big ()
   (double-check (fn (x) x))
@@ -129,9 +128,7 @@
                          (min (math:reciprocal (abs x)) (abs x))))))
   (double-check
    (fn (x) (math:acos (* (math:sign x)
-                         (min (math:reciprocal (abs x)) (abs x))))))
-
-  Unit)
+                         (min (math:reciprocal (abs x)) (abs x)))))))
 
 (coalton-toplevel
   (define (test-constant a b)
@@ -139,8 +136,7 @@
     (is (<= (abs (- (math:to-fraction
                      (the big-float:Big-Float
                           (big-float:with-precision-rounding 208 big-float:rndn a)))
-                    (/ b (^ 10 63))))
-            (^^ 2 -207)))))
+                    (/ b (^ 10 63)))) (^^ 2 -207)))))
 
 (define-test float-constants ()
   (test-constant

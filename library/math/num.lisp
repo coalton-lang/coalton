@@ -10,9 +10,6 @@
    #:coalton-library/functions
    #:coalton-library/utils
    #:coalton-library/math/arith)
-  (:import-from
-   #:coalton-library/hash
-   #:define-sxhash-hasher)
   (:local-nicknames
    (#:bits #:coalton-library/bits)))
 
@@ -244,39 +241,13 @@
 
      (define-instance (Reciprocable ,coalton-type)
        (define (/ x y)
-         (cond
-           #+allegro
-           ((or (nan? x)
-                (nan? y))
-            nan)
-
-           #+allegro
-           ((and (== x 0) (== y 0))
-            nan)
-
-           #+allegro
-           ((and (positive? x) (== y 0))
-            infinity)
-
-           #+allegro
-           ((and (negative? x) (== y 0))
-            negative-infinity)
-
-           (True
-            (lisp ,coalton-type (x y)
-              (float-features:with-float-traps-masked cl:t
-                (cl:/ x y))))))
-
+         (lisp ,coalton-type (x y)
+           (float-features:with-float-traps-masked cl:t
+             (cl:/ x y))))
        (define (reciprocal x)
-         (cond
-           #+allegro
-           ((== x 0)
-            infinity)
-
-           (True
-            (lisp ,coalton-type (x)
-              (float-features:with-float-traps-masked cl:t
-                (cl:/ x)))))))
+         (lisp ,coalton-type (x)
+           (float-features:with-float-traps-masked cl:t
+             (cl:/ x)))))
 
      (define-instance (Dividable Integer ,coalton-type)
        (define (general/ x y)

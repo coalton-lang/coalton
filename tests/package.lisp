@@ -31,6 +31,7 @@
   (:local-nicknames
    (#:types #:coalton-library/types)
    (#:math #:coalton-library/math)
+   #+sbcl
    (#:big-float #:coalton-library/big-float)
    (#:string #:coalton-library/string)
    (#:vector #:coalton-library/vector)

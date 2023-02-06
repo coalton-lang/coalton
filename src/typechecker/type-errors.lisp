@@ -539,7 +539,7 @@ Mutually recursive bindings must be either all functions or all constructor appl
          :type ty-list)
    (type :initarg :type
          :reader fundep-variable-error-type
-         :type ty-list)
+         :type ty)
    (class :initarg :class
           :reader fundep-variable-error-class
           :type symbol)
