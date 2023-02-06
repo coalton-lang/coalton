@@ -347,7 +347,9 @@ NOTES and HELP-NOTES may optionally be supplied notes and help messages."
                    (print-line-number (coalton-error-resolved-note-start-line note) nil)
                    (format stream
                            " ~v{~C~:*~}~v{~C~:*~} ~A~%"
-                           (coalton-error-resolved-note-start-column note)
+                           (+ (coalton-error-resolved-note-start-column note)
+                              (- multiline-note-max-depth
+                                 multiline-note-current-depth))
                            '(#\Space)
                            (- (coalton-error-resolved-note-end-column note)
                               (coalton-error-resolved-note-start-column note))
