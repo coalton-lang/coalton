@@ -51,17 +51,32 @@
               (program
                 (handler-case
                     (read-program stream file :mode :toplevel-macro)
+
+                  ;; We need some way of setting FILE-POSITION so that
+                  ;; when Slime grabs the location of the error it
+                  ;; highlights the correct form.
+                  ;;
+                  ;; In SBCL, we can't unread more than ~512
+                  ;; characters due to limitations with ANSI streams,
+                  ;; which breaks our old method of unreading
+                  ;; characters until the file position is
+                  ;; correct. Instead, we now patch in our own
+                  ;; version of FILE-POSITION.
+                  ;;
+                  ;; This is a massive hack and might start breaking
+                  ;; with future changes in SBCL.
+                  #+sbcl
                   (parse-error (c)
                     (let* ((err (parse-error-err c))
+                           (file-offset
+                             (- (sb-impl::fd-stream-get-file-position stream)
+                                (file-position stream)))
                            (loc (coalton-error-location err)))
-                      ;; In SBCL, we can unread characters to step back the
-                      ;; FILE-POSITION so that when Slime grabs the location of
-                      ;; the error it highlights the correct form.
-                      #+sbcl
-                      (loop :for i :below (- (file-position stream) loc 1)
-                            :when (= 0 (file-position stream))
-                              :do (error "uh oh")
-                            :do (unread-char #\Null stream))
+                      (setf (sb-impl::fd-stream-misc stream)
+                            (lambda (stream operation arg1)
+                              (if (= (sb-impl::%stream-opcode :get-file-position) operation)
+                                  (+ file-offset loc 1)
+                                  (sb-impl::tracking-stream-misc stream operation arg1))))
                       (error c))))))
 
          `(format t "~A" ,(format nil "~A" program))))
@@ -81,17 +96,31 @@
               (expression
                 (handler-case
                     (read-expression stream file)
+
+                  ;; We need some way of setting FILE-POSITION so that
+                  ;; when Slime grabs the location of the error it
+                  ;; highlights the correct form.
+                  ;;
+                  ;; In SBCL, we can't unread more than ~512
+                  ;; characters due to limitations with ANSI streams,
+                  ;; which breaks our old method of unreading
+                  ;; characters until the file position is
+                  ;; correct. Instead, we now patch in our own
+                  ;; version of FILE-POSITION.
+                  ;;
+                  ;; This is a massive hack and might start breaking
+                  ;; with future changes in SBCL.
                   (parse-error (c)
                     (let* ((err (parse-error-err c))
+                           (file-offset
+                             (- (sb-impl::fd-stream-get-file-position stream)
+                                (file-position stream)))
                            (loc (coalton-error-location err)))
-                      ;; In SBCL, we can unread characters to step back the
-                      ;; FILE-POSITION so that when Slime grabs the location of
-                      ;; the error it highlights the correct form.
-                      #+sbcl
-                      (loop :for i :below (- (file-position stream) loc 1)
-                            :when (= 0 (file-position stream))
-                              :do (error "uh oh")
-                            :do (unread-char #\Null stream))
+                      (setf (sb-impl::fd-stream-misc stream)
+                            (lambda (stream operation arg1)
+                              (if (= (sb-impl::%stream-opcode :get-file-position) operation)
+                                  (+ file-offset loc 1)
+                                  (sb-impl::tracking-stream-misc stream operation arg1))))
                       (error c))))))
          `(format t "~A" ,(format nil "~A" expression))))
       ;; Fall back to the default open paren reader
