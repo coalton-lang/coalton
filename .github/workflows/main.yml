@@ -15,14 +15,20 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        LISP_IMPL: ["sbcl", "allegro"]
         COALTON_ENV: ["release", "development"]
         SAFETY: ["0", "3"]
+        exclude:
+          # Since we don't have a way of switching safety on allegro, we can
+          # just ignore high safety tests.
+          - LISP_IMPL: "allegro"
+            SAFETY: "3"
 
     permissions:
       packages: read
 
     container:
-      image: ghcr.io/coalton-lang/sbcl-base
+      image: ghcr.io/coalton-lang/${{ matrix.LISP_IMPL }}-base
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -33,17 +39,28 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-      - name: Run tests
+      - name: Run SBCL tests
+        if: matrix.LISP_IMPL == 'sbcl'
         env:
           COALTON_ENV: ${{ matrix.COALTON_ENV }}
         run: |
           cat <<EOF > run-tests.lisp
           (sb-ext:restrict-compiler-policy 'safety ${{ matrix.SAFETY }})
-          (defun main (&rest args)
-            (declare (ignore args))
-            (ql:quickload :coalton/tests)
-            (asdf:test-system :coalton/tests)
-            ; TODO: Remove this or add tests for these programs.
-            (asdf:load-system :small-coalton-programs))
+          (ql:quickload :coalton/tests)
+          (asdf:test-system :coalton/tests)
+          ; TODO: Remove this or add tests for these programs.
+          (asdf:load-system :small-coalton-programs)
           EOF
-          sbcl --noinform --non-interactive --load run-tests.lisp --eval "(main)"
+          sbcl --noinform --non-interactive --load run-tests.lisp
+      - name: Run Allegro CL tests
+        if: matrix.LISP_IMPL == 'allegro'
+        env:
+          COALTON_ENV: ${{ matrix.COALTON_ENV }}
+        run: |
+          cat <<EOF > run-tests.lisp
+          (ql:quickload :coalton/tests)
+          (asdf:test-system :coalton/tests)
+          ; TODO: Remove this or add tests for these programs.
+          (asdf:load-system :small-coalton-programs)
+          EOF
+          cat run-tests.lisp | alisp --batch
