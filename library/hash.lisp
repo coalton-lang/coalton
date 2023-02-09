@@ -12,6 +12,8 @@
 
 (in-package #:coalton-library/hash)
 
+(named-readtables:in-readtable coalton:coalton)
+
 (coalton-toplevel
   #+sbcl
   (repr :native (cl:unsigned-byte 62))
@@ -22,7 +24,7 @@
   (define-type Hash
     "Implementation dependent hash code")
 
-  (define-class (Eq :a => (Hash :a))
+  (define-class (Eq :a => Hash :a)
     "Types which can be hashed for storage in hash tables.
 
 Invariant (== left right) implies (== (hash left) (hash right))."
@@ -61,14 +63,16 @@ Invariant (== left right) implies (== (hash left) (hash right))."
       (lisp Hash ()
         0))))
 
+;; TODO: There's now some issues with how we do macroexpansion emitting COALTON-TOPLEVEL.
 (cl:defmacro define-sxhash-hasher (type)
-  `(coalton-toplevel
-     (define-instance (Hash ,type)
-       (define (hash item)
-         (lisp Hash (item)
-           (cl:sxhash item))))))
+  `(define-instance (Hash ,type)
+     (define (hash item)
+       shshlshl
+       (lisp Hash (item)
+         (cl:sxhash item)))))
 
-(define-sxhash-hasher Hash)
+(coalton-toplevel
+  (define-sxhash-hasher Hash))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/HASH")

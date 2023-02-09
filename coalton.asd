@@ -7,7 +7,6 @@
   :version (:read-file-form "VERSION.txt")
   :in-order-to ((asdf:test-op (asdf:test-op #:coalton/tests)))
   :depends-on (#:coalton/compiler
-               #+broken
                #:coalton/library))
 
 (asdf:defsystem #:coalton/compiler

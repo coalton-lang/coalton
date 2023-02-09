@@ -42,6 +42,8 @@
 
 (in-package #:coalton-library/classes)
 
+(named-readtables:in-readtable coalton:coalton)
+
 (coalton-toplevel
   (define-class (Addressable :obj)
     "Types for which object identity is meaningful.
@@ -72,7 +74,7 @@ specify `repr :lisp`."
       (lisp Boolean (a b)
         (cl:equalp a b))))
 
-  (define-class ((Eq :a) => (Num :a))
+  (define-class ((Eq :a) => Num :a)
     "Types which have numeric operations defined."
     (+ (:a -> :a -> :a))
     (- (:a -> :a -> :a))
@@ -129,7 +131,7 @@ specify `repr :lisp`."
     (Err :bad))
 
   (define-instance (Eq Unit)
-    (define (== _ _) True))
+    (define (== _a _b) True))
 
   ;;
   ;; Ord
@@ -163,7 +165,7 @@ specify `repr :lisp`."
         ((Tuple (GT) (EQ)) GT)
         ((Tuple (GT) (GT)) EQ))))
 
-  (define-class ((Eq :a) => (Ord :a))
+  (define-class ((Eq :a) => Ord :a)
     "Types whose values can be ordered."
     (<=> (:a -> :a -> Ord)))
 
@@ -217,7 +219,7 @@ specify `repr :lisp`."
     "Types with an associative binary operation defined."
     (<> (:a -> :a -> :a)))
 
-  (define-class (Semigroup :a => (Monoid :a))
+  (define-class (Semigroup :a => Monoid :a)
     "Types with an associative binary operation and identity defined."
     (mempty (:a)))
 
@@ -225,12 +227,12 @@ specify `repr :lisp`."
     "Types which can map an inner type where the mapping adheres to the identity and composition laws."
     (map ((:a -> :b) -> (:f :a) -> (:f :b))))
 
-  (define-class (Functor :f => (Applicative :f))
+  (define-class (Functor :f => Applicative :f)
     "Types which are a functor which can embed pure expressions and sequence operations."
     (pure (:a -> (:f :a)))
     (liftA2 ((:a -> :b -> :c) -> (:f :a) -> (:f :b) -> (:f :c))))
 
-  (define-class (Applicative :m => (Monad :m))
+  (define-class (Applicative :m => Monad :m)
     "Types which are monads as defined in Haskell. See https://wiki.haskell.org/Monad for more information."
     (>>= ((:m :a) -> (:a -> (:m :b)) -> (:m :b))))
 
@@ -238,10 +240,10 @@ specify `repr :lisp`."
   (define (>> a b)
     (>>= a (fn (_) b)))
 
-  (define-class (Monad :m => (MonadFail :m))
+  (define-class (Monad :m => MonadFail :m)
     (fail (String -> (:m :a))))
 
-  (define-class (Applicative :f => (Alternative :f))
+  (define-class (Applicative :f => Alternative :f)
     "Types which are monoids on applicative functors."
     (alt ((:f :a) -> (:f :a) -> (:f :a)))
     (empty (:f :a)))
@@ -288,7 +290,7 @@ specify `repr :lisp`."
     "INTO imples *every* element of :a can be represented by an element of :b. This conversion might not be injective (i.e., there may be elements in :a that don't correspond to any in :b)."
     (into (:a -> :b)))
 
-  (define-class ((Into :a :b) (Into :b :a) => (Iso :a :b))
+  (define-class ((Into :a :b) (Into :b :a) => Iso :a :b)
     "Opting into this marker typeclass imples that the instances for (Into :a :b) and (Into :b :a) form a bijection.")
 
   (define-instance (Into :a :a)

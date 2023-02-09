@@ -40,6 +40,8 @@
 
 (in-package #:coalton-library/math/arith)
 
+(named-readtables:in-readtable coalton:coalton)
+
 (coalton-toplevel
   ;;
   ;; Division

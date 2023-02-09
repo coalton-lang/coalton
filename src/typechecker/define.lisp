@@ -197,8 +197,7 @@
                   (setf env (tc:set-name env name (tc:make-name-entry
                                                    :name name
                                                    :type :value
-                                                   ;; TOOD: add docstring here
-                                                   :docstring nil
+                                                   :docstring (parser:toplevel-define-docstring define)
                                                    :location (parser:coalton-file-name file)))))
 
         (values
@@ -491,14 +490,33 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type coalton-file file)
              (values tc:ty tc:ty-predicate-list node-abstraction tc:substitution-list))
 
+    (check-duplicates
+     (parser:node-abstraction-vars node)
+     #'parser:node-variable-name
+     (lambda (first second)
+       (error 'tc-error
+              :err (coalton-error
+                    :span (parser:node-source first)
+                    :file file
+                    :message "Duplicate parameters name"
+                    :primary-note "first parameter here"
+                    :notes
+                    (list
+                     (make-coalton-error-note
+                      :type :primary
+                      :span (parser:node-source second)
+                      :message "second parameter here"))))))
+
     (let (;; Setup return environment
           (*return-status* :lambda)
           (*returns* nil)
 
           ;; Add parameters to the environment
           (arg-tys
-            (loop :for var :in (parser:node-abstraction-vars node)
-                  :collect (tc-env-add-variable env (parser:node-variable-name var)))))
+            (if (null (parser:node-abstraction-vars node))
+                (list tc:*unit-type*)
+                (loop :for var :in (parser:node-abstraction-vars node)
+                      :collect (tc-env-add-variable env (parser:node-variable-name var))))))
 
       (multiple-value-bind (body-ty preds body-node subs)
           (infer-expression-type (parser:node-abstraction-body node)
@@ -556,12 +574,18 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                 (let ((type (tc:apply-substitution subs ty))
                       
                       (var-nodes
-                        (loop :for var :in (parser:node-abstraction-vars node)
-                              :for arg-ty :in arg-tys
-                              :collect (make-node-variable
-                                        :type (tc:qualify nil (tc:apply-substitution subs arg-ty))
-                                        :source (parser:node-source var)
-                                        :name (parser:node-variable-name var)))))
+                        (if (null (parser:node-abstraction-vars node))
+                            (list (make-node-variable
+                                   :type (tc:qualify nil tc:*unit-type*)
+                                   ;; TODO: We could store the source of the parens
+                                   :source (parser:node-source node)
+                                   :name (gensym "UNUSED")))
+                            (loop :for var :in (parser:node-abstraction-vars node)
+                                  :for arg-ty :in arg-tys
+                                  :collect (make-node-variable
+                                            :type (tc:qualify nil (tc:apply-substitution subs arg-ty))
+                                            :source (parser:node-source var)
+                                            :name (parser:node-variable-name var))))))
                   (values
                    type
                    preds
@@ -643,8 +667,11 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                   
                   (var-nodes
                     (mapcar (lambda (var)
-                              (tc-env-lookup-value env var file))
-                            (parser:node-lisp-vars node))))
+                              (make-node-variable
+                               :type (tc:qualify nil (tc-env-lookup-value env var file))
+                               :source (parser:node-source var)
+                               :name (parser:node-variable-name var)))
+                            (parser:node-lisp-vars node))))              
               (values
                type
                nil
@@ -652,6 +679,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                 :type (tc:qualify nil type)
                 :source (parser:node-source node)
                 :vars var-nodes
+                :var-names (parser:node-lisp-var-names node)
                 :body (parser:node-lisp-body node))
                subs)))
         (error:coalton-type-error ()
@@ -1726,6 +1754,23 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
            (type tc:substitution-list subs)
            (type coalton-file file)
            (values tc:ty-predicate-list (or toplevel-define node-let-binding instance-method-definition) tc:substitution-list))
+
+  (check-duplicates
+   (parser:parameters binding)
+   #'parser:node-variable-name
+   (lambda (first second)
+     (error 'tc-error
+              :err (coalton-error
+                    :span (parser:node-source first)
+                    :file file
+                    :message "Duplicate parameters name"
+                    :primary-note "first parameter here"
+                    :notes
+                    (list
+                     (make-coalton-error-note
+                      :type :primary
+                      :span (parser:node-source second)
+                      :message "second parameter here"))))))
 
   (let* ((vars (loop :for var :in (parser:parameters binding)
                      :for name := (parser:node-variable-name var)

@@ -15,6 +15,7 @@
    #:coalton-impl/codegen/translate-expression
    #:translate-toplevel)
   (:local-nicknames
+   (#:util #:coalton-impl/util)
    (#:tc #:coalton-impl/typechecker)
    (#:error #:coalton-impl/error))
   (:export
@@ -93,7 +94,8 @@
                 :rands (append
                         (loop :for pred :in superclass-preds
                               :collect (resolve-dict pred ctx env))
-                        unqualified-method-definitions))))
+                        unqualified-method-definitions))
+               var-node))
 
          (dict-node
            (if ctx

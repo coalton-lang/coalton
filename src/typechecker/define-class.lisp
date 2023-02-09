@@ -288,8 +288,7 @@
                   :codegen-sym codegen-sym
                   :superclass-dict superclass-dict
                   :superclass-map superclass-map
-                  ;; TOOD: add docstring here
-                  :docstring nil
+                  :docstring (parser:toplevel-define-class-docstring class)
                   :location location)
 
            :for method-tys := (loop :for (name . qual-ty) :in unqualifed-methods

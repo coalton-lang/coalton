@@ -25,6 +25,8 @@
 
 (in-package #:coalton-library/functions)
 
+(named-readtables:in-readtable coalton:coalton)
+
 (coalton-toplevel
   (declare trace (String -> Unit))
   (define (trace str)

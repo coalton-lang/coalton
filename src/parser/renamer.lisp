@@ -144,12 +144,18 @@
         :source (node-source node))
        ctx)))
 
-  ;; TOOD: think about how this works
   (:method ((node node-lisp) ctx)
     (declare (type algo:immutable-map ctx)
              (values node algo:immutable-map))
 
-    (values node ctx))
+    (values
+     (make-node-lisp
+      :source (node-source node)
+      :type (node-lisp-type node)
+      :vars (rename-variables-generic% (node-lisp-vars node) ctx)
+      :var-names (node-lisp-var-names node)
+      :body (node-lisp-body node))
+     ctx))
 
   (:method ((node node-match-branch) ctx)
     (declare (type algo:immutable-map ctx))
@@ -374,6 +380,7 @@
        (make-toplevel-define
         :name (toplevel-define-name toplevel)
         :vars (rename-variables-generic% (toplevel-define-vars toplevel) new-ctx)
+        :docstring (toplevel-define-docstring toplevel)
         :body (rename-variables-generic% (toplevel-define-body toplevel) new-ctx)
         :source (toplevel-define-source toplevel)
         :monomorphize (toplevel-define-monomorphize toplevel))
@@ -405,7 +412,8 @@
       :pred (toplevel-define-instance-pred toplevel)
       :methods (rename-variables-generic% (toplevel-define-instance-methods toplevel) ctx)
       :source (toplevel-define-instance-source toplevel)
-      :head-src (toplevel-define-instance-head-src toplevel))
+      :head-src (toplevel-define-instance-head-src toplevel)
+      :docstring (toplevel-define-instance-docstring toplevel))
      ctx))
 
   (:method ((program program) ctx)
@@ -567,6 +575,7 @@
        :vars (rename-type-variables-generic% (toplevel-define-class-vars toplevel) new-ctx)
        :preds (rename-type-variables-generic% (toplevel-define-class-preds toplevel) new-ctx)
        :fundeps (rename-type-variables-generic% (toplevel-define-class-fundeps toplevel) new-ctx)
+       :docstring (toplevel-define-class-docstring toplevel)
        :methods (rename-type-variables-generic% (toplevel-define-class-methods toplevel) new-ctx)
        :source (toplevel-define-class-source toplevel)
        :head-src (toplevel-define-class-head-src toplevel))))

@@ -11,6 +11,8 @@
 
 (in-package #:coalton-library/boolean)
 
+(named-readtables:in-readtable coalton:coalton)
+
 (coalton-toplevel
   ;;
   ;; Boolean instances
@@ -31,9 +33,9 @@
         ((False)
          (match y
            ((True) LT)
-           ((False) EQ)))))))
+           ((False) EQ))))))
 
-(define-sxhash-hasher Boolean)
+  (define-sxhash-hasher Boolean))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/BOOLEAN")

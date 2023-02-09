@@ -62,6 +62,7 @@
    #:make-node-lisp                     ; CONSTRUCTOR
    #:node-lisp-type                     ; ACCESSOR
    #:node-lisp-vars                     ; ACCESSOR
+   #:node-lisp-var-names                ; ACCESSOR
    #:node-lisp-body                     ; ACCESSOR
    #:node-match-branch                  ; STRUCT
    #:make-node-match-branch             ; CONSTRUCTOR
@@ -328,9 +329,10 @@
 (defstruct (node-lisp
             (:include node)
             (:copier nil))
-  (type (util:required 'type) :type ty                 :read-only t)
-  (vars (util:required 'vars) :type node-variable-list :read-only t)
-  (body (util:required 'body) :type cst:cst            :read-only t))
+  (type      (util:required 'type)      :type ty                 :read-only t)
+  (vars      (util:required 'vars)      :type node-variable-list :read-only t)
+  (var-names (util:required 'var-names) :type util:symbol-list   :read-only t)
+  (body      (util:required 'body)      :type cst:cst            :read-only t))
 
 (defstruct (node-match-branch
             (:copier nil))
@@ -630,13 +632,15 @@
                     :message "Malformed lisp expression"
                     :primary-note "expected body")))
 
-     (make-node-lisp
-      :type (parse-type (cst:second form) file)
-      :vars (loop :for vars := (cst:third form) :then (cst:rest vars)
+     (let ((vars (loop :for vars := (cst:third form) :then (cst:rest vars)
                   :while (cst:consp vars)
-                  :collect (parse-variable (cst:first vars) file))
-      :body (cst:nthrest 3 form)
-      :source (cst:source form)))
+                       :collect (parse-variable (cst:first vars) file))))
+       (make-node-lisp
+        :type (parse-type (cst:second form) file)
+        :vars vars
+        :var-names (mapcar #'node-variable-name vars)
+        :body (cst:nthrest 3 form)
+        :source (cst:source form))))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:match (cst:raw (cst:first form))))

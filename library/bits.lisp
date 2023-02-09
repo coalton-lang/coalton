@@ -22,6 +22,8 @@
 
 (in-package #:coalton-library/bits)
 
+(named-readtables:in-readtable coalton:coalton)
+
 (coalton-toplevel
   (define-class (Num :int => Bits :int)
     "Operations on the bits of twos-complement integers"

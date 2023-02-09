@@ -21,6 +21,8 @@
 
 (in-package #:coalton-library/math/num)
 
+(named-readtables:in-readtable coalton:coalton)
+
 (cl:declaim (cl:inline %unsigned->signed))
 (cl:defun %unsigned->signed (bits x)
   ;; This is the two's complement conversion of X (interpreted as BITS

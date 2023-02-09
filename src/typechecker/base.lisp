@@ -17,6 +17,7 @@
    (#:parser #:coalton-impl/parser))
   (:export
    #:tc-error                           ; CONDITION
+   #:tc-error-err                       ; ACCESSOR
    #:check-duplicates                   ; FUNCTION
    #:check-package                      ; FUNCTION
    ))

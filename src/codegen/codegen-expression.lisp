@@ -2,6 +2,7 @@
   (:use
    #:cl
    #:coalton-impl/util
+   #:coalton-impl/codegen/pattern
    #:coalton-impl/codegen/ast)
   (:import-from
    #:coalton-impl/codegen/codegen-pattern

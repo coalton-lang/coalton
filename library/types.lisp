@@ -14,6 +14,8 @@
 
 (in-package #:coalton-library/types)
 
+(named-readtables:in-readtable coalton:coalton)
+
 (coalton-toplevel
   (repr :enum)
   (define-type (Proxy :a)

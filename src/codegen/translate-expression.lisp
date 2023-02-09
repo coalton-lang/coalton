@@ -270,7 +270,9 @@ Returns a `node'.")
 
       (make-node-lisp
        :type (tc:qualified-ty-type qual-ty)
-       :vars (tc:node-lisp-vars expr)
+       :vars (loop :for var :in (tc:node-lisp-vars expr)
+                   :for var-name :in (tc:node-lisp-var-names expr)
+                   :collect (cons var-name (tc:node-variable-name var))) 
        :form (cst:raw (tc:node-lisp-body expr)))))
 
   (:method ((expr tc:node-match) ctx env)
@@ -398,10 +400,14 @@ Returns a `node'.")
 
     (let* ((coalton-package (find-package "COALTON"))
            (true-value (find-symbol "TRUE" coalton-package))
-           (false-value (find-symbol "FALSE" coalton-package)))
+           (false-value (find-symbol "FALSE" coalton-package))
+
+           (qual-ty (tc:node-type expr)))
+
+      (assert (null (tc:qualified-ty-predicates qual-ty)))
 
       (make-node-match
-       :type tc:*boolean-type*
+       :type (tc:qualified-ty-type qual-ty)
        :expr (translate-expression (tc:node-if-expr expr) ctx env)
        :branches (list
                   (make-match-branch

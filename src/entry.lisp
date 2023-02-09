@@ -5,7 +5,11 @@
    (#:settings #:coalton-impl/settings)
    (#:parser #:coalton-impl/parser)
    (#:tc #:coalton-impl/typechecker)
-   (#:codegen #:coalton-impl/codegen)))
+   (#:codegen #:coalton-impl/codegen))
+  (:export
+   #:*global-environment*
+   #:entry-point
+   #:file-entry-point))
 
 (in-package #:coalton-impl/entry)
 
@@ -94,20 +98,3 @@
   (let ((settings:*coalton-skip-update* t)
         (settings:*emit-type-annotations* nil))
     (file-entry-point filename)))
-
-;; TODO: remove this
-;; Temporary hack to define Num so that integer literals can be
-;; typechecked.
-(defpackage #:coalton-library/classes
-  (:use #:coalton)
-  (:export
-   #:Tuple
-   #:Num #:fromInt #:+
-   #:id
-   #:undefined
-   #:singleton
-   #:append
-   #:Eq #:==))
-
-(eval (file-entry-point "./pre-bootstrap.coalton"))
-(eval (file-entry-point "./bootstrap.coalton"))

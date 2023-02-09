@@ -3,6 +3,7 @@
    #:cl
    #:coalton-impl/parser/base
    #:coalton-impl/parser/types
+   #:coalton-impl/parser/macro
    #:coalton-impl/parser/expression)
   (:shadowing-import-from
    #:coalton-impl/parser/base
@@ -45,6 +46,7 @@
    #:make-toplevel-define               ; CONSTRUCTOR
    #:toplevel-define-name               ; ACCESSOR
    #:toplevel-define-vars               ; ACCESSOR
+   #:toplevel-define-docstring          ; ACCESSOR
    #:toplevel-define-body               ; ACCESSOR
    #:toplevel-define-source             ; ACCESSOR
    #:toplevel-define-monomorphize       ; ACCESSOR
@@ -67,6 +69,7 @@
    #:toplevel-define-class-vars         ; ACCESSOR
    #:toplevel-define-class-preds        ; ACCESSOR
    #:toplevel-define-class-fundeps      ; ACCESSOR
+   #:toplevel-define-class-docstring    ; ACCESSOR
    #:toplevel-define-class-methods      ; ACCESSOR
    #:toplevel-define-class-source       ; ACCESSOR
    #:toplevel-define-class-head-src     ; ACCESSOR
@@ -85,6 +88,7 @@
    #:toplevel-define-instance-methods   ; ACCESSOR
    #:toplevel-define-instance-source    ; ACCESSOR
    #:toplevel-define-instance-head-src  ; ACCESSOR
+   #:toplevel-define-instance-docstring ; ACCESSOR
    #:toplevel-define-instance-list      ; TYPE
    #:program                            ; STRUCT
    #:make-program                       ; CONSTRUCTOR
@@ -146,16 +150,16 @@
 ;;;;
 ;;;; class-head := identifier keyword+
 ;;;;
-;;;; toplevel-define-class := "(" "define-class" "(" class-head ")" method-definition* ")"
-;;;;                        | "(" "define-class" "(" ty-predicate "=>" class-head ")" method-definition* ")"
-;;;;                        | "(" "define-class" "(" ( "(" ty-predicate ")" )+ "=>" class-head ")" method-definition* ")"
+;;;; toplevel-define-class := "(" "define-class" "(" class-head ")" docstring? method-definition* ")"
+;;;;                        | "(" "define-class" "(" ty-predicate "=>" class-head ")" docstring? method-definition* ")"
+;;;;                        | "(" "define-class" "(" ( "(" ty-predicate ")" )+ "=>" class-head ")" docstring? method-definition* ")"
 ;;;;
 ;;;; instance-method-definiton := "(" "define" identifier body ")"
 ;;;;                            | "(" "define" "(" identifier identifier+ ")" body ")"
 ;;;;
-;;;; toplevel-define-instance := "(" "define-instance" "(" ty-predicate ")" instance-method-definition* ")"
-;;;;                           | "(" "define-instance" "(" ty-predicate "=>" ty-predicate ")" instance-method-definition ")"
-;;;;                           | "(" "define-instance" "(" ( "(" ty-predicate ")" )+ "=>" ty-predicate ")" instance-method-definition+ ")"
+;;;; toplevel-define-instance := "(" "define-instance" "(" ty-predicate ")" docstring? instance-method-definition* ")"
+;;;;                           | "(" "define-instance" "(" ty-predicate "=>" ty-predicate ")" docstring? instance-method-definition ")"
+;;;;                           | "(" "define-instance" "(" ( "(" ty-predicate ")" )+ "=>" ty-predicate ")" docstring? instance-method-definition+ ")"
 ;;;;
 
 ;;
@@ -227,10 +231,11 @@
 
 (defstruct (toplevel-define
             (:copier nil))
-  (name         (util:required 'name)         :type node-variable                  :read-only t)
-  (vars         (util:required 'vars)         :type node-variable-list              :read-only t)
-  (body         (util:required 'body)         :type node-body                       :read-only t)
-  (source       (util:required 'source)       :type cons                            :read-only t)
+  (name         (util:required 'name)         :type node-variable                    :read-only t)
+  (vars         (util:required 'vars)         :type node-variable-list               :read-only t)
+  (docstring    (util:required 'docstring)    :type (or null string)                 :read-only t)
+  (body         (util:required 'body)         :type node-body                        :read-only t)
+  (source       (util:required 'source)       :type cons                             :read-only t)
   (monomorphize (util:required 'monomorphize) :type (or null attribute-monomorphize) :read-only nil))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
@@ -269,14 +274,15 @@
 
 (defstruct (toplevel-define-class
             (:copier nil))
-  (name     (util:required 'name)     :type identifier-src         :read-only t)
-  (vars     (util:required 'vars)     :type keyword-src-list       :read-only t)
-  (preds    (util:required 'preds)    :type ty-predicate-list      :read-only t)
-  (fundeps  (util:required 'fundeps)  :type fundep-list            :read-only t)
-  (methods  (util:required 'methods)  :type method-definition-list :read-only t)
-  (source   (util:required 'source)   :type cons                   :read-only t)
+  (name      (util:required 'name)      :type identifier-src         :read-only t)
+  (vars      (util:required 'vars)      :type keyword-src-list       :read-only t)
+  (preds     (util:required 'preds)     :type ty-predicate-list      :read-only t)
+  (fundeps   (util:required 'fundeps)   :type fundep-list            :read-only t)
+  (docstring (util:required 'docstring) :type (or null string)       :read-only t)
+  (methods   (util:required 'methods)   :type method-definition-list :read-only t)
+  (source    (util:required 'source)    :type cons                   :read-only t)
   ;; Source information for context, name, and vars
-  (head-src (util:required 'head-src) :type cons                   :read-only t))
+  (head-src  (util:required 'head-src) :type cons                   :read-only t))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-define-class-list-p (x)
@@ -288,10 +294,10 @@
 
 (defstruct (instance-method-definition
             (:copier nil))
-  (name   (util:required 'name)   :type node-variable       :read-only t)
-  (vars   (util:required 'vars)   :type node-variable-list  :read-only t)
-  (body   (util:required 'body)   :type node-body           :read-only t)
-  (source (util:required 'source) :type cons                :read-only t))
+  (name      (util:required 'name)      :type node-variable       :read-only t)
+  (vars      (util:required 'vars)      :type node-variable-list  :read-only t)
+  (body      (util:required 'body)      :type node-body           :read-only t)
+  (source    (util:required 'source)    :type cons                :read-only t))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun instance-method-definition-list-p (x)
@@ -303,12 +309,13 @@
 
 (defstruct (toplevel-define-instance
             (:copier nil))
-  (context  (util:required 'context)  :type ty-predicate-list               :read-only t)
-  (pred     (util:required 'pred)     :type ty-predicate                    :read-only t)
-  (methods  (util:required 'methods)  :type instance-method-definition-list :read-only t)
-  (source   (util:required 'source)   :type cons                            :read-only t)
+  (context   (util:required 'context)   :type ty-predicate-list               :read-only t)
+  (pred      (util:required 'pred)      :type ty-predicate                    :read-only t)
+  (docstring (util:required 'docstring) :type (or null string)                :read-only t)
+  (methods   (util:required 'methods)   :type instance-method-definition-list :read-only t)
+  (source    (util:required 'source)    :type cons                            :read-only t)
   ;; Source information for the context and the pred
-  (head-src (util:required 'head-src) :type cons                            :read-only t))
+  (head-src  (util:required 'head-src)  :type cons                            :read-only t))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-define-instance-list-p (x)
@@ -717,13 +724,26 @@ consume all attributes")))
        (push instance (program-instances program))
        t))
 
+    
+
     (t
-     (error 'parse-error
-            :err (coalton-error
-                  :span (cst:source (cst:first form))
-                  :file file
-                  :message "Invalid toplevel form"
-                  :primary-note "unknown toplevel form")))))
+     (cond
+       ((and (cst:atom (cst:first form))
+             (symbolp (cst:raw (cst:first form)))
+             (macro-function (cst:raw (cst:first form))))
+        (let ((*coalton-error-context*
+                (adjoin (make-coalton-error-context
+                         :message "Error occurs within macro context. Source locations may be imprecise")
+                        *coalton-error-context*
+                        :test #'equalp)))
+          (parse-toplevel-form (expand-macro form) program attributes file)))
+       
+       ((error 'parse-error
+                :err (coalton-error
+                      :span (cst:source (cst:first form))
+                      :file file
+                      :message "Invalid toplevel form"
+                      :primary-note "unknown toplevel form")))))))
 
 
 (defun parse-define (form file)
@@ -756,11 +776,11 @@ consume all attributes")))
 
     (multiple-value-bind (docstring body)
         (parse-definition-body (cst:rest (cst:rest form)) form file)
-      (declare (ignore docstring))
 
       (make-toplevel-define
        :name name
        :vars arguments
+       :docstring docstring
        :body body
        :monomorphize nil
        :source (cst:source form)))))
@@ -906,7 +926,7 @@ consume all attributes")))
                (cst:atom (cst:third form))
                (stringp (cst:raw (cst:third form))))
       (setf docstring (cst:raw (cst:third form))))
-
+    
     (make-toplevel-define-type
      :name name
      :vars (reverse variables)
@@ -931,6 +951,7 @@ consume all attributes")))
         variables
         fundeps
         predicates
+        docstring
         methods)
 
     ;; (define-class)
@@ -1094,21 +1115,27 @@ consume all attributes")))
                   (loop :for pred :in left
                         :collect (parse-predicate (cst:listify pred) (cst:source pred) file)))))
 
+      (when (and (cst:consp (cst:rest (cst:rest form)))
+                 (cst:atom (cst:third form))
+                 (stringp (cst:raw (cst:third form))))
+        (setf docstring (cst:raw (cst:third form))))
+
       (setf methods
-            (loop :for methods := (cst:rest (cst:rest form)) :then (cst:rest methods)
+            (loop :for methods := (cst:nthrest (if docstring 3 2) form) :then (cst:rest methods)
                   :while (cst:consp methods)
                   :collect (parse-method (cst:first methods) form file)))
 
-       (make-toplevel-define-class
-        :name (make-identifier-src
-               :name name
-               :source (cst:source unparsed-name))
-        :vars variables
-        :preds predicates
-        :fundeps fundeps
-        :methods methods
-        :source (cst:source form)
-        :head-src (cst:source (cst:second form))))))
+      (make-toplevel-define-class
+       :name (make-identifier-src
+              :name name
+              :source (cst:source unparsed-name))
+       :vars variables
+       :preds predicates
+       :fundeps fundeps
+       :docstring docstring
+       :methods methods
+       :source (cst:source form)
+       :head-src (cst:source (cst:second form))))))
 
 (defun parse-define-instance (form file)
   (declare (type cst:cst form)
@@ -1119,7 +1146,8 @@ consume all attributes")))
 
   (let (unparsed-context
         context
-        unparsed-predicate)
+        unparsed-predicate
+        docstring)
 
     ;; (define-instance)
     (unless (cst:consp (cst:rest form))
@@ -1209,10 +1237,16 @@ consume all attributes")))
                   (loop :for unparsed :in unparsed-context
                         :collect (parse-predicate (cst:listify unparsed) (cst:source unparsed) file)))))
 
+      (when (and (cst:consp (cst:rest (cst:rest form)))
+                 (cst:atom (cst:third form))
+                 (stringp (cst:raw (cst:third form))))
+        (setf docstring (cst:raw (cst:third form))))
+      
       (make-toplevel-define-instance
        :context context
        :pred (parse-predicate unparsed-predicate (util:cst-source-range unparsed-predicate) file)
-       :methods (loop :for methods := (cst:rest (cst:rest form)) :then (cst:rest methods)
+       :docstring docstring
+       :methods (loop :for methods := (cst:nthrest (if docstring 3 2) form) :then (cst:rest methods)
                       :while (cst:consp methods)
                       :for method := (cst:first methods)
                       :collect (parse-instance-method-definition method (cst:second form) file))

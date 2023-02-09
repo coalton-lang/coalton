@@ -4,6 +4,8 @@
 
 (in-package #:coalton)
 
+(named-readtables:in-readtable coalton:coalton)
+
 (coalton-toplevel
   (repr :native (cl:unsigned-byte 8))
   (define-type U8

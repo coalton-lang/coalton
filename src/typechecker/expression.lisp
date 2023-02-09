@@ -63,6 +63,7 @@
    #:make-node-lisp                     ; CONSTRUCTOR
    #:node-lisp-type                     ; ACCESSOR
    #:node-lisp-vars                     ; ACCESSOR
+   #:node-lisp-var-names                ; ACCESSOR
    #:node-lisp-body                     ; ACCESSOR
    #:node-match-branch                  ; STRUCT
    #:make-node-match-branch             ; CONSTRUCTOR
@@ -222,8 +223,9 @@
 (defstruct (node-lisp
             (:include node)
             (:copier nil))
-  (vars (util:required 'vars) :type node-variable-list :read-only t)
-  (body (util:required 'body) :type cst:cst            :read-only t))
+  (vars      (util:required 'vars)      :type node-variable-list :read-only t)
+  (var-names (util:required 'var-names) :type util:symbol-list   :read-only t)
+  (body      (util:required 'body)      :type cst:cst            :read-only t))
 
 (defstruct (node-match-branch
             (:copier nil))
@@ -444,6 +446,7 @@
    :type (tc:apply-substitution subs (node-type node))
    :source (node-source node)
    :vars (tc:apply-substitution subs (node-lisp-vars node))
+   :var-names (node-lisp-var-names node)
    :body (node-lisp-body node)))
 
 (defmethod tc:apply-substitution (subs (node node-match-branch))
@@ -503,6 +506,16 @@
    :type (tc:apply-substitution subs (node-type node))
    :source (node-source node)
    :nodes (tc:apply-substitution subs (node-and-nodes node))))
+
+(defmethod tc:apply-substitution (subs (node node-if))
+  (declare (type tc:substitution-list subs)
+           (values node-if &optional))
+  (make-node-if
+   :type (tc:apply-substitution subs (node-type node))
+   :source (node-source node)
+   :expr (tc:apply-substitution subs (node-if-expr node))
+   :then (tc:apply-substitution subs (node-if-then node))
+   :else (tc:apply-substitution subs (node-if-else node))))
 
 (defmethod tc:apply-substitution (subs (node node-when))
   (declare (type tc:substitution-list subs)
