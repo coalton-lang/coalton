@@ -174,26 +174,54 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
   `(coalton-toplevel
      (define-instance (Trigonometric ,coalton-type)
        (define (sin x)
-         (lisp ,coalton-type (x)
-           (ff:with-float-traps-masked cl:t
-             (cl:sin x))))
+         (cond
+           ;; CCL signals errors when applying trigonometric functions to NaN and infinity
+           #+ccl
+           ((or (nan? x) (== x infinity) (== x (negate infinity)))
+            nan)
+
+           (True
+            (lisp ,coalton-type (x)
+              (ff:with-float-traps-masked cl:t
+                (cl:sin x))))))
 
        (define (cos x)
-         (lisp ,coalton-type (x)
-           (ff:with-float-traps-masked cl:t
-             (cl:cos x))))
+         (cond
+           ;; CCL signals errors when applying trigonometric functions to NaN and infinity
+           #+ccl
+           ((or (nan? x) (== x infinity) (== x (negate infinity)))
+            nan)
+
+           (True
+            (lisp ,coalton-type (x)
+              (ff:with-float-traps-masked cl:t
+                (cl:cos x))))))
 
        (define (tan x)
-         (lisp ,coalton-type (x)
-           (ff:with-float-traps-masked cl:t
-             (cl:tan x))))
+         (cond
+           ;; CCL signals errors when applying trigonometric functions to NaN and infinity
+           #+ccl
+           ((or (nan? x) (== x infinity) (== x (negate infinity)))
+            nan)
+
+           (True
+            (lisp ,coalton-type (x)
+              (ff:with-float-traps-masked cl:t
+                (cl:tan x))))))
 
        (define (asin x)
-         (if (or (nan? x) (> x 1) (< x -1))
-             nan
-             (lisp ,coalton-type (x)
-               (ff:with-float-traps-masked cl:t
-                 (cl:asin x)))))
+         (cond
+           ;; CCL signals errors when applying trigonometric functions to NaN and infinity
+           #+ccl
+           ((or (nan? x) (== x infinity) (== x (negate infinity)))
+            nan)
+
+           (True
+            (if (or (nan? x) (> x 1) (< x -1))
+                nan
+                (lisp ,coalton-type (x)
+                  (ff:with-float-traps-masked cl:t
+                    (cl:asin x)))))))
 
        (define (acos x)
          (if (or (nan? x) (> x 1) (< x -1))
@@ -203,9 +231,16 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
                  (cl:acos x)))))
 
        (define (atan x)
-         (lisp ,coalton-type (x)
-           (ff:with-float-traps-masked cl:t
-             (cl:atan x)))))
+         (cond
+           ;; CCL signals errors when applying trigonometric functions to NaN and infinity
+           #+ccl
+           ((or (nan? x) (== x infinity) (== x (negate infinity)))
+            nan)
+
+           (True
+            (lisp ,coalton-type (x)
+              (ff:with-float-traps-masked cl:t
+                (cl:atan x)))))))
 
      (define-instance (Polar ,coalton-type)
        (define (phase x)

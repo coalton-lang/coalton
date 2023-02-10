@@ -44,7 +44,8 @@ Returns (values SOURCE-PATHNAME COMPILED-PATHNAME)."
       (terpri out-stream))
     :close-stream
     (uiop:with-temporary-file (:pathname output-file
-                               :suffix "fasl"
+                               :type #+ccl (pathname-type ccl:*.fasl-pathname*)
+                                     #+(not ccl) "fasl"
                                :keep t)
       (compile-file input-file :output-file output-file)
       (load output-file)

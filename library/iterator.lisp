@@ -540,7 +540,7 @@ The empty iterator will hash as 0."
                              (combine-hashes current (hash new)))
                            (hash first)
                            iter))
-        ((None) mempty)))
+      ((None) mempty)))
 
 ;;; collecting
   (define-class (FromIterator :container :elt (:container -> :elt))
