@@ -15,10 +15,17 @@
 (coalton-toplevel
   #+sbcl
   (repr :native (cl:unsigned-byte 62))
+
   #+allegro
   (repr :native (cl:unsigned-byte 0 32))
-  #+(not (or sbcl allegro))
+
+  ;; https://github.com/Clozure/ccl/blob/ff51228259d9dbc8a9cc7bbb08858ef4aa9fe8d0/level-0/l0-hash.lisp#L1885
+  #+ccl
+  (repr :native (cl:and cl:fixnum cl:unsigned-byte)) 
+
+  #+(not (or sbcl allegro ccl))
   #.(cl:error "hashing is not supported on ~A" (cl:lisp-implementation-type))
+
   (define-type Hash
     "Implementation dependent hash code")
 
@@ -31,13 +38,20 @@ Invariant (== left right) implies (== (hash left) (hash right))."
   (declare combine-hashes (Hash -> Hash -> Hash))
   (define (combine-hashes lhs rhs)
     (lisp Hash (lhs rhs)
+      ;; SBCL has a hash combination function
       #+sbcl (sb-int:mix lhs rhs)
 
-      ;; Copied from
+      ;;
+      ;; Generic hash combination functions copied from:
       ;; https://stackoverflow.com/questions/5889238/why-is-xor-the-default-way-to-combine-hashes/27952689#27952689
       ;;
+
       ;; 32bit hash combination
-      #+allegro (cl:logxor lhs (cl:+ rhs #x9e3779b9 (cl:ash lhs 6) (cl:ash lhs -2)))))
+      #+allegro (cl:logxor lhs (cl:+ rhs #x9e3779b9 (cl:ash lhs 6) (cl:ash lhs -2)))
+
+      ;; 64bit hash combination
+      ;; logand required on ccl to force the output to be a fixnum
+      #+ccl (cl:logand (cl:logxor lhs (cl:+ rhs #x517cc1b727220a95 (cl:ash lhs 6) (cl:ash lhs -2))) cl:most-positive-fixnum)))
 
   (define-instance (Eq Hash)
     (define (== a b)

@@ -66,7 +66,7 @@ COALTON-USER> (coalton (dt (E+ (EVar (Symbol "t"))
 #.(E+ #.(ECONST 1) #.(ECONST 0))
 ```
 
-*Coalton has **not** reached "1.0" yet. This means that, from time to time, you may have a substandard user experience. While we try to be ANSI-conforming, Coalton is currently only tested on SBCL 2.2.x and Allegro CL 10.1.*
+*Coalton has **not** reached "1.0" yet. This means that, from time to time, you may have a substandard user experience. While we try to be ANSI-conforming, Coalton is currently only tested on SBCL 2.2.x, Allegro CL 10.1.* and Clozure CL 1.21.*.
 
 ## Getting Started
 

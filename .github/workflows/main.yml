@@ -15,13 +15,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        LISP_IMPL: ["sbcl", "allegro"]
+        LISP_IMPL: ["sbcl", "allegro", "ccl"]
         COALTON_ENV: ["release", "development"]
         SAFETY: ["0", "3"]
         exclude:
-          # Since we don't have a way of switching safety on allegro, we can
+          # Since we don't have a way of switching safety on allegro or ccl, we can
           # just ignore high safety tests.
           - LISP_IMPL: "allegro"
+            SAFETY: "3"
+          - LISP_IMPL: "ccl"
             SAFETY: "3"
 
     permissions:
@@ -64,3 +66,15 @@ jobs:
           (asdf:load-system :small-coalton-programs)
           EOF
           cat run-tests.lisp | alisp --batch
+      - name: Run Clozure CL tests
+        if: matrix.LISP_IMPL == 'ccl'
+        env:
+          COALTON_ENV: ${{ matrix.COALTON_ENV }}
+        run: |
+          cat <<EOF > run-tests.lisp
+          (ql:quickload :coalton/tests)
+          (asdf:test-system :coalton/tests)
+          ; TODO: Remove this or add tests for these programs.
+          (asdf:load-system :small-coalton-programs)
+          EOF
+          ccl64-wrapped.sh --batch --load run-tests.lisp

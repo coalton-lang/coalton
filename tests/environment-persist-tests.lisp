@@ -5,7 +5,7 @@
   (let ((test-expr
           '((in-package #:coalton-native-tests)
             (coalton-toplevel
-              (define (test-id a) a)))))
+             (define (test-id a) a)))))
 
     ;; Write out our test program to a temporary file
     (uiop:with-temporary-file (:stream f
@@ -21,7 +21,8 @@
 
       ;; Create a temp output fasl file
       (uiop:with-temporary-file (:pathname output-file
-                                 :suffix "fasl")
+                                 :type #+ccl (pathname-type ccl:*.fasl-pathname*)
+                                       #+(not ccl) "fasl")
         (handler-bind
             ;; Tell the compiler to be quiet
             ((style-warning (lambda (c)
