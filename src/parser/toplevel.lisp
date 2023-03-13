@@ -794,7 +794,44 @@ consume all attributes"))))
                         :message "when parsing specialize")))))
 
        (push spec (program-specializations program))
-       t))   
+       t))
+
+    ((coalton:progn)
+     (unless (zerop (length attributes))
+       (error 'parse-error
+              :err (coalton-error
+                    :span (cst:source (cdr (aref attributes 0)))
+                    :file file
+                    :message "Invalid attribute for progn"
+                    :primary-note "progn cannot have attributes"
+                    :notes
+                    (list
+                     (make-coalton-error-note
+                      :type :secondary
+                      :span (cst:source form)
+                      :message "when parsing progn")))))
+
+     (loop :for inner-form := (cst:rest form) :then (cst:rest inner-form)
+           :while (not (cst:null inner-form)) :do
+             (when (and (parse-toplevel-form (cst:first inner-form) program attributes file)
+                        (plusp (length attributes)))
+               (util:coalton-bug "parse-toplevel-form indicated that a form was parsed but did not
+consume all attributes")))
+
+     (unless (zerop (length attributes))
+       (error 'parse-error
+              :err (coalton-error
+                    :span (cst:source (cdr (aref attributes 0)))
+                    :file file
+                    :message "Trailing attributes in progn"
+                    :primary-note "progn cannot have trailing attributes"
+                    :notes
+                    (list
+                     (make-coalton-error-note
+                      :type :secondary
+                      :span (cst:source form)
+                      :message "when parsing progn")))))
+     t)
 
     (t
      (cond
@@ -807,7 +844,7 @@ consume all attributes"))))
                         *coalton-error-context*
                         :test #'equalp)))
           (parse-toplevel-form (expand-macro form) program attributes file)))
-       
+
        ((error 'parse-error
                :err (coalton-error
                      :span (cst:source (cst:first form))
@@ -997,7 +1034,7 @@ consume all attributes"))))
                (cst:atom (cst:third form))
                (stringp (cst:raw (cst:third form))))
       (setf docstring (cst:raw (cst:third form))))
-    
+
     (make-toplevel-define-type
      :name name
      :vars (reverse variables)
@@ -1345,7 +1382,7 @@ consume all attributes"))))
                  (cst:atom (cst:third form))
                  (stringp (cst:raw (cst:third form))))
         (setf docstring (cst:raw (cst:third form))))
-      
+
       (make-toplevel-define-instance
        :context context
        :pred (parse-predicate unparsed-predicate (util:cst-source-range unparsed-predicate) file)
@@ -1366,7 +1403,7 @@ consume all attributes"))))
   (assert (cst:consp form))
 
   ;; (specialize)
-  (unless (cst:consp (cst:rest form)) 
+  (unless (cst:consp (cst:rest form))
     (error 'parse-error
            :err (coalton-error
                  :span (cst:source form)

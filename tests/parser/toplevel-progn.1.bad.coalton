@@ -1,0 +1,7 @@
+;; BAD: Toplevel Progn
+(package test-package)
+
+(repr :transparent)
+(progn
+  (define-type T
+    (T Integer)))
