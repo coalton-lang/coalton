@@ -93,8 +93,8 @@
                     :type :warn
                     :file file
                     :span (tc:pattern-source pat)
-                    :message "Pattern variable matches constructor name"
-                    :primary-note "")))))
+                    :message "Pattern warning"
+                    :primary-note "pattern variable matches constructor name")))))
 
   (:method ((pat tc:pattern-literal) env file)
     (declare (ignore env file)))
