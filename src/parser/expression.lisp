@@ -569,8 +569,7 @@
                     :message "Malformed let"
                     :primary-note "expected let body")))
 
-     ;; (let x ...)
-     (unless (cst:consp (cst:second form))
+     (unless (cst:proper-list-p (cst:second form)) 
        (error 'parse-error
               :err (coalton-error
                     :span (cst:source (cst:second form))
