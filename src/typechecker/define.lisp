@@ -1893,32 +1893,35 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
     (labels ((valid-recursive-constructor-call-p (node)
                "Returns t if NODE is a valid constructor call in a recursive value binding group"
-               (when (typep node 'parser:node-application)
-                 (when (typep (parser:node-application-rator node) 'parser:node-variable)
+               (typecase node
+                 (parser:node-the
+                  (valid-recursive-constructor-call-p (parser:node-the-expr node)))
+                 (parser:node-application
+                  (when (typep (parser:node-application-rator node) 'parser:node-variable)
 
-                   (let* ((function-name (parser:node-variable-name (parser:node-application-rator node)))
+                    (let* ((function-name (parser:node-variable-name (parser:node-application-rator node)))
 
-                         (ctor (tc:lookup-constructor env function-name :no-error t)))
+                           (ctor (tc:lookup-constructor env function-name :no-error t)))
 
-                     (when ctor
-                       ;; The constructor must be fully applied
-                       (unless (= (length (parser:node-application-rands node)) (tc:constructor-entry-arity ctor))
-                         (return-from valid-recursive-constructor-call-p nil))
+                      (when ctor
+                        ;; The constructor must be fully applied
+                        (unless (= (length (parser:node-application-rands node)) (tc:constructor-entry-arity ctor))
+                          (return-from valid-recursive-constructor-call-p nil))
 
-                       (let ((type (tc:lookup-type env (tc:constructor-entry-constructs ctor))))
+                        (let ((type (tc:lookup-type env (tc:constructor-entry-constructs ctor))))
 
-                         ;; Recursive constructors are valid on types
-                         ;; without reprs, types with repr lisp and
-                         ;; the type "List"
-                         (when (or (null (tc:type-entry-explicit-repr type))
-                                   (eq :lisp (tc:type-entry-explicit-repr type))
-                                   (eq 'coalton:List (tc:type-entry-name type)))
-                           (return-from valid-recursive-constructor-call-p
-                             (reduce
-                              (lambda (a b) (and a b))
-                              (parser:node-application-rands node)
-                              :key #'valid-recursive-value-p
-                              :initial-value t)))))))))
+                          ;; Recursive constructors are valid on types
+                          ;; without reprs, types with repr lisp and
+                          ;; the type "List"
+                          (when (or (null (tc:type-entry-explicit-repr type))
+                                    (eq :lisp (tc:type-entry-explicit-repr type))
+                                    (eq 'coalton:List (tc:type-entry-name type)))
+                            (return-from valid-recursive-constructor-call-p
+                              (reduce
+                               (lambda (a b) (and a b))
+                               (parser:node-application-rands node)
+                               :key #'valid-recursive-value-p
+                               :initial-value t))))))))))
 
              (valid-recursive-value-p (node)
                "Returns t if NODE is a valid subcomponent in a recursive value binding group"

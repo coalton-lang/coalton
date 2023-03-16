@@ -96,19 +96,29 @@
     (declare (values boolean))
     t))
 
+(defgeneric initform-abstraction-p (expr)
+  (:method ((expr node-abstraction))
+    (declare (ignorable expr))
+    t)
+  (:method ((expr node-the))
+    (initform-abstraction-p (node-the-expr expr)))
+  (:method (expr)
+    (declare (ignorable expr))
+    nil))
+
 (defgeneric binding-function-p (binding)
   (:documentation "Returns t if BINDING is a lambda.")
 
   (:method ((binding node-let-binding))
     (declare (values boolean))
-     (node-abstraction-p (node-let-binding-value binding)))
+    (initform-abstraction-p (node-let-binding-value binding)))
 
   (:method ((binding toplevel-define))
     (declare (values boolean))
     (and (or (toplevel-define-vars binding)
 
              (and (null (node-body-nodes (toplevel-define-body binding)))
-                  (node-abstraction-p (node-body-last-node (toplevel-define-body binding)))))
+                  (initform-abstraction-p (node-body-last-node (toplevel-define-body binding)))))
          t))
 
   (:method ((binding instance-method-definition))
@@ -116,7 +126,7 @@
     (and (or (instance-method-definition-vars binding)
 
              (and (null (node-body-nodes (instance-method-definition-body binding)))
-                  (node-abstraction-p (node-body-last-node (instance-method-definition-body binding)))))
+                  (initform-abstraction-p (node-body-last-node (instance-method-definition-body binding)))))
          t)))
 
 (defgeneric binding-last-node (binding)
