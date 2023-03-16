@@ -36,6 +36,31 @@
     (is list)
     (is (eq list (cdr list)))))
 
+(deftest recursive-let-the ()
+  "Test that recusive `let`-bindings whose initforms are `the` are accepted as long as the inner initform is acceptable."
+  (check-coalton-types
+   "(define foo
+      (let ((circle (the (List Integer)
+                         (Cons 0 circle))))
+        circle))"
+   '("foo" . "(List Integer)"))
+
+  (check-coalton-types
+   "(define foo
+      (let ((loop-times (the (UFix -> Unit)
+                             (fn (n)
+                               (unless (== n 0)
+                                 (loop-times (- n 1)))))))
+        (loop-times 100)))"
+   '("foo" . "Unit"))
+
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define foo
+        (let ((invalid (the Integer
+                            (+ invalid 0))))
+          invalid))")))
+
 (deftest recursively-construct-via-non-constructor-function ()
   (signals tc:tc-error
     (check-coalton-types
