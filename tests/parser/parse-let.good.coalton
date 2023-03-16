@@ -1,0 +1,10 @@
+;; GOOD: Parse Let
+(package test-package)
+
+(define x
+  (let ((y 5))
+    y))
+
+(define x
+  (let ()
+    5))
