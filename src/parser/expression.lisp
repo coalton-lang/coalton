@@ -135,6 +135,10 @@
 
 (in-package #:coalton-impl/parser/expression)
 
+(defvar *macro-expansion-count* 0)
+
+(defconstant +macro-expansion-max+ 500)
+
 ;;;; # Expression Parsing
 ;;;;
 ;;;; Note that "expression" in the EBNF corresponds to the struct "node" in the lisp code.
@@ -864,12 +868,23 @@
     ((and (cst:atom (cst:first form))
           (symbolp (cst:raw (cst:first form)))
           (macro-function (cst:raw (cst:first form))))
-     (let ((*coalton-error-context*
-             (adjoin (make-coalton-error-context
-                      :message "Error occurs within macro context. Source locations may be imprecise")
-                     *coalton-error-context*
-                     :test #'equalp)))
-       (parse-expression (expand-macro form) file)))
+
+     (let ((*macro-expansion-count* (+ 1 *macro-expansion-count*)))
+
+       (when (= *macro-expansion-count* +macro-expansion-max+)
+         (error 'parse-error
+                :err (coalton-error
+                      :span (cst:source form)
+                      :file file
+                      :message "Invalid macro expansion"
+                      :primary-note "macro expansion limit hit")))
+
+       (let ((*coalton-error-context*
+               (adjoin (make-coalton-error-context
+                        :message "Error occurs within macro context. Source locations may be imprecise")
+                       *coalton-error-context*
+                       :test #'equalp)))
+         (parse-expression (expand-macro form) file))))
 
     ;;
     ;; Function Application
