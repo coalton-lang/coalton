@@ -184,8 +184,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
 
            (True
             (lisp ,coalton-type (x)
-              (ff:with-float-traps-masked cl:t
-                (cl:sin x))))))
+                (cl:sin x)))))
 
        (define (cos x)
          (cond
@@ -196,8 +195,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
 
            (True
             (lisp ,coalton-type (x)
-              (ff:with-float-traps-masked cl:t
-                (cl:cos x))))))
+                (cl:cos x)))))
 
        (define (tan x)
          (cond
@@ -208,8 +206,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
 
            (True
             (lisp ,coalton-type (x)
-              (ff:with-float-traps-masked cl:t
-                (cl:tan x))))))
+                (cl:tan x)))))
 
        (define (asin x)
          (cond
@@ -222,15 +219,13 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
             (if (or (nan? x) (> x 1) (< x -1))
                 nan
                 (lisp ,coalton-type (x)
-                  (ff:with-float-traps-masked cl:t
-                    (cl:asin x)))))))
+                    (cl:asin x))))))
 
        (define (acos x)
          (if (or (nan? x) (> x 1) (< x -1))
              nan
              (lisp ,coalton-type (x)
-               (ff:with-float-traps-masked cl:t
-                 (cl:acos x)))))
+                 (cl:acos x))))
 
        (define (atan x)
          (cond
@@ -241,14 +236,12 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
 
            (True
             (lisp ,coalton-type (x)
-              (ff:with-float-traps-masked cl:t
-                (cl:atan x)))))))
+                (cl:atan x))))))
 
      (define-instance (Polar ,coalton-type)
        (define (phase x)
          (lisp ,coalton-type (x)
-           (ff:with-float-traps-masked cl:t
-             (cl:phase x))))
+             (cl:phase x)))
        (define (polar x)
          (Tuple (magnitude x) (phase x))))
 
@@ -271,8 +264,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
 
            (True
             (lisp ,coalton-type (x y)
-              (ff:with-float-traps-masked cl:t
-                (cl:expt x y))))))
+                (cl:expt x y)))))
 
        (define (exp x)
          (cond
@@ -286,11 +278,10 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
 
            (True
             (lisp ,coalton-type (x)
-              (ff:with-float-traps-masked cl:t
                 (cl:let ((res (cl:exp x)))
                   (cl:if (cl:complexp res)
                          (cl:realpart res)
-                         res)))))))
+                         res))))))
 
        (define (log b x)
          (cond
@@ -302,8 +293,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
               (True nan)))
            ((and (> b 0) (> x 0))
             (lisp ,coalton-type (b x)
-              (ff:with-float-traps-masked cl:t
-                (cl:log x b))))
+                (cl:log x b)))
            (True nan)))
 
        (define (ln x)
@@ -311,8 +301,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
            ((nan? x) nan)
            ((> x 0)
             (lisp ,coalton-type (x)
-              (ff:with-float-traps-masked cl:t
-                (cl:log x))))
+                (cl:log x)))
            ((< x 0) nan)
            (True negative-infinity))))
 
@@ -321,8 +310,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
          (if (or (nan? x) (< x 0))
              nan
              (lisp ,coalton-type (x)
-               (ff:with-float-traps-masked cl:t
-                 (cl:sqrt x)))))
+                 (cl:sqrt x))))
        (define (nth-root n x)
          (canonical-nth-root n x)))
 

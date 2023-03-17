@@ -1,3 +1,3 @@
-;; See https://github.com/Clozure/ccl/issues/441
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (ccl:set-fpu-mode :overflow nil :underflow nil :division-by-zero nil :invalid nil :inexact nil))
+  #+ccl (ccl:set-fpu-mode :overflow nil :underflow nil :division-by-zero nil :invalid nil :inexact nil)
+  #+sbcl (sb-int:set-floating-point-modes :traps nil))

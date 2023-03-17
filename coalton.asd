@@ -133,7 +133,7 @@
                #:alexandria)
   :pathname "library/"
   :serial t
-  :components ((:file "set-float-traps" :if-feature :ccl)
+  :components ((:file "set-float-traps")
                (:file "utils")
                (:file "types")
                (:file "fixed-size-numbers")

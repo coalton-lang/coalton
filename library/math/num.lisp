@@ -226,16 +226,13 @@
      (define-instance (Num ,coalton-type)
        (define (+ a b)
          (lisp ,coalton-type (a b)
-           (float-features:with-float-traps-masked cl:t
-             (cl:+ a b))))
+           (cl:+ a b)))
        (define (- a b)
          (lisp ,coalton-type (a b)
-           (float-features:with-float-traps-masked cl:t
-             (cl:- a b))))
+           (cl:- a b)))
        (define (* a b)
          (lisp ,coalton-type (a b)
-           (float-features:with-float-traps-masked cl:t
-             (cl:* a b))))
+           (cl:* a b)))
        (define (fromInt x)
          (match (lisp (Optional ,coalton-type) (x)
                   (%optional-coerce x ,underlying-type))
@@ -266,8 +263,7 @@
 
            (True
             (lisp ,coalton-type (x y)
-              (float-features:with-float-traps-masked cl:t
-                (cl:/ x y))))))
+              (cl:/ x y)))))
 
        (define (reciprocal x)
          (cond
@@ -277,8 +273,7 @@
 
            (True
             (lisp ,coalton-type (x)
-              (float-features:with-float-traps-masked cl:t
-                (cl:/ x)))))))
+              (cl:/ x))))))
 
      (define-instance (Dividable Integer ,coalton-type)
        (define (general/ x y)
