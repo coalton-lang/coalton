@@ -23,6 +23,9 @@
    #:coalton-library/hashtable
    #:Hashtable)
   (:export
+   #:while
+   #:until
+   #:forever
    #:Iterator
    #:new
    #:next!
@@ -76,7 +79,8 @@
    #:collect-list!
    #:collect-vector-size-hint!
    #:collect-vector!
-   #:collect-hashtable!))
+   #:collect-hashtable!)
+)
 
 (in-package #:coalton-library/iterator)
 
@@ -84,6 +88,36 @@
 
 #+coalton-release
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+;; We need speed 3 so while get's tail recursion
+;; ref https://discord.com/channels/888196168067199046/1084182802104340590/1084560304500900040
+(cl:declaim (cl:optimize (cl:speed 3)))
+(coalton-toplevel
+  (declare %while ((Unit -> Boolean) -> (Unit -> :a) -> Unit))
+  (define (%while condition body)
+    (when (condition)
+      (body)
+      (%while condition body)))
+
+  (declare %until ((Unit -> Boolean) -> (Unit -> :a) -> Unit))
+  (define (%until condition body)
+    (unless (condition)
+      (body)
+      (%until condition body)))
+
+  (declare %forever ((Unit -> :a) -> Unit))
+  (define (%forever body)
+    (body)
+    (%forever body)))
+
+(cl:defmacro while (condition cl:&body body)
+  `(%while (fn () ,condition) (fn () ,@body)))
+
+(cl:defmacro until (condition cl:&body body)
+  `(%until (fn () ,condition) (fn () ,@body)))
+
+(cl:defmacro forever (cl:&body body)
+  `(%forever (fn () ,@body)))
 
 ;;; fundamental operators
 (coalton-toplevel
