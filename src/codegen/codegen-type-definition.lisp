@@ -100,18 +100,23 @@
                            (declare (type stream stream)
                                     (type ,classname self)
                                     (values ,classname))
-                             (format stream "#.(~s" ',(tc:constructor-entry-name constructor))
-                             ,@(loop :for slot :in field-names
-                                     :collect `(if (and *print-readably*
-                                                        (or (listp (slot-value self ',slot))
-                                                            (symbolp (slot-value self ',slot))))
-                                                   (progn
-                                                     (write-string " '" stream)
-                                                     (prin1 (slot-value self ',slot) stream))
-                                                   (progn
-                                                     (write-string " " stream)
-                                                     (prin1 (slot-value self ',slot) stream))))
-                             (write-string ")" stream)
+                           (format stream "#.(~s" ',(tc:constructor-entry-name constructor))
+                           ,@(loop :for slot :in field-names
+                                   :collect `(cond
+                                               ((and *print-readably* (not *read-eval*))
+                                                (error 'print-not-readable :object self))
+
+                                               ((and *print-readably*
+                                                     (or (listp (slot-value self ',slot))
+                                                         (symbolp (slot-value self ',slot))))
+
+                                                (write-string " '" stream)
+                                                (prin1 (slot-value self ',slot) stream))
+
+                                               (t
+                                                (write-string " " stream)
+                                                (prin1 (slot-value self ',slot) stream))))
+                           (write-string ")" stream)
                            self))))
 
         ,@(when (settings:coalton-release-p)
