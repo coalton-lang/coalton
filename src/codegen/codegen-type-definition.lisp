@@ -100,9 +100,18 @@
                            (declare (type stream stream)
                                     (type ,classname self)
                                     (values ,classname))
-                           (format stream "#.(~s~{ ~s~})"
-                                   ',(tc:constructor-entry-name constructor)
-                                   (list ,@(mapcar (lambda (slot) `(slot-value self ',slot)) field-names)))
+                             (format stream "#.(~s" ',(tc:constructor-entry-name constructor))
+                             ,@(loop :for slot :in field-names
+                                     :collect `(if (and *print-readably*
+                                                        (or (listp (slot-value self ',slot))
+                                                            (symbolp (slot-value self ',slot))))
+                                                   (progn
+                                                     (write-string " '" stream)
+                                                     (prin1 (slot-value self ',slot) stream))
+                                                   (progn
+                                                     (write-string " " stream)
+                                                     (prin1 (slot-value self ',slot) stream))))
+                             (write-string ")" stream)
                            self))))
 
         ,@(when (settings:coalton-release-p)
