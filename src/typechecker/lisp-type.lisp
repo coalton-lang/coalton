@@ -58,7 +58,7 @@ USE-FUNCTION-ENTRIES specifies whether to emit FUNCTION-ENTRY for functions, emi
 
   (:method ((ty ty) env)
     (declare (ignore env))
-    (util:coalton-bug "Unable to produce lisp type for ~A" ty))
+    (util:coalton-bug "Unable to produce lisp type for ~S" ty))
 
   ;; Allow for calling with other types
   (:method ((ty ty-scheme) env)

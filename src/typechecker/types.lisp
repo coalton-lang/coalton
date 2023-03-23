@@ -275,9 +275,9 @@
   (declare (type ty from to)
            (values ty))
   (unless (kstar-p (kind-of from))
-    (util:coalton-bug "Unable to construct function with type ~A of kind ~A" from (kind-of from)))
+    (util:coalton-bug "Unable to construct function with type ~S of kind ~S" from (kind-of from)))
   (unless (kstar-p (kind-of to))
-    (util:coalton-bug "Unable to construct function with type ~A of kind ~A" to (kind-of to)))
+    (util:coalton-bug "Unable to construct function with type ~S of kind ~S" to (kind-of to)))
   (make-tapp :from (make-tapp :from *arrow-type* :to from) :to to))
 
 (defun make-function-type* (args to)
@@ -491,7 +491,7 @@ This requires a valid PPRINT-VARIABLE-CONTEXT")
    (lambda (c s)
      (let ((*print-circle* nil) ; Prevent printing using reader macros
            )
-       (format s "Cannot apply ~A of kind ~A to ~A of kind ~A"
+       (format s "Cannot apply ~S of kind ~S to ~S of kind ~S"
                (type-application-error-argument c)
                (kind-of (type-application-error-argument c))
                (type-application-error-type c)

@@ -318,6 +318,6 @@
    (lambda (c s)
      (let ((*print-circle* nil) ; Prevent printing using reader macros
            )
-       (format s "Unable to unify kinds ~A and ~A"
+       (format s "Unable to unify kinds ~S and ~S"
                (kunify-errror-kind1 c)
                (kunify-error-kind2 c))))))

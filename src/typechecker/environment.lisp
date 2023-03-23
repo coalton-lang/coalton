@@ -774,7 +774,7 @@
 
   ;; Schemes stored in the environment are not allowed to have any free variables.
   (when (type-variables value)
-    (util:coalton-bug "Unable to add type with free variables to environment ~A" value))
+    (util:coalton-bug "Unable to add type with free variables to environment ~S" value))
 
   (update-environment
    env
@@ -913,7 +913,7 @@
             (return-from lookup-class-instance (values instance subs)))
         (predicate-unification-error () nil)))
     (unless no-error
-      (error "Unknown instance for predicate ~A" pred))))
+      (error "Unknown instance for predicate ~S" pred))))
 
 (defun lookup-instance-by-codegen-sym (env codegen-sym &key no-error)
   (declare (type environment env)
@@ -1042,7 +1042,7 @@
     (environment-method-inline-environment env)
     (cons method instance))
    (unless no-error
-     (error "Unable to find inline method for method ~A on instance ~A." method instance))))
+     (error "Unable to find inline method for method ~A on instance ~S." method instance))))
 
 (define-env-updater set-code (env name code)
   (declare (type environment env)

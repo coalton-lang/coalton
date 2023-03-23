@@ -195,7 +195,7 @@
                        :span (parser:ty-source type)
                        :file file
                        :message "Kind mismatch"
-                       :primary-note (format nil "Expected kind '~A' but variable is of kind '~A'"
+                       :primary-note (format nil "Expected kind '~S' but variable is of kind '~S'"
                                              expected-kind
                                              kvar)))))))
 
@@ -217,7 +217,7 @@
                        :span (parser:ty-source type)
                        :file file
                        :message "Kind mismatch"
-                       :primary-note (format nil "Expected kind '~A' but got kind '~A'"
+                       :primary-note (format nil "Expected kind '~S' but got kind '~S'"
                                              expected-kind
                                              (tc:kind-of type_))))))))
 
@@ -257,7 +257,7 @@
                            :span (parser:ty-source (parser:tapp-from type))
                            :file file
                            :message "Kind mismatch"
-                           :primary-note (format nil "Expected kind '~A' but got kind '~A'"
+                           :primary-note (format nil "Expected kind '~S' but got kind '~S'"
                                                  (tc:make-kfun
                                                   :from (tc:apply-ksubstitution ksubs arg-kind)
                                                   :to (tc:apply-ksubstitution ksubs expected-kind))
