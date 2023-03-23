@@ -142,7 +142,7 @@
            (values null))
 
   (unless (gethash name (tc-env-ty-table env))
-    (util:coalton-bug "Attempt to replace unknown type ~A" name))
+    (util:coalton-bug "Attempt to replace unknown type ~S" name))
 
   (setf (gethash name (tc-env-ty-table env)) scheme)
 

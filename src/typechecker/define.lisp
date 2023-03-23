@@ -71,21 +71,21 @@
            (type coalton-file file))
 
   (unless (tc:ty-predicate-source pred)
-    (util:coalton-bug "Predicate ~A does not have source information" pred))
+    (util:coalton-bug "Predicate ~S does not have source information" pred))
 
   (error 'tc-error
          :err (coalton-error
                :span (tc:ty-predicate-source pred)
                :file file
                :message "Ambigious predicate"
-               :primary-note (format nil "Ambigious predicate ~A" pred))))
+               :primary-note (format nil "Ambigious predicate ~S" pred))))
 
 (defun error-unknown-pred (pred file)
   (declare (type tc:ty-predicate pred)
            (type coalton-file file))
 
   (unless (tc:ty-predicate-source pred)
-    (util:coalton-bug "Predicate ~A does not have source information" pred))
+    (util:coalton-bug "Predicate ~S does not have source information" pred))
 
   (error 'tc-error
          :err (coalton-error
@@ -201,7 +201,7 @@
               :for scheme := (tc:remove-source-info (gethash name (tc-env-ty-table tc-env)))
 
               :when (tc:type-variables scheme)
-                :do (util:coalton-bug "Scheme ~A should not have any free type variables." scheme)
+                :do (util:coalton-bug "Scheme ~S should not have any free type variables." scheme)
 
               :do (setf env (tc:set-value-type env name scheme))
 
@@ -263,7 +263,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                        :span (parser:node-source node)
                        :file file
                        :message "Type mismatch"
-                       :primary-note (format nil "Expected type '~A' but got type '~A'"
+                       :primary-note (format nil "Expected type '~S' but got type '~S'"
                                              (tc:apply-substitution subs expected-type)
                                              (tc:apply-substitution subs ty))))))))
 
@@ -300,7 +300,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                        :span (parser:node-source node)
                        :file file
                        :message "Type mismatch"
-                       :primary-note (format nil "Expected type '~A' but got type '~A'"
+                       :primary-note (format nil "Expected type '~S' but got type '~S'"
                                              (tc:apply-substitution subs expected-type)
                                              (tc:apply-substitution subs tvar))))))))
 
@@ -334,7 +334,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                        :span (parser:node-source node)
                        :file file
                        :message "Type mismatch"
-                       :primary-note (format nil "Expected type '~A' but got type '~A'"
+                       :primary-note (format nil "Expected type '~S' but got type '~S'"
                                              (tc:apply-substitution subs expected-type)
                                              (tc:apply-substitution subs ty))))))))
 
@@ -410,9 +410,9 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                               :file file
                                               :message "Argument error"
                                               :primary-note (if (null (tc:function-type-arguments fun-ty))
-                                                                (format nil "Unable to call '~A' it is not a function"
+                                                                (format nil "Unable to call '~S' it is not a function"
                                                                         fun-ty)
-                                                                (format nil "Function call has ~D arguments but inferred type '~A' only takes ~D"
+                                                                (format nil "Function call has ~D arguments but inferred type '~S' only takes ~D"
                                                                         (length rands)
                                                                         fun-ty
                                                                         (length (tc:function-type-arguments fun-ty)))))))))))
@@ -436,7 +436,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                          :span (parser:node-source node)
                          :file file
                          :message "Type mismatch"
-                         :primary-note (format nil "Expected type '~A' but got type '~A'"
+                         :primary-note (format nil "Expected type '~S' but got type '~S'"
                                                (tc:apply-substitution subs expected-type)
                                                (tc:apply-substitution subs fun-ty_)))))))))
 
@@ -558,14 +558,14 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                    :span s1
                                    :file file
                                    :message "Return type mismatch"
-                                   :primary-note (format nil "First return is of type '~A'"
+                                   :primary-note (format nil "First return is of type '~S'"
                                                          (tc:apply-substitution subs ty1))
                                    :notes
                                    (list
                                     (make-coalton-error-note
                                      :type :primary
                                      :span s2
-                                     :message (format nil "Second return is of type '~A'"
+                                     :message (format nil "Second return is of type '~S'"
                                                       (tc:apply-substitution subs ty2)))))))))
 
         ;; Unify the function's inferered type with one of the early returns.
@@ -578,14 +578,14 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                            :span (car (first *returns*))
                            :file file
                            :message "Return type mismatch"
-                           :primary-note (format nil "First return is of type '~A'"
+                           :primary-note (format nil "First return is of type '~S'"
                                                  (tc:apply-substitution subs (cdr (first *returns*))))
                            :notes
                            (list
                             (make-coalton-error-note
                              :type :primary
                              :span (parser:node-source (parser:node-body-last-node (parser:node-abstraction-body node)))
-                             :message (format nil "Second return is of type '~A'"
+                             :message (format nil "Second return is of type '~S'"
                                               (tc:apply-substitution subs body-ty)))))))))
 
         (let ((ty (tc:make-function-type* arg-tys body-ty)))
@@ -621,7 +621,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                            :span (parser:node-source node)
                            :file file
                            :message "Type mismatch"
-                           :primary-note (format nil "Expected type '~A' but got type '~A'"
+                           :primary-note (format nil "Expected type '~S' but got type '~S'"
                                                  (tc:apply-substitution subs expected-type)
                                                  (tc:apply-substitution subs ty))))))))))
 
@@ -708,7 +708,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                        :span (parser:node-source node)
                        :file file
                        :message "Type mismatch"
-                       :primary-note (format nil "Expected type '~A' but got type '~A'"
+                       :primary-note (format nil "Expected type '~S' but got type '~S'"
                                              (tc:apply-substitution subs expected-type)
                                              (tc:apply-substitution subs declared-ty))))))))
 
@@ -778,7 +778,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                          :span (parser:node-source node)
                          :file file
                          :message "Type mismatch"
-                         :primary-note (format nil "Expected type '~A' but got type '~A'"
+                         :primary-note (format nil "Expected type '~S' but got type '~S'"
                                                (tc:apply-substitution subs expected-type)
                                                (tc:apply-substitution subs ret-ty)))))))))
 
@@ -832,7 +832,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                          :span (parser:node-source node)
                          :file file
                          :message "Type mismatch"
-                         :primary-note (format nil "Declared type '~A' does not match inferred type '~A'"
+                         :primary-note (format nil "Declared type '~S' does not match inferred type '~S'"
                                                (tc:apply-substitution subs declared-ty)
                                                (tc:apply-substitution subs expr-ty))))))
 
@@ -845,7 +845,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                          :span (parser:node-source node)
                          :file file
                          :message "Declared type too general"
-                         :primary-note (format nil "Declared type '~A' is more general than inferred type '~A'"
+                         :primary-note (format nil "Declared type '~S' is more general than inferred type '~S'"
                                                (tc:apply-substitution subs declared-ty)
                                                (tc:apply-substitution subs expr-ty))))))
 
@@ -868,7 +868,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                          :span (parser:node-source node)
                          :file file
                          :message "Type mismatch"
-                         :primary-note (format nil "Expected type '~A' but got type '~A'"
+                         :primary-note (format nil "Expected type '~S' but got type '~S'"
                                                (tc:apply-substitution subs expected-type)
                                                (tc:apply-substitution subs expr-ty)))))))))
 
@@ -959,7 +959,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                        :span (parser:node-source node)
                        :file file
                        :message "Type mismatch"
-                       :primary-note (format nil "Expected type '~A' but 'or' evaluates to '~A'"
+                       :primary-note (format nil "Expected type '~S' but 'or' evaluates to '~S'"
                                              (tc:apply-substitution subs expected-type)
                                              tc:*boolean-type*)))))))
 
@@ -1002,7 +1002,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                        :span (parser:node-source node)
                        :file file
                        :message "Type mismatch"
-                       :primary-note (format nil "Expected type '~A' but 'and' evaluates to '~A'"
+                       :primary-note (format nil "Expected type '~S' but 'and' evaluates to '~S'"
                                              (tc:apply-substitution subs expected-type)
                                              tc:*boolean-type*)))))))
 
@@ -1056,7 +1056,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                            :span (parser:node-source node)
                            :file file
                            :message "Type mismatch"
-                           :primary-note (format nil "Expected type '~A' but got '~A'"
+                           :primary-note (format nil "Expected type '~S' but got '~S'"
                                                  (tc:apply-substitution subs expected-type)
                                                  (tc:apply-substitution subs else-ty))))))))))
 
@@ -1101,7 +1101,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                          :span (parser:node-source node)
                          :file file
                          :message "Type mismatch"
-                         :primary-note (format nil "Expected type '~A' but got '~A'"
+                         :primary-note (format nil "Expected type '~S' but got '~S'"
                                                (tc:apply-substitution subs body-ty)
                                                (tc:apply-substitution subs expected-type)))))))))
 
@@ -1146,7 +1146,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                          :span (parser:node-source node)
                          :file file
                          :message "Type mismatch"
-                         :primary-note (format nil "Expected type '~A' but got '~A'"
+                         :primary-note (format nil "Expected type '~S' but got '~S'"
                                                (tc:apply-substitution subs body-ty)
                                                (tc:apply-substitution subs expected-type)))))))))
 
@@ -1225,7 +1225,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                        :span (parser:node-source node)
                        :file file
                        :message "Type mismatch"
-                       :primary-note (format nil "Expected type '~A' but got '~A'"
+                       :primary-note (format nil "Expected type '~S' but got '~S'"
                                              (tc:apply-substitution subs expected-type)
                                              (tc:apply-substitution subs ret-ty))))))))
 
@@ -1270,7 +1270,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                            :span (parser:node-do-bind-source node)
                            :file file
                            :message "Type mismatch"
-                           :primary-note (format nil "Expected type '~A' but got '~A'"
+                           :primary-note (format nil "Expected type '~S' but got '~S'"
                                                  (tc:apply-substitution subs expected-type)
                                                  (tc:apply-substitution subs expr-ty))))))))))
 
@@ -1374,7 +1374,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                          :span (parser:node-source node)
                          :file file
                          :message "Type mismatch"
-                         :primary-note (format nil "Expected type '~A' but do expression has type '~A'"
+                         :primary-note (format nil "Expected type '~S' but do expression has type '~S'"
                                                (tc:apply-substitution subs expected-type)
                                                (tc:apply-substitution subs ty))))))))))
 
@@ -1440,7 +1440,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                        :span (parser:pattern-source pat)
                        :file file
                        :message "Type mismatch"
-                       :primary-note (format nil "Expected type '~A' but pattern literal has type '~A'"
+                       :primary-note (format nil "Expected type '~S' but pattern literal has type '~S'"
                                              (tc:apply-substitution subs expected-type)
                                              (tc:apply-substitution subs ty))))))))
 
@@ -1541,7 +1541,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                            :span (parser:pattern-source pat)
                            :file file
                            :message "Type mismatch"
-                           :primary-note (format nil "Expected type '~A' but pattern has type '~A'"
+                           :primary-note (format nil "Expected type '~S' but pattern has type '~S'"
                                                  (tc:apply-substitution subs expected-type)
                                                  (tc:apply-substitution subs pat-ty)))))))))))
 
@@ -1815,7 +1815,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                              :message "Declared type is too general"
                              :span source
                              :file file
-                             :primary-note (format nil "Declared type ~A is more general than inferred type ~A."
+                             :primary-note (format nil "Declared type ~S is more general than inferred type ~S."
                                                    declared-ty
                                                    output-scheme))))
 
@@ -1826,7 +1826,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                              :message "Explicit type is missing inferred predicate"
                              :span source
                              :file file
-                             :primary-note (format nil "Declared type ~A is missing inferred predicate ~A"
+                             :primary-note (format nil "Declared type ~S is missing inferred predicate ~S"
                                                    output-qual-type
                                                    (first retained-preds)))))
 
@@ -2165,14 +2165,14 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                                               :span s1
                                               :file file
                                               :message "Return type mismatch"
-                                              :primary-note (format nil "First return is of type '~A'"
+                                              :primary-note (format nil "First return is of type '~S'"
                                                                     (tc:apply-substitution subs ty1))
                                               :notes
                                               (list
                                                (make-coalton-error-note
                                                 :type :primary
                                                 :span s2
-                                                :message (format nil "Second return is of type '~A'"
+                                                :message (format nil "Second return is of type '~S'"
                                                                  (tc:apply-substitution subs ty2)))))))))
 
                    ;; Unify the function's inferered type with one of the early returns.
@@ -2185,14 +2185,14 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                                       :span (car (first *returns*))
                                       :file file
                                       :message "Return type mismatch"
-                                      :primary-note (format nil "First return is of type '~A'"
+                                      :primary-note (format nil "First return is of type '~S'"
                                                             (tc:apply-substitution subs (cdr (first *returns*))))
                                       :notes
                                       (list
                                        (make-coalton-error-note
                                         :type :primary
                                         :span (parser:node-source (parser:binding-last-node binding))
-                                        :message (format nil "Second return is of type '~A'"
+                                        :message (format nil "Second return is of type '~S'"
                                                          (tc:apply-substitution subs ret-ty)))))))))
 
                    value-node))
@@ -2242,7 +2242,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                        :span (parser:binding-source binding)
                        :file file
                        :message "Type mismatch"
-                       :primary-note (format nil "Expected type '~A' but got type '~A'"
+                       :primary-note (format nil "Expected type '~S' but got type '~S'"
                                              (tc:apply-substitution subs expected-type)
                                              (tc:apply-substitution subs ty)))))))))
 
