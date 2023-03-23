@@ -56,12 +56,6 @@ Enable release mode either by setting the UNIX environment variable COALTON_ENV 
 (declaim (type boolean *emit-type-annotations*))
 (defvar *emit-type-annotations* t)
 
-;; Set to t when base types are defined
-(declaim (type boolean *coalton-stage-1-complete*))
-;; this has to be a `defparameter', not a `defvar', or else re-loading coalton in an image where it's already
-;; been compiled once will fail.
-(defparameter *coalton-stage-1-complete* nil)
-
 (defvar *coalton-optimize* '(optimize (speed 3) (safety 0)))
 
 (defvar *coalton-optimize-library* '(optimize (speed 3) (safety 1)))
