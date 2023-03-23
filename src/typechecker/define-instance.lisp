@@ -333,13 +333,37 @@
 
 (defun check-for-orphan-instance (instance file)
   (declare (type parser:toplevel-define-instance instance) 
-           (type coalton-file file))
+           (type coalton-file file)
+           (values null))
 
-  ;; Orphan instances can be defined before stage 1 of loading the
-  ;; standard libray is complete
-  (unless settings:*coalton-stage-1-complete*
+
+  ;; Stage-1 packages skip the orphan instance check
+  (when (find *package* (list (find-package "COALTON-LIBRARY/TYPES")
+                              (find-package "COALTON-LIBRARY/FIXED-SIZE-NUMBERS")
+                              (find-package "COALTON-LIBRARY/CLASSES")
+                              (find-package "COALTON-LIBRARY/HASH")
+                              (find-package "COALTON-LIBRARY/BUILTIN")
+                              (find-package "COALTON-LIBRARY/FUNCTIONS")
+                              (find-package "COALTON-LIBRARY/BOOLEAN")
+                              (find-package "COALTON-LIBRARY/BITS")
+                              (find-package "COALTON-LIBRARY/MATH/ARITH")
+                              (find-package "COALTON-LIBRARY/MATH/NUM")
+                              (find-package "COALTON-LIBRARY/MATH/BOUNDED")
+                              (find-package "COALTON-LIBRARY/MATH/CONVERSIONS")
+                              (find-package "COALTON-LIBRARY/MATH/FRACTION")
+                              (find-package "COALTON-LIBRARY/MATH/INTEGRAL")
+                              (find-package "COALTON-LIBRARY/MATH/REAL")
+                              (find-package "COALTON-LIBRARY/MATH/COMPLEX")
+                              (find-package "COALTON-LIBRARY/MATH/ELEMENTARY")
+                              (find-package "COALTON-LIBRARY/MATH/DYADIC")
+                              (find-package "COALTON-LIBRARY/CHAR")
+                              (find-package "COALTON-LIBRARY/STRING")
+                              (find-package "COALTON-LIBRARY/TUPLE")
+                              (find-package "COALTON-LIBRARY/OPTIONAL")
+                              (find-package "COALTON-LIBRARY/LIST")
+                              (find-package "COALTON-LIBRARY/RESULT")))
     (return-from check-for-orphan-instance))
-
+  
   (let ((instance-syms
           (cons
            (parser:identifier-src-name (parser:ty-predicate-class (parser:toplevel-define-instance-pred instance)))

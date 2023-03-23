@@ -6,9 +6,11 @@
 
   (:import-from
    #:common-lisp
-   #:in-package)
+   #:in-package
+   #:defpackage)
   (:export
-   #:in-package)
+   #:in-package
+   #:defpackage)
 
   (:export #:call-coalton-function)
 
