@@ -432,7 +432,7 @@
       (let ((y 1))
         (+ 0.5 y)))"
 
-   '("f" . "(:a -> Double-Float)"))
+   '("f" . "(:a -> Single-Float)"))
 
   ;; Check that the monomorphism restriction still applies to defaulted bindings
   (signals tc:tc-error
