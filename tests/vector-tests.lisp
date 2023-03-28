@@ -6,7 +6,9 @@
 
 (define-test vector-constructor-equivalencies ()
   (let vec = (vector:with-capacity 10))
-  (iter:for-each! (flip vector:push! vec)
+  (iter:for-each! (fn (x)
+                    (vector:push! x vec)
+                    Unit)
                   (iter:up-to 10))
   (is (== (vector:make 0 1 2 3 4 5 6 7 8 9)
           vec))

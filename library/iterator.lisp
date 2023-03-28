@@ -448,7 +448,7 @@ This operation could be called `length!`, but `count!` emphasizes the fact that 
 afterwards, ITER will be exhausted."
     (sum! (map (const 1) iter)))
 
-  (declare for-each! ((:elt -> :any) -> Iterator :elt -> Unit))
+  (declare for-each! ((:elt -> Unit) -> Iterator :elt -> Unit))
   (define (for-each! thunk iter)
     "Call THUNK on each element of ITER in order for side effects.
 Discard values returned by THUNK."
@@ -562,7 +562,10 @@ The empty iterator will hash as 0."
 
 The vector will be resized if ITER contains more than SIZE elements."
     (let v = (vector:with-capacity size))
-    (for-each! ((flip vector:push!) v) iter)
+    (for-each! (fn (x)
+                 (vector:push! x v)
+                 Unit)
+               iter)
     v)
 
   (declare collect-vector! (types:RuntimeRepr :elt => Iterator :elt -> Vector :elt))
