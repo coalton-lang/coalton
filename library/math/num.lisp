@@ -14,6 +14,7 @@
    #:coalton-library/hash
    #:define-sxhash-hasher)
   (:local-nicknames
+   (#:ff #:float-features)
    (#:bits #:coalton-library/bits)))
 
 (in-package #:coalton-library/math/num)
@@ -226,13 +227,19 @@
      (define-instance (Num ,coalton-type)
        (define (+ a b)
          (lisp ,coalton-type (a b)
-           (cl:+ a b)))
+           (#+(not ccl) cl:progn
+              #+ccl ff:with-float-traps-masked #+ccl cl:t
+              (cl:+ a b))))
        (define (- a b)
          (lisp ,coalton-type (a b)
-           (cl:- a b)))
+           (#+(not ccl) cl:progn
+              #+ccl ff:with-float-traps-masked #+ccl cl:t
+              (cl:- a b))))
        (define (* a b)
          (lisp ,coalton-type (a b)
-           (cl:* a b)))
+           (#+(not ccl) cl:progn
+              #+ccl ff:with-float-traps-masked #+ccl cl:t
+              (cl:* a b))))
        (define (fromInt x)
          (match (lisp (Optional ,coalton-type) (x)
                   (%optional-coerce x ,underlying-type))
@@ -263,7 +270,9 @@
 
            (True
             (lisp ,coalton-type (x y)
-              (cl:/ x y)))))
+              (#+(not ccl) cl:progn
+                 #+ccl ff:with-float-traps-masked #+ccl cl:t
+                 (cl:/ x y))))))
 
        (define (reciprocal x)
          (cond
@@ -273,7 +282,9 @@
 
            (True
             (lisp ,coalton-type (x)
-              (cl:/ x))))))
+              (#+(not ccl) cl:progn
+                 #+ccl ff:with-float-traps-masked #+ccl cl:t
+                 (cl:/ x)))))))
 
      (define-instance (Dividable Integer ,coalton-type)
        (define (general/ x y)
