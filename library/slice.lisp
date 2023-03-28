@@ -104,7 +104,7 @@
     (lisp :a (idx s)
       (cl:aref s idx)))
 
-  (declare foreach ((:a -> :b) -> (Slice :a) -> Unit))
+  (declare foreach ((:a -> Unit) -> (Slice :a) -> Unit))
   (define (foreach f s)
     "Call the function F once for each item in S"
     (lisp :a (f s)
@@ -112,7 +112,7 @@
          :do (call-coalton-function f elem)))
     Unit)
 
-  (declare foreach-index ((UFix -> :a -> :b) -> (Slice :a) -> Unit))
+  (declare foreach-index ((UFix -> :a -> Unit) -> (Slice :a) -> Unit))
   (define (foreach-index f s)
     "Call the function F once for each item in S with its index"
     (lisp :a (f s)
@@ -122,7 +122,7 @@
          :do (call-coalton-function f i elem)))
     Unit)
 
-  (declare foreach2 ((:a -> :b -> :c) -> (Slice :a) -> (Slice :b) -> Unit))
+  (declare foreach2 ((:a -> :b -> Unit) -> (Slice :a) -> (Slice :b) -> Unit))
   (define (foreach2 f s1 s2)
     "Iterate over S1 and S2 calling F once on each iteration"
     (lisp :a (f s1 s2)
@@ -202,7 +202,8 @@
       (let v = (vector:with-capacity (length s)))
       (foreach
        (fn (x)
-         (vector:push! x v))
+         (vector:push! x v)
+         Unit)
        s)
       v))
 

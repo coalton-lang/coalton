@@ -108,7 +108,7 @@
     (lisp Integer (table)
       (coalton/hashtable-shim:custom-hash-table-count table)))
 
-  (declare foreach ((:key -> :value -> :a) -> (Hashtable :key :value) -> Unit))
+  (declare foreach ((:key -> :value -> Unit) -> (Hashtable :key :value) -> Unit))
   (define (foreach f table)
     "Call F once for each key value pair in TABLE"
     (lisp Unit (f table)
@@ -124,7 +124,8 @@
     "Returns the key-values pairs as a list."
     (let lst = (cell:new Nil))
     (foreach (fn (key val)
-               (cell:push! lst (Tuple key val)))
+               (cell:push! lst (Tuple key val))
+               Unit)
              table)
     (cell:read lst))
 
@@ -133,7 +134,8 @@
     "Returns the keys in TABLE as a list"
     (let lst = (cell:new Nil))
     (foreach (fn (key _)
-               (cell:push! lst key))
+               (cell:push! lst key)
+               Unit)
              table)
     (cell:read lst))
 
@@ -142,7 +144,8 @@
     "Returns the values in TABLE as a list"
     (let lst = (cell:new Nil))
     (foreach (fn (_ val)
-               (cell:push! lst val))
+               (cell:push! lst val)
+               Unit)
              table)
     (cell:read lst)))
 

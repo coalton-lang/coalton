@@ -178,7 +178,7 @@
                  (Some pos)
                  None)))))
 
-  (declare foreach ((:a -> :b) -> Vector :a -> Unit))
+  (declare foreach ((:a -> Unit) -> Vector :a -> Unit))
   (define (foreach f v)
     "Call the function F once for each item in V"
     (lisp Void (f v)
@@ -186,7 +186,7 @@
          :do (call-coalton-function f elem)))
     Unit)
 
-  (declare foreach-index ((UFix -> :a -> :b) -> Vector :a -> Unit))
+  (declare foreach-index ((UFix -> :a -> Unit) -> Vector :a -> Unit))
   (define (foreach-index f v)
     "Call the function F once for each item in V with its index"
     (lisp Void (f v)
@@ -196,7 +196,7 @@
          :do (call-coalton-function f i elem)))
     Unit)
 
-  (declare foreach2 ((:a -> :b -> :c) -> Vector :a -> Vector :b -> Unit))
+  (declare foreach2 ((:a -> :b -> Unit) -> Vector :a -> Vector :b -> Unit))
   (define (foreach2 f v1 v2)
     "Iterate in parallel over V1 and V2 calling F once for each pair of elements. Iteration stops when the shorter vector runs out of elements."
     (lisp Void (f v1 v2)
@@ -212,7 +212,8 @@
     (let out = (with-capacity (+ (length v1) (length v2))))
     (let f =
       (fn (item)
-        (push! item out)))
+        (push! item out)
+        Unit))
 
     (foreach f v1)
     (foreach f v2)
@@ -280,7 +281,8 @@
                   (length v)))
       (foreach
        (fn (item)
-         (push! (f item) out))
+         (push! (f item) out)
+         Unit)
        v)
       out))
 
