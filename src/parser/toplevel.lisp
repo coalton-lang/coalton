@@ -384,10 +384,7 @@
            (eclector.readtable:copy-readtable eclector.readtable:*readtable*))
 
          ;; Initial package to read (package) forms into
-         (*package* *package*)
-
-         ;; Read unspecified floats as double floats
-         (*read-default-float-format* 'double-float))
+         (*package* *package*))
 
     ;; Parse package form
     (when (eq :file mode)
