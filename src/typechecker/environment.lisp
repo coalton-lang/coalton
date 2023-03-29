@@ -122,10 +122,12 @@
    #:environment-specialization-environment ; ACCESSOR
    #:lookup-value-type                      ; FUNCTION
    #:set-value-type                         ; FUNCTION
+   #:unset-value-type                       ; FUNCTION
    #:lookup-type                            ; FUNCTION
    #:set-type                               ; FUNCTION
    #:lookup-constructor                     ; FUNCTION
    #:set-constructor                        ; FUNCTION
+   #:unset-constructor                      ; FUNCTION
    #:lookup-class                           ; FUNCTION
    #:set-class                              ; FUNCTION
    #:lookup-function                        ; FUNCTION
@@ -133,6 +135,7 @@
    #:unset-function                         ; FUNCTION
    #:lookup-name                            ; FUNCTION
    #:set-name                               ; FUNCTION
+   #:unset-name                             ; FUNCTION
    #:lookup-class-instances                 ; FUNCTION
    #:lookup-class-instance                  ; FUNCTION
    #:lookup-instance-by-codegen-sym         ; FUNCTION
@@ -784,6 +787,17 @@
                        value
                        #'make-value-environment)))
 
+(define-env-updater unset-value-type (env symbol)
+  (declare (type environment env)
+           (type symbol symbol))
+
+  (update-environment
+   env
+   :value-environment (immutable-map-remove
+                       (environment-value-environment env)
+                       symbol
+                       #'make-value-environment)))
+
 (defun lookup-type (env symbol &key no-error)
   (declare (type environment env)
            (type symbol symbol))
@@ -820,6 +834,16 @@
                              (environment-constructor-environment env)
                              symbol
                              value
+                             #'make-constructor-environment)))
+
+(define-env-updater unset-constructor (env symbol)
+  (declare (type environment env)
+           (type symbol symbol))
+  (update-environment
+   env
+   :constructor-environment (immutable-map-remove
+                             (environment-constructor-environment env)
+                             symbol
                              #'make-constructor-environment)))
 
 (defun lookup-class (env symbol &key no-error)
@@ -896,6 +920,16 @@
                             symbol
                             value
                             #'make-name-environment)))))
+
+(define-env-updater unset-name (env symbol)
+  (declare (type environment env)
+           (type symbol symbol))
+  (update-environment
+   env
+   :name-environment (immutable-map-remove
+                      (environment-name-environment env)
+                      symbol
+                      #'make-name-environment)))
 
 (defun lookup-class-instances (env class &key no-error)
   (declare (type environment env)
