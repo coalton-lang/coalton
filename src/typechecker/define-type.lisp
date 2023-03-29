@@ -193,6 +193,20 @@
            (type tc:environment env)
            (values tc:environment))
 
+  ;; If the type was previously defined, then undefine all
+  ;; constructors that were defined only on the old version of the
+  ;; type.
+  (let ((old-type (tc:lookup-type env (type-definition-name type) :no-error t)))
+    (when old-type
+      (loop :for constructor :in (tc:type-entry-constructors old-type)
+            :for ctor-entry := (tc:lookup-constructor env constructor)
+            :unless (find constructor (type-definition-constructors type) :key #'tc:constructor-entry-name)
+              :do (setf env (tc:unset-constructor env constructor))
+                  (setf env (tc:unset-value-type env constructor))
+                  (setf env (tc:unset-name env constructor))
+                  (when (plusp (tc:constructor-entry-arity ctor-entry))
+                    (setf env (tc:unset-function env constructor))))))
+
   ;; Define type parsed type in the environment
   (setf env
         (tc:set-type
