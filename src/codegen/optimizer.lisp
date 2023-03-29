@@ -62,7 +62,10 @@
 
            (bindings
              (loop :for (name . node) :in bindings
-                   :collect (cons name (direct-application node function-table)))))
+                   :collect (cons name
+                                  (direct-application
+                                   (pointfree node function-table env)
+                                   function-table)))))
 
       (loop :for (name . node) :in bindings
             :do (typecheck-node node env)
@@ -154,8 +157,6 @@
   (alexandria-2:line-up-first
    node
 
-   pointfree
-
    canonicalize
 
    (match-dynamic-extent-lift env)
@@ -166,31 +167,100 @@
 
    (inline-methods env)))
 
-(defun pointfree (node)
+(defun pointfree (node table env)
   (declare (type node node)
+           (type hash-table table)
+           (type tc:environment env)
            (values node))
-  (declare (type node node)
-           (values node))
 
-  (unless (node-variable-p node)
-    (return-from pointfree node))
+  (let (function args num-params)
+    (cond
+      ;; Node must be a variable of type function
+      ((node-variable-p node)
+       (unless (tc:function-type-p (node-type node))
+         (return-from pointfree node))
+       (setf function node)
+       (setf num-params (length (tc:function-type-arguments (node-type node)))))
 
-  (if (not (tc:function-type-p (node-type node)))
-      (return-from pointfree node))
+      ;; Or an application on a function
+      ((node-application-p node)
+       (unless (node-variable-p (node-application-rator node))
+         (return-from pointfree node))
 
-  (let* ((arguments (tc:function-type-arguments (node-type node)))
-         (argument-names (loop :for argument :in arguments
-                               :collect (gensym))))
+       ;; The application must be on a known function
+       (unless (gethash (node-variable-value (node-application-rator node)) table)
+         (return-from pointfree node))
 
-    (make-node-abstraction
-     :type (node-type node)
-     :vars argument-names
-     :subexpr (make-node-application
-               :type (tc:function-return-type (node-type node))
-               :rator node
-               :rands (loop :for ty :in arguments
-                            :for name :in argument-names
-                            :collect (make-node-variable :type ty :value name))))))
+       ;; The function must take more arguments than it is currently applied with
+       (unless (> (gethash (node-variable-value (node-application-rator node)) table)
+                  (length (node-application-rands node)))
+         (return-from pointfree node))
+
+       (labels ((valid-pointfree-argument (node)
+                  (declare (type node node)
+                           (values boolean))
+                  (cond
+                    ;; Valid pointfree arguments are instances dictionaries
+                    ((node-variable-p node)
+                     (and (tc:lookup-instance-by-codegen-sym env (node-variable-value node) :no-error t) t))
+
+                    ;; And expressions that build instance dictionaries
+                    ((node-application-p node)
+                     (and (valid-pointfree-argument (node-application-rator node))
+                          (reduce
+                           (lambda (old new)
+                             (and old (valid-pointfree-argument new)))
+                           (node-application-rands node)
+                           :initial-value t)
+                          t))
+
+                    (t
+                     nil))))
+
+         ;; The applications arguments must all be valid
+         (unless (reduce (lambda (old new)
+                           (and old (valid-pointfree-argument new)))
+                         (node-application-rands node)
+                         :initial-value t)
+           (return-from pointfree node))
+
+         (setf function (node-application-rator node))
+         (setf args (node-application-rands node))
+         (setf num-params (- (gethash (node-variable-value (node-application-rator node)) table)
+                             (length (node-application-rands node))))))
+
+      (t
+       (return-from pointfree node)))
+
+    (let* ((orig-param-names (tc:lookup-function-source-parameter-names env (node-variable-value function)))
+
+           (param-names (loop :for i :from 0 :below num-params
+                              :if orig-param-names
+                                :collect (gentemp (concatenate 'string
+                                                               (symbol-name (nth (+ i (length args)) orig-param-names))
+                                                               "-"))
+                              :else
+                                :collect (gentemp)))
+
+           (param-types (subseq (tc:function-type-arguments (node-type function)) (length args)))
+
+           (param-nodes (loop :for name :in param-names
+                              :for ty :in param-types
+                              :collect (make-node-variable
+                                        :type ty
+                                        :value name)))
+
+           (new-args (append args param-nodes)))
+
+      (make-node-abstraction
+       :type (node-type node)
+       :vars param-names
+       :subexpr (make-node-application
+                 :type (tc:make-function-type*
+                        (subseq (tc:function-type-arguments (node-type function)) (length new-args))
+                        (tc:function-return-type (node-type node)))
+                 :rator function
+                 :rands new-args)))))
 
 (defun canonicalize (node)
   (declare (type node node)
