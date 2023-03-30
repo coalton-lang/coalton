@@ -18,6 +18,7 @@ jobs:
         LISP_IMPL: ["sbcl", "allegro", "ccl"]
         COALTON_ENV: ["release", "development"]
         SAFETY: ["0", "3"]
+        DISABLE_SPECIALIZATION: ["1", "0"] 
         exclude:
           # Since we don't have a way of switching safety on allegro or ccl, we can
           # just ignore high safety tests.
@@ -45,6 +46,7 @@ jobs:
         if: matrix.LISP_IMPL == 'sbcl'
         env:
           COALTON_ENV: ${{ matrix.COALTON_ENV }}
+          COALTON_DISABLE_SPECIALIZATION: ${{ matrix.DISABLE_SPECIALIZATION }}
         run: |
           cat <<EOF > run-tests.lisp
           (sb-ext:restrict-compiler-policy 'safety ${{ matrix.SAFETY }})
@@ -58,6 +60,7 @@ jobs:
         if: matrix.LISP_IMPL == 'allegro'
         env:
           COALTON_ENV: ${{ matrix.COALTON_ENV }}
+          COALTON_DISABLE_SPECIALIZATION: ${{ matrix.DISABLE_SPECIALIZATION }}
         run: |
           cat <<EOF > run-tests.lisp
           (ql:quickload :coalton/tests)
@@ -70,6 +73,7 @@ jobs:
         if: matrix.LISP_IMPL == 'ccl'
         env:
           COALTON_ENV: ${{ matrix.COALTON_ENV }}
+          COALTON_DISABLE_SPECIALIZATION: ${{ matrix.DISABLE_SPECIALIZATION }}
         run: |
           cat <<EOF > run-tests.lisp
           (ql:quickload :coalton/tests)

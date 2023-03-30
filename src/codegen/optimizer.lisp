@@ -510,6 +510,10 @@
   (declare (type node node)
            (type tc:environment env)
            (values node &optional))
+
+  (when settings:*coalton-disable-specialization*
+    (return-from apply-specializations node))
+
   (labels ((apply-specialization (node &rest rest)
              (declare (dynamic-extent rest)
                       (ignore rest))

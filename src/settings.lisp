@@ -7,6 +7,7 @@
   (:use #:cl)
   (:export
    #:coalton-release-p                  ; FUNCTION
+   #:*coalton-disable-specialization*   ; VARIABLE
    #:*coalton-print-unicode*            ; VARIABLE
    #:*coalton-dump-ast*                 ; VARIABLE
    #:*coalton-skip-update*              ; VARIABLE
@@ -43,6 +44,15 @@ Enable release mode either by setting the UNIX environment variable COALTON_ENV 
 
 (when (coalton-release-p)
   (format t "~&;; COALTON starting in release mode~%"))
+
+(declaim (type boolean *coalton-disable-specialization*))
+(defvar *coalton-disable-specialization* nil)
+
+(when (find (uiop:getenv "COALTON_DISABLE_SPECIALIZATION")
+            '("t" "true" "1")
+            :test #'string-equal)
+  (format t "~&;; COALTON starting with specializations disabled")
+  (setf *coalton-disable-specialization* t))
 
 ;; Configure the backend to print out the ast of toplevel forms
 (declaim (type boolean *coalton-dump-ast*))
