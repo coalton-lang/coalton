@@ -20,6 +20,8 @@
    #:literal-value                      ; TYPE
    #:literal-equal                      ; FUNCTION
    #:maphash-values-new                 ; FUNCTION
+   #:take                               ; FUNCTION
+   #:drop                               ; FUNCTION
    #:find-symbol                        ; FUNCTION
    #:find-symbol?                       ; FUNCTION
    #:take-until                         ; FUNCTION
@@ -137,7 +139,6 @@
            (values boolean))
   (equal x y))
 
-
 (defun take-until (pred list)
   "Splits LIST into two lists on the element where PRED first returns true"
   (declare (type list list)
@@ -155,6 +156,18 @@
         (values
          (nreverse out)
          result)))))
+
+(defun take (n list)
+  (declare (type fixnum n)
+           (type list list)
+           (values list))
+  (subseq list 0 n))
+
+(defun drop (n list)
+  (declare (type fixnum n)
+           (type list list)
+           (values list))
+  (subseq list n))
 
 (defun project-indicies (indices data)
   (declare (type list indices data)
