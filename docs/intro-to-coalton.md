@@ -4,15 +4,66 @@ Coalton is a statically typed language that is embedded in, and compiles to, Com
 
 This document is aimed toward people who are already familiar with functional programming languages.
 
-## Program Structure
+## Systems and Packages
 
-To start, we recommend changing your package to the `COALTON-USER` package like so:
+Coalton uses ordinary Common Lisp packages (and ASDF systems) to organize code. If you're starting a new project, add `#:coalton` to your ASD's `:depends-on` list. For improved error messages, also depend on `#:named-readtables`.
+
+Unlike Common Lisp, Coalton's standard library is organized as a large collection of packages. For example, string-related functions are in the `#:coalton-library/string` package. Refer to the [Coalton Reference](https://coalton-lang.github.io/reference) for a complete list of standard library packages.
+
+When making a new project, you will want to define a new package and establish your standard library imports. *Do not `:use` the `#:cl` or `#:common-lisp` packages!* Instead, you'll want to, at minimum, `:use` both the `#:coalton` package (for core language features) and `#:coalton-prelude` (for extremely common standard library definitions):
+
+```lisp
+(defpackage #:my-package
+  (:use #:coalton #:coalton-prelude))
+```
+
+The `#:coalton-prelude` package does not contain any functionality that isn't also found elsewhere in the standard library, and hence, it is a convenience.
+
+In idiomatic usage, this minimal package definition would be far too limiting to be useful. For instance, if we wanted to use the standard library function `strip-prefix` (which strips a prefix off of a string), we would have to type `coalton-library/string:strip-prefix` in our program. Instead, we can create a local nickname for this package:
+
+```lisp
+(defpackage #:my-package
+  (:use #:coalton)
+  (:local-nicknames (#:str #:coalton-library/string)))
+```
+
+This way, we can now just type `str:strip-prefix`. Any time we make use of a new function, either from the Coalton standard library or from a third-party library, we might add nicknames that function's package to our `:local-nicknames` list. For example:
+
+```lisp
+(defpackage #:my-package
+  (:use #:coalton)
+  (:local-nicknames (#:str  #:coalton-library/string)
+                    (#:vec  #:coalton-library/vector)
+                    (#:math #:coalton-library/math)))
+```
+
+**We do not recommend `:use`ing any other Coalton built-in packages besides `#:coalton` and `#:coalton-prelude`.** Historically, in Common Lisp, this has caused backwards-compatibility issues when the packages themselves introduce new exported symbols. Moreover, unlike Common Lisp, Coalton follows a pattern of using the same symbol name for similarly defined functions of different packages. For example, both the string package and the vector package have a symbol named `length`, i.e., `str:length` and `vec:length` both exist.
+
+### Coalton in the REPL
+
+If you're playing around with Coalton in the REPL, we recommend changing your package to `#:coalton-user` like so:
 
 ```lisp
 (in-package #:coalton-user)
 ```
 
-This package does *not* `:use` the `COMMON-LISP` package, so you must prepend Common Lisp symbols with `cl:` if you need them.
+This is a convenience package that is defined purely for your interactive and experimental use. (No software should ever depend on it, just like `#:cl-user`.)
+
+As we shall see in the next section, just because you change to the `#:coalton-user` package doesn't mean you can immediately start typing Coalton code; you will still need to use `coalton-toplevel` or `coalton` forms.
+
+Since `#:coalton-user` does not `:use` the `#:common-lisp` package, you will need to qualify any such symbols with `cl:`.
+
+## Program Structure
+
+After creating your package `#:my-package`, you must switch to it with:
+
+```lisp
+(in-package #:my-package)
+
+(named-readtables:in-readtable coalton:coalton)
+```
+
+The `named-readtables:in-readtable` form is optional but encouraged. Using Coalton's reader allows compiler errors to accurately refer to source code and provide correct line numbers.
 
 The first primary entry points for Coalton code. Definitions and the like sit in a toplevel-form called `coalton-toplevel`.
 
@@ -37,7 +88,7 @@ Note that one _cannot_ make new definitions in a `coalton` form, only evaluate e
 
 Whereas `coalton-toplevel` expects one or more toplevel definitions or declarations, the `coalton` form takes a single expression, evaluates it relative to the current environment, and returns its (underlying) Lisp value. This can be useful for working with Coalton from a Lisp REPL.
 
-Coalton can integrate with named readtables to provide better error messages. Files containing Coalton code should start with `(named-readtables:in-readtable coalton:coalton)`. Using Coalton's reader allow for compiler errors to accurately refer to source code and provide correct line numbers.
+Remember that Coalton packages, including `#:coalton-user`, do *not* `:use` the `#:common-lisp`/`#:cl` package, so you must prepend Common Lisp symbols with `cl:` if you need them.
 
 
 ## Variables and Functions
