@@ -52,8 +52,6 @@
     (loop :for (name . node) :in bindings
           :do (setf env (tc:set-code env name node)))
 
-    (setf env (update-function-env bindings env))
-
     (let* ((manager (make-candidate-manager))
 
            (resolve-table (alexandria:alist-hash-table bindings))
@@ -62,15 +60,13 @@
 
            (bindings
              (loop :for (name . node) :in bindings
-                   :collect (cons name
-                                  (direct-application
-                                   (pointfree node function-table env)
-                                   function-table)))))
+                   :collect (cons name (pointfree node function-table env)))))
 
       (loop :for (name . node) :in bindings
             :do (typecheck-node node env)
             :do (setf env (tc:set-code env name node)))
 
+      ;; Run the monomorphizer
       (setf bindings
             (loop :for (name . node) :in bindings
 
@@ -88,14 +84,19 @@
                   :else
                     :collect (cons name node)))
 
+      ;; Update function env
+      (setf env (update-function-env bindings env))
+
+      (setf bindings
+            (loop :for (name . node) :in bindings
+                  :collect (cons name (direct-application node function-table))))
+
       ;; Update code db
       (loop :for (name . node) :in bindings
             :do (setf env (tc:set-code env name node)))
 
       (loop :for (name . node) :in bindings
             :do (typecheck-node node env))
-
-      (setf env (update-function-env bindings env))
 
       (values bindings env))))
 
