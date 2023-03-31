@@ -33,6 +33,7 @@
    #:negative?
    #:nonpositive?
    #:nonnegative?
+   #:zero?
    #:nonzero?))
 
 (in-package #:coalton-library/math/arith)
@@ -88,7 +89,7 @@ The function general/ is partial, and will error produce a run-time error if the
     (define (general/ a b) (/ a b)))
 
   (define-class (Transfinite :a)
-    "Numberic type with a value for (positive) 'infinity' and/or 'NaN'"
+    "Numeric type with a value for (positive) 'infinity' and/or 'NaN'"
     (infinity :a)
     (infinite? (:a -> Boolean))
     (nan :a)
@@ -158,7 +159,7 @@ The function general/ is partial, and will error produce a run-time error if the
 
   (declare ash (Integer -> Integer -> Integer))
   (define (ash x n)
-    "Compute the \"arithmetic shift\" of X by N. "
+    "Compute the \"arithmetic shift\" of `x` by `n`. "
     (lisp Integer (x n) (cl:ash x n)))
 
   (declare 1+ ((Num :num) => :num -> :num))
@@ -190,6 +191,11 @@ The function general/ is partial, and will error produce a run-time error if the
   (define (nonnegative? x)
     "Is `x` not negative?"
     (>= x 0))
+
+  (declare zero? (Num :a => :a -> Boolean))
+  (define (zero? x)
+    "Is `x` zero?"
+    (== x 0))
 
   (declare nonzero? (Num :a => :a -> Boolean))
   (define (nonzero? x)
