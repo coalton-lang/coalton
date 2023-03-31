@@ -81,7 +81,8 @@
                               manager
                               package
                               resolve-table
-                              #'optimize-node
+                              (lambda (node env)
+                                (direct-application (optimize-node node env) function-table))
                               env)
                              package env)
                   :else
