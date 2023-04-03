@@ -66,7 +66,7 @@
     (define-instance (C String Integer)
       (define (m x) 5))
 
-    (define (ambig x) Unit)
+    (define (ambig _x) Unit)
 
     (define x (ambig (m \"hello\")))")
 
@@ -79,7 +79,7 @@
       (define-instance (C String Integer)
         (define (m x) 5))
 
-      (define (ambig x) Unit)
+      (define (ambig _x) Unit)
 
       (define x (ambig (m \"hello\")))"))
 

@@ -1,8 +1,7 @@
 (defpackage #:coalton-impl/analysis/pattern-exhaustiveness
-  (:use #:cl)
+  (:use
+   #:cl)
   (:local-nicknames
-   (#:settings #:coalton-impl/settings)
-   (#:rt #:coalton-impl/runtime)
    (#:tc #:coalton-impl/typechecker)
    (#:util #:coalton-impl/util)
    (#:error #:coalton-impl/error))

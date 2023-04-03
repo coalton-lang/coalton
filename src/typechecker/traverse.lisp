@@ -85,7 +85,8 @@
      (make-node-abstraction
       :type (node-type node)
       :source (node-source node)
-      :vars (traverse (node-abstraction-vars node) block)
+      :vars (node-abstraction-vars node)
+      :nullary (node-abstraction-nullary node)
       :body (traverse (node-abstraction-body node) block))))
 
   (:method ((node node-let-binding) block)
@@ -95,7 +96,7 @@
     (funcall
      (traverse-let-binding block)
      (make-node-let-binding
-      :name (traverse (node-let-binding-name node) block)
+      :name (node-let-binding-name node)
       :value (traverse (node-let-binding-value node) block)
       :source (node-let-binding-source node))))
 
@@ -238,8 +239,8 @@
      (make-node-unless
       :type (node-type node)
       :source (node-source node)
-      :expr (node-unless-expr node)
-      :body (node-unless-body node))))
+      :expr (traverse (node-unless-expr node) block)
+      :body (traverse (node-unless-body node) block))))
 
   (:method ((node node-cond-clause) block)
     (declare (type traverse-block block)

@@ -461,6 +461,7 @@
                        (parser:make-node-variable
                         :source source
                         :name (gentemp)))
+                :nullary nil
                 :body (parser:make-node-body
                        :nodes nil
                        :last-node (parser:make-node-lisp

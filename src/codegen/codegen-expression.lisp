@@ -15,7 +15,7 @@
    (#:rt #:coalton-impl/runtime)
    (#:tc #:coalton-impl/typechecker))
   (:export
-   #:codegen-expression ; FUNCTION
+   #:codegen-expression                 ; FUNCTION
    ))
 
 (in-package #:coalton-impl/codegen/codegen-expression)
@@ -141,6 +141,7 @@
                            expr)
                           (t
                            `(let ,bindings
+                              (declare (ignorable ,@(mapcar #'car bindings)))
                               ,expr))))))
 
            ;; Only emit a fallback if there is not a catch-all clause.
@@ -277,7 +278,10 @@
                                            ,(node-abstraction-vars node)
                                            (declare (ignorable ,@(node-abstraction-vars node))
                                                     ,@(argument-types node env)
-                                                    (values ,(tc:lisp-type (tc:function-return-type (node-type node)) env) &optional))
+                                                    (values ,(tc:lisp-type
+                                                              (tc:function-return-type (node-type node))
+                                                              env)
+                                                            &optional))
                                            ,(codegen-expression (node-abstraction-subexpr node) name env)))
                    ,@inner))
 
@@ -287,6 +291,7 @@
                          ,(loop :for (name . node) :in scc-bindings
                                 :if (find name binding-names-vars :test #'equalp)
                                   :collect name)
+                       (declare (ignorable ,@(mapcar #'car scc-bindings)))
                        ,inner)
                     inner)))
          node))
@@ -313,9 +318,9 @@
          `(let ,(mapcar (lambda (scc-binding allocation)
                           (list (car scc-binding) allocation))
                  scc-bindings allocations)
+            (declare (ignorable ,@(mapcar #'car scc-bindings)))
             ,@assignments
-            ,inner)
-         ))
+            ,inner)))
 
       ;; Single variable binding
       ((= 1 (length scc-bindings))
@@ -323,6 +328,7 @@
              (node_ (cdr (first scc-bindings))))
 
          `(let ((,name ,(codegen-expression node_ current-function env)))
+            (declare (ignorable ,name))
             ,(codegen-let node (cdr sccs) current-function local-vars env))))
 
       (t (error "Invalid scc binding group. This should have been detected during typechecking.")))))

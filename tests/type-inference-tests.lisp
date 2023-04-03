@@ -16,11 +16,11 @@
    '("g" . "Integer"))
 
   (check-coalton-types
-   "(define f (fn (x y) x))
+   "(define f (fn (x _y) x))
     (define g (f 5 \"str\"))
     (define h (f \"str\" 5))"
 
-   '("f" . "(:a -> (:b -> :a))")
+   '("f" . "(:a -> :b -> :a))")
    '("g" . "Integer")
    '("h" . "String"))
 
@@ -79,7 +79,7 @@
 
   (check-coalton-types
    "(define f
-       (fn (a) (f 5)))"
+       (fn (_a) (f 5)))"
 
    '("f" . "(Num :a => :a -> :b)")))
 
@@ -113,7 +113,7 @@
 
     (declare b (:a -> :a))
     (define (b y)
-      (let ((foo (c 5)))
+      (let ((_foo (c 5)))
         y))
 
     (define (c z) (append lst (a z)))"
@@ -211,7 +211,7 @@
    "(define-class (Show :a))
 
     (declare show (Show :a => :a -> String))
-    (define (show x) \"not impl\")
+    (define (show _x) \"not impl\")
 
     (define (f a)
       (show a))
@@ -384,7 +384,7 @@
 (deftest test-function-implicit-progn ()
   (check-coalton-types
    "(define (f a)
-      (let a_ = (+ a 1))
+      (let _a = (+ a 1))
       a)"
 
    '("f" . "(Num :a => :a -> :a)")))
@@ -428,7 +428,7 @@
   
   ;; Check that bindings aren't defaulted too early
   (check-coalton-types
-   "(define (f x)
+   "(define (f _x)
       (let ((y 1))
         (+ 0.5 y)))"
 
