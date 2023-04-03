@@ -18,6 +18,7 @@
    #:make-toplevel-define               ; CONSTRUCTOR
    #:toplevel-define-name               ; ACCESSOR
    #:toplevel-define-vars               ; ACCESSOR
+   #:toplevel-define-nullary            ; ACCESSOR
    #:toplevel-define-body               ; ACCESSOR
    #:toplevel-define-source             ; ACCESSOR
    #:toplevel-define-list               ; TYPE
@@ -25,6 +26,7 @@
    #:make-instance-method-definition    ; CONSTRUCTOR
    #:instance-method-definition-name    ; ACCESSOR
    #:instance-method-definition-vars    ; ACCESSOR
+   #:instance-method-definition-nullary ; ACCESSOR
    #:instance-method-definition-body    ; ACCESSOR
    #:instance-method-definition-source  ; ACCESSOR
    #:instance-method-definition-list    ; TYPE
@@ -44,6 +46,7 @@
             (:copier nil))
   (name          (util:required 'name)          :type node-variable             :read-only t)
   (vars          (util:required 'vars)          :type node-variable-list        :read-only t)
+  (nullary       (util:required 'nullary)       :type boolean                   :read-only t)
   (body          (util:required 'body)          :type node-body                 :read-only t)
   (source        (util:required 'source)        :type cons                      :read-only t))
 
@@ -62,15 +65,17 @@
   (make-toplevel-define
    :name (tc:apply-substitution subs (toplevel-define-name node))
    :vars (tc:apply-substitution subs (toplevel-define-vars node))
+   :nullary (toplevel-define-nullary node)
    :body (tc:apply-substitution subs (toplevel-define-body node))
    :source (toplevel-define-source node)))
 
 (defstruct (instance-method-definition
             (:copier nil))
-  (name          (util:required 'name)          :type node-variable            :read-only t)
-  (vars          (util:required 'vars)          :type node-variable-list        :read-only t)
-  (body          (util:required 'body)          :type node-body                 :read-only t)
-  (source        (util:required 'source)        :type cons                      :read-only t))
+  (name    (util:required 'name)    :type node-variable      :read-only t)
+  (vars    (util:required 'vars)    :type node-variable-list :read-only t)
+  (nullary (util:required 'nullary) :type boolean            :read-only t)
+  (body    (util:required 'body)    :type node-body          :read-only t)
+  (source  (util:required 'source)  :type cons               :read-only t))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun instance-method-definition-list-p (x)
@@ -86,16 +91,17 @@
   (make-instance-method-definition
    :name (tc:apply-substitution subs (instance-method-definition-name method))
    :vars (tc:apply-substitution subs (instance-method-definition-vars method))
+   :nullary (instance-method-definition-nullary method)
    :body (tc:apply-substitution subs (instance-method-definition-body method))
    :source (instance-method-definition-source method)))
 
 (defstruct (toplevel-define-instance
             (:copier nil))
-  (context  (util:required 'context)  :type tc:ty-predicate-list            :read-only t)
-  (pred     (util:required 'pred)     :type tc:ty-predicate                 :read-only t)
-  (methods  (util:required 'methods)  :type hash-table                      :read-only t)
-  (source   (util:required 'source)   :type cons                            :read-only t)
-  (head-src (util:required 'head-src) :type cons                            :read-only t))
+  (context  (util:required 'context)  :type tc:ty-predicate-list :read-only t)
+  (pred     (util:required 'pred)     :type tc:ty-predicate      :read-only t)
+  (methods  (util:required 'methods)  :type hash-table           :read-only t)
+  (source   (util:required 'source)   :type cons                 :read-only t)
+  (head-src (util:required 'head-src) :type cons                 :read-only t))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-define-instance-list-p (x)

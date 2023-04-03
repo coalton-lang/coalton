@@ -40,6 +40,7 @@
    #:node-abstraction                   ; STRUCT
    #:make-node-abstraction              ; CONSTRUCTOR
    #:node-abstraction-vars              ; ACCESSOR
+   #:node-abstraction-nullary           ; ACCESSOR
    #:node-abstraction-body              ; ACCESSOR
    #:node-abstraction-p                 ; FUNCTION
    #:node-let-binding                   ; STRUCT
@@ -173,9 +174,9 @@
 
 (defstruct (node-bind
             (:copier nil))
-  (pattern (util:required 'pattern) :type pattern         :read-only t)
-  (expr    (util:required 'expr)    :type node            :read-only t)
-  (source  (util:required 'source)  :type cons            :read-only t))
+  (pattern (util:required 'pattern) :type pattern :read-only t)
+  (expr    (util:required 'expr)    :type node    :read-only t)
+  (source  (util:required 'source)  :type cons    :read-only t))
 
 (deftype node-body-element ()
   '(or node node-bind))
@@ -198,14 +199,15 @@
 (defstruct (node-abstraction
             (:include node)
             (:copier nil))
-  (vars (util:required 'vars) :type node-variable-list :read-only t)
-  (body (util:required 'body) :type node-body          :read-only t))
+  (vars    (util:required 'vars)    :type node-variable-list :read-only t)
+  (nullary (util:required 'nullary) :type boolean            :read-only t)
+  (body    (util:required 'body)    :type node-body          :read-only t))
 
 (defstruct (node-let-binding
             (:copier nil))
-  (name          (util:required 'name)          :type node-variable             :read-only t)
-  (value         (util:required 'value)         :type node                      :read-only t)
-  (source        (util:required 'source)        :type cons                      :read-only t))
+  (name   (util:required 'name)   :type node-variable :read-only t)
+  (value  (util:required 'value)  :type node          :read-only t)
+  (source (util:required 'source) :type cons          :read-only t))
 
 (defun node-let-binding-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -387,6 +389,7 @@
    :type (tc:apply-substitution subs (node-type node))
    :source (node-source node)
    :vars (tc:apply-substitution subs (node-abstraction-vars node))
+   :nullary (node-abstraction-nullary node)
    :body (tc:apply-substitution subs (node-abstraction-body node))))
 
 (defmethod tc:apply-substitution (subs (node node-let-binding))

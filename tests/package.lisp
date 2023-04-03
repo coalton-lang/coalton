@@ -9,6 +9,7 @@
    (#:error #:coalton-impl/error)
    (#:parser #:coalton-impl/parser)
    (#:tc #:coalton-impl/typechecker)
+   (#:analysis #:coalton-impl/analysis)
    (#:entry #:coalton-impl/entry))
   (:export
    #:run-coalton-tests))

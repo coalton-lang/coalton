@@ -384,6 +384,7 @@
         :name (toplevel-define-name toplevel)
         :vars (rename-variables-generic% (toplevel-define-vars toplevel) new-ctx)
         :var-names (toplevel-define-var-names toplevel)
+        :nullary (toplevel-define-nullary toplevel)
         :docstring (toplevel-define-docstring toplevel)
         :body (rename-variables-generic% (toplevel-define-body toplevel) new-ctx)
         :source (toplevel-define-source toplevel)
@@ -402,6 +403,7 @@
        (make-instance-method-definition
         :name (instance-method-definition-name method)
         :vars (rename-variables-generic% (instance-method-definition-vars method) new-ctx)
+        :nullary (instance-method-definition-nullary method)
         :body (rename-variables-generic% (instance-method-definition-body method) new-ctx)
         :source (instance-method-definition-source method))
        ctx)))

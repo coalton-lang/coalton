@@ -613,6 +613,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                     :type (tc:qualify nil type)
                     :source (parser:node-source node)
                     :vars var-nodes
+                    :nullary (null (parser:node-abstraction-vars node))
                     :body body-node)
                    subs)))
             (error:coalton-internal-type-error ()
@@ -2254,10 +2255,11 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
              (values toplevel-define))
 
    (make-toplevel-define
-    :source (parser:toplevel-define-source binding)
     :name name
+    :vars vars
+    :nullary (parser:toplevel-define-nullary binding)
     :body value
-    :vars vars))
+    :source (parser:toplevel-define-source binding)))
 
   (:method ((binding parser:node-let-binding) name value vars)
     (declare (type node-variable name)
@@ -2282,6 +2284,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
     (make-instance-method-definition
      :name name
      :vars vars
+     :nullary (parser:instance-method-definition-nullary binding)
      :body value
      :source (parser:instance-method-definition-source binding))))
 
@@ -2295,8 +2298,9 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
            :name (node-variable-name (toplevel-define-name binding))
            :type explicit-type
            :source (node-source (toplevel-define-name binding)))
-    :body (toplevel-define-body binding)
     :vars (toplevel-define-vars binding)
+    :nullary (toplevel-define-nullary binding)
+    :body (toplevel-define-body binding)
     :source (toplevel-define-source binding)))
 
   (:method ((binding node-let-binding) explicit-type)
@@ -2321,6 +2325,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
             :type explicit-type
             :source (node-source (instance-method-definition-name binding)))
      :vars (instance-method-definition-vars binding)
+     :nullary (instance-method-definition-nullary binding)
      :body (instance-method-definition-body binding)
      :source (instance-method-definition-source binding))))
 
@@ -2351,11 +2356,12 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
       (toplevel-define
        (make-toplevel-define
         :name (toplevel-define-name binding)
+        :vars (toplevel-define-vars binding)
+        :nullary (toplevel-define-nullary binding)
         :body (traverse
                (toplevel-define-body binding)
                (make-traverse-block
                 :variable #'rewrite-variable-ref))
-        :vars (toplevel-define-vars binding)
         :source (toplevel-define-source binding)))
 
       (node-let-binding

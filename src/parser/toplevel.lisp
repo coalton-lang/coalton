@@ -49,6 +49,7 @@
    #:toplevel-define-name                        ; ACCESSOR
    #:toplevel-define-vars                        ; ACCESSOR
    #:toplevel-define-var-names                   ; ACCESSOR
+   #:toplevel-define-nullary                     ; ACCESSOR
    #:toplevel-define-docstring                   ; ACCESSOR
    #:toplevel-define-body                        ; ACCESSOR
    #:toplevel-define-source                      ; ACCESSOR
@@ -81,6 +82,7 @@
    #:make-instance-method-definition             ; CONSTRUCTOR
    #:instance-method-definition-name             ; ACCESSOR
    #:instance-method-definition-vars             ; ACCESSOR
+   #:instance-method-definition-nullary          ; ACCESSOR
    #:instance-method-definition-body             ; ACCESSOR
    #:instance-method-definition-source           ; ACCESSOR
    #:instance-method-definition-list             ; TYPE
@@ -248,6 +250,7 @@
   (name         (util:required 'name)         :type node-variable                    :read-only t)
   (vars         (util:required 'vars)         :type node-variable-list               :read-only t)
   (var-names    (util:required 'vars)         :type util:symbol-list                 :read-only t)
+  (nullary      (util:required 'nullary)      :type boolean                          :read-only t)
   (docstring    (util:required 'docstring)    :type (or null string)                 :read-only t)
   (body         (util:required 'body)         :type node-body                        :read-only t)
   (source       (util:required 'source)       :type cons                             :read-only t)
@@ -311,6 +314,7 @@
             (:copier nil))
   (name      (util:required 'name)      :type node-variable       :read-only t)
   (vars      (util:required 'vars)      :type node-variable-list  :read-only t)
+  (nullary   (util:required 'nullary)   :type boolean             :read-only t)
   (body      (util:required 'body)      :type node-body           :read-only t)
   (source    (util:required 'source)    :type cons                :read-only t))
 
@@ -875,7 +879,7 @@ consume all attributes")))
                  :message "Malformed definition"
                  :primary-note "expected value")))
 
-  (multiple-value-bind (name arguments)
+  (multiple-value-bind (name arguments nullary)
       (parse-argument-list (cst:second form) file)
 
     (multiple-value-bind (docstring body)
@@ -885,6 +889,7 @@ consume all attributes")))
        :name name
        :vars arguments
        :var-names (mapcar #'node-variable-name arguments)
+       :nullary nullary
        :docstring docstring
        :body body
        :monomorphize nil
@@ -1593,11 +1598,11 @@ consume all attributes")))
 (defun parse-argument-list (form file)
   (declare (type cst:cst form)
            (type coalton-file file)
-           (values node-variable node-variable-list))
+           (values node-variable node-variable-list boolean))
 
   ;; (define x 1)
   (when (cst:atom form)
-    (return-from parse-argument-list (values (parse-variable form file) nil)))
+    (return-from parse-argument-list (values (parse-variable form file) nil nil)))
 
   ;; (define (0.5 x y) ...)
   (unless (identifierp (cst:raw (cst:first form)))
@@ -1620,7 +1625,9 @@ consume all attributes")))
          :name (gentemp)))
        (loop :for vars := (cst:rest form) :then (cst:rest vars)
              :while (cst:consp vars)
-             :collect (parse-variable (cst:first vars) file)))))
+             :collect (parse-variable (cst:first vars) file)))
+
+   (cst:null (cst:rest form))))
 
 (defun parse-identifier (form file)
   (declare (type cst:cst form)
@@ -1719,12 +1726,13 @@ consume all attributes")))
                    :primary-note "expected definition name"
                    :notes (list context-note))))
 
-    (multiple-value-bind (name arguments)
+    (multiple-value-bind (name arguments nullary)
         (parse-argument-list (cst:second form) file)
 
       (make-instance-method-definition
        :name name
        :vars arguments
+       :nullary nullary
        :body (parse-body (cst:rest (cst:rest form)) form file)
        :source (cst:source form)))))
 

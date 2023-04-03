@@ -88,6 +88,7 @@
                (:module "analysis"
                 :serial t
                 :components ((:file "pattern-exhaustiveness")
+                             (:file "unused-variables")
                              (:file "analysis")
                              (:file "package")))
                (:module "codegen"
@@ -306,4 +307,5 @@
                (:file "recursive-let-tests")
                (:file "class-tests")
                (:file "list-tests")
-               (:file "red-black-tests")))
+               (:file "red-black-tests")
+               (:file "unused-variables")))

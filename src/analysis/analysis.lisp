@@ -2,10 +2,13 @@
   (:use
    #:cl
    #:coalton-impl/analysis/pattern-exhaustiveness)
+  (:import-from
+   #:coalton-impl/analysis/unused-variables
+   #:find-unused-variables)
   (:local-nicknames
-   (#:tc #:coalton-impl/typechecker)
    (#:util #:coalton-impl/util)
-   (#:error #:coalton-impl/error))
+   (#:error #:coalton-impl/error)
+   (#:tc #:coalton-impl/typechecker))
   (:export
    #:analyze-translation-unit))
 
@@ -36,39 +39,40 @@
                       (let ((exhaustive-or-missing
                               (find-non-matching-value (mapcar #'list patterns) 1 env)))
                         (unless (eq t exhaustive-or-missing)
-                          (warn
-                           'non-exhaustive-match-warning
-                           :err (error:coalton-error
-                                 :type :warn
-                                 :file file
-                                 :span (tc:node-source node)
-                                 :message "Non-exhaustive match"
-                                 :primary-note "non-exaustive match"
-                                 :notes (when (first exhaustive-or-missing)
-                                          (list
-                                           (error:make-coalton-error-note
-                                            :type :secondary
-                                            :span (tc:node-source node)
-                                            :message (format nil "Missing case ~W" (print-pattern (first exhaustive-or-missing)))))))))
+                          (warn 'non-exhaustive-match-warning
+                                :err (error:coalton-error
+                                      :type :warn
+                                      :file file
+                                      :span (tc:node-source node)
+                                      :message "Non-exhaustive match"
+                                      :primary-note "non-exaustive match"
+                                      :notes (when (first exhaustive-or-missing)
+                                               (list
+                                                (error:make-coalton-error-note
+                                                 :type :secondary
+                                                 :span (tc:node-source node)
+                                                 :message (format nil "Missing case ~W"
+                                                                  (print-pattern (first exhaustive-or-missing)))))))))
                         (loop :for pattern :in patterns
                               :unless (useful-pattern-p patterns pattern env) :do
-                                (warn
-                                 'useless-pattern-warning
-                                 :err (error:coalton-error
-                                       :type :warn
-                                       :file file
-                                       :span (tc:pattern-source pattern)
-                                       :message "Useless match case"
-                                       :primary-note "useless match case"
-                                       :notes (list (error:make-coalton-error-note
-                                                     :type :secondary
-                                                     :span (tc:node-source node)
-                                                     :message "in this match")))))))
+                                (warn 'useless-pattern-warning
+                                      :err (error:coalton-error
+                                            :type :warn
+                                            :file file
+                                            :span (tc:pattern-source pattern)
+                                            :message "Useless match case"
+                                            :primary-note "useless match case"
+                                            :notes (list (error:make-coalton-error-note
+                                                          :type :secondary
+                                                          :span (tc:node-source node)
+                                                          :message "in this match")))))))
                     node))))
 
     ;; Run analysis on definitions
-    (loop :for define :in (tc:translation-unit-definitions translation-unit) :do
-      (tc:traverse (tc:toplevel-define-body define) analysis-traverse-block))
+    (loop :for define :in (tc:translation-unit-definitions translation-unit)
+          :do (tc:traverse (tc:toplevel-define-body define) analysis-traverse-block)
+          :do (find-unused-variables define file))
+
     ;; Run analysis on instance definitions
     (loop :for instance :in (tc:translation-unit-instances translation-unit) :do
       (loop :for method :being :the :hash-value :of (tc:toplevel-define-instance-methods instance) :do

@@ -15,6 +15,7 @@
    #:binding-parameters                 ; FUNCTION
    #:binding-restricted-p               ; FUNCTION
    #:binding-last-node                  ; FUNCTION
+   #:binding-nullary                    ; FUNCTION
    ))
 
 (in-package #:coalton-impl/typechecker/binding)
@@ -125,3 +126,19 @@
     (declare (values node))
 
     (node-body-last-node (instance-method-definition-body binding))))
+
+(defgeneric binding-nullary (binding)
+  (:documentation "Returns t if BINDING is nullary")
+
+  (:method ((binding node-let-binding))
+    (declare (ignore binding)
+             (values boolean))
+    nil)
+
+  (:method ((binding toplevel-define))
+    (declare (values boolean))
+    (toplevel-define-nullary binding))
+
+  (:method ((binding instance-method-definition))
+    (declare (values boolean))
+    (instance-method-definition-nullary binding)))

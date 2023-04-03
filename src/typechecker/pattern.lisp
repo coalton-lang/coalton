@@ -32,7 +32,6 @@
    #:pattern-constructor-name           ; ACCESSOR
    #:pattern-constructor-patterns       ; ACCESSOR
    #:pattern-constructor-p              ; FUNCTION
-   #:parse-pattern                      ; FUNCTION
    #:pattern-variables                  ; FUNCTION
    ))
 
@@ -57,6 +56,13 @@
   (name      (util:required 'name)      :type parser:identifier :read-only t)
   (orig-name (util:required 'orig-name) :type parser:identifier :read-only t))
 
+(defun pattern-var-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'pattern-var-p x)))
+
+(deftype pattern-var-list ()
+  '(satisfies pattern-var-list-p))
+
 (defstruct (pattern-literal
             (:include pattern)
             (:copier nil))
@@ -75,6 +81,29 @@
 ;;;
 ;;; Methods
 ;;;
+
+(defun pattern-variables (pattern)
+  (declare (type pattern pattern)
+           (values pattern-var-list))
+
+  (remove-duplicates (pattern-variables-generic% pattern) :test #'eq))
+
+(defgeneric pattern-variables-generic% (pattern)
+  (:method ((pattern pattern-var))
+    (declare (values pattern-var-list))
+    (list pattern))
+
+  (:method ((pattern pattern-literal))
+    (declare (values pattern-var-list))
+    nil)
+
+  (:method ((pattern pattern-wildcard))
+    (declare (values pattern-var-list))
+    nil)
+
+  (:method ((pattern pattern-constructor))
+    (declare (values pattern-var-list))
+    (mapcan #'pattern-variables-generic% (pattern-constructor-patterns pattern))))
 
 (defmethod tc:apply-substitution (subs (node pattern-var))
   (declare (type tc:substitution-list subs)

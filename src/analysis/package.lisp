@@ -2,4 +2,5 @@
   (:documentation "Static analysis passes for COALTON.")
   (:mix-reexport
    #:coalton-impl/analysis/pattern-exhaustiveness
+   #:coalton-impl/analysis/unused-variables
    #:coalton-impl/analysis/analysis))
