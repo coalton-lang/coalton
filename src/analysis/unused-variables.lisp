@@ -8,15 +8,11 @@
   (:export
    #:find-unused-variables              ; FUNCTION
    #:unused-variable-warning            ; CONDITION
-   #:ignored-variable-used-warning      ; CONDITION
    ))
 
 (in-package #:coalton-impl/analysis/unused-variables)
 
 (define-condition unused-variable-warning (error:coalton-base-warning)
-  ())
-
-(define-condition ignored-variable-used-warning (error:coalton-base-warning)
   ())
 
 (defun find-unused-variables (binding file)

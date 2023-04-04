@@ -25,11 +25,6 @@
         (match x
           ((Tuple x y) 5)))")))
 
-(deftest test-used-ignored-variable ()
-  (signals analysis:ignored-variable-used-warning
-    (check-coalton-types
-     "(define (f _x) _x)")))
-
 (deftest test-hidden-bindings ()
   (not-signals analysis:unused-variable-warning
     (check-coalton-types
