@@ -215,7 +215,8 @@ NOTES and HELP-NOTES may optionally be supplied notes and help messages."
 
          (error (funcall error))
 
-         (file-stream (coalton-file-stream (coalton-error-file error))))
+         (file-stream (coalton-file-stream (coalton-error-file error)))
+         (file-stream-pos (file-position file-stream)))
 
     (progn
 
@@ -497,7 +498,10 @@ NOTES and HELP-NOTES may optionally be supplied notes and help messages."
 
       ;; Print error context
       (loop :for context :in (coalton-error-context error)
-            :do (format stream "note: ~A~%" (coalton-error-context-message context))))))
+            :do (format stream "note: ~A~%" (coalton-error-context-message context)))
+
+      ;; Reset our file position to avoid messing things up.
+      (file-position file-stream file-stream-pos))))
 
 (defun get-line-from-index (file index)
   "Get the line number corresponding to the character offset INDEX.
