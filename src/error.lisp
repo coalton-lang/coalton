@@ -463,7 +463,7 @@ NOTES and HELP-NOTES may optionally be supplied notes and help messages."
             :do (multiple-value-bind (start-line start-line-start)
                     (get-line-from-index file-stream start)
                   (multiple-value-bind (end-line end-line-start)
-                      (get-line-from-index file-stream end)
+                      (get-line-from-index file-stream (1- end))
 
                     (unless (= start-line end-line)
                       (util:coalton-bug "multiline help messages not supported yet."))

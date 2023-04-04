@@ -93,7 +93,6 @@
                       :primary-note "variable defined here"
                       :help-notes
                       (list
-                       #+broken
                        (error:make-coalton-error-help
                         :span source
                         :replacement (lambda (name)
