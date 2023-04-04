@@ -451,7 +451,7 @@ The Boolean operators `and` and `or` (of `coalton-library`) are actually variadi
   (or (cheap 5) True (really-expensive (expt 2 1000000))))
 ```
 
-In this case, `really-expensive` will never get called due to short-circuiting. Also note that both `and` and `or` can take any number of arguments, including zero.
+In this case, `really-expensive` will never get called due to short-circuiting. Also note that both `and` and `or` can take one or more arguments.
 
 
 ## `COALTON-LIBRARY:PROGN`
