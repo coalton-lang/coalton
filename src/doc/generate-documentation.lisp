@@ -98,6 +98,7 @@
                coalton-library/math/real
                coalton-library/math/complex
                coalton-library/math/elementary
+               coalton-library/math/dyadic
                coalton-library/boolean
                coalton-library/bits
                coalton-library/char
