@@ -39,7 +39,7 @@
 (define-condition coalton-base-error (error)
   ((err :accessor coalton-error-err
         :initarg :err
-        :type function)
+        :type (or null function))
    (text :accessor coalton-error-text
          :initarg :text
          :initform nil
@@ -53,7 +53,7 @@
 (define-condition coalton-base-warning (style-warning)
   ((err :accessor coalton-warning-err
         :initarg :err
-        :type function)
+        :type (or null function))
    (text :accessor coalton-warning-text
          :initarg :text
          :initform nil
