@@ -174,6 +174,10 @@
                                     (iter:into-iter (make-list 0 1 2))
                                     (iter:into-iter (make-list 0 1))))))
 
+(define-test filter-map ()
+  (is (== (iter:collect! (iter:filter-map! string:parse-int (iter:into-iter (make-list "1" "2" "three" "" "5"))))
+          (make-list 1 2 5))))
+
 ;;; FIXME: define more tests
 ;; - vector-iter
 ;; - recursive-iter

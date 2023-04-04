@@ -25,6 +25,7 @@
   (:export
    #:Iterator
    #:new
+   #:size-hint
    #:next!
    #:fold!
    #:empty
@@ -49,6 +50,7 @@
    #:zipWith!
    #:enumerate!
    #:filter!
+   #:filter-map!
    #:unwrapped!
    #:take!
    #:flatten!
@@ -87,15 +89,19 @@
 
 ;;; fundamental operators
 (coalton-toplevel
-  (repr :transparent)
   (define-type (Iterator :elt)
     "A forward-moving pointer into an ordered sequence of :ELTs"
-    (%Iterator (Unit -> (Optional :elt))))
+    (%Iterator (Unit -> (Optional :elt)) (Optional UFix)))
 
   (declare new ((Unit -> Optional :elt) -> Iterator :elt))
-  (define new
+  (define (new f)
     "Create a new iterator from a function that yields elements."
-    %Iterator)
+    (%Iterator f None))
+
+  (declare size-hint (Iterator :elt -> Optional UFix))
+  (define (size-hint iter)
+    (let (%Iterator _f size) = iter)
+    size)
 
   (declare next! (Iterator :elt -> Optional :elt))
   (define (next! iter)
@@ -104,7 +110,7 @@ Behavior is undefined if two threads concurrently call `next!` on the same itera
 most of the operators defined on iterators call `next!` internally, or create new iterators which will call
 `next!` on their inputs."
     (match iter
-      ((%Iterator func) (func Unit))))
+      ((%Iterator func _) (func Unit))))
 
   (declare fold! ((:state -> :elt -> :state) -> :state -> Iterator :elt -> :state))
   (define (fold! func init iter)
@@ -123,13 +129,13 @@ STATE, using INIT as the first STATE."
   ;; pathological, so i doubt it.
   (define-instance (Functor Iterator)
     (define (map func iter)
-      (%Iterator (fn () (map func (next! iter))))))
+      (%Iterator (fn () (map func (next! iter))) (size-hint iter))))
 
 ;;; constructors
   (declare empty (Iterator :any))
   (define empty
     "Yields nothing; stops immediately"
-    (%Iterator (fn () None)))
+    (%Iterator (fn () None) (Some 0)))
 
   (define-class (IntoIterator :container :elt (:container -> :elt))
     "Containers which can be converted into iterators.
@@ -142,7 +148,7 @@ STATE, using INIT as the first STATE."
     "Yield successive elements of LST.
 Behavior is undefined if the iterator is advanced after a destructive modification of LST."
     (let ((remaining (cell:new lst)))
-      (%Iterator (fn () (cell:pop! remaining)))))
+      (%Iterator (fn () (cell:pop! remaining)) (Some (list:length lst)))))
 
   (define-instance (IntoIterator (List :elt) :elt)
     (define into-iter list-iter))
@@ -158,8 +164,9 @@ Behavior is undefined if the iterator is advanced after a destructive modificati
                     (%Iterator (fn () (if (cell:read cell)
                                           (progn (cell:write! cell False)
                                                  (Some a))
-                                          None)))))
-        ((None) (%Iterator (fn () None))))))
+                                          None))
+                               (Some 1))))
+        ((None) empty))))
 
   (define-instance (IntoIterator (Result :a :elt) :elt)
     (define (into-iter result)
@@ -169,8 +176,9 @@ Behavior is undefined if the iterator is advanced after a destructive modificati
                   (%Iterator (fn () (if (cell:read cell)
                                         (progn (cell:write! cell False)
                                                (Some a))
-                                        None)))))
-        ((Err _) (%Iterator (fn () None))))))
+                                        None))
+                             (Some 1))))
+        ((Err _) empty))))
 
   (declare vector-iter (Vector :elt -> Iterator :elt))
   (define (vector-iter vec)
@@ -204,7 +212,8 @@ iterator is empty."
          (let ((this (cell:read next)))
            (if (done? this)
                None
-               (Some (cell:update-swap! succ next))))))))
+               (Some (cell:update-swap! succ next)))))
+       None)))
 
   (declare range-increasing ((Num :num) (Ord :num) =>
                              :num ->
@@ -269,7 +278,8 @@ Equivalent to reversing `range-increasing`"
     "Yield ITEM over and over, infinitely."
     (%Iterator
      (fn ()
-       (Some item))))
+       (Some item))
+     None))
 
   (declare repeat-item (:item -> UFix -> Iterator :item))
   (define (repeat-item item count)
@@ -305,7 +315,8 @@ interleaving. (interleave empty ITER) is equivalent to (id ITER)."
              ((None) (next! right)))
            (match (next! right)
              ((Some val) (Some val))
-             ((None) (next! left)))))))
+             ((None) (next! left)))))
+     (+ (size-hint left) (size-hint right))))
 
   (declare zipWith! ((:left -> :right -> :out) -> Iterator :left -> Iterator :right -> Iterator :out))
   (define (zipWith! f left right)
@@ -314,7 +325,8 @@ interleaving. (interleave empty ITER) is equivalent to (id ITER)."
      (fn ()
        (match (Tuple (next! left) (next! right))
          ((Tuple (Some l) (Some r)) (Some (f l r)))
-         (_ None)))))
+         (_ None)))
+     (liftA2 max (size-hint left) (size-hint right))))
 
   (declare zip! (Iterator :left -> Iterator :right -> Iterator (Tuple :left :right)))
   (define zip!
@@ -335,7 +347,23 @@ interleaving. (interleave empty ITER) is equivalent to (id ITER)."
                            ((Some candidate) (if (keep? candidate)
                                                  (Some candidate)
                                                  (filter-iter u)))))))
-      (%Iterator filter-iter)))
+      (%Iterator filter-iter (size-hint iter))))
+
+  (declare filter-map! ((:a -> Optional :b) -> Iterator :a -> Iterator :b))
+  (define (filter-map! f iter)
+    "Map an iterator, retaining only the elements where F returns SOME."
+    (let ((fun (fn ()
+                 (match (next! iter)
+                   ((Some x)
+                    (let x = (f x))
+                    (match x
+                      ((Some _) x)
+                      ((None) (fun))))
+                   ((None)
+                    None)))))
+      (%Iterator
+       fun
+       (size-hint iter))))
 
   (declare unwrapped! ((Unwrappable :wrapper) => Iterator (:wrapper :elt) -> Iterator :elt))
   (define (unwrapped! iter)
@@ -362,7 +390,8 @@ interleaving. (interleave empty ITER) is equivalent to (id ITER)."
      (fn ()
        (match (next! iter1)
          ((None)    (next! iter2))
-         ((Some el) (Some el))))))
+         ((Some el) (Some el))))
+     (liftA2 + (size-hint iter1) (size-hint iter2))))
 
   (declare flatten! (Iterator (Iterator :elt) -> Iterator :elt))
   (define (flatten! iters)
@@ -379,7 +408,7 @@ interleaving. (interleave empty ITER) is equivalent to (id ITER)."
                              ((Some next-iter) (progn (cell:write! current next-iter)
                                                       (flatten-iter-inner)))
                              ((None) None)))))))
-         (%Iterator flatten-iter-inner)))))
+         (%Iterator flatten-iter-inner None)))))
 
   (declare concat! (Iterator :elt -> Iterator :elt -> Iterator :elt))
   (define (concat! first second)
@@ -571,7 +600,7 @@ The vector will be resized if ITER contains more than SIZE elements."
   (declare collect-vector! (types:RuntimeRepr :elt => Iterator :elt -> Vector :elt))
   (define (collect-vector! iter)
     "Construct a `Vector` containing all the elements from ITER in order."
-    (collect-vector-size-hint! 0 iter))
+    (collect-vector-size-hint! (with-default 0 (size-hint iter)) iter))
 
   (define-instance (types:RuntimeRepr :elt => FromIterator (Vector :elt) :elt)
     (define collect! collect-vector!))
@@ -598,7 +627,7 @@ The table will be resized if ITER contains more than SIZE unique keys."
     "Construct a `HashTable` containing all the key/value pairs from ITER.
 
 If a key appears in ITER multiple times, the resulting table will contain its last corresponding value."
-    (collect-hashtable-size-hint! coalton-library/hashtable::default-hash-table-capacity iter))
+    (collect-hashtable-size-hint! (with-default coalton-library/hashtable::default-hash-table-capacity (size-hint iter)) iter))
 
   (define-instance (Hash :key => FromIterator (hashtable:HashTable :key :value) (Tuple :key :value))
     (define collect! collect-hashtable!)))
