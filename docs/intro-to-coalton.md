@@ -133,6 +133,9 @@ Functions are defined similarly to variables. Unlike Common Lisp, Coalton functi
   (define z (map (fn (x) (+ 2 x)) (make-list 1 2 3 4))))
 ```
 
+
+### Functions and Currying
+
 *All* functions in Coalton take *exactly* one input, and produce *exactly* one output. Consider this function:
 
 ```lisp
@@ -175,8 +178,9 @@ Here is an example of using a curried function to transform a list.
   (map (+ 2) nums)) ;; 4 5 6 7
 ```
 
-There are convenient *syntaxes* for composing functions with the
-`pipe` and `nest` macros.
+### Pipelining Syntax and Function Composition
+
+There are convenient syntaxes for composing functions with the `pipe` and `nest` macros.
 
 ```lisp
 (nest f g ... h x)
@@ -192,9 +196,41 @@ There are convenient *syntaxes* for composing functions with the
 
 These are useful to make code less noisy.
 
-Note that since these are macros (indicated by their variadic arguments), they
-cannot be used as higher-order functions. Consider either currying or the
-`compose` function if you're thinking in that direction.
+Note that since these are macros (indicated by their variadic arguments), they *cannot* be used as higher-order functions. Consider either currying or the `compose` function if you're thinking in that direction.
+
+### Ignoring Function Parameters
+
+Consider the function
+
+```lisp
+(coalton-toplevel
+  (define (f x y)
+    x))
+```
+
+Here, `y` is unused and will produce a warning:
+
+```
+COMMON-LISP:WARNING: warn: Unused variable
+  --> <unknown>:3:15
+   |
+ 3 |    (define (f x y)
+   |                 ^ variable defined here
+help: prefix the variable with '_' to decare it unused
+ 3 |   (define (f x _y)
+   |                --
+```
+
+As suggested, one can replace `y` with `_y`, which tells the Coalton compiler that the parameter might be intentionally unused.
+
+**Note**: Variables prefixed with `_` like `_y` are still normal variables, and can be read. The following is valid Coalton:
+
+```lisp
+(define (f _x) _x)
+```
+
+One should treat underscore prefixed variables as ignored whenever possible, and use a name not prefixed with `_` if it may be used. Reading from underscore-prefixed variables is permitted so that generated code (e.g., using macros or read-conditionals) may avoid unused variable warnings for variables which will be used in some compilation contexts but not others.
+
 
 ## Data Types
 
