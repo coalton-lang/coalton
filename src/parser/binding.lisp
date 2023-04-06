@@ -7,8 +7,9 @@
   (:use
    #:cl
    #:coalton-impl/error
+   #:coalton-impl/parser/pattern
    #:coalton-impl/parser/expression
-   #:coalton-impl/parser/parser)
+   #:coalton-impl/parser/toplevel)
   (:export
    #:binding-name                       ; FUNCTION
    #:binding-value                      ; FUNCTION
@@ -17,7 +18,6 @@
    #:binding-toplevel-p                 ; FUNCTION
    #:binding-function-p                 ; FUNCTION
    #:binding-last-node                  ; FUNCTION
-   #:binding-nullary                    ; FUNCTION
    ))
 
 (in-package #:coalton-impl/parser/binding)
@@ -71,16 +71,16 @@
   (:documentation "Returns the parameters bound in BINDING")
 
   (:method ((binding node-let-binding))
-    (declare (values node-variable-list))
+    (declare (values pattern-list))
     nil)
 
   (:method ((binding toplevel-define))
-    (declare (values node-variable-list))
-    (toplevel-define-vars binding))
+    (declare (values pattern-list &optional))
+    (toplevel-define-params binding))
 
   (:method ((binding instance-method-definition))
-    (declare (values node-variable-list))
-    (instance-method-definition-vars binding)))
+    (declare (values pattern-list &optional))
+    (instance-method-definition-params binding)))
 
 (defgeneric binding-toplevel-p (binding)
   (:documentation "Returns t if BINDING is a toplevel binding.")
@@ -111,12 +111,12 @@
   (:documentation "Returns t if BINDING is a lambda.")
 
   (:method ((binding node-let-binding))
-    (declare (values boolean))
+    (declare (values boolean &optional))
     (initform-abstraction-p (node-let-binding-value binding)))
 
   (:method ((binding toplevel-define))
     (declare (values boolean))
-    (and (or (toplevel-define-vars binding)
+    (and (or (toplevel-define-params binding)
 
              (and (null (node-body-nodes (toplevel-define-body binding)))
                   (initform-abstraction-p (node-body-last-node (toplevel-define-body binding)))))
@@ -124,7 +124,7 @@
 
   (:method ((binding instance-method-definition))
     (declare (values boolean))
-    (and (or (instance-method-definition-vars binding)
+    (and (or (instance-method-definition-params binding)
 
              (and (null (node-body-nodes (instance-method-definition-body binding)))
                   (initform-abstraction-p (node-body-last-node (instance-method-definition-body binding)))))
@@ -144,19 +144,3 @@
   (:method ((binding instance-method-definition))
     (declare (values node))
     (node-body-last-node (instance-method-definition-body binding))))
-
-(defgeneric binding-nullary (binding)
-  (:documentation "Returns t if BINDING is nullary")
-
-  (:method ((binding node-let-binding))
-    (declare (ignore binding)
-             (values boolean))
-    nil)
-
-  (:method ((binding toplevel-define))
-    (declare (values boolean))
-    (toplevel-define-nullary binding))
-
-  (:method ((binding instance-method-definition))
-    (declare (values boolean))
-    (instance-method-definition-nullary binding)))

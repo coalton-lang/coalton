@@ -9,7 +9,7 @@
    #:coalton-impl/parser/base
    #:coalton-impl/parser/types
    #:coalton-impl/parser/expression
-   #:coalton-impl/parser/parser)
+   #:coalton-impl/parser/toplevel)
   (:shadowing-import-from
    #:coalton-impl/parser/base
    #:parse-error)

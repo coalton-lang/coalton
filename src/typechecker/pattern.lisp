@@ -83,7 +83,7 @@
 ;;;
 
 (defun pattern-variables (pattern)
-  (declare (type pattern pattern)
+  (declare (type t pattern)
            (values pattern-var-list))
 
   (remove-duplicates (pattern-variables-generic% pattern) :test #'eq))
@@ -102,8 +102,12 @@
     nil)
 
   (:method ((pattern pattern-constructor))
+    (declare (values pattern-var-list &optional))
+    (pattern-variables-generic% (pattern-constructor-patterns pattern)))
+
+  (:method ((list list))
     (declare (values pattern-var-list))
-    (mapcan #'pattern-variables-generic% (pattern-constructor-patterns pattern))))
+    (mapcan #'pattern-variables-generic% list)))
 
 (defmethod tc:apply-substitution (subs (node pattern-var))
   (declare (type tc:substitution-list subs)

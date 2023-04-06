@@ -1,6 +1,7 @@
 (defpackage #:coalton-impl/typechecker/binding
   (:use
    #:cl
+   #:coalton-impl/typechecker/pattern
    #:coalton-impl/typechecker/expression
    #:coalton-impl/typechecker/toplevel)
   (:local-nicknames
@@ -15,7 +16,6 @@
    #:binding-parameters                 ; FUNCTION
    #:binding-restricted-p               ; FUNCTION
    #:binding-last-node                  ; FUNCTION
-   #:binding-nullary                    ; FUNCTION
    ))
 
 (in-package #:coalton-impl/typechecker/binding)
@@ -66,19 +66,19 @@
   (:documentation "Returns the parameters of BINDING")
 
   (:method ((binding node-let-binding))
-    (declare (values node-variable-list))
+    (declare (values pattern-list))
 
     nil)
 
   (:method ((binding toplevel-define))
-    (declare (values node-variable-list))
+    (declare (values pattern-list))
 
-    (toplevel-define-vars binding))
+    (toplevel-define-params binding))
 
   (:method ((binding instance-method-definition))
-    (declare (values node-variable-list))
+    (declare (values pattern-list))
 
-    (instance-method-definition-vars binding)))
+    (instance-method-definition-params binding)))
 
 (defgeneric binding-restricted-p (binding)
   (:documentation "Returns t if BINDING is restricted")
@@ -92,7 +92,7 @@
     (declare (values boolean))
 
     (and
-     (or (toplevel-define-vars binding)
+     (or (toplevel-define-params binding)
 
          (and (null (node-body-nodes (toplevel-define-body binding)))
               (node-abstraction-p (node-body-last-node (toplevel-define-body binding)))))
@@ -102,7 +102,7 @@
     (declare (values boolean))
 
     (and
-     (or (instance-method-definition-vars binding)
+     (or (instance-method-definition-params binding)
 
          (and (null (node-body-nodes (instance-method-definition-body binding)))
               (node-abstraction-p
@@ -126,19 +126,3 @@
     (declare (values node))
 
     (node-body-last-node (instance-method-definition-body binding))))
-
-(defgeneric binding-nullary (binding)
-  (:documentation "Returns t if BINDING is nullary")
-
-  (:method ((binding node-let-binding))
-    (declare (ignore binding)
-             (values boolean))
-    nil)
-
-  (:method ((binding toplevel-define))
-    (declare (values boolean))
-    (toplevel-define-nullary binding))
-
-  (:method ((binding instance-method-definition))
-    (declare (values boolean))
-    (instance-method-definition-nullary binding)))

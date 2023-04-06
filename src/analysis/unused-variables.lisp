@@ -32,9 +32,8 @@
                   node)))
 
     ;; Check for unused parameters in the binding
-    (unless (tc:binding-nullary binding)
-      (loop :for var :in (tc:binding-parameters binding)
-            :do (variable-binding var used-variables file)))
+    (loop :for var :in (tc:pattern-variables (tc:binding-parameters binding))
+          :do (variable-binding var used-variables file))
 
     ;; Check for unused variables in the body
     (tc:traverse
@@ -62,9 +61,8 @@
              node)
       :abstraction (lambda (node)
                      (declare (type tc:node-abstraction node))
-                     (unless (tc:node-abstraction-nullary node)
-                       (loop :for var :in (tc:node-abstraction-vars node)
-                             :do (variable-binding var used-variables file)))
+                     (loop :for var :in (tc:pattern-variables (tc:node-abstraction-params node))
+                           :do (variable-binding var used-variables file))
                      node)))))
 
 (defun variable-binding (var used-variables file)

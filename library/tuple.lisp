@@ -25,16 +25,14 @@
   ;;
 
   (declare fst ((Tuple :a :b) -> :a))
-  (define (fst t)
+  (define (fst (Tuple a _))
     "Get the first element of a tuple."
-    (match t
-      ((Tuple a _) a)))
+    a)
 
   (declare snd ((Tuple :a :b) -> :b))
-  (define (snd t)
+  (define (snd (Tuple _ b))
     "Get the second element of a tuple."
-    (match t
-      ((Tuple _ b) b)))
+    b)
 
   (define-type (Tuple3 :a :b :c)
     (Tuple3 :a :b :c))
@@ -50,9 +48,9 @@
   ;;
 
   (define-instance ((Eq :a) (Eq :b) => Eq (Tuple :a :b))
-    (define (== a b)
-      (and (== (fst a) (fst b))
-           (== (snd a) (snd b)))))
+    (define (== (Tuple a1 b1) (Tuple a2 b2))
+      (and (== a1 a2)
+           (== b1 b2))))
 
   (define-instance ((Ord :a) (Ord :b) => Ord (Tuple :a :b))
     (define (<=> a b)
@@ -64,9 +62,8 @@
         ((EQ) (<=> a2 b2)))))
 
   (define-instance (Into (Tuple :a :b) (Tuple :b :a))
-    (define (into t)
-      (match t
-        ((Tuple a b) (Tuple b a)))))
+    (define (into (Tuple a b))
+      (Tuple b a)))
 
   (define-instance (Iso (Tuple :a :b) (Tuple :b :a)))
 
@@ -79,10 +76,8 @@
           (hash b))))))
 
   (define-instance (Bifunctor Tuple)
-    (define (bimap f g item)
-      (match item
-        ((Tuple a b)
-         (Tuple (f a) (g b))))))
+    (define (bimap f g (Tuple a b))
+      (Tuple (f a) (g b))))
 
   ;;
   ;; Larger Tuple Instances

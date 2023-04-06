@@ -39,7 +39,7 @@
    #:node-body-last-node                ; ACCESSOR
    #:node-abstraction                   ; STRUCT
    #:make-node-abstraction              ; CONSTRUCTOR
-   #:node-abstraction-vars              ; ACCESSOR
+   #:node-abstraction-params            ; ACCESSOR
    #:node-abstraction-body              ; ACCESSOR
    #:node-abstraction-p                 ; FUNCTION
    #:node-let-binding                   ; STRUCT
@@ -145,7 +145,7 @@
 ;;;;
 ;;;; node-literal := <a lisp literal value>
 ;;;;
-;;;; node-variable := <a lisp symbol>
+;;;; node-variable := <a lisp symbol not including "_">
 ;;;;
 ;;;; ty := <defined in src/parser/types.lisp>
 ;;;;
@@ -179,7 +179,7 @@
 ;;;;
 ;;;; node-body := node-body-element* expression
 ;;;;
-;;;; node-abstraction := "(" "fn" "(" variable* ")" node-body ")"
+;;;; node-abstraction := "(" "fn" "(" pattern* ")" node-body ")"
 ;;;;
 ;;;; node-let-binding := "(" identifier expression ")"
 ;;;;
@@ -215,7 +215,7 @@
 ;;;;
 ;;;; node-cond := "(" "cond" cond-clause+ ")"
 ;;;;
-;;;; node-do-bind "(" variable "<-" expression ")"
+;;;; node-do-bind "(" pattern "<-" expression ")"
 ;;;;
 ;;;; node-do-body-element := expression
 ;;;;                       | node-bind
@@ -294,8 +294,8 @@
 (defstruct (node-abstraction
             (:include node)
             (:copier nil))
-  (vars (util:required 'vars) :type node-variable-list :read-only t)
-  (body (util:required 'body) :type node-body          :read-only t))
+  (params (util:required 'params) :type pattern-list :read-only t)
+  (body   (util:required 'body)   :type node-body    :read-only t))
 
 (defstruct (node-let-binding
             (:copier nil))
@@ -495,7 +495,7 @@
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:fn (cst:raw (cst:first form))))
-     (let ((variables)
+     (let ((params)
            (body))
 
        ;; (fn)
@@ -538,15 +538,15 @@
                           (concatenate 'string "(" existing ")"))
                         :message "add parentheses")))))
 
-       (setf variables
+       (setf params
              (loop :for vars := (cst:second form) :then (cst:rest vars)
                    :while (cst:consp vars)
-                   :collect (parse-variable (cst:first vars) file)))
+                   :collect (parse-pattern (cst:first vars) file)))
 
        (setf body (parse-body (cst:nthrest 2 form) form file))
 
        (make-node-abstraction
-        :vars variables
+        :params params
         :body body
         :source (cst:source form))))
 
@@ -912,6 +912,14 @@
                  :file file
                  :message "Invalid variable"
                  :primary-note "expected identifier")))
+
+  (when (string= "_" (symbol-name (cst:raw form)))
+    (error 'parse-error
+           :err (coalton-error
+                 :span (cst:source form)
+                 :file file
+                 :message "Invalid variable"
+                 :primary-note "invalid variable name '_'")))
 
   (make-node-variable
    :name (cst:raw form)

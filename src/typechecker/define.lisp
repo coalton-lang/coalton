@@ -211,13 +211,14 @@
                                                    :docstring (parser:toplevel-define-docstring define)
                                                    :location (error:coalton-file-name file))))
 
-              :if (parser:toplevel-define-var-names define)
+              :if (parser:toplevel-define-orig-params define)
                 :do (setf env (tc:set-function-source-parameter-names
                                env
                                name
-                               (parser:toplevel-define-var-names define)))
+                               (parser:toplevel-define-orig-params define)))
               :else
                 :do (setf env (tc:unset-function-source-parameter-names env name)))
+
 
         (values
          (tc:apply-substitution subs binding-nodes)
@@ -512,8 +513,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (values tc:ty tc:ty-predicate-list node-abstraction tc:substitution-list))
 
     (check-duplicates
-     (parser:node-abstraction-vars node)
-     #'parser:node-variable-name
+     (parser:pattern-variables (parser:node-abstraction-params node))
+     #'parser:pattern-var-name
      (lambda (first second)
        (error 'tc-error
               :err (coalton-error
@@ -528,16 +529,28 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                       :span (parser:node-source second)
                       :message "second parameter here"))))))
 
-    (let (;; Setup return environment
-          (*return-status* :lambda)
-          (*returns* nil)
+    (let* (;; Setup return environment
+           (*return-status* :lambda)
+           (*returns* nil)
 
-          ;; Add parameters to the environment
-          (arg-tys
-            (if (null (parser:node-abstraction-vars node))
-                (list tc:*unit-type*)
-                (loop :for var :in (parser:node-abstraction-vars node)
-                      :collect (tc-env-add-variable env (parser:node-variable-name var))))))
+           (arg-tys (if (null (parser:node-abstraction-params node))
+                        (list tc:*unit-type*)
+                        (loop :for pat :in (parser:node-abstraction-params node)
+                              :collect (tc:make-variable))))
+
+           (params
+             (if (null (parser:node-abstraction-params node))
+                 (list
+                  (make-pattern-wildcard
+                   :type (tc:qualify nil (first arg-tys))
+                   :source (parser:node-source node)))
+                 (loop :for pattern :in (parser:node-abstraction-params node)
+                       :for ty :in arg-tys
+                       :collect (multiple-value-bind (ty_ pattern subs_)
+                                    (infer-pattern-type pattern ty subs env file)
+                                  (declare (ignore ty_))
+                                  (setf subs subs_)
+                                  pattern)))))
 
       (multiple-value-bind (body-ty preds body-node subs)
           (infer-expression-type (parser:node-abstraction-body node)
@@ -592,28 +605,14 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
           (handler-case
               (progn
                 (setf subs (tc:unify subs ty expected-type))
-                (let ((type (tc:apply-substitution subs ty))
-
-                      (var-nodes
-                        (if (null (parser:node-abstraction-vars node))
-                            (list (make-node-variable
-                                   :type (tc:qualify nil tc:*unit-type*)
-                                   :source (parser:node-source node)
-                                   :name (gensym "UNUSED")))
-                            (loop :for var :in (parser:node-abstraction-vars node)
-                                  :for arg-ty :in arg-tys
-                                  :collect (make-node-variable
-                                            :type (tc:qualify nil (tc:apply-substitution subs arg-ty))
-                                            :source (parser:node-source var)
-                                            :name (parser:node-variable-name var))))))
+                (let ((type (tc:apply-substitution subs ty)))
                   (values
                    type
                    preds
                    (make-node-abstraction
                     :type (tc:qualify nil type)
                     :source (parser:node-source node)
-                    :vars var-nodes
-                    :nullary (null (parser:node-abstraction-vars node))
+                    :params params
                     :body body-node)
                    subs)))
             (error:coalton-internal-type-error ()
@@ -2113,32 +2112,39 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
            (values tc:ty-predicate-list (or toplevel-define node-let-binding instance-method-definition) tc:substitution-list))
 
   (check-duplicates
-   (parser:binding-parameters binding)
-   #'parser:node-variable-name
+   (parser:pattern-variables (parser:binding-parameters binding))
+   #'parser:pattern-var-name
    (lambda (first second)
      (error 'tc-error
-              :err (coalton-error
-                    :span (parser:node-source first)
-                    :file file
-                    :message "Duplicate parameters name"
-                    :primary-note "first parameter here"
-                    :notes
-                    (list
-                     (make-coalton-error-note
-                      :type :primary
-                      :span (parser:node-source second)
-                      :message "second parameter here"))))))
+            :err (coalton-error
+                  :span (parser:node-source first)
+                  :file file
+                  :message "Duplicate parameters name"
+                  :primary-note "first parameter here"
+                  :notes
+                  (list
+                   (make-coalton-error-note
+                    :type :primary
+                    :span (parser:node-source second)
+                    :message "second parameter here"))))))
 
-  (let* ((vars (loop :for var :in (parser:binding-parameters binding)
-                     :for name := (parser:node-variable-name var)
-                     :collect (tc-env-add-variable env name)))
+  (let* ((param-tys (loop :for pattern :in (parser:binding-parameters binding)
+                          :collect (tc:make-variable)))
+
+         (params (loop :for pattern :in (parser:binding-parameters binding)
+                       :for ty :in param-tys
+                       :collect (multiple-value-bind (ty_ pattern subs_)
+                                    (infer-pattern-type pattern ty subs env file)
+                                  (declare (ignore ty_))
+                                  (setf subs subs_)
+                                  pattern)))
 
          (ret-ty (tc:make-variable))
 
          (preds nil)
 
          (value-node
-           (if vars
+           (if params
                ;; If the binding has parameters that setup the return state before infering the binding's type
                (let ((*return-status* :lambda)
 
@@ -2210,7 +2216,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                  (setf preds preds_)
                  value-node))))
 
-    (let ((ty (tc:make-function-type* vars ret-ty)))
+    (let ((ty (tc:make-function-type* param-tys ret-ty)))
       (handler-case
           (progn
             (setf subs (tc:unify subs ty expected-type))
@@ -2223,16 +2229,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                       :source (parser:node-source (parser:binding-name binding))
                       :name (parser:node-variable-name (parser:binding-name binding))))
 
-                   (var-nodes
-                     (mapcar (lambda (var ty)
-                               (make-node-variable
-                                :type (tc:qualify nil ty)
-                                :source (parser:node-source var)
-                                :name (parser:node-variable-name var)))
-                             (parser:binding-parameters binding)
-                             vars))
-
-                   (typed-binding (build-typed-binding binding name-node value-node var-nodes)))
+                   (typed-binding (build-typed-binding binding name-node value-node params)))
               (values
                preds
                typed-binding
@@ -2247,44 +2244,41 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                                              (tc:apply-substitution subs expected-type)
                                              (tc:apply-substitution subs ty)))))))))
 
-(defgeneric build-typed-binding (binding name value vars)
-  (:method ((binding parser:toplevel-define) name value vars)
+(defgeneric build-typed-binding (binding name value params)
+  (:method ((binding parser:toplevel-define) name value params)
     (declare (type node-variable name)
              (type node-body value)
-             (type node-variable-list vars)
+             (type pattern-list params)
              (values toplevel-define))
 
    (make-toplevel-define
     :name name
-    :vars vars
-    :nullary (parser:toplevel-define-nullary binding)
+    :params params
     :body value
     :source (parser:toplevel-define-source binding)))
 
-  (:method ((binding parser:node-let-binding) name value vars)
+  (:method ((binding parser:node-let-binding) name value params)
     (declare (type node-variable name)
              (type node value)
-             (type node-variable-list vars)
+             (type pattern-list params)
              (values node-let-binding))
 
-    (unless (null vars)
-      (util:coalton-bug "Unexpected parameters on let binding"))
+    (assert (null params))
 
    (make-node-let-binding
     :name name
     :value value
     :source (parser:node-let-binding-source binding)))
 
-  (:method ((binding parser:instance-method-definition) name value vars)
+  (:method ((binding parser:instance-method-definition) name value params)
     (declare (type node-variable name)
              (type node-body value)
-             (type node-variable-list vars)
+             (type pattern-list params)
              (values instance-method-definition))
 
     (make-instance-method-definition
      :name name
-     :vars vars
-     :nullary (parser:instance-method-definition-nullary binding)
+     :params params
      :body value
      :source (parser:instance-method-definition-source binding))))
 
@@ -2298,8 +2292,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
            :name (node-variable-name (toplevel-define-name binding))
            :type explicit-type
            :source (node-source (toplevel-define-name binding)))
-    :vars (toplevel-define-vars binding)
-    :nullary (toplevel-define-nullary binding)
+    :params (toplevel-define-params binding)
     :body (toplevel-define-body binding)
     :source (toplevel-define-source binding)))
 
@@ -2324,8 +2317,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
             :name (node-variable-name (instance-method-definition-name binding))
             :type explicit-type
             :source (node-source (instance-method-definition-name binding)))
-     :vars (instance-method-definition-vars binding)
-     :nullary (instance-method-definition-nullary binding)
+     :params (instance-method-definition-params binding)
      :body (instance-method-definition-body binding)
      :source (instance-method-definition-source binding))))
 
@@ -2356,8 +2348,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
       (toplevel-define
        (make-toplevel-define
         :name (toplevel-define-name binding)
-        :vars (toplevel-define-vars binding)
-        :nullary (toplevel-define-nullary binding)
+        :params (toplevel-define-params binding)
         :body (traverse
                (toplevel-define-body binding)
                (make-traverse-block

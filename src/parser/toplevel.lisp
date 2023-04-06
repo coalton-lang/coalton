@@ -1,9 +1,10 @@
-(defpackage #:coalton-impl/parser/parser
+(defpackage #:coalton-impl/parser/toplevel
   (:use
    #:cl
    #:coalton-impl/error
    #:coalton-impl/parser/base
    #:coalton-impl/parser/types
+   #:coalton-impl/parser/pattern
    #:coalton-impl/parser/macro
    #:coalton-impl/parser/expression)
   (:shadowing-import-from
@@ -47,9 +48,8 @@
    #:toplevel-define                             ; STRUCT
    #:make-toplevel-define                        ; CONSTRUCTOR
    #:toplevel-define-name                        ; ACCESSOR
-   #:toplevel-define-vars                        ; ACCESSOR
-   #:toplevel-define-var-names                   ; ACCESSOR
-   #:toplevel-define-nullary                     ; ACCESSOR
+   #:toplevel-define-params                      ; ACCESSOR
+   #:toplevel-define-orig-params                 ; ACCESSOR
    #:toplevel-define-docstring                   ; ACCESSOR
    #:toplevel-define-body                        ; ACCESSOR
    #:toplevel-define-source                      ; ACCESSOR
@@ -81,8 +81,7 @@
    #:instance-method-definition                  ; STRUCT
    #:make-instance-method-definition             ; CONSTRUCTOR
    #:instance-method-definition-name             ; ACCESSOR
-   #:instance-method-definition-vars             ; ACCESSOR
-   #:instance-method-definition-nullary          ; ACCESSOR
+   #:instance-method-definition-params           ; ACCESSOR
    #:instance-method-definition-body             ; ACCESSOR
    #:instance-method-definition-source           ; ACCESSOR
    #:instance-method-definition-list             ; TYPE
@@ -118,7 +117,7 @@
    #:read-expression                             ; FUNCTION
    ))
 
-(in-package #:coalton-impl/parser/parser)
+(in-package #:coalton-impl/parser/toplevel)
 
 ;;;; # Toplevel Form Parsing
 ;;;;
@@ -153,7 +152,7 @@
 ;;;; toplevel-declare := "(" "declare" identifier qualified-ty ")"
 ;;;;
 ;;;; toplevel-define := "(" "define" identifier node-body ")"
-;;;;                  | "(" "define" "(" identifier identifier+ ")" docstring? node-body ")"
+;;;;                  | "(" "define" "(" identifier pattern* ")" docstring? node-body ")"
 ;;;;
 ;;;; constructor := identifier
 ;;;;              | "(" identifier ty+ ")"
@@ -170,7 +169,7 @@
 ;;;;                        | "(" "define-class" "(" ( "(" ty-predicate ")" )+ "=>" class-head ")" docstring? method-definition* ")"
 ;;;;
 ;;;; instance-method-definiton := "(" "define" identifier body ")"
-;;;;                            | "(" "define" "(" identifier identifier+ ")" body ")"
+;;;;                            | "(" "define" "(" identifier pattern* ")" body ")"
 ;;;;
 ;;;; toplevel-define-instance := "(" "define-instance" "(" ty-predicate ")" docstring? instance-method-definition* ")"
 ;;;;                           | "(" "define-instance" "(" ty-predicate "=>" ty-predicate ")" docstring? instance-method-definition ")"
@@ -248,9 +247,8 @@
 (defstruct (toplevel-define
             (:copier nil))
   (name         (util:required 'name)         :type node-variable                    :read-only t)
-  (vars         (util:required 'vars)         :type node-variable-list               :read-only t)
-  (var-names    (util:required 'vars)         :type util:symbol-list                 :read-only t)
-  (nullary      (util:required 'nullary)      :type boolean                          :read-only t)
+  (params       (util:required 'params)       :type pattern-list                     :read-only t)
+  (orig-params  (util:required 'orig-params)  :type pattern-list                     :read-only t)
   (docstring    (util:required 'docstring)    :type (or null string)                 :read-only t)
   (body         (util:required 'body)         :type node-body                        :read-only t)
   (source       (util:required 'source)       :type cons                             :read-only t)
@@ -313,8 +311,7 @@
 (defstruct (instance-method-definition
             (:copier nil))
   (name      (util:required 'name)      :type node-variable       :read-only t)
-  (vars      (util:required 'vars)      :type node-variable-list  :read-only t)
-  (nullary   (util:required 'nullary)   :type boolean             :read-only t)
+  (params    (util:required 'vars)      :type pattern-list        :read-only t)
   (body      (util:required 'body)      :type node-body           :read-only t)
   (source    (util:required 'source)    :type cons                :read-only t))
 
@@ -879,7 +876,7 @@ consume all attributes")))
                  :message "Malformed definition"
                  :primary-note "expected value")))
 
-  (multiple-value-bind (name arguments nullary)
+  (multiple-value-bind (name params)
       (parse-argument-list (cst:second form) file)
 
     (multiple-value-bind (docstring body)
@@ -887,9 +884,8 @@ consume all attributes")))
 
       (make-toplevel-define
        :name name
-       :vars arguments
-       :var-names (mapcar #'node-variable-name arguments)
-       :nullary nullary
+       :params params
+       :orig-params params
        :docstring docstring
        :body body
        :monomorphize nil
@@ -1598,11 +1594,11 @@ consume all attributes")))
 (defun parse-argument-list (form file)
   (declare (type cst:cst form)
            (type coalton-file file)
-           (values node-variable node-variable-list boolean))
+           (values node-variable pattern-list))
 
   ;; (define x 1)
   (when (cst:atom form)
-    (return-from parse-argument-list (values (parse-variable form file) nil nil)))
+    (return-from parse-argument-list (values (parse-variable form file) nil)))
 
   ;; (define (0.5 x y) ...)
   (unless (identifierp (cst:raw (cst:first form)))
@@ -1620,14 +1616,11 @@ consume all attributes")))
 
    (if (cst:null (cst:rest form))
        (list
-        (make-node-variable
-         :source (cst:source form)
-         :name (gentemp)))
+        (make-pattern-wildcard
+         :source (cst:source form)))
        (loop :for vars := (cst:rest form) :then (cst:rest vars)
              :while (cst:consp vars)
-             :collect (parse-variable (cst:first vars) file)))
-
-   (cst:null (cst:rest form))))
+             :collect (parse-pattern (cst:first vars) file)))))
 
 (defun parse-identifier (form file)
   (declare (type cst:cst form)
@@ -1726,13 +1719,12 @@ consume all attributes")))
                    :primary-note "expected definition name"
                    :notes (list context-note))))
 
-    (multiple-value-bind (name arguments nullary)
+    (multiple-value-bind (name params)
         (parse-argument-list (cst:second form) file)
 
       (make-instance-method-definition
        :name name
-       :vars arguments
-       :nullary nullary
+       :params params
        :body (parse-body (cst:rest (cst:rest form)) form file)
        :source (cst:source form)))))
 

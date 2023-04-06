@@ -15,3 +15,6 @@
 
 (define-instance (C :a => (C (List :a))))
 (define-instance ((C :a) => (C (List :a))))
+
+(define-instance (Eq T)
+  (define (== _ _) True))

@@ -457,11 +457,9 @@
                 :name (parser:make-node-variable
                        :source source
                        :name runtime-repr-method)
-                :vars (list
-                       (parser:make-node-variable
-                        :source source
-                        :name (gentemp)))
-                :nullary nil
+                :params (list
+                         (parser:make-pattern-wildcard
+                          :source source))
                 :body (parser:make-node-body
                        :nodes nil
                        :last-node (parser:make-node-lisp

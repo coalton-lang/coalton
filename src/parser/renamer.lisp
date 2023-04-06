@@ -5,7 +5,7 @@
    #:coalton-impl/parser/types
    #:coalton-impl/parser/pattern
    #:coalton-impl/parser/expression
-   #:coalton-impl/parser/parser)
+   #:coalton-impl/parser/toplevel)
   (:shadowing-import-from
    #:coalton-impl/parser/base
    #:parse-error)
@@ -93,13 +93,13 @@
     (declare (type algo:immutable-map ctx)
              (values node algo:immutable-map))
 
-    (let* ((new-bindings (make-local-vars (mapcar #'node-variable-name (node-abstraction-vars node))))
+    (let* ((new-bindings (make-local-vars (mapcar #'pattern-var-name (pattern-variables (node-abstraction-params node)))))
 
            (new-ctx (algo:immutable-map-set-multiple ctx new-bindings)))
 
       (values
        (make-node-abstraction
-        :vars (rename-variables-generic% (node-abstraction-vars node) new-ctx)
+        :params (rename-variables-generic% (node-abstraction-params node) new-ctx)
         :body (rename-variables-generic% (node-abstraction-body node) new-ctx)
         :source (node-source node))
        ctx)))
@@ -375,16 +375,15 @@
     (declare (type algo:immutable-map ctx)
              (values toplevel-define algo:immutable-map))
 
-    (let* ((new-bindings (make-local-vars (mapcar #'node-variable-name (toplevel-define-vars toplevel))))
+    (let* ((new-bindings (make-local-vars (mapcar #'pattern-var-name (pattern-variables (toplevel-define-params toplevel)))))
 
            (new-ctx (algo:immutable-map-set-multiple ctx new-bindings)))
 
       (values
        (make-toplevel-define
         :name (toplevel-define-name toplevel)
-        :vars (rename-variables-generic% (toplevel-define-vars toplevel) new-ctx)
-        :var-names (toplevel-define-var-names toplevel)
-        :nullary (toplevel-define-nullary toplevel)
+        :params (rename-variables-generic% (toplevel-define-params toplevel) new-ctx)
+        :orig-params (toplevel-define-orig-params toplevel)
         :docstring (toplevel-define-docstring toplevel)
         :body (rename-variables-generic% (toplevel-define-body toplevel) new-ctx)
         :source (toplevel-define-source toplevel)
@@ -395,15 +394,14 @@
     (declare (type algo:immutable-map ctx)
              (values instance-method-definition algo:immutable-map))
 
-    (let* ((new-bindings (make-local-vars (mapcar #'node-variable-name (instance-method-definition-vars method))))
+    (let* ((new-bindings (make-local-vars (mapcar #'pattern-var-name (pattern-variables (instance-method-definition-params method)))))
 
            (new-ctx (algo:immutable-map-set-multiple ctx new-bindings)))
 
       (values
        (make-instance-method-definition
         :name (instance-method-definition-name method)
-        :vars (rename-variables-generic% (instance-method-definition-vars method) new-ctx)
-        :nullary (instance-method-definition-nullary method)
+        :params (rename-variables-generic% (instance-method-definition-params method) new-ctx)
         :body (rename-variables-generic% (instance-method-definition-body method) new-ctx)
         :source (instance-method-definition-source method))
        ctx)))
