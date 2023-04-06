@@ -15,3 +15,5 @@
 
 (monomorphize)
 (define x 5)
+
+(define (f (Tuple x y)) x)

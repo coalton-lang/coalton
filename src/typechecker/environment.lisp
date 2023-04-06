@@ -35,7 +35,8 @@
    #:+fundep-max-depth+)
   (:local-nicknames
    (#:util #:coalton-impl/util)
-   (#:error #:coalton-impl/error))
+   (#:error #:coalton-impl/error)
+   (#:parser #:coalton-impl/parser))
   (:export
    #:*env-update-log*                       ; VARIABLE
    #:value-environment                      ; STRUCT
@@ -960,13 +961,13 @@
 (defun lookup-function-source-parameter-names (env function-name)
   (declare (type environment env)
            (type symbol function-name)
-           (values util:symbol-list &optional))
+           (values parser:pattern-list &optional))
   (values (immutable-map-lookup (environment-source-name-environment env) function-name)))
 
 (define-env-updater set-function-source-parameter-names (env function-name source-parameter-names)
   (declare (type environment env)
            (type symbol function-name)
-           (type util:symbol-list source-parameter-names))
+           (type parser:pattern-list source-parameter-names))
   (update-environment
    env
    :source-name-environment (immutable-map-set (environment-source-name-environment env)

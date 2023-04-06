@@ -8,7 +8,7 @@
    #:cl
    #:coalton-impl/parser/types
    #:coalton-impl/parser/expression
-   #:coalton-impl/parser/parser)
+   #:coalton-impl/parser/toplevel)
   (:export
    #:collect-referenced-types           ; FUNCTION
    #:collect-type-variables             ; FUNCTION
@@ -95,7 +95,11 @@
 
   (:method ((method method-definition))
     (declare (values tyvar-list &optional))
-    (collect-type-variables-generic% (method-definition-type method))))
+    (collect-type-variables-generic% (method-definition-type method)))
+
+  (:method ((list list))
+    (declare (values tyvar-list))
+    (mapcan #'collect-type-variables-generic% list)))
 
 (defun collect-variables (node)
   "Returns a deduplicated list of all `NODE-VARIABLE's referenced

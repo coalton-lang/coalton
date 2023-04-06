@@ -23,6 +23,21 @@
 (define-condition pattern-var-matches-constructor (error:coalton-base-warning)
   ())
 
+(defun check-pattern-exhaustiveness (pattern env file)
+  (declare (type tc:pattern pattern)
+           (type tc:environment env)
+           (type error:coalton-file file))
+
+  (let ((missing (find-non-matching-value (list (list pattern)) 1 env)))
+    (unless (eq t missing)
+      (error 'tc:tc-error
+             :err (error:coalton-error
+                   :file file
+                   :span (tc:pattern-source pattern)
+                   :message "Non-exaustive match"
+                   :primary-note (format nil "Missing case ~W"
+                                         (print-pattern (first missing))))))))
+
 (defun analyze-translation-unit (translation-unit env file)
   "Perform analysis passes on TRANSLATION-UNIT, potentially producing errors or warnings."
   (declare (type tc:translation-unit translation-unit)
@@ -62,21 +77,36 @@
                                             :span (tc:pattern-source pattern)
                                             :message "Useless match case"
                                             :primary-note "useless match case"
-                                            :notes (list (error:make-coalton-error-note
-                                                          :type :secondary
-                                                          :span (tc:node-source node)
-                                                          :message "in this match")))))))
-                    node))))
+                                            :notes
+                                            (list
+                                             (error:make-coalton-error-note
+                                              :type :secondary
+                                              :span (tc:node-source node)
+                                              :message "in this match")))))))
+                    node)
+           :abstraction (lambda (node)
+                          (declare (type tc:node-abstraction node))
+                          (loop :for pattern :in (tc:node-abstraction-params node)
+                                :do (check-pattern-exhaustiveness pattern env file))
+                          node)
+           :bind (lambda (node)
+                   (declare (type tc:node-bind node))
+                   (check-pattern-exhaustiveness (tc:node-bind-pattern node) env file)
+                   node))))
 
     ;; Run analysis on definitions
     (loop :for define :in (tc:translation-unit-definitions translation-unit)
           :do (tc:traverse (tc:toplevel-define-body define) analysis-traverse-block)
-          :do (find-unused-variables define file))
+          :do (find-unused-variables define file)
+          :do (loop :for pattern :in (tc:binding-parameters define)
+                    :do (check-pattern-exhaustiveness pattern env file)))
 
     ;; Run analysis on instance definitions
     (loop :for instance :in (tc:translation-unit-instances translation-unit) :do
-      (loop :for method :being :the :hash-value :of (tc:toplevel-define-instance-methods instance) :do
-        (tc:traverse (tc:instance-method-definition-body method) analysis-traverse-block)))))
+      (loop :for method :being :the :hash-value :of (tc:toplevel-define-instance-methods instance)
+            :do (tc:traverse (tc:instance-method-definition-body method) analysis-traverse-block)
+            :do (loop :for pattern :in (tc:binding-parameters method)
+                      :do (check-pattern-exhaustiveness pattern env file))))))
 
 (defgeneric print-pattern (pat)
   (:method ((pat tc:pattern-constructor))

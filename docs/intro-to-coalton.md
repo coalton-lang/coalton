@@ -464,6 +464,17 @@ Type declarations can also be added in let expressions
       (_ False))))
 ```
 
+Functions can pattern match on their arguments, but the patterns must be exaustive.
+
+```lisp
+(coalton-toplevel
+  (declare first (Tuple :a :b -> :a))
+  (define (first (Tuple a _)) a)
+
+  (declare second (Tuple :a :b -> :b))
+  (define second (fn ((Tuple _ b)) b)))
+```
+
 The operator `coalton-library:if` can be used as a shorthand when matching on Booleans:
 
 ```lisp

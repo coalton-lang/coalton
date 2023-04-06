@@ -39,8 +39,7 @@
    #:node-body-last-node                ; ACCESSOR
    #:node-abstraction                   ; STRUCT
    #:make-node-abstraction              ; CONSTRUCTOR
-   #:node-abstraction-vars              ; ACCESSOR
-   #:node-abstraction-nullary           ; ACCESSOR
+   #:node-abstraction-params            ; ACCESSOR
    #:node-abstraction-body              ; ACCESSOR
    #:node-abstraction-p                 ; FUNCTION
    #:node-let-binding                   ; STRUCT
@@ -199,9 +198,8 @@
 (defstruct (node-abstraction
             (:include node)
             (:copier nil))
-  (vars    (util:required 'vars)    :type node-variable-list :read-only t)
-  (nullary (util:required 'nullary) :type boolean            :read-only t)
-  (body    (util:required 'body)    :type node-body          :read-only t))
+  (params  (util:required 'vars)    :type pattern-list :read-only t)
+  (body    (util:required 'body)    :type node-body    :read-only t))
 
 (defstruct (node-let-binding
             (:copier nil))
@@ -388,8 +386,7 @@
   (make-node-abstraction
    :type (tc:apply-substitution subs (node-type node))
    :source (node-source node)
-   :vars (tc:apply-substitution subs (node-abstraction-vars node))
-   :nullary (node-abstraction-nullary node)
+   :params (tc:apply-substitution subs (node-abstraction-params node))
    :body (tc:apply-substitution subs (node-abstraction-body node))))
 
 (defmethod tc:apply-substitution (subs (node node-let-binding))

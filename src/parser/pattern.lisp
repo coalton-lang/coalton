@@ -17,6 +17,7 @@
    #:make-pattern-var                   ; ACCESSOR
    #:pattern-var-name                   ; ACCESSOR
    #:pattern-var-orig-name              ; ACCESSOR
+   #:pattern-var-p                      ; FUNCTION
    #:pattern-literal                    ; STRUCT
    #:make-pattern-literal               ; CONSTRUCTOR
    #:pattern-literal-value              ; ACCESSOR
@@ -36,7 +37,7 @@
 ;;;;
 ;;;; literal := <a lisp literal value>
 ;;;;
-;;;; variable := <a lisp symbol>
+;;;; variable := <a lisp symbol not including "_">
 ;;;;
 ;;;; pattern := literal
 ;;;;          | variable
@@ -47,6 +48,9 @@
             (:constructor nil)
             (:copier nil))
   (source (util:required 'source) :type cons :read-only t))
+
+(defmethod make-load-form ((self pattern) &optional env)
+  (make-load-form-saving-slots self :environment env))
 
 (defun pattern-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -101,6 +105,13 @@
 
     ((and (cst:atom form)
           (identifierp (cst:raw form)))
+     (when (string= "_" (symbol-name (cst:raw form)))
+       (error 'parse-error
+              :err  (coalton-error
+                     :span (cst:source form)
+                     :file file
+                     :message "Invalid variable"
+                     :primary-note "invalid variable name '_'")))
      (make-pattern-var
       :name (cst:raw form)
       :orig-name (cst:raw form)
@@ -140,7 +151,7 @@
       :source (cst:source form)))))
 
 (defun pattern-variables (pattern)
-  (declare (type pattern pattern)
+  (declare (type t pattern)
            (values pattern-var-list))
 
   (remove-duplicates (pattern-variables-generic% pattern) :test #'eq))
@@ -159,5 +170,39 @@
     nil)
 
   (:method ((pattern pattern-constructor))
+    (declare (values pattern-var-list &optional))
+    (pattern-variables-generic% (pattern-constructor-patterns pattern)))
+
+  (:method ((list list))
     (declare (values pattern-var-list))
-    (mapcan #'pattern-variables-generic% (pattern-constructor-patterns pattern))))
+    (mapcan #'pattern-variables-generic% list)))
+
+
+(defmethod print-object ((obj pattern-var) stream)
+  (declare (type stream stream))
+  (if *print-readably*
+      (call-next-method)
+      (princ (pattern-var-name obj) stream)))
+
+(defmethod print-object ((obj pattern-literal) stream)
+  (declare (type stream stream))
+  (if *print-readably*
+      (call-next-method)
+      (princ (pattern-literal-value obj) stream)))
+
+(defmethod print-object ((obj pattern-wildcard) stream)
+  (declare (type stream stream))
+  (if *print-readably*
+      (call-next-method)
+      (princ "_" stream)))
+
+(defmethod print-object ((obj pattern-constructor) stream)
+  (when *print-readably*
+    (return-from print-object (call-next-method)))
+
+  (princ "(" stream)
+  (princ (pattern-constructor-name obj) stream)
+  (loop :for pattern :in (pattern-constructor-patterns obj)
+        :do (princ " " stream)
+        :do (princ pattern stream))
+  (princ ")" stream))

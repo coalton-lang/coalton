@@ -86,3 +86,6 @@
   (cond
     (1 1)
     ((+ 1 2) 3)))
+
+(define x
+  (fn ((Tuple x y)) x))

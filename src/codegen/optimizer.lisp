@@ -31,6 +31,7 @@
   (:local-nicknames
    (#:settings #:coalton-impl/settings)
    (#:util #:coalton-impl/util)
+   (#:parser #:coalton-impl/parser)
    (#:tc #:coalton-impl/typechecker))
   (:export
    #:optimize-bindings
@@ -238,9 +239,12 @@
 
            (param-names (loop :for i :from 0 :below num-params
                               :if orig-param-names
-                                :collect (gentemp (concatenate 'string
-                                                               (symbol-name (nth (+ i (length args)) orig-param-names))
-                                                               "-"))
+                                :collect (let ((param (nth (+ i (length args)) orig-param-names)))
+                                           (if (parser:pattern-var-p param)
+                                               (gentemp (concatenate 'string
+                                                                     (symbol-name (parser:pattern-var-name param))
+                                                                     "-"))
+                                               (gentemp)))
                               :else
                                 :collect (gentemp)))
 
