@@ -81,7 +81,7 @@
 
              (ty (tc:qualified-ty-type qual-ty)))
 
-        (check-for-ambigious-variables preds ty unparsed-ty file env)
+        (check-for-ambiguous-variables preds ty unparsed-ty file env)
         (check-for-reducable-context preds unparsed-ty file env)
 
         qual-ty))))
@@ -98,19 +98,19 @@
 
     (tc:quantify tvars qual-ty)))
 
-(defun check-for-ambigious-variables (preds type qual-ty file env)
+(defun check-for-ambiguous-variables (preds type qual-ty file env)
   (declare (type tc:ty-predicate-list preds)
            (type tc:ty type)
            (type parser:qualified-ty qual-ty)
            (type coalton-file file)
            (type tc:environment env))
 
-  (let* ((old-unambigious-vars (tc:type-variables type))
-         (unambigious-vars old-unambigious-vars)) 
+  (let* ((old-unambiguous-vars (tc:type-variables type))
+         (unambiguous-vars old-unambiguous-vars)) 
 
     (block fundep-fixpoint
       (loop :for i :below tc:+fundep-max-depth+
-            :do (setf old-unambigious-vars unambigious-vars)
+            :do (setf old-unambiguous-vars unambiguous-vars)
             :do (loop :for pred :in preds
                       :for pred-tys := (tc:ty-predicate-types pred)
                       :for class-name := (tc:ty-predicate-class pred)
@@ -119,31 +119,31 @@
                       :when (tc:ty-class-fundeps class) :do
                         (loop :for fundep :in (tc:ty-class-fundeps class)
                               :for from-vars := (util:project-map (tc:fundep-from fundep) map pred-tys)
-                              :do (when (subsetp from-vars unambigious-vars :test #'equalp)
+                              :do (when (subsetp from-vars unambiguous-vars :test #'equalp)
                                     (let ((to-vars (util:project-map (tc:fundep-to fundep) map pred-tys)))
-                                      (setf unambigious-vars
-                                            (remove-duplicates (append to-vars unambigious-vars) :test #'equalp))))))
+                                      (setf unambiguous-vars
+                                            (remove-duplicates (append to-vars unambiguous-vars) :test #'equalp))))))
 
-            :when (equalp unambigious-vars old-unambigious-vars) ; Exit when progress stops
+            :when (equalp unambiguous-vars old-unambiguous-vars) ; Exit when progress stops
               :do (return-from fundep-fixpoint)
 
             :finally (util:coalton-bug "Fundep solving failed to fixpoint")))
 
-    (unless (subsetp (tc:type-variables preds) unambigious-vars :test #'equalp)
-      (let* ((ambigious-vars (set-difference (tc:type-variables preds) unambigious-vars :test #'equalp))
+    (unless (subsetp (tc:type-variables preds) unambiguous-vars :test #'equalp)
+      (let* ((ambiguous-vars (set-difference (tc:type-variables preds) unambiguous-vars :test #'equalp))
 
-             (single-variable (= 1 (length ambigious-vars))))
+             (single-variable (= 1 (length ambiguous-vars))))
 
         (error 'tc-error
                :err (coalton-error
                      :span (parser:qualified-ty-source qual-ty)
                      :file file
                      :message "Invalid qualified type"
-                     :primary-note (format nil "The type ~A ~{~S ~}ambigious in the type ~S"
+                     :primary-note (format nil "The type ~A ~{~S ~}ambiguous in the type ~S"
                                            (if single-variable
                                                "variable is"
                                                "variables are")
-                                           ambigious-vars
+                                           ambiguous-vars
                                            (tc:make-qualified-ty
                                             :predicates preds
                                             :type type))))))))

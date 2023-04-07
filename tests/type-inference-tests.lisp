@@ -442,7 +442,7 @@
         (+ 0.5f0 y)
         (+ 0.5d0 y)))"))
 
-  ;; Check that ambigious predicates are detected
+  ;; Check that ambiguous predicates are detected
   (signals tc:tc-error
     (check-coalton-types
      "(define (f x)

@@ -66,7 +66,7 @@
 (declaim (type node-return-info-list *returns*))
 (defparameter *returns* nil)
 
-(defun error-ambigious-pred (pred file)
+(defun error-ambiguous-pred (pred file)
   (declare (type tc:ty-predicate pred)
            (type coalton-file file))
 
@@ -77,8 +77,8 @@
          :err (coalton-error
                :span (tc:ty-predicate-source pred)
                :file file
-               :message "Ambigious predicate"
-               :primary-note (format nil "Ambigious predicate ~S" pred))))
+               :message "Ambiguous predicate"
+               :primary-note (format nil "Ambiguous predicate ~S" pred))))
 
 (defun error-unknown-pred (pred file)
   (declare (type tc:ty-predicate pred)
@@ -1786,7 +1786,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                           retained-preds)
 
                        (error:coalton-internal-type-error (e)
-                         (error-ambigious-pred (tc:ambigious-constraint-pred e) file))))
+                         (error-ambiguous-pred (tc:ambiguous-constraint-pred e) file))))
 
                    ;; Defaultable predicates are not retained
                    (retained-preds
@@ -2006,7 +2006,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
         (let* ((defaultable-preds (handler-case
                                       (tc:default-preds (tc-env-env env) (append env-tvars local-tvars) retained-preds)
                                     (error:coalton-internal-type-error (e)
-                                      (error-ambigious-pred (tc:ambigious-constraint-pred e) file))))
+                                      (error-ambiguous-pred (tc:ambiguous-constraint-pred e) file))))
 
                (retained-preds (set-difference retained-preds defaultable-preds :test #'eq))
 
@@ -2092,7 +2092,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                       :do (tc-env-replace-type env name scheme))
 
                 (when (and (parser:binding-toplevel-p (first bindings)) deferred-preds)
-                  (error-ambigious-pred (first deferred-preds) file))
+                  (error-ambiguous-pred (first deferred-preds) file))
 
                 (values
                  deferred-preds
