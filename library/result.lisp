@@ -3,9 +3,10 @@
    #:coalton
    #:coalton-library/builtin
    #:coalton-library/classes
-   #:coalton-library/optional)
+   #:coalton-library/optional) 
   (:local-nicknames
-   (#:classes #:coalton-library/classes))
+   (#:cell #:coalton-library/cell)
+   (#:iter #:coalton-library/iterator))
   (:export
    #:ok?
    #:err?
@@ -26,19 +27,17 @@
 
   (declare ok? (Result :a :b -> Boolean))
   (define (ok? x)
-    "Returns TRUE if X is ERR"
-    (lisp Boolean (x)
-      (cl:etypecase x
-        (classes::Result/Ok True)
-        (classes::Result/Err False))))
+    "Returns TRUE if X is OK"
+    (match x
+      ((Ok _) True)
+      ((Err _) False)))
 
   (declare err? (Result :a :b -> Boolean))
   (define (err? x)
     "Returns TRUE if X is ERR"
-    (lisp Boolean (x)
-      (cl:etypecase x
-        (classes::Result/Err True)
-        (classes::Result/Ok False))))
+    (match x
+      ((Err _) True)
+      ((Ok _) False)))
 
   (declare map-err ((:a -> :b) -> Result :a :c -> Result :b :c))
   (define (map-err f x)
@@ -47,14 +46,14 @@
       ((Err x) (Err (f x)))
       ((Ok x) (Ok x))))
 
-  (declare flatten ((Result :a :a) -> :a))
+  (declare flatten (Result :a :a -> :a))
   (define (flatten x)
     (match x
       ((Ok x) x)
       ((Err x) x)))
 
   ;;
-  ;; Result instances
+  ;; Instances
   ;;
 
   (define-instance ((Eq :a) (Eq :b) => Eq (Result :a :b))
@@ -128,7 +127,39 @@
     (define (unwrap-or-else succeed fail res)
       (match res
         ((Ok elt) (succeed elt))
-        ((Err _) (fail))))))
+        ((Err _) (fail)))))
+
+  (define-instance (iter:IntoIterator (Result :err :elt) :elt)
+    (define (iter:into-iter result)
+      (match result
+        ((Ok x)
+         (let cell = (cell:new True))
+         (iter:with-size
+             (fn ()
+               (unless (cell:read cell)
+                 (return None))
+
+               (cell:write! cell False)
+               (Some x))
+           1))
+        ((Err _)
+         iter:empty))))
+
+  (define-instance (iter:FromIterator :container :elt => iter:FromIterator (Result :err :container) (Result :err :elt))
+    (define (iter:collect! iter)
+      (let error = (cell:new None))
+      (let out =
+        (iter:collect!
+         (iter:map-while! (fn (x)
+                             (match x
+                               ((Ok x) (Some x))
+                               ((Err e)
+                                (cell:write! error (Some e))
+                                None)))
+                           iter)))
+      (match (cell:read error)
+        ((None) (Ok out))
+        ((Some e) (Err e))))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/RESULT")

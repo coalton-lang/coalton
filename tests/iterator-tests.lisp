@@ -33,10 +33,10 @@
 (define-test iter-char-range-string-chars ()
   (let ((same? (fn (expected-str range-start range-end)
                  (iter:and! 
-                  (iter:zipWith!
+                  (iter:zip-with!
                    ==
                    (iter:into-iter expected-str)
-                   (iter:char-range range-start range-end))))))
+                   (char:range range-start range-end))))))
     (progn (is (same? "abcdef" #\a #\f))
            (is (same? "0123456789" #\0 #\9))
            (is (same? "ABCDEF" #\A #\F)))))
@@ -53,8 +53,8 @@
 
 (define-test iter-concat-collect-list ()
   (is (== (the (List Integer) (make-list 0 1 2 3 4 5 6 7 8 9))
-          (iter:collect! (iter:concat! (iter:up-to 5)
-                                       (iter:range-increasing 1 5 10)))))
+          (iter:collect! (iter:chain! (iter:up-to 5)
+                                      (iter:range-increasing 1 5 10)))))
   (is (== (the (List Integer) (make-list 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14))
           (iter:collect! (iter:flatten! (iter:into-iter (make-list (iter:up-to 5)
                                                                    (iter:range-increasing 1 5 10)
@@ -95,9 +95,9 @@
 
 (define-test iter-repeat-item-every ()
   (is (iter:every! (== "foo")
-                   (iter:repeat-item "foo" 10)))
+                   (iter:repeat-for "foo" 10)))
   (is (not (iter:any! (/= "foo")
-                      (iter:repeat-item "foo" 10)))))
+                      (iter:repeat-for "foo" 10)))))
 
 (define-test iter-downfrom ()
   (is (== (the (List Integer) (make-list 9 8 7 6 5 4 3 2 1 0))
@@ -107,17 +107,17 @@
 
 (define-test iter-min-max ()
   (is (== (Some (the Integer 10))
-          (iter:max! (iter:concat! (iter:up-through 10)
-                                   (iter:down-from 10)))))
+          (iter:max! (iter:chain! (iter:up-through 10)
+                                  (iter:down-from 10)))))
   (is (== (Some (the UFix 10))
-          (iter:max! (iter:concat! (iter:up-through 10)
-                                   (iter:down-from 10)))))
+          (iter:max! (iter:chain! (iter:up-through 10)
+                                  (iter:down-from 10)))))
   (is (== (Some (the Integer 0))
-          (iter:min! (iter:concat! (iter:down-from 10)
-                                   (iter:up-to 10)))))
+          (iter:min! (iter:chain! (iter:down-from 10)
+                                  (iter:up-to 10)))))
   (is (== (Some (the UFix 0))
-          (iter:min! (iter:concat! (iter:down-from 10)
-                                   (iter:up-to 10))))))
+          (iter:min! (iter:chain! (iter:down-from 10)
+                                  (iter:up-to 10))))))
 
 (define-test iter-optimize-string-length ()
   (let ((longer? (fn (long short)

@@ -4,7 +4,8 @@
    #:coalton-library/builtin
    #:coalton-library/classes)
   (:local-nicknames
-   (#:classes #:coalton-library/classes))
+   (#:cell #:coalton-library/cell)
+   (#:iter #:coalton-library/iterator))
   (:export
    #:from-some
    #:some?
@@ -27,26 +28,24 @@
     "Get the value of OPT, erroring with the provided string if it is None."
     (match opt
       ((Some x) x)
-      ((None) (lisp :a (str) (cl:error str)))))
+      ((None) (error str))))
 
   (declare some? ((Optional :a) -> Boolean))
   (define (some? x)
     "Is X Some?"
-    (lisp Boolean (x)
-      (cl:etypecase x
-        (classes::Optional/Some True)
-        (classes::Optional/None False))))
+    (match x
+      ((Some _) True)
+      ((None) False)))
 
   (declare none? ((Optional :a) -> Boolean))
   (define (none? x)
     "Is X None?"
-    (lisp Boolean (x)
-      (cl:etypecase x
-        (classes::Optional/None True)
-        (classes::Optional/Some False))))
+    (match x
+      ((None) True)
+      ((Some _) False)))
 
   ;;
-  ;; Optional instances
+  ;; Instances
   ;;
 
   (define-instance (Eq :a => Eq (Optional :a))
@@ -58,15 +57,15 @@
 
   (define-instance (Ord :a => Ord (Optional :a))
     (define (<=> x y)
-      (match x
-        ((Some a)
-         (match y
-           ((Some b) (<=> a b))
-           ((None) GT)))
-        ((None)
-         (match y
-           ((Some _) LT)
-           ((None) EQ))))))
+      (match (Tuple x y)
+        ((Tuple (Some x) (Some y))
+         (<=> x y))
+        ((Tuple (Some _) (None))
+         GT)
+        ((Tuple (None) (Some _))
+         LT)
+        ((Tuple (None) (None))
+         Eq))))
 
   (define-instance (Num :a => Num (Optional :a))
     (define (+ a b) (liftA2 + a b))
@@ -93,13 +92,10 @@
     (define (pure x)
       (Some x))
     (define (liftA2 f x y)
-      (match x
-        ((None) None)
-        ((Some x)
-         (match y
-           ((None) None)
-           ((Some y)
-            (Some (f x y))))))))
+      (match (Tuple x y)
+        ((Tuple (Some x) (Some y))
+         (Some (f x y)))
+        (_ None))))
 
   (define-instance (Monad Optional)
     (define (>>= x f)
@@ -108,7 +104,7 @@
         ((None) None))))
 
   (define-instance (MonadFail Optional)
-    (define (fail str)
+    (define (fail _)
       None))
 
   (define-instance (Alternative Optional)
@@ -122,7 +118,39 @@
     (define (unwrap-or-else succeed fail opt)
       (match opt
         ((Some elt) (succeed elt))
-        ((None) (fail))))))
+        ((None) (fail)))))
+
+  (define-instance (iter:IntoIterator (Optional :a) :a)
+    (define (iter:into-iter opt)
+      (match opt
+        ((Some x)
+         (let cell = (cell:new True))
+         (iter:with-size
+             (fn ()
+               (unless (cell:read cell)
+                 (return None))
+
+               (cell:write! cell False)
+               opt)
+           1))
+        ((None)
+         iter:empty))))
+
+  (define-instance (iter:FromIterator :container :elt => iter:FromIterator (Optional :container) (Optional :elt))
+    (define (iter:collect! iter)
+      (let error = (cell:new False))
+      (let out =
+        (iter:collect!
+         (iter:map-while! (fn (x)
+                             (match x
+                               ((Some _) x)
+                               ((None)
+                                (cell:write! error True)
+                                None)))
+                           iter)))
+      (if (cell:read error)
+          None
+          (Some out)))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/OPTIONAL")

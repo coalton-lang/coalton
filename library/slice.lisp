@@ -3,11 +3,14 @@
    #:coalton
    #:coalton-library/builtin
    #:coalton-library/functions
-   #:coalton-library/classes)
+   #:coalton-library/classes
+   #:coalton-library/math/arith
+   #:coalton-library/math/integral)
   (:local-nicknames
    (#:types #:coalton-library/types)
-   (#:list #:coalton-library/list)
    (#:cell #:coalton-library/cell)
+   (#:iter #:coalton-library/iterator)
+   (#:list #:coalton-library/list)
    (#:vector #:coalton-library/vector))
   (:shadowing-import-from #:coalton-library/vector #:Vector)
   (:export
@@ -15,15 +18,12 @@
    #:new
    #:length
    #:element-type
-   #:copy
    #:set!
    #:index
    #:index-unsafe
-   #:foreach
-   #:foreach-index
-   #:foreach2
    #:iter-sliding
-   #:iter-chunked))
+   #:iter-chunked
+   #:iter-chunked-exact))
 
 (in-package #:coalton-library/slice)
 
@@ -37,10 +37,19 @@
   ;; Slice
   ;;
 
-  (repr :native (cl:vector cl:*))
+  (repr :native (cl:and (cl:vector cl:*) (cl:not cl:simple-array)))
   (define-type (Slice :a))
 
-  (declare new (types:RuntimeRepr :a => UFix -> UFix -> (Vector :a) -> (Slice :a)))
+  (define-class (Sliceable :a)
+    (%length (:a -> UFix)))
+
+  (define-instance (Sliceable (Vector :a))
+    (define %length vector:length))
+
+  (define-instance (Sliceable (Slice :a))
+    (define %length length))
+
+  (declare new ((types:RuntimeRepr :a) (Sliceable (:b :a)) => UFix -> UFix -> :b :a -> Slice :a))
   (define (new start length v)
     "Create a new slice backed by V starting at index START and continuing for LENGTH elements."
     (when (< start 0)
@@ -50,23 +59,23 @@
       (error "Length of slice cannot be equal to or less than 0."))
 
     (let end = (+ start length))
-    (when (> end (vector:length v))
+    (when (> end (%length v))
       (error "Slice cannot extend beyond length of backing vector."))
-    (let p = types:Proxy)
-    (let ((declare %proxy-helper (types:Proxy (Slice :a) -> types:Proxy :a))
-          (%proxy-helper (fn (_) types:Proxy)))
-      (let p_ = (%proxy-helper p))
-      (let t = (types:runtime-repr p_))
-      (types:as-proxy-of
-       (lisp (Slice :a) (v start length t)
-         (cl:make-array
-          length
-          :element-type t
-          :displaced-to v
-          :displaced-index-offset start))
-       p)))
 
-  (declare length ((Slice :a) -> UFix))
+    (let p = types:Proxy)
+    (let p_ = (types:proxy-inner p))
+    (let t = (types:runtime-repr p_))
+
+    (types:as-proxy-of
+     (lisp (Slice :a) (v start length t)
+       (cl:make-array
+        length
+        :element-type t
+        :displaced-to v
+        :displaced-index-offset start))
+     p))
+
+  (declare length (Slice :a -> UFix))
   (define (length s)
     "Returns the length of S"
     (lisp UFix (s)
@@ -77,12 +86,6 @@
     "Returns the element type of S as a LispType"
     (lisp types:LispType (s)
       (cl:array-element-type s)))
-
-  (declare copy ((Slice :a) -> (Slice :a)))
-  (define (copy s)
-    "Returns a new slice containg the same elements as S"
-    (lisp (Slice :a) (s)
-      (alexandria:copy-array s)))
 
   (declare set! (UFix -> :a -> (Slice :a) -> Unit))
   (define (set! index item s)
@@ -104,81 +107,93 @@
     (lisp :a (idx s)
       (cl:aref s idx)))
 
-  (declare foreach ((:a -> Unit) -> (Slice :a) -> Unit))
-  (define (foreach f s)
-    "Call the function F once for each item in S"
-    (lisp :a (f s)
-      (cl:loop :for elem :across s
-         :do (call-coalton-function f elem)))
-    Unit)
+  (declare iter-sliding ((types:RuntimeRepr :a) (Sliceable (:b :a)) => UFix -> :b :a -> iter:Iterator (Slice :a)))
+  (define (iter-sliding size s)
+    "Returns an iterator that yeilds a series of overlapping slices of length SIZE."
+    (let length = (%length s))
+    (let offset_ = (cell:new 0))
+    (iter:with-size 
+        (fn ()
+          (let offset = (cell:read offset_))
+          (when (> (+ offset size) length)
+            (return None))
 
-  (declare foreach-index ((UFix -> :a -> Unit) -> (Slice :a) -> Unit))
-  (define (foreach-index f s)
-    "Call the function F once for each item in S with its index"
-    (lisp :a (f s)
-      (cl:loop
-         :for elem :across s
-         :for i :from 0
-         :do (call-coalton-function f i elem)))
-    Unit)
+          (cell:increment! offset_)
+          (Some (new offset size s)))
+      (if (> size length)
+          0
+          (- (+ length 1) size))))
 
-  (declare foreach2 ((:a -> :b -> Unit) -> (Slice :a) -> (Slice :b) -> Unit))
-  (define (foreach2 f s1 s2)
-    "Iterate over S1 and S2 calling F once on each iteration"
-    (lisp :a (f s1 s2)
-      (cl:loop
-         :for e1 :across s1
-         :for e2 :across s2
-         :do (call-coalton-function f e1 e2)))
-    Unit)
+  (declare iter-chunked ((types:RuntimeRepr :a) (Sliceable (:b :a)) => UFix -> :b :a -> iter:Iterator (Slice :a)))
+  (define (iter-chunked size s)
+    "Divide S into a series of slices of length SIZE. Will return a final shorter slice if S does not divide evenly."
+    (let length = (%length s))
+    (let offset_ = (cell:new 0))
+    (iter:with-size
+        (fn ()
+          (let offset = (cell:read offset_))
+          (when (>= offset length)
+            (return None))
 
-  ;;
-  ;; Vector functions
-  ;;
+          (when (> (+ offset size) length)
+            (let remaining = (- length offset))
+            (cell:update! (+ size) offset_)
+            (return (Some (new offset remaining s))))
 
-  (declare iter-sliding (types:RuntimeRepr :a => ((Slice :a) -> :b) -> UFix -> (Vector :a) -> Unit))
-  (define (iter-sliding f size v)
-    "Sliding iteration over a vector"
-    (let ((inner
-            (fn (offset)
-              (if (> (+ offset size) (vector:length v))
-                  Unit
-                  (progn
-                    (let s = (new offset size v))
-                    (f s)
-                    (inner (+ offset 1)))))))
-      (inner 0)))
+          (cell:update! (+ size) offset_)
+          (Some (new offset size s)))
+      (cond
+        ;; If size is greater than length the iterator is empty
+        ((> size length) 0)
+        ;; If size evenly divides length
+        ((zero? (mod length size))
+         (div length size))
+        ;; If there is a final shorter slice
+        (True
+         (+ 1 (div length size))))))
 
-  (declare iter-chunked (types:RuntimeRepr :a => ((Slice :a) -> :b) -> UFix -> (Vector :a) -> Unit))
-  (define (iter-chunked f size v)
-    "Chunked iteration over a vector. Ignores elements at the end if the vector does not evenly divide by the chunk size."
-    (let ((inner
-            (fn (offset)
-              (if (> (+ offset size) (vector:length v))
-                  Unit
-                  (progn
-                    (let s = (new offset size v))
-                    (f s)
-                    (inner (+ offset size)))))))
-      (inner 0)))
+  (declare iter-chunked-exact ((types:RuntimeRepr :a) (Sliceable (:b :a)) => UFix -> :b :a -> iter:Iterator (Slice :a)))
+  (define (iter-chunked-exact size s)
+    "Divide S into a series of slices of length SIZE. Will skip trailing elements if S does not divide evenly."
+    (let length = (%length s))
+    (let offset_ = (cell:new 0))
+    (iter:with-size
+      (fn ()
+        (let offset = (cell:read offset_))
+        (when (> (+ offset size) length)
+          (return None))
+
+        (cell:update! (+ size) offset_)
+        (Some (new offset size s)))
+      (div length size)))
 
   ;;
   ;; Instances
   ;;
 
+  (define-instance (iter:IntoIterator (Slice :a) :a)
+    (define (iter:into-iter s)
+      (let idx = (cell:new 0))
+      (iter:with-size
+        (fn ()
+          (let res = (index (cell:read idx) s))
+          (cell:increment! idx)
+          res)
+        (length s))))
+
+  (define-instance (types:RuntimeRepr :a => iter:FromIterator (Slice :a) :a)
+    (define (iter:collect! iter)
+      ;; NOTE: This will create a non displaced array. It should be
+      ;; fine, because it isn't observable with the slice API.
+      (let vec = (vector:with-capacity (with-default 0 (iter:size-hint iter))))
+      (vector:extend vec iter)
+      (lisp (Slice :a) (vec) vec)))
+
   (define-instance (Eq :a => Eq (Slice :a))
     (define (== s1 s2)
       (if (/= (length s1) (length s2))
           False
-          (progn
-            (let out = (cell:new True))
-            (foreach2
-             (fn (e1 e2)
-               (unless (== e1 e2)
-                 (cell:write! out False)
-                 Unit))
-             s1 s2)
-            (cell:read out)))))
+          (iter:every! id (iter:zip-with! == (iter:into-iter s1) (iter:into-iter s2))))))
 
   (define-instance (Foldable Slice)
     (define (fold f init s)
@@ -200,11 +215,7 @@
   (define-instance (types:RuntimeRepr :a => Into (Slice :a) (Vector :a))
     (define (into s)
       (let v = (vector:with-capacity (length s)))
-      (foreach
-       (fn (x)
-         (vector:push! x v)
-         Unit)
-       s)
+      (vector:extend v (iter:into-iter s))
       v))
 
   (define-instance (types:RuntimeRepr :a => Into (Vector :a) (Slice :a))
