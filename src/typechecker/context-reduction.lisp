@@ -210,7 +210,7 @@ Returns (VALUES deferred-preds retained-preds defaultable-preds)"
         :for candidates := (candidates env ambig)
 
         :unless candidates
-          :do (error 'ambigious-constraint :pred (first (ambiguity-preds ambig)))
+          :do (error 'ambiguous-constraint :pred (first (ambiguity-preds ambig)))
         
         :when candidates
           :append (ambiguity-preds ambig)))

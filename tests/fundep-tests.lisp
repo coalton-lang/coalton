@@ -121,8 +121,8 @@
 
    '("f" . "(C (List :a) :b => :a -> :b)")))
 
-(deftest fundep-ambigious-methods ()
-  ;; Unambigious because of fundep
+(deftest fundep-ambiguous-methods ()
+  ;; Unambiguous because of fundep
   (check-coalton-types
    "(define-class (C :a :b (:a -> :b))
       (m :a))")
@@ -133,13 +133,13 @@
      "(define-class (C :a :b (:a -> :b))
       (m :b))"))
 
-  ;; Ambigious without fundep
+  ;; Ambiguous without fundep
   (signals tc:tc-error
     (check-coalton-types
      "(define-class (C :a :b)
         (m :a))")))
 
-(deftest fundep-ambigious-declerations ()
+(deftest fundep-ambiguous-declerations ()
   (check-coalton-types
    "(define-class (C :a :b (:a -> :b)))
 

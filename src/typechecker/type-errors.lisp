@@ -19,8 +19,8 @@
    #:overlapping-instance-error                ; CONDITION
    #:overlapping-instance-error-inst1          ; ACCESSOR
    #:overlapping-instance-error-inst2          ; ACCESSOR
-   #:ambigious-constraint                      ; CONDITION
-   #:ambigious-constraint-pred                 ; ACCESSOR
+   #:ambiguous-constraint                      ; CONDITION
+   #:ambiguous-constraint-pred                 ; ACCESSOR
    #:fundep-conflict                           ; CONDITION
    #:overlapping-specialization-error          ; CONDITION
    #:overlapping-specialization-error-new      ; ACCESSOR
@@ -95,15 +95,15 @@
                (unification-error-pred1 c)
                (unification-error-pred2 c))))))
 
-(define-condition ambigious-constraint (error:coalton-internal-type-error)
+(define-condition ambiguous-constraint (error:coalton-internal-type-error)
   ((pred :initarg :pred
-         :reader ambigious-constraint-pred))
+         :reader ambiguous-constraint-pred))
   (:report
    (lambda (c s)
      (let ((*print-circle* nil) ; Prevent printing using reader macros
            )
-       (format s "Ambigious constraint ~S~%"
-               (ambigious-constraint-pred c))))))
+       (format s "Ambiguous constraint ~S~%"
+               (ambiguous-constraint-pred c))))))
 
 (define-condition overlapping-instance-error (error:coalton-internal-type-error)
   ((inst1 :initarg :inst1

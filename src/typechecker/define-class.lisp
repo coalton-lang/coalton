@@ -439,14 +439,14 @@
                    ;; Type variables referenced in ty but not in the class predicate
                    :for new-tyvars := (set-difference tyvars var-names :test #'eq)
 
-                   ;; Ensure that methods are not ambigious
+                   ;; Ensure that methods are not ambiguous
                    :unless (subsetp var-names (tc:closure tyvars fundeps) :test #'eq)
                      :do (error 'tc-error
                                 :err (coalton-error
                                       :span (parser:method-definition-source method)
                                       :file file
                                       :message "Amgigious method"
-                                      :primary-note "the method is ambigious"))
+                                      :primary-note "the method is ambiguous"))
 
                          ;; Ensure that the type variables in each
                          ;; pred are not a subset of the class
