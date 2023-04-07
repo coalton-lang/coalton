@@ -6,6 +6,12 @@
   (:import-from
    #:coalton-library/hash
    #:define-sxhash-hasher)
+  (:import-from
+   #:coalton-library/vector
+   #:Vector)
+  (:local-nicknames
+   (#:cell #:coalton-library/cell)
+   (#:iter #:coalton-library/iterator))
   (:export
    #:concat
    #:reverse
@@ -17,7 +23,8 @@
    #:ref
    #:ref-unchecked
    #:substring-index
-   #:substring?))
+   #:substring?
+   #:chars))
 
 
 (in-package #:coalton-library/string)
@@ -116,8 +123,13 @@ does not have that suffix."
       ((None) False)
       ((Some _) True)))
 
+  (declare chars (String -> iter:Iterator Char))
+  (define (chars str)
+    "Returns an iterator over the characters in STR."
+    (iter:into-iter str))
+
   ;;
-  ;; String Instances
+  ;; Instances
   ;;
 
   (define-instance (Eq String)
@@ -137,6 +149,20 @@ does not have that suffix."
 
   (define-instance (Monoid String)
     (define mempty ""))
+
+  (define-instance (iter:IntoIterator String Char)
+    (define (iter:into-iter str)
+      (map (ref-unchecked str)
+           (iter:up-to (length str)))))
+
+  (define-instance (iter:FromIterator String Char)
+    (define (iter:collect! iter)
+      (let vec = (the (Vector Char) (iter:collect! iter)))
+      (lisp String (vec) vec)))
+
+  ;;
+  ;; Conversions
+  ;;
 
   (define-instance (Into String (List Char))
     (define (into str)

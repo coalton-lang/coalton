@@ -155,7 +155,7 @@
 
 (define-test removal-upholds-invariants-shuffled ()
   (let range-1024 = (the (List Integer)
-                         (iter:collect-list! (iter:up-to 1024))))
+                         (iter:collect! (iter:up-to 1024))))
   (let range-shuffled = (lisp (List Integer) (range-1024)
                           (alexandria:shuffle range-1024)))
   (destroy-tree-checking-invariants tree-1024 (iter:into-iter range-shuffled)))

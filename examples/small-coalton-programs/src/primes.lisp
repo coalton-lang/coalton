@@ -91,7 +91,7 @@
 (coalton-toplevel
   (define (extract! n it)
     "Extract `n` elements from the iterator `it` into a list."
-    (iter:collect-list! (iter:take! n it)))
+    (iter:collect! (iter:take! n it)))
 
   (define (numbers-from n)
     "Produce an iterator of ascending integers starting from `n`."
