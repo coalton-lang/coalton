@@ -42,6 +42,7 @@
                (:module "parser"
                 :serial t
                 :components ((:file "base")
+                             (:file "reader")
                              (:file "types")
                              (:file "pattern")
                              (:file "macro")
