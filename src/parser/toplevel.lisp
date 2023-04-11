@@ -3,6 +3,7 @@
    #:cl
    #:coalton-impl/error
    #:coalton-impl/parser/base
+   #:coalton-impl/parser/reader
    #:coalton-impl/parser/types
    #:coalton-impl/parser/pattern
    #:coalton-impl/parser/macro
@@ -393,16 +394,16 @@
 
       ;; Read the (package) form
       (multiple-value-bind (form presentp)
-          (util:maybe-read-form stream eclector.concrete-syntax-tree::*cst-client*)
+          (maybe-read-form stream *coalton-eclector-client*)
 
         (unless presentp
           (error 'parse-error
-               :err (coalton-error
-                     :span (cons (- (file-position stream) 2)
-                                 (- (file-position stream) 1))
-                     :file file
-                     :message "Unexpected EOF"
-                     :primary-note "missing package form")))
+                 :err (coalton-error
+                       :span (cons (- (file-position stream) 2)
+                                   (- (file-position stream) 1))
+                       :file file
+                       :message "Unexpected EOF"
+                       :primary-note "missing package form")))
 
         (setf *package* (parse-package form file))))
 
@@ -421,16 +422,16 @@
 
       (loop :do
         (multiple-value-bind (form presentp eofp)
-            (util:maybe-read-form stream eclector.concrete-syntax-tree::*cst-client*)
+            (maybe-read-form stream *coalton-eclector-client*)
 
           (when (and eofp (eq :toplevel-macro mode))
             (error 'parse-error
-               :err (coalton-error
-                     :span (cons (- (file-position stream) 2)
-                                 (- (file-position stream) 1))
-                     :file file
-                     :message "Unexpected EOF"
-                     :primary-note "missing close parenthesis")))
+                   :err (coalton-error
+                         :span (cons (- (file-position stream) 2)
+                                     (- (file-position stream) 1))
+                         :file file
+                         :message "Unexpected EOF"
+                         :primary-note "missing close parenthesis")))
 
           (unless presentp
             (return))
@@ -466,7 +467,7 @@ consume all attributes"))))
 
     ;; Read the coalton form
     (multiple-value-bind (form presentp)
-        (util:maybe-read-form stream eclector.concrete-syntax-tree::*cst-client*)
+        (maybe-read-form stream *coalton-eclector-client*)
 
       (unless presentp
         (error 'parse-error
@@ -479,7 +480,7 @@ consume all attributes"))))
 
       ;; Ensure there is only one form
       (multiple-value-bind (form presentp)
-          (util:maybe-read-form stream eclector.concrete-syntax-tree::*cst-client*)
+          (maybe-read-form stream *coalton-eclector-client*)
 
         (when presentp
           (error 'parse-error

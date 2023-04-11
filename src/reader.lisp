@@ -25,7 +25,7 @@ Used to forbid reading while inside quasiquoted forms.")
 
   (let ((first-form
           (multiple-value-bind (form presentp)
-              (util:maybe-read-form stream)
+              (parser:maybe-read-form stream)
             (unless presentp
               (return-from read-coalton-toplevel-open-paren
                 nil))
@@ -176,7 +176,7 @@ Used to forbid reading while inside quasiquoted forms.")
          (loop :do
            (handler-case
                (multiple-value-bind (form presentp)
-                   (util:maybe-read-form stream)
+                   (parser:maybe-read-form stream)
 
                  (cond
                    ((and (not presentp)
@@ -188,7 +188,7 @@ Used to forbid reading while inside quasiquoted forms.")
                       (nreverse collected-forms)))
 
                    (dotted-context
-                    (when (nth-value 1 (util:maybe-read-form stream))
+                    (when (nth-value 1 (parser:maybe-read-form stream))
                       (error "Invalid dotted list"))
 
                     (return-from read-coalton-toplevel-open-paren
@@ -232,12 +232,12 @@ Used to forbid reading while inside quasiquoted forms.")
 (named-readtables:defreadtable coalton:coalton
   (:merge :standard)
   (:macro-char #\( #'read-coalton-toplevel-open-paren)
-  (:macro-char #\` #'(lambda (s c)
-                       (let ((*coalton-reader-allowed* nil))
-                         (funcall (get-macro-character #\` (named-readtables:ensure-readtable :standard)) s c))))
-  (:macro-char #\, #'(lambda (s c)
-                       (let ((*coalton-reader-allowed* t))
-                         (funcall (get-macro-character #\, (named-readtables:ensure-readtable :standard)) s c)))))
+  (:macro-char #\` (lambda (s c)
+                     (let ((*coalton-reader-allowed* nil))
+                       (funcall (get-macro-character #\` (named-readtables:ensure-readtable :standard)) s c))))
+  (:macro-char #\, (lambda (s c)
+                     (let ((*coalton-reader-allowed* t))
+                       (funcall (get-macro-character #\, (named-readtables:ensure-readtable :standard)) s c)))))
 
 (defmacro coalton:coalton-toplevel (&body forms)
   (let ((*readtable* (named-readtables:ensure-readtable 'coalton:coalton))
