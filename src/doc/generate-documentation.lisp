@@ -284,11 +284,7 @@
     ;; Sort the entires by package
     (fset:do-map (sym entry (algo:immutable-map-data (tc:environment-name-environment env)))
       ;; Only include exported symbols from our package
-      (when (and (equalp (symbol-package sym) package)
-                 (multiple-value-bind (symbol status)
-                     (find-symbol (symbol-name sym) package)
-                   (declare (ignore symbol))
-                   (eql :external status)))
+      (when (exported-symbol-p sym package t)
         (push (cons sym entry) values)))
 
     (mapcar
@@ -313,11 +309,7 @@
     ;; Sort the entires by package
     (fset:do-map (sym entry (algo:immutable-map-data (tc:environment-type-environment env)))
       ;; Only include exported symbols from our packages
-      (when (and (equalp (symbol-package sym) package)
-                 (multiple-value-bind (symbol status)
-                     (find-symbol (symbol-name sym) package)
-                   (declare (ignore symbol))
-                   (eql :external status)))
+      (when (exported-symbol-p sym package t)
         (push (cons sym entry) types)))
     (fset:do-map (sym entry (algo:immutable-map-data (tc:environment-constructor-environment env)))
       (when (equalp (symbol-package sym) package)
@@ -333,17 +325,9 @@
                 (let* ((ctors (remove-if-not
                                (lambda (ctor)
                                  (and (eql (tc:constructor-entry-constructs (cdr ctor))
-                                           (car e))))
+                                           (car e))
+                                      (exported-symbol-p (car ctor) package t)))
                                ctors))
-
-                       (exported-ctors
-                         (remove-if-not
-                          (lambda (ctor)
-                            (multiple-value-bind (symbol status)
-                                (find-symbol (symbol-name (car ctor)) (symbol-package (car ctor)))
-                              (declare (ignore symbol))
-                              (eq :external status)))
-                          ctors))
 
                        (applicable-instances
                          (loop :for (class . instances) :in instance-list
@@ -364,11 +348,11 @@
                   (make-documentation-type-entry
                    :name (car e)
                    :type (tc:type-entry-type (cdr e))
-                   :constructors exported-ctors
+                   :constructors ctors
                    :constructor-types (mapcar
                                        (lambda (ctor)
                                          (tc:lookup-value-type env (car ctor)))
-                                       exported-ctors)
+                                       ctors)
                    :instances applicable-instances
                    :documentation (tc:type-entry-docstring (cdr e))
                    ;; Here we will assume that all constructors
@@ -385,11 +369,7 @@
     ;; Sort the entires by package
     (fset:do-map (sym entry (algo:immutable-map-data (tc:environment-class-environment env)))
       ;; Only include exported symbols from our package
-      (when (and (equalp (symbol-package sym) package)
-                 (multiple-value-bind (symbol status)
-                     (find-symbol (symbol-name sym) package)
-                   (declare (ignore symbol))
-                   (eql :external status)))
+      (when (exported-symbol-p sym package t)
         (push entry values)))
 
     (mapcar (lambda (e)
@@ -397,8 +377,17 @@
                :name (tc:ty-class-name e)
                :context (tc:ty-class-superclasses e)
                :predicate (tc:ty-class-predicate e)
-               :methods (tc:ty-class-unqualified-methods e)
+               ;; Only include exported methods from our packages
+               :methods (remove-if-not
+                         (lambda (binding)
+                           (exported-symbol-p (car binding) package t))
+                         (tc:ty-class-unqualified-methods e))
                :instances (reverse (fset:convert 'list (tc:lookup-class-instances env (tc:ty-class-name e) :no-error t)))
                :documentation (tc:ty-class-docstring e)
                :location (tc:ty-class-location e)))
             values)))
+
+(defun exported-symbol-p (symbol package &optional check-package)
+  "Is SYMBOL an exported symbol, optionally checking that it is a member of PACKAGE."
+  (and (if check-package (equalp (symbol-package symbol) package) t)
+       (eql :external (nth-value 1 (find-symbol (symbol-name symbol) package)))))

@@ -151,7 +151,9 @@
         (format stream "<summary>Instances</summary>~%~%")
         (loop :for instance :in instances :do
           (tc:with-pprint-variable-context ()
-            (format stream "- <code>~A</code>~%" (to-markdown instance))))
+            (format stream "- <code>~A</code>~:[~;  ~%~:*~A~]~%"
+                    (to-markdown instance)
+                    (tc:ty-class-instance-docstring instance))))
         (format stream "~%</details>~%~%")))))
 
 (defmethod write-documentation ((backend (eql ':markdown)) stream (object documentation-class-entry))
@@ -168,7 +170,8 @@
                 :constraints context
                 :predicate predicate
                 :codegen-sym nil
-                :method-codegen-syms (make-hash-table))))
+                :method-codegen-syms (make-hash-table)
+                :docstring nil)))
 
       (when documentation
         (format stream "~A~%~%"
@@ -187,7 +190,9 @@
       (format stream "<summary>Instances</summary>~%~%")
       (loop :for instance :in instances :do
         (tc:with-pprint-variable-context ()
-          (format stream "- <code>~A</code>~%" (to-markdown instance))))
+          (format stream "- <code>~A</code>~:[~;  ~%~:*~A~]~%"
+                    (to-markdown instance)
+                    (tc:ty-class-instance-docstring instance))))
       (format stream "~%</details>~%~%"))))
 
 (defmethod write-documentation ((backend (eql ':markdown)) stream (object documentation-function-entry))
