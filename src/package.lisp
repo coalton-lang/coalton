@@ -96,7 +96,8 @@
    #:lookup-class
    #:lookup-fundeps
    #:type-of
-   #:kind-of)
+   #:kind-of
+   #:runtime-type-of)
 
   (:intern
    #:seq

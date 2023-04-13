@@ -175,6 +175,11 @@
   "Lookup the kind of type SYMBOL in the global environment"
   (tc:kind-of (coalton-impl/typechecker::type-entry-type (tc:lookup-type entry:*global-environment* symbol))))
 
+(defun coalton:runtime-type-of (symbol)
+  "Lookup the runtime type of value SYMBOL in the global environment"
+  (let ((type (tc:lookup-type entry:*global-environment* symbol)))
+    (coalton-impl/typechecker::type-entry-runtime-type type)))
+
 (defun coalton:lookup-code (name)
   "Lookup the compiled code of a given definition"
   (declare (type symbol name))
