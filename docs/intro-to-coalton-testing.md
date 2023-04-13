@@ -7,25 +7,23 @@ The fact that your code type-checks and compiles should assure you that it's fre
 large class of bugs, but that doesn't necessarily mean that it does what you expect. If
 you're worried about whether you've got the logic right, it's time to write a test suite!
 
+You can find an example project containing the code from this document in [examples/coalton-testing-example-project](../examples/coalton-testing-example-project)
+
 ## Adding a Test System to Your System Definition
 
 For a project `foo`, you should already have a system definition file `foo.asd` located in
 the project's root directory, which looks something like:
 
-```
+```lisp
 (defsystem "foo"
   :depends-on ("coalton" "named-readtables" ...other dependencies?)
   :components ((:file "main")
                ...other components?))
 ```
 
-Don't worry if your system looks a little different. It might have `:serial t`, and it
-might specify an `:author` or a `:license`, it might have a `:pathname`, and if you're
-really cool it might have `:class :package-inferred-system`.
-
 To that `defsystem` form, add the following line:
 
-```
+```lisp
   :in-order-to ((test-op (test-op "foo/test")))
 ```
 
@@ -37,18 +35,15 @@ This tells ASDF, "when you want to run the `test-op` operation on this system, r
 That's great, but as yet the `"foo/test"` system doesn't exist. Add to the `.asd` file a
 new `defsystem` form like:
 
-```
+```lisp
 (defsystem "foo/test"
-  :depends-on ("foo" "coalton/testing")
+  :depends-on ("foo" "coalton/testing" "fiasco")
   :pathname "test/"
   :serial t
   :components ((:file "test"))
   :perform (test-op (o s)
              (symbol-call '#:foo/test '#:run-tests)))
 ```
-
-TODO: do we want to tell users to explicitly depend on `fiasco`, the same way we tell them
-      to explicitly depend on `named-readtables`?
 
 (Again, replace `foo` with your actual system name.)
 
@@ -82,7 +77,7 @@ your system definition, use those names instead.)
 
 In `test.lisp`, put the following forms:
 
-```
+```lisp
 (defpackage #:foo/test
   (:use #:coalton #:coalton-prelude #:coalton-testing)
   (:export #:run-tests))
@@ -130,15 +125,10 @@ Now that all that's done, we can finally get to the good part. Define a test wit
 earlier. (This is an implementation detail; try not to think too much about it.) For your
 very first `define-test`, try writing:
 
-```
+```lisp
 (define-test my-first-test ()
   (is True))
 ```
-
-`my-first-test` is the name of your test. The empty list `()` is its argument list. I
-(Phoebe) am not really sure why Fiasco tests take arguments. `coalton-testing` doesn't
-support doing anything useful with them, so leave the arglist empty. `(is True)` is an
-assertion that always succeeds.
 
 ### Boolean assertions with `is`
 
@@ -148,7 +138,7 @@ succeed, and `(is False)` will always fail.
 If you have a function `always-returns-zero` in your package `foo`, and you want to make
 sure it returns `0`, you might write:
 
-```
+```lisp
 (define-test test-always-returns-zero ()
   (is (== 0 (foo:always-returns-zero))))
 ```
@@ -163,7 +153,7 @@ TODO: `coalton-testing` doesn't actually privilege that argument order the way F
 `is` optionally takes a second argument, a string used to describe the assertion if it
 fails. For example, you might write:
 
-```
+```lisp
 (is (== 0 (foo:always-returns-zero))
     "ALWAYS-RETURNS-ZERO returned a non-zero value!")
 ```
@@ -177,7 +167,7 @@ succeed (assuming `anything` compiles and executes without error).
 If you have a function `one-element-list` which wraps its argument in a one-element list
 in your package `foo`, you might write:
 
-```
+```lisp
 (define-test test-one-element-list ()
   (matches (Cons _ (Nil))
            (foo:one-element-list 0)))
@@ -191,7 +181,7 @@ list `(Cons 0 (Nil))`, the test will pass just the same as if it returned `(Cons
 Like `is`, `matches` takes an optional string argument used to describe the assertion if
 it fails. You might write:
 
-```
+```lisp
 (matches (Cons _ (Nil))
          (foo:one-element-list 0)
          "ONE-ELEMENT-LIST returned a list with a length other than 1!")
@@ -206,7 +196,7 @@ the branch incorrectly taken in each of the failed branches. For example, if our
 `one-element-list` function from above is supposed to wrap specifically its argument in a
 list, we'll want to add an `==` assertion. We might write:
 
-```
+```lisp
 (define-test test-one-element-list ()
   (match (one-element-list 0)
     ((Nil) (is False "ONE-ELEMENT-LIST returned an empty list!"))
@@ -217,4 +207,12 @@ list, we'll want to add an `==` assertion. We might write:
 ## Running your tests
 
 Now that you've defined a test system and some tests to go in it, you can run your tests
-in the REPL using `(asdf:test-system "foo")`.
+in the REPL using `(asdf:test-system "foo")`. Try to avoid doing this while the REPL is in
+a Coalton package, or any package that doesn't `:use #:cl` - there have been some reports
+of breakage when running ASDF operations when `*package*` doesn't contain some CL
+symbols. If you don't want to change the REPL package, you can evaluate:
+
+```lisp
+(cl:let ((cl:*package* (cl:find-package "CL")))
+  (asdf:test-system "foo"))
+```
