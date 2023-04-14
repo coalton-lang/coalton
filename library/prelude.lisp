@@ -89,20 +89,14 @@
   (:import-from
    #:coalton-library/math/dual
    #:Dual
-   #:dual-real
-   #:dual-dual
-   #:sub-duals
-   #:add-duals
-   #:mul-duals
+   #:primal-part
+   #:dual-part
    #:*Real*
    #:*Dual*)
   (:export
    #:Dual
-   #:dual-real
-   #:dual-dual
-   #:sub-duals
-   #:add-duals
-   #:mul-duals
+   #:primal-part
+   #:dual-part
    #:*Real*
    #:*Dual*)
 
