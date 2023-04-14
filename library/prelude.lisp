@@ -12,7 +12,8 @@
    #:coalton-library/math/integral
    #:coalton-library/math/real
    #:coalton-library/math/complex
-   #:coalton-library/math/elementary))
+   #:coalton-library/math/elementary
+   #:coalton-library/math/dual))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/MATH")
@@ -84,6 +85,26 @@
    #:mod
    #:even?
    #:odd?)
+  
+  (:import-from
+   #:coalton-library/math/dual
+   #:Dual
+   #:dual-real
+   #:dual-dual
+   #:sub-duals
+   #:add-duals
+   #:mul-duals
+   #:*Real*
+   #:*Dual*)
+  (:export
+   #:Dual
+   #:dual-real
+   #:dual-dual
+   #:sub-duals
+   #:add-duals
+   #:mul-duals
+   #:*Real*
+   #:*Dual*)
 
   (:import-from
    #:coalton-library/string
