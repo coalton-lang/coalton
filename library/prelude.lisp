@@ -34,14 +34,16 @@
    #:coalton-library/math/arith
    #:Reciprocable #:/
    #:Fraction
+   #:reciprocal
    #:negate
    #:abs
    #:1+
    #:1-)
   (:export
    #:Reciprocable #:/
+   #:reciprocal
    #:Fraction
-   #:negate
+   #:negatesh
    #:abs
    #:1+
    #:1-)
@@ -59,6 +61,34 @@
    #:round
    #:Real
    #:Rational)
+
+  (:import-from
+   #:coalton-library/math/elementary
+   #:sin
+   #:cos
+   #:tan
+   #:asin
+   #:acos
+   #:atan
+   #:log
+   #:ln
+   #:pow
+   #:exp
+   #:sqrt
+   #:nth-root)
+  (:export
+   #:sin
+   #:cos
+   #:tan
+   #:asin
+   #:acos
+   #:atan
+   #:log
+   #:ln
+   #:pow
+   #:exp
+   #:sqrt
+   #:nth-root)
 
   (:import-from
    #:coalton-library/math/complex
@@ -90,15 +120,11 @@
    #:coalton-library/math/dual
    #:Dual
    #:primal-part
-   #:dual-part
-   #:*Real*
-   #:*Dual*)
+   #:dual-part)
   (:export
    #:Dual
    #:primal-part
-   #:dual-part
-   #:*Real*
-   #:*Dual*)
+   #:dual-part)
 
   (:import-from
    #:coalton-library/string
