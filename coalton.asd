@@ -290,6 +290,7 @@
   :components ((:file "package")
                (:file "utilities")
                (:file "tarjan-scc-tests")
+               (:file "reader-tests")
                (:file "parser-tests")
                (:file "type-inference-tests")
                (:file "fundep-tests")
