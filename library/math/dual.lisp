@@ -11,11 +11,10 @@
    #:coalton-library/math/arith)
   (:export
    #:Dual
-   #:dual-real
-   #:dual-dual
-   #:sub-duals
-   #:add-duals
-   #:mul-duals))
+   #:primal-part
+   #:dual-part
+   #:*Dual*
+   #:*Real*))
 
 (in-package #:coalton-library/math/dual)
 
@@ -27,39 +26,41 @@
  (define-type *Dual*
      (*Dual* Integer))
  
- (define-type Dual
-     (Dual *Real* *Dual*))
+ (define-type (Dual :t)
+     (Dual :t :t))
  
- (declare dual-real (Dual -> Integer))
- (define (dual-real d1)
-     (match d1
-	    ((Dual (*Real* x) (*Dual* y)) x)))
- 
- (declare dual-dual (Dual -> Integer))
- (define (dual-dual d1)
-     (match d1
-	    ((Dual (*Real* x) (*Dual* y)) y)))
+ (declare primal-part (Dual :t -> :t))
+ (define (primal-part (Dual r _)) r)
 
- (declare add-duals (Dual -> Dual -> Dual))
- (define (add-duals dual1 dual2)
-     (Dual (*Real* (+ (dual-real dual1)
-		      (dual-real dual2)))
-	   (*Dual* (+ (dual-dual dual1)
-		      (dual-dual dual2)))))
+ (declare dual-part (Dual :t -> :t))
+ (define (dual-part (Dual _ d))
+     d)
 
- (declare sub-duals (Dual -> Dual -> Dual))
- (define (sub-duals dual1 dual2)
-     (Dual (*Real* (- (dual-real dual1)
-		      (dual-real dual2)))
-	   (*Dual* (- (dual-dual dual1)
-		      (dual-dual dual2)))))
- (declare mul-duals (Dual -> Dual -> Dual))
- (define (mul-duals dual1 dual2)
-     (Dual (*Real* (* (dual-real dual1) (dual-real dual2)))
-	   (*Dual* (+ (* (dual-real dual1) (dual-dual dual2))
-		      (* (dual-dual dual1)
-			 (dual-real dual2)))))))
+ (define-instance (Eq :t => Eq (Dual :t))
+     (define (== a b)
+	 (lisp Boolean (a b)
+	       (cl:equal a b))))
+
+ (define-instance (Num :t => Num (Dual :t))
+     (define (+ dual1 dual2)
+	 (Dual (+ (primal-part dual1)
+		  (primal-part dual2))
+	       (+ (dual-part dual1)
+		  (dual-part dual2))))
+   (define (- dual1 dual2)
+       (Dual (- (primal-part dual1)
+		(primal-part dual2))
+	     (- (dual-part dual1)
+		(dual-part dual2))))
+   (define (* dual1 dual2)
+       (Dual (* (primal-part dual1) (primal-part dual2))
+	     (+ (* (primal-part dual1) (dual-part dual2))
+		(* (dual-part dual1)
+		   (primal-part dual2)))))
+   (define (fromInt z)
+       (Dual (fromInt z) (fromInt 0)))))
  
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/MATH/DUAL")
+
 
