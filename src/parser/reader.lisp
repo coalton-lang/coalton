@@ -4,6 +4,7 @@
    (#:cst #:concrete-syntax-tree))
   (:export
    #:*coalton-eclector-client*
+   #:with-reader-context
    #:maybe-read-form))
 
 (in-package #:coalton-impl/parser/reader)
@@ -20,6 +21,16 @@
   ;; children with source info.
   (cst:reconstruct expression children client :default-source source))
 
+(defmacro with-reader-context (stream &rest body)
+  "Run the body in the toplevel reader context."
+  `(eclector.reader:call-as-top-level-read
+    *coalton-eclector-client*
+    (lambda ()
+      ,@body)
+    ,stream
+    nil 'eof
+    nil))
+
 (defun maybe-read-form (stream &optional (eclector-client eclector.base:*client*))
   "Read the next form or return if there is no next form.
 
@@ -31,23 +42,17 @@ Returns (VALUES FORM PRESENTP EOFP)"
       (return (values nil nil nil)))
 
     ;; Otherwise, try to read in the next form
-    (eclector.reader:call-as-top-level-read
-     eclector-client
-     (lambda ()
-       (multiple-value-call
-           (lambda (form type &optional parse-result)
+    (multiple-value-call
+        (lambda (form type &optional parse-result)
 
-             ;; Return the read form when valid
-             (when (eq :object type)
-               (return (values (or parse-result form) t nil)))
+          ;; Return the read form when valid
+          (when (eq :object type)
+            (return (values (or parse-result form) t nil)))
 
-             (when (eq :eof type)
-               (return (values nil nil t))))
+          (when (eq :eof type)
+            (return (values nil nil t))))
 
-         (eclector.reader:read-maybe-nothing
-          eclector-client
-          stream
-          nil 'eof)))
-     stream
-     nil 'eof
-     nil)))
+      (eclector.reader:read-maybe-nothing
+       eclector-client
+       stream
+       nil 'eof))))
