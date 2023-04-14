@@ -257,6 +257,20 @@
                                                    name
                                                    class-name))))
 
+    ;; Ensure each method is defined
+    (loop :for name :being :the :hash-keys :of method-table
+          :for method := (find name (parser:toplevel-define-instance-methods unparsed-instance)
+                               :key (alexandria:compose #'parser:node-variable-name
+                                                        #'parser:instance-method-definition-name))
+          :unless method
+            :do (error 'tc-error
+                       :err (coalton-error
+                             :span (parser:toplevel-define-instance-source unparsed-instance)
+                             :file file
+                             :message "Missing method"
+                             :primary-note (format nil "The method ~S is not defined"
+                                                   name))))
+
     (let* ((methods (loop :with table := (make-hash-table :test #'eq)
 
                           :for method :in (parser:toplevel-define-instance-methods unparsed-instance)

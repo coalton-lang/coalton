@@ -1790,7 +1790,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                           retained-preds)
 
                        (tc:ambiguous-constraint (e)
-                         (error-ambigious-pred (tc:ambiguous-constraint-pred e) file))))
+                         (error-ambiguous-pred (tc:ambiguous-constraint-pred e) file))))
 
                    ;; Defaultable predicates are not retained
                    (retained-preds
