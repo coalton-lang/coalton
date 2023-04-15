@@ -9,7 +9,8 @@
      #:coalton-library/classes
      #:coalton-library/functions
      #:coalton-library/math/arith
-     #:coalton-library/math/elementary)
+     #:coalton-library/math/elementary
+     #:coalton-library/math/integral)
   (:export
    #:Dual
    #:primal-part
@@ -25,11 +26,15 @@
     (Dual :t :t))
   
   (declare primal-part (Dual :t -> :t))
-  (define (primal-part (Dual r _)) r)
+  (define (primal-part (Dual p _))
+      p)
 
   (declare dual-part (Dual :t -> :t))
   (define (dual-part (Dual _ d))
-    d)
+      d)
+  
+  (define (sq x)
+      (* x x))
   
   (define-instance (Eq :t => Eq (Dual :t))
     
@@ -64,15 +69,13 @@
     
     (define (reciprocal (Dual p1 d1))
       (Dual (reciprocal p1)
-            (/ d1
-               (* p1 p1)))))
+            (/ (negate d1) (* p1 p1)))))
 
-  (define-instance ((Num :t) (Trigonometric :t) (Reciprocable :t) (Radical :t) (Exponentiable :t) => (Trigonometric (Dual :t)))
+  (define-instance ((Num :t) (Trigonometric :t) (Reciprocable :t) (Radical :t) => (Trigonometric (Dual :t)))
     
     (define (sin (Dual p1 d1))
       (Dual (sin p1)
-            (* d1
-               (cos p1))))
+            (* d1 (cos p1))))
     
     (define (cos (Dual p1 d1))
       (Dual (cos p1)
@@ -80,22 +83,22 @@
     
     (define (tan (Dual p1 d1))
       (Dual (tan p1)
-            (/ d1 (pow (cos p1) 2))))
+            (/ d1 (sq (cos p1)))))
     
     (define (asin (Dual p1 d1))
       (Dual (asin p1)
             (* d1
-               (/ 1 (sqrt (- 1 (pow p1 2)))))))
+               (reciprocal (sqrt (- 1 (sq p1)))))))
     
     (define (acos (Dual p1 d1))
       (Dual (acos p1)
             (* d1
-               (/ -1 (sqrt (- 1 (pow p1 2)))))))
+               (/ -1 (sqrt (- 1 (sq p1)))))))
     
     (define (atan (Dual p1 d1))
       (Dual (atan p1)
             (/ d1
-               (+ 1 (pow p1 2))))))
+               (+ 1 (sq p1))))))
 
   (define-instance ((Num :t) (Exponentiable :t) (Reciprocable :t) => (Exponentiable (Dual :t)))
     
@@ -117,8 +120,8 @@
     
     (define (nth-root n (Dual p1 d1))
       (let ((n* (fromInt n)))
-	(Dual (pow  p1 (/ 1 n*))
-	      (pow (* p1 (/ d1 n*)) (- (reciprocal n*) 1)))))
+        (Dual (pow  p1 (/ 1 n*))
+              (pow (* p1 (/ d1 n*)) (- (reciprocal n*) 1)))))
     
     (define (sqrt (Dual p1 d1))
       (Dual (sqrt p1)
