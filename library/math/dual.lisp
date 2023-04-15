@@ -3,24 +3,26 @@
 ;;;; dual numbers to enable automatic differentiation
 
 (coalton-library/utils:defstdlib-package #:coalton-library/math/dual
-  (:use
-   #:coalton
-   #:coalton-library/builtin
-   #:coalton-library/classes
-   #:coalton-library/functions
-   #:coalton-library/math/arith
-   #:coalton-library/math/elementary)
+    (:use
+     #:coalton
+     #:coalton-library/builtin
+     #:coalton-library/classes
+     #:coalton-library/functions
+     #:coalton-library/math/arith
+     #:coalton-library/math/elementary)
   (:export
    #:Dual
    #:primal-part
    #:dual-part))
 
 (in-package #:coalton-library/math/dual)
+(named-readtables:in-readtable coalton:coalton)
 
 (coalton-toplevel
 
  (define-type (Dual :t)
-     (Dual :t :t))
+     "Representation of a Dual number in the form (a + bE)."
+   (Dual :t :t))
  
  (declare primal-part (Dual :t -> :t))
  (define (primal-part (Dual r _)) r)
@@ -39,96 +41,126 @@
      expt)
  
  (define-instance (Eq :t => Eq (Dual :t))
-     (define (== a b)
-	 (lisp Boolean (a b)
-	       (cl:equal a b))))
+     
+     (define (== (Dual a b) (Dual p q))
+	 "Check that the given Dual numbers are the same."
+       (and (== a p)
+	    (== b q))))
 
  (define-instance (Num :t => Num (Dual :t))
-     (define (+ dual1 dual2)
-	 (Dual (+ (primal-part dual1)
-		  (primal-part dual2))
-	       (+ (dual-part dual1)
-		  (dual-part dual2))))
-   (define (- dual1 dual2)
-       (Dual (- (primal-part dual1)
-		(primal-part dual2))
-	     (- (dual-part dual1)
-		(dual-part dual2))))
-   (define (* dual1 dual2)
-       (Dual (* (primal-part dual1) (primal-part dual2))
-	     (+ (* (primal-part dual1) (dual-part dual2))
-		(* (dual-part dual1)
-		   (primal-part dual2)))))
+     
+   (define (+ (Dual p1 d1) (Dual p2 d2))
+       "Addition of Dual numbers."
+     (Dual (+ p1 p2)
+	   (+ d1 d2)))
+   
+   (define (- (Dual p1 d1) (Dual p2 d2))
+       "Subtraction of Dual numbers."
+     (Dual (- p1 p2)
+	   (- d1 d2)))
+
+   (define (* (Dual p1 d1) (Dual p2 d2))
+       "Multiplication of Dual numbers."
+     (Dual (* p1 p2)
+	   (+ (* p1  d2)
+	      (* d1 p2))))
+   
    (define (fromInt z)
        (Dual (fromInt z) (fromInt 0))))
 
  (define-instance (Reciprocable :t => Reciprocable (Dual :t))
-     (define (/ dual1 dual2)
-	 (Dual (/ (primal-part dual1) (primal-part dual2))
-	       (/ (- (* (dual-part dual1) (primal-part dual2))
-		     (* (primal-part dual1) (dual-part dual2)))
-		  (* (primal-part dual2) (primal-part dual2)))))
-   (define (reciprocal dual1)
-       (Dual (/ 1 (primal-part dual1))
-	     (/ (dual-part dual1)
-		(* (primal-part dual1) (primal-part dual1))))))
+     
+   (define (/ (Dual p1 d1) (Dual p2 d2))
+       "Division of Dual numbers."
+     (Dual (/ p1 p2)
+	   (/ (- (* d1 p2)
+		 (* p1 d2))
+	      (* p2 p2))))
+   
+   (define (reciprocal (Dual p1 d1))
+       "Reciprocal of given Dual number."
+     (Dual (/ 1 p1)
+	   (/ d1
+	      (* p1 p1)))))
 
  (define-instance ((Num :t) (Trigonometric :t) (Reciprocable :t) (Radical :t) (Exponentiable :t) => (Trigonometric (Dual :t)))
-     (define (sin dual1)
-	(Dual (sin (primal-part dual1))
-	      (* (dual-part dual1)
-		 (cos (primal-part dual1)))))
-   (define (cos dual1)
-       (Dual (cos (primal-part dual1))
-	     (* (* -1 (dual-part dual1)) (sin (primal-part dual1)))))
-   (define (tan dual1)
-       (Dual (tan (primal-part dual1))
-	     (/ (dual-part dual1) (pow (cos (primal-part dual1)) 2))))
-   (define (asin dual1)
-       (Dual (asin (primal-part dual1))
-	     (* (dual-part dual1)
-		(/ 1 (sqrt (- 1 (pow (primal-part dual1) 2)))))))
+     
+   (define (sin (Dual p1 d1))
+       "Sin of given Dual number."
+     (Dual (sin p1)
+	   (* d1
+	      (cos p1))))
    
-   (define (acos dual1)
-       (Dual (acos (primal-part dual1))
-	     (* (dual-part dual1)
-		(/ -1 (sqrt (- 1 (pow (primal-part dual1) 2)))))))
-   (define (atan dual1)
-       (Dual (atan (primal-part dual1))
-	     (/ (dual-part dual1)
-		(+ 1 (pow (primal-part dual1) 2))))))
+   (define (cos (Dual p1 d1))
+       "Cos of a given Dual Number."
+     (Dual (cos p1)
+	   (* (* -1 d1) (sin p1))))
+   
+   (define (tan (Dual p1 d1))
+       "Tan of the given Dual number."
+     (Dual (tan p1)
+	   (/ d1 (pow (cos p1) 2))))
+   
+   (define (asin (Dual p1 d1))
+       "Asin of the given Dual number."
+     (Dual (asin p1)
+	   (* d1
+	      (/ 1 (sqrt (- 1 (pow p1 2)))))))
+   
+   (define (acos (Dual p1 d1))
+       "Acos of the given Dual number."
+     (Dual (acos p1)
+	   (* d1
+	      (/ -1 (sqrt (- 1 (pow p1 2)))))))
+   
+   (define (atan (Dual p1 d1))
+       "Atan of the given Dual number."
+     (Dual (atan p1)
+	   (/ d1
+	      (+ 1 (pow p1 2))))))
 
  (define-instance ((Num :t) (Exponentiable :t) (Reciprocable :t) => (Exponentiable (Dual :t)))
-     (define (exp dual1)
-	 (Dual (exp (primal-part dual1))
-	       (* (exp (primal-part dual1))
-		  (dual-part dual1))))
+     
+   (define (exp (Dual p1 d1))
+       "Exp of the given Dual number."
+     (Dual (exp p1)
+	   (* (exp p1)
+	      d1)))
 
-   (define (pow dual1 n)
-       (Dual (pow (primal-part dual1) (exponent-part n))
-	     (* (dual-part dual1)
-		(* (exponent-part n)
-		   (pow (primal-part dual1) (- (exponent-part n) 1)))))) 
-     (define (ln dual1)
-	 (Dual (ln (primal-part dual1))
-	       (* (/ 1 (primal-part dual1))
-		  (dual-part dual1))))
-     (define (log base dual1)
-	 (Dual (log (base-part base) (primal-part dual1))
-	       (/ (primal-part dual1) (dual-part dual1)))))
+   (define (pow (Dual p1 d1) (Dual n dummy))
+       "Pow of the given Dual number."
+     (Dual (pow p1 n)
+	   (* d1
+	      (* n
+		 (pow p1 (- n 1))))))
+   
+   (define (ln (Dual p1 d1))
+       "ln of the the given Dual number."
+     (Dual (ln p1)
+	   (* (/ 1 p1)
+	      d1)))
+   
+   (define (log (Dual base dummy) (Dual p1 d1))
+       "Log of the given Dual number."
+     (Dual (log base p1)
+	   (/ p1 d1))))
 
  (define-instance ((Num :t) (Radical :t) (Reciprocable :t) => (Radical (Dual :t)))
-     (define (nth-root n dual1)
-	 (Dual (nth-root n (primal-part dual1))
-	       (/ (* (/ 1 2) (primal-part dual1))
-		  (nth-root n (primal-part dual1)))))
-   (define (sqrt dual1)
-       (Dual (sqrt (primal-part dual1))
-	     (/ (* (/ 1 2) (primal-part dual1))
-		(sqrt (primal-part dual1)))))))
      
+   (define (nth-root n (Dual p1 d1))
+       "N-th root of the given Dual."
+     (Dual (nth-root n p1)
+	   (/ (* (/ 1 2) p1)
+	      (nth-root n p1))))
    
-   
+   (define (sqrt (Dual p1 d1))
+       "Sqrt of the given Dual number."
+     (Dual (sqrt p1)
+	   (/ (* (/ 1 2) p1)
+	      (sqrt p1))))))
+
+
+
 
 
 #+sb-package-locks
