@@ -115,16 +115,6 @@
    #:mod
    #:even?
    #:odd?)
-  
-  (:import-from
-   #:coalton-library/math/dual
-   #:Dual
-   #:primal-part
-   #:dual-part)
-  (:export
-   #:Dual
-   #:primal-part
-   #:dual-part)
 
   (:import-from
    #:coalton-library/string
