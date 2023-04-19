@@ -1,6 +1,21 @@
 ;;;; dual.lisp
 
-"
+
+(coalton-library/utils:defstdlib-package #:coalton-library/math/dual
+  (:use
+   #:coalton
+   #:coalton-library/builtin
+   #:coalton-library/classes
+   #:coalton-library/functions
+   #:coalton-library/math/arith
+   #:coalton-library/math/elementary
+   #:coalton-library/math/integral
+   #:coalton-library/hash)
+  (:export
+   #:Dual
+   #:primal-part
+   #:dual-part)
+  (:documentation "
 dual numbers are a hypercomplex number system [1]. A dual number has the form
 a + bε where a and b are real numbers and ε is a symbol that satisfies ε^2=0
 and ε!=0. One application of dual numbers is automatic differentiation; an example
@@ -39,22 +54,7 @@ taken from [2] is as follows:
    references:
 
    [1] https://en.wikipedia.org/wiki/Dual_number
-   [2] https://blog.demofox.org/2014/12/30/dual-numbers-automatic-differentiation/"
-
-(coalton-library/utils:defstdlib-package #:coalton-library/math/dual
-  (:use
-   #:coalton
-   #:coalton-library/builtin
-   #:coalton-library/classes
-   #:coalton-library/functions
-   #:coalton-library/math/arith
-   #:coalton-library/math/elementary
-   #:coalton-library/math/integral
-   #:coalton-library/hash)
-  (:export
-   #:Dual
-   #:primal-part
-   #:dual-part))
+   [2] https://blog.demofox.org/2014/12/30/dual-numbers-automatic-differentiation/"))
 
 (in-package #:coalton-library/math/dual)
 
@@ -66,7 +66,7 @@ taken from [2] is as follows:
 (coalton-toplevel
 
   (define-type (Dual :t)
-    "Representation of a Dual number in the form (a + bε) where a and b are    real numbers and ε satisfie ε**2 = 0 and ε != 0.  Note: `Eq`, and `Ord`    and `Hash` only work on the primal component."
+    "Representation of a Dual number in the form (a + bε) where a and b are  real numbers and ε satisfie ε**2 = 0 and ε != 0.  Note: `Eq`, and `Ord` and `Hash` only work on the primal component."
     (Dual :t :t))
    
   (declare primal-part (Dual :t -> :t))
@@ -81,6 +81,7 @@ taken from [2] is as follows:
     (* x x))
    
   (define-instance (Eq :t => Eq (Dual :t))
+    "Note: Eq only works on the primal components."
     (define (== (Dual a _) (Dual p _))
       (== a p)))
   
@@ -160,12 +161,12 @@ taken from [2] is as follows:
             (/ p1 (* 2 (sqrt p1))))))
 
   (define-instance ((Ord :t) (Ord :t) => Ord (Dual :t))
+    "Note: Ord only works on the primal components."
     (define (<=> (Dual p1 _) (Dual p2 _))
       (<=> p1 p2)))
       
-     
-
   (define-instance ((Hash :t) (Hash :t) => (Hash (Dual :t)))
+    "Note: Hash only works on the primal component."
     (define (hash (Dual p1 _))
       (hash p1))))
       
