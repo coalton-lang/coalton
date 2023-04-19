@@ -182,5 +182,29 @@ cannot be represented in :TO. These fall into a few categories:
                  (Err "Integer to Double-Float conversion out-of-range")
                  (Ok y)))))))
 
+(cl:defmacro integer-tryinto-float (integer integer-name lisp-float float float-name)
+  `(coalton-toplevel
+     (define-instance (TryInto ,integer ,float)
+       (define (tryInto x)
+	 (lisp (Result String ,float) (x)
+	   (cl:let ((y (cl:ignore-errors (cl:coerce x (cl:quote ,lisp-float)))))
+	     (cl:if (cl:null y)
+		    (Err (cl:concatenate 'string ,integer-name "to " ,float-name " conversion out-of-range"))
+		    (Ok y))))))))
+  
+;; Single Float
+(integer-tryinto-float U8 "U8" cl:single-float Single-Float "Single-Float")
+(integer-tryinto-float I8 "I8" cl:single-float Single-Float "Single-Float")
+(integer-tryinto-float U16 "U16" cl:single-float Single-Float "Single-Float")
+(integer-tryinto-float I16 "I16" cl:single-float Single-Float "Single-Float")
+
+;; Double Float
+(integer-tryinto-float U8 "U8" cl:double-float Double-Float "Double-Float")
+(integer-tryinto-float I8 "I8" cl:double-float Double-Float "Double-Float")
+(integer-tryinto-float U16 "U16" cl:double-float Double-Float "Double-Float")
+(integer-tryinto-float I16 "I16" cl:double-float Double-Float "Double-Float")
+(integer-tryinto-float U32 "U32" cl:double-float Double-Float "Double-Float")
+(integer-tryinto-float I32 "I32" cl:double-float Double-Float "Double-Float")
+
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/MATH/CONVERSIONS")
