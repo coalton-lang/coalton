@@ -24,7 +24,7 @@
       (if (and (math:nan? a) (math:nan? b))
           True
           (or (< (abs (- a b))
-                 (^ (math:reciprocal 2) (math:div (big-float:get-precision) 2)))
+                 (^ (math:1/ 2) (math:div (big-float:get-precision) 2)))
               (== a b) ))))
 
   (define-instance ((LooseCompare :a) (Complex :a) => LooseCompare (Complex :a))
@@ -39,12 +39,12 @@
   (declare test-list-single (List Single-Float))
   (define test-list-single
     (make-list math:infinity 0f0 1 math:pi math:ee (negate math:pi)
-               (math:sqrt 2) (/ math:pi (math:sqrt 3)) (math:general/ 1 2) 10))
+               (math:sqrt 2) (/ math:pi (math:sqrt 3)) (/ 1 2) 10))
 
   (declare test-list-double (List Double-Float))
   (define test-list-double
     (make-list math:infinity 0d0 1 math:pi math:ee (negate math:pi)
-               (math:sqrt 2) (/ math:pi (math:sqrt 3)) (math:general/ 1 2) 10 100))
+               (math:sqrt 2) (/ math:pi (math:sqrt 3)) (/ 1 2) 10 100))
 
   (declare test-list-complex-single (List (Complex Single-Float)))
   (define test-list-complex-single
@@ -96,10 +96,9 @@
         (map into test-list-single))))
 
 (coalton-toplevel
-  (declare float-checklist ((math:Dividable Integer :a) => (List :a)))
+  (declare float-checklist ((Num :a) (Ord :a) => List :a))
   (define float-checklist
-    (coalton-prelude:zipWith
-     math:general/ (coalton:the (coalton:List coalton:Integer) (coalton-prelude:range -100 100)) (coalton-prelude:range 200 1))))
+    (zipWith / (list:range -100 100) (list:range 200 1))))
 
 (coalton-toplevel
   (define (check-against-double x y)
@@ -128,10 +127,10 @@
   (double-check (fn (x) (math:atan x)))
   (double-check
    (fn (x) (math:asin (* (math:sign x)
-                         (min (math:reciprocal (abs x)) (abs x))))))
+                         (min (math:1/ (abs x)) (abs x))))))
   (double-check
    (fn (x) (math:acos (* (math:sign x)
-                         (min (math:reciprocal (abs x)) (abs x))))))
+                         (min (math:1/ (abs x)) (abs x))))))
 
   Unit)
 

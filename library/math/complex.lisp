@@ -24,6 +24,9 @@
 #+coalton-release
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
+;; TODO: do complex numbers need to retain their special case
+;; implementation of reciprocable?
+
 (coalton-toplevel
   (repr :native (cl:or cl:number complex))
   (define-type (Complex :a)
@@ -62,23 +65,9 @@
     (define (+ a b) (complex-plus a b))
     (define (- a b) (complex-minus a b))
     (define (* a b) (complex-times a b))
+    (define (/ a b) (complex-divide a b))
     (define (fromInt n)
       (complex (fromInt n) 0)))
-
-  ;; BUG: This shouldn't be overlapping
-  ;; (define-instance ((Complex :num) (Complex :frac) (Dividable :num :frac)
-  ;;                   => (Dividable (Complex :num) (Complex :frac)))
-  ;;   (define (general/ a b) (complex-divide a b)))
-
-  (define-instance ((Complex :a) (Reciprocable :a) => Reciprocable (Complex :a))
-    (define (reciprocal x)
-      (let a = (real-part x))
-      (let b = (imag-part x))
-      (let divisor = (reciprocal (square-magnitude x)))
-      ;; z^-1 = z*/|z|^2
-      (complex (* a divisor) (negate (* b divisor))))
-    (define (/ a b)
-      (complex-divide a b)))
 
   (define-instance (Complex :a => Complex (Complex :a))
     (define (complex a b)
@@ -96,14 +85,17 @@
   (define (complex-equal a b)
     (and (== (real-part a) (real-part b))
          (== (imag-part a) (imag-part b))))
+
   (declare complex-plus ((Complex :a) => Complex :a -> Complex :a -> Complex :a))
   (define (complex-plus a b)
     (complex (+ (real-part a) (real-part b))
              (+ (imag-part a) (imag-part b))))
+
   (declare complex-minus ((Complex :a) => Complex :a -> Complex :a -> Complex :a))
   (define (complex-minus a b)
     (complex (- (real-part a) (real-part b))
              (- (imag-part a) (imag-part b))))
+
   (declare complex-times ((Complex :a) => Complex :a -> Complex :a -> Complex :a))
   (define (complex-times a b)
     (let ra = (real-part a))
@@ -112,13 +104,13 @@
     (let ib = (imag-part b))
     (complex (- (* ra rb) (* ia ib))
              (+ (* ra ib) (* ia rb))))
-  (declare complex-divide ((Complex :a) (Complex :b) (Dividable :a :b)
-                           => Complex :a -> Complex :a -> Complex :b))
+
+  (declare complex-divide (Complex :a => Complex :a -> Complex :a -> Complex :a))
   (define (complex-divide a b)
     (let dividend = (* a (conjugate b)))
     (let divisor = (square-magnitude b))
-    (complex (general/ (real-part dividend) divisor)
-             (general/ (imag-part dividend) divisor))))
+    (complex (/ (real-part dividend) divisor)
+             (/ (imag-part dividend) divisor))))
 
 (cl:defmacro %define-native-complex-instances (type repr)
   (cl:let

@@ -10,12 +10,6 @@
    #:coalton-library/functions
    #:coalton-library/utils)
   (:export
-   #:Reciprocable
-   #:/
-   #:reciprocal
-   #:Dividable
-   #:general/
-   #:/
    #:Transfinite
    #:infinity
    #:infinite?
@@ -29,6 +23,7 @@
    #:ash
    #:1+
    #:1-
+   #:1/
    #:positive?
    #:negative?
    #:nonpositive?
@@ -44,50 +39,6 @@
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (coalton-toplevel
-  ;;
-  ;; Division
-  ;;
-
-  (define-class (Num :a  => Reciprocable :a)
-    "Any number with a multiplicative inverse (reciprocal) where:
-
-
-    1 = (* (reciprocal x) x) = (* x (reciprocal x))
-    (/ x y) = (* x (reciprocal y))
-
-
-If no reciprocal exists for an element, produce a run-time error (e.g. zero).
-"
-    (/ (:a -> :a -> :a))
-    (reciprocal (:a -> :a)))
-
-  (define-class (Dividable :arg-type :res-type)
-    "The representation of a type such that division within that type possibly results in another type. For instance,
-
-
-    (Dividable Integer Fraction)
-
-
-establishes that division of two `Integer`s can result in a `Fraction`, whereas
-
-
-    (Dividable Single-Float Single-Float)
-
-
-establishes that division of two `Single-Float`s can result in a `Single-Float`.
-
-Note that `Dividable` does *not* establish a default result type; you must constrain the result type yourself.
-
-The function general/ is partial, and will error produce a run-time error if the divisor is zero.
-"
-    ;; This is a type that is more pragmatic and less mathematical in
-    ;; nature. It expresses a division relationship between one input
-    ;; type and one output type.
-    (general/ (:arg-type -> :arg-type -> :res-type)))
-
-  (define-instance (Reciprocable :a => Dividable :a :a)
-    (define (general/ a b) (/ a b)))
-
   (define-class (Transfinite :a)
     "Numeric type with a value for (positive) 'infinity' and/or 'NaN'"
     (infinity :a)
@@ -171,6 +122,11 @@ The function general/ is partial, and will error produce a run-time error if the
   (define (1- num)
     "Decrement `num`."
     (- num 1))
+
+  (declare 1/ (Num :num => :num -> :num))
+  (define (1/ num)
+    "Compute the reciprocal of NUM."
+    (/ 1 num))
 
   (declare positive? ((Num :a) (Ord :a) => :a -> Boolean))
   (define (positive? x)

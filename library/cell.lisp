@@ -108,16 +108,6 @@
     (define (== c1 c2)
       (== (read c1) (read c2))))
 
-  (define-instance (Num :a => Num (Cell :a))
-    (define (+ c1 c2)
-      (new (+ (read c1) (read c2))))
-    (define (- c1 c2)
-      (new (- (read c1) (read c2))))
-    (define (* c1 c2)
-      (new (* (read c1) (read c2))))
-    (define (fromInt i)
-      (new (fromInt i))))
-
   (define-instance (Semigroup :a => Semigroup (Cell :a))
     (define (<> a b)
       (new (<> (read a) (read b)))))

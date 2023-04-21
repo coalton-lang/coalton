@@ -263,24 +263,11 @@
            ((== a 0) BFNaN)))
         ((Tuple a (BFInf)) (* BFInf a))
         (_ BFNaN)))
-    (define (fromInt x) (normalize (BFValue (fromInt x)))))
-
-  (define-instance (Reciprocable Big-Float)
-    (define (reciprocal x)
-      (match x
-        ((BFValue (Dyadic 0 _)) BFInf)
-        ((BFNegZero) BFNegInf)
-        ((BFValue (Dyadic m k))
-         (let p = (+ 1 (toInteger (get-precision))))
-         (normalize
-          (BFValue (Dyadic (div (lsh 1 (- p k)) m) (negate p)))))
-        ((BFInf) 0)
-        ((BFNegInf) BFNegZero)
-        ((BFConst f) (reciprocal (f)))
-        ((BFNaN) BFNaN)))
     (define (/ a b)
+      (when (== a 1)
+        (return (reciprocal b)))
       (when (== b 0)
-        (return (* a (reciprocal b))))
+        (return (* a (1/ b))))
       (match (Tuple a b)
         ((Tuple (BFValue (Dyadic m1 k1)) (BFValue (Dyadic m2 k2)))
          (let p = (+ 1 (toInteger (get-precision))))
@@ -288,14 +275,21 @@
           (BFValue
            (Dyadic
             (div (lsh m1 (+ p (- k1 k2))) m2) (negate p)))))
-        (_ (* a (reciprocal b))))))
+        (_ (* a (1/ b)))))
+    (define (fromInt x) (normalize (BFValue (fromInt x)))))
 
-  (define-instance (Dividable Integer Big-Float)
-    (define (general/ a b)
-      (let p = (+ 1 (toInteger (get-precision))))
-      (if (== b 0)
-          (* (fromInt a) (reciprocal (fromInt b)))
-          (normalize (BFValue (Dyadic (div (lsh a p) b) (negate p)))))))
+  (define (reciprocal x)
+    (match x
+      ((BFValue (Dyadic 0 _)) BFInf)
+      ((BFNegZero) BFNegInf)
+      ((BFValue (Dyadic m k))
+       (let p = (+ 1 (toInteger (get-precision))))
+       (normalize
+        (BFValue (Dyadic (div (lsh 1 (- p k)) m) (negate p)))))
+      ((BFInf) 0)
+      ((BFNegInf) BFNegZero)
+      ((BFConst f) (reciprocal (f)))
+      ((BFNaN) BFNaN)))
 
   (define-instance (Into Single-Float Big-Float)
     (define (into a)
@@ -333,7 +327,7 @@
 
   (define-instance (Into Fraction Big-Float)
     (define (into a)
-      (general/ (numerator a) (denominator a))))
+      (/ (into (numerator a)) (into (denominator a)))))
 
   (define-instance (Real Big-Float)
     (define (real-approx _ x) (to-fraction x)))
@@ -463,19 +457,19 @@ See `binary-split`."
       ((SeriesSplit a p q b)
        (SeriesResult p q b (* a p)))))
 
-  (declare eval-result ((Dividable Integer :a) => SeriesResult -> :a))
+  (declare eval-result ((Into Integer :a) (Num :a) => SeriesResult -> :a))
   (define (eval-result r)
     "Evaluates the final result of a SeriesResult. See `binary-split` step 4."
     (match r
       ((SeriesResult _ q b t)
-       (general/ t (* b q)))))
+       (/ (into t) (* (into b) (into q))))))
 
-  (declare recip-result ((Dividable Integer :a) => SeriesResult -> :a))
+  (declare recip-result ((Into Integer :a) (Num :a) => SeriesResult -> :a))
   (define (recip-result r)
     "Evaluates the reciprocal of `make-result`."
     (match r
       ((SeriesResult _ q b t)
-       (general/ (* b q) t))))
+       (/ (* (into b) (into q))) (into t))))
 
   (declare binary-split ((UFix -> SeriesSplit) -> UFix -> UFix -> SeriesResult))
   (define (binary-split s n1 n2)
@@ -529,14 +523,14 @@ Source: https://www.ginac.de/CLN/binsplit.pdf
     (<> (make-result x)
         (binary-split f 1 n)))
 
-  (declare make-results ((Dividable Integer :a) => Ufix -> SeriesSplit -> (Integer -> SeriesSplit) -> :a))
+  (declare make-results ((Into Integer :a) (Num :a) => Ufix -> SeriesSplit -> (Integer -> SeriesSplit) -> :a))
   (define (make-results n start f)
     "For a binary-split series, given an initial SeriesSPlit X and a function that
 returns the nth SeriesSplit, return the series evaluated to the Nth element."
     (eval-result
      (eval-series start (fn (m) (f (toInteger m))) n)))
 
-  (declare make-recip-results ((Dividable Integer :a) => Ufix -> SeriesSplit -> (Integer -> SeriesSplit) -> :a))
+  (declare make-recip-results ((Into Integer :a) (Num :a) => Ufix -> SeriesSplit -> (Integer -> SeriesSplit) -> :a))
   (define (make-recip-results n start f)
     "Reciprocal of `make-result`."
     (recip-result
@@ -557,7 +551,7 @@ returns the nth SeriesSplit, return the series evaluated to the Nth element."
       ;;  = Σ_n (6n)!(545140134n + 13591409)/((3q)!(n!)^3(-262537412640768000)^n
       ;; a(n)=A+nB, b(n)=1, p(0)=1, q(0)=1,
       ;; p(n)=−(6n−5)(2n−1)(6n−1), q(n)=1
-      (reciprocal
+      (1/
        (*
         (make-results
          (polylog-prec 2) (SeriesSplit a 1 1 1)
@@ -658,11 +652,11 @@ returns the nth SeriesSplit, return the series evaluated to the Nth element."
                  (compute-atan (numerator f) (denominator f)))
                 ((< x -1)
                  (- (scale (negate (bf-pi)) -1)
-                    (atan (reciprocal x))))
+                    (atan (1/ x))))
                 ((> x 1)
                  (let f = (to-fraction (Dyadic m k)))
                  (- (scale (bf-pi) -1)
-                    (atan (reciprocal x))))
+                    (atan (1/ x))))
                 ((== x 1)
                  (scale (bf-pi) -2))
                 ((== x -1)
@@ -732,7 +726,7 @@ returns the nth SeriesSplit, return the series evaluated to the Nth element."
                (fn ()
                  (+ (ln y)
                     (* (if (< l 0)
-                           (general/ 1 (negate l))
+                           (/ (into 1) (into (negate l)))
                            (fromInt l))
                        (bf-ln2)))))))))
         ((BFConst f) (ln (f)))
@@ -749,7 +743,7 @@ returns the nth SeriesSplit, return the series evaluated to the Nth element."
            ((< y 0)
             (let fl-x = (floor y))
             (if (== (fromInt fl-x) y)
-                (reciprocal (BFValue (^ x (negate fl-x))))
+                (1/ (BFValue (^ x (negate fl-x))))
                 BFNaN))
            (True
             (let fl-x = (floor y))
@@ -764,9 +758,9 @@ returns the nth SeriesSplit, return the series evaluated to the Nth element."
 
   (define-instance (Radical Big-Float)
     (define (sqrt x)
-      (reciprocal (reciprocal-sqrt x)))
+      (1/ (reciprocal-sqrt x)))
     (define (nth-root n x)
-      (pow x (general/ 1 n))))
+      (pow x (/ (into 1) (into n)))))
 
   (define-instance (Polar Big-Float)
     (define (phase z)

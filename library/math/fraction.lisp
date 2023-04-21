@@ -69,20 +69,11 @@
     (define (* p q)
       (lisp Fraction (p q)
         (cl:* p q)))
+    (define (/ p q)
+      (lisp Fraction (p q)
+        (cl:/ p q)))
     (define (fromInt z)
-      (lisp Fraction (z) z)))
-
-  (define-instance (Reciprocable Fraction)
-    (define (/ a b)
-      (lisp Fraction (a b)
-        (cl:/ a b)))
-    (define (reciprocal q)
-      (lisp Fraction (q)
-        (cl:/ q))))
-
-  (define-instance (Dividable Integer Fraction)
-    (define (general/ x y)
-      (mkFraction x y))))
+      (lisp Fraction (z) z))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/MATH/FRACTION")

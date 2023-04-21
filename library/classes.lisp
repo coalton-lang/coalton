@@ -3,12 +3,9 @@
    #:coalton)
   (:local-nicknames
    (#:types #:coalton-library/types))
-
-  (:export
-   #:Addressable #:eq?)
   (:export
    #:Eq #:==
-   #:Num #:+ #:- #:* #:fromInt)
+   #:Num #:+ #:- #:* #:/ #:fromInt)
   (:export
    #:Tuple
    #:Optional #:Some #:None
@@ -85,6 +82,7 @@
     (+ (:a -> :a -> :a))
     (- (:a -> :a -> :a))
     (* (:a -> :a -> :a))
+    (/ (:a -> :a -> :a))
     (fromInt (Integer -> :a)))
  
   (define-instance (Eq Unit)

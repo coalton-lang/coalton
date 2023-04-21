@@ -3,11 +3,11 @@
 ;;;; Integral domains and operations on integers
 
 (coalton-library/utils::defstdlib-package #:coalton-library/math/integral
-    (:use
-     #:coalton
-     #:coalton-library/classes
-     #:coalton-library/builtin
-     #:coalton-library/math/arith)
+  (:use
+   #:coalton
+   #:coalton-library/classes
+   #:coalton-library/builtin
+   #:coalton-library/math/arith)
   (:import-from
    #:coalton-library/bits #:Bits)
   (:local-nicknames
@@ -114,7 +114,7 @@ are floored and truncated division, respectively."
         ((== power 0) 1)
         (True (error "Can't exponentiate with a negative exponent.")))))
 
-  (declare ^^ ((Reciprocable :a) (Integral :int) => (:a -> :int -> :a)))
+  (declare ^^ ((Num :a) (Integral :int) => (:a -> :int -> :a)))
   (define (^^ base power)
     "Exponentiate BASE to a signed POWER."
     (if (< power 0)

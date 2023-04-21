@@ -81,6 +81,9 @@
         ((Tuple (Dyadic n k)
                 (Dyadic m j))
          (Dyadic (* n m) (+ j k)))))
+    (define (/ (Dyadic n k) (Dyadic m j))
+      ;; TODO: what goes here?
+      (undefined))
     (define (fromInt x) (Dyadic x 0)))
 
   (define (simplify-integer n)

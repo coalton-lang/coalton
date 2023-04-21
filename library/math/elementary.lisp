@@ -102,10 +102,8 @@
 "
     (complex (cos z) (sin z)))
 
-  (define-class
-      ((Reciprocable :a) (Polar :a)
-       (Trigonometric :a) (Exponentiable :a) (Radical :a)
-       => Elementary :a)
+  (define-class ((Polar :a) (Trigonometric :a) (Exponentiable :a) (Radical :a)
+                 => Elementary :a)
     "Numbers that can be can be passed to elementary functions."
     (ee :a)
     (pi :a))
@@ -150,7 +148,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
 
   (define (canonical-nth-root n x)
     "By definition implementation of `nth-root` for reals"
-    (pow x (reciprocal (fromInt n))))
+    (pow x (1/ (fromInt n))))
 
   (define (canonical-polar z)
     "By definition implementation of `polar`"

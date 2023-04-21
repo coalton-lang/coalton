@@ -31,14 +31,12 @@
 
   (:import-from
    #:coalton-library/math/arith
-   #:Reciprocable #:/
    #:Fraction
    #:negate
    #:abs
    #:1+
    #:1-)
   (:export
-   #:Reciprocable #:/
    #:Fraction
    #:negate
    #:abs

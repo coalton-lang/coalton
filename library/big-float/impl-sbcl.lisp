@@ -174,6 +174,10 @@
       (lisp Big-Float (a b)
         (cl:values (sb-mpfr:mul a b))))
 
+    (define (/ a b)
+      (lisp Big-Float (a b)
+        (cl:values (sb-mpfr:div a b))))
+
     (define (fromInt n)
       (lisp Big-Float (n)
         (sb-mpfr:coerce n 'sb-mpfr:mpfr-float))))
@@ -218,13 +222,6 @@
            (sb-mpfr:coerce x 'cl:integer)
            (sb-mpfr:sub f x))))))
 
-  (define-instance (Reciprocable Big-Float)
-    (define (/ a b)
-      (lisp big-float (a b)
-        (cl:values (sb-mpfr:div a b))))
-    (define (reciprocal a)
-      (/ 1 a)))
-
   (define-instance (Real Big-Float)
     (define (real-approx prec x)
       (coalton-library/math/real::rational-approx prec x)))
@@ -244,13 +241,7 @@
     (define nan (/ 0 0))
     (define (nan? x)
       (lisp Boolean (x)
-        (to-boolean (sb-mpfr:nan-p x)))))
-
-  (define-instance (Dividable Integer Big-Float)
-    (define (general/ a b)
-      (if (== 0 b)
-          (/ (fromInt a) (fromInt b))
-          (into (exact/ a b))))))
+        (to-boolean (sb-mpfr:nan-p x))))))
 
 (coalton-library/math/complex::%define-standard-complex-instances Big-Float)
 

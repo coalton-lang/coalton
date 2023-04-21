@@ -124,7 +124,7 @@ Furthermore, `best-approx` returns the simplest fraction, and both functions may
   (define (rational-approx precision x)
     "Implemention of `real-approx' for rationals."
     ;; See figure 3 in https://doi.org/10.1145/142675.142726
-    (let epsilon = (^ (reciprocal 2) precision))
+    (let epsilon = (^ (1/ 2) precision))
     (when (== epsilon 0)
       (return (to-fraction x)))
     (let ((approximate-rec
@@ -234,24 +234,17 @@ remainders expressed as values of type of X."
     "Return the nearest integer to X, with ties breaking toward positive infinity."
     (floor/ (ceiling (* 2 x)) 2))
 
-  (declare safe/ ((Num :a) (Dividable :a :b) => (:a -> :a -> (Optional :b))))
+  (declare safe/ (Num :a => :a -> :a -> (Optional :a)))
   (define (safe/ x y)
     "Safely divide X by Y, returning None if Y is zero."
     (if (== y 0)
         None
-        (Some (general/ x y))))
+        (Some (/ x y))))
 
   (declare exact/ (Integer -> Integer -> Fraction))
   (define (exact/ a b)
     "Exactly divide two integers and produce a fraction."
-    (general/ a b))
-
-  (declare inexact/ (Integer -> Integer -> Double-Float))
-  (define (inexact/ a b)
-    "Compute the quotient of integers as a double-precision float.
-
-Note: This does *not* divide double-float arguments."
-    (general/ a b))
+    (mkFraction a b))
 
   (declare floor/ (Integer -> Integer -> Integer))
   (define (floor/ a b)

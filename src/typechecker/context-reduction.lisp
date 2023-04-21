@@ -195,7 +195,6 @@ Returns (VALUES deferred-preds retained-preds defaultable-preds)"
   ;; work before the standard library is fully loaded
   (append (util:find-symbol? "NUM" "COALTON-LIBRARY/CLASSES")
           (util:find-symbol? "QUANTIZABLE" "COALTON-LIBRARY/MATH")
-          (util:find-symbol? "RECIPROCABLE" "COALTON-LIBRARY/MATH")
           (util:find-symbol? "COMPLEX" "COALTON-LIBRARY/MATH")
           (util:find-symbol? "REMAINDER" "COALTON-LIBRARY/MATH")
           (util:find-symbol? "INTEGRAL" "COALTON-LIBRARY/MATH")))
