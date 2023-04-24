@@ -174,3 +174,11 @@
             (map (* 3))
             (coalton-library/iterator:filter! even?)
             coalton-library/iterator:collect!))"))
+
+(deftest fundep-unambigous-method ()
+  (check-coalton-types
+   "(define-class (C :a :b :c (:a -> :b :c))
+      (m (:a -> :b)))
+
+     (define (f x)
+       (m x))"))
