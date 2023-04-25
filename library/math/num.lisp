@@ -1,6 +1,6 @@
 ;;;; num.lisp
 ;;;;
-;;;; Num instances for primitive numerical types
+;;;; Instances for primitive numerical types
 
 (coalton-library/utils:defstdlib-package #:coalton-library/math/num
   (:use
@@ -24,51 +24,60 @@
 #+coalton-release
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
-(cl:declaim (cl:inline %unsigned->signed))
-(cl:defun %unsigned->signed (bits x)
-  ;; This is the two's complement conversion of X (interpreted as BITS
-  ;; bits) to a signed integer (as a Lisp object).
-  (cl:-
-   (cl:ldb (cl:byte (cl:1- bits) 0) x)
-   (cl:dpb 0 (cl:byte (cl:1- bits) 0) x)))
-
-(cl:defmacro %define-overflow-handler (name bits)
-  `(cl:defun ,name (value)
-     (cl:typecase value
-       ((cl:signed-byte ,bits) value)
-       (cl:otherwise
-        (cl:cerror "Continue, wrapping around."
-                   ,(cl:format cl:nil "Signed value overflowed ~D bits." bits))
-        (%unsigned->signed ,bits (cl:mod value ,(cl:expt 2 bits)))))))
+;;;
+;;; Constants
+;;;
 
 (cl:eval-when (:compile-toplevel :load-toplevel)
-  (cl:defparameter +fixnum-bits+
+  (cl:defconstant +fixnum-bits+
     #+sbcl sb-vm:n-fixnum-bits
     #-sbcl (cl:1+ (cl:floor (cl:log cl:most-positive-fixnum 2))))
-  (cl:defparameter +unsigned-fixnum-bits+
+  (cl:defconstant +unsigned-fixnum-bits+
     (cl:1- +fixnum-bits+)))
 
-(%define-overflow-handler %handle-8bit-overflow 8)
-(%define-overflow-handler %handle-16bit-overflow 16)
-(%define-overflow-handler %handle-32bit-overflow 32)
-(%define-overflow-handler %handle-64bit-overflow 64)
-(%define-overflow-handler %handle-fixnum-overflow #.+fixnum-bits+)
+;;;
+;;; Eq Instances
+;;;
 
-(cl:defmacro %define-number-stuff (coalton-type)
-  (cl:let* ((ops   '(cl:< cl:<= cl:>= cl:>))
-            (specs (cl:loop
-                      :for op :in ops
-                      :collect (alexandria:format-symbol cl:*package* "~A-~A" coalton-type op))))
-    `(cl:progn
-       ;; Inline these functions unconditionally.
-       (cl:declaim (cl:inline ,@specs))
-       (coalton-toplevel
-         (define-instance (Eq ,coalton-type)
-           (define (== a b)
-             (lisp Boolean (a b)
-               (to-boolean (cl:= a b)))))
+(cl:eval-when (:compile-toplevel :load-toplevel)
+  (cl:defmacro define-eq (type)
+    `(define-instance (Eq ,type)
+       (define (== a b)
+         (lisp Boolean (a b)
+           ;; Use cl:= so that (== 0.0 -0.0) => True
+           (cl:= a b))))))
 
-         (define-instance (Ord ,coalton-type)
+(coalton-toplevel
+  (define-eq Integer)
+  (define-eq IFix)
+  (define-eq UFix)
+  (define-eq I8)
+  (define-eq U8)
+  (define-eq I16)
+  (define-eq U16)
+  (define-eq I32)
+  (define-eq U32)
+  (define-eq I64)
+  (define-eq U64)
+  (define-eq Single-Float)
+  (define-eq Double-Float))
+
+;;;
+;;; Ord Instances
+;;;
+
+(cl:eval-when (:compile-toplevel :load-toplevel)
+  (cl:defmacro define-ord (type)
+    (cl:let ((>-spec (alexandria:format-symbol cl:*package* "~A->" type))
+             (>=-spec (alexandria:format-symbol cl:*package* "~A->=" type))
+             (<-spec (alexandria:format-symbol cl:*package* "~A-< type" type))
+             (<=-spec (alexandria:format-symbol cl:*package* "~A-<=" type)))
+
+      ;; Generates the instance and specializations to use more direct
+      ;; comparison functions when possible.
+
+      `(progn
+         (define-instance (Ord ,type)
            (define (<=> a b)
              (lisp Ord (a b)
                (cl:cond
@@ -79,139 +88,137 @@
                  (cl:t
                   EQ)))))
 
-         ;; These are originally defined in classes.lisp.
-         ;;
-         ;; These are specializations so we don't need to produce
-         ;; intermediate MATCH calls.
-         ,@(cl:loop
-              :for op :in ops
-              :for coalton-op := (cl:find-symbol (cl:symbol-name op) "COALTON-LIBRARY/CLASSES")
-              :for spec :in specs
-              :for type := `(,coalton-type -> ,coalton-type -> Boolean)
-              :collect `(declare ,spec ,type)
-              :collect `(define (,spec a b)
-                          (lisp Boolean (a b)
-                            (to-boolean (,op a b))))
-              :collect `(specialize ,coalton-op ,spec ,type))))))
+         (specialize > ,>-spec (,type -> ,type -> Boolean))
+         (declare ,>-spec (,type -> ,type -> Boolean))
+         (define (,>-spec a b)
+           (lisp Boolean (a b)
+             (to-boolean (cl:> a b))))
 
-(%define-number-stuff U8)
-(%define-number-stuff U16)
-(%define-number-stuff U32)
-(%define-number-stuff U64)
-(%define-number-stuff I8)
-(%define-number-stuff I16)
-(%define-number-stuff I32)
-(%define-number-stuff I64)
-(%define-number-stuff Integer)
-(%define-number-stuff Fraction)
-(%define-number-stuff IFix)
-(%define-number-stuff UFix)
-(%define-number-stuff Single-Float)
-(%define-number-stuff Double-Float)
+         (specialize >= ,>=-spec (,type -> ,type -> Boolean))
+         (declare ,>=-spec (,type -> ,type -> Boolean))
+         (define (,>=-spec a b)
+           (lisp Boolean (a b)
+             (to-boolean (cl:>= a b))))
+
+         (specialize < ,<-spec (,type -> ,type -> Boolean))
+         (declare ,<-spec (,type -> ,type -> Boolean))
+         (define (,<-spec a b)
+           (lisp Boolean (a b)
+             (to-boolean (cl:< a b))))
+
+         (specialize <= ,<=-spec (,type -> ,type -> Boolean))
+         (declare ,<=-spec (,type -> ,type -> Boolean))
+         (define (,<=-spec a b)
+           (lisp Boolean (a b)
+             (to-boolean (cl:<= a b))))))))
 
 (coalton-toplevel
-  (define-instance (Num Integer)
-    (define (+ a b)
-      (lisp Integer (a b) (cl:+ a b)))
-    (define (- a b)
-      (lisp Integer (a b) (cl:- a b)))
-    (define (* a b)
-      (lisp Integer (a b) (cl:* a b)))
-    (define (fromInt x)
-      x))
+  (define-ord Integer)
+  (define-ord IFix)
+  (define-ord UFix)
+  (define-ord I8)
+  (define-ord U8)
+  (define-ord I16)
+  (define-ord U16)
+  (define-ord I32)
+  (define-ord U32)
+  (define-ord I64)
+  (define-ord U64)
+  (define-ord Single-Float)
+  (define-ord Double-Float))
 
-  (define-instance (Num I8)
-    (define (+ a b)
-      (lisp I8 (a b)
-        (%handle-8bit-overflow (cl:+ a b))))
-    (define (- a b)
-      (lisp I8 (a b)
-        (%handle-8bit-overflow (cl:- a b))))
-    (define (* a b)
-      (lisp I8 (a b)
-        (%handle-8bit-overflow (cl:* a b))))
-    (define (fromInt x)
-      (lisp I8 (x)
-        (%handle-8bit-overflow x))))
+;;;
+;;; Overflow checks for signed values
+;;;
 
-  (define-instance (Num I16)
-    (define (+ a b)
-      (lisp I16 (a b)
-        (%handle-16bit-overflow (cl:+ a b))))
-    (define (- a b)
-      (lisp I16 (a b)
-        (%handle-16bit-overflow (cl:- a b))))
-    (define (* a b)
-      (lisp I16 (a b)
-        (%handle-16bit-overflow (cl:* a b))))
-    (define (fromInt x)
-      (lisp I16 (x)
-        (%handle-16bit-overflow x))))
+(cl:declaim (cl:inline %unsigned->signed))
+(cl:defun %unsigned->signed (bits x)
+  ;; This is the two's complement conversion of X (interpreted as BITS
+  ;; bits) to a signed integer (as a Lisp object).
+  (cl:-
+   (cl:ldb (cl:byte (cl:1- bits) 0) x)
+   (cl:dpb 0 (cl:byte (cl:1- bits) 0) x)))
 
-  (define-instance (Num I32)
-    (define (+ a b)
-      (lisp I32 (a b)
-        (%handle-32bit-overflow (cl:+ a b))))
-    (define (- a b)
-      (lisp I32 (a b)
-        (%handle-32bit-overflow (cl:- a b))))
-    (define (* a b)
-      (lisp I32 (a b)
-        (%handle-32bit-overflow (cl:* a b))))
-    (define (fromInt x)
-      (lisp I32 (x)
-        (%handle-32bit-overflow x))))
-
-  (define-instance (Num I64)
-    (define (+ a b)
-      (lisp I64 (a b)
-        (%handle-64bit-overflow (cl:+ a b))))
-    (define (- a b)
-      (lisp I64 (a b)
-        (%handle-64bit-overflow (cl:- a b))))
-    (define (* a b)
-      (lisp I64 (a b)
-        (%handle-64bit-overflow (cl:* a b))))
-    (define (fromInt x)
-      (lisp I64 (x)
-        (%handle-64bit-overflow x))))
-
-  (define-instance (Num IFix)
-    (define (+ a b)
-      (lisp IFix (a b)
-        (cl:+ a b)))
-    (define (- a b)
-      (lisp IFix (a b)
-        (cl:- a b)))
-    (define (* a b)
-      (lisp IFix (a b)
-        (cl:* a b)))
-    (define (fromInt x)
-      (lisp IFix (x)
-        (%handle-fixnum-overflow x)))))
+(cl:defmacro %define-overflow-handler (name bits)
+  `(cl:progn
+     (cl:declaim (cl:inline ,name))
+     (cl:defun ,name (value)
+       (cl:typecase value
+         ((cl:signed-byte ,bits) value)
+         (cl:otherwise
+          (cl:cerror "Continue, wrapping around."
+                     ,(cl:format cl:nil "Signed value overflowed ~D bits." bits))
+          (%unsigned->signed ,bits (cl:mod value ,(cl:expt 2 bits))))))))
 
 
-(cl:defmacro %define-unsigned-num-instance (coalton-type bits)
-  `(coalton-toplevel
-     (define-instance (Num ,coalton-type)
+(%define-overflow-handler %handle-8bit-overflow 8)
+(%define-overflow-handler %handle-16bit-overflow 16)
+(%define-overflow-handler %handle-32bit-overflow 32)
+(%define-overflow-handler %handle-64bit-overflow 64)
+(%define-overflow-handler %handle-fixnum-overflow #.+fixnum-bits+)
+
+;;;
+;;; Num instances for integers
+;;;
+
+(cl:eval-when (:compile-toplevel :load-toplevel)
+  (cl:defmacro define-num-checked (type overflow-handler)
+    "Define a `Num' instance for TYPE which signals on overflow."
+    `(define-instance (Num ,type)
        (define (+ a b)
-         (lisp ,coalton-type (a b)
-           (cl:values (cl:mod (cl:+ a b) ,(cl:expt 2 bits)))))
+         (lisp ,type (a b)
+           (,overflow-handler (cl:+ a b))))
+
        (define (- a b)
-         (lisp ,coalton-type (a b)
-           (cl:values (cl:mod (cl:- a b) ,(cl:expt 2 bits)))))
+         (lisp ,type (a b)
+           (,overflow-handler (cl:- a b))))
+
        (define (* a b)
-         (lisp ,coalton-type (a b)
-           (cl:values (cl:mod (cl:* a b) ,(cl:expt 2 bits)))))
+         (lisp ,type (a b)
+           (,overflow-handler (cl:* a b))))
+
        (define (fromInt x)
-         (lisp ,coalton-type (x)
+         (lisp ,type (x)
+           (,overflow-handler x))))))
+
+(cl:eval-when (:compile-toplevel :load-toplevel)
+  (cl:defmacro define-num-wrapping (type bits)
+    "Define a `Num' instance for TYPE which wraps on overflow."
+    `(define-instance (Num ,type)
+       (define (+ a b)
+         (lisp ,type (a b)
+           (cl:values (cl:mod (cl:+ a b) ,(cl:expt 2 bits)))))
+
+       (define (- a b)
+         (lisp ,type (a b)
+           (cl:values (cl:mod (cl:- a b) ,(cl:expt 2 bits)))))
+
+       (define (* a b)
+         (lisp ,type (a b)
+           (cl:values (cl:mod (cl:* a b) ,(cl:expt 2 bits)))))
+
+       (define (fromInt x)
+         (lisp ,type (x)
            (cl:values (cl:mod x ,(cl:expt 2 bits))))))))
 
-(%define-unsigned-num-instance U8   8)
-(%define-unsigned-num-instance U16  16)
-(%define-unsigned-num-instance U32  32)
-(%define-unsigned-num-instance U64  64)
-(%define-unsigned-num-instance UFix #.+unsigned-fixnum-bits+)
+(coalton-toplevel
+  (define-num-checked Integer cl:identity)
+
+  (define-num-checked I8 %handle-8bit-overflow)
+  (define-num-checked I16 %handle-16bit-overflow)
+  (define-num-checked I32 %handle-32bit-overflow)
+  (define-num-checked I64 %handle-64bit-overflow)
+  (define-num-checked IFix %handle-fixnum-overflow)
+
+  (define-num-wrapping U8 8)
+  (define-num-wrapping U16 16)
+  (define-num-wrapping U32 32)
+  (define-num-wrapping U64 64)
+  (define-num-wrapping UFix #.+unsigned-fixnum-bits+))
+
+;;;
+;;; Num instances for floats
+;;;
 
 (cl:defun %optional-coerce (z cl-type)
   "Attempts to coerce Z to an Optional CL-TYPE, returns NONE if failed."
@@ -221,34 +228,74 @@
            None
            (Some x))))
 
-(cl:defmacro %define-real-float-arith (coalton-type underlying-type)
-  "Defines the arithmetic instances for a lisp floating-point type"
-  `(coalton-toplevel
-     (define-instance (Num ,coalton-type)
+(cl:eval-when (:compile-toplevel :load-toplevel)
+  (cl:defmacro define-num-float (type lisp-type)
+    "Define `Num' for TYPE"
+
+    ;;
+    ;; CCL has a tendency to re-enable float traps. The explicit float
+    ;; trap masking keeps the test suite working during interactive
+    ;; development.
+    ;;
+    ;; Allegro appears to have some checks that make some arithmetic
+    ;; functions error on some inputs. The explicit checks in division
+    ;; keep the behavior consistent with IEEE 754.
+    ;;
+
+    `(define-instance (Num ,type)
        (define (+ a b)
-         (lisp ,coalton-type (a b)
+         (lisp ,type (a b)
            (#+(not ccl) cl:progn
               #+ccl ff:with-float-traps-masked #+ccl cl:t
               (cl:+ a b))))
+
        (define (- a b)
-         (lisp ,coalton-type (a b)
+         (lisp ,type (a b)
            (#+(not ccl) cl:progn
               #+ccl ff:with-float-traps-masked #+ccl cl:t
               (cl:- a b))))
+
        (define (* a b)
-         (lisp ,coalton-type (a b)
+         (lisp ,type (a b)
            (#+(not ccl) cl:progn
               #+ccl ff:with-float-traps-masked #+ccl cl:t
               (cl:* a b))))
+
        (define (fromInt x)
-         (match (lisp (Optional ,coalton-type) (x)
-                  (%optional-coerce x ,underlying-type))
+         (match (lisp (Optional ,type) (x)
+                  (%optional-coerce x ',lisp-type))
            ((Some x) x)
            ((None) (if (< 0 x)
                        negative-infinity
-                       infinity)))))
+                       infinity)))))))
 
-     (define-instance (Reciprocable ,coalton-type)
+(coalton-toplevel
+  (define-num-float Single-Float cl:single-float)
+  (define-num-float Double-Float cl:double-float))
+
+;;;
+;;; Float to `Fraction' conversions
+;;;
+
+(cl:eval-when (:compile-toplevel :load-toplevel)
+  (cl:defmacro define-float-fraction-conversion (type)
+    `(define-instance (TryInto ,type Fraction)
+       (define (tryInto x)
+         (if (finite? x)
+             (Ok (lisp Fraction (x) (cl:rational x)))
+             (Err "Could not convert NaN or infinity into a Fraction"))))))
+
+(coalton-toplevel
+  (define-float-fraction-conversion Single-Float)
+  (define-float-fraction-conversion Double-Float))
+
+;;;
+;;; `Dividable' and `Reciprocable' instances for floata
+;;;
+
+(cl:eval-when (:compile-toplevel :load-toplevel)
+  (cl:defmacro define-reciprocable-float (type)
+    `(define-instance (Reciprocable ,type)
        (define (/ x y)
          (cond
            #+allegro
@@ -269,7 +316,7 @@
             negative-infinity)
 
            (True
-            (lisp ,coalton-type (x y)
+            (lisp ,type (x y)
               (#+(not ccl) cl:progn
                  #+ccl ff:with-float-traps-masked #+ccl cl:t
                  (cl:/ x y))))))
@@ -281,101 +328,117 @@
             infinity)
 
            (True
-            (lisp ,coalton-type (x)
+            (lisp ,type (x)
               (#+(not ccl) cl:progn
                  #+ccl ff:with-float-traps-masked #+ccl cl:t
-                 (cl:/ x)))))))
+                 (cl:/ x)))))))))
 
-     (define-instance (Dividable Integer ,coalton-type)
+(cl:eval-when (:compile-toplevel :load-toplevel)
+  (cl:defmacro define-dividable-float (type lisp-type)
+    `(define-instance (Dividable Integer ,type)
        (define (general/ x y)
          (if (== y 0)
              (/ (fromInt x) (fromInt y))
-             (match (lisp (Optional ,coalton-type) (x y)
-                      (%optional-coerce (cl:/ x y) ,underlying-type))
+             (match (lisp (Optional ,type) (x y)
+                      (%optional-coerce (cl:/ x y) ',lisp-type))
                ((Some x) x)
                ((None) (if (and (> x 0) (> y 0))
                            infinity
-                           negative-infinity))))))
+                           negative-infinity))))))))
 
-     (define-instance (TryInto ,coalton-type Fraction)
-       (define (tryInto x)
-         (if (finite? x)
-             (Ok (lisp Fraction (x) (cl:rational x)))
-             (Err "Could not convert NaN or infinity into a Fraction"))))))
+(coalton-toplevel
+  (define-reciprocable-float Single-Float)
+  (define-reciprocable-float Double-Float)
 
-(%define-real-float-arith Single-Float 'cl:single-float)
-(%define-real-float-arith Double-Float 'cl:double-float)
+  (define-dividable-float Single-Float cl:single-float)
+  (define-dividable-float Double-Float cl:double-float))
 
-;;;; `Bits' instances
-;;; signed
+;;;
+;;; `Bits' instances
+;;;
 
-(cl:defmacro define-signed-bit-instance (type handle-overflow)
-  (cl:flet ((lisp-binop (op)
-              `(lisp ,type (left right)
-                 (,op left right))))
-    `(coalton-toplevel
-       (define-instance (bits:Bits ,type)
-         (define (bits:and left right)
-           ,(lisp-binop 'cl:logand))
-         (define (bits:or left right)
-           ,(lisp-binop 'cl:logior))
-         (define (bits:xor left right)
-           ,(lisp-binop 'cl:logxor))
-         (define (bits:not bits)
-           (lisp ,type (bits) (cl:lognot bits)))
-         (define (bits:shift amount bits)
-           (lisp ,type (amount bits)
-             (,handle-overflow (cl:ash bits amount))))))))
+(cl:eval-when (:compile-toplevel :load-toplevel)
+  (cl:defmacro define-bits-checked (type handle-overflow)
+    `(define-instance (bits:Bits ,type)
+       (define (bits:and a b)
+         (lisp ,type (a b)
+           (cl:logand a b)))
 
-(define-signed-bit-instance I8 %handle-8bit-overflow)
-(define-signed-bit-instance I16 %handle-16bit-overflow)
-(define-signed-bit-instance I32 %handle-32bit-overflow)
-(define-signed-bit-instance I64 %handle-64bit-overflow)
-(define-signed-bit-instance IFix cl:identity)
-(define-signed-bit-instance Integer cl:identity)
+       (define (bits:or a b)
+         (lisp ,type (a b)
+           (cl:logior a b)))
 
-;;; unsigned
+       (define (bits:xor a b)
+         (lisp ,type (a b)
+           (cl:logxor a b)))
 
-(cl:declaim (cl:inline unsigned-lognot)
-            (cl:ftype (cl:function (cl:unsigned-byte cl:unsigned-byte)
-                                   (cl:values cl:unsigned-byte cl:&optional))
-                      unsigned-lognot))
+       (define (bits:not x)
+         (lisp ,type (x)
+           (cl:lognot x)))
+
+       (define (bits:shift amount bits)
+         (lisp ,type (amount bits)
+           (,handle-overflow (cl:ash bits amount)))))))
+
+(cl:declaim (cl:inline unsigned-lognot))
 (cl:defun unsigned-lognot (int n-bits)
+  (cl:declare (cl:type cl:unsigned-byte int)
+              (cl:type cl:unsigned-byte n-bits)
+              (cl:values cl:unsigned-byte))
+
   (cl:- (cl:ash 1 n-bits) int 1))
 
-(cl:declaim (cl:inline handle-unsigned-overflow)
-            (cl:ftype (cl:function (cl:unsigned-byte cl:unsigned-byte)
-                                   (cl:values cl:unsigned-byte cl:&optional))
-                      handle-unsigned-overflow))
+(cl:declaim (cl:inline handle-unsigned-overflow))
 (cl:defun handle-unsigned-overflow (int n-bits)
-  (cl:logand (cl:1- (cl:ash 1 n-bits))
-             int))
+  (cl:declare (cl:type cl:unsigned-byte int)
+              (cl:type cl:unsigned-byte n-bits)
+              (cl:values cl:unsigned-byte))
 
-(cl:defmacro define-unsigned-bit-instance (type width)
-  (cl:flet ((define-binop (coalton-name lisp-name)
-              `(define (,coalton-name left right)
-                 (lisp ,type (left right)
-                   (,lisp-name left right)))))
-    `(coalton-toplevel
-       (define-instance (bits:Bits ,type)
-         ,(define-binop 'bits:and 'cl:logand)
-         ,(define-binop 'bits:or 'cl:logior)
-         ,(define-binop 'bits:xor 'cl:logxor)
-         (define (bits:not bits)
-           (lisp ,type (bits) (unsigned-lognot bits ,width)))
-         (define (bits:shift amount bits)
-           (lisp ,type (amount bits)
-             (cl:logand (cl:ash bits amount)
-                        (cl:1- (cl:ash 1 ,width)))))))))
+  (cl:logand (cl:1- (cl:ash 1 n-bits)) int))
 
-(define-unsigned-bit-instance U8 8)
-(define-unsigned-bit-instance U16 16)
-(define-unsigned-bit-instance U32 32)
-(define-unsigned-bit-instance U64 64)
-(define-unsigned-bit-instance UFix #.coalton-library/math/num::+unsigned-fixnum-bits+)
+(cl:eval-when (:compile-toplevel :load-toplevel)
+  (cl:defmacro define-bits-wrapping (type bits)
+    `(define-instance (bits:Bits ,type)
+       (define (bits:and a b)
+         (lisp ,type (a b)
+           (cl:logand a b)))
 
-;;;; `Hash' instances
+       (define (bits:or a b)
+         (lisp ,type (a b)
+           (cl:logior a b)))
 
+       (define (bits:xor a b)
+         (lisp ,type (a b)
+           (cl:logxor a b)))
+
+       (define (bits:not x)
+         (lisp ,type (x)
+           (unsigned-lognot x bits)))
+
+       (define (bits:shift amount bits)
+         (lisp ,type (amount bits)
+           (cl:logand (cl:ash bits amount)
+                      ,(cl:1- (cl:ash 1 bits))))))))
+
+(coalton-toplevel
+  (define-bits-checked Integer cl:identity)
+
+  (define-bits-checked I8 %handle-8bit-overflow)
+  (define-bits-checked I16 %handle-16bit-overflow)
+  (define-bits-checked I32 %handle-32bit-overflow)
+  (define-bits-checked I64 %handle-64bit-overflow)
+  (define-bits-checked IFix %handle-fixnum-overflow)
+
+  (define-bits-wrapping U8 8)
+  (define-bits-wrapping U16 16)
+  (define-bits-wrapping U32 32)
+  (define-bits-wrapping U64 64)
+  (define-bits-wrapping UFix #.+unsigned-fixnum-bits+))
+
+
+;;; `Hash' instances
+
+(define-sxhash-hasher Integer)
 (define-sxhash-hasher I8)
 (define-sxhash-hasher I16)
 (define-sxhash-hasher I32)
@@ -384,7 +447,6 @@
 (define-sxhash-hasher U16)
 (define-sxhash-hasher U32)
 (define-sxhash-hasher U64)
-(define-sxhash-hasher Integer)
 (define-sxhash-hasher IFix)
 (define-sxhash-hasher UFix)
 (define-sxhash-hasher Single-Float)
