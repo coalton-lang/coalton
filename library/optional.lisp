@@ -9,7 +9,8 @@
   (:export
    #:from-some
    #:some?
-   #:none?))
+   #:none?
+   #:flatten))
 
 (in-package #:coalton-library/optional)
 
@@ -43,6 +44,13 @@
     (match x
       ((None) True)
       ((Some _) False)))
+
+
+  (declare flatten ((Optional (Optional :a)) -> (Optional :a)))
+  (define (flatten opt)
+    (match opt
+      ((Some (Some x)) (Some x))
+      (_ None)))
 
   ;;
   ;; Instances
