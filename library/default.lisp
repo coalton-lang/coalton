@@ -16,10 +16,10 @@
 #+coalton-release
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
-(cl:defmacro define-default-numbers (cl:&rest types)
-  `(progn ,@(cl:loop :for type :in types
-               :collect `(define-instance (Default ,type)
-                           (define (default) 0)))))
+(cl:eval-when (:compile-toplevel :load-toplevel)
+  (cl:defmacro define-number-default (type)
+    `(define-instance (Default ,type)
+       (define (default) 0))))
 
 (coalton-toplevel
   ;;
@@ -38,11 +38,21 @@
 
   (define-instance (Default (List :a))
     (define (default) Nil))
-
-  (define-default-numbers
-    I8 U8 I16 I32 I64 U16 U32 U64
-    IFix UFix
-    Integer Double-Float Single-Float Fraction)
+    
+  (define-number-default I8)
+  (define-number-default U8)
+  (define-number-default I16)
+  (define-number-default I32)
+  (define-number-default I64)
+  (define-number-default U16)
+  (define-number-default U32)
+  (define-number-default U64)
+  (define-number-default IFix)
+  (define-number-default UFix)
+  (define-number-default Integer)
+  (define-number-default Double-Float)
+  (define-number-default Single-Float)
+  (define-number-default Fraction)
 
   (define-instance (Default (Optional :a))
     (define (default) None)))
