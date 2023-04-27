@@ -334,7 +334,10 @@
                         (push! x vec)
                         Unit)
                       iter)
-      vec)))
+      vec))
+
+  (define-instance (types:RuntimeRepr :a => Default (Vector :a))
+    (define default new)))
 
 (cl:defmacro make (cl:&rest elements)
   "Construct a `Vector' containing the ELEMENTS, in the order listed."

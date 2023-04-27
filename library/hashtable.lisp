@@ -188,7 +188,10 @@
       (iter:for-each!
        (fn ((Tuple key value))
          (set! table key value)))
-      table)))
+      table))
+
+  (define-instance (Hash :key => Default (Hashtable :key :value))
+    (define default new)))
 
 (cl:define-condition make-hash-table-static-duplicate-keys (cl:error)
   ((offending-key :initarg :offending-key

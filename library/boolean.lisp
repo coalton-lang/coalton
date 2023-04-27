@@ -36,7 +36,7 @@
            ((False) EQ))))))
 
   (define-instance (Default Boolean)
-    (define default False)))
+    (define (default) False)))
 
 (define-sxhash-hasher Boolean)
 

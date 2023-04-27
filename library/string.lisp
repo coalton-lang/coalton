@@ -200,7 +200,7 @@ does not have that suffix."
                  (Ok z))))))
 
   (define-instance (Default String)
-    (define default "")))
+    (define (default) "")))
 
 (define-sxhash-hasher String)
 
