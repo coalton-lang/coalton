@@ -160,7 +160,6 @@
                (:file "cell")
                (:file "iterator")
                (:file "optional")
-               (:file "default")
                (:file "result")
                (:file "tuple")
                (:file "list")

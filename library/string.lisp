@@ -197,7 +197,10 @@ does not have that suffix."
         (cl:let ((z (cl:ignore-errors (cl:parse-integer s))))
           (cl:if (cl:null z)
                  (Err (concat "Cannot parse string as integer: " s))
-                 (Ok z)))))))
+                 (Ok z))))))
+
+  (define-instance (Default String)
+    (define default "")))
 
 (define-sxhash-hasher String)
 
