@@ -338,9 +338,7 @@ Typical `fail` continuations are:
   (declare defaulting-unwrap ((Unwrappable :container) (Default :element) =>
                               (:container :element) -> :element))
   (define (defaulting-unwrap container)
-    (unwrap-or-else (fn (elt) elt)
-                    (fn () default)
-                    container)))
+    (with-default default container)))
 
 
 #+sb-package-locks
