@@ -333,12 +333,12 @@ Typical `fail` continuations are:
   ;;
 
   (define-class (Default :a)
-    (default :a))
+    (default (Unit -> :a)))
 
   (declare defaulting-unwrap ((Unwrappable :container) (Default :element) =>
                               (:container :element) -> :element))
   (define (defaulting-unwrap container)
-    (with-default default container)))
+    (with-default (default) container)))
 
 
 #+sb-package-locks

@@ -135,7 +135,10 @@
     (define into new))
 
   (define-instance (Into (Cell :a) :a)
-    (define into read)))
+    (define into read))
+
+  (define-instance (Default :a => Default (Cell :a))
+    (define (default) (new (default)))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/CELL")

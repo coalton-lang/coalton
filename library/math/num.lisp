@@ -459,7 +459,7 @@
 (cl:eval-when (:compile-toplevel :load-toplevel)
  (cl:defmacro define-default-num (type)
    `(define-instance (Default ,type)
-      (define default 0))))
+      (define (default) 0))))
 
 (coalton-toplevel
   (define-default-num I8)

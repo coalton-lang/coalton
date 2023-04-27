@@ -740,7 +740,7 @@ This function is equivalent to all size-N elements of `(COMBS L)`."
            :finally (cl:return top)))))
 
   (define-instance (Default (List :a))
-    (define default Nil)))
+    (define (default) Nil)))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/LIST")
