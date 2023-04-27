@@ -35,7 +35,8 @@
    #:TryInto
    #:Iso
    #:error
-   #:Unwrappable #:unwrap-or-else #:with-default #:unwrap #:expect #:as-optional))
+   #:Unwrappable #:unwrap-or-else #:with-default #:unwrap #:expect #:as-optional
+   #:default #:defaulting-unwrap))
 
 (in-package #:coalton-library/classes)
 
@@ -324,6 +325,21 @@ Typical `fail` continuations are:
     "Convert any Unwrappable container into an Optional, constructing Some on a successful unwrap and None on a failed unwrap."
     (unwrap-or-else Some
                     (fn () None)
+                    container))
+
+
+  ;;
+  ;; Default
+  ;;
+
+  (define-class (Default :a)
+    (default :a))
+
+  (declare defaulting-unwrap ((Unwrappable :container) (Default :element) =>
+                              (:container :element) -> :element))
+  (define (defaulting-unwrap container)
+    (unwrap-or-else (fn (elt) elt)
+                    (fn () default)
                     container)))
 
 

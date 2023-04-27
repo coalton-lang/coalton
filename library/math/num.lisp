@@ -451,3 +451,27 @@
 (define-sxhash-hasher UFix)
 (define-sxhash-hasher Single-Float)
 (define-sxhash-hasher Double-Float)
+
+;;;
+;;; Default instances
+;;;
+
+(cl:eval-when (:compile-toplevel :load-toplevel)
+ (cl:defmacro define-default-num (type)
+   `(define-instance (Default ,type)
+      (define default 0))))
+
+(coalton-toplevel
+  (define-default-num I8)
+  (define-default-num U8)
+  (define-default-num I16)
+  (define-default-num I32)
+  (define-default-num I64)
+  (define-default-num U16)
+  (define-default-num U32)
+  (define-default-num U64)
+  (define-default-num IFix)
+  (define-default-num UFix)
+  (define-default-num Integer)
+  (define-default-num Double-Float)
+  (define-default-num Single-Float))

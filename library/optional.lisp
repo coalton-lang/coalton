@@ -150,7 +150,10 @@
                            iter)))
       (if (cell:read error)
           None
-          (Some out)))))
+          (Some out))))
+
+  (define-instance (Default (Optional :a))
+    (define default None)))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/OPTIONAL")
