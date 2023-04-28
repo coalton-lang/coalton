@@ -333,12 +333,16 @@ Typical `fail` continuations are:
   ;;
 
   (define-class (Default :a)
+    "Types which have default values."
     (default (Unit -> :a)))
 
   (declare defaulting-unwrap ((Unwrappable :container) (Default :element) =>
                               (:container :element) -> :element))
   (define (defaulting-unwrap container)
-    (with-default (default) container)))
+    "Unwrap an UNWRAPPABLE, returning (DEFAULT) of the wrapped type on failure. "
+    (unwrap-or-else (fn (elt) elt)
+                    (fn () (default))
+                    container)))
 
 
 #+sb-package-locks
