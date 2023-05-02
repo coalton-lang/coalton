@@ -1772,6 +1772,19 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
         (let* ((expr-preds (tc:apply-substitution subs expr-preds))
 
+               (known-variables
+                 (tc:apply-substitution
+                  subs
+                  (append (remove-duplicates (tc:type-variables expr-type) :test #'eq) env-tvars)))
+
+               (preds (tc:apply-substitution subs preds))
+
+               (subs (tc:compose-substitution-lists
+                      subs
+                      (tc:fundep-entail (tc-env-env env) expr-preds preds known-variables)))
+
+               (expr-preds (tc:apply-substitution subs expr-preds))
+
                (reduced-preds (remove-if-not (lambda (p)
                                                (not (tc:entail (tc-env-env env) expr-preds p)))
                                              (tc:apply-substitution subs preds))))

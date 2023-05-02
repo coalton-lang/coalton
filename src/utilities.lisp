@@ -57,9 +57,10 @@
 
 (defmacro debug-log (&rest vars)
   "Log names and values of VARS to standard output"
-  `(format t
-           ,(format nil "~&~{~A: ~~A~~%~}" vars)
-           ,@vars))
+  `(let ((*print-circle* nil))
+     (format t
+             ,(format nil "~&~{~A: ~~A~~%~}" vars)
+             ,@vars)))
 
 (defmacro debug-tap (var)
   (let ((var-name (gensym)))
