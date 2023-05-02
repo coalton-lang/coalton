@@ -397,7 +397,7 @@
   (cl:logand (cl:1- (cl:ash 1 n-bits)) int))
 
 (cl:eval-when (:compile-toplevel :load-toplevel)
-  (cl:defmacro define-bits-wrapping (type bits)
+  (cl:defmacro define-bits-wrapping (type width)
     `(define-instance (bits:Bits ,type)
        (define (bits:and a b)
          (lisp ,type (a b)
@@ -413,12 +413,12 @@
 
        (define (bits:not x)
          (lisp ,type (x)
-           (unsigned-lognot x bits)))
+           (unsigned-lognot x ,width)))
 
        (define (bits:shift amount bits)
          (lisp ,type (amount bits)
            (cl:logand (cl:ash bits amount)
-                      ,(cl:1- (cl:ash 1 bits))))))))
+                      ,(cl:1- (cl:ash 1 width))))))))
 
 (coalton-toplevel
   (define-bits-checked Integer cl:identity)
