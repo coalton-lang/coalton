@@ -181,4 +181,8 @@
       (m (:a -> :b)))
 
      (define (f x)
+       (m x))
+
+     (declare g (C :a :b :C => :a -> :b))
+     (define (g x)
        (m x))"))
