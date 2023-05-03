@@ -318,6 +318,6 @@ Returns (VALUES deferred-preds retained-preds defaultable-preds)"
                                        (ty-predicate-types pred))
 
                          :when (and (tyvar-p ty) (tyvar-p ty_))
-                           :collect (make-substitution :from ty :to ty_))))
+                           :collect (make-substitution :from ty_ :to ty))))
 
       nil)))
