@@ -1785,15 +1785,18 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
                (expr-preds (tc:apply-substitution subs expr-preds))
 
-               (reduced-preds (remove-if-not (lambda (p)
+               (preds (remove-if-not (lambda (p)
                                                (not (tc:entail (tc-env-env env) expr-preds p)))
                                              (tc:apply-substitution subs preds))))
 
-          (setf local-tvars (expand-local-tvars env-tvars local-tvars reduced-preds (tc-env-env env)))
+          (setf preds (tc:apply-substitution subs preds))
+          (setf local-tvars (expand-local-tvars env-tvars local-tvars preds (tc-env-env env)))
+          (setf env-tvars
+                (expand-local-tvars local-tvars (tc:apply-substitution subs env-tvars) preds (tc-env-env env)))
 
           ;; Split predicates into retained and deferred
           (multiple-value-bind (deferred-preds retained-preds)
-              (tc:split-context (tc-env-env env) env-tvars reduced-preds subs)
+              (tc:split-context (tc-env-env env) env-tvars preds subs)
 
             (let* (;; Calculate defaultable predicates
                    (defaultable-preds
@@ -2016,9 +2019,12 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
            (local-tvars (set-difference expr-tvars env-tvars :test #'eq)))
 
+      ;; Generate additional substitutions from fundeps
       (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) preds subs)))
 
+      (setf preds (tc:apply-substitution subs preds))
       (setf local-tvars (expand-local-tvars env-tvars local-tvars preds (tc-env-env env)))
+      (setf env-tvars (expand-local-tvars local-tvars (tc:apply-substitution subs env-tvars) preds (tc-env-env env)))
 
       (multiple-value-bind (deferred-preds retained-preds)
           (tc:split-context (tc-env-env env) env-tvars preds subs)
