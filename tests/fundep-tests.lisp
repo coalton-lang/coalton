@@ -183,6 +183,11 @@
      (define (f x)
        (m x))
 
-     (declare g (C :a :b :C => :a -> :b))
+     (declare g (C :a :b :c => :a -> :b))
      (define (g x)
+       (m x))
+
+     (declare h (C :a :b :c => :a -> :b))
+     (define (h x)
+       (m x)
        (m x))"))

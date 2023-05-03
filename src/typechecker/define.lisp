@@ -1850,7 +1850,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
               (values
                deferred-preds
-               (attach-explicit-binding-type binding-node (tc:apply-substitution subs fresh-qual-type))
+               (attach-explicit-binding-type (tc:apply-substitution subs binding-node) (tc:apply-substitution subs fresh-qual-type))
                subs))))))))
 
 (defun check-for-invalid-recursive-scc (bindings env file)
