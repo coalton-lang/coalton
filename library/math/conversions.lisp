@@ -182,5 +182,41 @@ cannot be represented in :TO. These fall into a few categories:
                  (Err "Integer to Double-Float conversion out-of-range")
                  (Ok y)))))))
 
+(cl:eval-when (:compile-toplevel :load-toplevel)
+  (cl:defmacro integer-tryinto-float (integer lisp-float float pow)
+    `(define-instance (TryInto ,integer ,float)
+       (define (tryInto x)
+	 (lisp (Result String ,float) (x)
+           (cl:if (cl:and (cl:> x (cl:expt -2 ,pow)) (cl:< x (cl:expt 2 ,pow)))	 
+	          (cl:let ((y (cl:coerce x ',lisp-float)))
+	            (cl:if (cl:null y)
+		           (cl:error `,(cl:concatenate 'string (cl:symbol-name ,integer) "to " (cl:symbol-name ,float) " conversion out-of-range"))
+		           (Ok y)))
+	          (Err `,(cl:concatenate 'string "Given integer" "is not within " "(-2^" (write-to-string ,pow) ", " "2^" (write-to-string ,pow) ")"))))))))
+
+(coalton-toplevel
+  ;; Single Float
+  (integer-tryinto-float I64 cl:single-float Single-Float 24)
+
+  (integer-tryinto-float U64 cl:single-float Single-Float 24)
+
+  (integer-tryinto-float IFix cl:single-float Single-Float 24)
+
+  (integer-tryinto-float UFix cl:single-float Single-Float 24)
+
+  (integer-tryinto-float U32 cl:single-float Single-Float 24)
+
+  (integer-tryinto-float I32 cl:single-float Single-Float 24)
+
+;; Double Float
+  (integer-tryinto-float I64 cl:double-float Double-Float 53)
+
+  (integer-tryinto-float U64 cl:double-float Double-Float 53)
+
+  (integer-tryinto-float IFix cl:double-float Double-Float 53)
+
+  (integer-tryinto-float UFix cl:double-float Double-Float 53))
+
+
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/MATH/CONVERSIONS")
