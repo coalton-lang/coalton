@@ -5,6 +5,9 @@
   (:import-from
    #:coalton-impl/analysis/unused-variables
    #:find-unused-variables)
+  (:import-from
+   #:coalton-impl/analysis/underapplied-values
+   #:find-underapplied-values)
   (:local-nicknames
    (#:util #:coalton-impl/util)
    (#:error #:coalton-impl/error)
@@ -98,6 +101,7 @@
     (loop :for define :in (tc:translation-unit-definitions translation-unit)
           :do (tc:traverse (tc:toplevel-define-body define) analysis-traverse-block)
           :do (find-unused-variables define file)
+          :do (find-underapplied-values define file)
           :do (loop :for pattern :in (tc:binding-parameters define)
                     :do (check-pattern-exhaustiveness pattern env file)))
 
@@ -105,6 +109,8 @@
     (loop :for instance :in (tc:translation-unit-instances translation-unit) :do
       (loop :for method :being :the :hash-value :of (tc:toplevel-define-instance-methods instance)
             :do (tc:traverse (tc:instance-method-definition-body method) analysis-traverse-block)
+            :do (find-underapplied-values method file)
+            :do (find-underapplied-values method file)
             :do (loop :for pattern :in (tc:binding-parameters method)
                       :do (check-pattern-exhaustiveness pattern env file))))))
 
