@@ -73,12 +73,13 @@
           (write-documentation :markdown stream file-entry))))))
 
 (defmethod write-documentation ((backend (eql ':markdown)) stream (object documentation-file-entry))
-  (with-slots (filename package value-entries type-entries class-entries link-prefix)
+  (with-slots (filename package value-entries type-entries struct-entries class-entries link-prefix)
       object
     ;; We only want to write documentation when there is documentation to write.
     (when (or value-entries
               type-entries
-              class-entries)
+              class-entries
+              struct-entries)
 
       (unless (string= "" filename)
         (format stream "## [~A](~A) <a name=\"~(~A-~A-file~)\"></a>~%~%"
@@ -92,6 +93,14 @@
         (format stream "### Types~%~%")
 
         (dolist (entry type-entries)
+          (write-documentation backend stream entry)
+          (format stream "~%***~%~%")))
+
+      ;; Print struct information
+      (when struct-entries
+        (format stream "### Structs~%~%")
+
+        (dolist (entry struct-entries)
           (write-documentation backend stream entry)
           (format stream "~%***~%~%")))
 
@@ -156,6 +165,39 @@
                     (tc:ty-class-instance-docstring instance))))
         (format stream "~%</details>~%~%")))))
 
+(defmethod write-documentation ((backend (eql ':markdown)) stream (object documentation-struct-entry))
+  (with-slots (name type tyvars fields field-tys instances documentation)
+      object
+    (tc:with-pprint-variable-context ()
+      (format stream
+              "#### <code>~A~A</code> <sup><sub>[STRUCT]</sub></sup><a name=\"~(~A-type~)\"></a>~%"
+              (html-entities:encode-entities (symbol-name name))
+              (html-entities:encode-entities (format nil "~{ ~S~}" tyvars))
+              (html-entities:encode-entities (symbol-name name)))
+
+      (loop :for field :in fields
+            :for field-ty := (gethash field field-tys)
+            :do (format stream "- <code>~A :: ~S</code>~%"
+                        field
+                        field-ty))
+
+      (when documentation
+        (format stream "~%~A~%"
+                (html-entities:encode-entities
+                 documentation
+                 :regex "[<>&]"))
+        (format stream "~%"))
+
+      (when instances
+        (format stream "<details>~%")
+        (format stream "<summary>Instances</summary>~%~%")
+        (loop :for instance :in instances :do
+          (tc:with-pprint-variable-context ()
+            (format stream "- <code>~A</code>~:[~;  ~%~:*~A~]~%"
+                    (to-markdown instance)
+                    (tc:ty-class-instance-docstring instance))))
+        (format stream "~%</details>~%~%")))))
+
 (defmethod write-documentation ((backend (eql ':markdown)) stream (object documentation-class-entry))
   (with-slots (name context predicate methods instances documentation location)
       object
@@ -191,8 +233,8 @@
       (loop :for instance :in instances :do
         (tc:with-pprint-variable-context ()
           (format stream "- <code>~A</code>~:[~;  ~%~:*~A~]~%"
-                    (to-markdown instance)
-                    (tc:ty-class-instance-docstring instance))))
+                  (to-markdown instance)
+                  (tc:ty-class-instance-docstring instance))))
       (format stream "~%</details>~%~%"))))
 
 (defmethod write-documentation ((backend (eql ':markdown)) stream (object documentation-function-entry))

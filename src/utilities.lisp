@@ -15,6 +15,7 @@
    #:debug-tap                          ; MACRO
    #:runtime-quote                      ; FUNCTION
    #:symbol-list                        ; TYPE
+   #:string-list                        ; TYPE
    #:cst-list                           ; TYPE
    #:cst-source-range                   ; FUNCTION
    #:literal-value                      ; TYPE
@@ -40,6 +41,13 @@
 
 (deftype symbol-list ()
   '(satisfies symbol-list-p))
+
+(defun string-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'stringp x)))
+
+(deftype string-list ()
+  '(satisfies string-list-p))
 
 (defun cst-list-p (x)
   (and (alexandria:proper-list-p x)

@@ -34,7 +34,10 @@
          (tc:*env-update-log* nil))
 
     (multiple-value-bind (type-definitions instances env)
-        (tc:toplevel-define-type (parser:program-types program) file env)
+        (tc:toplevel-define-type (parser:program-types program)
+                                 (parser:program-structs program)
+                                 file
+                                 env)
 
       (multiple-value-bind (class-definitions env)
           (tc:toplevel-define-class (parser:program-classes program)
@@ -111,7 +114,7 @@
 
   (let ((env *global-environment*))
 
-    (multiple-value-bind (ty preds node subs)
+    (multiple-value-bind (ty preds accessors node subs)
         (tc:infer-expression-type (parser:rename-variables node)
                                   (tc:make-variable)
                                   nil
@@ -121,62 +124,75 @@
       (multiple-value-bind (preds subs)
           (tc:solve-fundeps env preds subs)
 
-        (let* ((preds (tc:reduce-context env preds subs))
-               (subs (tc:compose-substitution-lists
-                      (tc:default-subs env nil preds)
-                      subs))
-               (preds (tc:reduce-context env preds subs))
+        (setf accessors (tc:apply-substitution subs accessors))
 
-               (node (tc:apply-substitution subs node))
-               (ty (tc:apply-substitution subs ty))
+        (multiple-value-bind (accessors subs_)
+            (tc:solve-accessors accessors file env)
+          (setf subs (tc:compose-substitution-lists subs subs_))
 
-               (qual-ty (tc:qualify preds ty))
-               (scheme (tc:quantify (tc:type-variables qual-ty) qual-ty)))
-
-          (when (null preds)
-            (return-from expression-entry-point
-              (let ((node (codegen:optimize-node
-                           (codegen:translate-expression node nil env)
-                           env)))
-                (codegen:codegen-expression 
-                 (codegen:direct-application
-                  node
-                  (codegen:make-function-table env))
-                 nil
-                 env))))
-
-          (let* ((tvars
-                   (loop :for i :to (1- (length (remove-duplicates (tc:type-variables qual-ty)
-                                                                   :test #'equalp)))
-                         :collect (tc:make-variable)))
-                 (qual-type (tc:instantiate
-                             tvars
-                             (tc:ty-scheme-type scheme))))
-              
-
+          (when accessors
             (error 'tc:tc-error
-                   :err (error:coalton-error
-                         :span (tc:node-source node)
+                   :err (tc:coalton-error
+                         :span (tc:accessor-source (first accessors))
                          :file file
-                         :message "Unable to codegen"
-                         :primary-note (format nil
-                                               "expression has type ~A~{ ~S~}.~{ (~S)~} => ~S with unresolved constraint~A ~S"
-                                               (if settings:*coalton-print-unicode*
-                                                   "∀"
-                                                   "FORALL")
-                                               tvars
-                                               (tc:qualified-ty-predicates qual-type)
-                                               (tc:qualified-ty-type qual-type)
-                                               (if (= (length (tc:qualified-ty-predicates qual-type)) 1)
-                                                   ""
-                                                   "s")
-                                               (tc:qualified-ty-predicates qual-type))
-                         :notes
-                         (list
-                          (error:make-coalton-error-note
-                           :type :secondary
+                         :message "Ambiguous accessor"
+                         :primary-note "accessor is ambiguous")))
+
+          (let* ((preds (tc:reduce-context env preds subs))
+                 (subs (tc:compose-substitution-lists
+                        (tc:default-subs env nil preds)
+                        subs))
+                 (preds (tc:reduce-context env preds subs))
+
+                 (node (tc:apply-substitution subs node))
+                 (ty (tc:apply-substitution subs ty))
+
+                 (qual-ty (tc:qualify preds ty))
+                 (scheme (tc:quantify (tc:type-variables qual-ty) qual-ty)))
+
+            (when (null preds)
+              (return-from expression-entry-point
+                (let ((node (codegen:optimize-node
+                             (codegen:translate-expression node nil env)
+                             env)))
+                  (codegen:codegen-expression 
+                   (codegen:direct-application
+                    node
+                    (codegen:make-function-table env))
+                   nil
+                   env))))
+
+            (let* ((tvars
+                     (loop :for i :to (1- (length (remove-duplicates (tc:type-variables qual-ty)
+                                                                     :test #'equalp)))
+                           :collect (tc:make-variable)))
+                   (qual-type (tc:instantiate
+                               tvars
+                               (tc:ty-scheme-type scheme))))
+
+              (error 'tc:tc-error
+                     :err (error:coalton-error
                            :span (tc:node-source node)
-                           :message "Add a type assertion with THE to resolve ambiguity"))))))))))
+                           :file file
+                           :message "Unable to codegen"
+                           :primary-note (format nil
+                                                 "expression has type ~A~{ ~S~}.~{ (~S)~} => ~S with unresolved constraint~A ~S"
+                                                 (if settings:*coalton-print-unicode*
+                                                     "∀"
+                                                     "FORALL")
+                                                 tvars
+                                                 (tc:qualified-ty-predicates qual-type)
+                                                 (tc:qualified-ty-type qual-type)
+                                                 (if (= (length (tc:qualified-ty-predicates qual-type)) 1)
+                                                     ""
+                                                     "s")
+                                                 (tc:qualified-ty-predicates qual-type))
+                           :notes
+                           (list
+                            (error:make-coalton-error-note
+                             :type :secondary
+                             :span (tc:node-source node)
+                             :message "Add a type assertion with THE to resolve ambiguity")))))))))))
 
 (defun file-entry-point (filename)
   (declare (type string filename))

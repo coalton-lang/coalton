@@ -9,10 +9,10 @@
 
 (defstruct (documentation-type-entry
             (:include documentation-entry))
-  (type              (util:required 'type)              :type tc:ty :read-only t)
-  (constructors      (util:required 'constructors)      :type t     :read-only t)
-  (constructor-types (util:required 'constructor-types) :type t     :read-only t)
-  (instances         (util:required 'instances)         :type t     :read-only t))
+  (type              (util:required 'type)              :type tc:ty                     :read-only t)
+  (constructors      (util:required 'constructors)      :type t                         :read-only t)
+  (constructor-types (util:required 'constructor-types) :type t                         :read-only t)
+  (instances         (util:required 'instances)         :type tc:ty-class-instance-list :read-only t))
 
 (defun documentation-type-entry-list-p (x)
   (and (every #'documentation-type-entry-p x)
@@ -20,6 +20,21 @@
 
 (deftype documentation-type-entry-list ()
   '(satisfies documentation-type-entry-list-p))
+
+(defstruct (documentation-struct-entry
+            (:include documentation-entry))
+  (type      (util:required 'type)        :type tc:ty                     :read-only t)
+  (tyvars    (util:required 'tyvars)      :type tc:tyvar-list             :read-only t)
+  (fields    (util:required 'fields)      :type util:string-list          :read-only t)
+  (field-tys (util:required 'field-types) :type hash-table                :read-only t)
+  (instances (util:required 'instances)   :type tc:ty-class-instance-list :read-only t))
+
+(defun documentation-struct-entry-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'documentation-struct-entry-p x)))
+
+(deftype documentation-struct-entry-list ()
+  '(satisfies documentation-struct-entry-list-p))
 
 (defstruct (documentation-class-entry
             (:include documentation-entry))
@@ -51,12 +66,13 @@
   (param-names (util:required 'param-names) :type list :read-only t))
 
 (defstruct documentation-file-entry
-  (filename      (util:required 'filename)      :type t                              :read-only t)
-  (package       (util:required 'package)       :type symbol                         :read-only t)
-  (value-entries (util:required 'value-entries) :type documentation-value-entry-list :read-only nil)
-  (type-entries  (util:required 'type-entries)  :type documentation-type-entry-list  :read-only nil)
-  (class-entries (util:required 'class-entries) :type documentation-class-entry-list :read-only nil)
-  (link-prefix   (util:required 'link-prefix)   :type string                         :read-only t))
+  (filename       (util:required 'filename)       :type t                               :read-only t)
+  (package        (util:required 'package)        :type symbol                          :read-only t)
+  (value-entries  (util:required 'value-entries)  :type documentation-value-entry-list  :read-only nil)
+  (type-entries   (util:required 'type-entries)   :type documentation-type-entry-list   :read-only nil)
+  (struct-entries (util:required 'struct-entries) :type documentation-struct-entry-list :read-only nil)
+  (class-entries  (util:required 'class-entries)  :type documentation-class-entry-list  :read-only nil)
+  (link-prefix    (util:required 'link-prefix)    :type string                          :read-only t))
 
 (defun documentation-file-entry-list-p (x)
   (and (every #'documentation-file-entry-p x)
@@ -184,10 +200,14 @@
            (values
             documentation-value-entry-list
             documentation-type-entry-list
+            documentation-struct-entry-list
             documentation-class-entry-list))
-  (values (get-doc-value-info env package)
-          (get-doc-type-info env package)
-          (get-doc-class-info env package)))
+  (multiple-value-bind (type-entries struct-entries)
+      (get-doc-type-info env package)
+    (values (get-doc-value-info env package)
+            type-entries
+            struct-entries
+            (get-doc-class-info env package))))
 
 (defun collect-documentation-by-file (basepath link-prefix env package)
   (declare (type t basepath)
@@ -195,12 +215,12 @@
            (type tc:environment env)
            (type symbol package)
            (values hash-table &optional))
-  (multiple-value-bind (value-entries type-entries class-entries)
+  (multiple-value-bind (value-entries type-entries struct-entries class-entries)
       (collect-documentation env package)
-    (sort-documentation-by-file basepath link-prefix package value-entries type-entries class-entries)))
+    (sort-documentation-by-file basepath link-prefix package value-entries type-entries struct-entries class-entries)))
 
 ;; HACK: We should sort everything here
-(defun sort-documentation-by-file (basepath link-prefix package value-entries type-entries class-entries)
+(defun sort-documentation-by-file (basepath link-prefix package value-entries type-entries struct-entries class-entries)
   (declare (type t basepath )
            (type string link-prefix)
            (type symbol package)
@@ -222,6 +242,7 @@
                      :package package
                      :value-entries nil
                      :type-entries nil
+                     :struct-entries nil
                      :class-entries nil
                      :link-prefix link-prefix)))))
 
@@ -238,8 +259,26 @@
                      :package package
                      :value-entries nil
                      :type-entries nil
+                     :struct-entries nil
                      :class-entries nil
                      :link-prefix link-prefix)))))
+
+    ;; Sort structs by file
+    (loop :for entry :in struct-entries
+          :for filename := (enough-namestring (documentation-entry-location entry) basepath) :do
+          (push entry
+                (documentation-file-entry-struct-entries
+                 (alexandria:ensure-gethash
+                  filename
+                  file-entries
+                  (make-documentation-file-entry
+                   :filename filename
+                   :package package
+                   :value-entries nil
+                   :type-entries nil
+                   :struct-entries nil
+                   :class-entries nil
+                   :link-prefix link-prefix)))))
 
     ;; Sort the classes by file
     (loop :for entry :in class-entries
@@ -254,6 +293,7 @@
                      :package package
                      :value-entries nil
                      :type-entries nil
+                     :struct-entries nil
                      :class-entries nil
                      :link-prefix link-prefix)))))
 
@@ -304,7 +344,7 @@
 (defun get-doc-type-info (env package)
   (declare (type tc:environment env)
            (type symbol package)
-           (values documentation-type-entry-list))
+           (values documentation-type-entry-list documentation-struct-entry-list))
   (let ((types nil)
         (ctors nil)
         (package (find-package package)))
@@ -321,46 +361,70 @@
             (fset:convert 'list
                           (algo:immutable-listmap-data
                            (tc:instance-environment-instances
-                            (tc:environment-instance-environment env))))))
+                            (tc:environment-instance-environment env)))))
 
-      (mapcar (lambda (e)
-                (let* ((ctors (remove-if-not
-                               (lambda (ctor)
-                                 (and (eql (tc:constructor-entry-constructs (cdr ctor))
-                                           (car e))
-                                      (exported-symbol-p (car ctor) package t)))
-                               ctors))
+          (output-types nil)
+          (output-structs nil))
 
-                       (applicable-instances
-                         (loop :for (class . instances) :in instance-list
-                               :append
-                               (loop :for instance :in (fset:convert 'list instances)
-                                     :append
-                                     (when (some
-                                            (lambda (pred-type)
-                                              (labels ((check (pred)
-                                                         (typecase pred
-                                                           (tc:tapp
-                                                            (check (tc:tapp-from pred)))
-                                                           (t
-                                                            (equalp (tc:type-entry-type (cdr e)) pred)))))
-                                                (check pred-type)))
-                                            (tc:ty-predicate-types (tc:ty-class-instance-predicate instance)))
-                                       (list instance))))))
-                  (make-documentation-type-entry
-                   :name (car e)
-                   :type (tc:type-entry-type (cdr e))
-                   :constructors ctors
-                   :constructor-types (mapcar
-                                       (lambda (ctor)
-                                         (tc:lookup-value-type env (car ctor)))
-                                       ctors)
-                   :instances applicable-instances
-                   :documentation (tc:type-entry-docstring (cdr e))
-                   ;; Here we will assume that all constructors
-                   ;; share the same location as the type.
-                   :location (tc:type-entry-location (cdr e)))))
-              types))))
+      (loop :for (name . entry) :in types
+
+            :for ctors := (remove-if-not
+                           (lambda (ctor)
+                             (and (eql (tc:constructor-entry-constructs (cdr ctor))
+                                       name)
+                                  (exported-symbol-p (car ctor) package t)))
+                           ctors)
+
+            :for applicable-instances := (loop :for (class . instances) :in instance-list
+                                               :append
+                                               (loop :for instance :in (fset:convert 'list instances)
+                                                     :append
+                                                     (when (some
+                                                            (lambda (pred-type)
+                                                              (labels ((check (pred)
+                                                                         (typecase pred
+                                                                           (tc:tapp
+                                                                            (check (tc:tapp-from pred)))
+                                                                           (t
+                                                                            (equalp (tc:type-entry-type entry) pred)))))
+                                                                (check pred-type)))
+                                                            (tc:ty-predicate-types (tc:ty-class-instance-predicate instance)))
+                                                       (list instance))))
+
+            :for struct-entry := (tc:lookup-struct env name :no-error t)
+
+            :if (not struct-entry)
+              :do (push
+                   (make-documentation-type-entry
+                    :name name 
+                    :type (tc:type-entry-type entry)
+                    :constructors ctors
+                    :constructor-types (mapcar
+                                        (lambda (ctor)
+                                          (tc:lookup-value-type env (car ctor)))
+                                        ctors)
+                    :instances applicable-instances
+                    :documentation (tc:type-entry-docstring entry)
+                    ;; Here we will assume that all constructors
+                    ;; share the same location as the type.
+                    :location (tc:type-entry-location entry))
+                   output-types)
+            :else
+              :do (push
+                   (make-documentation-struct-entry
+                    :name name
+                    :documentation (tc:type-entry-docstring entry)
+                    :location (tc:type-entry-location entry)
+                    :type (tc:type-entry-type entry)
+                    :tyvars (tc:type-entry-tyvars entry)
+                    :fields (tc:struct-entry-fields struct-entry)
+                    :field-tys (tc:struct-entry-field-tys struct-entry)
+                    :instances applicable-instances)
+                   output-structs))
+
+      (values
+       output-types
+       output-structs))))
 
 (defun get-doc-class-info (env package)
   (declare (type tc:environment env)

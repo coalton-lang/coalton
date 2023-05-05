@@ -39,6 +39,22 @@
    #:toplevel-define-type-repr                   ; ACCESSOR
    #:toplevel-define-type-head-src               ; ACCESSOR
    #:toplevel-define-type-list                   ; TYPE
+   #:struct-field                                ; STRUCT
+   #:make-struct-field                           ; CONSTRUCTOR
+   #:struct-field-name                           ; ACCESSOR
+   #:struct-field-type                           ; ACCESSOR
+   #:struct-field-source                         ; ACCESSOR
+   #:struct-field-list                           ; TYPE
+   #:toplevel-define-struct                      ; STRUCT
+   #:make-toplevel-define-struct                 ; CONSTRUCTOR
+   #:toplevel-define-struct-name                 ; ACCESSOR
+   #:toplevel-define-struct-vars                 ; ACCESSOR
+   #:toplevel-define-struct-docstring            ; ACCESSOR
+   #:toplevel-define-struct-fields               ; ACCESSOR
+   #:toplevel-define-struct-source               ; ACCESSOR
+   #:toplevel-define-struct-repr                 ; ACCESSOR
+   #:toplevel-define-struct-head-src             ; ACCESSOR
+   #:toplevel-define-struct-list                 ; TYPE
    #:toplevel-declare                            ; STRUCT
    #:make-toplevel-declare                       ; CONSTRUCTOR
    #:toplevel-declare-name                       ; ACCESSOR
@@ -108,6 +124,7 @@
    #:program-package                             ; ACCESSOR
    #:program-file                                ; ACCESSOR
    #:program-types                               ; ACCESSOR
+   #:program-structs                             ; ACCESSOR
    #:program-declares                            ; ACCESSOR
    #:program-defines                             ; ACCESSOR
    #:program-classes                             ; ACCESSOR
@@ -160,6 +177,11 @@
 ;;;;
 ;;;; toplevel-define-type := "(" "define-type" identifier docstring? constructor* ")"
 ;;;;                       | "(" "define-type" "(" identifier keyword+ ")" docstring? constructor* ")"
+;;;;
+;;;; struct-field := "(" identifier type ")"
+;;;;
+;;;; toplevel-define-struct := "(" "define-struct" identifier docstring? struct-field* ")"
+;;;;                         | "(" "define-struct" "(" identifier keyword+ ")" docstring? struct-field* ")"
 ;;;;
 ;;;; method-definition := "(" identifier qualified-ty ")"
 ;;;;
@@ -229,6 +251,38 @@
 
 (deftype toplevel-define-type-list ()
   '(satisfies toplevel-define-type-list-p))
+
+(defstruct (struct-field
+            (:copier nil))
+  (name   (util:required 'name)   :type string :read-only t)
+  (type   (util:required 'ty)     :type ty     :read-only t)
+  (source (util:required 'source) :type cons   :read-only t))
+
+(eval-when (:load-toplevel :compile-toplevel :execute)
+  (defun struct-field-list-p (x)
+    (and (alexandria:proper-list-p x)
+         (every #'struct-field-p x))))
+
+(deftype struct-field-list ()
+  '(satisfies struct-field-list-p))
+
+(defstruct (toplevel-define-struct
+            (:copier nil))
+  (name      (util:required 'name)      :type identifier-src           :read-only t)
+  (vars      (util:required 'vars)      :type keyword-src-list         :read-only t)
+  (docstring (util:required 'docstring) :type (or null string)         :read-only t)
+  (fields    (util:required 'fields)    :type struct-field-list        :read-only t)
+  (source    (util:required 'source)    :type cons                     :read-only t)
+  (repr      (util:required 'repr)      :type (or null attribute-repr) :read-only nil)
+  (head-src  (util:required 'head-src)  :type cons                     :read-only t))
+
+(eval-when (:load-toplevel :compile-toplevel :execute)
+  (defun toplevel-define-struct-list-p (x)
+    (and (alexandria:proper-list-p x)
+         (every #'toplevel-define-struct-p x))))
+
+(deftype toplevel-define-struct-list ()
+  '(satisfies toplevel-define-struct-list-p))
 
 (defstruct (toplevel-declare
             (:copier nil))
@@ -363,6 +417,7 @@
   (package         (util:required 'package)         :type package                       :read-only t)
   (file            (util:required 'file)            :type coalton-file                  :read-only t)
   (types           (util:required 'types)           :type toplevel-define-type-list     :read-only nil)
+  (structs         (util:required 'structs)         :type toplevel-define-struct-list   :read-only nil)
   (declares        (util:required 'declares)        :type toplevel-declare-list         :read-only nil)
   (defines         (util:required 'defines)         :type toplevel-define-list          :read-only nil)
   (classes         (util:required 'classes)         :type toplevel-define-class-list    :read-only nil)
@@ -412,6 +467,7 @@
                      :package *package*
                      :file file
                      :types nil
+                     :structs nil
                      :declares nil
                      :defines nil
                      :classes nil
@@ -450,6 +506,7 @@ consume all attributes"))))
                      :primary-note "attribute must be attached to another form")))
 
       (setf (program-types program) (nreverse (program-types program)))
+      (setf (program-structs program) (nreverse (program-structs program)))
       (setf (program-declares program) (nreverse (program-declares program)))
       (setf (program-defines program) (nreverse (program-defines program)))
       (setf (program-classes program) (nreverse (program-classes program)))
@@ -709,7 +766,7 @@ consume all attributes"))))
                                      :message "previous attribute here")
                                     (make-coalton-error-note
                                      :type :secondary
-                                     :span (identifier-src-source (toplevel-define-type-name type))
+                                     :span (toplevel-define-type-head-src type)
                                      :message "when parsing define-type")))))
 
                     (setf repr attribute)
@@ -726,12 +783,75 @@ consume all attributes"))))
                                  (list
                                   (make-coalton-error-note
                                    :type :secondary
-                                   :span (identifier-src-source (toplevel-define-type-name type))
+                                   :span (toplevel-define-type-head-src type)
                                    :message "when parsing define-type")))))))
 
        (setf (fill-pointer attributes) 0)
        (setf (toplevel-define-type-repr type) repr)
        (push type (program-types program))
+       t))
+
+    ((coalton:define-struct)
+
+     (let ((struct (parse-define-struct form file))
+           repr
+           repr-form)
+
+       (loop :for (attribute . attribute-form) :across attributes
+             :do (etypecase attribute
+                   (attribute-repr
+                    (when repr
+                      (error 'parse-error
+                             :err (coalton-error
+                                   :span (cst:source attribute-form)
+                                   :file file
+                                   :message "Duplicate repr attribute"
+                                   :primary-note "repr attribute here"
+                                   :notes
+                                   (list
+                                    (make-coalton-error-note
+                                     :type :secondary
+                                     :span (cst:source repr-form)
+                                     :message "previous attribute here")
+                                    (make-coalton-error-note
+                                     :type :secondary
+                                     :span (toplevel-define-struct-head-src struct) 
+                                     :message "when parsing define-struct")))))
+
+                    (unless (eq :transparent (keyword-src-name (attribute-repr-type attribute)))
+                      (error 'parse-error
+                             :err (coalton-error
+                                   :span (cst:source attribute-form)
+                                   :file file
+                                   :message "Invalid repr attribute"
+                                   :primary-note "structs can only be repr transparent"
+                                   :notes
+                                   (list
+                                    (make-coalton-error-note
+                                     :type :secondary
+                                     :span (toplevel-define-struct-head-src struct)
+                                     :message "when parsing define-struct")))))
+
+                    (setf repr attribute)
+                    (setf repr-form attribute-form))
+
+                   (attribute-monomorphize
+                    (error 'parse-error
+                           :err (coalton-error
+                                 :span (cst:source attribute-form)
+                                 :file file
+                                 :message "Invalid target for monomorphize attribute"
+                                 :primary-note "monomorphize must be attached to a define or declare form"
+                                 :notes
+                                 (list
+                                  (make-coalton-error-note
+                                   :type :secondary
+                                   :span (identifier-src-source (toplevel-define-struct-name struct))
+                                   :message "when parsing define-type")))))))
+
+       (setf (fill-pointer attributes) 0)
+       (setf (toplevel-define-struct-repr struct) repr)
+       (push struct (program-structs program))
        t))
 
     ((coalton:define-class)
@@ -1045,6 +1165,54 @@ consume all attributes")))
      :source (cst:source form)
      :head-src (cst:source (cst:second form)))))
 
+(defun parse-define-struct (form file)
+  (declare (type cst:cst form)
+           (type coalton-file file))
+
+  (assert (cst:consp form))
+
+  (let (unparsed-name
+        unparsed-variables
+        docstring)
+
+    ;; (define-struct)
+    (unless (cst:consp (cst:rest form))
+      (error 'parse-error
+             :err (coalton-error
+                   :span (cst:source form)
+                   :file file
+                   :message "Malformed struct definition"
+                   :primary-note "expected body"
+                   :highlight :end)))
+
+    (if (cst:atom (cst:second form))
+        ;; (deine-struct S ...)
+        (setf unparsed-name (cst:second form))
+
+        ;; (define-struct (S ...) ...)
+        (progn
+          (setf unparsed-name (cst:first (cst:second form)))
+          (setf unparsed-variables (cst:rest (cst:second form)))))
+
+    ;; (define-struct S "docstring" ...)
+    (when (and (cst:consp (cst:rest (cst:rest form)))
+               (cst:atom (cst:third form))
+               (stringp (cst:raw (cst:third form))))
+      (setf docstring (cst:raw (cst:third form))))
+
+    (make-toplevel-define-struct
+     :name (parse-identifier unparsed-name file)
+     :vars (when unparsed-variables
+             (parse-list #'parse-type-variable unparsed-variables file)) 
+     :docstring docstring
+     :fields (parse-list
+              #'parse-struct-field
+              (cst:nthrest (if docstring 3 2) form)
+              file)
+     :source (cst:source form)
+     :repr nil
+     :head-src (cst:source (cst:second form)))))
+
 (defun parse-define-class (form file)
   (declare (type cst:cst form)
            (type coalton-file file)
@@ -1146,8 +1314,8 @@ consume all attributes")))
       (cond
         ;; No predicates
         ((null right)
-            (setf unparsed-name (first left))
-            (setf unparsed-variables (rest left)))
+         (setf unparsed-name (first left))
+         (setf unparsed-variables (rest left)))
 
         ;; (... => (...) ...)
         ((and (cst:consp (second right))
@@ -1644,6 +1812,22 @@ consume all attributes")))
                  :message "Unexpected form"
                  :primary-note "expected an identifier")))
 
+  (when (string= "_" (symbol-name (cst:raw form)))
+    (error 'parse-error
+           :err (coalton-error
+                 :span (cst:source form)
+                 :file file
+                 :message "Invalid identifier"
+                 :primary-note "invalid identifier '_'")))
+
+  (when (char= #\. (aref (symbol-name (cst:raw form)) 0))
+    (error 'parse-error
+           :err (coalton-error
+                 :span (cst:source form)
+                 :file file
+                 :message "Invalid identifier"
+                 :primary-note "identifiers cannot start with '.'")))
+
   (make-identifier-src
    :name (cst:raw form)
    :source (cst:source form)))
@@ -1867,3 +2051,52 @@ consume all attributes")))
            :type type
            :arg nil
            :source (cst:source form))))))
+
+(defun parse-struct-field (form file)
+  (declare (type cst:cst form)
+           (type coalton-file file)
+           (values struct-field))
+
+  ;; 5
+  (unless (cst:consp form)
+    (error 'parse-error
+           :err (coalton-error
+                 :span (cst:source form)
+                 :file file
+                 :message "Malformed struct field"
+                 :primary-note "expected field name")))
+
+  ;; (name)
+  (unless (cst:consp (cst:rest form))
+    (error 'parse-error
+           :err (coalton-error
+                 :span (cst:source form)
+                 :file file
+                 :message "Malformed struct field"
+                 :primary-note "expected field type")))
+
+  ;; (name ty ...)
+  (when (cst:consp (cst:rest (cst:rest form)))
+    (error 'parse-error
+           :err (coalton-error
+                 :span (cst:source form)
+                 :file file
+                 :message "Malformed struct field"
+                 :primary-note "unexpected form"
+                 :highlight :end)))
+
+  ;; (5 ty)
+  (unless (and (cst:atom (cst:first form))
+               (symbolp (cst:raw (cst:first form))))
+    (error 'parse-error
+           :err (coalton-error
+                 :span (cst:source form)
+                 :file file
+                 :message "Malformed struct field"
+                 :primary-note "unexpected form"
+                 :highlight :end)))
+
+  (make-struct-field
+   :name (symbol-name (cst:raw (cst:first form)))
+   :type (parse-type (cst:second form) file)
+   :source (cst:source form)))

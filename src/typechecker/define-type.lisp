@@ -18,7 +18,6 @@
    (#:tc #:coalton-impl/typechecker/stage-1))
   (:export
    #:toplevel-define-type               ; FUNCTION
-
    #:type-definition                    ; STRUCT
    #:make-type-definition               ; CONSTRUCTOR
    #:type-definition-name               ; ACCESSOR
@@ -47,9 +46,15 @@
 
   (constructors      (util:required 'constructors)      :type tc:constructor-entry-list :read-only t)
   (constructor-types (util:required 'constructor-types) :type tc:scheme-list            :read-only t)
+  (constructor-args  (util:required 'constructor-args)  :type list                      :read-only t)
 
   (docstring         (util:required 'docstring)         :type (or null string)          :read-only t)
   (source            (util:required 'source)            :type cons                      :read-only t))
+
+(defstruct field-definition
+  (name   (util:required 'name)   :type symbol :read-only t)
+  (type   (util:required 'type)   :type tc:ty  :read-only t)
+  (source (util:required 'source) :type cons   :read-only t))
 
 (defun type-definition-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -58,17 +63,18 @@
 (deftype type-definition-list ()
   '(satisfies type-definition-list-p))
 
-(defun toplevel-define-type (types file env)
+(defun toplevel-define-type (types structs file env)
   (declare (type parser:toplevel-define-type-list types)
+           (type parser:toplevel-define-struct-list structs)
            (type coalton-file file)
            (type tc:environment env)
            (values type-definition-list parser:toplevel-define-instance-list tc:environment))
 
   ;; Ensure that all types are defined in the current package
   (check-package
-   types
-   (alexandria:compose #'parser:identifier-src-name #'parser:toplevel-define-type-name)
-   (alexandria:compose #'parser:identifier-src-source #'parser:toplevel-define-type-name)
+   (append types structs)
+   (alexandria:compose #'parser:identifier-src-name #'parser:type-definition-name)
+   (alexandria:compose #'parser:identifier-src-source #'parser:type-definition-name)
    file)
 
   ;; Ensure that all constructors are defined in the current package
@@ -80,12 +86,13 @@
 
   ;; Ensure that there are no duplicate type definitions
   (check-duplicates
-   types
-   (alexandria:compose #'parser:identifier-src-name #'parser:toplevel-define-type-name)
+   (append types structs)
+   (alexandria:compose #'parser:identifier-src-name #'parser:type-definition-name)
+   #'parser:type-definition-source
    (lambda (first second)
      (error 'tc-error
             :err (coalton-error
-                  :span (parser:toplevel-define-type-head-src first)
+                  :span (parser:type-definition-source first)
                   :file file
                   :message "Duplicate type definitions"
                   :primary-note "first definition here"
@@ -93,31 +100,35 @@
                   (list
                    (make-coalton-error-note
                     :type :primary
-                    :span (parser:toplevel-define-type-head-src second)
+                    :span (parser:type-definition-source second)
                     :message "second definition here"))))))
 
   ;; Ensure that there are no duplicate constructors
+  ;; NOTE: structs define a constructor with the same name
   (check-duplicates
-   (mapcan (alexandria:compose #'copy-list #'parser:toplevel-define-type-ctors) types)
-   (alexandria:compose #'parser:identifier-src-name #'parser:constructor-name)
+   (mapcan (alexandria:compose #'copy-list #'parser:type-definition-ctors)
+           (append types structs))
+   (alexandria:compose #'parser:identifier-src-name #'parser:type-definition-ctor-name)
+   #'parser:type-definition-ctor-source
    (lambda (first second)
      (error 'tc-error
             :err (coalton-error
-                  :span (parser:constructor-source first)
+                  :span (parser:type-definition-ctor-source first)
                   :file file
                   :message "Duplicate constructor definitions"
                   :primary-note "first definition here"
                   :notes
                   (list (make-coalton-error-note
                          :type :primary
-                         :span (parser:constructor-source second)
+                         :span (parser:type-definition-ctor-source second)
                          :message "second definition here"))))))
 
   ;; Ensure that no type has duplicate type variables
-  (loop :for type :in types
+  (loop :for type :in (append types structs)
         :do (check-duplicates
-             (parser:toplevel-define-type-vars type)
+             (parser:type-definition-vars type)
              #'parser:keyword-src-name
+             #'parser:keyword-src-source
              (lambda (first second)
                (error 'tc-error
                       :err (coalton-error
@@ -132,22 +143,22 @@
                                    :message "second definition here")))))))
 
   (let* ((type-names (mapcar (alexandria:compose #'parser:identifier-src-name
-                                                 #'parser:toplevel-define-type-name)
-                             types))
+                                                 #'parser:type-definition-name)
+                             (append types structs)))
 
          (type-dependencies
-           (loop :for type :in types
+           (loop :for type :in (append types structs)
                  :for referenced-types := (parser:collect-referenced-types type)
                  :collect (list*
-                           (parser:identifier-src-name (parser:toplevel-define-type-name type))
-                           (intersection type-names (mapcar #'parser:tycon-name referenced-types)))))
+                           (parser:identifier-src-name (parser:type-definition-name type))
+                           (intersection type-names (mapcar #'parser:tycon-name referenced-types) :test #'eq))))
 
          (sccs (algo:tarjan-scc type-dependencies))
 
          (type-table
            (loop :with table := (make-hash-table :test #'eq)
-                 :for type :in types
-                 :for type-name := (parser:identifier-src-name (parser:toplevel-define-type-name type))
+                 :for type :in (append types structs)
+                 :for type-name := (parser:identifier-src-name (parser:type-definition-name type))
                  :do (setf (gethash type-name table) type)
                  :finally (return table)))
 
@@ -164,8 +175,8 @@
 
            ;; Register each type in the partial type env
            :do (loop :for type :in scc
-                     :for name := (parser:identifier-src-name (parser:toplevel-define-type-name type))
-                     :for vars := (mapcar #'parser:keyword-src-name (parser:toplevel-define-type-vars type))
+                     :for name := (parser:identifier-src-name (parser:type-definition-name type))
+                     :for vars := (mapcar #'parser:keyword-src-name (parser:type-definition-vars type))
 
                      ;; Register each type's type variables in the environment. A
                      ;; mapping is stored from (type-name, var-name) to kind-variable
@@ -179,17 +190,28 @@
                      :for ty := (tc:make-tycon :name name :kind kind)
                      :do (partial-type-env-add-type partial-env name ty))
 
-           :append  (multiple-value-bind (type-definitions instances_)
+           :append  (multiple-value-bind (type-definitions instances_ ksubs)
                         (infer-define-type-scc-kinds scc partial-env file)
                       (setf instances (append instances instances_))
                       (loop :for type :in type-definitions
-                            :do (setf env (update-env-for-type-definition type env))
+
+                            :for parser-type := (gethash (type-definition-name type) type-table)
+
+                            :for vars := (tc:apply-ksubstitution
+                                          ksubs
+                                          (loop :for var :in (parser:type-definition-vars parser-type)
+                                                :for var-name := (parser:keyword-src-name var)
+                                                :collect (gethash var-name (partial-type-env-ty-table partial-env))))
+                            
+                            :do (setf env (update-env-for-type-definition type vars parser-type env))
                             :finally (return type-definitions))))
      instances
      env)))
 
-(defun update-env-for-type-definition (type env)
+(defun update-env-for-type-definition (type tyvars parsed-type env)
   (declare (type type-definition type)
+           (type tc:tyvar-list tyvars)
+           (type parser:type-definition parsed-type)
            (type tc:environment env)
            (values tc:environment))
 
@@ -207,6 +229,32 @@
                   (when (plusp (tc:constructor-entry-arity ctor-entry))
                     (setf env (tc:unset-function env constructor))))))
 
+  (if (typep parsed-type 'parser:toplevel-define-struct)
+      (let* ((fields (mapcar #'parser:struct-field-name (parser:toplevel-define-struct-fields parsed-type)))
+
+             (field-tys (loop :with table := (make-hash-table :test #'equal)
+                              :for field :in fields
+                              :for ty :in (first (type-definition-constructor-args type))
+                              :do (setf (gethash field table) ty)
+                              :finally (return table)))
+
+             (field-idx (loop :with table := (make-hash-table :test #'equal)
+                              :for field :in fields
+                              :for i :from 0
+                              :do (setf (gethash field table) i)
+                              :finally (return table))))
+
+        (setf env (tc:set-struct
+                   env
+                   (type-definition-name type)
+                   (tc:make-struct-entry
+                    :name (type-definition-name type)
+                    :fields fields
+                    :field-tys field-tys
+                    :field-idx field-idx))))
+
+      (setf env (tc:unset-struct env (type-definition-name type))))
+
   ;; Define type parsed type in the environment
   (setf env
         (tc:set-type
@@ -216,6 +264,7 @@
           :name (type-definition-name type)
           :runtime-type (type-definition-runtime-type type)
           :type (type-definition-type type)
+          :tyvars tyvars
           :constructors (mapcar #'tc:constructor-entry-name (type-definition-constructors type))
           :explicit-repr (type-definition-explicit-repr type)
           :enum-repr (type-definition-enum-repr type)
@@ -226,6 +275,7 @@
   ;; Define the type's constructors in the environment
   (loop :for ctor :in (type-definition-constructors type)
         :for ctor-type :in (type-definition-constructor-types type)
+
         :for ctor-name := (tc:constructor-entry-name ctor) :do
 
           ;; Add the constructor to the constructor environment
@@ -264,7 +314,7 @@
   env)
 
 (defun infer-define-type-scc-kinds (types env file)
-  (declare (type parser:toplevel-define-type-list types)
+  (declare (type parser:type-definition-list types)
            (type partial-type-env env)
            (type coalton-file file)
            (values type-definition-list parser:toplevel-define-instance-list))
@@ -275,10 +325,10 @@
 
     ;; Infer the kinds of each type
     (loop :for type :in types
-          :for name := (parser:identifier-src-name (parser:toplevel-define-type-name type))
-          :do (loop :for ctor :in (parser:toplevel-define-type-ctors type)
-                    :for ctor-name := (parser:identifier-src-name (parser:constructor-name ctor))
-                    :for fields := (loop :for field :in (parser:constructor-fields ctor)
+          :for name := (parser:identifier-src-name (parser:type-definition-name type))
+          :do (loop :for ctor :in (parser:type-definition-ctors type)
+                    :for ctor-name := (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
+                    :for fields := (loop :for field :in (parser:type-definition-ctor-field-types ctor)
                                          :collect (multiple-value-bind (type ksubs_)
                                                       (infer-type-kinds field tc:+kstar+ ksubs env file)
                                                     (setf ksubs ksubs_)
@@ -287,17 +337,19 @@
     
     ;; Redefine types with final inferred kinds in the environment
     (loop :for type :in types
-          :for name := (parser:identifier-src-name (parser:toplevel-define-type-name type))
+          :for name := (parser:identifier-src-name (parser:type-definition-name type))
           :for ty := (gethash name (partial-type-env-ty-table env))
           :for kind := (tc:apply-ksubstitution ksubs (tc:tycon-kind ty))
           :do (setf ksubs (tc:kind-monomorphize-subs (tc:kind-variables kind) ksubs))
-          :do (partial-type-env-replace-type env name (tc:make-tycon :name name :kind (tc:apply-ksubstitution ksubs kind))))
+          :do (partial-type-env-replace-type env name (tc:make-tycon
+                                                       :name name
+                                                       :kind (tc:apply-ksubstitution ksubs kind))))
 
     ;; Build type-definitions for each type in the scc
     (let ((instances nil))
       (values
        (loop :for type :in types
-             :for name := (parser:identifier-src-name (parser:toplevel-define-type-name type))
+             :for name := (parser:identifier-src-name (parser:type-definition-name type))
              :for tvars := (tc:apply-ksubstitution
                             ksubs
                             (mapcar (lambda (var)
@@ -306,16 +358,16 @@
                                        (parser:keyword-src-name var)
                                        (parser:keyword-src-source var)
                                        file))
-                                    (parser:toplevel-define-type-vars type)))
+                                    (parser:type-definition-vars type)))
 
-             :for repr := (parser:toplevel-define-type-repr type)
+             :for repr := (parser:type-definition-repr type)
              :for repr-type := (and repr (parser:keyword-src-name (parser:attribute-repr-type repr)))
              :for repr-arg := (and repr (eq repr-type :native) (cst:raw (parser:attribute-repr-arg repr))) 
 
              ;; Apply ksubs to find the type of each constructor
              :for constructor-types
-               := (loop :for ctor :in (parser:toplevel-define-type-ctors type)
-                        :for ctor-name := (parser:identifier-src-name (parser:constructor-name ctor))
+               := (loop :for ctor :in (parser:type-definition-ctors type)
+                        :for ctor-name := (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
                         :for ty
                           := (tc:make-function-type*
                               (tc:apply-ksubstitution ksubs (gethash ctor-name ctor-table))
@@ -323,6 +375,11 @@
                                (tc:apply-ksubstitution ksubs (gethash name (partial-type-env-ty-table env)))
                                tvars))
                         :collect (tc:quantify-using-tvar-order tvars (tc:qualify nil ty)))
+
+             :for constructor-args
+              := (loop :for ctor :in (parser:type-definition-ctors type)
+                       :for ctor-name := (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
+                       :collect (tc:apply-ksubstitution ksubs (gethash ctor-name ctor-table)))
 
              ;; Check that repr :enum types do not have any constructors with fields
              :when (eq repr-type :enum)
@@ -337,7 +394,7 @@
 
                    ;; Check that repr :transparent types have a single constructor
              :when (eq repr-type :transparent)
-               :do (unless (= 1 (length (parser:toplevel-define-type-ctors type)))
+               :do (unless (= 1 (length (parser:type-definition-ctors type)))
                      (error 'tc-error
                             :err (coalton-error
                                   :span (parser:toplevel-define-type-source type)
@@ -348,17 +405,20 @@
                    
                    ;; Check that the single constructor of a repr :transparent type has a single field
              :when (eq repr-type :transparent)
-               :do (unless (= 1 (length (parser:constructor-fields (first (parser:toplevel-define-type-ctors type)))))
+               :do (unless (= 1 (length (parser:type-definition-ctor-field-types (first (parser:type-definition-ctors type)))))
                      (error 'tc-error
                             :err (coalton-error
-                                  :span (parser:constructor-source (first (parser:toplevel-define-type-ctors type)))
+                                  :span (parser:type-definition-ctor-source (first (parser:type-definition-ctors type)))
                                   :file file
                                   :message "Invalid repr :transparent attribute"
                                   :primary-note "constructors of repr :transparent types must have a single field")))
 
              :collect (let* ((ctors
-                               (loop :for ctor :in (parser:toplevel-define-type-ctors type)
-                                     :for ctor-name := (parser:identifier-src-name (parser:constructor-name ctor))
+                               (loop :for ctor :in (parser:type-definition-ctors type)
+
+                                     :for ctor-name := (parser:identifier-src-name
+                                                        (parser:type-definition-ctor-name ctor))
+
                                      :for classname := (alexandria:format-symbol
                                                         *package*
                                                         "~A/~A"
@@ -366,7 +426,7 @@
                                                         ctor-name)
                                      :collect (tc:make-constructor-entry
                                                :name ctor-name
-                                               :arity (length (parser:constructor-fields ctor))
+                                               :arity (length (parser:type-definition-ctor-field-types ctor))
                                                :constructs name
                                                :classname classname
                                                :compressed-repr (if (eq repr-type :enum)
@@ -399,8 +459,9 @@
                                 :constructors ctors
 
                                 :constructor-types constructor-types
-                                :docstring (parser:toplevel-define-type-docstring type)
-                                :source (parser:toplevel-define-type-source type)))
+                                :constructor-args constructor-args
+                                :docstring (parser:type-definition-docstring type)
+                                :source (parser:type-definition-source type)))
 
                              (runtime-repr-instance (maybe-runtime-repr-instance type-definition)))
 
@@ -408,7 +469,8 @@
                           (push runtime-repr-instance instances))
 
                         type-definition))
-       instances))))
+       instances
+       ksubs))))
 
 (defun maybe-runtime-repr-instance (type)
   (declare (type type-definition type))
@@ -431,7 +493,7 @@
          (tvars (loop :for i :below (tc:kind-arity (tc:tycon-kind (type-definition-type type)))
                       :collect (parser:make-tyvar
                                 :source source
-                                :name (alexandria:format-symbol :keyword "~d" i))))
+                                :name (alexandria:format-symbol util:+keyword-package+ "~d" i))))
 
          (ty (parser:make-tycon
               :source source

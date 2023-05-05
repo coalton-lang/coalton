@@ -163,6 +163,38 @@ Returns a `node'.")
 
     (apply-dicts expr ctx env))
 
+  (:method ((expr tc:node-accessor) ctx env)
+    (declare (type pred-context ctx)
+             (type tc:environment env)
+             (values node))
+
+    (let* ((qual-ty (tc:node-type expr))
+           (ty (tc:qualified-ty-type qual-ty)))
+      (assert (null (tc:qualified-ty-predicates qual-ty)))
+
+      (unless (tc:function-type-p ty)
+        (util:coalton-bug "Invalid accessor type '~S'" ty))
+
+      (let ((from-ty (tc:base-type (tc:function-type-from ty))))
+
+        (unless (tc:tycon-p from-ty)
+          (util:coalton-bug "Invalid accessor type '~S'" ty))
+
+        (let* ((struct-entry (tc:lookup-struct env (tc:tycon-name from-ty)))
+
+               (idx (gethash (tc:node-accessor-name expr) (tc:struct-entry-field-idx struct-entry))))
+
+          (assert idx)
+
+          (make-node-variable
+           :type ty
+           :value (alexandria:format-symbol
+                   (symbol-package (tc:tycon-name from-ty))
+                   "~A/~A-_~D"
+                   (tc:tycon-name from-ty)
+                   (tc:tycon-name from-ty)
+                   idx))))))
+
   (:method ((expr tc:node-application) ctx env)
     (declare (type pred-context ctx)
              (type tc:environment env)

@@ -58,7 +58,15 @@
 
   (:method ((type toplevel-define-type))
     (declare (values tycon-list))
-    (mapcan #'collect-referenced-types-generic% (toplevel-define-type-ctors type))))
+    (mapcan #'collect-referenced-types-generic% (toplevel-define-type-ctors type)))
+
+  (:method ((field struct-field))
+    (declare (values tycon-list &optional))
+    (collect-referenced-types-generic% (struct-field-type field)))
+
+  (:method ((type toplevel-define-struct))
+    (declare (values tycon-list))
+    (mapcan #'collect-referenced-types-generic% (toplevel-define-struct-fields type))))
 
 (defun collect-type-variables (type)
   "Returns a deduplicated list of all `TYVAR's in TYPE."
@@ -118,6 +126,10 @@ in expressions. May not include all bound variables."
   (:method ((node node-variable))
     (declare (values node-variable-list))
     (list node))
+
+  (:method ((node node-accessor))
+    (declare (values node-variable-list))
+    nil)
 
   (:method ((node node-literal))
     (declare (values node-variable-list))

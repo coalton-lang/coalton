@@ -14,7 +14,9 @@ When making a new project, you will want to define a new package and establish y
 
 ```lisp
 (defpackage #:my-package
-  (:use #:coalton #:coalton-prelude))
+  (:use 
+   #:coalton 
+   #:coalton-prelude))
 ```
 
 The `#:coalton-prelude` package does not contain any functionality that isn't also found elsewhere in the standard library, and hence, it is a convenience.
@@ -23,18 +25,22 @@ In idiomatic usage, this minimal package definition would be far too limiting to
 
 ```lisp
 (defpackage #:my-package
-  (:use #:coalton)
-  (:local-nicknames (#:str #:coalton-library/string)))
+  (:use 
+   #:coalton)
+  (:local-nicknames 
+   (#:str #:coalton-library/string)))
 ```
 
 This way, we can now just type `str:strip-prefix`. Any time we make use of a new function, either from the Coalton standard library or from a third-party library, we might add nicknames that function's package to our `:local-nicknames` list. For example:
 
 ```lisp
 (defpackage #:my-package
-  (:use #:coalton)
-  (:local-nicknames (#:str  #:coalton-library/string)
-                    (#:vec  #:coalton-library/vector)
-                    (#:math #:coalton-library/math)))
+  (:use 
+   #:coalton)
+  (:local-nicknames 
+   (#:str  #:coalton-library/string)
+   (#:vec  #:coalton-library/vector)
+   (#:math #:coalton-library/math)))
 ```
 
 **We do not recommend `:use`ing any other Coalton built-in packages besides `#:coalton` and `#:coalton-prelude`.** Historically, in Common Lisp, this has caused backwards-compatibility issues when the packages themselves introduce new exported symbols. Moreover, unlike Common Lisp, Coalton follows a pattern of using the same symbol name for similarly defined functions of different packages. For example, both the string package and the vector package have a symbol named `length`, i.e., `str:length` and `vec:length` both exist.
@@ -265,6 +271,45 @@ Type definitions introduce type constructors. For example, we may construct a so
 ```
 
 We'll see how to unpack these types using `match` later in this document.
+
+
+### Structs
+
+There is also support for defining structs.
+
+```lisp
+(coalton-toplevel
+  (define-type Point
+    (x Integer)
+    (y Integer)))
+```
+
+Structs are like single constructor ADTs, and are constructed equivelently:
+
+```lisp
+(coalton (Point 1 2))
+```
+
+Field accessors can be used to read individual fields:
+
+```lisp
+(coalton (.x (Point 1 2)))
+```
+
+Field accessors can be passed by value:
+
+```
+(coalton (map .x (make-list (Point 1 2) (Point 2 3))))
+```
+
+Structs can also be parametric:
+
+```lisp
+(coalton-toplevel
+  (define-struct (Pair :a)
+    (first :a)
+    (second :a)))
+```
 
 ## Numbers
 
