@@ -20,6 +20,9 @@
    #:make-node-variable                 ; CONSTRUCTOR
    #:node-variable-name                 ; ACCESSOR
    #:node-variable-list                 ; TYPE
+   #:node-accessor                      ; STRUCT
+   #:make-node-accessor                 ; CONSTRUCTOR
+   #:node-accessor-name                 ; ACCESSOR
    #:node-literal                       ; STRUCT
    #:make-node-literal                  ; CONSTRUCTOR
    #:node-literal-value                 ; ACCESSOR
@@ -160,6 +163,11 @@
 
 (deftype node-variable-list ()
   '(satisfies node-variable-list-p))
+
+(defstruct (node-accessor
+            (:include node)
+            (:copier nil))
+  (name (util:required 'name) :type string :read-only t))
 
 (defstruct (node-literal
             (:include node)
@@ -348,6 +356,14 @@
    :type (tc:apply-substitution subs (node-type node))
    :source (node-source node)
    :name (node-variable-name node)))
+
+(defmethod tc:apply-substitution (subs (node node-accessor))
+  (declare (type tc:substitution-list subs)
+           (values node-accessor))
+  (make-node-accessor
+   :type (tc:apply-substitution subs (node-type node))
+   :source (node-source node)
+   :name (node-accessor-name node)))
 
 (defmethod tc:apply-substitution (subs (node node-literal))
   (declare (type tc:substitution-list subs)

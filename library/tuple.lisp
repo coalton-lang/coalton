@@ -34,14 +34,23 @@
     "Get the second element of a tuple."
     b)
 
-  (define-type (Tuple3 :a :b :c)
-    (Tuple3 :a :b :c))
+  (define-struct (Tuple3 :a :b :c)
+    (first :a)
+    (second :b)
+    (third :c))
 
-  (define-type (Tuple4 :a :b :c :d)
-    (Tuple4 :a :b :c :d))
+  (define-struct (Tuple4 :a :b :c :d)
+    (first :a)
+    (second :b)
+    (third :c)
+    (fourth :d))
 
-  (define-type (Tuple5 :a :b :c :d :e)
-    (Tuple5 :a :b :c :d :e))
+  (define-struct (Tuple5 :a :b :c :d :e)
+    (first :a)
+    (second :b)
+    (third :c)
+    (fourth :d)
+    (fifth :e))
 
   ;;
   ;; Tuple instances
@@ -69,11 +78,9 @@
 
   (define-instance ((Hash :a) (Hash :b) => Hash (Tuple :a :b))
     (define (hash item)
-      (match item
-        ((Tuple a b)
-         (combine-hashes
-          (hash a)
-          (hash b))))))
+      (combine-hashes
+       (hash (.first item))
+       (hash (.second item)))))
 
   (define-instance (Bifunctor Tuple)
     (define (bimap f g (Tuple a b))
@@ -85,55 +92,54 @@
 
   (define-instance ((Eq :a) (Eq :b) (Eq :c) => Eq (Tuple3 :a :b :c))
     (define (== a b)
-      (match (Tuple a b)
-        ((Tuple (Tuple3 a1 b1 c1)
-                (Tuple3 a2 b2 c2))
-         (and (== a1 a2)
-              (== b1 b2)
-              (== c1 c2))))))
+      (and (== (.first a)
+               (.first b))
+           (== (.second a)
+               (.second b))
+           (== (.third a)
+               (.third b)))))
 
   (define-instance ((Hash :a) (Hash :b) (Hash :c) => Hash (Tuple3 :a :b :c))
     (define (hash item)
-      (match item
-        ((Tuple3 a b c)
-         (combine-hashes
-          (hash a)
-          (combine-hashes
-           (hash b)
-           (hash c)))))))
+      (combine-hashes
+       (hash (.first item))
+       (combine-hashes
+        (hash (.second item))
+        (hash (.third item))))))
 
   (define-instance ((Eq :a) (Eq :b) (Eq :c) (Eq :d) => Eq (Tuple4 :a :b :c :d))
     (define (== a b)
-      (match (Tuple a b)
-        ((Tuple (Tuple4 a1 b1 c1 d1)
-                (Tuple4 a2 b2 c2 d2))
-         (and (== a1 a2)
-              (== b1 b2)
-              (== c1 c2)
-              (== d1 d2))))))
+      (and (== (.first a)
+               (.first b))
+           (== (.second a)
+               (.second b))
+           (== (.third a)
+               (.third b))
+           (== (.fourth a)
+               (.fourth b)))))
 
   (define-instance ((Hash :a) (Hash :b) (Hash :c) (Hash :d) => Hash (Tuple4 :a :b :c :d))
     (define (hash item)
-      (match item
-        ((Tuple4 a b c d)
-         (combine-hashes
-          (hash a)
-          (combine-hashes
-           (hash b)
-           (combine-hashes
-            (hash c)
-            (hash d))))))))
+      (combine-hashes
+       (hash (.first item))
+       (combine-hashes
+        (hash (.second item))
+        (combine-hashes
+         (hash (.third item))
+         (hash (.fourth item)))))))
 
   (define-instance ((Eq :a) (Eq :b) (Eq :c) (Eq :d) (Eq :e) => Eq (Tuple5 :a :b :c :d :e))
     (define (== a b)
-      (match (Tuple a b)
-        ((Tuple (Tuple5 a1 b1 c1 d1 e1)
-                (Tuple5 a2 b2 c2 d2 e2))
-         (and (== a1 a2)
-              (== b1 b2)
-              (== c1 c2)
-              (== d1 d2)
-              (== e1 e2))))))
+      (and (== (.first a)
+               (.first b))
+           (== (.second a)
+               (.second b))
+           (== (.third a)
+               (.third b))
+           (== (.fourth a)
+               (.fourth b))
+           (== (.fifth a)
+               (.fifth b)))))
 
   (define-instance ((Hash :a)
                     (Hash :b)
@@ -142,17 +148,15 @@
                     (Hash :e)
                     => Hash (Tuple5 :a :b :c :d :e))
     (define (hash item)
-      (match item
-        ((Tuple5 a b c d e)
+      (combine-hashes
+       (hash (.first item))
+       (combine-hashes
+        (hash (.second item))
+        (Combine-hashes
+         (hash (.third item))
          (combine-hashes
-          (hash a)
-          (combine-hashes
-           (hash b)
-           (combine-hashes
-            (hash c)
-            (combine-hashes
-             (hash d)
-             (hash e)))))))))
+          (hash (.fourth item))
+          (hash (.fifth item))))))))
 
   ;;
   ;; Default instances

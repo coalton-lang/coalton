@@ -46,6 +46,7 @@
    #:type-entry-name                        ; ACCESSOR
    #:type-entry-runtime-type                ; ACCESSOR
    #:type-entry-type                        ; ACCESSOR
+   #:type-entry-tyvars                      ; ACCESSOR
    #:type-entry-constructors                ; ACCESSOR
    #:type-entry-explicit-repr               ; ACCESSOR
    #:type-entry-enum-repr                   ; ACCESSOR
@@ -62,6 +63,14 @@
    #:constructor-entry-compressed-repr      ; ACCESSOR
    #:constructor-entry-list                 ; TYPE
    #:constructor-environment                ; STRUCT
+   #:struct-entry                           ; STRUCT
+   #:make-struct-entry                      ; CONSTRUCTOR
+   #:struct-entry-name                      ; ACCESSOR
+   #:struct-entry-fields                    ; ACCESSOR
+   #:struct-entry-field-tys                 ; ACCESSOR
+   #:struct-entry-field-idx                 ; ACCESSOR`
+   #:struct-entry-list                      ; TYPE
+   #:struct-environment                     ; STRUCT
    #:ty-class                               ; STRUCT
    #:make-ty-class                          ; CONSTRUCTOR
    #:ty-class-name                          ; ACCESSOR
@@ -128,6 +137,11 @@
    #:lookup-type                            ; FUNCTION
    #:set-type                               ; FUNCTION
    #:lookup-constructor                     ; FUNCTION
+   #:set-constructor                        ; FUNCTION
+   #:unset-constructor                      ; FUNCTION
+   #:lookup-struct                          ; FUNCTION
+   #:set-struct                             ; FUNCTION
+   #:unset-struct                           ; FUNCTION
    #:set-constructor                        ; FUNCTION
    #:unset-constructor                      ; FUNCTION
    #:lookup-class                           ; FUNCTION
@@ -205,10 +219,11 @@
     (cons (eql :native) (cons t null))))
 
 (defstruct type-entry
-  (name         (util:required 'name)         :type symbol  :read-only t)
-  (runtime-type (util:required 'runtime-type) :type t       :read-only t)
-  (type         (util:required 'type)         :type ty      :read-only t)
-  (constructors (util:required 'constructors) :type list    :read-only t)
+  (name         (util:required 'name)         :type symbol           :read-only t)
+  (runtime-type (util:required 'runtime-type) :type t                :read-only t)
+  (type         (util:required 'type)         :type ty               :read-only t)
+  (tyvars       (util:required 'tvars)        :type tyvar-list       :read-only t)
+  (constructors (util:required 'constructors) :type util:symbol-list :read-only t)
 
   ;; An explicit repr defined in the source, or nil if none was supplied. Computed repr will be reflected in
   ;; ENUM-REPR, NEWTYPE, and/or RUNTIME-TYPE.
@@ -245,7 +260,6 @@
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type type-environment))
 
-
 (defun make-default-type-environment ()
   "Create a TYPE-ENVIRONMENT containing early types"
   (make-type-environment
@@ -256,6 +270,7 @@
             :name 'coalton:Boolean
             :runtime-type 'cl:boolean
             :type *boolean-type*
+            :tyvars nil
             :constructors '(coalton:True coalton:False)
             :explicit-repr '(:native cl:boolean)
             :enum-repr t
@@ -268,6 +283,7 @@
             :name 'coalton:Unit
             :runtime-type '(member coalton::Unit/Unit)
             :type *unit-type*
+            :tyvars nil
             :constructors '(coalton:Unit)
             :explicit-repr :enum
             :enum-repr t
@@ -280,6 +296,7 @@
             :name 'coalton:Char
             :runtime-type 'cl:character
             :type *char-type*
+            :tyvars nil
             :constructors nil
             :explicit-repr '(:native cl:character)
             :enum-repr nil
@@ -292,6 +309,7 @@
             :name 'coalton:Integer
             :runtime-type 'cl:integer
             :type *integer-type*
+            :tyvars nil
             :constructors nil
             :explicit-repr '(:native cl:integer)
             :enum-repr nil
@@ -304,6 +322,7 @@
             :name 'coalton:Single-Float
             :runtime-type 'cl:single-float
             :type *single-float-type*
+            :tyvars nil
             :constructors nil
             :explicit-repr '(:native cl:single-float)
             :enum-repr nil
@@ -316,6 +335,7 @@
             :name 'coalton:Double-Float
             :runtime-type 'cl:double-float
             :type *double-float-type*
+            :tyvars nil
             :constructors nil
             :explicit-repr '(:native cl:double-float)
             :enum-repr nil
@@ -328,6 +348,7 @@
             :name 'coalton:String
             :runtime-type 'cl:string
             :type *string-type*
+            :tyvars nil
             :constructors nil
             :explicit-repr '(:native cl:string)
             :enum-repr nil
@@ -340,6 +361,7 @@
             :name 'coalton:Fraction
             :runtime-type 'cl:rational
             :type *fraction-type*
+            :tyvars nil
             :constructors nil
             :explicit-repr '(:native cl:rational)
             :enum-repr nil
@@ -352,6 +374,7 @@
             :name 'coalton:Arrow
             :runtime-type nil
             :type *arrow-type*
+            :tyvars nil
             :constructors nil
             :explicit-repr nil
             :enum-repr nil
@@ -364,6 +387,7 @@
             :name 'coalton:List
             :runtime-type 'cl:list
             :type *list-type*
+            :tyvars (list (make-variable))
             :constructors '(coalton:Cons coalton:Nil)
             :explicit-repr '(:native cl:list)
             :enum-repr nil
@@ -447,6 +471,33 @@
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type constructor-environment))
+
+;;;
+;;; Struct environment
+;;;
+
+(defstruct struct-entry
+  (name      (util:required 'name)      :type symbol           :read-only t)
+  (fields    (util:required 'fields)    :type util:string-list :read-only t)
+
+  ;; Mapping of "field name" -> "field type"
+  ;; Type variables are the same as in `type-entry-type'
+  (field-tys (util:required 'field-tys) :type hash-table       :read-only t)
+
+  ;; Mapping of "field name" -> "field index"
+  (field-idx (util:required 'field-idx) :type hash-table       :read-only t)h)
+
+(defmethod make-load-form ((self struct-entry) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
+(defun struct-entry-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'struct-entry-p x)))
+
+(deftype struct-entry-list ()
+  '(satisfies struct-entry-list-p))
+
+(defstruct (struct-environment (:include immutable-map)))
 
 ;;;
 ;;; Class environment
@@ -667,6 +718,7 @@
   (value-environment          (util:required 'value-environment)          :type value-environment          :read-only t)
   (type-environment           (util:required 'type-environment)           :type type-environment           :read-only t)
   (constructor-environment    (util:required 'constructor-environment)    :type constructor-environment    :read-only t)
+  (struct-environment         (util:required 'struct-environment)         :type struct-environment         :read-only t)
   (class-environment          (util:required 'class-environment)          :type class-environment          :read-only t)
   (fundep-environment         (util:required 'fundep-environment)         :type fundep-environment         :read-only t)
   (instance-environment       (util:required 'instance-environment)       :type instance-environment       :read-only t)
@@ -694,6 +746,7 @@
   (make-environment
    :value-environment (make-value-environment)
    :type-environment (make-default-type-environment)
+   :struct-environment (make-struct-environment)
    :constructor-environment (make-default-constructor-environment)
    :class-environment (make-class-environment)
    :fundep-environment (make-fundep-environment)
@@ -710,6 +763,7 @@
                              (value-environment (environment-value-environment env))
                              (type-environment (environment-type-environment env))
                              (constructor-environment (environment-constructor-environment env))
+                             (struct-environment (environment-struct-environment env))
                              (class-environment (environment-class-environment env))
                              (fundep-environment (environment-fundep-environment env))
                              (instance-environment (environment-instance-environment env))
@@ -722,6 +776,7 @@
   (declare (type environment env)
            (type value-environment value-environment)
            (type constructor-environment constructor-environment)
+           (type struct-environment struct-environment)
            (type class-environment class-environment)
            (type fundep-environment fundep-environment)
            (type instance-environment instance-environment)
@@ -736,6 +791,7 @@
    :value-environment value-environment
    :type-environment type-environment
    :constructor-environment constructor-environment
+   :struct-environment struct-environment
    :class-environment class-environment
    :fundep-environment fundep-environment
    :instance-environment instance-environment
@@ -849,6 +905,35 @@
                              (environment-constructor-environment env)
                              symbol
                              #'make-constructor-environment)))
+
+(defun lookup-struct (env symbol &key no-error)
+  (declare (type environment env)
+           (type symbol symbol))
+  (or (immutable-map-lookup (environment-struct-environment env) symbol)
+      (unless no-error
+        (util:coalton-bug "Unknown struct ~S" symbol))))
+
+(define-env-updater set-struct (env symbol value)
+  (declare (type environment env)
+           (type symbol symbol)
+           (type struct-entry value))
+  (update-environment
+   env
+   :struct-environment (immutable-map-set
+                        (environment-struct-environment env)
+                        symbol
+                        value
+                        #'make-struct-environment)))
+
+(define-env-updater unset-struct (env symbol)
+  (declare (type environment env)
+           (type symbol symbol))
+  (update-environment
+   env
+   :struct-environment (immutable-map-remove
+                        (environment-struct-environment env)
+                        symbol
+                        #'make-struct-environment)))
 
 (defun lookup-class (env symbol &key no-error)
   (declare (type environment env)

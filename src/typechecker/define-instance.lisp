@@ -229,6 +229,7 @@
     (check-duplicates
      (parser:toplevel-define-instance-methods unparsed-instance)
      (alexandria:compose #'parser:node-variable-name #'parser:instance-method-definition-name)
+     #'parser:instance-method-definition-source
      (lambda (first second)
        (error 'tc-error
               :err (coalton-error

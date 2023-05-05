@@ -13,6 +13,7 @@
 (defstruct (traverse-block
             (:conc-name traverse-))
   (variable        #'identity :type function :read-only t)
+  (accessor        #'identity :type function :read-only t)
   (literal         #'identity :type function :read-only t)
   (integer-literal #'identity :type function :read-only t)
   (bind            #'identity :type function :read-only t)
@@ -42,6 +43,12 @@
              (values node &optional))
 
     (funcall (traverse-variable block) node))
+
+  (:method ((node node-accessor) block)
+    (declare (type traverse-block block)
+             (values node &optional))
+
+    (funcall (traverse-accessor block) node))
 
   (:method ((node node-literal) block)
     (declare (type traverse-block block)

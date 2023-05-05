@@ -20,6 +20,9 @@
    #:make-node-variable                 ; CONSTRUCTOR
    #:node-variable-name                 ; ACCESSOR
    #:node-variable-list                 ; TYPE
+   #:node-accessor                      ; STRUCT
+   #:make-node-accessor                 ; CONSTRUCTOR
+   #:node-accessor-name                 ; ACCESSOR
    #:node-literal                       ; STRUCT
    #:make-node-literal                  ; CONSTRUCTOR
    #:node-literal-value                 ; ACCESSOR
@@ -145,7 +148,9 @@
 ;;;;
 ;;;; node-literal := <a lisp literal value>
 ;;;;
-;;;; node-variable := <a lisp symbol not including "_">
+;;;; node-variable := <a lisp symbol not including "_" or starting with ".">
+;;;;
+;;;; node-accessor := <a lisp symbol starting with ".">
 ;;;;
 ;;;; ty := <defined in src/parser/types.lisp>
 ;;;;
@@ -156,6 +161,7 @@
 ;;;; lisp-form := <an arbitrary lisp form>
 ;;;;
 ;;;; expression := node-variable
+;;;;             | node-accessor
 ;;;;             | node-literal
 ;;;;             | node-abstraction
 ;;;;             | node-let
@@ -246,6 +252,11 @@
 
 (deftype node-variable-list ()
   '(satisfies node-variable-list-p))
+
+(defstruct (node-accessor
+            (:include node)
+            (:copier nil))
+  (name (util:required 'name) :type string :read-only t))
 
 (defstruct (node-literal
             (:include node)
@@ -471,7 +482,10 @@
                      :message "Malformed expression"
                      :primary-note "unexpected `nil` or `()`")))
 
-       (symbol (parse-variable form file))
+       (symbol
+        (if (char= #\. (aref (symbol-name (cst:raw form)) 0))
+            (parse-accessor form file)
+            (parse-variable form file)))
 
        (t
         (parse-literal form file))))
@@ -921,8 +935,30 @@
                  :message "Invalid variable"
                  :primary-note "invalid variable name '_'")))
 
+  (when (char= #\. (aref (symbol-name (cst:raw form)) 0))
+    (error 'parse-error
+           :err (coalton-error
+                 :span (cst:source form)
+                 :file file
+                 :message "Invalid variable"
+                 :primary-note "variables cannot start with '.'")))
+
   (make-node-variable
    :name (cst:raw form)
+   :source (cst:source form)))
+
+(defun parse-accessor (form file)
+  (declare (type cst:cst form)
+           (type coalton-file file)
+           (ignore file)
+           (values node-accessor))
+
+  (assert (cst:atom form))
+  (assert (symbolp (cst:raw form)))
+  (assert (char= #\. (aref (symbol-name (cst:raw form)) 0)))
+
+  (make-node-accessor
+   :name (subseq (symbol-name (cst:raw form)) 1)
    :source (cst:source form)))
 
 (defun parse-literal (form file)

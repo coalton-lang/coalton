@@ -51,9 +51,10 @@
   ;; Base Types
   ;;
 
-  (define-type (Tuple :a :b)
+  (define-struct (Tuple :a :b)
     "A heterogeneous collection of items."
-    (Tuple :a :b))
+    (first :a)
+    (second :b))
 
   (define-type (Optional :a)
     "Represents something that may not have a value."

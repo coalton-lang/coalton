@@ -8,4 +8,5 @@
    #:coalton-impl/parser/toplevel
    #:coalton-impl/parser/collect
    #:coalton-impl/parser/renamer
-   #:coalton-impl/parser/binding))
+   #:coalton-impl/parser/binding
+   #:coalton-impl/parser/type-definition))

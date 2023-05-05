@@ -22,6 +22,7 @@
    #:declare
    #:define
    #:define-type
+   #:define-struct
    #:define-class
    #:define-instance
    #:repr

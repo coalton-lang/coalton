@@ -61,6 +61,7 @@
   (check-duplicates
    classes
    (alexandria:compose #'parser:identifier-src-name #'parser:toplevel-define-class-name)
+   #'parser:toplevel-define-class-source
    (lambda (first second)
      (error 'tc-error
             :err (coalton-error
@@ -79,6 +80,7 @@
   (check-duplicates
    (mapcan (alexandria:compose #'copy-list #'parser:toplevel-define-class-methods) classes)
    (alexandria:compose #'parser:identifier-src-name #'parser:method-definition-name)
+   #'parser:method-definition-source
    (lambda (first second)
      (error 'tc-error
             :err (coalton-error
@@ -98,6 +100,7 @@
     (check-duplicates
      (parser:toplevel-define-class-vars class)
      #'parser:keyword-src-name
+     #'parser:keyword-src-source
      (lambda (first second)
        (error 'tc-error
               :err (coalton-error
@@ -377,6 +380,7 @@
                (check-duplicates
                 vars
                 #'parser:keyword-src-name
+                #'parser:keyword-src-source
                 (lambda (first second)
                   (error 'tc-error
                          :err (coalton-error

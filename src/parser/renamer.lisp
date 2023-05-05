@@ -45,6 +45,14 @@
            node)
        ctx)))
 
+  (:method ((node node-accessor) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values node algo:immutable-map))
+
+    (values
+     node
+     ctx))
+
   (:method ((node node-literal) ctx)
     (declare (type algo:immutable-map ctx)
              (values node algo:immutable-map))
@@ -430,6 +438,7 @@
       :package (program-package program)
       :file (program-file program)
       :types (rename-type-variables (program-types program))
+      :structs (rename-type-variables (program-structs program))
       :declares (program-declares program)
       :defines (rename-variables-generic% (program-defines program) ctx)
       :classes (program-classes program) ; Class type variables are renamed during kind inference
@@ -537,6 +546,34 @@
        :source (toplevel-define-type-source toplevel)
        :repr (toplevel-define-type-repr toplevel)
        :head-src (toplevel-define-type-head-src toplevel))))
+
+  (:method ((field struct-field) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values struct-field))
+
+    (make-struct-field
+     :name (struct-field-name field)
+     :type (rename-type-variables-generic% (struct-field-type field) ctx)
+     :source (struct-field-source field)))
+
+  (:method ((toplevel toplevel-define-struct) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values toplevel-define-struct))
+
+    (let* ((tvars (mapcar #'keyword-src-name (toplevel-define-struct-vars toplevel)))
+
+           (new-bindings (make-local-vars tvars :package util:+keyword-package+))
+
+           (new-ctx (algo:immutable-map-set-multiple ctx new-bindings)))
+
+      (make-toplevel-define-struct
+       :name (toplevel-define-struct-name toplevel)
+       :vars (rename-type-variables-generic% (toplevel-define-struct-vars toplevel) new-ctx)
+       :docstring (toplevel-define-struct-docstring toplevel)
+       :fields (rename-type-variables-generic% (toplevel-define-struct-fields toplevel) new-ctx)
+       :source (toplevel-define-struct-source toplevel)
+       :repr (toplevel-define-struct-repr toplevel)
+       :head-src (toplevel-define-struct-head-src toplevel))))
 
   (:method ((fundep fundep) ctx)
     (declare (type algo:immutable-map ctx)

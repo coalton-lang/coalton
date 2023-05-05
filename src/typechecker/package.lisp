@@ -7,6 +7,7 @@
    #:coalton-impl/typechecker/traverse
    #:coalton-impl/typechecker/toplevel
    #:coalton-impl/typechecker/binding
+   #:coalton-impl/typechecker/accessor
    #:coalton-impl/typechecker/partial-type-env
    #:coalton-impl/typechecker/parse-type
    #:coalton-impl/typechecker/define-type

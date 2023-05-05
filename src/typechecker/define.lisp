@@ -22,6 +22,7 @@
    #:coalton-impl/typechecker/expression
    #:coalton-impl/typechecker/traverse
    #:coalton-impl/typechecker/toplevel
+   #:coalton-impl/typechecker/accessor
    #:coalton-impl/typechecker/tc-env)
   (:local-nicknames
    (#:util #:coalton-impl/util)
@@ -117,6 +118,7 @@
   (check-duplicates
    defines
    (alexandria:compose #'parser:node-variable-name #'parser:toplevel-define-name)
+   #'parser:toplevel-define-source
    (lambda (first second)
      (error 'tc-error
             :err (coalton-error
@@ -135,6 +137,7 @@
   (check-duplicates
    declares
    (alexandria:compose #'parser:identifier-src-name #'parser:toplevel-declare-name)
+   #'parser:toplevel-define-source
    (lambda (first second)
      (error 'tc-error
             :err (coalton-error
@@ -182,9 +185,10 @@
           :do (setf (gethash name dec-table) ty))
 
     ;; Infer binding types, returning the typed nodes.
-    (multiple-value-bind (preds binding-nodes subs)
+    (multiple-value-bind (preds accessors binding-nodes subs)
         (infer-bindings-type defines dec-table nil tc-env file)
       (assert (null preds))
+      (assert (null accessors))
 
       (let (;; Attach explicit types to any explicit bindings
 
@@ -237,7 +241,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc:substitution-list subs)
              (type tc-env env)
              (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list node-literal tc:substitution-list))
+             (values tc:ty tc:ty-predicate-list accessor-list node-literal tc:substitution-list))
 
     (let ((ty (etypecase (parser:node-literal-value node)
                 (ratio tc:*fraction-type*)
@@ -252,6 +256,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
             (let ((type (tc:apply-substitution subs ty)))
               (values
                type
+               nil
                nil
                (make-node-literal
                 :type (tc:qualify nil type)
@@ -268,12 +273,44 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                              (tc:apply-substitution subs expected-type)
                                              (tc:apply-substitution subs ty))))))))
 
+  (:method ((node parser:node-accessor) expected-type subs env file)
+    (declare (type tc:ty expected-type)
+             (type tc:substitution-list subs)
+             (type tc-env env)
+             (type coalton-file file)
+             (values tc:ty tc:ty-predicate-list accessor-list node-accessor tc:substitution-list))
+
+    (let* ((from-ty (tc:make-variable))
+
+           (to-ty (tc:make-variable))
+
+           (ty (tc:make-function-type from-ty to-ty)))
+
+      (handler-case
+          (progn
+            (setf subs (tc:unify subs ty expected-type))
+            (let ((type (tc:apply-substitution subs ty)))
+              (values
+               type
+               nil
+               (list
+                (make-accessor
+                 :from from-ty
+                 :to to-ty
+                 :field (parser:node-accessor-name node)
+                 :source (parser:node-source node)))
+               (make-node-accessor
+                :type (tc:qualify nil type)
+                :source (parser:node-source node)
+                :name (parser:node-accessor-name node))
+               subs))))))
+
   (:method ((node parser:node-integer-literal) expected-type subs env file)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
              (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list node-integer-literal tc:substitution-list))
+             (values tc:ty tc:ty-predicate-list accessor-list node-integer-literal tc:substitution-list))
 
     (let* ((classes-package (find-package "COALTON-LIBRARY/CLASSES"))
 
@@ -290,6 +327,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
               (values
                type
                (list pred)
+               nil
                (make-node-integer-literal
                 :type (tc:qualify nil type)
                 :source (parser:node-source node)
@@ -310,7 +348,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc:substitution-list subs)
              (type tc-env env)
              (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list node-variable tc:substitution-list))
+             (values tc:ty tc:ty-predicate-list accessor-list node-variable tc:substitution-list))
 
     (multiple-value-bind (ty preds)
         (tc-env-lookup-value env node file)
@@ -324,6 +362,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
               (values
                type
                preds
+               nil
                (make-node-variable
                 :type (tc:qualify preds type)
                 :source (parser:node-source node)
@@ -344,9 +383,9 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc:substitution-list subs)
              (type tc-env env)
              (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list node-application tc:substitution-list))
+             (values tc:ty tc:ty-predicate-list accessor-list node-application tc:substitution-list))
 
-    (multiple-value-bind (fun-ty preds rator-node subs)
+    (multiple-value-bind (fun-ty preds accessors rator-node subs)
         (infer-expression-type (parser:node-application-rator node)
                                (tc:make-variable)
                                subs
@@ -366,7 +405,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                      :collect (cond
                                 ;; If the rator is a function then unify against its argument
                                 ((tc:function-type-p fun-ty_)
-                                 (multiple-value-bind (ty_ preds_ node_ subs_)
+                                 (multiple-value-bind (ty_ preds_ accessors_ node_ subs_)
                                      (infer-expression-type rand
                                                             (tc:function-type-from fun-ty_)
                                                             subs
@@ -374,6 +413,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                                             file)
                                    (declare (ignore ty_))
                                    (setf preds (append preds preds_))
+                                   (setf accessors (append accessors accessors_))
                                    (setf subs subs_)
                                    (setf fun-ty_ (tc:function-type-to fun-ty_))
 
@@ -388,7 +428,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                         (new-ty (tc:make-function-type new-from new-to)))
 
                                    (setf subs (tc:unify subs fun-ty_ new-ty))
-                                   (multiple-value-bind (ty_ preds_ node_ subs_)
+                                   (multiple-value-bind (ty_ preds_ accessors_ node_ subs_)
                                        (infer-expression-type rand
                                                               new-from
                                                               subs
@@ -396,6 +436,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                                               file)
                                      (declare (ignore ty_))
                                      (setf preds (append preds preds_))
+                                     (setf accessors (append accessors accessors_))
                                      (setf subs subs_)
                                      (setf fun-ty_ new-to)
 
@@ -425,6 +466,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                 (values
                  type
                  preds
+                 accessors
                  (make-node-application
                   :type (tc:qualify nil type)
                   :source (parser:node-source node)
@@ -446,9 +488,9 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc:substitution-list subs)
              (type tc-env env)
              (type coalton-file file)
-             (values null tc:ty-predicate-list node-bind tc:substitution-list))
+             (values null tc:ty-predicate-list accessor-list node-bind tc:substitution-list))
 
-    (multiple-value-bind (expr-ty preds expr-node subs)
+    (multiple-value-bind (expr-ty preds accessors expr-node subs)
         (infer-expression-type (parser:node-bind-expr node)
                                (tc:make-variable)
                                subs
@@ -466,6 +508,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
         (values
          nil                ; return nil as this is always thrown away
          preds
+         accessors
          (make-node-bind
           ;; NOTE: We don't attach type here because NODE-BIND has no
           ;; meaningful type.
@@ -479,27 +522,31 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc:substitution-list subs)
              (type tc-env env)
              (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list node-body tc:substitution-list))
+             (values tc:ty tc:ty-predicate-list accessor-list node-body tc:substitution-list))
 
     (let* ((preds nil)
+           (accessors nil)
 
            ;; Infer the type of each node
            (body-nodes
              (loop :for node_ :in (parser:node-body-nodes node)
-                   :collect (multiple-value-bind (node_ty_ preds_ node_ subs_)
+                   :collect (multiple-value-bind (node_ty_ preds_ accessors_ node_ subs_)
                                 (infer-expression-type node_ (tc:make-variable) subs env file)
                               (declare (ignore node_ty_))
                               (setf subs subs_)
                               (setf preds (append preds preds_))
+                              (setf accessors (append accessors accessors_))
                               node_))))
 
-      (multiple-value-bind (ty preds_ last-node subs)
+      (multiple-value-bind (ty preds_ accessors_ last-node subs)
           (infer-expression-type (parser:node-body-last-node node) expected-type subs env file)
         (setf preds (append preds preds_))
+        (setf accessors (append accessors accessors_))
 
         (values
          ty
          preds
+         accessors
          (make-node-body
           :nodes body-nodes
           :last-node last-node)
@@ -510,11 +557,12 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc:substitution-list subs)
              (type tc-env env)
              (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list node-abstraction tc:substitution-list))
+             (values tc:ty tc:ty-predicate-list accessor-list node-abstraction tc:substitution-list))
 
     (check-duplicates
      (parser:pattern-variables (parser:node-abstraction-params node))
      #'parser:pattern-var-name
+     #'parser:pattern-source
      (lambda (first second)
        (error 'tc-error
               :err (coalton-error
@@ -552,7 +600,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                   (setf subs subs_)
                                   pattern)))))
 
-      (multiple-value-bind (body-ty preds body-node subs)
+      (multiple-value-bind (body-ty preds accessors body-node subs)
           (infer-expression-type (parser:node-abstraction-body node)
                                  (tc:make-variable)
                                  subs
@@ -609,6 +657,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                   (values
                    type
                    preds
+                   accessors
                    (make-node-abstraction
                     :type (tc:qualify nil type)
                     :source (parser:node-source node)
@@ -630,12 +679,13 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc:substitution-list subs)
              (type tc-env env)
              (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list node-let tc:substitution-list))
+             (values tc:ty tc:ty-predicate-list accessor-list node-let tc:substitution-list))
 
     ;; Ensure that there are no duplicate let bindings
     (check-duplicates
      (parser:node-let-bindings node)
      (alexandria:compose #'parser:node-variable-name #'parser:node-let-binding-name)
+     #'parser:node-let-binding-source
      (lambda (first second)
        (error 'tc-error
               :err (coalton-error
@@ -650,20 +700,22 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                       :span (parser:node-let-binding-source second)
                       :message "second definition here"))))))
 
-    (multiple-value-bind (preds binding-nodes subs)
+    (multiple-value-bind (preds accessors binding-nodes subs)
         (infer-let-bindings (parser:node-let-bindings node) (parser:node-let-declares node) subs env file)
 
-      (multiple-value-bind (ty preds_ body-node subs)
+      (multiple-value-bind (ty preds_ accessors_ body-node subs)
           (infer-expression-type (parser:node-let-body node)
                                  expected-type ; pass through expected type
                                  subs
                                  env
                                  file)
         (setf preds (append preds preds_))
+        (setf accessors (append accessors accessors_))
 
         (values
          ty
          preds
+         accessors
          (make-node-let
           :type (tc:qualify nil ty)
           :source (parser:node-source node)
@@ -676,7 +728,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc:substitution-list subs)
              (type tc-env env)
              (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list node-lisp tc:substitution-list))
+             (values tc:ty tc:ty-predicate-list accessor-list node-lisp tc:substitution-list))
 
     (let ((declared-ty (parse-type (parser:node-lisp-type node) (tc-env-env env) file)))
 
@@ -694,6 +746,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                             (parser:node-lisp-vars node))))
               (values
                type
+               nil
                nil
                (make-node-lisp
                 :type (tc:qualify nil type)
@@ -717,10 +770,10 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc:substitution-list subs)
              (type tc-env env)
              (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list node-match tc:substitution-list))
+             (values tc:ty tc:ty-predicate-list accessor-list node-match tc:substitution-list))
 
     ;; Infer the type of the expression being cased on
-    (multiple-value-bind (expr-ty preds expr-node subs)
+    (multiple-value-bind (expr-ty preds accessors expr-node subs)
         (infer-expression-type (parser:node-match-expr node)
                                (tc:make-variable)
                                subs
@@ -743,11 +796,12 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (branch-body-nodes
                (loop :for branch :in (parser:node-match-branches node)
                      :for body := (parser:node-match-branch-body branch)
-                     :collect (multiple-value-bind (body-ty preds_ body-node subs_)
+                     :collect (multiple-value-bind (body-ty preds_ accessors_ body-node subs_)
                                   (infer-expression-type body ret-ty subs env file)
                                 (declare (ignore body-ty))
                                 (setf subs subs_)
                                 (setf preds (append preds preds_))
+                                (setf accessors (append accessors accessors_))
                                 body-node)))
 
              (branch-nodes
@@ -766,6 +820,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                 (values
                  type
                  preds
+                 accessors
                  (make-node-match
                   :type (tc:qualify nil type)
                   :source (parser:node-source node)
@@ -787,9 +842,9 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc:substitution-list subs)
              (type tc-env env)
              (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list node-progn tc:substitution-list &optional))
+             (values tc:ty tc:ty-predicate-list accessor-list node-progn tc:substitution-list &optional))
 
-    (multiple-value-bind (body-ty preds body-node subs)
+    (multiple-value-bind (body-ty preds accessors body-node subs)
         (infer-expression-type (parser:node-progn-body node)
                                expected-type
                                subs
@@ -798,6 +853,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
       (values
        body-ty
        preds
+       accessors
        (make-node-progn
         :type (tc:qualify nil body-ty)
         :source (parser:node-source node)
@@ -809,11 +865,11 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc:substitution-list subs)
              (type tc-env env)
              (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list node tc:substitution-list))
+             (values tc:ty tc:ty-predicate-list accessor-list node tc:substitution-list))
 
     (let ((declared-ty (parse-type (parser:node-the-type node) (tc-env-env env) file)))
 
-      (multiple-value-bind (expr-ty preds expr-node subs)
+      (multiple-value-bind (expr-ty preds accessors expr-node subs)
           (infer-expression-type (parser:node-the-expr node)
                                  (tc:make-variable)
                                  subs
@@ -860,6 +916,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
               (values
                (tc:apply-substitution subs expr-ty)
                preds
+               accessors
                expr-node
                subs))
           (error:coalton-internal-type-error ()
@@ -877,7 +934,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc:substitution-list subs)
              (type tc-env env)
              (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list node-return tc:substitution-list))
+             (values tc:ty tc:ty-predicate-list accessor-list node-return tc:substitution-list))
 
     ;; Returns must be inside a lambda
     (when (eq *return-status* :toplevel)
@@ -897,7 +954,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                    :message "Invalid return"
                    :primary-note "returns cannot be in a do expression")))
 
-    (multiple-value-bind (ty preds expr-node subs)
+    (multiple-value-bind (ty preds accessors expr-node subs)
         (infer-expression-type (or (parser:node-return-expr node)
                                    ;; If the return looks like (return) then it returns unit
                                    (parser:make-node-variable
@@ -914,6 +971,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
       (values
        expected-type
        preds
+       accessors
        (make-node-return
         :type (tc:qualify nil expected-type)
         :source (parser:node-source node)
@@ -925,13 +983,14 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc:substitution-list subs)
              (type tc-env env)
              (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list node-or tc:substitution-list))
+             (values tc:ty tc:ty-predicate-list accessor-list node-or tc:substitution-list))
 
     (let* ((preds nil)
+           (accessors nil)
 
            (body-nodes
              (loop :for node_ :in (parser:node-or-nodes node)
-                   :collect (multiple-value-bind (node_ty_ preds_ node_ subs_)
+                   :collect (multiple-value-bind (node_ty_ preds_ accessors_ node_ subs_)
                                 (infer-expression-type node_
                                                        tc:*boolean-type*
                                                        subs
@@ -940,6 +999,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                               (declare (ignore node_ty_))
                               (setf subs subs_)
                               (setf preds (append preds preds_))
+                              (setf accessors (append accessors accessors_))
                               node_))))
 
       (handler-case
@@ -948,6 +1008,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
             (values
              tc:*boolean-type*
              preds
+             accessors
              (make-node-or
               :type (tc:qualify nil tc:*boolean-type*)
               :source (parser:node-source node)
@@ -968,13 +1029,14 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc:substitution-list subs)
              (type tc-env env)
              (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list node-and tc:substitution-list))
+             (values tc:ty tc:ty-predicate-list accessor-list node-and tc:substitution-list))
 
     (let* ((preds nil)
+           (accessors nil)
 
            (body-nodes
              (loop :for node_ :in (parser:node-and-nodes node)
-                   :collect (multiple-value-bind (node_ty_ preds_ node_ subs_)
+                   :collect (multiple-value-bind (node_ty_ preds_ accessors_ node_ subs_)
                                 (infer-expression-type node_
                                                        tc:*boolean-type*
                                                        subs
@@ -983,6 +1045,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                               (declare (ignore node_ty_))
                               (setf subs subs_)
                               (setf preds (append preds preds_))
+                              (setf accessors (append accessors accessors_))
                               node_))))
 
       (handler-case
@@ -991,6 +1054,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
             (values
              tc:*boolean-type*
              preds
+             accessors
              (make-node-and
               :type (tc:qualify nil tc:*boolean-type*)
               :source (parser:node-source node)
@@ -1011,9 +1075,9 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc:substitution-list subs)
              (type tc-env env)
              (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list node-if tc:substitution-list))
+             (values tc:ty tc:ty-predicate-list accessor-list node-if tc:substitution-list))
 
-    (multiple-value-bind (expr-ty preds expr-node subs)
+    (multiple-value-bind (expr-ty preds accessors expr-node subs)
         (infer-expression-type (parser:node-if-expr node)
                                tc:*boolean-type* ; unify predicate against boolean
                                subs
@@ -1021,7 +1085,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                file)
       (declare (ignore expr-ty))
 
-      (multiple-value-bind (then-ty preds_ then-node subs)
+      (multiple-value-bind (then-ty preds_ accessors_ then-node subs)
           (infer-expression-type (parser:node-if-then node)
                                  expected-type
                                  subs
@@ -1029,20 +1093,23 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                  file)
         (declare (ignore then-ty))
         (setf preds (append preds preds_))
+        (setf accessors (append accessors accessors_))
 
-        (multiple-value-bind (else-ty preds_ else-node subs)
+        (multiple-value-bind (else-ty preds_ accessors_ else-node subs)
             (infer-expression-type (parser:node-if-else node)
                                    expected-type
                                    subs
                                    env
                                    file)
           (setf preds (append preds preds_))
+          (setf accessors (append accessors accessors_))
 
           (handler-case
               (let ((type (tc:apply-substitution subs else-ty)))
                 (values
                  type
                  preds
+                 accessors
                  (make-node-if
                   :type (tc:qualify nil type)
                   :source (parser:node-source node)
@@ -1065,9 +1132,9 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc:substitution-list subs)
              (type tc-env env)
              (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list node-when tc:substitution-list))
+             (values tc:ty tc:ty-predicate-list accessor-list node-when tc:substitution-list))
 
-    (multiple-value-bind (expr-ty preds expr-node subs)
+    (multiple-value-bind (expr-ty preds accessors expr-node subs)
         (infer-expression-type (parser:node-when-expr node)
                                tc:*boolean-type*
                                subs
@@ -1075,13 +1142,14 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                file)
       (declare (ignore expr-ty))
 
-      (multiple-value-bind (body-ty preds_ body-node subs)
+      (multiple-value-bind (body-ty preds_ accessors_ body-node subs)
           (infer-expression-type (parser:node-when-body node)
                                  tc:*unit-type*
                                  subs
                                  env
                                  file)
         (setf preds (append preds preds_))
+        (setf accessors (append accessors accessors_))
 
         (handler-case
             (progn
@@ -1089,6 +1157,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
               (values
                tc:*unit-type*
                preds
+               accessors
                (make-node-when
                 :type (tc:qualify nil tc:*unit-type*)
                 :source (parser:node-source node)
@@ -1110,9 +1179,9 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc:substitution-list subs)
              (type tc-env env)
              (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list node-unless tc:substitution-list))
+             (values tc:ty tc:ty-predicate-list accessor-list node-unless tc:substitution-list))
 
-    (multiple-value-bind (expr-ty preds expr-node subs)
+    (multiple-value-bind (expr-ty preds accessors expr-node subs)
         (infer-expression-type (parser:node-unless-expr node)
                                tc:*boolean-type*
                                subs
@@ -1120,13 +1189,14 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                file)
       (declare (ignore expr-ty))
 
-      (multiple-value-bind (body-ty preds_ body-node subs)
+      (multiple-value-bind (body-ty preds_ accessors_ body-node subs)
           (infer-expression-type (parser:node-unless-body node)
                                  tc:*unit-type*
                                  subs
                                  env
                                  file)
         (setf preds (append preds preds_))
+        (setf accessors (append accessors accessors_))
 
         (handler-case
             (progn
@@ -1134,6 +1204,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
               (values
                tc:*unit-type*
                preds
+               accessors
                (make-node-unless
                 :type (tc:qualify nil tc:*unit-type*)
                 :source (parser:node-source node)
@@ -1155,9 +1226,9 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc:substitution-list subs)
              (type tc-env env)
              (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list node-cond-clause tc:substitution-list))
+             (values tc:ty tc:ty-predicate-list accessor-list node-cond-clause tc:substitution-list))
 
-    (multiple-value-bind (expr-ty preds expr-node subs)
+    (multiple-value-bind (expr-ty preds accessors expr-node subs)
         (infer-expression-type (parser:node-cond-clause-expr node)
                                tc:*boolean-type*
                                subs
@@ -1165,18 +1236,20 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                file)
       (declare (ignore expr-ty))
 
-      (multiple-value-bind (body-ty preds_ body-node subs)
+      (multiple-value-bind (body-ty preds_ accessors_ body-node subs)
           (infer-expression-type (parser:node-cond-clause-body node)
                                  expected-type ; unify against expected-type
                                  subs
                                  env
                                  file)
         (setf preds (append preds preds_))
+        (setf accessors (append accessors accessors_))
 
         (let ((type (tc:apply-substitution subs body-ty)))
           (values
            type
            preds
+           accessors
            (make-node-cond-clause
             :source (parser:node-cond-clause-source node)
             :expr expr-node
@@ -1188,15 +1261,16 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc:substitution-list subs)
              (type tc-env env)
              (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list node-cond tc:substitution-list))
+             (values tc:ty tc:ty-predicate-list accessor-list node-cond tc:substitution-list))
 
     (let* ((preds nil)
+           (accessors nil)
 
            (ret-ty (tc:make-variable))
 
            (clause-nodes
              (loop :for clause :in (parser:node-cond-clauses node)
-                   :collect (multiple-value-bind (clause-ty preds_ clause-node subs_)
+                   :collect (multiple-value-bind (clause-ty preds_ accessors_ clause-node subs_)
                                 (infer-expression-type clause
                                                        ret-ty
                                                        subs
@@ -1205,6 +1279,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                               (declare (ignore clause-ty))
                               (setf subs subs_)
                               (setf preds (append preds preds_))
+                              (setf accessors (append accessors accessors_))
                               clause-node))))
 
       (handler-case
@@ -1214,6 +1289,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
               (values
                type
                preds
+               accessors
                (make-node-cond
                 :type (tc:qualify nil type)
                 :source (parser:node-source node)
@@ -1234,11 +1310,11 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc:substitution-list subs)
              (type tc-env env)
              (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list node-do-bind tc:substitution-list))
+             (values tc:ty tc:ty-predicate-list accessor-list node-do-bind tc:substitution-list))
 
     (let ((*return-status* :do))
 
-      (multiple-value-bind (expr-ty preds expr-node subs)
+      (multiple-value-bind (expr-ty preds accessors expr-node subs)
           (infer-expression-type (parser:node-do-bind-expr node)
                                  expected-type ; unify here so that expr-ty is in the form "m a"
                                  subs
@@ -1259,6 +1335,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                 (values
                  expr-ty
                  preds
+                 accessors
                  (make-node-do-bind
                   :pattern pattern
                   :expr expr-node
@@ -1279,7 +1356,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc:substitution-list subs)
              (type tc-env env)
              (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list node-do tc:substitution-list))
+             (values tc:ty tc:ty-predicate-list accessor-list node-do tc:substitution-list))
 
     (let* (;; m-type is the type of the monad and has kind "* -> *"
            (m-type (tc:make-variable (tc:make-kfun :from tc:+kstar+ :to tc:+kstar+)))
@@ -1289,6 +1366,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
            (monad-symbol (util:find-symbol "MONAD" classes-package))
 
            (preds nil)
+           (accessors nil)
 
            (nodes
              (loop :for elem :in (parser:node-do-nodes node)
@@ -1297,7 +1375,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                               ;; and then unified against "m a" where
                               ;; "a" is a fresh tyvar each time
                               (parser:node
-                               (multiple-value-bind (ty_ preds_ node_ subs_)
+                               (multiple-value-bind (ty_ preds_ accessors_ node_ subs_)
                                    (infer-expression-type elem
                                                           (tc:make-tapp
                                                            :from m-type
@@ -1307,12 +1385,13 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                                           file)
                                  (declare (ignore ty_))
                                  (setf preds (append preds preds_))
+                                 (setf accessors (append accessors accessors_))
                                  (setf subs subs_)
                                  node_))
 
                               ;; Node-binds are typechecked normally
                               (parser:node-bind
-                               (multiple-value-bind (ty_ preds_ node_ subs_)
+                               (multiple-value-bind (ty_ preds_ accessors_ node_ subs_)
                                    (infer-expression-type elem
                                                           (tc:make-variable)
                                                           subs
@@ -1320,12 +1399,13 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                                           file)
                                  (declare (ignore ty_))
                                  (setf preds (append preds preds_))
+                                 (setf accessors (append accessors accessors_))
                                  (setf subs subs_)
                                  node_))
 
                               ;; Node-do-binds are typechecked and unified against "m a"
                               (parser:node-do-bind
-                               (multiple-value-bind (ty_ preds_ node_ subs_)
+                               (multiple-value-bind (ty_ preds_ accessors_ node_ subs_)
                                    (infer-expression-type elem
                                                           (tc:make-tapp
                                                            :from m-type
@@ -1335,12 +1415,13 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                                           file)
                                  (declare (ignore ty_))
                                  (setf preds (append preds preds_))
+                                 (setf accessors (append accessors accessors_))
                                  (setf subs subs_)
                                  node_))))))
 
       
 
-      (multiple-value-bind (ty preds_ last-node subs)
+      (multiple-value-bind (ty preds_ accessors_ last-node subs)
           (infer-expression-type
            (parser:node-do-last-node node)
            (tc:make-tapp
@@ -1349,7 +1430,9 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
            subs
            env
            file)
+
         (setf preds (append preds preds_))
+        (setf accessors (append accessors accessors_))
 
         (handler-case
             (progn
@@ -1362,6 +1445,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                  :types (list m-type)
                  :source (parser:node-source node))
                 preds)
+               accessors
                (make-node-do
                 :type (tc:qualify nil ty)
                 :source (parser:node-source node)
@@ -1470,6 +1554,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
       (check-duplicates
        (parser:pattern-variables pat)
        #'parser:pattern-var-name
+       #'parser:pattern-source
        (lambda (first second)
          (error 'tc-error
                 :err (coalton-error
@@ -1555,7 +1640,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
            (type tc:substitution-list subs)
            (type tc-env env)
            (type coalton-file file)
-           (values tc:ty-predicate-list (or toplevel-define-list node-let-binding-list) tc:substitution-list &optional))
+           (values tc:ty-predicate-list accessor-list (or toplevel-define-list node-let-binding-list) tc:substitution-list &optional))
 
   (let ((def-table (make-hash-table :test #'eq))
 
@@ -1634,7 +1719,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
            (type tc:substitution-list subs)
            (type tc-env env)
            (type coalton-file file)
-           (values tc:ty-predicate-list (or toplevel-define-list node-let-binding-list) tc:substitution-list))
+           (values tc:ty-predicate-list accessor-list (or toplevel-define-list node-let-binding-list) tc:substitution-list))
   ;;
   ;; Binding type inference has several steps.
   ;; 1. Explicit types are parsed and added to the environment
@@ -1718,6 +1803,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
     (values
      preds
+     nil
      (append impl-binding-nodes expl-binding-nodes)
      subs)))
 
@@ -1743,7 +1829,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
          (fresh-type (tc:qualified-ty-type fresh-qual-type))
          (fresh-preds (tc:qualified-ty-predicates fresh-qual-type)))
 
-    (multiple-value-bind (preds binding-node subs)
+    (multiple-value-bind (preds accessors binding-node subs)
         (infer-binding-type
          binding
          fresh-type                     ; unify against declared type
@@ -1753,108 +1839,122 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
       (tc:apply-substitution subs env)
 
-      (let* ((expr-type (tc:apply-substitution subs fresh-type))
-             (expr-preds (tc:apply-substitution subs fresh-preds))
+      (setf accessors (tc:apply-substitution subs accessors))
+      
+      (multiple-value-bind (accessors subs_)
+          (solve-accessors accessors file (tc-env-env env))
+        (setf subs (tc:compose-substitution-lists subs subs_))
 
-             (env-tvars (tc-env-bindings-variables env bound-variables))
-             (local-tvars (set-difference (remove-duplicates
-                                           (append (tc:type-variables expr-type)
-                                                   (tc:type-variables expr-preds))
-                                           :test #'eq)
-                                          env-tvars
-                                          :test #'eq))
+        (when accessors
+          (error 'tc-error
+                 :err (coalton-error
+                       :span (accessor-source (first accessors))
+                       :file file
+                       :message "Ambiguous accessor"
+                       :primary-note "accessor is ambiguous")))
 
-             (output-qual-type (tc:qualify expr-preds expr-type))
-             (output-scheme (tc:quantify local-tvars output-qual-type)))
+        (let* ((expr-type (tc:apply-substitution subs fresh-type))
+               (expr-preds (tc:apply-substitution subs fresh-preds))
 
-        ;; Generate additional substitutions from fundeps
-        (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) preds subs)))
+               (env-tvars (tc-env-bindings-variables env bound-variables))
+               (local-tvars (set-difference (remove-duplicates
+                                             (append (tc:type-variables expr-type)
+                                                     (tc:type-variables expr-preds))
+                                             :test #'eq)
+                                            env-tvars
+                                            :test #'eq))
 
-        (let* ((expr-preds (tc:apply-substitution subs expr-preds))
+               (output-qual-type (tc:qualify expr-preds expr-type))
+               (output-scheme (tc:quantify local-tvars output-qual-type)))
 
-               (known-variables
-                 (tc:apply-substitution
-                  subs
-                  (append (remove-duplicates (tc:type-variables expr-type) :test #'eq) env-tvars)))
+          ;; Generate additional substitutions from fundeps
+          (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) preds subs)))
 
-               (preds (tc:apply-substitution subs preds))
+          (let* ((expr-preds (tc:apply-substitution subs expr-preds))
 
-               (subs (tc:compose-substitution-lists
-                      subs
-                      (tc:fundep-entail (tc-env-env env) expr-preds preds known-variables)))
+                 (known-variables
+                   (tc:apply-substitution
+                    subs
+                    (append (remove-duplicates (tc:type-variables expr-type) :test #'eq) env-tvars)))
 
-               (expr-preds (tc:apply-substitution subs expr-preds))
+                 (preds (tc:apply-substitution subs preds))
 
-               (preds (remove-if-not (lambda (p)
-                                               (not (tc:entail (tc-env-env env) expr-preds p)))
-                                             (tc:apply-substitution subs preds))))
+                 (subs (tc:compose-substitution-lists
+                        subs
+                        (tc:fundep-entail (tc-env-env env) expr-preds preds known-variables)))
 
-          (setf preds (tc:apply-substitution subs preds))
-          (setf local-tvars (expand-local-tvars env-tvars local-tvars preds (tc-env-env env)))
-          (setf env-tvars
-                (expand-local-tvars local-tvars (tc:apply-substitution subs env-tvars) preds (tc-env-env env)))
+                 (expr-preds (tc:apply-substitution subs expr-preds))
 
-          ;; Split predicates into retained and deferred
-          (multiple-value-bind (deferred-preds retained-preds)
-              (tc:split-context (tc-env-env env) env-tvars preds subs)
+                 (preds (remove-if-not (lambda (p)
+                                         (not (tc:entail (tc-env-env env) expr-preds p)))
+                                       (tc:apply-substitution subs preds))))
 
-            (let* (;; Calculate defaultable predicates
-                   (defaultable-preds
-                     (handler-case
-                         (tc:default-preds
-                          (tc-env-env env)
-                          (append env-tvars local-tvars)
-                          retained-preds)
+            (setf preds (tc:apply-substitution subs preds))
+            (setf local-tvars (expand-local-tvars env-tvars local-tvars preds (tc-env-env env)))
+            (setf env-tvars
+                  (expand-local-tvars local-tvars (tc:apply-substitution subs env-tvars) preds (tc-env-env env)))
 
-                       (tc:ambiguous-constraint (e)
-                         (error-ambiguous-pred (tc:ambiguous-constraint-pred e) file))))
+            ;; Split predicates into retained and deferred
+            (multiple-value-bind (deferred-preds retained-preds)
+                (tc:split-context (tc-env-env env) env-tvars preds subs)
 
-                   ;; Defaultable predicates are not retained
-                   (retained-preds
-                     (set-difference retained-preds defaultable-preds :test #'tc:type-predicate=)))
+              (let* (;; Calculate defaultable predicates
+                     (defaultable-preds
+                       (handler-case
+                           (tc:default-preds
+                            (tc-env-env env)
+                            (append env-tvars local-tvars)
+                            retained-preds)
 
-              ;; Apply defaulting to defaultable predicates
-              (setf subs (tc:compose-substitution-lists
-                          (tc:default-subs (tc-env-env env) nil defaultable-preds)
-                          subs))
+                         (tc:ambiguous-constraint (e)
+                           (error-ambiguous-pred (tc:ambiguous-constraint-pred e) file))))
 
-              ;; If the bindings is toplevel then attempt to default deferred-predicates
-              (when (parser:binding-toplevel-p binding)
+                     ;; Defaultable predicates are not retained
+                     (retained-preds
+                       (set-difference retained-preds defaultable-preds :test #'tc:type-predicate=)))
+
+                ;; Apply defaulting to defaultable predicates
                 (setf subs (tc:compose-substitution-lists
-                            (tc:default-subs (tc-env-env env) nil deferred-preds)
+                            (tc:default-subs (tc-env-env env) nil defaultable-preds)
                             subs))
-                (setf deferred-preds (tc:reduce-context (tc-env-env env) deferred-preds subs)))
 
-              ;; Toplevel bindings cannot defer predicates
-              (when (and (parser:binding-toplevel-p binding) deferred-preds)
-                (error-unknown-pred (first deferred-preds) file))
+                ;; If the bindings is toplevel then attempt to default deferred-predicates
+                (when (parser:binding-toplevel-p binding)
+                  (setf subs (tc:compose-substitution-lists
+                              (tc:default-subs (tc-env-env env) nil deferred-preds)
+                              subs))
+                  (setf deferred-preds (tc:reduce-context (tc-env-env env) deferred-preds subs)))
 
-              ;; Check that the declared and inferred schemes match
-              (unless (equalp declared-ty output-scheme)
-                (error 'tc-error
-                       :err (coalton-error
-                             :message "Declared type is too general"
-                             :span source
-                             :file file
-                             :primary-note (format nil "Declared type ~S is more general than inferred type ~S."
-                                                   declared-ty
-                                                   output-scheme))))
+                ;; Toplevel bindings cannot defer predicates
+                (when (and (parser:binding-toplevel-p binding) deferred-preds)
+                  (error-unknown-pred (first deferred-preds) file))
 
-              ;; Check for undeclared predicates
-              (when (not (null retained-preds))
-                (error 'tc-error
-                       :err (coalton-error
-                             :message "Explicit type is missing inferred predicate"
-                             :span source
-                             :file file
-                             :primary-note (format nil "Declared type ~S is missing inferred predicate ~S"
-                                                   output-qual-type
-                                                   (first retained-preds)))))
+                ;; Check that the declared and inferred schemes match
+                (unless (equalp declared-ty output-scheme)
+                  (error 'tc-error
+                         :err (coalton-error
+                               :message "Declared type is too general"
+                               :span source
+                               :file file
+                               :primary-note (format nil "Declared type ~S is more general than inferred type ~S."
+                                                     declared-ty
+                                                     output-scheme))))
 
-              (values
-               deferred-preds
-               (attach-explicit-binding-type (tc:apply-substitution subs binding-node) (tc:apply-substitution subs fresh-qual-type))
-               subs))))))))
+                ;; Check for undeclared predicates
+                (when (not (null retained-preds))
+                  (error 'tc-error
+                         :err (coalton-error
+                               :message "Explicit type is missing inferred predicate"
+                               :span source
+                               :file file
+                               :primary-note (format nil "Declared type ~S is missing inferred predicate ~S"
+                                                     output-qual-type
+                                                     (first retained-preds)))))
+
+                (values
+                 deferred-preds
+                 (attach-explicit-binding-type (tc:apply-substitution subs binding-node) (tc:apply-substitution subs fresh-qual-type))
+                 subs)))))))))
 
 (defun check-for-invalid-recursive-scc (bindings env file)
   (declare (type (or parser:toplevel-define-list parser:node-let-binding-list parser:instance-method-definition-list) bindings)
@@ -1997,137 +2097,154 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
          (preds nil)
 
+         (accessors nil)
+
          ;; Derive the type of each binding
          (binding-nodes
            (loop :for binding :in bindings
                  :for ty :in expr-tys
                  :for node := (parser:binding-value binding)
 
-                 :collect (multiple-value-bind (preds_ node_ subs_)
+                 :collect (multiple-value-bind (preds_ accessors_ node_ subs_)
                               (infer-binding-type binding ty subs env file)
                             (setf subs subs_)
                             (setf preds (append preds preds_))
+                            (setf accessors (append accessors accessors_))
                             node_))))
 
     (tc:apply-substitution subs env)
 
-    (let* ((expr-tys (tc:apply-substitution subs expr-tys))
+    (setf accessors (tc:apply-substitution subs accessors))
 
-           (env-tvars (tc-env-bindings-variables env bound-variables))
+    (multiple-value-bind (accessors subs_)
+        (solve-accessors accessors file (tc-env-env env))
+      (setf subs (tc:compose-substitution-lists subs subs_))
 
-           (expr-tvars (remove-duplicates (tc:type-variables expr-tys) :test #'eq))
+      (when accessors
+        (error 'tc-error
+               :err (coalton-error
+                     :span (accessor-source (first accessors))
+                     :file file
+                     :message "Ambiguous accessor"
+                     :primary-note "accessor is ambiguous")))
 
-           (local-tvars (set-difference expr-tvars env-tvars :test #'eq)))
+      (let* ((expr-tys (tc:apply-substitution subs expr-tys))
 
-      ;; Generate additional substitutions from fundeps
-      (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) preds subs)))
+             (env-tvars (tc-env-bindings-variables env bound-variables))
 
-      (setf preds (tc:apply-substitution subs preds))
-      (setf local-tvars (expand-local-tvars env-tvars local-tvars preds (tc-env-env env)))
-      (setf env-tvars (expand-local-tvars local-tvars (tc:apply-substitution subs env-tvars) preds (tc-env-env env)))
+             (expr-tvars (remove-duplicates (tc:type-variables expr-tys) :test #'eq))
 
-      (multiple-value-bind (deferred-preds retained-preds)
-          (tc:split-context (tc-env-env env) env-tvars preds subs)
+             (local-tvars (set-difference expr-tvars env-tvars :test #'eq)))
 
-        (let* ((defaultable-preds (handler-case
-                                      (tc:default-preds (tc-env-env env) (append env-tvars local-tvars) retained-preds)
-                                    (error:coalton-internal-type-error (e)
-                                      (error-ambiguous-pred (tc:ambiguous-constraint-pred e) file))))
+        ;; Generate additional substitutions from fundeps
+        (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) preds subs)))
 
-               (retained-preds (set-difference retained-preds defaultable-preds :test #'eq))
+        (setf preds (tc:apply-substitution subs preds))
+        (setf local-tvars (expand-local-tvars env-tvars local-tvars preds (tc-env-env env)))
+        (setf env-tvars (expand-local-tvars local-tvars (tc:apply-substitution subs env-tvars) preds (tc-env-env env)))
 
-               ;; Check if the monomorphism restriction applies
-               (restricted (some (lambda (b)
-                                   (not (parser:binding-function-p b)))
-                                 bindings)))
+        (multiple-value-bind (deferred-preds retained-preds)
+            (tc:split-context (tc-env-env env) env-tvars preds subs)
+
+          (let* ((defaultable-preds (handler-case
+                                        (tc:default-preds (tc-env-env env) (append env-tvars local-tvars) retained-preds)
+                                      (error:coalton-internal-type-error (e)
+                                        (error-ambiguous-pred (tc:ambiguous-constraint-pred e) file))))
+
+                 (retained-preds (set-difference retained-preds defaultable-preds :test #'eq))
+
+                 ;; Check if the monomorphism restriction applies
+                 (restricted (some (lambda (b)
+                                     (not (parser:binding-function-p b)))
+                                   bindings)))
 
 
-          (setf subs (tc:compose-substitution-lists
-                      (tc:default-subs (tc-env-env env) nil defaultable-preds)
-                      subs))
+            (setf subs (tc:compose-substitution-lists
+                        (tc:default-subs (tc-env-env env) nil defaultable-preds)
+                        subs))
 
-          (when (parser:binding-toplevel-p (first bindings))
+            (when (parser:binding-toplevel-p (first bindings))
+              (if restricted
+                  ;; Restricted bindings have all predicates defaulted
+                  (setf subs (tc:compose-substitution-lists
+                              (tc:default-subs (tc-env-env env) nil (append deferred-preds retained-preds))
+                              subs))
+                  ;; Unrestricted bindings have deferred predicates defaulted
+                  (setf subs (tc:compose-substitution-lists
+                              (tc:default-subs (tc-env-env env) nil deferred-preds)
+                              subs)))
+
+              (setf deferred-preds (tc:reduce-context (tc-env-env env) deferred-preds subs))
+              (setf retained-preds (tc:reduce-context (tc-env-env env) retained-preds subs))
+              (setf expr-tys (tc:apply-substitution subs expr-tys)))
+
             (if restricted
-                ;; Restricted bindings have all predicates defaulted
-                (setf subs (tc:compose-substitution-lists
-                            (tc:default-subs (tc-env-env env) nil (append deferred-preds retained-preds))
-                            subs))
-                ;; Unrestricted bindings have deferred predicates defaulted
-                (setf subs (tc:compose-substitution-lists
-                            (tc:default-subs (tc-env-env env) nil deferred-preds)
-                            subs)))
+                (let* ((allowed-tvars (set-difference local-tvars (tc:type-variables retained-preds) :test #'eq))
 
-            (setf deferred-preds (tc:reduce-context (tc-env-env env) deferred-preds subs))
-            (setf retained-preds (tc:reduce-context (tc-env-env env) retained-preds subs))
-            (setf expr-tys (tc:apply-substitution subs expr-tys)))
+                       (output-qual-tys
+                         (loop :for ty :in expr-tys
+                               :collect (tc:apply-substitution subs (tc:make-qualified-ty :predicates nil :type ty))))
 
-          (if restricted
-              (let* ((allowed-tvars (set-difference local-tvars (tc:type-variables retained-preds) :test #'eq))
+                       (output-schemes
+                         (loop :for ty :in output-qual-tys
+                               :collect (tc:quantify allowed-tvars ty)))
 
-                     (output-qual-tys
-                       (loop :for ty :in expr-tys
-                             :collect (tc:apply-substitution subs (tc:make-qualified-ty :predicates nil :type ty))))
+                       (deferred-preds (append deferred-preds retained-preds)))
 
-                     (output-schemes
-                       (loop :for ty :in output-qual-tys
-                             :collect (tc:quantify allowed-tvars ty)))
+                  (loop :for scheme :in output-schemes
+                        :for binding :in bindings
 
-                     (deferred-preds (append deferred-preds retained-preds)))
+                        :for name := (parser:node-variable-name (parser:binding-name binding))
 
-                (loop :for scheme :in output-schemes
-                      :for binding :in bindings
+                        :do (tc-env-replace-type env name scheme))
 
-                      :for name := (parser:node-variable-name (parser:binding-name binding))
+                  (when (and (parser:binding-toplevel-p (first bindings)) deferred-preds)
+                    (error-unknown-pred (first deferred-preds) file))
 
-                      :do (tc-env-replace-type env name scheme))
+                  (values
+                   deferred-preds
+                   (loop :for binding :in binding-nodes
+                         :for ty :in output-qual-tys
+                         :collect (tc:apply-substitution subs (attach-explicit-binding-type binding ty)))
+                   subs))
 
-                (when (and (parser:binding-toplevel-p (first bindings)) deferred-preds)
-                  (error-unknown-pred (first deferred-preds) file))
+                (let* ((output-qual-tys
+                         (loop :for ty :in expr-tys
+                               :collect (tc:make-qualified-ty :predicates retained-preds :type ty)))
 
-                (values
-                 deferred-preds
-                 (loop :for binding :in binding-nodes
-                       :for ty :in output-qual-tys
-                       :collect (attach-explicit-binding-type binding ty))
-                 subs))
+                       (output-schemes
+                         (loop :for ty :in output-qual-tys
+                               :collect (tc:quantify local-tvars ty)))
 
-              (let* ((output-qual-tys
-                       (loop :for ty :in expr-tys
-                             :collect (tc:make-qualified-ty :predicates retained-preds :type ty)))
+                       (rewrite-table
+                         (loop :with table := (make-hash-table :test #'eq)
 
-                     (output-schemes
-                       (loop :for ty :in output-qual-tys
-                             :collect (tc:quantify local-tvars ty)))
+                               :for ty :in output-qual-tys
+                               :for binding :in bindings
 
-                     (rewrite-table
-                       (loop :with table := (make-hash-table :test #'eq)
+                               :for name := (parser:node-variable-name (parser:binding-name binding))
+                               :do (setf (gethash name table) ty)
 
-                             :for ty :in output-qual-tys
-                             :for binding :in bindings
+                               :finally (return table))))
 
-                             :for name := (parser:node-variable-name (parser:binding-name binding))
-                             :do (setf (gethash name table) ty)
+                  (loop :for scheme :in output-schemes
+                        :for binding :in bindings
 
-                             :finally (return table))))
+                        :for name := (parser:node-variable-name (parser:binding-name binding))
 
-                (loop :for scheme :in output-schemes
-                      :for binding :in bindings
+                        :do (tc-env-replace-type env name scheme))
 
-                      :for name := (parser:node-variable-name (parser:binding-name binding))
+                  (when (and (parser:binding-toplevel-p (first bindings)) deferred-preds)
+                    (error-ambiguous-pred (first deferred-preds) file))
 
-                      :do (tc-env-replace-type env name scheme))
-
-                (when (and (parser:binding-toplevel-p (first bindings)) deferred-preds)
-                  (error-ambiguous-pred (first deferred-preds) file))
-
-                (values
-                 deferred-preds
-                 (loop :for binding :in binding-nodes
-                       :for ty :in output-qual-tys
-                       :collect (rewrite-recursive-calls
-                                 (tc:apply-substitution subs (attach-explicit-binding-type binding ty))
-                                 rewrite-table))
-                 subs))))))))
+                  (values
+                   deferred-preds
+                   (loop :for binding :in binding-nodes
+                         :for ty :in output-qual-tys
+                         :collect (rewrite-recursive-calls
+                                   (tc:apply-substitution subs (attach-explicit-binding-type binding ty))
+                                   rewrite-table))
+                   subs)))))))))
 
 (defun infer-binding-type (binding expected-type subs env file)
   "Infer the type of BINDING then unify against EXPECTED-TYPE. Adds BINDING's paramaters to the environment."
@@ -2135,11 +2252,12 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
            (type tc:ty expected-type)
            (type tc:substitution-list subs)
            (type coalton-file file)
-           (values tc:ty-predicate-list (or toplevel-define node-let-binding instance-method-definition) tc:substitution-list))
+           (values tc:ty-predicate-list accessor-list (or toplevel-define node-let-binding instance-method-definition) tc:substitution-list))
 
   (check-duplicates
    (parser:pattern-variables (parser:binding-parameters binding))
    #'parser:pattern-var-name
+   #'parser:pattern-source
    (lambda (first second)
      (error 'tc-error
             :err (coalton-error
@@ -2168,6 +2286,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
          (ret-ty (tc:make-variable))
 
          (preds nil)
+         (accessors nil)
 
          (value-node
            (if params
@@ -2176,7 +2295,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
                      (*returns* nil))
 
-                 (multiple-value-bind (ty_ preds_ value-node subs_)
+                 (multiple-value-bind (ty_ preds_ accessors_ value-node subs_)
                      (infer-expression-type (parser:binding-value binding)
                                             ret-ty
                                             subs
@@ -2185,6 +2304,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                    (declare (ignore ty_))
                    (setf subs subs_)
                    (setf preds preds_)
+                   (setf accessors accessors_)
 
                    ;; Ensure that all early returns unify
                    (loop :with returns := (reverse *returns*)
@@ -2231,7 +2351,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                    value-node))
 
                ;; If the binding does not have parameters that just infer the binding's type
-               (multiple-value-bind (ty_ preds_ value-node subs_)
+               (multiple-value-bind (ty_ preds_ accessors_ value-node subs_)
                    (infer-expression-type (parser:binding-value binding)
                                           ret-ty
                                           subs
@@ -2240,6 +2360,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                  (declare (ignore ty_))
                  (setf subs subs_)
                  (setf preds preds_)
+                 (setf accessors accessors_)
                  value-node))))
 
     (let ((ty (tc:make-function-type* param-tys ret-ty)))
@@ -2258,6 +2379,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                    (typed-binding (build-typed-binding binding name-node value-node params)))
               (values
                preds
+               accessors
                typed-binding
                subs)))
         (error:coalton-internal-type-error ()
@@ -2270,6 +2392,10 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                                              (tc:apply-substitution subs expected-type)
                                              (tc:apply-substitution subs ty)))))))))
 
+;;;
+;;; Helpers
+;;;
+
 (defgeneric build-typed-binding (binding name value params)
   (:method ((binding parser:toplevel-define) name value params)
     (declare (type node-variable name)
@@ -2277,11 +2403,11 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
              (type pattern-list params)
              (values toplevel-define))
 
-   (make-toplevel-define
-    :name name
-    :params params
-    :body value
-    :source (parser:toplevel-define-source binding)))
+    (make-toplevel-define
+     :name name
+     :params params
+     :body value
+     :source (parser:toplevel-define-source binding)))
 
   (:method ((binding parser:node-let-binding) name value params)
     (declare (type node-variable name)
@@ -2291,10 +2417,10 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
     (assert (null params))
 
-   (make-node-let-binding
-    :name name
-    :value value
-    :source (parser:node-let-binding-source binding)))
+    (make-node-let-binding
+     :name name
+     :value value
+     :source (parser:node-let-binding-source binding)))
 
   (:method ((binding parser:instance-method-definition) name value params)
     (declare (type node-variable name)

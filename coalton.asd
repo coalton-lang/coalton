@@ -51,6 +51,7 @@
                              (:file "collect")
                              (:file "renamer")
                              (:file "binding")
+                             (:file "type-definition")
                              (:file "package")))
                (:module "runtime"
                 :serial t
@@ -76,6 +77,7 @@
                              (:file "traverse")
                              (:file "toplevel")
                              (:file "binding")
+                             (:file "accessor")
                              (:file "partial-type-env")
                              (:file "parse-type")
                              (:file "define-type")
