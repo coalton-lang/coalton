@@ -90,6 +90,7 @@
                 :serial t
                 :components ((:file "pattern-exhaustiveness")
                              (:file "unused-variables")
+                             (:file "underapplied-values")
                              (:file "analysis")
                              (:file "package")))
                (:module "codegen"
