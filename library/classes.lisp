@@ -35,7 +35,8 @@
    #:TryInto
    #:Iso
    #:error
-   #:Unwrappable #:unwrap-or-else #:with-default #:unwrap #:expect #:as-optional))
+   #:Unwrappable #:unwrap-or-else #:with-default #:unwrap #:expect #:as-optional
+   #:default #:defaulting-unwrap))
 
 (in-package #:coalton-library/classes)
 
@@ -45,54 +46,11 @@
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (coalton-toplevel
-  (define-class (Eq :a)
-    "Types which have equality defined."
-    (== (:a -> :a -> Boolean)))
 
-  (define-instance (Eq types:LispType)
-    (define (== a b)
-      (lisp Boolean (a b)
-        (cl:equalp a b))))
+  ;;
+  ;; Base Types
+  ;;
 
-  (define-class ((Eq :a) => Num :a)
-    "Types which have numeric operations defined."
-    (+ (:a -> :a -> :a))
-    (- (:a -> :a -> :a))
-    (* (:a -> :a -> :a))
-    (fromInt (Integer -> :a))))
-
-(in-package #:coalton)
-
-(coalton-toplevel
-  (repr :native cl:t)
-  (define-type Void)
-
-  ;; Boolean is an early type
-  (declare True Boolean)
-  (define True (lisp Boolean ()  cl:t))
-
-  (declare False Boolean)
-  (define False (lisp Boolean ()  cl:nil))
-
-  ;; Unit is an early type
-  (declare Unit Unit)
-  (define Unit (lisp Unit () 'coalton::Unit/Unit))
-
-  ;; List is an early type
-  (declare Cons (:a -> (List :a) -> (List :a)))
-  (define (Cons x xs)
-    (lisp (List :a) (x xs)
-      (cl:cons x xs)))
-
-  (declare Nil (List :a))
-  (define Nil
-    (lisp (List :a) ()
-      cl:nil)))
-
-(in-package #:coalton-library/classes)
-
-(coalton-toplevel
- 
   (define-type (Tuple :a :b)
     "A heterogeneous collection of items."
     (Tuple :a :b))
@@ -110,8 +68,28 @@
     (Ok :good)
     (Err :bad))
 
+  ;;
+  ;; Eq
+  ;;
+
+  (define-class (Eq :a)
+    "Types which have equality defined."
+    (== (:a -> :a -> Boolean)))
+
+  (define-instance (Eq types:LispType)
+    (define (== a b)
+      (lisp Boolean (a b)
+        (cl:equalp a b))))
+
+  (define-class (Eq :a => Num :a)
+    "Types which have numeric operations defined."
+    (+ (:a -> :a -> :a))
+    (- (:a -> :a -> :a))
+    (* (:a -> :a -> :a))
+    (fromInt (Integer -> :a)))
+ 
   (define-instance (Eq Unit)
-    (define (== _a _b) True))
+    (define (== _ _) True))
 
   ;;
   ;; Ord
@@ -145,46 +123,46 @@
         ((Tuple (GT) (EQ)) GT)
         ((Tuple (GT) (GT)) EQ))))
 
-  (define-class ((Eq :a) => Ord :a)
+  (define-class (Eq :a => Ord :a)
     "Types whose values can be ordered."
     (<=> (:a -> :a -> Ord)))
 
-  (declare > (Ord :a => (:a -> :a -> Boolean)))
+  (declare > (Ord :a => :a -> :a -> Boolean))
   (define (> x y)
     "Is X greater than Y?"
     (match (<=> x y)
       ((GT) True)
       (_ False)))
 
-  (declare < (Ord :a => (:a -> :a -> Boolean)))
+  (declare < (Ord :a => :a -> :a -> Boolean))
   (define (< x y)
     "Is X less than Y?"
     (match (<=> x y)
       ((LT) True)
       (_ False)))
 
-  (declare >= (Ord :a => (:a -> :a -> Boolean)))
+  (declare >= (Ord :a => :a -> :a -> Boolean))
   (define (>= x y)
     "Is X greater than or equal to Y?"
     (match (<=> x y)
       ((LT) False)
       (_ True)))
 
-  (declare <= (Ord :a => (:a -> :a -> Boolean)))
+  (declare <= (Ord :a => :a -> :a -> Boolean))
   (define (<= x y)
     "Is X less than or equal to Y?"
     (match (<=> x y)
       ((GT) False)
       (_ True)))
 
-  (declare max (Ord :a => (:a -> :a -> :a)))
+  (declare max (Ord :a => :a -> :a -> :a))
   (define (max x y)
     "Returns the greater element of X and Y."
     (if (> x y)
         x
         y))
 
-  (declare min (Ord :a => (:a -> :a -> :a)))
+  (declare min (Ord :a => :a -> :a -> :a))
   (define (min x y)
     "Returns the lesser element of X and Y."
     (if (< x y)
@@ -201,31 +179,31 @@
 
   (define-class (Semigroup :a => Monoid :a)
     "Types with an associative binary operation and identity defined."
-    (mempty (:a)))
+    (mempty :a))
 
   (define-class (Functor :f)
     "Types which can map an inner type where the mapping adheres to the identity and composition laws."
-    (map ((:a -> :b) -> (:f :a) -> (:f :b))))
+    (map ((:a -> :b) -> :f :a -> :f :b)))
 
   (define-class (Functor :f => Applicative :f)
     "Types which are a functor which can embed pure expressions and sequence operations."
     (pure (:a -> (:f :a)))
-    (liftA2 ((:a -> :b -> :c) -> (:f :a) -> (:f :b) -> (:f :c))))
+    (liftA2 ((:a -> :b -> :c) -> :f :a -> :f :b -> :f :c)))
 
   (define-class (Applicative :m => Monad :m)
     "Types which are monads as defined in Haskell. See https://wiki.haskell.org/Monad for more information."
-    (>>= ((:m :a) -> (:a -> (:m :b)) -> (:m :b))))
+    (>>= (:m :a -> (:a -> :m :b) -> :m :b)))
 
   (declare >> (Monad :m => (:m :a) -> (:m :b) -> (:m :b)))
   (define (>> a b)
     (>>= a (fn (_) b)))
 
   (define-class (Monad :m => MonadFail :m)
-    (fail (String -> (:m :a))))
+    (fail (String -> :m :a)))
 
   (define-class (Applicative :f => Alternative :f)
     "Types which are monoids on applicative functors."
-    (alt ((:f :a) -> (:f :a) -> (:f :a)))
+    (alt (:f :a -> :f :a -> :f :a))
     (empty (:f :a)))
 
   (define-class (Foldable :container)
@@ -237,7 +215,7 @@
     (fold ((:accum -> :elt -> :accum) -> :accum -> :container :elt -> :accum))
     (foldr ((:elt -> :accum -> :accum) -> :accum -> :container :elt -> :accum)))
 
-  (declare mconcat ((Foldable :f) (Monoid :a) => (:f :a) -> :a))
+  (declare mconcat ((Foldable :f) (Monoid :a) => :f :a -> :a))
   (define mconcat
     "Fold a container of monoids into a single element."
     (fold <> mempty))
@@ -250,14 +228,14 @@
 
   (define-class (Bifunctor :f)
     "Types which take two type arguments and are functors on both."
-    (bimap ((:a -> :b) -> (:c -> :d) -> (:f :a :c) -> (:f :b :d))))
+    (bimap ((:a -> :b) -> (:c -> :d) -> :f :a :c -> :f :b :d)))
 
-  (declare map-fst ((Bifunctor :f) => (:a -> :b) -> (:f :a :c) -> (:f :b :c)))
+  (declare map-fst (Bifunctor :f => (:a -> :b) -> :f :a :c -> :f :b :c))
   (define (map-fst f b)
     "Map over the first argument of a Bifunctor."
     (bimap f (fn (x) x) b))
 
-  (declare map-snd ((Bifunctor :f) => (:b -> :c) -> (:f :a :b) -> (:f :a :c)))
+  (declare map-snd (Bifunctor :f => (:b -> :c) -> :f :a :b -> :f :a :c))
   (define (map-snd f b)
     "Map over the second argument of a Bifunctor."
     (bimap (fn (x) x) f b))
@@ -271,16 +249,16 @@
     (into (:a -> :b)))
 
   (define-class ((Into :a :b) (Into :b :a) => Iso :a :b)
-    "Opting into this marker typeclass imples that the instances for (Into :a :b) and (Into :b :a) form a bijection.")
+    "Opting into this marker typeclass imples that the instances for `(Into :a :b)` and `(Into :b :a)` form a bijection.")
 
   (define-instance (Into :a :a)
     (define (into x) x))
 
   (define-class (TryInto :a :b)
-    "TRY-INTO implies *most* elements of :a can be represented exactly by an element of :b, but sometimes not. If not, an error string is returned."
+    "TRY-INTO implies some elements of `:a` can be represented exactly by an element of :b, but sometimes not. If not, an error string is returned."
     ;; Ideally we'd have an associated-type here instead of locking in
     ;; on String.
-    (tryInto (:a -> (Result String :b))))
+    (tryInto (:a -> Result String :b)))
 
   (define-instance (Iso :a :a))
 
@@ -347,6 +325,23 @@ Typical `fail` continuations are:
     "Convert any Unwrappable container into an Optional, constructing Some on a successful unwrap and None on a failed unwrap."
     (unwrap-or-else Some
                     (fn () None)
+                    container))
+
+
+  ;;
+  ;; Default
+  ;;
+
+  (define-class (Default :a)
+    "Types which have default values."
+    (default (Unit -> :a)))
+
+  (declare defaulting-unwrap ((Unwrappable :container) (Default :element) =>
+                              (:container :element) -> :element))
+  (define (defaulting-unwrap container)
+    "Unwrap an UNWRAPPABLE, returning (DEFAULT) of the wrapped type on failure. "
+    (unwrap-or-else (fn (elt) elt)
+                    (fn () (default))
                     container)))
 
 

@@ -152,7 +152,26 @@
             (hash c)
             (combine-hashes
              (hash d)
-             (hash e))))))))))
+             (hash e)))))))))
+
+  ;;
+  ;; Default instances
+  ;;
+
+  (define-instance ((Default :a) (Default :b) => (Default (Tuple :a :b)))
+    (define (default) (Tuple (default) (default))))
+
+  (define-instance ((Default :a) (Default :b) (Default :c) =>
+                    (Default (Tuple3 :a :b :c)))
+    (define (default) (Tuple3 (default) (default) (default))))
+
+  (define-instance ((Default :a) (Default :b) (Default :c) (Default :d) =>
+                    (Default (Tuple4 :a :b :c :d)))
+    (define (default) (Tuple4 (default) (default) (default) (default))))
+
+  (define-instance ((Default :a) (Default :b) (Default :c) (Default :d) (Default :e) =>
+                    (Default (Tuple5 :a :b :c :d :e)))
+    (define (default) (Tuple5 (default) (default) (default) (default) (default)))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/TUPLE")

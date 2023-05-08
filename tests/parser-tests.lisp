@@ -8,7 +8,8 @@
     (loop :for file :in files
           :do (with-open-file (stream file)
                 (signals parser:parse-error
-                  (parser:read-program stream (error:make-coalton-file :stream stream :name (namestring file)) :mode :file)))))
+                  (parser:with-reader-context stream
+                    (parser:read-program stream (error:make-coalton-file :stream stream :name (namestring file)) :mode :file))))))
 
   (let* ((glob (merge-pathnames "tests/parser/*.good.coalton" (asdf:system-source-directory "coalton/tests")))
 
@@ -16,4 +17,5 @@
 
     (loop :for file :in files
           :do (with-open-file (stream file)
-                (parser:read-program stream (error:make-coalton-file :stream stream :name (namestring file)) :mode :file)))))
+                (parser:with-reader-context stream
+                  (parser:read-program stream (error:make-coalton-file :stream stream :name (namestring file)) :mode :file))))))

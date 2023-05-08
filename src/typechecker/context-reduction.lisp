@@ -11,10 +11,14 @@
    #:coalton-impl/typechecker/substitutions
    #:apply-substitution
    #:substitution-list)
+  (:import-from
+   #:coalton-impl/typechecker/fundeps
+   #:closure)
   (:local-nicknames
    (#:util #:coalton-impl/util))
   (:export
    #:entail                             ; FUNCTION
+   #:fundep-entail                      ; FUNCTION
    #:reduce-context                     ; FUNCTION
    #:split-context                      ; FUNCTION
    #:default-preds                      ; FUNCTION
@@ -224,3 +228,96 @@ Returns (VALUES deferred-preds retained-preds defaultable-preds)"
         :for candidates := (candidates env ambig)
         :when candidates
           :collect (make-substitution :from (ambiguity-var ambig) :to (first candidates))))
+
+;;;
+;;; When typechecking bindings with fundeps, there can be unambigious
+;;; type variables in predicates that do not appear in the bindings
+;;; body.
+;;;
+;;; For a class defined like C:
+;;;
+;;;     class C :a :b :c (:a :b -> :c)
+;;;       m :: :a -> :b
+;;;
+;;; The following is a valid definition:
+;;;
+;;;     f x = m x
+;;;
+;;; However if f had a type declaration like:
+;;;
+;;;     f :: C :a :b :c => :a -> :b
+;;;
+;;; Then its inferred predicates would need to be checked against its
+;;; declared predicates. Because the class variable :c is not used
+;;; anywhere, the declaration of f's type and the invocation of "m"
+;;; would chose different type variables for :c. This would then error
+;;; because "C :a :b :c" does not `entail' "C :a :b :d".
+;;;
+;;; The function `fundep-entail' takes a list of declared predicates,
+;;; a list of inferred predicates, and a list of known type variables.
+;;; It then finds inferred predicates that would match declared
+;;; predicates if not for differing unknown types at identical
+;;; indicies.
+;;;
+;;; The other requirement is that unknown types must be within the
+;;; "transitive `closure'" of the known types.
+
+(defun fundep-entail (env expr-preds preds known-tyvars)
+  (loop :with subs := nil
+        :for pred :in preds
+        :do (setf subs (compose-substitution-lists subs (fundep-entail% env expr-preds pred known-tyvars)))
+        :finally (return subs)))
+
+(defun fundep-entail% (env expr-preds pred known-tyvars)
+  (let ((class (lookup-class env (ty-predicate-class pred))))
+    (unless (ty-class-fundeps class)
+      (return-from fundep-entail% nil))
+
+    (let* ((unknown-indicies nil)
+
+           (known-indicies
+             (loop :for ty :in (ty-predicate-types pred)
+                   :for i :from 0
+                   :if (intersection (type-variables ty) known-tyvars :test #'eq)
+                     :collect i
+                   :else
+                     :do (push i unknown-indicies)))
+
+           (unknown-indicies (reverse unknown-indicies))
+
+           (known-class-vars (util:project-indicies known-indicies (ty-class-class-variables class)))
+
+           (unknown-class-vars
+             (util:project-indicies unknown-indicies (ty-class-class-variables class)))
+
+           (closure (closure known-class-vars (ty-class-fundeps class))))
+
+      (unless (subsetp unknown-class-vars closure)
+        (return-from fundep-entail% nil))
+
+      (loop :for expr-pred :in expr-preds
+
+            :for expr-pred-indicies
+              := (loop :for ty :in (ty-predicate-types pred)
+                       :for i :from 0
+                       :when (intersection (type-variables ty) known-tyvars :test #'eq)
+                         :collect i)
+
+            :when (and (eq (ty-predicate-class pred) (ty-predicate-class expr-pred))
+                       (equalp known-indicies expr-pred-indicies))
+
+              :do
+                 (return-from
+                  fundep-entail%
+                   (loop :for ty :in (util:project-indicies
+                                      unknown-indicies
+                                      (ty-predicate-types expr-pred))
+
+                         :for ty_ :in (util:project-indicies
+                                       unknown-indicies
+                                       (ty-predicate-types pred))
+
+                         :when (and (tyvar-p ty) (tyvar-p ty_))
+                           :collect (make-substitution :from ty_ :to ty))))
+
+      nil)))

@@ -50,16 +50,17 @@
 
         (out (vector:new)))
 
-    (slice:iter-sliding
+    (iter:for-each!
      (fn (s)
        (vector:push!
         (make-list
          (slice:index-unsafe 0 s)
          (slice:index-unsafe 1 s)
          (slice:index-unsafe 2 s))
-        out))
-     3 v)
-
+        out)
+       Unit)
+     (slice:iter-sliding 3 v))
+    
     (is (== (into out)
             (make-list
              (make-list 1 2 3)
@@ -75,20 +76,45 @@
             (into
              (the
               (List Integer)
+              (make-list 1 2 3 4 5 6 7 8))))))
+
+    (let out = (the (Vector (List Integer)) (vector:new)))
+
+    (iter:for-each!
+     (fn (s)
+       (vector:push!
+        (iter:collect! (iter:into-iter s))
+        out)
+       Unit)
+     (slice:iter-chunked 3 v))
+     
+    (is (== (into out)
+            (make-list
+             (make-list 1 2 3)
+             (make-list 4 5 6)
+             (make-list 7 8))))))
+
+(define-test test-slice-chunked-exact-iteration ()
+  (let ((v (the
+            (Vector Integer)
+            (into
+             (the
+              (List Integer)
               (make-list 1 2 3 4 5 6 7 8)))))
 
         (out (vector:new)))
 
-    (slice:iter-chunked
+    (iter:for-each!
      (fn (s)
        (vector:push!
         (make-list
          (slice:index-unsafe 0 s)
          (slice:index-unsafe 1 s)
          (slice:index-unsafe 2 s))
-        out))
-     3 v)
-
+        out)
+       Unit)
+     (slice:iter-chunked-exact 3 v))
+     
     (is (== (into out)
             (make-list
              (make-list 1 2 3)

@@ -2,10 +2,13 @@
   (:use
    #:coalton
    #:coalton-library/classes
-   #:coalton-library/builtin)
+   #:coalton-library/builtin
+   #:coalton-library/functions)
   (:import-from
    #:coalton-library/hash
    #:define-sxhash-hasher)
+  (:local-nicknames
+   (#:iter #:coalton-library/iterator))
   (:export
    #:char-code
    #:char-code-unchecked
@@ -20,7 +23,8 @@
    #:lowercase?
    #:ascii-lowercase?
    #:upcase
-   #:downcase))
+   #:downcase
+   #:range))
 
 (in-package #:coalton-library/char)
 
@@ -46,7 +50,7 @@
   (define (code-char code)
     "Convert a number to its ASCII character, returning None on failure."
     (lisp (Optional Char) (code)
-      ;; not sufficient to compare against `char-code-limit', because the char-code space may be sparse.
+      ;; not sufficient to compare against `cl:char-code-limit', because the char-code space may be sparse.
       (alexandria:if-let (char (cl:code-char code))
         (Some char)
         None)))
@@ -131,7 +135,17 @@
   (define (downcase c)
     "Returns the downcased version of C, returning C when there is none."
     (lisp Char (c)
-      (cl:char-downcase c))))
+      (cl:char-downcase c)))
+  
+  (declare range (Char -> Char -> iter:Iterator Char))
+  (define (range start end)
+    "An inclusive range of characters from START to END by cl:char-code."
+    (iter:filter-map!
+     code-char
+     (iter:range-increasing
+      1
+      (char-code start)
+      (+ 1 (char-code end))))))
 
 (define-sxhash-hasher Char)
 

@@ -1757,8 +1757,10 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
              (expr-preds (tc:apply-substitution subs fresh-preds))
 
              (env-tvars (tc-env-bindings-variables env bound-variables))
-             (local-tvars (set-difference (append (tc:type-variables expr-type)
-                                                  (tc:type-variables expr-preds))
+             (local-tvars (set-difference (remove-duplicates
+                                           (append (tc:type-variables expr-type)
+                                                   (tc:type-variables expr-preds))
+                                           :test #'eq)
                                           env-tvars
                                           :test #'eq))
 
@@ -1768,14 +1770,33 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
         ;; Generate additional substitutions from fundeps
         (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) preds subs)))
 
-        (let ((reduced-preds (remove-if-not (lambda (p)
-                                              (not (tc:entail (tc-env-env env) expr-preds p)))
-                                            (tc:apply-substitution subs preds))))
+        (let* ((expr-preds (tc:apply-substitution subs expr-preds))
 
+               (known-variables
+                 (tc:apply-substitution
+                  subs
+                  (append (remove-duplicates (tc:type-variables expr-type) :test #'eq) env-tvars)))
+
+               (preds (tc:apply-substitution subs preds))
+
+               (subs (tc:compose-substitution-lists
+                      subs
+                      (tc:fundep-entail (tc-env-env env) expr-preds preds known-variables)))
+
+               (expr-preds (tc:apply-substitution subs expr-preds))
+
+               (preds (remove-if-not (lambda (p)
+                                               (not (tc:entail (tc-env-env env) expr-preds p)))
+                                             (tc:apply-substitution subs preds))))
+
+          (setf preds (tc:apply-substitution subs preds))
+          (setf local-tvars (expand-local-tvars env-tvars local-tvars preds (tc-env-env env)))
+          (setf env-tvars
+                (expand-local-tvars local-tvars (tc:apply-substitution subs env-tvars) preds (tc-env-env env)))
 
           ;; Split predicates into retained and deferred
           (multiple-value-bind (deferred-preds retained-preds)
-              (tc:split-context (tc-env-env env) env-tvars reduced-preds subs)
+              (tc:split-context (tc-env-env env) env-tvars preds subs)
 
             (let* (;; Calculate defaultable predicates
                    (defaultable-preds
@@ -1785,7 +1806,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                           (append env-tvars local-tvars)
                           retained-preds)
 
-                       (error:coalton-internal-type-error (e)
+                       (tc:ambiguous-constraint (e)
                          (error-ambiguous-pred (tc:ambiguous-constraint-pred e) file))))
 
                    ;; Defaultable predicates are not retained
@@ -1832,7 +1853,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
               (values
                deferred-preds
-               (attach-explicit-binding-type binding-node fresh-qual-type)
+               (attach-explicit-binding-type (tc:apply-substitution subs binding-node) (tc:apply-substitution subs fresh-qual-type))
                subs))))))))
 
 (defun check-for-invalid-recursive-scc (bindings env file)
@@ -1998,7 +2019,12 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
            (local-tvars (set-difference expr-tvars env-tvars :test #'eq)))
 
+      ;; Generate additional substitutions from fundeps
       (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) preds subs)))
+
+      (setf preds (tc:apply-substitution subs preds))
+      (setf local-tvars (expand-local-tvars env-tvars local-tvars preds (tc-env-env env)))
+      (setf env-tvars (expand-local-tvars local-tvars (tc:apply-substitution subs env-tvars) preds (tc-env-env env)))
 
       (multiple-value-bind (deferred-preds retained-preds)
           (tc:split-context (tc-env-env env) env-tvars preds subs)
@@ -2363,3 +2389,53 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                 (make-traverse-block
                  :variable #'rewrite-variable-ref))
         :source (node-let-binding-source binding))))))
+
+;;; When type checking bindings, Coalton computes the set of type
+;;; variables that can be qualified over. Predicates that contain type
+;;; variables not in this set are rejected as amgigious.
+;;;
+;;;   An example rejected definition:
+;;;   Into :a :b => :a -> Integer
+;;;
+;;; Without fundeps this set of type variables is simply the type
+;;; variables in the infered type, minus the type variables in the
+;;; environment. With fundeps, type variables can appear in the
+;;; predicates but not the type without being ambigious. 
+;;; 
+;;;   A valid definition for "C :a :b (:a -> :b)"
+;;;   C :a :b => :a -> Integer
+;;;
+;;; `expand-local-tvars' uses fundeps to compute an extended set of
+;;; unambigious type variables given a previous such list and the
+;;; binding's predicates.
+
+(defun expand-local-tvars (env-tvars local-tvars preds env)
+  (let ((old-local-tvars nil))
+    (loop :until (null (set-exclusive-or old-local-tvars local-tvars)) :do
+      (setf old-local-tvars local-tvars)
+      (loop :for pred :in preds
+            :for class := (tc:lookup-class env (tc:ty-predicate-class pred))
+            :when (tc:ty-class-fundeps class) :do
+              (let* ((idx (loop :for i :from 0
+                                :for ty :in (tc:ty-predicate-types pred)
+                                :when (subsetp (tc:type-variables ty) local-tvars :test #'eq)
+                                  :collect i))
+
+                     (fundep-vars (util:project-indicies idx (tc:ty-class-class-variables class)))
+                     (closure-vars (tc:closure fundep-vars (tc:ty-class-fundeps class)))
+
+                     (new-vars (set-difference closure-vars fundep-vars :test #'eq))
+
+                     (new-tys (util:project-map
+                               new-vars
+                               (tc:ty-class-class-variable-map class)
+                               (tc:ty-predicate-types pred))))
+
+                (loop :for var :in (set-difference
+                                    (remove-duplicates
+                                     (tc:type-variables new-tys)
+                                     :test #'eq)
+                                    env-tvars)
+                      :do (push var local-tvars)))))
+
+    (remove-duplicates local-tvars :test #'eq)))

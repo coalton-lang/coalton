@@ -8,13 +8,14 @@
   (:local-nicknames
    (#:util #:coalton-impl/util))
   (:export
-   #:hash-table
-   #:make-hash-table
-   #:hash-table-insert
-   #:hash-table-get
-   #:hash-table-delete
-   #:hash-table-count
-   #:hash-table-foreach))
+   #:hash-table                         ; STRUCT
+   #:make-hash-table                    ; FUNCTION
+   #:hash-table-insert                  ; FUNCTION
+   #:hash-table-get                     ; FUNCTION
+   #:hash-table-delete                  ; FUNCTION
+   #:hash-table-count                   ; FUNCTION
+   #:hash-table-iter                    ; FUNCTION
+   ))
 
 (in-package #:coalton/hashtable-shim/hash-table)
 
@@ -168,6 +169,7 @@
 
     (util:coalton-bug "hash table full")))
 
+(declaim (inline hash-table-insert))
 (defun hash-table-insert (table key element)
   "Insert or update the values stored at KEY in TABLE."
   (declare (type hash-table table)
@@ -228,6 +230,7 @@
 
     nil))
 
+(declaim (inline hash-table-get))
 (defun hash-table-get (table key)
   "Get the element stored at KEY in TABLE. Returns (VALUES ELEMENT FOUNDP)."
   (declare (type hash-table table)
@@ -261,6 +264,7 @@
 
     (values nil nil)))
 
+(declaim (inline hash-table-delete))
 (defun hash-table-delete (table key)
   "Attempt to delete the element stored at KEY in TABLE. Returns t if an element was deleted."
   (declare (type hash-table table)
@@ -299,6 +303,7 @@
 
     nil))
 
+(declaim (inline hash-table-count))
 (defun hash-table-count (table)
   "Returns the number of undeleted key values pairs in TABLE."
   (declare (type hash-table table)
@@ -310,6 +315,7 @@
             :do (incf count)
           :finally (return count)))
 
+(declaim (inline hash-table-foreach))
 (defun hash-table-foreach (table f)
   "Call the function F once with every key value pair in TABLE."
   (declare (type hash-table table)
@@ -320,3 +326,23 @@
         :when (>= m 0)
           :do (funcall f (aref (hash-table-keys table) i) (aref (hash-table-values table) i)))
   nil)
+
+(declaim (inline hash-table-iter))
+(defun hash-table-iter (table)
+  (declare (type hash-table table)
+           #.*hash-table-optimize*)
+  (let ((i 0))
+    (lambda ()
+      (block iter
+        (loop :while (< i (length (hash-table-metadata table)))
+              :for idx := i
+              :for m := (aref (hash-table-metadata table) idx)
+
+              :do (incf i)
+
+              :when (>= m 0)
+                :do (return-from iter
+                      (values
+                       t
+                       (aref (hash-table-keys table) idx)
+                       (aref (hash-table-values table) idx))))))))

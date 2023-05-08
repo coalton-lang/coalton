@@ -174,3 +174,33 @@
             (map (* 3))
             (coalton-library/iterator:filter! even?)
             coalton-library/iterator:collect!))"))
+
+(deftest fundep-unambigous-method ()
+  (check-coalton-types
+   "(define-class (C :a :b :c (:a -> :b :c))
+      (m (:a -> :b)))
+
+     (define (f x)
+       (m x))
+
+     (declare g (C :a :b :c => :a -> :b))
+     (define (g x)
+       (m x))
+
+     (declare h (C :a :b :c => :a -> :b))
+     (define (h x)
+       (m x)
+       (m x))"))
+
+(deftest fundep-unambigous-local-bindings ()
+  ;; See https://github.com/coalton-lang/coalton/issues/913
+  (check-coalton-types
+   "(define-class (Moo :a :b :c (:a -> :b :c))
+      (moo-size (:a -> :b))
+      (moo-find (:a -> :b -> (Optional :c))))
+
+    (declare filled-moos ((Num :b) (Ord :b) (Moo :a :b :c) => :a -> Iterator :b))
+    (define (filled-moos moo)
+      (let ((filled?
+              (fn (i) (coalton-library/optional:some? (moo-find moo i)))))
+        (coalton-library/iterator:filter! filled? (coalton-library/iterator:up-to (moo-size moo)))))"))

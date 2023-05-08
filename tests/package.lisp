@@ -21,6 +21,7 @@
    (#:types #:coalton-library/types)
    (#:math #:coalton-library/math)
    (#:big-float #:coalton-library/big-float)
+   (#:char #:coalton-library/char)
    (#:string #:coalton-library/string)
    (#:vector #:coalton-library/vector)
    (#:slice #:coalton-library/slice)

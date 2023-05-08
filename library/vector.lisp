@@ -7,7 +7,8 @@
   (:local-nicknames
    (#:types #:coalton-library/types)
    (#:list #:coalton-library/list)
-   (#:cell #:coalton-library/cell))
+   (#:cell #:coalton-library/cell)
+   (#:iter #:coalton-library/iterator))
   (:export
    #:Vector
    #:new
@@ -17,6 +18,7 @@
    #:element-type
    #:empty?
    #:copy
+   #:set-capacity
    #:push!
    #:pop!
    #:pop-unsafe!
@@ -27,10 +29,8 @@
    #:head-unsafe
    #:last
    #:last-unsafe
+   #:extend
    #:find-elem
-   #:foreach
-   #:foreach-index
-   #:foreach2
    #:append
    #:swap-remove!
    #:swap-remove-unsafe!
@@ -51,7 +51,7 @@
   ;; Vector
   ;;
 
-  (repr :native (cl:vector cl:*))
+  (repr :native (cl:and (cl:vector cl:*) (cl:not cl:simple-array)))
   (define-type (Vector :a))
 
   (declare new (types:RuntimeRepr :a => Unit -> Vector :a))
@@ -69,11 +69,9 @@
   (define (with-capacity n)
     "Create a new vector with N elements preallocated"
     (let p = types:Proxy)
-    (let ((declare %proxy-helper (types:Proxy (Vector :a) -> types:Proxy :a))
-          (%proxy-helper (fn (_) types:Proxy)))
-      (let p_ = (%proxy-helper p))
-      (let t = (types:runtime-repr p_))
-      (types:as-proxy-of (%with-capacity-specialized t n) p)))
+    (let p_ = (types:proxy-inner p))
+    (let t = (types:runtime-repr p_))
+    (types:as-proxy-of (%with-capacity-specialized t n) p))
 
   (declare length (Vector :a -> UFix))
   (define (length v)
@@ -103,6 +101,18 @@
     "Return a new vector containing the same elements as V"
     (lisp (Vector :a) (v)
       (alexandria:copy-array v)))
+
+  (declare set-capacity (UFix -> Vector :a -> Unit))
+  (define (set-capacity new-capacity v)
+    "Set the capacity of V to NEW-CAPACITY. Setting the capacity to lower then the length will remove elements from the end."
+    (let shrinking = (< new-capacity (length v)))
+    (lisp Unit (v shrinking new-capacity)
+      (cl:if shrinking
+             ;; If the array is getting larger then dont change the
+             ;; fill pointer
+             (cl:adjust-array v new-capacity :fill-pointer cl:nil)
+             (cl:adjust-array v new-capacity :fill-pointer cl:t))
+      Unit))
 
   (declare push! (:a -> Vector :a -> UFix))
   (define (push! item v)
@@ -178,45 +188,12 @@
                  (Some pos)
                  None)))))
 
-  (declare foreach ((:a -> Unit) -> Vector :a -> Unit))
-  (define (foreach f v)
-    "Call the function F once for each item in V"
-    (lisp Void (f v)
-      (cl:loop :for elem :across v
-         :do (call-coalton-function f elem)))
-    Unit)
-
-  (declare foreach-index ((UFix -> :a -> Unit) -> Vector :a -> Unit))
-  (define (foreach-index f v)
-    "Call the function F once for each item in V with its index"
-    (lisp Void (f v)
-      (cl:loop
-         :for elem :across v
-         :for i :from 0
-         :do (call-coalton-function f i elem)))
-    Unit)
-
-  (declare foreach2 ((:a -> :b -> Unit) -> Vector :a -> Vector :b -> Unit))
-  (define (foreach2 f v1 v2)
-    "Iterate in parallel over V1 and V2 calling F once for each pair of elements. Iteration stops when the shorter vector runs out of elements."
-    (lisp Void (f v1 v2)
-      (cl:loop
-         :for e1 :across v1
-         :for e2 :across v2
-         :do (call-coalton-function f e1 e2)))
-    Unit)
-
   (declare append (types:RuntimeRepr :a => Vector :a -> Vector :a -> Vector :a))
   (define (append v1 v2)
     "Create a new VECTOR containing the elements of v1 followed by the elements of v2"
     (let out = (with-capacity (+ (length v1) (length v2))))
-    (let f =
-      (fn (item)
-        (push! item out)
-        Unit))
-
-    (foreach f v1)
-    (foreach f v2)
+    (extend out v1)
+    (extend out v2)
     out)
 
   (declare swap-remove! (UFix -> Vector :a -> Optional :a))
@@ -251,24 +228,34 @@
     "Sort a vector inplace"
     (sort-by! < v))
 
+  (declare extend (iter:IntoIterator :container :elt => Vector :elt -> :container -> Unit))
+  (define (extend vec iter)
+    "Push every element in ITER to the end of VEC."
+    (let iter = (iter:into-iter iter))
+
+    ;; If the iterator is known to require more capacity then vec has,
+    ;; resize before pushing elements
+    (let size = (with-default 0 (iter:size-hint iter)))
+    (let remaining-capacity = (- (capacity vec) (length vec)))
+    (when (> size remaining-capacity)
+      (set-capacity (- size remaining-capacity) vec))
+
+    (iter:for-each!
+     (fn (x)
+       (push! x vec)
+       Unit)
+     iter)
+    Unit)
 
   ;;
-  ;; Vector Instances
+  ;; Instances
   ;;
 
   (define-instance (Eq :a => Eq (Vector :a))
     (define (== v1 v2)
       (if (/= (length v1) (length v2))
           False
-          (progn
-            (let out = (cell:new True))
-            (foreach2
-             (fn (e1 e2)
-               (unless (== e1 e2)
-                 (cell:write! out False)
-                 Unit))
-             v1 v2)
-            (cell:read out)))))
+          (iter:every! id (iter:zip-with! == (iter:into-iter v1) (iter:into-iter v2))))))
 
   (define-instance (types:RuntimeRepr :a => Semigroup (Vector :a))
     (define <> append))
@@ -279,11 +266,11 @@
                   (lisp types:LispType (v)
                     (cl:array-element-type v))
                   (length v)))
-      (foreach
-       (fn (item)
-         (push! (f item) out)
+      (iter:for-each!
+       (fn (x)
+         (push! x out)
          Unit)
-       v)
+       (iter:into-iter v)) 
       out))
 
   (define-instance (Foldable Vector)
@@ -302,7 +289,6 @@
          vec
          :initial-value init
          :from-end cl:t))))
-
 
   (define-instance (types:RuntimeRepr :a => Into (List :a) (Vector :a))
     (define (into lst)
@@ -330,7 +316,28 @@
 
   (define-instance (types:RuntimeRepr :a => Iso (Vector :a) (List :a)))
 
-  )
+  (define-instance (iter:IntoIterator (Vector :a) :a)
+    (define (iter:into-iter vec)
+      (let idx = (cell:new 0))
+      (iter:with-size
+          (fn ()
+            (let res = (index (cell:read idx) vec))
+            (cell:increment! idx)
+            res)
+        (length vec))))
+
+  (define-instance (types:RuntimeRepr :a => iter:FromIterator (Vector :a) :a)
+    (define (iter:collect! iter)
+      (let size = (with-default 0 (iter:size-hint iter)))
+      (let vec = (with-capacity size))
+      (iter:for-each! (fn (x)
+                        (push! x vec)
+                        Unit)
+                      iter)
+      vec))
+
+  (define-instance (types:RuntimeRepr :a => Default (Vector :a))
+    (define default new)))
 
 (cl:defmacro make (cl:&rest elements)
   "Construct a `Vector' containing the ELEMENTS, in the order listed."

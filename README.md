@@ -87,7 +87,6 @@ This repository contains the source code to the [Coalton compiler](src/), and th
 It also contains a few example programs, such as:
 
 - Some [simple pedagogical programs](examples/small-coalton-programs/),
-- A [JSON parser](examples/coalton-json) piggybacking on a native Common Lisp library.
 - An [implementation](examples/thih/) of Jones's *Typing Haskell in Haskell*, and
 - An [implementation](examples/quil-coalton/) of a simple [Quil](https://en.wikipedia.org/wiki/Quil_(instruction_set_architecture)) parser using parser combinators.
 

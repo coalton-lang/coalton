@@ -2,8 +2,7 @@
   (:use
    #:coalton
    #:coalton-library/builtin
-   #:coalton-library/classes
-   #:coalton-library/list)
+   #:coalton-library/classes)
   (:export
    #:Cell
    #:new
@@ -89,8 +88,8 @@
     "Remove and return the first element of the list in CEL."
     (match (read cel)
       ((Cons fst rst)
-       (progn (write! cel rst)
-              (Some fst)))
+       (write! cel rst)
+       (Some fst))
       ((Nil) None)))
 
 ;;; operators on cells of numbers
@@ -136,7 +135,10 @@
     (define into new))
 
   (define-instance (Into (Cell :a) :a)
-    (define into read)))
+    (define into read))
+
+  (define-instance (Default :a => Default (Cell :a))
+    (define (default) (new (default)))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/CELL")

@@ -33,7 +33,10 @@
         ((False)
          (match y
            ((True) LT)
-           ((False) EQ)))))))
+           ((False) EQ))))))
+
+  (define-instance (Default Boolean)
+    (define (default) False)))
 
 (define-sxhash-hasher Boolean)
 
