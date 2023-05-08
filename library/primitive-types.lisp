@@ -1,6 +1,6 @@
-;;;; fixed-size-numbers.lisp
+;;;; primitive-types.lisp
 ;;;;
-;;;; Fixed size numberical types
+;;;; Primitive types
 
 (in-package #:coalton)
 
@@ -10,6 +10,31 @@
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (coalton-toplevel
+  (repr :native cl:t)
+  (define-type Void)
+
+  ;; Boolean is an early type
+  (declare True Boolean)
+  (define True (lisp Boolean () cl:t))
+
+  (declare False Boolean)
+  (define False (lisp Boolean () cl:nil))
+
+  ;; Unit is an early type
+  (declare Unit Unit)
+  (define Unit (lisp Unit () 'coalton::Unit/Unit))
+
+  ;; List is an early type
+  (declare Cons (:a -> (List :a) -> (List :a)))
+  (define (Cons x xs)
+    (lisp (List :a) (x xs)
+      (cl:cons x xs)))
+
+  (declare Nil (List :a))
+  (define Nil
+    (lisp (List :a) ()
+      cl:nil))
+
   (repr :native (cl:unsigned-byte 8))
   (define-type U8
     "Unsigned 8-bit integer capable of storing values in `[0, 255]`. Uses `(unsigned-byte 8)`.")

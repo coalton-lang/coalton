@@ -7,6 +7,9 @@
    #:coalton-library/functions
    #:coalton-library/tuple
    #:coalton-library/optional)
+  (:local-nicknames
+   (#:cell #:coalton-library/cell)
+   (#:iter #:coalton-library/iterator))
   (:export
    #:head
    #:tail
@@ -211,7 +214,7 @@
   (declare length (List :a -> UFix))
   (define (length l)
     "Returns the length of a list."
-    (fold (fn (a b)
+    (fold (fn (a _)
             (+ 1 a))
           0
           l))
@@ -625,7 +628,7 @@ This function is equivalent to all size-N elements of `(COMBS L)`."
                                 (combsOf n xs))))))) ; and without x
 
   ;;
-  ;; List instances
+  ;; Instances
   ;;
 
   (define-instance (Eq :a => Eq (List :a))
@@ -707,7 +710,37 @@ This function is equivalent to all size-N elements of `(COMBS L)`."
     (define (traverse f xs)
       (match xs
         ((Cons x xs) (liftA2 Cons (f x) (traverse f xs)))
-        ((Nil) (pure Nil))))))
+        ((Nil) (pure Nil)))))
+
+  (define-instance (iter:IntoIterator (List :elt) :elt)
+    (define (iter:into-iter list)
+      (let remaining = (cell:new list))
+      (iter:with-size
+          (fn ()
+            (cell:pop! remaining))
+        (length list))))
+
+  (define-instance (iter:FromIterator (List :elt) :elt)
+    (define (iter:collect! iter)
+      ;; Dropping into lisp is necessary because building a list from
+      ;; front to back requires mutability.
+      (lisp (List :elt) (iter)
+        (cl:loop
+           :with top := cl:nil
+           :with current := cl:nil
+           :for res := (iter:next! iter)
+           :while (some? res)
+           :do (cl:if current
+                      (cl:progn
+                        (cl:setf (cl:cdr current) (cl:cons (from-some "" res) cl:nil))
+                        (cl:setf current (cl:cdr current)))
+                      (cl:progn
+                        (cl:setf top (cl:cons (from-some "" res) cl:nil))
+                        (cl:setf current top)))
+           :finally (cl:return top)))))
+
+  (define-instance (Default (List :a))
+    (define (default) Nil)))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/LIST")

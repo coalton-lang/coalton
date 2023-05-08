@@ -5,6 +5,7 @@
    #:Proxy
    #:proxy-of
    #:as-proxy-of
+   #:proxy-inner
    #:LispType
    #:RuntimeRepr #:runtime-repr
    #:runtime-repr-of))
@@ -31,6 +32,10 @@
   (define (as-proxy-of x _)
     "Returns the parameter, forcing the proxy to have the same type as the parameter."
     x)
+
+  (declare proxy-inner (Proxy (:a :b) -> Proxy :b))
+  (define (proxy-inner _)
+    Proxy)
 
   (repr :native (cl:or cl:symbol cl:list))
   (define-type LispType

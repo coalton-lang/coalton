@@ -1,5 +1,8 @@
 (in-package #:coalton/hashtable-shim)
 
+(deftype hash-table-type ()
+  'coalton/hashtable-shim/hash-table:hash-table)
+
 (defun make-custom-hash-table (size hash-function test-function)
   (coalton/hashtable-shim/hash-table:make-hash-table size hash-function test-function))
 
@@ -18,5 +21,5 @@
 (defun custom-hash-table-count (table)
   (coalton/hashtable-shim/hash-table:hash-table-count table))
 
-(defun custom-hash-table-foreach (table visitor)
-  (coalton/hashtable-shim/hash-table:hash-table-foreach table visitor))
+(defun custom-hash-table-iter (table)
+  (coalton/hashtable-shim/hash-table:hash-table-iter table))

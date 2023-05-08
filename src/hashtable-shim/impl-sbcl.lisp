@@ -1,5 +1,6 @@
-(cl:in-package #:coalton/hashtable-shim)
+(in-package #:coalton/hashtable-shim)
 
+#+sbcl-pre-2-2-2
 (defun make-custom-hash-table (size hash-function test-function)
   (let ((weakness 0) ; not weak
         (ht-kind 48) ; KIND: custom
@@ -22,6 +23,15 @@
      rehash-size
      rehash-threshold)))
 
+#+sbcl-post-2-2-2
+(defun make-custom-hash-table (size hash-function test-function)
+  (make-hash-table :size size
+                   :test test-function
+                   :hash-function hash-function))
+
+(deftype hash-table-type ()
+  'hash-table)
+
 (defun custom-hash-table-get (table key)
   (gethash key table))
 
@@ -39,6 +49,7 @@
 (defun custom-hash-table-count (table)
   (hash-table-count table))
 
-(defun custom-hash-table-foreach (table visitor)
-  (maphash visitor table)
-  (values))
+(defun custom-hash-table-iter (table)
+  (with-hash-table-iterator (getter table)
+    (lambda ()
+      (getter))))

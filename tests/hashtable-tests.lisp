@@ -1,4 +1,4 @@
-(cl:in-package #:coalton-native-tests)
+(in-package #:coalton-native-tests)
 
 (define-test simple-hashtable ()
   (let ((ht (the (Hashtable String Integer) (hashtable:new)))
@@ -21,8 +21,8 @@
 
 (define-test hashtable-constructor-equivalencies ()
   (let ht-eq? = (fn (ht-a ht-b)
-                  (== (list:sort (hashtable:entries ht-a))
-                      (list:sort (hashtable:entries ht-b)))))
+                  (== (list:sort (iter:collect! (hashtable:entries ht-a)))
+                      (list:sort (iter:collect! (hashtable:entries ht-b))))))
   (let ht = (hashtable:new))
   (hashtable:set! ht "zero" 0)
   (hashtable:set! ht "one" 1)
@@ -43,7 +43,7 @@
                                 (two 2)
                                 (three 3))))))
 
-(cl:in-package #:coalton-tests)
+(in-package #:coalton-tests)
 
 (deftest hashtable-static-duplicate-keys ()
   (signals coalton-library/hashtable::make-hash-table-static-duplicate-keys

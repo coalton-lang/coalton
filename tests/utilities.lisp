@@ -24,7 +24,8 @@
 
                 (file (error:make-coalton-file :stream stream :name "<test>"))
 
-                (program (parser:read-program stream file :mode :test)))
+                (program (parser:with-reader-context stream
+                           (parser:read-program stream file :mode :test))))
 
            (multiple-value-bind (program env)
                (entry:entry-point program)

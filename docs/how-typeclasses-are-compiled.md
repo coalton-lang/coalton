@@ -22,7 +22,7 @@ Each class defines a struct with fields for methods and superclasses. For instan
   -
   *
   FROMINT)
-``
+```
 
 Classes also define stub functions for dispatching methods on a dictionary. Each stub function selects the correct field from a dict and forwards the remaining arguments. See the definition of the `+` stub function below:
 
