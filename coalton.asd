@@ -172,6 +172,7 @@
                (:file "monad/state")
                (:file "ord-tree")
                (:file "ord-map")
+               (:file "monad/free")
                (:file "system")
                (:file "prelude")))
 

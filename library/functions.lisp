@@ -133,7 +133,14 @@
   (declare /= (Eq :a => :a -> :a -> Boolean))
   (define (/= a b)
     "Is A not equal to B?"
-    (boolean-not (== a b))))
+    (boolean-not (== a b)))
+
+  ;;
+  ;; Instances
+  ;;
+
+  (define-instance (Functor (Arrow :a))
+    (define map compose)))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/FUNCTIONS")
