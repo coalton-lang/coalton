@@ -112,6 +112,7 @@
                coalton-library/slice
                coalton-library/hashtable
                coalton-library/monad/state
+               coalton-library/monad/free
                coalton-library/iterator
                coalton-library/ord-tree
                coalton-library/ord-map)
