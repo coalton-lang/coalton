@@ -725,7 +725,7 @@ Inline type annotations can be added to resolve ambiguities when using typeclass
 
 ## Shorthand Function Syntax
 
-Coalton does not have nullary functions. However, a function with the type signature `Unit -> *` can be called in Coalton without explicitly passing `Unit`. For instance, the Coalton form `(make-vector)` is a shorthand for `(make-vector Unit)`.
+Coalton does not have nullary functions. However, a function with the type signature `Unit -> *` can be called in Coalton without explicitly passing `Unit`. For instance, the Coalton form `(coalton-library/vector:new)` is a shorthand for `(coalton-library/vector:new Unit)`.
 
 Functions can also be defined with an implicit parameter using `(fn () 5)`. This creates a function with a single implicit parameter of type `Unit`.
 
