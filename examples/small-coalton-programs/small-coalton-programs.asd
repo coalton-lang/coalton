@@ -5,4 +5,5 @@
   :components ((:file "package")
                (:file "diff")
                (:file "primes")
+               (:file "freecalc")
                (:file "microbench1")))
