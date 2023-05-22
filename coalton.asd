@@ -302,6 +302,7 @@
                (:file "environment-persist-tests")
                (:file "slice-tests")
                (:file "float-tests")
+               (:file "dual-tests")
                (:file "quantize-tests")
                (:file "hashtable-tests")
                (:file "iterator-tests")

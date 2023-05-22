@@ -18,7 +18,8 @@
    #:element-type
    #:empty?
    #:copy
-   #:set-capacity
+   #:set-capacity!
+   #:clear!
    #:push!
    #:pop!
    #:pop-unsafe!
@@ -102,17 +103,20 @@
     (lisp (Vector :a) (v)
       (alexandria:copy-array v)))
 
-  (declare set-capacity (UFix -> Vector :a -> Unit))
-  (define (set-capacity new-capacity v)
+  (declare set-capacity! (UFix -> Vector :a -> Unit))
+  (define (set-capacity! new-capacity v)
     "Set the capacity of V to NEW-CAPACITY. Setting the capacity to lower then the length will remove elements from the end."
     (let shrinking = (< new-capacity (length v)))
     (lisp Unit (v shrinking new-capacity)
-      (cl:if shrinking
-             ;; If the array is getting larger then dont change the
-             ;; fill pointer
-             (cl:adjust-array v new-capacity :fill-pointer cl:nil)
-             (cl:adjust-array v new-capacity :fill-pointer cl:t))
+      ;; If the array is getting larger then dont change the
+      ;; fill pointer
+      (cl:adjust-array v new-capacity :fill-pointer shrinking)
       Unit))
+
+  (declare clear! (Vector :a -> Unit))
+  (define (clear! v)
+    "Set the capacity of V to 0."
+    (set-capacity! 0 v))
 
   (declare push! (:a -> Vector :a -> UFix))
   (define (push! item v)
@@ -238,7 +242,7 @@
     (let size = (with-default 0 (iter:size-hint iter)))
     (let remaining-capacity = (- (capacity vec) (length vec)))
     (when (> size remaining-capacity)
-      (set-capacity (- size remaining-capacity) vec))
+      (set-capacity! (- size remaining-capacity) vec))
 
     (iter:for-each!
      (fn (x)
