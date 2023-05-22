@@ -3,6 +3,7 @@
 \#*\#
 .\#*
 .DS_Store
+*~
 
 # The reference doc is built automatically by a bot
 docs/reference.md
