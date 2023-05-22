@@ -18,52 +18,87 @@ Coalton can be written in files:
 ```lisp
 (in-package #:coalton-user)
 
+(named-readtables:in-readtable coalton:coalton)
+
 (coalton-toplevel
-  (define-type Symbol
-    (Symbol String))
+  ;; Define Coalton `Symbol`s as Lisp `cl:keyword`s.
+  (repr :native cl:keyword)
+  (define-type Symbol)
 
-  (define (symbol-name sym)
-    (match sym
-      ((Symbol s) s)))
+  ;; Bind a Lisp function into Coalton.
+  (declare sym (String -> Symbol))
+  (define (sym s)
+    "Create a new symbol named `s`."
+    (lisp Symbol (s)
+      (cl:intern s "KEYWORD")))
 
+  ;; Define equality of `Symbol` types using CL's `eq`.
   (define-instance (Eq Symbol)
     (define (== a b)
-      (== (symbol-name a) (symbol-name b))))
+      (lisp Boolean (a b)
+        (cl:eq a b))))
 
-  (define-type Expr
+  ;; Define a new parametric algebraic data type for simple
+  ;; mathematical expressions.
+  (define-type (Expr :t)
     "A symbolic expression of basic arithmetic."
-    (EConst Integer)
+    (EConst :t)
     (EVar   Symbol)
-    (E+     Expr Expr)
-    (E*     Expr Expr))
+    (E+     (Expr :t) (Expr :t))
+    (E*     (Expr :t) (Expr :t)))
 
-  (declare diff (Symbol -> Expr -> Expr))
+  ;; The classic `diff` function, in Coalton.
+  (declare diff (Num :t => Symbol -> Expr :t -> Expr :t))
   (define (diff x f)
-    "Compute the derivative of F with respect to X."
+    "Compute the derivative of `f` with respect to `x`."
     (match f
-      ((EConst _)   ; c' = 0
+      ((EConst _)                       ; c' = 0
        (EConst 0))
-      ((EVar s)     ; x' = 1
+      ((EVar s)                         ; x' = 1
        (if (== s x) (EConst 1) (EConst 0)))
-      ((E+ a b)     ; (a+b)' = a' + b'
+      ((E+ a b)                         ; (a+b)' = a' + b'
        (E+ (diff x a) (diff x b)))
-      ((E* a b)     ; (ab)' = a'b + ab'
+      ((E* a b)                         ; (ab)' = a'b + ab'
        (E+ (E* (diff x a) b)
            (E* a          (diff x b))))))
 
- (declare dt (Expr -> Expr))
- (define dt
-   "The time derivative operator."
-   (diff (Symbol "t"))))
+  ;; We can use `t` just fine since Coalton doesn't import `cl:t`.
+  (define t (sym "t"))
+
+  (declare dt (Num :t => Expr :t -> Expr :t))
+  (define dt
+    "The time derivative operator."
+    (diff t)))
 ```
 
 And at the REPL:
 
 ```lisp
 CL-USER> (in-package #:coalton-user)
-COALTON-USER> (coalton (dt (E+ (EVar (Symbol "t"))
-                               (EConst 1))))
-#.(E+ #.(ECONST 1) #.(ECONST 0))
+COALTON-USER> (coalton-toplevel
+                (define (square x) (E* x x)))
+; No value
+COALTON-USER> (coalton (dt (E+ (square (EVar t)) (EConst 1))))
+#.(E+ #.(E+ #.(E* #.(ECONST 1) #.(EVAR |t|))
+            #.(E* #.(EVAR |t|) #.(ECONST 1)))
+      #.(ECONST 0))
+```
+
+Type errors are discovered at compile-time, and errors are printed beautifully without sacrificing Common Lisp's interactive debugging facilities.
+
+```lisp
+COALTON-USER> (coalton (dt (E+ (EConst 1/2) (EConst 0.5))))
+error: Type mismatch
+  --> <unknown>:1:30
+   |
+ 1 |  (coalton (dt (E+ (EConst 1/2) (EConst 0.5))))
+   |                                ^^^^^^^^^^^^ Expected type '(EXPR FRACTION)' but got type '(EXPR DOUBLE-FLOAT)'
+   [Condition of type COALTON-IMPL/TYPECHECKER/BASE:TC-ERROR]
+
+Restarts:
+ 0: [RETRY] Retry REPL evaluation request.
+ 1: [*ABORT] Return to top level.
+ 2: [ABORT] abort thread (#<THREAD "repl-thread" RUNNING {10013A8003}>)
 ```
 
 *Coalton has **not** reached "1.0" yet. This means that, from time to time, you may have a substandard user experience. While we try to be ANSI-conforming, Coalton is currently only tested on SBCL 2.2.x, Allegro CL 10.1.* and Clozure CL 1.21.*.
