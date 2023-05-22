@@ -12,7 +12,8 @@
    #:coalton-library/math/integral
    #:coalton-library/math/real
    #:coalton-library/math/complex
-   #:coalton-library/math/elementary))
+   #:coalton-library/math/elementary
+   #:coalton-library/math/dual))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/MATH")
@@ -33,12 +34,14 @@
    #:coalton-library/math/arith
    #:Reciprocable #:/
    #:Fraction
+   #:reciprocal
    #:negate
    #:abs
    #:1+
    #:1-)
   (:export
    #:Reciprocable #:/
+   #:reciprocal
    #:Fraction
    #:negate
    #:abs
@@ -58,6 +61,34 @@
    #:round
    #:Real
    #:Rational)
+
+  (:import-from
+   #:coalton-library/math/elementary
+   #:sin
+   #:cos
+   #:tan
+   #:asin
+   #:acos
+   #:atan
+   #:log
+   #:ln
+   #:pow
+   #:exp
+   #:sqrt
+   #:nth-root)
+  (:export
+   #:sin
+   #:cos
+   #:tan
+   #:asin
+   #:acos
+   #:atan
+   #:log
+   #:ln
+   #:pow
+   #:exp
+   #:sqrt
+   #:nth-root)
 
   (:import-from
    #:coalton-library/math/complex
