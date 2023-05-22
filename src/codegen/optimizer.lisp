@@ -57,10 +57,9 @@
 
            (resolve-table (alexandria:alist-hash-table bindings))
 
-           (function-table (make-function-table env))
-
            (bindings
-             (loop :for (name . node) :in bindings
+             (loop :with function-table := (make-function-table env)
+                   :for (name . node) :in bindings
                    :collect (cons name (pointfree node function-table env)))))
 
       (loop :for (name . node) :in bindings
@@ -79,27 +78,31 @@
                               package
                               resolve-table
                               (lambda (node env)
-                                (direct-application (optimize-node node env) function-table))
+                                (optimize-node node env))
                               env)
                              package env)
                   :else
                     :collect (cons name node)))
 
+
       ;; Update function env
       (setf env (update-function-env bindings env))
 
-      (setf bindings
-            (loop :for (name . node) :in bindings
-                  :collect (cons name (direct-application node function-table))))
 
-      ;; Update code db
-      (loop :for (name . node) :in bindings
-            :do (setf env (tc:set-code env name node)))
+      (let ((function-table (make-function-table env)))
 
-      (loop :for (name . node) :in bindings
-            :do (typecheck-node node env))
+        (setf bindings
+              (loop :for (name . node) :in bindings
+                    :collect (cons name (direct-application node function-table))))
 
-      (values bindings env))))
+        ;; Update code db
+        (loop :for (name . node) :in bindings
+              :do (setf env (tc:set-code env name node)))
+
+        (loop :for (name . node) :in bindings
+              :do (typecheck-node node env))
+
+        (values bindings env)))))
 
 (defun direct-application (node table)
   (declare (type node node)
