@@ -28,6 +28,7 @@
    #:length
    #:index
    #:nth
+   #:nth-cdr
    #:elemIndex
    #:findIndex
    #:range
@@ -233,6 +234,16 @@
   (define (nth n l)
     "Like INDEX, but errors if the index is not found."
     (from-some "There is no NTH" (index n l)))
+
+  (declare nth-cdr (Ufix -> List :a -> (Optional (List :a))))
+  (define (nth-cdr i xs)
+    "Returns the nth-cdr of a list."
+    (match xs
+      ((Nil) None)
+      ((Cons x xs)
+       (if (== 0 i)
+	   (Some (cons x xs))
+	   (nth-cdr (- i 1) xs)))))
 
   (declare elemIndex (Eq :a => :a -> List :a -> Optional UFix))
   (define (elemIndex x xs)

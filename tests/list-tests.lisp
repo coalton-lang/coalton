@@ -54,6 +54,8 @@
 
   (is (== (list:nth 0 x) 1))
 
+  (is (== (list:nth-cdr 3 (make-list 1 2 3 4 5 6 7)) (Some (make-list 4 5 6 7))))
+
   (is (== (list:elemIndex 2 x) 1))
 
   (is (== (list:findIndex even? x) 1))
