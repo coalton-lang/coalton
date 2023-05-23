@@ -131,7 +131,7 @@
                     :span (parser:node-source (parser:toplevel-define-name second))
                     :message "second defintion here"))))))
 
-  ;; Ensure that there are no duplicate declerations
+  ;; Ensure that there are no duplicate declarations
   (check-duplicates
    declares
    (alexandria:compose #'parser:identifier-src-name #'parser:toplevel-declare-name)
@@ -140,16 +140,16 @@
             :err (coalton-error
                   :span (parser:identifier-src-source (parser:toplevel-declare-name first))
                   :file file
-                  :message "Duplicate decleration"
-                  :primary-note "first decleration here"
+                  :message "Duplicate declaration"
+                  :primary-note "first declaration here"
                   :notes
                   (list
                    (make-coalton-error-note
                     :type :primary
                     :span (parser:identifier-src-source (parser:toplevel-declare-name second))
-                    :message "second decleration here"))))))
+                    :message "second declaration here"))))))
 
-  ;; Ensure that each decleration has an associated definition
+  ;; Ensure that each declaration has an associated definition
   (loop :with def-table
           := (loop :with table := (make-hash-table :test #'eq)
 
@@ -169,8 +169,8 @@
                      :err (coalton-error
                            :span (parser:identifier-src-source (parser:toplevel-declare-name declare))
                            :file file
-                           :message "Orphan decleration"
-                           :primary-note "decleration does not have an associated definition")))
+                           :message "Orphan declaration"
+                           :primary-note "declaration does not have an associated definition")))
 
   (let ((dec-table (make-hash-table :test #'eq))
 
@@ -1584,7 +1584,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
             :do (setf (gethash name def-table) binding))
 
 
-    ;; Ensure that there are no duplicate declerations
+    ;; Ensure that there are no duplicate declarations
     (loop :for declare :in declares
           :for name := (parser:node-variable-name (parser:node-let-declare-name declare))
 
@@ -1593,8 +1593,8 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                        :err (coalton-error
                              :span (parser:node-source (parser:node-let-declare-name declare))
                              :file file
-                             :message "Duplicate decleration in let"
-                             :primary-note "second decleration here"
+                             :message "Duplicate declaration in let"
+                             :primary-note "second declaration here"
                              :notes
                              (list
                               (make-coalton-error-note
@@ -1602,11 +1602,11 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                                :span (parser:node-source
                                       (parser:node-let-declare-name
                                        (gethash name dec-table)))
-                               :message "first decleration here"))))
+                               :message "first declaration here"))))
           :else
             :do (setf (gethash name dec-table) declare))
 
-    ;; Ensure that each decleration has an associated definition
+    ;; Ensure that each declaration has an associated definition
     (loop :for declare :in declares
           :for name := (parser:node-variable-name (parser:node-let-declare-name declare))
 
@@ -1616,7 +1616,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                              :span (parser:node-source (parser:node-let-declare-name declare))
                              :file file
                              :message "Orphan declare in let"
-                             :primary-note "decleration does not have an associated definition")))
+                             :primary-note "declaration does not have an associated definition")))
 
     (let ((dec-table
             (loop :with table := (make-hash-table :test #'eq)

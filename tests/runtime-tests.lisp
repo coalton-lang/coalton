@@ -109,7 +109,7 @@
   (is (== (+ (Some (Some (the Integer 1))) (Some (Some 2))) (Some (Some 3)))))
 
 
-;; Test that explicit type declerations in let bindings work
+;; Test that explicit type declarations in let bindings work
 ;; See gh #478
 (define-test test-explicit-type-decs-in-let ()
   (let ((declare z (Num :a => :a -> :a))

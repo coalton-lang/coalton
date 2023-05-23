@@ -57,7 +57,7 @@
 
       (define-instance (C (List :a) String))")))
 
-;; Check that fundep declerations are used to improve type checking 
+;; Check that fundep declarations are used to improve type checking 
 (deftest fundep-improve-types ()
   (check-coalton-types
    "(define-class (C :a :b (:a -> :b))
@@ -139,7 +139,7 @@
      "(define-class (C :a :b)
         (m :a))")))
 
-(deftest fundep-ambiguous-declerations ()
+(deftest fundep-ambiguous-declarations ()
   (check-coalton-types
    "(define-class (C :a :b (:a -> :b)))
 
