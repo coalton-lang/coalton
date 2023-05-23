@@ -133,6 +133,7 @@
           (lisp (Optional :key) (lisp-iter)
             (cl:multiple-value-bind (presentp key value)
                 (cl:funcall lisp-iter)
+              (cl:declare (cl:ignore value))
               (cl:if presentp
                      (Some key)
                      None))))
@@ -147,6 +148,7 @@
           (lisp (Optional :value) (lisp-iter)
             (cl:multiple-value-bind (presentp key value)
                 (cl:funcall lisp-iter)
+              (cl:declare (cl:ignore key))
               (cl:if presentp
                      (Some value)
                      None))))
@@ -187,7 +189,8 @@
       (let table = (with-capacity (into capacity)))
       (iter:for-each!
        (fn ((Tuple key value))
-         (set! table key value)))
+         (set! table key value))
+       iter)
       table))
 
   (define-instance (Hash :key => Default (Hashtable :key :value))

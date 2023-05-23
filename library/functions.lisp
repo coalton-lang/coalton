@@ -70,7 +70,7 @@
     x)
 
   (declare const (:a -> :b -> :a))
-  (define (const a b)
+  (define (const a _b)
     "A function that always returns its first argument."
     a)
 
