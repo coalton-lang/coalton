@@ -9,7 +9,8 @@
    #:coalton-library/optional)
   (:local-nicknames
    (#:cell #:coalton-library/cell)
-   (#:iter #:coalton-library/iterator))
+   (#:iter #:coalton-library/iterator)
+   (#:arith #:coalton-library/math/arith))
   (:export
    #:head
    #:tail
@@ -28,6 +29,7 @@
    #:length
    #:index
    #:nth
+   #:nth-cdr
    #:elemIndex
    #:findIndex
    #:range
@@ -234,6 +236,16 @@
     "Like INDEX, but errors if the index is not found."
     (from-some "There is no NTH" (index n l)))
 
+  (declare nth-cdr (Ufix -> List :a -> List :a))
+  (define (nth-cdr n l)
+    "Returns the nth-cdr of a list."
+    (cond ((null? l)
+	   Nil)
+	  ((arith:zero? n)
+	   l)
+	  (True
+	   (nth-cdr (arith:1- n) (cdr l)))))
+  
   (declare elemIndex (Eq :a => :a -> List :a -> Optional UFix))
   (define (elemIndex x xs)
     (findIndex (== x) xs))
