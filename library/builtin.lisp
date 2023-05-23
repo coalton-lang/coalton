@@ -20,7 +20,7 @@
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (coalton-toplevel
-  (define (undefined x)
+  (define (undefined _)
     "A function which can be used in place of any value, throwing an error at runtime."
     (error "Undefined"))
 
