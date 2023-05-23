@@ -83,15 +83,15 @@
 
    '("f" . "(Num :a => :a -> :b)")))
 
-(deftest test-explicit-type-declerations ()
-  ;; Check that explicit declerations can reduce the type of a definition
+(deftest test-explicit-type-declarations ()
+  ;; Check that explicit declarations can reduce the type of a definition
   (check-coalton-types
    "(declare f Integer)
     (define f (undefined \"hello\"))"
 
    '("f" . "Integer"))
 
-  ;; Declerations cannot be less specefic than their associated definition
+  ;; Declarations cannot be less specefic than their associated definition
   (signals tc:tc-error
     (check-coalton-types
      "(declare x :a)
