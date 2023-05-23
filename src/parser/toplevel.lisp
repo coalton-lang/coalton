@@ -493,7 +493,7 @@ consume all attributes"))))
       (parse-expression form file))))
 
 (defun parse-package (form file)
-  "Parses a coalton package decleration in the form of (package {name})"
+  "Parses a coalton package declaration in the form of (package {name})"
   (declare (type cst:cst form)
            (type coalton-file file)
            (values package))
@@ -1408,7 +1408,7 @@ consume all attributes")))
                  :span (cst:source form)
                  :file file
                  :highlight :end
-                 :message "Malformed specialize decleration"
+                 :message "Malformed specialize declaration"
                  :primary-note "missing from name")))
 
   ;; (specialize f)
@@ -1418,7 +1418,7 @@ consume all attributes")))
                  :span (cst:source form)
                  :file file
                  :highlight :end
-                 :message "Malformed specialize decleration"
+                 :message "Malformed specialize declaration"
                  :primary-note "missing to name")))
 
   ;; (specialize f f2)
@@ -1428,7 +1428,7 @@ consume all attributes")))
                  :span (cst:source form)
                  :file file
                  :highlight :end
-                 :message "Malformed specialize decleration"
+                 :message "Malformed specialize declaration"
                  :primary-note "missing type")))
 
   ;; (specialize f f2 t ....)
@@ -1437,7 +1437,7 @@ consume all attributes")))
            :err (coalton-error
                  :span (cst:source (cst:first (cst:rest (cst:rest (cst:rest (cst:rest form))))))
                  :file file
-                 :message "Malformed specialize decleration"
+                 :message "Malformed specialize declaration"
                  :primary-note "unexpected form")))
 
   (make-toplevel-specialize
