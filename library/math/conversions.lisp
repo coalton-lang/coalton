@@ -190,9 +190,9 @@ cannot be represented in :TO. These fall into a few categories:
            (cl:if (cl:and (cl:> x (cl:expt -2 ,pow)) (cl:< x (cl:expt 2 ,pow)))	 
 	          (cl:let ((y (cl:coerce x ',lisp-float)))
 	            (cl:if (cl:null y)
-		           (cl:error `,(cl:concatenate 'string (cl:symbol-name ,integer) "to " (cl:symbol-name ,float) " conversion out-of-range"))
+		           (coalton-impl/util:unreachable) 
 		           (Ok y)))
-	          (Err `,(cl:concatenate 'string "Given integer" "is not within " "(-2^" (write-to-string ,pow) ", " "2^" (write-to-string ,pow) ")"))))))))
+	          (Err `,(cl:concatenate 'cl:string "Given integer" "is not within " "(-2^" (cl:write-to-string ,pow) ", " "2^" (cl:write-to-string ,pow) ")"))))))))
 
 (coalton-toplevel
   ;; Single Float
