@@ -20,6 +20,7 @@
    #:entries
    #:keys
    #:values
+   #:extend!
    #:make))
 
 (in-package #:coalton-library/hashtable)
@@ -154,9 +155,9 @@
                      None))))
       (with-default 0 (tryinto (count table))))) 
 
-  (declare extend ((Hash :key) (iter:IntoIterator :container (Tuple :key :value))
+  (declare extend! ((Hash :key) (iter:IntoIterator :container (Tuple :key :value))
                    => Hashtable :key :value -> :container -> Unit))
-  (define (extend table iter)
+  (define (extend! table iter)
     "Insert all of the key value pairs from ITER into TABLE, overwriting duplicate keys."
     (let iter = (iter:into-iter iter))
     (iter:for-each!

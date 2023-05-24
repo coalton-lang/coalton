@@ -30,7 +30,7 @@
    #:head-unsafe
    #:last
    #:last-unsafe
-   #:extend
+   #:extend!
    #:find-elem
    #:append
    #:swap-remove!
@@ -196,8 +196,8 @@
   (define (append v1 v2)
     "Create a new VECTOR containing the elements of v1 followed by the elements of v2"
     (let out = (with-capacity (+ (length v1) (length v2))))
-    (extend out v1)
-    (extend out v2)
+    (extend! out v1)
+    (extend! out v2)
     out)
 
   (declare swap-remove! (UFix -> Vector :a -> Optional :a))
@@ -232,8 +232,8 @@
     "Sort a vector inplace"
     (sort-by! < v))
 
-  (declare extend (iter:IntoIterator :container :elt => Vector :elt -> :container -> Unit))
-  (define (extend vec iter)
+  (declare extend! (iter:IntoIterator :container :elt => Vector :elt -> :container -> Unit))
+  (define (extend! vec iter)
     "Push every element in ITER to the end of VEC."
     (let iter = (iter:into-iter iter))
 
