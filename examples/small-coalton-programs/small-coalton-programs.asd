@@ -6,4 +6,5 @@
                (:file "diff")
                (:file "primes")
                (:file "freecalc")
-               (:file "microbench1")))
+               (:file "microbench1")
+	       (:file "brainfold")))
