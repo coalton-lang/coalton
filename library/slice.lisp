@@ -186,7 +186,7 @@
       ;; NOTE: This will create a non displaced array. It should be
       ;; fine, because it isn't observable with the slice API.
       (let vec = (vector:with-capacity (with-default 0 (iter:size-hint iter))))
-      (vector:extend vec iter)
+      (vector:extend! vec iter)
       (lisp (Slice :a) (vec) vec)))
 
   (define-instance (Eq :a => Eq (Slice :a))
@@ -215,7 +215,7 @@
   (define-instance (types:RuntimeRepr :a => Into (Slice :a) (Vector :a))
     (define (into s)
       (let v = (vector:with-capacity (length s)))
-      (vector:extend v (iter:into-iter s))
+      (vector:extend! v (iter:into-iter s))
       v))
 
   (define-instance (types:RuntimeRepr :a => Into (Vector :a) (Slice :a))
