@@ -211,6 +211,12 @@
    #:Vector)
 
   (:import-from
+   #:coalton-library/seq
+   #:Seq)
+  (:export
+   #:Seq)
+
+  (:import-from
    #:coalton-library/hashtable
    #:Hashtable)
   (:export
@@ -252,6 +258,7 @@
    (#:result #:coalton-library/result)
    (#:cell #:coalton-library/cell)
    (#:vector #:coalton-library/vector)
+   (#:seq #:coalton-library/seq)
    (#:slice #:coalton-library/slice)
    (#:hashtable #:coalton-library/hashtable)
    (#:st #:coalton-library/monad/state)

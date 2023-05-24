@@ -132,6 +132,7 @@
                       (funcall compile)))
   :depends-on (#:coalton/compiler
                #:coalton/hashtable-shim
+               #:coalton/persistent-data-structures
                #:trivial-garbage
                #:alexandria)
   :pathname "library/"
@@ -166,6 +167,7 @@
                (:file "tuple")
                (:file "list")
                (:file "vector")
+               (:file "seq")
                (:file "char")
                (:file "string")
                (:file "slice")
@@ -255,6 +257,15 @@
                (:file "hash-table" :if-feature (:not :sbcl))
                (:file "impl-custom" :if-feature (:not :sbcl))))
 
+(asdf:defsystem #:coalton/persistent-data-structures
+  :description "Portable implementations of persistent data structures in Common Lisp, for use by the Coalton standard library."
+  :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
+  :license "MIT"
+  :version (:read-file-form "VERSION.txt")
+  :pathname "src/persistent-data-structures"
+  :serial t
+  :components ((:file "persistent-vector")))
+
 (asdf:defsystem #:coalton/doc
   :description "Documentation generator for Coalton"
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
@@ -305,6 +316,7 @@
                (:file "dual-tests")
                (:file "quantize-tests")
                (:file "hashtable-tests")
+               (:file "persistent-vector-tests")
                (:file "iterator-tests")
                (:file "call-coalton-from-lisp")
                (:file "vector-tests")
