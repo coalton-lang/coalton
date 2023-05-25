@@ -128,30 +128,32 @@
                     subexpr)))
 
          (declare (ignorable ,match-var))
-         (cond
-           ,@(loop :for branch :in (node-match-branches expr)
-                   :for pattern := (match-branch-pattern branch)
-                   :for expr := (codegen-expression (match-branch-body branch) current-function env)
-                   :collect
-                   (multiple-value-bind (pred bindings)
-                       (codegen-pattern pattern match-var env)
-                     `(,pred
-                       ,(cond
-                          ((null bindings)
-                           expr)
-                          (t
-                           `(let ,bindings
-                              (declare (ignorable ,@(mapcar #'car bindings)))
-                              ,expr))))))
+         (locally
+             #+sbcl (declare (sb-ext:muffle-conditions sb-ext:code-deletion-note))
+             (cond
+               ,@(loop :for branch :in (node-match-branches expr)
+                       :for pattern := (match-branch-pattern branch)
+                       :for expr := (codegen-expression (match-branch-body branch) current-function env)
+                       :collect
+                       (multiple-value-bind (pred bindings)
+                           (codegen-pattern pattern match-var env)
+                         `(,pred
+                           ,(cond
+                              ((null bindings)
+                               expr)
+                              (t
+                               `(let ,bindings
+                                  (declare (ignorable ,@(mapcar #'car bindings)))
+                                  ,expr))))))
 
-           ;; Only emit a fallback if there is not a catch-all clause.
-           ,@(unless (member-if (lambda (pat)
-                                  (or (pattern-wildcard-p pat)
-                                      (pattern-var-p pat)))
-                                (node-match-branches expr)
-                                :key #'match-branch-pattern)
-               `((t
-                  (error "Pattern match not exaustive error"))))))))
+               ;; Only emit a fallback if there is not a catch-all clause.
+               ,@(unless (member-if (lambda (pat)
+                                      (or (pattern-wildcard-p pat)
+                                          (pattern-var-p pat)))
+                                    (node-match-branches expr)
+                                    :key #'match-branch-pattern)
+                   `((t
+                      (error "Pattern match not exaustive error")))))))))
 
   (:method ((expr node-seq) current-function env)
     (declare (type tc:environment env)
