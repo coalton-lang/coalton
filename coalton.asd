@@ -313,4 +313,5 @@
                (:file "class-tests")
                (:file "list-tests")
                (:file "red-black-tests")
-               (:file "unused-variables")))
+               (:file "unused-variables")
+               (:file "pattern-matching-tests")))
