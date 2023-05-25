@@ -13,6 +13,7 @@
    #:Vector
    #:new
    #:with-capacity
+   #:with-initial-element
    #:length
    #:capacity
    #:element-type
@@ -73,6 +74,13 @@
     (let p_ = (types:proxy-inner p))
     (let t = (types:runtime-repr p_))
     (types:as-proxy-of (%with-capacity-specialized t n) p))
+
+  (declare with-initial-element (types:RuntimeRepr :a => UFix -> :a -> Vector :a))
+  (define (with-initial-element n x)
+    "Create a new vector with N elements equal to X"
+    (let v = (with-capacity n))
+    (extend! v (iter:repeat-for x n))
+    v)
 
   (declare length (Vector :a -> UFix))
   (define (length v)
