@@ -178,14 +178,35 @@
   (is (== (iter:collect! (iter:filter-map! string:parse-int (iter:into-iter (make-list "1" "2" "three" "" "5"))))
           (make-list 1 2 5))))
 
+(define-test iter-for-each ()
+  (let ((populate-vector (fn ()
+			   (let v = (vector:with-capacity 6))
+			   (iter:for-each! (fn (x)
+					     (vector:push! x v)
+					     Unit)
+					   (iter:up-to 5))
+			   v)))
+    (is (== (iter:collect! (iter:into-iter (populate-vector)))
+	    (make-list 0 1 2 3 4)))))
+
+(define-test iter-count ()
+  (is (== (iter:count! (iter:into-iter (make-list 1 2 3 4 5)))
+	  5)))
+
+(define-test iter-find ()
+  (let ((even-in-iter (fn (iter)
+			(iter:find! (fn (x) (math:zero? (mod x 2)))
+				    iter))))
+    (is (== (even-in-iter (iter:into-iter (make-list 1 3 5 6)))
+	    (Some 6)))
+    (is (== (even-in-iter (iter:into-iter (make-list 1 3 5 7)))
+	    None))))
+
 ;;; FIXME: define more tests
 ;; - vector-iter
 ;; - recursive-iter
 ;; - repeat-forever
 ;; - pair-with!
-;; - count!
-;; - for-each!
-;; - find!
 ;; - collect-vector!
 ;; - collect-vector-size-hint!
 ;; - collect-hashtable!
