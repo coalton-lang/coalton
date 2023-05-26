@@ -202,6 +202,12 @@
     (is (== (even-in-iter (iter:into-iter (make-list 1 3 5 7)))
 	    None))))
 
+(define-test iter-flat-map ()
+  (is (== (the (List Integer) (make-list 0 2 1 3 2 4 3 5))
+	  (iter:collect!
+	   (iter:flat-map! (fn (x) (iter:into-iter (make-list x (+ x 2))))
+			   (iter:up-to 4))))))
+
 ;;; FIXME: define more tests
 ;; - vector-iter
 ;; - recursive-iter

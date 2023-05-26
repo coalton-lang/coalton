@@ -40,6 +40,7 @@
    #:unwrapped!
    #:take!
    #:flatten!
+   #:flat-map!
    #:chain!
    #:remove-duplicates! ; defined in library/hashtable.lisp
    #:pair-with!
@@ -303,7 +304,7 @@ interleaving. (interleave empty ITER) is equivalent to (id ITER)."
 
   (declare filter! ((:elt -> Boolean) -> Iterator :elt -> Iterator :elt))
   (define (filter! keep? iter)
-    "Return an iterator over the elements from ITER for which KEEP? returns true."
+    "Return an iterator over the elements from ITER for which KEEP?returns true."
     (let ((filter-iter (fn (u)
                          (match (next! iter)
                            ((None) None)
@@ -400,6 +401,10 @@ interleaving. (interleave empty ITER) is equivalent to (id ITER)."
                              ((None) None)))))))
          (%Iterator flatten-iter-inner None)))))
 
+  (declare flat-map! ((:a -> (Iterator :b)) -> Iterator :a -> Iterator :b))
+  (define (flat-map! func iter)
+    "Flatten! wrapped around map."
+    (flatten! (map func iter)))
 
 
   (declare pair-with! ((:key -> :value) -> Iterator :key -> Iterator (Tuple :key :value)))
