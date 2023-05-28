@@ -17,6 +17,7 @@
    #:reverse
    #:length
    #:substring
+   #:split
    #:strip-prefix
    #:strip-suffix
    #:parse-int
@@ -64,6 +65,12 @@
       (lisp String (real-start real-end str)
         (cl:subseq str real-start real-end))))
 
+  (declare split (UFix -> String -> (Tuple String String)))
+  (define (split n str)
+    "Splits a string into a head and tail at the nth index."
+    (Tuple (substring str 0 n)
+           (substring str n (length str))))
+  
   (declare strip-prefix (String -> String -> (Optional String)))
   (define (strip-prefix prefix str)
     "Returns a string without a give prefix, or None if the string
@@ -139,10 +146,10 @@ does not have that suffix."
   (define-instance (Ord String)
     (define (<=> a b)
       (lisp Ord (a b)
-         (cl:cond
-           ((cl:string> a b) GT)
-           ((cl:string< a b) LT)
-           (cl:t EQ)))))
+        (cl:cond
+          ((cl:string> a b) GT)
+          ((cl:string< a b) LT)
+          (cl:t EQ)))))
 
   (define-instance (Semigroup String)
     (define <> concat))
