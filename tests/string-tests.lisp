@@ -26,3 +26,10 @@
   (let has-empty? = (string:substring? ""))
   (is (has-empty? ""))
   (is (has-empty? "foo")))
+
+(define-test string-split ()
+  (let str = "teststring")
+  (is (== (string:split 1 str)
+          (Tuple "t" "eststring")))
+  (is (== (string:split 4 str)
+          (Tuple "test" "string"))))
