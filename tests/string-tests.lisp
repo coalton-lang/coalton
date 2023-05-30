@@ -1,5 +1,55 @@
 (cl:in-package #:coalton-native-tests)
 
+
+(define-test string-concat ()
+  (is (== "hello" (string:concat "h" "ello"))))
+
+(define-test reverse-string ()
+  (is (== (string:reverse "amanaplanacanalpanama")
+          "amanaplanacanalpanama"))
+  (is (== (string:reverse "foo")
+          "oof")))
+
+(define-test string-length ()
+  (is (== (string:length "12345") 5)))
+
+(define-test substring-tests ()
+  (is (== (substring "foobar" 0 3)
+          "foo"))
+  (is (== (substring "foobar" 3 6)
+          "bar")))
+
+(define-test string-split ()
+  (let str = "teststring")
+  (is (== (string:split 1 str)
+          (Tuple "t" "eststring")))
+  (is (== (string:split 4 str)
+          (Tuple "test" "string"))))
+
+(define-test strip-fixes ()
+  (is (== (string:strip-prefix "pre" "prefix")
+          (Some "fix")))
+  (is (== (string:strip-prefix "pre" "fix")
+          None))
+  (is (== (string:strip-suffix "ish" "suffixish")
+          (Some "suffix")))
+  (is (== (string:strip-suffix "ish" "suffix")
+          None)))
+
+(define-test string-parse-int ()
+  (is (== (string:parse-int "5")
+          (Some 5)))
+  (is (== (string:parse-int "five")
+          None)))
+
+(define-test reffing ()
+  (is (== (string:ref-unchecked "ABCDE" 0)
+          (unwrap (char:code-char 65))))
+  (is (== (string:ref "ABCDE" 2)
+          (char:code-char 67)))
+  (is (== (string:ref "" 2)
+          None)))
+
 (define-test string-substring-finders ()
   (let find-foo = (string:substring-index "foo"))
   (is (== (Some 0) (find-foo "foo")))
@@ -26,10 +76,3 @@
   (let has-empty? = (string:substring? ""))
   (is (has-empty? ""))
   (is (has-empty? "foo")))
-
-(define-test string-split ()
-  (let str = "teststring")
-  (is (== (string:split 1 str)
-          (Tuple "t" "eststring")))
-  (is (== (string:split 4 str)
-          (Tuple "test" "string"))))
