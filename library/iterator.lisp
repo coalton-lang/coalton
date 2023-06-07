@@ -50,6 +50,7 @@
    #:count!
    #:for-each!
    #:find!
+   #:filter-find!
    #:index-of!
    #:optimize!
    #:max!
@@ -477,6 +478,11 @@ Discard values returned by THUNK."
                       (Some elt)
                       (find! this? iter)))
       ((None) None)))
+
+  (declare filter-find! ((:a -> Optional :b) -> Iterator :a -> Optional :b))
+  (define (filter-find! f)
+    "Return the first element of (map F ITER) for which F returns `Some`."
+    (compose next! (filter-map! f)))
 
   (declare index-of! ((:elt -> Boolean) -> Iterator :elt -> Optional UFix))
   (define (index-of! this? iter)
