@@ -279,7 +279,7 @@ There is also support for defining structs.
 
 ```lisp
 (coalton-toplevel
-  (define-type Point
+  (define-struct Point
     (x Integer)
     (y Integer)))
 ```
