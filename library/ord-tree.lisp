@@ -534,4 +534,4 @@ B'. Which one is chosen for the result is undefined."
   "Construct a tree containing the ELEMENTS.
 
 e.g. (tree:make 5 6 1 8 9) => tree containing 1, 5, 6, 8, 9."
-  `(collect-tree! (iter:into-iter (make-list ,@elements))))
+  `(collect! (iter:into-iter (make-list ,@elements))))
