@@ -100,8 +100,8 @@
 (define-test test-removal ()
   (is (== (list:remove-duplicates (make-list 1 3 2 2 3)) x))
 
-  (is (== (list:delete 2 x) (make-list 1 3)))
-  (is (== (list:delete 4 x) x))
+  (is (== (list:remove 2 x) (make-list 1 3)))
+  (is (== (list:remove 4 x) x))
 
   (is (== (list:difference x x) Nil))
   (is (== (list:difference x Nil) x)))
