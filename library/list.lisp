@@ -41,6 +41,7 @@
    #:intersection
    #:lookup
    #:remove-duplicates
+   #:delete-if
    #:delete
    #:difference
    #:zipWith
@@ -364,19 +365,24 @@
     "Returns a new list without duplicate elements."
     (%reverse! (remove-duplicates-rev xs Nil)))
 
-  (declare delete-rev (Eq :a => (:a -> (List :a) -> (List :a) -> (List :a))))
-  (define (delete-rev x ys acc)
+  (declare delete-rev-if ((:a -> Boolean) -> (List :a) -> (List :a) -> (List :a)))
+  (define (delete-rev-if pred ys acc)
     (match ys
       ((Nil) acc)
       ((Cons y ys)
-       (if (== x y)
+       (if (pred y)
            (append-rev ys acc)
-           (delete-rev x ys (Cons y acc))))))
+           (delete-rev-if pred ys (Cons y acc))))))
+
+  (declare delete-if ((:a -> Boolean) -> (List :a) -> (List :a)))
+  (define (delete-if pred xs)
+    "Return a new list with the first element for which PRED is `True` is removed."
+    (%reverse! (delete-rev-if pred xs Nil)))
 
   (declare delete (Eq :a => (:a -> (List :a) -> (List :a))))
   (define (delete x ys)
     "Return a new list with the first element equal to X removed."
-    (%reverse! (delete-rev x ys Nil)))
+    (delete-if (== x) ys))
 
   (declare difference (Eq :a => ((List :a) -> (List :a) -> (List :a))))
   (define (difference xs ys)
