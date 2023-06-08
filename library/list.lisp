@@ -41,8 +41,8 @@
    #:intersection
    #:lookup
    #:remove-duplicates
-   #:delete-if
-   #:delete
+   #:remove-if
+   #:remove
    #:difference
    #:zipWith
    #:zipWith3
@@ -365,29 +365,29 @@
     "Returns a new list without duplicate elements."
     (%reverse! (remove-duplicates-rev xs Nil)))
 
-  (declare delete-rev-if ((:a -> Boolean) -> (List :a) -> (List :a) -> (List :a)))
-  (define (delete-rev-if pred ys acc)
+  (declare remove-rev-if ((:a -> Boolean) -> (List :a) -> (List :a) -> (List :a)))
+  (define (remove-rev-if pred ys acc)
     (match ys
       ((Nil) acc)
       ((Cons y ys)
        (if (pred y)
            (append-rev ys acc)
-           (delete-rev-if pred ys (Cons y acc))))))
+           (remove-rev-if pred ys (Cons y acc))))))
 
-  (declare delete-if ((:a -> Boolean) -> (List :a) -> (List :a)))
-  (define (delete-if pred xs)
+  (declare remove-if ((:a -> Boolean) -> (List :a) -> (List :a)))
+  (define (remove-if pred xs)
     "Return a new list with the first element for which PRED is `True` is removed."
-    (%reverse! (delete-rev-if pred xs Nil)))
+    (%reverse! (remove-rev-if pred xs Nil)))
 
-  (declare delete (Eq :a => (:a -> (List :a) -> (List :a))))
-  (define (delete x ys)
+  (declare remove (Eq :a => (:a -> (List :a) -> (List :a))))
+  (define (remove x ys)
     "Return a new list with the first element equal to X removed."
-    (delete-if (== x) ys))
+    (remove-if (== x) ys))
 
   (declare difference (Eq :a => ((List :a) -> (List :a) -> (List :a))))
   (define (difference xs ys)
-    "Returns a new list with the first occurence of each element in YS deleted from XS."
-    (fold (fn (a b) (delete b a)) xs ys))
+    "Returns a new list with the first occurence of each element in YS removed from XS."
+    (fold (fn (a b) (remove b a)) xs ys))
 
   (declare zipWith ((:a -> :b -> :c) -> (List :a) -> (List :b) -> (List :c)))
   (define (zipWith f xs ys)
