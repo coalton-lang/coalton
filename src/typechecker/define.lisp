@@ -2272,8 +2272,14 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                     :span (parser:node-source second)
                     :message "second parameter here"))))))
 
-  (let* ((param-tys (loop :for pattern :in (parser:binding-parameters binding)
-                          :collect (tc:make-variable)))
+  (let* ((param-tys (loop :with args := (tc:function-type-arguments expected-type)
+                          :for pattern :in (parser:binding-parameters binding)
+
+                          :if args
+                            :collect (car args)
+                            :and :do (setf args (cdr args))
+                          :else
+                            :collect (tc:make-variable)))
 
          (params (loop :for pattern :in (parser:binding-parameters binding)
                        :for ty :in param-tys

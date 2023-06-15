@@ -89,3 +89,14 @@
       (define (f _)
         (let ((g (fn (p) (.x p))))
           (g (Point 1 2))))")))
+
+;; See gh #959
+(deftest test-accessor-on-argument-let-binding ()
+  (check-coalton-types
+   "(define-struct (Wrapper :a)
+     (inner :a))
+
+    (declare f (Wrapper :a -> :a))
+    (define (f x)
+      (let ((y (.inner x)))
+       y))"))
