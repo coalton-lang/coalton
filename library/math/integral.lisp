@@ -247,14 +247,7 @@ are floored and truncated division, respectively."
                  `(if (< a 0)
                       (error "Can't take ISQRT of a negative number.")
                       (lisp ,type (a) (cl:isqrt a)))
-                 `(lisp ,type (a) (cl:isqrt a))))
-
-       (specialize ilog ,ilog (,type -> ,type -> ,type))
-       (declare ,ilog (,type -> ,type -> ,type))
-       (define (,ilog b x)
-         (cond
-           ((== b 2) (- (lisp :a (x) (cl:integer-length x)) 1))
-           (True (ilog b x)))))))
+                 `(lisp ,type (a) (cl:isqrt a)))))))
 
 (%define-integral-native Integer t)
 (%define-integral-native I8 t)
