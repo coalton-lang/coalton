@@ -280,7 +280,7 @@
                   (length v)))
       (iter:for-each!
        (fn (x)
-         (push! x out)
+         (push! (f x) out)
          Unit)
        (iter:into-iter v)) 
       out))
