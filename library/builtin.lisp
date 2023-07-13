@@ -3,6 +3,7 @@
    #:coalton
    #:coalton-library/classes)
   (:export
+   #:unreachable
    #:undefined
    #:error ; re-export from classes
    #:not
@@ -18,6 +19,11 @@
 
 #+coalton-release
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(cl:defmacro unreachable (cl:&optional (datum "Unreachable") cl:&rest arguments)
+  "Signal an error with CL format string DATUM and optional format arguments ARGUMENTS."
+  `(lisp :a ()
+     (cl:error ,datum ,@arguments)))
 
 (coalton-toplevel
   (define (undefined _)
