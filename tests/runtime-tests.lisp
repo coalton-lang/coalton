@@ -144,3 +144,21 @@
 (coalton-toplevel
   (define-class (Mult :a :b :c (:a :b -> :c))
     (.* (:a -> :b -> :c))))
+
+
+(coalton-toplevel
+  (define-class (Gh-968 :a)
+    (gh-968-m (:a -> :a)))
+
+  (define-class (Gh-968 :a => Gh-968-b :a))
+
+  (declare gh-968-f (Gh-968-b :a => :a -> :a))
+  (define (gh-968-f x)
+    (gh-968-m x))
+
+  (define-instance (gh-968 Unit)
+    (define gh-968-m (fn (x) x)))
+
+  (define-instance (gh-968-b Unit))
+
+  (define gh-968-x (gh-968-f Unit)))

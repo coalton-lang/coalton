@@ -83,7 +83,7 @@
 
          ;; If the instance has methods then apply them
          (app-node
-           (if unqualified-method-definitions 
+           (if (or unqualified-method-definitions superclass-preds)
                (make-node-application
                 :type (pred-type pred env)
                 :rator var-node
