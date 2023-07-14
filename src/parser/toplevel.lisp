@@ -1668,7 +1668,7 @@ consume all attributes")))
 
   (make-method-definition
    :name (make-identifier-src
-          :name (cst:raw (cst:first method-form))
+          :name (node-variable-name (parse-variable (cst:first method-form) file))
           :source (cst:source (cst:first method-form)))
    :type (parse-qualified-type (cst:second method-form) file)
    :source (cst:source method-form)))
@@ -1779,10 +1779,7 @@ consume all attributes")))
                  :primary-note "expected symbol")))
 
   (values
-   (make-node-variable
-    :name (cst:raw (cst:first form))
-    :source (cst:source form))
-
+   (parse-variable (cst:first form) file)
    (if (cst:null (cst:rest form))
        (list
         (make-pattern-wildcard
