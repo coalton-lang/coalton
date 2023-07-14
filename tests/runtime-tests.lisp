@@ -143,7 +143,7 @@
 ;; Check that codegen for fundep classes works
 (coalton-toplevel
   (define-class (Mult :a :b :c (:a :b -> :c))
-    (.* (:a -> :b -> :c))))
+    (_* (:a -> :b -> :c))))
 
 
 (coalton-toplevel
