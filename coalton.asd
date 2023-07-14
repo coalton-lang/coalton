@@ -176,6 +176,7 @@
                (:file "ord-tree")
                (:file "ord-map")
                (:file "monad/free")
+               (:file "seq")
                (:file "system")
                (:file "prelude")))
 
@@ -315,5 +316,6 @@
                (:file "class-tests")
                (:file "list-tests")
                (:file "red-black-tests")
+               (:file "seq-tests")
                (:file "unused-variables")
                (:file "pattern-matching-tests")))

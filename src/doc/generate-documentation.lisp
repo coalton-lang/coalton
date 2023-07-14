@@ -132,7 +132,8 @@
                coalton-library/monad/free
                coalton-library/iterator
                coalton-library/ord-tree
-               coalton-library/ord-map)
+               coalton-library/ord-map
+               coalton-library/seq)
    :asdf-system :coalton/library
    :file-link-prefix "https://github.com/coalton-lang/coalton/tree/main/library/"))
 
