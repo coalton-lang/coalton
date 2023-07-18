@@ -64,6 +64,8 @@
                (loop :for param :in (tc:node-abstraction-params (tc:binding-last-node binding))
                      :if (tc:pattern-var-p param)
                        :collect (tc:pattern-var-name param)
+                     :else :if (tc:pattern-wildcard-p param)
+                             :collect (gentemp "_")
                      :else
                        :collect (let ((name (gentemp)))
                                   (push (cons name param) pattern-params)
@@ -93,6 +95,8 @@
                (loop :for param :in (tc:binding-parameters binding)
                      :if (tc:pattern-var-p param)
                        :collect (tc:pattern-var-name param)
+                     :else :if (tc:pattern-wildcard-p param)
+                             :collect (gentemp "_")
                      :else
                        :collect (let ((name (gensym)))
                                   (push (cons name param) pattern-params)
