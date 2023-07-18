@@ -90,13 +90,17 @@
   (:method ((expr node-lisp) current-function env)
     (declare (type tc:environment env)
              (type (or null symbol) current-function))
-    (let ((inner
-            `(let ,(mapcar
-                    (lambda (var)
-                      (list (car var) (cdr var)))
-                    (node-lisp-vars expr))
-               ,@(butlast (node-lisp-form expr))
-               (values ,(car (last (node-lisp-form expr)))))))
+    (let* ((inner `(values ,(car (last (node-lisp-form expr)))))
+
+           (inner
+             (if (node-lisp-vars expr)
+                 `(let ,(mapcar
+                         (lambda (var)
+                           (list (car var) (cdr var)))
+                         (node-lisp-vars expr))
+                    ,@(butlast (node-lisp-form expr))
+                    (values ,(car (last (node-lisp-form expr)))))
+                 inner)))
 
       (if settings:*emit-type-annotations*
           `(the (values ,(tc:lisp-type (node-type expr) env) &optional)
