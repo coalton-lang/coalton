@@ -153,7 +153,7 @@
   (let ((hoister (make-hoister)))
     (append
      (loop :for (name . node) :in bindings
-           :collect (cons name (static-dict-lift (optimize-node node env) hoister package env)))
+           :collect (cons name (static-dict-lift (optimize-node node env) name hoister package env)))
      (pop-final-hoist-point hoister))))
 
 (defun optimize-node (node env)
@@ -377,8 +377,9 @@
       (cons :direct-application #'inline-direct-method))
      nil)))
 
-(defun static-dict-lift (node hoister package env)
+(defun static-dict-lift (node name hoister package env)
   (declare (type node node)
+           (type symbol name)
            (type hoister hoister)
            (type package package)
            (type tc:environment env)
@@ -395,6 +396,10 @@
                        env
                        (node-variable-value (node-application-rator node))
                        :no-error t))
+               (return-from lift-static-dict nil))
+
+             ;; Don't lift a function in itself
+             (when (eq name (node-variable-value (node-application-rator node)))
                (return-from lift-static-dict nil))
 
              (hoist-definition node package hoister))
