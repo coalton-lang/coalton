@@ -145,7 +145,6 @@
   (define-class (Mult :a :b :c (:a :b -> :c))
     (_* (:a -> :b -> :c))))
 
-
 (coalton-toplevel
   (define-class (Gh-968 :a)
     (gh-968-m (:a -> :a)))
@@ -162,3 +161,23 @@
   (define-instance (gh-968-b Unit))
 
   (define gh-968-x (gh-968-f Unit)))
+
+(coalton-toplevel
+  (define-type (WrapperT :a)
+    (Single :a)
+    (Many (Vector (WrapperT :a))))
+
+  (define-instance (Eq :a => Eq (WrapperT :a))
+    (define (== a b)
+      (match (Tuple a b)
+        ((Tuple (Single x) (Single y))
+         (== x y))
+
+        ((Tuple (Many xs) (Many ys))
+         (== xs ys))
+
+        (_ False)))))
+
+(define-test test-gh-973 ()
+    (is (== (Many (vector:make (Single "hello")))
+                     (Many (vector:make (Single "hello"))))))
