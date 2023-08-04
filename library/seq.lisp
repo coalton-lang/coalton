@@ -18,7 +18,9 @@
    #:pop
    #:size
    #:get
+   #:get-unsafe
    #:put
+   #:put-unsafe
    #:empty?
    #:conc
    #:make))
@@ -60,7 +62,7 @@
      UFix                               ; height
      UFix                               ; cached full subtree size
      (vector:Vector UFix)               ; cumulative size table
-     (vector:Vector (Seq :a)))         ; subtrees
+     (vector:Vector (Seq :a)))          ; subtrees
     (LeafArray (vector:Vector :a)))
 
   (declare new (types:RuntimeRepr :a => Unit -> Seq :a))
@@ -80,8 +82,7 @@
 
   (declare get (Seq :a -> UFix -> Optional :a))
   (define (get seq idx)
-    "Get the member of `seq` at index `idx`, or `None` if `idx` is larger
-than `(size seq)`"
+    "Get the member of `seq` at index `idx`, or `None` if `idx` >= `(size seq)`"
     (match seq
       ((LeafArray leaves)
        (vector:index idx leaves))
@@ -92,6 +93,15 @@ than `(size seq)`"
         ((Tuple subtree-idx offset) <- (cst-search guess cst idx))
          (subtree <- (vector:index subtree-idx sts))
          (get subtree (- idx offset))))))
+
+  (declare get-unsafe (Seq :a -> UFix -> :a))
+  (define (get-unsafe seq idx)
+    "Gets the member of `seq` at index `idx`, triggers error if `idx` >= `(size seq)`."
+    (match (get seq idx)
+      ((Some x) x)
+      ((None) (error (let ((l (math:1- (size seq))))
+                   (lisp String (l idx)
+                         (cl:format cl:nil "Invalid index ~a for Seq with max index ~a." idx l)))))))
   
   (declare put (Seq :a -> Ufix -> :a -> Optional (Seq :a)))
   (define (put seq idx a)
@@ -115,6 +125,16 @@ contains `a`."
            (vector:set! subtree-idx new-subtree newsts)
            (pure (RelaxedNode h fss cst newsts)))))))
 
+  (declare put-unsafe ((Seq :a) -> UFix -> :a -> (Seq :a)))
+  (define (put-unsafe seq idx a)
+    "If `idx` is less than `(size seq)`, Return a new `seq` whose `idx` position
+contains `a`, otherwise errors."
+    (match (put seq idx a)
+      ((Some x) x)
+      ((None) (error (let ((l (math:1- (size seq))))
+                   (lisp String (l idx)
+                         (cl:format cl:nil "Invalid index ~a for Seq with max index ~a." idx l)))))))
+  
   (define (push seq a)
     "Push `a` onto the end of `seq`, returning a new `Seq` instance."
     (let (Tuple node in-place?) =  (%push seq a))
@@ -146,7 +166,7 @@ a new `Seq` instance."
           (cond
             ;; this was the only thing left in seq
             ((== 1 seq-size)
-             (Tuple leaf newsub))     ; newsub is empty
+             (Tuple leaf newsub))       ; newsub is empty
 
             ;; the seq was exactly one larger than the subtree size
             ;; for the current height, this means we can reduce the tree height
@@ -164,7 +184,7 @@ a new `Seq` instance."
              (vector:set! last-idx newsub newsts)
              (Tuple leaf (RelaxedNode h fss newcst newsts)))))))))
 
-    (define (conc left right)
+  (define (conc left right)
     "Concatenate two `Seq`s"
     (cond
       ((empty? left) right)

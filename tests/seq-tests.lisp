@@ -70,8 +70,11 @@
            (iter:up-to 30000)))
         (seq2
           (defaulting-unwrap
-           (seq:put seq 11234 0))))
-    (is (== (Some 0) (seq:get seq2 11234)))))
+           (seq:put seq 11234 0)))
+        (seq3
+          (seq:put-unsafe seq 25 2)))
+    (is (== (Some 0) (seq:get seq2 11234)))
+    (is (== 2 (seq:get-unsafe seq3 25)))))
 
 
 (coalton-toplevel 
