@@ -157,10 +157,43 @@
 (%define-overflow-handler %handle-64bit-overflow 64)
 (%define-overflow-handler %handle-fixnum-overflow #.+fixnum-bits+)
 
-;;;
-;;; Num instances for integers
+;;; 
+;;; Underflow checks for unsigned values
 ;;;
 
+(cl:eval-when (:compile-toplevel :load-toplevel)
+  (cl:defmacro define-unsigned-num-underflow (type bits)
+    "Define a `Num' instance for Type which signals an error on underflow."
+    `(define-instance (Num ,type)
+       (define (+ a b)
+         (lisp ,type (a b)
+	   (cl:if (cl:and (cl:< b 0) (cl:< a (cl:- 0 b)))
+		  (cl:cerror "Unsigned value underflowed." ,(cl:format cl:nil "Unsigned value underflowed ~D bits." bits))
+		  (cl:+ a b))))
+       
+       (define (- a b)
+         (lisp ,type (a b)
+	   (cl:if (cl:and (cl:>= b 0) (cl:< a (cl:+ 0 b)))
+		  (cl:cerror "Unsigned value underflowed." ,(cl:format cl:nil "Unsigned value underflowed ~D bits." bits))
+		  (cl:- a b))))
+       
+       (define (* a b)
+	 (lisp ,type (a b)
+	   (cl:if (cl:or (cl:and (cl:and (cl:> b 0) (cl:< a 0)) (cl:< a (cl:/ 0 b)))
+			 (cl:and (cl:and (cl:< b 0) (cl:> a 0)) (cl:> a (cl:/ 0 b))))
+		  (cl:cerror "Unsigned value undeflowed." ,(cl:format cl:nil "Unsigned value underflowed ~D bits." bits))
+		  (cl:* a b))))
+
+       (define (fromInt x)
+	 (lisp ,type (x)
+	   (cl:if (cl:< x 0)
+		  (cl:cerror "Unsigned value underflowed." ,(cl:format cl:nil "Unsigned value underflowed ~D bits." bits))
+		  x))))))
+
+
+;;;
+;;; Num instances for integers
+;;;	   
 (cl:eval-when (:compile-toplevel :load-toplevel)
   (cl:defmacro define-num-checked (type overflow-handler)
     "Define a `Num' instance for TYPE which signals on overflow."
@@ -214,8 +247,12 @@
   (define-num-wrapping U16 16)
   (define-num-wrapping U32 32)
   (define-num-wrapping U64 64)
-  (define-num-wrapping UFix #.+unsigned-fixnum-bits+))
+  (define-num-wrapping UFix #.+unsigned-fixnum-bits+)
 
+  (define-unsigned-num-underflow U8 8)
+  (define-unsigned-num-underflow U16 16)
+  (define-unsigned-num-underflow U32 32)
+  (define-unsigned-num-underflow U64 64))
 ;;;
 ;;; Num instances for floats
 ;;;
