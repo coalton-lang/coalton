@@ -157,29 +157,47 @@
 (%define-overflow-handler %handle-64bit-overflow 64)
 (%define-overflow-handler %handle-fixnum-overflow #.+fixnum-bits+)
 
+;;; 
+;;; Underflow checks for unsigned values
+;;;
+
+(cl:defmacro %define-underflow-handler (name bits)
+  `(cl:progn
+     (cl:declaim (cl:inline ,name))
+     (cl:defun ,name (value)
+       (cl:typecase value
+	 ((cl:unsigned-byte ,bits) value)
+	 (cl:otherwise
+	  (cl:cerror ,(cl:format cl:nil "Unsigned value underflowed ~D bits." bits)))))))
+
+(%define-underflow-handler %handler-8bit-underflow 8)
+(%define-underflow-handler %handler-16bit-underflow 16)
+(%define-underflow-handler %handler-32bit-underflow 32)
+(%define-underflow-handler %handler-64bit-underflow 64)
+
 ;;;
 ;;; Num instances for integers
 ;;;
 
 (cl:eval-when (:compile-toplevel :load-toplevel)
-  (cl:defmacro define-num-checked (type overflow-handler)
-    "Define a `Num' instance for TYPE which signals on overflow."
+  (cl:defmacro define-num-checked (type handler)
+    "Define a `Num' instance for TYPE which signals on overflow or underflow."
     `(define-instance (Num ,type)
        (define (+ a b)
          (lisp ,type (a b)
-           (,overflow-handler (cl:+ a b))))
+           (,handler (cl:+ a b))))
 
        (define (- a b)
          (lisp ,type (a b)
-           (,overflow-handler (cl:- a b))))
+           (,handler (cl:- a b))))
 
        (define (* a b)
          (lisp ,type (a b)
-           (,overflow-handler (cl:* a b))))
+           (,handler (cl:* a b))))
 
        (define (fromInt x)
          (lisp ,type (x)
-           (,overflow-handler x))))))
+           (,handler x))))))
 
 (cl:eval-when (:compile-toplevel :load-toplevel)
   (cl:defmacro define-num-wrapping (type bits)
@@ -209,6 +227,11 @@
   (define-num-checked I32 %handle-32bit-overflow)
   (define-num-checked I64 %handle-64bit-overflow)
   (define-num-checked IFix %handle-fixnum-overflow)
+
+  (define-num-checked U8 %handler-8bit-underflow)
+  (define-num-checked U16 %handler-16bit-underflow)
+  (define-num-checked U32 %handler-32bit-underflow)
+  (define-num-checked U64 %handler-64bit-underflow)
 
   (define-num-wrapping U8 8)
   (define-num-wrapping U16 16)
