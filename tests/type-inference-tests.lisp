@@ -91,13 +91,13 @@
 
    '("f" . "Integer"))
 
-  ;; Declarations cannot be less specefic than their associated definition
+  ;; Declarations cannot be less specific than their associated definition
   (signals tc:tc-error
     (check-coalton-types
      "(declare x :a)
       (define x Unit)"))
 
-  ;; Missing explicit predicates cannot be defualted
+  ;; Missing explicit predicates cannot be defaulted
   (signals tc:tc-error
     (check-coalton-types
      "(declare x :a)
@@ -224,7 +224,7 @@
    '("g" . "(Show :a => :a -> String)")))
 
 (deftest test-type-classes ()
-  ;; Check that type constrains are propegated
+  ;; Check that type constraints are propagated
   (check-coalton-types
    "(define (f a b) (== a b))"
 
@@ -294,7 +294,7 @@
              (singleton b)))))")))
 
 (deftest test-typeclass-definition-constraints ()
-  ;; Check that typeclasses cannot have additional constrains defined in a method
+  ;; Check that typeclasses cannot have additional constraints defined in a method
   ;;
   ;; this is a stylistic decision and not a technical limitation
   (signals tc:tc-error

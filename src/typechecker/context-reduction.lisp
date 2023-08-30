@@ -230,7 +230,7 @@ Returns (VALUES deferred-preds retained-preds defaultable-preds)"
           :collect (make-substitution :from (ambiguity-var ambig) :to (first candidates))))
 
 ;;;
-;;; When typechecking bindings with fundeps, there can be unambigious
+;;; When typechecking bindings with fundeps, there can be unambiguous
 ;;; type variables in predicates that do not appear in the bindings
 ;;; body.
 ;;;

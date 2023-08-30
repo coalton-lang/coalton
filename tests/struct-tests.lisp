@@ -74,7 +74,7 @@
     (declare f (Point -> Integer))
     (define f .x)"))
 
-(deftest test-ambigious-accessors ()
+(deftest test-ambiguous-accessors ()
   (signals tc:tc-error
     (check-coalton-types
      "(define (f p)

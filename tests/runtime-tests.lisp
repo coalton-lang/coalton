@@ -6,7 +6,7 @@
         goal
         (recursive-predicate (+ x inc) inc goal))))
 
-;; Test that functions with typeclass constraints call themselfs recursively
+;; Test that functions with typeclass constraints call themselves recursively
 ;; This was bugged in the past #216 #147 #125
 (define-test test-recursive-predicate ()
   (is (== (recursive-predicate 0 1 5) 5)))
@@ -116,13 +116,13 @@
         (z id))
     (z 5)))
 
-;; Test mutli param typeclass context reduction
+;; Test multi param typeclass context reduction
 (coalton-toplevel
   (declare context-reduction (Into :a Integer => :a -> Integer))
   (define (context-reduction x)
     (into x)))
 
-;; Check that defaulting propigates through let bindings
+;; Check that defaulting propagates through let bindings
 ;; See gh #526
 (coalton-toplevel
   (define gh-526
