@@ -157,7 +157,7 @@
                                     (node-match-branches expr)
                                     :key #'match-branch-pattern)
                    `((t
-                      (error "Pattern match not exaustive error")))))))))
+                      (error "Pattern match not exhaustive error")))))))))
 
   (:method ((expr node-seq) current-function env)
     (declare (type tc:environment env)

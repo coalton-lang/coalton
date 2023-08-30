@@ -222,7 +222,7 @@ COMMON-LISP:WARNING: warn: Unused variable
    |
  3 |    (define (f x y)
    |                 ^ variable defined here
-help: prefix the variable with '_' to decare it unused
+help: prefix the variable with '_' to declare it unused
  3 |   (define (f x _y)
    |                --
 ```
@@ -284,7 +284,7 @@ There is also support for defining structs.
     (y Integer)))
 ```
 
-Structs are like single constructor ADTs, and are constructed equivelently:
+Structs are like single constructor ADTs, and are constructed equivalently:
 
 ```lisp
 (coalton (Point 1 2))
@@ -545,7 +545,7 @@ Type declarations can also be added in let expressions
       (_ False))))
 ```
 
-Functions can pattern match on their arguments, but the patterns must be exaustive.
+Functions can pattern match on their arguments, but the patterns must be exhaustive.
 
 ```lisp
 (coalton-toplevel
@@ -760,7 +760,7 @@ The following are the main typeclasses defined in the standard library.
 * `Num` - defined on types that are numeric
 
 * `Semigroup` - defined on types which support an associative binary operation
-* `Monoid` - defined on types that are semigroups and have an identiy element
+* `Monoid` - defined on types that are semigroups and have an identity element
 
 
 Each of the following typeclasses resembles the class of the same name in
@@ -832,10 +832,10 @@ The following functions all take an optional package parameter.
 
 ## Instance Defaulting
 
-Coalton has a similar [type defaulting system](https://www.haskell.org/onlinereport/decls.html#sect4.3.4) as Haskell. Type defaulting is invoked on implicitly typed definitions and code compiled with the `coalton` macro. Defaulting is applied to a set of ambiguous predicates, with the goal to resolve an ambigious type variable to a valid type. Coalton will only default if one or more of the predicates is a numeric type class (Num, Quantizable, Reciprocable, Complex, Remainder, Integral). Coalton will default an ambgious variable to either Integer, Double-Float, or Single-Float; taking the first type that is valid for all predicates referencing that type variable. Coalton will not default when one or more of the predicates containing an ambigous variable is a multi-parameter type class.
+Coalton has a similar [type defaulting system](https://www.haskell.org/onlinereport/decls.html#sect4.3.4) as Haskell. Type defaulting is invoked on implicitly typed definitions and code compiled with the `coalton` macro. Defaulting is applied to a set of ambiguous predicates, with the goal to resolve an ambiguous type variable to a valid type. Coalton will only default if one or more of the predicates is a numeric type class (Num, Quantizable, Reciprocable, Complex, Remainder, Integral). Coalton will default an ambiguous variable to either Integer, Double-Float, or Single-Float; taking the first type that is valid for all predicates referencing that type variable. Coalton will not default when one or more of the predicates containing an ambiguous variable is a multi-parameter type class.
 
 
-Differences from Haskell 98. Haskell would consider `Num (List :a)` to be ambigious, Coalton would default it to `Num Integer`. Haskell would consider (`Num :a` `CustomTypeClass :a`) to be amgbigious, Coalton would default to (`Num Integer` `CustomTypeClass Integer`) assuming `CustomTypeClass Integer` was a valid instance.
+Differences from Haskell 98. Haskell would consider `Num (List :a)` to be ambiguous, Coalton would default it to `Num Integer`. Haskell would consider (`Num :a` `CustomTypeClass :a`) to be ambiguous, Coalton would default to (`Num Integer` `CustomTypeClass Integer`) assuming `CustomTypeClass Integer` was a valid instance.
 
 ## Functional Dependencies
 
@@ -845,7 +845,7 @@ A class `C` can be given a functional dependency `(:a -> :b)` like so:
 
 `(define-class (C :a :b (:a -> :b)))`
 
-`(:a -> :b)` can be read as: foreach `:a` there will be only one `:b` or alternativly the value of `:b` is uniquely determined by `:a`. 
+`(:a -> :b)` can be read as: foreach `:a` there will be only one `:b` or alternatively the value of `:b` is uniquely determined by `:a`. 
 
 If the instance `(C String Integer)` was defined, then it would be invalid to define `(C String Char)` because there are multiple values of `:b` for the same value of `:a`.
 
@@ -881,7 +881,7 @@ int specialized call
 2
 ```
 
-Specialization can only apply when the argument types at a callsite are known. Because specialization is not guaranteed, specialized functions must have the same behavior as their unspecilized variants. Specialization should only be used for performance. See the following example:
+Specialization can only apply when the argument types at a callsite are known. Because specialization is not guaranteed, specialized functions must have the same behavior as their unspecialized variants. Specialization should only be used for performance. See the following example:
 
 ```
 (coalton-toplevel

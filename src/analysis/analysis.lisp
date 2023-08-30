@@ -37,7 +37,7 @@
              :err (error:coalton-error
                    :file file
                    :span (tc:pattern-source pattern)
-                   :message "Non-exaustive match"
+                   :message "Non-exhaustive match"
                    :primary-note (format nil "Missing case ~W"
                                          (print-pattern (first missing))))))))
 
@@ -63,7 +63,7 @@
                                       :file file
                                       :span (tc:node-source node)
                                       :message "Non-exhaustive match"
-                                      :primary-note "non-exaustive match"
+                                      :primary-note "non-exhaustive match"
                                       :notes (when (first exhaustive-or-missing)
                                                (list
                                                 (error:make-coalton-error-note

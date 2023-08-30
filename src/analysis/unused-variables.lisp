@@ -96,4 +96,4 @@
                         :span source
                         :replacement (lambda (name)
                                        (concatenate 'string "_" name))
-                        :message "prefix the variable with '_' to decare it unused"))))))))
+                        :message "prefix the variable with '_' to declare it unused"))))))))

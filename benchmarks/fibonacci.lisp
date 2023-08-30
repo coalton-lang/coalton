@@ -35,7 +35,7 @@
 
 ;;
 ;; Benchmarks on optional are disabled by default because they compute the 10th
-;; instead of the 20th fibonacci number. Computing the 20th was exausting the heap.
+;; instead of the 20th fibonacci number. Computing the 20th was exhausting the heap.
 ;;
 
 #+ignore

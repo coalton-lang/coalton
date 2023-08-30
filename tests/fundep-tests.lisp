@@ -127,7 +127,7 @@
    "(define-class (C :a :b (:a -> :b))
       (m :a))")
 
-  ;; Amgbigious despite fundep
+  ;; Ambiguous despite fundep
   (signals tc:tc-error
     (check-coalton-types
      "(define-class (C :a :b (:a -> :b))

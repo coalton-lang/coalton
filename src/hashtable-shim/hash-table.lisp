@@ -22,8 +22,8 @@
 ;;;; An imlementation of a hashtable using open addressing and linear
 ;;;; probing. Loosely based on swiss tables.
 ;;;;
-;;;; Each hash tAble stores three equal length arrays. Array elements
-;;;; are refered to as associated with elements of other arrays at
+;;;; Each hash table stores three equal length arrays. Array elements
+;;;; are referred to as associated with elements of other arrays at
 ;;;; them same index. The term "slot" refers to a set of array
 ;;;; elements across all three arrays.
 ;;;;
@@ -39,7 +39,7 @@
 ;;;; | m1 | ... | mn |
 ;;;; +----+-----+----+
 ;;;;
-;;;; The keys and values arrays store keys and values respectivly. The
+;;;; The keys and values arrays store keys and values respectively. The
 ;;;; metadata array stores signed bytes. If the value of an element in
 ;;;; the metadata array is positive (0b0xxxxxxx) then it is the lower
 ;;;; 7 bits of the associated keys hash. If the values is -128
@@ -47,8 +47,8 @@
 ;;;; (0b10000001) then the slot has been deleted. Other negative
 ;;;; values are unused.
 ;;;;
-;;;; Colisions are resolved by linear probing; the metadata array is
-;;;; scanned staring from hash(key) % capacity to find the first empty
+;;;; Collisions are resolved by linear probing; the metadata array is
+;;;; scanned starting from hash(key) % capacity to find the first empty
 ;;;; element. When searching for a value deleted elements are skipped
 ;;;; over, but finding an empty element terminates the search.
 

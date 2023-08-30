@@ -1979,7 +1979,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                    :span (parser:node-source (parser:binding-name first-fn))
                    :file file
                    :message "Invalid recursive bindings"
-                   :primary-note "function can not be defined recursivly with variables"
+                   :primary-note "function can not be defined recursively with variables"
                    :notes (loop :for binding :in (remove first-fn bindings :test #'eq)
                                 :collect (make-coalton-error-note
                                           :type :secondary
@@ -2524,7 +2524,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
 ;;; When type checking bindings, Coalton computes the set of type
 ;;; variables that can be qualified over. Predicates that contain type
-;;; variables not in this set are rejected as amgigious.
+;;; variables not in this set are rejected as ambiguous.
 ;;;
 ;;;   An example rejected definition:
 ;;;   Into :a :b => :a -> Integer
@@ -2532,13 +2532,13 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 ;;; Without fundeps this set of type variables is simply the type
 ;;; variables in the infered type, minus the type variables in the
 ;;; environment. With fundeps, type variables can appear in the
-;;; predicates but not the type without being ambigious. 
+;;; predicates but not the type without being ambiguous. 
 ;;; 
 ;;;   A valid definition for "C :a :b (:a -> :b)"
 ;;;   C :a :b => :a -> Integer
 ;;;
 ;;; `expand-local-tvars' uses fundeps to compute an extended set of
-;;; unambigious type variables given a previous such list and the
+;;; unambiguous type variables given a previous such list and the
 ;;; binding's predicates.
 
 (defun expand-local-tvars (env-tvars local-tvars preds env)
