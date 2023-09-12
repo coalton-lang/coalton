@@ -1,0 +1,4 @@
+;; BAD: Parse Continue
+(package test-parser)
+
+(define f (continue))

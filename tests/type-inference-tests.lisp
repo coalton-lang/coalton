@@ -145,9 +145,9 @@
   ;; Check higher kinded type variables
   (check-coalton-types
    "(define-type (TFix :f)
-      (In (:f (TFix :f))))"
+      (InType (:f (TFix :f))))"
 
-   '("In" . "(:f (TFix :f) -> TFix :f)"))
+   '("InType" . "(:f (TFix :f) -> TFix :f)"))
 
   ;; Check that constructors are properly typed
   (signals tc:tc-error

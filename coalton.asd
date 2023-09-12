@@ -32,6 +32,7 @@
                (:file "settings")
                (:file "utilities")
                (:file "global-lexical")
+               (:file "constants")
                (:module "algorithm"
                 :serial t
                 :components ((:file "tarjan-scc")
@@ -324,4 +325,5 @@
                (:file "red-black-tests")
                (:file "seq-tests")
                (:file "unused-variables")
-               (:file "pattern-matching-tests")))
+               (:file "pattern-matching-tests")
+               (:file "looping-native-tests")))

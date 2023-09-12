@@ -67,7 +67,15 @@
    #:<-                                 ; Syntax
    #:_
    #:return
-   #:the)
+   #:the
+   #:while
+   #:while-let
+   #:loop
+   #:break
+   #:continue
+   #:for
+   #:in                                 ; Syntax
+   )
 
   ;; Macros
   (:export

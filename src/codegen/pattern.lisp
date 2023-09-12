@@ -6,7 +6,7 @@
    (#:tc #:coalton-impl/typechecker))
   (:export
    #:pattern                            ; STRUCT
-   #:pattern-source                     ; ACCESSOR
+   #:pattern-type                       ; ACCESSOR
    #:pattern-list                       ; TYPE
    #:pattern-var                        ; STRUCT
    #:make-pattern-var                   ; ACCESSOR

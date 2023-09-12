@@ -111,6 +111,33 @@
    #:make-node-unless                   ; CONSTRUCTOR
    #:node-unless-expr                   ; ACCESSOR
    #:node-unless-body                   ; ACCESSOR
+   #:node-while                         ; STRUCT
+   #:make-node-while                    ; CONSTRUCTOR
+   #:node-while-label                   ; ACCESSOR
+   #:node-while-expr                    ; ACCESSOR
+   #:node-while-body                    ; ACCESSOR
+   #:node-while-let                     ; STRUCT
+   #:make-node-while-let                ; CONSTRUCTOR
+   #:node-while-let-label               ; ACCESSOR
+   #:node-while-let-pattern             ; ACCESSOR 
+   #:node-while-let-expr                ; ACCESSOR
+   #:node-while-let-body                ; ACCESSOR
+   #:node-for                           ; STRUCT
+   #:make-node-for                      ; CONSTRUCTOR
+   #:node-for-label                     ; ACCESSOR
+   #:node-for-pattern                   ; ACCESSOR 
+   #:node-for-expr                      ; ACCESSOR
+   #:node-for-body                      ; ACCESSOR
+   #:node-loop                          ; STRUCT
+   #:make-node-loop                     ; CONSTRUCTOR
+   #:node-loop-label                    ; ACCESSOR
+   #:node-loop-body                     ; ACCESSOR
+   #:node-break                         ; STRUCT
+   #:make-node-break                    ; CONSTRUCTOR
+   #:node-break-label                   ; ACCESSOR
+   #:node-continue                      ; STRUCT
+   #:make-node-continue                 ; CONSTRUCTOR
+   #:node-continue-label                ; ACCESSOR
    #:node-cond-clause                   ; STRUCT
    #:make-node-cond-clause              ; CONSTRUCTOR
    #:node-cond-clause-expr              ; ACCESSOR
@@ -301,6 +328,45 @@
             (:copier nil))
   (expr (util:required 'expr) :type node      :read-only t)
   (body (util:required 'body) :type node-body :read-only t))
+
+(defstruct (node-while
+            (:include node)
+            (:copier nil))
+  (label (util:required 'label) :type keyword   :read-only t)
+  (expr  (util:required 'expr)  :type node      :read-only t)
+  (body  (util:required 'body)  :type node-body :read-only t))
+
+(defstruct (node-while-let
+            (:include node)
+            (:copier nil))
+  (label   (util:required 'label)   :type keyword   :read-only t)
+  (pattern (util:required 'pattern) :type pattern   :read-only t)
+  (expr    (util:required 'expr)    :type node      :read-only t)
+  (body    (util:required 'body)    :type node-body :read-only t))
+
+(defstruct (node-for
+            (:include node)
+            (:copier nil))
+  (label   (util:required 'label)   :type keyword   :read-only t)
+  (pattern (util:required 'pattern) :type pattern   :read-only t)
+  (expr    (util:required 'expr)    :type node      :read-only t)
+  (body    (util:required 'body)    :type node-body :read-only t))
+
+(defstruct (node-loop
+            (:include node)
+            (:copier nil))
+  (label (util:required 'label) :type keyword   :read-only t)
+  (body  (util:required 'body)  :type node-body :read-only t))
+
+(defstruct (node-break 
+            (:include node)
+            (:copier nil))
+  (label (util:required 'label) :type keyword :read-only t))
+
+(defstruct (node-continue
+            (:include node)
+            (:copier nil))
+  (label (util:required 'label) :type keyword :read-only t))
 
 (defstruct (node-cond-clause
             (:copier nil))
@@ -517,6 +583,57 @@
    :source (node-source node)
    :expr (tc:apply-substitution subs (node-unless-expr node))
    :body (tc:apply-substitution subs (node-unless-body node))))
+
+(defmethod tc:apply-substitution (subs (node node-while))
+  (declare (type tc:substitution-list subs)
+           (values node-while))
+  (make-node-while
+   :type (tc:apply-substitution subs (node-type node))
+   :source (node-source node)
+   :label (node-while-label node)
+   :expr (tc:apply-substitution subs (node-while-expr node))
+   :body (tc:apply-substitution subs (node-while-body node))))
+
+(defmethod tc:apply-substitution (subs (node node-while-let))
+  (declare (type tc:substitution-list subs)
+           (values node-while-let))
+  (make-node-while-let
+   :type (tc:apply-substitution subs (node-type node))
+   :source (node-source node)
+   :label (node-while-let-label node)
+   :pattern (tc:apply-substitution subs (node-while-let-pattern node))
+   :expr (tc:apply-substitution subs (node-while-let-expr node))
+   :body (tc:apply-substitution subs (node-while-let-body node))))
+
+(defmethod tc:apply-substitution (subs (node node-for))
+  (declare (type tc:substitution-list subs)
+           (values node-for))
+  (make-node-for
+   :type (tc:apply-substitution subs (node-type node))
+   :source (node-source node)
+   :label (node-for-label node)
+   :pattern (tc:apply-substitution subs (node-for-pattern node))
+   :expr (tc:apply-substitution subs (node-for-expr node))
+   :body (tc:apply-substitution subs (node-for-body node))))
+
+(defmethod tc:apply-substitution (subs (node node-loop))
+  (declare (type tc:substitution-list subs)
+           (values node-loop))
+  (make-node-loop
+   :type (tc:apply-substitution subs (node-type node))
+   :source (node-source node)
+   :label (node-loop-label node)
+   :body (tc:apply-substitution subs (node-loop-body node))))
+
+(defmethod tc:apply-substitution (subs (node node-break))
+  (declare (type tc:substitution-list subs)
+           (values node-break))
+  node)
+
+(defmethod tc:apply-substitution (subs (node node-continue))
+  (declare (type tc:substitution-list subs)
+           (values node-continue))
+  node)
 
 (defmethod tc:apply-substitution (subs (node node-cond-clause))
   (declare (type tc:substitution-list subs)

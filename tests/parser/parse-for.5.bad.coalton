@@ -1,0 +1,4 @@
+;; BAD: Parse For
+(package test-parser)
+
+(define f (for :label x in iter))

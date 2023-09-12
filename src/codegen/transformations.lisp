@@ -119,6 +119,44 @@
                         (node-match-branches node)))))
       (call-if node :match funs bound-variables)))
 
+  (:method ((node node-while) funs bound-variables)
+    (declare (type util:symbol-list bound-variables))
+    (let ((node
+            (make-node-while
+             :type (node-type node)
+             :label (node-while-label node)
+             :expr (traverse (node-while-expr node) funs bound-variables)
+             :body (traverse (node-while-body node) funs bound-variables))))
+      (call-if node :while funs bound-variables)))
+
+  (:method ((node node-while-let) funs bound-variables)
+    (declare (type util:symbol-list bound-variables))
+    (let ((node
+            (make-node-while-let
+             :type tc:*unit-type*
+             :label (node-while-let-label node)
+             :pattern (node-while-let-pattern node)
+             :expr (traverse (node-while-let-expr node) funs bound-variables)
+             :body (traverse (node-while-let-body node) funs bound-variables))))
+      (call-if node :while-let funs bound-variables)))
+
+  (:method ((node node-loop) funs bound-variables)
+    (declare (type util:symbol-list bound-variables))
+    (let ((node
+            (make-node-loop
+             :type tc:*unit-type*
+             :label (node-loop-label node)
+             :body (traverse (node-loop-body node) funs bound-variables))))
+      (call-if node :loop funs bound-variables)))
+
+  (:method ((node node-break) funs bound-variables)
+    (declare (type util:symbol-list bound-variables))
+    (call-if node :break funs bound-variables))
+
+  (:method ((node node-continue) funs bound-variables)
+    (declare (type util:symbol-list bound-variables))
+    (call-if node :continue funs bound-variables))
+
   (:method ((node node-seq) funs bound-variables)
     (declare (type util:symbol-list bound-variables))
     (let ((node

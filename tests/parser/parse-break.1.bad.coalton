@@ -1,0 +1,4 @@
+;; BAD: Parse-Break
+(package test-parser)
+
+(define f (break))

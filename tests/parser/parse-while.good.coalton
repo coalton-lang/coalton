@@ -1,0 +1,6 @@
+;; GOOD: Parse While
+(package test-package)
+
+(define f
+  (while :alabel True (trace "one") (trace "two")))
+

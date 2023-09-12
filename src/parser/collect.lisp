@@ -232,6 +232,33 @@ in expressions. May not include all bound variables."
     (declare (values node-variable-list))
     (mapcan #'collect-variables-generic% (node-cond-clauses node)))
 
+  (:method ((node node-while))
+    (declare (values node-variable-list))
+    (nconc (collect-variables-generic% (node-while-expr node))
+           (collect-variables-generic% (node-while-body node))))
+
+  (:method ((node node-while-let))
+    (declare (values node-variable-list))
+    (nconc (collect-variables-generic% (node-while-let-expr node))
+           (collect-variables-generic% (node-while-let-body node))))
+
+  (:method ((node node-for))
+    (declare (values node-variable-list))
+    (nconc (collect-variables-generic% (node-for-expr node))
+           (collect-variables-generic% (node-for-body node))))  
+  
+  (:method ((node node-loop))
+    (declare (values node-variable-list))
+    (collect-variables-generic% (node-loop-body node)))
+
+  (:method ((node node-break))
+    (declare (values node-variable-list &optional))
+    nil)
+
+  (:method ((node node-continue))
+    (declare (values node-variable-list &optional))
+    nil)
+
   (:method ((node node-do-bind))
     (declare (values node-variable-list &optional))
     (collect-variables-generic% (node-do-bind-expr node)))

@@ -279,6 +279,84 @@
       :source (node-source node))
      ctx))
 
+  (:method ((node node-while) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values node algo:immutable-map))
+    (values
+     (make-node-while
+      :expr (rename-variables-generic% (node-while-expr node) ctx)
+      :label (node-while-label node)
+      :body (rename-variables-generic% (node-while-body node) ctx)
+      :source (node-source node))
+     ctx))
+
+  (:method ((node node-while-let) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values node algo:immutable-map))
+    (let*
+        ((new-bindings
+           (make-local-vars
+            (mapcar #'pattern-var-name
+                    (pattern-variables (node-while-let-pattern node)))))
+
+           (new-ctx
+             (algo:immutable-map-set-multiple ctx new-bindings)))
+
+
+      (values
+       (make-node-while-let
+        :label (node-while-let-label node)
+        :pattern (rename-variables-generic% (node-while-let-pattern node) new-ctx)
+        :expr (rename-variables-generic% (node-while-let-expr node) ctx)
+        :body (rename-variables-generic% (node-while-let-body node) new-ctx)
+        :source (node-source node))
+       new-ctx)))
+
+  (:method ((node node-for) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values node algo:immutable-map))
+    (let*
+        ((new-bindings
+           (make-local-vars
+            (mapcar #'pattern-var-name
+                    (pattern-variables (node-for-pattern node)))))
+
+           (new-ctx
+             (algo:immutable-map-set-multiple ctx new-bindings)))
+
+      (values
+       (make-node-for
+        :label (node-for-label node)
+        :pattern (rename-variables-generic% (node-for-pattern node) new-ctx)
+        :expr (rename-variables-generic% (node-for-expr node) ctx)
+        :body (rename-variables-generic% (node-for-body node) new-ctx)
+        :source (node-source node))
+       new-ctx)))
+
+  (:method ((node node-loop) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values node algo:immutable-map))
+    (values
+     (make-node-loop
+      :source (node-source node)
+      :label (node-loop-label node)
+      :body (rename-variables-generic% (node-loop-body node) ctx))
+     ctx))
+
+  (:method ((node node-break) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values node algo:immutable-map))
+    (values
+     node
+     ctx))
+
+  (:method ((node node-continue) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values node algo:immutable-map))
+    (values
+     node
+     ctx))
+  
   (:method ((node node-unless) ctx)
     (declare (type algo:immutable-map ctx)
              (values node algo:immutable-map))

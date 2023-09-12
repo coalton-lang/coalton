@@ -141,7 +141,8 @@ Returns a `node'.")
 
              (num-class (util:find-symbol "NUM" classes-package))
 
-             (num-pred (tc:make-ty-predicate :class num-class :types (list (tc:qualified-ty-type qual-ty))))
+             (num-pred (tc:make-ty-predicate :class num-class
+                                             :types (list (tc:qualified-ty-type qual-ty))))
 
              (from-int-method (util:find-symbol "FROMINT" classes-package)))
         
@@ -549,6 +550,159 @@ Returns a `node'.")
                    :body (make-node-variable
                           :type tc:*unit-type*
                           :value unit-value))))))
+
+  (:method ((expr tc:node-while) ctx env)
+    (declare (type pred-context ctx)
+             (type tc:environment env)
+             (values node))
+    
+    (make-node-while 
+     :type tc:*unit-type*
+     :label (tc:node-while-label expr)
+     :expr (translate-expression (tc:node-while-expr expr) ctx env)
+     :body (translate-expression (tc:node-while-body expr) ctx env)))
+
+  (:method ((expr tc:node-while-let) ctx env)
+    (declare (type pred-context ctx)
+             (type tc:environment env)
+             (values node))
+    (make-node-while-let
+     :type tc:*unit-type*
+     :pattern (translate-pattern (tc:node-while-let-pattern expr))
+     :label (tc:node-while-let-label expr)
+     :expr (translate-expression (tc:node-while-let-expr expr) ctx env)
+     :body (translate-expression (tc:node-while-let-body expr) ctx env)))
+
+  (:method ((expr tc:node-for) ctx env)
+    (declare (type pred-context ctx)
+             (type tc:environment env)
+             (values node))
+    (let* ((pat-arg
+             (translate-pattern (tc:node-for-pattern expr)))
+
+           (pat-arg-ty
+             (pattern-type pat-arg))
+
+           (classes-package
+             (find-package "COALTON-LIBRARY/CLASSES"))
+
+           (some
+             (util:find-symbol "SOME" classes-package))
+
+           (optional
+             (util:find-symbol "OPTIONAL" classes-package))
+
+           (optional-pat-arg-ty
+             (tc:apply-type-argument
+              (tc:make-tycon :name optional
+                             :kind (tc:make-kfun :from tc:+kstar+ :to tc:+kstar+))
+              pat-arg-ty))
+
+           (some-pattern
+             (make-pattern-constructor
+              :type optional-pat-arg-ty
+              :name some
+              :patterns (list pat-arg)))
+
+           (into-iter-arg
+             (translate-expression (tc:node-for-expr expr) ctx env))
+
+           (into-iter-arg-ty
+             (node-type into-iter-arg))
+
+           (iterator-package
+             (find-package "COALTON-LIBRARY/ITERATOR"))
+
+           (into-iter-method
+             (util:find-symbol "INTO-ITER" iterator-package))
+
+           (intoiter-class
+             (util:find-symbol "INTOITERATOR" iterator-package))
+
+           (iterator
+             (util:find-symbol "ITERATOR" iterator-package))
+
+           (iter-ty
+             (tc:apply-type-argument
+              (tc:make-tycon :name iterator
+                             :kind (tc:make-kfun :from tc:+kstar+ :to tc:+kstar+))
+              into-iter-arg-ty))
+
+           (intoiterator-pred
+             (tc:make-ty-predicate
+              :class intoiter-class
+              :types (list into-iter-arg-ty pat-arg-ty)
+              :source (tc:node-source expr)))
+
+           (into-iter-node
+             (make-node-application
+              :type optional-pat-arg-ty
+              :rator (make-node-variable
+                      :type (tc:make-function-type*
+                             (list (pred-type intoiterator-pred env)
+                                   (node-type into-iter-arg))
+                             iter-ty)
+                      :value into-iter-method)
+              :rands (list
+                      (resolve-dict intoiterator-pred ctx env)
+                      into-iter-arg)))
+
+           (next-method
+             (util:find-symbol "NEXT!" iterator-package))
+
+           (into-iter-binding-var-name
+             (gensym "ITER-"))
+
+           (iter-next-node
+             (make-node-application
+              :type optional-pat-arg-ty
+              :rator (make-node-variable
+                      :type (tc:make-function-type*
+                             (list iter-ty)
+                             optional-pat-arg-ty)
+                      :value next-method)
+              :rands (list (make-node-variable
+                            :type iter-ty
+                            :value  into-iter-binding-var-name))))
+
+           (while-let-node
+             (make-node-while-let
+              :type tc:*unit-type*
+              :label (tc:node-for-label expr)
+              :pattern some-pattern
+              :expr iter-next-node
+              :body (translate-expression (tc:node-for-body expr) ctx env))))
+
+      (make-node-bind
+       :type tc:*unit-type* 
+       :name into-iter-binding-var-name
+       :expr into-iter-node
+       :body while-let-node)))
+
+  (:method ((expr tc:node-loop) ctx env)
+    (declare (type pred-context ctx)
+             (type tc:environment env)
+             (values node))
+    (make-node-loop
+     :type tc:*unit-type*
+     :label (tc:node-loop-label expr)
+     :body (translate-expression (tc:node-loop-body expr) ctx env)))
+
+  (:method ((expr tc:node-break) ctx env)
+    (declare (type pred-context ctx)
+             (type tc:environment env)
+             (values node))
+    (make-node-break
+     :type tc:*unit-type*
+     :label (tc:node-break-label expr)))
+
+  (:method ((expr tc:node-continue) ctx env)
+    (declare (type pred-context ctx)
+             (type tc:environment env)
+             (values node))
+    (make-node-continue
+     :type tc:*unit-type*
+     :label (tc:node-continue-label expr)))
 
   (:method ((expr tc:node-cond) ctx env)
     (declare (type pred-context ctx)
