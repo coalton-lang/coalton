@@ -11,7 +11,8 @@
    #:parse-error)
   (:local-nicknames
    (#:cst #:concrete-syntax-tree)
-   (#:util #:coalton-impl/util))
+   (#:util #:coalton-impl/util)
+   (#:const #:coalton-impl/constants))
   (:export
    #:node                               ; STRUCT
    #:node-source                        ; ACCESSOR
@@ -128,6 +129,33 @@
    #:node-do-body-element               ; TYPE
    #:node-body-element-list             ; TYPE
    #:node-do                            ; STRUCT
+   #:node-while                         ; STRUCT
+   #:make-node-while                    ; CONSTRUCTOR
+   #:node-while-label                   ; ACCESSOR
+   #:node-while-expr                    ; ACCESSOR
+   #:node-while-body                    ; ACCESSOR
+   #:node-while-let                     ; STRUCT
+   #:make-node-while-let                ; CONSTRUCTOR
+   #:node-while-let-label               ; ACCESSOR
+   #:node-while-let-pattern             ; ACCESSOR
+   #:node-while-let-expr                ; ACCESSOR
+   #:node-while-let-body                ; ACCESSOR
+   #:node-loop                          ; STRUCT
+   #:make-node-loop                     ; CONSTRUCTOR
+   #:node-loop-body                     ; ACCESSOR
+   #:node-loop-label                    ; ACCESSOR
+   #:node-break                         ; STRUCT
+   #:make-node-break                    ; CONSTRUCTOR
+   #:node-break-label                   ; ACCESSOR
+   #:node-continue                      ; STRUCT
+   #:make-node-continue                 ; CONSTRUCTOR
+   #:node-continue-label                ; ACCESSOR
+   #:node-for                           ; STRUCT
+   #:make-node-for                      ; CONSTRUCTOR
+   #:node-for-label                     ; ACCESSOR
+   #:node-for-pattern                   ; ACCESSOR
+   #:node-for-expr                      ; ACCESSOR
+   #:node-for-body                      ; ACCESSOR
    #:make-node-do                       ; CONSTRUCTOR
    #:node-do-nodes                      ; ACCESSOR
    #:node-do-last-node                  ; ACCESSOR
@@ -139,6 +167,15 @@
 (in-package #:coalton-impl/parser/expression)
 
 (defvar *macro-expansion-count* 0)
+
+(declaim (type util:symbol-list *loop-label-context*))
+(defvar *loop-label-context* nil
+  "A list of known labels encountered during parse. 
+
+Parsing (BREAK label) and (CONTINUE label) forms fails unless the label is found in
+this list.
+
+Rebound to NIL parsing an anonymous FN.")
 
 (defconstant +macro-expansion-max+ 500)
 
@@ -462,6 +499,46 @@
   (nodes     (util:required 'nodes)     :type node-do-body-element-list :read-only t)
   (last-node (util:required 'last-node) :type node                      :read-only t))
 
+(defstruct (node-while
+            (:include node)
+            (:copier nil))
+  (label (util:required 'label) :type keyword   :read-only t)
+  (expr  (util:required 'expr)  :type node      :read-only t)
+  (body  (util:required 'body)  :type node-body :read-only t))
+
+(defstruct (node-while-let
+            (:include node)
+            (:copier nil))
+  (label   (util:required 'label)   :type keyword   :read-only t)
+  (pattern (util:required 'pattern) :type pattern   :read-only t)
+  (expr    (util:required 'expr)    :type node      :read-only t)
+  (body    (util:required 'body)    :type node-body :read-only t))
+
+(defstruct (node-break
+            (:include node)
+            (:copier nil))
+  (label (util:required 'label) :type keyword :read-only t))
+
+(defstruct (node-continue
+            (:include node)
+            (:copier nil))
+  (label (util:required 'label) :type keyword :read-only t))
+
+(defstruct (node-loop
+            (:include node)
+            (:copier nil))
+  (label (util:required 'label) :type keyword   :read-only t)
+  (body  (util:required 'body)  :type node-body :read-only t))
+
+(defstruct (node-for
+            (:include node)
+            (:copier nil))
+  (label   (util:required 'label)   :type keyword   :read-only t)
+  (pattern (util:required 'pattern) :type pattern   :read-only t)
+  (expr    (util:required 'expr)    :type node      :read-only t)
+  (body    (util:required 'body)    :type node-body :read-only t))
+
+
 (defun parse-expression (form file)
   (declare (type cst:cst form)
            (type coalton-file file)
@@ -551,18 +628,18 @@
                         (lambda (existing)
                           (concatenate 'string "(" existing ")"))
                         :message "add parentheses")))))
-
-       (setf params
-             (loop :for vars := (cst:second form) :then (cst:rest vars)
-                   :while (cst:consp vars)
-                   :collect (parse-pattern (cst:first vars) file)))
-
-       (setf body (parse-body (cst:nthrest 2 form) form file))
-
-       (make-node-abstraction
-        :params params
-        :body body
-        :source (cst:source form))))
+       ;; Bind *LOOP-LABEL-CONTEXT* to NIL to disallow BREAKing from
+       ;; or CONTINUING with loops that enclose the FN form.
+       (let ((*loop-label-context* nil))
+         (setf params
+              (loop :for vars := (cst:second form) :then (cst:rest vars)
+                    :while (cst:consp vars)
+                    :collect (parse-pattern (cst:first vars) file)))
+         (setf body (parse-body (cst:nthrest 2 form) form file))
+         (make-node-abstraction
+          :params params
+          :body body
+          :source (cst:source form)))))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:let (cst:raw (cst:first form))))
@@ -874,6 +951,237 @@
     ((and (cst:atom (cst:first form))
           (eq 'coalton:do (cst:raw (cst:first form))))
      (parse-do form file))
+
+    ((and (cst:atom (cst:first form))
+          (eq 'coalton:while (cst:raw (cst:first form))))
+
+     (multiple-value-bind (label labelled-body) (take-label form)
+         ;; (while [label])
+       (unless (cst:consp labelled-body)
+         (error 'parse-error
+                :err (coalton-error
+                      :span (cst:source form)
+                      :file file
+                      :highlight :end
+                      :message "Malformed while expression"
+                      :primary-note "expected condition")))
+       ;; (while [label] condition)
+       (unless (cst:consp (cst:rest labelled-body))
+         (error 'parse-error
+                :err (coalton-error
+                      :span (cst:source form)
+                      :file file
+                      :highlight :end
+                      :message "Malformed while expression"
+                      :primary-note "expected body")))
+       (let ((*loop-label-context*
+               (if label 
+                   (list* label const:+default-loop-label+ *loop-label-context*)
+                   (cons const:+default-loop-label+ *loop-label-context*))))
+
+         (make-node-while
+          :source (cst:source form)
+          :label (or label const:+default-loop-label+)
+          :expr (parse-expression (cst:first labelled-body) file)
+          :body (parse-body (cst:rest labelled-body) form file)))))
+
+    ((and (cst:atom (cst:first form))
+          (eq 'coalton:while-let (cst:raw (cst:first form))))
+
+     (multiple-value-bind (label labelled-body) (take-label form)
+       ;; (while-let [label])
+       (unless (cst:consp labelled-body)
+         (error 'parse-error
+                :err (coalton-error
+                      :span (cst:source form)
+                      :file file
+                      :highlight :end
+                      :message "Malformed while-let expression"
+                      :primary-note  "expected pattern"))) 
+
+       ;; (while-let [label] pattern)
+       (unless (and (cst:consp (cst:rest labelled-body))
+                    (eq 'coalton:= (cst:raw (cst:second labelled-body))))
+         (error 'parse-error
+                :err (coalton-error
+                      :span (cst:source form)
+                      :file file
+                      :highlight :end
+                      :message "Malformed while-let expression"
+                      :primary-note  "expected =")))
+       
+       ;; (when-let [label] pattern =)
+       (unless (cst:consp (cst:nthrest 2 labelled-body))
+         (error 'parse-error
+                :err (coalton-error
+                      :span (cst:source form)
+                      :file file
+                      :highlight :end
+                      :message "Malformed while-let expression"
+                      :primary-note "expected expression")))
+       
+       ;; (when-let pattern = expr)
+       (unless (cst:consp (cst:nthrest 3 labelled-body))
+         (error 'parse-error
+                :err (coalton-error
+                      :span (cst:source form)
+                      :file file
+                      :highlight :end
+                      :message "Malformed while-let expression"
+                      :primary-note "exptected body")))
+       (let* ((*loop-label-context*
+                (if label
+                    (list* label const:+default-loop-label+ *loop-label-context*)
+                    (cons const:+default-loop-label+ *loop-label-context*))))
+         (make-node-while-let
+          :source (cst:source form)
+          :label (or label const:+default-loop-label+)
+          :pattern (parse-pattern (cst:first labelled-body) file) 
+          :expr (parse-expression (cst:third labelled-body) file)
+          :body (parse-body (cst:nthrest 3 labelled-body) form file)))))
+
+    ((and (cst:atom (cst:first form))
+          (eq 'coalton:loop (cst:raw (cst:first form))))
+     (multiple-value-bind (label labelled-body) (take-label form)
+       (unless (cst:consp labelled-body)
+         (error 'parse-error
+                :err (coalton-error
+                      :span (cst:source form)
+                      :file file
+                      :highlight :end
+                      :message "Malformed loop expression"
+                      :primary-note "expected a loop body")))
+
+       (let* ((*loop-label-context*
+                (if label
+                    (list* label const:+default-loop-label+ *loop-label-context*)
+                    (cons const:+default-loop-label+ *loop-label-context*))))
+         (make-node-loop
+          :source (cst:source form)
+          :label (or label const:+default-loop-label+)
+          :body (parse-body labelled-body form file)))))
+
+    ((and (cst:atom (cst:first form))
+          (eq 'coalton:break (cst:raw (cst:first form))))
+
+     (multiple-value-bind (label postlabel) (take-label form)
+       (unless (cst:null postlabel)
+         (error 'parse-error
+                :err (coalton-error
+                      :span (cst:source form)
+                      :file file
+                      :message "Invalid argument in break"
+                      :primary-note (if label
+                                        "unexpected argument after label"
+                                        "expected a keyword"))))
+
+       (if label
+           (unless (member label *loop-label-context*)
+             (error 'parse-error
+                    :err (coalton-error
+                          :span (cst:source (cst:second form))
+                          :file file
+                          :message "Invalid label in break"
+                          :primary-note "label not found in any enclosing loop")))
+           (unless *loop-label-context*
+             (error 'parse-error
+                    :err (coalton-error
+                          :span (cst:source form)
+                          :file file
+                          :message "Invalid break"
+                          :primary-note "break does not appear in an enclosing loop"))))
+       
+       (make-node-break :source (cst:source form) :label (or label (car *loop-label-context*)))))
+
+    ((and (cst:atom (cst:first form))
+          (eq 'coalton:continue (cst:raw (cst:first form))))
+
+     (multiple-value-bind (label postlabel) (take-label form)
+       (unless (cst:null postlabel)
+         (error 'parse-error
+                :err (coalton-error
+                      :span (cst:source form)
+                      :file file
+                      :message "Invalid argument in continue"
+                      :primary-note (if label
+                                        "unexpected argument after label"
+                                        "expected a keyword"))))
+
+       (if label
+           (unless (member label *loop-label-context*)
+             (error 'parse-error
+                    :err (coalton-error
+                          :span (cst:source (cst:second form))
+                          :file file
+                          :message "Invalid label in continue"
+                          :primary-note "label not found in any enclosing loop")))
+           (unless *loop-label-context*
+             (error 'parse-error
+                    :err (coalton-error
+                          :span (cst:source form)
+                          :file file
+                          :message "Invalid continue"
+                          :primary-note "continue does not appear in an enclosing loop"))))
+       
+       (make-node-continue :source (cst:source form) :label (or label (car *loop-label-context*)))))
+    
+
+    ((and (cst:atom (cst:first form))
+          (eq 'coalton:for (cst:raw (cst:first form))))
+
+     (multiple-value-bind (label labelled-body) (take-label form)
+       ;; (for [label])
+       (unless (cst:consp labelled-body)
+         (error 'parse-error
+                :err (coalton-error
+                      :span (cst:source form)
+                      :file file
+                      :highlight :end
+                      :message "Malformed for expression"
+                      :primary-note  "expected pattern"))) 
+       
+       ;; (for [label] pattern)
+       (unless (and (cst:consp (cst:rest labelled-body))
+                    (cst:atom (cst:second labelled-body))
+                    (eq 'coalton:in (cst:raw (cst:second labelled-body))))
+         (error 'parse-error
+                :err (coalton-error
+                      :span (cst:source form)
+                      :file file
+                      :highlight :end
+                      :message "Malformed for expression"
+                      :primary-note "expected in")))
+
+       ;; (for [label] pattern in)
+       (unless (cst:consp (cst:nthrest 2 labelled-body))
+         (error 'parse-error
+                :err (coalton-error
+                      :span (cst:source form)
+                      :file file
+                      :highlight :end
+                      :message "Malformed for expression"
+                      :primary-note  "expected expression")))
+       
+       ;; (for [label] pattern in expr)
+       (unless (cst:consp (cst:nthrest 3 labelled-body))
+         (error 'parse-error
+                :err (coalton-error
+                      :span (cst:source form)
+                      :file file
+                      :highlight :end
+                      :message "Malformed for expression"
+                      :primary-note "exptected body")))
+       
+       (let ((*loop-label-context*
+               (if label
+                   (list* label const:+default-loop-label+ *loop-label-context*)
+                   (cons const:+default-loop-label+ *loop-label-context*))))
+         (make-node-for
+          :source (cst:source form)
+          :label (or label const:+default-loop-label+)
+          :pattern (parse-pattern (cst:first labelled-body) file) 
+          :expr (parse-expression (cst:third labelled-body) file)
+          :body (parse-body (cst:nthrest 3 labelled-body) form  file)))))
 
     ;;
     ;; Macros
@@ -1362,3 +1670,23 @@
    :name (parse-variable (cst:second form) file)
    :type (parse-qualified-type (cst:third form) file)
    :source (cst:source form)))
+
+(defun take-label (form)
+  "Takes form (HEAD . (MAYBEKEYWORD . REST)) and returns two values,
+either
+
+MAYBEKEYWORD REST 
+
+if MAYBEKEYWORD is a keyword, or else
+
+NIL (MAYBEKEYWORD . REST)  
+
+if (CST:SECOND FORM) is not a keyword."
+  (declare (type cst:cst form)
+           (values (or keyword null) cst:cst))
+  (if (and (cst:consp (cst:rest form))
+           (cst:atom (cst:second form))
+           (keywordp (cst:raw (cst:second form))))
+      (values (cst:raw (cst:second form))
+              (cst:nthrest 2 form))
+      (values nil (cst:rest form))))

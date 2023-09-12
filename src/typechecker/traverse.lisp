@@ -34,6 +34,12 @@
   (unless          #'identity :type function :read-only t)
   (cond-clause     #'identity :type function :read-only t)
   (cond            #'identity :type function :read-only t)
+  (while           #'identity :type function :read-only t)
+  (while-let       #'identity :type function :read-only t)
+  (for             #'identity :type function :read-only t)
+  (loop            #'identity :type function :read-only t)
+  (break           #'identity :type function :read-only t)
+  (continue        #'identity :type function :read-only t)
   (do-bind         #'identity :type function :read-only t)
   (do              #'identity :type function :read-only t))
 
@@ -270,6 +276,69 @@
       :source (node-source node)
       :clauses (traverse (node-cond-clauses node) block))))
 
+  (:method ((node node-while) block)
+    (declare (type traverse-block block)
+             (values node &optional))
+    (funcall
+     (traverse-while block)
+     (make-node-while
+      :type (node-type node)
+      :source (node-source node)
+      :label (node-while-label node)
+      :expr (traverse (node-while-expr node) block)
+      :body (traverse (node-while-body node) block))))
+
+  (:method ((node node-while-let) block)
+    (declare (type traverse-block block)
+             (values node &optional))
+    (funcall
+     (traverse-while-let block)
+     (make-node-while-let
+      :type (node-type node)
+      :source (node-source node)
+      :label (node-while-let-label node)
+      :pattern (node-while-let-pattern node)
+      :expr (traverse (node-while-let-expr node) block)
+      :body (traverse (node-while-let-body node) block))))
+
+  (:method ((node node-for) block)
+    (declare (type traverse-block block)
+             (values node &optional))
+    (funcall
+     (traverse-for block)
+     (make-node-for
+      :type (node-type node)
+      :source (node-source node)
+      :label (node-for-label node)
+      :pattern (node-for-pattern node)
+      :expr (traverse (node-for-expr node) block)
+      :body (traverse (node-for-body node) block))))
+  
+  (:method ((node node-loop) block)
+    (declare (type traverse-block block)
+             (values node &optional))
+    (funcall
+     (traverse-loop block)
+     (make-node-loop
+      :type (node-type node)
+      :source (node-source node)
+      :label (node-loop-label node)
+      :body (traverse (node-loop-body node) block))))
+  
+  (:method ((node node-break) block)
+    (declare (type traverse-block block)
+             (values node &optional))
+    (funcall
+     (traverse-break block)
+     node))
+  
+  (:method ((node node-continue) block)
+    (declare (type traverse-block block)
+             (values node &optional))
+    (funcall
+     (traverse-continue block)
+     node))
+  
   (:method ((node node-do-bind) block)
     (declare (type traverse-block block)
              (values node-do-bind &optional))

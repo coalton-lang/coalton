@@ -1,0 +1,6 @@
+;; BAD: Parse Continue
+(package test-parser)
+
+(define f
+  (loop :foo        
+    (continue :not-foo)))

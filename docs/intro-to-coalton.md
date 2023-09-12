@@ -311,6 +311,123 @@ Structs can also be parametric:
     (second :a)))
 ```
 
+## Looping & Iteration
+
+Coalton supports infinite looping, conditional looping, and `for`-loop styled iteration. 
+
+### `loop`, `while`, `while-let`, and `for`
+
+You can loop forever 
+
+```lisp
+(loop (trace "hi"))
+```
+
+You can loop while some condition is true
+
+```lisp
+(coalton
+ (let ((counter (cell:new 0))
+       (limit 10))
+   (while (< (cell:read counter) limit)
+     (trace "hi") 
+     (cell:increment! counter))))
+```
+
+You can loop so long as a pattern matches 
+
+```lisp
+(coalton
+ (let ((xs (vector:make 4 3 2 1)))
+   (while-let (Some x) = (vector:pop! xs)
+              (traceobject "x" x))))
+```
+
+You can loop over instances of `IntoIterator`
+
+```lisp
+(coalton
+ (for x in "coalton"
+      (traceobject "x" x)))
+```
+
+
+### `break` and `continue`
+
+Each of the above looping forms supports `break` and `continue`.
+
+The `break` form immediately terminates iteration.  The following
+prints out `c`, `o`, and `a` and then terminates.
+
+```lisp
+(coalton
+ (for x in "coalton"
+      (when (== x #\l)
+        (break))
+      (traceobject "x" x)))
+```
+
+The `continue` form skips the remainder of the loop's body and starts
+on its next iteration. The following prints out `c`, `o`, `a`, `t`,
+`o`, and `n`, having skipped the printing of `l`.
+
+```lisp
+(coalton
+ (for x in "coalton"
+      (when (== x #\l)
+        (continue))
+      (traceobject "x" x)))
+```
+
+
+### Loop Labels
+
+Each of the above looping forms takes an optional loop label
+keyword. These labels can be used in conjunction with `break` and
+`continue` to acheive complex control flow.
+
+For each of the looping forms, a label may immediately follow the
+opening term of the loop:
+
+```lisp 
+
+(loop :outer (do-stuff))
+
+(while :a-label (is-true?) (do-stuff))
+
+(while-let :another-label 
+   (Some thing) = (get-something)
+   (do-stuff thing))
+
+(for :iter word in words 
+   (do-stuff-with word))
+
+```
+
+In the following entirely artificial example, the outermost loop is
+labelled `:outer`. This label is passed to `break` from inside the
+inner `while` loop to terminate iteration whenever the sum of the
+accumulator and the counter exceeds 500.  Without the `:outer` label,
+`break` would have only broken out of the inner `while` loop.
+
+```lisp
+(coalton 
+  (let ((counter (cell:new 0))
+        (acc (cell:new Nil)))
+    (loop :outer
+          (while (< (cell:increment! counter) 10)
+            (let x = (fold + (cell:read counter) (cell:read acc)))
+            (when (< 500 x)
+              (break :outer))
+            (when (== 0 (mod (cell:read counter) 3)) 
+              (continue))
+            (cell:push! acc x))
+          (when (< (length (cell:read acc)) 500)
+            (cell:swap! counter 0)
+            Unit))
+    (cell:read acc)))
+```
+
 ## Numbers
 
 Coalton supports a few numeric types. The main ones are `Integer`, `Single-Float`, and `Double-Float`.

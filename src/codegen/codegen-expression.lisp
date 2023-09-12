@@ -13,12 +13,21 @@
    (#:settings #:coalton-impl/settings)
    (#:util #:coalton-impl/util)
    (#:rt #:coalton-impl/runtime)
-   (#:tc #:coalton-impl/typechecker))
+   (#:tc #:coalton-impl/typechecker)
+   (#:const #:coalton-impl/constants))
   (:export
    #:codegen-expression                 ; FUNCTION
    ))
 
 (in-package #:coalton-impl/codegen/codegen-expression)
+
+(defun continue-label (lаbеl)
+  (declare (type symbol lаbеl))
+  (alexandria:format-symbol :keyword "~a-CONTINUE" lаbеl))
+
+(defun break-label (lаbеl)
+  (declare (type symbol lаbеl))
+  (alexandria:format-symbol :keyword "~a-BREAK" lаbеl))
 
 (defgeneric codegen-expression (node current-function env)
   (:method ((node node-literal) current-function env)
@@ -107,10 +116,65 @@
                 ,inner)
           inner)))
 
-  (:method ((expr node-match) current-function env)
+  (:method ((expr node-while) current-function env)
     (declare (type tc:environment env)
              (type (or null symbol) current-function))
 
+    (let ((pred-expr (codegen-expression (node-while-expr expr) current-function env))
+          (body-expr (codegen-expression (node-while-body expr) current-function env))
+          (label (node-while-label expr)))
+      `(loop
+         :named ,(break-label label)
+         :while ,pred-expr
+         :do
+            (block ,(continue-label label) ,body-expr))))
+
+  (:method ((expr node-while-let) current-function env)
+    (declare (type tc:environment env)
+             (type (or null symbol) current-function))
+
+    (let ((match-expr (codegen-expression (node-while-let-expr expr) current-function env))
+          (body-expr (codegen-expression (node-while-let-body expr) current-function env))
+          (label (node-while-let-label expr))
+          (match-var (gensym "MATCH")))
+
+      (multiple-value-bind (pred bindings)
+          (codegen-pattern (node-while-let-pattern expr) match-var env)
+        `(loop
+           :named ,(break-label label)
+           :for ,match-var
+             := ,(if settings:*emit-type-annotations*
+                     `(the ,(tc:lisp-type (node-type (node-while-let-expr expr)) env) ,match-expr)
+                     match-expr)
+           :while ,pred
+           :do (block ,(continue-label label)
+                 ,(cond ((null bindings) body-expr)
+                        (t `(let ,bindings
+                              (declare (ignorable ,@(mapcar #'car bindings)))
+                              ,body-expr))))))))
+
+  (:method ((expr node-loop) current-function env)
+    (declare (type tc:environment env)
+             (type (or null symbol) current-function))
+    (let ((body-expr (codegen-expression (node-loop-body expr) current-function env))
+          (label (node-loop-label expr)))
+      `(loop :named  ,(break-label label)
+             :do (block ,(continue-label label)
+                   ,body-expr))))
+
+  (:method ((expr node-break) current-function env)
+    (declare (type tc:environment env)
+             (type (or null symbol) current-function))
+    `(return-from ,(break-label (node-break-label expr))))
+
+  (:method ((expr node-continue) current-function env)
+    (declare (type tc:environment env)
+             (type (or null symbol) current-function))
+    `(return-from ,(continue-label (node-continue-label expr))))
+
+  (:method ((expr node-match) current-function env)
+    (declare (type tc:environment env)
+             (type (or null symbol) current-function))
     ;; If possible codegen a cl:if instead of a trivia:match
     (when (and (equalp (node-type (node-match-expr expr)) tc:*boolean-type*)
                (= 2 (length (node-match-branches expr)))

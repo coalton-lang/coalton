@@ -54,6 +54,27 @@
    #:make-node-match                    ; CONSTRUCTOR
    #:node-match-expr                    ; ACCESSOR
    #:node-match-branches                ; ACCESSOR
+   #:node-while                         ; STRUCT
+   #:make-node-while                    ; CONSTRUCTOR
+   #:node-while-label                   ; ACCESSOR
+   #:node-while-expr                    ; ACCESSOR
+   #:node-while-body                    ; ACESSOR
+   #:node-while-let                     ; STRUCT
+   #:make-node-while-let                ; CONSTRUCTOR
+   #:node-while-let-label               ; ACESSOR
+   #:node-while-let-pattern             ; ACCESSPR 
+   #:node-while-let-expr                ; ACCESSOR
+   #:node-while-let-body                ; ACESSOR
+   #:node-loop                          ; STRUCT
+   #:make-node-loop                     ; CONSTRUCTOR
+   #:node-loop-body                     ; ACCESSOR
+   #:node-loop-label                    ; ACCESSOR 
+   #:node-break                         ; STRUCT
+   #:make-node-break                    ; CONSTRUCTOR
+   #:node-break-label                   ; ACCESSOR
+   #:node-continue                      ; STRUCT
+   #:make-node-continue                 ; CONSTRUCTOR
+   #:node-continue-label                ; ACCESSOR
    #:node-seq                           ; STRUCT
    #:make-node-seq                      ; CONSTRUCTOR
    #:node-seq-nodes                     ; ACCESSOR
@@ -164,6 +185,33 @@
   "A pattern matching construct. Uses MATCH-BRANCH to represent branches"
   (expr (util:required 'expr) :type node :read-only t)
   (branches (util:required 'branches) :type branch-list :read-only t))
+
+(defstruct (node-while (:include node))
+  "A looping construct. Executes a body until an expression is false."
+  (label (util:required 'label) :type keyword :read-only t)
+  (expr  (util:required 'expr)  :type node    :read-only t)
+  (body  (util:required 'body)  :type node    :read-only t))
+
+(defstruct (node-while-let (:include node))
+  "A looping construct. Executes a body until a pattern match fails."
+  (label   (util:required 'label)   :type keyword :read-only t)
+  (pattern (util:required 'pattern) :type pattern :read-only t)
+  (expr    (util:required 'expr)    :type node    :read-only t)
+  (body    (util:required 'body)    :type node    :read-only t))
+
+(defstruct (node-loop (:include node))
+  "A labelled looping construct. Loops forever until broken out of by a
+call to (break)."
+  (label (util:required 'label) :type keyword :read-only t)
+  (body  (util:required 'body)  :type node    :read-only t))
+
+(defstruct (node-break (:include node))
+  "A break statment used to exit a loop."
+  (label (util:required 'label) :type keyword :read-only t))
+
+(defstruct (node-continue (:include node))
+  "A continue statment used to skip to the next iteration of a loop."
+  (label (util:required 'label) :type keyword :read-only t))
 
 (defstruct (node-seq (:include node))
   "A series of statements to be executed sequentially"
@@ -329,6 +377,28 @@ both CL namespaces appearing in NODE"
         (node-variables-g node :variable-namespace-only variable-namespace-only))
       (node-match-branches node))))
 
+  (:method ((node node-while) &key variable-namespace-only)
+    (declare (values parser:identifier-list &optional))
+    (nconc (node-variables-g (node-while-expr node) :variable-namespace-only variable-namespace-only)
+           (node-variables-g (node-while-body node) :variable-namespace-only variable-namespace-only)))
+
+  (:method ((node node-while-let) &key variable-namespace-only)
+    (declare (values parser:identifier-list &optional))
+    (nconc (node-variables-g (node-while-let-expr node) :variable-namespace-only variable-namespace-only)
+           (node-variables-g (node-while-let-body node) :variable-namespace-only variable-namespace-only)))
+
+  (:method ((node node-loop) &key variable-namespace-only)
+    (declare (values parser:identifier-list &optional))
+    (node-variables-g (node-loop-body node) :variable-namespace-only variable-namespace-only))
+
+  (:method ((node node-break) &key variable-namespace-only)
+    (declare (values parser:identifier-list &optional))
+    nil)
+
+  (:method ((node node-continue) &key variable-namespace-only)
+    (declare (values parser:identifier-list &optional))
+    nil)
+  
   (:method ((node node-seq) &key variable-namespace-only)
     (declare (values parser:identifier-list &optional))
     (mapcan

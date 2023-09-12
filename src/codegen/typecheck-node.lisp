@@ -113,6 +113,33 @@
                 (setf subs (tc:unify subs subexpr-ty type))))
       type))
 
+  (:method ((expr node-while) env)
+    (declare (type tc:environment env)
+             (values tc:ty))
+    (typecheck-node (node-while-expr expr) env)
+    (typecheck-node (node-while-body expr) env))
+
+  (:method ((expr node-while-let) env)
+    (declare (type tc:environment env)
+             (values tc:ty))
+    (typecheck-node (node-while-let-expr expr) env)
+    (typecheck-node (node-while-let-body expr) env))
+
+  (:method ((expr node-loop) env)
+    (declare (type tc:environment env)
+             (values tc:ty))
+    (typecheck-node (node-loop-body expr) env))
+
+  (:method ((expr node-break) env)
+    (declare (type tc:environment env)
+             (values tc:ty))
+    tc:*unit-type*)
+
+  (:method ((expr node-continue) env)
+    (declare (type tc:environment env)
+             (values tc:ty))
+    tc:*unit-type*)
+
   (:method ((expr node-seq) env)
     (declare (type tc:environment env)
              (values tc:ty))
