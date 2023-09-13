@@ -229,6 +229,7 @@
            (Some x))))
 
 (cl:eval-when (:compile-toplevel :load-toplevel)
+  (cl:declaim (inline + - * fromInt))
   (cl:defmacro define-num-float (type lisp-type)
     "Define `Num' for TYPE"
 
