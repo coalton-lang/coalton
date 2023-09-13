@@ -53,6 +53,14 @@
         :for unparsed-instance :in unparsed-instances
         :collect (typecheck-instance instance unparsed-instance env file)))
 
+(defun method-inline-p (method-name)
+  #+sbcl
+  (multiple-value-bind (type locally-bound-p decl)
+      (sb-cltl2:function-information method-name)
+    (and (eq type :function)
+         (null locally-bound-p)
+         (cdr (assoc 'cl:inline decl)))))
+
 (defun define-instance-in-environment (instance env file)
   (declare (type parser:toplevel-define-instance instance)
            (type tc:environment env)
@@ -109,12 +117,16 @@
              (method-codegen-syms
                (loop :with table := (make-hash-table :test #'eq)
                      :for method-name :in method-names
-                     :do (setf (gethash method-name table)
-                               (alexandria:format-symbol
-                                *package*
-                                "~A-~S"
-                                instance-codegen-sym
-                                method-name))
+                     :do (let ((instance-name-symbol
+                                 (alexandria:format-symbol
+                                  *package*
+                                  "~A-~S"
+                                  instance-codegen-sym
+                                  method-name)))
+                           (setf (gethash method-name table)
+                                 instance-name-symbol)
+                           (when (method-inline-p method-name)
+                             (proclaim `(cl:inline ,instance-name-symbol))))
                      :finally (return table)))
 
              (docstring (parser:toplevel-define-instance-docstring instance))
