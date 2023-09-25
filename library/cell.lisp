@@ -108,6 +108,13 @@
     (define (== c1 c2)
       (== (read c1) (read c2))))
 
+  (define-instance (Ord :a => Ord (Cell :a))
+    (define (<=> c1 c2)
+      (match (<=> (read c1) (read c2))
+        ((LT) LT)
+        ((GT) GT)
+        ((EQ) EQ))))
+
   (define-instance (Num :a => Num (Cell :a))
     (define (+ c1 c2)
       (new (+ (read c1) (read c2))))
