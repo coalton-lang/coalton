@@ -500,7 +500,17 @@ Returns a `node'.")
     (let* ((coalton-package (find-package "COALTON"))
            (true-value (util:find-symbol "TRUE" coalton-package))
            (false-value (util:find-symbol "FALSE" coalton-package))
-           (unit-value (util:find-symbol "UNIT" coalton-package)))
+           (unit-value (util:find-symbol "UNIT" coalton-package))
+           (translated-body (translate-expression (tc:node-when-body expr) ctx env)))
+
+      (unless (equalp tc:*unit-type* (node-type translated-body))
+        (setf translated-body
+              (make-node-seq
+               :type tc:*unit-type*
+               :nodes (list translated-body
+                            (make-node-variable
+                             :type tc:*unit-type*
+                             :value unit-value)))))
 
       (make-node-match
        :type tc:*unit-type*
@@ -511,7 +521,7 @@ Returns a `node'.")
                              :type tc:*boolean-type*
                              :name true-value
                              :patterns nil)
-                   :body (translate-expression (tc:node-when-body expr) ctx env))
+                   :body translated-body)
                   (make-match-branch
                    :pattern (make-pattern-constructor
                              :type tc:*boolean-type*
@@ -529,7 +539,17 @@ Returns a `node'.")
     (let* ((coalton-package (find-package "COALTON"))
            (true-value (util:find-symbol "TRUE" coalton-package))
            (false-value (util:find-symbol "FALSE" coalton-package))
-           (unit-value (util:find-symbol "UNIT" coalton-package)))
+           (unit-value (util:find-symbol "UNIT" coalton-package))
+           (translated-body (translate-expression (tc:node-unless-body expr) ctx env)))
+
+      (unless (equalp tc:*unit-type* (node-type translated-body))
+        (setf translated-body
+              (make-node-seq
+               :type tc:*unit-type*
+               :nodes (list translated-body
+                            (make-node-variable
+                             :type tc:*unit-type*
+                             :value unit-value)))))
 
       (make-node-match
        :type tc:*unit-type*
@@ -538,13 +558,13 @@ Returns a `node'.")
                   (make-match-branch
                    :pattern (make-pattern-constructor
                              :type tc:*boolean-type*
-                             :name false-value
+                             :name true-value
                              :patterns nil)
-                   :body (translate-expression (tc:node-unless-body expr) ctx env))
+                   :body translated-body)
                   (make-match-branch
                    :pattern (make-pattern-constructor
                              :type tc:*boolean-type*
-                             :name true-value
+                             :name false-value
                              :patterns nil)
                    :body (make-node-variable
                           :type tc:*unit-type*

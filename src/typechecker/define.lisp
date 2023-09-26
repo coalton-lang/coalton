@@ -1144,35 +1144,24 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
 
       (multiple-value-bind (body-ty preds_ accessors_ body-node subs)
           (infer-expression-type (parser:node-when-body node)
-                                 tc:*unit-type*
+                                 (tc:make-variable)
                                  subs
                                  env
                                  file)
+        (declare (ignore body-ty))
         (setf preds (append preds preds_))
         (setf accessors (append accessors accessors_))
 
-        (handler-case
-            (progn
-              (setf subs (tc:unify subs body-ty expected-type))
-              (values
-               tc:*unit-type*
-               preds
-               accessors
-               (make-node-when
-                :type (tc:qualify nil tc:*unit-type*)
-                :source (parser:node-source node)
-                :expr expr-node
-                :body body-node)
-               subs))
-          (error:coalton-internal-type-error ()
-            (error 'tc-error
-                   :err (coalton-error
-                         :span (parser:node-source node)
-                         :file file
-                         :message "Type mismatch"
-                         :primary-note (format nil "Expected type '~S' but got '~S'"
-                                               (tc:apply-substitution subs body-ty)
-                                               (tc:apply-substitution subs expected-type)))))))))
+        (values
+         tc:*unit-type*
+         preds
+         accessors
+         (make-node-when
+          :type (tc:qualify nil tc:*unit-type*)
+          :source (parser:node-source node)
+          :expr expr-node
+          :body body-node)
+         subs))))
 
   (:method ((node parser:node-unless) expected-type subs env file)
     (declare (type tc:ty expected-type)
@@ -1191,35 +1180,24 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
 
       (multiple-value-bind (body-ty preds_ accessors_ body-node subs)
           (infer-expression-type (parser:node-unless-body node)
-                                 tc:*unit-type*
+                                 (tc:make-variable)
                                  subs
                                  env
                                  file)
+        (declare (ignore body-ty))
         (setf preds (append preds preds_))
         (setf accessors (append accessors accessors_))
 
-        (handler-case
-            (progn
-              (setf subs (tc:unify subs body-ty expected-type))
-              (values
-               tc:*unit-type*
-               preds
-               accessors
-               (make-node-unless
-                :type (tc:qualify nil tc:*unit-type*)
-                :source (parser:node-source node)
-                :expr expr-node
-                :body body-node)
-               subs))
-          (error:coalton-internal-type-error ()
-            (error 'tc-error
-                   :err (coalton-error
-                         :span (parser:node-source node)
-                         :file file
-                         :message "Type mismatch"
-                         :primary-note (format nil "Expected type '~S' but got '~S'"
-                                               (tc:apply-substitution subs body-ty)
-                                               (tc:apply-substitution subs expected-type)))))))))
+        (values
+         tc:*unit-type*
+         preds
+         accessors
+         (make-node-unless
+          :type (tc:qualify nil tc:*unit-type*)
+          :source (parser:node-source node)
+          :expr expr-node
+          :body body-node)
+         subs))))
 
   (:method ((node parser:node-cond-clause) expected-type subs env file)
     (declare (type tc:ty expected-type)
