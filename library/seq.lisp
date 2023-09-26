@@ -339,12 +339,14 @@ to `len`."
          (vector:push! elem acc)
          (when (== len (vector:length acc))
            (vector:push! (vector:copy acc) result)
-           (vector:clear! acc)))
+           (vector:clear! acc) ))
        (iter:into-iter vec))
       ;; push the last if non-empty
+
       (unless (== 0 (vector:length acc)) 
         (vector:push! acc result)
         Unit)
+
       result))
 
   (declare build-cumulative-size-table (vector:Vector (Seq :a) -> vector:Vector UFix))
@@ -427,10 +429,21 @@ table of relaxed nodes may be incaccurate."
   (define (make-relaxed-node ht branches)
     (RelaxedNode ht (perfect-subtree-size-at-height ht) (build-cumulative-size-table branches) branches))
   
+  (define (pop-while vec pred)
+    (when (pred vec)
+      (vector:pop! vec)
+      (pop-while vec pred)))
+
   (declare make-node-from-branches (types:runtimerepr :a => vector:Vector (Seq :a) -> Seq :a))
   (define (make-node-from-branches branches)
     "Makes a `Seq` tall enough to contain all the branches. Branches are
 all assumed to have the same height."
+
+    (pop-while branches
+               (fn (v)
+                 (and (< 0 (vector:length v))
+                      (== 0 (virtual-size (vector:last-unsafe v))))))
+
     (let branches-length = (vector:length branches))
     (cond ((== 0 branches-length)
            (new))
@@ -444,6 +457,7 @@ all assumed to have the same height."
                        (group-vectors max-branching branches))
                      (taller-branches
                        (map (make-relaxed-node (+ ht 1)) groups)))
+
                  (make-node-from-branches taller-branches))))))
 
   (define (copy seq)
@@ -453,6 +467,15 @@ all assumed to have the same height."
        (LeafArray (vector:copy vec)))
       ((RelaxedNode ht fss cst seq)
        (RelaxedNode ht fss (vector:copy cst) (vector:copy seq)))))
+
+  (define (virtual-size seq)
+    (match seq
+      ((RelaxedNode _ht _sts cst _subs)
+       (if (== 0 (vector:length cst))
+           0
+           (size seq)))
+      (_ (size seq))))
+  
   
   (declare rebalance-branches (types:runtimerepr :a => vector:Vector (Seq :a) -> Seq :a))
   (define (rebalance-branches branches)
@@ -500,14 +523,13 @@ It attempts to rebalance with a minimum of array copying."
                    this-branch next-branch (- min-branching subbranch-count))
                   ;; cache the branch for the next round  
                   (cell:swap! cached-branch (Some next-branch))
-                  this-branch)))))) 
+                  this-branch))))))
 
       ;;make a node from rebalanced branches
       (make-node-from-branches
-       (iter:collect!
-        (iter:filter! (compose (< 0) size)
-                      (map branch-rebalancer
-                           (iter:up-through stop))))))))
+       (iter:collect! (map branch-rebalancer (iter:up-through stop)))))))
+
+
 
 (cl:defmacro make (cl:&rest elems)
   "Create a new `Seq` containing `elems`."
