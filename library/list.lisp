@@ -757,6 +757,12 @@ This function is equivalent to all size-N elements of `(COMBS L)`."
                         (cl:setf current top)))
            :finally (cl:return top)))))
 
+  (define-instance (Into (Optional :a) (List :a))
+    (define (into opt)
+      (match opt
+        ((None) Nil)
+        ((Some a) (Cons a Nil)))))
+
   (define-instance (Default (List :a))
     (define (default) Nil)))
 
