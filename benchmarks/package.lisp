@@ -12,13 +12,21 @@
    #:coalton-prelude
    #:coalton-library/big-float
    #:coalton-library/math)
+  (:local-nicknames (#:list #:coalton-library/list))
   (:export
    #:fib
    #:fib-fixnum
    #:fib-generic-wrapped
    #:fib-monomorphized
    #:fib-generic-optional
-   #:fib-monomorphized-optional))
+   #:fib-monomorphized-optional)
+
+  ;; gabriel-benchmarks/
+  (:export
+   #:tak
+   #:stak
+   #:takl
+   #:takr))
 
 (cl:in-package #:coalton-benchmarks)
 

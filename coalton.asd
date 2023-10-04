@@ -232,7 +232,13 @@
   :serial t
   :components ((:file "package")
                (:file "fibonacci")
-               (:file "big-float")))
+               (:file "big-float")
+               (:module "gabriel-benchmarks"
+                        :serial t
+                        :components ((:file "tak")
+                                     (:file "stak")
+                                     (:file "takl")
+                                     (:file "takr")))))
 
 ;;; we need to inspect the sbcl version in order to decide which version of the hashtable shim to load,
 ;;; because 2.1.12 includes (or will include) a bugfix that allows a cleaner, more maintainable
