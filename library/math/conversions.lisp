@@ -148,7 +148,7 @@ cannot be represented in :TO. These fall into a few categories:
      (define-instance (Into ,integer ,coalton-float)
        (define (into x)
          (lisp ,coalton-float (x)
-           (cl:coerce x (cl:quote ,lisp-float)))))))
+           (cl:coerce x ',lisp-float))))))
 
 ;; Only exact conversions
 ;; Single-Float: 24 bit mantissa (not including sign)
@@ -187,12 +187,12 @@ cannot be represented in :TO. These fall into a few categories:
     `(define-instance (TryInto ,integer ,float)
        (define (tryInto x)
 	 (lisp (Result String ,float) (x)
-           (cl:if (cl:and (cl:> x (cl:expt -2 ,pow)) (cl:< x (cl:expt 2 ,pow)))	 
-	          (cl:let ((y (cl:coerce x ',lisp-float)))
+           (cl:if (cl:< ,(cl:- (cl:expt 2 pow)) x ,(cl:expt 2 pow))
+	          (cl:let ((y (cl:ignore-errors (cl:coerce x ',lisp-float))))
 	            (cl:if (cl:null y)
-		           (coalton-impl/util:unreachable) 
+		           (coalton-impl/util:unreachable)
 		           (Ok y)))
-	          (Err `,(cl:concatenate 'cl:string "Given integer" "is not within " "(-2^" (cl:write-to-string ,pow) ", " "2^" (cl:write-to-string ,pow) ")"))))))))
+	          (Err ,(cl:format cl:nil "Given integer is not within (-2^~D, 2^~D)." pow pow))))))))
 
 (coalton-toplevel
   ;; Single Float
@@ -208,7 +208,7 @@ cannot be represented in :TO. These fall into a few categories:
 
   (integer-tryinto-float I32 cl:single-float Single-Float 24)
 
-;; Double Float
+  ;; Double Float
   (integer-tryinto-float I64 cl:double-float Double-Float 53)
 
   (integer-tryinto-float U64 cl:double-float Double-Float 53)
