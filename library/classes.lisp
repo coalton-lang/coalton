@@ -130,42 +130,42 @@
 
   (declare > (Ord :a => :a -> :a -> Boolean))
   (define (> x y)
-    "Is X greater than Y?"
+    "Is `x` greater than `y`?"
     (match (<=> x y)
       ((GT) True)
       (_ False)))
 
   (declare < (Ord :a => :a -> :a -> Boolean))
   (define (< x y)
-    "Is X less than Y?"
+    "Is `x` less than `y`?"
     (match (<=> x y)
       ((LT) True)
       (_ False)))
 
   (declare >= (Ord :a => :a -> :a -> Boolean))
   (define (>= x y)
-    "Is X greater than or equal to Y?"
+    "Is `x` greater than or equal to `y`?"
     (match (<=> x y)
       ((LT) False)
       (_ True)))
 
   (declare <= (Ord :a => :a -> :a -> Boolean))
   (define (<= x y)
-    "Is X less than or equal to Y?"
+    "Is `x` less than or equal to `y`?"
     (match (<=> x y)
       ((GT) False)
       (_ True)))
 
   (declare max (Ord :a => :a -> :a -> :a))
   (define (max x y)
-    "Returns the greater element of X and Y."
+    "Returns the greater element of `x` and `y`."
     (if (> x y)
         x
         y))
 
   (declare min (Ord :a => :a -> :a -> :a))
   (define (min x y)
-    "Returns the lesser element of X and Y."
+    "Returns the lesser element of `x` and `y`."
     (if (< x y)
         x
         y))
@@ -210,9 +210,9 @@
   (define-class (Foldable :container)
     "Types which can be folded into a single element.
 
-`fold` is a left tail recursive fold
+`fold` is a left tail recursive fold.
 
-`foldr` is a right non tail recursive fold"
+`foldr` is a right non tail recursive fold."
     (fold ((:accum -> :elt -> :accum) -> :accum -> :container :elt -> :accum))
     (foldr ((:elt -> :accum -> :accum) -> :accum -> :container :elt -> :accum)))
 
@@ -233,12 +233,12 @@
 
   (declare map-fst (Bifunctor :f => (:a -> :b) -> :f :a :c -> :f :b :c))
   (define (map-fst f b)
-    "Map over the first argument of a Bifunctor."
+    "Map over the first argument of a `Bifunctor`."
     (bimap f (fn (x) x) b))
 
   (declare map-snd (Bifunctor :f => (:b -> :c) -> :f :a :b -> :f :a :c))
   (define (map-snd f b)
-    "Map over the second argument of a Bifunctor."
+    "Map over the second argument of a `Bifunctor`."
     (bimap (fn (x) x) f b))
 
   ;;
@@ -246,7 +246,7 @@
   ;;
 
   (define-class (Into :a :b)
-    "INTO imples *every* element of :a can be represented by an element of :b. This conversion might not be bijective (i.e., there may be elements in :b that don't correspond to any in :a)."
+    "INTO imples *every* element of `:a` can be represented by an element of `:b`. This conversion might not be bijective (i.e., there may be elements in `:b` that don't correspond to any in `:a`)."
     (into (:a -> :b)))
 
   (define-class ((Into :a :b) (Into :b :a) => Iso :a :b)
@@ -275,12 +275,12 @@
   (define-class (Unwrappable :container)
     "Containers which can be unwrapped to get access to their contents.
 
-(unwrap-or-else SUCCEED FAIL CONTAINER) should invoke the SUCCEED continuation on the unwrapped contents of
-CONTAINER when successful, or invoke the FAIL continuation with no arguments (i.e. with Unit as an argument)
+`(unwrap-or-else succeed fail container)` should invoke the `succeed` continuation on the unwrapped contents of
+`container` when successful, or invoke the `fail` continuation with no arguments (i.e., with `Unit` as an argument)
 when unable to unwrap a value.
 
-The SUCCEED continuation will often, but not always, be the identity function. `as-optional` passes Some to
-construct an Optional.
+The `succeed` continuation will often, but not always, be the identity function. `as-optional` passes `Some` to
+construct an `Optional`.
 
 Typical `fail` continuations are:
 - Return a default value, or
@@ -295,7 +295,7 @@ Typical `fail` continuations are:
                    -> (:container :element)
                    -> :element))
   (define (expect reason container)
-    "Unwrap CONTAINER, signaling an error with the description REASON on failure."
+    "Unwrap `container`, signaling an error with the description `reason` on failure."
     (unwrap-or-else (fn (elt) elt)
                     (fn () (error reason))
                     container))
@@ -304,7 +304,7 @@ Typical `fail` continuations are:
                    (:container :element)
                    -> :element))
   (define (unwrap container)
-    "Unwrap CONTAINER, signaling an error on failure."
+    "Unwrap `container`, signaling an error on failure."
     (unwrap-or-else (fn (elt) elt)
                     (fn () (error (lisp String (container)
                                     (cl:format cl:nil "Unexpected ~a in UNWRAP"
@@ -316,14 +316,14 @@ Typical `fail` continuations are:
                          -> (:container :element)
                          -> :element))
   (define (with-default default container)
-    "Unwrap CONTAINER, returning DEFAULT on failure."
+    "Unwrap `container`, returning `default` on failure."
     (unwrap-or-else (fn (elt) elt)
                     (fn () default)
                     container))
 
   (declare as-optional ((Unwrappable :container) => (:container :elt) -> (Optional :elt)))
   (define (as-optional container)
-    "Convert any Unwrappable container into an Optional, constructing Some on a successful unwrap and None on a failed unwrap."
+    "Convert any Unwrappable container into an `Optional`, constructing Some on a successful unwrap and None on a failed unwrap."
     (unwrap-or-else Some
                     (fn () None)
                     container))
@@ -340,7 +340,7 @@ Typical `fail` continuations are:
   (declare defaulting-unwrap ((Unwrappable :container) (Default :element) =>
                               (:container :element) -> :element))
   (define (defaulting-unwrap container)
-    "Unwrap an UNWRAPPABLE, returning (DEFAULT) of the wrapped type on failure. "
+    "Unwrap an `unwrappable`, returning `(default)` of the wrapped type on failure. "
     (unwrap-or-else (fn (elt) elt)
                     (fn () (default))
                     container)))

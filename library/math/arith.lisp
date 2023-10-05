@@ -56,7 +56,7 @@
     (/ x y) = (* x (reciprocal y))
 
 
-If no reciprocal exists for an element, produce a run-time error (e.g. zero).
+If no reciprocal exists for an element, produce a run-time error (e.g., zero).
 "
     (/ (:a -> :a -> :a))
     (reciprocal (:a -> :a)))
@@ -78,7 +78,7 @@ establishes that division of two `Single-Float`s can result in a `Single-Float`.
 
 Note that `Dividable` does *not* establish a default result type; you must constrain the result type yourself.
 
-The function general/ is partial, and will error produce a run-time error if the divisor is zero.
+The function `general/` is partial, and will error produce a run-time error if the divisor is zero.
 "
     ;; This is a type that is more pragmatic and less mathematical in
     ;; nature. It expresses a division relationship between one input
@@ -89,7 +89,7 @@ The function general/ is partial, and will error produce a run-time error if the
     (define (general/ a b) (/ a b)))
 
   (define-class (Transfinite :a)
-    "Numeric type with a value for (positive) 'infinity' and/or 'NaN'"
+    "Numeric type with a value for (positive) infinity and/or NaN."
     (infinity :a)
     (infinite? (:a -> Boolean))
     (nan :a)
