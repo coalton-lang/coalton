@@ -34,7 +34,7 @@
   (define-class (Eq :a => Hash :a)
     "Types which can be hashed for storage in hash tables.
 
-Invariant (== left right) implies (== (hash left) (hash right))."
+The hash function must satisfy the invariant that `(== left right)` implies `(== (hash left) (hash right))`."
     (hash (:a -> Hash)))
 
   (declare combine-hashes (Hash -> Hash -> Hash))

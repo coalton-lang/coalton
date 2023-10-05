@@ -267,14 +267,12 @@
   (define (range start end)
     "Returns a list containing the numbers from START to END inclusive, counting by 1.
 
-
-    ```
-    > COALTON-USER> (coalton (range 1 5))
+    COALTON-USER> (coalton (range 1 5))
     (1 2 3 4 5)
 
-    > COALTON-USER> (coalton (range 5 2))
+    COALTON-USER> (coalton (range 5 2))
     (5 4 3 2)
-    ```"
+"
     (let ((inner (fn (x end a)
                    (if (> x end)
                        a
@@ -381,17 +379,17 @@
 
   (declare remove (Eq :a => (:a -> (List :a) -> (List :a))))
   (define (remove x ys)
-    "Return a new list with the first element equal to X removed."
+    "Return a new list with the first element equal to `x` removed."
     (remove-if (== x) ys))
 
   (declare difference (Eq :a => ((List :a) -> (List :a) -> (List :a))))
   (define (difference xs ys)
-    "Returns a new list with the first occurence of each element in YS removed from XS."
+    "Returns a new list with the first occurence of each element in `ys` removed from `xs`."
     (fold (fn (a b) (remove b a)) xs ys))
 
   (declare zipWith ((:a -> :b -> :c) -> (List :a) -> (List :b) -> (List :c)))
   (define (zipWith f xs ys)
-    "Builds a new list by calling F with elements of XS and YS."
+    "Builds a new list by calling `f` with elements of `xs` and `ys`."
     (let ((rec
             (fn (xs ys acc)
               (match (Tuple xs ys)

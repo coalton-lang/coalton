@@ -31,14 +31,14 @@
 (coalton-toplevel
   (declare trace (String -> Unit))
   (define (trace str)
-    "Print a line to `*STANDARD-OUTPUT*`"
+    "Print a line to `cl:*standard-output*`."
     (progn
       (lisp :a (str) (cl:format cl:t"~A~%" str))
       Unit))
 
   (declare traceObject (String -> :a -> Unit))
   (define (traceObject str item)
-    "Print a line to `*STANDARD-OUTPUT*` in the form \"{STR}: {ITEM}\""
+    "Print a line to `cl:*standard-output*` in the form \"{STR}: {ITEM}\"."
     (progn
       (lisp :a (str item) (cl:format cl:t "~A: ~A~%" str item))
       Unit))
@@ -90,7 +90,7 @@
   ;; considered to be "saturated".
   (declare compose ((:b -> :c) -> (:a -> :b) -> (:a -> :c)))
   (define (compose f g)
-    "Produces a function equivalent to applying G then F in succession."
+    "Produces a function equivalent to applying `g` followed by `f`."
     ;; Note: ((compose f g) x) behaves like (f (g x))
     (fn (x)
       (f (g x))))
@@ -122,17 +122,17 @@
 
   (declare msum ((Monoid :a) (Foldable :t) => :t :a -> :a))
   (define (msum xs)
-    "Fold over a list using <>"
+    "Fold over a list using `<>`."
     (foldr <> mempty xs))
 
   (declare asum ((Alternative :f) (Foldable :t) => :t (:f :a) -> :f :a))
   (define (asum xs)
-    "Fold over a list using alt"
+    "Fold over a list using `alt`."
     (foldr alt empty xs))
 
   (declare /= (Eq :a => :a -> :a -> Boolean))
   (define (/= a b)
-    "Is A not equal to B?"
+    "Is `a` not equal to `b`?"
     (boolean-not (== a b)))
 
   ;;

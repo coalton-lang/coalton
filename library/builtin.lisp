@@ -31,37 +31,37 @@
     (error "Undefined"))
 
   (define not
-    "Synonym for BOOLEAN-NOT."
+    "Synonym for `boolean-not`."
     boolean-not)
 
   (define xor
-    "Synonym for BOOLEAN-XOR."
+    "Synonym for `boolean-xor`."
     boolean-xor)
 
   (declare boolean-not (Boolean -> Boolean))
   (define (boolean-not x)
-    "Is X False?"
+    "The logical negation of `x`. Is `x` false?"
     (match x
       ((True) False)
       ((False) True)))
 
   (declare boolean-or (Boolean -> Boolean -> Boolean))
   (define (boolean-or x y)
-    "Is X or Y True? Note that this is a *function* which means both X and Y will be evaluated. Use the OR macro for short-circuiting behavior."
+    "Is either `x` or `y` true? Note that this is a *function* which means both `x` and `y` will be evaluated. Use the `or` macro for short-circuiting behavior."
     (match x
       ((True) True)
       ((False) y)))
 
   (declare boolean-and (Boolean -> Boolean -> Boolean))
   (define (boolean-and x y)
-    "Are X and Y True? Note that this is a *function* which means both X and Y will be evaluated. Use the AND macro for short-circuiting behavior."
+    "Are both `x` and `y` true? Note that this is a *function* which means both `x` and `y` will be evaluated. Use the AND macro for short-circuiting behavior."
     (match x
       ((True) y)
       ((False) False)))
 
   (declare boolean-xor (Boolean -> Boolean -> Boolean))
   (define (boolean-xor x y)
-    "Are X or Y True, but not both?"
+    "Are `x` or `y` true, but not both?"
     (match x
       ((True) (boolean-not y))
       ((False) y))))
