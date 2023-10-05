@@ -186,7 +186,6 @@ are floored and truncated division, respectively."
            (gcd (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-GCD")))
            (^ (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-^")))
            (lcm (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-LCM")))
-           (ilog (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-ILOG")))
            (isqrt (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-ISQRT"))))
     `(coalton-toplevel
        (define-instance (Remainder ,type)
