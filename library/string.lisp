@@ -73,7 +73,7 @@
   
   (declare strip-prefix (String -> String -> (Optional String)))
   (define (strip-prefix prefix str)
-    "Returns a string without a give prefix, or None if the string
+    "Returns a string without a give prefix, or `None` if the string
 does not have that suffix."
     (let prefix-len = (length prefix))
     (let substr = (substring str 0 prefix-len))
@@ -83,7 +83,7 @@ does not have that suffix."
 
   (declare strip-suffix (String -> String -> (Optional String)))
   (define (strip-suffix suffix str)
-    "Returns a string without a give suffix, or None if the string
+    "Returns a string without a give suffix, or `None` if the string
 does not have that suffix."
     (let suffix-len = (length suffix))
     (let str-len = (length str))
@@ -94,7 +94,7 @@ does not have that suffix."
 
   (declare parse-int (String -> (Optional Integer)))
   (define (parse-int str)
-    "Parse the integer in string STR."
+    "Parse the integer in string `str`."
     (lisp (Optional Integer) (str)
       (cl:let ((x (cl:parse-integer str :junk-allowed cl:t)))
         (cl:if x
@@ -103,13 +103,13 @@ does not have that suffix."
   
   (declare ref-unchecked (String -> UFix -> Char))
   (define (ref-unchecked str idx)
-    "Return the IDXth character of STR. This function is partial."
+    "Return the `idx`th character of `str`. This function is partial."
     (lisp Char (str idx)
       (cl:char str idx)))
 
   (declare ref (String -> UFix -> (Optional Char)))
   (define (ref str idx)
-    "Return the IDXth character of STR."
+    "Return the `idx`th character of `str`."
     (if (< idx (length str))
         (Some (ref-unchecked str idx))
         None))
@@ -132,7 +132,7 @@ does not have that suffix."
 
   (declare chars (String -> iter:Iterator Char))
   (define (chars str)
-    "Returns an iterator over the characters in STR."
+    "Returns an iterator over the characters in `str`."
     (iter:into-iter str))
 
   ;;
@@ -165,7 +165,8 @@ does not have that suffix."
   (define-instance (iter:FromIterator String Char)
     (define (iter:collect! iter)
       (let vec = (the (Vector Char) (iter:collect! iter)))
-      (lisp String (vec) vec)))
+      (lisp String (vec)
+        (cl:coerce vec 'cl:string))))
 
   ;;
   ;; Conversions

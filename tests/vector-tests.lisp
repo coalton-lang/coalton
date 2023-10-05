@@ -11,15 +11,5 @@
   (is (== (iter:collect! (iter:up-to 10))
           vec)))
 
-(define-test test-vector-specialize-element-type ()
-  (is (== (vector:element-type (the (Vector (Optional Integer)) (vector:new)))
-          (lisp types:LispType () 'cl:t)))
-  (is (== (vector:element-type (the (Vector IFix) (vector:new)))
-          (lisp types:LispType () 'cl:fixnum)))
-  (is (== (vector:element-type (the (Vector String) (vector:new)))
-          (lisp types:LispType () 'cl:t)))
-  (is (== (vector:element-type (the (Vector Char) (vector:new)))
-          (lisp types:LispType () 'cl:character))))
-
 (define-test test-vector-initial-element ()
   (== (vector:make "x" "x" "x") (vector:with-initial-element 3 "x")))

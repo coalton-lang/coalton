@@ -16,7 +16,6 @@
    #:with-initial-element
    #:length
    #:capacity
-   #:element-type
    #:empty?
    #:copy
    #:set-capacity!
@@ -53,67 +52,55 @@
   ;; Vector
   ;;
 
-  (repr :native (cl:and (cl:vector cl:*) (cl:not cl:simple-array)))
+  (repr :native (cl:and (cl:vector cl:t) (cl:not cl:simple-vector)))
   (define-type (Vector :a))
 
-  (declare new (types:RuntimeRepr :a => Unit -> Vector :a))
+  (declare new (Unit -> Vector :a))
   (define (new _)
     "Create a new empty vector"
     (with-capacity 0))
 
-  (declare %with-capacity-specialized (types:LispType -> UFix -> Vector :a))
-  (define (%with-capacity-specialized t n)
-    "Create a new vector with N elements preallocated"
-    (lisp (Vector :a) (n t)
-      (cl:make-array n :fill-pointer 0 :adjustable cl:t :element-type t)))
-
-  (declare with-capacity (types:RuntimeRepr :a => UFix -> Vector :a))
+  (declare with-capacity (UFix -> Vector :a))
   (define (with-capacity n)
-    "Create a new vector with N elements preallocated"
-    (let p = types:Proxy)
-    (let p_ = (types:proxy-inner p))
-    (let t = (types:runtime-repr p_))
-    (types:as-proxy-of (%with-capacity-specialized t n) p))
+    "Create a new vector with `n` elements preallocated."
+    (lisp (Vector :a) (n)
+      (cl:make-array n :fill-pointer 0 :adjustable cl:t :element-type cl:t)))
 
   (declare with-initial-element (types:RuntimeRepr :a => UFix -> :a -> Vector :a))
   (define (with-initial-element n x)
-    "Create a new vector with N elements equal to X"
+    "Create a new vector with `n` elements equal to `x`."
     (let v = (with-capacity n))
     (extend! v (iter:repeat-for x n))
     v)
 
   (declare length (Vector :a -> UFix))
   (define (length v)
-    "Returns the length of V"
+    "Returns the length of `v`."
     (lisp UFix (v)
       (cl:length v)))
 
   (declare capacity (Vector :a -> UFix))
   (define (capacity v)
-    "Returns the number of elements that V can store without resizing"
+    "Returns the number of elements that `v` can store without resizing."
     (lisp UFix (v)
       (cl:array-dimension v 0)))
 
-  (declare element-type (Vector :a -> types:LispType))
-  (define (element-type v)
-    "Returns the element type of V as a LispType"
-    (lisp types:LispType (v)
-      (cl:array-element-type v)))
-
   (declare empty? (Vector :a -> Boolean))
   (define (empty? v)
-    "Returns TRUE if V is empty"
+    "Is `v` empty?"
     (== 0 (length v)))
 
   (declare copy (Vector :a -> Vector :a))
   (define (copy v)
-    "Return a new vector containing the same elements as V"
+    "Return a new vector containing the same elements as `v`."
     (lisp (Vector :a) (v)
+      ;; We use COPY-ARRAY and not COPY-SEQ to get identical
+      ;; adjustable properties.
       (alexandria:copy-array v)))
 
   (declare set-capacity! (UFix -> Vector :a -> Unit))
   (define (set-capacity! new-capacity v)
-    "Set the capacity of V to NEW-CAPACITY. Setting the capacity to lower then the length will remove elements from the end."
+    "Set the capacity of `v` to `new-capacity`. Setting the capacity to lower then the length will remove elements from the end."
     (let shrinking = (< new-capacity (length v)))
     (lisp Unit (v shrinking new-capacity)
       ;; If the array is getting larger then dont change the
@@ -123,71 +110,71 @@
 
   (declare clear! (Vector :a -> Unit))
   (define (clear! v)
-    "Set the capacity of V to 0."
+    "Set the capacity of `v` to `0`."
     (set-capacity! 0 v))
 
   (declare push! (:a -> Vector :a -> UFix))
   (define (push! item v)
-    "Append ITEM to V and resize V if necessary, returning the index of the new item."
+    "Append `item` to `v` and resize `v` if necessary, returning the index of the new item."
     (lisp UFix (item v)
       (cl:vector-push-extend item v)))
 
   (declare pop! (Vector :a -> Optional :a))
   (define (pop! v)
-    "Remove and return the last item of V"
-    (if (== 0 (length v))
+    "Remove and return the last item of `v`."
+    (if (empty? v)
         None
         (Some (pop-unsafe! v))))
 
   (declare pop-unsafe! (Vector :a -> :a))
   (define (pop-unsafe! v)
-    "Remove and return the last item of V without checking if the vector is empty"
+    "Remove and return the last item of `v` without checking if the vector is empty."
     (lisp :a (v)
       (cl:vector-pop v)))
 
   (declare index (UFix -> Vector :a -> Optional :a))
   (define (index index v)
-    "Return the INDEXth element of V"
+    "Return the `index`th element of `v`."
     (if (>= index (length v))
         None
         (Some (index-unsafe index v))))
 
   (declare index-unsafe (UFix -> Vector :a -> :a))
   (define (index-unsafe index v)
-    "Return the INDEXth element of V without checking if the element exists"
+    "Return the `index`th element of `v` without checking if the element exists."
     (lisp :a (index v)
       (cl:aref v index)))
 
   (declare set! (UFix -> :a -> Vector :a -> Unit))
   (define (set! index item v)
-    "Set the INDEXth element of V to ITEM. This function left intentionally unsafe because it does not have a return value to check."
+    "Set the `index`th element of `v` to `item`. This function left intentionally unsafe because it does not have a return value to check."
     (lisp Void (index item v)
       (cl:setf (cl:aref v index) item))
     Unit)
 
   (declare head (Vector :a -> Optional :a))
   (define (head v)
-    "Return the first item of V"
+    "Return the first item of `v`."
     (index 0 v))
 
   (declare head-unsafe (Vector :a -> :a))
   (define (head-unsafe v)
-    "Return the first item of V without first checking if V is empty"
+    "Return the first item of `v` without first checking if `v` is empty."
     (index-unsafe 0 v))
 
   (declare last (Vector :a -> Optional :a))
   (define (last v)
-    "Return the last element of V"
+    "Return the last element of `v`."
     (index (- (length v) 1) v))
 
   (declare last-unsafe (Vector :a -> :a))
   (define (last-unsafe v)
-    "Return the last element of V without first checking if V is empty"
+    "Return the last element of `v` without first checking if `v` is empty."
     (index-unsafe (- (length v) 1) v))
 
   (declare find-elem (Eq :a => :a -> Vector :a -> Optional UFix))
   (define (find-elem e v)
-    "Find the index of element E in V"
+    "Find the index of element `e` in `v`."
     (let ((test (fn (elem)
                   (== elem e))))
 
@@ -200,9 +187,9 @@
                  (Some pos)
                  None)))))
 
-  (declare append (types:RuntimeRepr :a => Vector :a -> Vector :a -> Vector :a))
+  (declare append (Vector :a -> Vector :a -> Vector :a))
   (define (append v1 v2)
-    "Create a new VECTOR containing the elements of v1 followed by the elements of v2"
+    "Create a new vector containing the elements of `v1` followed by the elements of `v2`."
     (let out = (with-capacity (+ (length v1) (length v2))))
     (extend! out v1)
     (extend! out v2)
@@ -210,14 +197,14 @@
 
   (declare swap-remove! (UFix -> Vector :a -> Optional :a))
   (define (swap-remove! idx vec)
-    "Remove the element IDX from VEC and replace it with the last element in VEC. Then return the removed element."
+    "Remove the element `idx` from `vec` and replace it with the last element in `vec`. Then return the removed element."
     (if (>= idx (length vec))
         None
         (Some (swap-remove-unsafe! idx vec))))
 
   (declare swap-remove-unsafe! (UFix -> Vector :a -> :a))
   (define (swap-remove-unsafe! idx vec)
-    "Remove the element IDX from VEC and replace it with the last element in VEC without bounds checking. Then return the removed element."
+    "Remove the element `idx` from `vec` and replace it with the last element in `vec` without bounds checking. Then return the removed element."
     (if (== (+ 1 idx) (length vec))
         (pop-unsafe! vec)
         (progn
@@ -227,7 +214,7 @@
 
   (declare sort-by! ((:a -> :a -> Boolean) -> Vector :a -> Unit))
   (define (sort-by! f v)
-    "Sort a vector inplace with predicate function F"
+    "Sort a vector in-place with predicate function `f`."
     (lisp Void (v f)
       (cl:sort
        v
@@ -237,12 +224,12 @@
 
   (declare sort! (Ord :a => Vector :a -> Unit))
   (define (sort! v)
-    "Sort a vector inplace"
+    "Sort a vector in-place in ascending order."
     (sort-by! < v))
 
   (declare extend! (iter:IntoIterator :container :elt => Vector :elt -> :container -> Unit))
   (define (extend! vec iter)
-    "Push every element in ITER to the end of VEC."
+    "Push every element in `iter` to the end of `vec`."
     (let iter = (iter:into-iter iter))
 
     ;; If the iterator is known to require more capacity then vec has,
@@ -269,15 +256,12 @@
           False
           (iter:every! id (iter:zip-with! == (iter:into-iter v1) (iter:into-iter v2))))))
 
-  (define-instance (types:RuntimeRepr :a => Semigroup (Vector :a))
+  (define-instance (Semigroup (Vector :a))
     (define <> append))
 
   (define-instance (Functor Vector)
     (define (map f v)
-      (let out = (%with-capacity-specialized
-                  (lisp types:LispType (v)
-                    (cl:array-element-type v))
-                  (length v)))
+      (let out = (with-capacity (length v)))
       (iter:for-each!
        (fn (x)
          (push! (f x) out)
@@ -302,7 +286,7 @@
          :initial-value init
          :from-end cl:t))))
 
-  (define-instance (types:RuntimeRepr :a => Into (List :a) (Vector :a))
+  (define-instance (Into (List :a) (Vector :a))
     (define (into lst)
       (let ((out (with-capacity (list:length lst)))
             (inner
@@ -317,7 +301,7 @@
           (inner lst)
           out))))
 
-  (define-instance (types:RuntimeRepr :a => Into (Vector :a) (List :a))
+  (define-instance (Into (Vector :a) (List :a))
     (define (into v)
       (let ((inner
               (fn (v index)
@@ -326,7 +310,7 @@
                     (Cons (index-unsafe index v) (inner v (+ 1 index)))))))
         (inner v 0))))
 
-  (define-instance (types:RuntimeRepr :a => Iso (Vector :a) (List :a)))
+  (define-instance (Iso (Vector :a) (List :a)))
 
   (define-instance (iter:IntoIterator (Vector :a) :a)
     (define (iter:into-iter vec)
@@ -338,7 +322,7 @@
             res)
         (length vec))))
 
-  (define-instance (types:RuntimeRepr :a => iter:FromIterator (Vector :a) :a)
+  (define-instance (iter:FromIterator (Vector :a) :a)
     (define (iter:collect! iter)
       (let size = (with-default 0 (iter:size-hint iter)))
       (let vec = (with-capacity size))
@@ -348,7 +332,7 @@
                       iter)
       vec))
 
-  (define-instance (types:RuntimeRepr :a => Default (Vector :a))
+  (define-instance (Default (Vector :a))
     (define default new)))
 
 (cl:defmacro make (cl:&rest elements)
