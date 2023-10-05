@@ -391,7 +391,7 @@ shifts the each member of `target` down by `n` positions.  Mutates both
       (vector:set! (- (vector:length v) 1) a cv)
       cv))
 
-  (declare butfirst (iter:FromIterator (vector:Vector :a) :a =>  vector:Vector :a -> vector:Vector :a))
+  (declare butfirst (vector:Vector :a -> vector:Vector :a))
   (define (butfirst v)
     (iter:collect!
      (map (flip vector:index-unsafe v)

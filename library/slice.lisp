@@ -17,7 +17,6 @@
    #:Slice
    #:new
    #:length
-   #:element-type
    #:set!
    #:index
    #:index-unsafe
@@ -37,7 +36,7 @@
   ;; Slice
   ;;
 
-  (repr :native (cl:and (cl:vector cl:*) (cl:not cl:simple-array)))
+  (repr :native (cl:and (cl:vector cl:t) (cl:not cl:simple-vector)))
   (define-type (Slice :a))
 
   (define-class (Sliceable :a)
@@ -49,9 +48,9 @@
   (define-instance (Sliceable (Slice :a))
     (define %length length))
 
-  (declare new ((types:RuntimeRepr :a) (Sliceable (:b :a)) => UFix -> UFix -> :b :a -> Slice :a))
+  (declare new ((Sliceable (:b :a)) => UFix -> UFix -> :b :a -> Slice :a))
   (define (new start length v)
-    "Create a new slice backed by V starting at index START and continuing for LENGTH elements."
+    "Create a new slice backed by `v` starting at index `start` and continuing for `length` elements."
     (when (< start 0)
       (error "Start of slice cannot be less than 0."))
 
@@ -62,54 +61,42 @@
     (when (> end (%length v))
       (error "Slice cannot extend beyond length of backing vector."))
 
-    (let p = types:Proxy)
-    (let p_ = (types:proxy-inner p))
-    (let t = (types:runtime-repr p_))
-
-    (types:as-proxy-of
-     (lisp (Slice :a) (v start length t)
-       (cl:make-array
-        length
-        :element-type t
-        :displaced-to v
-        :displaced-index-offset start))
-     p))
+    (lisp (Slice :a) (v start length)
+      (cl:make-array
+       length
+       :element-type cl:t
+       :displaced-to v
+       :displaced-index-offset start)))
 
   (declare length (Slice :a -> UFix))
   (define (length s)
-    "Returns the length of S"
+    "Returns the length of `s`."
     (lisp UFix (s)
       (cl:array-dimension s 0)))
 
-  (declare element-type (Slice :a -> types:LispType))
-  (define (element-type s)
-    "Returns the element type of S as a LispType"
-    (lisp types:LispType (s)
-      (cl:array-element-type s)))
-
   (declare set! (UFix -> :a -> (Slice :a) -> Unit))
   (define (set! index item s)
-    "Set the element at INDEX in S to ITEM"
+    "Set the element at `index` in `s` to `item`."
     (lisp :a (index item s)
       (cl:setf (cl:aref s index) item))
     Unit)
 
   (declare index (UFix -> (Slice :a) -> (Optional :a)))
   (define (index idx s)
-    "Lookup the element at INDEX in S"
+    "Lookup the element at `index` in `s`."
     (if (>= idx (length s))
         None
         (Some (index-unsafe idx s))))
 
   (declare index-unsafe (UFix -> (Slice :a) -> :a))
   (define (index-unsafe idx s)
-    "Lookup the element at INDEX in S without bounds checking"
+    "Lookup the element at `index` in `s` without bounds checking."
     (lisp :a (idx s)
       (cl:aref s idx)))
 
-  (declare iter-sliding ((types:RuntimeRepr :a) (Sliceable (:b :a)) => UFix -> :b :a -> iter:Iterator (Slice :a)))
+  (declare iter-sliding ((Sliceable (:b :a)) => UFix -> :b :a -> iter:Iterator (Slice :a)))
   (define (iter-sliding size s)
-    "Returns an iterator that yeilds a series of overlapping slices of length SIZE."
+    "Returns an iterator that yeilds a series of overlapping slices of length `size`."
     (let length = (%length s))
     (let offset_ = (cell:new 0))
     (iter:with-size 
@@ -124,9 +111,9 @@
           0
           (- (+ length 1) size))))
 
-  (declare iter-chunked ((types:RuntimeRepr :a) (Sliceable (:b :a)) => UFix -> :b :a -> iter:Iterator (Slice :a)))
+  (declare iter-chunked ((Sliceable (:b :a)) => UFix -> :b :a -> iter:Iterator (Slice :a)))
   (define (iter-chunked size s)
-    "Divide S into a series of slices of length SIZE. Will return a final shorter slice if S does not divide evenly."
+    "Divide `s` into a series of slices of length `size`. Will return a final shorter slice if `s` does not divide evenly."
     (let length = (%length s))
     (let offset_ = (cell:new 0))
     (iter:with-size
@@ -152,9 +139,9 @@
         (True
          (+ 1 (div length size))))))
 
-  (declare iter-chunked-exact ((types:RuntimeRepr :a) (Sliceable (:b :a)) => UFix -> :b :a -> iter:Iterator (Slice :a)))
+  (declare iter-chunked-exact ((Sliceable (:b :a)) => UFix -> :b :a -> iter:Iterator (Slice :a)))
   (define (iter-chunked-exact size s)
-    "Divide S into a series of slices of length SIZE. Will skip trailing elements if S does not divide evenly."
+    "Divide `s` into a series of slices of length `size`. Will skip trailing elements if `s` does not divide evenly."
     (let length = (%length s))
     (let offset_ = (cell:new 0))
     (iter:with-size
@@ -181,7 +168,7 @@
           res)
         (length s))))
 
-  (define-instance (types:RuntimeRepr :a => iter:FromIterator (Slice :a) :a)
+  (define-instance (iter:FromIterator (Slice :a) :a)
     (define (iter:collect! iter)
       ;; NOTE: This will create a non displaced array. It should be
       ;; fine, because it isn't observable with the slice API.
@@ -212,17 +199,17 @@
          :initial-value init
          :from-end cl:t))))
 
-  (define-instance (types:RuntimeRepr :a => Into (Slice :a) (Vector :a))
+  (define-instance (Into (Slice :a) (Vector :a))
     (define (into s)
       (let v = (vector:with-capacity (length s)))
       (vector:extend! v (iter:into-iter s))
       v))
 
-  (define-instance (types:RuntimeRepr :a => Into (Vector :a) (Slice :a))
+  (define-instance (Into (Vector :a) (Slice :a))
     (define (into v)
       (new 0 (vector:length v) v)))
 
-  (define-instance (types:RuntimeRepr :a => Iso (Slice :a) (Vector :a))))
+  (define-instance (Iso (Slice :a) (Vector :a))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/SLICE")
