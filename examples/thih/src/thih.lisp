@@ -399,7 +399,7 @@
 
   (declare initialEnv ClassEnv)
   (define initialEnv
-    (ClassEnv (fn (i) (fail "Class not defined"))
+    (ClassEnv (fn (_i) (fail "Class not defined"))
               (make-list tInteger tDouble)))
 
   ;; (define-type-alias EnvTransformer (ClassEnv -> (Optional ClassEnv)))
@@ -924,7 +924,7 @@
     (Ambiguity Tyvar (List Pred)))
 
   (declare ambiguities (ClassEnv -> (List Tyvar) -> (List Pred) -> (List Ambiguity)))
-  (define (ambiguities ce vs ps)
+  (define (ambiguities _ce vs ps)
     (map (fn (v)
            (Ambiguity v (filter
                          (fn (x)
@@ -983,7 +983,7 @@
 
   (declare defaultedPreds (MonadFail :m => (ClassEnv -> (List Tyvar) -> (List Pred) -> (:m (List Pred)))))
   (define defaultedPreds
-    (withDefaults (fn (vps ts) (concat (map (fn (a)
+    (withDefaults (fn (vps _ts) (concat (map (fn (a)
                                               (match a
                                                 ((Ambiguity _ x) x)))
                                             vps)))))

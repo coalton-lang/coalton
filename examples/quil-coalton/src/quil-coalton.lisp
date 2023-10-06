@@ -5,12 +5,12 @@
   (declare parse-quil-string (Parser String))
   (define parse-quil-string
     (map3
-     (fn (a b c) (into b))
+     (fn (_a b _c) (into b))
      (char #\")
      (many0
       (alt
        (not-char #\")
-       (map2 (fn (a b) b)
+       (map2 (fn (_a b) b)
              (char #\\)
              (char #\"))))
      (char #\")))
@@ -259,14 +259,14 @@
 
   (declare parse-quil-comment (Parser Unit))
   (define parse-quil-comment
-    (map3 (fn (a b c) Unit)
+    (map3 (fn (_a _b _c) Unit)
           (many0 non-newline-whitespace)
           (char #\#)
           (many0 (not-char #\Newline))))
 
   (declare parse-quil-comment-line (Parser Unit))
   (define parse-quil-comment-line
-    (map3 (fn (_ __ ___) Unit)
+    (map3 (fn (_a _b _c) Unit)
           (many0 whitespace)
           parse-quil-comment
           (alt (map (const Unit) (char #\Newline))
@@ -285,10 +285,10 @@
      QuilProgram
      (map2 const
            (many0
-            (map2 (fn (a _) a)
+            (map2 (fn (a _b) a)
                   ;; Quil statements
                   (map4
-                   (fn (_ a __ ___) a)
+                   (fn (_a b _c _d) b)
                    ;; Allow leading whitespace (including newlines) and comments
                    (many0 (alt parse-quil-comment-line whitespace))
                    parse-quil-statement
