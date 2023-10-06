@@ -125,6 +125,7 @@
                coalton-library/list
                coalton-library/result
                coalton-library/cell
+               coalton-library/randomaccess
                coalton-library/vector
                coalton-library/slice
                coalton-library/hashtable
