@@ -200,14 +200,14 @@
 
 (defstruct (node-body
             (:copier nil))
-  (nodes     (util:required 'node)      :type node-body-element-list :read-only t)
+  (nodes     (util:required 'nodes)     :type node-body-element-list :read-only t)
   (last-node (util:required 'last-node) :type node                   :read-only t))
 
 (defstruct (node-abstraction
             (:include node)
             (:copier nil))
-  (params  (util:required 'vars)    :type pattern-list :read-only t)
-  (body    (util:required 'body)    :type node-body    :read-only t))
+  (params  (util:required 'params) :type pattern-list :read-only t)
+  (body    (util:required 'body)   :type node-body    :read-only t))
 
 (defstruct (node-let-binding
             (:copier nil))
@@ -287,7 +287,7 @@
             (:include node)
             (:copier nil))
   (expr (util:required 'expr) :type node :read-only t)
-  (then (util:required 'expr) :type node :read-only t)
+  (then (util:required 'then) :type node :read-only t)
   (else (util:required 'else) :type node :read-only t))
 
 (defstruct (node-when
@@ -322,9 +322,9 @@
 
 (defstruct (node-do-bind
             (:copier nil))
-  (pattern (util:required 'name)   :type pattern :read-only t)
-  (expr    (util:required 'expr)   :type node    :read-only t)
-  (source  (util:required 'source) :type cons    :read-only t))
+  (pattern (util:required 'pattern) :type pattern :read-only t)
+  (expr    (util:required 'expr)    :type node    :read-only t)
+  (source  (util:required 'source)  :type cons    :read-only t))
 
 (deftype node-do-body-element ()
   '(or node node-bind node-do-bind))

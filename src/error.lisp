@@ -129,7 +129,7 @@
 (defstruct (coalton-file
             (:copier nil))
   (stream (util:required 'stream) :type stream :read-only t)
-  (name   (util:required 'file)   :type string :read-only t))
+  (name   (util:required 'name)   :type string :read-only t))
 
 (defstruct (coalton-error
             (:copier nil))

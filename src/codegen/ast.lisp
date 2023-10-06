@@ -175,8 +175,8 @@
 
 (defstruct (node-field (:include node))
   "Accessing a superclass on a typeclass dictionary"
-  (name (util:required 'field) :type parser:identifier :read-only t)
-  (dict (util:required 'dict)  :type node              :read-only t))
+  (name (util:required 'name) :type parser:identifier :read-only t)
+  (dict (util:required 'dict) :type node              :read-only t))
 
 (defstruct (node-dynamic-extent (:include node))
   "A single stack allocated binding"
