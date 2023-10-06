@@ -255,7 +255,7 @@
 (defstruct (struct-field
             (:copier nil))
   (name   (util:required 'name)   :type string :read-only t)
-  (type   (util:required 'ty)     :type ty     :read-only t)
+  (type   (util:required 'type)   :type ty     :read-only t)
   (source (util:required 'source) :type cons   :read-only t))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
@@ -366,7 +366,7 @@
 (defstruct (instance-method-definition
             (:copier nil))
   (name      (util:required 'name)      :type node-variable       :read-only t)
-  (params    (util:required 'vars)      :type pattern-list        :read-only t)
+  (params    (util:required 'params)    :type pattern-list        :read-only t)
   (body      (util:required 'body)      :type node-body           :read-only t)
   (source    (util:required 'source)    :type cons                :read-only t))
 

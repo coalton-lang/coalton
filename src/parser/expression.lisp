@@ -299,7 +299,7 @@
 ;;
 (defstruct (node-body
             (:copier nil))
-  (nodes     (util:required 'node)      :type node-body-element-list :read-only t)
+  (nodes     (util:required 'nodes)     :type node-body-element-list :read-only t)
   (last-node (util:required 'last-node) :type node                   :read-only t))
 
 (defstruct (node-abstraction

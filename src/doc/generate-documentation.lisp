@@ -23,11 +23,11 @@
 
 (defstruct (documentation-struct-entry
             (:include documentation-entry))
-  (type      (util:required 'type)        :type tc:ty                     :read-only t)
-  (tyvars    (util:required 'tyvars)      :type tc:tyvar-list             :read-only t)
-  (fields    (util:required 'fields)      :type util:string-list          :read-only t)
-  (field-tys (util:required 'field-types) :type hash-table                :read-only t)
-  (instances (util:required 'instances)   :type tc:ty-class-instance-list :read-only t))
+  (type      (util:required 'type)      :type tc:ty                     :read-only t)
+  (tyvars    (util:required 'tyvars)    :type tc:tyvar-list             :read-only t)
+  (fields    (util:required 'fields)    :type util:string-list          :read-only t)
+  (field-tys (util:required 'field-tys) :type hash-table                :read-only t)
+  (instances (util:required 'instances) :type tc:ty-class-instance-list :read-only t))
 
 (defun documentation-struct-entry-list-p (x)
   (and (alexandria:proper-list-p x)
