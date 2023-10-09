@@ -205,6 +205,17 @@
                (:file "impl-default"
                 :if-feature (:or :coalton-portable-bigfloat (:not :sbcl)))))
 
+(asdf:defsystem #:coalton/library/computable-reals
+  :description "A Coalton interface for computable-reals (https://github.com/stylewarning/computable-reals)"
+  :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
+  :license "MIT"
+  :version (:read-file-form "VERSION.txt")
+  :pathname "library/computable-reals"
+  :depends-on (#:coalton
+               #:computable-reals)
+  :serial t
+  :components ((:file "computable-reals")))
+
 (asdf:defsystem #:coalton/testing
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
   :license "MIT"
