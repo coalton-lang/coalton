@@ -150,7 +150,9 @@ Note: `Eq`, and `Ord` and `Hash` only make use of the primal component."
 
     (define (atan (Dual p1 d1))
       (Dual (atan p1)
-            (/ d1 (+ 1 (sq p1))))))
+            (/ d1 (+ 1 (sq p1)))))
+    
+    (define pi (Dual pi 0)))
 
   (define-instance ((Num :t) (Exponentiable :t) (Reciprocable :t) => (Exponentiable (Dual :t)))
     (define (exp (Dual p1 d1))
@@ -165,7 +167,9 @@ Note: `Eq`, and `Ord` and `Hash` only make use of the primal component."
       (exp (* dual2 (ln dual1))))
 
     (define (log dual1 dual2)
-      (/ (ln dual2) (ln dual1))))
+      (/ (ln dual2) (ln dual1)))
+
+    (define ee (Dual ee 0)))
 
   (define-instance ((Num :t) (Radical :t) (Reciprocable :t) (Exponentiable :t) => (Radical (Dual :t)))
     (define (nth-root n (Dual p1 d1))

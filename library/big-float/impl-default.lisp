@@ -121,7 +121,9 @@
 
   (declare ilog2-abs (Integer -> Integer))
   (define (ilog2-abs x)
-    (- (bit-length (abs x)) 1))
+    (- (bit-length (abs x)) 1)))
+
+(coalton-toplevel
 
   (define-type Big-Float
     (BFValue Dyadic)
@@ -540,10 +542,13 @@ returns the nth SeriesSplit, return the series evaluated to the Nth element."
   (define (make-recip-results n start f)
     "Reciprocal of `make-result`."
     (recip-result
-     (eval-series start (fn (m) (f (toInteger m))) n)))
+     (eval-series start (fn (m) (f (toInteger m))) n))))
+
+(coalton-toplevel
 
   ;; XXX: We can pre-compute some values here
-  (define (bf-pi _)
+  (declare bf-pi (Unit -> Big-Float))
+  (define (bf-pi)
     "Return the value of pi to the currently set precision."
     ;; Chudnovsky algorithm
     (progn
@@ -675,8 +680,11 @@ returns the nth SeriesSplit, return the series evaluated to the Nth element."
     (define (asin x)
       (atan (* x (reciprocal-sqrt (- 1 (* x x))))))
     (define (acos x)
-      (- (scale (bf-pi) -1) (asin x))))
+      (- (scale (bf-pi) -1) (asin x)))
+    (define pi (BFconst bf-pi))))
 
+(coalton-toplevel
+  
   (define-instance (Exponentiable Big-Float)
     (define (exp x)
       (let prec = (get-precision))
@@ -760,7 +768,13 @@ returns the nth SeriesSplit, return the series evaluated to the Nth element."
         ((Tuple x (BFConst f)) (pow x (f)))
         (_ (exp (* y (ln x))))))
     (define (log b x)
-      (/ (ln x) (ln b))))
+      (/ (ln x) (ln b)))
+    (define ee (BFConst bf-ee)))
+
+  (declare bf-ee (Unit -> Big-Float))
+  (define (bf-ee)
+    "Return the value of ee = exp(1) to the currently set precision."
+    (exp 1))
 
   (define-instance (Radical Big-Float)
     (define (sqrt x)
@@ -783,14 +797,7 @@ returns the nth SeriesSplit, return the series evaluated to the Nth element."
     (define (polar z)
       (Tuple (magnitude z) (phase z))))
 
-  (declare bf-ee (Unit -> Big-Float))
-  (define (bf-ee)
-    "Return the value of ee = exp(1) to the currently set precision."
-    (exp 1))
-
-  (define-instance (Elementary Big-Float)
-    (define pi (BFConst bf-pi))
-    (define ee (BFConst bf-ee)))
+  (define-instance (Elementary Big-Float))
 
   (define (big-float->string x)
     "Returns a Big-Float in scientific notation."
@@ -805,9 +812,9 @@ returns the nth SeriesSplit, return the series evaluated to the Nth element."
          (cl:multiple-value-bind (t r) (cl:truncate z (cl:expt 10 powr))
            (cl:format
             nil (cl:concatenate
-                 'cl:string "~d.~" ; Integer part and sign
+                 'cl:string "~d.~"         ; Integer part and sign
                  (cl:princ-to-string powr) ; Left pad of zeros
-                 ",'0de~@d") ; Decimal part and exponent.
+                 ",'0de~@d")               ; Decimal part and exponent.
             t (cl:abs r) (cl:- powr prec)))))
       ((BFConst f) (big-float->string (f)))
       ((BFNegZero) "-0.0e+0")

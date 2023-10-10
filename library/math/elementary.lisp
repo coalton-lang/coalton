@@ -48,12 +48,25 @@
     (tan   (:a -> :a))
     (asin  (:a -> :a))
     (acos  (:a -> :a))
-    (atan  (:a -> :a)))
+    (atan  (:a -> :a))
+    (pi    (:a)))
 
   (declare sincos (Trigonometric :a => :a -> (Tuple :a :a)))
   (define (sincos x)
     "Computes the sine and cosine of X."
     (Tuple (sin x) (cos x)))
+
+  (declare atan2 ((Ord :f) (Trigonometric :f) (Reciprocable :f) => :f -> :f -> :f))
+  (define (atan2 y x)
+    "Computes the two-argument arctangent of y and x, which is roughly the same
+as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
+    (match (Tuple (<=> x 0) (<=> y 0))
+      ((Tuple (GT) _)    (atan (/ y x)))
+      ((Tuple (LT) (LT)) (- (atan (/ y x)) pi))
+      ((Tuple (LT) _)    (+ (atan (/ y x)) pi))
+      ((Tuple (EQ) (GT)) (/ pi 2))
+      ((Tuple (EQ) (LT)) (/ pi -2))
+      ((Tuple (EQ) (EQ)) 0)))
 
   (define-class (Exponentiable :a)
     "Exponential maps obeying:
@@ -66,7 +79,8 @@
     (exp (:a -> :a))
     (pow (:a -> :a -> :a))
     (ln  (:a -> :a))
-    (log  (:a -> :a -> :a)))
+    (log (:a -> :a -> :a))
+    (ee  (:a)))
 
   (define-class (Radical :a)
     "Obeys:
@@ -106,9 +120,7 @@
       ((Reciprocable :a) (Polar :a)
        (Trigonometric :a) (Exponentiable :a) (Radical :a)
        => Elementary :a)
-    "Numbers that can be can be passed to elementary functions."
-    (ee :a)
-    (pi :a))
+    "`Elementary` is a marker class, providing `Reciprocable`, `Polar`, `Trigonometric`, `Exponentiable`, and `Radical`.")
 
   ;; See http://clhs.lisp.se/Body/f_sinh_.htm
 
@@ -135,18 +147,6 @@
   (declare atanh ((Elementary :f) => :f -> :f))
   (define (atanh x)
     (/ (- (ln (+ 1 x)) (ln (- 1 x))) (fromInt 2)))
-
-  (declare atan2 ((Ord :f) (Elementary :f) => :f -> :f -> :f))
-  (define (atan2 y x)
-    "Computes the two-argument arctangent of y and x, which is roughly the same
-as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
-    (match (Tuple (<=> x 0) (<=> y 0))
-      ((Tuple (GT) _)    (atan (/ y x)))
-      ((Tuple (LT) (LT)) (- (atan (/ y x)) pi))
-      ((Tuple (LT) _)    (+ (atan (/ y x)) pi))
-      ((Tuple (EQ) (GT)) (/ pi 2))
-      ((Tuple (EQ) (LT)) (/ pi -2))
-      ((Tuple (EQ) (EQ)) 0)))
 
   (define (canonical-nth-root n x)
     "By definition implementation of `nth-root` for reals"
@@ -248,7 +248,10 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
             (lisp ,coalton-type (x)
               (#+(not ccl) cl:progn
                  #+ccl ff:with-float-traps-masked #+ccl cl:t
-                 (cl:atan x)))))))
+                 (cl:atan x))))))
+       (define pi
+         (lisp ,coalton-type ()
+           (cl:coerce cl:pi ',underlying-type))))
 
      (define-instance (Polar ,coalton-type)
        (define (phase x)
@@ -323,7 +326,10 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
             (lisp ,coalton-type (x)
               (cl:log x)))
            ((< x 0) nan)
-           (True negative-infinity))))
+           (True negative-infinity)))
+        (define ee
+         (lisp ,coalton-type ()
+           (cl:exp (cl:coerce 1 ',underlying-type)))))
 
      (define-instance (Radical ,coalton-type)
        (define (sqrt x)
@@ -336,13 +342,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
        (define (nth-root n x)
          (canonical-nth-root n x)))
 
-     (define-instance (Elementary ,coalton-type)
-       (define ee
-         (lisp ,coalton-type ()
-           (cl:exp (cl:coerce 1 ',underlying-type))))
-       (define pi
-         (lisp ,coalton-type ()
-           (cl:coerce cl:pi ',underlying-type))))))
+     (define-instance (Elementary ,coalton-type))))
 
 (%define-real-float-elementary Single-Float cl:single-float)
 (%define-real-float-elementary Double-Float cl:double-float)
@@ -377,7 +377,8 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
     (define (pow x y)
       (exp (* y (ln x))))
     (define (log b x)
-      (/ (ln x) (ln b))))
+      (/ (ln x) (ln b)))
+    (define ee (Complex ee 0)))
 
   (define-instance ((Elementary :a) => Radical (Complex :a))
     (define (sqrt z)
@@ -431,7 +432,8 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
       ;; atan = (- i/2 (ln (i - z)/(i+z))
       (* (complex 0 (/ -1 2))
          (ln (/ (- ii z)
-                (+ ii z))))))
+                (+ ii z)))))
+    (define pi (Complex pi 0)))
 
   ;; This doesn't have much mathematical meaning
   (define-instance ((Elementary :a) => Polar (Complex :a))
@@ -448,9 +450,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
             (* 2 (atan (/ y (+ r x))))))
       (Tuple r p)))
 
-  (define-instance ((Elementary :a) => Elementary (Complex :a))
-    (define ee (complex ee 0))
-    (define pi (complex pi 0))))
+  (define-instance ((Elementary :a) => Elementary (Complex :a))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/MATH/ELEMENTARY")
