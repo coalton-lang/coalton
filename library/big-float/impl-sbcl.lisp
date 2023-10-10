@@ -272,6 +272,12 @@
 (coalton-library/math/complex::%define-standard-complex-instances Big-Float)
 
 (coalton-toplevel
+  
+  (define (bf-pi)
+    "Return the value of pi to the currently set precision."
+    (lisp Big-Float ()
+      (cl:values (sb-mpfr:const-pi))))
+  
   ;; Trig
   (define-instance (Trigonometric Big-Float)
     (define (sin x)
@@ -291,8 +297,16 @@
         (cl:values (sb-mpfr:acos x))))
     (define (atan x)
       (lisp Big-Float (x)
-        (cl:values (sb-mpfr:atan x)))))
-
+        (cl:values (sb-mpfr:atan x))))
+    ;; BUG: Pi is calculated just once, so if we change precision,
+    ;; it will *NOT* get updated.
+    (define pi (bf-pi)))
+  
+  (define (bf-ee)
+    "Return the value of ee = exp(1) to the currently set precision."
+    (lisp Big-Float ()
+      (cl:values (sb-mpfr:exp (sb-mpfr:coerce 1 'sb-mpfr:mpfr-float)))))
+  
   ;; Exp/Log
   (define-instance (Exponentiable Big-Float)
     (define (exp x)
@@ -316,7 +330,12 @@
         (True (/ (ln x) (ln n)))))
     (define (ln x)
       (lisp Big-Float (x)
-        (cl:values (sb-mpfr:log x)))))
+        (cl:values (sb-mpfr:log x))))
+    ;; BUG: EE is calculated just once, so if we change precision,
+    ;; it will *NOT* get updated.
+    (define ee 
+      "Return the value of ee = exp(1) to the currently set precision."
+      (bf-ee)))
 
   (define-instance (Radical Big-Float)
     (define (sqrt x)
@@ -327,34 +346,14 @@
 
   (define-instance (Polar Big-Float)
     (define (phase z)
-      (let x = (real-part z))
-      (let y = (imag-part z))
-      (match (Tuple (<=> x 0) (<=> y 0))
-        ((Tuple (GT) _)    (atan (/ y x)))
-        ((Tuple (LT) (LT)) (- (atan (/ y x)) (bf-pi)))
-        ((Tuple (LT) _)    (+ (atan (/ y x)) (bf-pi)))
-        ((Tuple (EQ) (GT)) (/ (bf-pi) 2))
-        ((Tuple (EQ) (LT)) (/ (bf-pi) -2))
-        ((Tuple (EQ) (EQ)) 0)))
+      (atan2 (imag-part z) (real-part z)))
     (define (polar z)
       (Tuple (magnitude z) (phase z))))
 
-  ;; Elementary
-  (define (bf-pi _)
-    "Return the value of pi to the currently set precision."
-    (lisp Big-Float ()
-      (cl:values (sb-mpfr:const-pi))))
-  (define (bf-ee _)
-    "Return the value of ee = exp(1) to the currently set precision."
-    (lisp Big-Float ()
-      (cl:values (sb-mpfr:exp (sb-mpfr:coerce 1 'sb-mpfr:mpfr-float)))))
 
-  ;; BUG: These are calculated just once, so if we change precision,
-  ;; these will *NOT* get updated.
-  (define-instance (Elementary Big-Float)
-    (define pi (bf-pi))
-    (define ee (bf-ee)))
-)                                       ; COALTON-TOPLEVEL
+  (define-instance (Elementary Big-Float)))
+                                        
+;COALTON-TOPLEVEL
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/BIG-FLOAT")
