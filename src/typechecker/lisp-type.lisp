@@ -15,6 +15,31 @@
 
 (in-package #:coalton-impl/typechecker/lisp-type)
 
+(defun lisp-type= (x y)
+  (and (subtypep x y)
+       (subtypep y x)))
+
+;;; This is a list of Coalton tycon names that (1) have a finite
+;;; number of specialized representations, and (2) won't yet exist
+;;; when this file is first compiled.
+
+;;; Complex
+(defun complex-tycon-p (tycon)
+  (if (find-package "COALTON-LIBRARY/MATH/COMPLEX")
+      (eq tycon (find-symbol "COMPLEX" "COALTON-LIBRARY/MATH/COMPLEX"))
+      nil))
+
+(defvar *specialized-complex-part-types-considered*
+  '(cl:single-float
+    cl:double-float))
+
+;;; Simple Arrays
+(defun lisparray-tycon-p (tycon)
+  (if (find-package "COALTON-LIBRARY/LISPARRAY")
+      (eq tycon (find-symbol "LISPARRAY" "COALTON-LIBRARY/LISPARRAY"))
+      nil))
+
+
 ;;;
 ;;; Lisp types for coalton types
 ;;;
@@ -30,7 +55,6 @@ USE-FUNCTION-ENTRIES specifies whether to emit FUNCTION-ENTRY for functions, emi
     't)
 
   (:method ((ty tycon) env)
-    (declare (ignore))
     (let*
         ((tcon-name (tycon-name ty))
          (type-entry (lookup-type env tcon-name :no-error t)))
@@ -48,6 +72,40 @@ USE-FUNCTION-ENTRIES specifies whether to emit FUNCTION-ENTRY for functions, emi
       ;; If we are a function, emit a function type
       ((function-type-p ty)
        'function-entry)
+
+      ((typep (tapp-from ty) 'tycon)
+       (let ((from (tycon-name (tapp-from ty)))
+             (to   (tapp-to ty)))
+         (cond
+           ;; First we deal with specialized parametric types.
+           ;;
+           ;; (Complex :t)
+           ((complex-tycon-p from)
+            (let ((lisp-to (lisp-type to env)))
+              (cond
+                ((member lisp-to
+                         *specialized-complex-part-types-considered*
+                         :test #'lisp-type=)
+                 `(cl:complex ,lisp-to))
+                (t
+                 ;; We can use FROM directly since it'll be the name
+                 ;; of the Complex tycon, which matches the Lisp type
+                 ;; exactly.
+                 `(cl:or cl:number ,from)))))
+
+           ;; (LispArray :t)
+           ((lisparray-tycon-p from)
+            ;; Subtle observation: We don't want to recursively call
+            ;; LISP-TYPE on a TYVAR, because that will resolve to
+            ;; `cl:t`, which isn't the correct type of
+            ;; arbitrarily-typed arrays.
+            (if (typep to 'tyvar)
+                `(cl:simple-array cl:* (cl:*))
+                `(cl:simple-array ,(lisp-type to env) (cl:*))))
+           
+           ;; Otherwise we fall back.
+           (t
+            (lisp-type (tapp-from ty) env)))))
 
       ;; Otherwise, emit the applied type
       (t
