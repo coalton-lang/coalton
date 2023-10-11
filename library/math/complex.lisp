@@ -25,11 +25,18 @@
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (coalton-toplevel
-  (repr :native (cl:or cl:number complex))
+  ;; The representation of (Complex :t) is specially dealt with by the
+  ;; compiler in lisp-type.lisp.
   (define-type (Complex :a)
     "Complex number that may either have a native or constructed representation."
     (%Complex :a :a))
+)
 
+;; Quirk: We had to split the above COALTON-TOPLEVEL from the bottom
+;; one because Allegro needs to know about Complex before it gets used
+;; as a Lisp type in codegen. SBCL and CCL tolerate it fine.
+
+(coalton-toplevel
   (define-class (Num :a => Complex :a)
     (complex (:a -> :a -> (Complex :a)))
     (real-part (Complex :a -> :a))

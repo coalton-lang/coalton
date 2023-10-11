@@ -168,6 +168,7 @@
                (:file "optional")
                (:file "result")
                (:file "tuple")
+               (:file "lisparray")
                (:file "list")
                (:file "vector")
                (:file "char")

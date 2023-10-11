@@ -121,6 +121,7 @@
                coalton-library/char
                coalton-library/string
                coalton-library/tuple
+               coalton-library/lisparray
                coalton-library/optional
                coalton-library/list
                coalton-library/result
