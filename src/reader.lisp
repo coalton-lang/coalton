@@ -232,7 +232,7 @@ Used to forbid reading while inside quasiquoted forms.")
 
 (named-readtables:defreadtable coalton:coalton
   (:merge :standard)
-  (:macro-char #\( #'read-coalton-toplevel-open-paren)
+  (:macro-char #\( 'read-coalton-toplevel-open-paren)
   (:macro-char #\` (lambda (s c)
                      (let ((*coalton-reader-allowed* nil))
                        (funcall (get-macro-character #\` (named-readtables:ensure-readtable :standard)) s c))))
