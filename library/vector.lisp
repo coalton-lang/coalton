@@ -66,7 +66,7 @@
     (lisp (Vector :a) (n)
       (cl:make-array n :fill-pointer 0 :adjustable cl:t :element-type cl:t)))
 
-  (declare with-initial-element (types:RuntimeRepr :a => UFix -> :a -> Vector :a))
+  (declare with-initial-element (UFix -> :a -> Vector :a))
   (define (with-initial-element n x)
     "Create a new vector with `n` elements equal to `x`."
     (let v = (with-capacity n))
