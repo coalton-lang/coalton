@@ -2,20 +2,37 @@
 ;;;;
 ;;;; Arbitrary precision floats using SBCL's MPFR library.
 
+(in-package #:cl-user)
+
+#-sbcl
+(error "This file is hopelessly SBCL specific.")
+
+#+sbcl
+(eval-when (:compile-toplevel :load-toplevel)
+  (loop :until (uiop:featurep :sb-mpfr)
+        :do (restart-case (error "SB-MPFR failed to load, for some reason. ~
+                                  This is probably due to the shared library ~
+                                  not existing, or the system being unable ~
+                                  to find it. If you do not wish to install it, ~
+                                  re-compile Coalton from scratch with the ~
+                                  environment variable ~
+                                  ~
+                                  COALTON_PORTABLE_BIGFLOAT=1 ~
+                                  ~
+                                  set, or add the feature ~
+                                  :COALTON-PORTABLE-BIGFLOAT.")
+              (reload-sb-mpfr ()
+                :report "Reload the MPFR library"
+                (handler-case (sb-mpfr::load-mpfr)
+                  (simple-warning (e) (declare (ignore e))))))))
+
+
 (in-package #:coalton-library/big-float)
 
 (named-readtables:in-readtable coalton:coalton)
 
 #+coalton-release
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
-
-#-sbcl (error "This file is hopelessly SBCL specific.")
-#-sb-mpfr (error "SB-MPFR failed to load, for some reason. ~
-                  This is probably due to the shared library ~
-                  not existing, or the system being unable ~
-                  to find it. ~
-                  Set COALTON_PORTABLE_BIGFLOAT=1 or ~
-                  add the feature :coalton-portable-bigfloat.")
 
 ;;; Preliminary patched functionality for SB-MPFR
 ;;;
