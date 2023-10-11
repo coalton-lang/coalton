@@ -8,7 +8,8 @@
    (#:types #:coalton-library/types)
    (#:list #:coalton-library/list)
    (#:cell #:coalton-library/cell)
-   (#:iter #:coalton-library/iterator))
+   (#:iter #:coalton-library/iterator)
+   (#:ram #:coalton-library/randomaccess))
   (:export
    #:Vector
    #:new
@@ -285,6 +286,20 @@
          vec
          :initial-value init
          :from-end cl:t))))
+
+  (define-instance (ram:RandomAccess (Vector :t) :t)
+    (define (ram:make n x)
+      (with-initial-element n x))
+    (define (ram:length a)
+      (length a))
+    (define (ram:readable? _)
+      True)
+    (define (ram:writable? _)
+      True)
+    (define (ram:unsafe-aref a n)
+      (index-unsafe n a))
+    (define (ram:unsafe-set! a n x)
+      (set! n x a)))
 
   (define-instance (Into (List :a) (Vector :a))
     (define (into lst)
