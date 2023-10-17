@@ -107,8 +107,10 @@
     (lisp RoundingMode () ':MPFR_RNDA))
   (define rndf
     "Faithful rounding (experimental)."
-    (lisp RoundingMode () ':MPFR_RNDF))
+    (lisp RoundingMode () ':MPFR_RNDF)))
 
+(coalton-toplevel
+  
   ;; Calculation Configuration
   (declare set-precision! (UFix -> Unit))
   (define (set-precision! prec-bits)
@@ -155,21 +157,36 @@
   (declare with-rounding (RoundingMode -> (Unit -> :a) -> :a))
   (define (with-rounding rnd f)
     "Call F with a temporary Big-Float rounding-mode RND."
-    (with-precision-rounding (get-precision) rnd f))
+    (with-precision-rounding (get-precision) rnd f)))
+
+(coalton-toplevel
 
   ;; Float Type
   (repr :native sb-mpfr:mpfr-float)
-  (define-type Big-Float
+  (define-type MPFR-Float
     "An arbitrary (but fixed) precision floating point number.")
 
+  (define-type Big-Float
+    (BFValue MPFR-Float)
+    (BFConst (Unit -> MPFR-Float)))
+
+  (define (mpfr-of bf)
+    (match bf
+      ((BFValue v) v)
+      ((BFConst f) (f))))
+
   ;; Equality
-  (define-instance (Eq Big-Float)
+  (define-instance (Eq MPFR-Float)
     (define (== a b)
       (lisp Boolean (a b)
         (to-boolean (sb-mpfr:= a b)))))
 
+  (define-instance (Eq Big-Float)
+    (define (== a b)
+      (== (mpfr-of a) (mpfr-of b))))
+
   ;; Ordering
-  (define-instance (Ord Big-Float)
+  (define-instance (Ord MPFR-Float)
     (define (<=> a b)
       (lisp Ord (a b)
         (cl:ecase (sb-mpfr:compare a b)
@@ -177,46 +194,80 @@
           (0   EQ)
           (1   GT)))))
 
+  (define-instance (Ord Big-Float)
+    (define (<=> a b)
+      (<=> (mpfr-of a) (mpfr-of b))))
+
   ;; Basic number operations
-  (define-instance (Num Big-Float)
+  (define-instance (Num MPFR-Float)
     (define (+ a b)
-      (lisp Big-Float (a b)
+      (lisp MPFR-Float (a b)
         (cl:values (sb-mpfr:add a b))))
 
     (define (- a b)
-      (lisp Big-Float (a b)
+      (lisp MPFR-Float (a b)
         (cl:values (sb-mpfr:sub a b))))
 
     (define (* a b)
-      (lisp Big-Float (a b)
+      (lisp MPFR-Float (a b)
         (cl:values (sb-mpfr:mul a b))))
 
     (define (fromInt n)
-      (lisp Big-Float (n)
+      (lisp MPFR-Float (n)
         (sb-mpfr:coerce n 'sb-mpfr:mpfr-float))))
 
-  ;; Conversion
+  (define-instance (Num Big-Float)
+    (define (+ a b)
+      (BFValue (+ (mpfr-of a) (mpfr-of b))))
+    (define (- a b)
+      (BFValue (- (mpfr-of a) (mpfr-of b))))
+    (define (* a b)
+      (BFValue (* (mpfr-of a) (mpfr-of b))))
+    (define (fromint x)
+      (BFValue (fromInt x)))))
+
+;;; Conversion
+(coalton-toplevel
+
+  (define-instance (Into Integer MPFR-Float)
+    (define (into a)
+      (fromInt a)))
+  
   (define-instance (Into Integer Big-Float)
     (define (into a)
       (fromInt a)))
 
+  (define-instance (Into Fraction MPFR-Float)
+    (define (into a)
+      (lisp MPFR-Float (a)
+        (sb-mpfr:coerce a 'sb-mpfr:mpfr-float))))
+
   (define-instance (Into Fraction Big-Float)
     (define (into a)
-      (lisp Big-Float (a)
+      (BFValue (into a))))
+
+  (define-instance (Into Single-Float MPFR-Float)
+    (define (into a)
+      (lisp MPFR-Float (a)
         (sb-mpfr:coerce a 'sb-mpfr:mpfr-float))))
 
   (define-instance (Into Single-Float Big-Float)
     (define (into a)
-      (lisp Big-Float (a)
+      (BFValue (into a))))
+  
+  (define-instance (Into Double-Float MPFR-Float)
+    (define (into a)
+      (lisp MPFR-Float (a)
         (sb-mpfr:coerce a 'sb-mpfr:mpfr-float))))
 
   (define-instance (Into Double-Float Big-Float)
     (define (into a)
-      (lisp Big-Float (a)
-        (sb-mpfr:coerce a 'sb-mpfr:mpfr-float))))
+      (BFValue (into a)))))
+
+(coalton-toplevel
 
   ;; quantization and division
-  (define-instance (Quantizable Big-Float)
+  (define-instance (Quantizable MPFR-Float)
     (define (floor f)
       (lisp Integer (f)
         (cl:let ((x (sb-mpfr:floor f)))
@@ -229,31 +280,58 @@
         (cl:let ((x (sb-mpfr:ceiling f)))
           (sb-mpfr:coerce x 'cl:integer))))
     (define (proper f)
-      (lisp (Tuple Integer Big-Float) (f)
+      (lisp (Tuple Integer MPFR-Float) (f)
         (cl:let ((x (sb-mpfr:truncate f)))
           (Tuple
            (sb-mpfr:coerce x 'cl:integer)
            (sb-mpfr:sub f x))))))
 
-  (define-instance (Reciprocable Big-Float)
+  ;; quantization and division
+  (define-instance (Quantizable Big-Float)
+    (define (floor f)
+      (floor (mpfr-of f)))
+    (define (ceiling f)
+      (ceiling (mpfr-of f)))
+    (define (proper f)
+      (match (proper (mpfr-of f))
+        ((Tuple n x)
+         (Tuple n (BFValue x))))))
+
+  (define-instance (Reciprocable MPFR-Float)
     (define (/ a b)
-      (lisp big-float (a b)
+      (lisp MPFR-float (a b)
         (cl:values (sb-mpfr:div a b))))
     (define (reciprocal a)
       (/ 1 a)))
+  
+  (define-instance (Reciprocable Big-Float)
+    (define (/ a b)
+      (BFValue (/ (mpfr-of a) (mpfr-of b))))
+    (define (reciprocal a)
+      (BFValue (/ 1 (mpfr-of a)))))
 
-  (define-instance (Real Big-Float)
+  (define-instance (Real MPFR-Float)
     (define (real-approx prec x)
       (coalton-library/math/real::rational-approx prec x)))
 
-  (define-instance (Rational Big-Float)
+  (define-instance (Real Big-Float)
+    (define (real-approx prec x)
+      (real-approx prec (mpfr-of x))))
+
+  (define-instance (Rational MPFR-Float)
     (define (to-fraction x)
       (lisp Fraction (x)
         (mpfr->rational (sb-mpfr::mpfr-float-ref x))))
     (define (best-approx x)
       (real-approx (get-precision) x)))
-
-  (define-instance (Transfinite Big-Float)
+  
+  (define-instance (Rational Big-Float)
+    (define (to-fraction x)
+      (to-fraction (mpfr-of x)))
+    (define (best-approx x)
+      (best-approx (mpfr-of x))))
+  
+  (define-instance (Transfinite MPFR-Float)
     (define infinity (/ 1 0))
     (define (infinite? x)
       (lisp Boolean (x)
@@ -263,11 +341,27 @@
       (lisp Boolean (x)
         (to-boolean (sb-mpfr:nan-p x)))))
 
+  (define-instance (Transfinite Big-Float)
+    (define infinity (BFValue (/ 1 0)))
+    (define (infinite? x)
+      (infinite? (mpfr-of x)) )
+    (define nan (BFValue (/ 0 0)))
+    (define (nan? x)
+      (nan? (mpfr-of x))))
+
+  (define-instance (Dividable Integer MPFR-Float)
+    (define (general/ a b)
+      (if (== 0 b)
+          (/ (fromInt a) (fromInt b))
+          (into (exact/ a b)))))
+  
   (define-instance (Dividable Integer Big-Float)
     (define (general/ a b)
       (if (== 0 b)
           (/ (fromInt a) (fromInt b))
           (into (exact/ a b))))))
+
+(coalton-library/math/complex::%define-standard-complex-instances MPFR-Float)
 
 (coalton-library/math/complex::%define-standard-complex-instances Big-Float)
 
@@ -275,75 +369,125 @@
   
   (define (bf-pi)
     "Return the value of pi to the currently set precision."
-    (lisp Big-Float ()
+    (lisp MPFR-Float ()
       (cl:values (sb-mpfr:const-pi))))
+
+  ;; Trig
+  (define-instance (Trigonometric MPFR-Float)
+    (define (sin x)
+      (lisp MPFR-Float (x)
+        (cl:values (sb-mpfr:sin x))))
+    (define (cos x)
+      (lisp MPFR-Float (x)
+        (cl:values (sb-mpfr:cos x))))
+    (define (tan x)
+      (lisp MPFR-Float (x)
+        (cl:values (sb-mpfr:tan x))))
+    (define (asin x)
+      (lisp MPFR-Float (x)
+        (cl:values (sb-mpfr:asin x))))
+    (define (acos x)
+      (lisp MPFR-Float (x)
+        (cl:values (sb-mpfr:acos x))))
+    (define (atan x)
+      (lisp MPFR-Float (x)
+        (cl:values (sb-mpfr:atan x))))
+    ;; NOTE: in MPFR, Pi is calculated just once, so if we change precision,
+    ;; it will *NOT* get updated.
+    (define pi (bf-pi)))
   
   ;; Trig
   (define-instance (Trigonometric Big-Float)
     (define (sin x)
-      (lisp Big-Float (x)
-        (cl:values (sb-mpfr:sin x))))
+      (BFValue (sin (mpfr-of x))))
     (define (cos x)
-      (lisp Big-Float (x)
-        (cl:values (sb-mpfr:cos x))))
+      (BFValue (cos (mpfr-of x))))
     (define (tan x)
-      (lisp Big-Float (x)
-        (cl:values (sb-mpfr:tan x))))
+      (BFValue (tan (mpfr-of x))))
     (define (asin x)
-      (lisp Big-Float (x)
-        (cl:values (sb-mpfr:asin x))))
+      (BFvalue (asin (mpfr-of x))))
     (define (acos x)
-      (lisp Big-Float (x)
-        (cl:values (sb-mpfr:acos x))))
+      (BFValue (acos (mpfr-of x))))
     (define (atan x)
-      (lisp Big-Float (x)
-        (cl:values (sb-mpfr:atan x))))
-    ;; BUG: Pi is calculated just once, so if we change precision,
-    ;; it will *NOT* get updated.
-    (define pi (bf-pi)))
+      (BFValue (atan (mpfr-of x))))
+    (define pi (BFConst bf-pi))))
+
+(coalton-toplevel
   
   (define (bf-ee)
     "Return the value of ee = exp(1) to the currently set precision."
-    (lisp Big-Float ()
+    (lisp MPFR-Float ()
       (cl:values (sb-mpfr:exp (sb-mpfr:coerce 1 'sb-mpfr:mpfr-float)))))
-  
+
   ;; Exp/Log
-  (define-instance (Exponentiable Big-Float)
+  (define-instance (Exponentiable MPFR-Float)
     (define (exp x)
-      (lisp Big-Float (x)
+      (lisp MPFR-Float (x)
         (cl:values (sb-mpfr:exp x))))
     (define (pow x n)
       (cond
         ((< x 0) nan)
         (True
-         (lisp Big-Float (x n)
+         (lisp MPFR-Float (x n)
            (cl:values (sb-mpfr:power x n))))))
     (define (log n x)
       (cond
         ((<= n 0) nan)
         ((== n 2)
-         (lisp Big-Float (x)
+         (lisp MPFR-Float (x)
            (cl:values (sb-mpfr:log2 x))))
         ((== n 10)
-         (lisp Big-Float (x)
+         (lisp MPFR-Float (x)
            (cl:values (sb-mpfr:log10 x))))
         (True (/ (ln x) (ln n)))))
     (define (ln x)
-      (lisp Big-Float (x)
+      (lisp MPFR-Float (x)
         (cl:values (sb-mpfr:log x))))
-    ;; BUG: EE is calculated just once, so if we change precision,
+    ;; NOTE: in MPFR, EE is calculated just once, so if we change precision,
     ;; it will *NOT* get updated.
     (define ee 
       "Return the value of ee = exp(1) to the currently set precision."
       (bf-ee)))
 
-  (define-instance (Radical Big-Float)
+  ;; Exp/Log
+  (define-instance (Exponentiable Big-Float)
+    (define (exp x)
+      (BFValue
+       (exp (mpfr-of x))))
+    (define (pow x n)
+      (BFValue
+       (pow (mpfr-of x) (mpfr-of n))))
+    (define (log n x)
+      (BFValue
+       (log (mpfr-of n) (mpfr-of x))))
+    (define (ln x)
+      (BFValue
+       (ln (mpfr-of x))))
+    (define ee 
+      "Return the value of ee = exp(1) to the currently set precision."
+      (BFConst bf-ee))))
+
+(coalton-toplevel
+  
+  (define-instance (Radical MPFR-Float)
     (define (sqrt x)
-      (lisp Big-Float (x)
+      (lisp MPFR-Float (x)
         (cl:values (sb-mpfr:sqrt x))))
     (define (nth-root n x)
       (coalton-library/math/elementary::canonical-nth-root n x)))
-
+  
+  (define-instance (Radical Big-Float)
+    (define (sqrt x)
+      (BFValue (sqrt (mpfr-of x))))
+    (define (nth-root n x)
+      (BFValue (nth-root n (mpfr-of x)))))
+  
+  (define-instance (Polar MPFR-Float)
+    (define (phase z)
+      (atan2 (imag-part z) (real-part z)))
+    (define (polar z)
+      (Tuple (magnitude z) (phase z))))
+  
   (define-instance (Polar Big-Float)
     (define (phase z)
       (atan2 (imag-part z) (real-part z)))
@@ -351,6 +495,7 @@
       (Tuple (magnitude z) (phase z))))
 
 
+  (define-instance (Elementary MPFR-Float))
   (define-instance (Elementary Big-Float)))
                                         
 ;COALTON-TOPLEVEL

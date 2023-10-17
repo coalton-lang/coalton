@@ -29,6 +29,7 @@
    #:get-precision
    #:with-precision
 
+   #:MPFR-Float
    #:Big-Float
    #:with-precision-rounding
 

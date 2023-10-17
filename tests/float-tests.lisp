@@ -19,7 +19,17 @@
           True
           (or (== a b) (< (abs (- a b)) 1d-6)))))
 
+  #-sbcl
   (define-instance (LooseCompare big-float:Big-Float)
+    (define (~ a b)
+      (if (and (math:nan? a) (math:nan? b))
+          True
+          (or (< (abs (- a b))
+                 (^ (math:reciprocal 2) (math:div (big-float:get-precision) 2)))
+              (== a b) ))))
+
+  #+sbcl
+  (define-instance (LooseCompare big-float:MPFR-Float)
     (define (~ a b)
       (if (and (math:nan? a) (math:nan? b))
           True
@@ -92,7 +102,10 @@
   (test-identities test-list-complex-single)
   (test-identities test-list-complex-double)
   (test-identities
-   (the (List big-float:Big-Float)
+   (the #+sbcl
+        (List big-float:MPFR-Float)
+        #-sbcl
+        (List big-float:Big-Float)
         (map into test-list-single))))
 
 (coalton-toplevel
@@ -106,7 +119,10 @@
     "Checks to see if a double-float within a tolerable error of a big-float thunk."
     (is (<= (abs (- (math:to-fraction (the Double-Float x))
                     (big-float:with-precision-rounding 53 big-float:rndn
-                      (fn () (math:to-fraction (the big-float:Big-Float (y)))))))
+                      (fn () (math:to-fraction #+sbcl
+                                               (the big-float:MPFR-Float (y))
+                                               #-sbcl
+                                               (the big-float:Big-Float (Y)))))))
             ;; 2^-48 is the worst a double-float will compare to a coerced fraction.
             (math:^^ 2 -48)))))
 
@@ -139,7 +155,11 @@
   (define (test-constant a b)
     "Checks a big-float against an integer representing the actual first 64 digits."
     (is (<= (abs (- (math:to-fraction
-                     (the big-float:Big-Float
+                     #+sbcl
+                     (the big-float:MPFR-Float
+                          (big-float:with-precision-rounding 208 big-float:rndn a))
+                     #-sbcl
+                     (the big-float:MPFR-Float
                           (big-float:with-precision-rounding 208 big-float:rndn a)))
                     (/ b (^ 10 63))))
             (^^ 2 -207)))))
