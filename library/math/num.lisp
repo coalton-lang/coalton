@@ -172,22 +172,22 @@
 		  (cl:+ a b))))
        (define (- a b)
          (lisp ,type (a b)
-	 (cl:if (cl:and (cl:>= b 0) (cl:< a (cl:+ 0 b)))
-			(cl:cerror ,(cl:format cl:nil "Unsigned value underflowed."))
-			(cl:- a b))))
+	   (cl:if (cl:and (cl:>= b 0) (cl:< a (cl:+ 0 b)))
+		  (cl:cerror ,(cl:format cl:nil "Unsigned value underflowed."))
+		  (cl:- a b))))
        (define (* a b)
-	   (lisp ,type (a b)
-		 (cl:if (cl:or (cl:and (cl:and (cl:> b 0) (cl:< a 0)) (cl:< a (cl:/ 0 b)))
-			       (cl:and (cl:and (cl:< b 0) (cl:> a 0)) (cl:> a (cl:/ 0 b))))
-			(cl:cerror ,(cl:format cl:nil "Unsigned value underflowed."))
-			(cl:* a b))))
+	 (lisp ,type (a b)
+	   (cl:if (cl:or (cl:and (cl:and (cl:> b 0) (cl:< a 0)) (cl:< a (cl:/ 0 b)))
+			 (cl:and (cl:and (cl:< b 0) (cl:> a 0)) (cl:> a (cl:/ 0 b))))
+		  (cl:cerror ,(cl:format cl:nil "Unsigned value underflowed."))
+		  (cl:* a b))))
 
        (define (fromInt x)
-	   (lisp ,type (x)
-		 (cl:if (cl:< x 0)
-			(cl:cerror ,(cl:format cl:nil "Unsigned value underflows."))
-			x))))))
-		      
+	 (lisp ,type (x)
+	   (cl:if (cl:< x 0)
+		  (cl:cerror ,(cl:format cl:nil "Unsigned value underflows."))
+		  x))))))
+
 
 
 		      
