@@ -161,43 +161,59 @@
 ;;; Underflow checks for unsigned values
 ;;;
 
-(cl:defmacro %define-underflow-handler (name bits)
-  `(cl:progn
-     (cl:declaim (cl:inline ,name))
-     (cl:defun ,name (value)
-       (cl:typecase value
-	 ((cl:unsigned-byte ,bits) value)
-	 (cl:otherwise
-	  (cl:cerror ,(cl:format cl:nil "Unsigned value underflowed ~D bits." bits)))))))
-
-(%define-underflow-handler %handler-8bit-underflow 8)
-(%define-underflow-handler %handler-16bit-underflow 16)
-(%define-underflow-handler %handler-32bit-underflow 32)
-(%define-underflow-handler %handler-64bit-underflow 64)
-
-;;;
-;;; Num instances for integers
-;;;
-
 (cl:eval-when (:compile-toplevel :load-toplevel)
-  (cl:defmacro define-num-checked (type handler)
-    "Define a `Num' instance for TYPE which signals on overflow or underflow."
+  (cl:defmacro define-unsigned-num-underflow (type)
+    "Define a `Num' instance for Type which signals an error on underflow."
     `(define-instance (Num ,type)
        (define (+ a b)
          (lisp ,type (a b)
-           (,handler (cl:+ a b))))
+	   (cl:if (cl:and (cl:< b 0) (cl:< a (cl:- 0 b)))
+		  (cl:cerror ,(cl:format cl:nil "Unsigned value underflow"))
+		  (cl:+ a b))))
+       (define (- a b)
+         (lisp ,type (a b)
+	 (cl:if (cl:and (cl:>= b 0) (cl:< a (cl:+ 0 b)))
+			(cl:cerror ,(cl:format cl:nil "Unsigned value underflowed."))
+			(cl:- a b))))
+       (define (* a b)
+	   (lisp ,type (a b)
+		 (cl:if (cl:or (cl:and (cl:and (cl:> b 0) (cl:< a 0)) (cl:< a (cl:/ 0 b)))
+			       (cl:and (cl:and (cl:< b 0) (cl:> a 0)) (cl:> a (cl:/ 0 b))))
+			(cl:cerror ,(cl:format cl:nil "Unsigned value underflowed."))
+			(cl:* a b))))
+
+       (define (fromInt x)
+	   (lisp ,type (x)
+		 (cl:if (cl:< x 0)
+			(cl:cerror ,(cl:format cl:nil "Unsigned value underflows."))
+			x))))))
+		      
+
+
+		      
+
+;;;
+;;; Num instances for integers
+;;;	   
+(cl:eval-when (:compile-toplevel :load-toplevel)
+  (cl:defmacro define-num-checked (type overflow-handler)
+    "Define a `Num' instance for TYPE which signals on overflow."
+    `(define-instance (Num ,type)
+       (define (+ a b)
+         (lisp ,type (a b)
+           (,overflow-handler (cl:+ a b))))
 
        (define (- a b)
          (lisp ,type (a b)
-           (,handler (cl:- a b))))
+           (,overflow-handler (cl:- a b))))
 
        (define (* a b)
          (lisp ,type (a b)
-           (,handler (cl:* a b))))
+           (,overflow-handler (cl:* a b))))
 
        (define (fromInt x)
          (lisp ,type (x)
-           (,handler x))))))
+           (,overflow-handler x))))))
 
 (cl:eval-when (:compile-toplevel :load-toplevel)
   (cl:defmacro define-num-wrapping (type bits)
@@ -228,17 +244,16 @@
   (define-num-checked I64 %handle-64bit-overflow)
   (define-num-checked IFix %handle-fixnum-overflow)
 
-  (define-num-checked U8 %handler-8bit-underflow)
-  (define-num-checked U16 %handler-16bit-underflow)
-  (define-num-checked U32 %handler-32bit-underflow)
-  (define-num-checked U64 %handler-64bit-underflow)
-
   (define-num-wrapping U8 8)
   (define-num-wrapping U16 16)
   (define-num-wrapping U32 32)
   (define-num-wrapping U64 64)
-  (define-num-wrapping UFix #.+unsigned-fixnum-bits+))
+  (define-num-wrapping UFix #.+unsigned-fixnum-bits+)
 
+  (define-unsigned-num-underflow U8)
+  (define-unsigned-num-underflow U16)
+  (define-unsigned-num-underflow U32)
+  (define-unsigned-num-underflow U64))
 ;;;
 ;;; Num instances for floats
 ;;;
