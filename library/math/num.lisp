@@ -162,37 +162,34 @@
 ;;;
 
 (cl:eval-when (:compile-toplevel :load-toplevel)
-  (cl:defmacro define-unsigned-num-underflow (type)
+  (cl:defmacro define-unsigned-num-underflow (type bits)
     "Define a `Num' instance for Type which signals an error on underflow."
     `(define-instance (Num ,type)
        (define (+ a b)
          (lisp ,type (a b)
 	   (cl:if (cl:and (cl:< b 0) (cl:< a (cl:- 0 b)))
-		  (cl:cerror ,(cl:format cl:nil "Unsigned value underflow"))
+		  (cl:cerror "Unsigned value underflowed." ,(cl:format cl:nil "Unsigned value underflowed ~D bits." bits))
 		  (cl:+ a b))))
        
        (define (- a b)
          (lisp ,type (a b)
 	   (cl:if (cl:and (cl:>= b 0) (cl:< a (cl:+ 0 b)))
-		  (cl:cerror ,(cl:format cl:nil "Unsigned value underflowed."))
+		  (cl:cerror "Unsigned value underflowed." ,(cl:format cl:nil "Unsigned value underflowed ~D bits." bits))
 		  (cl:- a b))))
        
        (define (* a b)
 	 (lisp ,type (a b)
 	   (cl:if (cl:or (cl:and (cl:and (cl:> b 0) (cl:< a 0)) (cl:< a (cl:/ 0 b)))
 			 (cl:and (cl:and (cl:< b 0) (cl:> a 0)) (cl:> a (cl:/ 0 b))))
-		  (cl:cerror ,(cl:format cl:nil "Unsigned value underflowed."))
+		  (cl:cerror "Unsigned value undeflowed." ,(cl:format cl:nil "Unsigned value underflowed ~D bits." bits))
 		  (cl:* a b))))
 
        (define (fromInt x)
 	 (lisp ,type (x)
 	   (cl:if (cl:< x 0)
-		  (cl:cerror ,(cl:format cl:nil "Unsigned value underflows."))
+		  (cl:cerror "Unsigned value underflowed." ,(cl:format cl:nil "Unsigned value underflowed ~D bits." bits))
 		  x))))))
 
-
-
-		      
 
 ;;;
 ;;; Num instances for integers
@@ -252,10 +249,10 @@
   (define-num-wrapping U64 64)
   (define-num-wrapping UFix #.+unsigned-fixnum-bits+)
 
-  (define-unsigned-num-underflow U8)
-  (define-unsigned-num-underflow U16)
-  (define-unsigned-num-underflow U32)
-  (define-unsigned-num-underflow U64))
+  (define-unsigned-num-underflow U8 8)
+  (define-unsigned-num-underflow U16 16)
+  (define-unsigned-num-underflow U32 32)
+  (define-unsigned-num-underflow U64 64))
 ;;;
 ;;; Num instances for floats
 ;;;
