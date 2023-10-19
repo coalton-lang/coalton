@@ -560,7 +560,7 @@ Returns a `node'.")
      :type tc:*unit-type*
      :label (tc:node-while-label expr)
      :expr (translate-expression (tc:node-while-expr expr) ctx env)
-     :body (translate-expression (tc:node-while-body expr) ctx env)))
+     :body (append-unit (translate-expression (tc:node-while-body expr) ctx env))))
 
   (:method ((expr tc:node-while-let) ctx env)
     (declare (type pred-context ctx)
@@ -571,7 +571,7 @@ Returns a `node'.")
      :pattern (translate-pattern (tc:node-while-let-pattern expr))
      :label (tc:node-while-let-label expr)
      :expr (translate-expression (tc:node-while-let-expr expr) ctx env)
-     :body (translate-expression (tc:node-while-let-body expr) ctx env)))
+     :body (append-unit (translate-expression (tc:node-while-let-body expr) ctx env))))
 
   (:method ((expr tc:node-for) ctx env)
     (declare (type pred-context ctx)
@@ -671,7 +671,7 @@ Returns a `node'.")
               :label (tc:node-for-label expr)
               :pattern some-pattern
               :expr iter-next-node
-              :body (translate-expression (tc:node-for-body expr) ctx env))))
+              :body (append-unit (translate-expression (tc:node-for-body expr) ctx env)))))
 
       (make-node-bind
        :type tc:*unit-type* 
@@ -686,7 +686,7 @@ Returns a `node'.")
     (make-node-loop
      :type tc:*unit-type*
      :label (tc:node-loop-label expr)
-     :body (translate-expression (tc:node-loop-body expr) ctx env)))
+     :body (append-unit (translate-expression (tc:node-loop-body expr) ctx env))))
 
   (:method ((expr tc:node-break) ctx env)
     (declare (type pred-context ctx)
@@ -938,3 +938,14 @@ dictionaries applied."
                            :body inner))))
 
         :finally (return inner)))
+
+(defun append-unit (node)
+  "Wrap node in a NODE-SEQ whose last node is AST:NODE-VARIABLE
+representation of a Unit literal expression."
+  (make-node-seq
+   :type tc:*unit-type*
+   :nodes (list
+           node
+           (make-node-variable
+            :type tc:*unit-type*
+            :value (util:find-symbol "UNIT" (find-package "COALTON"))))))
