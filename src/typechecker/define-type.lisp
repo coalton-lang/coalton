@@ -532,7 +532,9 @@
                                    :vars nil
                                    :var-names nil
                                    :body (list (util:runtime-quote (type-definition-runtime-type type)))))
-                :source source))
+                :source source
+                ;; FIXME: Is NIL correct?
+                :inline-p nil))
      :source source
      :head-src source
      :compiler-generated t)))

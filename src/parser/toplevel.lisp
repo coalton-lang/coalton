@@ -72,6 +72,7 @@
    #:toplevel-define-source                      ; ACCESSOR
    #:toplevel-define-monomorphize                ; ACCESSOR
    #:toplevel-define-list                        ; TYPE
+   #:toplevel-define-inline-p                    ; ACCESSOR
    #:fundep                                      ; STRUCT
    #:make-fundep                                 ; CONSTRUCTOR
    #:fundep-left                                 ; ACCESSOR
@@ -101,6 +102,7 @@
    #:instance-method-definition-params           ; ACCESSOR
    #:instance-method-definition-body             ; ACCESSOR
    #:instance-method-definition-source           ; ACCESSOR
+   #:instance-method-definition-inline-p         ; ACCESSOR
    #:instance-method-definition-list             ; TYPE
    #:toplevel-define-instance                    ; STRUCT
    #:make-toplevel-define-instance               ; CONSTRUCTOR
@@ -307,7 +309,8 @@
   (docstring    (util:required 'docstring)    :type (or null string)                 :read-only t)
   (body         (util:required 'body)         :type node-body                        :read-only t)
   (source       (util:required 'source)       :type cons                             :read-only t)
-  (monomorphize (util:required 'monomorphize) :type (or null attribute-monomorphize) :read-only nil))
+  (monomorphize (util:required 'monomorphize) :type (or null attribute-monomorphize) :read-only nil)
+  (inline-p     (util:required 'inline-p)     :type boolean                          :read-only t))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-define-list-p (x)
@@ -368,7 +371,8 @@
   (name      (util:required 'name)      :type node-variable       :read-only t)
   (params    (util:required 'params)    :type pattern-list        :read-only t)
   (body      (util:required 'body)      :type node-body           :read-only t)
-  (source    (util:required 'source)    :type cons                :read-only t))
+  (source    (util:required 'source)    :type cons                :read-only t)
+  (inline-p  (util:required 'inline-p)  :type boolean             :read-only t))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun instance-method-definition-list-p (x)
@@ -645,8 +649,10 @@ consume all attributes"))))
 
      nil)
 
-    ((coalton:define)
-     (let ((define (parse-define form file))
+    ((coalton:define coalton:define-inline)
+     (let ((define (parse-define form
+                                 file
+                                 (eq 'coalton:define-inline (cst:raw (cst:first form)))))
 
            monomorphize
            monomorphize-form)
@@ -972,7 +978,7 @@ consume all attributes")))
                      :primary-note "unknown toplevel form")))))))
 
 
-(defun parse-define (form file)
+(defun parse-define (form file inline-p)
   (declare (type cst:cst form)
            (type coalton-file file)
            (values toplevel-define))
@@ -1010,7 +1016,8 @@ consume all attributes")))
        :docstring docstring
        :body body
        :monomorphize nil
-       :source (cst:source form)))))
+       :source (cst:source form)
+       :inline-p inline-p))))
 
 (defun parse-declare (form file)
   (declare (type cst:cst form)
@@ -1883,7 +1890,8 @@ consume all attributes")))
                    :notes (list context-note))))
 
     (unless (and (cst:atom (cst:first form))
-                 (eq (cst:raw (cst:first form)) 'coalton:define))
+                 (member (cst:raw (cst:first form))
+                         '(coalton:define coalton:define-inline)))
       (error 'parse-error
              :err (coalton-error
                    :span (cst:source (cst:first form))
@@ -1908,7 +1916,8 @@ consume all attributes")))
        :name name
        :params params
        :body (parse-body (cst:rest (cst:rest form)) form file)
-       :source (cst:source form)))))
+       :source (cst:source form)
+       :inline-p (eq 'coalton:define-inline (cst:raw (cst:first form)))))))
 
 (defun parse-fundep (form file)
   (declare (type cst:cst form)

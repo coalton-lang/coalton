@@ -22,12 +22,14 @@
    #:toplevel-define-body               ; ACCESSOR
    #:toplevel-define-source             ; ACCESSOR
    #:toplevel-define-list               ; TYPE
+   #:toplevel-define-inline-p           ; ACCESSOR
    #:instance-method-definition         ; STRUCT
    #:make-instance-method-definition    ; CONSTRUCTOR
    #:instance-method-definition-name    ; ACCESSOR
    #:instance-method-definition-params  ; ACCESSOR
    #:instance-method-definition-body    ; ACCESSOR
    #:instance-method-definition-source  ; ACCESSOR
+   #:instance-method-definition-inline-p; ACCESSOR
    #:instance-method-definition-list    ; TYPE
    #:toplevel-define-instance           ; STRUCT
    #:make-toplevel-define-instance      ; CONSTRUCTOR
@@ -43,10 +45,11 @@
 
 (defstruct (toplevel-define
             (:copier nil))
-  (name    (util:required 'name)   :type node-variable :read-only t)
-  (params  (util:required 'params) :type pattern-list  :read-only t)
-  (body    (util:required 'body)   :type node-body     :read-only t)
-  (source  (util:required 'source) :type cons          :read-only t))
+  (name     (util:required 'name)         :type node-variable :read-only t)
+  (params   (util:required 'pattern-list) :type pattern-list  :read-only t)
+  (body     (util:required 'body)         :type node-body     :read-only t)
+  (source   (util:required 'source)       :type cons          :read-only t)
+  (inline-p (util:required 'inline-p)     :type boolean       :read-only t))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-define-list-p (x)
@@ -64,14 +67,16 @@
    :name (tc:apply-substitution subs (toplevel-define-name node))
    :params (tc:apply-substitution subs (toplevel-define-params node))
    :body (tc:apply-substitution subs (toplevel-define-body node))
-   :source (toplevel-define-source node)))
+   :source (toplevel-define-source node)
+   :inline-p (toplevel-define-inline-p node)))
 
 (defstruct (instance-method-definition
             (:copier nil))
-  (name    (util:required 'name)    :type node-variable :read-only t)
-  (params  (util:required 'params)  :type pattern-list  :read-only t)
-  (body    (util:required 'body)    :type node-body     :read-only t)
-  (source  (util:required 'source)  :type cons          :read-only t))
+  (name     (util:required 'name)     :type node-variable :read-only t)
+  (params   (util:required 'params)   :type pattern-list  :read-only t)
+  (body     (util:required 'body)     :type node-body     :read-only t)
+  (source   (util:required 'source)   :type cons          :read-only t)
+  (inline-p (util:required 'inline-p) :type boolean       :read-only t))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun instance-method-definition-list-p (x)
@@ -89,7 +94,8 @@
    :name (tc:apply-substitution subs (instance-method-definition-name method))
    :params (tc:apply-substitution subs (instance-method-definition-params method))
    :body (tc:apply-substitution subs (instance-method-definition-body method))
-   :source (instance-method-definition-source method)))
+   :source (instance-method-definition-source method)
+   :inline-p (instance-method-definition-inline-p method)))
 
 (defstruct (toplevel-define-instance
             (:copier nil))

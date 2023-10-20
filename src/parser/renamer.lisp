@@ -109,7 +109,8 @@
        (make-node-abstraction
         :params (rename-variables-generic% (node-abstraction-params node) new-ctx)
         :body (rename-variables-generic% (node-abstraction-body node) new-ctx)
-        :source (node-source node))
+        :source (node-source node)
+        :inline-p (node-abstraction-inline-p node))
        ctx)))
 
   (:method ((node node-let-binding) ctx)
@@ -473,7 +474,8 @@
         :docstring (toplevel-define-docstring toplevel)
         :body (rename-variables-generic% (toplevel-define-body toplevel) new-ctx)
         :source (toplevel-define-source toplevel)
-        :monomorphize (toplevel-define-monomorphize toplevel))
+        :monomorphize (toplevel-define-monomorphize toplevel)
+        :inline-p (toplevel-define-inline-p toplevel))
        ctx)))
 
   (:method ((method instance-method-definition) ctx)
@@ -489,7 +491,8 @@
         :name (instance-method-definition-name method)
         :params (rename-variables-generic% (instance-method-definition-params method) new-ctx)
         :body (rename-variables-generic% (instance-method-definition-body method) new-ctx)
-        :source (instance-method-definition-source method))
+        :source (instance-method-definition-source method)
+        :inline-p (instance-method-definition-inline-p method))
        ctx)))
 
   (:method ((toplevel toplevel-define-instance) ctx)

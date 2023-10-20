@@ -34,6 +34,7 @@
    #:make-node-abstraction              ; CONSTRUCTOR
    #:node-abstraction-vars              ; ACCESSOR
    #:node-abstraction-subexpr           ; ACCESSOR
+   #:node-abstraction-inline-p          ; ACCESSOR
    #:node-abstraction-p                 ; FUNCTION
    #:node-let                           ; STRUCT
    #:make-node-let                      ; CONSTRUCTOR
@@ -153,8 +154,9 @@
 
 (defstruct (node-abstraction (:include node))
   "Lambda literals (fn (x) x)"
-  (vars    (util:required 'vars)    :type parser:identifier-list :read-only t)
-  (subexpr (util:required 'subexpr) :type node                   :read-only t))
+  (vars     (util:required 'vars)     :type parser:identifier-list :read-only t)
+  (subexpr  (util:required 'subexpr)  :type node                   :read-only t)
+  (inline-p (util:required 'inline-p) :type boolean                :read-only t))
 
 (defstruct (node-let (:include node))
   "Introduction of local mutually-recursive bindings (let ((x 2)) (+ x x))"
@@ -461,7 +463,8 @@ both CL namespaces appearing in NODE"
   (make-node-abstraction
    :type (tc:apply-substitution subs (node-type node))
    :vars (node-abstraction-vars node)
-   :subexpr (tc:apply-substitution subs (node-abstraction-subexpr node))))
+   :subexpr (tc:apply-substitution subs (node-abstraction-subexpr node))
+   :inline-p (node-abstraction-inline-p node)))
 
 (defmethod tc:apply-substitution (subs (node node-let))
   (make-node-let

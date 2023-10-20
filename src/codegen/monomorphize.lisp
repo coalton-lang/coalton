@@ -239,7 +239,8 @@ recompilation, and also maintains a stack of uncompiled candidates."
                 (make-node-abstraction
                  :type (tc:make-function-type* arg-tys new-type)
                  :vars new-vars
-                 :subexpr subexpr)))
+                 :subexpr subexpr
+                 :inline-p (node-abstraction-inline-p node))))
 
               ;; Overapplication
               ((> (length (compile-candidate-args candidate)) (length (node-abstraction-vars node)))
@@ -276,7 +277,9 @@ recompilation, and also maintains a stack of uncompiled candidates."
                                           :for ty :in remaining-types
                                           :collect (make-node-variable
                                                     :type ty
-                                                    :value name)))))))
+                                                    :value name)))
+                   ;; FIXME: What should INLINE-P be?
+                   :inline-p nil))))
               ;; Underapplication
               ((< (length (compile-candidate-args candidate)) (length (node-abstraction-vars node)))
                (let* ((remaining-parameters (util:drop (length (compile-candidate-args candidate)) (node-abstraction-vars node))))
@@ -289,7 +292,11 @@ recompilation, and also maintains a stack of uncompiled candidates."
                    :subexpr (make-node-abstraction
                              :type new-type
                              :vars remaining-parameters
-                             :subexpr subexpr)))))
+                             :subexpr subexpr
+                             ;; FIXME: What should INLINE-P be?
+                             :inline-p nil)
+                   ;; FIXME: What should INLINE-P be?
+                   :inline-p nil))))
 
               (t
                (util:unreachable)))))

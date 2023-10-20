@@ -141,6 +141,9 @@
    (loop :for (name . node) :in bindings
          :if (node-abstraction-p node)
            :append (list
+                    (if (node-abstraction-inline-p node)
+                        `(declaim (inline ,name))
+                        `(declaim (notinline ,name)))
                     (compile-function name node env)
                     `(setf
                       ,name
