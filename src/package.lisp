@@ -21,6 +21,7 @@
    #:coalton
    #:declare
    #:define
+   #:define-inline
    #:define-type
    #:define-struct
    #:define-class

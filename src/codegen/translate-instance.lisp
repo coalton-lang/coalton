@@ -100,7 +100,9 @@
                        ctx-ty
                        (node-type app-node))
                 :vars (mapcar #'cdr ctx)
-                :subexpr app-node)
+                :subexpr app-node
+                ;; FIXME: What should INLINE-P be?
+                :inline-p nil)
                app-node))
 
          (bindings

@@ -80,7 +80,8 @@
     (make-node-abstraction
      :type (node-type node)
      :vars (node-abstraction-vars node)
-     :subexpr (apply-ast-substitution subs (node-abstraction-subexpr node))))
+     :subexpr (apply-ast-substitution subs (node-abstraction-subexpr node))
+     :inline-p (node-abstraction-inline-p node)))
 
   (:method (subs (node node-let))
     (declare (type ast-substitution-list subs)
