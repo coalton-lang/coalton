@@ -323,19 +323,32 @@
                           (inline-method-name (tc:lookup-method-inline env method-name dict :no-error t)))
 
                      (when inline-method-name
-                       (if (null rands_)
-                           (make-node-variable
-                            :type (node-type node)
-                            :value inline-method-name)
 
-                           (make-node-application
-                            :type (node-type node)
-                            :rator (make-node-variable
-                                    :type (tc:make-function-type*
-                                           (mapcar #'node-type rands_)
-                                           (node-type node))
-                                    :value inline-method-name)
-                            :rands rands_))))))))
+                       (let ((method-node-abs (tc:lookup-code env inline-method-name :no-error t)))
+
+                         (cond ((null rands_)
+                                (make-node-variable
+                                 :type (node-type node)
+                                 :value inline-method-name))
+
+                               ((and method-node-abs
+                                     (node-abstraction-inline-p method-node-abs))
+                                (make-node-let
+                                 :type (node-type node)
+                                 :bindings (mapcar #'cons
+                                                   (node-abstraction-vars method-node-abs)
+                                                   rands_)
+                                 :subexpr (node-abstraction-subexpr method-node-abs)))
+
+                               (t
+                                (make-node-application
+                                 :type (node-type node)
+                                 :rator (make-node-variable
+                                         :type (tc:make-function-type*
+                                                (mapcar #'node-type rands_)
+                                                (node-type node))
+                                         :value inline-method-name)
+                                 :rands rands_))))))))))
 
            (inline-direct-method (node &rest rest)
              (declare (ignore rest)
