@@ -38,9 +38,17 @@
 
   (:method (subs (node node-lisp))
     (declare (type ast-substitution-list subs)
-             (ignore subs)
              (values node))
-    node)
+    (make-node-lisp
+     :type (node-type node)
+     :vars (loop :for (var . val) :in (node-lisp-vars node)
+                 :collect (let ((sub (find val subs
+                                           :key #'ast-substitution-from)))
+                            (cons var (if sub
+                                          (node-variable-value
+                                           (ast-substitution-to sub))
+                                          val))))
+     :form (node-lisp-form node)))
 
   (:method (subs (node node-variable))
     (declare (type ast-substitution-list subs)
