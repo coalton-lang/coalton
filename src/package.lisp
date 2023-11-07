@@ -21,7 +21,6 @@
    #:coalton
    #:declare
    #:define
-   #:define-inline
    #:define-type
    #:define-struct
    #:define-class
@@ -29,8 +28,9 @@
    #:repr
    #:monomorphize
    #:specialize
-   #:unable-to-codegen)
-  
+   #:unable-to-codegen
+   #:inline)
+
   ;; Early Types
   (:export
    #:-> #:→
