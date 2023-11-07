@@ -28,6 +28,10 @@
    #:traverse
    #:update-function-env
    #:make-function-table)
+  (:import-from
+   #:coalton-impl/codegen/ast-substitutions
+   #:apply-ast-substitution
+   #:make-ast-substitution)
   (:local-nicknames
    (#:settings #:coalton-impl/settings)
    (#:util #:coalton-impl/util)
@@ -171,7 +175,9 @@
 
    (resolve-static-superclass env)
 
-   (inline-methods env)))
+   (inline-methods env)
+
+   (inline-applications env)))
 
 (defun pointfree (node table env)
   (declare (type node node)
@@ -294,6 +300,114 @@
       (cons :application #'rewrite-application))
      nil)))
 
+(defun inline-applications (node env)
+  (declare (type node node)
+           (type tc:environment env)
+           (values node &optional))
+  (labels ((inline-application (node &rest rest)
+             (declare (ignore rest)
+                      (dynamic-extent rest))
+             (let ((rator (node-application-rator node))
+                   (rands (node-application-rands node)))
+               (when (node-variable-p rator)
+                 (let* ((name (node-variable-value rator))
+                        (code (tc:lookup-code env name :no-error t))
+                        (vars (and (node-abstraction-p code)
+                                   (node-abstraction-vars code)))
+                        ;; FIXME: We need to lookup inline-p in the environment rather than the AST
+                        (inline-p (and (node-abstraction-p code)
+                                       (node-abstraction-inline-p code))))
+                   (cond ((null rands)
+                          (make-node-variable
+                           :type (node-type node)
+                           :value name))
+                         ((and code
+                               inline-p
+                               ;; TODO: Optimize the case when the lengths are unequal
+                               (= (length vars)
+                                  (length rands)))
+                          (multiple-value-bind (bindings subs)
+                              (loop :for var :in vars
+                                    :for val :in rands
+                                    :for new-var := (gentemp (symbol-name var))
+                                    :collect (cons new-var val) :into bindings
+                                    :collect (make-ast-substitution
+                                              :from var
+                                              :to (make-node-variable
+                                                   :type (node-type val)
+                                                   :value new-var))
+                                      :into subs
+                                    :finally (return (values bindings subs)))
+                            (make-node-let
+                             :type (node-type node)
+                             :bindings bindings
+                             :subexpr (apply-ast-substitution
+                                       subs
+                                       (node-abstraction-subexpr code)))))
+                         (t
+                          (make-node-application
+                           :type (node-type node)
+                           :rator (make-node-variable
+                                   :type (tc:make-function-type*
+                                          (mapcar #'node-type rands)
+                                          (node-type node))
+                                   :value name)
+                           :rands rands)))))))
+           ;; FIXME: What kind of frontend code evokes DIRECT-APPLICATION
+           ;; as opposed to APPLICATION?
+           (inline-direct-application (node &rest rest)
+             (declare (ignore rest)
+                      (dynamic-extent rest))
+             (let ((rator (node-application-rator node))
+                   (rands (node-application-rands node)))
+               (when (node-variable-p rator)
+                 (let* ((name (node-variable-value rator))
+                        (code (tc:lookup-code env name :no-error t))
+                        ;; FIXME: We need to lookup inline-p in the environment rather than the AST
+                        (inline-p (and (node-abstraction-p code)
+                                       (node-abstraction-inline-p code))))
+                   (print code)
+                   (print
+                    (cond ((null rands)
+                           (make-node-variable
+                            :type (node-type node)
+                            :value name))
+                          ((and code inline-p)
+                           (multiple-value-bind (bindings subs)
+                               (loop :for var :in (node-abstraction-vars code)
+                                     :for val :in rands
+                                     :for new-var := (gentemp (symbol-name var))
+                                     :collect (cons new-var val) :into bindings
+                                     :collect (make-ast-substitution
+                                               :from var
+                                               :to (make-node-variable
+                                                    :type (node-type val)
+                                                    :value new-var))
+                                       :into subs
+                                     :finally (return (values bindings subs)))
+                             (make-node-let
+                              :type (node-type node)
+                              :bindings bindings
+                              :subexpr (apply-ast-substitution
+                                        subs
+                                        (node-abstraction-subexpr code)))))
+                          (t
+                           (make-node-application
+                            :type (node-type node)
+                            :rator (make-node-variable
+                                    :type (tc:make-function-type*
+                                           (mapcar #'node-type rands)
+                                           (node-type node))
+                                    :value name)
+                            :rands rands)))))))))
+
+    (traverse
+     node
+     (list
+      (cons :application #'inline-application)
+      (cons :direct-application #'inline-direct-application))
+     nil)))
+
 
 (defun inline-methods (node env)
   (declare (type node node)
@@ -323,32 +437,19 @@
                           (inline-method-name (tc:lookup-method-inline env method-name dict :no-error t)))
 
                      (when inline-method-name
+                       (if (null rands_)
+                           (make-node-variable
+                            :type (node-type node)
+                            :value inline-method-name)
 
-                       (let ((method-node-abs (tc:lookup-code env inline-method-name :no-error t)))
-
-                         (cond ((null rands_)
-                                (make-node-variable
-                                 :type (node-type node)
-                                 :value inline-method-name))
-
-                               ((and method-node-abs
-                                     (node-abstraction-inline-p method-node-abs))
-                                (make-node-let
-                                 :type (node-type node)
-                                 :bindings (mapcar #'cons
-                                                   (node-abstraction-vars method-node-abs)
-                                                   rands_)
-                                 :subexpr (node-abstraction-subexpr method-node-abs)))
-
-                               (t
-                                (make-node-application
-                                 :type (node-type node)
-                                 :rator (make-node-variable
-                                         :type (tc:make-function-type*
-                                                (mapcar #'node-type rands_)
-                                                (node-type node))
-                                         :value inline-method-name)
-                                 :rands rands_))))))))))
+                           (make-node-application
+                            :type (node-type node)
+                            :rator (make-node-variable
+                                    :type (tc:make-function-type*
+                                           (mapcar #'node-type rands_)
+                                           (node-type node))
+                                    :value inline-method-name)
+                            :rands rands_))))))))
 
            (inline-direct-method (node &rest rest)
              (declare (ignore rest)
@@ -383,7 +484,7 @@
                                          (mapcar #'node-type rands_)
                                          (node-type node))
                                   :value inline-method-name)
-                          :rands rands_)))))))) 
+                          :rands rands_))))))))
 
     (traverse
      node
@@ -591,14 +692,14 @@
                      (t
                       (util:coalton-bug "Invalid specialization ~A~%" specialization))))))))
     (traverse
-     node 
+     node
      (list
       (cons :application #'apply-specialization)
       (cons :direct-application #'apply-specialization))
      nil)))
 
 (defun match-dynamic-extent-lift (node env)
-  "Stack allocates uncaptured ADTs constructed in the head of a match expression" 
+  "Stack allocates uncaptured ADTs constructed in the head of a match expression"
   (declare (type node node)
            (type tc:environment env)
            (values node &optional))
