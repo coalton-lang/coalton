@@ -219,6 +219,9 @@
   (type (util:required 'type) :type keyword-src       :read-only t)
   (arg  (util:required 'arg)  :type (or null cst:cst) :read-only t))
 
+(defstruct (attribute-inline
+            (:include attribute)))
+
 ;;
 ;; Toplevel Structures
 ;;
@@ -310,7 +313,7 @@
   (body         (util:required 'body)         :type node-body                        :read-only t)
   (source       (util:required 'source)       :type cons                             :read-only t)
   (monomorphize (util:required 'monomorphize) :type (or null attribute-monomorphize) :read-only nil)
-  (inline-p     (util:required 'inline-p)     :type boolean                          :read-only t))
+  (inline-p     (util:required 'inline-p)     :type boolean                          :read-only nil))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-define-list-p (x)
@@ -372,7 +375,7 @@
   (params    (util:required 'params)    :type pattern-list        :read-only t)
   (body      (util:required 'body)      :type node-body           :read-only t)
   (source    (util:required 'source)    :type cons                :read-only t)
-  (inline-p  (util:required 'inline-p)  :type boolean             :read-only t))
+  (inline-p  (util:required 'inline-p)  :type boolean             :read-only nil))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun instance-method-definition-list-p (x)
@@ -649,13 +652,21 @@ consume all attributes"))))
 
      nil)
 
-    ((coalton:define coalton:define-inline)
-     (let ((define (parse-define form
-                                 file
-                                 (eq 'coalton:define-inline (cst:raw (cst:first form)))))
+    ((coalton:inline)
+     (vector-push-extend
+      (cons
+       (parse-inline form file)
+       form)
+      attributes)
 
+     nil)
+
+    ((coalton:define)
+     (let ((define (parse-define form file))
            monomorphize
-           monomorphize-form)
+           monomorphize-form
+
+           inline-p)
        (loop :for (attribute . attribute-form) :across attributes
              :do (etypecase attribute
                    (attribute-repr
@@ -692,10 +703,13 @@ consume all attributes"))))
                                      :message "when parsing define")))))
 
                     (setf monomorphize attribute)
-                    (setf monomorphize-form attribute-form))))
+                    (setf monomorphize-form attribute-form))
+                   (attribute-inline
+                    (setf inline-p t))))
 
        (setf (fill-pointer attributes) 0)
        (setf (toplevel-define-monomorphize define) monomorphize)
+       (setf (toplevel-define-inline-p define) inline-p)
        (push define (program-defines program))
        t))
 
@@ -821,7 +835,7 @@ consume all attributes"))))
                                      :message "previous attribute here")
                                     (make-coalton-error-note
                                      :type :secondary
-                                     :span (toplevel-define-struct-head-src struct) 
+                                     :span (toplevel-define-struct-head-src struct)
                                      :message "when parsing define-struct")))))
 
                     (unless (eq :transparent (keyword-src-name (attribute-repr-type attribute)))
@@ -978,7 +992,7 @@ consume all attributes")))
                      :primary-note "unknown toplevel form")))))))
 
 
-(defun parse-define (form file inline-p)
+(defun parse-define (form file)
   (declare (type cst:cst form)
            (type coalton-file file)
            (values toplevel-define))
@@ -1017,7 +1031,7 @@ consume all attributes")))
        :body body
        :monomorphize nil
        :source (cst:source form)
-       :inline-p inline-p))))
+       :inline-p nil))))
 
 (defun parse-declare (form file)
   (declare (type cst:cst form)
@@ -1210,7 +1224,7 @@ consume all attributes")))
     (make-toplevel-define-struct
      :name (parse-identifier unparsed-name file)
      :vars (when unparsed-variables
-             (parse-list #'parse-type-variable unparsed-variables file)) 
+             (parse-list #'parse-type-variable unparsed-variables file))
      :docstring docstring
      :fields (parse-list
               #'parse-struct-field
@@ -1557,17 +1571,37 @@ consume all attributes")))
                  (stringp (cst:raw (cst:third form))))
         (setf docstring (cst:raw (cst:third form))))
 
-      (make-toplevel-define-instance
-       :context context
-       :pred (parse-predicate unparsed-predicate (util:cst-source-range unparsed-predicate) file)
-       :docstring docstring
-       :methods (loop :for methods := (cst:nthrest (if docstring 3 2) form) :then (cst:rest methods)
-                      :while (cst:consp methods)
-                      :for method := (cst:first methods)
-                      :collect (parse-instance-method-definition method (cst:second form) file))
-       :source (cst:source form)
-       :head-src (cst:source (cst:second form))
-       :compiler-generated nil))))
+      (let ((methods (loop :with forms := (cst:nthrest (if docstring 3 2) form)
+                           :while (cst:raw forms)
+                           :for inline-p := (let ((form (cst:first forms)))
+                                              (when (and (cst:consp form)
+                                                         (eq 'coalton:inline (cst:raw (cst:first form))))
+                                                (if (null (cst:raw (cst:rest form)))
+                                                    (progn
+                                                      (setq forms (cst:rest forms))
+                                                      t)
+                                                    (coalton-error
+                                                     :span (cst:source form)
+                                                     :file file
+                                                     :message "Malformed inline form"
+                                                     :primary-note "expected list"
+                                                     :notes (list context)))))
+                           :for method := (parse-instance-method-definition (cst:first forms) (cst:second form) file)
+                           :collect
+                           (progn
+                             (when inline-p
+                               (setf (instance-method-definition-inline-p method) t))
+                             (setq forms (cst:rest forms))
+                             method))))
+
+        (make-toplevel-define-instance
+         :context context
+         :pred (parse-predicate unparsed-predicate (util:cst-source-range unparsed-predicate) file)
+         :docstring docstring
+         :methods methods
+         :source (cst:source form)
+         :head-src (cst:source (cst:second form))
+         :compiler-generated nil)))))
 
 (defun parse-specialize (form file)
   (declare (type cst:cst form)
@@ -1890,8 +1924,7 @@ consume all attributes")))
                    :notes (list context-note))))
 
     (unless (and (cst:atom (cst:first form))
-                 (member (cst:raw (cst:first form))
-                         '(coalton:define coalton:define-inline)))
+                 (eq (cst:raw (cst:first form)) 'coalton:define))
       (error 'parse-error
              :err (coalton-error
                    :span (cst:source (cst:first form))
@@ -1916,8 +1949,8 @@ consume all attributes")))
        :name name
        :params params
        :body (parse-body (cst:rest (cst:rest form)) form file)
-       :source (cst:source form)
-       :inline-p (eq 'coalton:define-inline (cst:raw (cst:first form)))))))
+       :inline-p nil
+       :source (cst:source form)))))
 
 (defun parse-fundep (form file)
   (declare (type cst:cst form)
@@ -1989,6 +2022,17 @@ consume all attributes")))
 
   (make-attribute-monomorphize
    :source (cst:source form)))
+
+(defun parse-inline (form file)
+  (declare (type cst:cst form)
+           (type coalton-file file)
+           (values attribute-inline))
+
+  (assert (cst:consp form))
+
+  ;; TODO: Parsing errors
+
+  (make-attribute-inline :source (cst:source form)))
 
 (defun parse-repr (form file)
   (declare (type cst:cst form)
