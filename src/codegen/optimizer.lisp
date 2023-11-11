@@ -276,9 +276,7 @@
                         (subseq (tc:function-type-arguments (node-type function)) (length new-args))
                         (tc:function-return-type (node-type node)))
                  :rator function
-                 :rands new-args)
-       ;; FIXME: What should INLINE-P be?
-       :inline-p ()))))
+                 :rands new-args)))))
 
 (defun canonicalize (node)
   (declare (type node node)
@@ -541,9 +539,7 @@
                     :subexpr (make-node-let
                               :type (node-type (node-abstraction-subexpr node))
                               :bindings hoisted
-                              :subexpr (node-abstraction-subexpr node))
-                    ;; FIXME: What should INLINE-P be?
-                    :inline-p ())
+                              :subexpr (node-abstraction-subexpr node)))
 
                    node))))
 

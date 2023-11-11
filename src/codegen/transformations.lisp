@@ -79,8 +79,7 @@
              :subexpr (traverse
                        (node-abstraction-subexpr node)
                        funs
-                       (append (node-abstraction-vars node) bound-variables))
-             :inline-p (node-abstraction-inline-p node))))
+                       (append (node-abstraction-vars node) bound-variables)))))
       (call-if node :abstraction funs bound-variables)))
 
   (:method ((node node-let) funs bound-variables)

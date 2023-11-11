@@ -73,12 +73,7 @@
 
         :subexpr (wrap-with-pattern-params
                   pattern-params
-                  (translate-expression (tc:node-abstraction-body (tc:binding-last-node binding)) full-ctx env))
-        :inline-p (typecase binding
-                    (tc:toplevel-define
-                     (tc:toplevel-define-inline-p binding))
-                    (tc:instance-method-definition
-                     (tc:instance-method-definition-inline-p binding)))))
+                  (translate-expression (tc:node-abstraction-body (tc:binding-last-node binding)) full-ctx env))))
 
       ;; If the binding has parameters and/or predicates then wrap the body in a lambda.
       ((or (tc:binding-parameters binding) preds)
@@ -109,13 +104,7 @@
 
         :subexpr (wrap-with-pattern-params
                   pattern-params
-                  (translate-expression (tc:binding-value binding) full-ctx env))
-
-        :inline-p (typecase binding
-                    (tc:toplevel-define
-                     (tc:toplevel-define-inline-p binding))
-                    (tc:instance-method-definition
-                     (tc:instance-method-definition-inline-p binding)))))
+                  (translate-expression (tc:binding-value binding) full-ctx env))))
 
       (t
        (translate-expression (tc:binding-value binding) full-ctx env)))))
@@ -332,8 +321,7 @@ Returns a `node'.")
                                    :pattern (translate-pattern pattern)
                                    :body inner))))
 
-                      :finally (return inner))
-       :inline-p (tc:node-abstraction-inline-p expr))))
+                      :finally (return inner)))))
 
   (:method ((expr tc:node-let) ctx env)
     (declare (type pred-context ctx)
@@ -837,8 +825,7 @@ Returns a `node'.")
                                                           (make-match-branch
                                                            :pattern (translate-pattern
                                                                      (tc:node-do-bind-pattern elem))
-                                                           :body out-node)))
-                                     :inline-p t)))))
+                                                           :body out-node))))))))
 
                         ;; Same as node-do-bind but without binding
                         ;; the result of the computation to a
@@ -865,8 +852,7 @@ Returns a `node'.")
                                     (make-node-abstraction
                                      :type callback-ty
                                      :vars (list var-name)
-                                     :subexpr out-node
-                                     :inline-p t)))))))
+                                     :subexpr out-node)))))))
 
             :finally (return out-node)))))
 
