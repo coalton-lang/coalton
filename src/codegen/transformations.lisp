@@ -220,21 +220,21 @@
                   (push name variables)))
     (values functions variables)))
 
-(defun update-function-env (bindings env)
+(defun update-function-env (bindings inline-p-table env)
   (declare (type binding-list bindings)
+           (type hash-table inline-p-table)
            (type tc:environment env)
            (values tc:environment))
   (multiple-value-bind (toplevel-functions toplevel-values)
       (split-binding-definitions bindings)
     (loop :for (name . arity) :in toplevel-functions
-          :do
-             (setf env
-                   (tc:set-function
-                    env
-                    name
-                    (tc:make-function-env-entry
-                     :name name
-                     :arity arity))))
+          :do (setf env (tc:set-function
+                         env
+                         name
+                         (tc:make-function-env-entry
+                          :name name
+                          :arity arity
+                          :inline-p (gethash name inline-p-table)))))
     (loop :for name :in toplevel-values
           :do
              (setf env (tc:unset-function env name))))

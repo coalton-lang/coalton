@@ -36,7 +36,8 @@
            (type hash-table monomorphize-table)
            (type tc:environment env))
 
-  (let* ((definitions
+  (let* ((inline-p-table (make-hash-table))
+         (definitions
            (append
             (loop :for define :in (tc:translation-unit-definitions translation-unit)
                   :for name := (tc:node-variable-name (tc:toplevel-define-name define))
@@ -48,11 +49,13 @@
                                 name
                                 (tc:lookup-value-type env name)
                                 (tc:binding-value define)))
+                      (setf (gethash name inline-p-table)
+                            (tc:toplevel-define-inline-p define))
                   :collect (cons name compiled-node))
 
             ;; HACK: this load bearing reverse should be replaced with an actual solution
             (loop :for instance :in (reverse (tc:translation-unit-instances translation-unit))
-                  :append (translate-instance instance env))))
+                  :append (translate-instance instance inline-p-table env))))
 
          (definition-names
            (mapcar #'car definitions)))
@@ -61,6 +64,7 @@
         (optimize-bindings
          definitions
          monomorphize-table
+         inline-p-table
          *package*
          env)
 

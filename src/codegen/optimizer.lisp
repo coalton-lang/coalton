@@ -43,9 +43,10 @@
 
 (in-package #:coalton-impl/codegen/optimizer)
 
-(defun optimize-bindings (bindings monomorphize-table package env)
+(defun optimize-bindings (bindings monomorphize-table inline-p-table package env)
   (declare (type binding-list bindings)
            (type hash-table monomorphize-table)
+           (type hash-table inline-p-table)
            (type package package)
            (type tc:environment env)
            (values binding-list tc:environment))
@@ -90,7 +91,7 @@
 
 
       ;; Update function env
-      (setf env (update-function-env bindings env))
+      (setf env (update-function-env bindings inline-p-table env))
 
 
       (let ((function-table (make-function-table env)))
@@ -314,9 +315,9 @@
                         (code (tc:lookup-code env name :no-error t))
                         (vars (and (node-abstraction-p code)
                                    (node-abstraction-vars code)))
-                        ;; FIXME: We need to lookup inline-p in the environment rather than the AST
                         (inline-p (and (node-abstraction-p code)
-                                       (node-abstraction-inline-p code))))
+                                       (tc:function-env-entry-inline-p
+                                        (tc:lookup-function env name)))))
                    (cond ((null rands)
                           (make-node-variable
                            :type (node-type node)
@@ -365,7 +366,8 @@
                         (code (tc:lookup-code env name :no-error t))
                         ;; FIXME: We need to lookup inline-p in the environment rather than the AST
                         (inline-p (and (node-abstraction-p code)
-                                       (node-abstraction-inline-p code))))
+                                       (tc:function-env-entry-inline-p
+                                        (tc:lookup-function env name)))))
                    (print code)
                    (print
                     (cond ((null rands)
