@@ -366,40 +366,38 @@
                         (inline-p (and (node-abstraction-p code)
                                        (tc:function-env-entry-inline-p
                                         (tc:lookup-function env name)))))
-                   (print code)
-                   (print
-                    (cond ((null rands)
-                           (make-node-variable
-                            :type (node-type node)
-                            :value name))
-                          ((and code inline-p)
-                           (multiple-value-bind (bindings subs)
-                               (loop :for var :in (node-abstraction-vars code)
-                                     :for val :in rands
-                                     :for new-var := (gentemp (symbol-name var))
-                                     :collect (cons new-var val) :into bindings
-                                     :collect (make-ast-substitution
-                                               :from var
-                                               :to (make-node-variable
-                                                    :type (node-type val)
-                                                    :value new-var))
-                                       :into subs
-                                     :finally (return (values bindings subs)))
-                             (make-node-let
-                              :type (node-type node)
-                              :bindings bindings
-                              :subexpr (apply-ast-substitution
-                                        subs
-                                        (node-abstraction-subexpr code)))))
-                          (t
-                           (make-node-application
-                            :type (node-type node)
-                            :rator (make-node-variable
-                                    :type (tc:make-function-type*
-                                           (mapcar #'node-type rands)
-                                           (node-type node))
-                                    :value name)
-                            :rands rands)))))))))
+                   (cond ((null rands)
+                          (make-node-variable
+                           :type (node-type node)
+                           :value name))
+                         ((and code inline-p)
+                          (multiple-value-bind (bindings subs)
+                              (loop :for var :in (node-abstraction-vars code)
+                                    :for val :in rands
+                                    :for new-var := (gentemp (symbol-name var))
+                                    :collect (cons new-var val) :into bindings
+                                    :collect (make-ast-substitution
+                                              :from var
+                                              :to (make-node-variable
+                                                   :type (node-type val)
+                                                   :value new-var))
+                                      :into subs
+                                    :finally (return (values bindings subs)))
+                            (make-node-let
+                             :type (node-type node)
+                             :bindings bindings
+                             :subexpr (apply-ast-substitution
+                                       subs
+                                       (node-abstraction-subexpr code)))))
+                         (t
+                          (make-node-application
+                           :type (node-type node)
+                           :rator (make-node-variable
+                                   :type (tc:make-function-type*
+                                          (mapcar #'node-type rands)
+                                          (node-type node))
+                                   :value name)
+                           :rands rands))))))))
 
     (traverse
      node
