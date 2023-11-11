@@ -23,8 +23,9 @@
 
 (in-package #:coalton-impl/codegen/translate-instance)
 
-(defun translate-instance (instance env)
+(defun translate-instance (instance inline-p-table env)
   (declare (type tc:toplevel-define-instance instance)
+           (type hash-table inline-p-table)
            (type tc:environment env))
 
   (let* ((pred (tc:toplevel-define-instance-pred instance))
@@ -51,7 +52,8 @@
            (loop :for (method-name . type) :in (tc:ty-class-unqualified-methods class)
                  :for binding := (gethash method-name (tc:toplevel-define-instance-methods instance))
                  :for codegen-sym := (gethash method-name method-codegen-syms)
-
+                 :do (setf (gethash codegen-sym inline-p-table)
+                           (tc:instance-method-definition-inline-p binding))
                  :collect (cons codegen-sym (translate-toplevel binding env))))
 
          (unqualified-method-definitions

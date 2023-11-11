@@ -299,12 +299,9 @@
           ;; add it to the function environment
           (if (not (= (tc:constructor-entry-arity ctor) 0))
               (setf env
-                    (tc:set-function
-                     env
-                     ctor-name
-                     (tc:make-function-env-entry
-                      :name ctor-name
-                      :arity (tc:constructor-entry-arity ctor))))
+                    (tc:set-function-arity env
+                                           ctor-name
+                                           (tc:constructor-entry-arity ctor)))
 
               ;; If the constructor does not take
               ;; parameters then remove it from the

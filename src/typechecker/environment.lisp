@@ -101,6 +101,7 @@
    #:make-function-env-entry                ; CONSTRUCTOR
    #:function-env-entry-name                ; ACCESSOR
    #:function-env-entry-arity               ; ACCESSOR
+   #:function-env-entry-inline-p            ; ACCESSOR
    #:function-environment                   ; STRUCT
    #:name-entry                             ; STRUCT
    #:make-name-entry                        ; CONSTRUCTOR
@@ -149,6 +150,7 @@
    #:lookup-function                        ; FUNCTION
    #:set-function                           ; FUNCTION
    #:unset-function                         ; FUNCTION
+   #:set-function-arity                     ; FUNCTION
    #:lookup-name                            ; FUNCTION
    #:set-name                               ; FUNCTION
    #:unset-name                             ; FUNCTION
@@ -621,8 +623,9 @@
 ;;;
 
 (defstruct function-env-entry
-  (name  (util:required 'name)  :type symbol :read-only t)
-  (arity (util:required 'arity) :type fixnum :read-only t))
+  (name     (util:required 'name)     :type symbol  :read-only t)
+  (arity    (util:required 'arity)    :type fixnum  :read-only t)
+  (inline-p (util:required 'inline-p) :type boolean :read-only t))
 
 (defmethod make-load-form ((self function-env-entry) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -982,6 +985,22 @@
                           (environment-function-environment env)
                           symbol
                           #'make-function-environment)))
+
+(define-env-updater set-function-arity (env symbol arity)
+  (declare (type environment env)
+           (type symbol symbol)
+           (type fixnum arity))
+  (let ((prev (lookup-function env symbol :no-error t)))
+    (update-environment
+     env
+     :function-environment (immutable-map-set
+                            (environment-function-environment env)
+                            symbol
+                            (make-function-env-entry
+                             :name symbol
+                             :arity arity
+                             :inline-p (and prev (function-env-entry-inline-p prev)))
+                            #'make-function-environment))))
 
 (defun lookup-name (env symbol &key no-error)
   (declare (type environment env)
