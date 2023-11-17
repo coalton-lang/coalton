@@ -33,23 +33,25 @@
 
 (coalton-toplevel
   
- (repr :native cr:creal)
- (define-type Creal)
+  (repr :native cr:creal)
+  (define-type Creal)
 
- (define (set-comparison-threshold! k)
-   "Sets the global `Creal` comparison threshold to k bits after the 'decimal' point.
+  (declare set-comparison-threshold! (UFix -> Unit))
+  (define (set-comparison-threshold! k)
+    "Sets the global `Creal` comparison threshold to k bits after the 'decimal' point.
 
 See `comparison-threshold` for more details."
-   (lisp UFix (k)
-         (cl:setq *creal-comparison-threshold* k))
-   Unit)
+    (lisp UFix (k)
+      (cl:setq *creal-comparison-threshold* k))
+    Unit)
 
- (define (comparison-threshold)
-   "Returns the current `Creal` comparison threshold measured as a number of bits after the 'decimal' point.
+  (declare comparison-threshold (Unit -> UFix))
+  (define (comparison-threshold)
+    "Returns the current `Creal` comparison threshold measured as a number of bits after the 'decimal' point.
 
 This threshold is used to ensure `Eq` and `Ord` instances terminate. (In general computable real arithmetic is undecidable.) Note that if the production of a `Creal` depends on comparison, *there is no guarantee that the `Creal` will be accurate to any precision*."
-   (lisp UFix ()
-         *creal-comparison-threshold*)))
+    (lisp UFix ()
+      *creal-comparison-threshold*)))
 
 ;;;
 ;;; Instances
@@ -282,6 +284,7 @@ This threshold is used to ensure `Eq` and `Ord` instances terminate. (In general
 
 (coalton-toplevel
 
+  (declare approx (CReal -> UFix -> Integer))
   (define (approx x k)
     "Computes an approximation of the bits of a given `Creal`. Specifically, given an object of type `Creal` `X` and a non-negative integer `K`, return an integer `A` with
 
@@ -291,13 +294,15 @@ See `rational` or `rationalize` to produce a rational approximation of `Creal`."
     (lisp Integer (x k)
       (cr:approx-r x k)))
 
+  (declare rational-approx (CReal -> UFix -> Fraction))
   (define (rational-approx x k)
     "Produce a rational approximation of `X` called `R` such that
 
     `|R - X| < 2^(-K)`."
     (lisp Fraction (x k)
       (cr:rational-approx-r x k)))
-  
+
+  (declare rationalize (CReal -> UFix -> Fraction))
   (define (rationalize x k)
     "Produce a rational approximation of `X` called `R` such that
 
@@ -309,11 +314,13 @@ See `rational` or `rationalize` to produce a rational approximation of `Creal`."
       (cr:rationalize-r x k)))
 
   ;; this is just for testing purposes. Intentionally not exported.
+  (declare raw-approx (Creal -> Integer))
   (define (raw-approx x)
     "Returns an approximation for `Creal`s."
     (lisp Integer (x)
       (cr:raw-approx-r x)))
 
+  (declare print (Creal -> UFix -> Boolean))
   (define (print x k)
     "Prints a real `R` up to `K` bits of precision."
     (lisp Boolean (x k)
