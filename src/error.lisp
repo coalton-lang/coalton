@@ -513,11 +513,19 @@ Returns (VALUES LINE-NUM LINE-START-INDEX)"
   (file-position file 0)
   (let ((line 1)
         (line-start-index 0))
-    (loop :for i :to index
-          :for char := (read-char file)
+    (loop :for char := (read-char file)
+          :for code := (char-code char)
+          ;; It is assumed that code is utf-8 code point.
+          :for length := (cond ((<= code #x7f) 1)
+                               ((<= code #x7ff) 2)
+                               ((<= code #xffff) 3)
+                               (t 4))
+          :for i := 0 :then (+ i length)
           :when (char= char #\Newline)
             :do (setf line (1+ line)
-                      line-start-index (1+ i)))
+                      line-start-index (1+ i))
+          :when (>= i index)
+            :return nil)
     (values line line-start-index)))
 
 (defun get-source-line-info (file form)
