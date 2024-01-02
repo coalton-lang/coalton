@@ -181,3 +181,13 @@
 (define-test test-gh-973 ()
     (is (== (Many (vector:make (Single "hello")))
                      (Many (vector:make (Single "hello"))))))
+
+;; Test accessors on transparent structs
+(coalton-toplevel
+  (repr :transparent)
+  (define-struct (TransparentWrapper :a)
+    (inner :a)))
+
+(define-test test-transparent-wrapper ()
+  (is (== (make-list "x")
+          (map .inner (make-list (TransparentWrapper "x"))))))
