@@ -184,20 +184,30 @@ Returns a `node'.")
         (unless (tc:tycon-p from-ty)
           (util:coalton-bug "Invalid accessor type '~S'" ty))
 
-        (let* ((struct-entry (tc:lookup-struct env (tc:tycon-name from-ty)))
+        (let* ((type-entry (tc:lookup-type env (tc:tycon-name from-ty)))
+
+               (struct-entry (tc:lookup-struct env (tc:tycon-name from-ty)))
 
                (idx (gethash (tc:node-accessor-name expr) (tc:struct-entry-field-idx struct-entry))))
 
           (assert idx)
 
-          (make-node-variable
-           :type ty
-           :value (alexandria:format-symbol
-                   (symbol-package (tc:tycon-name from-ty))
-                   "~A/~A-_~D"
-                   (tc:tycon-name from-ty)
-                   (tc:tycon-name from-ty)
-                   idx))))))
+          (if (tc:type-entry-newtype type-entry)
+              ;; If the struct is a newtype, then return 'id' as the accessor
+              (make-node-variable
+               :type ty
+               :value (util:find-symbol
+                       "ID"
+                       (find-package "COALTON-LIBRARY/FUNCTIONS")))
+
+              (make-node-variable
+               :type ty
+               :value (alexandria:format-symbol
+                       (symbol-package (tc:tycon-name from-ty))
+                       "~A/~A-_~D"
+                       (tc:tycon-name from-ty)
+                       (tc:tycon-name from-ty)
+                       idx)))))))
 
   (:method ((expr tc:node-application) ctx env)
     (declare (type pred-context ctx)
