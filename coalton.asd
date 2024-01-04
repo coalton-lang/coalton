@@ -173,6 +173,7 @@
                (:file "string")
                (:file "slice")
                (:file "hashtable")
+               (:file "queue")
                (:file "monad/state")
                (:file "ord-tree")
                (:file "ord-map")
