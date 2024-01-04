@@ -393,10 +393,12 @@ both CL namespaces appearing in NODE"
 
   (:method ((node node-break) &key variable-namespace-only)
     (declare (values parser:identifier-list &optional))
+    (declare (ignore variable-namespace-only))
     nil)
 
   (:method ((node node-continue) &key variable-namespace-only)
     (declare (values parser:identifier-list &optional))
+    (declare (ignore variable-namespace-only))
     nil)
   
   (:method ((node node-seq) &key variable-namespace-only)
