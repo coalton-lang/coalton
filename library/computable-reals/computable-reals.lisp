@@ -33,7 +33,7 @@
 
 (coalton-toplevel
   
- (repr :native cr:creal)
+ (repr :native (cl:or cr:creal cl:rational))
  (define-type Creal)
 
  (define (set-comparison-threshold! k)
@@ -282,6 +282,7 @@ This threshold is used to ensure `Eq` and `Ord` instances terminate. (In general
 
 (coalton-toplevel
 
+  (declare approx (CReal -> UFix -> Integer))
   (define (approx x k)
     "Computes an approximation of the bits of a given `Creal`. Specifically, given an object of type `Creal` `X` and a non-negative integer `K`, return an integer `A` with
 
@@ -291,13 +292,15 @@ See `rational` or `rationalize` to produce a rational approximation of `Creal`."
     (lisp Integer (x k)
       (cr:approx-r x k)))
 
+  (declare rational-approx (CReal -> UFix -> Fraction))
   (define (rational-approx x k)
     "Produce a rational approximation of `X` called `R` such that
 
     `|R - X| < 2^(-K)`."
     (lisp Fraction (x k)
       (cr:rational-approx-r x k)))
-  
+
+  (declare rationalize (CReal -> UFix -> Fraction))
   (define (rationalize x k)
     "Produce a rational approximation of `X` called `R` such that
 
@@ -314,6 +317,7 @@ See `rational` or `rationalize` to produce a rational approximation of `Creal`."
     (lisp Integer (x)
       (cr:raw-approx-r x)))
 
+  (declare print (CReal -> UFix -> Boolean))
   (define (print x k)
     "Prints a real `R` up to `K` bits of precision."
     (lisp Boolean (x k)
