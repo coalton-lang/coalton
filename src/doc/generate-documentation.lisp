@@ -128,6 +128,7 @@
                coalton-library/vector
                coalton-library/slice
                coalton-library/hashtable
+               coalton-library/queue
                coalton-library/monad/state
                coalton-library/monad/free
                coalton-library/iterator
