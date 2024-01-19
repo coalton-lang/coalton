@@ -41,7 +41,7 @@ Release mode freezes most structures and optimizes them.
 
 ### Pitfalls of Having Two Modes
 
-Unfortunately, having two modes may mean one inadvertently depend on the behavior in one mode that is not supported in the other. We advise testing your code against both modes.
+Unfortunately, having two modes may mean that a user might inadvertently depend on the behavior of one mode that is not supported in the other. We advise testing your code against both modes.
 
 ### Developing the compiler
 
@@ -210,3 +210,57 @@ Here, the values of the parameters `a` and `b` are captured for use inside of th
 As with almost any "foreign function interface" (especially those interfacing with C), there's lots of potential for type errors to be made that Coalton simply cannot check for at compile time. We recommend being extra cautious and being liberal with `check-type`s and other assertions when putting a value into the hands of Coalton-managed code.
 
 Always be vigilant about _all_ possible return types of Lisp functions. Lisp, being a dynamically typed language, is sometimes lax about the possible return types, especially as they relate to the input type. Things like numerical contagion, `nil`, and error conditions can be serious sources of type errors.
+
+## Recipes for calling Coalton functions from inside a Coalton-Calls-Lisp Bridge
+
+The simplest example is calling a function without type class constraints. This allows you to call it directly from lisp:
+```
+(coalton-toplevel
+
+  (declare int-square (Integer -> Integer))
+  (define (int-square x)
+    "Returns the square of an Integer."
+    (* x x))
+
+  (define (print-int-square x)
+    (lisp String (x)
+      (cl:format cl:nil "~a squared = ~a" x (int-square x)))))
+```
+Functions with type class constraints cannot be called this way, but instead must be called with a nested lisp form containing the argument:
+```
+(coalton-toplevel
+
+  (declare num-square ((Num :a) => :a -> :a))
+  (define (num-square x)
+    "Returns the square of an object of any type with a defined instance of num."
+    (* x x))
+
+  (define (print-num-square1 x)
+    (lisp String (x)
+      (cl:format cl:nil "~a squared = ~a" x (coalton (num-square (lisp :a () x)))))))
+```
+If you have a function with no input, Coalton declares it as a function taking `Unit` as input. Thus, it must be wrapped in a Coalton form:
+```
+(coalton-toplevel
+
+  (declare spell-2 (Unit -> String))
+  (define (spell-2)
+    "two")
+
+  (define (how-do-you-spell-2)
+    (lisp String ()
+      (cl:format cl:nil "2 is spelled '~a'" (coalton (spell-2))))))
+```
+Lambda/anonymous functions in Coalton `let` bindings can be used from Lisp, as long they are unconstrained by a type class:
+```
+(coalton-toplevel
+  (define (lambda-print-square x)
+    (let ((declare square (Integer -> Integer))
+          (square (fn (a)
+                    (* a a))))
+      (lisp :a (x square)
+        (cl:format cl:nil "~a squared = ~a" x (call-coalton-function square x))))))
+```
+
+
+
