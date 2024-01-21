@@ -287,19 +287,21 @@
          :initial-value init
          :from-end cl:t))))
 
-  (define-instance (ram:RandomAccess (Vector :t) :t)
+  (define-instance (ram:RandomAccessBase (Vector :t) :t)
     (define (ram:make n x)
       (with-initial-element n x))
     (define (ram:length a)
-      (length a))
-    (define (ram:readable? _)
-      True)
-    (define (ram:writable? _)
-      True)
+      (length a)))
+
+  (define-instance (ram:RandomAccessReadable (Vector :t) :t)
     (define (ram:unsafe-aref a n)
-      (index-unsafe n a))
+      (index-unsafe n a)))
+
+  (define-instance (ram:RandomAccessWritable (Vector :t) :t)
     (define (ram:unsafe-set! a n x)
       (set! n x a)))
+
+  (define-instance (ram:RandomAccess (Vector :t) :t))
 
   (define-instance (Into (List :a) (Vector :a))
     (define (into lst)
