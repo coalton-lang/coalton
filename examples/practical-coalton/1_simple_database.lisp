@@ -98,8 +98,7 @@ query DSL, like:
 
 Example:
 
-(keyword-to-struct-accessor :title) => .TITLE
-"
+(keyword-to-struct-accessor :title) => .TITLE"
   (cl:intern (cl:concatenate 'cl:string (cl:string '#:.) (cl:string keyword))))
 
 (cl:defun comparison-clause (attr-keyword value var-sym)
@@ -107,8 +106,7 @@ Example:
 
 Example:
 
-(comparison-clause :rating 5 'cd) => `(== 5 (.rating cd))
-"
+(comparison-clause :rating 5 'cd) => `(== 5 (.rating cd))"
     `(== ,value (,(keyword-to-struct-accessor attr-keyword) ,var-sym)))
 
 (cl:defun comparison-clauses (var-sym clauses)
@@ -127,8 +125,7 @@ CD matches the specified criteria.
 Example:
 
 (where :rating 5 :artist ''Peter Siebel'')
-  => (fn (cd) (and (== 5 (.rating cd)) (== ''Peter Siebel'' (.artist cd))))
-"
+  => (fn (cd) (and (== 5 (.rating cd)) (== ''Peter Siebel'' (.artist cd))))"
   (with-gensyms (cd-sym)
     `(fn (,cd-sym)
        (and ,@(comparison-clauses cd-sym clauses)))))
