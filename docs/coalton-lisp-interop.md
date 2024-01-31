@@ -113,13 +113,66 @@ The pragma `(repr :lisp)` helps achieve Lisp compatibility of structures regardl
 
 **HALF-HEARTED PROMISE**: For each non-nullary constructor (say `Ctor1`), a `setf`-able accessor function called `<class-name>/<ctor-name>-_<k>` will be defined for the `k`th member of that constructor. For the example above, suppose that `Ctor1` has two fields. Then the accessor functions `FOO/CTOR1-_0` and `FOO/CTOR1-_1` will be defined. (*Note*: The naming here is subject to change.)
 
+### Simple enumerations with `(REPR :ENUM)`
+
+Types that are a just a disjoint union of nullary constructors can be represented internally as Lisp symbols by using `(REPR :ENUM)`. This can be used for both Lisp interoperation matters as well as certain efficiency matters.
+
+For example, we could represent the class of plane traveler like so:
+
+```
+(repr :enum)
+(define-type TravelerClass
+  Economy
+  Business
+  First)
+```
+
+These will be compiled into symbols:
+
+```
+COALTON-USER> (coalton (make-list Economy Business First))
+(TRAVELERCLASS/ECONOMY TRAVELERCLASS/BUSINESS TRAVELERCLASS/FIRST)
+COALTON-USER> cl::(mapcar #'type-of *)
+(COMMON-LISP:SYMBOL COMMON-LISP:SYMBOL COMMON-LISP:SYMBOL)
+```
+
 ### Wrapper types with `(REPR :TRANSPARENT)`
 
 Types with a single construtor consisting of a single field can be annotated with `(REPR :TRANSPARENT)`. This guarentees the wrapper type does not exist at runtime. The constructor function will still be generated, but it will be the identity function.
 
-### Passing Lisp types through Coalton with `(REPR :NATIVE T)`
+For example, we could represent an 8-bit gray value like so:
 
-Coalton types can be unboxed lisp types under the hood with `(repr :native T)`. See [`Vector`](https://github.com/coalton-lang/coalton/blob/main/library/vector.lisp) for an example.
+```
+(repr :transparent)
+(define-type Gray (Gray U8))
+```
+
+At runtime, a `Gray` value would just be a single byte.
+
+### Passing Lisp types through Coalton with `(REPR :NATIVE)`
+
+Coalton types can be unboxed lisp types under the hood with `(REPR :NATIVE <type>)`, where `<type>` is a Common Lisp type.
+
+For example, we could wrap Common Lisp's `cl:random-state` objects like so:
+
+```
+(repr :native cl:random-state)
+(define-type RandomState)
+
+(declare make-state (Unit -> RandomState))
+(define (make-state)
+  (lisp RandomState ()
+    (cl:make-random-state cl:t)))
+
+(declare random (RandomState -> Integer -> Integer))
+(define (random rs n)
+  (lisp Integer (rs n)
+    (cl:random n rs)))
+```
+
+Here, we used `lisp` to actually construct, type, and return our `RandomState` object, since our `define-type` doesn't itself have constructors.
+
+See [`Vector`](https://github.com/coalton-lang/coalton/blob/main/library/vector.lisp) for a more extensive example.
 
 ## Promises of `define`
 
