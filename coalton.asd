@@ -318,6 +318,7 @@
                (:file "utilities")
                (:file "tarjan-scc-tests")
                (:file "reader-tests")
+               (:file "error-tests")
                (:file "parser-tests")
                (:file "type-inference-tests")
                (:file "fundep-tests")
