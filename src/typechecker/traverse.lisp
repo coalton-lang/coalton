@@ -99,7 +99,8 @@
       :type (node-type node)
       :source (node-source node)
       :params (node-abstraction-params node)
-      :body (traverse (node-abstraction-body node) block))))
+      :body (traverse (node-abstraction-body node) block)
+      :inline-p (node-abstraction-inline-p node))))
 
   (:method ((node node-let-binding) block)
     (declare (type traverse-block block)

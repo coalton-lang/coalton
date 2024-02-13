@@ -334,7 +334,9 @@
            :if (not (zerop class-arity))
              :do (setf env (tc:set-function env codegen-sym (tc:make-function-env-entry
                                                              :name codegen-sym
-                                                             :arity class-arity)))
+                                                             :arity class-arity
+                                                             ;; FIXME: Under what circumstances would we want fundep to be inline?
+                                                             :inline-p nil)))
            :else
              :do (setf env (tc:unset-function env codegen-sym))
 
@@ -358,7 +360,9 @@
                      :if (not (zerop method-arity))
                        :do (setf env (tc:set-function env method-name (tc:make-function-env-entry
                                                                        :name method-name
-                                                                       :arity method-arity)))
+                                                                       :arity method-arity
+                                                                       ;; FIXME: Always declare methods to be inline?
+                                                                       :inline-p t)))
                      :else
                        :do (setf env (tc:unset-function env method-name))) 
 

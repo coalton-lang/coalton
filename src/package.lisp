@@ -28,8 +28,9 @@
    #:repr
    #:monomorphize
    #:specialize
-   #:unable-to-codegen)
-  
+   #:unable-to-codegen
+   #:inline)
+
   ;; Early Types
   (:export
    #:-> #:→
