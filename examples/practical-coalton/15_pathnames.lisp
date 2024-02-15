@@ -1,12 +1,4 @@
-;; To load this file, you need to load Chapter 15 from the Practical
-;; Common Lisp repository. The source code can be found at the link
-;; below. Then you can copy the Chapter 15 directory into
-;; ~/quicklisp/local-projects and run (quickload "Chapter-15").
-;; https://gigamonkeys.com/book/
-
 (in-package :cl-user)
-(ql:quickload "coalton")
-(ql:quickload "Chapter-15")
 (defpackage :practical-coalton.pathnames
   (:use
    #:coalton

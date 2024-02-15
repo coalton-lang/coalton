@@ -1,4 +1,3 @@
-;; Make sure to load :coalton and :alexandria before loading this file.
 (in-package :cl-user)
 (defpackage :practical-coalton.simple-database
   (:use
@@ -87,34 +86,35 @@
 ;;; Query DSL implemented as Common Lisp macros that generate Coalton code.
 ;;;
 
-(cl:defun keyword-to-struct-accessor (keyword)
-  "Converts a keyword to a Coalton struct accessor.
+(cl:eval-when (:compile-toplevel :load-toplevel :execute)
+  (cl:defun keyword-to-struct-accessor (keyword)
+    "Converts a keyword to a Coalton struct accessor.
 
-This is useful for converting keywords to Coalton struct accessors in the
-query DSL, like:
+  This is useful for converting keywords to Coalton struct accessors in the
+  query DSL, like:
 
-(where :rating 8), in which :rating will eventually be transformed into
-(.rating cd) in the generated Coalton code.
+  (where :rating 8), in which :rating will eventually be transformed into
+  (.rating cd) in the generated Coalton code.
 
-Example:
+  Example:
 
-(keyword-to-struct-accessor :title) => .TITLE"
-  (cl:intern (cl:concatenate 'cl:string (cl:string '#:.) (cl:string keyword))))
+  (keyword-to-struct-accessor :title) => .TITLE"
+    (cl:intern (cl:concatenate 'cl:string (cl:string '#:.) (cl:string keyword))))
 
-(cl:defun comparison-clause (attr-keyword value var-sym)
-  "Generates a comparison clause for the query DSL.
+  (cl:defun comparison-clause (attr-keyword value var-sym)
+    "Generates a comparison clause for the query DSL.
 
-Example:
+  Example:
 
-(comparison-clause :rating 5 'cd) => `(== 5 (.rating cd))"
-    `(== ,value (,(keyword-to-struct-accessor attr-keyword) ,var-sym)))
+  (comparison-clause :rating 5 'cd) => `(== 5 (.rating cd))"
+      `(== ,value (,(keyword-to-struct-accessor attr-keyword) ,var-sym)))
 
-(cl:defun comparison-clauses (var-sym clauses)
-  "Generates a list of comparison clauses for the query DSL."
-  (cl:loop while clauses
-    collecting (comparison-clause (cl:pop clauses)
-                                  (cl:pop clauses)
-                                  var-sym)))
+  (cl:defun comparison-clauses (var-sym clauses)
+    "Generates a list of comparison clauses for the query DSL."
+    (cl:loop while clauses
+      collecting (comparison-clause (cl:pop clauses)
+                                    (cl:pop clauses)
+                                    var-sym))))
 
 (cl:defmacro where (cl:&rest clauses)
   "Provides a query DSL to select records from a database.
