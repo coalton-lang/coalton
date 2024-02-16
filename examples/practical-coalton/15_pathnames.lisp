@@ -4,7 +4,8 @@
    #:coalton
    #:coalton-prelude)
   (:local-nicknames
-    (#:pth #:com.gigamonkeys.pathnames))
+    (#:pth #:com.gigamonkeys.pathnames)
+    (#:str #:coalton-library/string))
   (:export
    :list-directory
    :file-exists-p
@@ -14,7 +15,9 @@
    :pathname-as-file
    :walk-directory
    :directory-p
-   :file-p))
+   :file-p
+   :IncludeDirs
+   :ExcludeDirs))
 (in-package :practical-coalton.pathnames)
 
 (named-readtables:in-readtable coalton:coalton)
@@ -28,19 +31,9 @@
 ;;
 ;; First, we start by defining a few Coalton types that provide
 ;; a type-safe interface to the Common Lisp pathname functions.
-;; For example, in several of the Common Lisp functions a wildcard
-;; pathname is an invalid argument. Instead of checking for wildcard
-;; paths and erroring if found, we can use the type system to ensure
-;; that we never pass a wildcard path to a function that doesn't
-;; accept it.
 ;;
 ;; Second, we define a corresponding Coalton function for each
 ;; function exported by the Common Lisp pathname package.
-
-;; TODO: I'm open to any suggestions to make this code less verbose.
-;; If you count the comments at the top of the file and the package
-;; definition (which the original doesn't have), this is almost
-;; as long as the Common Lisp implementation this is wrapping!
 
 (cl:defmacro wrap-lisp-call (type function value)
   "Wrap a call to a Lisp function that returns a value of type TYPE
@@ -54,10 +47,6 @@ A nil return value is converted to None."
 
 (coalton-toplevel
 
-  (define-class (Path :a))
-
-  (define-instance (Path String))
-
   (repr :native cl:pathname)
   (define-type Pathname)
 
@@ -65,71 +54,77 @@ A nil return value is converted to None."
   (define (pathname->string pathname)
     (lisp String (pathname)
       (cl:write-to-string pathname)))
-
-  (define-instance (Path Pathname))
-
+  
   (repr :native cl:pathname)
   (define-type WildPathname)
 
-  (define-instance (Path WildPathname)))
+  ;; TODO: Is this safe? I want to be able to pass any of these
+  ;; straight into CL code so I don't have to wrap identical code
+  ;; in three separate pattern matches every time
+  (repr :native cl:t)
+  (define-type Path
+    (PathnamePath Pathname)
+    (StringPath String)
+    (WildPath WildPathname))
+  
+  (define-instance (Into Pathname Path)
+    (define (into pathname)
+      (PathnamePath pathname)))
+  
+  (define-instance (Into String Path)
+    (define (into str)
+      (StringPath str)))
+  
+  (define-instance (Into WildPathname Path)
+    (define (into wild-pathname)
+      (WildPath wild-pathname)))
+
+  (declare error-wild! (String -> Path -> Unit))
+  (define (error-wild! msg path)
+    (match path
+      ((WildPath _) (error (str:concat "Cannot pass a wild pathname into " msg))))))
 
 (coalton-toplevel
 
-  ;; TODO: It's a little unforunate that the Either type is called
-  ;; Result in Coalton, because it makes a usage to represent one of two
-  ;; possible values a little confusing. Is there a more idiomatic way
-  ;; to represent this?
-  (declare list-directory ((Result String Pathname) -> (List Pathname)))
+  (declare list-directory (Path -> (List Pathname)))
   (define (list-directory dirname)
     "Return a list of pathnames for the files in the directory named by DIRNAME."
-    (match dirname
-      ((Err str)
-       (lisp (List Pathname) (str)
-         (pth:list-directory str)))
-      ((Ok pth)
-       (lisp (List Pathname) (pth)
-         (pth:list-directory pth)))))
+    (error-wild! "list-directory" dirname)
+    (lisp (List Pathname) (dirname)
+      (pth:list-directory dirname)))
 
-  (declare file-exists-p ((Path :a) => :a -> (Optional Pathname)))
+  (declare file-exists-p (Path -> (Optional Pathname)))
   (define (file-exists-p pth)
     "Return a pathname for the file named by PTH if it exists, otherwise return None."
     (wrap-lisp-call :a pth:file-exists-p pth))
 
-  (declare directory-pathname-p ((Path :a) => :a -> (Optional :a)))
+  (declare directory-pathname-p (Path -> (Optional :a)))
   (define (directory-pathname-p pth)
     (wrap-lisp-call :a pth:directory-pathname-p pth))
 
-  (declare file-pathname-p ((Path :a) => :a -> (Optional :a)))
+  (declare file-pathname-p (Path -> (Optional :a)))
   (define (file-pathname-p pth)
     (wrap-lisp-call :a pth:file-pathname-p pth))
 
-  (declare pathname-as-directory ((Result String Pathname) -> Pathname))
+  (declare pathname-as-directory (Path -> Pathname))
   (define (pathname-as-directory pth)
-    (match pth
-      ((Err str)
-       (lisp :a (str)
-         (pth:pathname-as-directory str)))
-      ((Ok pth)
-       (lisp :a (pth)
-         (pth:pathname-as-directory pth)))))
+    (error-wild! "pathname-as-directory" pth)
+    (lisp :a (pth)
+      (pth:pathname-as-directory pth)))
 
-  (declare pathname-as-file ((Result String Pathname) -> Pathname))
+  (declare pathname-as-file (Path -> Pathname))
   (define (pathname-as-file pth)
-    (match pth
-      ((Err str)
-       (lisp :a (str)
-         (pth:pathname-as-file str)))
-      ((Ok pth)
-       (lisp :a (pth)
-         (pth:pathname-as-file pth)))))
+    (error-wild! "pathname-as-file" pth)
+    (lisp :a (pth)
+      (pth:pathname-as-file pth)))
 
-  (declare directory-p ((Path :a) => :a -> (Optional :a)))
+  (declare directory-p (Path -> (Optional :a)))
   (define (directory-p pth)
     "Return a pathname for the directory named by PTH if it is an existing directory.
 Otherwise return None."
     (wrap-lisp-call :a pth:directory-p pth))
   
-  (declare file-p ((Path :a) => :a -> (Optional :a)))
+  (declare file-p (Path -> (Optional :a)))
   (define (file-p pth)
     "Return a pathname for the file named by PTH if it is an existing file.
 Otherwise return None."
@@ -139,12 +134,11 @@ Otherwise return None."
   
   ;; Create an enum type to make the :directories argument to walk-directory
   ;; more discoverable from the type signature.
+  (repr :enum)
   (define-type WalkDirectoryOptions
     IncludeDirs
     ExcludeDirs)
   
-  ;; TODO: Is there a better way to be able to check if two WalkDirectoryOptions
-  ;; are equal? This seems inefficient at runtime and verbose.
   (define-instance (Eq WalkDirectoryOptions)
     (define (== x y)
       (match (Tuple x y)
