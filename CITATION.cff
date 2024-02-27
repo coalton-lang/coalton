@@ -1,0 +1,30 @@
+cff-version: 1.2.0
+
+type: software
+
+message: "If you use this software, please cite it as below."
+
+title: "coalton"
+
+authors:
+  - name: coalton-lang contributors
+
+version: 0.0.1
+
+license: MIT
+
+repository-code: "https://github.com/coalton-lang/coalton"
+
+url: "https://coalton-lang.github.io/"
+
+abstract: "Coalton is an efficient, statically typed functional programming language that supercharges Common Lisp."
+
+
+keywords:
+- functional
+- fp
+- "functional programming"
+- "Common Lisp"
+- Lisp
+- Haskell
+- hindley-milner
