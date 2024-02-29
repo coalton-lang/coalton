@@ -1028,7 +1028,7 @@ Rebound to NIL parsing an anonymous FN.")
                       :file file
                       :highlight :end
                       :message "Malformed while-let expression"
-                      :primary-note "exptected body")))
+                      :primary-note "expected body")))
        (let* ((*loop-label-context*
                 (if label
                     (list* label const:+default-loop-label+ *loop-label-context*)
@@ -1170,7 +1170,7 @@ Rebound to NIL parsing an anonymous FN.")
                       :file file
                       :highlight :end
                       :message "Malformed for expression"
-                      :primary-note "exptected body")))
+                      :primary-note "expected body")))
        
        (let ((*loop-label-context*
                (if label
