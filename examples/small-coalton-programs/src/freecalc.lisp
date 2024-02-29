@@ -55,7 +55,7 @@ we map over."
     (free:liftf (InputE id)))
 
   ;; 
-  ;; This lets us define programs in our arithemtic langauge
+  ;; This lets us define programs in our arithmetic language
   ;; 
 
   (define a-program
@@ -67,7 +67,7 @@ we map over."
      (pure res2)))
 
   ;;
-  ;; We now define an interpretr for our language. Uses a natural
+  ;; We now define an interpreter for our language. Uses a natural
   ;; transformation from the free monad over our expression functor
   ;; into a State monad. We use a vector of numbers for our inputs.
   ;;
