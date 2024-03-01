@@ -254,9 +254,10 @@
                              :span (parser:instance-method-definition-source method)
                              :file file
                              :message "Unknown method"
-                             :primary-note (format nil "The method ~S is not part of class ~S"
-                                                   name
-                                                   class-name))))
+                             :primary-note (let ((*package* util:+keyword-package+))
+                                             (format nil "The method ~S is not part of class ~S"
+                                                     name
+                                                     class-name)))))
 
     ;; Ensure each method is defined
     (loop :for name :being :the :hash-keys :of method-table
