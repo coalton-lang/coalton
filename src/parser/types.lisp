@@ -128,15 +128,14 @@
   (type       (util:required 'type)       :type ty                :read-only t)
   (source     (util:required 'source)     :type cons              :read-only t))
 
-(defun parse-qualified-type (form file)
-  (declare (type cst:cst form)
-           (type coalton-file file))
+(defun parse-qualified-type (form)
+  (declare (type cst:cst form))
 
   (if (cst:atom form)
 
       (make-qualified-ty
        :predicates nil
-       :type (parse-type form file)
+       :type (parse-type form)
        :source (cst:source form))
 
       (multiple-value-bind (left right)
@@ -149,50 +148,46 @@
           ((null right)
            (make-qualified-ty
             :predicates nil
-            :type (parse-type-list left (cst:source form) file)
+            :type (parse-type-list left (cst:source form))
             :source (cst:source form)))
 
           ;; (=> T -> T)
           ((and (null left) right)
            (error 'parse-error
-                  :err (coalton-error
-                        :span (cst:source (cst:first form))
-                        :file file
-                        :message "Malformed type"
-                        :primary-note "unnecessary `=>`"
-                        :help-notes
-                        (cond
-                          ;; If this is the only thing in the list then don't suggest anything
-                          ((cst:atom (cst:rest form))
-                           nil)
-                          ;; If there is nothing to the right of C then emit without list
-                          ((cst:atom (cst:rest (cst:rest form)))
-                           (list
-                            (make-coalton-error-help
-                             :span (cst:source form)
-                             :replacement
-                             (lambda (existing)
-                               (subseq existing 4 (1- (length existing))))
-                             :message "remove `=>`")))
-                          (t
-                           (list
-                            (make-coalton-error-help
-                             :span (cst:source form)
-                             :replacement
-                             (lambda (existing)
-                               (concatenate 'string
-                                            (subseq existing 0 1)
-                                            (subseq existing 4)))
-                             :message "remove `=>`")))))))
+                  :location (cst:source (cst:first form))
+                  :message "Malformed type"
+                  :primary-note "unnecessary `=>`"
+                  :help-notes
+                  (cond
+                    ;; If this is the only thing in the list then don't suggest anything
+                    ((cst:atom (cst:rest form))
+                     nil)
+                    ;; If there is nothing to the right of C then emit without list
+                    ((cst:atom (cst:rest (cst:rest form)))
+                     (list
+                      (source-error:make-help
+                       :location (cst:source form)
+                       :replacement
+                       (lambda (existing)
+                         (subseq existing 4 (1- (length existing))))
+                       :message "remove `=>`")))
+                    (t
+                     (list
+                      (source-error:make-help
+                       :location (cst:source form)
+                       :replacement
+                       (lambda (existing)
+                         (concatenate 'string
+                                      (subseq existing 0 1)
+                                      (subseq existing 4)))
+                       :message "remove `=>`"))))))
 
           ;; (... =>)
           ((null (rest right))
            (error 'parse-error
-                  :err (coalton-error
-                        :span (cst:source (cst:second form))
-                        :file file
-                        :message "Malformed type"
-                        :primary-note "missing type after `=>`")))
+                  :location (cst:source (cst:second form))
+                  :message "Malformed type"
+                  :primary-note "missing type after `=>`"))
 
           (t
            (let (predicates)
@@ -201,17 +196,15 @@
                                          left
                                          (cons (car (cst:source (first left)))
                                                (cdr (cst:source (car (last left)))))
-                                         file)))
+                                         )))
 
                  (loop :for pred :in left
                        :unless (cst:consp pred)
                          :do (error 'parse-error
-                                    :err (coalton-error
-                                          :span (cst:source (cst:second form))
-                                          :file file
-                                          :message "Malformed type predicate"
-                                          :primary-note "expected predicate"))
-                       :do (push (parse-predicate (cst:listify pred) (cst:source form) file) predicates)))
+                                    :location (cst:source (cst:second form))
+                                    :message "Malformed type predicate"
+                                    :primary-note "expected predicate")
+                       :do (push (parse-predicate (cst:listify pred) (cst:source form)) predicates)))
              
              (make-qualified-ty
               :predicates (reverse predicates)
@@ -219,13 +212,12 @@
                      (cdr right)
                      (cons (car (cst:source (second right)))
                            (cdr (cst:source (car (last right)))))
-                     file)
+                     )
               :source (cst:source form))))))))
 
-(defun parse-predicate (forms source file)
+(defun parse-predicate (forms source)
   (declare (type util:cst-list forms)
            (type cons source)
-           (type coalton-file file)
            (values ty-predicate))
 
   (assert forms)
@@ -234,51 +226,44 @@
     ;; (T) ... => ....
     ((not (cst:atom (first forms)))
      (error 'parse-error
-            :err (coalton-error
-                  :span (cst:source (first forms))
-                  :file file
-                  :message "Malformed type predicate"
-                  :primary-note "expected class name"
-                  :help-notes
-                  (list
-                   (make-coalton-error-help
-                    :span (cst:source (first forms))
-                    :replacement
-                    (lambda (existing)
-                      (subseq existing 1 (1- (length existing))))
-                    :message "remove parentheses")))))
+            :location (cst:source (first forms))
+            :message "Malformed type predicate"
+            :primary-note "expected class name"
+            :help-notes
+            (list
+             (source-error:make-help
+              :location (cst:source (first forms))
+              :replacement
+              (lambda (existing)
+                (subseq existing 1 (1- (length existing))))
+              :message "remove parentheses"))))
 
     ;; "T" ... => ...
     ((not (identifierp (cst:raw (first forms))))
      (error 'parse-error
-            :err (coalton-error
-                  :span (cst:source (first forms))
-                  :file file
-                  :message "Malformed type predicate"
-                  :primary-note "expected identifier")))
+            :location (cst:source (first forms))
+            :message "Malformed type predicate"
+            :primary-note "expected identifier"))
 
     (t
      (let ((name (cst:raw (first forms)))
            (name-src (cst:source (first forms))))
        (when (= 1 (length forms))
          (error 'parse-error
-                :err (coalton-error
-                      :span (cst:source (first forms))
-                      :file file
-                      :message "Malformed type predicate"
-                      :primary-note "expected predicate")))
+                :location (cst:source (first forms))
+                :message "Malformed type predicate"
+                :primary-note "expected predicate"))
 
        (make-ty-predicate
         :class (make-identifier-src
                 :name name
                 :source name-src)
         :types (loop :for form :in (cdr forms)
-                     :collect (parse-type form file))
+                     :collect (parse-type form))
         :source source)))))
 
-(defun parse-type (form file)
+(defun parse-type (form)
   (declare (type cst:cst form)
-           (type coalton-file file)
            (values ty &optional))
 
   (cond
@@ -292,34 +277,29 @@
 
     ((cst:atom form)
      (error 'parse-error
-            :err (coalton-error
-                  :span (cst:source form)
-                  :file file
-                  :message "Malformed type"
-                  :primary-note "expected identifier")))
+            :location (cst:source form)
+            :message "Malformed type"
+            :primary-note "expected identifier"))
 
     ;; (T)
     ((cst:atom (cst:rest form))
      (error 'parse-error
-            :err (coalton-error
-                  :span (cst:source form)
-                  :file file
-                  :message "Malformed type"
-                  :primary-note "unexpected nullary type")))
+            :location (cst:source form)
+            :message "Malformed type"
+            :primary-note "unexpected nullary type"))
 
     (t
-     (parse-type-list (cst:listify form) (cst:source form) file))))
+     (parse-type-list (cst:listify form) (cst:source form)))))
 
-(defun parse-type-list (forms source file)
+(defun parse-type-list (forms source)
   (declare (type util:cst-list forms)
            (type cons source)
-           (type coalton-file file)
            (values ty &optional))
 
   (assert forms)
 
   (if (= 1 (length forms))
-      (parse-type (first forms) file)
+      (parse-type (first forms))
 
       (multiple-value-bind (left right)
           (util:take-until (lambda (cst)
@@ -331,25 +311,21 @@
         (cond
           ((and right (null (rest right)))
            (error 'parse-error
-                  :err (coalton-error
-                        :span (cst:source (car right))
-                        :file file
-                        :message "Malformed function type"
-                        :primary-note "missing return type")))
+                  :location (cst:source (car right))
+                  :message "Malformed function type"
+                  :primary-note "missing return type"))
 
           ;; (-> ...)
           ((and (null left) right)
            (error 'parse-error
-                  :err (coalton-error
-                        :span (cst:source (car right))
-                        :file file
-                        :message "Malformed function type"
-                        :primary-note "invalid function syntax")))
+                  :location (cst:source (car right))
+                  :message "Malformed function type"
+                  :primary-note "invalid function syntax"))
 
           (t
-           (let ((ty (parse-type (car left) file)))
+           (let ((ty (parse-type (car left))))
              (loop :for form_ :in (cdr left)
-                   :for ty_ := (parse-type form_ file)
+                   :for ty_ := (parse-type form_)
                    :do (setf ty (make-tapp :from ty
                                            :to ty_
                                            :source source)))
@@ -369,5 +345,5 @@
                        (cons
                         (car (cst:source (first right)))
                         (cdr (cst:source (car (last right)))))
-                       file)
+                       )
                   :source source))))))))

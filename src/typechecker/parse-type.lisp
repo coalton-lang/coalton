@@ -30,10 +30,9 @@
 ;;; Entrypoints
 ;;;
 
-(defun parse-type (ty env file)
+(defun parse-type (ty env)
   (declare (type parser:ty ty)
            (type tc:environment env)
-           (type coalton-file file)
            (values tc:ty &optional))
 
   (let ((tvars (parser:collect-type-variables ty))
@@ -45,20 +44,15 @@
           :do (partial-type-env-add-var partial-env tvar-name))
 
     (multiple-value-bind (ty ksubs)
-        (infer-type-kinds ty
-                          tc:+kstar+
-                          nil
-                          partial-env
-                          file)
+        (infer-type-kinds ty tc:+kstar+ nil partial-env)
 
       (setf ty (tc:apply-ksubstitution ksubs ty))
       (setf ksubs (tc:kind-monomorphize-subs (tc:kind-variables ty) ksubs))
       (tc:apply-ksubstitution ksubs ty))))
 
-(defun parse-qualified-type (unparsed-ty env file)
+(defun parse-qualified-type (unparsed-ty env)
   (declare (type parser:qualified-ty unparsed-ty)
            (type tc:environment env)
-           (type coalton-file file)
            (values tc:qualified-ty &optional))
 
   (let ((tvars (parser:collect-type-variables unparsed-ty))
@@ -70,7 +64,7 @@
           :do (partial-type-env-add-var partial-env tvar-name))
 
     (multiple-value-bind (qual-ty ksubs)
-        (infer-type-kinds unparsed-ty tc:+kstar+ nil partial-env file)
+        (infer-type-kinds unparsed-ty tc:+kstar+ nil partial-env)
 
       (setf qual-ty (tc:apply-ksubstitution ksubs qual-ty))
       (setf ksubs (tc:kind-monomorphize-subs (tc:kind-variables qual-ty) ksubs))
@@ -81,28 +75,26 @@
 
              (ty (tc:qualified-ty-type qual-ty)))
 
-        (check-for-ambiguous-variables preds ty unparsed-ty file env)
-        (check-for-reducable-context preds unparsed-ty file env)
+        (check-for-ambiguous-variables preds ty unparsed-ty env)
+        (check-for-reducable-context preds unparsed-ty env)
 
         qual-ty))))
 
-(defun parse-ty-scheme (ty env file)
+(defun parse-ty-scheme (ty env)
   (declare (type parser:qualified-ty ty)
            (type tc:environment env)
-           (type coalton-file file)
            (values tc:ty-scheme &optional))
 
-  (let* ((qual-ty (parse-qualified-type ty env file))
+  (let* ((qual-ty (parse-qualified-type ty env))
 
          (tvars (tc:type-variables qual-ty)))
 
     (tc:quantify tvars qual-ty)))
 
-(defun check-for-ambiguous-variables (preds type qual-ty file env)
+(defun check-for-ambiguous-variables (preds type qual-ty env)
   (declare (type tc:ty-predicate-list preds)
            (type tc:ty type)
            (type parser:qualified-ty qual-ty)
-           (type coalton-file file)
            (type tc:environment env))
 
   (let* ((old-unambiguous-vars (tc:type-variables type))
@@ -135,51 +127,44 @@
              (single-variable (= 1 (length ambiguous-vars))))
 
         (error 'tc-error
-               :err (coalton-error
-                     :span (parser:qualified-ty-source qual-ty)
-                     :file file
-                     :message "Invalid qualified type"
-                     :primary-note (format nil "The type ~A ~{~S ~}ambiguous in the type ~S"
-                                           (if single-variable
-                                               "variable is"
-                                               "variables are")
-                                           ambiguous-vars
-                                           (tc:make-qualified-ty
-                                            :predicates preds
-                                            :type type))))))))
+               :location (parser:qualified-ty-source qual-ty)
+               
+               :message "Invalid qualified type"
+               :primary-note (format nil "The type ~A ~{~S ~}ambiguous in the type ~S"
+                                     (if single-variable
+                                         "variable is"
+                                         "variables are")
+                                     ambiguous-vars
+                                     (tc:make-qualified-ty
+                                      :predicates preds
+                                      :type type)))))))
 
-(defun check-for-reducable-context (preds qual-ty file env)
+(defun check-for-reducable-context (preds qual-ty env)
   (declare (type tc:ty-predicate-list preds)
            (type parser:qualified-ty qual-ty)
-           (type coalton-file file)
            (type tc:environment env))
   (let ((reduced-preds (tc:reduce-context env preds nil)))
     (unless (null (set-exclusive-or preds reduced-preds :test #'tc:type-predicate=))
       (warn 'error:coalton-base-warning
-             :err (coalton-error
-                   :type :warn
-                   :span (parser:qualified-ty-source qual-ty)
-                   :file file
-                   :message "Declared context can be reduced"
-                   :primary-note (if (null reduced-preds)
-                                     "declared predicates are redundant"
-                                     (format nil "context can be reduced to ~{ ~S~}"
-                                             reduced-preds)))))))
+            :location (parser:qualified-ty-source qual-ty)
+            :message "Declared context can be reduced"
+            :primary-note (if (null reduced-preds)
+                              "declared predicates are redundant"
+                              (format nil "context can be reduced to ~{ ~S~}"
+                                      reduced-preds))))))
 
 ;;;
 ;;; Kind Inference
 ;;;
 
-(defgeneric infer-type-kinds (type expected-kind ksubs env file)
-  (:method ((type parser:tyvar) expected-kind ksubs env file)
+(defgeneric infer-type-kinds (type expected-kind ksubs env)
+  (:method ((type parser:tyvar) expected-kind ksubs env)
     (declare (type tc:kind expected-kind)
-             (type tc:ksubstitution-list ksubs)
-             (type coalton-file file))
+             (type tc:ksubstitution-list ksubs))
     (let* ((tvar (partial-type-env-lookup-var
                   env
                   (parser:tyvar-name type)
-                  (parser:ty-source type)
-                  file))
+                  (parser:ty-source type)))
 
            (kvar (tc:kind-of tvar)))
 
@@ -191,41 +176,37 @@
             (values (tc:apply-ksubstitution ksubs tvar) ksubs))
         (error:coalton-internal-type-error ()
           (error 'tc-error
-                 :err (coalton-error
-                       :span (parser:ty-source type)
-                       :file file
-                       :message "Kind mismatch"
-                       :primary-note (format nil "Expected kind '~S' but variable is of kind '~S'"
-                                             expected-kind
-                                             kvar)))))))
+                 :location (parser:ty-source type)
+                 
+                 :message "Kind mismatch"
+                 :primary-note (format nil "Expected kind '~S' but variable is of kind '~S'"
+                                       expected-kind
+                                       kvar))))))
 
-  (:method ((type parser:tycon) expected-kind ksubs env file)
+  (:method ((type parser:tycon) expected-kind ksubs env)
     (declare (type tc:kind expected-kind)
              (type tc:ksubstitution-list ksubs)
              (type partial-type-env env)
-             (type coalton-file file)
              (values tc:ty tc:ksubstitution-list))
 
-    (let ((type_ (partial-type-env-lookup-type env type file)))
+    (let ((type_ (partial-type-env-lookup-type env type)))
       (handler-case
           (progn
             (setf ksubs (tc:kunify (tc:kind-of type_) expected-kind ksubs))
             (values (tc:apply-ksubstitution ksubs type_) ksubs))
         (error:coalton-internal-type-error ()
           (error 'tc-error
-                 :err (coalton-error
-                       :span (parser:ty-source type)
-                       :file file
-                       :message "Kind mismatch"
-                       :primary-note (format nil "Expected kind '~S' but got kind '~S'"
-                                             expected-kind
-                                             (tc:kind-of type_))))))))
+                 :location (parser:ty-source type)
+                 
+                 :message "Kind mismatch"
+                 :primary-note (format nil "Expected kind '~S' but got kind '~S'"
+                                       expected-kind
+                                       (tc:kind-of type_)))))))
 
-  (:method ((type parser:tapp) expected-kind ksubs env file)
+  (:method ((type parser:tapp) expected-kind ksubs env)
     (declare (type tc:kind expected-kind)
              (type tc:ksubstitution-list ksubs)
              (type partial-type-env env)
-             (type coalton-file file)
              (values tc:ty tc:ksubstitution-list &optional))
 
     (let ((fun-kind (tc:make-kvariable))
@@ -233,7 +214,7 @@
           (arg-kind (tc:make-kvariable)))
 
       (multiple-value-bind (fun-ty ksubs)
-          (infer-type-kinds (parser:tapp-from type) fun-kind ksubs env file)
+          (infer-type-kinds (parser:tapp-from type) fun-kind ksubs env)
 
         (setf fun-kind (tc:apply-ksubstitution ksubs fun-kind))
 
@@ -243,7 +224,7 @@
           (setf arg-kind (tc:apply-ksubstitution ksubs arg-kind)))
 
         (multiple-value-bind (arg-ty ksubs)
-            (infer-type-kinds (parser:tapp-to type) arg-kind ksubs env file)
+            (infer-type-kinds (parser:tapp-to type) arg-kind ksubs env)
 
           (handler-case
               (progn
@@ -253,21 +234,19 @@
                  ksubs))
             (error:coalton-internal-type-error ()
               (error 'tc-error
-                     :err (coalton-error
-                           :span (parser:ty-source (parser:tapp-from type))
-                           :file file
-                           :message "Kind mismatch"
-                           :primary-note (format nil "Expected kind '~S' but got kind '~S'"
-                                                 (tc:make-kfun
-                                                  :from (tc:apply-ksubstitution ksubs arg-kind)
-                                                  :to (tc:apply-ksubstitution ksubs expected-kind))
-                                                 (tc:apply-ksubstitution ksubs fun-kind))))))))))
+                     :location (parser:ty-source (parser:tapp-from type))
+                     
+                     :message "Kind mismatch"
+                     :primary-note (format nil "Expected kind '~S' but got kind '~S'"
+                                           (tc:make-kfun
+                                            :from (tc:apply-ksubstitution ksubs arg-kind)
+                                            :to (tc:apply-ksubstitution ksubs expected-kind))
+                                           (tc:apply-ksubstitution ksubs fun-kind)))))))))
 
-  (:method ((type parser:qualified-ty) expected-kind ksubs env file)
+  (:method ((type parser:qualified-ty) expected-kind ksubs env)
     (declare (type tc:kind expected-kind)
              (type tc:ksubstitution-list ksubs)
              (type partial-type-env env)
-             (type coalton-file file)
              (values tc:qualified-ty tc:ksubstitution-list))
     
     ;; CCL >:(
@@ -278,8 +257,7 @@
                                     (infer-predicate-kinds
                                      pred
                                      ksubs
-                                     env
-                                     file)
+                                     env)
                                   (setf ksubs ksubs_)
                                   pred))))
 
@@ -287,8 +265,7 @@
           (infer-type-kinds (parser:qualified-ty-type type)
                             tc:+kstar+
                             ksubs
-                            env
-                            file)
+                            env)
 
         (values
          (tc:make-qualified-ty
@@ -296,29 +273,27 @@
           :type ty)
          ksubs)))))
 
-(defun infer-predicate-kinds (pred ksubs env file)
+(defun infer-predicate-kinds (pred ksubs env)
   (declare (type parser:ty-predicate pred)
            (type tc:ksubstitution-list ksubs)
            (type partial-type-env env)
-           (type coalton-file file)
            (values tc:ty-predicate tc:ksubstitution-list))
 
   (let* ((class-name (parser:identifier-src-name (parser:ty-predicate-class pred)))
 
-         (class-pred (partial-type-env-lookup-class env pred file))
+         (class-pred (partial-type-env-lookup-class env pred))
 
          (class-arity (length (tc:ty-predicate-types class-pred))))
 
     ;; Check that pred has the correct number of arguments
     (unless (= class-arity (length (parser:ty-predicate-types pred)))
       (error 'tc-error
-             :err (coalton-error
-                   :span (parser:ty-predicate-source pred)
-                   :file file
-                   :message "Predicate arity mismatch"
-                   :primary-note (format nil "Expected ~D arguments but received ~D"
-                                         class-arity
-                                         (length (parser:ty-predicate-types pred))))))
+             :location (parser:ty-predicate-source pred)
+             
+             :message "Predicate arity mismatch"
+             :primary-note (format nil "Expected ~D arguments but received ~D"
+                                   class-arity
+                                   (length (parser:ty-predicate-types pred)))))
 
     (let ((types (loop :for ty :in (parser:ty-predicate-types pred)
                        :for class-ty :in (tc:ty-predicate-types class-pred)
@@ -326,8 +301,7 @@
                                     (infer-type-kinds ty
                                                       (tc:kind-of class-ty)
                                                       ksubs
-                                                      env
-                                                      file)
+                                                      env)
                                   (setf ksubs ksubs_)
                                   ty))))
       (values

@@ -30,36 +30,36 @@
                   output-stream)
     :close-stream
     (with-open-file (stream program-file)
-      (let* ((f (coalton-impl/error::make-coalton-file :stream stream :name "file"))
+      (let* ((source-error:*source* (source-error:make-displaced-source-file program-file "file" 0))
              (msg (with-output-to-string (output)
                     ;; an annotating error
-                    (coalton-impl/error::display-coalton-error
-                     output
-                     (coalton-impl/error::coalton-error
-                      :span '(76 . 321)
-                      :file f
+                    (source-error:report-source-condition
+                     (make-instance 'source-error:source-error
+                      :location '(76 . 321)
                       :message "message"
                       :primary-note "define instance form"
                       :notes (list
-                              (coalton-impl/error:make-coalton-error-note
+                              (source-error:make-note
                                :type :secondary
-                               :span  '(132 . 319)
+                               :location  '(132 . 319)
                                :message "message 2")
-                              (coalton-impl/error:make-coalton-error-note
+                              (source-error:make-note
                                :type :secondary
-                               :span  '(140 . 145)
+                               :location  '(140 . 145)
                                :message "message 3")
-                              (coalton-impl/error:make-coalton-error-note
+                              (source-error:make-note
                                :type :secondary
-                               :span  '(170 . 174)
+                               :location  '(170 . 174)
                                :message "message 4"))
                       :help-notes
                       (list
-                       (coalton-impl/error:make-coalton-error-help
-                        :span  '(289 . 291)
+                       (source-error:make-help
+                        :location  '(289 . 291)
                         :replacement (lambda (existing)
                                        (concatenate 'string "*" existing "*"))
-                        :message "message 5")))))))
+                        :message "message 5")))
+                     output))))
+
         ;; output text
         (is (string= msg "error: message
   --> file:9:2

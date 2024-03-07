@@ -22,7 +22,6 @@
    #:identifier-src-source              ; ACCESSOR
    #:identifier-src-list                ; TYPE
    #:parse-error                        ; CONDITION
-   #:parse-error-err                    ; ACCESSOR
    #:parse-list                         ; FUNCTION
    ))
 
@@ -72,12 +71,11 @@
 (define-condition parse-error (error:coalton-base-error)
   ())
 
-(defun parse-list (f list_ file)
+(defun parse-list (f list_)
   (declare (type function f)
            (type cst:cst list_)
-           (type error:coalton-file file)
            (values list))
 
   (loop :for list := list_ :then (cst:rest list)
         :while (cst:consp list)
-        :collect (funcall f (cst:first list) file)))
+        :collect (funcall f (cst:first list))))

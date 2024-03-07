@@ -39,6 +39,7 @@
                              (:file "immutable-map")
                              (:file "immutable-listmap")
                              (:file "package")))
+               (:file "source-error")
                (:file "error")
                (:module "parser"
                 :serial t

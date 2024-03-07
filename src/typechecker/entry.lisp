@@ -19,23 +19,19 @@
 
          (program (parser:rename-variables program))
 
-         (file (parser:program-file program))
-
          (env *global-environment*))
 
     (multiple-value-bind (type-definitions env)
-        (tc:toplevel-define-type (parser:program-types program) file env)
+        (tc:toplevel-define-type (parser:program-types program) env)
       (declare (ignore type-definitions))
 
       (multiple-value-bind (class-definitions env)
           (tc:toplevel-define-class (parser:program-classes program)
-                                 file
-                                 env)
+                                    env)
         (declare (ignore class-definitions))
 
         (setf env (tc:toplevel-define (parser:program-defines program)
-                                   (parser:program-declares program)
-                                   file
-                                   env))
+                                      (parser:program-declares program)
+                                      env))
 
         (values)))))
