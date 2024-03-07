@@ -17,7 +17,9 @@
    #:symbol-list                        ; TYPE
    #:string-list                        ; TYPE
    #:cst-list                           ; TYPE
-   #:cst-source-range                   ; FUNCTION
+   #:source-start                       ; FUNCTION
+   #:source-end                         ; FUNCTION
+   #:source-range                       ; FUNCTION
    #:literal-value                      ; TYPE
    #:literal-equal                      ; FUNCTION
    #:maphash-values-new                 ; FUNCTION
@@ -56,12 +58,18 @@
 (deftype cst-list ()
   '(satisfies cst-list-p))
 
-(defun cst-source-range (csts)
+(defun source-start (form)
+  (car (cst:source form)))
+
+(defun source-end (form)
+  (cdr (cst:source form)))
+
+(defun source-range (csts)
   (declare (type cst-list csts)
            (values cons))
   (cons
-   (car (cst:source (first csts)))
-   (cdr (cst:source (car (last csts))))))
+   (source-start (first csts))
+   (source-end (car (last csts)))))
 
 (defmacro debug-log (&rest vars)
   "Log names and values of VARS to standard output"

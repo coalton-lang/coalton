@@ -14,7 +14,7 @@
 (define-condition underapplied-value-warning (error:coalton-base-warning)
   ())
 
-(defun find-underapplied-values (binding file)
+(defun find-underapplied-values (binding)
   (tc:traverse
    (tc:binding-value binding)
    (tc:make-traverse-block
@@ -25,11 +25,8 @@
                   :when (and (typep elem 'tc:node)
                              (tc:function-type-p (tc:qualified-ty-type (tc:node-type elem))))
                     :do (warn 'underapplied-value-warning
-                              :err (error:coalton-error
-                                    :type :warn
-                                    :file file
-                                    :span (tc:node-source elem)
-                                    :message "Value may be underapplied"
-                                    :primary-note "discard explicitly with (let _ = ...) to ignore this warning")))
+                              :location (tc:node-source elem)
+                              :message "Value may be underapplied"
+                              :primary-note "discard explicitly with (let _ = ...) to ignore this warning"))
 
             node))))

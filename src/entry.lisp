@@ -27,8 +27,6 @@
 
          (program (parser:rename-variables program))
 
-         (file (parser:program-file program))
-
          (env *global-environment*)
 
          (tc:*env-update-log* nil))
@@ -36,30 +34,26 @@
     (multiple-value-bind (type-definitions instances env)
         (tc:toplevel-define-type (parser:program-types program)
                                  (parser:program-structs program)
-                                 file
                                  env)
 
       (multiple-value-bind (class-definitions env)
           (tc:toplevel-define-class (parser:program-classes program)
-                                    file
                                     env)
 
         (multiple-value-bind (ty-instances env)
-            (tc:toplevel-define-instance (append instances (parser:program-instances program)) env file)
+            (tc:toplevel-define-instance (append instances (parser:program-instances program)) env)
 
           (multiple-value-bind (toplevel-definitions env)
               (tc:toplevel-define (parser:program-defines program)
                                   (parser:program-declares program)
-                                  file
                                   env)
 
             (multiple-value-bind (toplevel-instances)
                 (tc:toplevel-typecheck-instance ty-instances
                                                 (append instances (parser:program-instances program))
-                                                env
-                                                file)
+                                                env)
 
-              (setf env (tc:toplevel-specialize (parser:program-specializations program) env file))
+              (setf env (tc:toplevel-specialize (parser:program-specializations program) env))
 
               (let ((monomorphize-table (make-hash-table :test #'eq))
 
@@ -83,7 +77,7 @@
                                            monomorphize-table)
                                   t))
 
-                (analysis:analyze-translation-unit translation-unit env file)
+                (analysis:analyze-translation-unit translation-unit env)
 
                 (multiple-value-bind (program env)
                     (codegen:compile-translation-unit translation-unit monomorphize-table env)
@@ -108,9 +102,8 @@
                           ,program))
                    env))))))))))
 
-(defun expression-entry-point (node file)
-  (declare (type parser:node node)
-           (type error:coalton-file file))
+(defun expression-entry-point (node)
+  (declare (type parser:node node))
 
   (let ((env *global-environment*))
 
@@ -118,8 +111,7 @@
         (tc:infer-expression-type (parser:rename-variables node)
                                   (tc:make-variable)
                                   nil
-                                  (tc:make-tc-env :env env)
-                                  file)
+                                  (tc:make-tc-env :env env))
 
       (multiple-value-bind (preds subs)
           (tc:solve-fundeps env preds subs)
@@ -127,16 +119,15 @@
         (setf accessors (tc:apply-substitution subs accessors))
 
         (multiple-value-bind (accessors subs_)
-            (tc:solve-accessors accessors file env)
+            (tc:solve-accessors accessors env)
           (setf subs (tc:compose-substitution-lists subs subs_))
 
           (when accessors
             (error 'tc:tc-error
-                   :err (tc:coalton-error
-                         :span (tc:accessor-source (first accessors))
-                         :file file
-                         :message "Ambiguous accessor"
-                         :primary-note "accessor is ambiguous")))
+                   :location (tc:accessor-source (first accessors))
+                   
+                   :message "Ambiguous accessor"
+                   :primary-note "accessor is ambiguous"))
 
           (let* ((preds (tc:reduce-context env preds subs))
                  (subs (tc:compose-substitution-lists
@@ -171,46 +162,24 @@
                                (tc:ty-scheme-type scheme))))
 
               (error 'tc:tc-error
-                     :err (error:coalton-error
-                           :span (tc:node-source node)
-                           :file file
-                           :message "Unable to codegen"
-                           :primary-note (format nil
-                                                 "expression has type ~A~{ ~S~}.~{ (~S)~} => ~S with unresolved constraint~A ~S"
-                                                 (if settings:*coalton-print-unicode*
-                                                     "∀"
-                                                     "FORALL")
-                                                 tvars
-                                                 (tc:qualified-ty-predicates qual-type)
-                                                 (tc:qualified-ty-type qual-type)
-                                                 (if (= (length (tc:qualified-ty-predicates qual-type)) 1)
-                                                     ""
-                                                     "s")
-                                                 (tc:qualified-ty-predicates qual-type))
-                           :notes
-                           (list
-                            (error:make-coalton-error-note
-                             :type :secondary
-                             :span (tc:node-source node)
-                             :message "Add a type assertion with THE to resolve ambiguity")))))))))))
-
-(defun file-entry-point (filename)
-  (declare (type string filename))
-
-  (with-open-file (file-stream filename :if-does-not-exist :error)
-    (let ((coalton-file (error:make-coalton-file
-                         :stream file-stream
-                         :name filename)))
-      (multiple-value-bind (code env)
-          (entry-point (parser:read-program file-stream coalton-file :mode :file))
-
-        (setf *global-environment* env)
-
-        code))))
-
-(defun debug-file-entry-point (filename)
-  (declare (type string filename))
-
-  (let ((settings:*coalton-skip-update* t)
-        (settings:*emit-type-annotations* nil))
-    (file-entry-point filename)))
+                     :location (tc:node-source node)
+                     
+                     :message "Unable to codegen"
+                     :primary-note (format nil
+                                           "expression has type ~A~{ ~S~}.~{ (~S)~} => ~S with unresolved constraint~A ~S"
+                                           (if settings:*coalton-print-unicode*
+                                               "∀"
+                                               "FORALL")
+                                           tvars
+                                           (tc:qualified-ty-predicates qual-type)
+                                           (tc:qualified-ty-type qual-type)
+                                           (if (= (length (tc:qualified-ty-predicates qual-type)) 1)
+                                               ""
+                                               "s")
+                                           (tc:qualified-ty-predicates qual-type))
+                     :notes
+                     (list
+                      (source-error:make-note
+                       :type :secondary
+                       :location (tc:node-source node)
+                       :message "Add a type assertion with THE to resolve ambiguity"))))))))))

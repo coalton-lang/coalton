@@ -5,7 +5,6 @@
    #:coalton-impl/typechecker/parse-type)
   (:local-nicknames
    (#:util #:coalton-impl/util)
-   (#:error #:coalton-impl/error)
    (#:parser #:coalton-impl/parser)
    (#:tc #:coalton-impl/typechecker/stage-1))
   (:export
@@ -47,11 +46,10 @@
 
   (tc:qualified-ty-type (tc:fresh-inst (setf (gethash name (tc-env-ty-table env)) (tc:to-scheme (tc:make-variable))))))
 
-(defun tc-env-lookup-value (env var file)
+(defun tc-env-lookup-value (env var)
   "Lookup a variable named VAR in ENV."
   (declare (type tc-env env)
            (type parser:node-variable var)
-           (type coalton-file file)
            (values tc:ty tc:ty-predicate-list))
 
 
@@ -70,20 +68,18 @@
                                        (coalton-impl/algorithm::immutable-map-keys
                                         (tc:environment-value-environment (tc-env-env env)))))))
                        (error 'tc-error
-                              :err (coalton-error
-                                    :span (parser:node-source var)
-                                    :file file
-                                    :message "Unknown variable"
-                                    :primary-note "unknown variable"
-                                    :help-notes (mapcar
-                                                 (lambda (symbol)
-                                                   (error:make-coalton-error-help
-                                                    :span (parser:node-source var)
-                                                    :replacement (lambda (s)
-                                                                   (declare (ignore s))
-                                                                   (format nil "~S" symbol))
-                                                    :message (format nil "Did you mean ~S?" symbol)))
-                                                 matches))))))
+                              :location (parser:node-source var)
+                              :message "Unknown variable"
+                              :primary-note "unknown variable"
+                              :help-notes (mapcar
+                                           (lambda (symbol)
+                                             (source-error:make-help
+                                              :location (parser:node-source var)
+                                              :replacement (lambda (s)
+                                                             (declare (ignore s))
+                                                             (format nil "~S" symbol))
+                                              :message (format nil "Did you mean ~S?" symbol)))
+                                           matches)))))
 
          (qual-ty (tc:fresh-inst scheme))
 

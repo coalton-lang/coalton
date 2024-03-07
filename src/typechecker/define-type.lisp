@@ -63,10 +63,9 @@
 (deftype type-definition-list ()
   '(satisfies type-definition-list-p))
 
-(defun toplevel-define-type (types structs file env)
+(defun toplevel-define-type (types structs env)
   (declare (type parser:toplevel-define-type-list types)
            (type parser:toplevel-define-struct-list structs)
-           (type coalton-file file)
            (type tc:environment env)
            (values type-definition-list parser:toplevel-define-instance-list tc:environment))
 
@@ -74,15 +73,13 @@
   (check-package
    (append types structs)
    (alexandria:compose #'parser:identifier-src-name #'parser:type-definition-name)
-   (alexandria:compose #'parser:identifier-src-source #'parser:type-definition-name)
-   file)
+   (alexandria:compose #'parser:identifier-src-source #'parser:type-definition-name))
 
   ;; Ensure that all constructors are defined in the current package
   (check-package
    (mapcan (alexandria:compose #'copy-list #'parser:toplevel-define-type-ctors) types)
    (alexandria:compose #'parser:identifier-src-name #'parser:constructor-name)
-   (alexandria:compose #'parser:identifier-src-source #'parser:constructor-name)
-   file)
+   (alexandria:compose #'parser:identifier-src-source #'parser:constructor-name))
 
   ;; Ensure that there are no duplicate type definitions
   (check-duplicates
@@ -91,17 +88,16 @@
    #'parser:type-definition-source
    (lambda (first second)
      (error 'tc-error
-            :err (coalton-error
-                  :span (parser:type-definition-source first)
-                  :file file
-                  :message "Duplicate type definitions"
-                  :primary-note "first definition here"
-                  :notes
-                  (list
-                   (make-coalton-error-note
-                    :type :primary
-                    :span (parser:type-definition-source second)
-                    :message "second definition here"))))))
+            :location (parser:type-definition-source first)
+            
+            :message "Duplicate type definitions"
+            :primary-note "first definition here"
+            :notes
+            (list
+             (source-error:make-note
+              :type :primary
+              :location (parser:type-definition-source second)
+              :message "second definition here")))))
 
   ;; Ensure that there are no duplicate constructors
   ;; NOTE: structs define a constructor with the same name
@@ -112,16 +108,15 @@
    #'parser:type-definition-ctor-source
    (lambda (first second)
      (error 'tc-error
-            :err (coalton-error
-                  :span (parser:type-definition-ctor-source first)
-                  :file file
-                  :message "Duplicate constructor definitions"
-                  :primary-note "first definition here"
-                  :notes
-                  (list (make-coalton-error-note
-                         :type :primary
-                         :span (parser:type-definition-ctor-source second)
-                         :message "second definition here"))))))
+            :location (parser:type-definition-ctor-source first)
+            
+            :message "Duplicate constructor definitions"
+            :primary-note "first definition here"
+            :notes
+            (list (source-error:make-note
+                   :type :primary
+                   :location (parser:type-definition-ctor-source second)
+                   :message "second definition here")))))
 
   ;; Ensure that no type has duplicate type variables
   (loop :for type :in (append types structs)
@@ -131,16 +126,15 @@
              #'parser:keyword-src-source
              (lambda (first second)
                (error 'tc-error
-                      :err (coalton-error
-                            :span (parser:keyword-src-source first)
-                            :file file
-                            :message "Duplicate type variable definitions"
-                            :primary-note "first definition here"
-                            :notes
-                            (list (make-coalton-error-note
-                                   :type :primary
-                                   :span (parser:keyword-src-source second)
-                                   :message "second definition here")))))))
+                      :location (parser:keyword-src-source first)
+                      
+                      :message "Duplicate type variable definitions"
+                      :primary-note "first definition here"
+                      :notes
+                      (list (source-error:make-note
+                             :type :primary
+                             :location (parser:keyword-src-source second)
+                             :message "second definition here"))))))
 
   (let* ((type-names (mapcar (alexandria:compose #'parser:identifier-src-name
                                                  #'parser:type-definition-name)
@@ -191,7 +185,7 @@
                      :do (partial-type-env-add-type partial-env name ty))
 
            :append  (multiple-value-bind (type-definitions instances_ ksubs)
-                        (infer-define-type-scc-kinds scc partial-env file)
+                        (infer-define-type-scc-kinds scc partial-env)
                       (setf instances (append instances instances_))
                       (loop :for type :in type-definitions
 
@@ -311,10 +305,9 @@
 
   env)
 
-(defun infer-define-type-scc-kinds (types env file)
+(defun infer-define-type-scc-kinds (types env)
   (declare (type parser:type-definition-list types)
            (type partial-type-env env)
-           (type coalton-file file)
            (values type-definition-list parser:toplevel-define-instance-list))
 
   (let ((ksubs nil)
@@ -328,7 +321,7 @@
                     :for ctor-name := (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
                     :for fields := (loop :for field :in (parser:type-definition-ctor-field-types ctor)
                                          :collect (multiple-value-bind (type ksubs_)
-                                                      (infer-type-kinds field tc:+kstar+ ksubs env file)
+                                                      (infer-type-kinds field tc:+kstar+ ksubs env)
                                                     (setf ksubs ksubs_)
                                                     type))
                     :do (setf (gethash ctor-name ctor-table) fields)))
@@ -354,8 +347,7 @@
                                       (partial-type-env-lookup-var
                                        env
                                        (parser:keyword-src-name var)
-                                       (parser:keyword-src-source var)
-                                       file))
+                                       (parser:keyword-src-source var)))
                                     (parser:type-definition-vars type)))
 
              :for repr := (parser:type-definition-repr type)
@@ -375,41 +367,38 @@
                         :collect (tc:quantify-using-tvar-order tvars (tc:qualify nil ty)))
 
              :for constructor-args
-              := (loop :for ctor :in (parser:type-definition-ctors type)
-                       :for ctor-name := (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
-                       :collect (tc:apply-ksubstitution ksubs (gethash ctor-name ctor-table)))
+               := (loop :for ctor :in (parser:type-definition-ctors type)
+                        :for ctor-name := (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
+                        :collect (tc:apply-ksubstitution ksubs (gethash ctor-name ctor-table)))
 
              ;; Check that repr :enum types do not have any constructors with fields
              :when (eq repr-type :enum)
                :do (loop :for ctor :in (parser:toplevel-define-type-ctors type)
                          :unless (endp (parser:constructor-fields ctor))
                            :do (error 'tc-error
-                                      :err (coalton-error
-                                            :span (parser:ty-source (first (parser:constructor-fields ctor)))
-                                            :file file
-                                            :message "Invalid repr :enum attribute"
-                                            :primary-note "constructors of repr :enum types cannot have fields")))
+                                      :location (parser:ty-source (first (parser:constructor-fields ctor)))
+                                      
+                                      :message "Invalid repr :enum attribute"
+                                      :primary-note "constructors of repr :enum types cannot have fields"))
 
                    ;; Check that repr :transparent types have a single constructor
              :when (eq repr-type :transparent)
                :do (unless (= 1 (length (parser:type-definition-ctors type)))
                      (error 'tc-error
-                            :err (coalton-error
-                                  :span (parser:toplevel-define-type-source type)
-                                  :file file
-                                  :message "Invalid repr :transparent attribute"
-                                  :primary-note "repr :transparent types must have a single constructor")))
+                            :location (parser:toplevel-define-type-source type)
+                            
+                            :message "Invalid repr :transparent attribute"
+                            :primary-note "repr :transparent types must have a single constructor"))
 
                    
                    ;; Check that the single constructor of a repr :transparent type has a single field
              :when (eq repr-type :transparent)
                :do (unless (= 1 (length (parser:type-definition-ctor-field-types (first (parser:type-definition-ctors type)))))
                      (error 'tc-error
-                            :err (coalton-error
-                                  :span (parser:type-definition-ctor-source (first (parser:type-definition-ctors type)))
-                                  :file file
-                                  :message "Invalid repr :transparent attribute"
-                                  :primary-note "constructors of repr :transparent types must have a single field")))
+                            :location (parser:type-definition-ctor-source (first (parser:type-definition-ctors type)))
+                            
+                            :message "Invalid repr :transparent attribute"
+                            :primary-note "constructors of repr :transparent types must have a single field"))
 
              :collect (let* ((ctors
                                (loop :for ctor :in (parser:type-definition-ctors type)

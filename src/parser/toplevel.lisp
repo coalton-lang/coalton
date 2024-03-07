@@ -415,7 +415,7 @@
 (defstruct (program
             (:copier nil))
   (package         (util:required 'package)         :type package                       :read-only t)
-  (file            (util:required 'file)            :type coalton-file                  :read-only t)
+  (file            (util:required 'file)            :type source-error:source           :read-only t)
   (types           (util:required 'types)           :type toplevel-define-type-list     :read-only nil)
   (structs         (util:required 'structs)         :type toplevel-define-struct-list   :read-only nil)
   (declares        (util:required 'declares)        :type toplevel-declare-list         :read-only nil)
@@ -430,10 +430,9 @@
 (defpackage #:coalton-impl/parser/read
   (:use))
 
-(defun read-program (stream file &key (mode (error "you must supply this bozo!")))
+(defun read-program (stream &key (mode (error "you must supply this bozo!")))
   "Read a PROGRAM from the COALTON-FILE."
-  (declare (type coalton-file file)
-           (type (member :file :toplevel-macro :test) mode)
+  (declare (type (member :file :toplevel-macro :test) mode)
            (values program))
 
   (let* (;; Setup eclector readtable
@@ -453,19 +452,17 @@
 
         (unless presentp
           (error 'parse-error
-                 :err (coalton-error
-                       :span (cons (- (file-position stream) 2)
-                                   (- (file-position stream) 1))
-                       :file file
-                       :message "Unexpected EOF"
-                       :primary-note "missing package form")))
+                 :location (cons (- (file-position stream) 2)
+                                 (- (file-position stream) 1))
+                 :message "Unexpected EOF"
+                 :primary-note "missing package form"))
 
-        (setf *package* (parse-package form file))))
+        (setf *package* (parse-package form))))
 
     ;; imma parsin mah program
     (let* ((program (make-program
                      :package *package*
-                     :file file
+                     :file source-error:*source*
                      :types nil
                      :structs nil
                      :declares nil
@@ -482,28 +479,24 @@
 
           (when (and eofp (eq :toplevel-macro mode))
             (error 'parse-error
-                   :err (coalton-error
-                         :span (cons (- (file-position stream) 2)
-                                     (- (file-position stream) 1))
-                         :file file
-                         :message "Unexpected EOF"
-                         :primary-note "missing close parenthesis")))
+                   :location (cons (- (file-position stream) 2)
+                                   (- (file-position stream) 1))
+                   :message "Unexpected EOF"
+                   :primary-note "missing close parenthesis"))
 
           (unless presentp
             (return))
 
-          (when (and (parse-toplevel-form form program attributes file)
+          (when (and (parse-toplevel-form form program attributes)
                      (plusp (length attributes)))
             (util:coalton-bug "parse-toplevel-form indicated that a form was parsed but did not
 consume all attributes"))))
 
       (unless (zerop (length attributes))
         (error 'parse-error
-               :err (coalton-error
-                     :span (cst:source (cdr (aref attributes 0)))
-                     :file file
-                     :message "Orphan attribute"
-                     :primary-note "attribute must be attached to another form")))
+               :location (cst:source (cdr (aref attributes 0)))
+               :message "Orphan attribute"
+               :primary-note "attribute must be attached to another form"))
 
       (setf (program-types program) (nreverse (program-types program)))
       (setf (program-structs program) (nreverse (program-structs program)))
@@ -514,7 +507,7 @@ consume all attributes"))))
 
       program)))
 
-(defun read-expression (stream file)
+(defun read-expression (stream)
   (let* (;; Setup eclector readtable
          (eclector.readtable:*readtable*
            (eclector.readtable:copy-readtable eclector.readtable:*readtable*))
@@ -528,12 +521,10 @@ consume all attributes"))))
 
       (unless presentp
         (error 'parse-error
-               :err (coalton-error
-                     :span (cons (- (file-position stream) 2)
-                                 (- (file-position stream) 1))
-                     :file file
-                     :message "Malformed coalton expression"
-                     :primary-note "missing expression")))
+               :location (cons (- (file-position stream) 2)
+                               (- (file-position stream) 1))
+               :message "Malformed coalton expression"
+               :primary-note "missing expression"))
 
       ;; Ensure there is only one form
       (multiple-value-bind (form presentp)
@@ -541,54 +532,43 @@ consume all attributes"))))
 
         (when presentp
           (error 'parse-error
-                 :err (coalton-error
-                       :span (cst:source form)
-                       :file file
-                       :message "Malformed coalton expression"
-                       :primary-note "unexpected form"))))
+                 :location (cst:source form)
+                 :message "Malformed coalton expression"
+                 :primary-note "unexpected form")))
 
-      (parse-expression form file))))
+      (parse-expression form))))
 
-(defun parse-package (form file)
+(defun parse-package (form)
   "Parses a coalton package declaration in the form of (package {name})"
   (declare (type cst:cst form)
-           (type coalton-file file)
            (values package))
 
   ;; Package declarations must start with "PACKAGE"
   (unless (string= (cst:raw (cst:first form)) "PACKAGE")
     (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source (cst:first form))
-                 :file file
-                 :message "Malformed package declaration"
-                 :primary-note "package declarations must start with `package`")))
+           :location (cst:source (cst:first form))
+           :message "Malformed package declaration"
+           :primary-note "package declarations must start with `package`"))
 
   ;; Package declarations must have a name
   (unless (cst:consp (cst:rest form))
     (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source (cst:first form))
-                 :file file
-                 :message "Malformed package declaration"
-                 :primary-note "missing package name")))
+           :location (cst:source (cst:first form))
+           :message "Malformed package declaration"
+           :primary-note "missing package name"))
 
   ;; Package declarations cannot contain more than two forms
   (when (cst:consp (cst:rest (cst:rest form)))
     (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source (cst:first (cst:rest (cst:rest form))))
-                 :file file
-                 :message "Malformed package declaration"
-                 :primary-note "unexpected forms")))
+           :location (cst:source (cst:first (cst:rest (cst:rest form))))
+           :message "Malformed package declaration"
+           :primary-note "unexpected forms"))
 
   (unless (identifierp (cst:raw (cst:second form)))
     (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source (cst:second form))
-                 :file file
-                 :message "Malformed package declaration"
-                 :primary-note "package name must be a symbol")))
+           :location (cst:source (cst:second form))
+           :message "Malformed package declaration"
+           :primary-note "package name must be a symbol"))
 
   (let* ((package-name (symbol-name (cst:raw (cst:second form))))
 
@@ -600,29 +580,24 @@ consume all attributes"))))
     package))
 
 
-(defun parse-toplevel-form (form program attributes file)
+(defun parse-toplevel-form (form program attributes)
   (declare (type cst:cst form)
            (type program program)
            (type (vector (cons attribute cst:cst)) attributes)
-           (type coalton-file file)
            (values boolean &optional))
 
   (when (cst:atom form)
     (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source form)
-                 :file file
-                 :message "Malformed toplevel form"
-                 :primary-note "Unexpected atom")))
+           :location (cst:source form)
+           :message "Malformed toplevel form"
+           :primary-note "Unexpected atom"))
 
   ;; Toplevel forms must begin with an atom
   (when (cst:consp (cst:first form))
     (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source (cst:first form))
-                 :file file
-                 :message "Malformed toplevel form"
-                 :primary-note "unexpected list")))
+           :location (cst:source (cst:first form))
+           :message "Malformed toplevel form"
+           :primary-note "unexpected list"))
 
 
 
@@ -630,7 +605,7 @@ consume all attributes"))))
     ((coalton:monomorphize)
      (vector-push-extend
       (cons
-       (parse-monomorphize form file)
+       (parse-monomorphize form)
        form)
       attributes)
 
@@ -639,14 +614,14 @@ consume all attributes"))))
     ((coalton:repr)
      (vector-push-extend
       (cons
-       (parse-repr form file)
+       (parse-repr form)
        form)
       attributes)
 
      nil)
 
     ((coalton:define)
-     (let ((define (parse-define form file))
+     (let ((define (parse-define form))
 
            monomorphize
            monomorphize-form)
@@ -654,36 +629,32 @@ consume all attributes"))))
              :do (etypecase attribute
                    (attribute-repr
                     (error 'parse-error
-                           :err (coalton-error
-                                 :span (cst:source attribute-form)
-                                 :file file
-                                 :message "Invalid target for repr attribute"
-                                 :primary-note "repr must be attached to a define-type"
-                                 :notes
-                                 (list
-                                  (make-coalton-error-note
-                                   :type :secondary
-                                   :span (node-source (toplevel-define-name define))
-                                   :message "when parsing define")))))
+                           :location (cst:source attribute-form)
+                           :message "Invalid target for repr attribute"
+                           :primary-note "repr must be attached to a define-type"
+                           :notes
+                           (list
+                            (source-error:make-note
+                             :type :secondary
+                             :location (node-source (toplevel-define-name define))
+                             :message "when parsing define"))))
 
                    (attribute-monomorphize
                     (when monomorphize
                       (error 'parse-error
-                             :err (coalton-error
-                                   :span (cst:source attribute-form)
-                                   :file file
-                                   :message "Duplicate monomorphize attribute"
-                                   :primary-note "monomorphize attribute here"
-                                   :notes
-                                   (list
-                                    (make-coalton-error-note
-                                     :type :secondary
-                                     :span (cst:source monomorphize-form)
-                                     :message "previous attribute here")
-                                    (make-coalton-error-note
-                                     :type :secondary
-                                     :span (node-source (toplevel-define-name define))
-                                     :message "when parsing define")))))
+                             :location (cst:source attribute-form)
+                             :message "Duplicate monomorphize attribute"
+                             :primary-note "monomorphize attribute here"
+                             :notes
+                             (list
+                              (source-error:make-note
+                               :type :secondary
+                               :location (cst:source monomorphize-form)
+                               :message "previous attribute here")
+                              (source-error:make-note
+                               :type :secondary
+                               :location (node-source (toplevel-define-name define))
+                               :message "when parsing define"))))
 
                     (setf monomorphize attribute)
                     (setf monomorphize-form attribute-form))))
@@ -694,7 +665,7 @@ consume all attributes"))))
        t))
 
     ((coalton:declare)
-     (let ((declare (parse-declare form file))
+     (let ((declare (parse-declare form))
 
            monomorphize
            monomorphize-form)
@@ -703,36 +674,32 @@ consume all attributes"))))
              :do (etypecase attribute
                    (attribute-repr
                     (error 'parse-error
-                           :err (coalton-error
-                                 :span (cst:source attribute-form)
-                                 :file file
-                                 :message "Invalid target for repr attribute"
-                                 :primary-note "repr must be attached to a define-type"
-                                 :notes
-                                 (list
-                                  (make-coalton-error-note
-                                   :type :secondary
-                                   :span (cst:source form)
-                                   :message "when parsing declare")))))
+                           :location (cst:source attribute-form)
+                           :message "Invalid target for repr attribute"
+                           :primary-note "repr must be attached to a define-type"
+                           :notes
+                           (list
+                            (source-error:make-note
+                             :type :secondary
+                             :location (cst:source form)
+                             :message "when parsing declare"))))
 
                    (attribute-monomorphize
                     (when monomorphize
                       (error 'parse-error
-                             :err (coalton-error
-                                   :span (cst:source attribute-form)
-                                   :file file
-                                   :message "Duplicate monomorphize attribute"
-                                   :primary-note "monomorphize attribute here"
-                                   :notes
-                                   (list
-                                    (make-coalton-error-note
-                                     :type :secondary
-                                     :span (cst:source monomorphize-form)
-                                     :message "previous attribute here")
-                                    (make-coalton-error-note
-                                     :type :secondary
-                                     :span (cst:source form)
-                                     :message "when parsing declare")))))
+                             :location (cst:source attribute-form)
+                             :message "Duplicate monomorphize attribute"
+                             :primary-note "monomorphize attribute here"
+                             :notes
+                             (list
+                              (source-error:make-note
+                               :type :secondary
+                               :location (cst:source monomorphize-form)
+                               :message "previous attribute here")
+                              (source-error:make-note
+                               :type :secondary
+                               :location (cst:source form)
+                               :message "when parsing declare"))))
 
                     (setf monomorphize attribute)
                     (setf monomorphize-form attribute-form))))
@@ -743,7 +710,7 @@ consume all attributes"))))
        t))
 
     ((coalton:define-type)
-     (let* ((type (parse-define-type form file))
+     (let* ((type (parse-define-type form))
 
             repr
             repr-form)
@@ -753,38 +720,34 @@ consume all attributes"))))
                    (attribute-repr
                     (when repr
                       (error 'parse-error
-                             :err (coalton-error
-                                   :span (cst:source attribute-form)
-                                   :file file
-                                   :message "Duplicate repr atttribute"
-                                   :primary-note "repr attribute here"
-                                   :notes
-                                   (list
-                                    (make-coalton-error-note
-                                     :type :secondary
-                                     :span (cst:source repr-form)
-                                     :message "previous attribute here")
-                                    (make-coalton-error-note
-                                     :type :secondary
-                                     :span (toplevel-define-type-head-src type)
-                                     :message "when parsing define-type")))))
+                             :location (cst:source attribute-form)
+                             :message "Duplicate repr atttribute"
+                             :primary-note "repr attribute here"
+                             :notes
+                             (list
+                              (source-error:make-note
+                               :type :secondary
+                               :location (cst:source repr-form)
+                               :message "previous attribute here")
+                              (source-error:make-note
+                               :type :secondary
+                               :location (toplevel-define-type-head-src type)
+                               :message "when parsing define-type"))))
 
                     (setf repr attribute)
                     (setf repr-form attribute-form))
 
                    (attribute-monomorphize
                     (error 'parse-error
-                           :err (coalton-error
-                                 :span (cst:source attribute-form)
-                                 :file file
-                                 :message "Invalid target for monomorphize attribute"
-                                 :primary-note "monomorphize must be attached to a define or declare form"
-                                 :notes
-                                 (list
-                                  (make-coalton-error-note
-                                   :type :secondary
-                                   :span (toplevel-define-type-head-src type)
-                                   :message "when parsing define-type")))))))
+                           :location (cst:source attribute-form)
+                           :message "Invalid target for monomorphize attribute"
+                           :primary-note "monomorphize must be attached to a define or declare form"
+                           :notes
+                           (list
+                            (source-error:make-note
+                             :type :secondary
+                             :location (toplevel-define-type-head-src type)
+                             :message "when parsing define-type"))))))
 
        (setf (fill-pointer attributes) 0)
        (setf (toplevel-define-type-repr type) repr)
@@ -793,7 +756,7 @@ consume all attributes"))))
 
     ((coalton:define-struct)
 
-     (let ((struct (parse-define-struct form file))
+     (let ((struct (parse-define-struct form))
            repr
            repr-form)
 
@@ -802,52 +765,46 @@ consume all attributes"))))
                    (attribute-repr
                     (when repr
                       (error 'parse-error
-                             :err (coalton-error
-                                   :span (cst:source attribute-form)
-                                   :file file
-                                   :message "Duplicate repr attribute"
-                                   :primary-note "repr attribute here"
-                                   :notes
-                                   (list
-                                    (make-coalton-error-note
-                                     :type :secondary
-                                     :span (cst:source repr-form)
-                                     :message "previous attribute here")
-                                    (make-coalton-error-note
-                                     :type :secondary
-                                     :span (toplevel-define-struct-head-src struct) 
-                                     :message "when parsing define-struct")))))
+                             :location (cst:source attribute-form)
+                             :message "Duplicate repr attribute"
+                             :primary-note "repr attribute here"
+                             :notes
+                             (list
+                              (source-error:make-note
+                               :type :secondary
+                               :location (cst:source repr-form)
+                               :message "previous attribute here")
+                              (source-error:make-note
+                               :type :secondary
+                               :location (toplevel-define-struct-head-src struct) 
+                               :message "when parsing define-struct"))))
 
                     (unless (eq :transparent (keyword-src-name (attribute-repr-type attribute)))
                       (error 'parse-error
-                             :err (coalton-error
-                                   :span (cst:source attribute-form)
-                                   :file file
-                                   :message "Invalid repr attribute"
-                                   :primary-note "structs can only be repr transparent"
-                                   :notes
-                                   (list
-                                    (make-coalton-error-note
-                                     :type :secondary
-                                     :span (toplevel-define-struct-head-src struct)
-                                     :message "when parsing define-struct")))))
+                             :location (cst:source attribute-form)
+                             :message "Invalid repr attribute"
+                             :primary-note "structs can only be repr transparent"
+                             :notes
+                             (list
+                              (source-error:make-note
+                               :type :secondary
+                               :location (toplevel-define-struct-head-src struct)
+                               :message "when parsing define-struct"))))
 
                     (setf repr attribute)
                     (setf repr-form attribute-form))
 
                    (attribute-monomorphize
                     (error 'parse-error
-                           :err (coalton-error
-                                 :span (cst:source attribute-form)
-                                 :file file
-                                 :message "Invalid target for monomorphize attribute"
-                                 :primary-note "monomorphize must be attached to a define or declare form"
-                                 :notes
-                                 (list
-                                  (make-coalton-error-note
-                                   :type :secondary
-                                   :span (identifier-src-source (toplevel-define-struct-name struct))
-                                   :message "when parsing define-type")))))))
+                           :location (cst:source attribute-form)
+                           :message "Invalid target for monomorphize attribute"
+                           :primary-note "monomorphize must be attached to a define or declare form"
+                           :notes
+                           (list
+                            (source-error:make-note
+                             :type :secondary
+                             :location (identifier-src-source (toplevel-define-struct-name struct))
+                             :message "when parsing define-type"))))))
 
        (setf (fill-pointer attributes) 0)
        (setf (toplevel-define-struct-repr struct) repr)
@@ -855,62 +812,56 @@ consume all attributes"))))
        t))
 
     ((coalton:define-class)
-     (let ((class (parse-define-class form file)))
+     (let ((class (parse-define-class form)))
 
        (unless (zerop (length attributes))
          (error 'parse-error
-                :err (coalton-error
-                      :span (cst:source (cdr (aref attributes 0)))
-                      :file file
-                      :message "Invalid attribute for define-class"
-                      :primary-note "define-class cannot have attributes"
-                      :notes
-                      (list
-                       (make-coalton-error-note
-                        :type :secondary
-                        :span (toplevel-define-class-head-src class)
-                        :message "while parsing define-class")))))
+                :location (cst:source (cdr (aref attributes 0)))
+                :message "Invalid attribute for define-class"
+                :primary-note "define-class cannot have attributes"
+                :notes
+                (list
+                 (source-error:make-note
+                  :type :secondary
+                  :location (toplevel-define-class-head-src class)
+                  :message "while parsing define-class"))))
 
        (push class (program-classes program))
        t))
 
     ((coalton:define-instance)
-     (let ((instance (parse-define-instance form file)))
+     (let ((instance (parse-define-instance form)))
 
        (unless (zerop (length attributes))
          (error 'parse-error
-                :err (coalton-error
-                      :span (cst:source (cdr (aref attributes 0)))
-                      :file file
-                      :message "Invalid attribute for define-instance"
-                      :primary-note "define-instance cannot have attributes"
-                      :notes
-                      (list
-                       (make-coalton-error-note
-                        :type :secondary
-                        :span (toplevel-define-instance-head-src instance)
-                        :message "while parsing define-instance")))))
+                :location (cst:source (cdr (aref attributes 0)))
+                :message "Invalid attribute for define-instance"
+                :primary-note "define-instance cannot have attributes"
+                :notes
+                (list
+                 (source-error:make-note
+                  :type :secondary
+                  :location (toplevel-define-instance-head-src instance)
+                  :message "while parsing define-instance"))))
 
 
        (push instance (program-instances program))
        t))
 
     ((coalton:specialize)
-     (let ((spec (parse-specialize form file)))
+     (let ((spec (parse-specialize form)))
 
        (unless (zerop (length attributes))
          (error 'parse-error
-                :err (coalton-error
-                      :span (cst:source (cdr (aref attributes 0)))
-                      :file file
-                      :message "Invalid attribute for specialize"
-                      :primary-note "specialize cannot have attributes"
-                      :notes
-                      (list
-                       (make-coalton-error-note
-                        :type :secondary
-                        :span (cst:source form)
-                        :message "when parsing specialize")))))
+                :location (cst:source (cdr (aref attributes 0)))
+                :message "Invalid attribute for specialize"
+                :primary-note "specialize cannot have attributes"
+                :notes
+                (list
+                 (source-error:make-note
+                  :type :secondary
+                  :location (cst:source form)
+                  :message "when parsing specialize"))))
 
        (push spec (program-specializations program))
        t))
@@ -918,38 +869,34 @@ consume all attributes"))))
     ((coalton:progn)
      (unless (zerop (length attributes))
        (error 'parse-error
-              :err (coalton-error
-                    :span (cst:source (cdr (aref attributes 0)))
-                    :file file
-                    :message "Invalid attribute for progn"
-                    :primary-note "progn cannot have attributes"
-                    :notes
-                    (list
-                     (make-coalton-error-note
-                      :type :secondary
-                      :span (cst:source form)
-                      :message "when parsing progn")))))
+              :location (cst:source (cdr (aref attributes 0)))
+              :message "Invalid attribute for progn"
+              :primary-note "progn cannot have attributes"
+              :notes
+              (list
+               (source-error:make-note
+                :type :secondary
+                :location (cst:source form)
+                :message "when parsing progn"))))
 
      (loop :for inner-form := (cst:rest form) :then (cst:rest inner-form)
            :while (not (cst:null inner-form)) :do
-             (when (and (parse-toplevel-form (cst:first inner-form) program attributes file)
+             (when (and (parse-toplevel-form (cst:first inner-form) program attributes)
                         (plusp (length attributes)))
                (util:coalton-bug "parse-toplevel-form indicated that a form was parsed but did not
 consume all attributes")))
 
      (unless (zerop (length attributes))
        (error 'parse-error
-              :err (coalton-error
-                    :span (cst:source (cdr (aref attributes 0)))
-                    :file file
-                    :message "Trailing attributes in progn"
-                    :primary-note "progn cannot have trailing attributes"
-                    :notes
-                    (list
-                     (make-coalton-error-note
-                      :type :secondary
-                      :span (cst:source form)
-                      :message "when parsing progn")))))
+              :location (cst:source (cdr (aref attributes 0)))
+              :message "Trailing attributes in progn"
+              :primary-note "progn cannot have trailing attributes"
+              :notes
+              (list
+               (source-error:make-note
+                :type :secondary
+                :location (cst:source form)
+                :message "when parsing progn"))))
      t)
 
     (t
@@ -957,24 +904,18 @@ consume all attributes")))
        ((and (cst:atom (cst:first form))
              (symbolp (cst:raw (cst:first form)))
              (macro-function (cst:raw (cst:first form))))
-        (let ((*coalton-error-context*
-                (adjoin (make-coalton-error-context
-                         :message "Error occurs within macro context. Source locations may be imprecise")
-                        *coalton-error-context*
-                        :test #'equalp)))
-          (parse-toplevel-form (expand-macro form) program attributes file)))
+        (source-error:with-source-context
+            (:macro "Error occurs within macro context. Source locations may be imprecise")
+          (parse-toplevel-form (expand-macro form) program attributes)))
 
        ((error 'parse-error
-               :err (coalton-error
-                     :span (cst:source (cst:first form))
-                     :file file
-                     :message "Invalid toplevel form"
-                     :primary-note "unknown toplevel form")))))))
+               :location (cst:source (cst:first form))
+               :message "Invalid toplevel form"
+               :primary-note "unknown toplevel form"))))))
 
 
-(defun parse-define (form file)
+(defun parse-define (form)
   (declare (type cst:cst form)
-           (type coalton-file file)
            (values toplevel-define))
 
   (assert (cst:consp form))
@@ -982,26 +923,22 @@ consume all attributes")))
   ;; (define)
   (unless (cst:consp (cst:rest form))
     (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source form)
-                 :file file
-                 :message "Malformed definition"
-                 :primary-note "expected define body")))
+           :location (cst:source form)
+           :message "Malformed definition"
+           :primary-note "expected define body"))
 
   ;; (define x)
   (unless (cst:consp (cst:rest (cst:rest form)))
     (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source form)
-                 :file file
-                 :message "Malformed definition"
-                 :primary-note "expected value")))
+           :location (cst:source form)
+           :message "Malformed definition"
+           :primary-note "expected value"))
 
   (multiple-value-bind (name params)
-      (parse-argument-list (cst:second form) file)
+      (parse-argument-list (cst:second form))
 
     (multiple-value-bind (docstring body)
-        (parse-definition-body (cst:rest (cst:rest form)) form file)
+        (parse-definition-body (cst:rest (cst:rest form)) form)
 
       (make-toplevel-define
        :name name
@@ -1012,9 +949,8 @@ consume all attributes")))
        :monomorphize nil
        :source (cst:source form)))))
 
-(defun parse-declare (form file)
+(defun parse-declare (form)
   (declare (type cst:cst form)
-           (type coalton-file file)
            (values toplevel-declare))
 
   (assert (cst:consp form))
@@ -1022,50 +958,41 @@ consume all attributes")))
   ;; (declare)
   (unless (cst:consp (cst:rest form))
     (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source form)
-                 :file file
-                 :message "Malformed declaration"
-                 :primary-note "expected body")))
+           :location (cst:source form)
+           :message "Malformed declaration"
+           :primary-note "expected body"))
 
   ;; (declare x)
   (unless (cst:consp (cst:rest (cst:rest form)))
     (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source form)
-                 :file file
-                 :message "Malformed declaration"
-                 :primary-note "expected declared type")))
+           :location (cst:source form)
+           :message "Malformed declaration"
+           :primary-note "expected declared type"))
 
   ;; (declare x y z)
   (when (cst:consp (cst:rest (cst:rest (cst:rest form))))
     (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source (cst:first (cst:rest (cst:rest (cst:rest form)))))
-                 :file file
-                 :message "Malformed declaration"
-                 :primary-note "unexpected trailing form")))
+           :location (cst:source (cst:first (cst:rest (cst:rest (cst:rest form)))))
+           :message "Malformed declaration"
+           :primary-note "unexpected trailing form"))
 
   ;; (declare 0.5 x)
   (unless (identifierp (cst:raw (cst:second form)))
     (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source (cst:second form))
-                 :file file
-                 :message "Malformed declaration"
-                 :primary-note "expected symbol")))
+           :location (cst:source (cst:second form))
+           :message "Malformed declaration"
+           :primary-note "expected symbol"))
 
   (make-toplevel-declare
    :name (make-identifier-src
           :name (cst:raw (cst:second form))
           :source (cst:source (cst:second form)))
-   :type (parse-qualified-type (cst:third form) file)
+   :type (parse-qualified-type (cst:third form))
    :monomorphize nil
    :source (cst:source form)))
 
-(defun parse-define-type (form file)
+(defun parse-define-type (form)
   (declare (type cst:cst form)
-           (type coalton-file file)
            (values toplevel-define-type))
 
   (assert (cst:consp form))
@@ -1079,21 +1006,17 @@ consume all attributes")))
     ;; (define-type)
     (unless (cst:consp (cst:rest form))
       (error 'parse-error
-             :err (coalton-error
-                   :span (cst:source form)
-                   :file file
-                   :message "Malformed type definition"
-                   :primary-note "expected body")))
+             :location (cst:source form)
+             :message "Malformed type definition"
+             :primary-note "expected body"))
 
     (cond
       ((cst:atom (cst:second form))
        (unless (identifierp (cst:raw (cst:second form)))
          (error 'parse-error
-                :err (coalton-error
-                      :span (cst:source (cst:second form))
-                      :file file
-                      :message "Malformed type definition"
-                      :primary-note "expected symbol")))
+                :location (cst:source (cst:second form))
+                :message "Malformed type definition"
+                :primary-note "expected symbol"))
 
        (setf name (make-identifier-src :name (cst:raw (cst:second form))
                                        :source (cst:source form))))
@@ -1102,28 +1025,24 @@ consume all attributes")))
        ;; (define-type ((T) ...) ...)
        (unless (cst:atom (cst:first (cst:second form)))
          (error 'parse-error
-                :err (coalton-error
-                      :span (cst:source (cst:first (cst:second form)))
-                      :file file
-                      :message "Malformed type definition"
-                      :primary-note "expected symbol"
-                      :help-notes
-                      (list
-                       (make-coalton-error-help
-                        :span (cst:source (cst:second form))
-                        :replacement
-                        (lambda (existing)
-                          (subseq existing 1 (1- (length existing))))
-                        :message "remove parentheses")))))
+                :location (cst:source (cst:first (cst:second form)))
+                :message "Malformed type definition"
+                :primary-note "expected symbol"
+                :help-notes
+                (list
+                 (source-error:make-help
+                  :location (cst:source (cst:second form))
+                  :replacement
+                  (lambda (existing)
+                    (subseq existing 1 (1- (length existing))))
+                  :message "remove parentheses"))))
 
        ;; (define-type (1 ...) ...)
        (unless (identifierp (cst:raw (cst:first (cst:second form))))
          (error 'parse-error
-                :err (coalton-error
-                      :span (cst:source (cst:first (cst:second form)))
-                      :file file
-                      :message "Malformed type definition"
-                      :primary-note "expected symbol")))
+                :location (cst:source (cst:first (cst:second form)))
+                :message "Malformed type definition"
+                :primary-note "expected symbol"))
 
        (setf name (make-identifier-src :name (cst:raw (cst:first (cst:second form)))
                                        :source (cst:source (cst:first (cst:second form)))))
@@ -1131,23 +1050,21 @@ consume all attributes")))
        ;; (define-type (T) ...)
        (when (cst:atom (cst:rest (cst:second form)))
          (error 'parse-error
-                :err (coalton-error
-                      :span (cst:source (cst:second form))
-                      :file file
-                      :message "Malformed type definition"
-                      :primary-note "nullary types should not have parentheses"
-                      :help-notes
-                      (list
-                       (make-coalton-error-help
-                        :span (cst:source (cst:second form))
-                        :replacement
-                        (lambda (existing)
-                          (subseq existing 1 (1- (length existing))))
-                        :message "remove unnecessary parentheses")))))
+                :location (cst:source (cst:second form))
+                :message "Malformed type definition"
+                :primary-note "nullary types should not have parentheses"
+                :help-notes
+                (list
+                 (source-error:make-help
+                  :location (cst:source (cst:second form))
+                  :replacement
+                  (lambda (existing)
+                    (subseq existing 1 (1- (length existing))))
+                  :message "remove unnecessary parentheses"))))
 
        (loop :for vars := (cst:rest (cst:second form)) :then (cst:rest vars)
              :while (cst:consp vars)
-             :do (push (parse-type-variable (cst:first vars) file) variables))))
+             :do (push (parse-type-variable (cst:first vars)) variables))))
 
     (when (and (cst:consp (cst:rest (cst:rest form)))
                (cst:atom (cst:third form))
@@ -1160,17 +1077,16 @@ consume all attributes")))
      :docstring docstring
      :ctors (loop :for constructors_ := (cst:nthrest (if docstring 3 2) form) :then (cst:rest constructors_)
                   :while (cst:consp constructors_)
-                  :collect (parse-constructor (cst:first constructors_) form file))
+                  :collect (parse-constructor (cst:first constructors_) form))
      :repr nil
      :source (cst:source form)
      :head-src (cst:source (cst:second form)))))
 
-(defun parse-define-struct (form file)
-  (declare (type cst:cst form)
-           (type coalton-file file))
-
+(defun parse-define-struct (form)
+  (declare (type cst:cst form))
+  
   (assert (cst:consp form))
-
+  
   (let (unparsed-name
         unparsed-variables
         docstring)
@@ -1178,12 +1094,9 @@ consume all attributes")))
     ;; (define-struct)
     (unless (cst:consp (cst:rest form))
       (error 'parse-error
-             :err (coalton-error
-                   :span (cst:source form)
-                   :file file
-                   :message "Malformed struct definition"
-                   :primary-note "expected body"
-                   :highlight :end)))
+             :location (util:source-end form)
+             :message "Malformed struct definition"
+             :primary-note "expected body"))
 
     (if (cst:atom (cst:second form))
         ;; (define-struct S ...)
@@ -1201,21 +1114,20 @@ consume all attributes")))
       (setf docstring (cst:raw (cst:third form))))
 
     (make-toplevel-define-struct
-     :name (parse-identifier unparsed-name file)
+     :name (parse-identifier unparsed-name)
      :vars (when unparsed-variables
-             (parse-list #'parse-type-variable unparsed-variables file)) 
+             (parse-list #'parse-type-variable unparsed-variables)) 
      :docstring docstring
      :fields (parse-list
               #'parse-struct-field
               (cst:nthrest (if docstring 3 2) form)
-              file)
+              )
      :source (cst:source form)
      :repr nil
      :head-src (cst:source (cst:second form)))))
 
-(defun parse-define-class (form file)
+(defun parse-define-class (form)
   (declare (type cst:cst form)
-           (type coalton-file file)
            (values toplevel-define-class))
 
   (assert (cst:consp form))
@@ -1232,36 +1144,30 @@ consume all attributes")))
     ;; (define-class)
     (unless (cst:consp (cst:rest form))
       (error 'parse-error
-             :err (coalton-error
-                   :span (cst:source form)
-                   :file file
-                   :message "Malformed class definition"
-                   :primary-note "expected body")))
+             :location (cst:source form)
+             :message "Malformed class definition"
+             :primary-note "expected body"))
 
     ;; (define-class C)
     (unless (cst:consp (cst:second form))
       (error 'parse-error
-             :err (coalton-error
-                   :span (cst:source (cst:second form))
-                   :file file
-                   :message "Malformed class definition"
-                   :primary-note "expected class type variable(s)"
-                   :help-notes
-                   (list
-                    (make-coalton-error-help
-                     :span (cst:source (cst:second form))
-                     :replacement
-                     (lambda (existing)
-                       (concatenate 'string "(" existing " :a)"))
-                     :message "add class type variable `:a`")))))
+             :location (cst:source (cst:second form))
+             :message "Malformed class definition"
+             :primary-note "expected class type variable(s)"
+             :help-notes
+             (list
+              (source-error:make-help
+               :location (cst:source (cst:second form))
+               :replacement
+               (lambda (existing)
+                 (concatenate 'string "(" existing " :a)"))
+               :message "add class type variable `:a`"))))
 
     (unless (cst:proper-list-p (cst:second form))
       (error 'parse-error
-             :err (coalton-error
-                   :span (cst:source (cst:second form))
-                   :file file
-                   :message "Malformed class definition"
-                   :primary-note "unexpected dotted list")))
+             :location (cst:source (cst:second form))
+             :message "Malformed class definition"
+             :primary-note "unexpected dotted list"))
 
     (multiple-value-bind (left right)
         (util:take-until (lambda (cst)
@@ -1272,44 +1178,40 @@ consume all attributes")))
       ;; (=> C ...)
       (when (and (null left) right)
         (error 'parse-error
-               :err (coalton-error
-                     :span (cst:source (cst:first (cst:second form)))
-                     :file file
-                     :message "Malformed class definition"
-                     :primary-note "unnecessary `=>`"
-                     :help-notes
-                     (cond
-                       ;; If this is the only thing in the list then don't suggest anything
-                       ((cst:atom (cst:rest (cst:second form)))
-                        nil)
-                       ;; If there is nothing to the right of C then emit without list
-                       ((cst:atom (cst:rest (cst:rest (cst:second form))))
-                        (list
-                         (make-coalton-error-help
-                          :span (cst:source (cst:second form))
-                          :replacement
-                          (lambda (existing)
-                            (subseq existing 4 (1- (length existing))))
-                          :message "remove `=>`")))
-                       (t
-                        (list
-                         (make-coalton-error-help
-                          :span (cst:source (cst:second form))
-                          :replacement
-                          (lambda (existing)
-                            (concatenate 'string
-                                         (subseq existing 0 1)
-                                         (subseq existing 4)))
-                          :message "remove `=>`")))))))
+               :location (cst:source (cst:first (cst:second form)))
+               :message "Malformed class definition"
+               :primary-note "unnecessary `=>`"
+               :help-notes
+               (cond
+                 ;; If this is the only thing in the list then don't suggest anything
+                 ((cst:atom (cst:rest (cst:second form)))
+                  nil)
+                 ;; If there is nothing to the right of C then emit without list
+                 ((cst:atom (cst:rest (cst:rest (cst:second form))))
+                  (list
+                   (source-error:make-help
+                    :location (cst:source (cst:second form))
+                    :replacement
+                    (lambda (existing)
+                      (subseq existing 4 (1- (length existing))))
+                    :message "remove `=>`")))
+                 (t
+                  (list
+                   (source-error:make-help
+                    :location (cst:source (cst:second form))
+                    :replacement
+                    (lambda (existing)
+                      (concatenate 'string
+                                   (subseq existing 0 1)
+                                   (subseq existing 4)))
+                    :message "remove `=>`"))))))
 
       ;; (... =>)
       (when (and left right (null (cdr right)))
         (error 'parse-error
-               :err (coalton-error
-                     :span (cst:source (cst:second form))
-                     :file file
-                     :message "Malformed class definition"
-                     :primary-note "missing class name")))
+               :location (cst:source (cst:second form))
+               :message "Malformed class definition"
+               :primary-note "missing class name"))
 
       (cond
         ;; No predicates
@@ -1321,11 +1223,9 @@ consume all attributes")))
         ((and (cst:consp (second right))
               (consp (cdr (cdr right))))
          (error 'parse-error
-                :err (coalton-error
-                      :span (cst:source (third right))
-                      :file file
-                      :message "Malformed class definition"
-                      :primary-note "unexpected form")))
+                :location (cst:source (third right))
+                :message "Malformed class definition"
+                :primary-note "unexpected form"))
 
         ;; (... => (...))
         ((cst:consp (second right))
@@ -1341,47 +1241,41 @@ consume all attributes")))
       ;; (define-class ((C) ...))
       (unless (cst:atom unparsed-name)
         (error 'parse-error
-               :err (coalton-error
-                     :span (cst:source unparsed-name)
-                     :file file
-                     :message "Malformed class definition"
-                     :primary-note "unnecessary parentheses"
-                     :help-notes
-                     (list
-                      (make-coalton-error-help
-                       :span (cst:source unparsed-name)
-                       :replacement
-                       (lambda (existing)
-                         (subseq existing 1 (1- (length existing))))
-                       :message "remove unnecessary parentheses")))))
+               :location (cst:source unparsed-name)
+               :message "Malformed class definition"
+               :primary-note "unnecessary parentheses"
+               :help-notes
+               (list
+                (source-error:make-help
+                 :location (cst:source unparsed-name)
+                 :replacement
+                 (lambda (existing)
+                   (subseq existing 1 (1- (length existing))))
+                 :message "remove unnecessary parentheses"))))
 
       (unless (identifierp (cst:raw unparsed-name))
         (error 'parse-error
-               :err (coalton-error
-                     :span (cst:source unparsed-name)
-                     :file file
-                     :message "Malformed class definition"
-                     :primary-note "expected symbol")))
+               :location (cst:source unparsed-name)
+               :message "Malformed class definition"
+               :primary-note "expected symbol"))
 
       (setf name (cst:raw unparsed-name))
 
       (when (null unparsed-variables)
         (error 'parse-error
-               :err (coalton-error
-                     :span (cst:source unparsed-name)
-                     :file file
-                     :message "Malformed class definition"
-                     :primary-note "expected class type variable(s)"
-                     :help-notes
-                     (list
-                      (make-coalton-error-help
-                       :span (cst:source unparsed-name)
-                       :replacement
-                       (lambda (existing)
-                         (if (cst:consp (cst:second form))
-                             (concatenate 'string existing " :a")
-                             (concatenate 'string "(" existing " :a)")))
-                       :message "add class type variable `:a`")))))
+               :location (cst:source unparsed-name)
+               :message "Malformed class definition"
+               :primary-note "expected class type variable(s)"
+               :help-notes
+               (list
+                (source-error:make-help
+                 :location (cst:source unparsed-name)
+                 :replacement
+                 (lambda (existing)
+                   (if (cst:consp (cst:second form))
+                       (concatenate 'string existing " :a")
+                       (concatenate 'string "(" existing " :a)")))
+                 :message "add class type variable `:a`"))))
 
 
       (multiple-value-bind (left right)
@@ -1389,22 +1283,22 @@ consume all attributes")))
 
         (setf variables
               (loop :for var :in left
-                    :collect (parse-type-variable var file)))
+                    :collect (parse-type-variable var)))
 
         (setf fundeps
               (loop :for fundep :in right
-                    :collect (parse-fundep fundep file))))
+                    :collect (parse-fundep fundep))))
 
       ;; (... => C ...)
       (when right
         (if (cst:atom (first left))
             ;; (C1 ... => C2 ...)
-            (setf predicates (list (parse-predicate left (util:cst-source-range left) file)))
+            (setf predicates (list (parse-predicate left (util:source-range left))))
 
             ;; ((C1 ...) (C2 ...) ... => C3 ...)
             (setf predicates
                   (loop :for pred :in left
-                        :collect (parse-predicate (cst:listify pred) (cst:source pred) file)))))
+                        :collect (parse-predicate (cst:listify pred) (cst:source pred))))))
 
       (when (and (cst:consp (cst:rest (cst:rest form)))
                  (cst:atom (cst:third form))
@@ -1414,7 +1308,7 @@ consume all attributes")))
       (setf methods
             (loop :for methods := (cst:nthrest (if docstring 3 2) form) :then (cst:rest methods)
                   :while (cst:consp methods)
-                  :collect (parse-method (cst:first methods) form file)))
+                  :collect (parse-method (cst:first methods) form)))
 
       (make-toplevel-define-class
        :name (make-identifier-src
@@ -1428,9 +1322,8 @@ consume all attributes")))
        :source (cst:source form)
        :head-src (cst:source (cst:second form))))))
 
-(defun parse-define-instance (form file)
+(defun parse-define-instance (form)
   (declare (type cst:cst form)
-           (type coalton-file file)
            (values toplevel-define-instance))
 
   (assert (cst:consp form))
@@ -1443,29 +1336,22 @@ consume all attributes")))
     ;; (define-instance)
     (unless (cst:consp (cst:rest form))
       (error 'parse-error
-             :err (coalton-error
-                   :span (cst:source form)
-                   :file file
-                   :highlight :end
-                   :message "Malformed instance definition"
-                   :primary-note "expected an instance head")))
+             :location (util:source-end form)
+             :message "Malformed instance definition"
+             :primary-note "expected an instance head"))
 
     ;; (define-instance 5)
     (unless (cst:consp (cst:second form))
       (error 'parse-error
-             :err (coalton-error
-                   :span (cst:source (cst:second form))
-                   :file file
-                   :message "Malformed instance definition"
-                   :primary-note "expected a list")))
+             :location (cst:source (cst:second form))
+             :message "Malformed instance definition"
+             :primary-note "expected a list"))
 
     (unless (cst:proper-list-p (cst:second form))
       (error 'parse-error
-             :err (coalton-error
-                   :span (cst:source (cst:second form))
-                   :file file
-                   :message "Malformed instance definition"
-                   :primary-note "unexpected dotted list")))
+             :location (cst:source (cst:second form))
+             :message "Malformed instance definition"
+             :primary-note "unexpected dotted list"))
 
     (multiple-value-bind (left right)
         (util:take-until
@@ -1484,11 +1370,9 @@ consume all attributes")))
               (cst:consp (second right))
               (consp (cdr (cdr right))))
          (error 'parse-error
-                :err (coalton-error
-                      :span (cst:source (third right))
-                      :file file
-                      :message "Malformed instance definition"
-                      :primary-note "unexpected form")))
+                :location (cst:source (third right))
+                :message "Malformed instance definition"
+                :primary-note "unexpected form"))
 
         ;; (.... => (...))
         ((and (second right)
@@ -1504,46 +1388,42 @@ consume all attributes")))
       ;; (... =>)
       (when (and left right (null (cdr right)))
         (error 'parse-error
-               :err (coalton-error
-                     :span (cst:source (first right))
-                     :file file
-                     :message "Malformed instance head"
-                     :primary-note "unexpected `=>`"
-                     :help-notes
-                     (list
-                      (make-coalton-error-help
-                       :span (cst:source (first right))
-                       :replacement
-                       (lambda (existing)
-                         (declare (ignore existing))
-                         "")
-                       :message "remove the `=>`")))))
+               :location (cst:source (first right))
+               :message "Malformed instance head"
+               :primary-note "unexpected `=>`"
+               :help-notes
+               (list
+                (source-error:make-help
+                 :location (cst:source (first right))
+                 :replacement
+                 (lambda (existing)
+                   (declare (ignore existing))
+                   "")
+                 :message "remove the `=>`"))))
 
       ;; (=> ...)
       (when (and (null left) right)
         (error 'parse-error
-               :err (coalton-error
-                     :span (cst:source (first right))
-                     :file file
-                     :message "Malformed instance head"
-                     :primary-note "unexpected `=>`"
-                     :help-notes
-                     (list
-                      (make-coalton-error-help
-                       :span (cst:source (first right))
-                       :replacement
-                       (lambda (existing)
-                         (declare (ignore existing))
-                         "")
-                       :message "remove the `=>`")))))
+               :location (cst:source (first right))
+               :message "Malformed instance head"
+               :primary-note "unexpected `=>`"
+               :help-notes
+               (list
+                (source-error:make-help
+                 :location (cst:source (first right))
+                 :replacement
+                 (lambda (existing)
+                   (declare (ignore existing))
+                   "")
+                 :message "remove the `=>`"))))
 
       (when unparsed-context
         (if (cst:atom (first unparsed-context))
-            (setf context (list (parse-predicate unparsed-context (util:cst-source-range unparsed-context) file)))
+            (setf context (list (parse-predicate unparsed-context (util:source-range unparsed-context))))
 
             (setf context
                   (loop :for unparsed :in unparsed-context
-                        :collect (parse-predicate (cst:listify unparsed) (cst:source unparsed) file)))))
+                        :collect (parse-predicate (cst:listify unparsed) (cst:source unparsed))))))
 
       (when (and (cst:consp (cst:rest (cst:rest form)))
                  (cst:atom (cst:third form))
@@ -1552,19 +1432,18 @@ consume all attributes")))
 
       (make-toplevel-define-instance
        :context context
-       :pred (parse-predicate unparsed-predicate (util:cst-source-range unparsed-predicate) file)
+       :pred (parse-predicate unparsed-predicate (util:source-range unparsed-predicate))
        :docstring docstring
        :methods (loop :for methods := (cst:nthrest (if docstring 3 2) form) :then (cst:rest methods)
                       :while (cst:consp methods)
                       :for method := (cst:first methods)
-                      :collect (parse-instance-method-definition method (cst:second form) file))
+                      :collect (parse-instance-method-definition method (cst:second form)))
        :source (cst:source form)
        :head-src (cst:source (cst:second form))
        :compiler-generated nil))))
 
-(defun parse-specialize (form file)
+(defun parse-specialize (form)
   (declare (type cst:cst form)
-           (type coalton-file file)
            (values toplevel-specialize))
 
   (assert (cst:consp form))
@@ -1572,146 +1451,122 @@ consume all attributes")))
   ;; (specialize)
   (unless (cst:consp (cst:rest form))
     (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source form)
-                 :file file
-                 :highlight :end
-                 :message "Malformed specialize declaration"
-                 :primary-note "missing from name")))
+           :location (util:source-end form)
+           :message "Malformed specialize declaration"
+           :primary-note "missing from name"))
 
   ;; (specialize f)
   (unless (cst:consp (cst:rest (cst:rest form)))
     (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source form)
-                 :file file
-                 :highlight :end
-                 :message "Malformed specialize declaration"
-                 :primary-note "missing to name")))
+           :location (util:source-end form)
+           :message "Malformed specialize declaration"
+           :primary-note "missing to name"))
 
   ;; (specialize f f2)
   (unless (cst:consp (cst:rest (cst:rest (cst:rest form))))
     (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source form)
-                 :file file
-                 :highlight :end
-                 :message "Malformed specialize declaration"
-                 :primary-note "missing type")))
+           :location (util:source-end form)
+           :message "Malformed specialize declaration"
+           :primary-note "missing type"))
 
   ;; (specialize f f2 t ....)
   (when (cst:consp (cst:rest (cst:rest (cst:rest (cst:rest form)))))
     (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source (cst:first (cst:rest (cst:rest (cst:rest (cst:rest form))))))
-                 :file file
-                 :message "Malformed specialize declaration"
-                 :primary-note "unexpected form")))
+           :location (cst:source (cst:first (cst:rest (cst:rest (cst:rest (cst:rest form))))))
+           :message "Malformed specialize declaration"
+           :primary-note "unexpected form"))
 
   (make-toplevel-specialize
-   :from (parse-variable (cst:second form) file)
-   :to (parse-variable (cst:third form) file)
-   :type (parse-type (cst:fourth form) file)
+   :from (parse-variable (cst:second form))
+   :to (parse-variable (cst:third form))
+   :type (parse-type (cst:fourth form))
    :source (cst:source form)))
 
-(defun parse-method (method-form form file)
+(defun parse-method (method-form form)
   (declare (type cst:cst method-form)
-           (type coalton-file file)
            (values method-definition))
 
   ;; m or (m)
   (unless (and (cst:consp method-form)
                (cst:consp (cst:rest method-form)))
     (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source method-form)
-                 :file file
-                 :message "Malformed method definition"
-                 :primary-note "missing method type"
-                 :notes
-                 (list
-                  (make-coalton-error-note
-                   :type :secondary
-                   :span (cst:source (cst:second form))
-                   :message "in this class definition")))))
+           :location (cst:source method-form)
+           :message "Malformed method definition"
+           :primary-note "missing method type"
+           :notes
+           (list
+            (source-error:make-note
+             :type :secondary
+             :location (cst:source (cst:second form))
+             :message "in this class definition"))))
 
   ;; (m t ...)
   (when (cst:consp (cst:rest (cst:rest method-form)))
     (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source (cst:first (cst:rest (cst:rest method-form))))
-                 :file file
-                 :message "Malformed method definition"
-                 :primary-note "unexpected trailing form"
-                 :notes
-                 (list
-                  (make-coalton-error-note
-                   :type :secondary
-                   :span (cst:source (cst:second form))
-                   :message "in this class definition")))))
+           :location (cst:source (cst:first (cst:rest (cst:rest method-form))))
+           :message "Malformed method definition"
+           :primary-note "unexpected trailing form"
+           :notes
+           (list
+            (source-error:make-note
+             :type :secondary
+             :location (cst:source (cst:second form))
+             :message "in this class definition"))))
 
   ;; (0.5 t ...)
   (unless (and (cst:atom (cst:first method-form))
                (identifierp (cst:raw (cst:first method-form))))
     (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source (cst:first method-form))
-                 :file file
-                 :message "Malformed method definition"
-                 :primary-note "expected symbol"
-                 :notes
-                 (list
-                  (make-coalton-error-note
-                   :type :secondary
-                   :span (cst:source (cst:second form))
-                   :message "in this class definition")))))
+           :location (cst:source (cst:first method-form))
+           :message "Malformed method definition"
+           :primary-note "expected symbol"
+           :notes
+           (list
+            (source-error:make-note
+             :type :secondary
+             :location (cst:source (cst:second form))
+             :message "in this class definition"))))
 
   (make-method-definition
    :name (make-identifier-src
-          :name (node-variable-name (parse-variable (cst:first method-form) file))
+          :name (node-variable-name (parse-variable (cst:first method-form)))
           :source (cst:source (cst:first method-form)))
-   :type (parse-qualified-type (cst:second method-form) file)
+   :type (parse-qualified-type (cst:second method-form))
    :source (cst:source method-form)))
 
 
-(defun parse-type-variable (form file)
+(defun parse-type-variable (form)
   (declare (type cst:cst form)
-           (type coalton-file file)
            (values keyword-src &optional))
 
   (when (cst:consp form)
     (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source form)
-                 :file file
-                 :message "Invalid type variable"
-                 :primary-note "expected keyword symbol")))
+           :location (cst:source form)
+           :message "Invalid type variable"
+           :primary-note "expected keyword symbol"))
 
   (unless (keywordp (cst:raw form))
     (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source form)
-                 :file file
-                 :message "Invalid type variable"
-                 :primary-note "expected keyword symbol"
-                 :help-notes
-                 (cond
-                   ((eq *package* (symbol-package (cst:raw form)))
-                    (list
-                     (make-coalton-error-help
-                      :span (cst:source form)
-                      :replacement
-                      (lambda (existing)
-                        (concatenate 'string ":" existing))
-                      :message "add `:` to symbol")))))))
+           :location (cst:source form)
+           :message "Invalid type variable"
+           :primary-note "expected keyword symbol"
+           :help-notes
+           (cond
+             ((eq *package* (symbol-package (cst:raw form)))
+              (list
+               (source-error:make-help
+                :location (cst:source form)
+                :replacement
+                (lambda (existing)
+                  (concatenate 'string ":" existing))
+                :message "add `:` to symbol"))))))
 
   (make-keyword-src
    :name (cst:raw form)
    :source (cst:source form)))
 
-(defun parse-constructor (form enclosing-form file)
+(defun parse-constructor (form enclosing-form)
   (declare (type cst:cst form enclosing-form)
-           (type coalton-file file)
            (values constructor))
 
   (let (unparsed-name
@@ -1725,114 +1580,97 @@ consume all attributes")))
 
     (unless (cst:atom unparsed-name)
       (error 'parse-error
-             :err (coalton-error
-                   :span (cst:source unparsed-name)
-                   :file file
-                   :message "Malformed constructor"
-                   :primary-note "expected symbol"
-                   :notes
-                   (list
-                    (make-coalton-error-note
-                     :type :secondary
-                     :span (cst:source (cst:second enclosing-form))
-                     :message "in this type definition")))))
+             :location (cst:source unparsed-name)
+             :message "Malformed constructor"
+             :primary-note "expected symbol"
+             :notes
+             (list
+              (source-error:make-note
+               :type :secondary
+               :location (cst:source (cst:second enclosing-form))
+               :message "in this type definition"))))
 
     (unless (identifierp (cst:raw unparsed-name))
       (error 'parse-error
-             :err (coalton-error
-                   :span (cst:source unparsed-name)
-                   :file file
-                   :message "Malformed constructor"
-                   :primary-note "expected symbol"
-                   :notes
-                   (list
-                    (make-coalton-error-note
-                     :type :secondary
-                     :span (cst:source (cst:second enclosing-form))
-                     :message "in this type definition")))))
+             :location (cst:source unparsed-name)
+             :message "Malformed constructor"
+             :primary-note "expected symbol"
+             :notes
+             (list
+              (source-error:make-note
+               :type :secondary
+               :location (cst:source (cst:second enclosing-form))
+               :message "in this type definition"))))
 
     (make-constructor
      :name (make-identifier-src
             :name (cst:raw unparsed-name)
             :source (cst:source unparsed-name))
      :fields (loop :for field :in unparsed-fields
-                   :collect (parse-type field file))
+                   :collect (parse-type field))
      :source (cst:source form))))
 
 
-(defun parse-argument-list (form file)
+(defun parse-argument-list (form)
   (declare (type cst:cst form)
-           (type coalton-file file)
            (values node-variable pattern-list))
 
   ;; (define x 1)
   (when (cst:atom form)
-    (return-from parse-argument-list (values (parse-variable form file) nil)))
+    (return-from parse-argument-list (values (parse-variable form) nil)))
 
   ;; (define (0.5 x y) ...)
   (unless (identifierp (cst:raw (cst:first form)))
     (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source (cst:first form))
-                 :file file
-                 :message "Malformed function definition"
-                 :primary-note "expected symbol")))
+           :location (cst:source (cst:first form))
+           :message "Malformed function definition"
+           :primary-note "expected symbol"))
 
   (values
-   (parse-variable (cst:first form) file)
+   (parse-variable (cst:first form))
    (if (cst:null (cst:rest form))
        (list
         (make-pattern-wildcard
          :source (cst:source form)))
        (loop :for vars := (cst:rest form) :then (cst:rest vars)
              :while (cst:consp vars)
-             :collect (parse-pattern (cst:first vars) file)))))
+             :collect (parse-pattern (cst:first vars))))))
 
-(defun parse-identifier (form file)
+(defun parse-identifier (form)
   (declare (type cst:cst form)
-           (type coalton-file file)
            (values identifier-src))
 
   (unless (cst:atom form)
     (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source form)
-                 :file file
-                 :message "Unexpected list"
-                 :primary-note "expected an identifier")))
+           :location (cst:source form)
+           :message "Unexpected list"
+           :primary-note "expected an identifier"))
 
   (unless (identifierp (cst:raw form))
     (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source form)
-                 :file file
-                 :message "Unexpected form"
-                 :primary-note "expected an identifier")))
+           :location (cst:source form)
+           :message "Unexpected form"
+           :primary-note "expected an identifier"))
 
   (when (string= "_" (symbol-name (cst:raw form)))
     (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source form)
-                 :file file
-                 :message "Invalid identifier"
-                 :primary-note "invalid identifier '_'")))
+           :location (cst:source form)
+           :message "Invalid identifier"
+           :primary-note "invalid identifier '_'"))
 
   (when (char= #\. (aref (symbol-name (cst:raw form)) 0))
     (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source form)
-                 :file file
-                 :message "Invalid identifier"
-                 :primary-note "identifiers cannot start with '.'")))
+           :location (cst:source form)
+           :message "Invalid identifier"
+           :primary-note "identifiers cannot start with '.'"))
 
   (make-identifier-src
    :name (cst:raw form)
    :source (cst:source form)))
 
-(defun parse-definition-body (form enclosing-form file)
+(defun parse-definition-body (form enclosing-form)
   (declare (type cst:cst form)
            (type cst:cst enclosing-form)
-           (type coalton-file file)
            (values (or null string) node-body))
 
   (let (docstring
@@ -1840,7 +1678,7 @@ consume all attributes")))
 
     ;; (define y 2)
     (when (cst:atom (cst:rest form))
-      (return-from parse-definition-body (values nil (parse-body form enclosing-form file))))
+      (return-from parse-definition-body (values nil (parse-body form enclosing-form))))
 
     (if (and (cst:atom (cst:first form))
              (stringp (cst:raw (cst:first form))))
@@ -1850,86 +1688,72 @@ consume all attributes")))
 
         (setf unparsed-body form))
 
-    (values docstring (parse-body unparsed-body enclosing-form file))))
+    (values docstring (parse-body unparsed-body enclosing-form))))
 
-(defun parse-instance-method-definition (form parent-form file)
+(defun parse-instance-method-definition (form parent-form)
   (declare (type cst:cst form)
            (type cst:cst parent-form)
-           (type coalton-file file)
            (values instance-method-definition))
 
   (let ((context-note
-          (make-coalton-error-note
+          (source-error:make-note
            :type :secondary
-           :span (cst:source parent-form)
+           :location (cst:source parent-form)
            :message "when parsing instance")))
 
     (unless (cst:consp form)
       (error 'parse-error
-             :err (coalton-error
-                   :span (cst:source form)
-                   :file file
-                   :message "Malformed method definition"
-                   :primary-note "expected list"
-                   :notes (list context-note))))
+             :location (cst:source form)
+             :message "Malformed method definition"
+             :primary-note "expected list"
+             :notes (list context-note)))
 
     (unless (cst:proper-list-p form)
       (error 'parse-error
-             :err (coalton-error
-                   :span (cst:source form)
-                   :file file
-                   :message "Malformed method definition"
-                   :primary-note "unexpected dotted list"
-                   :notes (list context-note))))
+             :location (cst:source form)
+             :message "Malformed method definition"
+             :primary-note "unexpected dotted list"
+             :notes (list context-note)))
 
     (unless (and (cst:atom (cst:first form))
                  (eq (cst:raw (cst:first form)) 'coalton:define))
       (error 'parse-error
-             :err (coalton-error
-                   :span (cst:source (cst:first form))
-                   :file file
-                   :message "Malformed method definition"
-                   :primary-note "expected method definition"
-                   :notes (list context-note))))
+             :location (cst:source (cst:first form))
+             :message "Malformed method definition"
+             :primary-note "expected method definition"
+             :notes (list context-note)))
 
     (unless (cst:consp (cst:rest form))
       (error 'parse-error
-             :err (coalton-error
-                   :span (cst:source form)
-                   :file file
-                   :message "Malformed method definition"
-                   :primary-note "expected definition name"
-                   :notes (list context-note))))
+             :location (cst:source form)
+             :message "Malformed method definition"
+             :primary-note "expected definition name"
+             :notes (list context-note)))
 
     (multiple-value-bind (name params)
-        (parse-argument-list (cst:second form) file)
+        (parse-argument-list (cst:second form))
 
       (make-instance-method-definition
        :name name
        :params params
-       :body (parse-body (cst:rest (cst:rest form)) form file)
+       :body (parse-body (cst:rest (cst:rest form)) form)
        :source (cst:source form)))))
 
-(defun parse-fundep (form file)
+(defun parse-fundep (form)
   (declare (type cst:cst form)
-           (type coalton-file file)
            (values fundep))
 
   (unless (cst:consp form)
     (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source form)
-                 :file file
-                 :message "Malformed functional dependency"
-                 :primary-note "expected a list")))
+           :location (cst:source form)
+           :message "Malformed functional dependency"
+           :primary-note "expected a list"))
 
   (unless (cst:proper-list-p form)
     (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source form)
-                 :file file
-                 :message "Malformed functional dependency"
-                 :primary-note "unexpected dotted list")))
+           :location (cst:source form)
+           :message "Malformed functional dependency"
+           :primary-note "unexpected dotted list"))
 
   (multiple-value-bind (left right)
       (util:take-until
@@ -1940,83 +1764,66 @@ consume all attributes")))
 
     (unless left
       (error 'parse-error
-             :err (coalton-error
-                   :span (cst:source form)
-                   :file file
-                   :message "Malformed functional dependency"
-                   :primary-note "expected one or more type variables")))
+             :location (cst:source form)
+             :message "Malformed functional dependency"
+             :primary-note "expected one or more type variables"))
 
     (unless (rest right)
       (error 'parse-error
-             :err (coalton-error
-                   :span (cst:source form)
-                   :file file
-                   :highlight :end
-                   :message "Malformed functional dependency"
-                   :primary-note "expected one or more type variables")))
+             :location (util:source-end form)
+             :message "Malformed functional dependency"
+             :primary-note "expected one or more type variables"))
 
     (make-fundep
      :left (loop :for var :in left
-                 :collect (parse-type-variable var file))
+                 :collect (parse-type-variable var))
      :right (loop :for var :in (cdr right)
-                  :collect (parse-type-variable var file))
+                  :collect (parse-type-variable var))
      :source (cst:source form))))
 
 
-(defun parse-monomorphize (form file)
+(defun parse-monomorphize (form)
   (declare (type cst:cst form)
-           (type coalton-file file)
            (values attribute-monomorphize))
 
   (assert (cst:consp form))
 
   (when (cst:consp (cst:rest form))
     (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source form)
-                 :file file
-                 :message "Malformed monomophize attribute"
-                 :primary-note "unexpected form")))
+           :location (cst:source form)
+           :message "Malformed monomophize attribute"
+           :primary-note "unexpected form"))
 
   (make-attribute-monomorphize
    :source (cst:source form)))
 
-(defun parse-repr (form file)
+(defun parse-repr (form)
   (declare (type cst:cst form)
-           (type coalton-file file)
            (values attribute-repr))
 
   (assert (cst:consp form))
 
   (unless (cst:consp (cst:rest form))
     (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source form)
-                 :file file
-                 :highlight :end
-                 :message "Malformed repr attribute"
-                 :primary-note "expected keyword symbol")))
+           :location (util:source-end form)
+           :message "Malformed repr attribute"
+           :primary-note "expected keyword symbol"))
 
-  (let ((type (parse-type-variable (cst:second form) file)))
+  (let ((type (parse-type-variable (cst:second form))))
     (if (eq (keyword-src-name type) :native)
 
         (progn ;; :native reprs must have an argument
           (unless (cst:consp (cst:rest (cst:rest form)))
             (error 'parse-error
-                   :err (coalton-error
-                         :span (cst:source form)
-                         :file file
-                         :highlight :end
-                         :message "Malformed repr :native attribute"
-                         :primary-note "expected a lisp type")))
+                   :location (util:source-end form)
+                   :message "Malformed repr :native attribute"
+                   :primary-note "expected a lisp type"))
 
           (when (cst:consp (cst:rest (cst:rest (cst:rest form))))
             (error 'parse-error
-                   :err (coalton-error
-                         :span (cst:source (cst:first (cst:rest (cst:rest (cst:rest form)))))
-                         :file file
-                         :message "Malformed repr :native attribute"
-                         :primary-note "unexpected form")))
+                   :location (cst:source (cst:first (cst:rest (cst:rest (cst:rest form)))))
+                   :message "Malformed repr :native attribute"
+                   :primary-note "unexpected form"))
 
           (make-attribute-repr
            :type type
@@ -2026,11 +1833,9 @@ consume all attributes")))
         (progn ;; other reprs do not have an argument
           (when (cst:consp (cst:rest (cst:rest form)))
             (error 'parse-error
-                   :err (coalton-error
-                         :span (cst:source (cst:first (cst:rest (cst:rest form))))
-                         :file file
-                         :message "Malformed repr attribute"
-                         :primary-note "unexpected form")))
+                   :location (cst:source (cst:first (cst:rest (cst:rest form))))
+                   :message "Malformed repr attribute"
+                   :primary-note "unexpected form"))
 
           (case (keyword-src-name type)
             (:lisp nil)
@@ -2038,62 +1843,49 @@ consume all attributes")))
             (:enum nil)
             (t
              (error 'parse-error
-                    :err (coalton-error
-                          :span (cst:source (cst:second form))
-                          :file file
-                          :message "Unknown repr attribute"
-                          :primary-note "expected one of :lisp, :transparent, :enum, or :native"))))
+                    :location (cst:source (cst:second form))
+                    :message "Unknown repr attribute"
+                    :primary-note "expected one of :lisp, :transparent, :enum, or :native")))
 
           (make-attribute-repr
            :type type
            :arg nil
            :source (cst:source form))))))
 
-(defun parse-struct-field (form file)
+(defun parse-struct-field (form)
   (declare (type cst:cst form)
-           (type coalton-file file)
            (values struct-field))
 
   ;; 5
   (unless (cst:consp form)
     (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source form)
-                 :file file
-                 :message "Malformed struct field"
-                 :primary-note "expected field name")))
+           :location (cst:source form)
+           :message "Malformed struct field"
+           :primary-note "expected field name"))
 
   ;; (name)
   (unless (cst:consp (cst:rest form))
     (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source form)
-                 :file file
-                 :message "Malformed struct field"
-                 :primary-note "expected field type")))
+           :location (cst:source form)
+           :message "Malformed struct field"
+           :primary-note "expected field type"))
 
   ;; (name ty ...)
   (when (cst:consp (cst:rest (cst:rest form)))
     (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source form)
-                 :file file
-                 :message "Malformed struct field"
-                 :primary-note "unexpected form"
-                 :highlight :end)))
+           :location (util:source-end form)
+           :message "Malformed struct field"
+           :primary-note "unexpected form"))
 
   ;; (5 ty)
   (unless (and (cst:atom (cst:first form))
                (symbolp (cst:raw (cst:first form))))
     (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source form)
-                 :file file
-                 :message "Malformed struct field"
-                 :primary-note "unexpected form"
-                 :highlight :end)))
+           :location (util:source-end form)
+           :message "Malformed struct field"
+           :primary-note "unexpected form"))
 
   (make-struct-field
    :name (symbol-name (cst:raw (cst:first form)))
-   :type (parse-type (cst:second form) file)
+   :type (parse-type (cst:second form))
    :source (cst:source form)))

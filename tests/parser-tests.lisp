@@ -5,21 +5,22 @@
              (directory (merge-pathnames pattern (asdf:system-source-directory "coalton/tests"))))
 
            (parse-file (file)
-             (with-open-file (stream file
-                                     :direction :input
-                                     :element-type 'character)
+             (source-error:with-source-file (stream file)
                (parser:with-reader-context stream
-                 (parser:read-program stream (error:make-coalton-file :stream stream :name (namestring file)) :mode :file))))
+                 (parser:read-program stream :mode :file))))
+
+           (error-string (condition)
+             (with-output-to-string (stream)
+               (source-error:report-source-condition condition stream)))
 
            (parse-error-text (file)
-             (with-open-file (stream file
-                                     :direction :input
-                                     :element-type 'character)
-               (handler-case
+             (handler-case
+                 (source-error:with-displaced-source-file (stream file "test" 0)
                    (parser:with-reader-context stream
-                     (parser:read-program stream (error:make-coalton-file :stream stream :name "test") :mode :file))
-                 (error:coalton-base-error (c)
-                   (princ-to-string c))))))
+                     (parser:read-program stream :mode :file))
+                   nil)
+               (error:coalton-base-error (c)
+                 (error-string c)))))
     (dolist (file (test-files "tests/parser/*.bad.coalton"))
       (let ((error-file (make-pathname :type "error"
                                        :defaults file)))
