@@ -630,7 +630,7 @@ consume all attributes"))))
     ((coalton:monomorphize)
      (vector-push-extend
       (cons
-       (parse-monomorhpize form file)
+       (parse-monomorphize form file)
        form)
       attributes)
 
@@ -1963,7 +1963,7 @@ consume all attributes")))
      :source (cst:source form))))
 
 
-(defun parse-monomorhpize (form file)
+(defun parse-monomorphize (form file)
   (declare (type cst:cst form)
            (type coalton-file file)
            (values attribute-monomorphize))
