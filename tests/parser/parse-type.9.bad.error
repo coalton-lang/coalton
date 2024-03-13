@@ -1,0 +1,8 @@
+error: Malformed type predicate
+  --> test:4:20
+   |
+ 4 |  (declare f ((T :a) ((T) :a) => T -> T))
+   |                      ^^^ expected class name
+help: remove parentheses
+ 4 | (declare f ((T :a) (T :a) => T -> T))
+   |                     -

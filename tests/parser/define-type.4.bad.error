@@ -1,0 +1,7 @@
+error: Malformed constructor
+  --> test:5:3
+   |
+ 4 |  (define-type (T :a)
+   |               ------ in this type definition
+ 5 |    ((T) :a))
+   |     ^^^ expected symbol

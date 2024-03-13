@@ -1,0 +1,5 @@
+error: Malformed repr attribute
+  --> test:4:12
+   |
+ 4 |  (repr :enum 5)
+   |              ^ unexpected form

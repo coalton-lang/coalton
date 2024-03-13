@@ -1,0 +1,5 @@
+error: Malformed while expression
+  --> test:4:23
+   |
+ 4 |  (define f (while false))
+   |                        ^ expected body

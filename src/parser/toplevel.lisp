@@ -1953,7 +1953,7 @@ consume all attributes")))
                    :file file
                    :highlight :end
                    :message "Malformed functional dependency"
-                   :primary-note "expected one ore more type variables")))
+                   :primary-note "expected one or more type variables")))
 
     (make-fundep
      :left (loop :for var :in left

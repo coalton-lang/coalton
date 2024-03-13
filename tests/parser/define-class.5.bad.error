@@ -1,0 +1,5 @@
+error: Malformed class definition
+  --> test:4:14
+   |
+ 4 |  (define-class (C :a :b =>))
+   |                ^^^^^^^^^^^^ missing class name

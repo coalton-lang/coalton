@@ -1,0 +1,5 @@
+error: Malformed function type
+  --> test:4:12
+   |
+ 4 |  (declare f (-> T))
+   |              ^^ invalid function syntax

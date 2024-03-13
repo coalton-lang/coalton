@@ -1,0 +1,5 @@
+error: Malformed type definition
+  --> test:4:0
+   |
+ 4 |  (define-type)
+   |  ^^^^^^^^^^^^^ expected body

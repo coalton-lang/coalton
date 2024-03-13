@@ -1,0 +1,8 @@
+error: Malformed type definition
+  --> test:4:13
+   |
+ 4 |  (define-type (T))
+   |               ^^^ nullary types should not have parentheses
+help: remove unnecessary parentheses
+ 4 | (define-type T)
+   |              -

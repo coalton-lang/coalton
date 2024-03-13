@@ -1,0 +1,5 @@
+error: Malformed lisp expression
+  --> test:4:16
+   |
+ 4 |  (define f (lisp))
+   |                 ^ expected expression type

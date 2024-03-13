@@ -1,0 +1,5 @@
+error: Malformed do expression
+  --> test:4:14
+   |
+ 4 |  (define x (do))
+   |               ^ expected one or more forms

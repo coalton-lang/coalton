@@ -1,0 +1,7 @@
+error: Malformed method definition
+  --> test:5:2
+   |
+ 4 |  (define-instance (C :a)
+   |                   ------ when parsing instance
+ 5 |    (1 2 . 3))
+   |    ^^^^^^^^^ unexpected dotted list

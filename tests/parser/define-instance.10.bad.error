@@ -1,0 +1,7 @@
+error: Invalid attribute for define-instance
+  --> test:4:0
+   |
+ 4 |  (repr :enum)
+   |  ^^^^^^^^^^^^ define-instance cannot have attributes
+ 5 |  (define-instance (C :a))
+   |                   ------ while parsing define-instance

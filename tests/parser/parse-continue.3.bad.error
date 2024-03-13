@@ -1,0 +1,5 @@
+error: Invalid label in continue
+  --> test:6:14
+   |
+ 6 |      (continue :not-foo)))
+   |                ^^^^^^^^ label not found in any enclosing loop

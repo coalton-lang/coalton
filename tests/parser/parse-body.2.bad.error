@@ -1,0 +1,5 @@
+error: Malformed expression
+  --> test:4:10
+   |
+ 4 |  (define x (progn 1 2 . 3))
+   |            ^^^^^^^^^^^^^^^ unexpected dotted list

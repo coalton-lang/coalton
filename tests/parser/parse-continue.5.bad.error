@@ -1,0 +1,5 @@
+error: Invalid label in continue
+  --> test:6:42
+   |
+ 6 |          (let ((continuer (fn () (continue :blech))))
+   |                                            ^^^^^^ label not found in any enclosing loop

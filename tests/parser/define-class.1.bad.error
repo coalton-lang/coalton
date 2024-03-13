@@ -1,0 +1,8 @@
+error: Malformed class definition
+  --> test:4:15
+   |
+ 4 |  (define-class (C))
+   |                 ^ expected class type variable(s)
+help: add class type variable `:a`
+ 4 | (define-class (C :a))
+   |                ----

@@ -1,0 +1,5 @@
+error: Malformed cond clause
+  --> test:4:16
+   |
+ 4 |  (define x (cond 1))
+   |                  ^ expected list

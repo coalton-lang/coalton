@@ -1,0 +1,9 @@
+error: Duplicate repr atttribute
+  --> test:5:0
+   |
+ 4 |  (repr :enum)
+   |  ------------ previous attribute here
+ 5 |  (repr :enum)
+   |  ^^^^^^^^^^^^ repr attribute here
+ 6 |  (define-type T)
+   |               - when parsing define-type

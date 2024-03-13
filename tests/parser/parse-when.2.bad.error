@@ -1,0 +1,5 @@
+error: Malformed function
+  --> test:4:18
+   |
+ 4 |  (define x (when 1))
+   |                   ^ expected body

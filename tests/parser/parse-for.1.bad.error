@@ -1,0 +1,5 @@
+error: Malformed for expression
+  --> test:4:15
+   |
+ 4 |  (define f (for))
+   |                ^ expected pattern

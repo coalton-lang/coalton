@@ -1,0 +1,5 @@
+error: Unknown repr attribute
+  --> test:4:6
+   |
+ 4 |  (repr :hello)
+   |        ^^^^^^ expected one of :lisp, :transparent, :enum, or :native

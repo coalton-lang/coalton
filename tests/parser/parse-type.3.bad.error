@@ -1,0 +1,5 @@
+error: Malformed type
+  --> test:4:14
+   |
+ 4 |  (declare f (T :a =>))
+   |                ^^ missing type after `=>`

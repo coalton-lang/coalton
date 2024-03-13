@@ -1,0 +1,5 @@
+error: Malformed let binding
+  --> test:5:10
+   |
+ 5 |   (let ((x)) 5))
+   |           ^ let bindings must have a value

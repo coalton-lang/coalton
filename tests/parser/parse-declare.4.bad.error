@@ -1,0 +1,5 @@
+error: Malformed declaration
+  --> test:4:9
+   |
+ 4 |  (declare "x" 5)
+   |           ^^^ expected symbol

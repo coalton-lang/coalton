@@ -1,0 +1,8 @@
+error: Malformed class definition
+  --> test:4:15
+   |
+ 4 |  (define-class ((C) :a))
+   |                 ^^^ unnecessary parentheses
+help: remove unnecessary parentheses
+ 4 | (define-class (C :a))
+   |                -

@@ -1,0 +1,5 @@
+error: Malformed let binding
+  --> test:5:8
+   |
+ 5 |    (let ((y 2 . 3))
+   |          ^^^^^^^^^ unexpected dotted list

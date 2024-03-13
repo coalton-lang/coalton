@@ -1,0 +1,8 @@
+error: Malformed type
+  --> test:4:12
+   |
+ 4 |  (declare f (=> T))
+   |              ^^ unnecessary `=>`
+help: remove `=>`
+ 4 | (declare f T)
+   |            -

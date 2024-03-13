@@ -1,0 +1,5 @@
+error: Invalid variable
+  --> test:5:17
+   |
+ 5 |    (let ((declare 5 (T -> T)))
+   |                   ^ expected identifier
