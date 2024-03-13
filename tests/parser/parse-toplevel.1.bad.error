@@ -1,0 +1,5 @@
+error: Malformed toplevel form
+  --> test:4:1
+   |
+ 4 |  ((define) x 5)
+   |   ^^^^^^^^ unexpected list

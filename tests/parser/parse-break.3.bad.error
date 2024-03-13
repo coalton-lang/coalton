@@ -1,0 +1,5 @@
+error: Invalid label in break
+  --> test:5:39
+   |
+ 5 |    (while :x True (return (fn () (break :x)))))
+   |                                         ^^ label not found in any enclosing loop

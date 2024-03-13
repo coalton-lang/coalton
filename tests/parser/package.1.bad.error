@@ -1,0 +1,5 @@
+error: Malformed package declaration
+  --> test:2:1
+   |
+ 2 |  (package)
+   |   ^^^^^^^ missing package name

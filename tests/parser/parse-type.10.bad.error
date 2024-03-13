@@ -1,0 +1,5 @@
+error: Malformed type
+  --> test:4:17
+   |
+ 4 |  (declare f (T -> "T"))
+   |                   ^^^ expected identifier

@@ -1,0 +1,5 @@
+error: Malformed package declaration
+  --> test:2:22
+   |
+ 2 |  (package test-package 1)
+   |                        ^ unexpected forms

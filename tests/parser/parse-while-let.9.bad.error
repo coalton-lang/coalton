@@ -1,0 +1,5 @@
+error: Malformed while-let expression
+  --> test:4:38
+   |
+ 4 |  (define f (while-let :label foo = bar))
+   |                                       ^ expected body

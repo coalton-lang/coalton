@@ -1,0 +1,5 @@
+error: Malformed if expression
+  --> test:4:14
+   |
+ 4 |  (define x (if))
+   |               ^ expected a predicate

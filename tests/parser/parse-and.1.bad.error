@@ -1,0 +1,5 @@
+error: Malformed and expression
+  --> test:4:15
+   |
+ 4 |  (define x (and))
+   |                ^ expected one or more arguments

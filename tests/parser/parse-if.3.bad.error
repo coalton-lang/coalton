@@ -1,0 +1,5 @@
+error: Malformed if expression
+  --> test:4:18
+   |
+ 4 |  (define x (if 1 2))
+   |                   ^ expected a form

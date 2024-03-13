@@ -1,0 +1,5 @@
+error: Malformed loop expression
+  --> test:4:24
+   |
+ 4 |  (define f (loop :alabel))
+   |                         ^ expected a loop body

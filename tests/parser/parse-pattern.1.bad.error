@@ -1,0 +1,5 @@
+error: Invalid pattern
+  --> test:5:7
+   |
+ 5 |    (let #C(1 2) = x)
+   |         ^^^^^^^ unknown pattern literal

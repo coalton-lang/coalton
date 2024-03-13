@@ -1,0 +1,5 @@
+error: Invalid variable
+  --> test:4:8
+   |
+ 4 |  (define "x" 1.5)
+   |          ^^^ expected identifier

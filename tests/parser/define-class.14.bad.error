@@ -1,0 +1,5 @@
+error: Malformed functional dependency
+  --> test:4:34
+   |
+ 4 |  (define-class (C :a :b (:a -> :b) :c))
+   |                                    ^^ expected a list

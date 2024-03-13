@@ -1,0 +1,5 @@
+error: Malformed match branch
+  --> test:6:4
+   |
+ 6 |      (x y . z)))
+   |      ^^^^^^^^^ unexpected dotted list

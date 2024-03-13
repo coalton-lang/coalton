@@ -1,0 +1,5 @@
+error: Malformed type predicate
+  --> test:4:12
+   |
+ 4 |  (declare f ("T" :a => T))
+   |              ^^^ expected identifier

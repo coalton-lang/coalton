@@ -1,0 +1,10 @@
+error: Invalid attribute for progn
+  --> test:4:0
+   |
+ 4 |   (repr :transparent)
+   |   ^^^^^^^^^^^^^^^^^^^ progn cannot have attributes
+ 5 |   (progn
+   |  _-
+ 6 | |   (define-type T
+ 7 | |     (T Integer)))
+   | |_________________- when parsing progn

@@ -14,6 +14,22 @@
   ;; XXX: This will not check ordering of edges within vertices
   (set-equalp dag1 dag2))
 
+(defun check-string= (context a b)
+  "Fire a test failure assertion if strings A and B differ, reporting the first position at which this is true."
+  (let ((compare-len (min (length a)
+                          (length b))))
+    (loop :for i :from 0 :below compare-len
+          :unless (char= (aref a i)
+                         (aref b i))
+            :do (is (string= a b)
+                    (format nil "Strings differ at offset ~A of ~A:~%A: ~A~%B: ~A"
+                            context i a b))
+                (return))
+    (is (= (length a)
+           (length b))
+        (format nil "Strings differ at offset ~A of ~A:~%~A~%~A"
+                context compare-len a b))))
+
 (defun check-coalton-types (toplevel-string &rest expected-types)
   (let ((*package* (make-package (or (and fiasco::*current-test*
                                           (fiasco::name-of fiasco::*current-test*))

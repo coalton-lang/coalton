@@ -1,0 +1,5 @@
+error: Malformed declaration
+  --> test:4:0
+   |
+ 4 |  (declare)
+   |  ^^^^^^^^^ expected body

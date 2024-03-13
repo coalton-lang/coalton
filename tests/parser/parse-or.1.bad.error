@@ -1,0 +1,5 @@
+error: Malformed or expression
+  --> test:4:14
+   |
+ 4 |  (define x (or))
+   |               ^ expected one or more arguments

@@ -1,0 +1,5 @@
+error: Malformed while expression
+  --> test:4:24
+   |
+ 4 |  (define f (while :label))
+   |                         ^ expected condition

@@ -1,0 +1,5 @@
+error: Malformed let binding
+  --> test:5:13
+   |
+ 5 |    (let ((x y z)) 5))
+   |               ^ unexpected trailing form

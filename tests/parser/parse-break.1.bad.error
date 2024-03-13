@@ -1,0 +1,5 @@
+error: Invalid break
+  --> test:4:10
+   |
+ 4 |  (define f (break))
+   |            ^^^^^^^ break does not appear in an enclosing loop

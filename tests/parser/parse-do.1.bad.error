@@ -1,0 +1,5 @@
+error: Malformed bind form
+  --> test:6:13
+   |
+ 6 |      (x <- mx y)
+   |               ^ unexpected trailing form

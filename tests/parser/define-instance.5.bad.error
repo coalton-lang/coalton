@@ -1,0 +1,5 @@
+error: Malformed instance definition
+  --> test:4:17
+   |
+ 4 |  (define-instance (C :a . :b))
+   |                   ^^^^^^^^^^^ unexpected dotted list

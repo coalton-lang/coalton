@@ -1,0 +1,5 @@
+error: Malformed class definition
+  --> test:4:0
+   |
+ 4 |  (define-class)
+   |  ^^^^^^^^^^^^^^ expected body

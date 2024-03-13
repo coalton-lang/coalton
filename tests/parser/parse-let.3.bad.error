@@ -1,0 +1,5 @@
+error: Malformed let
+  --> test:4:15
+   |
+ 4 |  (define f (let x 5))
+   |                 ^ expected binding list
