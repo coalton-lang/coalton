@@ -23,12 +23,12 @@
                          (aref b i))
             :do (is (string= a b)
                     (format nil "Strings differ at offset ~A of ~A:~%A: ~A~%B: ~A"
-                            context i a b))
-                (return))
+                            i context a b))
+                (return-from check-string=))
     (is (= (length a)
            (length b))
         (format nil "Strings differ at offset ~A of ~A:~%~A~%~A"
-                context compare-len a b))))
+                compare-len context a b))))
 
 (defun check-coalton-types (toplevel-string &rest expected-types)
   (let ((*package* (make-package (or (and fiasco::*current-test*
