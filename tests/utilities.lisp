@@ -15,7 +15,7 @@
   (set-equalp dag1 dag2))
 
 (defun check-string= (context a b)
-  "Fire a test failure assertion if strings A and B differ, reporting the first position at which this is true."
+  "Signal a test failure assertion if strings A and B differ, reporting the first position at which this is true."
   (let ((compare-len (min (length a)
                           (length b))))
     (loop :for i :from 0 :below compare-len
