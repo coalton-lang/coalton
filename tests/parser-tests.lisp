@@ -15,7 +15,7 @@
                    (parser:with-reader-context stream
                      (parser:read-program stream (error:make-coalton-file :stream stream :name "test") :mode :file))
                  (error:coalton-base-error (c)
-                   (format nil "~A" c))))))
+                   (princ-to-string c))))))
     (loop :for file :in (test-files "tests/parser/*.bad.coalton")
           :do (let ((error-file (make-pathname :type "error"
                                                :defaults file)))
