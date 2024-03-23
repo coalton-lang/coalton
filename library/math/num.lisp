@@ -191,7 +191,18 @@
 
        (define (- a b)
          (lisp ,type (a b)
-           (cl:values (cl:mod (cl:- a b) ,(cl:expt 2 bits)))))
+	   (cl:if (cl:< a b)
+		  (cl:cond
+		    ((cl:= ,bits 8)
+		     255)
+		    ((cl:= ,bits 16)
+		     65535)
+		    ((cl:= ,bits 32)
+		     4294967295)
+		    ((cl:= ,bits 64)
+		     18446744073709551615)
+		    (cl:t 4611686018427387903))
+		  (cl:values (cl:mod (cl:- a b) ,(cl:expt 2 bits))))))
 
        (define (* a b)
          (lisp ,type (a b)
@@ -199,7 +210,18 @@
 
        (define (fromInt x)
          (lisp ,type (x)
-           (cl:values (cl:mod x ,(cl:expt 2 bits))))))))
+	   (cl:if (cl:minusp x)
+		  (cl:cond
+		    ((cl:= ,bits 8)
+		     255)
+		    ((cl:= ,bits 16)
+		     65535)
+		    ((cl:= ,bits 32)
+		     4294967295)
+		    ((cl:= ,bits 64)
+		     18446744073709551615)
+		    (cl:t 4611686018427387903))
+		  (cl:values (cl:mod x ,(cl:expt 2 bits)))))))))
 
 (coalton-toplevel
   (define-num-checked Integer cl:identity)
