@@ -9,19 +9,12 @@
   (define-type Id
     (Id String))
 
-  (define (id->string id)
-    (match id
-      ((Id s) s)))
+  (define (id->string (Id str))
+    str)
 
   (define-instance (Eq Id)
-    (define (== x y)
-      (== (get-id x)
-          (get-id y))))
-
-  (declare get-id (Id -> String))
-  (define (get-id x)
-    (match x
-      ((Id str) str)))
+    (define (== (Id x) (Id y))
+      (== x y)))
 
   (declare enumId (Integer -> Id))
   (define (enumId n)
@@ -72,22 +65,18 @@
     (Tyvar Id Kind))
 
   (define-instance (Eq Tyvar)
-    (define (== x y)
-      (match (Tuple x y)
-        ((Tuple (Tyvar i1 k1) (Tyvar i2 k2))
-         (and (== i1 i2)
-              (== k1 k2))))))
+    (define (== (Tyvar i1 k1) (Tyvar i2 k2))
+      (and (== i1 i2)
+           (== k1 k2))))
 
 
   (define-type Tycon
     (Tycon Id Kind))
 
   (define-instance (Eq Tycon)
-    (define (== x y)
-      (match (Tuple x y)
-        ((Tuple (Tycon i1 k1) (Tycon i2 k2))
-         (and (== i1 i2)
-              (== k1 k2))))))
+    (define (== (Tycon i1 k1) (Tycon i2 k2))
+      (and (== i1 i2)
+           (== k1 k2))))
 
 
   (define tUnit (TCon (Tycon (Id "()") Star)))
@@ -121,14 +110,12 @@
     (kind (:t -> Kind)))
 
   (define-instance (HasKind Tyvar)
-    (define (kind t)
-      (match t
-        ((Tyvar _ k) k))))
+    (define (kind (Tyvar _ k))
+      k))
 
   (define-instance (HasKind Tycon)
-    (define (kind t)
-      (match t
-        ((Tycon _ k) k))))
+    (define (kind (Tycon _ k))
+      k))
 
   (define-instance (HasKind Type)
     (define (kind t)
@@ -279,43 +266,32 @@
     (Qual (List Pred) :t))
 
   (define-instance (Eq :t => Eq (Qual :t))
-    (define (== x y)
-      (match (Tuple x y)
-        ((Tuple (Qual xs t1) (Qual ys t2))
-         (and (== xs ys)
-              (== t1 t2))))))
+    (define (== (Qual xs t1) (Qual ys t2))
+      (and (== xs ys)
+           (== t1 t2))))
 
   (define-instance (Types :t => Types (Qual :t))
-    (define (apply s q)
-      (match q
-        ((Qual ps t)
-         (Qual (apply s ps)
-               (apply s t)))))
-    (define (tv q)
-      (match q
-        ((Qual ps t)
-         (list:union (tv ps) (tv t))))))
-
+    (define (apply s (Qual ps t))
+      (Qual (apply s ps)
+            (apply s t)))
+    
+    (define (tv (Qual ps t))
+      (list:union (tv ps) (tv t))))
 
   (define-type Pred
     (IsIn Id Type))
 
   (define-instance (Eq Pred)
-    (define (== x y)
-      (match (Tuple x y)
-        ((Tuple (IsIn id1 t1) (IsIn id2 t2))
-         (and (== id1 id2)
-              (== t1 t2))))))
+    (define (== (IsIn id1 t1) (IsIn id2 t2))
+      (and (== id1 id2)
+           (== t1 t2))))
 
   (define-instance (Types Pred)
-    (define (apply s p)
-      (match p
-        ((IsIn i t)
-         (IsIn i (apply s t)))))
-    (define (tv p)
-      (match p
-        ((IsIn _ t)
-         (tv t)))))
+    (define (apply s (IsIn i t))
+      (IsIn i (apply s t)))
+    
+    (define (tv (IsIn _ t))
+      (tv t)))
 
 
   (declare mguPred (Pred -> Pred -> (Optional Subst)))
@@ -338,17 +314,15 @@
     (Class (Tuple (List Id) (List Inst))))
 
   (declare get-class (Class -> (Tuple (List Id) (List Inst))))
-  (define (get-class c)
-    (match c
-      ((Class x) x)))
+  (define (get-class (Class x))
+    x)
 
   (define-type Inst
     (Instance (Qual Pred)))
 
   (declare get-inst (Inst -> (Qual Pred)))
-  (define (get-inst i)
-    (match i
-      ((Instance x) x)))
+  (define (get-inst (Instance x))
+    x)
 
 
   ;; Class Environments
@@ -357,14 +331,12 @@
     (ClassEnv (Id -> (Optional Class)) (List Type)))
 
   (declare classes (ClassEnv -> (Id -> (Optional Class))))
-  (define (classes env)
-    (match env
-      ((ClassEnv cs _) cs)))
+  (define (classes (ClassEnv cs _))
+    cs)
 
   (declare defaults (ClassEnv -> (List Type)))
-  (define (defaults env)
-    (match env
-      ((ClassEnv _ ds) ds)))
+  (define (defaults (ClassEnv _ ds))
+    ds)
 
   (declare super (ClassEnv -> Id -> (List Id)))
   (define (super ce i)
@@ -586,22 +558,15 @@
     (Forall (List Kind) (Qual Type)))
 
   (define-instance (Eq Scheme)
-    (define (== x y)
-      (match (Tuple x y)
-        ((Tuple (Forall ks1 q1)
-                (Forall ks2 q2))
-         (and (== ks1 ks2)
-              (== q1 q2))))))
+    (define (== (Forall ks1 q1) (Forall ks2 q2))
+      (and (== ks1 ks2)
+           (== q1 q2))))
 
   (define-instance (Types Scheme)
-    (define (apply s t)
-      (match t
-        ((Forall ks qt)
-         (Forall ks (apply s qt)))))
-    (define (tv t)
-      (match t
-        ((Forall _ qt)
-         (tv qt)))))
+    (define (apply s (Forall ks qt))
+      (Forall ks (apply s qt)))
+    (define (tv (Forall _ qt))
+      (tv qt)))
 
   (declare quantify ((List Tyvar) -> (Qual Type) -> Scheme))
   (define (quantify vs qt)
@@ -627,21 +592,15 @@
     (Assump Id Scheme))
 
   (define-instance (Eq Assump)
-    (define (== a b)
-      (match (Tuple a b)
-        ((Tuple (Assump id-a scheme-a) (Assump id-b scheme-b))
-         (and (== id-a id-b)
-              (== scheme-a scheme-b))))))
+    (define (== (Assump id-a scheme-a) (Assump id-b scheme-b))
+      (and (== id-a id-b)
+           (== scheme-a scheme-b))))
 
   (define-instance (Types Assump)
-    (define (apply s a)
-      (match a
-        ((Assump i sc)
-         (Assump i (apply s sc)))))
-    (define (tv a)
-      (match a
-        ((Assump _ sc)
-         (tv sc)))))
+    (define (apply s (Assump i sc))
+      (Assump i (apply s sc)))
+    (define (tv (Assump _ sc))
+      (tv sc)))
 
   (declare find (MonadFail :m => (Id -> (List Assump) -> (:m Scheme))))
   (define (find i xs)
@@ -662,9 +621,8 @@
     (TI (Subst -> Integer -> (Tuple3 Subst Integer :a))))
 
   (declare get-ti ((TI :a) -> (Subst -> Integer -> (Tuple3 Subst Integer :a))))
-  (define (get-ti x)
-    (match x
-      ((TI y) y)))
+  (define (get-ti (TI y))
+    y)
 
   (define-instance (Functor TI)
     (define (map f x)
@@ -744,15 +702,13 @@
       (map (inst ts))))
 
   (define-instance (Instantiate :t => Instantiate (Qual :t))
-    (define (inst ts q)
-      (match q
-        ((Qual ps t) (Qual (inst ts ps)
-                           (inst ts t))))))
+    (define (inst ts (Qual ps t))
+      (Qual (inst ts ps)
+            (inst ts t))))
 
   (define-instance (Instantiate Pred)
-    (define (inst ts p)
-      (match p
-        ((IsIn c t) (IsIn c (inst ts t))))))
+    (define (inst ts (IsIn c t))
+      (IsIn c (inst ts t))))
 
 
   ;;
@@ -766,7 +722,7 @@
   (define-type Literal
     (LitInt Integer)
     (LitChar Char)
-    ;; NOTE: Rationals are ignored because coalton does not have support
+    (LitRat Fraction)
     (LitStr String))
 
   (declare tiLit (Literal -> (TI (Tuple (List Pred) Type))))
@@ -775,7 +731,9 @@
       ((LitChar _) (pure (Tuple Nil tChar)))
       ((LitInt _)  (do (v <- (newTVar Star))
                        (pure (Tuple (make-list (IsIn (Id "Num") v)) v))))
-      ((LitStr _)  (pure (Tuple Nil tString)))))
+      ((LitStr _)  (pure (Tuple Nil tString)))
+      ((LitRat _) (do (v <- (newTVar Star))
+                      (pure (Tuple (make-list (IsIn (Id "Fractional") v)) v))))))
 
   ;; Patterns
 
@@ -984,9 +942,9 @@
   (declare defaultedPreds (MonadFail :m => (ClassEnv -> (List Tyvar) -> (List Pred) -> (:m (List Pred)))))
   (define defaultedPreds
     (withDefaults (fn (vps _ts) (concat (map (fn (a)
-                                              (match a
-                                                ((Ambiguity _ x) x)))
-                                            vps)))))
+                                               (match a
+                                                 ((Ambiguity _ x) x)))
+                                             vps)))))
 
   (declare defaultSubst (MonadFail :m => (ClassEnv -> (List Tyvar) -> (List Pred) -> (:m Subst))))
   (define defaultSubst
@@ -1131,17 +1089,15 @@
     (Program (List BindGroup)))
 
   (declare tiProgram (ClassEnv -> (List Assump) -> Program -> (List Assump)))
-  (define (tiProgram ce as bgs)
-    (match bgs
-      ((Program bgs)
-       (runTI
-        (do (seq <- (tiSeq tiBindGroup ce as bgs))
-            (match seq
-              ((Tuple ps as_)
-               (do (s  <- getSubst)
-                   (rs <- (reduce ce (apply s ps)))
-                 (s_ <- (defaultSubst ce Nil rs))
-                 (pure (apply (@@ s_ s) as_))))))))))
+  (define (tiProgram ce as (Program bgs))
+    (runTI
+     (do (seq <- (tiSeq tiBindGroup ce as bgs))
+         (match seq
+           ((Tuple ps as_)
+            (do (s  <- getSubst)
+                (rs <- (reduce ce (apply s ps)))
+              (s_ <- (defaultSubst ce Nil rs))
+              (pure (apply (@@ s_ s) as_))))))))
 
   (declare assumption-list-equal ((List Assump) -> (List Assump) -> Boolean))
   (define (assumption-list-equal a b)
