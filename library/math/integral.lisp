@@ -169,16 +169,15 @@ are floored and truncated division, respectively."
   (define (isqrt x)
     "The floor of the square root of N > 0."
     (let ((isqrt-rec 
-            (fn (a)
-              (let b = (quot (+ (* a a) x) (* 2 a)))
-              (if (> a b)
-                  (isqrt-rec b)
-                  a))))
+            (fn (x0)
+              (let ((x1 (div (+ x0 (div x x0)) 2)))
+                (if (<= x0 x1)
+                    x0
+                    (isqrt-rec x1))))))
       (cond
-        ((> x 1) (isqrt-rec x))
-        ((== x 1) 1)
-        ((== x 0) 0)
-        ((< x 0) (error "Cannot take ISQRT of a negative number."))))))
+        ((> x 1) (isqrt-rec (div x 2)))
+        ((>= x 0) x)
+        (True (error "Cannot take ISQRT of a negative number."))))))
 
 (cl:defmacro %define-integral-native (type signed)
   (cl:let ((even? (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-EVEN?")))
