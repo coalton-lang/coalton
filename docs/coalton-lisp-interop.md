@@ -314,6 +314,25 @@ Lambda/anonymous functions in Coalton `let` bindings can be used from Lisp, as l
       (lisp :a (x square)
         (cl:format cl:nil "~a squared = ~a" x (call-coalton-function square x))))))
 ```
+## Coalton Struct Interop
 
+Structs defined in Coalton must be handled carefully before using them in Lisp. There are two main approaches to Struct interop: either you define let bindings for the desired slot-values, or you embed the Struct's constructor in the function's lambda list. Note that to use accessors in the function body, the type must be declared. Here are examples of each option:
+```
+(coalton-toplevel
 
+  (define-struct Point
+    (x Integer)
+    (y Integer))
+
+  (declare print-point-with-accessors (Point -> String))
+  (define (print-point-with-accessors p)
+    (let ((x (.x p))
+          (y (.y p)))
+      (lisp String (x y)
+        (cl:format cl:nil "Point: (~d,~d)" x y))))
+
+  (define (print-point-with-constructor (Point x y))
+    (lisp String (x y)
+      (cl:format cl:nil "Point: (~d,~d)" x y))))
+```
 
