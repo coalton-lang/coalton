@@ -40,23 +40,20 @@
 
   (setf (gethash var (partial-type-env-ty-table env)) (tc:make-variable (tc:make-kvariable))))
 
-(defun partial-type-env-lookup-var (env var source file)
+(defun partial-type-env-lookup-var (env var source)
   (declare (type partial-type-env env)
            (type symbol var)
            (type cons source)
-           (type coalton-file file)
            (values tc:tyvar))
 
   (let ((ty (gethash var (partial-type-env-ty-table env))))
 
     (unless ty
       (error 'tc-error
-             :err (coalton-error
-                   :span source
-                   :file file
-                   :message "Unknown type variable"
-                   :primary-note (format nil "Unknown type variable ~S"
-                                         var))))
+             :location source
+             :message "Unknown type variable"
+             :primary-note (format nil "Unknown type variable ~S"
+                                   var)))
 
     ty))
 
@@ -84,10 +81,9 @@
   (setf (gethash name (partial-type-env-ty-table env)) type)
   nil)
 
-(defun partial-type-env-lookup-type (env tycon file)
+(defun partial-type-env-lookup-type (env tycon)
   (declare (type partial-type-env env)
            (type parser:tycon tycon)
-           (type coalton-file file)
            (values tc:ty))
   
   (let* ((name (parser:tycon-name tycon))
@@ -101,11 +97,9 @@
 
       (unless type-entry
         (error 'tc-error
-               :err (coalton-error
-                     :span (parser:ty-source tycon)
-                     :file file
-                     :message "Unknown type"
-                     :primary-note (format nil "unknown type ~S" (parser:tycon-name tycon)))))
+               :location (parser:ty-source tycon)
+               :message "Unknown type"
+               :primary-note (format nil "unknown type ~S" (parser:tycon-name tycon))))
 
       (tc:type-entry-type type-entry))))
 
@@ -120,10 +114,9 @@
   (setf (gethash (tc:ty-predicate-class pred) (partial-type-env-class-table env)) pred)
   nil)
 
-(defun partial-type-env-lookup-class (env pred file)
+(defun partial-type-env-lookup-class (env pred)
   (declare (type partial-type-env env)
            (type parser:ty-predicate pred)
-           (type coalton-file file)
            (values tc:ty-predicate))
 
   (let* ((name (parser:identifier-src-name (parser:ty-predicate-class pred)))
@@ -137,12 +130,10 @@
 
       (unless class-entry
         (error 'tc-error
-               :err (coalton-error
-                     :span (parser:ty-predicate-source pred)
-                     :file file
-                     :message "Unknown class"
-                     :primary-note (format nil "unknown class ~S"
-                                           (parser:identifier-src-name
-                                            (parser:ty-predicate-class pred))))))
+               :location (parser:ty-predicate-source pred)
+               :message "Unknown class"
+               :primary-note (format nil "unknown class ~S"
+                                     (parser:identifier-src-name
+                                      (parser:ty-predicate-class pred)))))
 
       (tc:ty-class-predicate class-entry))))

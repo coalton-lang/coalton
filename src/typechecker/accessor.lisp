@@ -50,9 +50,9 @@
     (t
      (util:unreachable))))
 
-(defun solve-accessors (accessors file env)
+(defun solve-accessors (accessors env)
   (declare (type accessor-list accessors)
-           (type error:coalton-file file)
+           
            (type tc:environment env))
 
   (let ((subs nil)
@@ -65,7 +65,7 @@
 
           :do (loop :for accessor :in accessors
                     :do (multiple-value-bind (matchp subs_)
-                            (solve-accessor accessor file env)
+                            (solve-accessor accessor env)
                           (when matchp
                             (push accessor solved-accessors))
                           (setf subs (tc:compose-substitution-lists subs subs_))))
@@ -82,9 +82,8 @@
 
     (values accessors subs)))
 
-(defun solve-accessor (accessor file env)
+(defun solve-accessor (accessor env)
   (declare (type accessor accessor)
-           (type error:coalton-file file)
            (type tc:environment env)
            (values boolean tc:substitution-list))
 
@@ -105,12 +104,10 @@
 
       (unless struct-entry
         (error 'tc-error
-               :err (error:coalton-error
-                     :span (accessor-source accessor)
-                     :file file
-                     :message "Invalid accessor"
-                     :primary-note
-                     (format nil "type '~S' is not a struct" ty-name))))
+               :location (accessor-source accessor)
+               :message "Invalid accessor"
+               :primary-note
+               (format nil "type '~S' is not a struct" ty-name)))
 
       (let* ((subs (tc:match struct-ty (accessor-from accessor)))
              (field-ty (gethash (accessor-field accessor)
@@ -118,14 +115,11 @@
 
         (unless field-ty
           (error 'tc-error
-                 :err (error:coalton-error
-                       :span (accessor-source accessor)
-                       :file file
-                       :message "Invalid accessor"
-                       :primary-note
-                       (format nil "struct '~S' does not have the field '~A'"
-                               ty-name
-                               (accessor-field accessor)))))
+                 :location (accessor-source accessor)
+                 :primary-note
+                 (format nil "struct '~S' does not have the field '~A'"
+                         ty-name
+                         (accessor-field accessor))))
 
         ;; the order of unification matters here
         (setf subs (tc:unify subs (accessor-to accessor) field-ty))

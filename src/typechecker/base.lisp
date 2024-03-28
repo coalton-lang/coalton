@@ -2,16 +2,14 @@
   (:use
    #:cl)
   (:import-from
-   #:coalton-impl/error
-   #:coalton-file
-   #:coalton-error
-   #:make-coalton-error-note
-   #:make-coalton-error-help)
+   #:source-error
+   #:source-error
+   #:make-note
+   #:make-help)
   (:export
-   #:coalton-file
-   #:coalton-error
-   #:make-coalton-error-note
-   #:make-coalton-error-help)
+   #:source-error
+   #:make-note
+   #:make-help)
   (:local-nicknames
    (#:util #:coalton-impl/util)
    (#:error #:coalton-impl/error)
@@ -27,11 +25,9 @@
 (define-condition tc-error (error:coalton-base-error)
   ()
   (:report
-   (lambda (c s)
-     (if (error:coalton-error-text c)
-         (write-string (error:coalton-error-text c) s)
-         (tc:with-pprint-variable-context ()
-           (error:display-coalton-error s (error:coalton-error-err c)))))))
+   (lambda (condition stream)
+     (tc:with-pprint-variable-context ()
+       (source-error:report-source-condition condition stream)))))
 
 (defun check-duplicates (elems f g callback)
   "Check for duplicate elements in ELEMS. F maps items in ELEMS to
@@ -60,11 +56,10 @@ source tuples which are compared for ordering."
         :else
           :do (setf (gethash (funcall f elem) table) elem)))
 
-(defun check-package (elems f source file)
+(defun check-package (elems f source)
   (declare (type list elems)
            (type function f)
-           (type function source)
-           (type coalton-file file))
+           (type function source))
 
   (loop :for elem :in elems
         :for id := (funcall f elem)
@@ -73,12 +68,10 @@ source tuples which are compared for ordering."
 
         :unless (equalp (symbol-package id) *package*)
           :do (error 'tc-error
-                     :err (coalton-error
-                           :span (funcall source elem)
-                           :file file
-                           :message "Invalid identifier name"
-                           :primary-note (format nil "The symbol ~S is defined in the package ~A and not the current package ~A"
-                                            id
-                                            (symbol-package id)
-                                            *package*)))))
+                     :location (funcall source elem)
+                     :message "Invalid identifier name"
+                     :primary-note (format nil "The symbol ~S is defined in the package ~A and not the current package ~A"
+                                           id
+                                           (symbol-package id)
+                                           *package*))))
 
