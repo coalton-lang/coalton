@@ -32,16 +32,6 @@
    (#:tc #:coalton-impl/typechecker/stage-1)
    (#:types #:coalton-impl/typechecker/types))
   (:export
-   #:toplevel-define                    ; STRUCT
-   #:make-toplevel-define               ; CONSTRUCTOR
-   #:toplevel-define-name               ; ACCESSOR
-   #:toplevel-define-vars               ; ACCESSOR
-   #:toplevel-define-body               ; ACCESSOR
-   #:toplevel-define-explicit-type      ; ACCESSOR
-   #:toplevel-define-source             ; ACCESSOR
-   #:toplevel-define-monomorphize       ; ACCESSOR
-   #:toplevel-define-list               ; TYPE
-   #:toplevel-define                    ; FUNCTION
    #:infer-expression-type              ; FUNCTION
    #:infer-expl-binging-type            ; FUNCTION
    #:attach-explicit-binding-type       ; FUNCTION
