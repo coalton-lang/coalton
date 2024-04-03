@@ -1111,7 +1111,7 @@
       (handler-case
           (progn
             (predicate-match (ty-class-instance-predicate value) (ty-class-instance-predicate inst))
-            (predicate-match (ty-class-instance-predicate value) (ty-class-instance-predicate inst))
+            (predicate-match (ty-class-instance-predicate inst) (ty-class-instance-predicate value))
 
             (return-from add-instance
               (update-environment
