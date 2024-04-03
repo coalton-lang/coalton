@@ -1369,17 +1369,17 @@
                          (fundep-entry-from s)
                          from-tys
                          (fundep-entry-to s)
-                         to-tys))))))
+                         to-tys)))))
 
-              ;; Insert a new relation if there wasn't a match
-              (setf env
-                    (insert-fundep-entry%
-                     env
-                     (ty-class-name class)
-                     i
-                     (make-fundep-entry
-                      :from from-tys
-                      :to to-tys)))))
+                ;; Insert a new relation if there wasn't a match
+                (setf env
+                      (insert-fundep-entry%
+                       env
+                       (ty-class-name class)
+                       i
+                       (make-fundep-entry
+                        :from from-tys
+                        :to to-tys))))))
 
   env)
 
