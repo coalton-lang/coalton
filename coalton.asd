@@ -58,6 +58,7 @@
                 :serial t
                 :components ((:file "function-entry")
                              (:file "package")))
+               (:file "environment")
                (:module "typechecker"
                 :serial t
                 :components ((:file "kinds")

@@ -325,14 +325,8 @@
   (declare (type tc:environment env)
            (type symbol package)
            (values documentation-value-entry-list))
-  (let ((values nil)
-        (package (find-package package)))
-    ;; Sort the entires by package
-    (fset:do-map (sym entry (algo:immutable-map-data (tc:environment-name-environment env)))
-      ;; Only include exported symbols from our package
-      (when (exported-symbol-p sym package t)
-        (push (cons sym entry) values)))
-
+  (let* ((package (find-package package))
+         (values (env:entries-for-package env :name package :public t)))
     (mapcar
      (lambda (e)
        (destructuring-bind (name . name-entry) e
@@ -349,25 +343,16 @@
   (declare (type tc:environment env)
            (type symbol package)
            (values documentation-type-entry-list documentation-struct-entry-list))
-  (let ((types nil)
-        (ctors nil)
-        (package (find-package package)))
-    ;; Sort the entires by package
-    (fset:do-map (sym entry (algo:immutable-map-data (tc:environment-type-environment env)))
-      ;; Only include exported symbols from our packages
-      (when (exported-symbol-p sym package t)
-        (push (cons sym entry) types)))
-    (fset:do-map (sym entry (algo:immutable-map-data (tc:environment-constructor-environment env)))
-      (when (equalp (symbol-package sym) package)
-        (push (cons sym entry) ctors)))
+  (let* ((package (find-package package))
+         (types (env:entries-for-package env :type package :public t))
+         (all-ctors (env:entries-for-package env :constructor package :public t))
+         (instance-list nil))
+    (env:do-environment (class instances env :instance)
+      (declare (ignore class))
+      (dolist (instance instances)
+        (push instance instance-list)))
 
-    (let ((instance-list
-            (fset:convert 'list
-                          (algo:immutable-listmap-data
-                           (tc:instance-environment-instances
-                            (tc:environment-instance-environment env)))))
-
-          (output-types nil)
+    (let ((output-types nil)
           (output-structs nil))
 
       (loop :for (name . entry) :in types
@@ -376,24 +361,21 @@
                            (lambda (ctor)
                              (and (eql (tc:constructor-entry-constructs (cdr ctor))
                                        name)
-                                  (exported-symbol-p (car ctor) package t)))
-                           ctors)
+                                  (env:exported-symbol-p (car ctor) package)))
+                           all-ctors)
 
-            :for applicable-instances := (loop :for (class . instances) :in instance-list
-                                               :append
-                                               (loop :for instance :in (fset:convert 'list instances)
-                                                     :append
-                                                     (when (some
-                                                            (lambda (pred-type)
-                                                              (labels ((check (pred)
-                                                                         (typecase pred
-                                                                           (tc:tapp
-                                                                            (check (tc:tapp-from pred)))
-                                                                           (t
-                                                                            (equalp (tc:type-entry-type entry) pred)))))
-                                                                (check pred-type)))
-                                                            (tc:ty-predicate-types (tc:ty-class-instance-predicate instance)))
-                                                       (list instance))))
+            :for applicable-instances := (loop :for instance :in instance-list
+                                               :when (some
+                                                      (lambda (pred-type)
+                                                        (labels ((check (pred)
+                                                                   (typecase pred
+                                                                     (tc:tapp
+                                                                      (check (tc:tapp-from pred)))
+                                                                     (t
+                                                                      (equalp (tc:type-entry-type entry) pred)))))
+                                                          (check pred-type)))
+                                                      (tc:ty-predicate-types (tc:ty-class-instance-predicate instance)))
+                                                 :collect instance)
 
             :for struct-entry := (tc:lookup-struct env name :no-error t)
 
@@ -434,14 +416,8 @@
   (declare (type tc:environment env)
            (type symbol package)
            (values documentation-class-entry-list))
-  (let ((values nil)
-        (package (find-package package)))
-    ;; Sort the entires by package
-    (fset:do-map (sym entry (algo:immutable-map-data (tc:environment-class-environment env)))
-      ;; Only include exported symbols from our package
-      (when (exported-symbol-p sym package t)
-        (push entry values)))
-
+  (let* ((package (find-package package))
+         (values (mapcar #'cdr (env:entries-for-package env :class package :public t))))
     (mapcar (lambda (e)
               (make-documentation-class-entry
                :name (tc:ty-class-name e)
@@ -450,14 +426,9 @@
                ;; Only include exported methods from our packages
                :methods (remove-if-not
                          (lambda (binding)
-                           (exported-symbol-p (car binding) package t))
+                           (env:exported-symbol-p (car binding) package))
                          (tc:ty-class-unqualified-methods e))
-               :instances (reverse (fset:convert 'list (tc:lookup-class-instances env (tc:ty-class-name e) :no-error t)))
+               :instances (reverse (tc:lookup-class-instances env (tc:ty-class-name e) :no-error t))
                :documentation (tc:ty-class-docstring e)
                :location (tc:ty-class-location e)))
             values)))
-
-(defun exported-symbol-p (symbol package &optional check-package)
-  "Is SYMBOL an exported symbol, optionally checking that it is a member of PACKAGE."
-  (and (if check-package (equalp (symbol-package symbol) package) t)
-       (eql :external (nth-value 1 (find-symbol (symbol-name symbol) package)))))

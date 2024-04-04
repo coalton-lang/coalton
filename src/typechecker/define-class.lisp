@@ -322,10 +322,7 @@
                                 :span (parser:toplevel-define-class-head-src class)
                                 :file file
                                 :message "Invalid fundep redefinition"
-                                :primary-note (format nil "unable to redefine the fudndeps of class ~S." class-name))))
-
-           :when fundeps
-             :do (setf env (tc:initialize-fundep-environment env class-name))
+                                :primary-note (format nil "unable to redefine the fundeps of class ~S." class-name))))
 
            :do (setf env (tc:set-class env class-name class-entry))
 
@@ -376,7 +373,7 @@
 
   (let ((var-names (mapcar #'parser:keyword-src-name (parser:toplevel-define-class-vars class))))
 
-    ;; Ensure fudneps don't have duplicate variables
+    ;; Ensure fundeps don't have duplicate variables
     (labels ((check-duplicate-fundep-variables (vars)
                (check-duplicates
                 vars

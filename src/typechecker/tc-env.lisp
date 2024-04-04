@@ -4,6 +4,7 @@
    #:coalton-impl/typechecker/base
    #:coalton-impl/typechecker/parse-type)
   (:local-nicknames
+   (#:env #:coalton-impl/environment)
    (#:util #:coalton-impl/util)
    (#:error #:coalton-impl/error)
    (#:parser #:coalton-impl/parser)
@@ -30,10 +31,10 @@
 (defstruct (tc-env
             (:predicate nil))
 
-  ;; The main copiler env
+  ;; The main compiler env
   (env      (util:required 'env)          :type tc:environment :read-only t)
 
-  ;; Hash table mappinig variables bound in the current translation unit to types
+  ;; Hash table mapping variables bound in the current translation unit to types
   (ty-table (make-hash-table :test #'eq)  :type hash-table     :read-only t))
 
 (defun tc-env-add-variable (env name)
@@ -67,8 +68,7 @@
                                        (alexandria:hash-table-keys (tc-env-ty-table env)))
                                       (remove-if-not
                                        (lambda (s) (string= (symbol-name s) sym-name))
-                                       (coalton-impl/algorithm::immutable-map-keys
-                                        (tc:environment-value-environment (tc-env-env env)))))))
+                                       (env:keys (tc-env-env env) :value)))))
                        (error 'tc-error
                               :err (coalton-error
                                     :span (parser:node-source var)

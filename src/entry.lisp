@@ -2,6 +2,7 @@
   (:use
    #:cl)
   (:local-nicknames
+   (#:env #:coalton-impl/environment)
    (#:settings #:coalton-impl/settings)
    (#:util #:coalton-impl/util)
    (#:error #:coalton-impl/error)
@@ -20,18 +21,32 @@
 
 (defvar *global-environment* (tc:make-default-environment))
 
+(defun set! (type k v)
+  (setf *global-environment* (env:set *global-environment* type k v)))
+
+(defun unset! (type k)
+  (setf *global-environment* (env:unset *global-environment* type k)))
+
+(defun compute-updates (a b)
+  (nreverse
+   (loop :for c := b :then (env:parent c)
+         :while (and c (not (eq a c)))
+         :collect (destructuring-bind (op . args) (env:operation c)
+                    (ecase op
+                      (:set
+                       (destructuring-bind (k v) args
+                         `(set! ,(env:namespace c) ',k ',v)))
+                      (:unset
+                       (destructuring-bind (k) args
+                         `(unset! ,(env:namespace c) ',k))))))))
+
 (defun entry-point (program)
   (declare (type parser:program program))
 
   (let* ((*package* (parser:program-package program))
-
          (program (parser:rename-variables program))
-
          (file (parser:program-file program))
-
-         (env *global-environment*)
-
-         (tc:*env-update-log* nil))
+         (env *global-environment*))
 
     (multiple-value-bind (type-definitions instances env)
         (tc:toplevel-define-type (parser:program-types program)
@@ -99,12 +114,7 @@
                                            ,(or *compile-file-pathname* *load-truename*))
                                    `(error "~A was compiled in development mode but loaded in release."
                                            ,(or *compile-file-pathname* *load-truename*)))))
-
-                          (let ((coalton-impl/typechecker/environment::env *global-environment*))
-                            ,@(loop :for elem :in (reverse tc:*env-update-log*)
-                                    :collect elem)
-                            (setf *global-environment* coalton-impl/typechecker/environment::env))
-
+                          ,@(compute-updates *global-environment* env)
                           ,program))
                    env))))))))))
 
@@ -155,7 +165,7 @@
                 (let ((node (codegen:optimize-node
                              (codegen:translate-expression node nil env)
                              env)))
-                  (codegen:codegen-expression 
+                  (codegen:codegen-expression
                    (codegen:direct-application
                     node
                     (codegen:make-function-table env))
