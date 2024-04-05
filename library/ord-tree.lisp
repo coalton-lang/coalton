@@ -78,7 +78,7 @@
       ((NegativeBlack) (error "cannot subtract black from negative-black"))))
 
   (define-type (Tree :elt)
-    "A red-black balanced binary tree, sorted by `<=>' and unique by `=='."
+    "A red-black balanced binary tree, sorted by `<=>` and unique by `==`."
     ;; exported; an empty tree.
     ;; considered black for the purpose of the invariants.
     Empty
@@ -127,7 +127,7 @@
 
   (declare lookup ((Ord :elt) => ((Tree :elt) -> :elt -> (Optional :elt))))
   (define (lookup haystack needle)
-    "If HAYSTACK contains an element `==' to NEEDLE, return it."
+    "If HAYSTACK contains an element `==` to NEEDLE, return it."
     (match haystack
       ((Empty) None)
       ((Branch _ left elt right)
@@ -278,7 +278,7 @@
 
   (declare insert ((Ord :elt) => ((Tree :elt) -> :elt -> (Optional (Tree :elt)))))
   (define (insert tre elt)
-    "Construct a new Tree like TRE but containing ELT. If TRE already had an element `==' to ELT, return None."
+    "Construct a new Tree like TRE but containing ELT. If TRE already had an element `==` to ELT, return None."
     (let ((ins (fn (subtree)
                  (match subtree
                    ((Empty) (Some (Branch Red Empty elt Empty)))
@@ -294,7 +294,7 @@
 
   (declare replace ((Ord :elt) => ((Tree :elt) -> :elt -> (Optional (Tuple (Tree :elt) :elt)))))
   (define (replace tre elt)
-    "Construct a new Tree like TRE but with ELT replacing an old element `==' to ELT.
+    "Construct a new Tree like TRE but with ELT replacing an old element `==` to ELT.
 
 Return the new tree and the removed element.
 
@@ -317,7 +317,7 @@ If TRE did not have an element `==' to ELT, return None."
   (define (replace-or-insert tre elt)
     "Construct a new Tree like TRE but containing ELT.
 
-If TRE already had an element `==' to ELT, remove it, replace it with ELT, and return the removed value
+If TRE already had an element `==` to ELT, remove it, replace it with ELT, and return the removed value
 alongside the new tree."
     (let ((ins (fn (subtree)
                  (match subtree
@@ -343,9 +343,9 @@ alongside the new tree."
   (define (insert-or-replace tre elt)
     "Construct a new Tree like TRE but containing ELT.
 
-If TRE already had an element `==' to ELT, remove it, replace it with ELT, and discard the removed value.
+If TRE already had an element `==` to ELT, remove it, replace it with ELT, and discard the removed value.
 
-Like `replace-or-insert', but prioritizing insertion as a use case."
+Like `replace-or-insert`, but prioritizing insertion as a use case."
     (fst (replace-or-insert tre elt)))
 
   ;;; removing from trees
@@ -353,7 +353,7 @@ Like `replace-or-insert', but prioritizing insertion as a use case."
   ;; matt might calls this operation `sorted-map-delete'
   (declare remove ((Ord :elt) => ((Tree :elt) -> :elt -> (Optional (Tree :elt)))))
   (define (remove tre elt)
-    "Construct a new Tree like TRE but without an element `==' to ELT. Return None if TRE does not contain an element `==' to ELT."
+    "Construct a new Tree like TRE but without an element `==' to ELT. Return None if TRE does not contain an element `==` to ELT."
     (map as-black
          (remove-without-as-black tre elt)))
 
