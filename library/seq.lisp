@@ -10,7 +10,8 @@
    (#:optional #:coalton-library/optional)
    (#:cell #:coalton-library/cell)
    (#:vector #:coalton-library/vector)
-   (#:iter #:coalton-library/iterator))
+   (#:iter #:coalton-library/iterator)
+   (#:list #:coalton-library/list))
   (:export
    #:Seq
    #:new
@@ -21,6 +22,7 @@
    #:put
    #:empty?
    #:conc
+   #:split
    #:make))
 
 (in-package #:coalton-library/seq)
@@ -60,7 +62,7 @@
      UFix                               ; height
      UFix                               ; cached full subtree size
      (vector:Vector UFix)               ; cumulative size table
-     (vector:Vector (Seq :a)))         ; subtrees
+     (vector:Vector (Seq :a)))          ; subtrees
     (LeafArray (vector:Vector :a)))
 
   (declare new (types:RuntimeRepr :a => Unit -> Seq :a))
@@ -139,14 +141,14 @@ a new `Seq` instance."
        (do
         ((Tuple leaf newsub) <- (pop (vector:last-unsafe sts)))
         (let newsts = (vector:copy sts))
-        (let newcst = (vector:copy cst))
-        (let last-idx = (- (vector:length cst) 1))
-        (let seq-size = (size seq))
+         (let newcst = (vector:copy cst))
+         (let last-idx = (- (vector:length cst) 1))
+         (let seq-size = (size seq))
          (pure
           (cond
             ;; this was the only thing left in seq
             ((== 1 seq-size)
-             (Tuple leaf newsub))     ; newsub is empty
+             (Tuple leaf newsub))       ; newsub is empty
 
             ;; the seq was exactly one larger than the subtree size
             ;; for the current height, this means we can reduce the tree height
@@ -164,7 +166,7 @@ a new `Seq` instance."
              (vector:set! last-idx newsub newsts)
              (Tuple leaf (RelaxedNode h fss newcst newsts)))))))))
 
-    (define (conc left right)
+  (define (conc left right)
     "Concatenate two `Seq`s"
     (cond
       ((empty? left) right)
@@ -206,6 +208,30 @@ a new `Seq` instance."
                      (conc (vector:last-unsafe lsubts) (vector:head-unsafe rsubts))
                    (rebalance-branches
                     (fold <> (butlast lsubts) (make-list nsubts (butfirst rsubts))))))))))))
+
+  (declare split ((Eq :a) (types:RuntimeRepr :a) => :a -> (Seq :a) -> (iter:Iterator (Seq :a))))
+  (define (split delim xs)
+    (let ((blocks (cell:new Nil))
+          (current-block (cell:new (new)))
+          (iter (iter:into-iter xs)))
+        
+      (iter:for-each!
+       (fn (x)
+         (cond
+           ((== x delim)
+            (cell:push! blocks (cell:read current-block))
+            (cell:write! current-block (new))
+            Unit)
+           (True
+            (cell:write! current-block (push (cell:read current-block) x))
+            Unit)))
+       iter)
+        
+      (unless (empty? (cell:read current-block))
+        (cell:push! blocks (cell:read current-block))
+        Unit)
+        
+      (iter:into-iter (list:reverse (cell:read blocks)))))
 
   ;;
   ;; Instances
@@ -252,6 +278,8 @@ a new `Seq` instance."
                (iter:every! (fn ((Tuple x y)) (== x y))
                             (iter:zip! (iter:into-iter a)
                                        (iter:into-iter b)))))))
+
+  
 
   ;;
   ;; Helpers

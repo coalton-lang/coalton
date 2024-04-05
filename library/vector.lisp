@@ -32,6 +32,7 @@
    #:last
    #:last-unsafe
    #:extend!
+   #:split
    #:find-elem
    #:append
    #:swap-remove!
@@ -246,6 +247,24 @@
        Unit)
      iter)
     Unit)
+
+  (declare split ((Eq :a) => :a -> (Vector :a) -> (iter:Iterator (Vector :a))))
+  (define (split delim v)
+    "Splits a vector according to a delimiter. Returns an iterator of vectors."
+    (let fragments = (new))
+    (let current-fragment = (new))
+    (for i in (iter:up-to (length v))
+         (let ((elt (index-unsafe i v)))
+           (cond ((== elt delim)
+                  (push! (copy current-fragment) fragments)
+                  (clear! current-fragment))
+                 (True
+                  (push! elt current-fragment)
+                  Unit))))
+    (while (not (empty? current-fragment))
+      (push! (copy current-fragment) fragments)
+      (clear! current-fragment))
+    (iter:into-iter fragments))
 
   ;;
   ;; Instances

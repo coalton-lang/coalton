@@ -187,7 +187,7 @@
     (let cmds = (vec:new))
     (let vecs = (vec:new))
     (let ((parser (fn (input-string v)
-                    (let ((head-tail (str:split 1 input-string)))
+                    (let ((head-tail (str:bisect 1 input-string)))
                       (match (fst head-tail)
                         ("" cmds)
                         (">"

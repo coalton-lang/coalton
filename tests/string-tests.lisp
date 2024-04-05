@@ -19,11 +19,11 @@
   (is (== (substring "foobar" 3 6)
           "bar")))
 
-(define-test string-split ()
+(define-test bisect-string ()
   (let str = "teststring")
-  (is (== (string:split 1 str)
+  (is (== (string:bisect 1 str)
           (Tuple "t" "eststring")))
-  (is (== (string:split 4 str)
+  (is (== (string:bisect 4 str)
           (Tuple "test" "string"))))
 
 (define-test strip-fixes ()
@@ -76,3 +76,13 @@
   (let has-empty? = (string:substring? ""))
   (is (has-empty? ""))
   (is (has-empty? "foo")))
+
+(define-test string-split ()
+  (is (== (string:split #\, "one,two,three") (make-list "one" "two" "three")))
+  (is (== (string:split #\, "one,,three") (make-list "one" "" "three")))
+
+  (let path = "wow/ok/dir/file.txt")
+  (is (== (string:split #\. path) (make-list "wow/ok/dir/file" "txt")))
+  (is (== (string:split #\/ path) (make-list "wow" "ok" "dir" "file.txt")))
+  (is (== (string:split #\d "thisddddworks") (make-list "this" "" "" "" "works"))))
+

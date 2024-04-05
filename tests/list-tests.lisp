@@ -209,9 +209,6 @@
   Unit)
 
 (define-test test-combinatorics ()
-  (is (== (list:split #\, "one,two,three") (make-list "one" "two" "three")))
-  (is (== (list:split #\, "one,,three") (make-list "one" "" "three")))
-
   (is (set== (list:perms x)
              (make-list
               (make-list 1 2 3)

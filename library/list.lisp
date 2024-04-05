@@ -241,11 +241,11 @@
   (define (nth-cdr n l)
     "Returns the nth-cdr of a list."
     (cond ((null? l)
-	   Nil)
-	  ((arith:zero? n)
-	   l)
-	  (True
-	   (nth-cdr (arith:1- n) (cdr l)))))
+           Nil)
+          ((arith:zero? n)
+           l)
+          (True
+           (nth-cdr (arith:1- n) (cdr l)))))
   
   (declare elemIndex (Eq :a => :a -> List :a -> Optional UFix))
   (define (elemIndex x xs)
@@ -604,13 +604,6 @@
            (any f xs)))
       ((Nil) False)))
 
-  (declare split (Char -> String -> (List String)))
-  (define (split c str)
-    (lisp (List String) (c str)
-      (cl:let ((split-chars (cl:list c)))
-        (cl:declare (cl:dynamic-extent split-chars))
-        (uiop:split-string str :separator split-chars))))
-
   (declare perms (List :a -> (List (List :a))))
   (define (perms l)
     "Produce all permutations of the list L."
@@ -642,6 +635,29 @@ This function is equivalent to all size-N elements of `(COMBS L)`."
                   ((Cons x xs) (append
                                 (map (Cons x) (combsOf (- n 1) xs)) ; combs with X
                                 (combsOf n xs))))))) ; and without x
+
+  (declare split ((Eq :a) => :a -> (List :a) -> (iter:Iterator (List :a))))
+  (define (split delim xs)
+    (let ((blocks (cell:new Nil))
+          (current-block (cell:new Nil))
+          (iter (iter:into-iter xs)))
+        
+      (iter:for-each! (fn (x)
+                        (cond
+                          ((== x delim)
+                           (cell:push! blocks (reverse (cell:read current-block)))
+                           (cell:write! current-block nil)
+                           Unit)
+                          (True
+                           (cell:push! current-block x)
+                           Unit)))
+                      iter)
+        
+      (unless (null? (cell:read current-block))
+        (cell:push! blocks (reverse (cell:read current-block)))
+        Unit)
+        
+      (iter:into-iter (reverse (cell:read blocks)))))
 
   ;;
   ;; Instances
@@ -763,6 +779,8 @@ This function is equivalent to all size-N elements of `(COMBS L)`."
 
   (define-instance (Default (List :a))
     (define (default) Nil)))
+
+
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/LIST")
