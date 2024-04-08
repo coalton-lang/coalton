@@ -111,17 +111,17 @@
   (labels ((rewrite-direct-application (node &rest rest)
              (declare (ignore rest)
                       (dynamic-extent rest))
-             (when (node-variable-p (node-application-rator node))
-               (let ((name (node-variable-value (node-application-rator node))))
+             (when (node-variable-p (node-application-operator node))
+               (let ((name (node-variable-value (node-application-operator node))))
                  (when (and (gethash name table)
                             (equalp (gethash name table)
-                                    (length (node-application-rands node))))
+                                    (length (node-application-operands node))))
                    (return-from rewrite-direct-application
                      (make-node-direct-application
                       :type (node-type node)
-                      :rator-type (node-type (node-application-rator node))
-                      :rator name
-                      :rands (node-application-rands node)))))))
+                      :operator-type (node-type (node-application-operator node))
+                      :operator name
+                      :operands (node-application-operands node)))))))
 
            (add-local-funs (node &rest rest)
              (declare (ignore rest)
@@ -190,16 +190,16 @@
 
       ;; Or an application on a function
       ((node-application-p node)
-       (unless (node-variable-p (node-application-rator node))
+       (unless (node-variable-p (node-application-operator node))
          (return-from pointfree node))
 
        ;; The application must be on a known function
-       (unless (gethash (node-variable-value (node-application-rator node)) table)
+       (unless (gethash (node-variable-value (node-application-operator node)) table)
          (return-from pointfree node))
 
        ;; The function must take more arguments than it is currently applied with
-       (unless (> (gethash (node-variable-value (node-application-rator node)) table)
-                  (length (node-application-rands node)))
+       (unless (> (gethash (node-variable-value (node-application-operator node)) table)
+                  (length (node-application-operands node)))
          (return-from pointfree node))
 
        (labels ((valid-pointfree-argument (node)
@@ -212,11 +212,11 @@
 
                     ;; And expressions that build instance dictionaries
                     ((node-application-p node)
-                     (and (valid-pointfree-argument (node-application-rator node))
+                     (and (valid-pointfree-argument (node-application-operator node))
                           (reduce
                            (lambda (old new)
                              (and old (valid-pointfree-argument new)))
-                           (node-application-rands node)
+                           (node-application-operands node)
                            :initial-value t)
                           t))
 
@@ -226,14 +226,14 @@
          ;; The applications arguments must all be valid
          (unless (reduce (lambda (old new)
                            (and old (valid-pointfree-argument new)))
-                         (node-application-rands node)
+                         (node-application-operands node)
                          :initial-value t)
            (return-from pointfree node))
 
-         (setf function (node-application-rator node))
-         (setf args (node-application-rands node))
-         (setf num-params (- (gethash (node-variable-value (node-application-rator node)) table)
-                             (length (node-application-rands node))))))
+         (setf function (node-application-operator node))
+         (setf args (node-application-operands node))
+         (setf num-params (- (gethash (node-variable-value (node-application-operator node)) table)
+                             (length (node-application-operands node))))))
 
       (t
        (return-from pointfree node)))
@@ -268,8 +268,8 @@
                  :type (tc:make-function-type*
                         (subseq (tc:function-type-arguments (node-type function)) (length new-args))
                         (tc:function-return-type (node-type node)))
-                 :rator function
-                 :rands new-args)))))
+                 :operator function
+                 :operands new-args)))))
 
 (defun canonicalize (node)
   (declare (type node node)
@@ -277,15 +277,15 @@
   (labels ((rewrite-application (node &rest rest)
              (declare (ignore rest)
                       (dynamic-extent rest))
-             (let ((rator (node-application-rator node))
-                   (rands (node-application-rands node)))
-               (when (node-application-p rator)
+             (let ((operator (node-application-operator node))
+                   (operands (node-application-operands node)))
+               (when (node-application-p operator)
                  (make-node-application
                   :type (node-type node)
-                  :rator (node-application-rator rator)
-                  :rands (append
-                          (node-application-rands rator)
-                          rands))))))
+                  :operator (node-application-operator operator)
+                  :operands (append
+                          (node-application-operands operator)
+                          operands))))))
     (traverse
      node
      (list
@@ -300,75 +300,75 @@
   (labels ((inline-method (node &rest rest)
              (declare (ignore rest)
                       (dynamic-extent rest))
-             (let ((rator (node-application-rator node))
-                   (rands (node-application-rands node)))
-               (when (node-variable-p rator)
-                 (let (dict rands_)
+             (let ((operator (node-application-operator node))
+                   (operands (node-application-operands node)))
+               (when (node-variable-p operator)
+                 (let (dict operands_)
                    (cond
-                     ((node-variable-p (first rands))
-                      (setf dict (node-variable-value (first rands)))
-                      (setf rands_ (cdr rands)))
+                     ((node-variable-p (first operands))
+                      (setf dict (node-variable-value (first operands)))
+                      (setf operands_ (cdr operands)))
 
-                     ((and (node-application-p (first rands))
-                           (node-variable-p (node-application-rator (first rands))))
-                      (setf dict (node-variable-value (node-application-rator (first rands))))
-                      (setf rands_ (append (node-application-rands (first rands)) (cdr rands))))
+                     ((and (node-application-p (first operands))
+                           (node-variable-p (node-application-operator (first operands))))
+                      (setf dict (node-variable-value (node-application-operator (first operands))))
+                      (setf operands_ (append (node-application-operands (first operands)) (cdr operands))))
 
                      (t
                       (return-from inline-method nil)))
 
-                   (let* ((method-name (node-variable-value rator))
+                   (let* ((method-name (node-variable-value operator))
                           (inline-method-name (tc:lookup-method-inline env method-name dict :no-error t)))
 
                      (when inline-method-name
-                       (if (null rands_)
+                       (if (null operands_)
                            (make-node-variable
                             :type (node-type node)
                             :value inline-method-name)
 
                            (make-node-application
                             :type (node-type node)
-                            :rator (make-node-variable
+                            :operator (make-node-variable
                                     :type (tc:make-function-type*
-                                           (mapcar #'node-type rands_)
+                                           (mapcar #'node-type operands_)
                                            (node-type node))
                                     :value inline-method-name)
-                            :rands rands_))))))))
+                            :operands operands_))))))))
 
            (inline-direct-method (node &rest rest)
              (declare (ignore rest)
                       (dynamic-extent rest))
-             (let ((rands (node-direct-application-rands node)))
-               (let (dict rands_)
+             (let ((operands (node-direct-application-operands node)))
+               (let (dict operands_)
                  (cond
-                   ((node-variable-p (first rands))
-                    (setf dict (node-variable-value (first rands)))
-                    (setf rands_ (cdr rands)))
+                   ((node-variable-p (first operands))
+                    (setf dict (node-variable-value (first operands)))
+                    (setf operands_ (cdr operands)))
 
-                   ((and (node-application-p (first rands))
-                         (node-variable-p (node-application-rator (first rands))))
-                    (setf dict (node-variable-value (node-application-rator (first rands))))
-                    (setf rands_ (append (node-application-rands (first rands)) (cdr rands))))
+                   ((and (node-application-p (first operands))
+                         (node-variable-p (node-application-operator (first operands))))
+                    (setf dict (node-variable-value (node-application-operator (first operands))))
+                    (setf operands_ (append (node-application-operands (first operands)) (cdr operands))))
 
                    (t
                     (return-from inline-direct-method nil)))
 
-                 (let* ((method-name (node-direct-application-rator node))
+                 (let* ((method-name (node-direct-application-operator node))
                         (inline-method-name (tc:lookup-method-inline env method-name dict :no-error t)))
                    (when inline-method-name
-                     (if (null rands_)
+                     (if (null operands_)
                          (make-node-variable
                           :type (node-type node)
                           :value inline-method-name)
 
                          (make-node-application
                           :type (node-type node)
-                          :rator (make-node-variable
+                          :operator (make-node-variable
                                   :type (tc:make-function-type*
-                                         (mapcar #'node-type rands_)
+                                         (mapcar #'node-type operands_)
                                          (node-type node))
                                   :value inline-method-name)
-                          :rands rands_)))))))) 
+                          :operands operands_))))))))
 
     (traverse
      node
@@ -389,17 +389,17 @@
                       (dynamic-extent rest))
              (unless (and
                       ;; The function is a variable
-                      (node-variable-p (node-application-rator node))
+                      (node-variable-p (node-application-operator node))
 
                       ;; The function constructs a typeclass dictionary
                       (tc:lookup-instance-by-codegen-sym
                        env
-                       (node-variable-value (node-application-rator node))
+                       (node-variable-value (node-application-operator node))
                        :no-error t))
                (return-from lift-static-dict nil))
 
              ;; Don't lift a function in itself
-             (when (eq name (node-variable-value (node-application-rator node)))
+             (when (eq name (node-variable-value (node-application-operator node)))
                (return-from lift-static-dict nil))
 
              (hoist-definition node package hoister))
@@ -443,12 +443,12 @@
     (let* ((instance (tc:lookup-instance-by-codegen-sym env (node-variable-value node))))
       (return-from resolve-compount-superclass (tc:fresh-pred (tc:ty-class-instance-predicate instance)))))
 
-  (let ((rator (node-rator-name node)))
-    (unless rator
-      (util:coalton-bug "Expected rator to be a symbol."))
+  (let ((operator (node-operator-name node)))
+    (unless operator
+      (util:coalton-bug "Expected operator to be a symbol."))
 
     (let* (;; Lookup the instance
-           (instance (tc:lookup-instance-by-codegen-sym env rator))
+           (instance (tc:lookup-instance-by-codegen-sym env operator))
 
            ;; Generate a fresh predicate to avoid type variable colisions
            (pred (tc:fresh-pred (tc:ty-class-instance-predicate instance)))
@@ -460,7 +460,7 @@
            (constraints (tc:apply-substitution subs (tc:ty-class-instance-constraints instance)))
 
            (args
-             (loop :for arg :in (node-rands node)
+             (loop :for arg :in (node-operands node)
                    :collect (resolve-compount-superclass arg env))))
 
       (unless (= (length constraints)
@@ -531,11 +531,11 @@
   (labels ((apply-specialization (node &rest rest)
              (declare (dynamic-extent rest)
                       (ignore rest))
-             (let ((rator-name (node-rator-name node)))
-               (unless rator-name
+             (let ((operator-name (node-operator-name node)))
+               (unless operator-name
                  (return-from apply-specialization))
 
-               (let ((from-ty (tc:lookup-value-type env rator-name :no-error t)))
+               (let ((from-ty (tc:lookup-value-type env operator-name :no-error t)))
                  (unless from-ty
                    (return-from apply-specialization))
 
@@ -545,31 +545,31 @@
 
                         (num-preds (length preds))
 
-                        (rator-type
+                        (operator-type
                           (tc:make-function-type*
-                           (subseq (tc:function-type-arguments (node-rator-type node)) num-preds)
-                           (tc:function-return-type (node-rator-type node))))
+                           (subseq (tc:function-type-arguments (node-operator-type node)) num-preds)
+                           (tc:function-return-type (node-operator-type node))))
 
-                        (specialization (tc:lookup-specialization-by-type env rator-name rator-type :no-error t)))
+                        (specialization (tc:lookup-specialization-by-type env operator-name operator-type :no-error t)))
                    (unless specialization
                      (return-from apply-specialization))
 
-                   (unless (>= (length (node-rands node)) num-preds)
-                     (util:coalton-bug "Expected function ~A to have at least ~A args when applying specialization." rator-name (length preds)))
+                   (unless (>= (length (node-operands node)) num-preds)
+                     (util:coalton-bug "Expected function ~A to have at least ~A args when applying specialization." operator-name (length preds)))
 
                    (cond
-                     ((= num-preds (length (node-rands node)))
+                     ((= num-preds (length (node-operands node)))
                       (make-node-variable
-                       :type rator-type
+                       :type operator-type
                        :value (tc:specialization-entry-to specialization)))
 
-                     ((< num-preds (length (node-rands node)))
+                     ((< num-preds (length (node-operands node)))
                       (make-node-application
                        :type (node-type node)
-                       :rator (make-node-variable
-                               :type rator-type
+                       :operator (make-node-variable
+                               :type operator-type
                                :value (tc:specialization-entry-to specialization))
-                       :rands (subseq (node-rands node) num-preds)))
+                       :operands (subseq (node-operands node) num-preds)))
 
                      (t
                       (util:coalton-bug "Invalid specialization ~A~%" specialization))))))))
@@ -607,7 +607,7 @@
                            (node-application-p expr))
                  (return-from apply-lift nil))
 
-               (let ((expr-name (node-rator-name expr)))
+               (let ((expr-name (node-operator-name expr)))
                  (unless expr-name
                    (return-from apply-lift nil))
 

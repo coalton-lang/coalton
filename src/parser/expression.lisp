@@ -91,8 +91,8 @@
    #:node-return-expr                   ; ACCESSOR
    #:node-application                   ; STRUCT
    #:make-node-application              ; CONSTRUCTOR
-   #:node-application-rator             ; ACCESSOR
-   #:node-application-rands             ; ACCESSOR
+   #:node-application-operator             ; ACCESSOR
+   #:node-application-operands             ; ACCESSOR
    #:node-or                            ; STRUCT
    #:make-node-or                       ; CONSTRUCTOR
    #:node-or-nodes                      ; ACCESSOR
@@ -424,8 +424,8 @@ Rebound to NIL parsing an anonymous FN.")
 (defstruct (node-application
             (:include node)
             (:copier nil))
-  (rator (util:required 'rator) :type node      :read-only t)
-  (rands (util:required 'rands) :type node-list :read-only t))
+  (operator (util:required 'operator) :type node      :read-only t)
+  (operands (util:required 'operands) :type node-list :read-only t))
 
 (defstruct (node-or
             (:include node)
@@ -1214,11 +1214,11 @@ Rebound to NIL parsing an anonymous FN.")
 
     (t
      (make-node-application
-      :rator (parse-expression (cst:first form) file)
-      :rands (loop :for rands := (cst:rest form) :then (cst:rest rands)
-                   :while (cst:consp rands)
-                   :for rand := (cst:first rands)
-                   :collect (parse-expression rand file))
+      :operator (parse-expression (cst:first form) file)
+      :operands (loop :for operands := (cst:rest form) :then (cst:rest operands)
+                   :while (cst:consp operands)
+                   :for operand := (cst:first operands)
+                   :collect (parse-expression operand file))
       :source (cst:source form)))))
 
 (defun parse-variable (form file)

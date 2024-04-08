@@ -175,8 +175,8 @@ in expressions. May not include all bound variables."
   (:method ((node node-application))
     (declare (values node-variable-list &optional))
     (nconc
-     (collect-variables-generic% (node-application-rator node))
-     (mapcan #'collect-variables-generic% (node-application-rands node))))
+     (collect-variables-generic% (node-application-operator node))
+     (mapcan #'collect-variables-generic% (node-application-operands node))))
 
   (:method ((node node-or))
     (declare (values node-variable-list))

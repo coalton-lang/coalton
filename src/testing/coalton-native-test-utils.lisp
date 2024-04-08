@@ -47,9 +47,9 @@ BODY within a `coalton' expression."
              (cl:or (cl:not (cl:symbolp (cl:first check)))
                     (cl:and (cl:not (cl:macro-function (cl:first check)))
                             (cl:not (cl:eql 'coalton:if (cl:first check))))))
-     (cl:let* ((rator (cl:first check))
-               (rands (cl:rest check))
-               (name-els (cl:loop :for rand :in (cl:cons rator rands) :collect (cl:list (cl:gensym) rand)))
+     (cl:let* ((operator (cl:first check))
+               (operands (cl:rest check))
+               (name-els (cl:loop :for operand :in (cl:cons operator operands) :collect (cl:list (cl:gensym) operand)))
                (names (cl:mapcar #'cl:first name-els)))
        `(progn
           (%register-assertion) 

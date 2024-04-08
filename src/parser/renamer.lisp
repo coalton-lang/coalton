@@ -231,8 +231,8 @@
 
     (values
      (make-node-application
-      :rator (rename-variables-generic% (node-application-rator node) ctx)
-      :rands (rename-variables-generic% (node-application-rands node) ctx)
+      :operator (rename-variables-generic% (node-application-operator node) ctx)
+      :operands (rename-variables-generic% (node-application-operands node) ctx)
       :source (node-source node))
      ctx))
 

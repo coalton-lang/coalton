@@ -22,13 +22,13 @@
    #:node-application                   ; STRUCT
    #:make-node-application              ; CONSTRUCTOR
    #:node-application-p                 ; FUNCTION
-   #:node-application-rator             ; ACCESSOR
-   #:node-application-rands             ; ACCESSOR
+   #:node-application-operator          ; ACCESSOR
+   #:node-application-operands          ; ACCESSOR
    #:node-direct-application            ; STRUCT
    #:make-node-direct-application       ; CONSTRUCTOR
-   #:node-direct-application-rator-type ; ACCESSOR
-   #:node-direct-application-rator      ; ACCESSOR
-   #:node-direct-application-rands      ; ACCESSOR
+   #:node-direct-application-operator-type ; ACCESSOR
+   #:node-direct-application-operator   ; ACCESSOR
+   #:node-direct-application-operands   ; ACCESSOR
    #:node-direct-application-p          ; FUNCTION
    #:node-abstraction                   ; STRUCT
    #:make-node-abstraction              ; CONSTRUCTOR
@@ -99,10 +99,10 @@
    #:node-variables                     ; FUNCTION
    #:node-binding-sccs                  ; FUNCTION
    #:node-free-p                        ; FUNCTION
-   #:node-application-symbol-rator      ; FUNCTION
-   #:node-rands                         ; FUNCTION
-   #:node-rator-name                    ; FUNCTION
-   #:node-rator-type                    ; FUNCTION
+   #:node-application-symbol-operator   ; FUNCTION
+   #:node-operands                      ; FUNCTION
+   #:node-operator-name                 ; FUNCTION
+   #:node-operator-type                 ; FUNCTION
    ))
 
 (in-package #:coalton-impl/codegen/ast)
@@ -142,14 +142,14 @@
 
 (defstruct (node-application (:include node))
   "Function application (f x)"
-  (rator (util:required 'rator) :type node      :read-only t)
-  (rands (util:required 'rands) :type node-list :read-only t))
+  (operator (util:required 'operator) :type node      :read-only t)
+  (operands (util:required 'operands) :type node-list :read-only t))
 
 (defstruct (node-direct-application (:include node))
   "Fully saturated function application of a known function"
-  (rator-type (util:required 'rator-type) :type tc:ty             :read-only t)
-  (rator      (util:required 'rator)      :type parser:identifier :read-only t)
-  (rands      (util:required 'rands)      :type node-list         :read-only t))
+  (operator-type (util:required 'operator-type) :type tc:ty             :read-only t)
+  (operator      (util:required 'operator)      :type parser:identifier :read-only t)
+  (operands      (util:required 'operands)      :type node-list         :read-only t))
 
 (defstruct (node-abstraction (:include node))
   "Lambda literals (fn (x) x)"
@@ -266,50 +266,50 @@ both CL namespaces appearing in NODE"
            (values boolean))
   (null (intersection (node-variables node) bound-variables)))
 
-(defun node-application-symbol-rator (node)
+(defun node-application-symbol-operator (node)
   "Returns the name of the function being called if it is known"
   (declare (type (or node-application node-direct-application) node)
            (values (or null parser:identifier)))
   (etypecase node
     (node-direct-application
-     (node-direct-application-rator node))
+     (node-direct-application-operator node))
 
     (node-application
-     (unless (node-variable-p (node-application-rator node))
-       (return-from node-application-symbol-rator))
+     (unless (node-variable-p (node-application-operator node))
+       (return-from node-application-symbol-operator))
 
-     (node-variable-value (node-application-rator node)))))
+     (node-variable-value (node-application-operator node)))))
 
-(defun node-rands (node)
+(defun node-operands (node)
   (declare (type (or node-application node-direct-application))
            (values node-list))
   (etypecase node
     (node-direct-application
-     (node-direct-application-rands node))
+     (node-direct-application-operands node))
 
     (node-application
-     (node-application-rands node))))
+     (node-application-operands node))))
 
-(defun node-rator-name (node)
+(defun node-operator-name (node)
   (declare (type (or node-application node-direct-application))
            (values (or null parser:identifier)))
   (etypecase node
     (node-direct-application
-     (node-direct-application-rator node))
+     (node-direct-application-operator node))
 
     (node-application
-     (when (node-variable-p (node-application-rator node))
-       (node-variable-value (node-application-rator node))))))
+     (when (node-variable-p (node-application-operator node))
+       (node-variable-value (node-application-operator node))))))
 
-(defun node-rator-type (node)
+(defun node-operator-type (node)
   (declare (type (or node-application node-direct-application))
            (values tc:ty))
   (etypecase node
     (node-direct-application
-     (node-direct-application-rator-type node))
+     (node-direct-application-operator-type node))
 
     (node-application
-     (node-type (node-application-rator node)))))
+     (node-type (node-application-operator node)))))
 
 ;;;
 ;;; Methods
@@ -330,11 +330,11 @@ both CL namespaces appearing in NODE"
   (:method ((node node-application) &key variable-namespace-only)
     (declare (values parser:identifier-list &optional))
     (append
-     (node-variables-g (node-application-rator node) :variable-namespace-only variable-namespace-only)
+     (node-variables-g (node-application-operator node) :variable-namespace-only variable-namespace-only)
      (mapcan
       (lambda (node)
         (node-variables-g node :variable-namespace-only variable-namespace-only))
-      (node-application-rands node))))
+      (node-application-operands node))))
 
   (:method ((node node-abstraction) &key variable-namespace-only)
     (declare (values parser:identifier-list &optional))
@@ -346,12 +346,12 @@ both CL namespaces appearing in NODE"
         (mapcan
          (lambda (node)
            (node-variables-g node :variable-namespace-only variable-namespace-only))
-         (node-direct-application-rands node))
-        (cons (node-direct-application-rator node)
+         (node-direct-application-operands node))
+        (cons (node-direct-application-operator node)
               (mapcan
                (lambda (node)
                  (node-variables-g node :variable-namespace-only variable-namespace-only))
-               (node-direct-application-rands node)))))
+               (node-direct-application-operands node)))))
 
   (:method ((node node-let) &key variable-namespace-only)
     (declare (values parser:identifier-list))
@@ -441,21 +441,21 @@ both CL namespaces appearing in NODE"
 (defmethod tc:apply-substitution (subs (node node-application))
   (make-node-application
    :type (tc:apply-substitution subs (node-type node))
-   :rator (tc:apply-substitution subs (node-application-rator node))
-   :rands (mapcar
+   :operator (tc:apply-substitution subs (node-application-operator node))
+   :operands (mapcar
            (lambda (node)
              (tc:apply-substitution subs node))
-           (node-application-rands node))))
+           (node-application-operands node))))
 
 (defmethod tc:apply-substitution (subs (node node-direct-application))
   (make-node-direct-application
    :type (tc:apply-substitution subs (node-type node))
-   :rator-type (tc:apply-substitution subs (node-direct-application-rator-type node))
-   :rator (node-direct-application-rator node)
-   :rands (mapcar
+   :operator-type (tc:apply-substitution subs (node-direct-application-operator-type node))
+   :operator (node-direct-application-operator node)
+   :operands (mapcar
            (lambda (node)
              (tc:apply-substitution subs node))
-           (node-direct-application-rands node))))
+           (node-direct-application-operands node))))
 
 (defmethod tc:apply-substitution (subs (node node-abstraction))
   (make-node-abstraction

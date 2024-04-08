@@ -29,12 +29,12 @@
   (:method ((expr node-application) env)
     (declare (type tc:environment env)
              (values tc:ty))
-    (assert (not (null (node-application-rands expr))))
+    (assert (not (null (node-application-operands expr))))
 
-    (let ((type (typecheck-node (node-application-rator expr) env))
+    (let ((type (typecheck-node (node-application-operator expr) env))
 
           (subs nil))
-      (loop :for arg :in (node-application-rands expr)
+      (loop :for arg :in (node-application-operands expr)
             :for arg-ty := (typecheck-node arg env) :do
               (progn
                 (setf subs (tc:unify subs (tc:function-type-from type) arg-ty))
@@ -45,12 +45,12 @@
   (:method ((expr node-direct-application) env)
     (declare (type tc:environment env)
              (values tc:ty))
-    (assert (not (null (node-direct-application-rands expr))))
+    (assert (not (null (node-direct-application-operands expr))))
 
-    (let ((type (node-direct-application-rator-type expr))
+    (let ((type (node-direct-application-operator-type expr))
 
           (subs nil))
-      (loop :for arg :in (node-direct-application-rands expr)
+      (loop :for arg :in (node-direct-application-operands expr)
             :for arg-ty := (typecheck-node arg env) :do
               (progn
                 (setf subs (tc:unify subs (tc:function-type-from type) arg-ty))

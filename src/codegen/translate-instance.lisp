@@ -86,8 +86,8 @@
            (if (or unqualified-method-definitions superclass-preds)
                (make-node-application
                 :type (pred-type pred env)
-                :rator var-node
-                :rands (append
+                :operator var-node
+                :operands (append
                         (loop :for pred :in superclass-preds
                               :collect (resolve-dict pred ctx env))
                         unqualified-method-definitions))

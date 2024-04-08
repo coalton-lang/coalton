@@ -55,23 +55,23 @@
              (values node))
     (make-node-application
      :type (node-type node)
-     :rator (apply-ast-substitution subs (node-application-rator node))
-     :rands (apply-ast-substitution subs (node-application-rands node))))
+     :operator (apply-ast-substitution subs (node-application-operator node))
+     :operands (apply-ast-substitution subs (node-application-operands node))))
 
   (:method (subs (node node-direct-application))
     (declare (type ast-substitution-list subs)
              (values node))
 
-    (when (find (node-direct-application-rator node) subs :key #'ast-substitution-from)
+    (when (find (node-direct-application-operator node) subs :key #'ast-substitution-from)
       (util:coalton-bug
        "Failure to apply ast substitution on variable ~A to node-direct-application"
-       (node-direct-application-rator node)))
+       (node-direct-application-operator node)))
 
     (make-node-direct-application
      :type (node-type node)
-     :rator-type (node-direct-application-rator-type node)
-     :rator (node-direct-application-rator node)
-     :rands (apply-ast-substitution subs (node-direct-application-rands node))))
+     :operator-type (node-direct-application-operator-type node)
+     :operator (node-direct-application-operator node)
+     :operands (apply-ast-substitution subs (node-direct-application-operands node))))
 
   (:method (subs (node node-abstraction))
     (declare (type ast-substitution-list subs)

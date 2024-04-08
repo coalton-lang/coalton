@@ -46,20 +46,20 @@
     (declare (type tc:environment env)
              (type (or null symbol) current-function))
     `(rt:call-coalton-function
-      ,(codegen-expression (node-application-rator node) current-function env)
+      ,(codegen-expression (node-application-operator node) current-function env)
       ,@(mapcar
          (lambda (node)
            (codegen-expression node current-function env))
-         (node-application-rands node))))
+         (node-application-operands node))))
 
   (:method ((node node-direct-application) current-function env)
     (declare (type tc:environment env)
              (type (or null symbol) current-function))
-    `(,(node-direct-application-rator node)
+    `(,(node-direct-application-operator node)
       ,@(mapcar
          (lambda (node)
            (codegen-expression node current-function env))
-         (node-direct-application-rands node))))
+         (node-direct-application-operands node))))
 
   (:method ((expr node-abstraction) current-function env)
     (declare (type tc:environment env)
@@ -283,8 +283,8 @@
 
 (defun find-constructor (initform env)
   (if (or (node-application-p initform) (node-direct-application-p initform))
-      (and (node-rator-name initform)
-           (tc:lookup-constructor env (node-rator-name initform) :no-error t))
+      (and (node-operator-name initform)
+           (tc:lookup-constructor env (node-operator-name initform) :no-error t))
       nil))
 
 (defun data-letrec-able-p (initform env)
@@ -373,7 +373,7 @@
        (let* ((inner (codegen-let node (cdr sccs) current-function local-vars env))
               (assignments (loop :for (name . initform) :in scc-bindings
                                  :for ctor-info := (find-constructor initform env)
-                                 :appending (loop :for arg :in (node-rands initform)
+                                 :appending (loop :for arg :in (node-operands initform)
                                                   :for i :from 0
                                                   :collect `(setf ,(setf-accessor ctor-info i name)
                                                                   ,(codegen-expression arg current-function env)))))
@@ -383,8 +383,8 @@
                                  :collect
                                  (if ctor-classname
                                      `(allocate-instance (find-class ',ctor-classname))
-                                     `(,(node-rator-name initform)
-                                       ,@(mapcar (constantly nil) (node-direct-application-rands initform)))))))
+                                     `(,(node-operator-name initform)
+                                       ,@(mapcar (constantly nil) (node-direct-application-operands initform)))))))
          `(let ,(mapcar (lambda (scc-binding allocation)
                           (list (car scc-binding) allocation))
                  scc-bindings allocations)

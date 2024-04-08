@@ -369,28 +369,28 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type coalton-file file)
              (values tc:ty tc:ty-predicate-list accessor-list node-application tc:substitution-list))
 
-    (multiple-value-bind (fun-ty preds accessors rator-node subs)
-        (infer-expression-type (parser:node-application-rator node)
+    (multiple-value-bind (fun-ty preds accessors operator-node subs)
+        (infer-expression-type (parser:node-application-operator node)
                                (tc:make-variable)
                                subs
                                env
                                file)
 
-      (let* ((rands (or (parser:node-application-rands node)
+      (let* ((operands (or (parser:node-application-operands node)
                         (list
                          (parser:make-node-variable
                           :source (parser:node-source node)
                           :name 'coalton:unit))))
 
              (fun-ty_ fun-ty)
-             (rand-nodes
+             (operand-nodes
                ;; Apply arguments one at a time for better error messages
-               (loop :for rand :in rands
+               (loop :for operand :in operands
                      :collect (cond
-                                ;; If the rator is a function then unify against its argument
+                                ;; If the operator is a function then unify against its argument
                                 ((tc:function-type-p fun-ty_)
                                  (multiple-value-bind (ty_ preds_ accessors_ node_ subs_)
-                                     (infer-expression-type rand
+                                     (infer-expression-type operand
                                                             (tc:function-type-from fun-ty_)
                                                             subs
                                                             env
@@ -403,7 +403,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
 
                                    node_))
 
-                                ;; If the rator is variable then unify against a new function type
+                                ;; If the operator is variable then unify against a new function type
                                 ((tc:tyvar-p fun-ty_)
                                  (let* ((new-from (tc:make-variable))
 
@@ -413,7 +413,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
 
                                    (setf subs (tc:unify subs fun-ty_ new-ty))
                                    (multiple-value-bind (ty_ preds_ accessors_ node_ subs_)
-                                       (infer-expression-type rand
+                                       (infer-expression-type operand
                                                               new-from
                                                               subs
                                                               env
@@ -439,7 +439,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                                                 (format nil "Unable to call '~S' it is not a function"
                                                                         fun-ty)
                                                                 (format nil "Function call has ~D arguments but inferred type '~S' only takes ~D"
-                                                                        (length rands)
+                                                                        (length operands)
                                                                         fun-ty
                                                                         (length (tc:function-type-arguments fun-ty)))))))))))
 
@@ -454,8 +454,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                  (make-node-application
                   :type (tc:qualify nil type)
                   :source (parser:node-source node)
-                  :rator rator-node
-                  :rands rand-nodes)
+                  :operator operator-node
+                  :operands operand-nodes)
                  subs)))
           (error:coalton-internal-type-error ()
             (standard-expression-type-mismatch-error node file subs expected-type fun-ty_))))))
@@ -2151,15 +2151,15 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                  (parser:node-the
                   (valid-recursive-constructor-call-p (parser:node-the-expr node)))
                  (parser:node-application
-                  (when (typep (parser:node-application-rator node) 'parser:node-variable)
+                  (when (typep (parser:node-application-operator node) 'parser:node-variable)
 
-                    (let* ((function-name (parser:node-variable-name (parser:node-application-rator node)))
+                    (let* ((function-name (parser:node-variable-name (parser:node-application-operator node)))
 
                            (ctor (tc:lookup-constructor env function-name :no-error t)))
 
                       (when ctor
                         ;; The constructor must be fully applied
-                        (unless (= (length (parser:node-application-rands node)) (tc:constructor-entry-arity ctor))
+                        (unless (= (length (parser:node-application-operands node)) (tc:constructor-entry-arity ctor))
                           (return-from valid-recursive-constructor-call-p nil))
 
                         (let ((type (tc:lookup-type env (tc:constructor-entry-constructs ctor))))
@@ -2173,7 +2173,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                             (return-from valid-recursive-constructor-call-p
                               (reduce
                                (lambda (a b) (and a b))
-                               (parser:node-application-rands node)
+                               (parser:node-application-operands node)
                                :key #'valid-recursive-value-p
                                :initial-value t))))))))))
 

@@ -49,11 +49,11 @@
     (let ((node
             (make-node-application
              :type (node-type node)
-             :rator (traverse (node-application-rator node) funs bound-variables)
-             :rands (mapcar
+             :operator (traverse (node-application-operator node) funs bound-variables)
+             :operands (mapcar
                      (lambda (node)
                        (traverse node funs bound-variables))
-                     (node-application-rands node)))))
+                     (node-application-operands node)))))
       (call-if node :application funs bound-variables)))
 
   (:method ((node node-direct-application) funs bound-variables)
@@ -61,12 +61,12 @@
     (let ((node
             (make-node-direct-application
              :type (node-type node)
-             :rator-type (node-direct-application-rator-type node)
-             :rator (node-direct-application-rator node)
-             :rands (mapcar
+             :operator-type (node-direct-application-operator-type node)
+             :operator (node-direct-application-operator node)
+             :operands (mapcar
                      (lambda (node)
                        (traverse node funs bound-variables))
-                     (node-direct-application-rands node)))))
+                     (node-direct-application-operands node)))))
       (call-if node :direct-application funs bound-variables)))
 
   (:method ((node node-abstraction) funs bound-variables)

@@ -148,14 +148,14 @@ Returns a `node'.")
         
         (make-node-application
          :type (tc:qualified-ty-type qual-ty)
-         :rator (make-node-variable
+         :operator (make-node-variable
                  :type (tc:make-function-type*
                         (list
                          (pred-type num-pred env)
                          tc:*integer-type*)
                         (tc:qualified-ty-type qual-ty))
                  :value from-int-method)
-         :rands (list
+         :operands (list
                  (resolve-dict num-pred ctx env)
                  (make-node-literal
                   :type tc:*integer-type*
@@ -220,11 +220,11 @@ Returns a `node'.")
       
       (make-node-application
        :type (tc:qualified-ty-type qual-ty)
-       :rator (translate-expression (tc:node-application-rator expr) ctx env)
-       :rands (mapcar
+       :operator (translate-expression (tc:node-application-operator expr) ctx env)
+       :operands (mapcar
                (lambda (expr)
                  (apply-dicts expr ctx env))
-               (tc:node-application-rands expr)))))
+               (tc:node-application-operands expr)))))
 
   (:method ((expr tc:node-body) ctx env)
     (declare (type pred-context ctx)
@@ -647,13 +647,13 @@ Returns a `node'.")
            (into-iter-node
              (make-node-application
               :type optional-pat-arg-ty
-              :rator (make-node-variable
+              :operator (make-node-variable
                       :type (tc:make-function-type*
                              (list (pred-type intoiterator-pred env)
                                    (node-type into-iter-arg))
                              iter-ty)
                       :value into-iter-method)
-              :rands (list
+              :operands (list
                       (resolve-dict intoiterator-pred ctx env)
                       into-iter-arg)))
 
@@ -666,12 +666,12 @@ Returns a `node'.")
            (iter-next-node
              (make-node-application
               :type optional-pat-arg-ty
-              :rator (make-node-variable
+              :operator (make-node-variable
                       :type (tc:make-function-type*
                              (list iter-ty)
                              optional-pat-arg-ty)
                       :value next-method)
-              :rands (list (make-node-variable
+              :operands (list (make-node-variable
                             :type iter-ty
                             :value  into-iter-binding-var-name))))
 
@@ -803,14 +803,14 @@ Returns a `node'.")
 
                            (make-node-application
                             :type (node-type out-node)
-                            :rator (make-node-variable
+                            :operator (make-node-variable
                                     :type (tc:make-function-type* ; (Monad :m => m :a -> (:a -> :m :b) -> :m :b)
                                            (list (pred-type pred env)
                                                  (tc:qualified-ty-type (tc:node-type (tc:node-do-bind-expr elem)))
                                                  callback-ty)
                                            (node-type out-node))
                                     :value bind-symbol)
-                            :rands (list
+                            :operands (list
                                     (resolve-dict pred ctx env)
                                     (translate-expression (tc:node-do-bind-expr elem) ctx env)
                                     (make-node-abstraction
@@ -839,14 +839,14 @@ Returns a `node'.")
 
                            (make-node-application
                             :type (node-type out-node)
-                            :rator (make-node-variable
+                            :operator (make-node-variable
                                     :type (tc:make-function-type* ; (Monad :m => m :a -> (:a -> :m :b) -> :m :b)
                                            (list (pred-type pred env)
                                                  (tc:qualified-ty-type (tc:node-type elem))
                                                  callback-ty)
                                            (node-type out-node))
                                     :value bind-symbol)
-                            :rands (list
+                            :operands (list
                                     (resolve-dict pred ctx env)
                                     (translate-expression elem ctx env)
                                     (make-node-abstraction
@@ -926,8 +926,8 @@ dictionaries applied."
       (t
        (make-node-application
         :type (tc:qualified-ty-type qual-ty)
-        :rator inner-node
-        :rands dicts)))))
+        :operator inner-node
+        :operands dicts)))))
 
 (defun wrap-with-pattern-params (pattern-params inner)
   "Wrap INNER in nested `NODE-MATCH' expressions to pattern match on PATTERN-PARAMS"

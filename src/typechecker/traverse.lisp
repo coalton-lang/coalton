@@ -192,8 +192,8 @@
      (make-node-application
       :type (node-type node)
       :source (node-source node)
-      :rator (traverse (node-application-rator node) block)
-      :rands (traverse (node-application-rands node) block))))
+      :operator (traverse (node-application-operator node) block)
+      :operands (traverse (node-application-operands node) block))))
 
   (:method ((node node-or) block)
     (declare (type traverse-block block)

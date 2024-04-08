@@ -27,7 +27,7 @@
 ;;;; version of a function. Valid candidates have at least two
 ;;;; arguments, at least one argument must not be '@@unpropagated, and
 ;;;; they must have at least one unpropagated argument.
-;;;; 
+;;;;
 ;;;; Valid candidates can have unknown typeclass dictionaries as long
 ;;;; as at least one argument is a valid dictionary. Candidates are
 ;;;; each given a unique name, used as the name of their recompiled
@@ -110,13 +110,13 @@ constant values could be."
 
     ((and
       (node-direct-application-p node)
-      (tc:lookup-instance-by-codegen-sym env (node-direct-application-rator node) :no-error t))
+      (tc:lookup-instance-by-codegen-sym env (node-direct-application-operator node) :no-error t))
      t) 
 
     ((and
       (node-application-p node)
-      (node-variable-p (node-application-rator node))
-      (tc:lookup-instance-by-codegen-sym env (node-variable-value (node-application-rator node)) :no-error t))
+      (node-variable-p (node-application-operator node))
+      (tc:lookup-instance-by-codegen-sym env (node-variable-value (node-application-operator node)) :no-error t))
      t)
 
     (t
@@ -271,8 +271,8 @@ recompilation, and also maintains a stack of uncompiled candidates."
                              :type (tc:make-function-type*
                                     (util:drop num-remaining (tc:function-type-arguments new-type))
                                     (tc:function-return-type new-type))
-                             :rator subexpr
-                             :rands (loop :for name :in remaing-names
+                             :operator subexpr
+                             :operands (loop :for name :in remaing-names
                                           :for ty :in remaining-types
                                           :collect (make-node-variable
                                                     :type ty
@@ -321,8 +321,8 @@ propigate dictionaries that have been moved by the hoister."
            (type package package)
            (type tc:environment env))
   (labels ((validate-candidate (node &key bound-variables &allow-other-keys)
-             (let ((name (node-rator-name node))
-                   (rands (node-rands node)))
+             (let ((name (node-operator-name node))
+                   (operands (node-operands node)))
 
                (unless name
                  (return-from validate-candidate nil))
@@ -330,8 +330,8 @@ propigate dictionaries that have been moved by the hoister."
                (let ((candidate
                        (valid-candidate-p
                         name
-                        (loop :for rand :in rands
-                              :collect (resolve-var rand resolve-table))
+                        (loop :for operand :in operands
+                              :collect (resolve-var operand resolve-table))
                         bound-variables
                         env)))
 
@@ -359,16 +359,16 @@ propigate dictionaries that have been moved by the hoister."
            (values node &optional))
 
   (labels ((apply-candidate (node &key bound-variables &allow-other-keys)
-             (let ((name (node-rator-name node))
-                   (rands (node-rands node)))
+             (let ((name (node-operator-name node))
+                   (operands (node-operands node)))
 
                (unless name
                  (return-from apply-candidate nil))
 
                (let ((candidate (valid-candidate-p
                                  name
-                                 (loop :for rand :in rands
-                                       :collect (resolve-var rand resolve-table))
+                                 (loop :for operand :in operands
+                                       :collect (resolve-var operand resolve-table))
                                  bound-variables
                                  env)))
 
@@ -377,12 +377,12 @@ propigate dictionaries that have been moved by the hoister."
 
                  (let* ((function-name (candidate-manager-get candidate-manager candidate))
 
-                        (new-type (node-rator-type node))
+                        (new-type (node-operator-type node))
 
                         (arg-tys nil) 
 
                         (args (loop
-                                :for arg :in (node-rands node)
+                                :for arg :in (node-operands node)
                                 :for candidate-arg :in (compile-candidate-args candidate)
 
                                 :when (eq candidate-arg '@@unpropagated)
@@ -398,12 +398,12 @@ propigate dictionaries that have been moved by the hoister."
                         :value function-name)
                        (make-node-application
                         :type (node-type node)
-                        :rator (make-node-variable
+                        :operator (make-node-variable
                                 :type (tc:make-function-type*
                                        (reverse arg-tys)
                                        new-type)
                                 :value function-name)
-                        :rands args)))))))
+                        :operands args)))))))
 
     (traverse
      node

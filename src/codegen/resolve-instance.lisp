@@ -77,10 +77,10 @@
           ;; Otherwise create a new dict at runtime
           (make-node-application
            :type (pred-type pred env) 
-           :rator (make-node-variable
+           :operator (make-node-variable
                    :type (tc:make-function-type* arg-types (pred-type pred env))
                    :value (tc:ty-class-instance-codegen-sym instance))
-           :rands subdicts)))))
+           :operands subdicts)))))
 
 
 (defun superclass-accessors (pred ctx-pred env)

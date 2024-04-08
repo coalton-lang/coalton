@@ -90,8 +90,8 @@
    #:node-return-expr                   ; ACCESSOR
    #:node-application                   ; STRUCT
    #:make-node-application              ; CONSTRUCTOR
-   #:node-application-rator             ; ACCESSOR
-   #:node-application-rands             ; ACCESSOR
+   #:node-application-operator          ; ACCESSOR
+   #:node-application-operands          ; ACCESSOR
    #:node-or                            ; STRUCT
    #:make-node-or                       ; CONSTRUCTOR
    #:node-or-nodes                      ; ACCESSOR
@@ -297,8 +297,8 @@
 (defstruct (node-application
             (:include node)
             (:copier nil))
-  (rator (util:required 'rator) :type node      :read-only t)
-  (rands (util:required 'rands) :type node-list :read-only t))
+  (operator (util:required 'operator) :type node      :read-only t)
+  (operands (util:required 'operands) :type node-list :read-only t))
 
 (defstruct (node-or
             (:include node)
@@ -537,8 +537,8 @@
   (make-node-application
    :type (tc:apply-substitution subs (node-type node))
    :source (node-source node)
-   :rator (tc:apply-substitution subs (node-application-rator node))
-   :rands (tc:apply-substitution subs (node-application-rands node))))
+   :operator (tc:apply-substitution subs (node-application-operator node))
+   :operands (tc:apply-substitution subs (node-application-operands node))))
 
 (defmethod tc:apply-substitution (subs (node node-or))
   (declare (type tc:substitution-list subs)
