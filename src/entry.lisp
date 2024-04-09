@@ -21,24 +21,11 @@
 
 (defvar *global-environment* (tc:make-default-environment))
 
-(defun set! (type k v)
-  (setf *global-environment* (env:set *global-environment* type k v)))
-
-(defun unset! (type k)
-  (setf *global-environment* (env:unset *global-environment* type k)))
-
-(defun compute-updates (a b)
-  (nreverse
-   (loop :for c := b :then (env:parent c)
-         :while (and c (not (eq a c)))
-         :collect (destructuring-bind (op . args) (env:operation c)
-                    (ecase op
-                      (:set
-                       (destructuring-bind (k v) args
-                         `(set! ,(env:namespace c) ',k ',v)))
-                      (:unset
-                       (destructuring-bind (k) args
-                         `(unset! ,(env:namespace c) ',k))))))))
+(defun build-update-forms (updates)
+  (loop :for (name . args) :in (reverse updates)
+        :collect `(setf *global-environment*
+                        (funcall ',name *global-environment*
+                                 ,@(mapcar #'util:runtime-quote args)))))
 
 (defun entry-point (program)
   (declare (type parser:program program))
@@ -46,7 +33,11 @@
   (let* ((*package* (parser:program-package program))
          (program (parser:rename-variables program))
          (file (parser:program-file program))
-         (env *global-environment*))
+         (env *global-environment*)
+         (updates nil)
+         (tc:*update-hook* (lambda (name args)
+                             (unless settings:*coalton-skip-update*
+                               (push (cons name args) updates)))))
 
     (multiple-value-bind (type-definitions instances env)
         (tc:toplevel-define-type (parser:program-types program)
@@ -106,16 +97,17 @@
                   (values
                    (if settings:*coalton-skip-update*
                        program
-                       `(progn
-                          (eval-when (:load-toplevel)
-                            (unless (eq (settings:coalton-release-p) ,(settings:coalton-release-p))
-                              ,(if (settings:coalton-release-p)
-                                   `(error "~A was compiled in release mode but loaded in development."
-                                           ,(or *compile-file-pathname* *load-truename*))
-                                   `(error "~A was compiled in development mode but loaded in release."
-                                           ,(or *compile-file-pathname* *load-truename*)))))
-                          ,@(compute-updates *global-environment* env)
-                          ,program))
+                       (let ((update (build-update-forms updates)))
+                         `(progn
+                            (eval-when (:load-toplevel)
+                              (unless (eq (settings:coalton-release-p) ,(settings:coalton-release-p))
+                                ,(if (settings:coalton-release-p)
+                                     `(error "~A was compiled in release mode but loaded in development."
+                                             ,(or *compile-file-pathname* *load-truename*))
+                                     `(error "~A was compiled in development mode but loaded in release."
+                                             ,(or *compile-file-pathname* *load-truename*)))))
+                            ,@update
+                            ,program)))
                    env))))))))))
 
 (defun expression-entry-point (node file)

@@ -1,11 +1,11 @@
 ;;;;
-;;;; Central environment managment. Coalton stores all persistent
+;;;; Central environment management. Coalton stores all persistent
 ;;;; state in a single immutable struct. State is partitioned into a
 ;;;; series of sub-environments. Each sub-environment is analogous to
 ;;;; a database table, and holds multiple entries which function like
 ;;;; database rows. The process of compiling Coalton code will require
 ;;;; many "writes" to the environment. Each write is an immutable
-;;;; update which returns a new environment. The writes preformed when
+;;;; update which returns a new environment. The writes performed when
 ;;;; compiling a single coalton-toplevel form are tracked in a log.
 ;;;; After compilation is finished the write log is added to the
 ;;;; generated lisp code. This allows replaying the environment
@@ -151,9 +151,18 @@
    #:lookup-fundep-environment              ; FUNCTION
    #:update-instance-fundeps                ; FUNCTION
    #:solve-fundeps                          ; FUNCTION
-   ))
+   #:*update-hook*))
 
 (in-package #:coalton-impl/typechecker/environment)
+
+(defvar *update-hook*)
+
+(defmacro define-env-updater (name arg-list &body body)
+  `(defun ,name (&rest args)
+     (declare (values environment &optional))
+     (when (boundp '*update-hook*)
+       (funcall *update-hook* ',name (cdr args)))
+     (destructuring-bind ,arg-list args ,@body)))
 
 ;;;
 ;;; Type environments
@@ -518,7 +527,7 @@
 (defun lookup-value-type (env symbol &key no-error)
   (%lookup env :value symbol "Unknown binding ~S" no-error))
 
-(defun set-value-type (env symbol value)
+(define-env-updater set-value-type (env symbol value)
   (when (type-variables value)
     ;; Schemes stored in the environment are not allowed to have any free variables.
     (util:coalton-bug "Unable to add type with free variables to environment ~S" value))
@@ -534,7 +543,7 @@
 (defun lookup-type (env symbol &key no-error)
   (%lookup env :type symbol "Unknown type ~S" no-error))
 
-(defun set-type (env symbol value)
+(define-env-updater set-type (env symbol value)
   (env:set env :type symbol value))
 
 ;;;
@@ -544,7 +553,7 @@
 (defun lookup-constructor (env symbol &key no-error)
   (%lookup env :constructor symbol "Unknown constructor ~S" no-error))
 
-(defun set-constructor (env symbol value)
+(define-env-updater set-constructor (env symbol value)
   (env:set env :constructor symbol value))
 
 (defun unset-constructor (env symbol)
@@ -578,7 +587,7 @@
 (defun lookup-struct (env symbol &key no-error)
   (%lookup env :struct symbol "Unknown struct ~S" no-error))
 
-(defun set-struct (env symbol value)
+(define-env-updater set-struct (env symbol value)
   (env:set env :struct symbol value))
 
 (defun unset-struct (env symbol)
@@ -589,7 +598,7 @@
 (defun lookup-class (env symbol &key no-error)
   (%lookup env :class symbol "Unknown class ~S" no-error))
 
-(defun set-class (env symbol value)
+(define-env-updater set-class (env symbol value)
   (env:set env :class symbol value))
 
 ;;;
@@ -616,7 +625,7 @@
 (defun lookup-function (env symbol &key no-error)
   (%lookup env :function symbol "Unknown function ~S" no-error))
 
-(defun set-function (env symbol value)
+(define-env-updater set-function (env symbol value)
   (env:set env :function symbol value))
 
 (defun unset-function (env symbol)
@@ -641,7 +650,7 @@
 (defun lookup-name (env symbol &key no-error)
   (%lookup env :name symbol "Unknown name ~S" no-error))
 
-(defun set-name (env symbol value)
+(define-env-updater set-name (env symbol value)
   (let ((old-value (lookup-name env symbol :no-error t)))
     (when (and old-value (not (equalp (name-entry-type old-value) (name-entry-type value))))
       (error "Unable to change the type of name ~S from ~A to ~A."
@@ -678,7 +687,7 @@
 (defun lookup-function-source-parameter-names (env function-name)
   (env:get env :source-name function-name))
 
-(defun set-function-source-parameter-names (env function-name source-parameter-names)
+(define-env-updater set-function-source-parameter-names (env function-name source-parameter-names)
   (env:set env :source-name function-name source-parameter-names))
 
 (defun unset-function-source-parameter-names (env function-name)
@@ -720,7 +729,7 @@
      (env:set env :instance class (cons value instances))
      :codegen-sym (ty-class-instance-codegen-sym value) value)))
 
-(defun set-method-inline (env method instance codegen-sym)
+(define-env-updater set-method-inline (env method instance codegen-sym)
   (env:set env :method-inline (cons method instance) codegen-sym))
 
 (defun lookup-method-inline (env method instance &key no-error)
@@ -730,7 +739,7 @@
   (%lookup env :method-inline (cons method instance)
            "Unable to find inline method for method ~A on instance ~S." no-error))
 
-(defun set-code (env name code)
+(define-env-updater set-code (env name code)
   (env:set env :code name code))
 
 (defun lookup-code (env name &key no-error)
@@ -755,7 +764,7 @@
 (deftype specialization-entry-list ()
   '(satisfies specialization-entry-list-p))
 
-(defun add-specialization (env entry)
+(define-env-updater add-specialization (env entry)
   (declare (type environment env)
            (type specialization-entry entry))
   (let* ((from (specialization-entry-from entry))
@@ -835,7 +844,7 @@
   (env-update env :fundep class (lambda (fundeps)
                                   (acons-list fundep entry fundeps))))
 
-(defun update-instance-fundeps (env pred)
+(define-env-updater update-instance-fundeps (env pred)
   (declare (type environment env)
            (type ty-predicate pred))
   (let* ((class (lookup-class env (ty-predicate-class pred)))

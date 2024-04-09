@@ -5,8 +5,6 @@
    #:get
    #:set
    #:map)
-  (:local-nicknames
-   (#:a #:alexandria))
   (:export
    #:do-environment
    #:empty
@@ -16,13 +14,12 @@
    #:exported-symbol-p
    #:get
    #:keys
-   #:namespace
-   #:operation
-   #:parent
    #:set
+   #:set!
    #:set*
    #:update-entries
-   #:unset))
+   #:unset
+   #:unset!))
 
 ;;;
 ;;; Low-level environment, representing all that Coalton knows about
@@ -45,9 +42,6 @@
 (in-package #:coalton-impl/environment)
 
 (defstruct (environment (:conc-name nil))
-  (namespace nil :type symbol)
-  parent
-  operation
   value)                                ; namespace->k->v
 
 (defmethod print-object ((environment environment) stream)
@@ -76,20 +70,16 @@
 (declaim (inline set))
 (defun set (environment namespace name entry)
   "Bind NAME to ENTRY in NAMESPACE of ENVIRONMENT."
-  (make-environment :namespace namespace
-                    :parent environment
-                    :operation (list :set name entry)
-                    :value (update-namespace environment namespace
-                                             (a:rcurry #'fset:with name entry))))
+  (make-environment :value (update-namespace environment namespace
+                                             (lambda (namespace)
+                                               (fset:with namespace name entry)))))
 
 (declaim (inline unset))
 (defun unset (environment namespace name)
   "Unbind NAME in NAMESPACE of ENVIRONMENT."
-  (make-environment :namespace namespace
-                    :parent environment
-                    :operation (list :unset name)
-                    :value (update-namespace environment namespace
-                                             (a:rcurry #'fset:less name))))
+  (make-environment :value (update-namespace environment namespace
+                                             (lambda (namespace)
+                                               (fset:less namespace name)))))
 
 (defun set* (environment namespace &rest entries)
   "Create multiple NAME -> ENTRY bindings in NAMESPACE of ENVIRONMENT."
