@@ -223,7 +223,8 @@
                                name
                                (parser:toplevel-define-orig-params define)))
               :else
-                :do (setf env (tc:unset-function-source-parameter-names env name)))
+                :when (tc:lookup-function-source-parameter-names env name)
+                  :do (setf env (tc:unset-function-source-parameter-names env name)))
 
 
         (values
