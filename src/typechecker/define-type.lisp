@@ -229,31 +229,29 @@
                   (when (plusp (tc:constructor-entry-arity ctor-entry))
                     (setf env (tc:unset-function env constructor))))))
 
-  (if (typep parsed-type 'parser:toplevel-define-struct)
-      (let* ((fields (mapcar #'parser:struct-field-name (parser:toplevel-define-struct-fields parsed-type)))
-
-             (field-tys (loop :with table := (make-hash-table :test #'equal)
-                              :for field :in fields
-                              :for ty :in (first (type-definition-constructor-args type))
-                              :do (setf (gethash field table) ty)
-                              :finally (return table)))
-
-             (field-idx (loop :with table := (make-hash-table :test #'equal)
-                              :for field :in fields
-                              :for i :from 0
-                              :do (setf (gethash field table) i)
-                              :finally (return table))))
-
-        (setf env (tc:set-struct
-                   env
-                   (type-definition-name type)
-                   (tc:make-struct-entry
-                    :name (type-definition-name type)
-                    :fields fields
-                    :field-tys field-tys
-                    :field-idx field-idx))))
-
-      (setf env (tc:unset-struct env (type-definition-name type))))
+  (cond ((typep parsed-type 'parser:toplevel-define-struct)
+         (let* ((fields (mapcar #'parser:struct-field-name
+                                (parser:toplevel-define-struct-fields parsed-type)))
+                (field-tys (loop :with table := (make-hash-table :test #'equal)
+                                 :for field :in fields
+                                 :for ty :in (first (type-definition-constructor-args type))
+                                 :do (setf (gethash field table) ty)
+                                 :finally (return table)))
+                (field-idx (loop :with table := (make-hash-table :test #'equal)
+                                 :for field :in fields
+                                 :for i :from 0
+                                 :do (setf (gethash field table) i)
+                                 :finally (return table))))
+           (setf env (tc:set-struct
+                      env
+                      (type-definition-name type)
+                      (tc:make-struct-entry
+                       :name (type-definition-name type)
+                       :fields fields
+                       :field-tys field-tys
+                       :field-idx field-idx)))))
+        ((tc:lookup-struct env (type-definition-name type) :no-error t)
+         (setf env (tc:unset-struct env (type-definition-name type)))))
 
   ;; Define type parsed type in the environment
   (setf env
@@ -297,19 +295,19 @@
 
           ;; If the constructor takes paramaters then
           ;; add it to the function environment
-          (if (not (= (tc:constructor-entry-arity ctor) 0))
-              (setf env
-                    (tc:set-function
-                     env
-                     ctor-name
-                     (tc:make-function-env-entry
-                      :name ctor-name
-                      :arity (tc:constructor-entry-arity ctor))))
-
-              ;; If the constructor does not take
-              ;; parameters then remove it from the
-              ;; function environment
-              (setf env (tc:unset-function env ctor-name))))
+          (cond ((not (= (tc:constructor-entry-arity ctor) 0))
+                 (setf env
+                       (tc:set-function
+                        env
+                        ctor-name
+                        (tc:make-function-env-entry
+                         :name ctor-name
+                         :arity (tc:constructor-entry-arity ctor)))))
+                ((tc:lookup-function env ctor-name :no-error t)
+                 ;; If the constructor does not take
+                 ;; parameters then remove it from the
+                 ;; function environment
+                 (setf env (tc:unset-function env ctor-name)))))
 
   env)
 

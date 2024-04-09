@@ -336,7 +336,8 @@
                                                              :name codegen-sym
                                                              :arity class-arity)))
            :else
-             :do (setf env (tc:unset-function env codegen-sym))
+             :when (tc:lookup-function env codegen-sym :no-error t)
+               :do (setf env (tc:unset-function env codegen-sym))
 
            :do (loop :for method-ty :in method-tys
                      :for method-name :in method-names

@@ -234,9 +234,9 @@
                     (tc:make-function-env-entry
                      :name name
                      :arity arity))))
-    (loop :for name :in toplevel-values
-          :do
-             (setf env (tc:unset-function env name))))
+    (dolist (name toplevel-values)
+      (when (tc:lookup-function env name :no-error t)
+        (setf env (tc:unset-function env name)))))
   env)
 
 (defun make-function-table (env)
