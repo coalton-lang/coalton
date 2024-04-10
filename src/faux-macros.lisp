@@ -1,6 +1,6 @@
 ;;;; faux-macros.lisp
 ;;;;
-;;;; Some macro defintions that are only valid inside of a COALTON (&
+;;;; Some macro definitions that are only valid inside of a COALTON (&
 ;;;; co.) macro, that aren't actually valid as a toplevel form in
 ;;;; Lisp.
 

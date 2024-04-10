@@ -661,7 +661,7 @@ This function is equivalent to all size-N elements of `(COMBS L)`."
            ((Nil) True)
            (_ False))))))
 
-  ;; <=> on lists uses lexographic order, like strings.
+  ;; <=> on lists uses lexicographic order, like strings.
   ;; Nil is the smallest list, and is LT any non-nil list.
   ;; Two Conses with non-EQ cars are ordered based on the ordering of the cars, so (0 ...) is less than (1
   ;; ...) no matter the ...s.

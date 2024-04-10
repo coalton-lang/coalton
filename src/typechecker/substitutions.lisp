@@ -85,7 +85,7 @@
 
 
 
-(defun pprint-substution (stream sub &optional colon-p at-sign-p)
+(defun pprint-substitution (stream sub &optional colon-p at-sign-p)
   (declare (ignore colon-p)
            (ignore at-sign-p))
   (write-string "#T" stream)
@@ -94,4 +94,4 @@
   (write (substitution-to sub) :stream stream)
   nil)
 
-(set-pprint-dispatch 'substitution 'pprint-substution)
+(set-pprint-dispatch 'substitution 'pprint-substitution)

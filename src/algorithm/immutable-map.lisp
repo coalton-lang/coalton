@@ -49,7 +49,7 @@
 
 (defun immutable-map-keys (m)
   (declare (type immutable-map m))
-  "Return a unique list containg the keys in M and its parents"
+  "Return a unique list containing the keys in M and its parents"
   (declare (type immutable-map m))
   (fset:convert 'list (fset:domain (immutable-map-data m))))
 

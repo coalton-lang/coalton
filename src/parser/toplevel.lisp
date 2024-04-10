@@ -1186,7 +1186,7 @@ consume all attributes")))
                    :highlight :end)))
 
     (if (cst:atom (cst:second form))
-        ;; (deine-struct S ...)
+        ;; (define-struct S ...)
         (setf unparsed-name (cst:second form))
 
         ;; (define-struct (S ...) ...)

@@ -19,7 +19,7 @@
 
 (in-package #:coalton/hashtable-shim/hash-table)
 
-;;;; An imlementation of a hashtable using open addressing and linear
+;;;; An implementation of a hashtable using open addressing and linear
 ;;;; probing. Loosely based on swiss tables.
 ;;;;
 ;;;; Each hash table stores three equal length arrays. Array elements

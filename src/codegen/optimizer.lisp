@@ -49,7 +49,7 @@
 
   (let ((bindings (optimize-bindings-initial bindings package env)))
 
-    ;; Make code and environment data avaliable to the monomorphizer
+    ;; Make code and environment data available to the monomorphizer
     (loop :for (name . node) :in bindings
           :do (setf env (tc:set-code env name node)))
 
@@ -450,7 +450,7 @@
     (let* (;; Lookup the instance
            (instance (tc:lookup-instance-by-codegen-sym env rator))
 
-           ;; Generate a fresh predicate to avoid type variable colisions
+           ;; Generate a fresh predicate to avoid type variable collisions
            (pred (tc:fresh-pred (tc:ty-class-instance-predicate instance)))
 
            ;; Generate subs to match the class's superclasses to PRED

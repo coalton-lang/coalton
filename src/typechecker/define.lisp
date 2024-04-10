@@ -133,7 +133,7 @@
                    (make-coalton-error-note
                     :type :primary
                     :span (parser:node-source (parser:toplevel-define-name second))
-                    :message "second defintion here"))))))
+                    :message "second definition here"))))))
 
   ;; Ensure that there are no duplicate declarations
   (check-duplicates
@@ -607,7 +607,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                      :message (format nil "Second return is of type '~S'"
                                                       (tc:apply-substitution subs ty2)))))))))
 
-        ;; Unify the function's inferered type with one of the early returns.
+        ;; Unify the function's inferred type with one of the early returns.
         (when *returns*
           (handler-case
               (setf subs (tc:unify subs (cdr (first *returns*)) body-ty))
@@ -1701,7 +1701,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                        (make-coalton-error-note
                         :type :primary
                         :span (parser:pattern-source second) 
-                        :message "second defintion here"))))))
+                        :message "second definition here"))))))
 
       (unless ctor
         (error 'tc-error
@@ -2381,7 +2381,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                    subs)))))))))
 
 (defun infer-binding-type (binding expected-type subs env file)
-  "Infer the type of BINDING then unify against EXPECTED-TYPE. Adds BINDING's paramaters to the environment."
+  "Infer the type of BINDING then unify against EXPECTED-TYPE. Adds BINDING's parameters to the environment."
   (declare (type (or parser:toplevel-define parser:node-let-binding parser:instance-method-definition) binding)
            (type tc:ty expected-type)
            (type tc:substitution-list subs)
@@ -2430,7 +2430,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
          (value-node
            (if params
-               ;; If the binding has parameters that setup the return state before infering the binding's type
+               ;; If the binding has parameters that setup the return state before inferring the binding's type
                (let ((*return-status* :lambda)
 
                      (*returns* nil))
@@ -2468,7 +2468,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                                                 :message (format nil "Second return is of type '~S'"
                                                                  (tc:apply-substitution subs ty2)))))))))
 
-                   ;; Unify the function's inferered type with one of the early returns.
+                   ;; Unify the function's inferred type with one of the early returns.
                    (when *returns*
                      (handler-case
                          (setf subs (tc:unify subs (cdr (first *returns*)) ret-ty))
@@ -2613,11 +2613,11 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
      :body (instance-method-definition-body binding)
      :source (instance-method-definition-source binding))))
 
-;;; When infering the types of bindings in a recursive binding group,
+;;; When inferring the types of bindings in a recursive binding group,
 ;;; references to those bindings will not yet have predicates. If
-;;; these incorrectly typed references remain then compiler will
-;;; produce invalid codegen. `rewrite-recursive-calls' rewrites the
-;;; type of recursive refences once the predicates on each binding are
+;;; these incorrectly typed references remain, the compiler will
+;;; produce invalid code. `rewrite-recursive-calls' rewrites the type
+;;; of recursive references once the predicates on each binding are
 ;;; known.
 
 (defun rewrite-recursive-calls (binding table)
@@ -2664,10 +2664,10 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 ;;;   Into :a :b => :a -> Integer
 ;;;
 ;;; Without fundeps this set of type variables is simply the type
-;;; variables in the infered type, minus the type variables in the
+;;; variables in the inferred type, minus the type variables in the
 ;;; environment. With fundeps, type variables can appear in the
-;;; predicates but not the type without being ambiguous. 
-;;; 
+;;; predicates but not the type without being ambiguous.
+;;;
 ;;;   A valid definition for "C :a :b (:a -> :b)"
 ;;;   C :a :b => :a -> Integer
 ;;;

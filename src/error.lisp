@@ -451,7 +451,7 @@ NOTES and HELP-NOTES may optionally be supplied notes and help messages."
 
                          (print-finished-multiline-notes-for-line (coalton-error-resolved-note-start-line note)))))
 
-            ;; If there are any multline notes that have not closed out then
+            ;; If there are any multiline notes that have not closed out then
             ;; print them.
             (print-lines-until last-line)
             (print-finished-multiline-notes-for-line last-line))))

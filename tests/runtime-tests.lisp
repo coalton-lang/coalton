@@ -129,8 +129,8 @@
     (let ((y (even? 2)))
       y)))
 
-(define-test test-defaulting-propigation ()
-    (is (== True gh-526)))
+(define-test test-defaulting-propagation ()
+  (is (== True gh-526)))
 
 ;; Check that defaulted monomorphized bindings work
 (coalton-toplevel

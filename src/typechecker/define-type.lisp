@@ -293,7 +293,7 @@
                       :location (or *compile-file-pathname*
                                     *load-truename*))))
 
-          ;; If the constructor takes paramaters then
+          ;; If the constructor takes parameters then
           ;; add it to the function environment
           (cond ((not (= (tc:constructor-entry-arity ctor) 0))
                  (setf env
