@@ -51,9 +51,9 @@ Represented as a closure from initial state to updated state and value."
     (define (map fa->b sca)
       (ST
        (fn (state)
-	 (match (run sca state)
-	   ((Tuple state2 a)
-	    (Tuple state2 (fa->b a))))))))
+         (match (run sca state)
+           ((Tuple state2 a)
+            (Tuple state2 (fa->b a))))))))
 
   (define-instance (Applicative (ST :state))
     (define (pure x)
@@ -62,23 +62,23 @@ Represented as a closure from initial state to updated state and value."
     (define (liftA2 fab sca scb)
       (ST
        (fn (state1)
-	 ;; Apply the initial state to sca
-	 (match (run sca state1)
-	   ((Tuple state2 a)
-	    ;; Appply the state from sca to scb
-	    (match (run scb state2)
-	      ((Tuple state3 b)
-	       (Tuple state3 (fab a b))))))))))
+         ;; Apply the initial state to sca
+         (match (run sca state1)
+           ((Tuple state2 a)
+            ;; Apply the state from sca to scb
+            (match (run scb state2)
+              ((Tuple state3 b)
+               (Tuple state3 (fab a b))))))))))
 
   (define-instance (Monad (ST :state))
     (define (>>= sca fa->scb)
       (ST
        (fn (state1)
-	 (match (run sca state1)
-	   ((Tuple state2 a)
-	    ;; Use the a to compute the mb,
-	    ;; and apply the state from ma to the mb
-	    (run (fa->scb a) state2))))))))
+         (match (run sca state1)
+           ((Tuple state2 a)
+            ;; Use the a to compute the mb,
+            ;; and apply the state from ma to the mb
+            (run (fa->scb a) state2))))))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/MONAD/STATE")

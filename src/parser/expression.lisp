@@ -252,7 +252,7 @@ Rebound to NIL parsing an anonymous FN.")
 ;;;;
 ;;;; node-when := "(" "when" expression body ")"
 ;;;;
-;;;; node-unless := "(" "unless" expresson body ")"
+;;;; node-unless := "(" "unless" expression body ")"
 ;;;;
 ;;;; node-cond-clause := "(" expression body ")"
 ;;;;
@@ -332,7 +332,7 @@ Rebound to NIL parsing an anonymous FN.")
 ;;
 ;; - must contain at least one node
 ;; - cannot be terminated by a `node-bind'
-;; - does not have source information (but it's children do)
+;; - does not have source information (but its children do)
 ;;
 (defstruct (node-body
             (:copier nil))

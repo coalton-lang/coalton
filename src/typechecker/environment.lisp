@@ -237,7 +237,7 @@
   ;;
   ;; A type cannot be both enum repr and a newtype
   ;;
-  ;; A type that is a newtype has another Coalton type as it's
+  ;; A type that is a newtype has another Coalton type as its
   ;; runtime-type instead of a lisp type. This is to avoid issues with
   ;; recursive newtypes.
   (newtype (util:required 'newtype)           :type boolean :read-only t)

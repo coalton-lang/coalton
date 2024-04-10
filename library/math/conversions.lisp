@@ -70,8 +70,8 @@ Used in `cast-if-inbounds' to force the type inference engine to read minBound a
         (Err "value out of range")
         (Ok
          ;; type hackery to get the minBound and maxBound from the Bounded instance of :target. if we
-         ;; removed the two `unfiy' calls, type inference would compute extra type variables for
-         ;; minBound and maxBound, each with the contstraints `Bounded _' and `Into _ Integer', but
+         ;; removed the two `unify' calls, type inference would compute extra type variables for
+         ;; minBound and maxBound, each with the constraints `Bounded _' and `Into _ Integer', but
          ;; without unifying them with :target.
          (unify max-bound (unify min-bound
                                  (unsafe-cast x)))))))

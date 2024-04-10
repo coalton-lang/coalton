@@ -2,7 +2,7 @@
 ;;;; Type parsing and kind inference. The implementation is a
 ;;;; simplified version of the HM type inference used by the type
 ;;;; checker. After kind inference all remaining kind variables are
-;;;; subsituted with `tc:+kstar+' in the "kind monomorphization" step
+;;;; substituted with `tc:+kstar+' in the "kind monomorphization" step
 ;;;; because Coalton does not support polykinds.
 ;;;;
 

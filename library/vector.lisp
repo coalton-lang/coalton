@@ -104,7 +104,7 @@
     "Set the capacity of `v` to `new-capacity`. Setting the capacity to lower then the length will remove elements from the end."
     (let shrinking = (< new-capacity (length v)))
     (lisp Unit (v shrinking new-capacity)
-      ;; If the array is getting larger then dont change the
+      ;; If the array is getting larger then don't change the
       ;; fill pointer
       (cl:adjust-array v new-capacity :fill-pointer shrinking)
       Unit))

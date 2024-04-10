@@ -2,7 +2,7 @@
 
 ## Function Calls
  
-Type class constraints on functions are turned into additional parameters. These additional paramaters are used to pass type class dictionaries. For example the following type `f :: (Num :a) (Ord :a) => :a -> :a -> :a` would be compiled to the following lisp function definition.
+Type class constraints on functions are turned into additional parameters. These additional parameters are used to pass type class dictionaries. For example the following type `f :: (Num :a) (Ord :a) => :a -> :a -> :a` would be compiled to the following lisp function definition.
 
 ```lisp
 (defun f (G103 G104 A-27 B-28)

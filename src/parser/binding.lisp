@@ -1,6 +1,6 @@
 ;;;;
 ;;;; This file defines a generic protocol for writing code that
-;;;; operatates on both node-let-binding and toplevel-define structs.
+;;;; operates on both node-let-binding and toplevel-define structs.
 ;;;;
 
 (defpackage #:coalton-impl/parser/binding

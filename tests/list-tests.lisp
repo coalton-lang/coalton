@@ -267,7 +267,7 @@
            x)
           (Some x))))
 
-(define-test list-lexographic-order ()
+(define-test list-lexicographic-order ()
   (let is-lt = (fn (smaller larger)
                  (is (== LT (<=> smaller larger)))
                  (is (== GT (<=> larger smaller)))))

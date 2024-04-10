@@ -20,7 +20,7 @@
    #:kyvar-list                         ; TYPE
    #:make-kvariable                     ; FUNCTION
    #:ksubstitution                      ; STRUCT
-   #:make-ksubstution                   ; CONSTRUCTOR
+   #:make-ksubstitution                 ; CONSTRUCTOR
    #:ksubstitution-from                 ; ACCESSOR
    #:ksubstitution-to                   ; ACCESSOR
    #:ksubstitution-list                 ; TYPE
@@ -30,7 +30,7 @@
    #:kmgu                               ; FUNCTION
    #:kind-return-type                   ; FUNCTION
    #:kind-variables                     ; FUNCTION
-   #:kind-variables-generic%                   ; METHOD
+   #:kind-variables-generic%            ; METHOD
    #:kind-monomorphize-subs             ; FUNCTION
    #:simple-kind-p                      ; FUNCTION
    #:kind-arity                         ; FUNCTION

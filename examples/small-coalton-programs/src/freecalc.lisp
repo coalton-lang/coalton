@@ -1,4 +1,4 @@
-;;;; freelcalc.lisp -- An example of the Free Monad + Interpreter pattern in Coalton
+;;;; freecalc.lisp -- An example of the Free Monad + Interpreter pattern in Coalton
 
 ;;; This example follows
 ;;; https://serokell.io/blog/introduction-to-free-monads#free-monads-for-edsls

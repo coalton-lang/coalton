@@ -1,6 +1,6 @@
 ;;;; elementary.lisp
 ;;;;
-;;;; Elementary/algebriac functions and trancsendental numbers
+;;;; Elementary/algebraic functions and transcendental numbers
 
 (coalton-library/utils::defstdlib-package #:coalton-library/math/elementary
     (:use

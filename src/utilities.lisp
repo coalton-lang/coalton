@@ -196,7 +196,7 @@
                ((eql (car is) pos)
                 (inner (cdr is) (cdr xs) (1+ pos) (cons (car xs) out)))
 
-               ;; indicie is past pos
+               ;; index is past pos
                ((> pos (car is))
                 (inner (cdr is) xs pos out))
 

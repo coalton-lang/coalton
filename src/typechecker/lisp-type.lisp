@@ -110,7 +110,7 @@ USE-FUNCTION-ENTRIES specifies whether to emit FUNCTION-ENTRY for functions, emi
       ;; Otherwise, emit the applied type
       (t
        ;; Our underlying representation of types does not have any
-       ;; parameterization on coalton type paramters so we can just
+       ;; parameterization on coalton type parameters so we can just
        ;; recurse down to the base tycon.
        (lisp-type (tapp-from ty) env))))
 

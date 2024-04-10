@@ -56,7 +56,7 @@ Referred to as Decision 9 in Jones 1997.
   (test (fn (Eq :b) => :b -> :b -> Bool)))
 ```
 
-Constraints of class variables in class methods are not allowed since this complicates code and will result in the constraint being propogated up to the class, which is already supported by the class defintion syntax.
+Constraints of class variables in class methods are not allowed since this complicates code and will result in the constraint being propogated up to the class, which is already supported by the class definition syntax.
 
 ### Self Referential Class Definitions
 
@@ -108,7 +108,7 @@ In summary, this requires the formalisation of context reduction and defined res
 Referred to as Decision 4 in Jones 1997.
 
 ```lisp
-;; We can define instances for types beyond just a type constructor with type varaibles.
+;; We can define instances for types beyond just a type constructor with type variables.
 (define-instance (Eq (Optional Int))
   (define (== a b)
     False))

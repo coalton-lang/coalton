@@ -48,7 +48,7 @@
       (tc:lookup-class-instance env pred)
 
     (let*
-        ;; Apply substutions to find the superclass constraints
+        ;; Apply substitutions to find the superclass constraints
         ((instance-constraints
            (tc:apply-substitution
             subs

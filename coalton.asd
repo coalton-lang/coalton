@@ -100,7 +100,7 @@
                 :serial t
                 :components ((:file "pattern")
                              (:file "ast")
-                             (:file "ast-subsitutions")
+                             (:file "ast-substitutions")
                              (:file "resolve-instance")
                              (:file "typecheck-node")
                              (:file "hoister")

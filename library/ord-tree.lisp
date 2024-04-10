@@ -84,7 +84,7 @@
     Empty
 
     ;; unexported; a tree with at least one element, and possibly children.
-    ;; (Brach clr less elt right)
+    ;; (Branch clr less elt right)
     ;; every element of LESS is less than ELT, and every element of RIGHT is greater than ELT.
     (Branch Color (Tree :elt) :elt (Tree :elt))
 
