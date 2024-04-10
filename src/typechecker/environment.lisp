@@ -159,7 +159,6 @@
    #:set-function-source-parameter-names    ; FUNCTION
    #:unset-function-source-parameter-names  ; FUNCTION
    #:constructor-arguments                  ; FUNCTION
-   #:add-class                              ; FUNCTION
    #:add-instance                           ; FUNCTION
    #:set-method-inline                      ; FUNCTION
    #:lookup-method-inline                   ; FUNCTION
@@ -1079,19 +1078,6 @@
            (values ty-list &optional))
   (lookup-constructor env name)
   (function-type-arguments (lookup-value-type env name)))
-
-(define-env-updater add-class (env symbol value)
-  (declare (type environment env)
-           (type symbol symbol)
-           (type ty-class value))
-  ;; Ensure this class does not already exist
-  (when (lookup-class env symbol :no-error t)
-    (error "Class ~S already exists." symbol))
-  ;; Ensure all super classes exist
-  (dolist (sc (ty-class-superclasses value))
-    (unless (lookup-class env (ty-predicate-class sc) :no-error t)
-      (error "Superclass ~S is not defined." sc)))
-  (set-class env symbol value))
 
 (define-env-updater add-instance (env class value)
   (declare (type environment env)
