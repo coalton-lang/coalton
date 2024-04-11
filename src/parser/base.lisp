@@ -81,3 +81,11 @@
   (loop :for list := list_ :then (cst:rest list)
         :while (cst:consp list)
         :collect (funcall f (cst:first list) file)))
+
+(defmacro parse-error (file span message note &optional help)
+  `(error 'parse-error
+          :err (error:coalton-error :span ,span
+                                    :file ,file
+                                    :message ,message
+                                    :primary-note ,note
+                                    :help-notes ,help)))

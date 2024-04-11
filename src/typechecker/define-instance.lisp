@@ -354,6 +354,7 @@
 (defun check-for-orphan-instance (instance file)
   (declare (type parser:toplevel-define-instance instance) 
            (type coalton-file file)
+           (optimize (debug 3))
            (values null))
 
 
@@ -389,8 +390,9 @@
            (parser:identifier-src-name (parser:ty-predicate-class (parser:toplevel-define-instance-pred instance)))
            (loop :for type :in (parser:ty-predicate-types (parser:toplevel-define-instance-pred instance))
                  :append (mapcar #'parser:tycon-name (parser:collect-referenced-types type))))))
-
+ 
     (unless (find *package* instance-syms :key #'symbol-package)
+      
       (error 'tc-error
              :err (coalton-error
                    :span (parser:toplevel-define-instance-head-src instance)

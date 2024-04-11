@@ -5,6 +5,7 @@
    #:coalton-impl/parser/base
    #:coalton-impl/parser/reader
    #:coalton-impl/parser/types
+   #:coalton-impl/parser/package
    #:coalton-impl/parser/pattern
    #:coalton-impl/parser/macro
    #:coalton-impl/parser/expression)
@@ -131,8 +132,9 @@
    #:program-instances                           ; ACCESSOR
    #:program-specializations                     ; ACCESSOR
    #:parse-toplevel-form                         ; FUNCTION
-   #:read-program                                ; FUNCTION
    #:read-expression                             ; FUNCTION
+   #:read-file                                   ; FUNCTION
+   #:read-program                                ; FUNCTION
    ))
 
 (in-package #:coalton-impl/parser/toplevel)
@@ -412,193 +414,117 @@
 (deftype toplevel-specialize-list ()
   '(satisfies toplevel-specialize-list-p))
 
-(defstruct (program
-            (:copier nil))
-  (package         (util:required 'package)         :type package                       :read-only t)
-  (file            (util:required 'file)            :type coalton-file                  :read-only t)
-  (types           (util:required 'types)           :type toplevel-define-type-list     :read-only nil)
-  (structs         (util:required 'structs)         :type toplevel-define-struct-list   :read-only nil)
-  (declares        (util:required 'declares)        :type toplevel-declare-list         :read-only nil)
-  (defines         (util:required 'defines)         :type toplevel-define-list          :read-only nil)
-  (classes         (util:required 'classes)         :type toplevel-define-class-list    :read-only nil)
-  (instances       (util:required 'instances)       :type toplevel-define-instance-list :read-only nil)
-  (specializations (util:required 'specializations) :type toplevel-specialize-list      :read-only nil))
+(defstruct (program (:copier nil))
+  (package         (util:required 'package) :type package                       :read-only t)
+  (file            (util:required 'file)    :type coalton-file                  :read-only t)
+  (types           nil                      :type toplevel-define-type-list     :read-only nil)
+  (structs         nil                      :type toplevel-define-struct-list   :read-only nil)
+  (declares        nil                      :type toplevel-declare-list         :read-only nil)
+  (defines         nil                      :type toplevel-define-list          :read-only nil)
+  (classes         nil                      :type toplevel-define-class-list    :read-only nil)
+  (instances       nil                      :type toplevel-define-instance-list :read-only nil)
+  (specializations nil                      :type toplevel-specialize-list      :read-only nil))
 
 ;;
 ;; Empty package for reading (package) forms
 ;;
+
 (defpackage #:coalton-impl/parser/read
   (:use))
 
-(defun read-program (stream file &key (mode (error "you must supply this bozo!")))
+(defmacro with-eclector-readtable (&body body)
+  "Set up Eclector variables: readtable, and default client."
+  `(let ((eclector.readtable:*readtable* (eclector.readtable:copy-readtable eclector.readtable:*readtable*))
+         (eclector.base:*client* *coalton-eclector-client*))
+     ,@body))
+
+(defun read-object (stream &key on-eof)
+  (multiple-value-bind (form presentp eofp)
+      (maybe-read-form stream)
+    (cond (eofp
+           (when on-eof
+             (funcall on-eof)))
+          (presentp
+           form))))
+
+(defun last-position (stream)
+  (cons (- (file-position stream) 2)
+        (- (file-position stream) 1)))
+
+(defun read-package (stream file)
+  (let ((*package* (find-package "COALTON-IMPL/PARSER/READ")))
+    (parse-package (read-object stream
+                                :on-eof (lambda ()
+                                          (parse-error file (last-position stream)
+                                                       "Unexpected EOF"
+                                                       "missing package form")))
+                   file)))
+
+(defun read-file (stream file)
+  "Read a Coalton program for STREAM corresponding to coalton-file FILE. A package form is required."
+  (with-eclector-readtable
+    (read-body stream (read-package stream file) file)))
+
+(defun read-program (stream file)
   "Read a PROGRAM from the COALTON-FILE."
   (declare (type coalton-file file)
-           (type (member :file :toplevel-macro :test) mode)
+           (values program &optional))
+  (with-eclector-readtable
+    (read-body stream *package* file)))
+
+(defun read-body (stream package file)
+  (declare (type coalton-file file)
            (values program))
+  (let ((program (make-program :package package
+                               :file file))
+        (*package* package)
+        (attributes (make-array 0 :adjustable t :fill-pointer t)))
+    (loop :for value := (read-object stream)
+          :while value
+          :do (when (and (parse-toplevel-form value program attributes file)
+                         (plusp (length attributes)))
+                (util:coalton-bug "parse-toplevel-form indicated that a form was parsed but did not consume all attributes")))
+    (unless (zerop (length attributes))
+      (parse-error file (cst:source (cdr (aref attributes 0)))
+                   "Orphan attribute"
+                   "attribute must be attached to another form"))
+    (setf (program-types program) (nreverse (program-types program)))
+    (setf (program-structs program) (nreverse (program-structs program)))
+    (setf (program-declares program) (nreverse (program-declares program)))
+    (setf (program-defines program) (nreverse (program-defines program)))
+    (setf (program-classes program) (nreverse (program-classes program)))
+    (setf (program-specializations program) (nreverse (program-specializations program)))
+    program))
 
-  (let* (;; Setup eclector readtable
-         (eclector.readtable:*readtable*
-           (eclector.readtable:copy-readtable eclector.readtable:*readtable*))
+(defun read-expression (stream file)
+  (with-eclector-readtable
+    ;; Read unspecified floats as double floats
+    (let* ((*read-default-float-format* 'double-float))
 
-         ;; Initial package to read (package) forms into
-         (*package* *package*))
-
-    ;; Parse package form
-    (when (eq :file mode)
-      (setf *package* (find-package "COALTON-IMPL/PARSER/READ"))
-
-      ;; Read the (package) form
+      ;; Read the coalton form
       (multiple-value-bind (form presentp)
-          (maybe-read-form stream *coalton-eclector-client*)
-
+          (maybe-read-form stream)
         (unless presentp
           (error 'parse-error
                  :err (coalton-error
                        :span (cons (- (file-position stream) 2)
                                    (- (file-position stream) 1))
                        :file file
-                       :message "Unexpected EOF"
-                       :primary-note "missing package form")))
+                       :message "Malformed coalton expression"
+                       :primary-note "missing expression")))
 
-        (setf *package* (parse-package form file))))
-
-    ;; imma parsin mah program
-    (let* ((program (make-program
-                     :package *package*
-                     :file file
-                     :types nil
-                     :structs nil
-                     :declares nil
-                     :defines nil
-                     :classes nil
-                     :instances nil
-                     :specializations nil))
-
-           (attributes (make-array 0 :adjustable t :fill-pointer t)))
-
-      (loop :do
-        (multiple-value-bind (form presentp eofp)
-            (maybe-read-form stream *coalton-eclector-client*)
-
-          (when (and eofp (eq :toplevel-macro mode))
+        ;; Ensure there is only one form
+        (multiple-value-bind (form presentp)
+            (maybe-read-form stream)
+          (when presentp
             (error 'parse-error
                    :err (coalton-error
-                         :span (cons (- (file-position stream) 2)
-                                     (- (file-position stream) 1))
+                         :span (cst:source form)
                          :file file
-                         :message "Unexpected EOF"
-                         :primary-note "missing close parenthesis")))
+                         :message "Malformed coalton expression"
+                         :primary-note "unexpected form"))))
 
-          (unless presentp
-            (return))
-
-          (when (and (parse-toplevel-form form program attributes file)
-                     (plusp (length attributes)))
-            (util:coalton-bug "parse-toplevel-form indicated that a form was parsed but did not
-consume all attributes"))))
-
-      (unless (zerop (length attributes))
-        (error 'parse-error
-               :err (coalton-error
-                     :span (cst:source (cdr (aref attributes 0)))
-                     :file file
-                     :message "Orphan attribute"
-                     :primary-note "attribute must be attached to another form")))
-
-      (setf (program-types program) (nreverse (program-types program)))
-      (setf (program-structs program) (nreverse (program-structs program)))
-      (setf (program-declares program) (nreverse (program-declares program)))
-      (setf (program-defines program) (nreverse (program-defines program)))
-      (setf (program-classes program) (nreverse (program-classes program)))
-      (setf (program-specializations program) (nreverse (program-specializations program)))
-
-      program)))
-
-(defun read-expression (stream file)
-  (let* (;; Setup eclector readtable
-         (eclector.readtable:*readtable*
-           (eclector.readtable:copy-readtable eclector.readtable:*readtable*))
-
-         ;; Read unspecified floats as double floats
-         (*read-default-float-format* 'double-float))
-
-    ;; Read the coalton form
-    (multiple-value-bind (form presentp)
-        (maybe-read-form stream *coalton-eclector-client*)
-
-      (unless presentp
-        (error 'parse-error
-               :err (coalton-error
-                     :span (cons (- (file-position stream) 2)
-                                 (- (file-position stream) 1))
-                     :file file
-                     :message "Malformed coalton expression"
-                     :primary-note "missing expression")))
-
-      ;; Ensure there is only one form
-      (multiple-value-bind (form presentp)
-          (maybe-read-form stream *coalton-eclector-client*)
-
-        (when presentp
-          (error 'parse-error
-                 :err (coalton-error
-                       :span (cst:source form)
-                       :file file
-                       :message "Malformed coalton expression"
-                       :primary-note "unexpected form"))))
-
-      (parse-expression form file))))
-
-(defun parse-package (form file)
-  "Parses a coalton package declaration in the form of (package {name})"
-  (declare (type cst:cst form)
-           (type coalton-file file)
-           (values package))
-
-  ;; Package declarations must start with "PACKAGE"
-  (unless (string= (cst:raw (cst:first form)) "PACKAGE")
-    (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source (cst:first form))
-                 :file file
-                 :message "Malformed package declaration"
-                 :primary-note "package declarations must start with `package`")))
-
-  ;; Package declarations must have a name
-  (unless (cst:consp (cst:rest form))
-    (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source (cst:first form))
-                 :file file
-                 :message "Malformed package declaration"
-                 :primary-note "missing package name")))
-
-  ;; Package declarations cannot contain more than two forms
-  (when (cst:consp (cst:rest (cst:rest form)))
-    (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source (cst:first (cst:rest (cst:rest form))))
-                 :file file
-                 :message "Malformed package declaration"
-                 :primary-note "unexpected forms")))
-
-  (unless (identifierp (cst:raw (cst:second form)))
-    (error 'parse-error
-           :err (coalton-error
-                 :span (cst:source (cst:second form))
-                 :file file
-                 :message "Malformed package declaration"
-                 :primary-note "package name must be a symbol")))
-
-  (let* ((package-name (symbol-name (cst:raw (cst:second form))))
-
-         (package (find-package package-name)))
-
-    (unless package
-      (setf package (make-package package-name :use '("COALTON" "COALTON-PRELUDE"))))
-
-    package))
-
+        (parse-expression form file)))))
 
 (defun parse-toplevel-form (form program attributes file)
   (declare (type cst:cst form)

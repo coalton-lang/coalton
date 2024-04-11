@@ -41,12 +41,9 @@
                 (file (error:make-coalton-file :stream stream :name "<test>"))
 
                 (program (parser:with-reader-context stream
-                           (parser:read-program stream file :mode :test))))
+                           (parser:read-program stream file))))
 
-           (multiple-value-bind (program env)
-               (entry:entry-point program)
-             (declare (ignore program))
-             
+           (let ((env (entry:entry-point program nil)))
              (when expected-types
                (loop :for (unparsed-symbol . unparsed-type) :in expected-types
                      :for symbol := (intern (string-upcase unparsed-symbol) *package*)
@@ -91,3 +88,14 @@ Returns (values SOURCE-PATHNAME COMPILED-PATHNAME)."
        ((,muffle #'muffle-warning))
      (compile-and-load-forms '(,@(when package `((cl:in-package ,package)))
                                ,@coalton-code))))
+
+(defun check-parse (parse-fn string)
+  "Read a form from STRING, applying PARSE-FN to the result, providing a coalton-file as a second argument."
+  (with-input-from-string (stream string)
+    (parser:with-reader-context stream
+      (let ((file (error:make-coalton-file :stream stream :name "<string>")))
+        (funcall parse-fn
+                 (coalton-impl/parser/reader:maybe-read-form
+                  stream
+                  coalton-impl/parser/toplevel::*coalton-eclector-client*)
+                 file)))))
