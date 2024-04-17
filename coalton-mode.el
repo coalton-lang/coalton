@@ -42,18 +42,19 @@
 (defun coalton--font-lock-settings ()
   "Get settings for `treesit-font-lock-settings'."
    (treesit-font-lock-rules
-    :feature 'number
+    :feature 'comment
     :language 'coalton
-    '((number) @font-lock-number-face)
-
-    :feature 'symbol
-    :language 'coalton
-    '((symbol) @font-lock-type-face)))
+    '((comment) @font-lock-comment-face)))
 
 (defun coalton-mode-variables ()
   "Init buffer-local vars."
   (setq-local treesit-font-lock-settings
-              (coalton--font-lock-settings)))
+              (coalton--font-lock-settings))
+  (setq-local treesit-font-lock-feature-list
+              '((comment)
+                ()
+                ()
+                ())))
 
 ;;;###autoload
 (define-derived-mode coalton-mode prog-mode "Coalton"
