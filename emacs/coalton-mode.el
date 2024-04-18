@@ -1,6 +1,14 @@
 ;;; coalton-mode.el --- Major mode for working with Coalton -*- lexical-binding: t; -*-
+;;
+;; This file contains functions for in-Emacs structural operations on
+;; Coalton code, including syntax highlighting, indentation and
+;; navigation, and command integration with the in-CL operations
+;; defined in `inferior-coalton.el'.
 
 (require 'treesit)
+
+(defvar coalton-ts-repo
+  "https://github.com/jbouwman/tree-sitter-coalton.git")
 
 (defvar coalton-mode-map
   (make-sparse-keymap))
@@ -30,6 +38,7 @@
 (defvar coalton--debug t
   "Enable debugging.")
 
+
 ;; Fontification
 
 (defun coalton--font-lock-settings ()
@@ -47,6 +56,7 @@
    :language 'coalton
    '((comment) @font-lock-comment-face)))
 
+
 ;; Indentation
 
 (defun coalton--indent-rules ()
@@ -54,16 +64,49 @@
   `((coalton
      ((parent-is "list") parent 2))))
 
-;; Mode initialization
+
+;; Indexing and navigation
+
+(defun node-type-p (type node)
+  "Does NODE have tree-sitter TYPE?"
+  (string-equal type (treesit-node-type node)))
+  
+(defun coalton--list-p (node)
+  "Is NODE a list?"
+  (node-type-p "list" node))
+
+(defun coalton--symbol-p (node)
+  "Is NODE a symbol?"
+  (node-type-p "symbol" node))
+
+(defun coalton--symbol-name (node)
+  "Get the name of a symbol NODE."
+  (treesit-node-text (treesit-node-child-by-field-name node "name")))
+
+(defun coalton--symbol-name-p (name node)
+  "Is NODE a symbol named NAME?"
+  (and (coalton--symbol-p node)
+       (string-equal name (coalton--symbol-name node))))
+
+(defun coalton--definition-p (type node)
+  "Is NODE a definition of TYPE?"
+  (and (coalton--list-p node)
+       (coalton--symbol-p type (treesit-node-child node 0 t))))
+
+(defvar coalton--imenu-settings
+  `(("Definition" "list" coalton--definition-p))
+  "The value for `treesit-simple-imenu-settings'.")
+
+
+;; Initialization
 
 (defun coalton--load-grammar ()
   "Install grammar."
-  (let ((grammars '((coalton "https://github.com/jbouwman/tree-sitter-coalton.git" "main"))))
+  (let ((grammars `((coalton ,coalton-ts-repo "main"))))
     (dolist (grammar grammars)
-      (let ((language (car grammar)))
-        (unless (treesit-language-available-p language nil)
-          (let ((treesit-language-source-alist grammars))
-            (treesit-install-language-grammar language)))))))
+      (unless (treesit-language-available-p (car grammar) nil)
+        (let ((treesit-language-source-alist grammars))
+          (treesit-install-language-grammar language))))))
 
 (defun coalton-mode-variables ()
   "Initialize buffer-local vars."
@@ -96,3 +139,5 @@
     (treesit-major-mode-setup)))
 
 (add-to-list 'auto-mode-alist '("\\.coalton\\'" . coalton-mode))
+
+(provide 'coalton-mode)
