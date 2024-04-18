@@ -67,34 +67,75 @@
 
 ;; Indexing and navigation
 
-(defun node-type-p (type node)
+(defun coalton--node-type-p (type node)
   "Does NODE have tree-sitter TYPE?"
   (string-equal type (treesit-node-type node)))
   
 (defun coalton--list-p (node)
   "Is NODE a list?"
-  (node-type-p "list" node))
+  (coalton--node-type-p "list" node))
 
 (defun coalton--symbol-p (node)
   "Is NODE a symbol?"
-  (node-type-p "symbol" node))
+  (coalton--node-type-p "symbol" node))
 
 (defun coalton--symbol-name (node)
-  "Get the name of a symbol NODE."
-  (treesit-node-text (treesit-node-child-by-field-name node "name")))
+  "If NODE is a symbol, return its name."
+  (when (coalton--symbol-p node)
+    (treesit-node-text node t)))
 
 (defun coalton--symbol-name-p (name node)
   "Is NODE a symbol named NAME?"
   (and (coalton--symbol-p node)
        (string-equal name (coalton--symbol-name node))))
 
+(defun coalton--definition-type (node)
+  "If NODE is a definition, return the definition's type."
+  (when (coalton--list-p node)
+    (let ((node (treesit-node-child node 0 t)))
+      (when (coalton--symbol-p node)
+        (coalton--symbol-name node)))))
+
 (defun coalton--definition-p (type node)
-  "Is NODE a definition of TYPE?"
-  (and (coalton--list-p node)
-       (coalton--symbol-p type (treesit-node-child node 0 t))))
+  "Is NODE a definition of type TYPE?"
+  (string-equal type (coalton--definition-type node)))
+
+(defun coalton--definition-name (node)
+  "If NODE is a definition, return its name."
+  (when (coalton--list-p node)
+    (let ((node (treesit-node-child node 1 t)))
+      (cond ((coalton--list-p node)
+             (let ((node (treesit-node-child node 0 t)))
+               (when (coalton--symbol-p node)
+                 (coalton--symbol-name node))))
+            ((coalton--symbol-p node)
+             (coalton--symbol-name node))))))
+
+
+;; Imenu
+
+(defun coalton--type-definition-p (node)
+  "Does NODE represent a type definition?"
+  (coalton--definition-p "define-type" node))
+
+(defun coalton--instance-definition-p (node)
+  "Does NODE represent an instanclue definition?"
+  (coalton--definition-p "define-instance" node))
+
+(defun coalton--function-definition-p (node)
+  "Does NODE represent a function definition?"
+  (coalton--definition-p "define" node))
 
 (defvar coalton--imenu-settings
-  `(("Definition" "list" coalton--definition-p))
+  '(("Type" "list"
+     coalton--type-definition-p
+     coalton--definition-name)
+    ("Instance" "list"
+     coalton--instance-definition-p
+     coalton--definition-name)
+    ("Function" "list"
+     coalton--function-definition-p
+     coalton--definition-name))
   "The value for `treesit-simple-imenu-settings'.")
 
 
@@ -106,10 +147,12 @@
     (dolist (grammar grammars)
       (unless (treesit-language-available-p (car grammar) nil)
         (let ((treesit-language-source-alist grammars))
-          (treesit-install-language-grammar language))))))
+          (treesit-install-language-grammar (car grammar)))))))
 
 (defun coalton-mode-variables ()
   "Initialize buffer-local vars."
+  (setq-local treesit-simple-imenu-settings
+              coalton--imenu-settings)
   (setq-local treesit-font-lock-settings
               (coalton--font-lock-settings))
   (setq-local treesit-font-lock-feature-list
