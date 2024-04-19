@@ -1,11 +1,21 @@
 ;;; coalton-mode.el --- Major mode for working with Coalton -*- lexical-binding: t; -*-
 ;;
+;; URL: http://github.com/coalton-lang/coaltom
+;; Keywords: languages coalton lisp
+;; Version: 1.0.0
+;; Package-Requires: ((emacs "29.1"))
+;;
 ;; This file contains functions for in-Emacs structural operations on
 ;; Coalton code, including syntax highlighting, indentation and
 ;; navigation, and command integration with the in-CL operations
 ;; defined in `inferior-coalton.el'.
 
 (require 'treesit)
+(require 'lisp-mnt)
+
+(defconst coalton-mode-version
+  (eval-when-compile
+    (lm-version (or load-file-name buffer-file-name))))
 
 (defvar coalton-ts-repo
   "https://github.com/jbouwman/tree-sitter-coalton.git")
@@ -41,13 +51,28 @@
 
 ;; Fontification
 
+(defconst coalton--builtin-symbol
+  (eval-and-compile
+    (concat "^"
+            (regexp-opt
+             '("declare"
+               "define"
+               "define-instance"
+               "define-type"
+               "do"
+               "let"
+               "match"
+               "package"))
+            "$")))
+
 (defun coalton--font-lock-settings ()
   "Return settings for `treesit-font-lock-settings'."
   (treesit-font-lock-rules
-   :feature 'symbol
+   :feature 'builtin
    :language 'coalton
-   '((symbol) @font-lock-builtin-face) ; what's the right choice?
-
+   `(((list :anchor (symbol (symbol_name) @font-lock-keyword-face))
+      (:match ,coalton--builtin-symbol @font-lock-keyword-face)))
+   
    :feature 'number
    :language 'coalton
    '((number) @font-lock-number-face)
@@ -160,7 +185,7 @@
               ;; controlled by `treesit-font-lock-level'.
               '((comment)               ; 1
                 ()                      ; 2
-                (number symbol)         ; 3
+                (number builtin)        ; 3
                 ()))                    ; 4
   (setq-local treesit-simple-indent-rules
               (coalton--indent-rules)))
