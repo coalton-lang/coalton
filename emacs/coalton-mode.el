@@ -76,7 +76,11 @@
    :feature 'number
    :language 'coalton
    '((number) @font-lock-number-face)
-
+   
+   :feature 'paren
+   :language 'coalton
+   '((["(" ")"]) @font-lock-bracket-face)
+    
    :feature 'comment
    :language 'coalton
    '((comment) @font-lock-comment-face)))
@@ -186,7 +190,7 @@
               '((comment)               ; 1
                 ()                      ; 2
                 (number builtin)        ; 3
-                ()))                    ; 4
+                (paren)))               ; 4
   (setq-local treesit-simple-indent-rules
               (coalton--indent-rules)))
 
