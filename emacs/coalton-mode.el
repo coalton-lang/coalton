@@ -225,4 +225,28 @@
   (let ((nodes (treesit-query-capture 'coalton coalton--query-package)))
     (treesit-node-text (cdr (assoc 'package-name nodes)) t)))
 
+(defun coalton--find-parent (node pred)
+  "Find first parent of NODE matching PRED."
+  (cond ((null node)
+         nil)
+        ((funcall pred node)
+         node)
+        (t
+         (coalton--find-parent (treesit-node-parent node) pred))))
+
+(defun coalton--toplevel-form-p (node)
+  "Is NODE a toplevel program element?"
+  (and (coalton--list-p node)
+       (string-equal "program" (treesit-node-type
+                                (treesit-node-parent node)))))
+
+(defun coalton--node-at-point ()
+  (treesit-node-at (point)))
+
+(defun coalton-toplevel-form ()
+  "Return the text of the toplevel form at point."
+  (when-let ((node (coalton--find-parent (coalton--node-at-point)
+                                         #'coalton--toplevel-form-p)))
+    (treesit-node-text node t)))
+
 (provide 'coalton-mode)
