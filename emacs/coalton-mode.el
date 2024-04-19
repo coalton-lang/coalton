@@ -180,6 +180,7 @@
 
 (defun coalton-mode-variables ()
   "Initialize buffer-local vars."
+  (setq-local comment-start "; ")
   (setq-local treesit-simple-imenu-settings
               coalton--imenu-settings)
   (setq-local treesit-font-lock-settings
@@ -211,5 +212,17 @@
     (treesit-major-mode-setup)))
 
 (add-to-list 'auto-mode-alist '("\\.coalton\\'" . coalton-mode))
+
+(defvar coalton--query-package
+  (treesit-query-compile
+   'coalton
+   '(((program (list
+                :anchor (symbol name: (symbol_name) @package)
+                :anchor (symbol name: (symbol_name) @package-name)))
+      (:equal @package "package")))))
+
+(defun coalton-package ()
+  (let ((nodes (treesit-query-capture 'coalton coalton--query-package)))
+    (treesit-node-text (cdr (assoc 'package-name nodes)) t)))
 
 (provide 'coalton-mode)
