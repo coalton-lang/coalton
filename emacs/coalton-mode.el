@@ -45,7 +45,7 @@
 
     table))
 
-(defvar coalton--debug t
+(defvar coalton--debug nil
   "Enable debugging.")
 
 
