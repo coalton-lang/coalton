@@ -8,7 +8,7 @@
 ;; This file contains functions for in-Emacs structural operations on
 ;; Coalton code, including syntax highlighting, indentation and
 ;; navigation, and command integration with the in-CL operations
-;; defined in `inferior-coalton.el'.
+;; defined in `slime-coalton.el'.
 
 (require 'treesit)
 (require 'lisp-mnt)
@@ -141,6 +141,19 @@
              (coalton--symbol-name node))))))
 
 
+;; Easy menu
+
+(defvar coalton-easy-menu
+  (let ((C '(coalton-available-p)))
+    `("Coalton"
+      ("Debug"
+       [ "Show AST"         slime-coalton--ast ,C ])
+      ("Compile"
+       [ "Compile File"     slime-coalton--compile-file ,C ]))))
+
+(easy-menu-define menubar-coalton coalton-mode-map "Coalton" coalton-easy-menu)
+
+
 ;; Imenu
 
 (defun coalton--type-definition-p (node)
@@ -172,11 +185,11 @@
 
 (defun coalton--load-grammar ()
   "Install grammar."
-  (let ((grammars `((coalton ,coalton-ts-repo "main"))))
-    (dolist (grammar grammars)
-      (unless (treesit-language-available-p (car grammar) nil)
-        (let ((treesit-language-source-alist grammars))
-          (treesit-install-language-grammar (car grammar)))))))
+  (let ((treesit-language-source-alist
+         `((coalton ,coalton-ts-repo "main"))))
+    (unless (treesit-language-available-p 'coalton nil)
+      (when (yes-or-no-p "treesitter-coalton is not installed. Clone, build and install it?")
+        (treesit-install-language-grammar 'coalton)))))
 
 (defun coalton-mode-variables ()
   "Initialize buffer-local vars."
@@ -240,12 +253,9 @@
        (string-equal "program" (treesit-node-type
                                 (treesit-node-parent node)))))
 
-(defun coalton--node-at-point ()
-  (treesit-node-at (point)))
-
 (defun coalton-toplevel-form ()
   "Return the text of the toplevel form at point."
-  (when-let ((node (coalton--find-parent (coalton--node-at-point)
+  (when-let ((node (coalton--find-parent (treesit-node-at (point))
                                          #'coalton--toplevel-form-p)))
     (treesit-node-text node t)))
 
