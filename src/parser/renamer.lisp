@@ -514,6 +514,7 @@
     (values
      (make-program
       :package (program-package program)
+      :package-src (program-package-src program)
       :file (program-file program)
       :types (rename-type-variables (program-types program))
       :structs (rename-type-variables (program-structs program))

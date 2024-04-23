@@ -3,6 +3,7 @@
    #:coalton-impl/parser/base
    #:coalton-impl/parser/reader
    #:coalton-impl/parser/types
+   #:coalton-impl/parser/package
    #:coalton-impl/parser/pattern
    #:coalton-impl/parser/expression
    #:coalton-impl/parser/toplevel

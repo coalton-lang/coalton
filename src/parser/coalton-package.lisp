@@ -9,6 +9,8 @@
   (:local-nicknames
    (#:cst #:concrete-syntax-tree))
   (:export
+   #:ensure-package
+   #:generate-package
    #:parse-package))
 
 (in-package #:coalton-impl/parser/package)
@@ -76,7 +78,7 @@
                                :replacement #'identity
                                :message "Must be one of import or export")))))))
 
-(defun parse-package-form (form file)
+(defun parse-package (form file)
   "Parse a coalton package declaration in the form of (package {name})"
 
   ;; Package declarations must start with "PACKAGE"
@@ -141,5 +143,16 @@
            (apply #'do-export-clause package args)))))
     package))
 
-(defun parse-package (form file)
-  (ensure-package (parse-package-form form file)))
+(defun package-def-name (x)
+  (cadr (find :package x :key #'car)))
+
+(defun package-use (x)
+  (cons "COALTON"
+        (mapcar #'cadr
+                (remove-if-not (lambda (clause)
+                                 (eql (car clause) :import-all)) x))))
+
+(defun generate-package (x)
+  ;; FIXME incomplete
+  `(defpackage ,(package-def-name x)
+     (:use ,@(package-use x))))

@@ -21,7 +21,10 @@
   "https://github.com/jbouwman/tree-sitter-coalton.git")
 
 (defvar coalton-mode-map
-  (make-sparse-keymap))
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "C-c C-c") 'slime-coalton--compile-form)
+    (define-key map (kbd "C-c C-l") 'slime-coalton--compile-file)
+    map))
 
 (defvar coalton-mode-syntax-table
   (let ((table (make-syntax-table)))
@@ -147,7 +150,7 @@
   (let ((C '(coalton-available-p)))
     `("Coalton"
       ("Debug"
-       [ "Show AST"         slime-coalton--ast ,C ])
+       [ "Show AST"         slime-coalton--ast-file ,C ])
       ("Compile"
        [ "Compile File"     slime-coalton--compile-file ,C ]))))
 

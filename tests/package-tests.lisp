@@ -1,10 +1,10 @@
 (in-package #:coalton-tests)
 
 (deftest test-parse-package ()
-  (is (packagep (check-parse #'coalton-impl/parser/package:parse-package
-                             "(package coalton-unit-test/lib-example-simple)")))
-  (is (packagep (check-parse #'coalton-impl/parser/package:parse-package
-                             "(package coalton-unit-test/lib-example-complex
+  (is (check-parse #'coalton-impl/parser/package:parse-package
+                   "(package coalton-unit-test/lib-example-simple)"))
+  (is (check-parse #'coalton-impl/parser/package:parse-package
+                   "(package coalton-unit-test/lib-example-complex
   (import
    coalton-library/builtin
    coalton-library/classes
@@ -14,4 +14,4 @@
    snd
    Tuple3
    Tuple4
-   Tuple5))"))))
+   Tuple5))")))

@@ -3,6 +3,7 @@
    #:cl)
   (:local-nicknames
    (#:codegen #:coalton-impl/codegen)
+   (#:compiler #:coalton-impl/compiler)
    (#:cst #:concrete-syntax-tree)
    (#:settings #:coalton-impl/settings)
    (#:util #:coalton-impl/util)
@@ -41,52 +42,14 @@ Used to forbid reading while inside quasiquoted forms.")
                 (error:coalton-base-warning
                   (lambda (c)
                     (error:render-coalton-warning c))))
-             (entry:entry-point (parser:read-program stream file) collector)))
+             (let ((program (parser:read-program stream file)))
+               (entry:emit-prologue collector)
+               (entry:entry-point program collector))))
       ;; clean up any opened file streams
       (dolist (s opened-streams)
         (close s)))))
 
 ;; Implementation of toplevel macros
-
-(defgeneric collector-result (collector)
-  (:method (collector)
-    (declare (ignore collector))))
-
-;; (coalton-toplevel ...)
-
-(defclass toplevel-compiler ()
-  ((forms :initform (make-array 0 :adjustable t :fill-pointer 0))))
-
-(defmethod codegen:emit ((collector toplevel-compiler) form)
-  (vector-push-extend form (slot-value collector 'forms)))
-
-(defmethod codegen:emit-env ((collector toplevel-compiler) name args)
-  (codegen:emit collector
-                `(setf entry:*global-environment*
-                       (,name entry:*global-environment*
-                              ,@(mapcar #'util:runtime-quote args)))))
-
-(defmethod collector-result ((collector toplevel-compiler))
-  `(progn ,@(coerce (slot-value collector 'forms) 'list)))
-
-;; (coalton-codegen ...)
-
-(defclass codegen-collector ()
-  ((forms :initform (make-array 0 :adjustable t :fill-pointer 0))))
-
-(defmethod codegen:emit ((collector codegen-collector) form)
-  (vector-push-extend form (slot-value collector 'forms)))
-
-(defmethod collector-result ((collector codegen-collector))
-  (util:runtime-quote (coerce (slot-value collector 'forms) 'list)))
-
-;; (coalton-codegen-ast ...)
-
-(defclass ast-printer ()
-  ())
-
-(defmethod codegen:emit-ast ((collector ast-printer) name type value)
-  (format t "~A :: ~A~%~A~%~%~%" name type value))
 
 ;; Entry point
 
@@ -107,17 +70,17 @@ Used to forbid reading while inside quasiquoted forms.")
               form)))
       (case (cst:raw first-form)
         (coalton:coalton-toplevel
-          (let ((collector (make-instance 'toplevel-compiler)))
+          (let ((collector (make-instance 'compiler:compile-toplevel)))
             (setf entry:*global-environment* (process-toplevel stream collector))
-            (collector-result collector)))
+            (compiler:collector-result collector)))
         (coalton:coalton-codegen
-          (let ((collector (make-instance 'codegen-collector)))
+          (let ((collector (make-instance 'compiler:generate-code)))
             (process-toplevel stream collector)
-            (collector-result collector)))
+            (compiler:collector-result collector)))
         (coalton:coalton-codegen-ast
-          (let ((collector (make-instance 'ast-printer)))
+          (let ((collector (make-instance 'compiler:generate-ast)))
             (process-toplevel stream collector)
-            (collector-result collector)))
+            (compiler:collector-result collector)))
         (coalton:coalton
          (let ((opened-streams nil))
            (unwind-protect

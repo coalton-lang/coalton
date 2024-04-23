@@ -4,9 +4,10 @@
   (:export
    #:emit
    #:emit-ast
+   #:emit-comment
    #:emit-env))
 
-;; Protocol for collecting compilation output
+;; Protocol for collection of compilation output
 ;;
 ;; Compiling a Coalton program produces a sequence of updates to an
 ;; initial global environment and a sequence of Lisp definitions that
@@ -31,6 +32,12 @@
    "Emit a toplevel Lisp source form.")
   (:method (collector form)
     (declare (ignore collector form))))
+
+(defgeneric emit-comment (collector comment)
+  (:documentation
+   "Emit a comment.")
+  (:method (collector comment)
+    (declare (ignore collector comment))))
 
 (defgeneric emit-ast (collector name type value)
   (:documentation

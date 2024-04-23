@@ -123,6 +123,7 @@
    #:program                                     ; STRUCT
    #:make-program                                ; CONSTRUCTOR
    #:program-package                             ; ACCESSOR
+   #:program-package-src                         ; ACCESSOR
    #:program-file                                ; ACCESSOR
    #:program-types                               ; ACCESSOR
    #:program-structs                             ; ACCESSOR
@@ -416,6 +417,7 @@
 
 (defstruct (program (:copier nil))
   (package         (util:required 'package) :type package                       :read-only t)
+  (package-src     nil                      :type (or cons null)                :read-only t)
   (file            (util:required 'file)    :type coalton-file                  :read-only t)
   (types           nil                      :type toplevel-define-type-list     :read-only nil)
   (structs         nil                      :type toplevel-define-struct-list   :read-only nil)
@@ -463,19 +465,21 @@
 (defun read-file (stream file)
   "Read a Coalton program for STREAM corresponding to coalton-file FILE. A package form is required."
   (with-eclector-readtable
-    (read-body stream (read-package stream file) file)))
+    (let ((package-src (read-package stream file)))
+      (read-body stream (ensure-package package-src) package-src file))))
 
 (defun read-program (stream file)
   "Read a PROGRAM from the COALTON-FILE."
   (declare (type coalton-file file)
            (values program &optional))
   (with-eclector-readtable
-    (read-body stream *package* file)))
+    (read-body stream *package* nil file)))
 
-(defun read-body (stream package file)
+(defun read-body (stream package package-src file)
   (declare (type coalton-file file)
            (values program))
   (let ((program (make-program :package package
+                               :package-src package-src
                                :file file))
         (*package* package)
         (attributes (make-array 0 :adjustable t :fill-pointer t)))

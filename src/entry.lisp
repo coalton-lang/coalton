@@ -11,6 +11,7 @@
    (#:codegen #:coalton-impl/codegen))
   (:export
    #:*global-environment*
+   #:emit-prologue
    #:entry-point                        ; FUNCTION
    #:expression-entry-point             ; FUNCTION
    ))
@@ -33,6 +34,7 @@
          (file (parser:program-file program))
 
          (env *global-environment*))
+
     (tc:with-update-hook (lambda (name args)
                            (codegen:emit-env out name args))
       (multiple-value-bind (type-definitions instances env)
@@ -74,9 +76,7 @@
                                              monomorphize-table)
                                     t))
                   (analysis:analyze-translation-unit translation-unit env file)
-                  (emit-prologue out)
                   (codegen:compile-translation-unit out translation-unit monomorphize-table env))))))))))
-
 
 (defun emit-prologue (out)
   (codegen:emit out
@@ -88,7 +88,6 @@
                                   ,(or *compile-file-pathname* *load-truename*))
                           `(error "~A was compiled in development mode but loaded in release."
                                   ,(or *compile-file-pathname* *load-truename*)))))))
-
 
 (defun expression-entry-point (node file)
   (declare (type parser:node node)

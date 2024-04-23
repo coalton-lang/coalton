@@ -6,13 +6,15 @@
 (require 'slime)
 
 (defun coalton-available-p ()
+  ;; todo: associate tests with specific connections
   (and (not (null slime-net-processes))
-       (fboundp 'xxx)))
+       (eql :loaded (slime-eval `(swank:swank-coalton-status)))))
 
 (cl-defmacro slime-coalton--show ((name) &body body)
   (declare (indent 1))
   `(with-current-buffer (get-buffer-create ,name)
      (erase-buffer)
+     (slime-popup-buffer-mode)
      ,@body
      (display-buffer (current-buffer))
      (current-buffer)))
@@ -41,14 +43,21 @@
     ((:abort condition)
      (message "Evaluation aborted on %s." condition))))
 
-(defun slime-coalton--ast ()
-  "Display the AST of the definition at point."
+(defun slime-coalton--ast-file ()
+  "Display the AST of the current file."
   (interactive)
-  (let ((form (coalton-definition-at-point))
-        (package (coalton-package)))
-    (slime-coalton--eval `(swank:swank-coalton-ast `,form `,package)
-      (lambda (result)
-        (slime-coalton--popup 'ast result)))))
+  (slime-coalton--eval `(swank:swank-coalton--ast-file
+                         ,(buffer-substring-no-properties (point-min) (point-max)))
+    (lambda (result)
+      (slime-coalton--popup 'ast result))))
+
+(defun slime-coalton--compile-file ()
+  "Compile the current file."
+  (interactive)
+  (slime-coalton--eval `(swank:swank-coalton--compile-file
+                         ,(buffer-substring-no-properties (point-min) (point-max)))
+    (lambda (result)
+      (slime-coalton--popup 'ast result))))
 
 
 ;;; Initialization

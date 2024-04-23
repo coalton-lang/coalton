@@ -1,4 +1,5 @@
-(package diff-example)
+(package diff-example
+  (import coalton-prelude))
 
 ;; This program computes symbolic derivatives of simple
 ;; expressions. It uses a new Symbol data type for demonstration

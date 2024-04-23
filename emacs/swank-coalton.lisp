@@ -25,15 +25,10 @@
   (asdf:load-system "coalton"))
 
 
-(defslimefun swank-coalton--ast (form package)
-  :xyz)
+(defslimefun swank-coalton--ast-file (text)
+  (with-input-from-string (stream text)
+    (coalton-impl/compiler::generate-ast stream)))
 
-(provide :swank-coalton)
-
-
-
-(swank-coalton--ast "(define (symbol-name sym)
-  (match sym
-    ((Symbol s) s)))"
-                    "(package diff-example)")
-
+(defslimefun swank-coalton--compile-file (text)
+  (with-input-from-string (stream text)
+    (coalton-impl/compiler::%compile-file stream)))

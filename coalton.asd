@@ -120,6 +120,7 @@
                              (:file "package")))
                (:file "unlock-package" :if-feature :sb-package-locks)
                (:file "entry")
+               (:file "compiler")
                (:file "reader")
                (:file "main")
                (:file "debug")
