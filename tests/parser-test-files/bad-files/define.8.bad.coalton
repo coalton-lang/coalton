@@ -1,0 +1,8 @@
+;; BAD: Reference to type instead of constructor
+(package test-package)
+
+(define-type DataType
+  (Data1 Integer))
+
+(define (return-data int)
+  (DataType int))
