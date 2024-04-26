@@ -17,7 +17,9 @@
                                      :element-type 'character)
                (handler-case
                    (parser:with-reader-context stream
-                     (parser:read-program stream (error:make-coalton-file :stream stream :name "test") :mode :file))
+                     (entry:entry-point
+                      (parser:read-program stream (error:make-coalton-file :stream stream :name "test") :mode :file))
+                     "no errors")
                  (error:coalton-base-error (c)
                    (princ-to-string c))))))
     (dolist (file (test-files "tests/parser-test-files/bad/*.coal"))

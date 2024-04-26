@@ -30,10 +30,10 @@
 (defstruct (tc-env
             (:predicate nil))
 
-  ;; The main copiler env
+  ;; The main compiler env
   (env      (util:required 'env)          :type tc:environment :read-only t)
 
-  ;; Hash table mappinig variables bound in the current translation unit to types
+  ;; Hash table mapping variables bound in the current translation unit to types
   (ty-table (make-hash-table :test #'eq)  :type hash-table     :read-only t))
 
 (defun tc-env-add-variable (env name)
@@ -47,57 +47,47 @@
 
   (tc:qualified-ty-type (tc:fresh-inst (setf (gethash name (tc-env-ty-table env)) (tc:to-scheme (tc:make-variable))))))
 
+(defun tc-env-suggest-value (env name)
+  "If value lookup failed, generate suggestions for what to do, if anything."
+  (declare (type tc-env env)
+           (type symbol name)
+           (values util:string-list &optional))
+  (let ((suggestions nil))
+    ;; If the symbol names a type, user may have intended to use a type constructor
+    (let ((type (tc:lookup-type (tc-env-env env) name :no-error t)))
+      (when type
+        (push (format nil "Did you mean a constructor of type ~A?" (tc:type-entry-name type))
+              suggestions)))
+    (nreverse suggestions)))
+
 (defun tc-env-lookup-value (env var file)
-  "Lookup a variable named VAR in ENV."
+  "Lookup the type of a variable named VAR in ENV."
   (declare (type tc-env env)
            (type parser:node-variable var)
            (type coalton-file file)
            (values tc:ty tc:ty-predicate-list))
 
-
-  (let* ((scheme (or (gethash (parser:node-variable-name var) (tc-env-ty-table env))
-
-                     (tc:lookup-value-type (tc-env-env env) (parser:node-variable-name var) :no-error t)
-
-                     ;; Binding is unknown. Create an error.
-                     (let* ((sym-name (symbol-name (parser:node-variable-name var)))
-                            (matches (append
-                                      (remove-if-not
-                                       (lambda (s) (string= (symbol-name s) sym-name))
-                                       (alexandria:hash-table-keys (tc-env-ty-table env)))
-                                      (remove-if-not
-                                       (lambda (s) (string= (symbol-name s) sym-name))
-                                       (coalton-impl/algorithm::immutable-map-keys
-                                        (tc:environment-value-environment (tc-env-env env)))))))
-                       (error 'tc-error
-                              :err (coalton-error
-                                    :span (parser:node-source var)
-                                    :file file
-                                    :message "Unknown variable"
-                                    :primary-note "unknown variable"
-                                    :help-notes (mapcar
-                                                 (lambda (symbol)
-                                                   (error:make-coalton-error-help
-                                                    :span (parser:node-source var)
-                                                    :replacement (lambda (s)
-                                                                   (declare (ignore s))
-                                                                   (format nil "~S" symbol))
-                                                    :message (format nil "Did you mean ~S?" symbol)))
-                                                 matches))))))
-
-         (qual-ty (tc:fresh-inst scheme))
-
-         (ty (tc:qualified-ty-type qual-ty))
-
-         (preds (tc:qualified-ty-predicates qual-ty)))
-
-    (values
-     ty
-     (loop :for pred :in preds
-           :collect (tc:make-ty-predicate
-                     :class (tc:ty-predicate-class pred)
-                     :types (tc:ty-predicate-types pred)
-                     :source (parser:node-source var))))))
+  (let* ((var-name (parser:node-variable-name var))
+         (scheme (or (gethash var-name (tc-env-ty-table env))
+                     (tc:lookup-value-type (tc-env-env env) var-name :no-error t))))
+    (unless scheme
+      ;; Variable is unbound: create an error
+      (error 'tc-error
+             :err (coalton-error
+                   :span (parser:node-source var)
+                   :file file
+                   :message "Unknown variable"
+                   :primary-note "unknown variable"
+                   :help-notes (loop :for suggestion :in (tc-env-suggest-value env var-name)
+                                     :collect (error:make-coalton-error-help :span (parser:node-source var)
+                                                                             :replacement #'identity
+                                                                             :message suggestion)))))
+    (let ((qualified-type (tc:fresh-inst scheme)))
+      (values (tc:qualified-ty-type qualified-type)
+              (loop :for pred :in (tc:qualified-ty-predicates qualified-type)
+                    :collect (tc:make-ty-predicate :class (tc:ty-predicate-class pred)
+                                                   :types (tc:ty-predicate-types pred)
+                                                   :source (parser:node-source var)))))))
 
 (defun tc-env-add-definition (env name scheme)
   "Add a type named NAME to ENV."
