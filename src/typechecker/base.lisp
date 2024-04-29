@@ -34,7 +34,7 @@
 ;;;
 
 ;;;
-;;; Pretty printing
+;;; Pretty printer control
 ;;;
 
 (defvar *pprint-variable-symbol-code*)

@@ -352,6 +352,8 @@
 ;;;
 ;;; Pretty printing
 ;;;
+;;; (See typechecker/base.lisp for pretty printer control)
+;;;
 
 (defun next-pprint-variable ()
   "Get the next type variable symbol interned in the keyword package"
