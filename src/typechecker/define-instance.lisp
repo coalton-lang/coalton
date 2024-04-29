@@ -100,7 +100,7 @@
                 *package*
                 "INSTANCE/~A"
                 (with-output-to-string (s)
-                  (tc:with-pprint-variable-context ()
+                  (with-pprint-variable-context ()
                     (let ((*print-escape* t))
                       (tc:pprint-predicate s pred))))))
 

@@ -12,7 +12,6 @@
    #:*coalton-dump-ast*                 ; VARIABLE
    #:*coalton-skip-update*              ; VARIABLE
    #:*emit-type-annotations*            ; VARIABLE
-   #:*coalton-stage-1-complete*         ; VARIABLE
    #:*coalton-optimize*                 ; VARIABLE
    #:*coalton-optimize-library*         ; VARIABLE
    ))

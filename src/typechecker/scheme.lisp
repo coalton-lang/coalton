@@ -1,6 +1,7 @@
 (defpackage #:coalton-impl/typechecker/scheme
   (:use
    #:cl
+   #:coalton-impl/typechecker/base
    #:coalton-impl/typechecker/kinds
    #:coalton-impl/typechecker/types
    #:coalton-impl/typechecker/substitutions
