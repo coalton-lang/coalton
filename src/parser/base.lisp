@@ -29,7 +29,7 @@
 (in-package #:coalton-impl/parser/base)
 
 ;;;
-;;; Shared Definitions
+;;; Shared definitions for source parser
 ;;;
 
 (deftype identifier ()

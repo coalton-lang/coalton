@@ -14,15 +14,60 @@
    #:make-coalton-error-help)
   (:local-nicknames
    (#:util #:coalton-impl/util)
-   (#:error #:coalton-impl/error)
-   (#:tc #:coalton-impl/typechecker/stage-1))
+   (#:error #:coalton-impl/error))
   (:export
+   #:*coalton-pretty-print-tyvars*
+   #:*pprint-tyvar-dict*
+   #:*pprint-variable-symbol-code*
+   #:*pprint-variable-symbol-suffix*
    #:tc-error                           ; CONDITION
    #:check-duplicates                   ; FUNCTION
    #:check-package                      ; FUNCTION
+   #:with-pprint-variable-scope         ; MACRO
+   #:with-pprint-variable-context       ; MACRO
    ))
 
 (in-package #:coalton-impl/typechecker/base)
+
+;;;
+;;; Shared definitions for type checking environment
+;;;
+
+;;;
+;;; Pretty printing
+;;;
+
+(defvar *pprint-variable-symbol-code*)
+
+(defvar *pprint-variable-symbol-suffix*)
+
+(defmacro with-pprint-variable-scope (() &body body)
+  "If there is no pretty printing variable scope then create one for BODY"
+  `(if (boundp '*pprint-variable-symbol-code*)
+       (let ((*pprint-variable-symbol-code* *pprint-variable-symbol-code*)
+             (*pprint-variable-symbol-suffix* *pprint-variable-symbol-suffix*))
+         ,@body)
+       (let ((*pprint-variable-symbol-code* (char-code #\A))
+             (*pprint-variable-symbol-suffix* 0))
+         ,@body)))
+
+(defvar *coalton-pretty-print-tyvars* nil
+  "Whether to print all tyvars using type variable syntax
+
+This requires a valid PPRINT-VARIABLE-CONTEXT")
+
+(defvar *pprint-tyvar-dict*)
+
+(defmacro with-pprint-variable-context (() &body body)
+  "Create a variable context which can be used with PPRINT-TVAR"
+  `(let ((*pprint-tyvar-dict* (make-hash-table :test #'equalp))
+         (*coalton-pretty-print-tyvars* t))
+     (with-pprint-variable-scope ()
+       ,@body)))
+
+;;;
+;;; Conditions
+;;;
 
 (define-condition tc-error (error:coalton-base-error)
   ()
@@ -30,8 +75,12 @@
    (lambda (c s)
      (if (error:coalton-error-text c)
          (write-string (error:coalton-error-text c) s)
-         (tc:with-pprint-variable-context ()
+         (with-pprint-variable-context ()
            (error:display-coalton-error s (error:coalton-error-err c)))))))
+
+;;;
+;;; Assertions
+;;;
 
 (defun check-duplicates (elems f g callback)
   "Check for duplicate elements in ELEMS. F maps items in ELEMS to
@@ -81,4 +130,3 @@ source tuples which are compared for ordering."
                                             id
                                             (symbol-package id)
                                             *package*)))))
-

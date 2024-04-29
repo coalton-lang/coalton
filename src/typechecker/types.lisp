@@ -1,6 +1,7 @@
 (defpackage #:coalton-impl/typechecker/types
   (:use
    #:cl
+   #:coalton-impl/typechecker/base
    #:coalton-impl/typechecker/kinds)
   (:local-nicknames
    (#:util #:coalton-impl/util)
@@ -66,9 +67,6 @@
    #:function-return-type               ; FUNCTION
    #:function-remove-arguments          ; FUNCTION
    #:type-variables                     ; FUNCTION
-   #:*coalton-pretty-print-tyvars*      ; VARIABLE
-   #:with-pprint-variable-scope         ; MACRO
-   #:with-pprint-variable-context       ; MACRO
    #:next-pprint-variable               ; FUNCTION
    #:next-pprint-variable-as-tvar       ; FUNCTION
    #:pprint-tvar                        ; FUNCTION
@@ -355,9 +353,6 @@
 ;;; Pretty printing
 ;;;
 
-(defvar *pprint-variable-symbol-code*)
-(defvar *pprint-variable-symbol-suffix*)
-
 (defun next-pprint-variable ()
   "Get the next type variable symbol interned in the keyword package"
   (prog1
@@ -378,18 +373,6 @@
   ;; This is an awful awful hack
   (make-tycon :name (next-pprint-variable) :kind kind))
 
-(defmacro with-pprint-variable-scope (() &body body)
-  "If there is no pretty printing variable scope then create one for BODY"
-  `(if (boundp '*pprint-variable-symbol-code*)
-       (let ((*pprint-variable-symbol-code* *pprint-variable-symbol-code*)
-             (*pprint-variable-symbol-suffix* *pprint-variable-symbol-suffix*))
-         ,@body)
-       (let ((*pprint-variable-symbol-code* (char-code #\A))
-             (*pprint-variable-symbol-suffix* 0))
-         ,@body)))
-
-(defvar *pprint-tyvar-dict*)
-
 (defun pprint-tvar (tvar)
   (unless (boundp '*pprint-tyvar-dict*)
     (util:coalton-bug "Unable to pretty print tvar outside pprint variable context"))
@@ -397,18 +380,6 @@
     (or value
         (setf (gethash (tyvar-id tvar) *pprint-tyvar-dict*)
               (next-pprint-variable-as-tvar)))))
-
-(defmacro with-pprint-variable-context (() &body body)
-  "Create a variable context which can be used with PPRINT-TVAR"
-  `(let ((*pprint-tyvar-dict* (make-hash-table :test #'equalp))
-         (*coalton-pretty-print-tyvars* t))
-     (with-pprint-variable-scope ()
-       ,@body)))
-
-(defvar *coalton-pretty-print-tyvars* nil
-  "Whether to print all tyvars using type variable syntax
-
-This requires a valid PPRINT-VARIABLE-CONTEXT")
 
 (defun pprint-ty (stream ty)
   (declare (type stream stream)

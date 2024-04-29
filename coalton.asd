@@ -60,7 +60,8 @@
                              (:file "package")))
                (:module "typechecker"
                 :serial t
-                :components ((:file "kinds")
+                :components ((:file "base")
+                             (:file "kinds")
                              (:file "types")
                              (:file "substitutions")
                              (:file "predicate")
@@ -72,7 +73,6 @@
                              (:file "lisp-type")
                              (:file "context-reduction")
                              (:file "stage-1")
-                             (:file "base")
                              (:file "pattern")
                              (:file "expression")
                              (:file "traverse")

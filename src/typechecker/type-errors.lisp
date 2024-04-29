@@ -1,6 +1,7 @@
 (defpackage #:coalton-impl/typechecker/type-errors
   (:use
    #:cl
+   #:coalton-impl/typechecker/base
    #:coalton-impl/typechecker/types
    #:coalton-impl/typechecker/predicate)
   (:local-nicknames
