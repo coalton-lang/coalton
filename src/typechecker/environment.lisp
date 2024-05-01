@@ -484,7 +484,7 @@
   (field-tys (util:required 'field-tys) :type hash-table       :read-only t)
 
   ;; Mapping of "field name" -> "field index"
-  (field-idx (util:required 'field-idx) :type hash-table       :read-only t)h)
+  (field-idx (util:required 'field-idx) :type hash-table       :read-only t))
 
 (defmethod make-load-form ((self struct-entry) &optional env)
   (make-load-form-saving-slots self :environment env))
