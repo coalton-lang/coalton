@@ -91,7 +91,7 @@ Emitted by `define-integer-conversions' only if every element of FROM-TYPE can b
 
 Emitted by `define-integer-conversions' when some elements of FROM-TYPE cannot be represented in TO-TYPE,
 either because FROM-TYPE is signed and TO-TYPE is unsigned, or because FROM-TYPE is wider than TO-TYPE."
-    `(define-instance (TryInto ,from-type ,to-type)
+    `(define-instance (TryInto ,from-type ,to-type String)
        (define tryInto cast-if-inbounds)))
 
   (cl:defun definitely-subtype? (sub super)
@@ -166,7 +166,7 @@ cannot be represented in :TO. These fall into a few categories:
 
 ;; Allow Integer -> {Single,Double}-Float conversions
 (coalton-toplevel
-  (define-instance (TryInto Integer Single-Float)
+  (define-instance (TryInto Integer Single-Float String)
     (define (tryInto x)
       (lisp (Result String Single-Float) (x)
         (cl:let ((y (cl:ignore-errors (cl:coerce x 'cl:single-float))))
@@ -174,7 +174,7 @@ cannot be represented in :TO. These fall into a few categories:
                  (Err "Integer to Single-Float conversion out-of-range")
                  (Ok y))))))
 
-  (define-instance (TryInto Integer Double-Float)
+  (define-instance (TryInto Integer Double-Float String)
     (define (tryInto x)
       (lisp (Result String Double-Float) (x)
         (cl:let ((y (cl:ignore-errors (cl:coerce x 'cl:double-float))))
@@ -184,7 +184,7 @@ cannot be represented in :TO. These fall into a few categories:
 
 (cl:eval-when (:compile-toplevel :load-toplevel)
   (cl:defmacro integer-tryinto-float (integer lisp-float float pow)
-    `(define-instance (TryInto ,integer ,float)
+    `(define-instance (TryInto ,integer ,float String)
        (define (tryInto x)
 	 (lisp (Result String ,float) (x)
            (cl:if (cl:< ,(cl:- (cl:expt 2 pow)) x ,(cl:expt 2 pow))
