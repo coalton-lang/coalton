@@ -201,6 +201,7 @@
                (:file "monad/free")
                (:file "seq")
                (:file "system")
+               (:file "file")
                (:file "prelude")))
 
 (when (member (getenv "COALTON_PORTABLE_BIGFLOAT") '("1" "true" "t") :test 'equalp)
@@ -364,4 +365,5 @@
                (:file "unused-variables")
                (:file "pattern-matching-tests")
                (:file "looping-native-tests")
-               (:file "monomorphizer-tests")))
+               (:file "monomorphizer-tests")
+               (:file "file-tests")))

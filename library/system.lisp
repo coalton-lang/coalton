@@ -9,8 +9,10 @@
    #:sleep)
   (:export
 
+   #:LispCondition
+
    #:getenv
-   #:setenv
+   #:setenv!
    
    #:architecture
    #:os
@@ -66,6 +68,15 @@ While the result will always contain microseconds, some implementations may retu
 
 (coalton-toplevel
 
+  (repr :native cl:condition)
+  (define-type LispCondition
+    "Condition for lisp error handling. Uses `cl:condition`.")
+
+  (define-instance (Signalable LispCondition)
+    (define (error condition)
+      (lisp :a (condition)
+        (cl:error condition))))
+
   ;;
   ;; Accessing Environment Variables
   ;;
@@ -74,18 +85,18 @@ While the result will always contain microseconds, some implementations may retu
   (define (getenv var)
     "Gets the value of the environmental variable `var`, errors if `var` doesn't exist."
     (lisp (Optional String) (var)
-               (cl:let ((env (uiop:getenvp var)))
-                 (cl:if env
-                        (Some env)
-                        (None)))))
+      (cl:let ((env (uiop:getenvp var)))
+        (cl:if env
+               (Some env)
+               (None)))))
 
   
-  (declare setenv (String -> String -> Unit))
-  (define (setenv var val)
+  (declare setenv! (String -> String -> Unit))
+  (define (setenv! var val)
     "Sets an environment variable `var` to string `val`, only if `var` already exists."
     (lisp Unit (var val)
-           (cl:setf (uiop:getenv var) val)
-          Unit))
+      (cl:setf (uiop:getenv var) val)
+      Unit))
 
   ;;
   ;; Typical Environment/System variables
@@ -144,7 +155,7 @@ While the result will always contain microseconds, some implementations may retu
   (define (cmd-args)
     "The current command line arguments (stored at compile time)."
     (lisp (List String) ()
-        (uiop:command-line-arguments)))
+      (uiop:command-line-arguments)))
 
   (declare argv0 (Unit -> (Optional String)))
   (define (argv0)
