@@ -3,13 +3,14 @@
    #:coalton)
   (:local-nicknames
    (#:types #:coalton-library/types))
-
   (:export
    #:Addressable #:eq?)
   (:export
    #:Eq #:==
    #:Num #:+ #:- #:* #:fromInt)
   (:export
+   #:Signalable
+   #:error
    #:Tuple
    #:Optional #:Some #:None
    #:Result #:Ok #:Err
@@ -44,6 +45,25 @@
 
 #+coalton-release
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+;;;
+;;; Signaling errors and warnings
+;;;
+
+(coalton-toplevel
+ 
+ ;;
+ ;; Signalling errors on supported types
+ ;;
+ (define-class (Signalable :a)
+   "Signals errors or warnings by calling their respective lisp conditions."
+   (error (:a -> :b)))
+
+  (define-instance (Signalable String)
+    (define (error str)
+      (lisp :a (str)
+        (cl:error str)))))
+
 
 (coalton-toplevel
 
@@ -264,11 +284,6 @@
   ;;
   ;; Unwrappable for fallible unboxing
   ;;
-
-  (declare error (String -> :a))
-  (define (error str)
-    "Signal an error by calling `CL:ERROR`."
-    (lisp :a (str) (cl:error str)))
 
   (define-class (Unwrappable :container)
     "Containers which can be unwrapped to get access to their contents.

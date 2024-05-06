@@ -1,13 +1,13 @@
 (coalton-library/utils:defstdlib-package :coalton-library/ord-tree
   (:use
-   :coalton
-   :coalton-library/classes
+   #:coalton
+   #:coalton-library/classes
    #:coalton-library/hash
-   :coalton-library/tuple
-   :coalton-library/functions)
+   #:coalton-library/tuple
+   #:coalton-library/functions)
   (:local-nicknames
-   (#:iter :coalton-library/iterator)
-   (#:cell :coalton-library/cell))
+   (#:iter #:coalton-library/iterator)
+   (#:cell #:coalton-library/cell))
   (:shadow #:empty)
   (:export
    #:Tree #:Empty
