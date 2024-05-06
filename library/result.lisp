@@ -11,7 +11,8 @@
    #:ok?
    #:err?
    #:map-err
-   #:flatten))
+   #:flatten
+   #:ok-or-error))
 
 (in-package #:coalton-library/result)
 
@@ -52,6 +53,12 @@
       ((Ok x) x)
       ((Err x) x)))
 
+  (declare ok-or-error ((Signalable :err) => (Result :err :a) -> :a))
+  (define (ok-or-error res)
+    (match res
+      ((Ok elt) elt)
+      ((Err r) (error r))))
+  
   ;;
   ;; Instances
   ;;
