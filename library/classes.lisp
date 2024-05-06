@@ -246,7 +246,7 @@
   ;;
 
   (define-class (Into :a :b)
-    "INTO imples *every* element of `:a` can be represented by an element of `:b`. This conversion might not be bijective (i.e., there may be elements in `:b` that don't correspond to any in `:a`)."
+    "`INTO` imples *every* element of `:a` can be represented by an element of `:b`. This conversion might not be bijective (i.e., there may be elements in `:b` that don't correspond to any in `:a`)."
     (into (:a -> :b)))
 
   (define-class ((Into :a :b) (Into :b :a) => Iso :a :b)
@@ -255,11 +255,9 @@
   (define-instance (Into :a :a)
     (define (into x) x))
 
-  (define-class (TryInto :a :b)
-    "TRY-INTO implies some elements of `:a` can be represented exactly by an element of :b, but sometimes not. If not, an error string is returned."
-    ;; Ideally we'd have an associated-type here instead of locking in
-    ;; on String.
-    (tryInto (:a -> Result String :b)))
+  (define-class (TryInto :a :b :c (:a :b -> :c))
+    "`TRY-INTO` implies some elements of `:a` can be represented exactly by an element of `:b`, but sometimes not. If not, an error of type `:c` is returned."
+    (tryInto (:a -> (Result :c :b))))
 
   (define-instance (Iso :a :a))
 

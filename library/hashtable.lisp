@@ -123,7 +123,7 @@
               (cl:if presentp
                      (Some (Tuple key value))
                      None))))
-      (with-default 0 (tryinto (count table)))))
+      (with-default 0 (the (Result String UFix) (tryinto (count table))))))
 
   (declare keys (Hashtable :key :value -> iter:Iterator :key))
   (define (keys table)
@@ -138,7 +138,7 @@
               (cl:if presentp
                      (Some key)
                      None))))
-      (with-default 0 (tryinto (count table)))))
+      (with-default 0 (the (Result String Ufix) (tryinto (count table))))))
 
   (declare values (Hashtable :key :value -> iter:Iterator :value))
   (define (values table)
@@ -153,7 +153,7 @@
               (cl:if presentp
                      (Some value)
                      None))))
-      (with-default 0 (tryinto (count table))))) 
+      (with-default 0 (the (Result String UFix) (tryinto (count table)))))) 
 
   (declare extend! ((Hash :key) (iter:IntoIterator :container (Tuple :key :value))
                    => Hashtable :key :value -> :container -> Unit))

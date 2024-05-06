@@ -199,7 +199,7 @@ does not have that suffix."
       (lisp String (z)
         (cl:prin1-to-string z))))
 
-  (define-instance (TryInto String Integer)
+  (define-instance (TryInto String Integer String)
     (define (tryInto s)
       (lisp (Result String Integer) (s)
         (cl:let ((z (cl:ignore-errors (cl:parse-integer s))))
