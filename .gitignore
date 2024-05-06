@@ -11,3 +11,5 @@ docs/reference.md
 coverage-report/
 
 bench.json
+
+tests/file-tests/

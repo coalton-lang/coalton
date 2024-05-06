@@ -158,12 +158,12 @@
       (let out =
         (iter:collect!
          (iter:map-while! (fn (x)
-                             (match x
-                               ((Ok x) (Some x))
-                               ((Err e)
-                                (cell:write! error (Some e))
-                                None)))
-                           iter)))
+                            (match x
+                              ((Ok x) (Some x))
+                              ((Err e)
+                               (cell:write! error (Some e))
+                               None)))
+                          iter)))
       (match (cell:read error)
         ((None) (Ok out))
         ((Some e) (Err e))))))

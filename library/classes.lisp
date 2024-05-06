@@ -35,6 +35,7 @@
    #:Into
    #:TryInto
    #:Iso
+   #:Signalable
    #:error
    #:Unwrappable #:unwrap-or-else #:with-default #:unwrap #:expect #:as-optional
    #:default #:defaulting-unwrap))
@@ -284,7 +285,7 @@
   ;;
   ;; Unwrappable for fallible unboxing
   ;;
-
+  
   (define-class (Unwrappable :container)
     "Containers which can be unwrapped to get access to their contents.
 
