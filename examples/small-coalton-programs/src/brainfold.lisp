@@ -25,8 +25,9 @@
    (#:char #:coalton-library/char)
    (#:str #:coalton-library/string)
    (#:list #:coalton-library/list)
-   (#:state #:coalton-library/monad/state))
-
+   (#:arith #:coalton-library/math)
+   (#:state #:coalton-library/monad/state)
+   (#:file #:coalton-library/file))
   (:export
    #:eval
    #:run-program
@@ -281,8 +282,7 @@
 
   (define (run-file filepath)
     "Loads and executes the brainfold file at the given filepath."
-    (run-program (Lisp String (filepath)
-                   (uiop:read-file-string filepath)))))
+    (run-program (unwrap (file:read-file-to-string filepath)))))
 
 
 ;;;
