@@ -41,12 +41,9 @@
                 (file (error:make-coalton-file :stream stream :name "<test>"))
 
                 (program (parser:with-reader-context stream
-                           (parser:read-program stream file :mode :test))))
+                           (parser:read-program stream file))))
 
-           (multiple-value-bind (program env)
-               (entry:entry-point program)
-             (declare (ignore program))
-             
+           (let ((env (entry:entry-point program nil)))
              (when expected-types
                (loop :for (unparsed-symbol . unparsed-type) :in expected-types
                      :for symbol := (intern (string-upcase unparsed-symbol) *package*)

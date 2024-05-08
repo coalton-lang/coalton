@@ -1,5 +1,17 @@
 (uiop:define-package #:coalton-impl/codegen
   (:import-from
+   #:coalton-impl/codegen/base
+   #:emit
+   #:emit-ast
+   #:emit-comment
+   #:emit-env)
+  (:export
+   #:emit
+   #:emit-ast
+   #:emit-comment
+   #:emit-env)
+
+  (:import-from
    #:coalton-impl/codegen/codegen-expression
    #:codegen-expression)
   (:export

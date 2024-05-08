@@ -1,5 +1,5 @@
 ;;;;
-;;;; Central environment managment. Coalton stores all persistent
+;;;; Central environment management. Coalton stores all persistent
 ;;;; state in a single immutable struct. State is partitioned into a
 ;;;; series of sub-environments. Each sub-environment is analogous to
 ;;;; a database table, and holds multiple entries which function like
@@ -16,6 +16,7 @@
   (:use
    #:cl
    #:coalton-impl/algorithm
+   #:coalton-impl/typechecker/base
    #:coalton-impl/typechecker/type-errors
    #:coalton-impl/typechecker/types
    #:coalton-impl/typechecker/predicate
@@ -38,7 +39,7 @@
    (#:error #:coalton-impl/error)
    (#:parser #:coalton-impl/parser))
   (:export
-   #:*env-update-log*                       ; VARIABLE
+   #:with-update-hook                       ; MACRO
    #:value-environment                      ; STRUCT
    #:explicit-repr                          ; TYPE
    #:type-entry                             ; STRUCT
@@ -142,8 +143,6 @@
    #:lookup-struct                          ; FUNCTION
    #:set-struct                             ; FUNCTION
    #:unset-struct                           ; FUNCTION
-   #:set-constructor                        ; FUNCTION
-   #:unset-constructor                      ; FUNCTION
    #:lookup-class                           ; FUNCTION
    #:set-class                              ; FUNCTION
    #:lookup-function                        ; FUNCTION
@@ -175,16 +174,17 @@
 
 (in-package #:coalton-impl/typechecker/environment)
 
-(defvar *env-update-log* nil)
+(defvar *update-hook*)
 
-(defun make-update-record (name arg-list)
-  `(setf env (,name env ,@(loop :for arg :in (cdr arg-list)
-                                :collect (util:runtime-quote arg)))))
+(defmacro with-update-hook (fn &body body)
+  "Call FN with environment updates within the scope of BODY."
+  `(let ((*update-hook* ,fn)) ,@body))
 
 (defmacro define-env-updater (name arg-list &body body)
   `(defun ,name (&rest args)
      (declare (values environment &optional))
-     (push (make-update-record ',name args) *env-update-log*)
+     (when (boundp '*update-hook*)
+       (funcall *update-hook* ',name (cdr args)))
      (destructuring-bind ,arg-list args ,@body)))
 
 ;;;
@@ -1130,15 +1130,15 @@
                                          (ty-class-instance-codegen-sym value)
                                          value))))
 
-(define-env-updater set-method-inline (env method instance codegen-sym)
+(define-env-updater set-method-inline (env method-instance codegen-sym)
   (declare (type environment env)
-           (type symbol method instance codegen-sym))
+           (type symbol codegen-sym))
   (update-environment
    env
    :method-inline-environment
    (immutable-map-set
     (environment-method-inline-environment env)
-    (cons method instance)
+    method-instance
     codegen-sym
     #'make-method-inline-environment)))
 

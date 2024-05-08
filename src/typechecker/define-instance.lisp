@@ -159,7 +159,9 @@
 
         (loop :for method-name :in method-names
               :for method-codegen-sym := (gethash method-name method-codegen-syms) :do
-                (setf env (tc:set-method-inline env method-name instance-codegen-sym method-codegen-sym)))
+                (setf env (tc:set-method-inline env
+                                                (cons method-name instance-codegen-sym)
+                                                method-codegen-sym)))
 
         (values instance-entry env)))))
 
