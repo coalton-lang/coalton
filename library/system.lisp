@@ -6,7 +6,22 @@
   (:export
    #:gc
    #:time
-   #:sleep))
+   #:sleep)
+  (:export
+
+   #:getenv
+   #:setenv
+   
+   #:architecture
+   #:os
+   #:hostname
+   #:implementation
+   #:lisp-version
+   #:features
+   #:add-feature
+   
+   #:cmd-args
+   #:argv0))
 
 (in-package #:coalton-library/system)
 
@@ -44,6 +59,101 @@ While the result will always contain microseconds, some implementations may retu
     (lisp Unit (n)
       (cl:sleep n)
       Unit)))
+
+;;;
+;;; Gathering System information
+;;;
+
+(coalton-toplevel
+
+  ;;
+  ;; Accessing Environment Variables
+  ;;
+  
+  (declare getenv (String -> (Optional String)))
+  (define (getenv var)
+    "Gets the value of the environmental variable `var`, errors if `var` doesn't exist."
+    (lisp (Optional String) (var)
+               (cl:let ((env (uiop:getenvp var)))
+                 (cl:if env
+                        (Some env)
+                        (None)))))
+
+  
+  (declare setenv (String -> String -> Unit))
+  (define (setenv var val)
+    "Sets an environment variable `var` to string `val`, only if `var` already exists."
+    (lisp Unit (var val)
+           (cl:setf (uiop:getenv var) val)
+          Unit))
+
+  ;;
+  ;; Typical Environment/System variables
+  ;;
+  
+  (declare architecture (Unit -> String))
+  (define (architecture)
+    "The system's architecture (stored at compile time)."
+    (lisp String ()
+      (cl:string (uiop:architecture))))
+
+  (declare os (Unit -> String))
+  (define (os)
+    "The system's operating system (stored at compile time)."
+    (lisp String ()
+      (cl:string (uiop:detect-os))))
+
+  (declare hostname (Unit -> String))
+  (define (hostname)
+    "Returns the system's hostname. This is a function because the hostname can be redefined."
+    (lisp String ()
+      (uiop:hostname)))
+
+  (declare implementation (Unit -> String))
+  (define (implementation)
+    "The lisp implementation (stored at compile time)."
+    (lisp String ()
+      (cl:string (uiop:implementation-type))))
+
+  (declare lisp-version (Unit -> String))
+  (define (lisp-version)
+    "The lisp implementation version (stored at compile time)."
+    (lisp String ()
+      (uiop:lisp-version-string)))
+
+  (declare features (Unit -> (List String)))
+  (define (features)
+    "Returns a list of active features, from `cl:*features*`."
+    (lisp (list String) ()
+      (cl:mapcar #'cl:symbol-name cl:*features*)))
+
+  (declare add-feature (String -> Unit))
+  (define (add-feature feat)
+    "Adds a feature `feat` to `cl:*features*`."
+    (lisp Boolean (feat)
+      (cl:push (cl:intern feat "KEYWORD")
+               cl:*features*)
+      cl:t)
+    Unit)
+
+  ;;
+  ;; Command line arguments
+  ;;
+  
+  (declare cmd-args (Unit -> (List String)))
+  (define (cmd-args)
+    "The current command line arguments (stored at compile time)."
+    (lisp (List String) ()
+        (uiop:command-line-arguments)))
+
+  (declare argv0 (Unit -> (Optional String)))
+  (define (argv0)
+    "The first command line argument (stored at compile time)."
+    (lisp (Optional String) ()
+      (cl:let ((arg (uiop:argv0)))
+        (cl:if arg
+               (Some (uiop:argv0))
+               (None))))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/SYSTEM")
