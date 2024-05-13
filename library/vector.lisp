@@ -318,12 +318,7 @@
 
   (define-instance (Into (Vector :a) (List :a))
     (define (into v)
-      (let ((inner
-              (fn (v index)
-                (if (>= index (length v))
-                    Nil
-                    (Cons (index-unsafe index v) (inner v (+ 1 index)))))))
-        (inner v 0))))
+        (iter:collect! (iter:into-iter v))))
 
   (define-instance (Iso (Vector :a) (List :a)))
 
