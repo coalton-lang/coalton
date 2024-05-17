@@ -20,7 +20,7 @@
                      (parser:read-program stream (error:make-coalton-file :stream stream :name "test") :mode :file))
                  (error:coalton-base-error (c)
                    (princ-to-string c))))))
-    (dolist (file (test-files "tests/parser/*.bad.coalton"))
+    (dolist (file (test-files "tests/parser-test-files/bad/*.coal"))
       (let ((error-file (make-pathname :type "error"
                                        :defaults file)))
         (cond ((uiop:file-exists-p error-file)
@@ -31,5 +31,5 @@
                (signals parser:parse-error
                  (parse-file file))))))
 
-    (dolist (file (test-files "tests/parser/*.good.coalton"))
+    (dolist (file (test-files "tests/parser-test-files/good/*.coal"))
       (parse-file file))))

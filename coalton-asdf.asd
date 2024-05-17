@@ -10,7 +10,7 @@
 ;;    
 ;;         :defsystem-depends-on (#:coalton-asdf)
 ;;    
-;;     2. Rename library/types.lisp to library/types.coalton
+;;     2. Rename library/types.lisp to library/types.coal
 ;;    
 ;;     3. Change (:file "types") to (:coalton-file "types") in coalton.asd
 
