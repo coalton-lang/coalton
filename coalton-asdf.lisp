@@ -1,6 +1,6 @@
 ;; ASDF Coalton component type
 ;;
-;; Add an asdf component that supports compiling files with a .coalton
+;; Add an asdf component that supports compiling files with a .coal
 ;; extension.
 ;;
 ;; To use, add a :defsystem-depends-on clause to your system
@@ -22,7 +22,4 @@
 (in-package :asdf)
 
 (defclass coalton-file (cl-source-file)
-  ((type :initform "coalton")))
-
-(defmethod source-file-type ((c coalton-file) (s module))
-  "coalton")
+  ((type :initform "coal")))
