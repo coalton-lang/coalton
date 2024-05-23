@@ -120,7 +120,7 @@ Coalton is currently used in production to build [quantum computing software](ht
 
 **Test**: Compile the tests with `(ql:quickload :coalton/tests)`, then run the tests with `(asdf:test-system :coalton)`.
 
-**Learn**: Start with [*Intro to Coalton*](docs/intro-to-coalton.md), and then taking a peek in the [examples directory](examples/). It may also be helpful to check out the [introductory blog post](https://coalton-lang.github.io/20211010-introducing-coalton/).
+**Learn**: Start with [*Intro to Coalton*](docs/intro-to-coalton.md), and then take a peek at the [examples directory](examples/). It may also be helpful to check out the [introductory blog post](https://coalton-lang.github.io/20211010-introducing-coalton/).
 
 ## What's Here?
 
