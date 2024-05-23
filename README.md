@@ -1,5 +1,7 @@
 <p align="center">
-  <img src="docs/assets/coalton-logotype-gray.svg" style="zoom:45%;" />
+  <a href="https://coalton-lang.github.io/">
+    <img alt="Coalton" src="docs/assets/coalton-logotype-gray.svg" style="zoom:45%;" />
+  </a>
 </p>
 
 <p align="center" class="badges">
@@ -13,7 +15,7 @@
 
 Coalton is an efficient, statically typed functional programming language that supercharges Common Lisp.
 
-Coalton can be written in files:
+Coalton integrates directly into Common Lisp:
 
 ```lisp
 (in-package #:coalton-user)
@@ -71,7 +73,7 @@ Coalton can be written in files:
     (diff t)))
 ```
 
-And at the REPL:
+It also works directly in the REPL:
 
 ```lisp
 CL-USER> (in-package #:coalton-user)
@@ -86,7 +88,7 @@ COALTON-USER> (coalton (dt (E+ (square (EVar t)) (EConst 1))))
 
 Type errors are discovered at compile-time, and errors are printed beautifully without sacrificing Common Lisp's interactive debugging facilities.
 
-```lisp
+```
 COALTON-USER> (coalton (dt (E+ (EConst 1/2) (EConst 0.5))))
 error: Type mismatch
   --> <unknown>:1:30
@@ -101,19 +103,24 @@ Restarts:
  2: [ABORT] abort thread (#<THREAD "repl-thread" RUNNING {10013A8003}>)
 ```
 
-*Coalton has **not** reached "1.0" yet. This means that, from time to time, you may have a substandard user experience. While we try to be ANSI-conforming, Coalton is currently only tested on SBCL 2.2.x, Allegro CL 10.1.* and Clozure CL 1.21.*.
+Coalton is currently used in production to build [quantum computing software](https://coalton-lang.github.io/20220906-quantum-compiler/).
 
 ## Getting Started
 
+> [!WARNING]
+> Coalton has **not** reached "1.0" yet. This means that, from time to time, you may have a substandard user experience. While we try to be ANSI-conforming, Coalton is currently only tested on recent versions of SBCL, Allegro CL, and Clozure CL.
+>
+> Coalton will **not** be in Quicklisp until it reaches its first stable version.
+
 **Prepare**: Install [SBCL](http://www.sbcl.org/platform-table.html) (on macOS with Homebrew: `brew install sbcl`). Install Quicklisp by following instructions [here](https://www.quicklisp.org/beta/#installation). (The step command involving `gpg` is not needed.) After installing Quicklisp, you should have a `quicklisp` folder which will make installing Coalton easier.
 
-**Install**: Clone this repository into a place your Lisp can see (e.g., `~/quicklisp/local-projects/`). Coalton is not yet on Quicklisp.
+**Install**: Clone this repository into a place your Lisp can see (e.g., `~/quicklisp/local-projects/`).
 
 **Use**: Either run `(ql:quickload :coalton)`, or add `#:coalton` to your ASD's `:depends-on` list. Quicklisp will automatically download all of Coalton's dependencies.
 
 **Test**: Compile the tests with `(ql:quickload :coalton/tests)`, then run the tests with `(asdf:test-system :coalton)`.
 
-**Learn**: We recommend starting with the [*Intro to Coalton*](docs/intro-to-coalton.md) document, and then taking a peek in the [examples directory](examples/). It may also be helpful to check out the [introductory blog post](https://coalton-lang.github.io/20211010-introducing-coalton/).
+**Learn**: Start with [*Intro to Coalton*](docs/intro-to-coalton.md), and then taking a peek in the [examples directory](examples/). It may also be helpful to check out the [introductory blog post](https://coalton-lang.github.io/20211010-introducing-coalton/).
 
 ## What's Here?
 
