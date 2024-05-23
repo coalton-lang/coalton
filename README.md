@@ -120,7 +120,7 @@ Coalton is currently used in production to build [quantum computing software](ht
 
 **Test**: Compile the tests with `(ql:quickload :coalton/tests)`, then run the tests with `(asdf:test-system :coalton)`.
 
-**Learn**: Start with [*Intro to Coalton*](docs/intro-to-coalton.md), and then take a peek at the [examples directory](examples/). It may also be helpful to check out the [introductory blog post](https://coalton-lang.github.io/20211010-introducing-coalton/).
+**Learn**: Start with [*Intro to Coalton*](docs/intro-to-coalton.md) and the [standard library reference](https://coalton-lang.github.io/reference/), and then take a peek at the [examples directory](examples/). It may also be helpful to check out the [introductory blog post](https://coalton-lang.github.io/20211010-introducing-coalton/).
 
 ## What's Here?
 
@@ -132,7 +132,7 @@ It also contains a few example programs, such as:
 - An [implementation](examples/thih/) of Jones's *Typing Haskell in Haskell*, and
 - An [implementation](examples/quil-coalton/) of a simple [Quil](https://en.wikipedia.org/wiki/Quil_(instruction_set_architecture)) parser using parser combinators.
 
-Lastly and importantly, we maintain a collection of documentation about Coalton in the [docs](docs/) directory, including a [standard library reference guide](https://coalton-lang.github.io/reference/).
+Lastly and importantly, we maintain a collection of documentation about Coalton in the [docs](docs/) directory.
 
 ## Get Involved
 
