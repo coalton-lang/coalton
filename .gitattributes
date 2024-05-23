@@ -1,4 +1,9 @@
 *.lisp linguist-language=Common-Lisp
 
+# GitHub/Linguist's requirements for a new language
+# https://github.com/github-linguist/linguist/blob/master/CONTRIBUTING.md#adding-an-extension-to-a-language
+*.coal linguist-language=Common-Lisp
+
 # See https://sourceforge.net/p/sbcl/mailman/sbcl-devel/thread/4D50C7E6.20400@yv.org/
 *.lisp text eol=lf 
+*.coal text eol=lf
