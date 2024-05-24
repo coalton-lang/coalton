@@ -1,9 +1,11 @@
 (coalton-library/utils:defstdlib-package #:coalton-library/file
+  (:documentation "This file library is particularly sensitive to trailing slashes or lack thereof. Directory paths should always use trailing `/`s, and file paths should be without.")
   (:use
    #:coalton
    #:coalton-library/classes
    #:coalton-library/builtin
-   #:coalton-library/functions)
+   #:coalton-library/functions
+   #:coalton-library/system)
   (:local-nicknames
    (#:str #:coalton-library/string)
    (#:iter #:coalton-library/iterator)
@@ -14,7 +16,6 @@
    (#:types #:coalton-library/types)
    (#:char #:coalton-library/char)
    (#:math #:coalton-library/math/bounded))
-  (:documentation "This file library is particularly sensitive to trailing slashes or lack thereof. Directory paths should always use trailing `/`s, and file paths should be without.")
   (:export
    
    #:Pathname
@@ -115,18 +116,9 @@
   (define-instance (Eq Pathname)
     (define (== a b)
       (lisp Boolean (a b)
-        (cl:equalp a b))))
+        (cl:equalp a b)))))
 
-  (repr :native cl:condition)
-  (define-type LispCondition
-    "Condition for lisp error handling. Uses `cl:condition`.")
-
-  (define-instance (Signalable LispCondition)
-    (define (error condition)
-      (lisp :a (condition)
-        (cl:error condition)))))
-
-(cl:defmacro handle-file-function ((func cl:&rest args))
+(cl:defmacro %handle-file-function ((func cl:&rest args))
   "A macro for handling potentially erroring lisp file operations. Automatically returns the lisp condition if one is thrown."
   `(cl:handler-case (Ok (,func ,@args))
      (cl:error (c) (Err (LispError c)))))
@@ -156,7 +148,7 @@
         ((LispError c)
          (error c))
         ((EOF)
-         (error #. (cl:format cl:nil "Error~%~%End of File")))))))
+         (error #.(cl:format cl:nil "Error~%~%End of File")))))))
 
 ;;;
 ;;; Handling existential path queries
@@ -178,15 +170,15 @@
     (lisp Boolean (p)
       (to-boolean (uiop:file-pathname-p p))))
 
-  (declare merge ((Into :a Pathname) (Into :b Pathname) => :a -> :b -> (Result FileError Pathname)))
+  (declare merge ((Into :a Pathname) (Into :b Pathname) => :a -> :b -> Pathname))
   (define (merge path1 path2)
     "Merges two pathnames together. The directory pathname should be the first argument."
     (let p1 = (the Pathname (into path1)))
     (let p2 = (the Pathname (into path2)))
     (if (not (directory-pathname? p1))
-        (Err (PathError "Merge: first argument must be a directory path." p1))
-        (Ok (lisp Pathname (p1 p2)
-              (cl:merge-pathnames p2 p1)))))
+        (error (PathError "Merge: first argument must be a directory path." p1))
+        (lisp Pathname (p1 p2)
+          (cl:merge-pathnames p2 p1))))
 
   (declare exists? ((Into :a Pathname) => :a -> (Result FileError Boolean)))
   (define (exists? path)
@@ -194,24 +186,24 @@
     (do
      (let p = (the Pathname (into path)))
      (lisp (Result FileError Boolean) (p)
-       (handle-file-function (to-boolean (cl:probe-file p))))))
+       (%handle-file-function (to-boolean (cl:probe-file p))))))
 
-  (declare if-directory-path ((Into :a Pathname) => :a -> (Pathname -> (Result FileError :b)) -> (Result FileError :b)))
-  (define (if-directory-path path action)
+  (declare %if-directory-path ((Into :a Pathname) => :a -> (Pathname -> (Result FileError :b)) -> (Result FileError :b)))
+  (define (%if-directory-path path action)
     "Performs an operation only if the path is a valid directory pathname."
     (do
      (let p = (the Pathname (Into path)))
      (let dir = (directory-pathname? p))
       (if dir
           (action p)
-          (Err (PathError "This path does not represent a directory. Please add a trailing `/` or rethink your decision." p)))))
+          (Err (PathError "This path does not represent a directory. Please add a trailing `/`." p)))))
   
   (declare directory-exists? ((Into :a Pathname) => :a -> (Result FileError Boolean)))
   (define (directory-exists? path)
     "Returns True if a pathname names a directory that exists."
-    (if-directory-path path (fn (p)
-                              (lisp (Result FileError Boolean) (p)
-                                (handle-file-function (to-boolean (uiop:directory-exists-p p)))))))
+    (%if-directory-path path (fn (p)
+                               (lisp (Result FileError Boolean) (p)
+                                 (%handle-file-function (to-boolean (uiop:directory-exists-p p)))))))
 
   (declare file-exists? ((Into :a Pathname) => :a -> (Result FileError Boolean)))
   (define (file-exists? path)
@@ -221,8 +213,8 @@
      (let file = (file-pathname? p))
       (if file
           (lisp (Result FileError Boolean) (p)
-              (handle-file-function (to-boolean (uiop:file-exists-p p))))
-          (Err (PathError "This path does not represent a file. Please remove the trailing `/` or rethink your decision." p))))))
+            (%handle-file-function (to-boolean (uiop:file-exists-p p))))
+          (Err (PathError "This path does not represent a file. Please remove the trailing `/`." p))))))
 
 ;;;
 ;;; Working with directories
@@ -233,26 +225,32 @@
   (declare create-directory ((Into :a Pathname) => :a -> (Result FileError Pathname)))
   (define (create-directory path)
     "This is equivalent to `mkdir -p`. Creates a directory and its parents. The pathname must be a valid directory pathname."
-    (if-directory-path path
+    (%if-directory-path path
                        (fn (p)
                          (lisp (Result FileError Pathname) (p)
-                           (handle-file-function (cl:ensure-directories-exist p))))))
+                           (%handle-file-function (cl:ensure-directories-exist p))))))
+
+  (declare create-temp-directory (Unit -> Pathname))
+  (define (create-temp-directory)
+    "This creates a temporary directory."
+    (lisp Pathname ()
+          (uiop:setup-temporary-directory)))
 
   (declare directory-files ((Into :a Pathname) => :a -> (Result FileError (List Pathname))))
   (define (directory-files path)
     "Returns all files within the directory. Returns an error if the pathname is not a directory pathname."
-    (if-directory-path path
+    (%if-directory-path path
                        (fn (p)
                          (lisp (Result FileError (List Pathname)) (p)
-                           (handle-file-function (uiop:directory-files p))))))
+                           (%handle-file-function (uiop:directory-files p))))))
 
   (declare subdirectories ((Into :a Pathname) => :a -> (Result FileError (List Pathname))))
   (define (subdirectories path)
     "Returns all subdirectories within the directory. Returns an error if the pathname is not a directory pathname."
-    (if-directory-path path
+    (%if-directory-path path
                        (fn (p)
                          (lisp (Result FileError (List Pathname)) (p)
-                           (handle-file-function (uiop:subdirectories p))))))
+                           (%handle-file-function (uiop:subdirectories p))))))
 
   ;;
   ;; Handling directory behavior that depends on emptiness
@@ -261,30 +259,29 @@
   (declare empty? ((Into :a Pathname) => :a -> (Result FileError Boolean)))
   (define (empty? path)
     "Checks whether a directory is empty."
-    (if-directory-path path
+    (%if-directory-path path
                        (fn (p)
                          (pure (lisp Boolean (p)
-                                 (cl:null (cl:directory (cl:format cl:nil "~a*" p))))))))
+                                 (cl:null (cl:directory (cl:merge-pathnames uiop:*wild-directory* p))))))))
 
   (declare remove-directory ((Into :a Pathname) => :a -> (Result FileError :a)))
   (define (remove-directory path)
     "Deletes an empty directory."
     (let p = (the Pathname (into path)))
     (lisp (Result FileError :a) (p)
-      (handle-file-function (uiop:delete-empty-directory p))))
-  
+      (%handle-file-function (uiop:delete-empty-directory p))))
   
   (declare remove-directory-recursive ((Into :a Pathname) => :a -> (Result FileError Unit)))
   (define (remove-directory-recursive path)
     "Deletes a target directory recursively. Equivalent to `rm -r`. Errors if the path is not a directory."
-    (if-directory-path path
+    (%if-directory-path path
                        (fn (p)
                          (lisp (Result FileError Unit) (p)
-                           (handle-file-function (uiop:delete-directory-tree p))))))
+                           (%handle-file-function (uiop:delete-directory-tree p))))))
   
   (declare system-relative-pathname ((Into :a String) => :a -> String -> (Result FileError Pathname)))
   (define (system-relative-pathname system-name name)
-    "Generates a system-relative-pathname for a given filename or path."
+    "Generates a system-relative-pathname for a given filename or path. This is a wrapper for `asdf:system-relative-pathname`."
     (lisp (Result FileError Pathname) (system-name name)
       (cl:handler-case (Ok (asdf:system-relative-pathname system-name name))
         (cl:error (c) (Err (LispError c)))))))
@@ -301,14 +298,10 @@
     (do
      (let in = (the Pathname (into input)))
      (let out = (the Pathname (into output)))
-      (output-exists <- (exists? out))
-      (let input-is-file = (file-pathname? in))
-      (if output-exists
-          (Err (PathError "Invalid output for copying, path already exists:" out))
-          (if (not input-is-file)
-              (Err (PathError "Invalid input for copying, path is not a file:" in))
-              (lisp (Result FileError :c) (in out)
-                (handle-file-function (uiop:copy-file in out)))))))
+      (if (not (file-pathname? in))
+          (Err (PathError "Invalid input for copying, path is not a file:" in))
+          (lisp (Result FileError :c) (in out)
+            (%handle-file-function (uiop:copy-file in out))))))
 
   (declare delete-file ((Into :a Pathname) => :a -> (Result FileError Unit)))
   (define (delete-file path)
@@ -316,7 +309,7 @@
     (do
      (let p = (the Pathname (into path)))
      (lisp (Result FileError Unit) (p)
-       (handle-file-function (uiop:delete-file-if-exists p))))))
+       (%handle-file-function (uiop:delete-file-if-exists p))))))
 
 ;;;
 ;;; FStreams, FileStreams, and options
@@ -332,24 +325,15 @@
   (define-type IfExists
     "Possible options for opening a stream when the file exists."
     EError
-    NewVersion
-    Rename
-    RenameAndDelete
     Overwrite
     Append
     Supersede)
 
-  (repr :enum)
-  (define-type IfDoesNotExist
-    "Possible options for opening a stream when the file does not exist."
-    DNEError
-    Create)
-
   (define-type (StreamOptions :a)
     "A type for providing parameters for opening streams. StreamOptions take strings for pathnames, but they will error if they are not proper and appropriate pathnames."
     (Input Pathname)
-    (Output Pathname IfExists IfDoesNotExist)
-    (Bidirectional Pathname IfExists IfDoesNotExist))
+    (Output Pathname IfExists)
+    (Bidirectional Pathname IfExists))
 
   ;;
   ;; Opening Streams
@@ -358,47 +342,44 @@
   (define (%open-input path etype)
     "Opens an input stream for the given filepath, and for a given type."
     (lisp (Result FileError (FileStream :a)) (path etype)
-      (handle-file-function (cl:open path
-                                     :direction :input
-                                     :element-type etype))))
+      (%handle-file-function (cl:open path
+                                      :direction :input
+                                      :element-type etype
+                                      :if-does-not-exist ':error))))
 
-  (declare %open-output (Pathname -> IfExists -> IfDoesNotExist -> types:lisptype -> (Result FileError (FileStream :a))))
-  (define (%open-output path if-exists if-does-not-exist etype)
+  (declare %open-output (Pathname -> IfExists -> types:lisptype -> (Result FileError (FileStream :a))))
+  (define (%open-output path if-exists etype)
     "Opens an output stream for the given filepath, and for a given type."
-    (lisp (Result FileError (FileStream :a)) (path if-exists if-does-not-exist etype)
-      (handle-file-function (cl:open path
-                                     :direction :output
-                                     :element-type etype
-                                     :if-exists (cl:case if-exists
-                                                  (IfExists/ExistsError ':error)
-                                                  (IfExists/NewVersion ':new-version)
-                                                  (IfExists/Rename ':rename)
-                                                  (IfExists/RenameAndDelete ':rename-and-delete)
-                                                  (IfExists/Overwrite ':overwrite)
-                                                  (IfExists/Append ':append)
-                                                  (IfExists/Supersede ':supersede))
-                                     :if-does-not-exist (cl:case if-does-not-exist
-                                                          (IfDoesNotExist/DNExistError ':error)
-                                                          (IfDoesNotExist/Create ':create))))))
+    (lisp (Result FileError (FileStream :a)) (path if-exists etype)
+      (%handle-file-function (cl:open path
+                                      :direction :output
+                                      :element-type etype
+                                      :if-exists (cl:case if-exists
+                                                   (IfExists/ExistsError ':error)
+                                                   (IfExists/NewVersion ':new-version)
+                                                   (IfExists/Rename ':rename)
+                                                   (IfExists/RenameAndDelete ':rename-and-delete)
+                                                   (IfExists/Overwrite ':overwrite)
+                                                   (IfExists/Append ':append)
+                                                   (IfExists/Supersede ':supersede))
+                                      :if-does-not-exist ':create))))
 
-  (declare %open-bidirectional (Pathname -> IFExists -> IfDoesNotExist -> types:lisptype -> (Result FileError (FileStream :a))))
-  (define (%open-bidirectional path if-exists if-does-not-exist etype)
+  (declare %open-bidirectional (Pathname -> IFExists -> types:lisptype -> (Result FileError (FileStream :a))))
+  (define (%open-bidirectional path if-exists etype)
     "Opens a two way stream for the given filepath and for a given type."
-    (lisp (Result FileError (FileStream :a)) (path if-exists if-does-not-exist etype)
-      (handle-file-function (cl:open path
-                                     :direction :io
-                                     :element-type etype
-                                     :if-exists (cl:case if-exists
-                                                  (IfExists/ExistsError ':error)
-                                                  (IfExists/NewVersion ':new-version)
-                                                  (IfExists/Rename ':rename)
-                                                  (IfExists/RenameAndDelete ':rename-and-delete)
-                                                  (IfExists/Overwrite ':overwrite)
-                                                  (IfExists/Append ':append)
-                                                  (IfExists/Supersede ':supersede))
-                                     :if-does-not-exist (cl:case if-does-not-exist
-                                                          (IfDoesNotExist/DNExistError ':error)
-                                                          (IfDoesNotExist/Create ':create))))))
+    (lisp (Result FileError (FileStream :a)) (path if-exists etype)
+      (%handle-file-function (cl:open path
+                                      :direction :io
+                                      :element-type etype
+                                      :if-exists (cl:case if-exists
+                                                   (IfExists/ExistsError ':error)
+                                                   (IfExists/NewVersion ':new-version)
+                                                   (IfExists/Rename ':rename)
+                                                   (IfExists/RenameAndDelete ':rename-and-delete)
+                                                   (IfExists/Overwrite ':overwrite)
+                                                   (IfExists/Append ':append)
+                                                   (IfExists/Supersede ':supersede))
+                                      :if-does-not-exist ':create))))
 
   (declare %open ((StreamOptions :a) -> types:lisptype -> (Result FileError (FileStream :a))))
   (define (%open stream-options etype)
@@ -406,19 +387,19 @@
     (match stream-options
       ((Input path)
        (%open-input path etype))
-      ((Output path exists does-not-exist)
-       (%open-output path exists does-not-exist etype))
-      ((Bidirectional path exists does-not-exist)
-       (%open-bidirectional path exists does-not-exist etype))))
+      ((Output path exists)
+       (%open-output path exists etype))
+      ((Bidirectional path exists)
+       (%open-bidirectional path exists etype))))
 
   ;;
   ;; Other basic stream operations
   ;;
-  (declare %close ((FileStream :a) -> (Result FileError :b)))
-  (define (%close stream)
+  (declare close ((FileStream :a) -> (Result FileError :b)))
+  (define (close stream)
     "Closes a FileStream."
     (lisp (Result FileError :a) (stream)
-      (handle-file-function (cl:close stream))))
+      (%handle-file-function (cl:close stream))))
 
   (declare read-char ((FileStream Char) -> (Result FileError Char)))
   (define (read-char stream)
@@ -440,46 +421,35 @@
   (define (write-char stream data)
     "Writes a `Char` to the stream."
     (lisp (Result FileError Unit) (stream data)
-      (handle-file-function (cl:write-char data stream))))
+      (%handle-file-function (cl:write-char data stream))))
 
   (declare write-byte ((math:Bounded :a) => (FileStream :a) -> :a -> (Result FileError Unit)))
   (define (write-byte stream data)
     "Writes a `Char` to the stream."
     (lisp (Result FileError Unit) (stream data)
-      (handle-file-function (cl:write-byte data stream))))
+      (%handle-file-function (cl:write-byte data stream))))
 
   ;;
   ;;
   ;;
-  (declare force ((FileStream :a) -> (Result FileError :b)))
-  (define (force stream)
-    "Attempts to force the end of a stream."
-    (lisp (Result FileError :b) (stream)
-      (handle-file-function (cl:force-output stream))))
 
   (declare flush ((FileStream :a) -> (Result FileError :b)))
   (define (flush stream)
     "Attempts to finish a stream."
     (lisp (Result FileError :b) (stream)
-      (handle-file-function (cl:finish-output stream))))
-
-  (declare clear ((FileStream :a) -> (Result FileError :b)))
-  (define (clear stream)
-    "Attempts to clear a stream."
-    (lisp (Result FileError :b) (stream)
-      (handle-file-function (cl:clear-output stream))))
+      (%handle-file-function (cl:finish-output stream))))
 
   (declare file-position ((FileStream :a) -> (Result FileError UFix)))
   (define (file-position stream)
     "Finds the file-position of a file stream."
     (lisp (Result FileError UFix) (stream)
-      (handle-file-function (cl:file-position stream))))
+      (%handle-file-function (cl:file-position stream))))
 
-  (declare set-file-position ((FileStream :a) -> UFix -> (Result FileError UFix)))
+  (declare set-file-position ((FileStream :a) -> UFix -> (Result FileError Unit)))
   (define (set-file-position stream i)
     "Sets the file position of a file stream."
-    (lisp (Result FileError UFix) (stream i)
-      (handle-file-function (cl:file-position stream i)))))
+    (lisp (Result FileError Unit) (stream i)
+      (%handle-file-function (cl:file-position stream i)))))
 
 ;;;
 ;;; Streamable Class
@@ -490,7 +460,6 @@
   (define-class (Streamable :a)
     "A class of types which are able to be written to or read from a file."
     (open           ((StreamOptions :a)   -> (Result FileError (Filestream :a))))
-    (close          ((FileStream :a) -> (Result FileError :b)))
     (read           ((FileStream :a) -> (Result FileError :a)))
     (write          ((FileStream :a) -> :a -> (Result FileError Unit))))
 
@@ -498,8 +467,6 @@
     (define (open stream-options)
       (let ((Type (types:runtime-repr (the (types:Proxy Char) types:Proxy))))
         (%open stream-options type)))
-    (define (close fs)
-      (%close fs))
     (define (read fs)
       (read-char fs))
     (define (write fs data)
@@ -515,8 +482,6 @@
        (define (open stream-options)
          (let ((t (types:runtime-repr (the (types:Proxy ,type) types:Proxy))))
            (%open stream-options t)))
-       (define (close fs)
-         (%close fs))
        (define (read fs)
          (read-byte fs))
        (define (write fs data)
@@ -603,14 +568,14 @@
   (declare append-to-file ((Into :p Pathname) (Streamable :a) => :p -> (iter:Iterator :a) -> (Result FileError Unit)))
   (define (append-to-file path data)
     "Opens and appends a file with data of type :a."
-    (with-open-file (Output (into path) Append DNEError)
+    (with-open-file (Output (into path) Append)
       (fn (stream)
         (write-sequence stream data))))
 
   (declare write-to-file ((Into :p Pathname) (Streamable :a) => :p -> (iter:Iterator :a) -> (Result FileError Unit)))
   (define (write-to-file path data)
     "Opens and writes to a file with data of type :a. Supersedes existing data on the file."
-    (with-open-file (Output (into path) Supersede DNEError)
+    (with-open-file (Output (into path) Supersede)
       (fn (stream)
         (write-sequence stream data))))
 

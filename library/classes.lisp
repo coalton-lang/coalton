@@ -285,7 +285,7 @@
   ;;
   ;; Unwrappable for fallible unboxing
   ;;
-  
+
   (define-class (Unwrappable :container)
     "Containers which can be unwrapped to get access to their contents.
 
