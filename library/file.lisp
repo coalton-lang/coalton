@@ -14,8 +14,7 @@
    (#:vec #:coalton-library/vector)
    (#:res #:coalton-library/result)
    (#:types #:coalton-library/types)
-   (#:char #:coalton-library/char)
-   (#:math #:coalton-library/math/bounded))
+   (#:char #:coalton-library/char))
   (:export
    
    #:Pathname
@@ -454,7 +453,15 @@ Automatically returns the lisp condition if one is thrown."
         (cl:end-of-file () (Err (EOF)))
         (cl:error (c) (Err (LispError c))))))
 
-  (declare read-byte ((math:Bounded :a) => (FileStream :a) -> (Result FileError :a)))
+  (declare write-char ((FileStream Char) -> Char -> (Result FileError Unit)))
+  (define (write-char stream data)
+    "Writes a `Char` to the stream."
+    (lisp (Result FileError Unit) (stream data)
+      (%handle-file-function (cl:write-char data stream))))
+
+  (define-class (FileByte :a))
+
+  (declare read-byte ((FileByte :a) => (FileStream :a) -> (Result FileError :a)))
   (define (read-byte stream)
     "Reads a byte from a FileStream"
     (lisp (Result FileError :a) (stream)
@@ -462,13 +469,7 @@ Automatically returns the lisp condition if one is thrown."
         (cl:end-of-file () (Err (EOF)))
         (cl:error (c) (Err (LispError c))))))
 
-  (declare write-char ((FileStream Char) -> Char -> (Result FileError Unit)))
-  (define (write-char stream data)
-    "Writes a `Char` to the stream."
-    (lisp (Result FileError Unit) (stream data)
-      (%handle-file-function (cl:write-char data stream))))
-
-  (declare write-byte ((math:Bounded :a) => (FileStream :a) -> :a -> (Result FileError Unit)))
+  (declare write-byte ((FileByte :a) => (FileStream :a) -> :a -> (Result FileError Unit)))
   (define (write-byte stream data)
     "Writes a `Char` to the stream."
     (lisp (Result FileError Unit) (stream data)
@@ -522,27 +523,28 @@ Automatically returns the lisp condition if one is thrown."
 ;;;
 
 (cl:eval-when (:compile-toplevel :load-toplevel)
-  (cl:defmacro define-streamable (type)
-    `(define-instance (FileOp ,type)
-       (define (open stream-options)
-         (let ((t (types:runtime-repr (the (types:Proxy ,type) types:Proxy))))
-           (%open stream-options t)))
-       (define (read fs)
-         (read-byte fs))
-       (define (write fs data)
-         (write-byte fs data)))))
+  (cl:defmacro define-file-op (type)
+    `(progn (define-instance (FileByte ,type))
+            (define-instance (FileOp ,type)
+              (define (open stream-options)
+                (let ((t (types:runtime-repr (the (types:Proxy ,type) types:Proxy))))
+                  (%open stream-options t)))
+              (define (read fs)
+                (read-byte fs))
+              (define (write fs data)
+                (write-byte fs data))))))
 
 (coalton-toplevel
-  (define-streamable IFix)
-  (define-streamable UFix)
-  (define-streamable I8)
-  (define-streamable U8)
-  (define-streamable I16)
-  (define-streamable U16)
-  (define-streamable I32)
-  (define-streamable U32)
-  (define-streamable I64)
-  (define-streamable U64))
+  (define-file-op IFix)
+  (define-file-op UFix)
+  (define-file-op I8)
+  (define-file-op U8)
+  (define-file-op I16)
+  (define-file-op U16)
+  (define-file-op I32)
+  (define-file-op U32)
+  (define-file-op I64)
+  (define-file-op U64))
 
 ;;;
 ;;;
@@ -562,10 +564,11 @@ Automatically returns the lisp condition if one is thrown."
 
   (declare make-temp-pathname (String -> Pathname))
   (define (make-temp-pathname file-ext)
-    "Makes a temporary pathname of a given file extension string (e.g. 'txt' or 'csv', not '.txt')."
+    "Makes a temporary pathname of a given file extension string.
+File extensions need to include `.`, like \".txt\"."
     (lisp Pathname (file-ext)
       (cl:pathname
-       (cl:format cl:nil "tmp/~36R-tmp.~A]"
+       (cl:format cl:nil "tmp/~36R-tmp~A]"
                   (cl:random (cl:expt 36 8))
                   file-ext))))
 
@@ -574,7 +577,7 @@ Automatically returns the lisp condition if one is thrown."
                            -> ((FileStream :a) -> (Result FileError :b))
                            -> (Result FileError :b)))
   (define (with-temp-file file-type thunk)
-    "Performs an operation `thunk` on a temporary file."
+    "Performs an operation `thunk` on a temporary file. File type extensions need to include `.`, like \".txt\"."
     (let file = (make-temp-pathname file-type))
     (bracket
      (open (Bidirectional file Overwrite))
