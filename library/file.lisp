@@ -118,10 +118,42 @@
       (lisp Boolean (a b)
         (cl:equalp a b)))))
 
+;;;
+;;; Macros
+;;;
+
 (cl:defmacro %handle-file-function ((func cl:&rest args))
   "A macro for handling potentially erroring lisp file operations. Automatically returns the lisp condition if one is thrown."
   `(cl:handler-case (Ok (,func ,@args))
      (cl:error (c) (Err (LispError c)))))
+
+(cl:defmacro %unwind-protect (stream exit thunk)
+  "A wrapper on `cl:unwind-protect.`"
+  (cl:let ((abortp (cl:gensym)))
+    `(cl:let ((,abortp cl:t)
+              (output cl:nil))
+       (cl:unwind-protect (cl:progn (cl:setq output (call-coalton-function ,thunk ,stream))
+                                    (cl:setq ,abortp cl:nil))
+         (cl:when ,stream
+           (call-coalton-function ,exit ,stream)))
+       output)))
+
+;;;
+;;; Bracket pattern
+;;;
+
+(coalton-toplevel
+
+  (declare bracket ((Result FileError :a)
+                    -> (:a -> (Result FileError :b))
+                    -> (:a -> (Result FileError :c))
+                    -> (Result FileError :c)))
+  (define (bracket init exit body)
+    "Bracket takes a stream generator, an exit operation, and a body and safely handles operation failure."
+    (do
+     (stream <- init)
+     (lisp (Result FileError :a) (stream exit body)
+       (%unwind-protect stream exit body)))))
 
 ;;;
 ;;; Handling Errors
@@ -401,6 +433,12 @@
     (lisp (Result FileError :a) (stream)
       (%handle-file-function (cl:close stream))))
 
+  (declare abort ((FileStream :a) -> (Result FileError :b)))
+  (define (abort stream)
+    "Closes a FileStream."
+    (lisp (Result FileError :a) (stream)
+      (%handle-file-function (cl:close stream :abort cl:t))))
+
   (declare read-char ((FileStream Char) -> (Result FileError Char)))
   (define (read-char stream)
     "Reads a character from an FileStream."
@@ -500,28 +538,23 @@
   (define-streamable U64))
 
 ;;;
-;;; Other useful Streamable functions
+;;;
 ;;;
 
-(cl:defmacro %with-open-file (stream thunk)
-  (cl:let ((abortp (cl:gensym)))
-    `(cl:let ((,abortp cl:t)
-              (output cl:nil))
-       (cl:unwind-protect (cl:progn (cl:setq output (call-coalton-function ,thunk ,stream))
-                                    (cl:setq ,abortp cl:nil))
-         (cl:when ,stream
-           (cl:close ,stream :abort ,abortp)))
-       output)))
 
 (coalton-toplevel
+
+
 
   (declare with-open-file ((Streamable :a) => (StreamOptions :a) -> ((FileStream :a) -> (Result FileError :b)) -> (Result FileError :b)))
   (define (with-open-file stream-options thunk)
     "Opens a file stream, performs `thunk` on it, then closes the stream."
-    (do
-     (stream <- (open stream-options))
-     (lisp (Result FileError :a) (stream thunk)
-       (%with-open-file stream thunk))))
+    (bracket (open stream-options)
+             abort
+             thunk))
+
+  ;(declare with-temporary-directory ())
+  ;(define (with-temporary-directory thunk))
 
   (declare read-sequence ((Streamable :a) => (FileStream :a) -> (Result FileError (vec:Vector :a))))
   (define (read-sequence stream)
@@ -536,14 +569,14 @@
        (Ok v))
       ((Err e)
        (Err e))
-      (_ (Err (FileError "Invalid read action that inexplicably failed to signal a lisp error.")))))
+      (_ (Err (FileError "Invalid read action that failed to signal a lisp error.")))))
 
   (declare write-sequence ((Streamable :a) => (FileStream :a) -> (iter:Iterator :a) -> (Result FileError Unit)))
   (define (write-sequence stream data)
     "Writes elements of an iterator of type `:a` to a stream of type `:a`."
     (let written = (cell:new Nil))
     (for elt in data
-         (cell:push! written (write stream elt)))
+      (cell:push! written (write stream elt)))
     (if (list:all res:ok? (cell:read written))
         (Ok Unit)
         (unwrap (list:find res:err? (cell:read written)))))
@@ -582,39 +615,16 @@
   (declare read-file-to-string ((Into :a Pathname) => :a -> (Result FileError String)))
   (define (read-file-to-string path)
     "Reads a file into a string, given a pathname string."
-    (with-open-file (Input (into path))
-      (fn (stream)
-        (do
-         (chars <- (read-sequence stream))
-         (pure (into (the (List Char) (into (the (vec:Vector Char) chars)))))))))
-
-  (declare %read-file-lines ((FileStream Char) -> (Result FileError (List String))))
-  (define (%read-file-lines fs)
-    "Reads a filestream into a list of line strings."
-    (let current-line = (cell:new Nil))
-    (let lines = (cell:new Nil))
-    (do
-     (chars <- (read-sequence fs))
-     (pure (progn
-             (iter:for-each!
-              (fn (c)
-                (cond ((== c (unwrap (char:code-char 10)))
-                       (cell:push! lines (the String (into (list:reverse (cell:read current-line)))))
-                       (cell:write! current-line Nil))
-                      (True
-                       (cell:push! current-line c)))
-                Unit)
-              (iter:into-iter chars))
-             (if (not (list:null? (cell:read current-line)))
-                 (list:reverse (cell:push! lines (the String (into (list:reverse (cell:read current-line))))))
-                 (list:reverse (cell:read lines)))))))
+    (let p = (the Pathname (into path)))
+    (lisp (Result FileError String) (p)
+      (%handle-file-function (uiop:read-file-string p))))
 
   (declare read-file-lines ((Into :a Pathname) => :a -> (Result FileError (List String))))
   (define (read-file-lines path)
-    "Reads a file into lines, given a pathname string."
-    (with-open-file (Input (into path))
-      (fn (stream)
-        (%read-file-lines stream)))))
+    "Reads a file into lines, given a pathname or string."
+    (let p = (the Pathname (into path)))
+    (lisp (Result FileError (List String)) (p)
+      (%handle-file-function (uiop:read-file-lines p)))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/FILE")
