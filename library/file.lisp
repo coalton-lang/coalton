@@ -20,14 +20,17 @@
    
    #:Pathname
 
-   #:merge
+   #:bracket
+
    #:directory-pathname?
    #:file-pathname?
+   #:merge
    #:exists?
    #:directory-exists?
    #:file-exists?
 
    #:create-directory
+   #:create-temp-directory
    #:directory-files
    #:subdirectories
    #:empty?
@@ -43,21 +46,17 @@
    
    #:IfExists
    #:EError
-   #:NewVersion
-   #:Rename
-   #:RenameAndDelete
    #:Overwrite
    #:Append
    #:Supersede
 
-   #:IfDoesNotExist
-   #:DNEError
-   #:Create
-
    #:StreamOptions
    #:Input
    #:Output
-   #:TwoWay
+   #:Bidirectional
+
+   #:close
+   #:abort
 
    #:read-char
    #:read-byte
@@ -65,17 +64,18 @@
    #:write-byte
   
    #:flush
-   #:clear
    #:file-position
    #:set-file-position
 
-   #:Streamable
+   #:FileOp
    #:open
-   #:close
    #:read
    #:write
 
    #:with-open-file
+   #:make-temp-pathname
+   #:with-temp-file
+   #:with-temp-directory
    #:read-sequence
    #:write-sequence
    #:write-string
@@ -119,43 +119,6 @@
         (cl:equalp a b)))))
 
 ;;;
-;;; Macros
-;;;
-
-(cl:defmacro %handle-file-function ((func cl:&rest args))
-  "A macro for handling potentially erroring lisp file operations. Automatically returns the lisp condition if one is thrown."
-  `(cl:handler-case (Ok (,func ,@args))
-     (cl:error (c) (Err (LispError c)))))
-
-(cl:defmacro %unwind-protect (stream exit thunk)
-  "A wrapper on `cl:unwind-protect.`"
-  (cl:let ((abortp (cl:gensym)))
-    `(cl:let ((,abortp cl:t)
-              (output cl:nil))
-       (cl:unwind-protect (cl:progn (cl:setq output (call-coalton-function ,thunk ,stream))
-                                    (cl:setq ,abortp cl:nil))
-         (cl:when ,stream
-           (call-coalton-function ,exit ,stream)))
-       output)))
-
-;;;
-;;; Bracket pattern
-;;;
-
-(coalton-toplevel
-
-  (declare bracket ((Result FileError :a)
-                    -> (:a -> (Result FileError :b))
-                    -> (:a -> (Result FileError :c))
-                    -> (Result FileError :c)))
-  (define (bracket init exit body)
-    "Bracket takes a stream generator, an exit operation, and a body and safely handles operation failure."
-    (do
-     (stream <- init)
-     (lisp (Result FileError :a) (stream exit body)
-       (%unwind-protect stream exit body)))))
-
-;;;
 ;;; Handling Errors
 ;;;
 
@@ -181,6 +144,40 @@
          (error c))
         ((EOF)
          (error #.(cl:format cl:nil "Error~%~%End of File")))))))
+
+;;;
+;;; Macros
+;;;
+
+(cl:defmacro %handle-file-function ((func cl:&rest args))
+  "A macro for handling potentially erroring lisp file operations.
+Automatically returns the lisp condition if one is thrown."
+  `(cl:handler-case (Ok (,func ,@args))
+     (cl:error (c) (Err (LispError c)))))
+
+(cl:defmacro %unwind-protect (obj exit thunk)
+  "A wrapper on `cl:unwind-protect.`"
+  `(cl:let ((output cl:nil))
+     (cl:unwind-protect (cl:setq output (call-coalton-function ,thunk ,obj))
+       (call-coalton-function ,exit ,obj))
+     output))
+
+;;;
+;;; Bracket pattern
+;;;
+
+(coalton-toplevel
+
+  (declare bracket ((Result FileError :a)
+                    -> (:a -> (Result FileError :b))
+                    -> (:a -> (Result FileError :c))
+                    -> (Result FileError :c)))
+  (define (bracket init exit body)
+    "Bracket takes a stream generator, an exit operation, and a body and safely handles operation failure."
+    (do
+     (obj <- init)
+     (lisp (Result FileError :a) (obj exit body)
+       (%unwind-protect obj exit body)))))
 
 ;;;
 ;;; Handling existential path queries
@@ -220,7 +217,10 @@
      (lisp (Result FileError Boolean) (p)
        (%handle-file-function (to-boolean (cl:probe-file p))))))
 
-  (declare %if-directory-path ((Into :a Pathname) => :a -> (Pathname -> (Result FileError :b)) -> (Result FileError :b)))
+  (declare %if-directory-path ((Into :a Pathname)
+                               => :a
+                               -> (Pathname -> (Result FileError :b))
+                               -> (Result FileError :b)))
   (define (%if-directory-path path action)
     "Performs an operation only if the path is a valid directory pathname."
     (do
@@ -258,31 +258,34 @@
   (define (create-directory path)
     "This is equivalent to `mkdir -p`. Creates a directory and its parents. The pathname must be a valid directory pathname."
     (%if-directory-path path
-                       (fn (p)
-                         (lisp (Result FileError Pathname) (p)
-                           (%handle-file-function (cl:ensure-directories-exist p))))))
+                        (fn (p)
+                          (lisp (Result FileError Pathname) (p)
+                            (%handle-file-function (cl:ensure-directories-exist p))))))
 
-  (declare create-temp-directory (Unit -> Pathname))
+  (declare create-temp-directory (Unit -> (Result FileError Pathname)))
   (define (create-temp-directory)
-    "This creates a temporary directory."
-    (lisp Pathname ()
-          (uiop:setup-temporary-directory)))
+    "This configures a default temporary directory for use."
+    (do
+     (tmp <- (lisp (Result FileError Pathname) ()
+               (%handle-file-function (uiop:setup-temporary-directory))))
+     (let dirpath = (merge tmp "coalton-tmp/"))
+     (create-directory dirpath)))
 
   (declare directory-files ((Into :a Pathname) => :a -> (Result FileError (List Pathname))))
   (define (directory-files path)
     "Returns all files within the directory. Returns an error if the pathname is not a directory pathname."
     (%if-directory-path path
-                       (fn (p)
-                         (lisp (Result FileError (List Pathname)) (p)
-                           (%handle-file-function (uiop:directory-files p))))))
+                        (fn (p)
+                          (lisp (Result FileError (List Pathname)) (p)
+                            (%handle-file-function (uiop:directory-files p))))))
 
   (declare subdirectories ((Into :a Pathname) => :a -> (Result FileError (List Pathname))))
   (define (subdirectories path)
     "Returns all subdirectories within the directory. Returns an error if the pathname is not a directory pathname."
     (%if-directory-path path
-                       (fn (p)
-                         (lisp (Result FileError (List Pathname)) (p)
-                           (%handle-file-function (uiop:subdirectories p))))))
+                        (fn (p)
+                          (lisp (Result FileError (List Pathname)) (p)
+                            (%handle-file-function (uiop:subdirectories p))))))
 
   ;;
   ;; Handling directory behavior that depends on emptiness
@@ -292,9 +295,9 @@
   (define (empty? path)
     "Checks whether a directory is empty."
     (%if-directory-path path
-                       (fn (p)
-                         (pure (lisp Boolean (p)
-                                 (cl:null (cl:directory (cl:merge-pathnames uiop:*wild-directory* p))))))))
+                        (fn (p)
+                          (pure (lisp Boolean (p)
+                                  (cl:null (cl:directory (cl:merge-pathnames uiop:*wild-directory* p))))))))
 
   (declare remove-directory ((Into :a Pathname) => :a -> (Result FileError :a)))
   (define (remove-directory path)
@@ -307,9 +310,9 @@
   (define (remove-directory-recursive path)
     "Deletes a target directory recursively. Equivalent to `rm -r`. Errors if the path is not a directory."
     (%if-directory-path path
-                       (fn (p)
-                         (lisp (Result FileError Unit) (p)
-                           (%handle-file-function (uiop:delete-directory-tree p))))))
+                        (fn (p)
+                          (lisp (Result FileError Unit) (p)
+                            (%handle-file-function (uiop:delete-directory-tree p))))))
   
   (declare system-relative-pathname ((Into :a String) => :a -> String -> (Result FileError Pathname)))
   (define (system-relative-pathname system-name name)
@@ -361,7 +364,7 @@
     Append
     Supersede)
 
-  (define-type (StreamOptions :a)
+  (define-type StreamOptions
     "A type for providing parameters for opening streams. StreamOptions take strings for pathnames, but they will error if they are not proper and appropriate pathnames."
     (Input Pathname)
     (Output Pathname IfExists)
@@ -413,7 +416,7 @@
                                                    (IfExists/Supersede ':supersede))
                                       :if-does-not-exist ':create))))
 
-  (declare %open ((StreamOptions :a) -> types:lisptype -> (Result FileError (FileStream :a))))
+  (declare %open (StreamOptions -> types:lisptype -> (Result FileError (FileStream :a))))
   (define (%open stream-options etype)
     "Opens a FileStream for a given type and StreamOptions."
     (match stream-options
@@ -438,6 +441,10 @@
     "Closes a FileStream."
     (lisp (Result FileError :a) (stream)
       (%handle-file-function (cl:close stream :abort cl:t))))
+
+  ;;
+  ;;
+  ;;
 
   (declare read-char ((FileStream Char) -> (Result FileError Char)))
   (define (read-char stream)
@@ -490,18 +497,18 @@
       (%handle-file-function (cl:file-position stream i)))))
 
 ;;;
-;;; Streamable Class
+;;; FileOp Class
 ;;;
 
 (coalton-toplevel
 
-  (define-class (Streamable :a)
+  (define-class (FileOp :a)
     "A class of types which are able to be written to or read from a file."
-    (open           ((StreamOptions :a)   -> (Result FileError (Filestream :a))))
+    (open           (StreamOptions   -> (Result FileError (Filestream :a))))
     (read           ((FileStream :a) -> (Result FileError :a)))
     (write          ((FileStream :a) -> :a -> (Result FileError Unit))))
 
-  (define-instance (Streamable Char)
+  (define-instance (FileOp Char)
     (define (open stream-options)
       (let ((Type (types:runtime-repr (the (types:Proxy Char) types:Proxy))))
         (%open stream-options type)))
@@ -511,12 +518,12 @@
       (write-char fs data))))
 
 ;;;
-;;; Streamable instances for supported Integer/Byte types
+;;; FileOp instances for supported Integer/Byte types
 ;;;
 
 (cl:eval-when (:compile-toplevel :load-toplevel)
   (cl:defmacro define-streamable (type)
-    `(define-instance (Streamable ,type)
+    `(define-instance (FileOp ,type)
        (define (open stream-options)
          (let ((t (types:runtime-repr (the (types:Proxy ,type) types:Proxy))))
            (%open stream-options t)))
@@ -541,22 +548,50 @@
 ;;;
 ;;;
 
-
 (coalton-toplevel
 
-
-
-  (declare with-open-file ((Streamable :a) => (StreamOptions :a) -> ((FileStream :a) -> (Result FileError :b)) -> (Result FileError :b)))
+  (declare with-open-file ((FileOp :a)
+                           => StreamOptions
+                           -> ((FileStream :a) -> (Result FileError :b))
+                           -> (Result FileError :b)))
   (define (with-open-file stream-options thunk)
     "Opens a file stream, performs `thunk` on it, then closes the stream."
     (bracket (open stream-options)
              abort
              thunk))
 
-  ;(declare with-temporary-directory ())
-  ;(define (with-temporary-directory thunk))
+  (declare make-temp-pathname (String -> Pathname))
+  (define (make-temp-pathname file-ext)
+    "Makes a temporary pathname of a given file extension string (e.g. 'txt' or 'csv', not '.txt')."
+    (lisp Pathname (file-ext)
+      (cl:pathname
+       (cl:format cl:nil "tmp/~36R-tmp.~A]"
+                  (cl:random (cl:expt 36 8))
+                  file-ext))))
 
-  (declare read-sequence ((Streamable :a) => (FileStream :a) -> (Result FileError (vec:Vector :a))))
+  (declare with-temp-file ((FileOp :a)
+                           => String
+                           -> ((FileStream :a) -> (Result FileError :b))
+                           -> (Result FileError :b)))
+  (define (with-temp-file file-type thunk)
+    "Performs an operation `thunk` on a temporary file."
+    (let file = (make-temp-pathname file-type))
+    (bracket
+     (open (Bidirectional file Overwrite))
+     (fn (_)
+       (delete-file file))
+     thunk))
+
+  (declare with-temp-directory ((Pathname -> (Result FileError :a)) -> (Result FileError :a)))
+  (define (with-temp-directory thunk)
+    "Performs an operation `thunk` inside a temporary directory."
+    (bracket
+     (create-temp-directory)
+     (fn (dir)
+       (remove-directory-recursive dir))
+     thunk))
+
+  (declare read-sequence ((FileOp :a) => (FileStream :a) -> (Result FileError (vec:Vector :a))))
   (define (read-sequence stream)
     "Reads a file into a vector of type `:a`."
     (let v = (vec:new))
@@ -571,7 +606,10 @@
        (Err e))
       (_ (Err (FileError "Invalid read action that failed to signal a lisp error.")))))
 
-  (declare write-sequence ((Streamable :a) => (FileStream :a) -> (iter:Iterator :a) -> (Result FileError Unit)))
+  (declare write-sequence ((FileOp :a)
+                           => (FileStream :a)
+                           -> (iter:Iterator :a)
+                           -> (Result FileError Unit)))
   (define (write-sequence stream data)
     "Writes elements of an iterator of type `:a` to a stream of type `:a`."
     (let written = (cell:new Nil))
@@ -593,19 +631,27 @@
     (write stream #\NewLine)))
 
 ;;;
-;;; Top-level functions, i.e. those that don't require FileStream or Streamable knowledge
+;;; Top-level functions, i.e. those that don't require FileStream or FileOp knowledge
 ;;;
 
 (coalton-toplevel
 
-  (declare append-to-file ((Into :p Pathname) (Streamable :a) => :p -> (iter:Iterator :a) -> (Result FileError Unit)))
+  (declare append-to-file ((Into :p Pathname)
+                           (FileOp :a)
+                           => :p
+                           -> (iter:Iterator :a)
+                           -> (Result FileError Unit)))
   (define (append-to-file path data)
     "Opens and appends a file with data of type :a."
     (with-open-file (Output (into path) Append)
       (fn (stream)
         (write-sequence stream data))))
 
-  (declare write-to-file ((Into :p Pathname) (Streamable :a) => :p -> (iter:Iterator :a) -> (Result FileError Unit)))
+  (declare write-to-file ((Into :p Pathname)
+                          (FileOp :a)
+                          => :p
+                          -> (iter:Iterator :a)
+                          -> (Result FileError Unit)))
   (define (write-to-file path data)
     "Opens and writes to a file with data of type :a. Supersedes existing data on the file."
     (with-open-file (Output (into path) Supersede)

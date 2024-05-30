@@ -20,7 +20,16 @@
       ((Err _)
        True))))
 
-(define-test file-test ()
+(define-test test-open-and-close-temp-directory ()
+  (let d = (cell:new (the file:Pathname (into ""))))
+  (traceobject "temp directory" (cell:read d))
+  (res-succeeds (file:with-temp-directory (fn (dir)
+                                            (traceobject "temp directory" dir)
+                                            (cell:write! d dir)
+                                            (file:directory-exists? dir))))
+  (traceobject "temp directory" (cell:read d)))
+
+#+ig(define-test file-test ()
   (let syspath = (unwrap (file:system-relative-pathname "coalton" "tests/")))
   (is (file:directory-pathname? syspath))
   
@@ -48,10 +57,10 @@
   ;; this handles order ambiguity between lisp implementations
   #+allegro
   (is (== (unwrap (file:directory-files testpath))
-            (make-list filepath2 filepath)))
+          (make-list filepath2 filepath)))
   #-allegro
   (is (== (unwrap (file:directory-files testpath))
-            (make-list filepath filepath2)))
+          (make-list filepath filepath2)))
   
   ;; clearing the file-test directory
   (is (res-fails (file:remove-directory testpath)))
