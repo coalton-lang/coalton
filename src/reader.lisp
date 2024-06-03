@@ -240,34 +240,37 @@ Used to forbid reading while inside quasiquoted forms.")
                      (let ((*coalton-reader-allowed* t))
                        (funcall (get-macro-character #\, (named-readtables:ensure-readtable :standard)) s c)))))
 
+(defun print-form (form)
+  "Prevent truncation of a FORM that will be immediately re-read."
+  (let ((*print-length* nil)
+        (*print-level* nil)
+        (*print-circle* t))
+    (prin1-to-string form)))
+
 (defmacro coalton:coalton-toplevel (&body forms)
   (let ((*readtable* (named-readtables:ensure-readtable 'coalton:coalton))
         (*compile-file-truename*
-          (pathname (format nil "COALTON-TOPLEVEL (~A)" *compile-file-truename*)))
-        (*print-circle* t))
-    (with-input-from-string (stream (cl:format cl:nil "~S" (cons 'coalton:coalton-toplevel forms)))
+          (pathname (format nil "COALTON-TOPLEVEL (~A)" *compile-file-truename*))))
+    (with-input-from-string (stream (print-form (cons 'coalton:coalton-toplevel forms)))
       (cl:read stream))))
 
 (defmacro coalton:coalton-codegen (&body forms)
   (let ((*readtable* (named-readtables:ensure-readtable 'coalton:coalton))
         (*compile-file-truename*
-          (pathname (format nil "COALTON-TOPLEVEL (~A)" *compile-file-truename*)))
-        (*print-circle* t))
-    (with-input-from-string (stream (cl:format cl:nil "~S" (cons 'coalton:coalton-codegen forms)))
+          (pathname (format nil "COALTON-TOPLEVEL (~A)" *compile-file-truename*))))
+    (with-input-from-string (stream (print-form (cons 'coalton:coalton-codegen forms)))
       (cl:read stream))))
 
 (defmacro coalton:coalton-codegen-ast (&body forms)
   (let ((*readtable* (named-readtables:ensure-readtable 'coalton:coalton))
         (*compile-file-truename*
-          (pathname (format nil "COALTON-TOPLEVEL (~A)" *compile-file-truename*)))
-        (*print-circle* t))
-    (with-input-from-string (stream (cl:format cl:nil "~S" (cons 'coalton:coalton-codegen-ast forms)))
+          (pathname (format nil "COALTON-TOPLEVEL (~A)" *compile-file-truename*))))
+    (with-input-from-string (stream (print-form (cons 'coalton:coalton-codegen-ast forms)))
       (cl:read stream))))
 
 (defmacro coalton:coalton (&rest forms)
   (let ((*readtable* (named-readtables:ensure-readtable 'coalton:coalton))
         (*compile-file-truename*
-          (pathname (format nil "COALTON (~A)" *compile-file-truename*)))
-        (*print-circle* t))
-    (with-input-from-string (stream (cl:format cl:nil "~S" (cons 'coalton:coalton forms)))
+          (pathname (format nil "COALTON (~A)" *compile-file-truename*))))
+    (with-input-from-string (stream (print-form (cons 'coalton:coalton forms)))
       (cl:read stream))))
