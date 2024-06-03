@@ -39,6 +39,8 @@ jobs:
         # Tell ASDF to look through our repo recursively
         # See https://github.com/actions/runner/issues/2058
         CL_SOURCE_REGISTRY: "/__w/coalton/coalton//"
+        if: matrix.LISP_IMPL == 'allegro'
+        ALLEGRO_VERSION: "11.0"
 
     steps:
       - uses: actions/checkout@v3
