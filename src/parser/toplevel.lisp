@@ -517,10 +517,7 @@ consume all attributes"))))
 (defun read-expression (stream file)
   (let* (;; Setup eclector readtable
          (eclector.readtable:*readtable*
-           (eclector.readtable:copy-readtable eclector.readtable:*readtable*))
-
-         ;; Read unspecified floats as double floats
-         (*read-default-float-format* 'double-float))
+           (eclector.readtable:copy-readtable eclector.readtable:*readtable*)))
 
     ;; Read the coalton form
     (multiple-value-bind (form presentp)
