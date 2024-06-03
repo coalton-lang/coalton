@@ -43,13 +43,14 @@
 
 (defmacro with-pprint-variable-scope (() &body body)
   "If there is no pretty printing variable scope then create one for BODY"
-  `(if (boundp '*pprint-variable-symbol-code*)
-       (let ((*pprint-variable-symbol-code* *pprint-variable-symbol-code*)
-             (*pprint-variable-symbol-suffix* *pprint-variable-symbol-suffix*))
-         ,@body)
-       (let ((*pprint-variable-symbol-code* (char-code #\A))
-             (*pprint-variable-symbol-suffix* 0))
-         ,@body)))
+  `(let* ((bound (boundp '*pprint-variable-symbol-code*))
+          (*pprint-variable-symbol-code* (if bound
+                                             *pprint-variable-symbol-code*
+                                             (char-code #\A)))
+          (*pprint-variable-symbol-suffix* (if bound
+                                               *pprint-variable-symbol-suffix*
+                                               0)))
+     ,@body))
 
 (defvar *coalton-pretty-print-tyvars* nil
   "Whether to print all tyvars using type variable syntax
