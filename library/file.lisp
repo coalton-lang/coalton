@@ -261,14 +261,7 @@ Automatically returns the lisp condition if one is thrown."
                           (lisp (Result FileError Pathname) (p)
                             (%handle-file-function (cl:ensure-directories-exist p))))))
 
-  (declare create-temp-directory (Unit -> (Result FileError Pathname)))
-  (define (create-temp-directory)
-    "This configures a default temporary directory for use."
-    (do
-     (tmp <- (lisp (Result FileError Pathname) ()
-               (%handle-file-function (uiop:setup-temporary-directory))))
-     (let dirpath = (merge tmp "coalton-tmp/"))
-     (create-directory dirpath)))
+
 
   (declare directory-files ((Into :a Pathname) => :a -> (Result FileError (List Pathname))))
   (define (directory-files path)
@@ -498,18 +491,18 @@ Automatically returns the lisp condition if one is thrown."
       (%handle-file-function (cl:file-position stream i)))))
 
 ;;;
-;;; FileOp Class
+;;; File Class
 ;;;
 
 (coalton-toplevel
 
-  (define-class (FileOp :a)
+  (define-class (File :a)
     "A class of types which are able to be written to or read from a file."
     (open           (StreamOptions   -> (Result FileError (Filestream :a))))
     (read           ((FileStream :a) -> (Result FileError :a)))
     (write          ((FileStream :a) -> :a -> (Result FileError Unit))))
 
-  (define-instance (FileOp Char)
+  (define-instance (File Char)
     (define (open stream-options)
       (let ((Type (types:runtime-repr (the (types:Proxy Char) types:Proxy))))
         (%open stream-options type)))
@@ -519,13 +512,13 @@ Automatically returns the lisp condition if one is thrown."
       (write-char fs data))))
 
 ;;;
-;;; FileOp instances for supported Integer/Byte types
+;;; File instances for supported Integer/Byte types
 ;;;
 
 (cl:eval-when (:compile-toplevel :load-toplevel)
   (cl:defmacro define-file-op (type)
     `(progn (define-instance (FileByte ,type))
-            (define-instance (FileOp ,type)
+            (define-instance (File ,type)
               (define (open stream-options)
                 (let ((t (types:runtime-repr (the (types:Proxy ,type) types:Proxy))))
                   (%open stream-options t)))
@@ -552,7 +545,7 @@ Automatically returns the lisp condition if one is thrown."
 
 (coalton-toplevel
 
-  (declare with-open-file ((FileOp :a)
+  (declare with-open-file ((File :a)
                            => StreamOptions
                            -> ((FileStream :a) -> (Result FileError :b))
                            -> (Result FileError :b)))
@@ -562,39 +555,7 @@ Automatically returns the lisp condition if one is thrown."
              abort
              thunk))
 
-  (declare make-temp-pathname (String -> Pathname))
-  (define (make-temp-pathname file-ext)
-    "Makes a temporary pathname of a given file extension string.
-File extensions need to include `.`, like \".txt\"."
-    (lisp Pathname (file-ext)
-      (cl:pathname
-       (cl:format cl:nil "tmp/~36R-tmp~A]"
-                  (cl:random (cl:expt 36 8))
-                  file-ext))))
-
-  (declare with-temp-file ((FileOp :a)
-                           => String
-                           -> ((FileStream :a) -> (Result FileError :b))
-                           -> (Result FileError :b)))
-  (define (with-temp-file file-type thunk)
-    "Performs an operation `thunk` on a temporary file. File type extensions need to include `.`, like \".txt\"."
-    (let file = (make-temp-pathname file-type))
-    (bracket
-     (open (Bidirectional file Overwrite))
-     (fn (_)
-       (delete-file file))
-     thunk))
-
-  (declare with-temp-directory ((Pathname -> (Result FileError :a)) -> (Result FileError :a)))
-  (define (with-temp-directory thunk)
-    "Performs an operation `thunk` inside a temporary directory."
-    (bracket
-     (create-temp-directory)
-     (fn (dir)
-       (remove-directory-recursive dir))
-     thunk))
-
-  (declare read-sequence ((FileOp :a) => (FileStream :a) -> (Result FileError (vec:Vector :a))))
+  (declare read-sequence ((File :a) => (FileStream :a) -> (Result FileError (vec:Vector :a))))
   (define (read-sequence stream)
     "Reads a file into a vector of type `:a`."
     (let v = (vec:new))
@@ -609,7 +570,7 @@ File extensions need to include `.`, like \".txt\"."
        (Err e))
       (_ (Err (FileError "Invalid read action that failed to signal a lisp error.")))))
 
-  (declare write-sequence ((FileOp :a)
+  (declare write-sequence ((File :a)
                            => (FileStream :a)
                            -> (iter:Iterator :a)
                            -> (Result FileError Unit)))
@@ -634,46 +595,114 @@ File extensions need to include `.`, like \".txt\"."
     (write stream #\NewLine)))
 
 ;;;
-;;; Top-level functions, i.e. those that don't require FileStream or FileOp knowledge
+;;; Temporary files and directories
 ;;;
 
 (coalton-toplevel
 
-  (declare append-to-file ((Into :p Pathname)
-                           (FileOp :a)
-                           => :p
-                           -> (iter:Iterator :a)
-                           -> (Result FileError Unit)))
-  (define (append-to-file path data)
-    "Opens and appends a file with data of type :a."
-    (with-open-file (Output (into path) Append)
-      (fn (stream)
-        (write-sequence stream data))))
+  (declare %temp-directory (Unit -> Pathname))
+  (define (%temp-directory)
+    "Returns the current temporary directory, `uiop:*temporary-directory*`."
+    (lisp Pathname ()
+      (uiop:temporary-directory)))
 
-  (declare write-to-file ((Into :p Pathname)
-                          (FileOp :a)
+  (declare set-temp-directory ((Into :a Pathname) => :a -> (Result FileError Unit)))
+  (define (set-temp-directory path)
+    "Sets the temporary directory."
+    (%if-directory-path path
+                        (fn (p)
+                          (lisp (Result FileError Unit) (p)
+                            (%handle-file-function (cl:setf uiop:*temporary-directory* p))))))
+
+  (declare make-temp-dir-name (Unit -> Pathname))
+  (define (make-temp-dir-name)
+    "Makes a temporary directory pathname."
+    (merge (%temp-directory)
+           (lisp Pathname ()
+             (cl:pathname
+              (cl:format cl:nil "~a~36R-tmp/"
+                         (uiop:temporary-directory)
+                         (cl:random (cl:expt 36 8)))))))
+
+  (declare make-temp-file-name (String -> Pathname))
+  (define (make-temp-file-name file-ext)
+    "Makes a pathname of a file in the temporary directory.
+File extensions need to include `.`, like \".txt\"."
+    (merge (%temp-directory)
+           (lisp Pathname (file-ext)
+             (cl:pathname
+              (cl:format cl:nil "~36R-tmp~A"
+                         (cl:random (cl:expt 36 8))
+                         file-ext)))))
+
+  (declare create-temp-directory (Unit -> (Result FileError Pathname)))
+  (define (create-temp-directory)
+    "This configures a default temporary directory for use."
+    (create-directory (make-temp-dir-name)))
+
+  (declare with-temp-file ((File :a)
+                           => String
+                           -> ((FileStream :a) -> (Result FileError :b))
+                           -> (Result FileError :b)))
+  (define (with-temp-file file-type thunk)
+    "Performs an operation `thunk` on a temporary file. File type extensions need to include `.`, like \".txt\"."
+    (let file = (make-temp-file-name file-type))
+    (bracket
+     (open (Bidirectional file Overwrite))
+     (fn (_)
+       (delete-file file))
+     thunk))
+
+  (declare with-temp-directory ((Pathname -> (Result FileError :a)) -> (Result FileError :a)))
+  (define (with-temp-directory thunk)
+    "Performs an operation `thunk` inside a temporary directory."
+    (bracket
+     (create-temp-directory)
+     (fn (dir)
+       (remove-directory-recursive dir))
+     thunk)))
+
+;;;
+;;; Top-level functions, i.e. those that don't require FileStream or File knowledge
+;;;
+
+(coalton-toplevel
+
+ (declare append-to-file ((Into :p Pathname)
+                          (File :a)
                           => :p
                           -> (iter:Iterator :a)
                           -> (Result FileError Unit)))
-  (define (write-to-file path data)
-    "Opens and writes to a file with data of type :a. Supersedes existing data on the file."
-    (with-open-file (Output (into path) Supersede)
-      (fn (stream)
-        (write-sequence stream data))))
+ (define (append-to-file path data)
+   "Opens and appends a file with data of type :a."
+   (with-open-file (Output (into path) Append)
+     (fn (stream)
+         (write-sequence stream data))))
 
-  (declare read-file-to-string ((Into :a Pathname) => :a -> (Result FileError String)))
-  (define (read-file-to-string path)
-    "Reads a file into a string, given a pathname string."
-    (let p = (the Pathname (into path)))
-    (lisp (Result FileError String) (p)
-      (%handle-file-function (uiop:read-file-string p))))
+ (declare write-to-file ((Into :p Pathname)
+                         (File :a)
+                         => :p
+                         -> (iter:Iterator :a)
+                         -> (Result FileError Unit)))
+ (define (write-to-file path data)
+   "Opens and writes to a file with data of type :a. Supersedes existing data on the file."
+   (with-open-file (Output (into path) Supersede)
+     (fn (stream)
+         (write-sequence stream data))))
 
-  (declare read-file-lines ((Into :a Pathname) => :a -> (Result FileError (List String))))
-  (define (read-file-lines path)
-    "Reads a file into lines, given a pathname or string."
-    (let p = (the Pathname (into path)))
-    (lisp (Result FileError (List String)) (p)
-      (%handle-file-function (uiop:read-file-lines p)))))
+ (declare read-file-to-string ((Into :a Pathname) => :a -> (Result FileError String)))
+ (define (read-file-to-string path)
+   "Reads a file into a string, given a pathname string."
+   (let p = (the Pathname (into path)))
+   (lisp (Result FileError String) (p)
+         (%handle-file-function (uiop:read-file-string p))))
+
+ (declare read-file-lines ((Into :a Pathname) => :a -> (Result FileError (List String))))
+ (define (read-file-lines path)
+   "Reads a file into lines, given a pathname or string."
+   (let p = (the Pathname (into path)))
+   (lisp (Result FileError (List String)) (p)
+         (%handle-file-function (uiop:read-file-lines p)))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/FILE")
