@@ -360,4 +360,4 @@
                (:file "unused-variables")
                (:file "pattern-matching-tests")
                (:file "looping-native-tests")
-               #+i(:file "file-tests")))
+               (:file "file-tests")))

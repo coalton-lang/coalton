@@ -1,5 +1,5 @@
 (coalton-library/utils:defstdlib-package #:coalton-library/file
-  (:documentation "This file library is particularly sensitive to trailing slashes or lack thereof. Directory paths should always use trailing `/`s, and file paths should be without.")
+    (:documentation "This file library is particularly sensitive to trailing slashes or lack thereof. Directory paths should always use trailing `/`s, and file paths should be without.")
   (:use
    #:coalton
    #:coalton-library/classes
@@ -29,11 +29,9 @@
    #:file-exists?
 
    #:create-directory
-   #:create-temp-directory
    #:directory-files
    #:subdirectories
    #:empty?
-   #:if-empty
    #:remove-directory
    #:remove-directory-recursive
    #:system-relative-pathname
@@ -58,27 +56,31 @@
    #:abort
 
    #:read-char
-   #:read-byte
    #:write-char
+   #:read-byte
    #:write-byte
   
    #:flush
    #:file-position
    #:set-file-position
 
-   #:FileOp
+   #:File
    #:open
    #:read
    #:write
 
    #:with-open-file
-   #:make-temp-pathname
-   #:with-temp-file
-   #:with-temp-directory
    #:read-sequence
    #:write-sequence
    #:write-string
    #:write-line
+
+   #:set-temp-directory
+   #:make-temp-dir-pathname
+   #:make-temp-file-pathname
+   #:create-temp-directory
+   #:with-temp-file
+   #:with-temp-directory
 
    #:append-to-file
    #:write-to-file
@@ -304,7 +306,7 @@ Automatically returns the lisp condition if one is thrown."
     (%if-directory-path path
                         (fn (p)
                           (lisp (Result FileError Unit) (p)
-                            (%handle-file-function (uiop:delete-directory-tree p))))))
+                            (%handle-file-function (uiop:delete-directory-tree p :validate cl:t))))))
   
   (declare system-relative-pathname ((Into :a String) => :a -> String -> (Result FileError Pathname)))
   (define (system-relative-pathname system-name name)
@@ -430,7 +432,7 @@ Automatically returns the lisp condition if one is thrown."
 
   (declare abort ((FileStream :a) -> (Result FileError :b)))
   (define (abort stream)
-    "Closes a FileStream."
+    "Closes a FileStream and aborts all operations.."
     (lisp (Result FileError :a) (stream)
       (%handle-file-function (cl:close stream :abort cl:t))))
 
@@ -516,7 +518,7 @@ Automatically returns the lisp condition if one is thrown."
 ;;;
 
 (cl:eval-when (:compile-toplevel :load-toplevel)
-  (cl:defmacro define-file-op (type)
+  (cl:defmacro define-file-type (type)
     `(progn (define-instance (FileByte ,type))
             (define-instance (File ,type)
               (define (open stream-options)
@@ -528,16 +530,16 @@ Automatically returns the lisp condition if one is thrown."
                 (write-byte fs data))))))
 
 (coalton-toplevel
-  (define-file-op IFix)
-  (define-file-op UFix)
-  (define-file-op I8)
-  (define-file-op U8)
-  (define-file-op I16)
-  (define-file-op U16)
-  (define-file-op I32)
-  (define-file-op U32)
-  (define-file-op I64)
-  (define-file-op U64))
+  (define-file-type IFix)
+  (define-file-type UFix)
+  (define-file-type I8)
+  (define-file-type U8)
+  (define-file-type I16)
+  (define-file-type U16)
+  (define-file-type I32)
+  (define-file-type U32)
+  (define-file-type I64)
+  (define-file-type U64))
 
 ;;;
 ;;;
@@ -552,7 +554,7 @@ Automatically returns the lisp condition if one is thrown."
   (define (with-open-file stream-options thunk)
     "Opens a file stream, performs `thunk` on it, then closes the stream."
     (bracket (open stream-options)
-             abort
+             close
              thunk))
 
   (declare read-sequence ((File :a) => (FileStream :a) -> (Result FileError (vec:Vector :a))))
@@ -614,31 +616,31 @@ Automatically returns the lisp condition if one is thrown."
                           (lisp (Result FileError Unit) (p)
                             (%handle-file-function (cl:setf uiop:*temporary-directory* p))))))
 
-  (declare make-temp-dir-name (Unit -> Pathname))
-  (define (make-temp-dir-name)
+  (declare make-temp-dir-pathname (Unit -> Pathname))
+  (define (make-temp-dir-pathname)
     "Makes a temporary directory pathname."
     (merge (%temp-directory)
            (lisp Pathname ()
              (cl:pathname
-              (cl:format cl:nil "~a~36R-tmp/"
+              (cl:format cl:nil "~acoal~36R-tmp/"
                          (uiop:temporary-directory)
                          (cl:random (cl:expt 36 8)))))))
 
-  (declare make-temp-file-name (String -> Pathname))
-  (define (make-temp-file-name file-ext)
+  (declare make-temp-file-pathname (String -> Pathname))
+  (define (make-temp-file-pathname file-ext)
     "Makes a pathname of a file in the temporary directory.
 File extensions need to include `.`, like \".txt\"."
     (merge (%temp-directory)
            (lisp Pathname (file-ext)
              (cl:pathname
-              (cl:format cl:nil "~36R-tmp~A"
+              (cl:format cl:nil "coal~36R-tmp~A"
                          (cl:random (cl:expt 36 8))
                          file-ext)))))
 
   (declare create-temp-directory (Unit -> (Result FileError Pathname)))
   (define (create-temp-directory)
     "This configures a default temporary directory for use."
-    (create-directory (make-temp-dir-name)))
+    (create-directory (make-temp-dir-pathname)))
 
   (declare with-temp-file ((File :a)
                            => String
@@ -646,7 +648,7 @@ File extensions need to include `.`, like \".txt\"."
                            -> (Result FileError :b)))
   (define (with-temp-file file-type thunk)
     "Performs an operation `thunk` on a temporary file. File type extensions need to include `.`, like \".txt\"."
-    (let file = (make-temp-file-name file-type))
+    (let file = (make-temp-file-pathname file-type))
     (bracket
      (open (Bidirectional file Overwrite))
      (fn (_)
@@ -658,8 +660,7 @@ File extensions need to include `.`, like \".txt\"."
     "Performs an operation `thunk` inside a temporary directory."
     (bracket
      (create-temp-directory)
-     (fn (dir)
-       (remove-directory-recursive dir))
+     remove-directory-recursive
      thunk)))
 
 ;;;
