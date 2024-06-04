@@ -13,7 +13,8 @@
    #:*global-environment*
    #:entry-point                        ; FUNCTION
    #:expression-entry-point             ; FUNCTION
-   #:file-entry-point                   ; FUNCTION
+   #:compile-coalton                    ; FUNCTION
+   #:compile-coalton-toplevel           ; FUNCTION
    ))
 
 (in-package #:coalton-impl/entry)
@@ -29,9 +30,7 @@
 
          (file (parser:program-file program))
 
-         (env *global-environment*)
-
-         (tc:*env-update-log* nil))
+         (env *global-environment*))
 
     (multiple-value-bind (type-definitions instances env)
         (tc:toplevel-define-type (parser:program-types program)
@@ -85,28 +84,8 @@
 
                 (analysis:analyze-translation-unit translation-unit env file)
 
-                (multiple-value-bind (program env)
-                    (codegen:compile-translation-unit translation-unit monomorphize-table env)
+                (codegen:compile-translation-unit translation-unit monomorphize-table env)))))))))
 
-                  (values
-                   (if settings:*coalton-skip-update*
-                       program
-                       `(progn
-                          (eval-when (:load-toplevel)
-                            (unless (eq (settings:coalton-release-p) ,(settings:coalton-release-p))
-                              ,(if (settings:coalton-release-p)
-                                   `(error "~A was compiled in release mode but loaded in development."
-                                           ,(or *compile-file-pathname* *load-truename*))
-                                   `(error "~A was compiled in development mode but loaded in release."
-                                           ,(or *compile-file-pathname* *load-truename*)))))
-
-                          (let ((coalton-impl/typechecker/environment::env *global-environment*))
-                            ,@(loop :for elem :in (reverse tc:*env-update-log*)
-                                    :collect elem)
-                            (setf *global-environment* coalton-impl/typechecker/environment::env))
-
-                          ,program))
-                   env))))))))))
 
 (defun expression-entry-point (node file)
   (declare (type parser:node node)
@@ -194,23 +173,97 @@
                              :span (tc:node-source node)
                              :message "Add a type assertion with THE to resolve ambiguity")))))))))))
 
-(defun file-entry-point (filename)
-  (declare (type string filename))
+(defmacro with-environment-updates (updates &body body)
+  "Collect environment updates into a vector bound to UPDATES."
+  `(let* ((,updates (make-array 0 :adjustable t :fill-pointer 0))
+          (tc:*update-hook* (lambda (name arg-list)
+                              (vector-push-extend (cons name arg-list) ,updates))))
+     ,@body))
 
-  (with-open-file (file-stream filename :if-does-not-exist :error)
-    (let ((coalton-file (error:make-coalton-file
-                         :stream file-stream
-                         :name filename)))
-      (multiple-value-bind (code env)
-          (entry-point (parser:read-program file-stream coalton-file :mode :file))
+(defun make-environment-updater (update-log)
+  "Produce source form of the contents of an environment UPDATE-LOG (i.e., calls to functions in typechecker/environment)."
+  (let ((updates (remove-duplicates (coerce update-log 'list) :test #'code-update-eql)))
+    `(let ((env *global-environment*))
+       ,@(loop :for (fn . args) :in updates
+               :collect `(setf env (,fn env ,@(mapcar #'util:runtime-quote args))))
+       (setf *global-environment* env))))
 
-        (setf *global-environment* env)
+(defun compile-coalton-toplevel (program)
+  "Compile PROGRAM and return a single form suitable for direct inclusion by Lisp compiler. For implementing coalton-toplevel macro."
+  (with-environment-updates updates
+    (multiple-value-bind (program env)
+        (entry-point program)
+      (setf *global-environment* env)
+      `(progn
+         ,(make-prologue)
+         ,(make-environment-updater updates)
+         ,program))))
 
-        code))))
+(defun code-update-eql (a b)
+  "Compare environment updates, returning t for set-code updates of the same symbol."
+  (and (eql (first a) 'coalton-impl/typechecker/environment:set-code)
+       (eql (first b) 'coalton-impl/typechecker/environment:set-code)
+       (eql (second a)
+            (second b))))
 
-(defun debug-file-entry-point (filename)
-  (declare (type string filename))
+(defun make-prologue ()
+  "Return source form of an assertion that prevents mixing development and release modes."
+  `(eval-when (:load-toplevel)
+     (unless (eq (settings:coalton-release-p) ,(settings:coalton-release-p))
+       ,(if (settings:coalton-release-p)
+            `(error "~A was compiled in release mode but loaded in development."
+                    ,(or *compile-file-pathname* *load-truename*))
+            `(error "~A was compiled in development mode but loaded in release."
+                    ,(or *compile-file-pathname* *load-truename*))))))
 
-  (let ((settings:*coalton-skip-update* t)
-        (settings:*emit-type-annotations* nil))
-    (file-entry-point filename)))
+(defun print-form (stream form)
+  "Print a FORM to a STREAM, separated by 2 lines."
+  (with-standard-io-syntax
+    (let ((*package* (find-package "CL")))
+      (prin1 form stream)
+      (terpri stream)
+      (terpri stream))))
+
+(defun compile-to-lisp (name input output)
+  "Read Coalton source from INPUT and write Lisp source to OUTPUT."
+  (parser:with-reader-context input
+    (with-environment-updates updates
+      (let* ((file (error:make-coalton-file :stream input
+                                            :name name))
+             (program (entry-point (parser:read-program input file :mode :file))))
+        (print-form output (make-prologue))
+        (print-form output (make-environment-updater updates))
+        (print-form output program)))))
+
+(defun compile-coalton (coal-file &key (output-file nil) (format :default))
+  "Compile a Coalton file. The FORMAT keyword argument controls how the output is generated:
+
+  :DEFAULT Generate Lisp source, and compile immediately to .fasl. If no output file is specified, compiled Lisp code will be written to a temporary file, and that path will be returned.
+  :SOURCE  Write compiled Lisp code to console or specified output file."
+  (with-open-file (coal-stream coal-file
+                               :direction ':input
+                               :element-type 'character)
+    (let ((coal-file-name (etypecase coal-file
+                            (pathname (pathname-name coal-file))
+                            (string coal-file))))
+      (ecase format
+        (:default
+         (uiop:with-temporary-file (:stream lisp-stream
+                                    :pathname lisp-file
+                                    :suffix "lisp"
+                                    :direction ':output
+                                    :keep t)
+           (compile-to-lisp coal-file-name coal-stream lisp-stream)
+           :close-stream
+           (compile-file lisp-file :output-file output-file)))
+        (:source
+         (cond
+           (output-file
+            (with-open-file (lisp-stream output-file
+                                         :direction ':output
+                                         :element-type 'character
+                                         :if-exists ':supersede)
+              (compile-to-lisp coal-file-name coal-stream lisp-stream)))
+           (t
+            (with-output-to-string (lisp-stream)
+              (compile-to-lisp coal-file-name coal-stream lisp-stream)))))))))

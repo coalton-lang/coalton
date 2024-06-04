@@ -168,9 +168,9 @@
 
                 (type
                  (format nil "~A :: ~A" name type)))
-        :append (when (and docstring (not settings:*coalton-skip-update*))
+        :append (when docstring
                   (list `(setf (documentation ',name 'variable)
                                ,docstring)))
-        :append (when (and entry (node-abstraction-p node) (not settings:*coalton-skip-update*))
+        :append (when (and entry (node-abstraction-p node))
                   (list `(setf (documentation ',name 'function)
                                ,docstring))))))

@@ -337,6 +337,7 @@
                (:file "reader-tests")
                (:file "error-tests")
                (:file "parser-tests")
+               (:file "entry-tests")
                (:file "type-inference-tests")
                (:file "fundep-tests")
                (:file "fundep-fib-test")
