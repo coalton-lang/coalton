@@ -1,17 +1,3 @@
-;;;;
-;;;; Central environment managment. Coalton stores all persistent
-;;;; state in a single immutable struct. State is partitioned into a
-;;;; series of sub-environments. Each sub-environment is analogous to
-;;;; a database table, and holds multiple entries which function like
-;;;; database rows. The process of compiling Coalton code will require
-;;;; many "writes" to the environment. Each write is an immutable
-;;;; update which returns a new environment. The writes preformed when
-;;;; compiling a single coalton-toplevel form are tracked in a log.
-;;;; After compilation is finished the write log is added to the
-;;;; generated lisp code. This allows replaying the environment
-;;;; updates when the compiled fasl is loaded.
-;;;;
-
 (defpackage #:coalton-impl/typechecker/environment
   (:use
    #:cl
@@ -38,7 +24,7 @@
    (#:error #:coalton-impl/error)
    (#:parser #:coalton-impl/parser))
   (:export
-   #:*env-update-log*                       ; VARIABLE
+   #:*update-hook*                          ; VARIABLE
    #:value-environment                      ; STRUCT
    #:explicit-repr                          ; TYPE
    #:type-entry                             ; STRUCT
@@ -173,18 +159,46 @@
    #:solve-fundeps                          ; FUNCTION
    ))
 
+;;; Coalton environment management
+;;;
+;;; An environment contains all information about Coalton types,
+;;; functions, instances, specializations, and so on.
+;;;
+;;; Environments are immutable: all update functions defined below
+;;; return a new environment.
+;;;
+;;; The global environment root is:
+;;;
+;;;   coalton-impl/entry:*global-environment*
+;;;
+;;; An update hook mechanism is provided so that the compiler can
+;;; record updates that occur while compiling Coalton source. When
+;;; compilation is finished, an update log is prepended to generated
+;;; lisp code, to allow replaying the environment updates when the
+;;; compiled fasl is loaded.
+
 (in-package #:coalton-impl/typechecker/environment)
 
-(defvar *env-update-log* nil)
+;; *update-hook* may be bound to a function that is called whenever
+;; an environment is updated.
+;;
+;; The bound function must accept 2 arguments:
+;;
+;; - the symbol naming the environment update function
+;; - that function's arg list
+;;
+;; The environment itself, which is always the first argument to an
+;; update function, is not provided in the arg list: just the update
+;; values.
 
-(defun make-update-record (name arg-list)
-  `(setf env (,name env ,@(loop :for arg :in (cdr arg-list)
-                                :collect (util:runtime-quote arg)))))
+(defvar *update-hook*)
 
 (defmacro define-env-updater (name arg-list &body body)
+  "Wrap a function that mutates an environment so that the environment update notification hook is called with the function's name and arg list whenever the function is called."
   `(defun ,name (&rest args)
      (declare (values environment &optional))
-     (push (make-update-record ',name args) *env-update-log*)
+     (when (boundp '*update-hook*)
+       (funcall *update-hook* ',name (cdr args)))
      (destructuring-bind ,arg-list args ,@body)))
 
 ;;;

@@ -10,7 +10,6 @@
    #:*coalton-disable-specialization*   ; VARIABLE
    #:*coalton-print-unicode*            ; VARIABLE
    #:*coalton-dump-ast*                 ; VARIABLE
-   #:*coalton-skip-update*              ; VARIABLE
    #:*emit-type-annotations*            ; VARIABLE
    #:*coalton-optimize*                 ; VARIABLE
    #:*coalton-optimize-library*         ; VARIABLE
@@ -56,10 +55,6 @@ Enable release mode either by setting the UNIX environment variable COALTON_ENV 
 ;; Configure the backend to print out the ast of toplevel forms
 (declaim (type boolean *coalton-dump-ast*))
 (defvar *coalton-dump-ast* nil)
-
-;; Configure the backend to remove env updates from the generated code
-(declaim (type boolean *coalton-skip-update*))
-(defvar *coalton-skip-update* nil)
 
 ;; Configure the backend to remove type annotations from the generated code
 (declaim (type boolean *emit-type-annotations*))

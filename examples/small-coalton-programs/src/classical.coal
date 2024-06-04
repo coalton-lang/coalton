@@ -1,0 +1,7 @@
+(package small-coalton-programs/classical)
+
+;; fact: compute the factorial of a given integer
+
+(declare fact (Integer -> Integer))
+(define (fact n)
+  (if (== n 0) 1 (* n (fact (- n 1)))))
