@@ -78,6 +78,11 @@ Used to forbid reading while inside quasiquoted forms.")
             (let ((settings:*emit-type-annotations* nil))
               `',(entry:entry-point (parser:read-program stream file :mode ':toplevel-macro)))))
 
+        (coalton:coalton-codegen-types
+          (with-coalton-file (file stream)
+            (let ((settings:*emit-type-annotations* t))
+              `',(entry:entry-point (parser:read-program stream file :mode :toplevel-macro)))))
+
         (coalton:coalton-codegen-ast
           (with-coalton-file (file stream)
             (let ((settings:*emit-type-annotations* nil)
@@ -166,26 +171,29 @@ Used to forbid reading while inside quasiquoted forms.")
         (*print-circle* t))
     (prin1-to-string form)))
 
-(defmacro coalton:coalton-toplevel (&body forms)
+(defun compile-forms (mode forms)
+  "Compile FORMS as Coalton using the indicated MODE."
   (let ((*readtable* (named-readtables:ensure-readtable 'coalton:coalton))
         (*compile-file-truename*
           (pathname (format nil "COALTON-TOPLEVEL (~A)" *compile-file-truename*))))
-    (with-input-from-string (stream (print-form (cons 'coalton:coalton-toplevel forms)))
+    (with-input-from-string (stream (print-form (cons mode forms)))
       (cl:read stream))))
+
+(defmacro coalton:coalton-toplevel (&body forms)
+  "Compile Coalton FORMS."
+  (compile-forms 'coalton:coalton-toplevel forms))
 
 (defmacro coalton:coalton-codegen (&body forms)
-  (let ((*readtable* (named-readtables:ensure-readtable 'coalton:coalton))
-        (*compile-file-truename*
-          (pathname (format nil "COALTON-TOPLEVEL (~A)" *compile-file-truename*))))
-    (with-input-from-string (stream (print-form (cons 'coalton:coalton-codegen forms)))
-      (cl:read stream))))
+  "Generate code for FORMS, excluding Lisp type declarations."
+  (compile-forms 'coalton:coalton-codegen forms))
+
+(defmacro coalton:coalton-codegen-types (&body forms)
+  "Generate code for FORMS, including Lisp type declarations."
+  (compile-forms 'coalton:coalton-codegen-types forms))
 
 (defmacro coalton:coalton-codegen-ast (&body forms)
-  (let ((*readtable* (named-readtables:ensure-readtable 'coalton:coalton))
-        (*compile-file-truename*
-          (pathname (format nil "COALTON-TOPLEVEL (~A)" *compile-file-truename*))))
-    (with-input-from-string (stream (print-form (cons 'coalton:coalton-codegen-ast forms)))
-      (cl:read stream))))
+  "Dump the AST for toplevel definitions occurring in FORMS to *standard-out* and return NIL."
+  (compile-forms 'coalton:coalton-codegen-ast forms))
 
 (defmacro coalton:coalton (&rest forms)
   (let ((*readtable* (named-readtables:ensure-readtable 'coalton:coalton))
