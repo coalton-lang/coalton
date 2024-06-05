@@ -219,10 +219,10 @@ Automatically returns the lisp condition if one is thrown."
        (%handle-file-function (to-boolean (cl:probe-file p))))))
 
   (declare %if-directory-path ((Into :a Pathname)
-                               => :a
-                               -> (Pathname -> (Result FileError :b))
+                               => (Pathname -> (Result FileError :b))
+                               -> :a
                                -> (Result FileError :b)))
-  (define (%if-directory-path path action)
+  (define (%if-directory-path action path)
     "Performs an operation only if the path is a valid directory pathname."
     (do
      (let p = (the Pathname (Into path)))
@@ -234,9 +234,10 @@ Automatically returns the lisp condition if one is thrown."
   (declare directory-exists? ((Into :a Pathname) => :a -> (Result FileError Boolean)))
   (define (directory-exists? path)
     "Returns True if a pathname names a directory that exists."
-    (%if-directory-path path (fn (p)
+    (%if-directory-path (fn (p)
                                (lisp (Result FileError Boolean) (p)
-                                 (%handle-file-function (to-boolean (uiop:directory-exists-p p)))))))
+                                 (%handle-file-function (to-boolean (uiop:directory-exists-p p)))))
+                        path))
 
   (declare file-exists? ((Into :a Pathname) => :a -> (Result FileError Boolean)))
   (define (file-exists? path)
@@ -258,28 +259,28 @@ Automatically returns the lisp condition if one is thrown."
   (declare create-directory ((Into :a Pathname) => :a -> (Result FileError Pathname)))
   (define (create-directory path)
     "This is equivalent to `mkdir -p`. Creates a directory and its parents. The pathname must be a valid directory pathname."
-    (%if-directory-path path
-                        (fn (p)
+    (%if-directory-path (fn (p)
                           (lisp (Result FileError Pathname) (p)
-                            (%handle-file-function (cl:ensure-directories-exist p))))))
+                            (%handle-file-function (cl:ensure-directories-exist p))))
+                        path))
 
 
 
   (declare directory-files ((Into :a Pathname) => :a -> (Result FileError (List Pathname))))
   (define (directory-files path)
     "Returns all files within the directory. Returns an error if the pathname is not a directory pathname."
-    (%if-directory-path path
-                        (fn (p)
+    (%if-directory-path (fn (p)
                           (lisp (Result FileError (List Pathname)) (p)
-                            (%handle-file-function (uiop:directory-files p))))))
+                            (%handle-file-function (uiop:directory-files p))))
+                        path))
 
   (declare subdirectories ((Into :a Pathname) => :a -> (Result FileError (List Pathname))))
   (define (subdirectories path)
     "Returns all subdirectories within the directory. Returns an error if the pathname is not a directory pathname."
-    (%if-directory-path path
-                        (fn (p)
+    (%if-directory-path (fn (p)
                           (lisp (Result FileError (List Pathname)) (p)
-                            (%handle-file-function (uiop:subdirectories p))))))
+                            (%handle-file-function (uiop:subdirectories p))))
+                        path))
 
   ;;
   ;; Handling directory behavior that depends on emptiness
@@ -288,10 +289,10 @@ Automatically returns the lisp condition if one is thrown."
   (declare empty? ((Into :a Pathname) => :a -> (Result FileError Boolean)))
   (define (empty? path)
     "Checks whether a directory is empty."
-    (%if-directory-path path
-                        (fn (p)
+    (%if-directory-path (fn (p)
                           (pure (lisp Boolean (p)
-                                  (cl:null (cl:directory (cl:merge-pathnames uiop:*wild-directory* p))))))))
+                                  (cl:null (cl:directory (cl:merge-pathnames uiop:*wild-directory* p))))))
+                        path))
 
   (declare remove-directory ((Into :a Pathname) => :a -> (Result FileError :a)))
   (define (remove-directory path)
@@ -303,14 +304,14 @@ Automatically returns the lisp condition if one is thrown."
   (declare remove-directory-recursive ((Into :a Pathname) => :a -> (Result FileError Unit)))
   (define (remove-directory-recursive path)
     "Deletes a target directory recursively. Equivalent to `rm -r`. Errors if the path is not a directory."
-    (%if-directory-path path
-                        (fn (p)
+    (%if-directory-path (fn (p)
                           (lisp (Result FileError Unit) (p)
-                            (%handle-file-function (uiop:delete-directory-tree p :validate cl:t))))))
+                            (%handle-file-function (uiop:delete-directory-tree p :validate cl:t))))
+                        path))
   
   (declare system-relative-pathname ((Into :a String) => :a -> String -> (Result FileError Pathname)))
   (define (system-relative-pathname system-name name)
-    "Generates a system-relative-pathname for a given filename or path. This is a wrapper for `asdf:system-relative-pathname`."
+    "Generates a system-relative-pathname for a given filename or path. This is a wrapper for `asdf:system-relative-pathname`. `Name` will likely be an empty string unless a subdirectory or filename is specified."
     (lisp (Result FileError Pathname) (system-name name)
       (cl:handler-case (Ok (asdf:system-relative-pathname system-name name))
         (cl:error (c) (Err (LispError c)))))))
@@ -454,7 +455,8 @@ Automatically returns the lisp condition if one is thrown."
     (lisp (Result FileError Unit) (stream data)
       (%handle-file-function (cl:write-char data stream))))
 
-  (define-class (FileByte :a))
+  (define-class (FileByte :a)
+    "A class of `byte` types that can be written to and read from files.")
 
   (declare read-byte ((FileByte :a) => (FileStream :a) -> (Result FileError :a)))
   (define (read-byte stream)
@@ -611,10 +613,10 @@ Automatically returns the lisp condition if one is thrown."
   (declare set-temp-directory ((Into :a Pathname) => :a -> (Result FileError Unit)))
   (define (set-temp-directory path)
     "Sets the temporary directory."
-    (%if-directory-path path
-                        (fn (p)
+    (%if-directory-path (fn (p)
                           (lisp (Result FileError Unit) (p)
-                            (%handle-file-function (cl:setf uiop:*temporary-directory* p))))))
+                            (%handle-file-function (cl:setf uiop:*temporary-directory* p))))
+                        path))
 
   (declare make-temp-dir-pathname (Unit -> Pathname))
   (define (make-temp-dir-pathname)
