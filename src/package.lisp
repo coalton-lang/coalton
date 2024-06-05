@@ -18,6 +18,7 @@
    #:coalton-toplevel
    #:coalton-codegen
    #:coalton-codegen-ast
+   #:coalton-codegen-types
    #:coalton
    #:declare
    #:define
