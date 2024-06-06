@@ -27,9 +27,19 @@
    (#:rt #:coalton-impl/runtime)
    (#:tc #:coalton-impl/typechecker))
   (:export
+   #:*codegen-hook*
    #:compile-translation-unit))
 
 (in-package #:coalton-impl/codegen/program)
+
+(defvar *codegen-hook* nil
+  "A hook that provides access to intermediate program representations during code generation.
+
+A function bound here will be called with a keyword category, and one or more additional arguments, depending on the value of that keyword. Keyword values:
+
+  :ast name type value
+
+    Toplevel definitions, after type checking and before compilation.")
 
 (defun compile-translation-unit (translation-unit monomorphize-table env)
   (declare (type tc:translation-unit translation-unit)
@@ -43,11 +53,11 @@
 
                   :for compiled-node := (translate-toplevel define env)
 
-                  :do (when settings:*coalton-dump-ast*
-                        (format t "~A :: ~A~%~A~%~%~%"
-                                name
-                                (tc:lookup-value-type env name)
-                                (tc:binding-value define)))
+                  :do (when *codegen-hook*
+                        (funcall *codegen-hook* :ast
+                                 name
+                                 (tc:lookup-value-type env name)
+                                 (tc:binding-value define)))
                   :collect (cons name compiled-node))
 
             ;; HACK: this load bearing reverse should be replaced with an actual solution

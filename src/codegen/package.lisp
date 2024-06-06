@@ -27,6 +27,8 @@
 
   (:import-from
    #:coalton-impl/codegen/program
-   #:compile-translation-unit)
+   #:compile-translation-unit
+   #:*codegen-hook*)
   (:export
-   #:compile-translation-unit))
+   #:compile-translation-unit
+   #:*codegen-hook*))
