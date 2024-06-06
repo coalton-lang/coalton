@@ -632,6 +632,7 @@
     (make-struct-field
      :name (struct-field-name field)
      :type (rename-type-variables-generic% (struct-field-type field) ctx)
+     :docstring (struct-field-docstring field)
      :source (struct-field-source field)))
 
   (:method ((toplevel toplevel-define-struct) ctx)

@@ -23,11 +23,12 @@
 
 (defstruct (documentation-struct-entry
             (:include documentation-entry))
-  (type      (util:required 'type)      :type tc:ty                     :read-only t)
-  (tyvars    (util:required 'tyvars)    :type tc:tyvar-list             :read-only t)
-  (fields    (util:required 'fields)    :type util:string-list          :read-only t)
-  (field-tys (util:required 'field-tys) :type hash-table                :read-only t)
-  (instances (util:required 'instances) :type tc:ty-class-instance-list :read-only t))
+  (type             (util:required 'type)             :type tc:ty                     :read-only t)
+  (tyvars           (util:required 'tyvars)           :type tc:tyvar-list             :read-only t)
+  (fields           (util:required 'fields)           :type util:string-list          :read-only t)
+  (field-docstrings (util:required 'field-docstrings) :type hash-table                :read-only t)
+  (field-tys        (util:required 'field-tys)        :type hash-table                :read-only t)
+  (instances        (util:required 'instances)        :type tc:ty-class-instance-list :read-only t))
 
 (defun documentation-struct-entry-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -422,6 +423,7 @@
                     :type (tc:type-entry-type entry)
                     :tyvars (tc:type-entry-tyvars entry)
                     :fields (tc:struct-entry-fields struct-entry)
+                    :field-docstrings (tc:struct-entry-field-docstrings struct-entry)
                     :field-tys (tc:struct-entry-field-tys struct-entry)
                     :instances applicable-instances)
                    output-structs))
