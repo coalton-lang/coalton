@@ -270,3 +270,15 @@
            (t
             (with-output-to-string (lisp-stream)
               (compile-to-lisp coal-file-name coal-stream lisp-stream)))))))))
+
+(defun get-ast (stream)
+  "Read Coalton source from STREAM and collect AST of toplevel definitions."
+  (parser:with-reader-context stream
+    (let* ((ast nil)
+           (codegen:*codegen-hook* (lambda (op &rest args)
+                                     (when (eql op :ast)
+                                       (push args ast)))))
+      (let ((file (se:make-file :stream stream
+                                :name "<stream>")))
+        (entry-point (parser:read-program stream file :mode :file)))
+      (nreverse ast))))
