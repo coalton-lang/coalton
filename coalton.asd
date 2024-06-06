@@ -354,6 +354,7 @@
                (:file "string-tests")
                (:file "recursive-let-tests")
                (:file "class-tests")
+               (:file "struct-tests")
                (:file "list-tests")
                (:file "red-black-tests")
                (:file "seq-tests")

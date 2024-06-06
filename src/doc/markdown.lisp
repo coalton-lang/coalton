@@ -166,7 +166,7 @@
         (format stream "~%</details>~%~%")))))
 
 (defmethod write-documentation ((backend (eql ':markdown)) stream (object documentation-struct-entry))
-  (with-slots (name type tyvars fields field-tys instances documentation)
+  (with-slots (name type tyvars fields field-docstrings field-tys instances documentation)
       object
     (tc:with-pprint-variable-context ()
       (format stream
@@ -177,9 +177,13 @@
 
       (loop :for field :in fields
             :for field-ty := (gethash field field-tys)
-            :do (format stream "- <code>~A :: ~S</code>~%"
+            :for field-docstring := (gethash field field-docstrings)
+            :do (format stream "- <code>~A :: ~S</code>~A~%"
                         field
-                        field-ty))
+                        field-ty
+                        (if field-docstring
+                            (format nil "<br/>~a" field-docstring)
+                            "")))
 
       (when documentation
         (format stream "~%~A~%"

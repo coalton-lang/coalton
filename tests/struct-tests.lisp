@@ -5,13 +5,50 @@
 (deftest test-struct-definition ()
   (check-coalton-types
    "(define-struct Point
-      (x Integer)
+      (x \"The x value.\" Integer)
       (y Integer))")
 
   (check-coalton-types
-   "(define-type (Point :a)
+   "(define-struct (Point :a)
       (x :a)
-      (y :a))"))
+      (y \"The y value.\" :a))"))
+
+(deftest test-struct-definition-parse-errors ()
+  (signals parser:parse-error
+    (check-coalton-types
+     "(define-struct Point
+        5
+        (y Integer))"))
+
+  (signals parser:parse-error
+    (check-coalton-types
+     "(define-struct Point
+        (5 Integer)
+        (y Integer))"))
+
+  (signals parser:parse-error
+    (check-coalton-types
+     "(define-struct Point
+        (x)
+        (y Integer))"))
+
+  (signals parser:parse-error
+    (check-coalton-types
+     "(define-struct Point
+        (x \"the x value.\")
+        (y Integer))"))
+
+  (signals parser:parse-error
+    (check-coalton-types
+     "(define-struct Point
+        (x Integer \"the x value\")
+        (y Integer))"))
+
+  (signals parser:parse-error
+    (check-coalton-types
+     "(define-struct Point
+        (x \"the x value\" Integer \"also, it's the x value\")
+        (y Integer))")))
 
 (deftest test-struct-accessors ()
   (check-coalton-types

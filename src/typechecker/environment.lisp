@@ -54,6 +54,7 @@
    #:struct-entry-name                      ; ACCESSOR
    #:struct-entry-fields                    ; ACCESSOR
    #:struct-entry-field-tys                 ; ACCESSOR
+   #:struct-entry-field-docstrings          ; ACCESSOR
    #:struct-entry-field-idx                 ; ACCESSOR`
    #:struct-entry-list                      ; TYPE
    #:struct-environment                     ; STRUCT
@@ -490,15 +491,16 @@
 ;;;
 
 (defstruct struct-entry
-  (name      (util:required 'name)      :type symbol           :read-only t)
-  (fields    (util:required 'fields)    :type util:string-list :read-only t)
+  (name             (util:required 'name)             :type symbol           :read-only t)
+  (fields           (util:required 'fields)           :type util:string-list :read-only t)
 
+  (field-docstrings (util:required 'field-docstrings) :type hash-table       :read-only t)
   ;; Mapping of "field name" -> "field type"
   ;; Type variables are the same as in `type-entry-type'
-  (field-tys (util:required 'field-tys) :type hash-table       :read-only t)
+  (field-tys        (util:required 'field-tys)        :type hash-table       :read-only t)
 
   ;; Mapping of "field name" -> "field index"
-  (field-idx (util:required 'field-idx) :type hash-table       :read-only t))
+  (field-idx        (util:required 'field-idx)        :type hash-table       :read-only t))
 
 (defmethod make-load-form ((self struct-entry) &optional env)
   (make-load-form-saving-slots self :environment env))

@@ -232,6 +232,12 @@
   (cond ((typep parsed-type 'parser:toplevel-define-struct)
          (let* ((fields (mapcar #'parser:struct-field-name
                                 (parser:toplevel-define-struct-fields parsed-type)))
+                (field-docstrings (loop :with table := (make-hash-table :test #'equal)
+                                        :for field :in fields
+                                        :for docstring :in (mapcar #'parser:struct-field-docstring
+                                                                   (parser:toplevel-define-struct-fields parsed-type))
+                                        :do (setf (gethash field table) docstring)
+                                        :finally (return table)))
                 (field-tys (loop :with table := (make-hash-table :test #'equal)
                                  :for field :in fields
                                  :for ty :in (first (type-definition-constructor-args type))
@@ -248,6 +254,7 @@
                       (tc:make-struct-entry
                        :name (type-definition-name type)
                        :fields fields
+                       :field-docstrings field-docstrings
                        :field-tys field-tys
                        :field-idx field-idx)))))
         ((tc:lookup-struct env (type-definition-name type) :no-error t)

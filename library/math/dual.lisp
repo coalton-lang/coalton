@@ -75,11 +75,12 @@ References:
 
 (coalton-toplevel
 
-  (define-type (Dual :t)
+  (define-struct (Dual :t)
     "Representation of a dual number in the form `a + bε` where `a` and `b` are real numbers and `ε` satisfies `ε^2 = 0` and `ε != 0`.
 
 Note: `Eq`, and `Ord` and `Hash` only make use of the primal component."
-    (Dual :t :t))
+    (primal-part "The primal part." :t)
+    (dual-part "The dual part." :t))
 
   (declare primal-part (Dual :t -> :t))
   (define (primal-part (Dual p _))
