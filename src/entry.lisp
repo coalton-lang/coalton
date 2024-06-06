@@ -285,3 +285,15 @@
                                :direction ':output)
       (compile-file lisp-file :output-file fasl-file)
       (load fasl-file))))
+
+(defun get-ast (stream)
+  "Read Coalton source from STREAM and collect AST of toplevel definitions."
+  (parser:with-reader-context stream
+    (let* ((ast nil)
+           (codegen:*codegen-hook* (lambda (op &rest args)
+                                     (when (eql op :ast)
+                                       (push args ast)))))
+      (let ((file (error:make-coalton-file :stream stream
+                                           :name "<stream>")))
+        (entry-point (parser:read-program stream file :mode :file)))
+      (nreverse ast))))
