@@ -43,6 +43,7 @@
    #:make-struct-field                           ; CONSTRUCTOR
    #:struct-field-name                           ; ACCESSOR
    #:struct-field-type                           ; ACCESSOR
+   #:struct-field-docstring                      ; ACCESSOR
    #:struct-field-source                         ; ACCESSOR
    #:struct-field-list                           ; TYPE
    #:toplevel-define-struct                      ; STRUCT
@@ -178,7 +179,7 @@
 ;;;; toplevel-define-type := "(" "define-type" identifier docstring? constructor* ")"
 ;;;;                       | "(" "define-type" "(" identifier keyword+ ")" docstring? constructor* ")"
 ;;;;
-;;;; struct-field := "(" identifier type ")"
+;;;; struct-field := "(" identifier type docstring? ")"
 ;;;;
 ;;;; toplevel-define-struct := "(" "define-struct" identifier docstring? struct-field* ")"
 ;;;;                         | "(" "define-struct" "(" identifier keyword+ ")" docstring? struct-field* ")"
@@ -254,9 +255,10 @@
 
 (defstruct (struct-field
             (:copier nil))
-  (name   (util:required 'name)   :type string :read-only t)
-  (type   (util:required 'type)   :type ty     :read-only t)
-  (source (util:required 'source) :type cons   :read-only t))
+  (name      (util:required 'name)      :type string           :read-only t)
+  (type      (util:required 'type)      :type ty               :read-only t)
+  (docstring (util:required 'docstring) :type (or null string) :read-only t)
+  (source    (util:required 'source)    :type cons             :read-only t))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun struct-field-list-p (x)
@@ -2069,8 +2071,9 @@ consume all attributes")))
                  :message "Malformed struct field"
                  :primary-note "expected field type")))
 
-  ;; (name ty ...)
-  (when (cst:consp (cst:rest (cst:rest form)))
+  ;; (name ty "docstring" ...)
+  (when (and (cst:consp (cst:rest (cst:rest form)))
+             (cst:consp (cst:rest (cst:rest (cst:rest form)))))
     (error 'parse-error
            :err (coalton-error
                  :span (cst:source form)
@@ -2090,7 +2093,16 @@ consume all attributes")))
                  :primary-note "unexpected form"
                  :highlight :end)))
 
-  (make-struct-field
-   :name (symbol-name (cst:raw (cst:first form)))
-   :type (parse-type (cst:second form) file)
-   :source (cst:source form)))
+
+  ;; (identifier type "docstring")
+  (let (docstring)
+    (when (and (cst:consp (cst:rest (cst:rest form)))
+               (cst:atom (cst:third form))
+               (stringp (cst:raw (cst:third form))))
+      (setf docstring (cst:raw (cst:third form))))
+
+    (make-struct-field
+     :name (symbol-name (cst:raw (cst:first form)))
+     :type (parse-type (cst:second form) file)
+     :docstring docstring
+     :source (cst:source form))))

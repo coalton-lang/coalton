@@ -5,13 +5,13 @@
 (deftest test-struct-definition ()
   (check-coalton-types
    "(define-struct Point
-      (x Integer)
+      (x Integer \"The x value.\")
       (y Integer))")
 
   (check-coalton-types
    "(define-type (Point :a)
       (x :a)
-      (y :a))"))
+      (y :a \"The y value.\"))"))
 
 (deftest test-struct-accessors ()
   (check-coalton-types

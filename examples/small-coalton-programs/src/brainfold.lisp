@@ -48,9 +48,9 @@
 (coalton-toplevel
 
   (define-struct State
-    (memory (Vector Integer))
-    (pointer (Cell UFix))
-    (print-buffer (Cell String)))
+    (memory (Vector Integer) "The brainfold memory array.")
+    (pointer (Cell UFix) "A pointer to the current register.")
+    (print-buffer (Cell String) "The print buffer."))
   
   ;;
   ;; Generating a Brainfold memory vector
