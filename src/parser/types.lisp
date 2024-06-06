@@ -290,7 +290,8 @@
          (make-tyvar :name (cst:raw form) :source (cst:source form))
          (make-tycon :name (cst:raw form) :source (cst:source form))))
 
-    ((cst:atom form)
+    ((and (cst:atom form)
+          (not (stringp (cst:raw form))))
      (error 'parse-error
             :err (coalton-error
                   :span (cst:source form)

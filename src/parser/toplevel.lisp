@@ -27,6 +27,7 @@
    #:make-constructor                            ; CONSTRUCTOR
    #:constructor-name                            ; ACCESSOR
    #:constructor-fields                          ; ACCESSOR
+   #:constructor-docstring                       ; ACCESSOR
    #:constructor-source                          ; ACCESSOR
    #:constructor-list                            ; TYPE
    #:toplevel-define-type                        ; STRUCT
@@ -174,7 +175,7 @@
 ;;;;                  | "(" "define" "(" identifier pattern* ")" docstring? node-body ")"
 ;;;;
 ;;;; constructor := identifier
-;;;;              | "(" identifier ty+ ")"
+;;;;              | "(" identifier ty+ docstring+")"
 ;;;;
 ;;;; toplevel-define-type := "(" "define-type" identifier docstring? constructor* ")"
 ;;;;                       | "(" "define-type" "(" identifier keyword+ ")" docstring? constructor* ")"
@@ -224,9 +225,10 @@
 
 (defstruct (constructor
             (:copier nil))
-  (name   (util:required 'name)   :type identifier-src :read-only t)
-  (fields (util:required 'fields) :type ty-list        :read-only t)
-  (source (util:required 'source) :type cons           :read-only t))
+  (name      (util:required 'name)      :type identifier-src   :read-only t)
+  (fields    (util:required 'fields)    :type ty-list          :read-only t)
+  (docstring (util:required 'docstring) :type (or null string) :read-only t)
+  (source    (util:required 'source)    :type cons             :read-only t))
 
 (defun constructor-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -1750,13 +1752,23 @@ consume all attributes")))
                      :span (cst:source (cst:second enclosing-form))
                      :message "in this type definition")))))
 
-    (make-constructor
-     :name (make-identifier-src
-            :name (cst:raw unparsed-name)
-            :source (cst:source unparsed-name))
-     :fields (loop :for field :in unparsed-fields
-                   :collect (parse-type field file))
-     :source (cst:source form))))
+    (let (docstring)
+      (make-constructor
+       :name (make-identifier-src
+              :name (cst:raw unparsed-name)
+              :source (cst:source unparsed-name))
+       :fields (loop :with parsed-fields := nil
+                     :for field :in unparsed-fields
+
+                     :do (if (stringp (cst:raw field))
+                             (if docstring
+                                 (concatenate 'string docstring ", " (cst:raw field))
+                                 (setf docstring (cst:raw field)))
+                             (push (parse-type field file) parsed-fields))
+
+                     :finally (return (reverse parsed-fields)))
+       :docstring docstring
+       :source (cst:source form)))))
 
 
 (defun parse-argument-list (form file)
