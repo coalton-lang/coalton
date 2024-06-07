@@ -67,6 +67,7 @@
    #:ty-class-class-variable-map            ; ACCESSOR
    #:ty-class-fundeps                       ; ACCESSOR
    #:ty-class-unqualified-methods           ; ACCESSOR
+   #:ty-class-method-docstrings             ; ACCESSOR
    #:ty-class-codegen-sym                   ; ACCESSOR
    #:ty-class-superclass-dict               ; ACCESSOR
    #:ty-class-superclass-map                ; ACCESSOR
@@ -531,6 +532,9 @@
   ;; Methods of the class containing the same tyvars in PREDICATE for
   ;; use in pretty printing
   (unqualified-methods (util:required 'unqualified-methods) :type scheme-binding-list :read-only t)
+  ;; Method-docstrings is a list of Strings or Nils, in the same order
+  ;; as the unqualified-methods
+  (method-docstrings   (util:required 'method-docstrings)   :type list                :read-only t)
   (codegen-sym         (util:required 'codegen-sym)         :type symbol              :read-only t)
   (superclass-dict     (util:required 'superclass-dict)     :type list                :read-only t)
   (superclass-map      (util:required 'superclass-map)      :type hash-table          :read-only t)
@@ -564,6 +568,7 @@
                                   (cons (car entry)
                                         (apply-substitution subst-list (cdr entry))))
                                 (ty-class-unqualified-methods class))
+   :method-docstrings (ty-class-method-docstrings class)
    :codegen-sym (ty-class-codegen-sym class)
    :superclass-dict (mapcar (lambda (entry)
                               (cons (apply-substitution subst-list (car entry))

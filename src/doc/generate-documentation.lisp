@@ -39,10 +39,12 @@
 
 (defstruct (documentation-class-entry
             (:include documentation-entry))
-  (context   (util:required 'context)   :type t :read-only t)
-  (predicate (util:required 'predicate) :type t :read-only t)
-  (methods   (util:required 'methods)   :type t :read-only t)
-  (instances (util:required 'instances) :type t :read-only t))
+  (context   (util:required 'context)                   :type t :read-only t)
+  (predicate (util:required 'predicate)                 :type t :read-only t)
+  (methods   (util:required 'methods)                   :type t :read-only t)
+  ;; A list of strings in the same order as the methods slot
+  (method-docstrings (util:required 'method-docstrings) :type t :read-only t)
+  (instances (util:required 'instances)                 :type t :read-only t))
 
 (defun documentation-class-entry-list-p (x)
   (and (every #'documentation-class-entry-p x)
@@ -454,6 +456,7 @@
                          (lambda (binding)
                            (exported-symbol-p (car binding) package t))
                          (tc:ty-class-unqualified-methods e))
+               :method-docstrings (tc:ty-class-method-docstrings e)
                :instances (reverse (fset:convert 'list (tc:lookup-class-instances env (tc:ty-class-name e) :no-error t)))
                :documentation (tc:ty-class-docstring e)
                :location (tc:ty-class-location e)))

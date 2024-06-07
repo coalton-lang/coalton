@@ -203,7 +203,7 @@
         (format stream "~%</details>~%~%")))))
 
 (defmethod write-documentation ((backend (eql ':markdown)) stream (object documentation-class-entry))
-  (with-slots (name context predicate methods instances documentation location)
+  (with-slots (name context predicate methods method-docstrings instances documentation location)
       object
 
     (format stream "#### <code>~A</code> <sup><sub>[CLASS]</sub></sup><a name=\"~(~:*~A-class~)\"></a>~%"
@@ -226,10 +226,13 @@
                  :regex "[<>&]")))
 
       (format stream "Methods:~%")
-      (loop :for (name . type) :in methods :do
-        (format stream "- <code>~A :: ~A</code>~%"
+      (loop :for (name . type) :in methods
+            :for docstring     :in method-docstrings :do
+
+        (format stream "- <code>~A :: ~A</code>~@[<br/>~A~]~%"
                 (html-entities:encode-entities (symbol-name name))
-                (to-markdown type))))
+                (to-markdown type)
+                (html-entities:encode-entities docstring))))
 
     (when instances
       (format stream "~%<details>~%")

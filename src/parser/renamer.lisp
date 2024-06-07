@@ -680,6 +680,7 @@
       (make-method-definition
        :name (method-definition-name method)
        :type (rename-type-variables-generic% (method-definition-type method) new-ctx)
+       :docstring (method-definition-docstring method)
        :source (method-definition-source method))))
 
   (:method ((toplevel toplevel-define-class) ctx)
