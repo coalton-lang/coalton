@@ -296,6 +296,8 @@
                                                                   (parser:method-definition-name method))
 
                                              :collect (cons method-name (tc:quantify nil method-ty)))
+                  :method-docstrings (mapcar #'parser:method-definition-docstring
+                                             (parser:toplevel-define-class-methods class))
                   :codegen-sym codegen-sym
                   :superclass-dict superclass-dict
                   :superclass-map superclass-map

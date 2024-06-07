@@ -13,6 +13,18 @@
   (m1 :a)
   (m2 (:a -> :b)))
 
+(define-class (C5 :a)
+  (m3 "Method m3" :a)
+  (m4 (:a -> :b)))
+
+(define-class (C6 :a)
+  (m5 :a)
+  (m6 "Method m6" (:a -> :b)))
+
+(define-class (C7 :a)
+  (m7 "Method m7" :a)
+  (m8 "Method m8" (:a -> :b)))
+
 (define-class (C :a :b (:a -> :b)))
 
 (define-class (C :a :b :c :d (:a :b -> :c :d)))

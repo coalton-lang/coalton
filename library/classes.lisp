@@ -57,7 +57,7 @@
  ;;
  (define-class (Signalable :a)
    "Signals errors or warnings by calling their respective lisp conditions."
-   (error (:a -> :b)))
+   (error "Signal an error with a type-specific error string." (:a -> :b)))
 
   (define-instance (Signalable String)
     (define (error str)
@@ -228,13 +228,9 @@
     (empty (:f :a)))
 
   (define-class (Foldable :container)
-    "Types which can be folded into a single element.
-
-`fold` is a left tail recursive fold.
-
-`foldr` is a right non tail recursive fold."
-    (fold ((:accum -> :elt -> :accum) -> :accum -> :container :elt -> :accum))
-    (foldr ((:elt -> :accum -> :accum) -> :accum -> :container :elt -> :accum)))
+    "Types which can be folded into a single element."
+    (fold  "A left tail-recursive fold."       ((:accum -> :elt -> :accum) -> :accum -> :container :elt -> :accum))
+    (foldr "A right non-tail-recursive fold."  ((:elt -> :accum -> :accum) -> :accum -> :container :elt -> :accum)))
 
   (declare mconcat ((Foldable :f) (Monoid :a) => :f :a -> :a))
   (define mconcat

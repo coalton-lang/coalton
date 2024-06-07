@@ -83,6 +83,7 @@
    #:make-method-definition                      ; STRUCT
    #:method-definition-name                      ; ACCESSOR
    #:method-definition-type                      ; ACCESSOR
+   #:method-definition-docstring                 ; ACCESSOR
    #:method-definition-source                    ; ACCESSOR
    #:method-definition-list                      ; TYPE
    #:toplevel-define-class                       ; STRUCT
@@ -93,6 +94,7 @@
    #:toplevel-define-class-fundeps               ; ACCESSOR
    #:toplevel-define-class-docstring             ; ACCESSOR
    #:toplevel-define-class-methods               ; ACCESSOR
+   #:toplevel-define-class-method-docstrings     ; ACCESSOR
    #:toplevel-define-class-source                ; ACCESSOR
    #:toplevel-define-class-head-src              ; ACCESSOR
    #:toplevel-define-class-list                  ; TYPE
@@ -184,7 +186,7 @@
 ;;;; toplevel-define-struct := "(" "define-struct" identifier docstring? struct-field* ")"
 ;;;;                         | "(" "define-struct" "(" identifier keyword+ ")" docstring? struct-field* ")"
 ;;;;
-;;;; method-definition := "(" identifier qualified-ty ")"
+;;;; method-definition := "(" identifier docstring? qualified-ty ")"
 ;;;;
 ;;;; class-head := identifier keyword+
 ;;;;
@@ -334,9 +336,13 @@
 
 (defstruct (method-definition
             (:copier nil))
-  (name   (util:required 'name)   :type identifier-src :read-only t)
-  (type   (util:required 'type)   :type qualified-ty   :read-only t)
-  (source (util:required 'source) :type cons           :read-only t))
+  (name      (util:required 'name)      :type identifier-src   :read-only t)
+  (type      (util:required 'type)      :type qualified-ty     :read-only t)
+  (docstring (util:required 'docstring) :type (or string null) :read-only t)
+  (source    (util:required 'source)    :type cons             :read-only t))
+
+(defmethod make-load-form ((self method-definition) &optional env)
+  (make-load-form-saving-slots self :environment env))
 
 (defun method-definition-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -1634,8 +1640,9 @@ consume all attributes")))
                    :span (cst:source (cst:second form))
                    :message "in this class definition")))))
 
-  ;; (m t ...)
-  (when (cst:consp (cst:rest (cst:rest method-form)))
+  ;; (m d t ...)
+  (unless (or (cst:null (cst:rest (cst:rest method-form)))
+              (cst:null (cst:rest (cst:rest (cst:rest method-form)))))
     (error 'parse-error
            :err (coalton-error
                  :span (cst:source (cst:first (cst:rest (cst:rest method-form))))
@@ -1665,13 +1672,38 @@ consume all attributes")))
                    :span (cst:source (cst:second form))
                    :message "in this class definition")))))
 
-  (make-method-definition
-   :name (make-identifier-src
-          :name (node-variable-name (parse-variable (cst:first method-form) file))
-          :source (cst:source (cst:first method-form)))
-   :type (parse-qualified-type (cst:second method-form) file)
-   :source (cst:source method-form)))
+  ;; either list of length 2 or list of length 3 with docstring
+  (unless (or (cst:null (cst:rest (cst:rest method-form)))
+              (and (cst:atom (cst:second method-form))
+                   (stringp (cst:raw (cst:second method-form)))))
+    (error 'parse-error
+           :err (coalton-error
+                 :span (cst:source (cst:second method-form))
+                 :file file
+                 :message "Malformed method definition"
+                 :primary-note "expected docstring"
+                 :notes
+                 (list
+                  (make-coalton-error-note
+                   :type :secondary
+                   :span (cst:source (cst:second form))
+                   :message "in this class definition")))))
 
+  (let (docstring)
+    (when (and (cst:atom (cst:second method-form))
+               (stringp (cst:raw (cst:second method-form))))
+      (setf docstring (cst:raw (cst:second method-form))))
+
+    (make-method-definition
+     :name (make-identifier-src
+            :name (node-variable-name (parse-variable (cst:first method-form) file))
+            :source (cst:source (cst:first method-form)))
+     :docstring docstring
+     :type (parse-qualified-type (if docstring
+                                     (cst:third method-form)
+                                     (cst:second method-form))
+                                 file)
+     :source (cst:source method-form))))
 
 (defun parse-type-variable (form file)
   (declare (type cst:cst form)
