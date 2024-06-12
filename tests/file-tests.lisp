@@ -89,7 +89,7 @@
         (let testpath = (file:merge dir "file-tests/"))
         (is (file:directory-pathname? testpath))
         (is (not (unwrap (file:directory-exists? testpath))))
-        (is (res-succeeds (file:create-directory testpath)))
+        (is (res-succeeds (file:create-directory! testpath)))
         (is (unwrap (file:directory-exists? testpath)))
 
         (let filepath = (file:merge testpath "test-file.txt"))
@@ -103,14 +103,14 @@
                 "Hello World!"))
 
         (let filepath2 = (file:merge testpath "test-file2.txt"))
-        (is (res-succeeds (file:copy filepath filepath2)))
+        (is (res-succeeds (file:copy! filepath filepath2)))
         (is (unwrap (file:file-exists? filepath2)))
         (is (== (unwrap (file:read-file-to-string filepath2))
                 "Hello World!"))
-        (is (res-succeeds (file:write-to-file filepath2 (iter:into-iter "wow"))))
+        (is (res-succeeds (file:write-to-file! filepath2 (iter:into-iter "wow"))))
         (is (== (unwrap (file:read-file-to-string filepath2))
                 "wow"))
-        (is (res-succeeds (file:append-to-file filepath2 (iter:into-iter " and more"))))
+        (is (res-succeeds (file:append-to-file! filepath2 (iter:into-iter " and more"))))
         (is (== (unwrap (file:read-file-to-string filepath2))
                 "wow and more"))
 
@@ -123,14 +123,14 @@
                 (make-list filepath filepath2)))
 
         ;; clearing the file-test directory
-        (is (res-fails (file:remove-directory testpath)))
-        (is (res-fails (file:remove-directory filepath)))
-        (is (res-fails (file:remove-directory-recursive filepath)))
+        (is (res-fails (file:remove-directory! testpath)))
+        (is (res-fails (file:remove-directory! filepath)))
+        (is (res-fails (file:remove-directory-recursive! filepath)))
 
-        (is (res-succeeds (file:delete-file filepath)))
-        (is (res-succeeds (file:delete-file filepath2)))
+        (is (res-succeeds (file:delete-file! filepath)))
+        (is (res-succeeds (file:delete-file! filepath2)))
         (is (unwrap (file:empty? testpath)))
-        (is (res-succeeds (file:remove-directory testpath)))
+        (is (res-succeeds (file:remove-directory! testpath)))
 
         ;; clearing the file-test directory for real this time
         (is (not (unwrap (file:directory-exists? testpath))))

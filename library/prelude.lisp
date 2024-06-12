@@ -221,7 +221,7 @@
    #:Iterator)
   (:export
    #:Iterator)
-  
+
   (:import-from
    #:coalton-library/system
    #:time)
