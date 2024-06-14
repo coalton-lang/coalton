@@ -3,7 +3,7 @@
 ;;;; Recompile specialized versions of type class generic functions across a call graph.
 ;;;;
 ;;;; The monomorphizer works by traversing a callgraph, it starts at a
-;;;; given entrypoint and looks up the optimized AST associated that
+;;;; given entrypoint and looks up the optimized AST associated with that
 ;;;; entrypoint. The function CANDIDATE-SELECTION then finds function
 ;;;; applications within that entrypoint that are being passed
 ;;;; statically known typeclass dictionaries. These application sites
@@ -98,9 +98,9 @@ ARGUMENTS some of which are statically known dictionaries."
 (defun propagatable-p (x)
   (not (eq x '@@unpropagated)))
 
-(defun node-can-be-propidated (node env)
-  "Returns true if a given node should be const propidated to a callee.
-Currently only typeclass dictionaries will be propidated, although
+(defun node-can-be-propagated (node env)
+  "Returns true if a given node should be const propagated to a callee.
+Currently only typeclass dictionaries will be propagated, although
 constant values could be."
   (cond
     ((and
@@ -174,7 +174,7 @@ recompilation, and also maintains a stack of uncompiled candidates."
     (return-from valid-candidate-p nil))
 
   (let ((new-args (loop :for node :in args
-                    :if (and (node-can-be-propidated node env) (node-free-p node bound-variables))
+                    :if (and (node-can-be-propagated node env) (node-free-p node bound-variables))
                       :collect node
                     :else
                       :collect '@@unpropagated)))
