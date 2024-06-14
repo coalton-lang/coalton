@@ -31,6 +31,19 @@
 
 
 (coalton-toplevel
+  (monomorphize)
+  (declare underapplication-c
+           ((List coalton-library/big-float:Big-Float) -> coalton-library/big-float:Big-Float))
+  (define (underapplication-c xs)
+    (match (list:maximum (append xs (map (fn (x) (* x x)) xs)))
+      ((Some x) x)
+      ((None) 0))))
+
+(define-test test-monomorphizer-under-application-non-inline-method ()
+  (is (== 9 (underapplication-c (make-list -1 -2 -3)))))
+
+
+(coalton-toplevel
   (define (partial-monomorphization-a x y z)
     (== x y)
     (+ 1 z))
