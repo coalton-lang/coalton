@@ -281,15 +281,18 @@ recompilation, and also maintains a stack of uncompiled candidates."
               ((< (length (compile-candidate-args candidate)) (length (node-abstraction-vars node)))
                (let* ((remaining-parameters (util:drop (length (compile-candidate-args candidate)) (node-abstraction-vars node))))
 
-                 (tc:apply-substitution
-                  subs
-                  (make-node-abstraction
-                   :vars new-vars
-                   :type (tc:make-function-type* arg-tys new-type)
-                   :subexpr (make-node-abstraction
-                             :type new-type
-                             :vars remaining-parameters
-                             :subexpr subexpr)))))
+                 (let ((inner-abs (make-node-abstraction
+                                   :type new-type
+                                   :vars remaining-parameters
+                                   :subexpr subexpr)))
+                   (if (null new-vars)
+                       (tc:apply-substitution subs inner-abs)
+                       (tc:apply-substitution
+                        subs
+                        (make-node-abstraction
+                         :vars new-vars
+                         :type (tc:make-function-type* arg-tys new-type)
+                         :subexpr inner-abs))))))
 
               (t
                (util:unreachable)))))
