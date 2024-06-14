@@ -32,7 +32,8 @@
    (#:red-black/tree #:coalton-library/ord-tree)
    (#:red-black/map #:coalton-library/ord-map)
    (#:result #:coalton-library/result)
-   (#:seq #:coalton-library/seq)))
+   (#:seq #:coalton-library/seq)
+   (#:file #:coalton-library/file)))
 
 (in-package #:coalton-native-tests)
 

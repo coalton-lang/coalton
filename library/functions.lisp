@@ -19,7 +19,8 @@
    #:uncurry
    #:msum
    #:asum
-   #:/=))
+   #:/=
+   #:bracket))
 
 (in-package #:coalton-library/functions)
 
@@ -141,6 +142,31 @@
 
   (define-instance (Functor (Arrow :a))
     (define map compose)))
+
+;;;
+;;; Bracket pattern
+;;;
+
+(cl:defmacro %unwind-protect (obj exit thunk)
+  "A wrapper on `cl:unwind-protect.`"
+  `(cl:let ((output (cl:gensym "OUTPUT")))
+     (cl:unwind-protect (cl:setq output (call-coalton-function ,thunk ,obj))
+       (call-coalton-function ,exit ,obj))
+     output))
+
+(coalton-toplevel
+
+  (declare bracket (Monad :m
+                          => :m :a
+                          -> (:a -> :m :b)
+                          -> (:a -> :m :c)
+                          -> :m :c))
+  (define (bracket init exit body)
+    "Bracket takes a stream generator, an exit operation, and a body and safely handles operation failure. This wraps `cl:unwind-protect`."
+    (do
+     (obj <- init)
+     (lisp :m (obj exit body)
+       (%unwind-protect obj exit body)))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/FUNCTIONS")

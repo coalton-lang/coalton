@@ -35,6 +35,7 @@
    #:Into
    #:TryInto
    #:Iso
+   #:Signalable
    #:error
    #:Unwrappable #:unwrap-or-else #:with-default #:unwrap #:expect #:as-optional
    #:default #:defaulting-unwrap))
