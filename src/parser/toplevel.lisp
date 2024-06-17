@@ -12,6 +12,7 @@
    #:parse-error)
   (:local-nicknames
    (#:cst #:concrete-syntax-tree)
+   (#:cursor #:coalton-impl/parser/cursor)
    (#:se #:source-error)
    (#:util #:coalton-impl/util))
   (:export
@@ -115,6 +116,7 @@
    #:toplevel-define-instance-docstring          ; ACCESSOR
    #:toplevel-define-instance-compiler-generated ; ACCESSOR
    #:toplevel-define-instance-list               ; TYPE
+   #:toplevel-package-name                       ; ACCESSOR
    #:toplevel-specialize                         ; STRUCT
    #:make-toplevel-specialize                    ; CONSTRUCTOR
    #:toplevel-specialize-from                    ; ACCESSOR
@@ -133,6 +135,8 @@
    #:program-classes                             ; ACCESSOR
    #:program-instances                           ; ACCESSOR
    #:program-specializations                     ; ACCESSOR
+   #:program-lisp-package                        ; FUNCTION
+   #:make-defpackage                             ; FUNCTION
    #:parse-toplevel-form                         ; FUNCTION
    #:read-program                                ; FUNCTION
    #:read-expression                             ; FUNCTION
@@ -420,9 +424,19 @@
 (deftype toplevel-specialize-list ()
   '(satisfies toplevel-specialize-list-p))
 
+(defstruct (toplevel-package
+            (:copier nil))
+  "A Coalton package definition, which can be used to generate either a DEFPACKAGE form or a package instance directly."
+  (name        (util:required 'name) :type string           :read-only t)
+  (docstring   nil                   :type (or null string) :read-only t)
+  (import      nil                   :type list)
+  (import-as   nil                   :type list)
+  (import-from nil                   :type list)
+  (export      nil                   :type list))
+
 (defstruct (program
             (:copier nil))
-  (package         (util:required 'package)         :type package                       :read-only t)
+  (package         (util:required 'package)         :type (or null toplevel-package)    :read-only t)
   (file            (util:required 'file)            :type se:file                  :read-only t)
   (types           (util:required 'types)           :type toplevel-define-type-list     :read-only nil)
   (structs         (util:required 'structs)         :type toplevel-define-struct-list   :read-only nil)
@@ -432,47 +446,28 @@
   (instances       (util:required 'instances)       :type toplevel-define-instance-list :read-only nil)
   (specializations (util:required 'specializations) :type toplevel-specialize-list      :read-only nil))
 
-;;
-;; Empty package for reading (package) forms
-;;
-(defpackage #:coalton-impl/parser/read
-  (:use))
+(defun read-program (stream file &optional mode)
+  "Read a PROGRAM from FILE (an instance of source-error:file).
+MODE may be one of :file or :macro.
 
-(defun read-program (stream file &key (mode (error "you must supply this bozo!")))
-  "Read a PROGRAM from the SE:FILE."
+If MODE is :file, a package form is required.
+If MODE is :macro, a package form is forbidden, and an explicit check is made for EOF."
   (declare (type se:file file)
-           (type (member :file :toplevel-macro :test) mode)
+           (type (member :file :macro nil) mode)
            (values program))
 
   (let* (;; Setup eclector readtable
          (eclector.readtable:*readtable*
            (eclector.readtable:copy-readtable eclector.readtable:*readtable*))
 
-         ;; Initial package to read (package) forms into
-         (*package* *package*))
+         ;; In mode :file, the value of package is a toplevel-package structure
+         (package nil))
 
-    ;; Parse package form
-    (when (eq :file mode)
-      (setf *package* (find-package "COALTON-IMPL/PARSER/READ"))
+    (when (eq mode ':file)
+      (setf package (read-toplevel-package stream file)))
 
-      ;; Read the (package) form
-      (multiple-value-bind (form presentp)
-          (maybe-read-form stream *coalton-eclector-client*)
-
-        (unless presentp
-          (error 'parse-error
-                 :err (se:source-error
-                       :span (cons (- (file-position stream) 2)
-                                   (- (file-position stream) 1))
-                       :file file
-                       :message "Unexpected EOF"
-                       :primary-note "missing package form")))
-
-        (setf *package* (parse-package form file))))
-
-    ;; imma parsin mah program
     (let* ((program (make-program
-                     :package *package*
+                     :package package
                      :file file
                      :types nil
                      :structs nil
@@ -481,6 +476,7 @@
                      :classes nil
                      :instances nil
                      :specializations nil))
+           (*package* (program-lisp-package program))
 
            (attributes (make-array 0 :adjustable t :fill-pointer t)))
 
@@ -488,7 +484,7 @@
         (multiple-value-bind (form presentp eofp)
             (maybe-read-form stream *coalton-eclector-client*)
 
-          (when (and eofp (eq :toplevel-macro mode))
+          (when (and eofp (eq mode ':macro))
             (error 'parse-error
                    :err (se:source-error
                          :span (cons (- (file-position stream) 2)
@@ -554,56 +550,143 @@ consume all attributes"))))
 
       (parse-expression form file))))
 
-(defun parse-package (form file)
-  "Parses a coalton package declaration in the form of (package {name})"
-  (declare (type cst:cst form)
-           (type se:file file)
-           (values package))
+;;; Packages
 
-  ;; Package declarations must start with "PACKAGE"
-  (unless (string= (cst:raw (cst:first form)) "PACKAGE")
-    (error 'parse-error
-           :err (se:source-error
-                 :span (cst:source (cst:first form))
-                 :file file
-                 :message "Malformed package declaration"
-                 :primary-note "package declarations must start with `package`")))
+(defun parse-import-statement (package cursor)
+  (typecase (cursor:peek cursor)
+    (list (let ((name (cursor:next-symbol cursor
+                                          :message "package name must be a symbol"
+                                          :missing "package name is missing")))
+            (cursor:next-symbol cursor :require "AS"
+                                       :missing "missing AS")
+            (let ((nick (cursor:next-symbol cursor
+                                            :message "package nickname msut be a symbol"
+                                            :missing "missing package nickname")))
+              (when (not (cursor:empty-p cursor))
+                (cursor:syntax-error cursor "unexpected value"))
+              (pushnew (list (symbol-name nick)
+                             (symbol-name name))
+                       (toplevel-package-import-as package)))))
+    (symbol (pushnew (symbol-name (cst:raw (cursor:cursor-value cursor)))
+                     (toplevel-package-import package)))
+    (t (cursor:syntax-error cursor "expected PACKAGE or (PACKAGE as NICK)"))))
 
-  ;; Package declarations must have a name
-  (unless (cst:consp (cst:rest form))
-    (error 'parse-error
-           :err (se:source-error
-                 :span (cst:source (cst:first form))
-                 :file file
-                 :message "Malformed package declaration"
-                 :primary-note "missing package name")))
+(defun parse-import-from (package cursor)
+  "Parse an IMPORT-FROM clause: a package designator followed by uninterned symbols."
+  (push (cursor:collect-symbols cursor)
+        (toplevel-package-import-from package)))
 
-  ;; Package declarations cannot contain more than two forms
-  (when (cst:consp (cst:rest (cst:rest form)))
-    (error 'parse-error
-           :err (se:source-error
-                 :span (cst:source (cst:first (cst:rest (cst:rest form))))
-                 :file file
-                 :message "Malformed package declaration"
-                 :primary-note "unexpected forms")))
+(defun parse-import (package cursor)
+  (when (cursor:empty-p cursor)
+    (cursor:syntax-error cursor "empty IMPORT form"))
+  (cursor:do-every cursor (alexandria:curry 'parse-import-statement package)))
 
-  (unless (identifierp (cst:raw (cst:second form)))
-    (error 'parse-error
-           :err (se:source-error
-                 :span (cst:source (cst:second form))
-                 :file file
-                 :message "Malformed package declaration"
-                 :primary-note "package name must be a symbol")))
+(defun parse-export (package cursor)
+  (setf (toplevel-package-export package)
+        (append (toplevel-package-export package)
+                (cursor:collect-symbols cursor))))
 
-  (let* ((package-name (symbol-name (cst:raw (cst:second form))))
+(defvar *package-clauses*
+  '(("IMPORT" . parse-import)
+    ("IMPORT-FROM" . parse-import-from)
+    ("EXPORT" . parse-export)))
 
-         (package (find-package package-name)))
+(defun package-clause-parser (name)
+  (cdr (assoc name *package-clauses* :test #'string-equal)))
 
-    (unless package
-      (setf package (make-package package-name :use '("COALTON" "COALTON-PRELUDE"))))
+(defun parse-package-clause (package cursor)
+  "Parse a package clause form CURSOR and add it to PACKAGE."
+  (unless (consp (cursor:peek cursor))
+    (cursor:syntax-error cursor "malformed package clause"))
+  (let ((parser (package-clause-parser (cursor:next-symbol cursor))))
+    (when (null parser)
+      (let ((form (cursor:cursor-value cursor)))
+        (error 'cursor:syntax-error
+               :notes (list (cursor:make-note :span (cst:source form)
+                                              :text "Unknown package clause")
+                            (cursor:make-note :span (cst:source (cst:first form))
+                                              :text (format nil "Must be one of ~{~a~^, ~}"
+                                                            (mapcar #'car *package-clauses*))
+                                              :type ':help)))))
+    (funcall parser package cursor)))
 
+(defun parse-package (cursor)
+  "Parse a coalton package declaration."
+  (cursor:next-symbol cursor
+                      :require "PACKAGE"
+                      :message "package declarations must start with `package`"
+                      :missing "missing `package`")
+  (let* ((package-name
+           (cursor:next-symbol cursor
+                               :missing "missing package name"
+                               :message "package name must be a symbol"))
+         (package-doc
+           (unless (cursor:empty-p cursor)
+             (cursor:next cursor :pred #'stringp)))
+         (package
+           (make-toplevel-package :name (symbol-name package-name)
+                                  :docstring package-doc)))
+    (cursor:do-every cursor (alexandria:curry 'parse-package-clause package))
     package))
 
+;; Empty package for reading (package) forms
+
+(defpackage #:coalton-impl/parser/%defpackage
+  (:documentation "The sole purpose of this package is to provide storage for symbols that are interned while Coalton package forms are read.")
+  (:use))
+
+(defmacro with-parser-package (&body body)
+  `(let ((*package* (find-package 'coalton-impl/parser/%defpackage)))
+     (unwind-protect
+          (progn ,@body)
+       (do-symbols (symbol)
+         (unintern symbol)))))
+
+(defun read-toplevel-package (stream file)
+  "Read and parse a Coalton toplevel package form."
+  (with-parser-package
+    (handler-bind ((cursor:syntax-error
+                     (lambda (syntax-error)
+                       (cursor:parse-error file
+                                           "Malformed package declaration"
+                                           syntax-error))))
+      (multiple-value-bind (form presentp)
+          (maybe-read-form stream *coalton-eclector-client*)
+        (unless presentp
+          (cursor:span-error (cons (- (file-position stream) 2)
+                                   (- (file-position stream) 1))
+                      "missing package form"))
+        (parse-package (cursor:make-cursor form))))))
+
+(defun make-defpackage (package)
+  "Generate a Lisp defpackage form from a Caolton toplevel-package structure."
+  `(defpackage ,(toplevel-package-name package)
+     (:use "COALTON" ,@(toplevel-package-import package))
+     ,@(mapcar (lambda (form)
+                 `(:import-from ,@form))
+               (toplevel-package-import-from package))
+     (:local-nicknames ,@(toplevel-package-import-as package))
+     (:export ,@(toplevel-package-export package))))
+
+;; The version of uiop:define-package that ships with SBCL doesn't
+;; support package local nicknames. This could be remedied by
+;; depending on trivial-package-nicknames, but evalling a defpackage
+;; form is good enough to get predictable behavior from supported
+;; platforms. This may be worth revisiting in the future if there trun
+;; out to be places where package definition behavior should diverge
+;; from that of common lisp.
+
+(defun lisp-package (package)
+  "Create a Lisp package by evaluating the defpackage representation of a PACKAGE form."
+  (eval (make-defpackage package)))
+
+(defun program-lisp-package (program)
+  "Return the Lisp package associated with PROGRAM, or current *PACKAGE* if none was specified."
+  (if (program-package program)
+      (lisp-package (program-package program))
+      *package*))
+
+;; end package support
 
 (defun parse-toplevel-form (form program attributes file)
   (declare (type cst:cst form)
@@ -629,8 +712,6 @@ consume all attributes"))))
                  :message "Malformed toplevel form"
                  :primary-note "unexpected list")))
 
-
-
   (case (cst:raw (cst:first form))
     ((coalton:monomorphize)
      (vector-push-extend
@@ -638,7 +719,6 @@ consume all attributes"))))
        (parse-monomorphize form file)
        form)
       attributes)
-
      nil)
 
     ((coalton:repr)
@@ -647,7 +727,6 @@ consume all attributes"))))
        (parse-repr form file)
        form)
       attributes)
-
      nil)
 
     ((coalton:define)
@@ -1857,7 +1936,7 @@ consume all attributes")))
                  :message "Unexpected form"
                  :primary-note "expected an identifier")))
 
-  (when (string= "_" (symbol-name (cst:raw form)))
+  (when (string= "_" (cst:raw form))
     (error 'parse-error
            :err (se:source-error
                  :span (cst:source form)

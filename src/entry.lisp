@@ -1,6 +1,8 @@
 (defpackage #:coalton-impl/entry
   (:use
    #:cl)
+  (:shadow
+   #:compile)
   (:local-nicknames
    (#:se #:source-error)
    (#:settings #:coalton-impl/settings)
@@ -14,7 +16,8 @@
    #:*global-environment*
    #:entry-point                        ; FUNCTION
    #:expression-entry-point             ; FUNCTION
-   #:compile-coalton                    ; FUNCTION
+   #:codegen                            ; FUNCTION
+   #:compile                            ; FUNCTION
    #:compile-coalton-toplevel           ; FUNCTION
    #:compile-to-lisp                    ; FUNCTION
    ))
@@ -26,7 +29,7 @@
 (defun entry-point (program)
   (declare (type parser:program program))
 
-  (let* ((*package* (parser:program-package program))
+  (let* ((*package* (parser:program-lisp-package program))
 
          (program (parser:rename-variables program))
 
@@ -218,56 +221,56 @@
             `(error "~A was compiled in development mode but loaded in release."
                     ,(or *compile-file-pathname* *load-truename*))))))
 
-(defun print-form (stream form)
+(defun print-form (stream form &optional (package "CL"))
   "Print a FORM to a STREAM, separated by 2 lines."
   (with-standard-io-syntax
-    (let ((*package* (find-package "CL")))
+    (let ((*package* (find-package package))
+          (*print-case* ':downcase)
+          (*print-pretty* t)
+          (*print-right-margin* 80))
       (prin1 form stream)
       (terpri stream)
       (terpri stream))))
 
-(defun compile-to-lisp (name input output)
-  "Read Coalton source from INPUT and write Lisp source to OUTPUT."
-  (parser:with-reader-context input
+(defun compile-to-lisp (stream name output)
+  "Read Coalton source from STREAM and write Lisp source to OUTPUT. NAME may be the filename related to the input stream."
+  (declare (optimize (debug 3)))
+  (parser:with-reader-context stream
     (with-environment-updates updates
-      (let* ((file (se:make-file
-                    :stream input
-                    :name name))
-             (program (entry-point (parser:read-program input file :mode :file))))
+      (let* ((file (se:make-file :stream stream
+                                 :name name))
+             (program (parser:read-program stream file ':file))
+             (program-text (entry-point program))
+             (program-package (parser:program-package program))
+             (package-name (parser:toplevel-package-name program-package)))
         (print-form output (make-prologue))
         (print-form output (make-environment-updater updates))
-        (print-form output program)))))
+        (print-form output (parser:make-defpackage program-package))
+        (print-form output `(in-package ,package-name))
+        ;; coalton-impl/codegen/program:compile-translation-unit wraps
+        ;; definitions in progn to provide a single expression as the
+        ;; macroexpansion of coalton-toplevel: unwrap for better
+        ;; readability
+        (dolist (form (cdr program-text))
+          (print-form output form package-name))))))
 
-(defun compile-coalton (coal-file &key (output-file nil) (format :default))
-  "Compile a Coalton file. The FORMAT keyword argument controls how the output is generated:
+(defun codegen (stream name)
+  "Compile Coalton source from STREAM and return Lisp program text. NAME may be the filename related to the input stream."
+  (with-output-to-string (output)
+    (compile-to-lisp stream name output)))
 
-  :DEFAULT Generate Lisp source, and compile immediately to .fasl. If no output file is specified, compiled Lisp code will be written to a temporary file, and that path will be returned.
-  :SOURCE  Write compiled Lisp code to console or specified output file."
-  (with-open-file (stream coal-file
-                          :direction ':input
-                          :element-type 'character)
-    (let* ((coal-stream (stream:make-char-position-stream stream))
-           (coal-file-name (etypecase coal-file
-                             (pathname (pathname-name coal-file))
-                             (string coal-file))))
-      (ecase format
-        (:default
-         (uiop:with-temporary-file (:stream lisp-stream
-                                    :pathname lisp-file
-                                    :suffix "lisp"
-                                    :direction ':output
-                                    :keep t)
-           (compile-to-lisp coal-file-name coal-stream lisp-stream)
-           :close-stream
-           (compile-file lisp-file :output-file output-file)))
-        (:source
-         (cond
-           (output-file
-            (with-open-file (lisp-stream output-file
-                                         :direction ':output
-                                         :element-type 'character
-                                         :if-exists ':supersede)
-              (compile-to-lisp coal-file-name coal-stream lisp-stream)))
+(defun compile (stream name &key (load t) (output-file nil))
+   "Compile Coalton code in STREAM, returning the pathname of the generated .fasl file. If OUTPUT-FILE is nil, the built-in compiler default output location will be used."
+   (uiop:with-temporary-file (:stream lisp-stream
+                              :pathname lisp-file
+                              :type "lisp"
+                              :direction ':output)
+     (compile-to-lisp stream name lisp-stream)
+     :close-stream
+     (cond ((null output-file)
+            (setf output-file (compile-file lisp-file)))
            (t
-            (with-output-to-string (lisp-stream)
-              (compile-to-lisp coal-file-name coal-stream lisp-stream)))))))))
+            (compile-file lisp-file :output-file output-file)))
+     (when load
+       (load output-file))
+     output-file))

@@ -72,17 +72,17 @@ Used to forbid reading while inside quasiquoted forms.")
       (case (cst:raw first-form)
         (coalton:coalton-toplevel
           (with-coalton-file (file stream)
-            (entry:compile-coalton-toplevel (parser:read-program stream file :mode ':toplevel-macro))))
+            (entry:compile-coalton-toplevel (parser:read-program stream file ':macro))))
 
         (coalton:coalton-codegen
           (with-coalton-file (file stream)
             (let ((settings:*emit-type-annotations* nil))
-              `',(entry:entry-point (parser:read-program stream file :mode ':toplevel-macro)))))
+              `',(entry:entry-point (parser:read-program stream file ':macro)))))
 
         (coalton:coalton-codegen-types
           (with-coalton-file (file stream)
             (let ((settings:*emit-type-annotations* t))
-              `',(entry:entry-point (parser:read-program stream file :mode :toplevel-macro)))))
+              `',(entry:entry-point (parser:read-program stream file ':macro)))))
 
         (coalton:coalton-codegen-ast
           (with-coalton-file (file stream)
@@ -91,7 +91,7 @@ Used to forbid reading while inside quasiquoted forms.")
                    (codegen:*codegen-hook* (lambda (op &rest args)
                                              (when (eql op ':AST)
                                                (push args ast)))))
-              (entry:entry-point (parser:read-program stream file :mode ':toplevel-macro))
+              (entry:entry-point (parser:read-program stream file ':macro))
               (loop :for (name type value) :in (nreverse ast)
                     :do (format t "~A :: ~A~%~A~%~%~%" name type value))))
           nil)

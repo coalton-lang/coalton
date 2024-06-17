@@ -1,21 +1,15 @@
-;;;; coalton.asd
-
-(in-package :asdf)
-
-;; ASDF Coalton component type
-;;
-;; Adds an asdf component that supports compiling files with a .coal
-;; extension.
-
-(defclass coalton-file (cl-source-file)
-  ((type :initform "coal")))
-
-;;
-;; This class is defined in the ASDF package, so that the keyword :coalton-file works.
-;;
-;; see: https://github.com/fare/asdf/blob/master/doc/best_practices.md#using-asdf-extensions
-
-(in-package :uiop)
+;;; This is coalton.asd, the toplevel coalton system definition.
+;;;
+;;; While it would be more convenient to put all of Coalton's
+;;; dependencies into a single file, the need to define an ASDF
+;;; extension for Coalton source files prevents that. Specifically,
+;;; coalton/library's system definition contains a
+;;; :defsystem-depends-on clause, and though it would be nice to to be
+;;; able call that dependency 'coalton/asdf', ASDF signals a
+;;; circular dependency error, claiming that it depends on 'coalton'.
+;;;
+;;; The asdf extension in turn requires access to the compiler. so
+;;; coalton-asdf and coalton-compiler live in their own .asd files.
 
 (asdf:defsystem #:coalton
   :description "An efficient, statically typed functional programming language that supercharges Common Lisp. "
@@ -23,126 +17,8 @@
   :license "MIT"
   :version (:read-file-form "VERSION.txt")
   :in-order-to ((asdf:test-op (asdf:test-op #:coalton/tests)))
-  :depends-on (#:coalton/compiler
+  :depends-on (#:coalton-compiler
                #:coalton/library))
-
-(asdf:defsystem #:coalton/compiler
-  :description "The Coalton compiler."
-  :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
-  :license "MIT"
-  :version (:read-file-form "VERSION.txt")
-
-  :around-compile (lambda (compile)
-                    (let (#+sbcl (sb-ext:*derive-function-types* t)
-                          #+sbcl (sb-ext:*block-compile-default* :specified))
-                      (funcall compile)))
-  :depends-on (#:alexandria
-               #:fset
-               #:float-features
-               #:eclector
-               #:concrete-syntax-tree
-               #:eclector-concrete-syntax-tree
-               #:named-readtables
-               #:source-error
-               #:trivial-gray-streams)
-  :pathname "src/"
-  :serial t
-  :components ((:file "package")
-               (:file "settings")
-               (:file "utilities")
-               (:file "stream")
-               (:file "global-lexical")
-               (:file "constants")
-               (:module "algorithm"
-                :serial t
-                :components ((:file "tarjan-scc")
-                             (:file "immutable-map")
-                             (:file "immutable-listmap")
-                             (:file "package")))
-               (:module "parser"
-                :serial t
-                :components ((:file "base")
-                             (:file "reader")
-                             (:file "types")
-                             (:file "pattern")
-                             (:file "macro")
-                             (:file "expression")
-                             (:file "toplevel")
-                             (:file "collect")
-                             (:file "renamer")
-                             (:file "binding")
-                             (:file "type-definition")
-                             (:file "package")))
-               (:module "runtime"
-                :serial t
-                :components ((:file "function-entry")
-                             (:file "package")))
-               (:module "typechecker"
-                :serial t
-                :components ((:file "base")
-                             (:file "kinds")
-                             (:file "types")
-                             (:file "substitutions")
-                             (:file "predicate")
-                             (:file "scheme")
-                             (:file "type-errors")
-                             (:file "unify")
-                             (:file "fundeps")
-                             (:file "map")
-                             (:file "environment")
-                             (:file "lisp-type")
-                             (:file "context-reduction")
-                             (:file "stage-1")
-                             (:file "pattern")
-                             (:file "expression")
-                             (:file "traverse")
-                             (:file "toplevel")
-                             (:file "binding")
-                             (:file "accessor")
-                             (:file "partial-type-env")
-                             (:file "parse-type")
-                             (:file "define-type")
-                             (:file "define-class")
-                             (:file "tc-env")
-                             (:file "define")
-                             (:file "define-instance")
-                             (:file "specialize")
-                             (:file "translation-unit")
-                             (:file "package")))
-               (:module "analysis"
-                :serial t
-                :components ((:file "pattern-exhaustiveness")
-                             (:file "unused-variables")
-                             (:file "underapplied-values")
-                             (:file "analysis")
-                             (:file "package")))
-               (:module "codegen"
-                :serial t
-                :components ((:file "pattern")
-                             (:file "ast")
-                             (:file "ast-substitutions")
-                             (:file "resolve-instance")
-                             (:file "typecheck-node")
-                             (:file "hoister")
-                             (:file "transformations")
-                             (:file "translate-expression")
-                             (:file "translate-instance")
-                             (:file "struct-or-class")
-                             (:file "codegen-pattern")
-                             (:file "codegen-type-definition")
-                             (:file "codegen-expression")
-                             (:file "codegen-class")
-                             (:file "monomorphize")
-                             (:file "optimizer")
-                             (:file "program")
-                             (:file "package")))
-               (:file "unlock-package" :if-feature :sb-package-locks)
-               (:file "entry")
-               (:file "reader")
-               (:file "debug")
-               (:file "faux-macros")
-               (:file "language-macros")
-               (:file "lock-package" :if-feature :sb-package-locks)))
 
 (asdf:defsystem #:coalton/library
   :description "The Coalton standard library."
@@ -153,7 +29,8 @@
                     (let (#+sbcl (sb-ext:*derive-function-types* t)
                           #+sbcl (sb-ext:*block-compile-default* :specified))
                       (funcall compile)))
-  :depends-on (#:coalton/compiler
+  :defsystem-depends-on (#:coalton-asdf)
+  :depends-on (#:coalton-compiler
                #:coalton/hashtable-shim
                #:trivial-garbage
                #:alexandria)
@@ -336,6 +213,7 @@
   :pathname "tests/"
   :serial t
   :components ((:file "package")
+               (:file "loader")
                (:file "utilities")
                (:file "stream-tests")
                (:file "tarjan-scc-tests")
@@ -343,6 +221,7 @@
                (:file "error-tests")
                (:file "parser-tests")
                (:file "entry-tests")
+               (:file "toplevel-tests")
                (:file "type-inference-tests")
                (:file "fundep-tests")
                (:file "fundep-fib-test")

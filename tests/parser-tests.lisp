@@ -14,7 +14,7 @@
                                      :external-format :utf-8)
                (let ((stream (stream:make-char-position-stream stream)))
                  (parser:with-reader-context stream
-                   (parser:read-program stream (se:make-file :stream stream :name (namestring file)) :mode :file)))))
+                   (parser:read-program stream (se:make-file :stream stream :name (namestring file)) ':file)))))
 
            (parse-error-text (file)
              (with-open-file (stream file
@@ -25,7 +25,7 @@
                  (handler-case
                      (parser:with-reader-context stream
                        (entry:entry-point
-                        (parser:read-program stream (se:make-file :stream stream :name "test") :mode :file))
+                        (parser:read-program stream (se:make-file :stream stream :name "test") ':file))
                        "no errors")
                    (se:source-base-error (c)
                      (princ-to-string c)))))))
@@ -42,3 +42,6 @@
 
     (dolist (file (test-files "tests/parser-test-files/good-files/*.coal"))
       (parse-file file))))
+
+(deftest test-parse-package-suite ()
+  (run-suite "tests/parser-test-files/package.txt"))
