@@ -1,49 +1,39 @@
 (in-package #:coalton-tests)
 
 (defun compile-test-file ()
-  (test-file "examples/small-coalton-programs/src/classical.coal"))
+  (test-file "examples/small-coalton-programs/src/fact-fib.coal"))
+
+(defun source-forms (string)
+  (with-input-from-string (stream string)
+    (loop :for form := (read stream nil nil)
+          :while form
+          :collect form)))
 
 (deftest test-compile-to-lisp ()
-  "Test that the Coalton compiler compiles a test file into Lisp source."
-  (let ((source (entry:compile-coalton (compile-test-file) :format ':source)))
-    (with-input-from-string (stream source)
-      (let ((prologue (read stream))
-            (env (read stream))
-            (defs (read stream)))
-        (is (eql 'eval-when (first prologue)))
-        (is (eql 'COALTON-IMPL/TYPECHECKER/ENVIRONMENT:SET-VALUE-TYPE
-                 (first (third (first (cddr env))))))
-        (is (string= "FACT"
-                     (symbol-name (second (fourth defs)))))))))
-
-;; Package needs definition outside of .coal test file until the
-;; native package form supports the definition of imports and exports.
-
-(defpackage #:small-coalton-programs/classical
-  (:use
-   #:coalton
-   #:coalton-prelude
-   #:coalton-library/math)
-  (:local-nicknames (#:list #:coalton-library/list))
-  (:export
-   #:fact))
+  "Test that the Coalton compiler compiles a test file into something that looks like Lisp source."
+  (with-open-file (input (compile-test-file) :direction ':input)
+    (let ((source-form-types (mapcar #'first
+                                     (source-forms (entry:codegen input "test")))))
+      (dolist (expect-type '(defpackage in-package defun eval-when let setf))
+        (is (position expect-type source-form-types)
+            "Missing expected ~A form in generated code" expect-type)))))
 
 (deftest test-compile-to-fasl ()
   "Test that the Coalton compiler compiles a test file into a working .fasl that persists environment updates."
-  (fmakunbound 'small-coalton-programs/classical:fact)
-  (setf entry:*global-environment*
-        (tc:unset-function entry:*global-environment*
-                           'small-coalton-programs/classical:fact))
-  (let ((fasl-file (merge-pathnames (format nil "~A-test.fasl" (gensym))
-                                    (uiop:temporary-directory))))
-    (entry:compile-coalton (compile-test-file)
-                           :output-file fasl-file
-                           :format ':default)
-    (load fasl-file :verbose t :print t)
-    (is (= 120 (small-coalton-programs/classical:fact 5)))
-    (is (equalp (tc:make-function-env-entry
-                 :name 'small-coalton-programs/classical:fact
-                 :arity 1)
-                (tc:lookup-function entry:*global-environment*
-                                   'small-coalton-programs/classical:fact
-                                   :no-error t)))))
+  (flet ((test-sym ()
+           (let ((p (find-package "SMALL-COALTON-PROGRAMS/FACT-FIB")))
+             (when p
+               (intern "FACT" p)))))
+    (let ((fact (test-sym)))
+      (fmakunbound fact)
+      (setf entry:*global-environment* (tc:unset-function entry:*global-environment* fact)))
+    (with-open-file (stream (compile-test-file))
+      (entry:compile stream "test" :load t)
+      (let ((fact (test-sym)))
+        (is (fboundp fact)
+            "Test function was bound as side effect of loading fasl")
+        (is (= 120 (funcall fact 5))
+            "Test function is callable")
+        (is (equalp (tc:make-function-env-entry :name fact :arity 1)
+                    (tc:lookup-function entry:*global-environment* fact :no-error t))
+            "Environment was restored")))))
