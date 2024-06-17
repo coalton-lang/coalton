@@ -142,6 +142,7 @@
    #:program-classes                             ; ACCESSOR
    #:program-instances                           ; ACCESSOR
    #:program-specializations                     ; ACCESSOR
+   #:program-lisp                                ; ACCESSOR
    #:program-lisp-package                        ; FUNCTION
    #:make-defpackage                             ; FUNCTION
    #:parse-toplevel-form                         ; FUNCTION
@@ -441,6 +442,7 @@
   (defines         (util:required 'defines)         :type toplevel-define-list          :read-only nil)
   (classes         (util:required 'classes)         :type toplevel-define-class-list    :read-only nil)
   (instances       (util:required 'instances)       :type toplevel-define-instance-list :read-only nil)
+  (lisp            (make-array 0 :adjustable t :fill-pointer t)                         :read-only nil)
   (specializations (util:required 'specializations) :type toplevel-specialize-list      :read-only nil))
 
 (defun read-program (stream file &key mode)
@@ -1047,6 +1049,11 @@ Ensure the package exists, import the COALTON package and required dependencies,
 
        (push instance (program-instances program))
        t))
+
+    ((coalton:lisp-toplevel)
+     (loop :for form :in (cst:raw (cst:rest form))
+           :do (vector-push-extend form (program-lisp program)))
+     t)
 
     ((coalton:specialize)
      (let ((spec (parse-specialize form file)))

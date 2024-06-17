@@ -26,6 +26,7 @@
    #:define-class
    #:define-instance
    #:repr
+   #:lisp-toplevel
    #:monomorphize
    #:specialize
    #:unable-to-codegen)

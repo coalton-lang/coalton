@@ -71,6 +71,7 @@
                        :definitions toplevel-definitions
                        :classes class-definitions
                        :instances toplevel-instances
+                       :lisp (coerce (parser:program-lisp program) 'list)
                        :package *package*)))
 
                 (loop :for define :in (parser:program-defines program)
