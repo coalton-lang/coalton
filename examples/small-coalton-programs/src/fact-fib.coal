@@ -1,0 +1,24 @@
+(package small-coalton-programs/fact-fib
+  "The venerable fact and fib functions"
+  (import
+    coalton-prelude)
+  (export
+    fact
+    fib))
+
+(declare fact (Integer -> Integer))
+(define (fact n)
+  "Compute the factorial of a given integer"
+  (match n
+    (0 1)
+    (_ (* n
+          (fact (- n 1))))))
+
+(declare fib (Integer -> Integer))
+(define (fib n)
+  "Compute the nth Fibonacci number"
+  (match n
+    (0 0)
+    (1 1)
+    (_ (+ (fib (1- n))
+          (fib (- n 2))))))
