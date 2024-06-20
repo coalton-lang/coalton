@@ -281,8 +281,4 @@
                              :direction ':output)
     (compile-to-lisp "ephemeral" stream lisp-stream)
     :close-stream
-    (uiop:with-temporary-file (:pathname fasl-file
-                               :type "fasl"
-                               :direction ':output)
-      (compile-file lisp-file :output-file fasl-file)
-      (load fasl-file))))
+    (load (compile-file lisp-file))))
