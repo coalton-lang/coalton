@@ -986,22 +986,6 @@
                           symbol
                           #'make-function-environment)))
 
-(define-env-updater set-function-arity (env symbol arity)
-  (declare (type environment env)
-           (type symbol symbol)
-           (type fixnum arity))
-  (let ((prev (lookup-function env symbol :no-error t)))
-    (update-environment
-     env
-     :function-environment (immutable-map-set
-                            (environment-function-environment env)
-                            symbol
-                            (make-function-env-entry
-                             :name symbol
-                             :arity arity
-                             :inline-p (and prev (function-env-entry-inline-p prev)))
-                            #'make-function-environment))))
-
 (defun lookup-name (env symbol &key no-error)
   (declare (type environment env)
            (type symbol symbol))
