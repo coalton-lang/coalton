@@ -52,7 +52,7 @@
 
             ;; HACK: this load bearing reverse should be replaced with an actual solution
             (loop :for instance :in (reverse (tc:translation-unit-instances translation-unit))
-                  :append (translate-instance instance inline-p-table env))))
+                  :append (translate-instance instance env))))
 
          (definition-names
            (mapcar #'car definitions)))

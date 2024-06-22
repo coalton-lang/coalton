@@ -235,8 +235,7 @@
             (:include node)
             (:copier nil))
   (params   (util:required 'vars)     :type pattern-list :read-only t)
-  (body     (util:required 'body)     :type node-body    :read-only t)
-  (inline-p (util:required 'inline-p) :type boolean      :read-only t))
+  (body     (util:required 'body)     :type node-body    :read-only t))
 
 (defstruct (node-let-binding
             (:copier nil))
@@ -471,8 +470,7 @@
    :type (tc:apply-substitution subs (node-type node))
    :source (node-source node)
    :params (tc:apply-substitution subs (node-abstraction-params node))
-   :body (tc:apply-substitution subs (node-abstraction-body node))
-   :inline-p (node-abstraction-inline-p node)))
+   :body (tc:apply-substitution subs (node-abstraction-body node))))
 
 (defmethod tc:apply-substitution (subs (node node-let-binding))
   (declare (type tc:substitution-list subs)

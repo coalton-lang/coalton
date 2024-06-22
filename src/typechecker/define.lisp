@@ -649,8 +649,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                     :type (tc:qualify nil type)
                     :source (parser:node-source node)
                     :params params
-                    :body body-node
-                    :inline-p (parser:node-abstraction-inline-p node))
+                    :body body-node)
                    subs)))
             (error:coalton-internal-type-error ()
               (standard-expression-type-mismatch-error node file subs expected-type ty)))))))
@@ -2557,8 +2556,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
      :name name
      :params params
      :body value
-     :source (parser:toplevel-define-source binding)
-     :inline-p (parser:toplevel-define-inline-p binding)))
+     :source (parser:toplevel-define-source binding)))
 
   (:method ((binding parser:node-let-binding) name value params)
     (declare (type node-variable name)
@@ -2583,8 +2581,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
      :name name
      :params params
      :body value
-     :source (parser:instance-method-definition-source binding)
-     :inline-p (parser:instance-method-definition-inline-p binding))))
+     :source (parser:instance-method-definition-source binding))))
 
 (defgeneric attach-explicit-binding-type (binding explicit-type)
   (:method ((binding toplevel-define) explicit-type)
@@ -2598,8 +2595,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
            :source (node-source (toplevel-define-name binding)))
     :params (toplevel-define-params binding)
     :body (toplevel-define-body binding)
-    :source (toplevel-define-source binding)
-    :inline-p (toplevel-define-inline-p binding)))
+    :source (toplevel-define-source binding)))
 
   (:method ((binding node-let-binding) explicit-type)
     (declare (type tc:qualified-ty explicit-type)
@@ -2624,8 +2620,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
             :source (node-source (instance-method-definition-name binding)))
      :params (instance-method-definition-params binding)
      :body (instance-method-definition-body binding)
-     :source (instance-method-definition-source binding)
-     :inline-p (instance-method-definition-inline-p binding))))
+     :source (instance-method-definition-source binding))))
 
 ;;; When infering the types of bindings in a recursive binding group,
 ;;; references to those bindings will not yet have predicates. If
@@ -2659,8 +2654,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                (toplevel-define-body binding)
                (make-traverse-block
                 :variable #'rewrite-variable-ref))
-        :source (toplevel-define-source binding)
-        :inline-p (toplevel-define-inline-p binding)))
+        :source (toplevel-define-source binding)))
 
       (node-let-binding
        (make-node-let-binding
