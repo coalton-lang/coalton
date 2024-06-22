@@ -299,9 +299,13 @@
           ;; add it to the function environment
           (if (not (= (tc:constructor-entry-arity ctor) 0))
               (setf env
-                    (tc:set-function-arity env
-                                           ctor-name
-                                           (tc:constructor-entry-arity ctor)))
+                    (tc:set-function
+                     env
+                     ctor-name
+                     (tc:make-function-env-entry
+                      :name ctor-name
+                      :arity (tc:constructor-entry-arity ctor)
+                      :inline-p nil)))
 
               ;; If the constructor does not take
               ;; parameters then remove it from the
@@ -530,7 +534,6 @@
                                    :var-names nil
                                    :body (list (util:runtime-quote (type-definition-runtime-type type)))))
                 :source source
-                ;; FIXME: Is NIL correct?
                 :inline-p nil))
      :source source
      :head-src source

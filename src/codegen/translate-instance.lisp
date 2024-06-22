@@ -51,6 +51,7 @@
            (loop :for (method-name . type) :in (tc:ty-class-unqualified-methods class)
                  :for binding := (gethash method-name (tc:toplevel-define-instance-methods instance))
                  :for codegen-sym := (gethash method-name method-codegen-syms)
+
                  :collect (cons codegen-sym (translate-toplevel binding env))))
 
          (unqualified-method-definitions

@@ -44,7 +44,6 @@
    #:make-node-abstraction              ; CONSTRUCTOR
    #:node-abstraction-params            ; ACCESSOR
    #:node-abstraction-body              ; ACCESSOR
-   #:node-abstraction-inline-p          ; ACCESSOR
    #:node-abstraction-p                 ; FUNCTION
    #:node-let-binding                   ; STRUCT
    #:make-node-let-binding              ; CONSTRUCTOR
@@ -120,13 +119,13 @@
    #:node-while-let                     ; STRUCT
    #:make-node-while-let                ; CONSTRUCTOR
    #:node-while-let-label               ; ACCESSOR
-   #:node-while-let-pattern             ; ACCESSOR
+   #:node-while-let-pattern             ; ACCESSOR 
    #:node-while-let-expr                ; ACCESSOR
    #:node-while-let-body                ; ACCESSOR
    #:node-for                           ; STRUCT
    #:make-node-for                      ; CONSTRUCTOR
    #:node-for-label                     ; ACCESSOR
-   #:node-for-pattern                   ; ACCESSOR
+   #:node-for-pattern                   ; ACCESSOR 
    #:node-for-expr                      ; ACCESSOR
    #:node-for-body                      ; ACCESSOR
    #:node-loop                          ; STRUCT
@@ -234,8 +233,8 @@
 (defstruct (node-abstraction
             (:include node)
             (:copier nil))
-  (params   (util:required 'vars)     :type pattern-list :read-only t)
-  (body     (util:required 'body)     :type node-body    :read-only t))
+  (params  (util:required 'params) :type pattern-list :read-only t)
+  (body    (util:required 'body)   :type node-body    :read-only t))
 
 (defstruct (node-let-binding
             (:copier nil))
@@ -359,7 +358,7 @@
   (label (util:required 'label) :type keyword   :read-only t)
   (body  (util:required 'body)  :type node-body :read-only t))
 
-(defstruct (node-break
+(defstruct (node-break 
             (:include node)
             (:copier nil))
   (label (util:required 'label) :type keyword :read-only t))

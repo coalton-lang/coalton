@@ -109,8 +109,7 @@
        (make-node-abstraction
         :params (rename-variables-generic% (node-abstraction-params node) new-ctx)
         :body (rename-variables-generic% (node-abstraction-body node) new-ctx)
-        :source (node-source node)
-        :inline-p (node-abstraction-inline-p node))
+        :source (node-source node))
        ctx)))
 
   (:method ((node node-let-binding) ctx)

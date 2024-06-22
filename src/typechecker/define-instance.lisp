@@ -128,7 +128,10 @@
                 :docstring docstring)))
 
         (if context
-            (setf env (tc:set-function-arity env instance-codegen-sym (length context)))
+            (setf env (tc:set-function env instance-codegen-sym (tc:make-function-env-entry
+                                                                 :name instance-codegen-sym
+                                                                 :arity (length context)
+                                                                 :inline-p nil)))
             (setf env (tc:unset-function env instance-codegen-sym)))
 
         (when (tc:ty-class-fundeps class)

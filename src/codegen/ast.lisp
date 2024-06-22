@@ -153,8 +153,8 @@
 
 (defstruct (node-abstraction (:include node))
   "Lambda literals (fn (x) x)"
-  (vars     (util:required 'vars)     :type parser:identifier-list :read-only t)
-  (subexpr  (util:required 'subexpr)  :type node                   :read-only t))
+  (vars    (util:required 'vars)    :type parser:identifier-list :read-only t)
+  (subexpr (util:required 'subexpr) :type node                   :read-only t))
 
 (defstruct (node-let (:include node))
   "Introduction of local mutually-recursive bindings (let ((x 2)) (+ x x))"

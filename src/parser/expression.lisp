@@ -45,7 +45,6 @@
    #:make-node-abstraction              ; CONSTRUCTOR
    #:node-abstraction-params            ; ACCESSOR
    #:node-abstraction-body              ; ACCESSOR
-   #:node-abstraction-inline-p          ; ACCESSOR
    #:node-abstraction-p                 ; FUNCTION
    #:node-let-binding                   ; STRUCT
    #:make-node-let-binding              ; CONSTRUCTOR
@@ -171,7 +170,7 @@
 
 (declaim (type util:symbol-list *loop-label-context*))
 (defvar *loop-label-context* nil
-  "A list of known labels encountered during parse.
+  "A list of known labels encountered during parse. 
 
 Parsing (BREAK label) and (CONTINUE label) forms fails unless the label is found in
 this list.
@@ -203,7 +202,7 @@ Rebound to NIL parsing an anonymous FN.")
 ;;;;             | node-literal
 ;;;;             | node-abstraction
 ;;;;             | node-let
-;;;;             | node-lisp
+;;;;             | node-lisp 
 ;;;;             | node-match
 ;;;;             | node-progn
 ;;;;             | node-the
@@ -343,9 +342,8 @@ Rebound to NIL parsing an anonymous FN.")
 (defstruct (node-abstraction
             (:include node)
             (:copier nil))
-  (params   (util:required 'params)   :type pattern-list :read-only t)
-  (body     (util:required 'body)     :type node-body    :read-only t)
-  (inline-p (util:required 'inline-p) :type boolean      :read-only t))
+  (params (util:required 'params) :type pattern-list :read-only t)
+  (body   (util:required 'body)   :type node-body    :read-only t))
 
 (defstruct (node-let-binding
             (:copier nil))
@@ -641,8 +639,7 @@ Rebound to NIL parsing an anonymous FN.")
          (make-node-abstraction
           :params params
           :body body
-          :source (cst:source form)
-          :inline-p nil))))
+          :source (cst:source form)))))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:let (cst:raw (cst:first form))))
@@ -667,7 +664,7 @@ Rebound to NIL parsing an anonymous FN.")
                     :message "Malformed let"
                     :primary-note "expected let body")))
 
-     (unless (cst:proper-list-p (cst:second form))
+     (unless (cst:proper-list-p (cst:second form)) 
        (error 'parse-error
               :err (coalton-error
                     :span (cst:source (cst:second form))
@@ -978,7 +975,7 @@ Rebound to NIL parsing an anonymous FN.")
                       :message "Malformed while expression"
                       :primary-note "expected body")))
        (let ((*loop-label-context*
-               (if label
+               (if label 
                    (list* label const:+default-loop-label+ *loop-label-context*)
                    (cons const:+default-loop-label+ *loop-label-context*))))
 
@@ -1000,7 +997,7 @@ Rebound to NIL parsing an anonymous FN.")
                       :file file
                       :highlight :end
                       :message "Malformed while-let expression"
-                      :primary-note  "expected pattern")))
+                      :primary-note  "expected pattern"))) 
 
        ;; (while-let [label] pattern)
        (unless (and (cst:consp (cst:rest labelled-body))
@@ -1012,7 +1009,7 @@ Rebound to NIL parsing an anonymous FN.")
                       :highlight :end
                       :message "Malformed while-let expression"
                       :primary-note  "expected =")))
-
+       
        ;; (when-let [label] pattern =)
        (unless (cst:consp (cst:nthrest 2 labelled-body))
          (error 'parse-error
@@ -1022,7 +1019,7 @@ Rebound to NIL parsing an anonymous FN.")
                       :highlight :end
                       :message "Malformed while-let expression"
                       :primary-note "expected expression")))
-
+       
        ;; (when-let pattern = expr)
        (unless (cst:consp (cst:nthrest 3 labelled-body))
          (error 'parse-error
@@ -1039,7 +1036,7 @@ Rebound to NIL parsing an anonymous FN.")
          (make-node-while-let
           :source (cst:source form)
           :label (or label const:+default-loop-label+)
-          :pattern (parse-pattern (cst:first labelled-body) file)
+          :pattern (parse-pattern (cst:first labelled-body) file) 
           :expr (parse-expression (cst:third labelled-body) file)
           :body (parse-body (cst:nthrest 3 labelled-body) form file)))))
 
@@ -1093,7 +1090,7 @@ Rebound to NIL parsing an anonymous FN.")
                           :file file
                           :message "Invalid break"
                           :primary-note "break does not appear in an enclosing loop"))))
-
+       
        (make-node-break :source (cst:source form) :label (or label (car *loop-label-context*)))))
 
     ((and (cst:atom (cst:first form))
@@ -1125,9 +1122,9 @@ Rebound to NIL parsing an anonymous FN.")
                           :file file
                           :message "Invalid continue"
                           :primary-note "continue does not appear in an enclosing loop"))))
-
+       
        (make-node-continue :source (cst:source form) :label (or label (car *loop-label-context*)))))
-
+    
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:for (cst:raw (cst:first form))))
@@ -1141,8 +1138,8 @@ Rebound to NIL parsing an anonymous FN.")
                       :file file
                       :highlight :end
                       :message "Malformed for expression"
-                      :primary-note  "expected pattern")))
-
+                      :primary-note  "expected pattern"))) 
+       
        ;; (for [label] pattern)
        (unless (and (cst:consp (cst:rest labelled-body))
                     (cst:atom (cst:second labelled-body))
@@ -1164,7 +1161,7 @@ Rebound to NIL parsing an anonymous FN.")
                       :highlight :end
                       :message "Malformed for expression"
                       :primary-note  "expected expression")))
-
+       
        ;; (for [label] pattern in expr)
        (unless (cst:consp (cst:nthrest 3 labelled-body))
          (error 'parse-error
@@ -1174,7 +1171,7 @@ Rebound to NIL parsing an anonymous FN.")
                       :highlight :end
                       :message "Malformed for expression"
                       :primary-note "exptected body")))
-
+       
        (let ((*loop-label-context*
                (if label
                    (list* label const:+default-loop-label+ *loop-label-context*)
@@ -1182,7 +1179,7 @@ Rebound to NIL parsing an anonymous FN.")
          (make-node-for
           :source (cst:source form)
           :label (or label const:+default-loop-label+)
-          :pattern (parse-pattern (cst:first labelled-body) file)
+          :pattern (parse-pattern (cst:first labelled-body) file) 
           :expr (parse-expression (cst:third labelled-body) file)
           :body (parse-body (cst:nthrest 3 labelled-body) form  file)))))
 
@@ -1327,7 +1324,7 @@ Rebound to NIL parsing an anonymous FN.")
                       :else
                         :do (setf last-node (parse-body-last-node (cst:first nodes) file)))))
 
-
+    
     (make-node-body
      :nodes nodes
      :last-node last-node)))
@@ -1678,11 +1675,11 @@ Rebound to NIL parsing an anonymous FN.")
   "Takes form (HEAD . (MAYBEKEYWORD . REST)) and returns two values,
 either
 
-MAYBEKEYWORD REST
+MAYBEKEYWORD REST 
 
 if MAYBEKEYWORD is a keyword, or else
 
-NIL (MAYBEKEYWORD . REST)
+NIL (MAYBEKEYWORD . REST)  
 
 if (CST:SECOND FORM) is not a keyword."
   (declare (type cst:cst form)
