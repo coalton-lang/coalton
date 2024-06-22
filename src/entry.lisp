@@ -63,6 +63,8 @@
 
               (let ((monomorphize-table (make-hash-table :test #'eq))
 
+                    (inline-p-table (make-hash-table :test #'eq))
+
                     (translation-unit
                       (tc:make-translation-unit
                        :types type-definitions
@@ -83,10 +85,22 @@
                                            monomorphize-table)
                                   t))
 
+                (loop :for define :in (parser:program-defines program)
+                      :when (parser:toplevel-define-inline-p define)
+                        :do (setf (gethash (parser:node-variable-name (parser:toplevel-define-name define))
+                                           inline-p-table)
+                                  t))
+
+                (loop :for declare :in (parser:program-declares program)
+                      :when (parser:toplevel-declare-inline-p declare)
+                        :do (setf (gethash (parser:identifier-src-name (parser:toplevel-declare-name declare))
+                                           inline-p-table)
+                                  t))
+
                 (analysis:analyze-translation-unit translation-unit env file)
 
                 (multiple-value-bind (program env)
-                    (codegen:compile-translation-unit translation-unit monomorphize-table env)
+                    (codegen:compile-translation-unit translation-unit monomorphize-table inline-p-table env)
 
                   (values
                    (if settings:*coalton-skip-update*

@@ -62,6 +62,7 @@
    #:toplevel-declare-source                     ; ACCESSOR
    #:toplevel-declare-list                       ; TYPE
    #:toplevel-declare-monomorphize               ; ACCESSOR
+   #:toplevel-declare-inline-p                   ; ACCESSOR
    #:toplevel-define                             ; STRUCT
    #:make-toplevel-define                        ; CONSTRUCTOR
    #:toplevel-define-name                        ; ACCESSOR
@@ -294,7 +295,8 @@
   (name         (util:required 'name)         :type identifier-src                  :read-only t)
   (type         (util:required 'type)         :type qualified-ty                    :read-only t)
   (source       (util:required 'source)       :type cons                            :read-only t)
-  (monomorphize (util:required 'monomorphize) :type (or null attribute-monomorphize) :read-only nil))
+  (monomorphize (util:required 'monomorphize) :type (or null attribute-monomorphize):read-only nil)
+  (inline-p     (util:required 'inline)       :type (or null attribute-inline)      :read-only nil))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-declare-list-p (x)
@@ -313,7 +315,7 @@
   (body         (util:required 'body)         :type node-body                        :read-only t)
   (source       (util:required 'source)       :type cons                             :read-only t)
   (monomorphize (util:required 'monomorphize) :type (or null attribute-monomorphize) :read-only nil)
-  (inline-p     (util:required 'inline-p)     :type boolean                          :read-only nil))
+  (inline-p     (util:required 'inline-p)     :type (or null attribute-inline)       :read-only nil))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-define-list-p (x)
@@ -705,7 +707,7 @@ consume all attributes"))))
                     (setf monomorphize attribute)
                     (setf monomorphize-form attribute-form))
                    (attribute-inline
-                    (setf inline-p t))))
+                    (setf inline-p attribute))))
 
        (setf (fill-pointer attributes) 0)
        (setf (toplevel-define-monomorphize define) monomorphize)
@@ -1082,6 +1084,7 @@ consume all attributes")))
           :source (cst:source (cst:second form)))
    :type (parse-qualified-type (cst:third form) file)
    :monomorphize nil
+   :inline-p nil
    :source (cst:source form)))
 
 (defun parse-define-type (form file)

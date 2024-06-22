@@ -31,13 +31,12 @@
 
 (in-package #:coalton-impl/codegen/program)
 
-(defun compile-translation-unit (translation-unit monomorphize-table env)
+(defun compile-translation-unit (translation-unit monomorphize-table inline-p-table env)
   (declare (type tc:translation-unit translation-unit)
            (type hash-table monomorphize-table)
            (type tc:environment env))
 
-  (let* ((inline-p-table (make-hash-table))
-         (definitions
+  (let* ((definitions
            (append
             (loop :for define :in (tc:translation-unit-definitions translation-unit)
                   :for name := (tc:node-variable-name (tc:toplevel-define-name define))
@@ -49,8 +48,6 @@
                                 name
                                 (tc:lookup-value-type env name)
                                 (tc:binding-value define)))
-                      (setf (gethash name inline-p-table)
-                            (tc:toplevel-define-inline-p define))
                   :collect (cons name compiled-node))
 
             ;; HACK: this load bearing reverse should be replaced with an actual solution
