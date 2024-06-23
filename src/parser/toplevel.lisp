@@ -377,7 +377,7 @@
   (params    (util:required 'params)    :type pattern-list        :read-only t)
   (body      (util:required 'body)      :type node-body           :read-only t)
   (source    (util:required 'source)    :type cons                :read-only t)
-  (inline-p  (util:required 'inline-p)  :type boolean             :read-only nil))
+  (inline-p  (util:required 'inline-p)  :type (or null attribute-inline) :read-only nil))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun instance-method-definition-list-p (x)
@@ -1582,7 +1582,7 @@ consume all attributes")))
                                                 (if (null (cst:raw (cst:rest form)))
                                                     (progn
                                                       (setq forms (cst:rest forms))
-                                                      t)
+                                                      (parse-inline form file))
                                                     (coalton-error
                                                      :span (cst:source form)
                                                      :file file
@@ -1593,7 +1593,7 @@ consume all attributes")))
                            :collect
                            (progn
                              (when inline-p
-                               (setf (instance-method-definition-inline-p method) t))
+                               (setf (instance-method-definition-inline-p method) inline-p))
                              (setq forms (cst:rest forms))
                              method))))
 

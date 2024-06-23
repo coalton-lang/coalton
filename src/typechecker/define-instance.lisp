@@ -117,6 +117,17 @@
                                 method-name))
                      :finally (return table)))
 
+             (method-inline-p
+               (loop :with table := (make-hash-table :test #'eq)
+                     :for method-def :in (parser:toplevel-define-instance-methods instance)
+                     :for method-name := (parser:node-variable-name
+                                          (parser:instance-method-definition-name method-def))
+                     :for method-inline-p := (parser:instance-method-definition-inline-p method-def)
+                     :do (setf (gethash method-name table)
+                               ;; Convert from attribute inline to boolean
+                               (if method-inline-p t nil))
+                     :finally (return table)))
+
              (docstring (parser:toplevel-define-instance-docstring instance))
 
              (instance-entry
@@ -125,6 +136,7 @@
                 :predicate pred
                 :codegen-sym instance-codegen-sym
                 :method-codegen-syms method-codegen-syms
+                :method-inline-p method-inline-p
                 :docstring docstring)))
 
         (if context

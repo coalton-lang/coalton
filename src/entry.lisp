@@ -97,6 +97,14 @@
                                            inline-p-table)
                                   t))
 
+                (loop :for ty-instance :in ty-instances
+                      :for method-codegen-syms := (tc:ty-class-instance-method-codegen-syms ty-instance)
+                      :for method-inline-p := (tc:ty-class-instance-method-inline-p ty-instance)
+                      :do (maphash (lambda (method-name method-codegen-sym)
+                                     (when (gethash method-name method-inline-p)
+                                       (setf (gethash method-codegen-sym inline-p-table) t)))
+                                   method-codegen-syms))
+
                 (analysis:analyze-translation-unit translation-unit env file)
 
                 (multiple-value-bind (program env)
