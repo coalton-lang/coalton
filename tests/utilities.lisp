@@ -91,3 +91,11 @@ Returns (values SOURCE-PATHNAME COMPILED-PATHNAME)."
        ((,muffle #'muffle-warning))
      (compile-and-load-forms '(,@(when package `((cl:in-package ,package)))
                                ,@coalton-code))))
+
+(defun check-parse (string fn)
+  "Apply FN to a form read from STRING."
+  (with-input-from-string (stream string)
+    (parser:with-reader-context stream
+      (funcall fn
+               (parser:maybe-read-form stream parser::*coalton-eclector-client*)
+               (error:make-coalton-file :stream stream :name "<string>")))))

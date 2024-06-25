@@ -1,6 +1,8 @@
 (defpackage #:coalton-impl/entry
   (:use
    #:cl)
+  (:shadow
+   #:compile)
   (:local-nicknames
    (#:settings #:coalton-impl/settings)
    (#:util #:coalton-impl/util)
@@ -13,6 +15,7 @@
    #:*global-environment*
    #:entry-point                        ; FUNCTION
    #:expression-entry-point             ; FUNCTION
+   #:compile                            ; FUNCTION
    #:compile-coalton                    ; FUNCTION
    #:compile-coalton-toplevel           ; FUNCTION
    ))
@@ -24,7 +27,7 @@
 (defun entry-point (program)
   (declare (type parser:program program))
 
-  (let* ((*package* (parser:program-package program))
+  (let* ((*package* (parser:program-lisp-package program))
 
          (program (parser:rename-variables program))
 
@@ -230,10 +233,13 @@
     (with-environment-updates updates
       (let* ((file (error:make-coalton-file :stream input
                                             :name name))
-             (program (entry-point (parser:read-program input file :mode :file))))
+             (program (parser:read-program input file :mode :file))
+             (program-text (entry-point program)))
         (print-form output (make-prologue))
         (print-form output (make-environment-updater updates))
-        (print-form output program)))))
+        (print-form output (parser:make-defpackage (parser:program-package program)))
+        (print-form output '(in-package :cl))
+        (print-form output program-text)))))
 
 (defun compile-coalton (coal-file &key (output-file nil) (format :default))
   "Compile a Coalton file. The FORMAT keyword argument controls how the output is generated:
@@ -250,9 +256,8 @@
         (:default
          (uiop:with-temporary-file (:stream lisp-stream
                                     :pathname lisp-file
-                                    :suffix "lisp"
-                                    :direction ':output
-                                    :keep t)
+                                    :type "lisp"
+                                    :direction ':output)
            (compile-to-lisp coal-file-name coal-stream lisp-stream)
            :close-stream
            (compile-file lisp-file :output-file output-file)))
@@ -267,3 +272,28 @@
            (t
             (with-output-to-string (lisp-stream)
               (compile-to-lisp coal-file-name coal-stream lisp-stream)))))))))
+
+(defun compile (stream)
+  (uiop:with-temporary-file (:stream lisp-stream
+                             :pathname lisp-file
+                             :type "lisp"
+                             :direction ':output)
+    (compile-to-lisp "ephemeral" stream lisp-stream)
+    :close-stream
+    (uiop:with-temporary-file (:pathname fasl-file
+                               :type "fasl"
+                               :direction ':output)
+      (compile-file lisp-file :output-file fasl-file)
+      (load fasl-file))))
+
+(defun get-ast (stream)
+  "Read Coalton source from STREAM and collect AST of toplevel definitions."
+  (parser:with-reader-context stream
+    (let* ((ast nil)
+           (codegen:*codegen-hook* (lambda (op &rest args)
+                                     (when (eql op :ast)
+                                       (push args ast)))))
+      (let ((file (error:make-coalton-file :stream stream
+                                           :name "<stream>")))
+        (entry-point (parser:read-program stream file :mode :file)))
+      (nreverse ast))))

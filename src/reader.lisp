@@ -3,6 +3,7 @@
    #:cl)
   (:local-nicknames
    (#:cst #:concrete-syntax-tree)
+   (#:codegen #:coalton-impl/codegen)
    (#:settings #:coalton-impl/settings)
    (#:util #:coalton-impl/util)
    (#:error #:coalton-impl/error)
@@ -85,10 +86,15 @@ Used to forbid reading while inside quasiquoted forms.")
 
         (coalton:coalton-codegen-ast
           (with-coalton-file (file stream)
-            (let ((settings:*emit-type-annotations* nil)
-                  (settings:*coalton-dump-ast* t))
+            (let* ((settings:*emit-type-annotations* nil)
+                   (ast nil)
+                   (codegen:*codegen-hook* (lambda (op &rest args)
+                                             (when (eql op :ast)
+                                               (push args ast)))))
               (entry:entry-point (parser:read-program stream file :mode ':toplevel-macro))
-              nil)))
+              (loop :for (name type value) :in (nreverse ast)
+                    :do (format t "~A :: ~A~%~A~%~%~%" name type value))))
+          nil)
 
         (coalton:coalton
           (with-coalton-file (file stream)
