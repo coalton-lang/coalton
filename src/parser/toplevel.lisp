@@ -1745,15 +1745,13 @@ consume all attributes")))
                  :message "Invalid type variable"
                  :primary-note "expected keyword symbol"
                  :help-notes
-                 (cond
-                   ((eq *package* (symbol-package (cst:raw form)))
-                    (list
-                     (make-coalton-error-help
-                      :span (cst:source form)
-                      :replacement
-                      (lambda (existing)
-                        (concatenate 'string ":" existing))
-                      :message "add `:` to symbol")))))))
+                 (list
+                  (make-coalton-error-help
+                   :span (cst:source form)
+                   :replacement
+                   (lambda (existing)
+                     (concatenate 'string ":" existing))
+                   :message "add `:` to symbol")))))
 
   (make-keyword-src
    :name (cst:raw form)
