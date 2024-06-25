@@ -1645,7 +1645,7 @@ consume all attributes")))
               (cst:null (cst:rest (cst:rest (cst:rest method-form)))))
     (error 'parse-error
            :err (coalton-error
-                 :span (cst:source (cst:first (cst:rest (cst:rest method-form))))
+                 :span (cst:source (cst:first (cst:rest (cst:rest (cst:rest method-form)))))
                  :file file
                  :message "Malformed method definition"
                  :primary-note "unexpected trailing form"
@@ -1672,16 +1672,16 @@ consume all attributes")))
                    :span (cst:source (cst:second form))
                    :message "in this class definition")))))
 
-  ;; either list of length 2 or list of length 3 with docstring
-  (unless (or (cst:null (cst:rest (cst:rest method-form)))
-              (and (cst:atom (cst:second method-form))
-                   (stringp (cst:raw (cst:second method-form)))))
+  ;; (m "docstring")
+  (when (and (cst:atom (cst:second method-form))
+             (stringp (cst:raw (cst:second method-form)))
+             (cst:null (cst:rest (cst:rest method-form))))
     (error 'parse-error
            :err (coalton-error
                  :span (cst:source (cst:second method-form))
                  :file file
                  :message "Malformed method definition"
-                 :primary-note "expected docstring"
+                 :primary-note "missing method type"
                  :notes
                  (list
                   (make-coalton-error-note
@@ -1693,6 +1693,25 @@ consume all attributes")))
     (when (and (cst:atom (cst:second method-form))
                (stringp (cst:raw (cst:second method-form))))
       (setf docstring (cst:raw (cst:second method-form))))
+
+    ;; either list of length 2 or list of length 3 with docstring
+    (unless (or (cst:null (cst:rest (cst:rest method-form)))
+                (and (cst:atom (cst:second method-form))
+                     (stringp (cst:raw (cst:second method-form)))))
+      (error 'parse-error
+             :err (coalton-error
+                   :span (cst:source (if docstring
+                                         (cst:fourth method-form)
+                                         (cst:third method-form)))
+                   :file file
+                   :message "Malformed method definition"
+                   :primary-note "unexpected trailing form"
+                   :notes
+                   (list
+                    (make-coalton-error-note
+                     :type :secondary
+                     :span (cst:source (cst:second form))
+                     :message "in this class definition")))))
 
     (make-method-definition
      :name (make-identifier-src
