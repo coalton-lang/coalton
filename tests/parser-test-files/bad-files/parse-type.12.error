@@ -1,5 +1,0 @@
-error: Malformed function type
-  --> test:4:14
-   |
- 4 |  (declare f (T ->))
-   |                ^^ missing return type

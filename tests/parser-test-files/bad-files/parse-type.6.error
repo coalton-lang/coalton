@@ -1,5 +1,0 @@
-error: Malformed type
-  --> test:4:12
-   |
- 4 |  (declare f (=>))
-   |              ^^ unnecessary `=>`

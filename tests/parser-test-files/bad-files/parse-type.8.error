@@ -1,5 +1,0 @@
-error: Malformed type predicate
-  --> test:4:19
-   |
- 4 |  (declare f ((T :a) T => T -> T))
-   |                     ^ expected predicate
