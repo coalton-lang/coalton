@@ -223,13 +223,24 @@ NOTES and HELP-NOTES may optionally be supplied notes and help messages."
       ;; Print the error message and location
       (multiple-value-bind (line-number line-start-index)
           (get-line-from-index file-stream (coalton-error-location error))
-        (format stream
-                "~(~A~): ~A~%  --> ~A:~D:~D~%"
-                (coalton-error-type error)
-                (coalton-error-message error)
-                (coalton-file-name (coalton-error-file error))
-                line-number
-                (- (coalton-error-location error) line-start-index)))
+
+        ;; get-line-from-index sometimes returns a line-start-index
+        ;; that is 1 larger than (coalton-error-location error),
+        ;; resulting in a column number of -1. The following lines
+        ;; compensate for that and can be removed if and when that is
+        ;; fixed.
+        (let ((column-number (- (coalton-error-location error) line-start-index)))
+          (when (< column-number 0)
+            (decf line-number)
+            (setf column-number (1- (length (get-nth-line file-stream line-number)))))
+
+          (format stream
+                  "~(~A~): ~A~%  --> ~A:~D:~D~%"
+                  (coalton-error-type error)
+                  (coalton-error-message error)
+                  (coalton-file-name (coalton-error-file error))
+                  line-number
+                  column-number)))
 
       ;; Print the error notes
       (let* (;; We need to keep track of the current depth of multiline

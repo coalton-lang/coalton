@@ -2,7 +2,10 @@
 
 (deftest test-parser ()
   (labels ((test-files (pattern)
-             (directory (merge-pathnames pattern (asdf:system-source-directory "coalton/tests"))))
+             (let ((files (directory (merge-pathnames pattern (asdf:system-source-directory "coalton/tests")))))
+               (when (endp files)
+                 (error "No test files match pattern '~A'" pattern))
+               files))
 
            (parse-file (file)
              (with-open-file (stream file
@@ -22,7 +25,7 @@
                      "no errors")
                  (error:coalton-base-error (c)
                    (princ-to-string c))))))
-    (dolist (file (test-files "tests/parser-test-files/bad/*.coal"))
+    (dolist (file (test-files "tests/parser-test-files/bad-files/*.coal"))
       (let ((error-file (make-pathname :type "error"
                                        :defaults file)))
         (cond ((uiop:file-exists-p error-file)
@@ -33,5 +36,5 @@
                (signals parser:parse-error
                  (parse-file file))))))
 
-    (dolist (file (test-files "tests/parser-test-files/good/*.coal"))
+    (dolist (file (test-files "tests/parser-test-files/good-files/*.coal"))
       (parse-file file))))
