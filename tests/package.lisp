@@ -8,6 +8,7 @@
    (#:se #:source-error)
    (#:util #:coalton-impl/util)
    (#:parser #:coalton-impl/parser)
+   (#:stream #:coalton-impl/stream)
    (#:tc #:coalton-impl/typechecker)
    (#:analysis #:coalton-impl/analysis)
    (#:entry #:coalton-impl/entry))

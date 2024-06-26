@@ -91,3 +91,7 @@ Returns (values SOURCE-PATHNAME COMPILED-PATHNAME)."
        ((,muffle #'muffle-warning))
      (compile-and-load-forms '(,@(when package `((cl:in-package ,package)))
                                ,@coalton-code))))
+
+(defun test-file (pathname)
+  "Create a pathname relative to the coalton/test system."
+  (merge-pathnames pathname (asdf:system-source-directory "coalton/tests")))
