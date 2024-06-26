@@ -2033,7 +2033,13 @@ consume all attributes")))
 
   (assert (cst:consp form))
 
-  ;; TODO: Parsing errors
+  (when (cst:consp (cst:rest form))
+    (error 'parse-error
+           :err (coalton-error
+                 :span (cst:source form)
+                 :file file
+                 :message "Malformed inline attribute"
+                 :primary-note "unexpected form")))
 
   (make-attribute-inline :source (cst:source form)))
 
