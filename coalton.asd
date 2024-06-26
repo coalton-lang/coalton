@@ -1,22 +1,3 @@
-;;;; coalton.asd
-
-(in-package :asdf)
-
-;; ASDF Coalton component type
-;;
-;; Adds an asdf component that supports compiling files with a .coal
-;; extension.
-
-(defclass coalton-file (cl-source-file)
-  ((type :initform "coal")))
-
-;;
-;; This class is defined in the ASDF package, so that the keyword :coalton-file works.
-;;
-;; see: https://github.com/fare/asdf/blob/master/doc/best_practices.md#using-asdf-extensions
-
-(in-package :uiop)
-
 (asdf:defsystem #:coalton
   :description "An efficient, statically typed functional programming language that supercharges Common Lisp. "
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
@@ -338,6 +319,8 @@
                (:file "error-tests")
                (:file "parser-tests")
                (:file "entry-tests")
+               (:file "toplevel-tests")
+               (:file "program-tests")
                (:file "type-inference-tests")
                (:file "fundep-tests")
                (:file "fundep-fib-test")

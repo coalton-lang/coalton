@@ -86,6 +86,11 @@
                        (tc:translation-unit-classes translation-unit)
                        env))))
 
+            ,@(when (tc:translation-unit-lisp translation-unit)
+                (list
+                 `(eval-when (:compile-toplevel :load-toplevel :execute)
+                    ,@(tc:translation-unit-lisp translation-unit))))
+
             #+sbcl
             ,@(when (eq sb-ext:*block-compile-default* :specified)
                 (list

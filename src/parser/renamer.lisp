@@ -520,6 +520,7 @@
       :declares (program-declares program)
       :defines (rename-variables-generic% (program-defines program) ctx)
       :classes (program-classes program) ; Class type variables are renamed during kind inference
+      :lisp (program-lisp program)
       :instances (rename-variables-generic% (program-instances program) ctx)
       :specializations (program-specializations program) ; Renaming type variables in specializations is not valid
       )

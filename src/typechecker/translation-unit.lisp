@@ -17,6 +17,7 @@
    #:translation-unit-instances         ; ACCESSOR
    #:translation-unit-classes           ; ACCESSOR
    #:translation-unit-attr-table        ; ACCESSOR
+   #:translation-unit-lisp              ; ACCESSOR
    #:translation-unit-package           ; ACCESSOR
    #:translation-unit-specializations   ; ACCESSOR
    ))
@@ -28,4 +29,5 @@
   (definitions     nil                      :type toplevel-define-list           :read-only t)
   (instances       nil                      :type toplevel-define-instance-list  :read-only t)
   (classes         nil                      :type ty-class-list                  :read-only t)
+  (lisp            nil                                                           :read-only t)
   (package         (util:required 'package) :type package                        :read-only t))

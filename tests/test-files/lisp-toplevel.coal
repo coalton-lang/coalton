@@ -1,0 +1,18 @@
+(package coalton-test-programs/lisp-toplevel
+  "Test the lisp-toplevel form, for introducing Lisp code into Coalton files"
+  (import
+    coalton-prelude)
+  (export
+    fact))
+
+(lisp-toplevel
+  (cl:defun my-zero-p (n)
+    (cl:string= (cl:format nil"~S" n) "0")))
+
+(declare fact (Integer -> Integer))
+(define (fact n)
+  "Compute the factorial of a given integer"
+  (if (lisp Boolean (n) (my-zero-p n))
+    1
+    (* n
+       (fact (- n 1)))))
