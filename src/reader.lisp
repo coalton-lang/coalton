@@ -177,7 +177,8 @@ Used to forbid reading while inside quasiquoted forms.")
         (*compile-file-truename*
           (pathname (format nil "COALTON-TOPLEVEL (~A)" *compile-file-truename*))))
     (with-input-from-string (stream (print-form (cons mode forms)))
-      (cl:read stream))))
+      (let ((stream (make-instance 'parser:position-stream :stream stream)))
+        (cl:read stream)))))
 
 (defmacro coalton:coalton-toplevel (&body forms)
   "Compile Coalton FORMS."
@@ -200,4 +201,5 @@ Used to forbid reading while inside quasiquoted forms.")
         (*compile-file-truename*
           (pathname (format nil "COALTON (~A)" *compile-file-truename*))))
     (with-input-from-string (stream (print-form (cons 'coalton:coalton forms)))
-      (cl:read stream))))
+      (let ((stream (make-instance 'parser:position-stream :stream stream)))
+        (cl:read stream)))))

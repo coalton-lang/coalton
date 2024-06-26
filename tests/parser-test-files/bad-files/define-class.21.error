@@ -1,0 +1,5 @@
+error: Invalid variable
+  --> test:5:3
+   |
+ 5 |    (.方法 (:a -> :a)))
+   |     ^^^ variables cannot start with '.'

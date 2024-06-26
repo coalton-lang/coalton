@@ -28,7 +28,6 @@
    #:take-until                         ; FUNCTION
    #:project-indicies                   ; FUNCTION
    #:project-map                        ; FUNCTION
-   #:maybe-read-form                    ; FUNCTION
    ))
 
 (in-package #:coalton-impl/util)

@@ -241,10 +241,11 @@
 
   :DEFAULT Generate Lisp source, and compile immediately to .fasl. If no output file is specified, compiled Lisp code will be written to a temporary file, and that path will be returned.
   :SOURCE  Write compiled Lisp code to console or specified output file."
-  (with-open-file (coal-stream coal-file
-                               :direction ':input
-                               :element-type 'character)
-    (let ((coal-file-name (etypecase coal-file
+  (with-open-file (stream coal-file
+                          :direction ':input
+                          :element-type 'character)
+    (let* ((coal-stream (make-instance 'parser:position-stream :stream stream))
+           (coal-file-name (etypecase coal-file
                             (pathname (pathname-name coal-file))
                             (string coal-file))))
       (ecase format

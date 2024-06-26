@@ -43,7 +43,8 @@
                #:concrete-syntax-tree
                #:eclector-concrete-syntax-tree
                #:named-readtables
-               #:source-error)
+               #:source-error
+               #:trivial-gray-streams)
   :pathname "src/"
   :serial t
   :components ((:file "package")

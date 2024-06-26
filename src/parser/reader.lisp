@@ -1,72 +1,90 @@
 (defpackage #:coalton-impl/parser/reader
   (:use #:cl)
-  (:local-nicknames
-   (#:cst #:concrete-syntax-tree))
   (:export
-   #:*coalton-eclector-client*
+   #:position-stream
    #:with-reader-context
    #:maybe-read-form))
 
 (in-package #:coalton-impl/parser/reader)
 
-(defclass coalton-eclector-client (eclector.parse-result:parse-result-client)
+(defclass source-position-client (eclector.parse-result:parse-result-client)
   ())
 
-(defvar *coalton-eclector-client* (make-instance 'coalton-eclector-client))
+(defvar *source-position-client* (make-instance 'source-position-client))
 
-;;;; Check which version of eclector is installed
+;; Check which version of eclector is installed
+
 (eval-when (:compile-toplevel)
-  (if (uiop:version< (asdf:component-version (asdf:find-system :eclector)) "0.10.0")
-      (pushnew :eclector-pre-0-10-0 *features*)
-      (pushnew :eclector-post-0-10-0 *features*)))
+  (when (uiop:version< (asdf:component-version (asdf:find-system :eclector)) "0.10.0")
+    (pushnew :eclector-pre-0-10-0 *features*)))
+
+;; All of our nodes need access to source into so we will tag all
+;; children with source info.
 
 (defmethod eclector.parse-result:make-expression-result
-    ((client coalton-eclector-client) expression children source)
-
-  ;; All of our nodes need access to source into so we will tag all
-  ;; children with source info.
+    ((client source-position-client) expression children source)
 
   ;; Hack to handle breaking change in eclector
   ;; See https://github.com/s-expressionists/Concrete-Syntax-Tree/pull/36
   ;; See https://github.com/coalton-lang/coalton/issues/887
-  #+eclector-pre-0-10-0
-  (cst:reconstruct expression children client :default-source source)
-  #+eclector-post-0-10-0
-  (cst:reconstruct client expression children :default-source source))
 
-(defmacro with-reader-context (stream &rest body)
-  "Run the body in the toplevel reader context."
-  `(eclector.reader:call-as-top-level-read
-    *coalton-eclector-client*
-    (lambda ()
-      ,@body)
-    ,stream
-    nil
-    'eof
-    nil))
+  (concrete-syntax-tree:reconstruct #-eclector-pre-0-10-0 client expression children
+                                    #+eclector-pre-0-10-0 client :default-source source))
 
-(defun maybe-read-form (stream &optional (eclector-client eclector.base:*client*))
+(defclass position-stream (trivial-gray-streams:fundamental-character-input-stream)
+  ((stream :initarg :stream
+           :reader inner-stream)
+   (unread :initform nil
+           :accessor unread-characters)
+   (position :initform 0
+             :accessor character-position)))
+
+(defmethod trivial-gray-streams:stream-read-char ((stream position-stream))
+  (prog1
+      (cond ((not (null (unread-characters stream)))
+             (pop (unread-characters stream)))
+            (t
+             (read-char (inner-stream stream) nil :eof)))
+    (incf (character-position stream))))
+
+(defmethod trivial-gray-streams:stream-unread-char ((stream position-stream) char)
+  (push char (unread-characters stream))
+  (decf (character-position stream)))
+
+(defmethod trivial-gray-streams:stream-file-position ((stream position-stream))
+  (character-position stream))
+
+(defmethod (setf trivial-gray-streams:stream-file-position) (position-spec (stream position-stream))
+  (file-position (inner-stream stream) 0)
+  (dotimes (i position-spec)
+    (read-char (inner-stream stream)))
+  (setf (character-position stream) position-spec))
+
+(defun maybe-read-form (stream)
   "Read the next form or return if there is no next form.
 
-Returns (VALUES FORM PRESENTP EOFP)"
+Returns (values FORM PRESENTP)"
+  (declare (optimize (debug 3)))
   (loop :do
     ;; On empty lists report nothing
     (when (eq #\) (peek-char t stream nil))
       (read-char stream)
-      (return (values nil nil nil)))
-
+      (return (values nil nil)))
     ;; Otherwise, try to read in the next form
-    (multiple-value-call
-        (lambda (form type &optional parse-result)
+    (multiple-value-bind (form type parse-result)
+        (eclector.reader:read-maybe-nothing eclector.base:*client* stream nil 'eof)
+      ;; Return the read form when valid
+      (case type
+        (:object
+         (return (values parse-result t)))
+        (:eof
+         (return (values nil nil)))))))
 
-          ;; Return the read form when valid
-          (when (eq :object type)
-            (return (values (or parse-result form) t nil)))
-
-          (when (eq :eof type)
-            (return (values nil nil t))))
-
-      (eclector.reader:read-maybe-nothing
-       eclector-client
-       stream
-       nil 'eof))))
+(defmacro with-reader-context (stream &rest body)
+  "Run the body in the toplevel reader context."
+  `(eclector.reader:call-as-top-level-read
+    *source-position-client*
+    (lambda () ,@body)
+    ,stream
+    nil 'eof
+    nil))

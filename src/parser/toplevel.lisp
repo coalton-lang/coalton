@@ -457,7 +457,7 @@
 
       ;; Read the (package) form
       (multiple-value-bind (form presentp)
-          (maybe-read-form stream *coalton-eclector-client*)
+          (maybe-read-form stream)
 
         (unless presentp
           (error 'parse-error
@@ -485,18 +485,8 @@
            (attributes (make-array 0 :adjustable t :fill-pointer t)))
 
       (loop :do
-        (multiple-value-bind (form presentp eofp)
-            (maybe-read-form stream *coalton-eclector-client*)
-
-          (when (and eofp (eq :toplevel-macro mode))
-            (error 'parse-error
-                   :err (se:source-error
-                         :span (cons (- (file-position stream) 2)
-                                     (- (file-position stream) 1))
-                         :file file
-                         :message "Unexpected EOF"
-                         :primary-note "missing close parenthesis")))
-
+        (multiple-value-bind (form presentp)
+            (maybe-read-form stream)
           (unless presentp
             (return))
 
@@ -529,7 +519,7 @@ consume all attributes"))))
 
     ;; Read the coalton form
     (multiple-value-bind (form presentp)
-        (maybe-read-form stream *coalton-eclector-client*)
+        (maybe-read-form stream)
 
       (unless presentp
         (error 'parse-error
@@ -542,7 +532,7 @@ consume all attributes"))))
 
       ;; Ensure there is only one form
       (multiple-value-bind (form presentp)
-          (maybe-read-form stream *coalton-eclector-client*)
+          (maybe-read-form stream)
 
         (when presentp
           (error 'parse-error

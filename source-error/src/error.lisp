@@ -210,8 +210,7 @@
 
          (error (funcall error))
 
-         (file-stream (file-stream (source-error-file error)))
-         (file-stream-pos (file-position file-stream)))
+         (file-stream (file-stream (source-error-file error))))
 
     (progn
 
@@ -504,10 +503,7 @@
 
       ;; Print error context
       (loop :for context :in (source-error-context error)
-            :do (format stream "note: ~A~%" (source-error-context-message context)))
-
-      ;; Reset our file position to avoid messing things up.
-      (file-position file-stream file-stream-pos))))
+            :do (format stream "note: ~A~%" (source-error-context-message context))))))
 
 (defun get-line-from-index (file index)
   "Get the line number corresponding to the character offset INDEX.
@@ -517,22 +513,17 @@ Returns (VALUES LINE-NUM LINE-START-INDEX)"
            (type integer index)
            (values integer integer))
   (file-position file 0)
-  (let ((line 1)
-        (line-start-index 0))
-    (loop :for char := (read-char file)
-          :for code := (char-code char)
-          ;; It is assumed that code is utf-8 code point.
-          :for length := (cond ((<= code #x7f) 1)
-                               ((<= code #x7ff) 2)
-                               ((<= code #xffff) 3)
-                               (t 4))
-          :for i := 0 :then (+ i length)
-          :when (char= char #\Newline)
-            :do (setf line (1+ line)
-                      line-start-index (1+ i))
-          :when (>= i index)
-            :return nil)
-    (values line line-start-index)))
+  (loop :with line-num := 1
+         :with line-start-index := 0
+         :for char := (read-char file nil nil)
+         :for char-index :from 0
+         :when (null char)
+           :do (error "Index ~D out of bounds for file ~A" char-index file)
+         :when (= index char-index)
+           :return (values line-num line-start-index)
+         :when (char= char #\Newline)
+           :do (incf line-num)
+               (setf line-start-index (1+ char-index))))
 
 (defun get-nth-line (file index)
   "Get the INDEXth line FILE. This function uses 1 based indexing."
