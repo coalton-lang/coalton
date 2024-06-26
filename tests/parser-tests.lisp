@@ -2,7 +2,7 @@
 
 (deftest test-parser ()
   (labels ((test-files (pattern)
-             (let ((files (directory (merge-pathnames pattern (asdf:system-source-directory "coalton/tests")))))
+             (let ((files (directory (test-file pattern))))
                (when (endp files)
                  (error "No test files match pattern '~A'" pattern))
                files))
@@ -10,21 +10,25 @@
            (parse-file (file)
              (with-open-file (stream file
                                      :direction :input
-                                     :element-type 'character)
-               (parser:with-reader-context stream
-                 (parser:read-program stream (se:make-file :stream stream :name (namestring file)) :mode :file))))
+                                     :element-type 'character
+                                     :external-format :utf-8)
+               (let ((stream (stream:make-char-position-stream stream)))
+                 (parser:with-reader-context stream
+                   (parser:read-program stream (se:make-file :stream stream :name (namestring file)) :mode :file)))))
 
            (parse-error-text (file)
              (with-open-file (stream file
                                      :direction :input
-                                     :element-type 'character)
-               (handler-case
-                   (parser:with-reader-context stream
-                     (entry:entry-point
-                      (parser:read-program stream (se:make-file :stream stream :name "test") :mode :file))
-                     "no errors")
-                 (se:source-base-error (c)
-                   (princ-to-string c))))))
+                                     :element-type 'character
+                                     :external-format :utf-8)
+               (let ((stream (stream:make-char-position-stream stream)))
+                 (handler-case
+                     (parser:with-reader-context stream
+                       (entry:entry-point
+                        (parser:read-program stream (se:make-file :stream stream :name "test") :mode :file))
+                       "no errors")
+                   (se:source-base-error (c)
+                     (princ-to-string c)))))))
     (dolist (file (test-files "tests/parser-test-files/bad-files/*.coal"))
       (let ((error-file (make-pathname :type "error"
                                        :defaults file)))

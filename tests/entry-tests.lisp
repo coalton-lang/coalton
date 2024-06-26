@@ -1,8 +1,7 @@
 (in-package #:coalton-tests)
 
 (defun compile-test-file ()
-  (merge-pathnames "examples/small-coalton-programs/src/classical.coal"
-                   (asdf:system-source-directory "coalton")))
+  (test-file "examples/small-coalton-programs/src/classical.coal"))
 
 (deftest test-compile-to-lisp ()
   "Test that the Coalton compiler compiles a test file into Lisp source."
