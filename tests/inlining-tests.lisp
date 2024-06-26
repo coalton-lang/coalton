@@ -55,3 +55,19 @@
         (inline m)
         (define (m x y)
           (lisp Double-Float (x y) (cl:+ x y))))")))
+
+(deftest function-inline-code ()
+  (is (equal '((cl:+ coalton-native-tests::x coalton-native-tests::y))
+             (coalton-impl/codegen/ast:node-lisp-form
+              (coalton-impl/codegen/ast:node-let-subexpr
+               (coalton-impl/codegen/ast:node-abstraction-subexpr
+                (coalton:lookup-code
+                 'coalton-native-tests::two-arg-double-float-add-caller)))))))
+
+(deftest method-inline-code ()
+  (is (equal '((cl:+ coalton-native-tests::x coalton-native-tests::y))
+             (coalton-impl/codegen/ast:node-lisp-form
+              (coalton-impl/codegen/ast:node-let-subexpr
+               (coalton-impl/codegen/ast:node-abstraction-subexpr
+                (coalton:lookup-code
+                 'coalton-native-tests::method-for-inline-test-caller)))))))
