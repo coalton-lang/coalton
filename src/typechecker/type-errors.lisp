@@ -5,8 +5,7 @@
    #:coalton-impl/typechecker/types
    #:coalton-impl/typechecker/predicate)
   (:local-nicknames
-   (#:util #:coalton-impl/util)
-   (#:error #:coalton-impl/error))
+   (#:util #:coalton-impl/util))
   (:export
    #:unification-error                  ; CONDITION
    #:infinite-type-unification-error    ; CONDITION
@@ -30,7 +29,7 @@
 
 (in-package #:coalton-impl/typechecker/type-errors)
 
-(define-condition unification-error (error:coalton-internal-type-error)
+(define-condition unification-error (coalton-internal-type-error)
   ((type1 :initarg :type1
           :reader unification-error-type1)
    (type2 :initarg :type2
@@ -43,7 +42,7 @@
                (unification-error-type1 c)
                (unification-error-type2 c))))))
 
-(define-condition infinite-type-unification-error (error:coalton-internal-type-error)
+(define-condition infinite-type-unification-error (coalton-internal-type-error)
   ((type :initarg :type
          :reader infinite-type-unification-error-type))
   (:report
@@ -54,7 +53,7 @@
                (infinite-type-unification-error-type c))))))
 
 
-(define-condition kind-mismatch-error (error:coalton-internal-type-error)
+(define-condition kind-mismatch-error (coalton-internal-type-error)
   ((type :initarg :type
          :reader kind-mismatch-error-type)
    (kind :initarg :kind
@@ -68,7 +67,7 @@
                (kind-of (kind-mismatch-error-type c))
                (kind-mismatch-error-kind c))))))
 
-(define-condition type-kind-mismatch-error (error:coalton-internal-type-error)
+(define-condition type-kind-mismatch-error (coalton-internal-type-error)
   ((type1 :initarg :type1
           :reader type-kind-mismatch-error-type1)
    (type2 :initarg :type2
@@ -83,7 +82,7 @@
                (type-kind-mismatch-error-type2 c)
                (kind-of (type-kind-mismatch-error-type2 c)))))))
 
-(define-condition predicate-unification-error (error:coalton-internal-type-error)
+(define-condition predicate-unification-error (coalton-internal-type-error)
   ((pred1 :initarg :pred1
           :reader unification-error-pred1)
    (pred2 :initarg :pred2
@@ -96,7 +95,7 @@
                (unification-error-pred1 c)
                (unification-error-pred2 c))))))
 
-(define-condition ambiguous-constraint (error:coalton-internal-type-error)
+(define-condition ambiguous-constraint (coalton-internal-type-error)
   ((pred :initarg :pred
          :reader ambiguous-constraint-pred))
   (:report
@@ -106,7 +105,7 @@
        (format s "Ambiguous constraint ~S~%"
                (ambiguous-constraint-pred c))))))
 
-(define-condition overlapping-instance-error (error:coalton-internal-type-error)
+(define-condition overlapping-instance-error (coalton-internal-type-error)
   ((inst1 :initarg :inst1
           :reader overlapping-instance-error-inst1)
    (inst2 :initarg :inst2
@@ -119,7 +118,7 @@
                (overlapping-instance-error-inst1 c)
                (overlapping-instance-error-inst2 c))))))
 
-(define-condition fundep-conflict (error:coalton-internal-type-error)
+(define-condition fundep-conflict (coalton-internal-type-error)
   ((new-pred :initarg :new-pred
              :reader fundep-conflict-new-pred
              :type ty-predicate)
@@ -158,7 +157,7 @@
          (format s "instance conflicts previous instance ~S"
                  (fundep-conflict-old-pred c)))))))
 
-(define-condition overlapping-specialization-error (error:coalton-internal-type-error)
+(define-condition overlapping-specialization-error (coalton-internal-type-error)
   ((new :initarg :new
         :reader overlapping-specialization-error-new)
    (existing :initarg :existing

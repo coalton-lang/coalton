@@ -1,181 +1,175 @@
-(defpackage #:coalton-impl/error
-  (:use #:cl)
-  (:local-nicknames
-   (#:util #:coalton-impl/util))
+(defpackage #:source-error/error
+  (:shadow
+   #:file
+   #:file-stream)
+  (:use
+   #:cl)
   (:export
-   #:coalton-internal-condition         ; CONDITION
-   #:coalton-base-error                 ; CONDITION
-   #:coalton-error-err                  ; ACCESSOR
-   #:coalton-error-text                 ; ACCESSOR
-   #:coalton-base-warning               ; CONDITION
-   #:coalton-warning-err                ; ACCESSOR
-   #:render-coalton-error               ; FUNCTION
-   #:render-coalton-warning             ; FUNCTION
-   #:coalton-internal-type-error        ; CONDITION
-   #:coalton-file                       ; TYPE
-   #:coalton-file-stream                ; ACCESSOR
-   #:coalton-file-name                  ; ACCESSOR
-   #:make-coalton-file                  ; FUNCTION
-   #:make-coalton-error-note            ; FUNCTION
-   #:make-coalton-error-help            ; FUNCTION
-   #:make-coalton-error-context         ; FUNCTION
-   #:*coalton-error-context*            ; VARIABLE
-   #:coalton-error                      ; MACRO
-   #:coalton-error-location             ; ACCESSOR
-   #:coalton-error-file                 ; ACCESSOR
-   #:display-coalton-error              ; FUNCTION
+   #:source-base-error                  ; CONDITION
+   #:source-base-error-err              ; ACCESSOR
+   #:source-base-error-text             ; ACCESSOR
+   #:source-base-warning                ; CONDITION
+   #:source-base-warning-err            ; ACCESSOR
+   #:source-base-warning-text           ; ACCESSOR
+   #:render-source-error                ; FUNCTION
+   #:render-source-warning              ; FUNCTION
+   #:file                               ; TYPE
+   #:make-file                          ; CONSTRUCTOR
+   #:file-stream                        ; ACCESSOR
+   #:file-name                          ; ACCESSOR
+   #:make-source-error-note             ; FUNCTION
+   #:make-source-error-help             ; FUNCTION
+   #:make-source-error-context          ; FUNCTION
+   #:*source-error-context*             ; VARIABLE
+   #:source-error                       ; MACRO
+   #:source-error-location              ; ACCESSOR
+   #:source-error-file                  ; ACCESSOR
+   #:display-source-error               ; FUNCTION
+   #:define-source-condition            ; MACRO
    ))
 
-(in-package #:coalton-impl/error)
+(in-package #:source-error/error)
 
-
-(define-condition coalton-internal-condition (error)
-  ()
-  (:documentation "An internal Coalton condition for use in signaling. Internal conditions should always be caught.")
-  (:report (lambda (c s)
-             (declare (ignore c))
-             (format s "Unhandled internal condition.~%~%If you are seeing this, please file an issue on Github."))))
-
-(define-condition coalton-base-error (error)
-  ((err :accessor coalton-error-err
+(define-condition source-base-error (error)
+  ((err :accessor source-base-error-err
         :initarg :err
         :type (or null function))
-   (text :accessor coalton-error-text
+   (text :accessor source-base-error-text
          :initarg :text
          :initform nil
          :type (or null string)))
-  (:documentation "The base type for user-facing errors. Only ERR needs to be specified, and TEXT will be filled when RENDER-COALTON-ERROR is called.")
+  (:documentation "The base type for user-facing errors. Only ERR needs to be specified, and TEXT will be filled when `RENDER-ERROR' is called.")
   (:report (lambda (c s)
-             (if (coalton-error-text c)
-                 (write-string (coalton-error-text c) s)
-                 (display-coalton-error s (coalton-error-err c))))))
+             (if (source-base-error-text c)
+                 (write-string (source-base-error-text c) s)
+                 (display-source-error s (source-base-error-err c))))))
 
-(define-condition coalton-base-warning (style-warning)
-  ((err :accessor coalton-warning-err
+(define-condition source-base-warning (style-warning)
+  ((err :accessor source-base-warning-err
         :initarg :err
         :type (or null function))
-   (text :accessor coalton-warning-text
+   (text :accessor source-base-warning-text
          :initarg :text
          :initform nil
          :type (or null string)))
-    (:documentation "The base type for user-facing warnings. Only ERR needs to be specified, and TEXT will be filled when RENDER-COALTON-WARNING is called.")
+    (:documentation "The base type for user-facing warnings. Only ERR needs to be specified, and TEXT will be filled when `RENDER-WARNING' is called.")
     (:report (lambda (c s)
-             (if (coalton-warning-text c)
-                 (write-string (coalton-warning-text c) s)
-                 (display-coalton-error s (coalton-warning-err c))))))
+             (if (source-base-warning-text c)
+                 (write-string (source-base-warning-text c) s)
+                 (display-source-error s (source-base-warning-err c))))))
 
-(defun render-coalton-error (e)
-  "Render the error object within a COALTON-BASE-ERROR to text, removing the need to keep source file handles open."
-  (declare (type coalton-base-error e))
+(defun render-source-error (e)
+  "Render the error object within a `SOURCE-BASE-ERROR' to text, removing the need to keep source file handles open."
+  (declare (type source-base-error e))
   (let ((*print-escape* nil))
-    (setf (coalton-error-text e)
+    (setf (source-base-error-text e)
           (with-output-to-string (s)
             (print-object e s))
-          (coalton-error-err e)
+          (source-base-error-err e)
           nil)))
 
-(defun render-coalton-warning (w)
-  "Render the error object within a COALTON-BASE-ERROR to text, removing the need to keep source file handles open."
-  (declare (type coalton-base-warning w))
+(defun render-source-warning (w)
+  "Render the error object within a `SOURCE-BASE-ERROR' to text, removing the need to keep source file handles open."
+  (declare (type source-base-warning w))
   (let ((*print-escape* nil))
-    (setf (coalton-warning-text w)
+    (setf (source-base-warning-text w)
           (with-output-to-string (s)
             (print-object w s))
-          (coalton-warning-err w)
+          (source-base-warning-err w)
           nil)))
 
-
-(define-condition coalton-internal-type-error (coalton-internal-condition)
-  ())
-
-;;;
-;;; Error Rendering
-;;;
-
-(defstruct (coalton-error-note
+(defstruct (source-error-note
             (:copier nil))
-  (type    (util:required 'type)    :type (member :primary :secondary) :read-only t)
-  (span    (util:required 'span)    :type (cons integer integer)       :read-only t)
-  (message (util:required 'message) :type string                       :read-only t))
+  (type    nil :type (member :primary :secondary) :read-only t)
+  (span    nil :type (cons integer integer)       :read-only t)
+  (message nil :type string                       :read-only t))
 
-(defun coalton-error-note-list-p (x)
+(defun source-error-note-list-p (x)
   (and (alexandria:proper-list-p x)
-       (every #'coalton-error-note-p x)))
+       (every #'source-error-note-p x)))
 
-(deftype coalton-error-note-list ()
-  '(satisfies coalton-error-note-list-p))
+(deftype source-error-note-list ()
+  '(satisfies source-error-note-list-p))
 
-
-(defstruct (coalton-error-help
+(defstruct (source-error-help
             (:copier nil))
-  (span        (util:required 'span)        :type (cons integer integer)     :read-only t)
-  (replacement (util:required 'replacement) :type (function (string) string) :read-only t)
-  (message     (util:required 'message)     :type string                     :read-only t))
+  (span        nil :type (cons integer integer)     :read-only t)
+  (replacement nil :type (function (string) string) :read-only t)
+  (message     nil :type string                     :read-only t))
 
-(defun coalton-error-help-list-p (x)
+(defun source-error-help-list-p (x)
   (and (alexandria:proper-list-p x)
-       (every #'coalton-error-help-p x)))
+       (every #'source-error-help-p x)))
 
-(deftype coalton-error-help-list ()
-  '(satisfies coalton-error-help-list-p))
+(deftype source-error-help-list ()
+  '(satisfies source-error-help-list-p))
 
-
-(defstruct (coalton-error-context
+(defstruct (source-error-context
             (:copier nil))
-  (message (util:required 'message) :type string :read-only t))
+  (message nil :type string :read-only t))
 
-(defvar *coalton-error-context* nil)
+(defun source-error-context-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'source-error-context-p x)))
 
-(defstruct (coalton-file
+(deftype source-error-context-list ()
+  '(satisfies source-error-context-list-p))
+
+(defvar *source-error-context* nil)
+
+(defstruct (file
             (:copier nil))
-  (stream (util:required 'stream) :type stream :read-only t)
-  (name   (util:required 'name)   :type string :read-only t))
+  (stream nil :type stream :read-only t)
+  (name   nil :type string :read-only t))
 
-(defstruct (coalton-error
+(defstruct (source-error
             (:copier nil))
-  (type            (util:required 'type)     :type (member :error :warn)   :read-only t)
-  (file            (util:required 'file)     :type coalton-file            :read-only t)
-  (location        (util:required 'location) :type integer                 :read-only t)
-  (message         (util:required 'message)  :type string                  :read-only t)
-  (notes           (util:required 'notes)    :type coalton-error-note-list :read-only t)
-  (help-notes      nil                       :type coalton-error-help-list :read-only t)
-  (context         *coalton-error-context*   :type list                    :read-only t))
+  (type       nil :type (member :error :warn)     :read-only t)
+  (file       nil :type file                      :read-only t)
+  (location   nil :type integer                   :read-only t)
+  (message    nil :type string                    :read-only t)
+  (notes      nil :type source-error-note-list    :read-only t)
+  (help-notes nil :type source-error-help-list    :read-only t)
+  (context    nil :type source-error-context-list :read-only t))
 
-(defmacro coalton-error (&key (type :error) span file (highlight :all) message primary-note notes help-notes)
-  `(lambda ()
-     (coalton-error_
-      :type ,type
-      :span ,span
-      :file ,file
-      :highlight ,highlight
-      :message ,message
-      :primary-note ,primary-note
-      :notes ,notes
-      :help-notes ,help-notes)))
+(defmacro source-error (&key (type :error) span file (highlight :all) message primary-note notes help-notes)
+  `(let ((ctx *source-error-context*))
+     (lambda ()
+       (source-error%
+        :type ,type
+        :span ,span
+        :file ,file
+        :highlight ,highlight
+        :message ,message
+        :primary-note ,primary-note
+        :notes ,notes
+        :help-notes ,help-notes
+        :context ctx))))
 
-(defun coalton-error_ (&key
-                         (type :error)
-                         span
-                         file
-                         (highlight :all)
-                         message
-                         primary-note
-                         notes
-                         help-notes)
-  "Construct a COALTON-ERROR with a message and primary note attached to the provided form.
-
-MESSAGE and PRIMARY-NOTE must be supplied string arguments.
-NOTES and HELP-NOTES may optionally be supplied notes and help messages."
+(defun source-error% (&key
+                        (type :error)
+                        span
+                        file
+                        (highlight :all)
+                        message
+                        primary-note
+                        notes
+                        help-notes
+                        context)
+  "Construct a `SOURCE-ERROR' with a message and primary note attached to the provided form."
   (declare (type cons span)
-           (type coalton-file file)
+           (type file file)
            (type (member :all :end) highlight)
-           (type string message primary-note)
-           (type list notes help-notes)
-           (values coalton-error &optional))
+           (type string message)
+           (type string primary-note)
+           (type source-error-note-list notes)
+           (type source-error-help-list help-notes)
+           (type source-error-context-list context)
+           (values source-error))
 
   (let ((start (car span))
         (end (cdr span)))
-    (make-coalton-error
+    (make-source-error
      :type type
      :file file
      :location (ecase highlight
@@ -185,29 +179,30 @@ NOTES and HELP-NOTES may optionally be supplied notes and help messages."
      :notes (list*
              (ecase highlight
                (:all
-                (make-coalton-error-note
+                (make-source-error-note
                  :type :primary
                  :span (cons start end)
                  :message primary-note))
                (:end
-                (make-coalton-error-note
+                (make-source-error-note
                  :type :primary
                  :span (cons (1- end) end)
                  :message primary-note)))
              notes)
-     :help-notes help-notes)))
+     :help-notes help-notes
+     :context context)))
 
-(defstruct (coalton-error-resolved-note
+(defstruct (source-error-resolved-note
             (:copier nil))
-  "A COALTON-ERROR-NOTE with its location resolved in the file's context."
-  (type         (util:required 'type)         :type (member :primary :secondary) :read-only t)
-  (start-line   (util:required 'start-line)   :type integer                      :read-only t)
-  (start-column (util:required 'start-column) :type integer                      :read-only t)
-  (end-line     (util:required 'end-line)     :type integer                      :read-only t)
-  (end-column   (util:required 'end-column)   :type integer                      :read-only t)
-  (message      (util:required 'message)      :type string                       :read-only t))
+  "A `SOURCE-ERROR-NOTE' with its location resolved in the file's context."
+  (type         nil :type (member :primary :secondary) :read-only t)
+  (start-line   nil :type integer                      :read-only t)
+  (start-column nil :type integer                      :read-only t)
+  (end-line     nil :type integer                      :read-only t)
+  (end-column   nil :type integer                      :read-only t)
+  (message      nil :type string                       :read-only t))
 
-(defun display-coalton-error (stream error)
+(defun display-source-error (stream error)
   (declare (type stream stream)
            (type function error))
 
@@ -215,30 +210,30 @@ NOTES and HELP-NOTES may optionally be supplied notes and help messages."
 
          (error (funcall error))
 
-         (file-stream (coalton-file-stream (coalton-error-file error)))
+         (file-stream (file-stream (source-error-file error)))
          (file-stream-pos (file-position file-stream)))
 
     (progn
 
       ;; Print the error message and location
       (multiple-value-bind (line-number line-start-index)
-          (get-line-from-index file-stream (coalton-error-location error))
+          (get-line-from-index file-stream (source-error-location error))
 
         ;; get-line-from-index sometimes returns a line-start-index
         ;; that is 1 larger than (coalton-error-location error),
         ;; resulting in a column number of -1. The following lines
         ;; compensate for that and can be removed if and when that is
         ;; fixed.
-        (let ((column-number (- (coalton-error-location error) line-start-index)))
+        (let ((column-number (- (source-error-location error) line-start-index)))
           (when (< column-number 0)
             (decf line-number)
             (setf column-number (1- (length (get-nth-line file-stream line-number)))))
 
           (format stream
                   "~(~A~): ~A~%  --> ~A:~D:~D~%"
-                  (coalton-error-type error)
-                  (coalton-error-message error)
-                  (coalton-file-name (coalton-error-file error))
+                  (source-error-type error)
+                  (source-error-message error)
+                  (file-name (source-error-file error))
                   line-number
                   column-number)))
 
@@ -253,18 +248,18 @@ NOTES and HELP-NOTES may optionally be supplied notes and help messages."
              ;; Sort notes by start of span
              (sorted-notes
                (stable-sort
-                (coalton-error-notes error)
+                (source-error-notes error)
                 #'<
                 :key (lambda (note)
-                       (car (coalton-error-note-span note)))))
+                       (car (source-error-note-span note)))))
 
              ;; Attach line info to notes and figure out the maximum
              ;; multiline note depth we will need.
              (resolved-notes
                (mapcar
                 (lambda (note)
-                  (let ((start (car (coalton-error-note-span note)))
-                        (end (cdr (coalton-error-note-span note))))
+                  (let ((start (car (source-error-note-span note)))
+                        (end (cdr (source-error-note-span note))))
                     ;; Get line info for the start of the span
                     (multiple-value-bind (start-line start-line-start)
                         (get-line-from-index file-stream start)
@@ -281,24 +276,24 @@ NOTES and HELP-NOTES may optionally be supplied notes and help messages."
                           (when (or (< end-line start-line)
                                     (and (= end-line start-line)
                                          (< end-column start-column)))
-                            (util:coalton-bug "Error note contains invalid span ~A:~A to ~A:~A"
-                                              start-line start-column end-line end-column))
+                            (error "Error note contains invalid span ~A:~A to ~A:~A"
+                                   start-line start-column end-line end-column))
 
                           ;; Clear any multiline notes in the stack that we have now passed.
                           (loop :while (and (car multiline-note-stack)
                                             (> start-line
-                                               (coalton-error-resolved-note-end-line
+                                               (source-error-resolved-note-end-line
                                                 (car multiline-note-stack))))
                                 :do (pop multiline-note-stack)
                                     (decf multiline-note-current-depth))
 
-                          (let ((resolved-note (make-coalton-error-resolved-note
-                                                :type (coalton-error-note-type note)
+                          (let ((resolved-note (make-source-error-resolved-note
+                                                :type (source-error-note-type note)
                                                 :start-line start-line
                                                 :start-column start-column
                                                 :end-line end-line
                                                 :end-column end-column
-                                                :message (coalton-error-note-message note))))
+                                                :message (source-error-note-message note))))
 
                             ;; If this is a multiline note then keep track of the current depth.
                             (when (/= end-line start-line)
@@ -314,8 +309,8 @@ NOTES and HELP-NOTES may optionally be supplied notes and help messages."
                 sorted-notes))
 
              ;; Get the character width of the last line mentioned.
-             (first-line (coalton-error-resolved-note-start-line (car resolved-notes)))
-             (last-line (reduce #'max resolved-notes :key #'coalton-error-resolved-note-end-line))
+             (first-line (source-error-resolved-note-start-line (car resolved-notes)))
+             (last-line (reduce #'max resolved-notes :key #'source-error-resolved-note-end-line))
              (line-number-width
                (1+ (floor (log last-line 10)))))
 
@@ -343,7 +338,7 @@ NOTES and HELP-NOTES may optionally be supplied notes and help messages."
                              '(#\Space)
                              (mapcar
                               (lambda (note)
-                                (>= (coalton-error-resolved-note-end-line note)
+                                (>= (source-error-resolved-note-end-line note)
                                     line-number))
                               multiline-note-stack)))
 
@@ -351,46 +346,46 @@ NOTES and HELP-NOTES may optionally be supplied notes and help messages."
                      (print-line-number line-number t)
                      (format stream " ~v@{ ~}~A~%"
                              (- multiline-note-max-depth
-                                multiline-note-current-depth)
+                                 multiline-note-current-depth)
                              (get-nth-line file-stream line-number)))
 
                    (note-highlight-char (note)
-                     (ecase (coalton-error-resolved-note-type note)
+                     (ecase (source-error-resolved-note-type note)
                        (:primary #\^)
                        (:secondary #\-)))
 
                    (print-singleline-note (note)
-                     (print-line-number (coalton-error-resolved-note-start-line note) nil)
+                     (print-line-number (source-error-resolved-note-start-line note) nil)
                      (format stream
                              " ~v{~C~:*~}~v{~C~:*~} ~A~%"
-                             (+ (coalton-error-resolved-note-start-column note)
-                                (- multiline-note-max-depth
-                                   multiline-note-current-depth))
+                             (+ (source-error-resolved-note-start-column note)
+                                 (- multiline-note-max-depth
+                                     multiline-note-current-depth))
                              '(#\Space)
-                             (- (coalton-error-resolved-note-end-column note)
-                                (coalton-error-resolved-note-start-column note))
+                             (- (source-error-resolved-note-end-column note)
+                                 (source-error-resolved-note-start-column note))
                              (list (note-highlight-char note))
-                             (coalton-error-resolved-note-message note)))
+                             (source-error-resolved-note-message note)))
 
                    (print-multiline-note-start (note)
-                     (print-line-number (coalton-error-resolved-note-start-line note) nil)
+                     (print-line-number (source-error-resolved-note-start-line note) nil)
                      (format stream " ~v{~C~:*~}~C~%"
-                             (+ (coalton-error-resolved-note-start-column note)
-                                (- multiline-note-max-depth
-                                   multiline-note-current-depth))
+                             (+ (source-error-resolved-note-start-column note)
+                                 (- multiline-note-max-depth
+                                     multiline-note-current-depth))
                              '(#\_)
                              (note-highlight-char note)))
 
                    (print-multiline-note-end (note)
-                     (print-line-number (coalton-error-resolved-note-start-line note) nil)
+                     (print-line-number (source-error-resolved-note-start-line note) nil)
                      (format stream
                              "~v{~C~:*~}~C ~A~%"
-                             (+ (coalton-error-resolved-note-end-column note)
-                                (- multiline-note-max-depth
-                                   multiline-note-current-depth))
+                             (+ (source-error-resolved-note-end-column note)
+                                 (- multiline-note-max-depth
+                                     multiline-note-current-depth))
                              '(#\_)
                              (note-highlight-char note)
-                             (coalton-error-resolved-note-message note)))
+                             (source-error-resolved-note-message note)))
 
                    (print-finished-multiline-notes-for-line (line-number)
                      ;; Check if there are any multiline notes that need to be printed
@@ -400,11 +395,11 @@ NOTES and HELP-NOTES may optionally be supplied notes and help messages."
                            :when (null stack-head)
                              :do (return)
 
-                           :when (= line-number (coalton-error-resolved-note-end-line note))
+                           :when (= line-number (source-error-resolved-note-end-line note))
                              :do (print-multiline-note-end note)
 
                            :when (and (eq note (car multiline-note-stack))
-                                      (>= line-number (coalton-error-resolved-note-end-line note)))
+                                      (>= line-number (source-error-resolved-note-end-line note)))
                              :do (pop multiline-note-stack)
                                  (decf multiline-note-current-depth)))
 
@@ -428,8 +423,8 @@ NOTES and HELP-NOTES may optionally be supplied notes and help messages."
 
                             ;; Print out any intermediate multiline note endings.
                             (loop :for note :in multiline-note-stack
-                                  :when (< current-line (coalton-error-resolved-note-end-line note) line-number)
-                                    :do (print-lines-until (coalton-error-resolved-note-end-line note)))
+                                  :when (< current-line (source-error-resolved-note-end-line note) line-number)
+                                    :do (print-lines-until (source-error-resolved-note-end-line note)))
 
                             (format stream " ...~%")
                             (print-line-contents (1- line-number))
@@ -441,10 +436,10 @@ NOTES and HELP-NOTES may optionally be supplied notes and help messages."
             (loop :for note :in resolved-notes
                   :do (cond
                         ;; For multiline we need to add to the current stack.
-                        ((/= (coalton-error-resolved-note-start-line note)
-                             (coalton-error-resolved-note-end-line note))
+                        ((/= (source-error-resolved-note-start-line note)
+                             (source-error-resolved-note-end-line note))
                          ;; Print lines until this note.
-                         (print-lines-until (coalton-error-resolved-note-start-line note))
+                         (print-lines-until (source-error-resolved-note-start-line note))
 
                          ;; Print out a new row with underlines connecting
                          ;; back to the multiline position.
@@ -456,11 +451,11 @@ NOTES and HELP-NOTES may optionally be supplied notes and help messages."
                         ;; For non-multiline just print the note
                         (t
                          ;; Print lines until this note.
-                         (print-lines-until (coalton-error-resolved-note-start-line note))
+                         (print-lines-until (source-error-resolved-note-start-line note))
 
                          (print-singleline-note note)
 
-                         (print-finished-multiline-notes-for-line (coalton-error-resolved-note-start-line note)))))
+                         (print-finished-multiline-notes-for-line (source-error-resolved-note-start-line note)))))
 
             ;; If there are any multiline notes that have not closed out then
             ;; print them.
@@ -468,20 +463,20 @@ NOTES and HELP-NOTES may optionally be supplied notes and help messages."
             (print-finished-multiline-notes-for-line last-line))))
 
       ;; Print help messages
-      (loop :for help :in (coalton-error-help-notes error)
-            :for start := (car (coalton-error-help-span help))
-            :for end := (cdr (coalton-error-help-span help))
+      (loop :for help :in (source-error-help-notes error)
+            :for start := (car (source-error-help-span help))
+            :for end := (cdr (source-error-help-span help))
             :do (multiple-value-bind (start-line start-line-start)
                     (get-line-from-index file-stream start)
                   (multiple-value-bind (end-line end-line-start)
                       (get-line-from-index file-stream (1- end))
 
                     (unless (= start-line end-line)
-                      (util:coalton-bug "multiline help messages not supported yet."))
+                      (error "multiline help messages not supported yet."))
 
                     (let ((line-number-width (1+ (floor (log end-line 10)))))
                       (format stream "help: ~A~%"
-                              (coalton-error-help-message help))
+                              (source-error-help-message help))
 
                       (format stream " ~vD | ~A"
                               line-number-width
@@ -489,7 +484,7 @@ NOTES and HELP-NOTES may optionally be supplied notes and help messages."
                               (subseq (get-nth-line file-stream start-line)
                                       0 (- start start-line-start)))
 
-                      (let ((replaced-text (funcall (coalton-error-help-replacement help)
+                      (let ((replaced-text (funcall (source-error-help-replacement help)
                                                     (subseq (get-nth-line file-stream start-line)
                                                             (- start start-line-start)
                                                             (- end end-line-start)))))
@@ -508,8 +503,8 @@ NOTES and HELP-NOTES may optionally be supplied notes and help messages."
                                 '(#\-)))))))
 
       ;; Print error context
-      (loop :for context :in (coalton-error-context error)
-            :do (format stream "note: ~A~%" (coalton-error-context-message context)))
+      (loop :for context :in (source-error-context error)
+            :do (format stream "note: ~A~%" (source-error-context-message context)))
 
       ;; Reset our file position to avoid messing things up.
       (file-position file-stream file-stream-pos))))
@@ -539,20 +534,6 @@ Returns (VALUES LINE-NUM LINE-START-INDEX)"
             :return nil)
     (values line line-start-index)))
 
-(defun get-source-line-info (file form)
-  "Get source information about FORM which can be used in errors.
-
-Returns (VALUES LINE-NUM LINE-START-INDEX LINE-END-INDEX)"
-  (declare (type stream file)
-           (type cst:cst form))
-  (let ((start-index (car (cst:source form)))
-        (end-index   (cdr (cst:source form))))
-    (multiple-value-bind (line-number line-start-index)
-        (get-line-from-index file start-index)
-      (values line-number
-              (- start-index line-start-index)
-              (- end-index   line-start-index)))))
-
 (defun get-nth-line (file index)
   "Get the INDEXth line FILE. This function uses 1 based indexing."
   (declare (type stream file)
@@ -564,4 +545,4 @@ Returns (VALUES LINE-NUM LINE-START-INDEX LINE-END-INDEX)"
         :when (= i index)
           :do (return-from get-nth-line line))
 
-  (util:coalton-bug "Line number ~D out of bounds for file ~A" index file))
+  (error "Line number ~D out of bounds for file ~A" index file))

@@ -2,6 +2,7 @@
   (:use
    #:cl
    #:coalton-impl/algorithm
+   #:coalton-impl/typechecker/base
    #:coalton-impl/typechecker/type-errors
    #:coalton-impl/typechecker/types
    #:coalton-impl/typechecker/predicate
@@ -21,7 +22,6 @@
    #:+fundep-max-depth+)
   (:local-nicknames
    (#:util #:coalton-impl/util)
-   (#:error #:coalton-impl/error)
    (#:parser #:coalton-impl/parser))
   (:export
    #:*update-hook*                          ; VARIABLE
@@ -1264,7 +1264,7 @@
         (progn
           (match (specialization-entry-to-ty elem) ty)
           (return-from lookup-specialization-by-type elem))
-      (error:coalton-internal-type-error (e)
+      (coalton-internal-type-error (e)
         (declare (ignore e))))))
 
 (defun lookup-fundep-environment (env class &key (no-error nil))

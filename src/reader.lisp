@@ -2,10 +2,10 @@
   (:use
    #:cl)
   (:local-nicknames
+   (#:se #:source-error)
    (#:cst #:concrete-syntax-tree)
    (#:settings #:coalton-impl/settings)
    (#:util #:coalton-impl/util)
-   (#:error #:coalton-impl/error)
    (#:parser #:coalton-impl/parser)
    (#:tc #:coalton-impl/typechecker)
    (#:entry #:coalton-impl/entry)))
@@ -39,15 +39,15 @@ Used to forbid reading while inside quasiquoted forms.")
                           s))
                        (t
                         ,stream)))
-                   (,file (error:make-coalton-file :stream ,file-input-stream :name ,filename)))
+                   (,file (se:make-file :stream ,file-input-stream :name ,filename)))
               (handler-bind
                   ;; Render errors and set highlights
-                  ((error:coalton-base-error
+                  ((se:source-base-error
                      (lambda (c)
-                       (set-highlight-position-for-error stream (funcall (error:coalton-error-err c)))
-                       (error:render-coalton-error c)))
-                   (error:coalton-base-warning
-                     #'error:render-coalton-warning))
+                       (set-highlight-position-for-error stream (funcall (se:source-base-error-err c)))
+                       (se:render-source-error c)))
+                   (se:source-base-warning
+                     #'se:render-source-warning))
                 ,@body))
          ;; Clean up any opened file streams
          (dolist (s ,opened-streams)
@@ -147,7 +147,7 @@ Used to forbid reading while inside quasiquoted forms.")
     (let* ((file-offset
              (- (sb-impl::fd-stream-get-file-position stream)
                 (file-position stream)))
-           (loc (error:coalton-error-location error)))
+           (loc (se:source-error-location error)))
       (setf (sb-impl::fd-stream-misc stream)
             (lambda (stream operation arg1)
               (if (= (sb-impl::%stream-opcode :get-file-position) operation)

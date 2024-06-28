@@ -1,8 +1,8 @@
 (defpackage #:coalton-impl/typechecker/partial-type-env
   (:use
-   #:cl
-   #:coalton-impl/typechecker/base)
+   #:cl)
   (:local-nicknames
+   (#:se #:source-error)
    (#:util #:coalton-impl/util)
    (#:parser #:coalton-impl/parser)
    (#:tc #:coalton-impl/typechecker/stage-1))
@@ -44,14 +44,14 @@
   (declare (type partial-type-env env)
            (type symbol var)
            (type cons source)
-           (type coalton-file file)
+           (type se:file file)
            (values tc:tyvar))
 
   (let ((ty (gethash var (partial-type-env-ty-table env))))
 
     (unless ty
-      (error 'tc-error
-             :err (coalton-error
+      (error 'tc:tc-error
+             :err (se:source-error
                    :span source
                    :file file
                    :message "Unknown type variable"
@@ -87,7 +87,7 @@
 (defun partial-type-env-lookup-type (env tycon file)
   (declare (type partial-type-env env)
            (type parser:tycon tycon)
-           (type coalton-file file)
+           (type se:file file)
            (values tc:ty))
   
   (let* ((name (parser:tycon-name tycon))
@@ -100,8 +100,8 @@
     (let ((type-entry (tc:lookup-type (partial-type-env-env env) name :no-error t)))
 
       (unless type-entry
-        (error 'tc-error
-               :err (coalton-error
+        (error 'tc:tc-error
+               :err (se:source-error
                      :span (parser:ty-source tycon)
                      :file file
                      :message "Unknown type"
@@ -123,7 +123,7 @@
 (defun partial-type-env-lookup-class (env pred file)
   (declare (type partial-type-env env)
            (type parser:ty-predicate pred)
-           (type coalton-file file)
+           (type se:file file)
            (values tc:ty-predicate))
 
   (let* ((name (parser:identifier-src-name (parser:ty-predicate-class pred)))
@@ -136,8 +136,8 @@
     (let ((class-entry (tc:lookup-class (partial-type-env-env env) name :no-error t)))
 
       (unless class-entry
-        (error 'tc-error
-               :err (coalton-error
+        (error 'tc:tc-error
+               :err (se:source-error
                      :span (parser:ty-predicate-source pred)
                      :file file
                      :message "Unknown class"

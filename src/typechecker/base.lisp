@@ -1,26 +1,16 @@
 (defpackage #:coalton-impl/typechecker/base
   (:use
    #:cl)
-  (:import-from
-   #:coalton-impl/error
-   #:coalton-file
-   #:coalton-error
-   #:make-coalton-error-note
-   #:make-coalton-error-help)
-  (:export
-   #:coalton-file
-   #:coalton-error
-   #:make-coalton-error-note
-   #:make-coalton-error-help)
   (:local-nicknames
-   (#:util #:coalton-impl/util)
-   (#:error #:coalton-impl/error))
+   (#:se #:source-error)
+   (#:util #:coalton-impl/util))
   (:export
    #:*coalton-pretty-print-tyvars*
    #:*pprint-tyvar-dict*
    #:*pprint-variable-symbol-code*
    #:*pprint-variable-symbol-suffix*
    #:tc-error                           ; CONDITION
+   #:coalton-internal-type-error        ; CONDITION
    #:check-duplicates                   ; FUNCTION
    #:check-package                      ; FUNCTION
    #:with-pprint-variable-scope         ; MACRO
@@ -70,14 +60,21 @@ This requires a valid PPRINT-VARIABLE-CONTEXT")
 ;;; Conditions
 ;;;
 
-(define-condition tc-error (error:coalton-base-error)
+(define-condition tc-error (se:source-base-error)
   ()
   (:report
    (lambda (c s)
-     (if (error:coalton-error-text c)
-         (write-string (error:coalton-error-text c) s)
+     (if (se:source-base-error-text c)
+         (write-string (se:source-base-error-text c) s)
          (with-pprint-variable-context ()
-           (error:display-coalton-error s (error:coalton-error-err c)))))))
+           (se:display-source-error s (se:source-base-error-err c)))))))
+
+(define-condition coalton-internal-type-error (error)
+  ()
+  (:documentation "An internal Coalton condition for use in signaling. Internal conditions should always be caught.")
+  (:report (lambda (c s)
+             (declare (ignore c))
+             (format s "Unhandled internal condition.~%~%If you are seeing this, please file an issue on Github."))))
 
 ;;;
 ;;; Assertions
@@ -114,7 +111,7 @@ source tuples which are compared for ordering."
   (declare (type list elems)
            (type function f)
            (type function source)
-           (type coalton-file file))
+           (type se:file file))
 
   (loop :for elem :in elems
         :for id := (funcall f elem)
@@ -123,11 +120,11 @@ source tuples which are compared for ordering."
 
         :unless (equalp (symbol-package id) *package*)
           :do (error 'tc-error
-                     :err (coalton-error
+                     :err (se:source-error
                            :span (funcall source elem)
                            :file file
                            :message "Invalid identifier name"
                            :primary-note (format nil "The symbol ~S is defined in the package ~A and not the current package ~A"
-                                            id
-                                            (symbol-package id)
-                                            *package*)))))
+                                                 id
+                                                 (symbol-package id)
+                                                 *package*)))))

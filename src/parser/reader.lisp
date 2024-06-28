@@ -41,7 +41,8 @@
     (lambda ()
       ,@body)
     ,stream
-    nil 'eof
+    nil
+    'eof
     nil))
 
 (defun maybe-read-form (stream &optional (eclector-client eclector.base:*client*))

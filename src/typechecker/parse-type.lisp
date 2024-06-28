@@ -9,12 +9,11 @@
 (defpackage #:coalton-impl/typechecker/parse-type
   (:use
    #:cl
-   #:coalton-impl/typechecker/base
    #:coalton-impl/typechecker/partial-type-env)
   (:local-nicknames
+   (#:se #:source-error)
    (#:util #:coalton-impl/util)
    (#:parser #:coalton-impl/parser)
-   (#:error #:coalton-impl/error)
    (#:tc #:coalton-impl/typechecker/stage-1))
   (:export
    #:parse-type                         ; FUNCTION
@@ -33,7 +32,7 @@
 (defun parse-type (ty env file)
   (declare (type parser:ty ty)
            (type tc:environment env)
-           (type coalton-file file)
+           (type se:file file)
            (values tc:ty &optional))
 
   (let ((tvars (parser:collect-type-variables ty))
@@ -58,7 +57,7 @@
 (defun parse-qualified-type (unparsed-ty env file)
   (declare (type parser:qualified-ty unparsed-ty)
            (type tc:environment env)
-           (type coalton-file file)
+           (type se:file file)
            (values tc:qualified-ty &optional))
 
   (let ((tvars (parser:collect-type-variables unparsed-ty))
@@ -89,7 +88,7 @@
 (defun parse-ty-scheme (ty env file)
   (declare (type parser:qualified-ty ty)
            (type tc:environment env)
-           (type coalton-file file)
+           (type se:file file)
            (values tc:ty-scheme &optional))
 
   (let* ((qual-ty (parse-qualified-type ty env file))
@@ -102,7 +101,7 @@
   (declare (type tc:ty-predicate-list preds)
            (type tc:ty type)
            (type parser:qualified-ty qual-ty)
-           (type coalton-file file)
+           (type se:file file)
            (type tc:environment env))
 
   (let* ((old-unambiguous-vars (tc:type-variables type))
@@ -134,8 +133,8 @@
 
              (single-variable (= 1 (length ambiguous-vars))))
 
-        (error 'tc-error
-               :err (coalton-error
+        (error 'tc:tc-error
+               :err (se:source-error
                      :span (parser:qualified-ty-source qual-ty)
                      :file file
                      :message "Invalid qualified type"
@@ -151,20 +150,20 @@
 (defun check-for-reducable-context (preds qual-ty file env)
   (declare (type tc:ty-predicate-list preds)
            (type parser:qualified-ty qual-ty)
-           (type coalton-file file)
+           (type se:file file)
            (type tc:environment env))
   (let ((reduced-preds (tc:reduce-context env preds nil)))
     (unless (null (set-exclusive-or preds reduced-preds :test #'tc:type-predicate=))
-      (warn 'error:coalton-base-warning
-             :err (coalton-error
-                   :type :warn
-                   :span (parser:qualified-ty-source qual-ty)
-                   :file file
-                   :message "Declared context can be reduced"
-                   :primary-note (if (null reduced-preds)
-                                     "declared predicates are redundant"
-                                     (format nil "context can be reduced to ~{ ~S~}"
-                                             reduced-preds)))))))
+      (warn 'se:source-base-warning
+            :err (se:source-error
+                  :type :warn
+                  :span (parser:qualified-ty-source qual-ty)
+                  :file file
+                  :message "Declared context can be reduced"
+                  :primary-note (if (null reduced-preds)
+                                    "declared predicates are redundant"
+                                    (format nil "context can be reduced to ~{ ~S~}"
+                                            reduced-preds)))))))
 
 ;;;
 ;;; Kind Inference
@@ -174,7 +173,7 @@
   (:method ((type parser:tyvar) expected-kind ksubs env file)
     (declare (type tc:kind expected-kind)
              (type tc:ksubstitution-list ksubs)
-             (type coalton-file file))
+             (type se:file file))
     (let* ((tvar (partial-type-env-lookup-var
                   env
                   (parser:tyvar-name type)
@@ -189,9 +188,9 @@
           (progn
             (setf ksubs (tc:kunify kvar expected-kind ksubs))
             (values (tc:apply-ksubstitution ksubs tvar) ksubs))
-        (error:coalton-internal-type-error ()
-          (error 'tc-error
-                 :err (coalton-error
+        (tc:coalton-internal-type-error ()
+          (error 'tc:tc-error
+                 :err (se:source-error
                        :span (parser:ty-source type)
                        :file file
                        :message "Kind mismatch"
@@ -203,7 +202,7 @@
     (declare (type tc:kind expected-kind)
              (type tc:ksubstitution-list ksubs)
              (type partial-type-env env)
-             (type coalton-file file)
+             (type se:file file)
              (values tc:ty tc:ksubstitution-list))
 
     (let ((type_ (partial-type-env-lookup-type env type file)))
@@ -211,9 +210,9 @@
           (progn
             (setf ksubs (tc:kunify (tc:kind-of type_) expected-kind ksubs))
             (values (tc:apply-ksubstitution ksubs type_) ksubs))
-        (error:coalton-internal-type-error ()
-          (error 'tc-error
-                 :err (coalton-error
+        (tc:coalton-internal-type-error ()
+          (error 'tc:tc-error
+                 :err (se:source-error
                        :span (parser:ty-source type)
                        :file file
                        :message "Kind mismatch"
@@ -225,7 +224,7 @@
     (declare (type tc:kind expected-kind)
              (type tc:ksubstitution-list ksubs)
              (type partial-type-env env)
-             (type coalton-file file)
+             (type se:file file)
              (values tc:ty tc:ksubstitution-list &optional))
 
     (let ((fun-kind (tc:make-kvariable))
@@ -251,9 +250,9 @@
                 (values
                  (tc:apply-type-argument fun-ty arg-ty :ksubs ksubs)
                  ksubs))
-            (error:coalton-internal-type-error ()
-              (error 'tc-error
-                     :err (coalton-error
+            (tc:coalton-internal-type-error ()
+              (error 'tc:tc-error
+                     :err (se:source-error
                            :span (parser:ty-source (parser:tapp-from type))
                            :file file
                            :message "Kind mismatch"
@@ -267,7 +266,7 @@
     (declare (type tc:kind expected-kind)
              (type tc:ksubstitution-list ksubs)
              (type partial-type-env env)
-             (type coalton-file file)
+             (type se:file file)
              (values tc:qualified-ty tc:ksubstitution-list))
     
     ;; CCL >:(
@@ -300,7 +299,7 @@
   (declare (type parser:ty-predicate pred)
            (type tc:ksubstitution-list ksubs)
            (type partial-type-env env)
-           (type coalton-file file)
+           (type se:file file)
            (values tc:ty-predicate tc:ksubstitution-list))
 
   (let* ((class-name (parser:identifier-src-name (parser:ty-predicate-class pred)))
@@ -311,8 +310,8 @@
 
     ;; Check that pred has the correct number of arguments
     (unless (= class-arity (length (parser:ty-predicate-types pred)))
-      (error 'tc-error
-             :err (coalton-error
+      (error 'tc:tc-error
+             :err (se:source-error
                    :span (parser:ty-predicate-source pred)
                    :file file
                    :message "Predicate arity mismatch"

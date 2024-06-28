@@ -9,32 +9,32 @@
    #:coalton-impl/analysis/underapplied-values
    #:find-underapplied-values)
   (:local-nicknames
+   (#:se #:source-error)
    (#:util #:coalton-impl/util)
-   (#:error #:coalton-impl/error)
    (#:tc #:coalton-impl/typechecker))
   (:export
    #:analyze-translation-unit))
 
 (in-package #:coalton-impl/analysis/analysis)
 
-(define-condition non-exhaustive-match-warning (error:coalton-base-warning)
+(define-condition non-exhaustive-match-warning (se:source-base-warning)
   ())
 
-(define-condition useless-pattern-warning (error:coalton-base-warning)
+(define-condition useless-pattern-warning (se:source-base-warning)
   ())
 
-(define-condition pattern-var-matches-constructor (error:coalton-base-warning)
+(define-condition pattern-var-matches-constructor (se:source-base-warning)
   ())
 
 (defun check-pattern-exhaustiveness (pattern env file)
   (declare (type tc:pattern pattern)
            (type tc:environment env)
-           (type error:coalton-file file))
+           (type se:file file))
 
   (let ((missing (find-non-matching-value (list (list pattern)) 1 env)))
     (unless (eq t missing)
       (error 'tc:tc-error
-             :err (error:coalton-error
+             :err (se:source-error
                    :file file
                    :span (tc:pattern-source pattern)
                    :message "Non-exhaustive match"
@@ -45,7 +45,7 @@
   "Perform analysis passes on TRANSLATION-UNIT, potentially producing errors or warnings."
   (declare (type tc:translation-unit translation-unit)
            (type tc:environment env)
-           (type error:coalton-file file))
+           (type se:file file))
 
   (let ((analysis-traverse-block
           (tc:make-traverse-block
@@ -58,7 +58,7 @@
                               (find-non-matching-value (mapcar #'list patterns) 1 env)))
                         (unless (eq t exhaustive-or-missing)
                           (warn 'non-exhaustive-match-warning
-                                :err (error:coalton-error
+                                :err (se:source-error
                                       :type :warn
                                       :file file
                                       :span (tc:node-source node)
@@ -66,7 +66,7 @@
                                       :primary-note "non-exhaustive match"
                                       :notes (when (first exhaustive-or-missing)
                                                (list
-                                                (error:make-coalton-error-note
+                                                (se:make-source-error-note
                                                  :type :secondary
                                                  :span (tc:node-source node)
                                                  :message (format nil "Missing case ~W"
@@ -74,7 +74,7 @@
                         (loop :for pattern :in patterns
                               :unless (useful-pattern-p patterns pattern env) :do
                                 (warn 'useless-pattern-warning
-                                      :err (error:coalton-error
+                                      :err (se:source-error
                                             :type :warn
                                             :file file
                                             :span (tc:pattern-source pattern)
@@ -82,7 +82,7 @@
                                             :primary-note "useless match case"
                                             :notes
                                             (list
-                                             (error:make-coalton-error-note
+                                             (se:make-source-error-note
                                               :type :secondary
                                               :span (tc:node-source node)
                                               :message "in this match")))))))
@@ -124,12 +124,12 @@
 (defgeneric check-for-var-matching-constructor (pat env file)
   (:method ((pat tc:pattern-var) env file)
     (declare (type tc:environment env)
-             (type error:coalton-file file))
+             (type se:file file))
 
     (let ((ctor (tc:lookup-constructor env (tc:pattern-var-orig-name pat) :no-error t)))
       (when ctor
         (warn 'pattern-var-matches-constructor
-              :err (error:coalton-error
+              :err (se:source-error
                     :type :warn
                     :file file
                     :span (tc:pattern-source pat)

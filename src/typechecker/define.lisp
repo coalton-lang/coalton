@@ -16,7 +16,6 @@
 (defpackage #:coalton-impl/typechecker/define
   (:use
    #:cl
-   #:coalton-impl/typechecker/base
    #:coalton-impl/typechecker/parse-type
    #:coalton-impl/typechecker/pattern
    #:coalton-impl/typechecker/expression
@@ -24,11 +23,15 @@
    #:coalton-impl/typechecker/toplevel
    #:coalton-impl/typechecker/accessor
    #:coalton-impl/typechecker/tc-env)
+  (:import-from
+   #:coalton-impl/typechecker/base
+   #:check-duplicates
+   #:check-package)
   (:local-nicknames
+   (#:se #:source-error)
    (#:util #:coalton-impl/util)
    (#:algo #:coalton-impl/algorithm)
    (#:parser #:coalton-impl/parser)
-   (#:error #:coalton-impl/error)
    (#:tc #:coalton-impl/typechecker/stage-1)
    (#:types #:coalton-impl/typechecker/types))
   (:export
@@ -60,13 +63,13 @@
 
 (defun error-ambiguous-pred (pred file)
   (declare (type tc:ty-predicate pred)
-           (type coalton-file file))
+           (type se:file file))
 
   (unless (tc:ty-predicate-source pred)
     (util:coalton-bug "Predicate ~S does not have source information" pred))
 
-  (error 'tc-error
-         :err (coalton-error
+  (error 'tc:tc-error
+         :err (se:source-error
                :span (tc:ty-predicate-source pred)
                :file file
                :message "Ambiguous predicate"
@@ -74,13 +77,13 @@
 
 (defun error-unknown-pred (pred file)
   (declare (type tc:ty-predicate pred)
-           (type coalton-file file))
+           (type se:file file))
 
   (unless (tc:ty-predicate-source pred)
     (util:coalton-bug "Predicate ~S does not have source information" pred))
 
-  (error 'tc-error
-         :err (coalton-error
+  (error 'tc:tc-error
+         :err (se:source-error
                :message "Unknown instance"
                :span (tc:ty-predicate-source pred)
                :file file
@@ -89,8 +92,8 @@
 
 (defun standard-expression-type-mismatch-error (node file subs expected-type ty)
   "Utility for signalling a type-mismatch error in INFER-EXPRESSION-TYPE"
-  (error 'tc-error
-         :err (coalton-error
+  (error 'tc:tc-error
+         :err (se:source-error
                :span (parser:node-source node)
                :file file
                :message "Type mismatch"
@@ -105,7 +108,7 @@
   "Entrypoint for typechecking a group of parsed defines and declares."
   (declare (type parser:toplevel-define-list defines)
            (type parser:toplevel-declare-list declares)
-           (type coalton-file file)
+           (type se:file file)
            (type tc:environment env)
            (values toplevel-define-list tc:environment))
 
@@ -122,15 +125,15 @@
    (alexandria:compose #'parser:node-variable-name #'parser:toplevel-define-name)
    #'parser:toplevel-define-source
    (lambda (first second)
-     (error 'tc-error
-            :err (coalton-error
+     (error 'tc:tc-error
+            :err (se:source-error
                   :span (parser:node-source (parser:toplevel-define-name first))
                   :file file
                   :message "Duplicate definition"
                   :primary-note "first definition here"
                   :notes
                   (list
-                   (make-coalton-error-note
+                   (se:make-source-error-note
                     :type :primary
                     :span (parser:node-source (parser:toplevel-define-name second))
                     :message "second definition here"))))))
@@ -141,15 +144,15 @@
    (alexandria:compose #'parser:identifier-src-name #'parser:toplevel-declare-name)
    #'parser:toplevel-define-source
    (lambda (first second)
-     (error 'tc-error
-            :err (coalton-error
+     (error 'tc:tc-error
+            :err (se:source-error
                   :span (parser:identifier-src-source (parser:toplevel-declare-name first))
                   :file file
                   :message "Duplicate declaration"
                   :primary-note "first declaration here"
                   :notes
                   (list
-                   (make-coalton-error-note
+                   (se:make-source-error-note
                     :type :primary
                     :span (parser:identifier-src-source (parser:toplevel-declare-name second))
                     :message "second declaration here"))))))
@@ -170,8 +173,8 @@
         :for name := (parser:identifier-src-name (parser:toplevel-declare-name declare))
 
         :unless (gethash name def-table)
-          :do (error 'tc-error
-                     :err (coalton-error
+          :do (error 'tc:tc-error
+                     :err (se:source-error
                            :span (parser:identifier-src-source (parser:toplevel-declare-name declare))
                            :file file
                            :message "Orphan declaration"
@@ -215,7 +218,7 @@
                                                    :name name
                                                    :type :value
                                                    :docstring (parser:toplevel-define-docstring define)
-                                                   :location (error:coalton-file-name file))))
+                                                   :location (se:file-name file))))
 
               :if (parser:toplevel-define-orig-params define)
                 :do (setf env (tc:set-function-source-parameter-names
@@ -245,8 +248,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list accessor-list node-literal tc:substitution-list))
+             (type se:file file)
+             (values tc:ty tc:ty-predicate-list accessor-list node-literal tc:substitution-list &optional))
 
     (let ((ty (etypecase (parser:node-literal-value node)
                 (ratio tc:*fraction-type*)
@@ -269,14 +272,14 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                 :value (parser:node-literal-value node))
                subs)))
 
-        (error:coalton-internal-type-error ()
+        (tc:coalton-internal-type-error ()
           (standard-expression-type-mismatch-error node file subs expected-type ty)))))
 
   (:method ((node parser:node-accessor) expected-type subs env file)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type coalton-file file)
+             (type se:file file)
              (values tc:ty tc:ty-predicate-list accessor-list node-accessor tc:substitution-list))
 
     (let* ((from-ty (tc:make-variable))
@@ -308,8 +311,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list accessor-list node-integer-literal tc:substitution-list))
+             (type se:file file)
+             (values tc:ty tc:ty-predicate-list accessor-list node-integer-literal tc:substitution-list &optional))
 
     (let* ((classes-package (find-package "COALTON-LIBRARY/CLASSES"))
 
@@ -332,15 +335,15 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                 :source (parser:node-source node)
                 :value (parser:node-integer-literal-value node))
                subs)))
-        (error:coalton-internal-type-error ()
+        (tc:coalton-internal-type-error ()
           (standard-expression-type-mismatch-error node file subs expected-type tvar)))))
 
   (:method ((node parser:node-variable) expected-type subs env file)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list accessor-list node-variable tc:substitution-list))
+             (type se:file file)
+             (values tc:ty tc:ty-predicate-list accessor-list node-variable tc:substitution-list &optional))
 
     (multiple-value-bind (ty preds)
         (tc-env-lookup-value env node file)
@@ -360,15 +363,15 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                 :source (parser:node-source node)
                 :name (parser:node-variable-name node))
                subs)))
-        (error:coalton-internal-type-error ()
+        (tc:coalton-internal-type-error ()
           (standard-expression-type-mismatch-error node file subs expected-type ty)))))
 
   (:method ((node parser:node-application) expected-type subs env file)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list accessor-list node-application tc:substitution-list))
+             (type se:file file)
+             (values tc:ty tc:ty-predicate-list accessor-list node-application tc:substitution-list &optional))
 
     (multiple-value-bind (fun-ty preds accessors rator-node subs)
         (infer-expression-type (parser:node-application-rator node)
@@ -431,8 +434,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                 (t
                                  (setf fun-ty (tc:apply-substitution subs fun-ty))
 
-                                 (error 'tc-error
-                                        :err (coalton-error
+                                 (error 'tc:tc-error
+                                        :err (se:source-error
                                               :span (parser:node-source node)
                                               :file file
                                               :message "Argument error"
@@ -458,14 +461,14 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                   :rator rator-node
                   :rands rand-nodes)
                  subs)))
-          (error:coalton-internal-type-error ()
+          (tc:coalton-internal-type-error ()
             (standard-expression-type-mismatch-error node file subs expected-type fun-ty_))))))
 
   (:method ((node parser:node-bind) expected-type subs env file)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type coalton-file file)
+             (type se:file file)
              (values null tc:ty-predicate-list accessor-list node-bind tc:substitution-list))
 
     (multiple-value-bind (expr-ty preds accessors expr-node subs)
@@ -499,7 +502,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type coalton-file file)
+             (type se:file file)
              (values tc:ty tc:ty-predicate-list accessor-list node-body tc:substitution-list))
 
     (let* ((preds nil)
@@ -534,23 +537,23 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list accessor-list node-abstraction tc:substitution-list))
+             (type se:file file)
+             (values tc:ty tc:ty-predicate-list accessor-list node-abstraction tc:substitution-list &optional))
 
     (check-duplicates
      (parser:pattern-variables (parser:node-abstraction-params node))
      #'parser:pattern-var-name
      #'parser:pattern-source
      (lambda (first second)
-       (error 'tc-error
-              :err (coalton-error
+       (error 'tc:tc-error
+              :err (se:source-error
                     :span (parser:node-source first)
                     :file file
                     :message "Duplicate parameters name"
                     :primary-note "first parameter here"
                     :notes
                     (list
-                     (make-coalton-error-note
+                     (se:make-source-error-note
                       :type :primary
                       :span (parser:node-source second)
                       :message "second parameter here"))))))
@@ -591,9 +594,9 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
               :for (s2 . ty2) :in (cdr returns)
               :do (handler-case
                       (setf subs (tc:unify subs ty1 ty2))
-                    (error:coalton-internal-type-error ()
-                      (error 'tc-error
-                             :err (coalton-error
+                    (tc:coalton-internal-type-error ()
+                      (error 'tc:tc-error
+                             :err (se:source-error
                                    :span s1
                                    :file file
                                    :message "Return type mismatch"
@@ -601,7 +604,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                                          (tc:apply-substitution subs ty1))
                                    :notes
                                    (list
-                                    (make-coalton-error-note
+                                    (se:make-source-error-note
                                      :type :primary
                                      :span s2
                                      :message (format nil "Second return is of type '~S'"
@@ -611,9 +614,9 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
         (when *returns*
           (handler-case
               (setf subs (tc:unify subs (cdr (first *returns*)) body-ty))
-            (error:coalton-internal-type-error ()
-              (error 'tc-error
-                     :err (coalton-error
+            (tc:coalton-internal-type-error ()
+              (error 'tc:tc-error
+                     :err (se:source-error
                            :span (car (first *returns*))
                            :file file
                            :message "Return type mismatch"
@@ -621,7 +624,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                                  (tc:apply-substitution subs (cdr (first *returns*))))
                            :notes
                            (list
-                            (make-coalton-error-note
+                            (se:make-source-error-note
                              :type :primary
                              :span (parser:node-source (parser:node-body-last-node (parser:node-abstraction-body node)))
                              :message (format nil "Second return is of type '~S'"
@@ -642,14 +645,14 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                     :params params
                     :body body-node)
                    subs)))
-            (error:coalton-internal-type-error ()
+            (tc:coalton-internal-type-error ()
               (standard-expression-type-mismatch-error node file subs expected-type ty)))))))
 
   (:method ((node parser:node-let) expected-type subs env file)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type coalton-file file)
+             (type se:file file)
              (values tc:ty tc:ty-predicate-list accessor-list node-let tc:substitution-list))
 
     ;; Ensure that there are no duplicate let bindings
@@ -658,15 +661,15 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
      (alexandria:compose #'parser:node-variable-name #'parser:node-let-binding-name)
      #'parser:node-let-binding-source
      (lambda (first second)
-       (error 'tc-error
-              :err (coalton-error
+       (error 'tc:tc-error
+              :err (se:source-error
                     :span (parser:node-let-binding-source first)
                     :file file
                     :message "Duplicate definition in let"
                     :primary-note "first definition here"
                     :notes
                     (list
-                     (make-coalton-error-note
+                     (se:make-source-error-note
                       :type :primary
                       :span (parser:node-let-binding-source second)
                       :message "second definition here"))))))
@@ -698,8 +701,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list accessor-list node-lisp tc:substitution-list))
+             (type se:file file)
+             (values tc:ty tc:ty-predicate-list accessor-list node-lisp tc:substitution-list &optional))
 
     (let ((declared-ty (parse-type (parser:node-lisp-type node) (tc-env-env env) file)))
 
@@ -726,15 +729,15 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                 :var-names (parser:node-lisp-var-names node)
                 :body (parser:node-lisp-body node))
                subs)))
-        (error:coalton-internal-type-error ()
+        (tc:coalton-internal-type-error ()
           (standard-expression-type-mismatch-error node file subs expected-type declared-ty)))))
 
   (:method ((node parser:node-match) expected-type subs env file)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list accessor-list node-match tc:substitution-list))
+             (type se:file file)
+             (values tc:ty tc:ty-predicate-list accessor-list node-match tc:substitution-list &optional))
 
     ;; Infer the type of the expression being cased on
     (multiple-value-bind (expr-ty preds accessors expr-node subs)
@@ -791,15 +794,15 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                   :expr expr-node
                   :branches branch-nodes)
                  subs)))
-          (error:coalton-internal-type-error ()
+          (tc:coalton-internal-type-error ()
             (standard-expression-type-mismatch-error node file subs expr-node ret-ty))))))
 
   (:method ((node parser:node-progn) expected-type subs env file)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list accessor-list node-progn tc:substitution-list &optional))
+             (type se:file file)
+             (values tc:ty tc:ty-predicate-list accessor-list node-progn tc:substitution-list))
 
     (multiple-value-bind (body-ty preds accessors body-node subs)
         (infer-expression-type (parser:node-progn-body node)
@@ -821,8 +824,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list accessor-list node tc:substitution-list))
+             (type se:file file)
+             (values tc:ty tc:ty-predicate-list accessor-list node tc:substitution-list &optional))
 
     (let ((declared-ty (parse-type (parser:node-the-type node) (tc-env-env env) file)))
 
@@ -839,9 +842,9 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
         ;; Check that declared-ty and expr-ty unify
         (handler-case
             (setf subs (tc:unify subs declared-ty expr-ty))
-          (error:coalton-internal-type-error ()
-            (error 'tc-error
-                   :err (coalton-error
+          (tc:coalton-internal-type-error ()
+            (error 'tc:tc-error
+                   :err (se:source-error
                          :span (parser:node-source node)
                          :file file
                          :message "Type mismatch"
@@ -852,9 +855,9 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
         ;; Check that declared-ty is not more specific than expr-ty
         (handler-case
             (tc:match expr-ty declared-ty)
-          (error:coalton-internal-type-error ()
-            (error 'tc-error
-                   :err (coalton-error
+          (tc:coalton-internal-type-error ()
+            (error 'tc:tc-error
+                   :err (se:source-error
                          :span (parser:node-source node)
                          :file file
                          :message "Declared type too general"
@@ -876,20 +879,20 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                accessors
                expr-node
                subs))
-          (error:coalton-internal-type-error ()
+          (tc:coalton-internal-type-error ()
             (standard-expression-type-mismatch-error node file subs expected-type expr-ty))))))
 
   (:method ((node parser:node-return) expected-type subs env file)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type coalton-file file)
+             (type se:file file)
              (values tc:ty tc:ty-predicate-list accessor-list node-return tc:substitution-list))
 
     ;; Returns must be inside a lambda
     (when (eq *return-status* :toplevel)
-      (error 'tc-error
-             :err (coalton-error
+      (error 'tc:tc-error
+             :err (se:source-error
                    :span (parser:node-source node)
                    :file file
                    :message "Unexpected return"
@@ -897,8 +900,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
 
     ;; Returns cannot be in a do expression
     (when (eq *return-status* :do)
-      (error 'tc-error
-             :err (coalton-error
+      (error 'tc:tc-error
+             :err (se:source-error
                    :span (parser:node-source node)
                    :file file
                    :message "Invalid return"
@@ -932,7 +935,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type coalton-file file)
+             (type se:file file)
              (values tc:ty tc:ty-predicate-list accessor-list node-or tc:substitution-list))
 
     (let* ((preds nil)
@@ -964,9 +967,9 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
               :source (parser:node-source node)
               :nodes body-nodes)
              subs))
-        (error:coalton-internal-type-error ()
-          (error 'tc-error
-                 :err (coalton-error
+        (tc:coalton-internal-type-error ()
+          (error 'tc:tc-error
+                 :err (se:source-error
                        :span (parser:node-source node)
                        :file file
                        :message "Type mismatch"
@@ -978,7 +981,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type coalton-file file)
+             (type se:file file)
              (values tc:ty tc:ty-predicate-list accessor-list node-and tc:substitution-list))
 
     (let* ((preds nil)
@@ -1010,9 +1013,9 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
               :source (parser:node-source node)
               :nodes body-nodes)
              subs))
-        (error:coalton-internal-type-error ()
-          (error 'tc-error
-                 :err (coalton-error
+        (tc:coalton-internal-type-error ()
+          (error 'tc:tc-error
+                 :err (se:source-error
                        :span (parser:node-source node)
                        :file file
                        :message "Type mismatch"
@@ -1024,8 +1027,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list accessor-list node-if tc:substitution-list))
+             (type se:file file)
+             (values tc:ty tc:ty-predicate-list accessor-list node-if tc:substitution-list &optional))
 
     (multiple-value-bind (expr-ty preds accessors expr-node subs)
         (infer-expression-type (parser:node-if-expr node)
@@ -1067,15 +1070,15 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                   :then then-node
                   :else else-node)
                  subs))
-            (error:coalton-internal-type-error ()
+            (tc:coalton-internal-type-error ()
               (standard-expression-type-mismatch-error node file subs expr-node else-ty)))))))
 
   (:method ((node parser:node-when) expected-type subs env file)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list accessor-list node-when tc:substitution-list))
+             (type se:file file)
+             (values tc:ty tc:ty-predicate-list accessor-list node-when tc:substitution-list &optional))
 
     (multiple-value-bind (expr-ty preds accessors expr-node subs)
         (infer-expression-type (parser:node-when-expr node)
@@ -1107,15 +1110,15 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                 :expr expr-node
                 :body body-node)
                subs))
-          (error:coalton-internal-type-error ()
+          (tc:coalton-internal-type-error ()
             (standard-expression-type-mismatch-error node file subs expected-type body-ty))))))
 
   (:method ((node parser:node-unless) expected-type subs env file)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list accessor-list node-unless tc:substitution-list))
+             (type se:file file)
+             (values tc:ty tc:ty-predicate-list accessor-list node-unless tc:substitution-list &optional))
 
     (multiple-value-bind (expr-ty preds accessors expr-node subs)
         (infer-expression-type (parser:node-unless-expr node)
@@ -1147,7 +1150,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                 :expr expr-node
                 :body body-node)
                subs))
-          (error:coalton-internal-type-error ()
+          (tc:coalton-internal-type-error ()
             (standard-expression-type-mismatch-error node file subs expected-type body-ty))))))
 
 
@@ -1155,8 +1158,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list accessor-list node-while tc:substitution-list))
+             (type se:file file)
+             (values tc:ty tc:ty-predicate-list accessor-list node-while tc:substitution-list &optional))
     (multiple-value-bind (expr-ty preds accessors expr-node subs)
         (infer-expression-type (parser:node-while-expr node)
                                tc:*boolean-type*
@@ -1190,15 +1193,15 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                 :expr expr-node
                 :body body-node)
                subs))
-          (error:coalton-internal-type-error () 
+          (tc:coalton-internal-type-error ()
             (standard-expression-type-mismatch-error node file subs expected-type tc:*unit-type*))))))
 
   (:method ((node parser:node-while-let) expected-type subs env file)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list accessor-list node-while-let tc:substitution-list))
+             (type se:file file)
+             (values tc:ty tc:ty-predicate-list accessor-list node-while-let tc:substitution-list &optional))
 
     (multiple-value-bind (expr-ty preds accessors expr-node subs)
         (infer-expression-type (parser:node-while-let-expr node)
@@ -1236,16 +1239,16 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                   :expr expr-node
                   :body body-node)
                  subs))
-            (error:coalton-internal-type-error ()
-             (standard-expression-type-mismatch-error node file subs expected-type tc:*unit-type*)))))))
+            (tc:coalton-internal-type-error ()
+              (standard-expression-type-mismatch-error node file subs expected-type tc:*unit-type*)))))))
 
 
   (:method ((node parser:node-for) expected-type subs env file)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list accessor-list node-for tc:substitution-list))
+             (type se:file file)
+             (values tc:ty tc:ty-predicate-list accessor-list node-for tc:substitution-list &optional))
 
     (let* ((iterator-package
              (find-package "COALTON-LIBRARY/ITERATOR"))
@@ -1287,15 +1290,16 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                     :expr expr-node
                     :body body-node)
                    subs))
-              (error:coalton-internal-type-error ()
+              (tc:coalton-internal-type-error ()
                 (standard-expression-type-mismatch-error node file subs expected-type tc:*unit-type*))))))))
 
   (:method ((node parser:node-loop) expected-type subs env file)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list accessor-list node-loop tc:substitution-list))
+             (type se:file file)
+             (values tc:ty tc:ty-predicate-list accessor-list node-loop tc:substitution-list &optional))
+
     (multiple-value-bind (body-ty preds accessors body-node subs)
         (infer-expression-type (parser:node-loop-body node)
                                (tc:make-variable)
@@ -1316,15 +1320,15 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
               :label (parser:node-loop-label node)
               :body body-node)
              subs))
-        (error:coalton-internal-type-error ()
+        (tc:coalton-internal-type-error ()
           (standard-expression-type-mismatch-error node file subs expected-type tc:*unit-type* )))))
 
-    (:method ((node parser:node-break) expected-type subs env file)
+  (:method ((node parser:node-break) expected-type subs env file)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list accessor-list node-break tc:substitution-list))
+             (type se:file file)
+             (values tc:ty tc:ty-predicate-list accessor-list node-break tc:substitution-list &optional))
     (handler-case
         (progn
           (setf subs (tc:unify subs tc:*unit-type* expected-type)) 
@@ -1337,15 +1341,15 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
             :source (parser:node-source node)
             :label (parser:node-break-label node))
            subs))
-      (error:coalton-internal-type-error ()
+      (tc:coalton-internal-type-error ()
         (standard-expression-type-mismatch-error node file subs expected-type tc:*unit-type*))))
 
   (:method ((node parser:node-continue) expected-type subs env file)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list accessor-list node-continue tc:substitution-list))
+             (type se:file file)
+             (values tc:ty tc:ty-predicate-list accessor-list node-continue tc:substitution-list &optional))
     (handler-case
         (progn
           (setf subs (tc:unify subs tc:*unit-type* expected-type))
@@ -1358,7 +1362,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
             :source (parser:node-source node)
             :label (parser:node-continue-label node))
            subs))
-      (error:coalton-internal-type-error ()
+      (tc:coalton-internal-type-error ()
         (standard-expression-type-mismatch-error node file subs expected-type tc:*unit-type*))))
 
 
@@ -1366,7 +1370,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type coalton-file file)
+             (type se:file file)
              (values tc:ty tc:ty-predicate-list accessor-list node-cond-clause tc:substitution-list))
 
     (multiple-value-bind (expr-ty preds accessors expr-node subs)
@@ -1401,8 +1405,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type coalton-file file)
-             (values tc:ty tc:ty-predicate-list accessor-list node-cond tc:substitution-list))
+             (type se:file file)
+             (values tc:ty tc:ty-predicate-list accessor-list node-cond tc:substitution-list &optional))
 
     (let* ((preds nil)
            (accessors nil)
@@ -1436,14 +1440,14 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                 :source (parser:node-source node)
                 :clauses clause-nodes)
                subs)))
-        (error:coalton-internal-type-error ()
+        (tc:coalton-internal-type-error ()
           (standard-expression-type-mismatch-error node file subs expected-type ret-ty)))))
 
   (:method ((node parser:node-do-bind) expected-type subs env file)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type coalton-file file)
+             (type se:file file)
              (values tc:ty tc:ty-predicate-list accessor-list node-do-bind tc:substitution-list))
 
     (let ((*return-status* :do))
@@ -1475,9 +1479,9 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                   :expr expr-node
                   :source (parser:node-do-bind-source node))
                  subs))
-            (error:coalton-internal-type-error ()
-              (error 'tc-error
-                     :err (coalton-error
+            (tc:coalton-internal-type-error ()
+              (error 'tc:tc-error
+                     :err (se:source-error
                            :span (parser:node-do-bind-source node)
                            :file file
                            :message "Type mismatch"
@@ -1489,7 +1493,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type coalton-file file)
+             (type se:file file)
              (values tc:ty tc:ty-predicate-list accessor-list node-do tc:substitution-list))
 
     (let* (;; m-type is the type of the monad and has kind "* -> *"
@@ -1586,9 +1590,9 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                 :nodes nodes
                 :last-node last-node) 
                subs))
-          (error:coalton-internal-type-error ()
-            (error 'tc-error
-                   :err (coalton-error
+          (tc:coalton-internal-type-error ()
+            (error 'tc:tc-error
+                   :err (se:source-error
                          :span (parser:node-source node)
                          :file file
                          :message "Type mismatch"
@@ -1608,7 +1612,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type coalton-file file)
+             (type se:file file)
              (values tc:ty pattern-var tc:substitution-list))
 
     (let ((ty (tc-env-add-variable env (parser:pattern-var-name pat))))
@@ -1630,7 +1634,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type coalton-file file)
+             (type se:file file)
              (values tc:ty pattern-literal tc:substitution-list))
 
     (let ((ty (etypecase (parser:pattern-literal-value pat)
@@ -1652,9 +1656,9 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                 :source (parser:pattern-source pat)
                 :value (parser:pattern-literal-value pat))
                subs)))
-        (error:coalton-internal-type-error ()
-          (error 'tc-error
-                 :err (coalton-error
+        (tc:coalton-internal-type-error ()
+          (error 'tc:tc-error
+                 :err (se:source-error
                        :span (parser:pattern-source pat)
                        :file file
                        :message "Type mismatch"
@@ -1666,7 +1670,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type coalton-file file)
+             (type se:file file)
              (values tc:ty pattern-wildcard tc:substitution-list))
 
     (values
@@ -1680,7 +1684,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (type coalton-file file)
+             (type se:file file)
              (values tc:ty pattern-constructor tc:substitution-list))
 
     (let ((ctor (tc:lookup-constructor (tc-env-env env) (parser:pattern-constructor-name pat) :no-error t)))
@@ -1690,22 +1694,22 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
        #'parser:pattern-var-name
        #'parser:pattern-source
        (lambda (first second)
-         (error 'tc-error
-                :err (coalton-error
+         (error 'tc:tc-error
+                :err (se:source-error
                       :span (parser:pattern-source first) 
                       :file file
                       :message "Duplicate pattern variable"
                       :primary-note "first definition here"
                       :notes
                       (list
-                       (make-coalton-error-note
+                       (se:make-source-error-note
                         :type :primary
                         :span (parser:pattern-source second) 
                         :message "second definition here"))))))
 
       (unless ctor
-        (error 'tc-error
-               :err (coalton-error
+        (error 'tc:tc-error
+               :err (se:source-error
                      :span (parser:pattern-source pat)
                      :file file
                      :message "Unknown constructor"
@@ -1717,8 +1721,8 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
             (num-args (length (parser:pattern-constructor-patterns pat))))
 
         (unless (= arity num-args)
-          (error 'tc-error
-                 :err (coalton-error
+          (error 'tc:tc-error
+                 :err (se:source-error
                        :span (parser:pattern-source pat)
                        :file file
                        :message "Argument mismatch"
@@ -1754,9 +1758,9 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                     :name (parser:pattern-constructor-name pat)
                     :patterns pattern-nodes)
                    subs)))
-            (error:coalton-internal-type-error ()
-              (error 'tc-error
-                     :err (coalton-error
+            (tc:coalton-internal-type-error ()
+              (error 'tc:tc-error
+                     :err (se:source-error
                            :span (parser:pattern-source pat)
                            :file file
                            :message "Type mismatch"
@@ -1773,7 +1777,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
            (type parser:node-let-declare-list declares)
            (type tc:substitution-list subs)
            (type tc-env env)
-           (type coalton-file file)
+           (type se:file file)
            (values tc:ty-predicate-list accessor-list (or toplevel-define-list node-let-binding-list) tc:substitution-list &optional))
 
   (let ((def-table (make-hash-table :test #'eq))
@@ -1785,15 +1789,15 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
           :for name := (parser:node-variable-name (parser:node-let-binding-name binding))
 
           :if (gethash name def-table)
-            :do (error 'tc-error
-                       :err (coalton-error
+            :do (error 'tc:tc-error
+                       :err (se:source-error
                              :span (parser:node-source (parser:node-let-binding-name binding))
                              :file file
                              :message "Duplicate binding in let"
                              :primary-note "second definition here"
                              :notes
                              (list
-                              (make-coalton-error-note
+                              (se:make-source-error-note
                                :type :primary
                                :span (parser:node-source
                                       (parser:node-let-binding-name
@@ -1808,15 +1812,15 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
           :for name := (parser:node-variable-name (parser:node-let-declare-name declare))
 
           :if (gethash name dec-table)
-            :do (error 'tc-error
-                       :err (coalton-error
+            :do (error 'tc:tc-error
+                       :err (se:source-error
                              :span (parser:node-source (parser:node-let-declare-name declare))
                              :file file
                              :message "Duplicate declaration in let"
                              :primary-note "second declaration here"
                              :notes
                              (list
-                              (make-coalton-error-note
+                              (se:make-source-error-note
                                :type :primary
                                :span (parser:node-source
                                       (parser:node-let-declare-name
@@ -1830,8 +1834,8 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
           :for name := (parser:node-variable-name (parser:node-let-declare-name declare))
 
           :unless (gethash name def-table)
-            :do (error 'tc-error
-                       :err (coalton-error
+            :do (error 'tc:tc-error
+                       :err (se:source-error
                              :span (parser:node-source (parser:node-let-declare-name declare))
                              :file file
                              :message "Orphan declare in let"
@@ -1852,7 +1856,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
            (type hash-table dec-table)
            (type tc:substitution-list subs)
            (type tc-env env)
-           (type coalton-file file)
+           (type se:file file)
            (values tc:ty-predicate-list accessor-list (or toplevel-define-list node-let-binding-list) tc:substitution-list))
   ;;
   ;; Binding type inference has several steps.
@@ -1948,7 +1952,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
            (type cons source)
            (type tc:substitution-list subs)
            (type tc-env env)
-           (type coalton-file file)
+           (type se:file file)
            (values tc:ty-predicate-list (or toplevel-define node-let-binding instance-method-definition) tc:substitution-list &optional))
   
   ;; HACK: recursive scc checking on instances is too strict
@@ -1980,8 +1984,8 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
         (setf subs (tc:compose-substitution-lists subs subs_))
 
         (when accessors
-          (error 'tc-error
-                 :err (coalton-error
+          (error 'tc:tc-error
+                 :err (se:source-error
                        :span (accessor-source (first accessors))
                        :file file
                        :message "Ambiguous accessor"
@@ -2065,8 +2069,8 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
                 ;; Check that the declared and inferred schemes match
                 (unless (equalp declared-ty output-scheme)
-                  (error 'tc-error
-                         :err (coalton-error
+                  (error 'tc:tc-error
+                         :err (se:source-error
                                :message "Declared type is too general"
                                :span source
                                :file file
@@ -2076,8 +2080,8 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
                 ;; Check for undeclared predicates
                 (when (not (null retained-preds))
-                  (error 'tc-error
-                         :err (coalton-error
+                  (error 'tc:tc-error
+                         :err (se:source-error
                                :message "Explicit type is missing inferred predicate"
                                :span source
                                :file file
@@ -2093,7 +2097,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 (defun check-for-invalid-recursive-scc (bindings env file)
   (declare (type (or parser:toplevel-define-list parser:node-let-binding-list parser:instance-method-definition-list) bindings)
            (type tc:environment env)
-           (type coalton-file file))
+           (type se:file file))
 
   (assert bindings)
 
@@ -2108,14 +2112,14 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
     (let ((first-fn (find-if #'parser:binding-function-p bindings)))
       (assert first-fn)
 
-      (error 'tc-error
-             :err (coalton-error
+      (error 'tc:tc-error
+             :err (se:source-error
                    :span (parser:node-source (parser:binding-name first-fn))
                    :file file
                    :message "Invalid recursive bindings"
                    :primary-note "function can not be defined recursively with variables"
                    :notes (loop :for binding :in (remove first-fn bindings :test #'eq)
-                                :collect (make-coalton-error-note
+                                :collect (se:make-source-error-note
                                           :type :secondary
                                           :span (parser:node-source (parser:binding-name binding))
                                           :message "with definition"))))))
@@ -2130,14 +2134,14 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
   ;; Toplevel bindings cannot be recursive values
   (when (parser:binding-toplevel-p (first bindings))
-    (error 'tc-error
-           :err (coalton-error
+    (error 'tc:tc-error
+           :err (se:source-error
                  :span (parser:node-source (parser:binding-name (first bindings)))
                  :file file
                  :message "Invalid recursive bindings"
                  :primary-note "invalid recursive variable bindings"
                  :notes (loop :for binding :in (rest bindings)
-                              :collect (make-coalton-error-note
+                              :collect (se:make-source-error-note
                                         :type :secondary
                                         :span (parser:node-source (parser:binding-name binding))
                                         :message "with definition")))))
@@ -2198,14 +2202,14 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
       (when (every (alexandria:compose #'valid-recursive-constructor-call-p #'parser:binding-value) bindings)
         (return-from check-for-invalid-recursive-scc))
 
-      (error 'tc-error
-             :err (coalton-error
+      (error 'tc:tc-error
+             :err (se:source-error
                    :span (parser:node-source (parser:binding-name (first bindings)))
                    :file file
                    :message "Invalid recursive bindings"
                    :primary-note "invalid recursive variable bindings"
                    :notes (loop :for binding :in (rest bindings)
-                                :collect (make-coalton-error-note
+                                :collect (se:make-source-error-note
                                           :type :secondary
                                           :span (parser:node-source (parser:binding-name binding))
                                           :message "with definition")))))))
@@ -2215,7 +2219,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
   (declare (type (or parser:toplevel-define-list parser:node-let-binding-list) bindings)
            (type tc:substitution-list subs)
            (type tc-env env)
-           (type coalton-file file)
+           (type se:file file)
            (values tc:ty-predicate-list (or toplevel-define-list node-let-binding-list) tc:substitution-list &optional))
 
   (check-for-invalid-recursive-scc bindings (tc-env-env env) file)
@@ -2255,8 +2259,8 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
       (setf subs (tc:compose-substitution-lists subs subs_))
 
       (when accessors
-        (error 'tc-error
-               :err (coalton-error
+        (error 'tc:tc-error
+               :err (se:source-error
                      :span (accessor-source (first accessors))
                      :file file
                      :message "Ambiguous accessor"
@@ -2282,7 +2286,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
           (let* ((defaultable-preds (handler-case
                                         (tc:default-preds (tc-env-env env) (append env-tvars local-tvars) retained-preds)
-                                      (error:coalton-internal-type-error (e)
+                                      (tc:coalton-internal-type-error (e)
                                         (error-ambiguous-pred (tc:ambiguous-constraint-pred e) file))))
 
                  (retained-preds (set-difference retained-preds defaultable-preds :test #'eq))
@@ -2385,7 +2389,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
   (declare (type (or parser:toplevel-define parser:node-let-binding parser:instance-method-definition) binding)
            (type tc:ty expected-type)
            (type tc:substitution-list subs)
-           (type coalton-file file)
+           (type se:file file)
            (values tc:ty-predicate-list accessor-list (or toplevel-define node-let-binding instance-method-definition) tc:substitution-list))
 
   (check-duplicates
@@ -2393,15 +2397,15 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
    #'parser:pattern-var-name
    #'parser:pattern-source
    (lambda (first second)
-     (error 'tc-error
-            :err (coalton-error
+     (error 'tc:tc-error
+            :err (se:source-error
                   :span (parser:node-source first)
                   :file file
                   :message "Duplicate parameters name"
                   :primary-note "first parameter here"
                   :notes
                   (list
-                   (make-coalton-error-note
+                   (se:make-source-error-note
                     :type :primary
                     :span (parser:node-source second)
                     :message "second parameter here"))))))
@@ -2452,9 +2456,9 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                          :for (s2 . ty2) :in (cdr returns)
                          :do (handler-case
                                  (setf subs (tc:unify subs ty1 ty2))
-                               (error:coalton-internal-type-error ()
-                                 (error 'tc-error
-                                        :err (coalton-error
+                               (tc:coalton-internal-type-error ()
+                                 (error 'tc:tc-error
+                                        :err (se:source-error
                                               :span s1
                                               :file file
                                               :message "Return type mismatch"
@@ -2462,7 +2466,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                                                                     (tc:apply-substitution subs ty1))
                                               :notes
                                               (list
-                                               (make-coalton-error-note
+                                               (se:make-source-error-note
                                                 :type :primary
                                                 :span s2
                                                 :message (format nil "Second return is of type '~S'"
@@ -2472,9 +2476,9 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                    (when *returns*
                      (handler-case
                          (setf subs (tc:unify subs (cdr (first *returns*)) ret-ty))
-                       (error:coalton-internal-type-error ()
-                         (error 'tc-error
-                                :err (coalton-error
+                       (tc:coalton-internal-type-error ()
+                         (error 'tc:tc-error
+                                :err (se:source-error
                                       :span (car (first *returns*))
                                       :file file
                                       :message "Return type mismatch"
@@ -2482,7 +2486,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                                                             (tc:apply-substitution subs (cdr (first *returns*))))
                                       :notes
                                       (list
-                                       (make-coalton-error-note
+                                       (se:make-source-error-note
                                         :type :primary
                                         :span (parser:node-source (parser:binding-last-node binding))
                                         :message (format nil "Second return is of type '~S'"
@@ -2522,9 +2526,9 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                accessors
                typed-binding
                subs)))
-        (error:coalton-internal-type-error ()
-          (error 'tc-error
-                 :err (coalton-error
+        (tc:coalton-internal-type-error ()
+          (error 'tc:tc-error
+                 :err (se:source-error
                        :span (parser:binding-source binding)
                        :file file
                        :message "Type mismatch"

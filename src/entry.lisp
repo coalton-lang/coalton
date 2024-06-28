@@ -2,9 +2,9 @@
   (:use
    #:cl)
   (:local-nicknames
+   (#:se #:source-error)
    (#:settings #:coalton-impl/settings)
    (#:util #:coalton-impl/util)
-   (#:error #:coalton-impl/error)
    (#:parser #:coalton-impl/parser)
    (#:tc #:coalton-impl/typechecker)
    (#:analysis #:coalton-impl/analysis)
@@ -89,7 +89,7 @@
 
 (defun expression-entry-point (node file)
   (declare (type parser:node node)
-           (type error:coalton-file file))
+           (type se:file file))
 
   (let ((env *global-environment*))
 
@@ -111,7 +111,7 @@
 
           (when accessors
             (error 'tc:tc-error
-                   :err (tc:coalton-error
+                   :err (se:source-error
                          :span (tc:accessor-source (first accessors))
                          :file file
                          :message "Ambiguous accessor"
@@ -150,7 +150,7 @@
                                (tc:ty-scheme-type scheme))))
 
               (error 'tc:tc-error
-                     :err (error:coalton-error
+                     :err (se:source-error
                            :span (tc:node-source node)
                            :file file
                            :message "Unable to codegen"
@@ -168,7 +168,7 @@
                                                  (tc:qualified-ty-predicates qual-type))
                            :notes
                            (list
-                            (error:make-coalton-error-note
+                            (se:make-source-error-note
                              :type :secondary
                              :span (tc:node-source node)
                              :message "Add a type assertion with THE to resolve ambiguity")))))))))))
@@ -228,8 +228,9 @@
   "Read Coalton source from INPUT and write Lisp source to OUTPUT."
   (parser:with-reader-context input
     (with-environment-updates updates
-      (let* ((file (error:make-coalton-file :stream input
-                                            :name name))
+      (let* ((file (se:make-file
+                    :stream input
+                    :name name))
              (program (entry-point (parser:read-program input file :mode :file))))
         (print-form output (make-prologue))
         (print-form output (make-environment-updater updates))

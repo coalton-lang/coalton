@@ -6,7 +6,6 @@
 (defpackage #:coalton-impl/parser/binding
   (:use
    #:cl
-   #:coalton-impl/error
    #:coalton-impl/parser/pattern
    #:coalton-impl/parser/expression
    #:coalton-impl/parser/toplevel)

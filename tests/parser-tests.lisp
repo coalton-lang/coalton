@@ -12,7 +12,7 @@
                                      :direction :input
                                      :element-type 'character)
                (parser:with-reader-context stream
-                 (parser:read-program stream (error:make-coalton-file :stream stream :name (namestring file)) :mode :file))))
+                 (parser:read-program stream (se:make-file :stream stream :name (namestring file)) :mode :file))))
 
            (parse-error-text (file)
              (with-open-file (stream file
@@ -21,9 +21,9 @@
                (handler-case
                    (parser:with-reader-context stream
                      (entry:entry-point
-                      (parser:read-program stream (error:make-coalton-file :stream stream :name "test") :mode :file))
+                      (parser:read-program stream (se:make-file :stream stream :name "test") :mode :file))
                      "no errors")
-                 (error:coalton-base-error (c)
+                 (se:source-base-error (c)
                    (princ-to-string c))))))
     (dolist (file (test-files "tests/parser-test-files/bad-files/*.coal"))
       (let ((error-file (make-pathname :type "error"

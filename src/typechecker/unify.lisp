@@ -1,12 +1,11 @@
 (defpackage #:coalton-impl/typechecker/unify
   (:use
    #:cl
+   #:coalton-impl/typechecker/base
    #:coalton-impl/typechecker/type-errors
    #:coalton-impl/typechecker/types
    #:coalton-impl/typechecker/substitutions
    #:coalton-impl/typechecker/predicate)
-  (:local-nicknames
-   (#:error #:coalton-impl/error))
   (:export
    #:unify                              ; FUNCTION
    #:match                              ; FUNCTION
@@ -103,7 +102,7 @@ apply s type1 == type2")
                                            (apply-substitution subs pred-type2))
                                       subs)))
                 :initial-value nil))
-    (error:coalton-internal-type-error ()
+    (coalton-internal-type-error ()
       (error 'predicate-unification-error :pred1 pred1 :pred2 pred2))))
 
 (defun predicate-match (pred1 pred2 &optional subs)
@@ -129,7 +128,7 @@ apply s type1 == type2")
                                      subs)))
                :initial-value nil)
        subs)
-    (error:coalton-internal-type-error ()
+    (coalton-internal-type-error ()
       (error 'predicate-unification-error :pred1 pred1 :pred2 pred2))))
 
 (defun match-list (list1 list2)

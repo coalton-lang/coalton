@@ -30,32 +30,32 @@
                   output-stream)
     :close-stream
     (with-open-file (stream program-file)
-      (let* ((f (coalton-impl/error::make-coalton-file :stream stream :name "file"))
+      (let* ((f (se:make-file :stream stream :name "file"))
              (msg (with-output-to-string (output)
                     ;; an annotating error
-                    (coalton-impl/error::display-coalton-error
+                    (se:display-source-error
                      output
-                     (coalton-impl/error::coalton-error
+                     (se:source-error
                       :span '(76 . 321)
                       :file f
                       :message "message"
                       :primary-note "define instance form"
                       :notes (list
-                              (coalton-impl/error:make-coalton-error-note
+                              (se:make-source-error-note
                                :type :secondary
                                :span  '(132 . 319)
                                :message "message 2")
-                              (coalton-impl/error:make-coalton-error-note
+                              (se:make-source-error-note
                                :type :secondary
                                :span  '(140 . 145)
                                :message "message 3")
-                              (coalton-impl/error:make-coalton-error-note
+                              (se:make-source-error-note
                                :type :secondary
                                :span  '(170 . 174)
                                :message "message 4"))
                       :help-notes
                       (list
-                       (coalton-impl/error:make-coalton-error-help
+                       (se:make-source-error-help
                         :span  '(289 . 291)
                         :replacement (lambda (existing)
                                        (concatenate 'string "*" existing "*"))

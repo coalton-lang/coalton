@@ -7,14 +7,17 @@
 (defpackage #:coalton-impl/typechecker/define-type
   (:use
    #:cl
-   #:coalton-impl/typechecker/base
    #:coalton-impl/typechecker/parse-type
    #:coalton-impl/typechecker/partial-type-env)
+  (:import-from
+   #:coalton-impl/typechecker/base
+   #:check-package
+   #:check-duplicates)
   (:local-nicknames
+   (#:se #:source-error)
    (#:util #:coalton-impl/util)
    (#:algo #:coalton-impl/algorithm)
    (#:parser #:coalton-impl/parser)
-   (#:error #:coalton-impl/error)
    (#:tc #:coalton-impl/typechecker/stage-1))
   (:export
    #:toplevel-define-type               ; FUNCTION
@@ -66,7 +69,7 @@
 (defun toplevel-define-type (types structs file env)
   (declare (type parser:toplevel-define-type-list types)
            (type parser:toplevel-define-struct-list structs)
-           (type coalton-file file)
+           (type se:file file)
            (type tc:environment env)
            (values type-definition-list parser:toplevel-define-instance-list tc:environment))
 
@@ -90,15 +93,15 @@
    (alexandria:compose #'parser:identifier-src-name #'parser:type-definition-name)
    #'parser:type-definition-source
    (lambda (first second)
-     (error 'tc-error
-            :err (coalton-error
+     (error 'tc:tc-error
+            :err (se:source-error
                   :span (parser:type-definition-source first)
                   :file file
                   :message "Duplicate type definitions"
                   :primary-note "first definition here"
                   :notes
                   (list
-                   (make-coalton-error-note
+                   (se:make-source-error-note
                     :type :primary
                     :span (parser:type-definition-source second)
                     :message "second definition here"))))))
@@ -111,14 +114,14 @@
    (alexandria:compose #'parser:identifier-src-name #'parser:type-definition-ctor-name)
    #'parser:type-definition-ctor-source
    (lambda (first second)
-     (error 'tc-error
-            :err (coalton-error
+     (error 'tc:tc-error
+            :err (se:source-error
                   :span (parser:type-definition-ctor-source first)
                   :file file
                   :message "Duplicate constructor definitions"
                   :primary-note "first definition here"
                   :notes
-                  (list (make-coalton-error-note
+                  (list (se:make-source-error-note
                          :type :primary
                          :span (parser:type-definition-ctor-source second)
                          :message "second definition here"))))))
@@ -130,14 +133,14 @@
              #'parser:keyword-src-name
              #'parser:keyword-src-source
              (lambda (first second)
-               (error 'tc-error
-                      :err (coalton-error
+               (error 'tc:tc-error
+                      :err (se:source-error
                             :span (parser:keyword-src-source first)
                             :file file
                             :message "Duplicate type variable definitions"
                             :primary-note "first definition here"
                             :notes
-                            (list (make-coalton-error-note
+                            (list (se:make-source-error-note
                                    :type :primary
                                    :span (parser:keyword-src-source second)
                                    :message "second definition here")))))))
@@ -321,7 +324,7 @@
 (defun infer-define-type-scc-kinds (types env file)
   (declare (type parser:type-definition-list types)
            (type partial-type-env env)
-           (type coalton-file file)
+           (type se:file file)
            (values type-definition-list parser:toplevel-define-instance-list))
 
   (let ((ksubs nil)
@@ -390,8 +393,8 @@
              :when (eq repr-type :enum)
                :do (loop :for ctor :in (parser:toplevel-define-type-ctors type)
                          :unless (endp (parser:constructor-fields ctor))
-                           :do (error 'tc-error
-                                      :err (coalton-error
+                           :do (error 'tc:tc-error
+                                      :err (se:source-error
                                             :span (parser:ty-source (first (parser:constructor-fields ctor)))
                                             :file file
                                             :message "Invalid repr :enum attribute"
@@ -400,8 +403,8 @@
                    ;; Check that repr :transparent types have a single constructor
              :when (eq repr-type :transparent)
                :do (unless (= 1 (length (parser:type-definition-ctors type)))
-                     (error 'tc-error
-                            :err (coalton-error
+                     (error 'tc:tc-error
+                            :err (se:source-error
                                   :span (parser:toplevel-define-type-source type)
                                   :file file
                                   :message "Invalid repr :transparent attribute"
@@ -411,8 +414,8 @@
                    ;; Check that the single constructor of a repr :transparent type has a single field
              :when (eq repr-type :transparent)
                :do (unless (= 1 (length (parser:type-definition-ctor-field-types (first (parser:type-definition-ctors type)))))
-                     (error 'tc-error
-                            :err (coalton-error
+                     (error 'tc:tc-error
+                            :err (se:source-error
                                   :span (parser:type-definition-ctor-source (first (parser:type-definition-ctors type)))
                                   :file file
                                   :message "Invalid repr :transparent attribute"

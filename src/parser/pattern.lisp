@@ -1,13 +1,13 @@
 (defpackage #:coalton-impl/parser/pattern
   (:use
    #:cl
-   #:coalton-impl/error
    #:coalton-impl/parser/base)
   (:shadowing-import-from
    #:coalton-impl/parser/base
    #:parse-error)
   (:local-nicknames
    (#:cst #:concrete-syntax-tree)
+   (#:se #:source-error)
    (#:util #:coalton-impl/util))
   (:export
    #:pattern                            ; STRUCT
@@ -89,7 +89,7 @@
 
 (defun parse-pattern (form file)
   (declare (type cst:cst form)
-           (type coalton-file file))
+           (type se:file file))
 
   (cond
     ((and (cst:atom form)
@@ -107,7 +107,7 @@
           (identifierp (cst:raw form)))
      (when (string= "_" (symbol-name (cst:raw form)))
        (error 'parse-error
-              :err  (coalton-error
+              :err  (se:source-error
                      :span (cst:source form)
                      :file file
                      :message "Invalid variable"
@@ -119,7 +119,7 @@
 
     ((cst:atom form)
      (error 'parse-error
-            :err (coalton-error
+            :err (se:source-error
                   :span (cst:source form)
                   :file file
                   :message "Invalid pattern"
@@ -127,7 +127,7 @@
 
     ((not (cst:proper-list-p form))
      (error 'parse-error
-            :err (coalton-error
+            :err (se:source-error
                   :span (cst:source form)
                   :file file
                   :message "Invalid match branch"
@@ -136,7 +136,7 @@
     ((not (and (cst:atom (cst:first form))
                (identifierp (cst:raw (cst:first form)))))
      (error 'parse-error
-            :err (coalton-error
+            :err (se:source-error
                   :span (cst:source (cst:first form))
                   :file file
                   :message "Invalid pattern"

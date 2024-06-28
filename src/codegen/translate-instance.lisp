@@ -15,8 +15,7 @@
    #:translate-toplevel)
   (:local-nicknames
    (#:util #:coalton-impl/util)
-   (#:tc #:coalton-impl/typechecker)
-   (#:error #:coalton-impl/error))
+   (#:tc #:coalton-impl/typechecker))
   (:export
    #:translate-instance                   ; FUNCTION
    ))

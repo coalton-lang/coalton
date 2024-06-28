@@ -1,14 +1,17 @@
 (defpackage #:coalton-impl/typechecker/define-class
   (:use
    #:cl
-   #:coalton-impl/typechecker/base
    #:coalton-impl/typechecker/parse-type
    #:coalton-impl/typechecker/partial-type-env)
+  (:import-from
+   #:coalton-impl/typechecker/base
+   #:check-package
+   #:check-duplicates)
   (:local-nicknames
+   (#:se #:source-error)
    (#:util #:coalton-impl/util)
    (#:algo #:coalton-impl/algorithm)
    (#:parser #:coalton-impl/parser)
-   (#:error #:coalton-impl/error)
    (#:tc #:coalton-impl/typechecker/stage-1))
   (:export
    #:toplevel-define-class              ; FUNCTION
@@ -39,7 +42,7 @@
 
 (defun toplevel-define-class (classes file env)
   (declare (type parser:toplevel-define-class-list classes)
-           (type error:coalton-file file)
+           (type se:file file)
            (type tc:environment env)
            (values tc:ty-class-list tc:environment))
 
@@ -63,15 +66,15 @@
    (alexandria:compose #'parser:identifier-src-name #'parser:toplevel-define-class-name)
    #'parser:toplevel-define-class-source
    (lambda (first second)
-     (error 'tc-error
-            :err (coalton-error
+     (error 'tc:tc-error
+            :err (se:source-error
                   :span (parser:toplevel-define-class-head-src first)
                   :file file
                   :message "Duplicate class definition"
                   :primary-note "first definition here"
                   :notes
                   (list
-                   (make-coalton-error-note
+                   (se:make-source-error-note
                     :type :primary
                     :span (parser:toplevel-define-class-head-src second)
                     :message "second definition here"))))))
@@ -82,15 +85,15 @@
    (alexandria:compose #'parser:identifier-src-name #'parser:method-definition-name)
    #'parser:method-definition-source
    (lambda (first second)
-     (error 'tc-error
-            :err (coalton-error
+     (error 'tc:tc-error
+            :err (se:source-error
                   :span (parser:method-definition-source first)
                   :file file
                   :message "Duplicate method definition"
                   :primary-note "first definition here"
                   :notes
                   (list
-                   (make-coalton-error-note
+                   (se:make-source-error-note
                     :type :primary
                     :span (parser:method-definition-source second)
                     :message "second definition here"))))))
@@ -102,15 +105,15 @@
      #'parser:keyword-src-name
      #'parser:keyword-src-source
      (lambda (first second)
-       (error 'tc-error
-              :err (coalton-error
+       (error 'tc:tc-error
+              :err (se:source-error
                     :span (parser:keyword-src-source first)
                     :file file
                     :message "Duplicate class variable"
                     :primary-note "first usage here"
                     :notes
                     (list
-                     (make-coalton-error-note
+                     (se:make-source-error-note
                       :type :primary
                       :span (parser:keyword-src-source second)
                       :message "second usage here")))))))
@@ -163,14 +166,14 @@
 
            ;; Classes cannot have cyclic superclasses
            :when (intersection superclass-names scc-names :test #'eq)
-             :do (error 'tc-error
-                        :err (coalton-error
+             :do (error 'tc:tc-error
+                        :err (se:source-error
                               :span (parser:toplevel-define-class-head-src (first scc))
                               :file file
                               :message "Cyclic superclasses"
                               :primary-note "in class defined here"
                               :notes (loop :for class :in (rest scc)
-                                           :collect (make-coalton-error-note
+                                           :collect (se:make-source-error-note
                                                      :type :primary
                                                      :span (parser:toplevel-define-class-head-src class)
                                                      :message "in class defined here"))))
@@ -184,7 +187,7 @@
 (defun infer-class-scc-kinds (classes env file)
   (declare (type parser:toplevel-define-class-list classes)
            (type tc:environment env)
-           (type error:coalton-file file)
+           (type se:file file)
            (values tc:ty-class-list tc:environment))
 
   (let* ((renamed-classes (parser:rename-type-variables classes))
@@ -319,8 +322,8 @@
            :when (and prev-class (not (equalp (tc:ty-class-fundeps prev-class)
                                               fundeps))) 
              :do (progn
-                   (error 'tc-error
-                          :err (coalton-error
+                   (error 'tc:tc-error
+                          :err (se:source-error
                                 :span (parser:toplevel-define-class-head-src class)
                                 :file file
                                 :message "Invalid fundep redefinition"
@@ -373,7 +376,7 @@
   (declare (type parser:toplevel-define-class class)
            (type partial-type-env env)
            (type tc:ksubstitution-list ksubs)
-           (type error:coalton-file file)
+           (type se:file file)
            (values partial-class tc:ksubstitution-list))
 
   (let ((var-names (mapcar #'parser:keyword-src-name (parser:toplevel-define-class-vars class))))
@@ -385,15 +388,15 @@
                 #'parser:keyword-src-name
                 #'parser:keyword-src-source
                 (lambda (first second)
-                  (error 'tc-error
-                         :err (coalton-error
+                  (error 'tc:tc-error
+                         :err (se:source-error
                                :span (parser:keyword-src-source first)
                                :file file
                                :message "Duplicate variable in function dependency"
                                :primary-note "first usage here"
                                :notes
                                (list
-                                (make-coalton-error-note
+                                (se:make-source-error-note
                                  :type :primary
                                  :span (parser:keyword-src-source second)
                                  :message "second usage here"))))))))
@@ -405,8 +408,8 @@
     (labels ((check-fundep-variables (vars)
                (loop :for var :in vars
                      :unless (find (parser:keyword-src-name var) var-names :test #'eq)
-                       :do (error 'tc-error
-                                  :err (coalton-error
+                       :do (error 'tc:tc-error
+                                  :err (se:source-error
                                         :span (parser:keyword-src-source var)
                                         :file file
                                         :message "Unkown type variable"
@@ -448,8 +451,8 @@
 
                    ;; Ensure that methods are not ambiguous
                    :unless (subsetp var-names (tc:closure tyvars fundeps) :test #'eq)
-                     :do (error 'tc-error
-                                :err (coalton-error
+                     :do (error 'tc:tc-error
+                                :err (se:source-error
                                       :span (parser:method-definition-source method)
                                       :file file
                                       :message "Amgigious method"
@@ -464,8 +467,8 @@
                                              :test #'eq)
 
                              :when (subsetp tyvars var-names)
-                               :do (error 'tc-error
-                                          :err (coalton-error
+                               :do (error 'tc:tc-error
+                                          :err (se:source-error
                                                 :span (parser:ty-predicate-source pred)
                                                 :file file
                                                 :message "Invalid method predicate"

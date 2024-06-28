@@ -1,9 +1,11 @@
 (defpackage #:coalton-impl/typechecker/define-instance
   (:use
    #:cl
-   #:coalton-impl/typechecker/base
    #:coalton-impl/typechecker/expression
    #:coalton-impl/typechecker/toplevel)
+  (:import-from
+   #:coalton-impl/typechecker/base
+   #:check-duplicates)
   (:import-from
    #:coalton-impl/typechecker/partial-type-env
    #:make-partial-type-env
@@ -16,6 +18,7 @@
    #:make-tc-env
    #:infer-expl-binding-type)
   (:local-nicknames
+   (#:se #:source-error)
    (#:settings #:coalton-impl/settings)
    (#:util #:coalton-impl/util)
    (#:parser #:coalton-impl/parser)
@@ -30,7 +33,7 @@
 (defun toplevel-define-instance (instances env file)
   (declare (type parser:toplevel-define-instance-list instances)
            (type tc:environment env)
-           (type coalton-file file)
+           (type se:file file)
            (values tc:ty-class-instance-list tc:environment))
 
   (values
@@ -46,7 +49,7 @@
   (declare (type tc:ty-class-instance-list instances)
            (type parser:toplevel-define-instance-list unparsed-instances)
            (type tc:environment env)
-           (type coalton-file file)
+           (type se:file file)
            (values toplevel-define-instance-list))
 
   (loop :for instance :in instances
@@ -56,7 +59,7 @@
 (defun define-instance-in-environment (instance env file)
   (declare (type parser:toplevel-define-instance instance)
            (type tc:environment env)
-           (type coalton-file file)
+           (type se:file file)
            (values tc:ty-class-instance tc:environment))
 
   (check-for-orphan-instance instance file)
@@ -100,7 +103,7 @@
                 *package*
                 "INSTANCE/~A"
                 (with-output-to-string (s)
-                  (with-pprint-variable-context ()
+                  (tc:with-pprint-variable-context ()
                     (let ((*print-escape* t))
                       (tc:pprint-predicate s pred))))))
 
@@ -138,8 +141,8 @@
           (handler-case 
               (setf env (tc:update-instance-fundeps env pred))
             (tc:fundep-conflict (e)
-              (error 'tc-error
-                     :err (coalton-error
+              (error 'tc:tc-error
+                     :err (se:source-error
                            :span (parser:toplevel-define-instance-head-src instance)
                            :file file
                            :message "Instance fundep conflict"
@@ -150,8 +153,8 @@
         (handler-case
             (setf env (tc:add-instance env class-name instance-entry))
           (tc:overlapping-instance-error (e)
-            (error 'tc-error
-                   :err (coalton-error
+            (error 'tc:tc-error
+                   :err (se:source-error
                          :span (parser:toplevel-define-instance-head-src instance)
                          :file file
                          :message "Overlapping instance"
@@ -167,7 +170,7 @@
   (declare (type tc:ty-class-instance instance)
            (type parser:toplevel-define-instance unparsed-instance)
            (type tc:environment env)
-           (type coalton-file file))
+           (type se:file file))
 
   (let* ((pred (tc:ty-class-instance-predicate instance))
 
@@ -199,8 +202,8 @@
                     env
                     superclass
                     :no-error t)
-                   (error 'tc-error
-                          :err (coalton-error
+                   (error 'tc:tc-error
+                          :err (se:source-error
                                 :span (parser:toplevel-define-instance-head-src unparsed-instance)
                                 :file file
                                 :message "Instance missing context"
@@ -216,8 +219,8 @@
 
           :do (loop :for pred :in additional-context
                     :do (unless (tc:entail env context pred)
-                          (error 'tc-error
-                                 :err (coalton-error
+                          (error 'tc:tc-error
+                                 :err (se:source-error
                                        :span (parser:toplevel-define-instance-head-src unparsed-instance)
                                        :file file
                                        :message "Instance missing context"
@@ -232,15 +235,15 @@
      (alexandria:compose #'parser:node-variable-name #'parser:instance-method-definition-name)
      #'parser:instance-method-definition-source
      (lambda (first second)
-       (error 'tc-error
-              :err (coalton-error
+       (error 'tc:tc-error
+              :err (se:source-error
                     :span (parser:instance-method-definition-source first)
                     :file file
                     :message "Duplicate method definition"
                     :primary-note "first definition here"
                     :notes
                     (list
-                     (make-coalton-error-note
+                     (se:make-source-error-note
                       :type :primary
                       :span (parser:instance-method-definition-source second)
                       :message "second definition here"))))))
@@ -250,8 +253,8 @@
           :for name := (parser:node-variable-name (parser:instance-method-definition-name method))
 
           :unless (gethash name method-table)
-            :do (error 'tc-error
-                       :err (coalton-error
+            :do (error 'tc:tc-error
+                       :err (se:source-error
                              :span (parser:instance-method-definition-source method)
                              :file file
                              :message "Unknown method"
@@ -266,8 +269,8 @@
                                :key (alexandria:compose #'parser:node-variable-name
                                                         #'parser:instance-method-definition-name))
           :unless method
-            :do (error 'tc-error
-                       :err (coalton-error
+            :do (error 'tc:tc-error
+                       :err (se:source-error
                              :span (parser:toplevel-define-instance-source unparsed-instance)
                              :file file
                              :message "Missing method"
@@ -328,7 +331,7 @@
 
 (defun check-instance-valid (instance file)
   (declare (type parser:toplevel-define-instance instance)
-           (type coalton-file file))
+           (type se:file file))
 
   ;; Instance validation is disabled for compiler generated instances
   (when (parser:toplevel-define-instance-compiler-generated instance)
@@ -344,8 +347,8 @@
 
 
     (when (eq (parser:identifier-src-name (parser:ty-predicate-class (parser:toplevel-define-instance-pred instance))) runtime-repr)
-      (error 'tc-error
-             :err (coalton-error
+      (error 'tc:tc-error
+             :err (se:source-error
                    :span (parser:toplevel-define-instance-head-src instance)
                    :file file
                    :message "Invalid instance"
@@ -353,7 +356,7 @@
 
 (defun check-for-orphan-instance (instance file)
   (declare (type parser:toplevel-define-instance instance) 
-           (type coalton-file file)
+           (type se:file file)
            (values null))
 
 
@@ -391,8 +394,8 @@
                  :append (mapcar #'parser:tycon-name (parser:collect-referenced-types type))))))
 
     (unless (find *package* instance-syms :key #'symbol-package)
-      (error 'tc-error
-             :err (coalton-error
+      (error 'tc:tc-error
+             :err (se:source-error
                    :span (parser:toplevel-define-instance-head-src instance)
                    :file file
                    :message "Invalid orphan instance"
