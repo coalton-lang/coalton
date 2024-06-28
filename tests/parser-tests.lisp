@@ -8,25 +8,18 @@
                files))
 
            (parse-file (file)
-             (with-open-file (stream file
-                                     :direction :input
-                                     :element-type 'character)
-               (let ((stream (make-instance 'parser:position-stream :stream stream)))
-                 (parser:with-reader-context stream
-                   (parser:read-program stream (se:make-file :stream stream :name (namestring file)) :mode :file)))))
+             (parser:with-file-input (stream file)
+               (parser:read-program stream (se:make-file :stream stream :name (namestring file)) :mode :file)))
 
            (parse-error-text (file)
-             (with-open-file (stream file
-                                     :direction :input
-                                     :element-type 'character)
-               (let ((stream (make-instance 'parser:position-stream :stream stream)))
-                 (handler-case
-                     (parser:with-reader-context stream
-                       (entry:entry-point
-                        (parser:read-program stream (se:make-file :stream stream :name "test") :mode :file))
-                       "no errors")
+             (parser:with-file-input (stream file)
+               (handler-case
+                   (progn
+                     (entry:entry-point
+                      (parser:read-program stream (se:make-file :stream stream :name "test") :mode :file))
+                     "no errors")
                    (se:source-base-error (c)
-                     (princ-to-string c)))))))
+                     (princ-to-string c))))))
     (dolist (file (test-files "tests/parser-test-files/bad-files/*.coal"))
       (let ((error-file (make-pathname :type "error"
                                        :defaults file)))
@@ -45,15 +38,11 @@
   "Check that read assigned source ranges to toplevel and nested forms, and that source ranges are expressed as character offsets."
   (let (from-string
         from-file)
-    (with-input-from-string (stream "(\"マグロをもう少しいただけますか?\")")
-      (let ((stream (make-instance 'parser:position-stream :stream stream)))
-        (parser:with-reader-context stream
-          (setf from-string (parser:maybe-read-form stream)))))
-    (with-open-file (stream (merge-pathnames "tests/parser-test-files/utf-8.txt"
-                                             (asdf:system-source-directory "coalton/tests")))
-      (let ((stream (make-instance 'parser:position-stream :stream stream)))
-        (parser:with-reader-context stream
-          (setf from-file (parser:maybe-read-form stream)))))
+    (parser:with-string-input (stream "(\"マグロをもう少しいただけますか?\")")
+      (setf from-string (parser:maybe-read-form stream)))
+    (parser:with-file-input (stream (merge-pathnames "tests/parser-test-files/utf-8.txt"
+                                                     (asdf:system-source-directory "coalton/tests")))
+      (setf from-file (parser:maybe-read-form stream)))
     (is (equal (cst:source from-file)
                (cst:source from-string)))
     (is (equal (cst:source from-file)

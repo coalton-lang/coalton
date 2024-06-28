@@ -3,7 +3,9 @@
   (:export
    #:position-stream
    #:with-reader-context
-   #:maybe-read-form))
+   #:maybe-read-form
+   #:with-file-input
+   #:with-string-input))
 
 (in-package #:coalton-impl/parser/reader)
 
@@ -88,3 +90,17 @@ Returns (values FORM PRESENTP)"
     ,stream
     nil 'eof
     nil))
+
+(defmacro with-string-input ((stream string) &body body)
+  `(with-input-from-string (,stream ,string)
+     (setf ,stream (make-instance 'position-stream :stream ,stream))
+     (with-reader-context ,stream
+       ,@body)))
+
+(defmacro with-file-input ((stream file) &body body)
+  `(with-open-file (,stream ,file
+                            :direction :input
+                            :element-type 'character)
+     (setf ,stream (make-instance 'position-stream :stream ,stream))
+     (with-reader-context ,stream
+       ,@body)))
