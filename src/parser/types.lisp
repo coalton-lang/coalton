@@ -1,13 +1,13 @@
 (defpackage #:coalton-impl/parser/types
   (:use
    #:cl
-   #:coalton-impl/error
    #:coalton-impl/parser/base)
   (:shadowing-import-from
    #:coalton-impl/parser/base
    #:parse-error)
   (:local-nicknames
    (#:cst #:concrete-syntax-tree)
+   (#:se #:source-error)
    (#:util #:coalton-impl/util))
   (:export
    #:ty                                 ; STRUCT
@@ -130,7 +130,7 @@
 
 (defun parse-qualified-type (form file)
   (declare (type cst:cst form)
-           (type coalton-file file))
+           (type se:file file))
 
   (if (cst:atom form)
 
@@ -155,7 +155,7 @@
           ;; (=> T -> T)
           ((and (null left) right)
            (error 'parse-error
-                  :err (coalton-error
+                  :err (se:source-error
                         :span (cst:source (cst:first form))
                         :file file
                         :message "Malformed type"
@@ -168,7 +168,7 @@
                           ;; If there is nothing to the right of C then emit without list
                           ((cst:atom (cst:rest (cst:rest form)))
                            (list
-                            (make-coalton-error-help
+                            (se:make-source-error-help
                              :span (cst:source form)
                              :replacement
                              (lambda (existing)
@@ -176,7 +176,7 @@
                              :message "remove `=>`")))
                           (t
                            (list
-                            (make-coalton-error-help
+                            (se:make-source-error-help
                              :span (cst:source form)
                              :replacement
                              (lambda (existing)
@@ -188,7 +188,7 @@
           ;; (... =>)
           ((null (rest right))
            (error 'parse-error
-                  :err (coalton-error
+                  :err (se:source-error
                         :span (cst:source (cst:second form))
                         :file file
                         :message "Malformed type"
@@ -206,7 +206,7 @@
                  (loop :for pred :in left
                        :unless (cst:consp pred)
                          :do (error 'parse-error
-                                    :err (coalton-error
+                                    :err (se:source-error
                                           :span (cst:source (cst:second form))
                                           :file file
                                           :message "Malformed type predicate"
@@ -225,7 +225,7 @@
 (defun parse-predicate (forms source file)
   (declare (type util:cst-list forms)
            (type cons source)
-           (type coalton-file file)
+           (type se:file file)
            (values ty-predicate))
 
   (assert forms)
@@ -234,14 +234,14 @@
     ;; (T) ... => ....
     ((not (cst:atom (first forms)))
      (error 'parse-error
-            :err (coalton-error
+            :err (se:source-error
                   :span (cst:source (first forms))
                   :file file
                   :message "Malformed type predicate"
                   :primary-note "expected class name"
                   :help-notes
                   (list
-                   (make-coalton-error-help
+                   (se:make-source-error-help
                     :span (cst:source (first forms))
                     :replacement
                     (lambda (existing)
@@ -251,7 +251,7 @@
     ;; "T" ... => ...
     ((not (identifierp (cst:raw (first forms))))
      (error 'parse-error
-            :err (coalton-error
+            :err (se:source-error
                   :span (cst:source (first forms))
                   :file file
                   :message "Malformed type predicate"
@@ -262,7 +262,7 @@
            (name-src (cst:source (first forms))))
        (when (= 1 (length forms))
          (error 'parse-error
-                :err (coalton-error
+                :err (se:source-error
                       :span (cst:source (first forms))
                       :file file
                       :message "Malformed type predicate"
@@ -278,7 +278,7 @@
 
 (defun parse-type (form file)
   (declare (type cst:cst form)
-           (type coalton-file file)
+           (type se:file file)
            (values ty &optional))
 
   (cond
@@ -292,7 +292,7 @@
 
     ((cst:atom form)
      (error 'parse-error
-            :err (coalton-error
+            :err (se:source-error
                   :span (cst:source form)
                   :file file
                   :message "Malformed type"
@@ -301,7 +301,7 @@
     ;; (T)
     ((cst:atom (cst:rest form))
      (error 'parse-error
-            :err (coalton-error
+            :err (se:source-error
                   :span (cst:source form)
                   :file file
                   :message "Malformed type"
@@ -313,7 +313,7 @@
 (defun parse-type-list (forms source file)
   (declare (type util:cst-list forms)
            (type cons source)
-           (type coalton-file file)
+           (type se:file file)
            (values ty &optional))
 
   (assert forms)
@@ -331,7 +331,7 @@
         (cond
           ((and right (null (rest right)))
            (error 'parse-error
-                  :err (coalton-error
+                  :err (se:source-error
                         :span (cst:source (car right))
                         :file file
                         :message "Malformed function type"
@@ -340,7 +340,7 @@
           ;; (-> ...)
           ((and (null left) right)
            (error 'parse-error
-                  :err (coalton-error
+                  :err (se:source-error
                         :span (cst:source (car right))
                         :file file
                         :message "Malformed function type"

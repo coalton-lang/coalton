@@ -3,8 +3,7 @@
    #:cl)
   (:local-nicknames
    (#:tc #:coalton-impl/typechecker)
-   (#:util #:coalton-impl/util)
-   (#:error #:coalton-impl/error))
+   (#:util #:coalton-impl/util))
   (:export
    #:non-exhaustive-match-warning
    #:useless-pattern-warning

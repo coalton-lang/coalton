@@ -1,11 +1,10 @@
 (defpackage #:coalton-impl/typechecker/tc-env
   (:use
    #:cl
-   #:coalton-impl/typechecker/base
    #:coalton-impl/typechecker/parse-type)
   (:local-nicknames
+   (#:se #:source-error)
    (#:util #:coalton-impl/util)
-   (#:error #:coalton-impl/error)
    (#:parser #:coalton-impl/parser)
    (#:tc #:coalton-impl/typechecker/stage-1))
   (:export
@@ -64,7 +63,7 @@
   "Lookup the type of a variable named VAR in ENV."
   (declare (type tc-env env)
            (type parser:node-variable var)
-           (type coalton-file file)
+           (type se:file file)
            (values tc:ty tc:ty-predicate-list))
 
   (let* ((var-name (parser:node-variable-name var))
@@ -72,16 +71,17 @@
                      (tc:lookup-value-type (tc-env-env env) var-name :no-error t))))
     (unless scheme
       ;; Variable is unbound: create an error
-      (error 'tc-error
-             :err (coalton-error
+      (error 'tc:tc-error
+             :err (se:source-error
                    :span (parser:node-source var)
                    :file file
                    :message "Unknown variable"
                    :primary-note "unknown variable"
                    :help-notes (loop :for suggestion :in (tc-env-suggest-value env var-name)
-                                     :collect (error:make-coalton-error-help :span (parser:node-source var)
-                                                                             :replacement #'identity
-                                                                             :message suggestion)))))
+                                     :collect (se:make-source-error-help
+                                               :span (parser:node-source var)
+                                               :replacement #'identity
+                                               :message suggestion)))))
     (let ((qualified-type (tc:fresh-inst scheme)))
       (values (tc:qualified-ty-type qualified-type)
               (loop :for pred :in (tc:qualified-ty-predicates qualified-type)

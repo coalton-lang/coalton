@@ -42,7 +42,8 @@
                #:eclector
                #:concrete-syntax-tree
                #:eclector-concrete-syntax-tree
-               #:named-readtables)
+               #:named-readtables
+               #:source-error)
   :pathname "src/"
   :serial t
   :components ((:file "package")
@@ -56,7 +57,6 @@
                              (:file "immutable-map")
                              (:file "immutable-listmap")
                              (:file "package")))
-               (:file "error")
                (:module "parser"
                 :serial t
                 :components ((:file "base")

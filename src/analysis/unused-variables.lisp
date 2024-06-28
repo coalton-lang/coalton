@@ -2,8 +2,8 @@
   (:use
    #:cl)
   (:local-nicknames
+   (#:se #:source-error)
    (#:util #:coalton-impl/util)
-   (#:error #:coalton-impl/error)
    (#:tc #:coalton-impl/typechecker))
   (:export
    #:find-unused-variables              ; FUNCTION
@@ -12,12 +12,12 @@
 
 (in-package #:coalton-impl/analysis/unused-variables)
 
-(define-condition unused-variable-warning (error:coalton-base-warning)
+(define-condition unused-variable-warning (se:source-base-warning)
   ())
 
 (defun find-unused-variables (binding file)
   (declare (type (or tc:toplevel-define tc:instance-method-definition) binding)
-           (type error:coalton-file file))
+           (type se:file file))
 
   (let ((used-variables (make-hash-table :test #'eq)))
 
@@ -68,7 +68,7 @@
 (defun variable-binding (var used-variables file)
   (declare (type (or tc:node-variable tc:pattern-var) var)
            (type hash-table used-variables)
-           (type error:coalton-file file))
+           (type se:file file))
 
   (destructuring-bind (name . source)
       (etypecase var
@@ -84,7 +84,7 @@
     (unless (char= (aref (symbol-name name) 0) #\_)
         (unless (gethash name used-variables)
           (warn 'unused-variable-warning
-                :err (error:coalton-error
+                :err (se:source-error
                       :type :warn
                       :file file
                       :span source
@@ -92,7 +92,7 @@
                       :primary-note "variable defined here"
                       :help-notes
                       (list
-                       (error:make-coalton-error-help
+                       (se:make-source-error-help
                         :span source
                         :replacement (lambda (name)
                                        (concatenate 'string "_" name))

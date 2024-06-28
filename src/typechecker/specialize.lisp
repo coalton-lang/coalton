@@ -1,10 +1,9 @@
 (defpackage #:coalton-impl/typechecker/specialize
   (:use
    #:cl
-   #:coalton-impl/typechecker/base
    #:coalton-impl/typechecker/parse-type)
   (:local-nicknames
-   (#:error #:coalton-impl/error)
+   (#:se #:source-error)
    (#:parser #:coalton-impl/parser)
    (#:tc #:coalton-impl/typechecker/stage-1))
   (:export
@@ -17,7 +16,7 @@
 
   (declare (type parser:toplevel-specialize-list specializations)
            (type tc:environment env)
-           (type error:coalton-file file)
+           (type se:file file)
            (values tc:environment))
 
   (loop :for spec :in specializations :do
@@ -28,7 +27,7 @@
 (defun process-specialize (specialize env file)
   (declare (type parser:toplevel-specialize specialize)
            (type tc:environment env)
-           (type error:coalton-file file)
+           (type se:file file)
            (values tc:environment &optional))
 
   (let* ((from-name (parser:node-variable-name (parser:toplevel-specialize-from specialize)))
@@ -45,30 +44,30 @@
                               (tc:qualify nil type))))
 
     (unless from-ty
-      (error 'tc-error
-             :err (coalton-error
+      (error 'tc:tc-error
+             :err (se:source-error
                    :span (parser:node-source (parser:toplevel-specialize-from specialize))
                    :file file
                    :message "Invalid specialization"
                    :primary-note "unknown function or variable")))
     (unless to-ty
-      (error 'tc-error
-             :err (coalton-error
+      (error 'tc:tc-error
+             :err (se:source-error
                    :span (parser:node-source (parser:toplevel-specialize-to specialize))
                    :file file
                    :message "Invalid specialization"
                    :primary-note "unknown function or variable")))
 
     (unless (eq :value (tc:name-entry-type from-name-entry))
-      (error 'tc-error
-             :err (coalton-error
+      (error 'tc:tc-error
+             :err (se:source-error
                    :span (parser:node-source (parser:toplevel-specialize-from specialize))
                    :file file
                    :message "Invalid specialization"
                    :primary-note (format nil "must be a function or variable, not a ~A" (tc:name-entry-type from-name-entry)))))
     (unless (eq :value (tc:name-entry-type to-name-entry))
-      (error 'tc-error
-             :err (coalton-error
+      (error 'tc:tc-error
+             :err (se:source-error
                    :span (parser:node-source (parser:toplevel-specialize-to specialize))
                    :file file
                    :message "Invalid specialization"
@@ -78,24 +77,24 @@
           (to-qual-ty (tc:fresh-inst to-ty)))
 
       (when (null (tc:qualified-ty-predicates from-qual-ty))
-        (error 'tc-error
-               :err (coalton-error
+        (error 'tc:tc-error
+               :err (se:source-error
                      :span (parser:node-source (parser:toplevel-specialize-from specialize))
                      :file file
                      :message "Invalid specialization"
                      :primary-note "must be a function or variable with class constraints")))
 
       (unless (equalp to-ty scheme)
-        (error 'tc-error
-               :err (coalton-error
+        (error 'tc:tc-error
+               :err (se:source-error
                      :span (parser:toplevel-specialize-source specialize)
                      :file file
                      :message "Invalid specialization"
                      :primary-note (format nil "function ~S does not match declared type" to-name))))
 
       (when (equalp from-ty to-ty)
-        (error 'tc-error
-               :err (coalton-error
+        (error 'tc:tc-error
+               :err (se:source-error
                      :span (parser:toplevel-specialize-source specialize)
                      :file file
                      :message "Invalid specialization"
@@ -103,9 +102,9 @@
 
       (handler-case
           (tc:match (tc:qualified-ty-type from-qual-ty) (tc:qualified-ty-type to-qual-ty))
-        (error:coalton-internal-type-error ()
-          (error 'tc-error
-                 :err (coalton-error
+        (tc:coalton-internal-type-error ()
+          (error 'tc:tc-error
+                 :err (se:source-error
                        :span (parser:toplevel-specialize-source specialize)
                        :file file
                        :message "Invalid specialization"
@@ -119,8 +118,8 @@
         (handler-case
             (tc:add-specialization env entry)
           (tc:overlapping-specialization-error (c)
-            (error 'tc-error
-                   :err (coalton-error
+            (error 'tc:tc-error
+                   :err (se:source-error
                          :span (parser:toplevel-specialize-source specialize)
                          :file file
                          :message "Overlapping specialization"

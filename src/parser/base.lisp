@@ -5,8 +5,8 @@
    #:parse-error)
   (:local-nicknames
    (#:cst #:concrete-syntax-tree)
-   (#:util #:coalton-impl/util)
-   (#:error #:coalton-impl/error))
+   (#:se #:source-error)
+   (#:util #:coalton-impl/util))
   (:export
    #:identifier                         ; TYPE
    #:identifierp                        ; FUNCTION
@@ -69,13 +69,13 @@
 (deftype identifier-src-list ()
   '(satisfies identifier-src-list-p))
 
-(define-condition parse-error (error:coalton-base-error)
+(define-condition parse-error (se:source-base-error)
   ())
 
 (defun parse-list (f list_ file)
   (declare (type function f)
            (type cst:cst list_)
-           (type error:coalton-file file)
+           (type se:file file)
            (values list))
 
   (loop :for list := list_ :then (cst:rest list)

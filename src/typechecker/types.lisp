@@ -5,8 +5,7 @@
    #:coalton-impl/typechecker/kinds)
   (:local-nicknames
    (#:util #:coalton-impl/util)
-   (#:settings #:coalton-impl/settings)
-   (#:error #:coalton-impl/error))
+   (#:settings #:coalton-impl/settings))
   (:export
    #:ty                                 ; STRUCT
    #:ty-list                            ; TYPE
@@ -455,7 +454,7 @@
 ;;; Conditions
 ;;;
 
-(define-condition type-application-error (error:coalton-internal-type-error)
+(define-condition type-application-error (coalton-internal-type-error)
   ((type :initarg :type
          :reader type-application-error-type)
    (argument :initarg :argument

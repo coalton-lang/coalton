@@ -3,8 +3,8 @@
    #:cl
    #:coalton-impl/typechecker/base)
   (:local-nicknames
+   (#:se #:source-error)
    (#:util #:coalton-impl/util)
-   (#:error #:coalton-impl/error)
    (#:tc #:coalton-impl/typechecker/stage-1))
   (:export
    #:accessor                           ; STRUCT
@@ -52,7 +52,7 @@
 
 (defun solve-accessors (accessors file env)
   (declare (type accessor-list accessors)
-           (type error:coalton-file file)
+           (type se:file file)
            (type tc:environment env))
 
   (let ((subs nil)
@@ -84,7 +84,7 @@
 
 (defun solve-accessor (accessor file env)
   (declare (type accessor accessor)
-           (type error:coalton-file file)
+           (type se:file file)
            (type tc:environment env)
            (values boolean tc:substitution-list))
 
@@ -104,8 +104,8 @@
            (struct-entry (tc:lookup-struct env ty-name :no-error t)))
 
       (unless struct-entry
-        (error 'tc-error
-               :err (error:coalton-error
+        (error 'tc:tc-error
+               :err (se:source-error
                      :span (accessor-source accessor)
                      :file file
                      :message "Invalid accessor"
@@ -117,8 +117,8 @@
                                 (tc:struct-entry-field-tys struct-entry))))
 
         (unless field-ty
-          (error 'tc-error
-                 :err (error:coalton-error
+          (error 'tc:tc-error
+                 :err (se:source-error
                        :span (accessor-source accessor)
                        :file file
                        :message "Invalid accessor"

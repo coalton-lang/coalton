@@ -1,10 +1,10 @@
 (defpackage #:coalton-impl/typechecker/substitutions
   (:use
    #:cl
+   #:coalton-impl/typechecker/base
    #:coalton-impl/typechecker/types)
   (:local-nicknames
-   (#:util #:coalton-impl/util)
-   (#:error #:coalton-impl/error))
+   (#:util #:coalton-impl/util))
   (:export
    #:substitution                       ; STRUCT
    #:make-substitution                  ; CONSTRUCTOR
@@ -34,7 +34,7 @@
 (deftype substitution-list ()
   '(satisfies substitution-list-p))
 
-(define-condition substitution-list-merge-error (error:coalton-internal-type-error)
+(define-condition substitution-list-merge-error (coalton-internal-type-error)
   ())
 
 (defun merge-substitution-lists (s1 s2)

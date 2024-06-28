@@ -2,8 +2,8 @@
   (:use
    #:cl)
   (:local-nicknames
+   (#:se #:source-error)
    (#:util #:coalton-impl/util)
-   (#:error #:coalton-impl/error)
    (#:tc #:coalton-impl/typechecker))
   (:export
    #:find-underapplied-values           ; FUNCTION
@@ -11,7 +11,7 @@
 
 (in-package #:coalton-impl/analysis/underapplied-values)
 
-(define-condition underapplied-value-warning (error:coalton-base-warning)
+(define-condition underapplied-value-warning (se:source-base-warning)
   ())
 
 (defun find-underapplied-values (binding file)
@@ -25,7 +25,7 @@
                   :when (and (typep elem 'tc:node)
                              (tc:function-type-p (tc:qualified-ty-type (tc:node-type elem))))
                     :do (warn 'underapplied-value-warning
-                              :err (error:coalton-error
+                              :err (se:source-error
                                     :type :warn
                                     :file file
                                     :span (tc:node-source elem)
