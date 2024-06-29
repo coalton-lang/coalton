@@ -82,6 +82,7 @@
                               manager
                               package
                               resolve-table
+                              inline-p-table
                               (lambda (node env)
                                 (optimize-node node env))
                               env)
