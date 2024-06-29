@@ -90,10 +90,17 @@
                   :else
                     :collect (cons name node)))
 
-
       ;; Update function env
       (setf env (update-function-env bindings inline-p-table env))
 
+      ;; Make code and data available to the inliner
+      (loop :for (name . node) :in bindings
+            :do (setf env (tc:set-code env name node)))
+
+      ;; Run the inliner
+      (setf bindings
+            (loop :for (name . node) :in bindings
+                  :collect (cons name (inline-applications node env))))
 
       (let ((function-table (make-function-table env)))
 
@@ -177,9 +184,7 @@
 
    (resolve-static-superclass env)
 
-   (inline-methods env)
-
-   (inline-applications env)))
+   (inline-methods env)))
 
 (defun pointfree (node table env)
   (declare (type node node)
