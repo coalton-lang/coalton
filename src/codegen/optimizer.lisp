@@ -358,52 +358,66 @@
                                           (node-type node))
                                    :value name)
                            :rands rands)))))))
-           ;; FIXME: What kind of frontend code evokes DIRECT-APPLICATION
-           ;; as opposed to APPLICATION?
            (inline-direct-application (node &rest rest)
              (declare (ignore rest)
-                      (dynamic-extent rest))
-             (let ((rator (node-application-rator node))
-                   (rands (node-application-rands node)))
-               (when (node-variable-p rator)
-                 (let* ((name (node-variable-value rator))
-                        (code (tc:lookup-code env name :no-error t))
-                        ;; FIXME: We need to lookup inline-p in the environment rather than the AST
-                        (inline-p (and (node-abstraction-p code)
-                                       (tc:function-env-entry-inline-p
-                                        (tc:lookup-function env name)))))
-                   (cond ((null rands)
-                          (make-node-variable
-                           :type (node-type node)
-                           :value name))
-                         ((and code inline-p)
-                          (multiple-value-bind (bindings subs)
-                              (loop :for var :in (node-abstraction-vars code)
-                                    :for val :in rands
-                                    :for new-var := (gentemp (symbol-name var))
-                                    :collect (cons new-var val) :into bindings
-                                    :collect (make-ast-substitution
-                                              :from var
-                                              :to (make-node-variable
-                                                   :type (node-type val)
-                                                   :value new-var))
-                                      :into subs
-                                    :finally (return (values bindings subs)))
-                            (make-node-let
+                      (dynamic-extent rest)
+                      (optimize debug))
+             ;; FIXME: This code is probably never called.
+             (let* ((rator (node-direct-application-rator node))
+                    (rands (node-direct-application-rands node)))
+
+               (let (dict rands_)
+                 (cond
+                   ((node-variable-p (first rands))
+                    (setf dict (node-variable-value (first rands)))
+                    (setf rands_ (cdr rands)))
+                   ((and (node-application-p (first rands))
+                         (node-variable-p (node-application-rator (first rands))))
+                    (setf dict (node-variable-value (node-application-rator (first rands))))
+                    (setf rands_ (append (node-application-rands (first rands)) (cdr rands))))
+
+                   (t
+                    (return-from inline-direct-application nil)))
+
+                 (let* ((inline-name
+                          (tc:lookup-method-inline env rator dict :no-error t))
+                        (code (when inline-name
+                                (tc:lookup-code env inline-name :no-error t)))
+                        (vars (and (node-abstraction-p code)
+                                   (node-abstraction-vars code)))
+                        (inline-p (when inline-name
+                                    (tc:function-env-entry-inline-p
+                                     (tc:lookup-function env inline-name)))))
+                   (when inline-name
+                     (cond ((null rands_)
+                            (make-node-variable
                              :type (node-type node)
-                             :bindings bindings
-                             :subexpr (apply-ast-substitution
-                                       subs
-                                       (node-abstraction-subexpr code)))))
-                         (t
-                          (make-node-application
-                           :type (node-type node)
-                           :rator (make-node-variable
-                                   :type (tc:make-function-type*
-                                          (mapcar #'node-type rands)
-                                          (node-type node))
-                                   :value name)
-                           :rands rands))))))))
+                             :value inline-name))
+                           (inline-p
+                            (multiple-value-bind (bindings subs)
+                                (loop :for var :in vars
+                                      :for val :in rands
+                                      :for new-var := (gentemp (symbol-name var))
+                                      :collect (cons new-var val) :into bindings
+                                      :collect (make-ast-substitution
+                                                :from var
+                                                :to (make-node-variable
+                                                     :type (node-type val)
+                                                     :value new-var))
+                                        :into subs
+                                      :finally (return (values bindings subs)))
+                              (make-node-let
+                               :type (node-type node)
+                               :bindings bindings
+                               :subexpr (apply-ast-substitution
+                                         subs
+                                         (node-abstraction-subexpr code)))))
+                           (t
+                            (make-node-direct-application
+                             :type (node-type node)
+                             :rator-type (node-direct-application-rator-type node)
+                             :rator (node-direct-application-rator node)
+                             :rands rands)))))))))
 
     (traverse
      node
