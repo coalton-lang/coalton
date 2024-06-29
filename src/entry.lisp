@@ -174,8 +174,10 @@
 
             (when (null preds)
               (return-from expression-entry-point
-                (let ((node (codegen:optimize-node
-                             (codegen:translate-expression node nil env)
+                (let ((node (codegen:inline-applications
+                             (codegen:optimize-node
+                              (codegen:translate-expression node nil env)
+                              env)
                              env)))
                   (codegen:codegen-expression 
                    (codegen:direct-application

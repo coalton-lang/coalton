@@ -14,10 +14,12 @@
   (:import-from
    #:coalton-impl/codegen/optimizer
    #:optimize-node
-   #:direct-application)
+   #:direct-application
+   #:inline-applications)
   (:export
    #:optimize-node
-   #:direct-application)
+   #:direct-application
+   #:inline-applications)
 
   (:import-from
    #:coalton-impl/codegen/translate-expression
