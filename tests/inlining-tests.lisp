@@ -38,6 +38,26 @@
 (define-test method-inline ()
   (is (== 5.0d0 (method-for-inline-test-caller 2.0d0 3.0d0))))
 
+(coalton-toplevel
+  (inline)
+  (define (generic-for-inline x y)
+    (+ x y))
+
+  (declare num-generic-for-inline (Num :a => :a -> :a))
+  (inline)
+  (define num-generic-for-inline
+    (generic-for-inline 2)))
+
+(coalton-toplevel
+  (monomorphize)
+  (declare monomorph-for-inline (Integer -> Integer))
+  (define (monomorph-for-inline y)
+    (num-generic-for-inline y)))
+
+(define-test monomorphize-inline ()
+  (is (== 5 (monomorph-for-inline 3))))
+
+
 (in-package #:coalton-tests)
 
 (deftest function-inline-error ()
