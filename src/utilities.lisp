@@ -26,7 +26,7 @@
    #:find-symbol                        ; FUNCTION
    #:find-symbol?                       ; FUNCTION
    #:take-until                         ; FUNCTION
-   #:project-indicies                   ; FUNCTION
+   #:project-indices                   ; FUNCTION
    #:project-map                        ; FUNCTION
    #:maybe-read-form                    ; FUNCTION
    ))
@@ -178,7 +178,7 @@
            (values list))
   (subseq list n))
 
-(defun project-indicies (indices data)
+(defun project-indices (indices data)
   (declare (type list indices data)
            (values list))
   (labels ((inner (is xs pos out)
@@ -187,7 +187,7 @@
                ((and is (null xs))
                 (error "Indices ~A extend past data" is))
 
-               ;; Data or indicies are done
+               ;; Data or indices are done
                ((or (null is)
                     (null xs))
                 out)
@@ -205,13 +205,13 @@
     (declare (dynamic-extent #'inner))
     (nreverse (inner indices data 0 nil))))
 
-(defun project-map (indicies map data)
-  (declare (type symbol-list indicies)
+(defun project-map (indices map data)
+  (declare (type symbol-list indices)
            (type hash-table map)
            (type list data))
-  (project-indicies
+  (project-indices
    (sort
-    (loop :for key :in indicies
+    (loop :for key :in indices
           :collect (gethash key map))
     #'<)
    data))

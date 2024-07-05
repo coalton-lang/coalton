@@ -257,7 +257,7 @@ Returns (VALUES deferred-preds retained-preds defaultable-preds)"
 ;;; a list of inferred predicates, and a list of known type variables.
 ;;; It then finds inferred predicates that would match declared
 ;;; predicates if not for differing unknown types at identical
-;;; indicies.
+;;; indices.
 ;;;
 ;;; The other requirement is that unknown types must be within the
 ;;; "transitive `closure'" of the known types.
@@ -273,22 +273,22 @@ Returns (VALUES deferred-preds retained-preds defaultable-preds)"
     (unless (ty-class-fundeps class)
       (return-from fundep-entail% nil))
 
-    (let* ((unknown-indicies nil)
+    (let* ((unknown-indices nil)
 
-           (known-indicies
+           (known-indices
              (loop :for ty :in (ty-predicate-types pred)
                    :for i :from 0
                    :if (intersection (type-variables ty) known-tyvars :test #'eq)
                      :collect i
                    :else
-                     :do (push i unknown-indicies)))
+                     :do (push i unknown-indices)))
 
-           (unknown-indicies (reverse unknown-indicies))
+           (unknown-indices (reverse unknown-indices))
 
-           (known-class-vars (util:project-indicies known-indicies (ty-class-class-variables class)))
+           (known-class-vars (util:project-indices known-indices (ty-class-class-variables class)))
 
            (unknown-class-vars
-             (util:project-indicies unknown-indicies (ty-class-class-variables class)))
+             (util:project-indices unknown-indices (ty-class-class-variables class)))
 
            (closure (closure known-class-vars (ty-class-fundeps class))))
 
@@ -297,24 +297,24 @@ Returns (VALUES deferred-preds retained-preds defaultable-preds)"
 
       (loop :for expr-pred :in expr-preds
 
-            :for expr-pred-indicies
+            :for expr-pred-indices
               := (loop :for ty :in (ty-predicate-types pred)
                        :for i :from 0
                        :when (intersection (type-variables ty) known-tyvars :test #'eq)
                          :collect i)
 
             :when (and (eq (ty-predicate-class pred) (ty-predicate-class expr-pred))
-                       (equalp known-indicies expr-pred-indicies))
+                       (equalp known-indices expr-pred-indices))
 
               :do
                  (return-from
                   fundep-entail%
-                   (loop :for ty :in (util:project-indicies
-                                      unknown-indicies
+                   (loop :for ty :in (util:project-indices
+                                      unknown-indices
                                       (ty-predicate-types expr-pred))
 
-                         :for ty_ :in (util:project-indicies
-                                       unknown-indicies
+                         :for ty_ :in (util:project-indices
+                                       unknown-indices
                                        (ty-predicate-types pred))
 
                          :when (and (tyvar-p ty) (tyvar-p ty_))
