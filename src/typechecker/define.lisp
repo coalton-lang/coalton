@@ -2691,7 +2691,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                                 :when (subsetp (tc:type-variables ty) local-tvars :test #'eq)
                                   :collect i))
 
-                     (fundep-vars (util:project-indicies idx (tc:ty-class-class-variables class)))
+                     (fundep-vars (util:project-indices idx (tc:ty-class-class-variables class)))
                      (closure-vars (tc:closure fundep-vars (tc:ty-class-fundeps class)))
 
                      (new-vars (set-difference closure-vars fundep-vars :test #'eq))
