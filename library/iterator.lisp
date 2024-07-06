@@ -55,6 +55,9 @@
    #:optimize!
    #:max!
    #:min!
+   #:optimize-by!
+   #:maximize-by!
+   #:minimize-by!
    #:every!
    #:any!
    #:elementwise-match!
@@ -516,6 +519,33 @@ Return `None` if ITER is empty."
   (define (min! iter)
     "Return the most-negative element of ITER, or `None` if ITER is empty."
     (optimize! < iter))
+
+  (declare optimize-by! ((:b -> :b -> Boolean) ->
+                        (:a -> :b) ->
+                        Iterator :a ->
+                        Optional :a))
+  (define (optimize-by! better? f iter)
+    "For an order BETTER? which returns `True` if its first argument is better than its second argument, return the element of ITER where (F ELT) is the best.
+
+Return `None` if ITER is empty."
+    (match (optimize! (fn ((Tuple _ a) (Tuple _ b)) (better? a b))
+                      (pair-with! f iter))
+      ((Some (Tuple result _)) (Some result))
+      ((None) None)))
+
+  (declare maximize-by! (Ord :a => (:elt -> :a) -> Iterator :elt -> Optional :elt))
+  (define (maximize-by! f iter)
+    "For a function F, which maps the iterator, return the element of ITER where (F ELT) is the most-positive.
+
+Return `None' if ITER is empty."
+    (optimize-by! > f iter))
+
+  (declare minimize-by! (Ord :a => (:elt -> :a) -> Iterator :elt -> Optional :elt))
+  (define (minimize-by! f iter)
+    "For a function F, which maps the iterator, return the element of ITER where (F ELT) is the most-negative.
+
+Return `None' if ITER is empty."
+    (optimize-by! < f iter))
 
   (declare every! ((:elt -> Boolean) -> Iterator :elt -> Boolean))
   (define (every! good? iter)
