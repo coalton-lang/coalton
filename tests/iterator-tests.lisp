@@ -32,7 +32,7 @@
 
 (define-test iter-char-range-string-chars ()
   (let ((same? (fn (expected-str range-start range-end)
-                 (iter:and! 
+                 (iter:and!
                   (iter:zip-with!
                    ==
                    (iter:into-iter expected-str)
@@ -117,7 +117,13 @@
                                   (iter:up-to 10)))))
   (is (== (Some (the UFix 0))
           (iter:min! (iter:chain! (iter:down-from 10)
-                                  (iter:up-to 10))))))
+                                  (iter:up-to 10)))))
+  (is (== (Some (the Integer 0))
+          (iter:maximize-by! negate (iter:chain! (iter:up-to 10)
+                                                (iter:down-from 10)))))
+  (is (== (Some (the Integer 10))
+          (iter:minimize-by! negate (iter:chain! (iter:down-from 10)
+                                                (iter:up-through 10))))))
 
 (define-test iter-optimize-string-length ()
   (let ((longer? (fn (long short)
