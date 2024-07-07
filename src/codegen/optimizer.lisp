@@ -180,6 +180,9 @@
 
    (match-dynamic-extent-lift env)
 
+   ;; FIXME: Is this the right place to propagate-constants?
+   propagate-constants
+
    (apply-specializations env)
 
    (resolve-static-superclass env)
@@ -304,6 +307,92 @@
      (list
       (cons :application #'rewrite-application))
      nil)))
+
+
+(defun constant-node-p (node)
+  (declare (type node node))
+  ;; FIXME: We need more nodes classified as constants
+  (node-literal-p node))
+
+(defun propagate-constants-with-bindings (node constant-bindings)
+  "Returns two values: the first is the propagted value, the second indicates success if non-NIl"
+  ;; (terpri)
+  ;; (print (list node bindings))
+  (cond
+    ((node-literal-p node)
+     (values node t))
+    ((node-variable-p node)
+     ;; FIXME: Can or Should we use an existing structure to handle bindings
+     (alexandria:if-let (value (cdr (assoc (node-variable-value node) constant-bindings)))
+       (values value t)
+       (values node nil)))
+    ((node-let-p node)
+     (let ((node-bindings (node-let-bindings node))
+           (new-constant-bindings nil)
+           (nonconstant-bindings nil))
+       (loop :for (var . value) :in node-bindings
+             :for propagated-value-node := (propagate-constants-with-bindings value constant-bindings)
+             :do (if (constant-node-p propagated-value-node)
+                     (push (cons var propagated-value-node)
+                           new-constant-bindings)
+                     (push (cons var propagated-value-node)
+                           nonconstant-bindings)))
+       (let ((constant-bindings (append new-constant-bindings constant-bindings)))
+         (if nonconstant-bindings
+             (make-node-let
+              :type (node-type node)
+              :bindings nonconstant-bindings
+              :subexpr (propagate-constants-with-bindings
+                        (node-let-subexpr node)
+                        constant-bindings))
+             (propagate-constants-with-bindings
+              (node-let-subexpr node)
+              constant-bindings)))))
+    ((node-abstraction-p node)
+     (make-node-abstraction
+      ;; FIXME: A more specific type?
+      :type (node-type node)
+      :vars (node-abstraction-vars node)
+      :subexpr (propagate-constants-with-bindings
+                (node-abstraction-subexpr node)
+                constant-bindings)))
+    ((node-application-p node)
+     (let ((constant-propagated-rands
+             (mapcar (lambda (rand)
+                       (propagate-constants-with-bindings
+                        rand
+                        constant-bindings))
+                     (node-application-rands node))))
+       (make-node-application
+        ;; FIXME: A more specific type
+        :type (node-type node)
+        :rator (node-application-rator node)
+        :rands constant-propagated-rands)))
+    ((node-direct-application-p node)
+     (let ((constant-propagated-rands
+             (mapcar (lambda (rand)
+                       (propagate-constants-with-bindings
+                        rand
+                        constant-bindings))
+                     (node-direct-application-rands node))))
+       (make-node-direct-application
+        :type (node-type node)
+        :rator-type (tc:make-function-type*
+                     (mapcar #'node-type constant-propagated-rands)
+                     (tc:function-return-type (node-type node)))
+        :rator (node-direct-application-rator node)
+        :rands constant-propagated-rands)))
+    (t
+     ;; TODO: Propagate constants in other nodes
+     node)))
+
+(defun propagate-constants (node)
+  (declare (type node node))
+  ;; FIXME: Can we use TRAVERSE?
+  ;; The trouble is: TRAVERSE expects a symbol-list, while we want a binding list
+  (propagate-constants-with-bindings node ()))
+
+
 
 (defun inline-applications (node env)
   (declare (type node node)
