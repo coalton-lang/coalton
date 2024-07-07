@@ -432,12 +432,19 @@
                                                    :value new-var))
                                       :into subs
                                     :finally (return (values bindings subs)))
-                            (make-node-let
-                             :type (node-type node)
-                             :bindings bindings
-                             :subexpr (apply-ast-substitution
-                                       subs
-                                       (node-abstraction-subexpr code)))))
+                            (propagate-constants
+                             (make-node-let
+                              :type (node-type node)
+                              :bindings bindings
+                              ;; FIXME: Is this the right place and right way to recurse?
+                              :subexpr (traverse
+                                        (apply-ast-substitution
+                                         subs
+                                         (node-abstraction-subexpr code))
+                                        (list
+                                         (cons :application #'inline-application)
+                                         (cons :direct-application #'inline-direct-application))
+                                        nil)))))
                          (t
                           (make-node-application
                            :type (node-type node)
@@ -495,12 +502,19 @@
                                                      :value new-var))
                                         :into subs
                                       :finally (return (values bindings subs)))
-                              (make-node-let
-                               :type (node-type node)
-                               :bindings bindings
-                               :subexpr (apply-ast-substitution
-                                         subs
-                                         (node-abstraction-subexpr code)))))
+                              (propagate-constants
+                               (make-node-let
+                                :type (node-type node)
+                                :bindings bindings
+                                ;; FIXME: Is this the right place and right way to recurse?
+                                :subexpr (traverse
+                                          (apply-ast-substitution
+                                           subs
+                                           (node-abstraction-subexpr code))
+                                          (list
+                                           (cons :application #'inline-application)
+                                           (cons :direct-application #'inline-direct-application))
+                                          nil)))))
                            (t
                             (make-node-direct-application
                              :type (node-type node)
