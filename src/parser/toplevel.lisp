@@ -117,6 +117,11 @@
    #:toplevel-define-instance-compiler-generated ; ACCESSOR
    #:toplevel-define-instance-list               ; TYPE
    #:toplevel-package-name                       ; ACCESSOR
+   #:toplevel-lisp-form                          ; STRUCT
+   #:make-toplevel-lisp-form                     ; CONSTRUCTOR
+   #:toplevel-lisp-form-body                     ; ACCESSOR
+   #:toplevel-lisp-form-source                   ; ACCESSOR
+   #:toplevel-lisp-form-list                     ; TYPE
    #:toplevel-specialize                         ; STRUCT
    #:make-toplevel-specialize                    ; CONSTRUCTOR
    #:toplevel-specialize-from                    ; ACCESSOR
@@ -128,6 +133,7 @@
    #:make-program                                ; CONSTRUCTOR
    #:program-package                             ; ACCESSOR
    #:program-file                                ; ACCESSOR
+   #:program-lisp-forms                          ; ACCESSOR
    #:program-types                               ; ACCESSOR
    #:program-structs                             ; ACCESSOR
    #:program-declares                            ; ACCESSOR
@@ -204,6 +210,8 @@
 ;;;; toplevel-define-instance := "(" "define-instance" "(" ty-predicate ")" docstring? instance-method-definition* ")"
 ;;;;                           | "(" "define-instance" "(" ty-predicate "=>" ty-predicate ")" docstring? instance-method-definition ")"
 ;;;;                           | "(" "define-instance" "(" ( "(" ty-predicate ")" )+ "=>" ty-predicate ")" docstring? instance-method-definition+ ")"
+;;;;
+;;;; toplevel-lisp-form := "(" "lisp-toplevel" lisp-form* ")"
 ;;;;
 ;;;; toplevel-specialize := "(" identifier identifier ty ")"
 
@@ -409,6 +417,19 @@
 (deftype toplevel-define-instance-list ()
   '(satisfies toplevel-define-instance-list-p))
 
+(defstruct (toplevel-lisp-form
+            (:copier nil))
+  (body   (util:required 'body)   :type cons  :read-only t)
+  (source (util:required 'source) :type cons  :read-only t))
+
+(eval-when (:load-toplevel :compile-toplevel :execute)
+  (defun toplevel-lisp-form-list-p (x)
+    (and (alexandria:proper-list-p x)
+         (every #'toplevel-lisp-form-p x))))
+
+(deftype toplevel-lisp-form-list ()
+  '(satisfies toplevel-lisp-form-list-p))
+
 (defstruct (toplevel-specialize
             (:copier nil))
   (from   (util:required 'from)   :type node-variable :read-only t)
@@ -437,13 +458,14 @@
 (defstruct (program
             (:copier nil))
   (package         (util:required 'package)         :type (or null toplevel-package)    :read-only t)
-  (file            (util:required 'file)            :type se:file                  :read-only t)
+  (file            (util:required 'file)            :type se:file                       :read-only t)
   (types           (util:required 'types)           :type toplevel-define-type-list     :read-only nil)
   (structs         (util:required 'structs)         :type toplevel-define-struct-list   :read-only nil)
   (declares        (util:required 'declares)        :type toplevel-declare-list         :read-only nil)
   (defines         (util:required 'defines)         :type toplevel-define-list          :read-only nil)
   (classes         (util:required 'classes)         :type toplevel-define-class-list    :read-only nil)
   (instances       (util:required 'instances)       :type toplevel-define-instance-list :read-only nil)
+  (lisp-forms      (util:required 'lisp-forms)      :type toplevel-lisp-form-list       :read-only nil)
   (specializations (util:required 'specializations) :type toplevel-specialize-list      :read-only nil))
 
 (defun read-program (stream file &optional mode)
@@ -475,6 +497,7 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
                      :defines nil
                      :classes nil
                      :instances nil
+                     :lisp-forms nil
                      :specializations nil))
            (*package* (program-lisp-package program))
 
@@ -514,6 +537,8 @@ consume all attributes"))))
       (setf (program-declares program) (nreverse (program-declares program)))
       (setf (program-defines program) (nreverse (program-defines program)))
       (setf (program-classes program) (nreverse (program-classes program)))
+      (setf (program-instances program) (nreverse (program-instances program)))
+      (setf (program-lisp-forms program) (nreverse (program-lisp-forms program)))
       (setf (program-specializations program) (nreverse (program-specializations program)))
 
       program)))
@@ -687,6 +712,25 @@ consume all attributes"))))
       *package*))
 
 ;; end package support
+
+(defun eval-toplevel-p (form)
+  "T if form is an instance of EVAL-WHEN containing a COMPILE-TOPLEVEL symbol."
+  (and (eql (car form) 'eval-when)
+       (some (lambda (k)
+               (string-equal 'compile-toplevel k))
+             (cadr form))))
+
+(defun parse-lisp-toplevel-form (form program)
+  "Parse lisp forms that are to be literally included in compiler output.
+
+If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the enclosed forms."
+  (loop :for form :in (cst:raw (cst:rest form))
+        :when (eval-toplevel-p form)
+          :do (dolist (form (cddr form))
+                (eval form)))
+  (push (make-toplevel-lisp-form :body (cdr (cst:raw form))
+                                 :source (cst:source form))
+        (program-lisp-forms program)))
 
 (defun parse-toplevel-form (form program attributes file)
   (declare (type cst:cst form)
@@ -978,6 +1022,23 @@ consume all attributes"))))
 
        (push instance (program-instances program))
        t))
+
+    ((coalton:lisp-toplevel)
+     (unless (zerop (length attributes))
+       (error 'parse-error
+              :err (se:source-error
+                    :span (cst:source (cdr (aref attributes 0)))
+                    :file file
+                    :message "Invalid attribute for lisp-toplevel"
+                    :primary-note "lisp-toplevel cannot have attributes"
+                    :notes
+                    (list
+                     (se:make-source-error-note
+                      :type :secondary
+                      :span (cst:source form)
+                      :message "when parsing lisp-toplevel")))))
+     (parse-lisp-toplevel-form form program)
+     t)
 
     ((coalton:specialize)
      (let ((spec (parse-specialize form file)))
