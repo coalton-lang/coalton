@@ -93,3 +93,15 @@
 (define-coalton-editor-macro coalton:do (&body body))
 
 (define-coalton-editor-macro coalton:return (&optional value))
+
+(define-coalton-editor-macro coalton:loop (&body body))
+
+(define-coalton-editor-macro coalton:while (test &body body))
+
+(define-coalton-editor-macro coalton:while-let (pattern = test &body body))
+
+(define-coalton-editor-macro coalton:for (pattern in iter &body body))
+
+(define-coalton-editor-macro coalton:break (&optional label))
+
+(define-coalton-editor-macro coalton:continue (&optional label))
