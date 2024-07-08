@@ -164,22 +164,29 @@ If UNWRAP is NIL, return the CST node, otherwise, return the raw value."
   "T if NOTE is a help note."
   (eq ':help (note-type note)))
 
+(defun note->source-note (note)
+  "Convert NOTE to a source error help note."
+  (se:make-source-error-note :span (note-span note)
+                             :type (note-type note)
+                             :message (note-text note)))
+
 (defun note->help-note (note)
   "Convert NOTE to a source error help note."
   (se:make-source-error-help :span (note-span note)
                              :replacement #'identity
                              :message (note-text note)))
 
-(defun parse-error (file message syntax-error)
+(defun parse-error (file message syntax-error &optional notes)
   "Rethrow SYNTAX-ERROR as a PARSE-ERROR."
-  (let ((notes (error-notes syntax-error)))
+  (destructuring-bind (primary-note &rest secondary-notes)
+      (append (error-notes syntax-error) notes)
     (error
      'parse-error
-     :err (se:source-error :span (note-span (first notes))
+     :err (se:source-error :span (note-span primary-note)
                            :file file
                            :message message
-                           :primary-note (note-text (first notes))
-                           :notes (remove-if #'help-note-p (rest notes))
+                           :primary-note (note-text primary-note)
+                           :notes (mapcar #'note->source-note
+                                          (remove-if #'help-note-p secondary-notes))
                            :help-notes (mapcar #'note->help-note
-                                               (remove-if-not #'help-note-p
-                                                              notes))))))
+                                               (remove-if-not #'help-note-p secondary-notes))))))

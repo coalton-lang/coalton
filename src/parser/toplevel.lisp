@@ -117,6 +117,11 @@
    #:toplevel-define-instance-compiler-generated ; ACCESSOR
    #:toplevel-define-instance-list               ; TYPE
    #:toplevel-package-name                       ; ACCESSOR
+   #:toplevel-lisp-form                          ; STRUCT
+   #:make-toplevel-lisp-form                     ; CONSTRUCTOR
+   #:toplevel-lisp-form-body                     ; ACCESSOR
+   #:toplevel-lisp-form-source                   ; ACCESSOR
+   #:toplevel-lisp-form-list                     ; TYPE
    #:toplevel-specialize                         ; STRUCT
    #:make-toplevel-specialize                    ; CONSTRUCTOR
    #:toplevel-specialize-from                    ; ACCESSOR
@@ -128,6 +133,7 @@
    #:make-program                                ; CONSTRUCTOR
    #:program-package                             ; ACCESSOR
    #:program-file                                ; ACCESSOR
+   #:program-lisp-forms                          ; ACCESSOR
    #:program-types                               ; ACCESSOR
    #:program-structs                             ; ACCESSOR
    #:program-declares                            ; ACCESSOR
@@ -204,6 +210,8 @@
 ;;;; toplevel-define-instance := "(" "define-instance" "(" ty-predicate ")" docstring? instance-method-definition* ")"
 ;;;;                           | "(" "define-instance" "(" ty-predicate "=>" ty-predicate ")" docstring? instance-method-definition ")"
 ;;;;                           | "(" "define-instance" "(" ( "(" ty-predicate ")" )+ "=>" ty-predicate ")" docstring? instance-method-definition+ ")"
+;;;;
+;;;; toplevel-lisp-form := "(" "lisp-toplevel" "(" ")" lisp-form* ")"
 ;;;;
 ;;;; toplevel-specialize := "(" identifier identifier ty ")"
 
@@ -409,6 +417,19 @@
 (deftype toplevel-define-instance-list ()
   '(satisfies toplevel-define-instance-list-p))
 
+(defstruct (toplevel-lisp-form
+            (:copier nil))
+  (body   (util:required 'body)   :type cons  :read-only t)
+  (source (util:required 'source) :type cons  :read-only t))
+
+(eval-when (:load-toplevel :compile-toplevel :execute)
+  (defun toplevel-lisp-form-list-p (x)
+    (and (alexandria:proper-list-p x)
+         (every #'toplevel-lisp-form-p x))))
+
+(deftype toplevel-lisp-form-list ()
+  '(satisfies toplevel-lisp-form-list-p))
+
 (defstruct (toplevel-specialize
             (:copier nil))
   (from   (util:required 'from)   :type node-variable :read-only t)
@@ -437,13 +458,14 @@
 (defstruct (program
             (:copier nil))
   (package         (util:required 'package)         :type (or null toplevel-package)    :read-only t)
-  (file            (util:required 'file)            :type se:file                  :read-only t)
+  (file            (util:required 'file)            :type se:file                       :read-only t)
   (types           (util:required 'types)           :type toplevel-define-type-list     :read-only nil)
   (structs         (util:required 'structs)         :type toplevel-define-struct-list   :read-only nil)
   (declares        (util:required 'declares)        :type toplevel-declare-list         :read-only nil)
   (defines         (util:required 'defines)         :type toplevel-define-list          :read-only nil)
   (classes         (util:required 'classes)         :type toplevel-define-class-list    :read-only nil)
   (instances       (util:required 'instances)       :type toplevel-define-instance-list :read-only nil)
+  (lisp-forms      (util:required 'lisp-forms)      :type toplevel-lisp-form-list       :read-only nil)
   (specializations (util:required 'specializations) :type toplevel-specialize-list      :read-only nil))
 
 (defun read-program (stream file &optional mode)
@@ -475,6 +497,7 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
                      :defines nil
                      :classes nil
                      :instances nil
+                     :lisp-forms nil
                      :specializations nil))
            (*package* (program-lisp-package program))
 
@@ -514,6 +537,8 @@ consume all attributes"))))
       (setf (program-declares program) (nreverse (program-declares program)))
       (setf (program-defines program) (nreverse (program-defines program)))
       (setf (program-classes program) (nreverse (program-classes program)))
+      (setf (program-instances program) (nreverse (program-instances program)))
+      (setf (program-lisp-forms program) (nreverse (program-lisp-forms program)))
       (setf (program-specializations program) (nreverse (program-specializations program)))
 
       program)))
@@ -688,6 +713,45 @@ consume all attributes"))))
 
 ;; end package support
 
+(defun eval-toplevel-p (form)
+  "T if form is an instance of EVAL-WHEN containing a COMPILE-TOPLEVEL symbol."
+  (and (eq 'cl:eval-when (car form))
+       (some (lambda (k)
+               (or (string-equal 'compile k)
+                   (string-equal 'compile-toplevel k)))
+             (cadr form))))
+
+(defun maybe-def-p (symbol)
+  "Return T if SYMBOL's name starts with 'DEF'."
+  (when (symbolp symbol)
+    (let ((name (symbol-name symbol)))
+      (and (<= 3 (length name))
+           (string= name "DEF" :end1 3)))))
+
+(defun parse-lisp-toplevel-form (form program)
+  "Parse lisp forms that are to be literally included in compiler output.
+
+If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the enclosed forms."
+  (let* ((options-node (cst:first (cst:rest form)))
+         (options (cst:raw options-node)))
+    (unless (null options)
+      (cond ((maybe-def-p (car options))
+             (cursor:span-error
+              (cst:source (cst:first (cst:rest form)))
+              "saw 'def' form: in lisp-toplevel, code must be preceded by an empty options list"))
+            (t
+             (cursor:span-error
+              (cst:source (cst:first (cst:rest form)))
+              "lisp-toplevel must be followed by an empty options list")))))
+
+  (loop :for form :in (cst:raw (cst:rest (cst:rest form)))
+        :when (eval-toplevel-p form)
+          :do (dolist (form (cddr form))
+                (eval form)))
+  (push (make-toplevel-lisp-form :body (cddr (cst:raw form))
+                                 :source (cst:source form))
+        (program-lisp-forms program)))
+
 (defun parse-toplevel-form (form program attributes file)
   (declare (type cst:cst form)
            (type program program)
@@ -746,7 +810,7 @@ consume all attributes"))))
                                  :notes
                                  (list
                                   (se:make-source-error-note
-                                   :type :secondary
+                                   :type ':secondary
                                    :span (node-source (toplevel-define-name define))
                                    :message "when parsing define")))))
 
@@ -761,11 +825,11 @@ consume all attributes"))))
                                    :notes
                                    (list
                                     (se:make-source-error-note
-                                     :type :secondary
+                                     :type ':secondary
                                      :span (cst:source monomorphize-form)
                                      :message "previous attribute here")
                                     (se:make-source-error-note
-                                     :type :secondary
+                                     :type ':secondary
                                      :span (node-source (toplevel-define-name define))
                                      :message "when parsing define")))))
 
@@ -795,7 +859,7 @@ consume all attributes"))))
                                  :notes
                                  (list
                                   (se:make-source-error-note
-                                   :type :secondary
+                                   :type ':secondary
                                    :span (cst:source form)
                                    :message "when parsing declare")))))
 
@@ -810,11 +874,11 @@ consume all attributes"))))
                                    :notes
                                    (list
                                     (se:make-source-error-note
-                                     :type :secondary
+                                     :type ':secondary
                                      :span (cst:source monomorphize-form)
                                      :message "previous attribute here")
                                     (se:make-source-error-note
-                                     :type :secondary
+                                     :type ':secondary
                                      :span (cst:source form)
                                      :message "when parsing declare")))))
 
@@ -845,11 +909,11 @@ consume all attributes"))))
                                    :notes
                                    (list
                                     (se:make-source-error-note
-                                     :type :secondary
+                                     :type ':secondary
                                      :span (cst:source repr-form)
                                      :message "previous attribute here")
                                     (se:make-source-error-note
-                                     :type :secondary
+                                     :type ':secondary
                                      :span (toplevel-define-type-head-src type)
                                      :message "when parsing define-type")))))
 
@@ -866,7 +930,7 @@ consume all attributes"))))
                                  :notes
                                  (list
                                   (se:make-source-error-note
-                                   :type :secondary
+                                   :type ':secondary
                                    :span (toplevel-define-type-head-src type)
                                    :message "when parsing define-type")))))))
 
@@ -894,11 +958,11 @@ consume all attributes"))))
                                    :notes
                                    (list
                                     (se:make-source-error-note
-                                     :type :secondary
+                                     :type ':secondary
                                      :span (cst:source repr-form)
                                      :message "previous attribute here")
                                     (se:make-source-error-note
-                                     :type :secondary
+                                     :type ':secondary
                                      :span (toplevel-define-struct-head-src struct) 
                                      :message "when parsing define-struct")))))
 
@@ -912,7 +976,7 @@ consume all attributes"))))
                                    :notes
                                    (list
                                     (se:make-source-error-note
-                                     :type :secondary
+                                     :type ':secondary
                                      :span (toplevel-define-struct-head-src struct)
                                      :message "when parsing define-struct")))))
 
@@ -929,7 +993,7 @@ consume all attributes"))))
                                  :notes
                                  (list
                                   (se:make-source-error-note
-                                   :type :secondary
+                                   :type ':secondary
                                    :span (identifier-src-source (toplevel-define-struct-name struct))
                                    :message "when parsing define-type")))))))
 
@@ -951,7 +1015,7 @@ consume all attributes"))))
                       :notes
                       (list
                        (se:make-source-error-note
-                        :type :secondary
+                        :type ':secondary
                         :span (toplevel-define-class-head-src class)
                         :message "while parsing define-class")))))
 
@@ -971,13 +1035,32 @@ consume all attributes"))))
                       :notes
                       (list
                        (se:make-source-error-note
-                        :type :secondary
+                        :type ':secondary
                         :span (toplevel-define-instance-head-src instance)
                         :message "while parsing define-instance")))))
 
 
        (push instance (program-instances program))
        t))
+
+    ((coalton:lisp-toplevel)
+     (handler-bind ((cursor:syntax-error
+                      (lambda (syntax-error)
+                        (cursor:parse-error file
+                                            "Invalid lisp-toplevel form"
+                                            syntax-error
+                                            (list
+                                             (cursor:make-note :span (cst:source form)
+                                                               :text "when parsing lisp-toplevel"
+                                                               :type ':secondary))))))
+       (unless (alexandria:featurep ':coalton-lisp-toplevel)
+         (cursor:span-error (cst:source form)
+                            "lisp-toplevel is only allowed in library source code. To enable elsewhere, (pushnew :coalton-lisp-toplevel *features*)"))
+       (unless (zerop (length attributes))
+         (cursor:span-error (cst:source (cdr (aref attributes 0)))
+                            "lisp-toplevel cannot have attributes"))
+       (parse-lisp-toplevel-form form program))
+     t)
 
     ((coalton:specialize)
      (let ((spec (parse-specialize form file)))
@@ -992,7 +1075,7 @@ consume all attributes"))))
                       :notes
                       (list
                        (se:make-source-error-note
-                        :type :secondary
+                        :type ':secondary
                         :span (cst:source form)
                         :message "when parsing specialize")))))
 
@@ -1010,7 +1093,7 @@ consume all attributes"))))
                     :notes
                     (list
                      (se:make-source-error-note
-                      :type :secondary
+                      :type ':secondary
                       :span (cst:source form)
                       :message "when parsing progn")))))
 
@@ -1031,7 +1114,7 @@ consume all attributes")))
                     :notes
                     (list
                      (se:make-source-error-note
-                      :type :secondary
+                      :type ':secondary
                       :span (cst:source form)
                       :message "when parsing progn")))))
      t)
@@ -1715,7 +1798,7 @@ consume all attributes")))
                  :notes
                  (list
                   (se:make-source-error-note
-                   :type :secondary
+                   :type ':secondary
                    :span (cst:source (cst:second form))
                    :message "in this class definition")))))
 
@@ -1731,7 +1814,7 @@ consume all attributes")))
                  :notes
                  (list
                   (se:make-source-error-note
-                   :type :secondary
+                   :type ':secondary
                    :span (cst:source (cst:second form))
                    :message "in this class definition")))))
 
@@ -1747,7 +1830,7 @@ consume all attributes")))
                  :notes
                  (list
                   (se:make-source-error-note
-                   :type :secondary
+                   :type ':secondary
                    :span (cst:source (cst:second form))
                    :message "in this class definition")))))
 
@@ -1764,7 +1847,7 @@ consume all attributes")))
                  :notes
                  (list
                   (se:make-source-error-note
-                   :type :secondary
+                   :type ':secondary
                    :span (cst:source (cst:second form))
                    :message "in this class definition")))))
 
@@ -1788,7 +1871,7 @@ consume all attributes")))
                    :notes
                    (list
                     (se:make-source-error-note
-                     :type :secondary
+                     :type ':secondary
                      :span (cst:source (cst:second form))
                      :message "in this class definition")))))
 
@@ -1860,7 +1943,7 @@ consume all attributes")))
                    :notes
                    (list
                     (se:make-source-error-note
-                     :type :secondary
+                     :type ':secondary
                      :span (cst:source (cst:second enclosing-form))
                      :message "in this type definition")))))
 
@@ -1874,7 +1957,7 @@ consume all attributes")))
                    :notes
                    (list
                     (se:make-source-error-note
-                     :type :secondary
+                     :type ':secondary
                      :span (cst:source (cst:second enclosing-form))
                      :message "in this type definition")))))
 
@@ -1987,7 +2070,7 @@ consume all attributes")))
 
   (let ((context-note
           (se:make-source-error-note
-           :type :secondary
+           :type ':secondary
            :span (cst:source parent-form)
            :message "when parsing instance")))
 
