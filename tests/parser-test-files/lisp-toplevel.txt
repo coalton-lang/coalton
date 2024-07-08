@@ -1,0 +1,64 @@
+================================================================================
+Empty options
+
+To support future extension, lisp-toplevel expects an empty options list in the
+first poisition.
+================================================================================
+
+(package test)
+
+(lisp-toplevel (x)
+  t)
+
+--------------------------------------------------------------------------------
+
+error: Invalid lisp-toplevel form
+  --> test:3:15
+   |
+ 3 |   (lisp-toplevel (x)
+   |  _-
+   | |                ^^^ lisp-toplevel must be followed by an empty options list
+ 4 | |   t)
+   | |____- when parsing lisp-toplevel
+
+================================================================================
+lisp-toplevel must receive an options list
+================================================================================
+
+(package test)
+
+(lisp-toplevel
+  (defvar *x* nil))
+
+--------------------------------------------------------------------------------
+
+error: Invalid lisp-toplevel form
+  --> test:4:2
+   |
+ 3 |   (lisp-toplevel
+   |  _-
+ 4 | |   (defvar *x* nil))
+   | |   ^^^^^^^^^^^^^^^^ saw 'def' form: in lisp-toplevel, code must be preceded by an empty options list
+   | |___________________- when parsing lisp-toplevel
+
+================================================================================
+lisp-toplevel may not have attributes
+================================================================================
+
+(package test)
+
+(repr :lisp)
+(lisp-toplevel
+  (defvar *x* nil))
+
+--------------------------------------------------------------------------------
+
+error: Invalid lisp-toplevel form
+  --> test:3:0
+   |
+ 3 |   (repr :lisp)
+   |   ^^^^^^^^^^^^ lisp-toplevel cannot have attributes
+ 4 |   (lisp-toplevel
+   |  _-
+ 5 | |   (defvar *x* nil))
+   | |___________________- when parsing lisp-toplevel

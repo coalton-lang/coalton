@@ -27,7 +27,12 @@
   :version (:read-file-form "VERSION.txt")
   :around-compile (lambda (compile)
                     (let (#+sbcl (sb-ext:*derive-function-types* t)
-                          #+sbcl (sb-ext:*block-compile-default* :specified))
+                          #+sbcl (sb-ext:*block-compile-default* :specified)
+                          ;; The lisp-toplevel form is currently
+                          ;; restricted to standard library
+                          ;; implementation by checking for the
+                          ;; presence of this feature.
+                          (*features* (cons ':coalton-lisp-toplevel *features*)))
                       (funcall compile)))
   :defsystem-depends-on (#:coalton-asdf)
   :depends-on (#:coalton-compiler
