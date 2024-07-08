@@ -8,6 +8,7 @@
    #:coalton-impl/typechecker/define-type
    #:coalton-impl/typechecker/toplevel)
   (:local-nicknames
+   (#:parser #:coalton-impl/parser)
    (#:util #:coalton-impl/util))
   (:export
    #:translation-unit                   ; STRUCT
@@ -15,6 +16,7 @@
    #:translation-unit-types             ; ACCESSOR
    #:translation-unit-definitions       ; ACCESSOR
    #:translation-unit-instances         ; ACCESSOR
+   #:translation-unit-lisp-forms        ; ACCESSOR
    #:translation-unit-classes           ; ACCESSOR
    #:translation-unit-attr-table        ; ACCESSOR
    #:translation-unit-package           ; ACCESSOR
@@ -24,8 +26,9 @@
 (in-package #:coalton-impl/typechecker/translation-unit)
 
 (defstruct translation-unit
-  (types           nil                      :type type-definition-list           :read-only t)
-  (definitions     nil                      :type toplevel-define-list           :read-only t)
-  (instances       nil                      :type toplevel-define-instance-list  :read-only t)
-  (classes         nil                      :type ty-class-list                  :read-only t)
-  (package         (util:required 'package) :type package                        :read-only t))
+  (types       nil                         :type type-definition-list          :read-only t)
+  (definitions nil                         :type toplevel-define-list          :read-only t)
+  (instances   nil                         :type toplevel-define-instance-list :read-only t)
+  (lisp-forms  (util:required 'lisp-forms) :type parser:toplevel-lisp-form-list :read-only t)
+  (classes     nil                         :type ty-class-list                 :read-only t)
+  (package     (util:required 'package)    :type package                       :read-only t))

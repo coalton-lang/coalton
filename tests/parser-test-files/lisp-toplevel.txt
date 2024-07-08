@@ -1,0 +1,22 @@
+================================================================================
+Empty options
+
+To support future extension, lisp-toplevel expects an empty options list in the
+first poisition.
+================================================================================
+
+(package test)
+
+(lisp-toplevel (x)
+  t)
+
+--------------------------------------------------------------------------------
+
+error: Invalid lisp-toplevel form
+  --> test:3:15
+   |
+ 3 |   (lisp-toplevel (x)
+   |  _-
+   | |                ^^^ expected empty lisp-toplevel options
+ 4 | |   t)
+   | |____- when parsing lisp-toplevel
