@@ -16,6 +16,7 @@
    #:expression-entry-point             ; FUNCTION
    #:compile-coalton                    ; FUNCTION
    #:compile-coalton-toplevel           ; FUNCTION
+   #:compile-to-lisp                    ; FUNCTION
    ))
 
 (in-package #:coalton-impl/entry)
@@ -243,8 +244,8 @@
   :DEFAULT Generate Lisp source, and compile immediately to .fasl. If no output file is specified, compiled Lisp code will be written to a temporary file, and that path will be returned.
   :SOURCE  Write compiled Lisp code to console or specified output file."
   (with-open-file (stream coal-file
-                               :direction ':input
-                               :element-type 'character)
+                          :direction ':input
+                          :element-type 'character)
     (let* ((coal-stream (stream:make-char-position-stream stream))
            (coal-file-name (etypecase coal-file
                              (pathname (pathname-name coal-file))
@@ -270,15 +271,3 @@
            (t
             (with-output-to-string (lisp-stream)
               (compile-to-lisp coal-file-name coal-stream lisp-stream)))))))))
-
-(defun get-ast (stream)
-  "Read Coalton source from STREAM and collect AST of toplevel definitions."
-  (parser:with-reader-context stream
-    (let* ((ast nil)
-           (codegen:*codegen-hook* (lambda (op &rest args)
-                                     (when (eql op :ast)
-                                       (push args ast)))))
-      (let ((file (se:make-file :stream stream
-                                :name "<stream>")))
-        (entry-point (parser:read-program stream file :mode :file)))
-      (nreverse ast))))
