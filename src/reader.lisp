@@ -92,9 +92,9 @@ Used to forbid reading while inside quasiquoted forms.")
                                              (when (eql op ':AST)
                                                (push args ast)))))
               (entry:entry-point (parser:read-program stream file :mode ':toplevel-macro))
-              (loop :for (name type value) :in (nreverse ast)
-                    :do (format t "~A :: ~A~%~A~%~%~%" name type value))))
-          nil)
+              `',(loop :for (name type value) :in (nreverse ast)
+                       :do (format t "~A :: ~A~%~A~%~%~%" name type value)
+                       :collect (list name type value)))))
 
         (coalton:coalton
           (with-coalton-file (file stream)
