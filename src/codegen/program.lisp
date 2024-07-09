@@ -37,7 +37,7 @@
 
 A function bound here will be called with a keyword category, and one or more additional arguments, depending on the value of that keyword. Keyword values:
 
-  :ast name type value
+  :AST name type value
 
     Toplevel definitions, after type checking and before compilation.")
 
@@ -54,7 +54,8 @@ A function bound here will be called with a keyword category, and one or more ad
                   :for compiled-node := (translate-toplevel define env)
 
                   :do (when *codegen-hook*
-                        (funcall *codegen-hook* :ast
+                        (funcall *codegen-hook*
+                                 ':AST
                                  name
                                  (tc:lookup-value-type env name)
                                  (tc:binding-value define)))
