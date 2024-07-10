@@ -3,7 +3,9 @@
 (defpackage #:coalton-impl/util
   (:documentation "Utility functions and methods used throughout COALTON.")
   (:use #:cl)
-  (:shadow #:find-symbol)
+  (:shadow
+   #:find-package
+   #:find-symbol)
   (:local-nicknames
    (#:cst #:concrete-syntax-tree))
   (:export
@@ -23,17 +25,18 @@
    #:maphash-values-new                 ; FUNCTION
    #:take                               ; FUNCTION
    #:drop                               ; FUNCTION
+   #:find-package                       ; FUNCTION
    #:find-symbol                        ; FUNCTION
    #:find-symbol?                       ; FUNCTION
    #:take-until                         ; FUNCTION
-   #:project-indices                   ; FUNCTION
+   #:project-indices                    ; FUNCTION
    #:project-map                        ; FUNCTION
    #:maybe-read-form                    ; FUNCTION
    ))
 
 (in-package #:coalton-impl/util)
 
-(alexandria:define-constant +keyword-package+ (find-package "KEYWORD") :test #'eq)
+(alexandria:define-constant +keyword-package+ (cl:find-package "KEYWORD") :test #'eq)
 
 (defun symbol-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -79,16 +82,6 @@
 (defun runtime-quote (x)
   `',x)
 
-(defun find-symbol (name package)
-  (declare (type string name)
-           (type package package)
-           (values symbol))
-
-  (let ((sym (cl:find-symbol name package)))
-    (unless sym
-      (coalton-bug "Unable to find symbol with name ~A in package ~A" name package))
-    sym))
-
 (define-condition coalton-bug (error)
   ((reason :initarg :reason
            :reader coalton-bug-reason)
@@ -103,6 +96,39 @@
   (error 'coalton-bug
          :reason reason
          :args args))
+
+
+;; Functions for runtime lookup of packages and symbols, used for
+;; looking up parts of the standard library that aren't yet defined
+;; when the compiler is loaded.
+
+(defun find-package (name)
+  "Look up a standard package by NAME, signalling a error if the package is not found."
+  (declare (type string name)
+           (values package &optional))
+  (or (cl:find-package name)
+      (coalton-bug "Missing required package: ~S" name)))
+
+(defun find-symbol (name package)
+  "Look up a symbol by NAME and PACKAGE, signalling a error if either package or the symbol is not found."
+  (declare (type string name)
+           (type (or package string) package)
+           (values symbol))
+  (when (stringp package)
+    (setf package (find-package package)))
+  (let ((sym (cl:find-symbol name package)))
+    (unless sym
+      (coalton-bug "Unable to find symbol with name ~A in package ~A" name package))
+    sym))
+
+(defun find-symbol? (name package)
+  "Look up a symbol by NAME and PACKAGE. If the package is not found, return nil. Otherwise return the named symbol, interning it if necessary."
+  (declare (type string name package)
+           (values symbol-list))
+  (unless (cl:find-package package)
+    (return-from find-symbol?))
+  (list (alexandria:ensure-symbol name package)))
+
 
 (defmacro unreachable ()
   "Assert that a branch of code cannot be evaluated in the course of normal execution."
@@ -124,14 +150,6 @@
           :for v :being :the :hash-values :of table
           :do (setf (gethash k new) (funcall function v)))
     new))
-
-(defun find-symbol? (name package)
-  (declare (type string name package)
-           (values symbol-list))
-  (unless (find-package package)
-    (return-from find-symbol?))
-
-  (list (alexandria:ensure-symbol name package)))
 
 (defun required (name)
   "A function to call as a slot initializer when it's required."

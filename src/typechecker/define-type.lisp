@@ -490,7 +490,7 @@
 
   (let* ((source (type-definition-source type))
 
-         (types-package (find-package "COALTON-LIBRARY/TYPES"))
+         (types-package (util:find-package "COALTON-LIBRARY/TYPES"))
 
          (runtime-repr (util:find-symbol "RUNTIMEREPR" types-package))
 
