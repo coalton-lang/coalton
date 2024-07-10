@@ -337,7 +337,7 @@
   (when (parser:toplevel-define-instance-compiler-generated instance)
     (return-from check-instance-valid))
 
-  (let* ((types-package (find-package "COALTON-LIBRARY/TYPES"))
+  (let* ((types-package (util:find-package "COALTON-LIBRARY/TYPES"))
 
          (runtime-repr (util:find-symbol "RUNTIMEREPR" types-package)))
 
