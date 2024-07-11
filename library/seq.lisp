@@ -253,6 +253,14 @@ a new `Seq` instance."
                             (iter:zip! (iter:into-iter a)
                                        (iter:into-iter b)))))))
 
+  (define-instance (Into (Seq :a) (List :a))
+    (define (into lst)
+      (iter:collect! (iter:into-iter lst))))
+
+  (define-instance (Into (Seq :a) (vector:Vector :a))
+    (define (into vec)
+      (iter:collect! (iter:into-iter vec))))
+
   ;;
   ;; Helpers
   ;; 
