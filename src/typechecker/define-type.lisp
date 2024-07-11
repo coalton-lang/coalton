@@ -235,22 +235,19 @@
   (cond ((typep parsed-type 'parser:toplevel-define-struct)
          (let* ((fields (mapcar #'parser:struct-field-name
                                 (parser:toplevel-define-struct-fields parsed-type)))
-                (field-docstrings (loop :with table := (make-hash-table :test #'equal)
-                                        :for field :in fields
+                (field-docstrings (loop :for field :in fields
                                         :for docstring :in (mapcar #'parser:struct-field-docstring
                                                                    (parser:toplevel-define-struct-fields parsed-type))
-                                        :do (setf (gethash field table) docstring)
-                                        :finally (return table)))
-                (field-tys (loop :with table := (make-hash-table :test #'equal)
-                                 :for field :in fields
+                                        :collect (cons field docstring) :into alist
+                                        :finally (return (tc:make-map alist 'equal))))
+                (field-tys (loop :for field :in fields
                                  :for ty :in (first (type-definition-constructor-args type))
-                                 :do (setf (gethash field table) ty)
-                                 :finally (return table)))
-                (field-idx (loop :with table := (make-hash-table :test #'equal)
-                                 :for field :in fields
+                                 :collect (cons field ty) :into alist
+                                 :finally (return (tc:make-map alist 'equal))))
+                (field-idx (loop :for field :in fields
                                  :for i :from 0
-                                 :do (setf (gethash field table) i)
-                                 :finally (return table))))
+                                 :collect (cons field i) :into alist
+                                 :finally (return (tc:make-map alist 'equal)))))
            (setf env (tc:set-struct
                       env
                       (type-definition-name type)

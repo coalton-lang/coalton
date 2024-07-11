@@ -58,3 +58,21 @@
             (is (not (null (tc:lookup-value-type entry:*global-environment* 'coalton-native-tests::test-id :no-error t))))
 
             t))))))
+
+(deftest test-external-hashtable ()
+  "Test that hashtables present in environment structures can be persisted."
+  (let ((doc (tc:make-map '(("x" . "string")) 'equal))
+        (tys (tc:make-map '(("x" . tc:*string-type*)) 'equal))
+        (idx (tc:make-map '(("x" . 0)) 'equal)))
+    (with-standard-io-syntax
+      (let* ((object (tc:make-struct-entry :name 'test
+                                           :fields (list "field")
+                                           :field-docstrings doc
+                                           :field-tys tys
+                                           :field-idx idx))
+             (object-string (with-output-to-string (stream)
+                              (prin1 object stream)))
+             (object-roundtrip (with-input-from-string (stream object-string)
+                                 (read stream))))
+        (is (equalp object
+                    object-roundtrip))))))
