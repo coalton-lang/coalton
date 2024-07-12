@@ -25,7 +25,7 @@
    (#:char #:coalton-library/char)
    (#:str #:coalton-library/string)
    (#:list #:coalton-library/list)
-   (#:arith #:coalton-library/math))
+   (#:state #:coalton-library/monad/state))
 
   (:export
    #:eval
@@ -47,10 +47,10 @@
 
 (coalton-toplevel
 
-  (define-struct State
-    (memory "The brainfold memory array." (Vector Integer))
-    (pointer "A pointer to the current register." (Cell UFix))
-    (print-buffer "The print buffer." (Cell String)))
+  (define-struct BF-State
+    (memory       "The brainfold memory array."        (Vector Integer))
+    (pointer      "A pointer to the current register." (Cell UFix))
+    (print-buffer "The print buffer."                  (Cell String)))
   
   ;;
   ;; Generating a Brainfold memory vector
@@ -58,31 +58,26 @@
 
   (declare bf-vector-size UFix)
   (define bf-vector-size 1000)
-  
-  (define (generate-bf-vector)
-    "Initializes the brainfold array."
-    (let v = (vec:new))
-    (vec:extend!  v (iter:repeat-for 0 bf-vector-size))
-    v)
 
   ;;
-  ;; Generating a default State:
+  ;; Generating a default BF-State:
   ;;
 
-  (define (new-state)
-    "Generates a new, blank Brainfold State."
-    (State (generate-bf-vector) (cell:new 0) (cell:new "")))
+  (define-instance (Default BF-State)
+    (define (default)
+      (BF-State (vec:with-initial-element bf-vector-size 0)
+                (cell:new 0)
+                (cell:new ""))))
 
   ;;
   ;; Accessing the current value
   ;;
 
-  (declare value-at-pointer (State -> Integer))
-  (define (value-at-pointer State)
+  (declare value-at-pointer (BF-State -> Integer))
+  (define (value-at-pointer bfs)
     "Returns the value at the current pointer."
-    (vec:index-unsafe (cell:read (.pointer State))
-		      (.memory State))))
-
+    (vec:index-unsafe (cell:read (.pointer bfs))
+		                (.memory bfs))))
 
 ;;;
 ;;; Commands (Functions called by Brainfold Cmds)
@@ -93,61 +88,69 @@
   ;;
   ;; Navigating through bf-cells (> <)
   ;;
-  
-  (declare move-right (State -> State))
-  (define (move-right s)
-    "Moves the pointer one bf-cell to the right."
-    (cell:increment! (.pointer s))
-    s)
 
-  (declare move-left (State -> State))
-  (define (move-left s)
+  (declare move-right (Unit -> (state:ST BF-State Unit)))
+  (define (move-right)
+    "Moves the pointer one bf-cell to the right."
+    (do
+     (bfs <- state:get)
+     (pure (cell:increment! (.pointer bfs)))
+      (state:put bfs)))
+
+  (declare move-left (Unit -> (state:ST BF-State Unit)))
+  (define (move-left)
     "Moves the pointer one bf-cell to the left."
-    (cell:decrement! (.pointer s))
-    s)
+    (do
+     (bfs <- state:get)
+     (pure (cell:decrement! (.pointer bfs)))
+      (state:put bfs)))
 
   ;;
   ;; Changing bf-cell values (+ -)
   ;;
 
-  (declare incr (State -> State))
-  (define (incr s)
+  (declare incr (Unit -> (state:ST BF-State Unit)))
+  (define (incr)
     "Increments the value for the current bf-cell."
-    (vec:set! (cell:read (.pointer s))
-              (1+ (value-at-pointer s))
-              (.memory s))
-    s)
+    (do
+     (bfs <- state:get)
+     (pure (vec:set! (cell:read (.pointer bfs))
+                     (1+ (value-at-pointer bfs))
+                     (.memory bfs)))))
 
-  (declare decr (State -> State))
-  (define (decr s)
+  (declare decr (Unit -> (state:ST BF-State Unit)))
+  (define (decr)
     "Decrements the value for the current bf-cell."
-    (vec:set! (cell:read (.pointer s))
-              (1- (value-at-pointer s))
-              (.memory s))
-    s)
+    (do
+     (bfs <- state:get)
+     (pure (vec:set! (cell:read (.pointer bfs))
+                     (1- (value-at-pointer bfs))
+                     (.memory bfs)))))
 
   ;;
   ;; Printing Cells (.)
   ;;
-  
+
   (declare find-ascii (UFix -> String))
   (define (find-ascii ascii-value)
     "Converts an ASCII character code into a string."
     (into (make-list (unwrap (char:code-char ascii-value)))))
 
-  (declare print (State -> State))
-  (define (print s)
+  (declare print (Unit -> (state:ST BF-State Unit)))
+  (define (print)
     "Prints the value at the pointer to the print buffer."
-    (cell:write! (.print-buffer s)
-                 (str:concat
-                  (cell:read (.print-buffer s))
-                  (find-ascii
-                   (fromint (abs (value-at-pointer s))))))
-    s)
+    (do
+     (bfs <- state:get)
+     (pure (cell:write! (.print-buffer bfs)
+                        (str:concat
+                         (cell:read (.print-buffer bfs))
+                         (find-ascii
+                          (fromint (abs (value-at-pointer bfs)))))))
+      (state:put bfs)))
 
   ;;
   ;; Taking Input (,)
-  ;; 
+  ;;
   ;; Currently takes individual characters one at a time as prompted
 
   (define (prompt-char)
@@ -157,14 +160,15 @@
       (cl:finish-output cl:*query-io*)
       (cl:read-char cl:*query-io*)))
 
-  (declare take-input (State -> State))
-  (define (take-input s)
+  (declare take-input (Unit -> (state:ST BF-State Unit)))
+  (define (take-input)
     "Takes and stores a character as an ascii code at the pointer."
-    (vec:set! (cell:read (.pointer s))
-              (into (char:char-code (prompt-char)))
-              (.memory s))
-    s))
-
+    (do
+     (bfs <- state:get)
+     (pure (vec:set! (cell:read (.pointer bfs))
+                     (into (char:char-code (prompt-char)))
+                     (.memory bfs)))
+      (state:put bfs))))
 
 ;;;
 ;;; Parsing/Lexing
@@ -217,45 +221,51 @@
                         (_ (parser (snd head-tail) v)))))))
       (parser input-string cmds))))
 
-
 ;;;
 ;;; Evaluation
 ;;;
 
 (coalton-toplevel
 
-  (declare exec (Cmd -> (State -> State))) 
+  (declare exec (Cmd -> (state:ST BF-State Unit)))
   (define (exec cmd)
     "Executes a given bf command."
     (match cmd
-      ((BFRight) move-right)
-      ((BFLeft) move-left)
-      ((BFPlus) incr)
-      ((BFMinus) decr)
-      ((BFPRint) print)
-      ((BFInput) take-input)
-      ((BFLoop v) (exec-loop v))))
+      ((BFRight) (move-right))
+      ((BFLeft) (move-left))
+      ((BFPlus) (incr))
+      ((BFMinus) (decr))
+      ((BFPRint) (print))
+      ((BFInput) (take-input))
+      ((BFLoop v) (exec-loop (into v)))))
 
-  (declare exec-cmds ((Vector Cmd) -> State -> State))
-  (define (exec-cmds cmds s)
+
+  (declare exec-cmds ((List Cmd) -> (state:ST BF-State Unit)))
+  (define (exec-cmds cmds)
     "Executes a list of bf-commands."
-    (let l = (1- (vec:length cmds)))
-    (let ((f (fn (index s)
-                (if (== l index)
-                    (exec (vec:index-unsafe index cmds) s)
-                    (f (1+ index) (exec (vec:index-unsafe index cmds) s))))))
-      (f 0 s)))
+    (match (into cmds)
+      ((Cons x xs)
+       (do
+        (exec x)
+        (exec-cmds xs)))
+      ((Nil)
+       (do
+        (pure Unit)))))
 
-  (declare exec-loop ((Vector Cmd) -> State -> State))
-  (define (exec-loop cmds s)
-    "Loops commands until the value at the pointer is 0."
-    (match (value-at-pointer s)
-      (0 s)
-      (_ (exec-loop cmds (exec-cmds cmds s)))))
+  (declare exec-loop ((List Cmd) -> (state:ST BF-State Unit)))
+  (define (exec-loop cmds)
+    "Executes a list of commands until the value at the pointer is 0."
+    (do
+     (bfs <- state:get)
+     (match (value-at-pointer bfs)
+       (0 (pure Unit))
+       (_ (do (exec-cmds cmds)
+              (exec-loop cmds))))))
 
-  (define (eval input-string s)
+  (declare eval (String -> (state:ST BF-State Unit)))
+  (define (eval input-string)
     "Parses and evaluates a string of brainfold input."
-    (exec-cmds (parse input-string) s)))
+    (exec-cmds (into (parse input-string)))))
 
 
 ;;;
@@ -267,7 +277,7 @@
   (declare run-program (String -> String))
   (define (run-program bf-string)
     "Evaluates and executes a bf-command string on a fresh state."
-    (cell:read (.print-buffer (eval bf-string (new-state)))))
+    (cell:read (.print-buffer (fst (state:run (eval bf-string) (default))))))
 
   (define (run-file filepath)
     "Loads and executes the brainfold file at the given filepath."
