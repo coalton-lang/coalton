@@ -38,7 +38,11 @@
    #:negate
    #:abs
    #:1+
-   #:1-)
+   #:1-
+   #:positive?
+   #:negative?
+   #:zero?
+   #:nonzero?)
   (:export
    #:Reciprocable #:/
    #:reciprocal
@@ -46,7 +50,11 @@
    #:negate
    #:abs
    #:1+
-   #:1-)
+   #:1-
+   #:positive?
+   #:negative?
+   #:zero?
+   #:nonzero?)
 
   (:import-from
    #:coalton-library/math/real
