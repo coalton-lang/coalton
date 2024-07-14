@@ -99,8 +99,8 @@
   (:method ((expr node-lisp) current-function env)
     (declare (type tc:environment env)
              (type (or null symbol) current-function))
-    (let* ((inner `(values ,(car (last (node-lisp-form expr)))))
-
+    (let* ((inner `(progn ,@(butlast (node-lisp-form expr))
+                          (values ,(car (last (node-lisp-form expr))))))
            (inner
              (if (node-lisp-vars expr)
                  `(let ,(mapcar
