@@ -58,7 +58,7 @@ Enable release mode either by setting the UNIX environment variable COALTON_ENV 
 
 (declaim (type boolean *compile-print-types*))
 (defvar *compile-print-types* nil
-  "Print types of definitions to stdout on compile.")
+  "Print types of definitions to standard output on compile.")
 
 (defvar *coalton-optimize* '(optimize (speed 3) (safety 0)))
 
