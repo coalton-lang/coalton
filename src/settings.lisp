@@ -12,6 +12,7 @@
    #:*emit-type-annotations*            ; VARIABLE
    #:*coalton-optimize*                 ; VARIABLE
    #:*coalton-optimize-library*         ; VARIABLE
+   #:*compile-print-types*              ; VARIABLE
    ))
 
 (in-package #:coalton-impl/settings)
@@ -54,6 +55,10 @@ Enable release mode either by setting the UNIX environment variable COALTON_ENV 
 ;; Configure the backend to remove type annotations from the generated code
 (declaim (type boolean *emit-type-annotations*))
 (defvar *emit-type-annotations* t)
+
+(declaim (type boolean *compile-print-types*))
+(defvar *compile-print-types* nil
+  "Print types of definitions to stdout on compile.")
 
 (defvar *coalton-optimize* '(optimize (speed 3) (safety 0)))
 
