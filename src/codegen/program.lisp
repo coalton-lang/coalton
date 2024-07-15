@@ -165,6 +165,14 @@ A function bound here will be called with a keyword category, and one or more ad
                       ,name
                       ,(codegen-expression node nil env)))
 
+  ;; Print types of definitions
+  (when *compile-print* 
+    (dolist (binding bindings)
+      (let ((name (car binding)))
+        (format t "NAME: ~a, TYPE: ~a~%"
+                name
+                (tc:lookup-value-type env name)))))
+
   ;; Docstrings
   (loop :for (name . node) :in bindings
         :for entry := (tc:lookup-name env name :no-error t)
