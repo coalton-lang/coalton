@@ -235,21 +235,21 @@
   (cond ((typep parsed-type 'parser:toplevel-define-struct)
          (let* ((fields (mapcar #'parser:struct-field-name
                                 (parser:toplevel-define-struct-fields parsed-type)))
-                (field-docstrings (loop :with table := (make-hash-table :test #'equal)
+                (field-docstrings (loop :with table := (tc:make-map)
                                         :for field :in fields
                                         :for docstring :in (mapcar #'parser:struct-field-docstring
                                                                    (parser:toplevel-define-struct-fields parsed-type))
-                                        :do (setf (gethash field table) docstring)
+                                        :do (setf (tc:get-value table field) docstring)
                                         :finally (return table)))
-                (field-tys (loop :with table := (make-hash-table :test #'equal)
+                (field-tys (loop :with table := (tc:make-map)
                                  :for field :in fields
                                  :for ty :in (first (type-definition-constructor-args type))
-                                 :do (setf (gethash field table) ty)
+                                 :do (setf (tc:get-value table field) ty)
                                  :finally (return table)))
-                (field-idx (loop :with table := (make-hash-table :test #'equal)
+                (field-idx (loop :with table := (tc:make-map)
                                  :for field :in fields
                                  :for i :from 0
-                                 :do (setf (gethash field table) i)
+                                 :do (setf (tc:get-value table field) i)
                                  :finally (return table))))
            (setf env (tc:set-struct
                       env

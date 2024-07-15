@@ -427,8 +427,8 @@
                     :type (tc:type-entry-type entry)
                     :tyvars (tc:type-entry-tyvars entry)
                     :fields (tc:struct-entry-fields struct-entry)
-                    :field-docstrings (tc:struct-entry-field-docstrings struct-entry)
-                    :field-tys (tc:struct-entry-field-tys struct-entry)
+                    :field-docstrings (tc:get-table (tc:struct-entry-field-docstrings struct-entry))
+                    :field-tys (tc:get-table (tc:struct-entry-field-tys struct-entry))
                     :instances applicable-instances)
                    output-structs))
 

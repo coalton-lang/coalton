@@ -110,14 +110,12 @@
              (method-names (mapcar #'car (tc:ty-class-unqualified-methods class)))
 
              (method-codegen-syms
-               (loop :with table := (make-hash-table :test #'eq)
+               (loop :with table := (tc:make-map :test 'eq)
                      :for method-name :in method-names
-                     :do (setf (gethash method-name table)
-                               (alexandria:format-symbol
-                                *package*
-                                "~A-~S"
-                                instance-codegen-sym
-                                method-name))
+                     :do (setf (tc:get-value table method-name)
+                               (alexandria:format-symbol *package* "~A-~S"
+                                                         instance-codegen-sym
+                                                         method-name))
                      :finally (return table)))
 
              (docstring (parser:toplevel-define-instance-docstring instance))
@@ -161,7 +159,7 @@
                          :primary-note (format nil "instance overlaps with ~S" (tc:overlapping-instance-error-inst2 e))))))
 
         (loop :for method-name :in method-names
-              :for method-codegen-sym := (gethash method-name method-codegen-syms) :do
+              :for method-codegen-sym := (tc:get-value method-codegen-syms method-name) :do
                 (setf env (tc:set-method-inline env method-name instance-codegen-sym method-codegen-sym)))
 
         (values instance-entry env)))))

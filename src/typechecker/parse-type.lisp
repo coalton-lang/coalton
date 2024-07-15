@@ -114,7 +114,7 @@
                       :for pred-tys := (tc:ty-predicate-types pred)
                       :for class-name := (tc:ty-predicate-class pred)
                       :for class := (tc:lookup-class env class-name)
-                      :for map := (tc:ty-class-class-variable-map class)
+                      :for map := (tc:get-table (tc:ty-class-class-variable-map class))
                       :when (tc:ty-class-fundeps class) :do
                         (loop :for fundep :in (tc:ty-class-fundeps class)
                               :for from-vars := (util:project-map (tc:fundep-from fundep) map pred-tys)
