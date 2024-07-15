@@ -3,6 +3,7 @@
    #:cl
    #:coalton-impl/algorithm
    #:coalton-impl/typechecker/base
+   #:coalton-impl/typechecker/map
    #:coalton-impl/typechecker/type-errors
    #:coalton-impl/typechecker/types
    #:coalton-impl/typechecker/predicate
@@ -159,6 +160,10 @@
    #:initialize-fundep-environment          ; FUNCTION
    #:update-instance-fundeps                ; FUNCTION
    #:solve-fundeps                          ; FUNCTION
+   #:environment-map                        ; STRUCT
+   #:make-map                               ; FUNCTION
+   #:get-value                              ; FUNCTION
+   #:get-table                              ; FUNCTION
    ))
 
 ;;; Coalton environment management
@@ -495,13 +500,13 @@
   (name             (util:required 'name)             :type symbol           :read-only t)
   (fields           (util:required 'fields)           :type util:string-list :read-only t)
 
-  (field-docstrings (util:required 'field-docstrings) :type hash-table       :read-only t)
+  (field-docstrings (util:required 'field-docstrings) :type environment-map  :read-only t)
   ;; Mapping of "field name" -> "field type"
   ;; Type variables are the same as in `type-entry-type'
-  (field-tys        (util:required 'field-tys)        :type hash-table       :read-only t)
+  (field-tys        (util:required 'field-tys)        :type environment-map  :read-only t)
 
   ;; Mapping of "field name" -> "field index"
-  (field-idx        (util:required 'field-idx)        :type hash-table       :read-only t))
+  (field-idx        (util:required 'field-idx)        :type environment-map  :read-only t))
 
 (defmethod make-load-form ((self struct-entry) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -526,7 +531,7 @@
   (class-variables     (util:required 'class-variables)     :type util:symbol-list    :read-only t)
 
   ;; Hash table mapping variable symbols to their index in the predicate
-  (class-variable-map  (util:required 'class-variable-map)  :type hash-table          :read-only t)
+  (class-variable-map  (util:required 'class-variable-map)  :type environment-map     :read-only t)
   (fundeps             (util:required 'fundeps)             :type fundep-list         :read-only t)
 
   ;; Methods of the class containing the same tyvars in PREDICATE for
@@ -537,7 +542,7 @@
   (method-docstrings   (util:required 'method-docstrings)   :type list                :read-only t)
   (codegen-sym         (util:required 'codegen-sym)         :type symbol              :read-only t)
   (superclass-dict     (util:required 'superclass-dict)     :type list                :read-only t)
-  (superclass-map      (util:required 'superclass-map)      :type hash-table          :read-only t)
+  (superclass-map      (util:required 'superclass-map)      :type environment-map     :read-only t)
   (docstring           (util:required 'docstring)           :type (or null string)    :read-only t)
   (location            (util:required 'location)            :type t                   :read-only t))
 
@@ -600,7 +605,7 @@
   (constraints         (util:required 'constraints)         :type ty-predicate-list :read-only t)
   (predicate           (util:required 'predicate)           :type ty-predicate      :read-only t)
   (codegen-sym         (util:required 'codegen-sym)         :type symbol            :read-only t)
-  (method-codegen-syms (util:required 'method-codegen-syms) :type hash-table        :read-only t)
+  (method-codegen-syms (util:required 'method-codegen-syms) :type environment-map   :read-only t)
   (docstring           (util:required 'docstring)           :type (or null string)  :read-only t))
 
 (defmethod make-load-form ((self ty-class-instance) &optional env)
@@ -1334,13 +1339,13 @@
           :for from-tys
             := (mapcar
                 (lambda (var)
-                  (nth (gethash var class-variable-map) (ty-predicate-types pred)))
+                  (nth (get-value class-variable-map var) (ty-predicate-types pred)))
                 (fundep-from fundep))
 
           :for to-tys
             := (mapcar
                 (lambda (var)
-                  (nth (gethash var class-variable-map) (ty-predicate-types pred)))
+                  (nth (get-value class-variable-map var) (ty-predicate-types pred)))
                 (fundep-to fundep))
 
           :do (block update-block
@@ -1522,7 +1527,7 @@
 (defun generate-fundep-subs-for-pred% (pred state class-variable-map fundep subs)
   (declare (type ty-predicate pred)
            (type fset:seq state)
-           (type hash-table class-variable-map)
+           (type environment-map class-variable-map)
            (type fundep fundep)
            (type substitution-list subs)
            (values substitution-list &optional))
@@ -1530,13 +1535,13 @@
   (let* ((from-tys
            (mapcar
             (lambda (var)
-              (nth (gethash var class-variable-map) (ty-predicate-types pred)))
+              (nth (get-value class-variable-map var) (ty-predicate-types pred)))
             (fundep-from fundep)))
 
          (to-tys
            (mapcar
             (lambda (var)
-              (nth (gethash var class-variable-map) (ty-predicate-types pred)))
+              (nth (get-value class-variable-map var) (ty-predicate-types pred)))
             (fundep-to fundep))))
 
     (fset:do-seq (entry state)

@@ -214,7 +214,7 @@
                 :constraints context
                 :predicate predicate
                 :codegen-sym nil
-                :method-codegen-syms (make-hash-table)
+                :method-codegen-syms (tc:make-map :test 'eq)
                 :docstring nil)))
 
       (maybe-write-section stream documentation)

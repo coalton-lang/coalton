@@ -2691,7 +2691,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
                      (new-tys (util:project-map
                                new-vars
-                               (tc:ty-class-class-variable-map class)
+                               (tc:get-table (tc:ty-class-class-variable-map class))
                                (tc:ty-predicate-types pred))))
 
                 (loop :for var :in (set-difference

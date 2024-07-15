@@ -88,6 +88,7 @@
                              (:file "type-errors")
                              (:file "unify")
                              (:file "fundeps")
+                             (:file "map")
                              (:file "environment")
                              (:file "lisp-type")
                              (:file "context-reduction")
@@ -346,6 +347,9 @@
                (:file "fundep-tests")
                (:file "fundep-fib-test")
                (:file "runtime-tests")
+               (:module "typechecker"
+                :serial t
+                :components ((:file "map-tests")))
                (:file "environment-persist-tests")
                (:file "slice-tests")
                (:file "float-tests")

@@ -188,7 +188,8 @@ Returns a `node'.")
 
                (struct-entry (tc:lookup-struct env (tc:tycon-name from-ty)))
 
-               (idx (gethash (tc:node-accessor-name expr) (tc:struct-entry-field-idx struct-entry))))
+               (idx (tc:get-value (tc:struct-entry-field-idx struct-entry)
+                                  (tc:node-accessor-name expr))))
 
           (assert idx)
 

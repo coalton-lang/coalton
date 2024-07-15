@@ -261,14 +261,14 @@
                                       (format nil "SUPER-~D" i))))
 
            :for superclass-map
-             := (loop :with table := (make-hash-table :test #'eq)
+             := (loop :with table := (tc:make-map :test 'eq)
                       :for (pred . super-name) :in superclass-dict
                       :for prefixed-name := (alexandria:format-symbol
                                              *package*
                                              "~A-~A"
                                              codegen-sym
                                              super-name)
-                      :do (setf (gethash prefixed-name table) super-name)
+                      :do (setf (tc:get-value table prefixed-name) super-name)
                       :finally (return table))
 
            :for fundeps
@@ -284,10 +284,10 @@
                   :superclasses (partial-class-superclasses partial)
                   :class-variables class-vars
 
-                  :class-variable-map (loop :with table := (make-hash-table :test #'eq)
+                  :class-variable-map (loop :with table := (tc:make-map :test 'eq)
                                             :for var :in class-vars
                                             :for i :from 0
-                                            :do (setf (gethash var table) i)
+                                            :do (setf (tc:get-value table var) i)
                                             :finally (return table))
 
                   :fundeps fundeps
