@@ -141,6 +141,7 @@ A function bound here will be called with a keyword category, and one or more ad
        ,(codegen-expression (node-abstraction-subexpr node) name env))))
 
 (defun compile-scc (bindings env)
+  "Compile SCC definitions in a translation unit."
   (declare (type binding-list bindings)
            (type tc:environment env))
   (append
@@ -171,7 +172,7 @@ A function bound here will be called with a keyword category, and one or more ad
       (let ((name (car binding)))
         (format t ";; ~a :: ~a~%"
                 name
-                (tc:lookup-value-type env name)))))
+                (tc:lookup-value-type env name :no-error t)))))
 
   ;; Docstrings
   (loop :for (name . node) :in bindings
