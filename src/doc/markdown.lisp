@@ -46,6 +46,14 @@
 ;; Value: `${name}-value`
 ;;
 
+(defun maybe-write-section (stream string)
+  "When STRING is nonempty, write it to STREAM, preceded and followed by empty lines to indicate a markdown section."
+  (when (and string (not (zerop (length string))))
+    (terpri stream)
+    (write-string string stream)
+    (terpri stream)
+    (terpri stream)))
+
 ;;;
 ;;; Methods for WRITE-DOCUMENTATION
 ;;;
@@ -146,14 +154,9 @@
                       (format stream "- <code>(~A~{ ~A~})</code>~%"
                               (html-entities:encode-entities (symbol-name ctor-name))
                               (mapcar #'to-markdown args))
-                      (format stream "- <code>~A</code>~%" (html-entities:encode-entities (symbol-name ctor-name))))))
+                      (format stream "- <code>~A</code>~%" (html-entities:encode-entities (symbol-name ctor-name)))))))
 
-        (when documentation
-          (format stream "~%~A~%"
-                  (html-entities:encode-entities
-                   documentation
-                   :regex "[<>&]")))
-        (format stream "~%"))
+      (maybe-write-section stream documentation)
 
       (when instances
         (format stream "<details>~%")
@@ -185,12 +188,7 @@
                             (format nil "<br/>~a" field-docstring)
                             "")))
 
-      (when documentation
-        (format stream "~%~A~%"
-                (html-entities:encode-entities
-                 documentation
-                 :regex "[<>&]"))
-        (format stream "~%"))
+      (maybe-write-section stream documentation)
 
       (when instances
         (format stream "<details>~%")
@@ -219,11 +217,7 @@
                 :method-codegen-syms (make-hash-table)
                 :docstring nil)))
 
-      (when documentation
-        (format stream "~A~%~%"
-                (html-entities:encode-entities
-                 documentation
-                 :regex "[<>&]")))
+      (maybe-write-section stream documentation)
 
       (format stream "Methods:~%")
       (loop :for (name . type) :in methods
@@ -256,11 +250,7 @@
       (tc:with-pprint-variable-context ()
         (format stream "<code>~A</code>~%" (to-markdown type)))
 
-      (when documentation
-        (format stream "~%~A~%~%"
-                (html-entities:encode-entities
-                 documentation
-                 :regex "[<>&]"))))))
+      (maybe-write-section stream documentation))))
 
 (defmethod write-documentation ((backend (eql ':markdown)) stream (object documentation-value-entry))
   (with-slots (name type documentation location)
@@ -274,11 +264,7 @@
       (tc:with-pprint-variable-context ()
         (format stream "<code>~A</code>~%" (to-markdown type)))
 
-      (when documentation
-        (format stream "~%~A~%~%"
-                (html-entities:encode-entities
-                 documentation
-                 :regex "[<>&]"))))))
+      (maybe-write-section stream documentation))))
 
 
 ;;;
