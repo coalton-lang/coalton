@@ -139,7 +139,7 @@
 
   (declare singleton (:a -> List :a))
   (define (singleton x)
-    "Returns a list containting one element."
+    "Returns a list containing one element."
     (Cons x Nil))
 
   (declare repeat (UFix -> :a -> List :a))

@@ -342,7 +342,7 @@
             :explicit-repr '(:native cl:single-float)
             :enum-repr nil
             :newtype nil
-            :docstring "Single precision floating point numer. Uses `single-float`."
+            :docstring "Single precision floating point number. Uses `single-float`."
             :location ""))
 
           ('coalton:Double-Float
@@ -355,7 +355,7 @@
             :explicit-repr '(:native cl:double-float)
             :enum-repr nil
             :newtype nil
-            :docstring "Double precision floating point numer. Uses `double-float`."
+            :docstring "Double precision floating point number. Uses `double-float`."
             :location ""))
 
           ('coalton:String
