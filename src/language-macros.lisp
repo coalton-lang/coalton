@@ -2,6 +2,22 @@
 
 ;;;; Macros used to implement the Coalton language
 
+(cl:defmacro as (type expr)
+  "A syntactic convenience for type casting.
+
+    (as <type> <expr>)
+
+is equivalent to
+
+    (the <type> (into <expr>))
+
+Note that this may copy the object or allocate memory."
+
+  (cl:let ((into (cl:ignore-errors (cl:find-symbol "INTO" "COALTON-LIBRARY/CLASSES"))))
+    (cl:assert into () "`as` macro does not have access to `into` yet.")
+    `(the ,type (,into ,expr))))
+
+
 (cl:defmacro nest (cl:&rest items)
   "A syntactic convenience for function application. Transform
 
