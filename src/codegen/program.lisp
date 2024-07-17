@@ -169,10 +169,10 @@ A function bound here will be called with a keyword category, and one or more ad
   ;; Print types of definitions
   (when (or *compile-print* settings:*compile-print-types*) 
     (dolist (binding bindings)
-      (let ((name (car binding)))
-        (format t ";; ~a :: ~a~%"
-                name
-                (tc:lookup-value-type env name :no-error t)))))
+      (let* ((name (car binding))
+             (type (tc:lookup-value-type env name :no-error t)))
+        (unless (null type)
+          (format t "~&;; ~a :: ~a~%" name type)))))
 
   ;; Docstrings
   (loop :for (name . node) :in bindings
