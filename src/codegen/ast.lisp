@@ -42,6 +42,7 @@
    #:node-let-bindings                  ; ACCESSOR
    #:node-let-subexpr                   ; ACCESSOR
    #:node-lisp                          ; STRUCT
+   #:node-lisp-p                        ; ACCESSOR
    #:make-node-lisp                     ; CONSTRUCTOR
    #:node-lisp-vars                     ; ACCESOR
    #:node-lisp-form                     ; ACCESOR
@@ -78,6 +79,7 @@
    #:node-continue-label                ; ACCESSOR
    #:node-seq                           ; STRUCT
    #:make-node-seq                      ; CONSTRUCTOR
+   #:node-seq-p                         ; FUNCTION
    #:node-seq-nodes                     ; ACCESSOR
    #:node-return                        ; STRUCT
    #:make-node-return                   ; CONSTRUCTOR
