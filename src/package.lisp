@@ -86,6 +86,7 @@
    #:and
    #:or
    #:cond
+   #:as
    #:nest
    #:pipe
    #:.<

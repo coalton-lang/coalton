@@ -620,6 +620,41 @@ Type declarations can also be added in let expressions
       (g a b))))
 ```
 
+### Type Casting, Coercing, and Conversion
+
+Coalton manages type conversions similar to the Common Lisp function `cl:coerce` by way of a type class called `Into` (of the package `#:coalton-library/classes`) and its sole method `into`. However, the `into` method only takes a single argument. How should Coalton know which data type to convert to? It determines this either by type inference (i.e., by the surrounding context) as in this example, where `substring` expects a `String`:
+
+```lisp
+(coalton-toplevel
+  (define integer-part (substring (into 12.34d0) 0 2)))
+
+;; ==> "12"
+```
+
+or by an explicit declaration with `the`:
+
+```lisp
+(coalton-toplevel
+  (define unique-letters
+    (remove-duplicates (the (List Char) (into "mississippi")))))
+
+;; ==> (#\m #\s #\p #\i)
+```
+
+The `the`-`into` pattern is so common that Coalton provides a shorthand called `as`. The above example can be written more succinctly as:
+
+```lisp
+(coalton-toplevel
+  (define unique-letters
+    (remove-duplicates (as (List Char) "mississippi"))))
+
+;; ==> (#\m #\s #\p #\i)
+```
+
+The into method is used only when a conversion can always be performed from one type to another. If not values of a type can be converted, then another type class `TryInto` with a method `tryInto` is used. The `tryinto` method returns a `Result` type which indicates whether the conversion was successful or not. 
+
+**Note that `as` only works for conversions via `into`, i.e., conversions that are total.** There is no corresponding syntax for `tryInto`.
+
 ## Pattern Matching
 
 `match` expressions can be used to pattern-match and deconstruct algebraic data types.
