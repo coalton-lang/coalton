@@ -562,6 +562,15 @@ It attempts to rebalance with a minimum of array copying."
                           (cl:rest leaf-arrays)
                           :initial-value `(LeafArray ,(cl:funcall make-ary (cl:first leaf-arrays))))))))))
 
+;; This method implementation uses :around because sum types implement
+;; cl:print-object for each representation, to avoid a brittle design
+;; by overwriting them manually, the :around method short-circuits them.
+(cl:defmethod cl:print-object :around ((self seq) stream)
+  (cl:print-unreadable-object (self stream :type cl:nil)
+    (cl:format stream "SEQ~{ ~A~}"
+               (coalton ((the ((Seq :a) -> (List :a)) (fn (seq) (into seq)))
+                         (lisp (Seq :a) () self)))))
+  self)
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/SEQ")
