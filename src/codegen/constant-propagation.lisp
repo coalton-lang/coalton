@@ -44,7 +44,7 @@
 (defgeneric propagate-constants (node env &optional constant-bindings))
 
 (defmethod propagate-constants (node env &optional constant-bindings)
-  (cerror "Don't know how to propagate constants in ~S" node)
+  (cerror "Continue" "Don't know how to propagate constants in ~S" node)
   node)
 
 (defmethod propagate-constants ((node node-literal) env &optional constant-bindings)
@@ -143,3 +143,40 @@
                :type (node-type node)
                :vars new-lisp-vars
                :form (node-lisp-form node)))))
+
+(defmethod propagate-constants ((node node-match) env &optional constant-bindings)
+  (make-node-match
+   :type (node-type node)
+   :expr (propagate-constants (node-match-expr node) env constant-bindings)
+   :branches (mapcar (lambda (branch)
+                       (propagate-constants branch env constant-bindings))
+                     (node-match-branches node))))
+
+(defmethod propagate-constants ((node match-branch) env &optional constant-bindings)
+  (make-match-branch
+   :pattern (match-branch-pattern node)
+   ;; FIXME: This looks incomplete? Doesn't matching produce bindings?
+   :body (propagate-constants (match-branch-body node) env constant-bindings)))
+
+(defmethod propagate-constants ((node node-field) env &optional constant-bindings)
+  (declare (ignore env constant-bindings))
+  node)
+
+(defmethod propagate-constants ((node node-bind) env &optional constant-bindings)
+  (make-node-bind
+   :type (node-type node)
+   :name (node-bind-name node)
+   :expr (propagate-constants (node-bind-expr node) env constant-bindings)
+   :body (propagate-constants (node-bind-body node) env constant-bindings)))
+
+(defmethod propagate-constants ((node node-dynamic-extent) env &optional constant-bindings)
+  (make-node-dynamic-extent
+   :type (node-type node)
+   :name (node-dynamic-extent-name node)
+   :node (propagate-constants (node-dynamic-extent-node node) env constant-bindings)
+   :body (propagate-constants (node-dynamic-extent-body node) env constant-bindings)))
+
+(defmethod propagate-constants ((node node-return) env &optional constant-bindings)
+  (make-node-return
+   :type (node-type node)
+   :expr (propagate-constants (node-return-expr node) env constant-bindings)))
