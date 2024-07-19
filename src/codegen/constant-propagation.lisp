@@ -9,6 +9,9 @@
 
 (in-package #:coalton-impl/codegen/constant-propagation)
 
+(defun constant-var-value (var constant-bindings)
+  (cdr (assoc var constant-bindings)))
+
 (defun constant-node-p (env node constant-bindings)
   (declare (type node node))
   ;; FIXME: We need more nodes classified as constants
@@ -18,17 +21,9 @@
               (tc:lookup-instance-by-codegen-sym env (node-variable-value node) :no-error t))
          t)
         ((node-variable-p node)
-         (let* ((name (node-variable-value node))
-                (variable-value-node
-                  (or (cdr (assoc name  constant-bindings))
-                      (tc:lookup-function env name :no-error t))))
-           (when variable-value-node
-             (constant-node-p env variable-value-node constant-bindings))))
+         (constant-var-value (node-variable-value node) constant-bindings))
         (t
          nil)))
-
-(defun constant-var-value (var constant-bindings)
-  (cdr (assoc var constant-bindings)))
 
 (defun constant-node-value (env node constant-bindings)
   (declare (type node node))
@@ -39,15 +34,7 @@
               (tc:lookup-instance-by-codegen-sym env (node-variable-value node) :no-error t))
          node)
         ((node-variable-p node)
-         (let ((variable-value-node
-                 (or (constant-var-value (node-variable-value node) constant-bindings)
-                     (let ((fn (tc:lookup-function env (node-variable-value node) :no-error t)))
-                       (if (and fn (tc:function-env-entry-inline-p fn))
-                           (tc:lookup-code env (tc:function-env-entry-name fn) :no-error t)
-                           nil)))))
-           (if variable-value-node
-               (constant-node-value env variable-value-node constant-bindings)
-               nil)))
+         (constant-var-value (node-variable-value node) constant-bindings))
         (t
          nil)))
 
