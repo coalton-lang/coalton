@@ -113,6 +113,7 @@
                              (:file "codegen-expression")
                              (:file "codegen-class")
                              (:file "monomorphize")
+                             (:file "constant-propagation")
                              (:file "optimizer")
                              (:file "program")
                              (:file "package")))
