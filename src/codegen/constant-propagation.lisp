@@ -9,8 +9,11 @@
 
 (in-package #:coalton-impl/codegen/constant-propagation)
 
-(defun constant-var-value (var constant-bindings)
-  (cdr (assoc var constant-bindings)))
+(defun constant-var-value (var constant-bindings &key no-error)
+  (the (or node null)
+       (or (cdr (assoc var constant-bindings))
+           (unless no-error
+             (error "Expected VAR ~S to be a constant but is not" var)))))
 
 (defun constant-node-p (env node constant-bindings)
   (declare (type node node))
@@ -21,11 +24,11 @@
               (tc:lookup-instance-by-codegen-sym env (node-variable-value node) :no-error t))
          t)
         ((node-variable-p node)
-         (constant-var-value (node-variable-value node) constant-bindings))
+         (constant-var-value (node-variable-value node) constant-bindings :no-error t))
         (t
          nil)))
 
-(defun constant-node-value (env node constant-bindings)
+(defun constant-node-value (env node constant-bindings &key no-error)
   (declare (type node node))
   ;; FIXME: We need more nodes classified as constants
   (cond ((node-literal-p node)
@@ -34,9 +37,11 @@
               (tc:lookup-instance-by-codegen-sym env (node-variable-value node) :no-error t))
          node)
         ((node-variable-p node)
-         (constant-var-value (node-variable-value node) constant-bindings))
+         (constant-var-value (node-variable-value node) constant-bindings :no-error no-error))
+        (no-error
+         nil)
         (t
-         nil)))
+         (error "Expected the node to be a constant but is not ~%~S" node))))
 
 ;; FIXME: Can or Should we use an existing structure to handle bindings
 ;; FIXME: Can we use TRAVERSE?
@@ -52,7 +57,7 @@
   node)
 
 (defmethod propagate-constants ((node node-variable) env &optional constant-bindings)
-  (or (constant-node-value env node constant-bindings)
+  (or (constant-node-value env node constant-bindings :no-error t)
       node))
 
 (defmethod propagate-constants ((node node-let) env &optional constant-bindings)
@@ -132,7 +137,7 @@
     (make-node-let
      :type (node-type node)
      :bindings (loop :for (lisp-var . coalton-var) :in (node-lisp-vars node)
-                     :for constant-value := (constant-var-value coalton-var constant-bindings)
+                     :for constant-value := (constant-var-value coalton-var constant-bindings :no-error t)
                      :if constant-value
                        :collect (let ((new-coalton-var (gentemp (symbol-name coalton-var))))
                                   (push (cons lisp-var new-coalton-var) new-lisp-vars)
