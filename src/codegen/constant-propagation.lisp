@@ -133,21 +133,28 @@
                   (node-seq-nodes node))))
 
 (defmethod propagate-constants ((node node-lisp) env &optional constant-bindings)
-  (let ((new-lisp-vars nil))
-    (make-node-let
-     :type (node-type node)
-     :bindings (loop :for (lisp-var . coalton-var) :in (node-lisp-vars node)
-                     :for constant-value := (constant-var-value coalton-var constant-bindings :no-error t)
-                     :if constant-value
-                       :collect (let ((new-coalton-var (gentemp (symbol-name coalton-var))))
-                                  (push (cons lisp-var new-coalton-var) new-lisp-vars)
-                                  (cons new-coalton-var constant-value))
-                     :else
-                       :do (push (cons lisp-var coalton-var) new-lisp-vars))
-     :subexpr (make-node-lisp
-               :type (node-type node)
-               :vars new-lisp-vars
-               :form (node-lisp-form node)))))
+  (let* ((new-lisp-vars nil)
+         (let-bindings
+           (loop :for (lisp-var . coalton-var) :in (node-lisp-vars node)
+                 :for constant-value := (constant-var-value coalton-var constant-bindings :no-error t)
+                 :if constant-value
+                   :collect (let ((new-coalton-var (gentemp (symbol-name coalton-var))))
+                              (push (cons lisp-var new-coalton-var) new-lisp-vars)
+                              (cons new-coalton-var constant-value))
+                 :else
+                   :do (push (cons lisp-var coalton-var) new-lisp-vars))))
+    (if let-bindings
+        (make-node-let
+         :type (node-type node)
+         :bindings let-bindings
+         :subexpr (make-node-lisp
+                   :type (node-type node)
+                   :vars new-lisp-vars
+                   :form (node-lisp-form node)))
+        (make-node-lisp
+         :type (node-type node)
+         :vars new-lisp-vars
+         :form (node-lisp-form node)))))
 
 (defmethod propagate-constants ((node node-match) env &optional constant-bindings)
   (make-node-match
