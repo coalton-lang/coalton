@@ -43,6 +43,32 @@
                                 (two 2)
                                 (three 3))))))
 
+(define-test hashtable-hashing ()
+  (is (== (hash (the (Hashtable String Integer) (hashtable:new)))
+          (hash (the (Hashtable String Integer) (hashtable:new)))))
+
+  (is (== (hash (hashtable:make (0 "zero") (1 "one")))
+          (hash (hashtable:make (0 "zero") (1 "one")))))
+
+  (is (== (hash (hashtable:make (1 "one") (0 "zero")))
+          (hash (hashtable:make (0 "zero") (1 "one")))))
+
+  (let ht1 = (hashtable:new))
+  (for x in (iter:up-to 10000)
+    (hashtable:set! ht1 x x))
+
+  (let ht2 = (hashtable:new))
+  (for x in (iter:down-from 10000)
+    (hashtable:set! ht2 x x))
+
+  (is (== (hash ht1) (hash ht2)))
+
+  (is (/= (hash (hashtable:make (0 "zero")))
+          (hash (hashtable:make (0 "two")))))
+
+  (is (/= (hash (the (Hashtable String String) (hashtable:make)))
+          (hash (hashtable:make ("a" "b"))))))
+
 (in-package #:coalton-tests)
 
 (deftest hashtable-static-duplicate-keys ()

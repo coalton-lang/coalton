@@ -5,6 +5,7 @@
   (:export
    #:Hash
    #:combine-hashes
+   #:combine-hashes-order-independent
    #:define-sxhash-hasher))
 
 (in-package #:coalton-library/hash)
@@ -55,6 +56,11 @@ The hash function must satisfy the invariant that `(== left right)` implies `(==
       ;; logand required on ccl to force the output to be a fixnum
       #+ccl (cl:logand (cl:logxor lhs (cl:+ rhs #x517cc1b727220a95 (cl:ash lhs 6) (cl:ash lhs -2))) cl:most-positive-fixnum)))
 
+  (declare combine-hashes-order-independent (Hash -> Hash -> Hash))
+  (define (combine-hashes-order-independent lhs rhs)
+    (lisp Hash (lhs rhs)
+      (cl:logxor lhs rhs)))
+
   (define-instance (Eq Hash)
     (define (== a b)
       (lisp Boolean (a b)
@@ -74,6 +80,11 @@ The hash function must satisfy the invariant that `(== left right)` implies `(==
 
   (define-instance (Monoid Hash)
     (define mempty
+      (lisp Hash ()
+        0)))
+
+  (define-instance (Default Hash)
+    (define (default)
       (lisp Hash ()
         0))))
 
