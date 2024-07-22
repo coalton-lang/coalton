@@ -141,16 +141,16 @@
         (Some (index-unsafe index v))))
 
   (declare index-unsafe (UFix -> Vector :a -> :a))
-  (define (index-unsafe index v)
-    "Return the `index`th element of `v` without checking if the element exists."
-    (lisp :a (index v)
-      (cl:aref v index)))
+  (define (index-unsafe idx v)
+    "Return the `idx`th element of `v` without checking if the element exists."
+    (lisp :a (idx v)
+      (cl:aref v idx)))
 
   (declare set! (UFix -> :a -> Vector :a -> Unit))
-  (define (set! index item v)
-    "Set the `index`th element of `v` to `item`. This function left intentionally unsafe because it does not have a return value to check."
-    (lisp Void (index item v)
-      (cl:setf (cl:aref v index) item))
+  (define (set! idx item v)
+    "Set the `idx`th element of `v` to `item`. This function left intentionally unsafe because it does not have a return value to check."
+    (lisp Void (idx item v)
+      (cl:setf (cl:aref v idx) item))
     Unit)
 
   (declare head (Vector :a -> Optional :a))
