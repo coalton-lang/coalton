@@ -149,7 +149,7 @@
   (declare (type symbol name)
            (type pred-context context)
            (values tc:ty-predicate &optional))
-  (or (car (find name context :key #'cdr :test #'equalp))
+  (or (car (rassoc name context :test #'equalp))
       (error "Unable to find pred with name ~A~%" name)))
 
 (defun build-call (args)

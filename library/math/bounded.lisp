@@ -59,10 +59,10 @@
   (define-instance (Bounded IFix)
     (define minBound
       (lisp IFix ()
-        cl:most-positive-fixnum))
+        cl:most-negative-fixnum))
     (define maxBound
       (lisp IFix ()
-        cl:most-negative-fixnum)))
+        cl:most-positive-fixnum)))
 
   (define-instance (Bounded UFix)
     (define minBound 0)
