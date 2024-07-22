@@ -148,6 +148,6 @@ apply s type1 == type2")
   (loop :for t1 :in list1
         :for t2 :in list2
 
-        :collect (setf subs (unify subs t1 t2)))
+        :do (setf subs (unify subs t1 t2)))
 
   subs)

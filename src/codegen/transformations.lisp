@@ -27,7 +27,7 @@
   (declare (type node node)
            (type symbol key)
            (values node &optional))
-  (let ((f (cdr (find key funs :key #'car))))
+  (let ((f (cdr (assoc key funs))))
     (if f
         (or (funcall f node :bound-variables bound-variables) node)
         node)))
