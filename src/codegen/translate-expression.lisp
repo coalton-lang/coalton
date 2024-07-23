@@ -52,7 +52,7 @@
                       :collect (pred-type pred env))
                 (loop :for param :in (tc:node-abstraction-params (tc:binding-last-node binding))
                       :collect (tc:qualified-ty-type (tc:pattern-type param))))
-               (tc:function-remove-arguments 
+               (tc:function-remove-arguments
                 (tc:qualified-ty-type
                  (tc:node-type (tc:binding-last-node binding)))
                 (length (tc:node-abstraction-params (tc:binding-last-node binding)))))
@@ -107,7 +107,7 @@
 
       (t
        (translate-expression (tc:binding-value binding) full-ctx env)))))
- 
+
 
 (defgeneric translate-expression (expr ctx env)
   (:documentation "Translate typechecker AST node EXPR to the codegen AST.
@@ -123,7 +123,7 @@ Returns a `node'.")
 
     (let ((qual-ty (tc:node-type expr)))
       (assert (null (tc:qualified-ty-predicates qual-ty)))
-      
+
       (make-node-literal
        :type (tc:qualified-ty-type qual-ty)
        :value (tc:node-literal-value expr))))
@@ -135,7 +135,7 @@ Returns a `node'.")
 
     (let ((qual-ty (tc:node-type expr)))
       (assert (null (tc:qualified-ty-predicates qual-ty)))
-      
+
       (let* ((classes-package (util:find-package "COALTON-LIBRARY/CLASSES"))
 
              (num-class (util:find-symbol "NUM" classes-package))
@@ -143,22 +143,29 @@ Returns a `node'.")
              (num-pred (tc:make-ty-predicate :class num-class
                                              :types (list (tc:qualified-ty-type qual-ty))))
 
-             (from-int-method (util:find-symbol "FROMINT" classes-package)))
-        
-        (make-node-application
-         :type (tc:qualified-ty-type qual-ty)
-         :rator (make-node-variable
-                 :type (tc:make-function-type*
-                        (list
-                         (pred-type num-pred env)
-                         tc:*integer-type*)
-                        (tc:qualified-ty-type qual-ty))
-                 :value from-int-method)
-         :rands (list
-                 (resolve-dict num-pred ctx env)
-                 (make-node-literal
-                  :type tc:*integer-type*
-                  :value (tc:node-integer-literal-value expr)))))))
+             (from-int-method (util:find-symbol "FROMINT" classes-package))
+
+             (ty (tc:qualified-ty-type qual-ty)))
+
+        ;; Avoid casting INTEGER to INTEGER with FROMINT at runtime
+        (if (and (tc:tycon-p ty) (eq 'coalton:integer (tc:tycon-name ty)))
+            (make-node-literal
+             :type tc:*integer-type*
+             :value (tc:node-integer-literal-value expr))
+            (make-node-application
+             :type (tc:qualified-ty-type qual-ty)
+             :rator (make-node-variable
+                     :type (tc:make-function-type*
+                            (list
+                             (pred-type num-pred env)
+                             tc:*integer-type*)
+                            (tc:qualified-ty-type qual-ty))
+                     :value from-int-method)
+             :rands (list
+                     (resolve-dict num-pred ctx env)
+                     (make-node-literal
+                      :type tc:*integer-type*
+                      :value (tc:node-integer-literal-value expr))))))))
 
   (:method ((expr tc:node-variable) ctx env)
     (declare (type pred-context ctx)
@@ -215,7 +222,7 @@ Returns a `node'.")
 
     (let ((qual-ty (tc:node-type expr)))
       (assert (null (tc:qualified-ty-predicates qual-ty)))
-      
+
       (make-node-application
        :type (tc:qualified-ty-type qual-ty)
        :rator (translate-expression (tc:node-application-rator expr) ctx env)
@@ -228,7 +235,7 @@ Returns a `node'.")
     (declare (type pred-context ctx)
              (type tc:environment env)
              (values node))
-    
+
     (loop :with out-node := (translate-expression (tc:node-body-last-node expr) ctx env)
           :for body-node :in (reverse (tc:node-body-nodes expr)) :do
             (setf out-node
@@ -252,10 +259,10 @@ Returns a `node'.")
                                         (make-match-branch
                                          :pattern (translate-pattern pattern)
                                          :body out-node))))))))
-                    
+
                     (tc:node
                      (make-node-seq
-                      :type (node-type out-node) 
+                      :type (node-type out-node)
                       :nodes (list (translate-expression body-node ctx env)
                                    out-node)))))
           :finally (return out-node)))
@@ -289,9 +296,9 @@ Returns a `node'.")
                   dict-var-names
                   (loop :for param :in (tc:node-abstraction-params expr)
                         :for qual-ty := (tc:pattern-type param)
-                        
+
                         :do (assert (null (tc:qualified-ty-predicates qual-ty)))
-                            
+
                         :if (tc:pattern-var-p param)
                           :collect (tc:pattern-var-name param)
                         :else
@@ -334,7 +341,7 @@ Returns a `node'.")
        :bindings (loop :for binding :in (tc:node-let-bindings expr)
                        :for name := (tc:node-variable-name (tc:node-let-binding-name binding))
                        :for var := (tc:node-let-binding-name binding)
-                       
+
                        :collect (cons name (translate-toplevel binding env :extra-context ctx)))
        :subexpr (translate-expression (tc:node-let-body expr) ctx env))))
 
@@ -350,7 +357,7 @@ Returns a `node'.")
        :type (tc:qualified-ty-type qual-ty)
        :vars (loop :for var :in (tc:node-lisp-vars expr)
                    :for var-name :in (tc:node-lisp-var-names expr)
-                   :collect (cons var-name (tc:node-variable-name var))) 
+                   :collect (cons var-name (tc:node-variable-name var)))
        :form (tc:node-lisp-body expr))))
 
   (:method ((expr tc:node-match) ctx env)
@@ -561,8 +568,8 @@ Returns a `node'.")
     (declare (type pred-context ctx)
              (type tc:environment env)
              (values node))
-    
-    (make-node-while 
+
+    (make-node-while
      :type tc:*unit-type*
      :label (tc:node-while-label expr)
      :expr (translate-expression (tc:node-while-expr expr) ctx env)
@@ -680,7 +687,7 @@ Returns a `node'.")
               :body (translate-expression (tc:node-for-body expr) ctx env))))
 
       (make-node-bind
-       :type tc:*unit-type* 
+       :type tc:*unit-type*
        :name into-iter-binding-var-name
        :expr into-iter-node
        :body while-let-node)))
@@ -788,7 +795,7 @@ Returns a `node'.")
                                            :pattern (translate-pattern pattern)
                                            :body out-node)))))))
 
-                        
+
                         ;; *sad burrito noises*
                         (tc:node-do-bind
                          (let* ((var-type (tc:qualified-ty-type (tc:pattern-type (tc:node-do-bind-pattern elem))))
@@ -857,7 +864,7 @@ Returns a `node'.")
   (:method ((pat tc:pattern-var))
     (let ((qual-ty (tc:pattern-type pat)))
       (assert (null (tc:qualified-ty-predicates qual-ty)))
-      
+
       (make-pattern-var
        :type (tc:qualified-ty-type qual-ty)
        :name (tc:pattern-var-name pat))))
@@ -865,7 +872,7 @@ Returns a `node'.")
   (:method ((pat tc:pattern-literal))
     (let ((qual-ty (tc:pattern-type pat)))
       (assert (null (tc:qualified-ty-predicates qual-ty)))
-      
+
       (make-pattern-literal
        :type (tc:qualified-ty-type qual-ty)
        :value (tc:pattern-literal-value pat))))
@@ -873,14 +880,14 @@ Returns a `node'.")
   (:method ((pat tc:pattern-wildcard))
     (let ((qual-ty (tc:pattern-type pat)))
       (assert (null (tc:qualified-ty-predicates qual-ty)))
-      
+
       (make-pattern-wildcard
        :type (tc:qualified-ty-type qual-ty))))
 
   (:method ((pat tc:pattern-constructor))
     (let ((qual-ty (tc:pattern-type pat)))
       (assert (null (tc:qualified-ty-predicates qual-ty)))
-      
+
       (make-pattern-constructor
        :type (tc:qualified-ty-type qual-ty)
        :name (tc:pattern-constructor-name pat)
@@ -944,5 +951,3 @@ dictionaries applied."
                            :body inner))))
 
         :finally (return inner)))
-
-
