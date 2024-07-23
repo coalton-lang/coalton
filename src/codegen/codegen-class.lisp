@@ -34,8 +34,8 @@
 
               (loop :for method :in (tc:ty-class-unqualified-methods class)
                     :collect (make-struct-or-class-field
-                              :name (car method)
-                              :type (tc:lisp-type (cdr method) env))))
+                              :name (tc:ty-class-method-name method)
+                              :type (tc:lisp-type (tc:ty-class-method-type method) env))))
 
         :append (struct-or-class
                  :classname codegen-name
@@ -49,35 +49,37 @@
                           (make-method-fun m package class env))
                         (tc:ty-class-unqualified-methods class))))
 
-(defun make-method-fun (m package class env)
-  (declare (type tc:environment env))
-  (let* ((qual-ty (tc:fresh-inst (cdr m)))
-
+(defun make-method-fun (method package class env)
+  (declare (type tc:ty-class-method method)
+           (type tc:environment env))
+  (let* ((qual-ty
+           (tc:fresh-inst (tc:ty-class-method-type method)))
          (method-contraint-args
            (length (tc:qualified-ty-predicates qual-ty)))
-
-         (arity (+ (tc:function-type-arity
-                    (tc:qualified-ty-type qual-ty))
+         (arity (+ (tc:function-type-arity (tc:qualified-ty-type qual-ty))
                    method-contraint-args))
          (params
            (loop :for i :from 0 :below arity
                  :collect (alexandria:format-symbol package "_~A" i)))
-         (class-codegen-sym (tc:ty-class-codegen-sym class))
-         (method-accessor (alexandria:format-symbol (symbol-package class-codegen-sym) "~A-~A" class-codegen-sym (car m))))
-
-    `((declaim (inline ,(car m)))
-      (defun ,(car m) (dict ,@params)
+         (class-codegen-sym
+           (tc:ty-class-codegen-sym class))
+         (method-name
+           (tc:ty-class-method-name method))
+         (method-accessor
+           (alexandria:format-symbol (symbol-package class-codegen-sym)
+                                     "~A-~A" class-codegen-sym method-name)))
+    `((declaim (inline ,method-name))
+      (defun ,method-name (dict ,@params)
         (declare #.settings:*coalton-optimize*)
         ,(if (null params)
              `(,method-accessor dict)
              `(rt:call-coalton-function (,method-accessor dict) ,@params)))
       ;; Generate the wrapper functions
-      (global-lexical:define-global-lexical ,(car m) rt:function-entry)
-      (setf ,(car m) ,(rt:construct-function-entry
-                       `#',(car m)
-                       (+ arity 1) ; We need a function of arity + 1 to account for DICT
-                       ))
-      (setf (documentation ',(car m) 'variable)
-            ,(format nil "~A :: ~A" (car m) (tc:lookup-value-type env (car m))))
-      (setf (documentation ',(car m) 'function)
-            ,(format nil "~A :: ~A" (car m) (tc:lookup-value-type env (car m)))))))
+      (global-lexical:define-global-lexical ,method-name rt:function-entry)
+      (setf ,method-name
+            ;; We need a function of arity + 1 to account for DICT
+            ,(rt:construct-function-entry `#',method-name (+ arity 1))
+            (documentation ',method-name 'variable)
+            ,(format nil "~A :: ~A" method-name (tc:lookup-value-type env method-name))
+            (documentation ',method-name 'function)
+            ,(format nil "~A :: ~A" method-name (tc:lookup-value-type env method-name))))))

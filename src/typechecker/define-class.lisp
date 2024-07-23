@@ -298,9 +298,9 @@
                                              :for method-name := (parser:identifier-src-name
                                                                   (parser:method-definition-name method))
 
-                                             :collect (cons method-name (tc:quantify nil method-ty)))
-                  :method-docstrings (mapcar #'parser:method-definition-docstring
-                                             (parser:toplevel-define-class-methods class))
+                                             :collect (tc:make-ty-class-method :name method-name
+                                                                               :type (tc:quantify nil method-ty)
+                                                                               :docstring (parser:method-definition-docstring method)))
                   :codegen-sym codegen-sym
                   :superclass-dict superclass-dict
                   :superclass-map superclass-map

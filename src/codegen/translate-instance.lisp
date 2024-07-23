@@ -47,16 +47,19 @@
                  :collect (pred-type pred env)))
 
          (method-definitions
-           (loop :for (method-name . type) :in (tc:ty-class-unqualified-methods class)
+           (loop :for method :in (tc:ty-class-unqualified-methods class)
+                 :for method-name := (tc:ty-class-method-name method)
                  :for binding := (gethash method-name (tc:toplevel-define-instance-methods instance))
                  :for codegen-sym := (tc:get-value method-codegen-syms method-name)
 
                  :collect (cons codegen-sym (translate-toplevel binding env))))
 
          (unqualified-method-definitions
-           (loop :for (method-name . type) :in (tc:ty-class-unqualified-methods class)
+           (loop :for method :in (tc:ty-class-unqualified-methods class)
+                 :for method-name := (tc:ty-class-method-name method)
+                 :for method-type := (tc:ty-class-method-type method)
                  :for binding := (gethash method-name (tc:toplevel-define-instance-methods instance))
-                 :collect (translate-toplevel (tc:attach-explicit-binding-type binding (tc:fresh-inst type))
+                 :collect (translate-toplevel (tc:attach-explicit-binding-type binding (tc:fresh-inst method-type))
                                               env
                                               :extra-context ctx)))
 
@@ -113,4 +116,3 @@
           :do (typecheck-node node env))
 
     bindings))
- 

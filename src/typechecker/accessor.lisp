@@ -112,11 +112,10 @@
                      :primary-note
                      (format nil "type '~S' is not a struct" ty-name))))
 
-      (let* ((subs (tc:match struct-ty (accessor-from accessor)))
-             (field-ty (tc:get-value (tc:struct-entry-field-tys struct-entry)
-                                      (accessor-field accessor))))
+      (let ((subs (tc:match struct-ty (accessor-from accessor)))
+            (field (tc:get-field struct-entry (accessor-field accessor) :no-error t)))
 
-        (unless field-ty
+        (unless field
           (error 'tc:tc-error
                  :err (se:source-error
                        :span (accessor-source accessor)
@@ -128,7 +127,8 @@
                                (accessor-field accessor)))))
 
         ;; the order of unification matters here
-        (setf subs (tc:unify subs (accessor-to accessor) field-ty))
+        (setf subs (tc:unify subs (accessor-to accessor)
+                             (tc:struct-field-type field)))
 
         (values t subs)))))
 
