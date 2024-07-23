@@ -107,7 +107,8 @@
                     (let ((*print-escape* t))
                       (tc:pprint-predicate s pred))))))
 
-             (method-names (mapcar #'car (tc:ty-class-unqualified-methods class)))
+             (method-names (mapcar #'tc:ty-class-method-name
+                                   (tc:ty-class-unqualified-methods class)))
 
              (method-codegen-syms
                (loop :with table := (tc:make-map :test 'eq)
@@ -186,8 +187,9 @@
          ;; HACK: these should *not* be stored as schemes
          (method-table
            (loop :with table := (make-hash-table :test #'eq)
-                 :for (name . scheme) :in (tc:ty-class-unqualified-methods class)
-                 :do (setf (gethash name table) scheme)
+                 :for method :in (tc:ty-class-unqualified-methods class)
+                 :do (setf (gethash (tc:ty-class-method-name method) table)
+                           (tc:ty-class-method-type method))
                  :finally (return table))))
 
     ;; Check for superclasses and check the context of superinstances

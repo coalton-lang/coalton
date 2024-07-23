@@ -183,8 +183,7 @@
 
                      ;; Register each type's type variables in the environment. A
                      ;; mapping is stored from (type-name, var-name) to kind-variable
-                     ;; because type variable names are not unique across between
-                     ;; define-types.
+                     ;; because type variable names are not unique between define-types.
                      :for kvars
                        := (loop :for var :in vars
                                 :collect (tc:kind-of (partial-type-env-add-var partial-env var)))
@@ -205,7 +204,7 @@
                                           (loop :for var :in (parser:type-definition-vars parser-type)
                                                 :for var-name := (parser:keyword-src-name var)
                                                 :collect (gethash var-name (partial-type-env-ty-table partial-env))))
-                            
+
                             :do (setf env (update-env-for-type-definition type vars parser-type env))
                             :finally (return type-definitions))))
      instances
@@ -233,33 +232,22 @@
                     (setf env (tc:unset-function env constructor))))))
 
   (cond ((typep parsed-type 'parser:toplevel-define-struct)
-         (let* ((fields (mapcar #'parser:struct-field-name
-                                (parser:toplevel-define-struct-fields parsed-type)))
-                (field-docstrings (loop :with table := (tc:make-map)
-                                        :for field :in fields
-                                        :for docstring :in (mapcar #'parser:struct-field-docstring
-                                                                   (parser:toplevel-define-struct-fields parsed-type))
-                                        :do (setf (tc:get-value table field) docstring)
-                                        :finally (return table)))
-                (field-tys (loop :with table := (tc:make-map)
-                                 :for field :in fields
-                                 :for ty :in (first (type-definition-constructor-args type))
-                                 :do (setf (tc:get-value table field) ty)
-                                 :finally (return table)))
-                (field-idx (loop :with table := (tc:make-map)
-                                 :for field :in fields
-                                 :for i :from 0
-                                 :do (setf (tc:get-value table field) i)
-                                 :finally (return table))))
+         (let ((fields (loop :for field
+                               :in (parser:toplevel-define-struct-fields parsed-type)
+                             :for ty
+                               :in (first (type-definition-constructor-args type))
+                             :for index :from 0
+                             :collect (tc:make-struct-field :name (parser:struct-field-name field)
+                                                            :type ty
+                                                            :index index
+                                                            :docstring (parser:struct-field-docstring field)))))
            (setf env (tc:set-struct
                       env
                       (type-definition-name type)
                       (tc:make-struct-entry
                        :name (type-definition-name type)
                        :fields fields
-                       :field-docstrings field-docstrings
-                       :field-tys field-tys
-                       :field-idx field-idx)))))
+                       :docstring nil)))))
         ((tc:lookup-struct env (type-definition-name type) :no-error t)
          (setf env (tc:unset-struct env (type-definition-name type)))))
 

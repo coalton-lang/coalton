@@ -50,15 +50,25 @@
    #:constructor-entry-compressed-repr      ; ACCESSOR
    #:constructor-entry-list                 ; TYPE
    #:constructor-environment                ; STRUCT
+   #:struct-field                           ; STRUCT
+   #:make-struct-field                      ; CONSTRUCTOR
+   #:struct-field-name                      ; ACCESSOR
+   #:struct-field-type                      ; ACCESSOR
+   #:struct-field-index                     ; ACCESSOR
+   #:struct-field-docstring                 ; ACCESSOR
+   #:struct-field-list                      ; TYPE
    #:struct-entry                           ; STRUCT
    #:make-struct-entry                      ; CONSTRUCTOR
    #:struct-entry-name                      ; ACCESSOR
    #:struct-entry-fields                    ; ACCESSOR
-   #:struct-entry-field-tys                 ; ACCESSOR
-   #:struct-entry-field-docstrings          ; ACCESSOR
-   #:struct-entry-field-idx                 ; ACCESSOR`
    #:struct-entry-list                      ; TYPE
    #:struct-environment                     ; STRUCT
+   #:get-field                              ; FUNCTION
+   #:ty-class-method                        ; STRUCT
+   #:make-ty-class-method                   ; CONSTRUCTOR
+   #:ty-class-method-name                   ; ACCESSOR
+   #:ty-class-method-type                   ; ACCESSOR
+   #:ty-class-method-docstring              ; ACCESSOR
    #:ty-class                               ; STRUCT
    #:make-ty-class                          ; CONSTRUCTOR
    #:ty-class-name                          ; ACCESSOR
@@ -68,7 +78,6 @@
    #:ty-class-class-variable-map            ; ACCESSOR
    #:ty-class-fundeps                       ; ACCESSOR
    #:ty-class-unqualified-methods           ; ACCESSOR
-   #:ty-class-method-docstrings             ; ACCESSOR
    #:ty-class-codegen-sym                   ; ACCESSOR
    #:ty-class-superclass-dict               ; ACCESSOR
    #:ty-class-superclass-map                ; ACCESSOR
@@ -496,17 +505,26 @@
 ;;; Struct environment
 ;;;
 
+(defstruct struct-field
+  (name      (util:required 'name)      :type string            :read-only t)
+  (type      (util:required 'type)      :type ty                :read-only t)
+  (index     (util:required 'index)     :type fixnum            :read-only t)
+  (docstring (util:required 'docstring) :type (or null string)  :read-only t))
+
+(defmethod make-load-form ((self struct-field) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
+(defun struct-field-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'struct-field-p x)))
+
+(deftype struct-field-list ()
+  '(satisfies struct-field-list-p))
+
 (defstruct struct-entry
-  (name             (util:required 'name)             :type symbol           :read-only t)
-  (fields           (util:required 'fields)           :type util:string-list :read-only t)
-
-  (field-docstrings (util:required 'field-docstrings) :type environment-map  :read-only t)
-  ;; Mapping of "field name" -> "field type"
-  ;; Type variables are the same as in `type-entry-type'
-  (field-tys        (util:required 'field-tys)        :type environment-map  :read-only t)
-
-  ;; Mapping of "field name" -> "field index"
-  (field-idx        (util:required 'field-idx)        :type environment-map  :read-only t))
+  (name             (util:required 'name)      :type symbol            :read-only t)
+  (fields           (util:required 'fields)    :type struct-field-list :read-only t)
+  (docstring        (util:required 'docstring) :type (or null string)  :read-only t))
 
 (defmethod make-load-form ((self struct-entry) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -518,11 +536,34 @@
 (deftype struct-entry-list ()
   '(satisfies struct-entry-list-p))
 
+(defun get-field (struct-entry name &key no-error)
+  (or (some (lambda (field)
+              (when (string-equal (struct-field-name field) name)
+                field))
+            (struct-entry-fields struct-entry))
+      (unless no-error
+        (util:coalton-bug "Unknown field ~S" name))))
+
 (defstruct (struct-environment (:include immutable-map)))
 
 ;;;
 ;;; Class environment
 ;;;
+
+(defstruct ty-class-method
+  (name      (util:required 'name)      :type symbol           :read-only t)
+  (type      (util:required 'type)      :type ty-scheme        :read-only t)
+  (docstring (util:required 'docstring) :type (or null string) :read-only t))
+
+(defmethod make-load-form ((self ty-class-method) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
+(defun ty-class-method-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'ty-class-method-p x)))
+
+(deftype ty-class-method-list ()
+  '(satisfies ty-class-method-list-p))
 
 (defstruct ty-class
   (name                (util:required 'name)                :type symbol              :read-only t)
@@ -536,10 +577,7 @@
 
   ;; Methods of the class containing the same tyvars in PREDICATE for
   ;; use in pretty printing
-  (unqualified-methods (util:required 'unqualified-methods) :type scheme-binding-list :read-only t)
-  ;; Method-docstrings is a list of Strings or Nils, in the same order
-  ;; as the unqualified-methods
-  (method-docstrings   (util:required 'method-docstrings)   :type list                :read-only t)
+  (unqualified-methods (util:required 'unqualified-methods) :type ty-class-method-list :read-only t)
   (codegen-sym         (util:required 'codegen-sym)         :type symbol              :read-only t)
   (superclass-dict     (util:required 'superclass-dict)     :type list                :read-only t)
   (superclass-map      (util:required 'superclass-map)      :type environment-map     :read-only t)
@@ -569,11 +607,11 @@
    :class-variables (ty-class-class-variables class)
    :class-variable-map (ty-class-class-variable-map class)
    :fundeps (ty-class-fundeps class)
-   :unqualified-methods (mapcar (lambda (entry)
-                                  (cons (car entry)
-                                        (apply-substitution subst-list (cdr entry))))
+   :unqualified-methods (mapcar (lambda (method)
+                                  (make-ty-class-method :name (ty-class-method-name method)
+                                                        :type (apply-substitution subst-list (ty-class-method-type method))
+                                                        :docstring (ty-class-method-docstring method)))
                                 (ty-class-unqualified-methods class))
-   :method-docstrings (ty-class-method-docstrings class)
    :codegen-sym (ty-class-codegen-sym class)
    :superclass-dict (mapcar (lambda (entry)
                               (cons (apply-substitution subst-list (car entry))

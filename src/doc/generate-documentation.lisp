@@ -25,9 +25,7 @@
             (:include documentation-entry))
   (type             (util:required 'type)             :type tc:ty                     :read-only t)
   (tyvars           (util:required 'tyvars)           :type tc:tyvar-list             :read-only t)
-  (fields           (util:required 'fields)           :type util:string-list          :read-only t)
-  (field-docstrings (util:required 'field-docstrings) :type hash-table                :read-only t)
-  (field-tys        (util:required 'field-tys)        :type hash-table                :read-only t)
+  (fields           (util:required 'fields)           :type tc:struct-field-list      :read-only t)
   (instances        (util:required 'instances)        :type tc:ty-class-instance-list :read-only t))
 
 (defun documentation-struct-entry-list-p (x)
@@ -42,8 +40,6 @@
   (context   (util:required 'context)                   :type t :read-only t)
   (predicate (util:required 'predicate)                 :type t :read-only t)
   (methods   (util:required 'methods)                   :type t :read-only t)
-  ;; A list of strings in the same order as the methods slot
-  (method-docstrings (util:required 'method-docstrings) :type t :read-only t)
   (instances (util:required 'instances)                 :type t :read-only t))
 
 (defun documentation-class-entry-list-p (x)
@@ -427,8 +423,6 @@
                     :type (tc:type-entry-type entry)
                     :tyvars (tc:type-entry-tyvars entry)
                     :fields (tc:struct-entry-fields struct-entry)
-                    :field-docstrings (tc:get-table (tc:struct-entry-field-docstrings struct-entry))
-                    :field-tys (tc:get-table (tc:struct-entry-field-tys struct-entry))
                     :instances applicable-instances)
                    output-structs))
 
@@ -455,10 +449,9 @@
                :predicate (tc:ty-class-predicate e)
                ;; Only include exported methods from our packages
                :methods (remove-if-not
-                         (lambda (binding)
-                           (exported-symbol-p (car binding) package t))
+                         (lambda (method)
+                           (exported-symbol-p (tc:ty-class-method-name method) package t))
                          (tc:ty-class-unqualified-methods e))
-               :method-docstrings (tc:ty-class-method-docstrings e)
                :instances (reverse (fset:convert 'list (tc:lookup-class-instances env (tc:ty-class-name e) :no-error t)))
                :documentation (tc:ty-class-docstring e)
                :location (tc:ty-class-location e)))
