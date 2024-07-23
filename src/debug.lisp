@@ -77,8 +77,10 @@
                                (tc:ty-predicate-class class-pred)
                                (tc:ty-predicate-types class-pred)
                                (mapcar #'tc:kind-of (tc:ty-predicate-types class-pred))))
-                     (loop :for (method-name . method-type) :in (tc:ty-class-unqualified-methods entry) :do
-                       (format t "    ~S :: ~A~%" method-name method-type)))
+                     (loop :for method :in (tc:ty-class-unqualified-methods entry) :do
+                       (format t "    ~S :: ~A~%"
+                               (tc:ty-class-method-name method)
+                               (tc:ty-class-method-type method))))
                    (format t "~%")))
                (format t "~%")))
       (if package

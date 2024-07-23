@@ -195,7 +195,14 @@
       table))
 
   (define-instance (Hash :key => Default (Hashtable :key :value))
-    (define default new)))
+    (define default new))
+
+  (define-instance ((Hash :key) (Hash :value) => Hash (Hashtable :key :value))
+    (define (hash table)
+      (iter:fold!
+       combine-hashes-order-independent
+       (default)
+       (map hash (entries table))))))
 
 (cl:define-condition make-hash-table-static-duplicate-keys (cl:error)
   ((offending-key :initarg :offending-key

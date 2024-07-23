@@ -195,8 +195,8 @@ Returns a `node'.")
 
                (struct-entry (tc:lookup-struct env (tc:tycon-name from-ty)))
 
-               (idx (tc:get-value (tc:struct-entry-field-idx struct-entry)
-                                  (tc:node-accessor-name expr))))
+               (idx (tc:struct-field-index (tc:get-field struct-entry
+                                                         (tc:node-accessor-name expr)))))
 
           (assert idx)
 

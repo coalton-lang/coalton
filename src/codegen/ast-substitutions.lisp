@@ -38,9 +38,31 @@
 
   (:method (subs (node node-lisp))
     (declare (type ast-substitution-list subs)
-             (ignore subs)
              (values node))
-    node)
+    (multiple-value-bind (let-bindings lisp-var-bindings)
+        (loop :for (lisp-var . coalton-var) :in (node-lisp-vars node)
+              :for new-var := (gentemp (symbol-name coalton-var))
+              :for res := (find coalton-var subs :key #'ast-substitution-from)
+              :if (and res (node-variable-p (ast-substitution-to res)))
+                  :collect (cons lisp-var (node-variable-value (ast-substitution-to res)))
+                    :into lisp-var-bindings
+              :else :if res
+                :collect (cons lisp-var new-var) :into lisp-var-bindings
+                :and :collect (cons new-var (ast-substitution-to res))
+                       :into let-bindings
+              :else
+                :collect (cons lisp-var coalton-var) :into lisp-var-bindings
+              :finally (return (values let-bindings lisp-var-bindings)))
+      (let ((new-lisp-node (make-node-lisp
+                            :type (node-type node)
+                            :vars lisp-var-bindings
+                            :form (node-lisp-form node))))
+        (if (null let-bindings)
+            new-lisp-node
+            (make-node-let
+             :type (node-type node)
+             :bindings let-bindings
+             :subexpr new-lisp-node)))))
 
   (:method (subs (node node-variable))
     (declare (type ast-substitution-list subs)

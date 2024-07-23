@@ -49,21 +49,21 @@
     (define %length length))
 
   (declare new ((Sliceable (:b :a)) => UFix -> UFix -> :b :a -> Slice :a))
-  (define (new start length v)
-    "Create a new slice backed by `v` starting at index `start` and continuing for `length` elements."
+  (define (new start len v)
+    "Create a new slice backed by `v` starting at index `start` and continuing for `len` elements."
     (when (< start 0)
       (error "Start of slice cannot be less than 0."))
 
-    (when (<= length 0)
+    (when (<= len 0)
       (error "Length of slice cannot be equal to or less than 0."))
 
-    (let end = (+ start length))
+    (let end = (+ start len))
     (when (> end (%length v))
       (error "Slice cannot extend beyond length of backing vector."))
 
-    (lisp (Slice :a) (v start length)
+    (lisp (Slice :a) (v start len)
       (cl:make-array
-       length
+       len
        :element-type cl:t
        :displaced-to v
        :displaced-index-offset start)))
@@ -75,10 +75,10 @@
       (cl:array-dimension s 0)))
 
   (declare set! (UFix -> :a -> (Slice :a) -> Unit))
-  (define (set! index item s)
-    "Set the element at `index` in `s` to `item`."
-    (lisp :a (index item s)
-      (cl:setf (cl:aref s index) item))
+  (define (set! idx item s)
+    "Set the element at index `idx` in `s` to `item`."
+    (lisp :a (idx item s)
+      (cl:setf (cl:aref s idx) item))
     Unit)
 
   (declare index (UFix -> (Slice :a) -> (Optional :a)))

@@ -289,7 +289,8 @@
 
 (defun data-letrec-able-p (initform env)
   (let ((ctor-ent (find-constructor initform env)))
-    (and ctor-ent
+    (and (node-direct-application-p initform)
+         ctor-ent
          (let* ((type-name (tc:constructor-entry-constructs ctor-ent))
                 (type-ent (tc:lookup-type env type-name)))
            (not (or (tc:type-entry-enum-repr type-ent)

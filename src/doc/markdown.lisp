@@ -169,7 +169,7 @@
         (format stream "~%</details>~%~%")))))
 
 (defmethod write-documentation ((backend (eql ':markdown)) stream (object documentation-struct-entry))
-  (with-slots (name type tyvars fields field-docstrings field-tys instances documentation)
+  (with-slots (name type tyvars fields instances documentation)
       object
     (tc:with-pprint-variable-context ()
       (format stream
@@ -179,11 +179,10 @@
               (html-entities:encode-entities (symbol-name name)))
 
       (loop :for field :in fields
-            :for field-ty := (gethash field field-tys)
-            :for field-docstring := (gethash field field-docstrings)
+            :for field-docstring := (tc:struct-field-docstring field)
             :do (format stream "- <code>~A :: ~S</code>~A~%"
-                        field
-                        field-ty
+                        (tc:struct-field-name field)
+                        (tc:struct-field-type field)
                         (if field-docstring
                             (format nil "<br/>~a" field-docstring)
                             "")))
@@ -201,7 +200,7 @@
         (format stream "~%</details>~%~%")))))
 
 (defmethod write-documentation ((backend (eql ':markdown)) stream (object documentation-class-entry))
-  (with-slots (name context predicate methods method-docstrings instances documentation location)
+  (with-slots (name context predicate methods instances documentation location)
       object
 
     (format stream "#### <code>~A</code> <sup><sub>[CLASS]</sub></sup><a name=\"~(~:*~A-class~)\"></a>~%"
@@ -220,13 +219,11 @@
       (maybe-write-section stream documentation)
 
       (format stream "Methods:~%")
-      (loop :for (name . type) :in methods
-            :for docstring     :in method-docstrings :do
-
-        (format stream "- <code>~A :: ~A</code>~@[<br/>~A~]~%"
-                (html-entities:encode-entities (symbol-name name))
-                (to-markdown type)
-                (html-entities:encode-entities docstring))))
+      (loop :for method :in methods
+            :do (format stream "- <code>~A :: ~A</code>~@[<br/>~A~]~%"
+                        (html-entities:encode-entities (symbol-name (tc:ty-class-method-name method)))
+                        (to-markdown (tc:ty-class-method-type method))
+                        (html-entities:encode-entities (tc:ty-class-method-docstring method)))))
 
     (when instances
       (format stream "~%<details>~%")
