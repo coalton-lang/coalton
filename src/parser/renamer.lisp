@@ -41,7 +41,7 @@
        (if new-name
            (make-node-variable
             :name new-name
-            :source (node-source node))
+            :location (node-location node))
            node)
        ctx)))
 
@@ -79,7 +79,7 @@
 
         ;; ctx is used instead of new-ctx because bind creates non-recursive bindings
         :expr (rename-variables-generic% (node-bind-expr node) ctx)
-        :source (node-bind-source node))
+        :location (node-bind-location node))
        new-ctx)))
 
   (:method ((node node-body) ctx)
@@ -109,7 +109,7 @@
        (make-node-abstraction
         :params (rename-variables-generic% (node-abstraction-params node) new-ctx)
         :body (rename-variables-generic% (node-abstraction-body node) new-ctx)
-        :source (node-source node))
+        :location (node-location node))
        ctx)))
 
   (:method ((node node-let-binding) ctx)
@@ -120,7 +120,7 @@
      (make-node-let-binding
       :name (rename-variables-generic% (node-let-binding-name node) ctx)
       :value (rename-variables-generic% (node-let-binding-value node) ctx)
-      :source (node-let-binding-source node))
+      :location (node-let-binding-location node))
      ctx))
 
   (:method ((node node-let-declare) ctx)
@@ -131,7 +131,7 @@
      (make-node-let-declare
       :name (rename-variables-generic% (node-let-declare-name node) ctx)
       :type (node-let-declare-type node)
-      :source (node-let-declare-source node))
+      :location (node-let-declare-location node))
      ctx))
 
   (:method ((node node-let) ctx)
@@ -150,7 +150,7 @@
         :bindings (rename-variables-generic% (node-let-bindings node) new-ctx)
         :declares (rename-variables-generic% (node-let-declares node) new-ctx)
         :body (rename-variables-generic% (node-let-body node) new-ctx)
-        :source (node-source node))
+        :location (node-location node))
        ctx)))
 
   (:method ((node node-lisp) ctx)
@@ -159,7 +159,7 @@
 
     (values
      (make-node-lisp
-      :source (node-source node)
+      :location (node-location node)
       :type (node-lisp-type node)
       :vars (rename-variables-generic% (node-lisp-vars node) ctx)
       :var-names (node-lisp-var-names node)
@@ -178,7 +178,7 @@
        (make-node-match-branch
         :pattern (rename-variables-generic% (node-match-branch-pattern node) new-ctx)
         :body (rename-variables-generic% (node-match-branch-body node) new-ctx)
-        :source (node-match-branch-source node))
+        :location (node-match-branch-location node))
        ctx)))
 
   (:method ((node node-match) ctx)
@@ -189,7 +189,7 @@
      (make-node-match
       :expr (rename-variables-generic% (node-match-expr node) ctx)
       :branches (rename-variables-generic% (node-match-branches node) ctx)
-      :source (node-source node))
+      :location (node-location node))
      ctx))
 
   (:method ((node node-progn) ctx)
@@ -199,7 +199,7 @@
     (values
      (make-node-progn
       :body (rename-variables-generic% (node-progn-body node) ctx)
-      :source (node-source node))
+      :location (node-location node))
      ctx))
 
   (:method ((node node-the) ctx)
@@ -210,7 +210,7 @@
      (make-node-the
       :type (node-the-type node)
       :expr (rename-variables-generic% (node-the-expr node) ctx)
-      :source (node-source node))
+      :location (node-location node))
      ctx))
 
   (:method ((node node-return) ctx)
@@ -222,7 +222,7 @@
       :expr (if (node-return-expr node)
                 (rename-variables-generic% (node-return-expr node) ctx)
                 nil)
-      :source (node-source node))
+      :location (node-location node))
      ctx))
 
   (:method ((node node-application) ctx)
@@ -233,7 +233,7 @@
      (make-node-application
       :rator (rename-variables-generic% (node-application-rator node) ctx)
       :rands (rename-variables-generic% (node-application-rands node) ctx)
-      :source (node-source node))
+      :location (node-location node))
      ctx))
 
   (:method ((node node-or) ctx)
@@ -243,7 +243,7 @@
     (values
      (make-node-or
       :nodes (rename-variables-generic% (node-or-nodes node) ctx)
-      :source (node-source node))
+      :location (node-location node))
      ctx))
 
   (:method ((node node-and) ctx)
@@ -253,7 +253,7 @@
     (values
      (make-node-and
       :nodes (rename-variables-generic% (node-and-nodes node) ctx)
-      :source (node-source node))
+      :location (node-location node))
      ctx))
 
   (:method ((node node-if) ctx)
@@ -265,7 +265,7 @@
       :expr (rename-variables-generic% (node-if-expr node) ctx)
       :then (rename-variables-generic% (node-if-then node) ctx)
       :else (rename-variables-generic% (node-if-else node) ctx)
-      :source (node-source node))
+      :location (node-location node))
      ctx))
 
   (:method ((node node-when) ctx)
@@ -276,7 +276,7 @@
      (make-node-when
       :expr (rename-variables-generic% (node-when-expr node) ctx)
       :body (rename-variables-generic% (node-when-body node) ctx)
-      :source (node-source node))
+      :location (node-location node))
      ctx))
 
   (:method ((node node-while) ctx)
@@ -287,7 +287,7 @@
       :expr (rename-variables-generic% (node-while-expr node) ctx)
       :label (node-while-label node)
       :body (rename-variables-generic% (node-while-body node) ctx)
-      :source (node-source node))
+      :location (node-location node))
      ctx))
 
   (:method ((node node-while-let) ctx)
@@ -309,7 +309,7 @@
         :pattern (rename-variables-generic% (node-while-let-pattern node) new-ctx)
         :expr (rename-variables-generic% (node-while-let-expr node) ctx)
         :body (rename-variables-generic% (node-while-let-body node) new-ctx)
-        :source (node-source node))
+        :location (node-location node))
        new-ctx)))
 
   (:method ((node node-for) ctx)
@@ -330,7 +330,7 @@
         :pattern (rename-variables-generic% (node-for-pattern node) new-ctx)
         :expr (rename-variables-generic% (node-for-expr node) ctx)
         :body (rename-variables-generic% (node-for-body node) new-ctx)
-        :source (node-source node))
+        :location (node-location node))
        new-ctx)))
 
   (:method ((node node-loop) ctx)
@@ -338,7 +338,7 @@
              (values node algo:immutable-map))
     (values
      (make-node-loop
-      :source (node-source node)
+      :location (node-location node)
       :label (node-loop-label node)
       :body (rename-variables-generic% (node-loop-body node) ctx))
      ctx))
@@ -365,7 +365,7 @@
      (make-node-unless
       :expr (rename-variables-generic% (node-unless-expr node) ctx)
       :body (rename-variables-generic% (node-unless-body node) ctx)
-      :source (node-source node))
+      :location (node-location node))
      ctx))
 
   (:method ((node node-cond-clause) ctx)
@@ -376,7 +376,7 @@
      (make-node-cond-clause
       :expr (rename-variables-generic% (node-cond-clause-expr node) ctx)
       :body (rename-variables-generic% (node-cond-clause-body node) ctx)
-      :source (node-cond-clause-source node))
+      :location (node-cond-clause-location node))
      ctx))
 
   (:method ((node node-cond) ctx)
@@ -386,7 +386,7 @@
     (values
      (make-node-cond
       :clauses (rename-variables-generic% (node-cond-clauses node) ctx)
-      :source (node-source node))
+      :location (node-location node))
      ctx))
 
   (:method ((node node-do-bind) ctx)
@@ -401,7 +401,7 @@
        (make-node-do-bind
         :pattern (rename-variables-generic% (node-do-bind-pattern node) new-ctx)
         :expr (rename-variables-generic% (node-do-bind-expr node) ctx)
-        :source (node-do-bind-source node))
+        :location (node-do-bind-location node))
        new-ctx)))
 
   (:method ((node node-do) ctx)
@@ -417,7 +417,7 @@
                                 (setf new-ctx new-ctx_)
                                 elem))
         :last-node (rename-variables-generic% (node-do-last-node node) new-ctx)
-        :source (node-source node))
+        :location (node-location node))
        ctx)))
 
   (:method ((pattern pattern-var) ctx)
@@ -430,7 +430,7 @@
            (make-pattern-var
             :name new-name
             :orig-name (pattern-var-orig-name pattern)
-            :source (pattern-source pattern))
+            :location (pattern-location pattern))
            pattern)
        ctx)))
 
@@ -454,7 +454,7 @@
      (make-pattern-constructor
       :name (pattern-constructor-name pattern)
       :patterns (rename-variables-generic% (pattern-constructor-patterns pattern) ctx)
-      :source (pattern-source pattern))
+      :location (pattern-location pattern))
      ctx))
 
   (:method ((toplevel toplevel-define) ctx)
@@ -472,7 +472,7 @@
         :orig-params (toplevel-define-orig-params toplevel)
         :docstring (toplevel-define-docstring toplevel)
         :body (rename-variables-generic% (toplevel-define-body toplevel) new-ctx)
-        :source (toplevel-define-source toplevel)
+        :location (toplevel-define-location toplevel)
         :monomorphize (toplevel-define-monomorphize toplevel))
        ctx)))
 
@@ -489,7 +489,7 @@
         :name (instance-method-definition-name method)
         :params (rename-variables-generic% (instance-method-definition-params method) new-ctx)
         :body (rename-variables-generic% (instance-method-definition-body method) new-ctx)
-        :source (instance-method-definition-source method))
+        :location (instance-method-definition-location method))
        ctx)))
 
   (:method ((toplevel toplevel-define-instance) ctx)
@@ -501,8 +501,8 @@
       :context (toplevel-define-instance-context toplevel)
       :pred (toplevel-define-instance-pred toplevel)
       :methods (rename-variables-generic% (toplevel-define-instance-methods toplevel) ctx)
-      :source (toplevel-define-instance-source toplevel)
-      :head-src (toplevel-define-instance-head-src toplevel)
+      :location (toplevel-define-instance-location toplevel)
+      :head-location (toplevel-define-instance-head-location toplevel)
       :docstring (toplevel-define-instance-docstring toplevel)
       :compiler-generated (toplevel-define-instance-compiler-generated toplevel))
      ctx))
@@ -514,7 +514,6 @@
     (values
      (make-program
       :package (program-package program)
-      :file (program-file program)
       :types (rename-type-variables (program-types program))
       :structs (rename-type-variables (program-structs program))
       :declares (program-declares program)
@@ -551,7 +550,7 @@
       (if new-name
           (make-tyvar
            :name new-name
-           :source (ty-source ty))
+           :location (ty-location ty))
           ty)))
 
   (:method ((ty tycon) ctx)
@@ -567,7 +566,7 @@
     (make-tapp
      :from (rename-type-variables-generic% (tapp-from ty) ctx)
      :to (rename-type-variables-generic% (tapp-to ty) ctx)
-     :source (ty-source ty)))
+     :location (ty-location ty)))
 
   (:method ((pred ty-predicate) ctx)
     (declare (type algo:immutable-map ctx)
@@ -576,16 +575,16 @@
     (make-ty-predicate
      :class (ty-predicate-class pred)
      :types (rename-type-variables-generic% (ty-predicate-types pred) ctx)
-     :source (ty-predicate-source pred)))
+     :location (ty-predicate-location pred)))
 
   (:method ((qual-ty qualified-ty) ctx)
     (declare (type algo:immutable-map ctx)
              (values qualified-ty))
 
     (make-qualified-ty
-     :predicates (rename-type-variables-generic% (qualified-ty-predicates qual-ty) ctx) 
+     :predicates (rename-type-variables-generic% (qualified-ty-predicates qual-ty) ctx)
      :type (rename-type-variables-generic% (qualified-ty-type qual-ty) ctx)
-     :source (qualified-ty-source qual-ty)))
+     :location (qualified-ty-location qual-ty)))
 
   (:method ((ctor constructor) ctx)
     (declare (type algo:immutable-map ctx)
@@ -593,7 +592,7 @@
     (make-constructor
      :name (constructor-name ctor)
      :fields (rename-type-variables-generic% (constructor-fields ctor) ctx)
-     :source (constructor-source ctor)))
+     :location (constructor-location ctor)))
 
   (:method ((keyword keyword-src) ctx)
     (declare (type algo:immutable-map ctx)
@@ -604,7 +603,7 @@
       (if new-name
           (make-keyword-src
            :name new-name
-           :source (keyword-src-source keyword))
+           :location (keyword-src-location keyword))
           keyword)))
 
   (:method ((toplevel toplevel-define-type) ctx)
@@ -622,9 +621,9 @@
        :vars (rename-type-variables-generic% (toplevel-define-type-vars toplevel) new-ctx)
        :docstring (toplevel-define-type-docstring toplevel)
        :ctors (rename-type-variables-generic% (toplevel-define-type-ctors toplevel) new-ctx)
-       :source (toplevel-define-type-source toplevel)
+       :location (toplevel-define-type-location toplevel)
        :repr (toplevel-define-type-repr toplevel)
-       :head-src (toplevel-define-type-head-src toplevel))))
+       :head-location (toplevel-define-type-head-location toplevel))))
 
   (:method ((field struct-field) ctx)
     (declare (type algo:immutable-map ctx)
@@ -634,7 +633,7 @@
      :name (struct-field-name field)
      :type (rename-type-variables-generic% (struct-field-type field) ctx)
      :docstring (struct-field-docstring field)
-     :source (struct-field-source field)))
+     :location (struct-field-location field)))
 
   (:method ((toplevel toplevel-define-struct) ctx)
     (declare (type algo:immutable-map ctx)
@@ -651,9 +650,9 @@
        :vars (rename-type-variables-generic% (toplevel-define-struct-vars toplevel) new-ctx)
        :docstring (toplevel-define-struct-docstring toplevel)
        :fields (rename-type-variables-generic% (toplevel-define-struct-fields toplevel) new-ctx)
-       :source (toplevel-define-struct-source toplevel)
+       :location (toplevel-define-struct-location toplevel)
        :repr (toplevel-define-struct-repr toplevel)
-       :head-src (toplevel-define-struct-head-src toplevel))))
+       :head-location (toplevel-define-struct-head-location toplevel))))
 
   (:method ((fundep fundep) ctx)
     (declare (type algo:immutable-map ctx)
@@ -662,7 +661,7 @@
     (make-fundep
      :left (rename-type-variables-generic% (fundep-left fundep) ctx)
      :right (rename-type-variables-generic% (fundep-right fundep) ctx)
-     :source (fundep-source fundep)))
+     :location (fundep-location fundep)))
 
   (:method ((method method-definition) ctx)
     (declare (type algo:immutable-map ctx)
@@ -682,7 +681,7 @@
        :name (method-definition-name method)
        :type (rename-type-variables-generic% (method-definition-type method) new-ctx)
        :docstring (method-definition-docstring method)
-       :source (method-definition-source method))))
+       :location (method-definition-location method))))
 
   (:method ((toplevel toplevel-define-class) ctx)
     (declare (type algo:immutable-map ctx)
@@ -701,8 +700,8 @@
        :fundeps (rename-type-variables-generic% (toplevel-define-class-fundeps toplevel) new-ctx)
        :docstring (toplevel-define-class-docstring toplevel)
        :methods (rename-type-variables-generic% (toplevel-define-class-methods toplevel) new-ctx)
-       :source (toplevel-define-class-source toplevel)
-       :head-src (toplevel-define-class-head-src toplevel))))
+       :location (toplevel-define-class-location toplevel)
+       :head-location (toplevel-define-class-head-location toplevel))))
 
   (:method ((list list) ctx)
     (mapcar

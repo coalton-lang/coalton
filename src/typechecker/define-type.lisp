@@ -7,6 +7,8 @@
 (defpackage #:coalton-impl/typechecker/define-type
   (:use
    #:cl
+   #:coalton-impl/source
+   #:coalton-impl/typechecker/base
    #:coalton-impl/typechecker/parse-type
    #:coalton-impl/typechecker/partial-type-env)
   (:import-from
@@ -52,12 +54,12 @@
   (constructor-args  (util:required 'constructor-args)  :type list                      :read-only t)
 
   (docstring         (util:required 'docstring)         :type (or null string)          :read-only t)
-  (source            (util:required 'source)            :type cons                      :read-only t))
+  (location            (util:required 'location)            :type location                      :read-only t))
 
 (defstruct field-definition
   (name   (util:required 'name)   :type symbol :read-only t)
   (type   (util:required 'type)   :type tc:ty  :read-only t)
-  (source (util:required 'source) :type cons   :read-only t))
+  (location (util:required 'location) :type location   :read-only t))
 
 (defun type-definition-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -66,45 +68,43 @@
 (deftype type-definition-list ()
   '(satisfies type-definition-list-p))
 
-(defun toplevel-define-type (types structs file env)
+(defun toplevel-define-type (types structs env)
   (declare (type parser:toplevel-define-type-list types)
            (type parser:toplevel-define-struct-list structs)
-           (type se:file file)
            (type tc:environment env)
            (values type-definition-list parser:toplevel-define-instance-list tc:environment))
 
   ;; Ensure that all types are defined in the current package
-  (check-package
-   (append types structs)
-   (alexandria:compose #'parser:identifier-src-name #'parser:type-definition-name)
-   (alexandria:compose #'parser:identifier-src-source #'parser:type-definition-name)
-   file)
+  (check-package (append types structs)
+                 (alexandria:compose #'parser:identifier-src-name
+                                     #'parser:type-definition-name)
+                 (alexandria:compose #'parser:identifier-src-location
+                                     #'parser:type-definition-name))
 
   ;; Ensure that all constructors are defined in the current package
-  (check-package
-   (mapcan (alexandria:compose #'copy-list #'parser:toplevel-define-type-ctors) types)
-   (alexandria:compose #'parser:identifier-src-name #'parser:constructor-name)
-   (alexandria:compose #'parser:identifier-src-source #'parser:constructor-name)
-   file)
+  (check-package (mapcan (alexandria:compose #'copy-list #'parser:toplevel-define-type-ctors)
+                         types)
+                 (alexandria:compose #'parser:identifier-src-name
+                                     #'parser:constructor-name)
+                 (alexandria:compose #'parser:identifier-src-location
+                                     #'parser:constructor-name))
 
   ;; Ensure that there are no duplicate type definitions
   (check-duplicates
    (append types structs)
    (alexandria:compose #'parser:identifier-src-name #'parser:type-definition-name)
-   #'parser:type-definition-source
+   #'parser:type-definition-location
    (lambda (first second)
      (error 'tc:tc-error
-            :err (se:source-error
-                  :span (parser:type-definition-source first)
-                  :file file
+            :err (source-error
+                  :location (parser:type-definition-location first)
                   :message "Duplicate type definitions"
                   :primary-note "first definition here"
-                  :notes
-                  (list
-                   (se:make-source-error-note
-                    :type :primary
-                    :span (parser:type-definition-source second)
-                    :message "second definition here"))))))
+                  :notes (list (se:make-source-error-note
+                                :type :primary
+                                :span (location-span
+                                       (parser:type-definition-location second))
+                                :message "second definition here"))))))
 
   ;; Ensure that there are no duplicate constructors
   ;; NOTE: structs define a constructor with the same name
@@ -112,37 +112,34 @@
    (mapcan (alexandria:compose #'copy-list #'parser:type-definition-ctors)
            (append types structs))
    (alexandria:compose #'parser:identifier-src-name #'parser:type-definition-ctor-name)
-   #'parser:type-definition-ctor-source
+   #'parser:type-definition-ctor-location
    (lambda (first second)
      (error 'tc:tc-error
-            :err (se:source-error
-                  :span (parser:type-definition-ctor-source first)
-                  :file file
+            :err (source-error
+                  :location (parser:type-definition-ctor-location first)
                   :message "Duplicate constructor definitions"
                   :primary-note "first definition here"
-                  :notes
-                  (list (se:make-source-error-note
-                         :type :primary
-                         :span (parser:type-definition-ctor-source second)
-                         :message "second definition here"))))))
+                  :notes (list (se:make-source-error-note
+                                :type :primary
+                                :span (location-span (parser:type-definition-ctor-location second))
+                                :message "second definition here"))))))
 
   ;; Ensure that no type has duplicate type variables
   (loop :for type :in (append types structs)
         :do (check-duplicates
              (parser:type-definition-vars type)
              #'parser:keyword-src-name
-             #'parser:keyword-src-source
+             #'parser:keyword-src-location
              (lambda (first second)
                (error 'tc:tc-error
-                      :err (se:source-error
-                            :span (parser:keyword-src-source first)
-                            :file file
+                      :err (source-error
+                            :location (parser:keyword-src-location first)
                             :message "Duplicate type variable definitions"
                             :primary-note "first definition here"
                             :notes
                             (list (se:make-source-error-note
                                    :type :primary
-                                   :span (parser:keyword-src-source second)
+                                   :span (location-span (parser:keyword-src-location second))
                                    :message "second definition here")))))))
 
   (let* ((type-names (mapcar (alexandria:compose #'parser:identifier-src-name
@@ -193,7 +190,7 @@
                      :do (partial-type-env-add-type partial-env name ty))
 
            :append  (multiple-value-bind (type-definitions instances_ ksubs)
-                        (infer-define-type-scc-kinds scc partial-env file)
+                        (infer-define-type-scc-kinds scc partial-env)
                       (setf instances (append instances instances_))
                       (loop :for type :in type-definitions
 
@@ -266,7 +263,7 @@
           :enum-repr (type-definition-enum-repr type)
           :newtype (type-definition-newtype type)
           :docstring (type-definition-docstring type)
-          :location (or *compile-file-pathname* *load-truename*))))
+          :location (parser:type-definition-location parsed-type))))
 
   ;; Define the type's constructors in the environment
   (loop :for ctor :in (type-definition-constructors type)
@@ -288,8 +285,7 @@
                       :name ctor-name
                       :type :constructor
                       :docstring nil
-                      :location (or *compile-file-pathname*
-                                    *load-truename*))))
+                      :location (parser:type-definition-location parsed-type))))
 
           ;; If the constructor takes parameters then
           ;; add it to the function environment
@@ -309,10 +305,10 @@
 
   env)
 
-(defun infer-define-type-scc-kinds (types env file)
+
+(defun infer-define-type-scc-kinds (types env)
   (declare (type parser:type-definition-list types)
            (type partial-type-env env)
-           (type se:file file)
            (values type-definition-list parser:toplevel-define-instance-list))
 
   (let ((ksubs nil)
@@ -326,11 +322,11 @@
                     :for ctor-name := (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
                     :for fields := (loop :for field :in (parser:type-definition-ctor-field-types ctor)
                                          :collect (multiple-value-bind (type ksubs_)
-                                                      (infer-type-kinds field tc:+kstar+ ksubs env file)
+                                                      (infer-type-kinds field tc:+kstar+ ksubs env)
                                                     (setf ksubs ksubs_)
                                                     type))
                     :do (setf (gethash ctor-name ctor-table) fields)))
-    
+
     ;; Redefine types with final inferred kinds in the environment
     (loop :for type :in types
           :for name := (parser:identifier-src-name (parser:type-definition-name type))
@@ -352,8 +348,7 @@
                                       (partial-type-env-lookup-var
                                        env
                                        (parser:keyword-src-name var)
-                                       (parser:keyword-src-source var)
-                                       file))
+                                       (parser:keyword-src-location var)))
                                     (parser:type-definition-vars type)))
 
              :for repr := (parser:type-definition-repr type)
@@ -381,33 +376,23 @@
              :when (eq repr-type :enum)
                :do (loop :for ctor :in (parser:toplevel-define-type-ctors type)
                          :unless (endp (parser:constructor-fields ctor))
-                           :do (error 'tc:tc-error
-                                      :err (se:source-error
-                                            :span (parser:ty-source (first (parser:constructor-fields ctor)))
-                                            :file file
-                                            :message "Invalid repr :enum attribute"
-                                            :primary-note "constructors of repr :enum types cannot have fields")))
+                           :do (tc-error (parser:ty-location (first (parser:constructor-fields ctor)))
+                                         "Invalid repr :enum attribute"
+                                         "constructors of repr :enum types cannot have fields"))
 
                    ;; Check that repr :transparent types have a single constructor
              :when (eq repr-type :transparent)
                :do (unless (= 1 (length (parser:type-definition-ctors type)))
-                     (error 'tc:tc-error
-                            :err (se:source-error
-                                  :span (parser:toplevel-define-type-source type)
-                                  :file file
-                                  :message "Invalid repr :transparent attribute"
-                                  :primary-note "repr :transparent types must have a single constructor")))
+                     (tc-error (parser:toplevel-define-type-location type)
+                               "Invalid repr :transparent attribute"
+                               "repr :transparent types must have a single constructor"))
 
-                   
                    ;; Check that the single constructor of a repr :transparent type has a single field
              :when (eq repr-type :transparent)
                :do (unless (= 1 (length (parser:type-definition-ctor-field-types (first (parser:type-definition-ctors type)))))
-                     (error 'tc:tc-error
-                            :err (se:source-error
-                                  :span (parser:type-definition-ctor-source (first (parser:type-definition-ctors type)))
-                                  :file file
-                                  :message "Invalid repr :transparent attribute"
-                                  :primary-note "constructors of repr :transparent types must have a single field")))
+                     (tc-error (parser:type-definition-ctor-location (first (parser:type-definition-ctors type)))
+                               "Invalid repr :transparent attribute"
+                               "constructors of repr :transparent types must have a single field"))
 
              :collect (let* ((ctors
                                (loop :for ctor :in (parser:type-definition-ctors type)
@@ -457,7 +442,7 @@
                                 :constructor-types constructor-types
                                 :constructor-args constructor-args
                                 :docstring (parser:type-definition-docstring type)
-                                :source (parser:type-definition-source type)))
+                                :location (parser:type-definition-location type)))
 
                              (runtime-repr-instance (maybe-runtime-repr-instance type-definition)))
 
@@ -476,28 +461,28 @@
 (defun make-runtime-repr-instance (type)
   (declare (type type-definition type))
 
-  (let* ((source (type-definition-source type))
-
-         (types-package (util:find-package "COALTON-LIBRARY/TYPES"))
-
-         (runtime-repr (util:find-symbol "RUNTIMEREPR" types-package))
-
-         (runtime-repr-method (util:find-symbol "RUNTIME-REPR" types-package))
-
-         (lisp-type (util:find-symbol "LISPTYPE" types-package))
-
-         (tvars (loop :for i :below (tc:kind-arity (tc:tycon-kind (type-definition-type type)))
-                      :collect (parser:make-tyvar
-                                :source source
-                                :name (alexandria:format-symbol util:+keyword-package+ "~d" i))))
-
-         (ty (parser:make-tycon
-              :source source
-              :name (type-definition-name type))))
+  (let* ((location
+           (type-definition-location type))
+         (types-package
+           (util:find-package "COALTON-LIBRARY/TYPES"))
+         (runtime-repr
+           (util:find-symbol "RUNTIMEREPR" types-package))
+         (runtime-repr-method
+           (util:find-symbol "RUNTIME-REPR" types-package))
+         (lisp-type
+           (util:find-symbol "LISPTYPE" types-package))
+         (tvars
+           (loop :for i :below (tc:kind-arity (tc:tycon-kind (type-definition-type type)))
+                 :collect (parser:make-tyvar
+                           :location location
+                           :name (alexandria:format-symbol util:+keyword-package+ "~d" i))))
+         (ty
+           (parser:make-tycon :location location
+                              :name (type-definition-name type))))
 
     (loop :for tvar :in tvars
           :do (setf ty (parser:make-tapp
-                        :source source
+                        :location location
                         :from ty
                         :to tvar)))
 
@@ -506,29 +491,29 @@
      :pred (parser:make-ty-predicate
             :class (parser:make-identifier-src
                     :name runtime-repr
-                    :source source)
+                    :location location)
             :types (list ty)
-            :source source)
+            :location location)
      :docstring nil
      :methods (list
                (parser:make-instance-method-definition
                 :name (parser:make-node-variable
-                       :source source
+                       :location location
                        :name runtime-repr-method)
                 :params (list
                          (parser:make-pattern-wildcard
-                          :source source))
+                          :location location))
                 :body (parser:make-node-body
                        :nodes nil
                        :last-node (parser:make-node-lisp
-                                   :source source
+                                   :location location
                                    :type (parser:make-tycon
-                                          :source source
+                                          :location location
                                           :name lisp-type)
                                    :vars nil
                                    :var-names nil
                                    :body (list (util:runtime-quote (type-definition-runtime-type type)))))
-                :source source))
-     :source source
-     :head-src source
+                :location location))
+     :location location
+     :head-location location
      :compiler-generated t)))

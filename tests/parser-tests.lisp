@@ -8,24 +8,18 @@
                files))
 
            (parse-file (file)
-             (with-open-file (stream file
-                                     :direction :input
-                                     :element-type 'character
-                                     :external-format :utf-8)
-               (let ((stream (stream:make-char-position-stream stream)))
+             (let ((source (source:make-source-file file :name "test")))
+               (with-open-stream (stream (source-error:source-stream source))
                  (parser:with-reader-context stream
-                   (parser:read-program stream (se:make-file :stream stream :name (namestring file)) ':file)))))
+                   (parser:read-program stream source ':file)))))
 
            (parse-error-text (file)
-             (with-open-file (stream file
-                                     :direction :input
-                                     :element-type 'character
-                                     :external-format :utf-8)
-               (let ((stream (stream:make-char-position-stream stream)))
+             (let ((source (source:make-source-file file :name "test")))
+               (with-open-stream (stream (source-error:source-stream source))
                  (handler-case
                      (parser:with-reader-context stream
                        (entry:entry-point
-                        (parser:read-program stream (se:make-file :stream stream :name "test") ':file))
+                        (parser:read-program stream source ':file))
                        "no errors")
                    (se:source-base-error (c)
                      (princ-to-string c)))))))

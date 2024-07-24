@@ -26,8 +26,7 @@
    (useful-pattern-clause-p
     (mapcar #'list patterns)
     (list (tc:make-pattern-wildcard
-           :type (tc:qualify nil (tc:make-variable))
-           :source (cons nil nil)))
+           :type (tc:qualify nil (tc:make-variable))))
     env)))
 
 (defun useful-pattern-p (patterns pattern env)
@@ -160,8 +159,7 @@ CLAUSE is a list representing a row-vector of patterns."
                      (tc:pattern-constructor
                       (list (append (mapcar (lambda (pattern)
                                               (tc:make-pattern-wildcard
-                                               :type (tc:pattern-type pattern)
-                                               :source (cons nil nil)))
+                                               :type (tc:pattern-type pattern)))
                                             (tc:pattern-constructor-patterns pattern))
                                     (rest row))))))
                   (t
@@ -218,8 +216,7 @@ CLAUSE is a list representing a row-vector of patterns."
     ((and (zerop (length pattern-matrix)))
      (loop :for i :below n
            :collect (tc:make-pattern-wildcard
-                     :type (tc:qualify nil (tc:make-variable))
-                     :source (cons nil nil))))
+                     :type (tc:qualify nil (tc:make-variable)))))
     ;; Zero wildcards with a pattern matrix that has zero columns indicates the matrix is exhaustive.
     ((and (zerop n)
           (zerop (length (first pattern-matrix))))
@@ -244,7 +241,6 @@ CLAUSE is a list representing a row-vector of patterns."
                 :unless (eq val t)
                   :do (return (cons (tc:make-pattern-constructor
                                      :type (tc:pattern-type ctor)
-                                     :source (cons nil nil)
                                      :name (tc:pattern-constructor-name ctor)
                                      :patterns (subseq val 0 ctor-arity))
                                     (subseq val ctor-arity (+ ctor-arity n -1))))
@@ -262,8 +258,7 @@ CLAUSE is a list representing a row-vector of patterns."
               ;; If there are no constructors then emit a wildcard.
               ((null first-column-constructors)
                (cons (tc:make-pattern-wildcard
-                      :type (tc:qualify nil (tc:make-variable))
-                      :source (cons nil nil))
+                      :type (tc:qualify nil (tc:make-variable)))
                      val))
               ;; Or emit a constructor which was not named in this pattern.
               (t
@@ -288,9 +283,7 @@ CLAUSE is a list representing a row-vector of patterns."
     ;; the error generation. Instead we just select the first one.
     (tc:make-pattern-constructor
      :type (tc:pattern-type (first patterns))
-     :source (cons nil nil)
      :name unnamed-constructor
      :patterns (loop :for i :below (tc:constructor-entry-arity unnamed-constructor-entry)
                      :collect (tc:make-pattern-wildcard
-                               :type (tc:qualify nil (tc:make-variable))
-                               :source (cons nil nil))))))
+                               :type (tc:qualify nil (tc:make-variable)))))))

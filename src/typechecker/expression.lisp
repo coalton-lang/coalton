@@ -9,12 +9,13 @@
    #:coalton-impl/typechecker/pattern)
   (:local-nicknames
    (#:parser #:coalton-impl/parser)
+   (#:source #:coalton-impl/source)
    (#:tc #:coalton-impl/typechecker/stage-1)
    (#:util #:coalton-impl/util))
   (:export
    #:node                               ; STRUCT
    #:node-type                          ; ACCESSOR
-   #:node-source                        ; ACCESSOR
+   #:node-location                        ; ACCESSOR
    #:node-list                          ; TYPE
    #:node-variable                      ; STRUCT
    #:make-node-variable                 ; CONSTRUCTOR
@@ -33,7 +34,7 @@
    #:make-node-bind                     ; CONSTRUCTOR
    #:node-bind-pattern                  ; ACCESSOR
    #:node-bind-expr                     ; ACCESSOR
-   #:node-bind-source                   ; ACCESSOR
+   #:node-bind-location                   ; ACCESSOR
    #:node-body-element                  ; TYPE
    #:node-body-element-list             ; TYPE
    #:node-body                          ; STRUCT
@@ -49,13 +50,13 @@
    #:make-node-let-binding              ; CONSTRUCTOR
    #:node-let-binding-name              ; ACCESSOR
    #:node-let-binding-value             ; ACCESSOR
-   #:node-let-binding-source            ; ACCESSOR
+   #:node-let-binding-location            ; ACCESSOR
    #:node-let-binding-list              ; TYPE
    #:node-let-declare                   ; STRUCT
    #:make-node-let-declare              ; CONSTRUCTOR
    #:node-let-declare-name              ; ACCESSOR
    #:node-let-declare-type              ; ACCESSOR
-   #:node-let-declare-source            ; ACCESSOR
+   #:node-let-declare-location            ; ACCESSOR
    #:node-let-declare-list              ; TYPE
    #:node-let                           ; STRUCT
    #:make-node-let                      ; CONSTRUCTOR
@@ -72,7 +73,7 @@
    #:make-node-match-branch             ; CONSTRUCTOR
    #:node-match-branch-pattern          ; ACCESSOR
    #:node-match-branch-body             ; ACCESSOR
-   #:node-match-branch-source           ; ACCESSOR
+   #:node-match-branch-location           ; ACCESSOR
    #:node-match-branch-list             ; TYPE
    #:node-match                         ; STRUCT
    #:make-node-match                    ; CONSTRUCTOR
@@ -142,7 +143,7 @@
    #:make-node-cond-clause              ; CONSTRUCTOR
    #:node-cond-clause-expr              ; ACCESSOR
    #:node-cond-clause-body              ; ACCESSOR
-   #:node-cond-clause-source            ; ACCESSOR
+   #:node-cond-clause-location            ; ACCESSOR
    #:node-cond-clause-list              ; TYPE
    #:node-cond                          ; STRUCT
    #:make-node-cond                     ; CONSTRUCTOR
@@ -151,7 +152,7 @@
    #:make-node-do-bind                  ; CONSTRUCTOR
    #:node-do-bind-pattern               ; ACCESSOR
    #:node-do-bind-expr                  ; ACCESSOR
-   #:node-do-bind-source                ; ACCESSOR
+   #:node-do-bind-location                ; ACCESSOR
    #:node-do-body-element               ; TYPE
    #:node-body-element-list             ; TYPE
    #:node-do                            ; STRUCT
@@ -170,7 +171,7 @@
             (:constructor nil)
             (:copier nil))
   (type   (util:required 'type)   :type tc:qualified-ty :read-only t)
-  (source (util:required 'source) :type cons            :read-only t))
+  (location (util:required 'location) :type source:location            :read-only t))
 
 (defun node-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -210,7 +211,7 @@
             (:copier nil))
   (pattern (util:required 'pattern) :type pattern :read-only t)
   (expr    (util:required 'expr)    :type node    :read-only t)
-  (source  (util:required 'source)  :type cons    :read-only t))
+  (location  (util:required 'location)  :type source:location    :read-only t))
 
 (deftype node-body-element ()
   '(or node node-bind))
@@ -240,7 +241,7 @@
             (:copier nil))
   (name   (util:required 'name)   :type node-variable :read-only t)
   (value  (util:required 'value)  :type node          :read-only t)
-  (source (util:required 'source) :type cons          :read-only t))
+  (location (util:required 'location) :type source:location          :read-only t))
 
 (defun node-let-binding-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -266,7 +267,7 @@
             (:copier nil))
   (pattern    (util:required 'pattern) :type pattern   :read-only t)
   (body       (util:required 'body)    :type node-body :read-only t)
-  (source     (util:required 'source)  :type cons      :read-only t))
+  (location     (util:required 'location)  :type source:location      :read-only t))
 
 (defun node-match-branch-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -372,7 +373,7 @@
             (:copier nil))
   (expr   (util:required 'expr)   :type node      :read-only t)
   (body   (util:required 'body)   :type node-body :read-only t)
-  (source (util:required 'source) :type cons      :read-only t))
+  (location (util:required 'location) :type source:location      :read-only t))
 
 (defun node-cond-clause-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -390,7 +391,7 @@
             (:copier nil))
   (pattern (util:required 'pattern) :type pattern :read-only t)
   (expr    (util:required 'expr)    :type node    :read-only t)
-  (source  (util:required 'source)  :type cons    :read-only t))
+  (location  (util:required 'location)  :type source:location    :read-only t))
 
 (deftype node-do-body-element ()
   '(or node node-bind node-do-bind))
@@ -420,7 +421,7 @@
            (values node-variable))
   (make-node-variable
    :type (tc:apply-substitution subs (node-type node))
-   :source (node-source node)
+   :location (node-location node)
    :name (node-variable-name node)))
 
 (defmethod tc:apply-substitution (subs (node node-accessor))
@@ -428,7 +429,7 @@
            (values node-accessor))
   (make-node-accessor
    :type (tc:apply-substitution subs (node-type node))
-   :source (node-source node)
+   :location (node-location node)
    :name (node-accessor-name node)))
 
 (defmethod tc:apply-substitution (subs (node node-literal))
@@ -436,7 +437,7 @@
            (values node-literal))
   (make-node-literal
    :type (tc:apply-substitution subs (node-type node))
-   :source (node-source node)
+   :location (node-location node)
    :value (node-literal-value node)))
 
 (defmethod tc:apply-substitution (subs (node node-integer-literal))
@@ -444,7 +445,7 @@
            (values node-integer-literal))
   (make-node-integer-literal
    :type (tc:apply-substitution subs (node-type node))
-   :source (node-source node)
+   :location (node-location node)
    :value (node-integer-literal-value node)))
 
 (defmethod tc:apply-substitution (subs (node node-bind))
@@ -453,7 +454,7 @@
   (make-node-bind
    :pattern (tc:apply-substitution subs (node-bind-pattern node))
    :expr (tc:apply-substitution subs (node-bind-expr node))
-   :source (node-bind-source node)))
+   :location (node-bind-location node)))
 
 (defmethod tc:apply-substitution (subs (node node-body))
   (declare (type tc:substitution-list subs)
@@ -467,7 +468,7 @@
            (values node-abstraction))
   (make-node-abstraction
    :type (tc:apply-substitution subs (node-type node))
-   :source (node-source node)
+   :location (node-location node)
    :params (tc:apply-substitution subs (node-abstraction-params node))
    :body (tc:apply-substitution subs (node-abstraction-body node))))
 
@@ -477,14 +478,14 @@
   (make-node-let-binding
    :name (tc:apply-substitution subs (node-let-binding-name node))
    :value (tc:apply-substitution subs (node-let-binding-value node))
-   :source (node-let-binding-source node)))
+   :location (node-let-binding-location node)))
 
 (defmethod tc:apply-substitution (subs (node node-let))
   (declare (type tc:substitution-list subs)
            (values node-let))
   (make-node-let
    :type (tc:apply-substitution subs (node-type node))
-   :source (node-source node)
+   :location (node-location node)
    :bindings (tc:apply-substitution subs (node-let-bindings node))
    :body (tc:apply-substitution subs (node-let-body node))))
 
@@ -493,7 +494,7 @@
            (values node-lisp))
   (make-node-lisp
    :type (tc:apply-substitution subs (node-type node))
-   :source (node-source node)
+   :location (node-location node)
    :vars (tc:apply-substitution subs (node-lisp-vars node))
    :var-names (node-lisp-var-names node)
    :body (node-lisp-body node)))
@@ -504,14 +505,14 @@
   (make-node-match-branch
    :pattern (tc:apply-substitution subs (node-match-branch-pattern node))
    :body (tc:apply-substitution subs (node-match-branch-body node))
-   :source (node-match-branch-source node)))
+   :location (node-match-branch-location node)))
 
 (defmethod tc:apply-substitution (subs (node node-match))
   (declare (type tc:substitution-list subs)
            (values node-match))
   (make-node-match
    :type (tc:apply-substitution subs (node-type node))
-   :source (node-source node)
+   :location (node-location node)
    :expr (tc:apply-substitution subs (node-match-expr node))
    :branches (tc:apply-substitution subs (node-match-branches node))))
 
@@ -520,7 +521,7 @@
            (values node-progn))
   (make-node-progn
    :type (tc:apply-substitution subs (node-type node))
-   :source (node-source node)
+   :location (node-location node)
    :body (tc:apply-substitution subs (node-progn-body node))))
 
 (defmethod tc:apply-substitution (subs (node node-return))
@@ -528,7 +529,7 @@
            (values node-return))
   (make-node-return
    :type (tc:apply-substitution subs (node-type node))
-   :source (node-source node)
+   :location (node-location node)
    :expr (tc:apply-substitution subs (node-return-expr node))))
 
 (defmethod tc:apply-substitution (subs (node node-application))
@@ -536,7 +537,7 @@
            (values node-application))
   (make-node-application
    :type (tc:apply-substitution subs (node-type node))
-   :source (node-source node)
+   :location (node-location node)
    :rator (tc:apply-substitution subs (node-application-rator node))
    :rands (tc:apply-substitution subs (node-application-rands node))))
 
@@ -545,7 +546,7 @@
            (values node-or))
   (make-node-or
    :type (tc:apply-substitution subs (node-type node))
-   :source (node-source node)
+   :location (node-location node)
    :nodes (tc:apply-substitution subs (node-or-nodes node))))
 
 (defmethod tc:apply-substitution (subs (node node-and))
@@ -553,7 +554,7 @@
            (values node-and))
   (make-node-and
    :type (tc:apply-substitution subs (node-type node))
-   :source (node-source node)
+   :location (node-location node)
    :nodes (tc:apply-substitution subs (node-and-nodes node))))
 
 (defmethod tc:apply-substitution (subs (node node-if))
@@ -561,7 +562,7 @@
            (values node-if))
   (make-node-if
    :type (tc:apply-substitution subs (node-type node))
-   :source (node-source node)
+   :location (node-location node)
    :expr (tc:apply-substitution subs (node-if-expr node))
    :then (tc:apply-substitution subs (node-if-then node))
    :else (tc:apply-substitution subs (node-if-else node))))
@@ -571,7 +572,7 @@
            (values node-when))
   (make-node-when
    :type (tc:apply-substitution subs (node-type node))
-   :source (node-source node)
+   :location (node-location node)
    :expr (tc:apply-substitution subs (node-when-expr node))
    :body (tc:apply-substitution subs (node-when-body node))))
 
@@ -580,7 +581,7 @@
            (values node-unless))
   (make-node-unless
    :type (tc:apply-substitution subs (node-type node))
-   :source (node-source node)
+   :location (node-location node)
    :expr (tc:apply-substitution subs (node-unless-expr node))
    :body (tc:apply-substitution subs (node-unless-body node))))
 
@@ -589,7 +590,7 @@
            (values node-while))
   (make-node-while
    :type (tc:apply-substitution subs (node-type node))
-   :source (node-source node)
+   :location (node-location node)
    :label (node-while-label node)
    :expr (tc:apply-substitution subs (node-while-expr node))
    :body (tc:apply-substitution subs (node-while-body node))))
@@ -599,7 +600,7 @@
            (values node-while-let))
   (make-node-while-let
    :type (tc:apply-substitution subs (node-type node))
-   :source (node-source node)
+   :location (node-location node)
    :label (node-while-let-label node)
    :pattern (tc:apply-substitution subs (node-while-let-pattern node))
    :expr (tc:apply-substitution subs (node-while-let-expr node))
@@ -610,7 +611,7 @@
            (values node-for))
   (make-node-for
    :type (tc:apply-substitution subs (node-type node))
-   :source (node-source node)
+   :location (node-location node)
    :label (node-for-label node)
    :pattern (tc:apply-substitution subs (node-for-pattern node))
    :expr (tc:apply-substitution subs (node-for-expr node))
@@ -621,7 +622,7 @@
            (values node-loop))
   (make-node-loop
    :type (tc:apply-substitution subs (node-type node))
-   :source (node-source node)
+   :location (node-location node)
    :label (node-loop-label node)
    :body (tc:apply-substitution subs (node-loop-body node))))
 
@@ -641,14 +642,14 @@
   (make-node-cond-clause
    :expr (tc:apply-substitution subs (node-cond-clause-expr node))
    :body (tc:apply-substitution subs (node-cond-clause-body node))
-   :source (node-cond-clause-source node)))
+   :location (node-cond-clause-location node)))
 
 (defmethod tc:apply-substitution (subs (node node-cond))
   (declare (type tc:substitution-list subs)
            (values node-cond))
   (make-node-cond
    :type (tc:apply-substitution subs (node-type node))
-   :source (node-source node)
+   :location (node-location node)
    :clauses (tc:apply-substitution subs (node-cond-clauses node))))
 
 (defmethod tc:apply-substitution (subs (node node-do-bind))
@@ -657,14 +658,13 @@
   (make-node-do-bind
    :pattern (tc:apply-substitution subs (node-do-bind-pattern node))
    :expr (tc:apply-substitution subs (node-do-bind-expr node))
-   :source (node-do-bind-source node)))
+   :location (node-do-bind-location node)))
 
 (defmethod tc:apply-substitution (subs (node node-do))
   (declare (type tc:substitution-list subs)
            (values node-do))
   (make-node-do
    :type (tc:apply-substitution subs (node-type node))
-   :source (node-source node)
+   :location (node-location node)
    :nodes (tc:apply-substitution subs (node-do-nodes node))
    :last-node (tc:apply-substitution subs (node-do-last-node node))))
-

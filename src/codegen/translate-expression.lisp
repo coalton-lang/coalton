@@ -681,7 +681,7 @@ Returns a `node'.")
              (tc:make-ty-predicate
               :class intoiter-class
               :types (list into-iter-arg-ty pat-arg-ty)
-              :source (tc:node-source expr)))
+              :location (tc:node-location expr)))
 
            (into-iter-node
              (make-node-application
@@ -806,7 +806,7 @@ Returns a `node'.")
            (pred (tc:make-ty-predicate
                   :class monad-symbol
                   :types (list m-type)
-                  :source (tc:node-source node))))
+                  :location (tc:node-location node))))
 
       (loop :with out-node := (translate-expression (tc:node-do-last-node node) ctx env)
 
