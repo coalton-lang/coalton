@@ -24,14 +24,14 @@ docs:
 	sbcl --noinform \
 		 --non-interactive \
 		 --eval "(ql:quickload :coalton/doc :silent t)" \
-		 --eval "(coalton-doc:write-stdlib-documentation-to-file \"docs/reference.md\")"
+		 --eval "(coalton/doc:write-stdlib-documentation-to-file \"docs/reference.md\")"
 
 .PHONY: web-docs
 web-docs:
 	sbcl --noinform \
 		 --non-interactive \
 		 --eval "(ql:quickload :coalton/doc :silent t)" \
-		 --eval "(coalton-doc:write-stdlib-documentation-to-file \"../coalton-website/content/reference.md\" :backend :hugo)"
+		 --eval "(coalton/doc:write-stdlib-documentation-to-file \"../coalton-website/content/reference.md\" :backend :hugo)"
 
 
 .PHONY: bench
