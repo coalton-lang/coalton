@@ -137,35 +137,52 @@ Returns a `node'.")
       (assert (null (tc:qualified-ty-predicates qual-ty)))
 
       (let* ((classes-package (util:find-package "COALTON-LIBRARY/CLASSES"))
-
              (num-class (util:find-symbol "NUM" classes-package))
-
              (num-pred (tc:make-ty-predicate :class num-class
                                              :types (list (tc:qualified-ty-type qual-ty))))
-
              (from-int-method (util:find-symbol "FROMINT" classes-package))
-
+             (val (tc:node-integer-literal-value expr))
              (ty (tc:qualified-ty-type qual-ty)))
+        (flet ((make-full-call ()
+                 (make-node-application
+                  :type (tc:qualified-ty-type qual-ty)
+                  :rator (make-node-variable
+                          :type (tc:make-function-type*
+                                 (list
+                                  (pred-type num-pred env)
+                                  tc:*integer-type*)
+                                 (tc:qualified-ty-type qual-ty))
+                          :value from-int-method)
+                  :rands (list
+                          (resolve-dict num-pred ctx env)
+                          (make-node-literal
+                           :type tc:*integer-type*
+                           :value val)))))
 
-        ;; Avoid casting INTEGER to INTEGER with FROMINT at runtime
-        (if (and (tc:tycon-p ty) (eq 'coalton:integer (tc:tycon-name ty)))
-            (make-node-literal
-             :type tc:*integer-type*
-             :value (tc:node-integer-literal-value expr))
-            (make-node-application
-             :type (tc:qualified-ty-type qual-ty)
-             :rator (make-node-variable
-                     :type (tc:make-function-type*
-                            (list
-                             (pred-type num-pred env)
-                             tc:*integer-type*)
-                            (tc:qualified-ty-type qual-ty))
-                     :value from-int-method)
-             :rands (list
-                     (resolve-dict num-pred ctx env)
-                     (make-node-literal
-                      :type tc:*integer-type*
-                      :value (tc:node-integer-literal-value expr))))))))
+          ;; Avoid casting INTEGER literals with FROMINT at runtime
+          ;; when the type is known, We can do that at comptime.  This
+          ;; is a temporary hack to get an easy performance boost but
+          ;; should be solved later with proper constant folding.
+          (if (not (tc:tycon-p ty))
+              (make-full-call)
+              (case (tc:tycon-name ty)
+                (coalton:Integer
+                 (make-node-literal :type tc:*integer-type*
+                                    :value val))
+                (coalton:Ifix
+                 (make-node-literal :type tc:*ifix-type*
+                                    :value val))
+                (coalton:Ufix
+                 (make-node-literal :type tc:*ufix-type*
+                                    :value val))
+                (coalton:Single-Float
+                 (make-node-literal :type tc:*single-float-type*
+                                    :value (coerce val 'single-float)))
+                (coalton:Double-Float
+                 (make-node-literal :type tc:*double-float-type*
+                                    :value (coerce val 'double-float)))
+                (otherwise
+                 (make-full-call))))))))
 
   (:method ((expr tc:node-variable) ctx env)
     (declare (type pred-context ctx)
