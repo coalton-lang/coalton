@@ -4,11 +4,6 @@
   (:local-nicknames
    (#:types #:coalton-library/types))
   (:export
-   #:Addressable #:eq?)
-  (:export
-   #:Eq #:==
-   #:Num #:+ #:- #:* #:fromInt)
-  (:export
    #:Signalable
    #:error
    #:Tuple
@@ -35,8 +30,6 @@
    #:Into
    #:TryInto
    #:Iso
-   #:Signalable
-   #:error
    #:Unwrappable #:unwrap-or-else #:with-default #:unwrap #:expect #:as-optional
    #:default #:defaulting-unwrap))
 

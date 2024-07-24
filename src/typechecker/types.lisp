@@ -9,7 +9,6 @@
   (:export
    #:ty                                 ; STRUCT
    #:ty-list                            ; TYPE
-   #:ty-binding-list                    ; TYPE
    #:tyvar                              ; STRUCT
    #:make-tyvar                         ; CONSTRUCTOR
    #:tyvar-id                           ; ACCESSOR
@@ -26,28 +25,18 @@
    #:tapp-from                          ; ACCESSOR
    #:tapp-to                            ; ACCESSOR
    #:tapp-p                             ; FUNCTION
-   #:tget                               ; STRUCT
+   #:tgen                               ; STRUCT
    #:make-tgen                          ; CONSTRUCTOR
-   #:tgen-id                            ; ACCESOR
+   #:tgen-id                            ; ACCESSOR
    #:tgen-p                             ; FUNCTION
    #:make-variable                      ; FUNCTION
    #:instantiate                        ; FUNCTION
-   #:kind-of
+   #:kind-of                            ; FUNCTION
    #:type-constructors                  ; FUNCTION
    #:*boolean-type*                     ; VARIABLE
    #:*unit-type*                        ; VARIABLE
    #:*char-type*                        ; VARIABLE
-   #:*u8-type*                          ; VARIABLE
-   #:*u16-type*                         ; VARIABLE
-   #:*u32-type*                         ; VARIABLE
-   #:*u64-type*                         ; VARIABLE
-   #:*i8-type*                          ; VARIABLE
-   #:*i16-type*                         ; VARIABLE
-   #:*132-type*                         ; VARIABLE
-   #:*164-type*                         ; VARIABLE
    #:*integer-type*                     ; VARIABLE
-   #:*ifix-type*                        ; VARIABLE
-   #:*ufix-type*                        ; VARIABLE
    #:*single-float-type*                ; VARIABLE
    #:*double-float-type*                ; VARIABLE
    #:*string-type*                      ; VARIABLE
@@ -90,13 +79,6 @@
 
 (deftype ty-list ()
   '(satisfies ty-list-p))
-
-(defun ty-binding-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every (lambda (b) (typep b '(cons symbol ty))) x)))
-
-(deftype ty-binding-list ()
-  `(satisfies ty-binding-list-p))
 
 (defstruct (tyvar (:include ty)) 
   (id   (util:required 'id)   :type fixnum :read-only t)
@@ -217,17 +199,7 @@
 (defvar *boolean-type*      (make-tycon :name 'coalton:Boolean      :kind +kstar+))
 (defvar *unit-type*         (make-tycon :name 'coalton:Unit         :kind +kstar+))
 (defvar *char-type*         (make-tycon :name 'coalton:Char         :kind +kstar+))
-(defvar *u8-type*           (make-tycon :name 'coalton:U8           :kind +kstar+))
-(defvar *u16-type*          (make-tycon :name 'coalton:U16          :kind +kstar+))
-(defvar *u32-type*          (make-tycon :name 'coalton:U32          :kind +kstar+))
-(defvar *u64-type*          (make-tycon :name 'coalton:U64          :kind +kstar+))
-(defvar *i8-type*           (make-tycon :name 'coalton:I8           :kind +kstar+))
-(defvar *i16-type*          (make-tycon :name 'coalton:I16          :kind +kstar+))
-(defvar *i32-type*          (make-tycon :name 'coalton:I32          :kind +kstar+))
-(defvar *i64-type*          (make-tycon :name 'coalton:I64          :kind +kstar+))
 (defvar *integer-type*      (make-tycon :name 'coalton:Integer      :kind +kstar+))
-(defvar *ifix-type*         (make-tycon :name 'coalton:IFix         :kind +kstar+))
-(defvar *ufix-type*         (make-tycon :name 'coalton:UFix         :kind +kstar+))
 (defvar *single-float-type* (make-tycon :name 'coalton:Single-Float :kind +kstar+))
 (defvar *double-float-type* (make-tycon :name 'coalton:Double-Float :kind +kstar+))
 (defvar *string-type*       (make-tycon :name 'coalton:String       :kind +kstar+))
