@@ -37,6 +37,8 @@
    #:*unit-type*                        ; VARIABLE
    #:*char-type*                        ; VARIABLE
    #:*integer-type*                     ; VARIABLE
+   #:*ifix-type*                        ; VARIABLE
+   #:*ufix-type*                        ; VARIABLE
    #:*single-float-type*                ; VARIABLE
    #:*double-float-type*                ; VARIABLE
    #:*string-type*                      ; VARIABLE
@@ -80,7 +82,7 @@
 (deftype ty-list ()
   '(satisfies ty-list-p))
 
-(defstruct (tyvar (:include ty)) 
+(defstruct (tyvar (:include ty))
   (id   (util:required 'id)   :type fixnum :read-only t)
   (kind (util:required 'kind) :type kind   :read-only t))
 
@@ -200,6 +202,8 @@
 (defvar *unit-type*         (make-tycon :name 'coalton:Unit         :kind +kstar+))
 (defvar *char-type*         (make-tycon :name 'coalton:Char         :kind +kstar+))
 (defvar *integer-type*      (make-tycon :name 'coalton:Integer      :kind +kstar+))
+(defvar *ifix-type*         (make-tycon :name 'coalton:IFix         :kind +kstar+))
+(defvar *ufix-type*         (make-tycon :name 'coalton:UFix         :kind +kstar+))
 (defvar *single-float-type* (make-tycon :name 'coalton:Single-Float :kind +kstar+))
 (defvar *double-float-type* (make-tycon :name 'coalton:Double-Float :kind +kstar+))
 (defvar *string-type*       (make-tycon :name 'coalton:String       :kind +kstar+))
