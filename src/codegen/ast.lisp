@@ -42,8 +42,8 @@
    #:node-let-subexpr                   ; ACCESSOR
    #:node-lisp                          ; STRUCT
    #:make-node-lisp                     ; CONSTRUCTOR
-   #:node-lisp-vars                     ; ACCESOR
-   #:node-lisp-form                     ; ACCESOR
+   #:node-lisp-vars                     ; ACCESSOR
+   #:node-lisp-form                     ; ACCESSOR
    #:match-branch                       ; STRUCT
    #:make-match-branch                  ; CONSTRUCTOR
    #:match-branch-pattern               ; ACCESSOR
@@ -62,13 +62,13 @@
    #:node-while-let                     ; STRUCT
    #:make-node-while-let                ; CONSTRUCTOR
    #:node-while-let-label               ; ACESSOR
-   #:node-while-let-pattern             ; ACCESSPR 
+   #:node-while-let-pattern             ; ACCESSOR
    #:node-while-let-expr                ; ACCESSOR
    #:node-while-let-body                ; ACESSOR
    #:node-loop                          ; STRUCT
    #:make-node-loop                     ; CONSTRUCTOR
    #:node-loop-body                     ; ACCESSOR
-   #:node-loop-label                    ; ACCESSOR 
+   #:node-loop-label                    ; ACCESSOR
    #:node-break                         ; STRUCT
    #:make-node-break                    ; CONSTRUCTOR
    #:node-break-label                   ; ACCESSOR
@@ -95,7 +95,7 @@
    #:make-node-bind                     ; CONSTRUCTOR
    #:node-bind-name                     ; ACCESSOR
    #:node-bind-expr                     ; ACCESSOR
-   #:node-bind-body                     ; ACCESOR
+   #:node-bind-body                     ; ACCESSOR
    #:node-variables                     ; FUNCTION
    #:node-binding-sccs                  ; FUNCTION
    #:node-free-p                        ; FUNCTION
