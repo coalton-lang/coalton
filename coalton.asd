@@ -197,10 +197,13 @@
                       (funcall compile)))
   :pathname "src/doc"
   :serial t
-  :components ((:file "package")
-               (:file "generate-documentation")
+  :components ((:file "base")
+               (:file "environment")
+               (:file "model")
+               (:file "string")
                (:file "markdown")
-               (:file "hugo")))
+               (:file "hugo")
+               (:file "main")))
 
 (asdf:defsystem #:coalton/tests
   :description "Tests for COALTON."
