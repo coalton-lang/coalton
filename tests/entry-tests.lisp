@@ -11,12 +11,12 @@
 
 (deftest test-compile-to-lisp ()
   "Test that the Coalton compiler compiles a test file into something that looks like Lisp source."
-  (with-open-file (input (compile-test-file) :direction ':input)
-    (let ((source-form-types (mapcar #'first
-                                     (source-forms (entry:codegen input "test")))))
-      (dolist (expect-type '(defpackage in-package defun eval-when let setf))
-        (is (position expect-type source-form-types)
-            "Missing expected ~A form in generated code" expect-type)))))
+  (let* ((file (source:make-source-file (compile-test-file)))
+         (source-form-types (mapcar #'first
+                                    (source-forms (entry:codegen file)))))
+    (dolist (expect-type '(defpackage in-package defun eval-when let setf))
+      (is (position expect-type source-form-types)
+          "Missing expected ~A form in generated code" expect-type))))
 
 (deftest test-compile-to-fasl ()
   "Test that the Coalton compiler compiles a test file into a working .fasl that persists environment updates."
@@ -27,8 +27,8 @@
     (let ((fact (test-sym)))
       (fmakunbound fact)
       (setf entry:*global-environment* (tc:unset-function entry:*global-environment* fact)))
-    (with-open-file (stream (compile-test-file))
-      (entry:compile stream "test" :load t)
+    (let ((file (source:make-source-file (compile-test-file) :name "test")))
+      (entry:compile file :load t)
       (let ((fact (test-sym)))
         (is (fboundp fact)
             "Test function was bound as side effect of loading fasl")

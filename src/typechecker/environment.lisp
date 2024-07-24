@@ -2,6 +2,7 @@
   (:use
    #:cl
    #:coalton-impl/algorithm
+   #:coalton-impl/source
    #:coalton-impl/typechecker/base
    #:coalton-impl/typechecker/map
    #:coalton-impl/typechecker/type-errors
@@ -105,7 +106,7 @@
    #:name-entry-name                        ; ACCESSOR
    #:name-entry-type                        ; ACCESSOR
    #:name-entry-docstring                   ; ACCESSOR
-   #:name-entry-location                    ; ACCESSOR
+   #:name-entry-location                      ; ACCESSOR
    #:name-environment                       ; STRUCT
    #:method-inline-environment              ; STRUCT
    #:code-environment                       ; STRUCT
@@ -270,10 +271,10 @@
   ;; A type that is a newtype has another Coalton type as its
   ;; runtime-type instead of a lisp type. This is to avoid issues with
   ;; recursive newtypes.
-  (newtype (util:required 'newtype)           :type boolean :read-only t)
+  (newtype (util:required 'newtype)     :type boolean :read-only t)
 
-  (docstring (util:required 'docstring)       :type (or null string) :read-only t)
-  (location  (util:required 'location)        :type t                :read-only t))
+  (docstring (util:required 'docstring) :type (or null string)   :read-only t)
+  (location  nil                        :type (or null location) :read-only t))
 
 (defmethod make-load-form ((self type-entry) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -304,8 +305,7 @@
             :explicit-repr '(:native cl:boolean)
             :enum-repr t
             :newtype nil
-            :docstring "Either true or false represented by `t` and `nil` respectively."
-            :location ""))
+            :docstring "Either true or false represented by `t` and `nil` respectively."))
 
           ('coalton:Unit
            (make-type-entry
@@ -317,8 +317,7 @@
             :explicit-repr :enum
             :enum-repr t
             :newtype nil
-            :docstring ""
-            :location ""))
+            :docstring ""))
 
           ('coalton:Char
            (make-type-entry
@@ -330,8 +329,7 @@
             :explicit-repr '(:native cl:character)
             :enum-repr nil
             :newtype nil
-            :docstring "A single character represented as a `character` type."
-            :location ""))
+            :docstring "A single character represented as a `character` type."))
 
           ('coalton:Integer
            (make-type-entry
@@ -343,8 +341,7 @@
             :explicit-repr '(:native cl:integer)
             :enum-repr nil
             :newtype nil
-            :docstring "Unbound integer. Uses `integer`."
-            :location ""))
+            :docstring "Unbound integer. Uses `integer`."))
 
           ('coalton:Single-Float
            (make-type-entry
@@ -356,8 +353,7 @@
             :explicit-repr '(:native cl:single-float)
             :enum-repr nil
             :newtype nil
-            :docstring "Single precision floating point number. Uses `single-float`."
-            :location ""))
+            :docstring "Single precision floating point number. Uses `single-float`."))
 
           ('coalton:Double-Float
            (make-type-entry
@@ -369,8 +365,7 @@
             :explicit-repr '(:native cl:double-float)
             :enum-repr nil
             :newtype nil
-            :docstring "Double precision floating point number. Uses `double-float`."
-            :location ""))
+            :docstring "Double precision floating point number. Uses `double-float`."))
 
           ('coalton:String
            (make-type-entry
@@ -382,8 +377,7 @@
             :explicit-repr '(:native cl:string)
             :enum-repr nil
             :newtype nil
-            :docstring "String of characters represented by Common Lisp `string`."
-            :location ""))
+            :docstring "String of characters represented by Common Lisp `string`."))
 
           ('coalton:Fraction
            (make-type-entry
@@ -395,8 +389,7 @@
             :explicit-repr '(:native cl:rational)
             :enum-repr nil
             :newtype nil
-            :docstring "A ratio of integers always in reduced form."
-            :location ""))
+            :docstring "A ratio of integers always in reduced form."))
 
           ('coalton:Arrow
            (make-type-entry
@@ -408,8 +401,7 @@
             :explicit-repr nil
             :enum-repr nil
             :newtype nil
-            :docstring "Type constructor for function types."
-            :location ""))
+            :docstring "Type constructor for function types."))
 
           ('coalton:List
            (make-type-entry
@@ -421,8 +413,7 @@
             :explicit-repr '(:native cl:list)
             :enum-repr nil
             :newtype nil
-            :docstring "Homogeneous list of objects represented as a Common Lisp `list`."
-            :location "")))))
+            :docstring "Homogeneous list of objects represented as a Common Lisp `list`.")))))
 
 ;;;
 ;;; Constructor environment
@@ -582,7 +573,7 @@
   (superclass-dict     (util:required 'superclass-dict)     :type list                :read-only t)
   (superclass-map      (util:required 'superclass-map)      :type environment-map     :read-only t)
   (docstring           (util:required 'docstring)           :type (or null string)    :read-only t)
-  (location            (util:required 'location)            :type t                   :read-only t))
+  (location              (util:required 'location)              :type location :read-only t))
 
 (defmethod make-load-form ((self ty-class) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -713,7 +704,7 @@
   (name      (util:required 'name)      :type symbol                               :read-only t)
   (type      (util:required 'type)      :type (member :value :method :constructor) :read-only t)
   (docstring (util:required 'docstring) :type (or null string)                     :read-only t)
-  (location  (util:required 'location)  :type t                                    :read-only t))
+  (location    (util:required 'location)    :type location                      :read-only t))
 
 (defmethod make-load-form ((self name-entry) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -1453,7 +1444,7 @@
                  :else
                    :collect (make-variable)))
 
-         (new-pred (make-ty-predicate :class class-name :types vars :source (ty-predicate-source pred))))
+         (new-pred (make-ty-predicate :class class-name :types vars :location (ty-predicate-location pred))))
 
     (fset:do-seq (inst (lookup-class-instances env class-name))
       (handler-case

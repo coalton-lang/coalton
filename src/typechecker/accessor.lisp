@@ -3,16 +3,17 @@
    #:cl
    #:coalton-impl/typechecker/base)
   (:local-nicknames
+   (#:source #:coalton-impl/source)
    (#:se #:source-error)
-   (#:util #:coalton-impl/util)
-   (#:tc #:coalton-impl/typechecker/stage-1))
+   (#:tc #:coalton-impl/typechecker/stage-1)
+   (#:util #:coalton-impl/util))
   (:export
    #:accessor                           ; STRUCT
    #:make-accessor                      ; CONSTRUCTOR
    #:accessor-from                      ; ACCESSOR
    #:accessor-to                        ; ACCESSOR
    #:accessor-field                     ; ACCESSOR
-   #:accessor-source                    ; ACCESSOR
+   #:accessor-location                    ; ACCESSOR
    #:accessor-list                      ; TYPE
    #:base-type                          ; FUNCTION
    #:solve-accessors                    ; FUNCTION
@@ -22,10 +23,10 @@
 
 (defstruct (accessor
             (:copier nil))
-  (from   (util:required 'from)   :type tc:ty  :read-only t)
-  (to     (util:required 'to)     :type tc:ty  :read-only t)
-  (field  (util:required 'field)  :type string :read-only t)
-  (source (util:required 'source) :type cons   :read-only t))
+  (from   (util:required 'from)   :type tc:ty           :read-only t)
+  (to     (util:required 'to)     :type tc:ty           :read-only t)
+  (field  (util:required 'field)  :type string          :read-only t)
+  (location (util:required 'location) :type source:location :read-only t))
 
 (defun accessor-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -50,9 +51,8 @@
     (t
      (util:unreachable))))
 
-(defun solve-accessors (accessors file env)
+(defun solve-accessors (accessors env)
   (declare (type accessor-list accessors)
-           (type se:file file)
            (type tc:environment env))
 
   (let ((subs nil)
@@ -65,7 +65,7 @@
 
           :do (loop :for accessor :in accessors
                     :do (multiple-value-bind (matchp subs_)
-                            (solve-accessor accessor file env)
+                            (solve-accessor accessor env)
                           (when matchp
                             (push accessor solved-accessors))
                           (setf subs (tc:compose-substitution-lists subs subs_))))
@@ -82,9 +82,8 @@
 
     (values accessors subs)))
 
-(defun solve-accessor (accessor file env)
+(defun solve-accessor (accessor env)
   (declare (type accessor accessor)
-           (type se:file file)
            (type tc:environment env)
            (values boolean tc:substitution-list))
 
@@ -104,27 +103,19 @@
            (struct-entry (tc:lookup-struct env ty-name :no-error t)))
 
       (unless struct-entry
-        (error 'tc:tc-error
-               :err (se:source-error
-                     :span (accessor-source accessor)
-                     :file file
-                     :message "Invalid accessor"
-                     :primary-note
-                     (format nil "type '~S' is not a struct" ty-name))))
+        (tc-error (accessor-location accessor)
+                  "Invalid accessor"
+                  (format nil "type '~S' is not a struct" ty-name)))
 
       (let ((subs (tc:match struct-ty (accessor-from accessor)))
             (field (tc:get-field struct-entry (accessor-field accessor) :no-error t)))
 
         (unless field
-          (error 'tc:tc-error
-                 :err (se:source-error
-                       :span (accessor-source accessor)
-                       :file file
-                       :message "Invalid accessor"
-                       :primary-note
-                       (format nil "struct '~S' does not have the field '~A'"
-                               ty-name
-                               (accessor-field accessor)))))
+          (tc-error (accessor-location accessor)
+                    "Invalid accessor"
+                    (format nil "struct '~S' does not have the field '~A'"
+                            ty-name
+                            (accessor-field accessor))))
 
         ;; the order of unification matters here
         (setf subs (tc:unify subs (accessor-to accessor)
@@ -140,7 +131,7 @@
    :from (tc:apply-substitution subs (accessor-from accessor))
    :to (tc:apply-substitution subs (accessor-to accessor))
    :field (accessor-field accessor)
-   :source (accessor-source accessor)))
+   :location (accessor-location accessor)))
 
 (defmethod tc:type-variables ((accessor accessor))
   (append (tc:type-variables (accessor-from accessor))

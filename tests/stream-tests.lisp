@@ -16,7 +16,7 @@
                             :direction ':input
                             :element-type 'character
                             :external-format :utf-8)
-      (let* ((char-stream (stream:make-char-position-stream stream))
+      (let* ((char-stream (make-instance 'source:char-position-stream :stream stream))
              (chars (stream-contents char-stream)))
         (is (= 86 (length chars))
             (format nil "File expected length 86 != ~A" (length chars)))

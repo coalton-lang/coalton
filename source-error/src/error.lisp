@@ -1,82 +1,37 @@
 (defpackage #:source-error/error
-  (:shadow
-   #:file
-   #:file-stream)
   (:use
    #:cl)
   (:export
    #:source-base-error                  ; CONDITION
-   #:source-base-error-err              ; ACCESSOR
-   #:source-base-error-text             ; ACCESSOR
+   #:source-condition-err               ; ACCESSOR
    #:source-base-warning                ; CONDITION
-   #:source-base-warning-err            ; ACCESSOR
-   #:source-base-warning-text           ; ACCESSOR
-   #:render-source-error                ; FUNCTION
-   #:render-source-warning              ; FUNCTION
-   #:file                               ; TYPE
-   #:make-file                          ; CONSTRUCTOR
-   #:file-stream                        ; ACCESSOR
-   #:file-name                          ; ACCESSOR
+   #:source-stream                      ; GENERIC
+   #:source-name                        ; GENERIC
    #:make-source-error-note             ; FUNCTION
    #:make-source-error-help             ; FUNCTION
    #:make-source-error-context          ; FUNCTION
    #:*source-error-context*             ; VARIABLE
    #:source-error                       ; MACRO
    #:source-error-location              ; ACCESSOR
-   #:source-error-file                  ; ACCESSOR
+   #:source-error-source                ; ACCESSOR
    #:display-source-error               ; FUNCTION
-   #:define-source-condition            ; MACRO
    ))
 
 (in-package #:source-error/error)
 
-(define-condition source-base-error (error)
-  ((err :accessor source-base-error-err
-        :initarg :err
-        :type (or null function))
-   (text :accessor source-base-error-text
-         :initarg :text
-         :initform nil
-         :type (or null string)))
-  (:documentation "The base type for user-facing errors. Only ERR needs to be specified, and TEXT will be filled when `RENDER-ERROR' is called.")
+(define-condition source-condition ()
+  ((err :accessor source-condition-err
+        :initarg :err))
   (:report (lambda (c s)
-             (if (source-base-error-text c)
-                 (write-string (source-base-error-text c) s)
-                 (display-source-error s (source-base-error-err c))))))
+             (display-source-error s (source-condition-err c)))))
 
-(define-condition source-base-warning (style-warning)
-  ((err :accessor source-base-warning-err
-        :initarg :err
-        :type (or null function))
-   (text :accessor source-base-warning-text
-         :initarg :text
-         :initform nil
-         :type (or null string)))
-    (:documentation "The base type for user-facing warnings. Only ERR needs to be specified, and TEXT will be filled when `RENDER-WARNING' is called.")
-    (:report (lambda (c s)
-             (if (source-base-warning-text c)
-                 (write-string (source-base-warning-text c) s)
-                 (display-source-error s (source-base-warning-err c))))))
+(define-condition source-base-error (source-condition error)
+  ()
+  (:documentation "The base type for user-facing errors."))
 
-(defun render-source-error (e)
-  "Render the error object within a `SOURCE-BASE-ERROR' to text, removing the need to keep source file handles open."
-  (declare (type source-base-error e))
-  (let ((*print-escape* nil))
-    (setf (source-base-error-text e)
-          (with-output-to-string (s)
-            (print-object e s))
-          (source-base-error-err e)
-          nil)))
-
-(defun render-source-warning (w)
-  "Render the error object within a `SOURCE-BASE-ERROR' to text, removing the need to keep source file handles open."
-  (declare (type source-base-warning w))
-  (let ((*print-escape* nil))
-    (setf (source-base-warning-text w)
-          (with-output-to-string (s)
-            (print-object w s))
-          (source-base-warning-err w)
-          nil)))
+(define-condition source-base-warning (source-condition style-warning)
+  ()
+  (:documentation "The base type for user-facing warnings."))
 
 (defstruct (source-error-note
             (:copier nil))
@@ -117,48 +72,39 @@
 
 (defvar *source-error-context* nil)
 
-(defstruct (file
-            (:copier nil))
-  (stream nil :type stream :read-only t)
-  (name   nil :type string :read-only t))
+;;; An object that implements #'source-name and #'source-stream
+;;; provides access to a source-error condition's source text and
+;;; metadata about its origin so that the condition printer can
+;;; decorate that text with notes and line numbers.
+
+(defgeneric source-stream (source)
+  (:documentation "Open and return a stream from which source text may be read. The caller is responsible for closing the stream, and the stream's initial position may be greater than zero."))
+
+(defgeneric source-name (source)
+  (:documentation "The name of an error's source, suitable for reporting in errors. If the source is a file, SOURCE-NAME will be that file's absolute path."))
 
 (defstruct (source-error
-            (:copier nil))
+            (:constructor %make-source-error))
   (type       nil :type (member :error :warn)     :read-only t)
-  (file       nil :type file                      :read-only t)
+  (source     nil                                 :read-only t)
   (location   nil :type integer                   :read-only t)
   (message    nil :type string                    :read-only t)
   (notes      nil :type source-error-note-list    :read-only t)
   (help-notes nil :type source-error-help-list    :read-only t)
   (context    nil :type source-error-context-list :read-only t))
 
-(defmacro source-error (&key (type :error) span file (highlight :all) message primary-note notes help-notes)
-  `(let ((ctx *source-error-context*))
-     (lambda ()
-       (source-error%
-        :type ,type
-        :span ,span
-        :file ,file
-        :highlight ,highlight
-        :message ,message
-        :primary-note ,primary-note
-        :notes ,notes
-        :help-notes ,help-notes
-        :context ctx))))
-
-(defun source-error% (&key
-                        (type :error)
-                        span
-                        file
-                        (highlight :all)
-                        message
-                        primary-note
-                        notes
-                        help-notes
-                        context)
+(defun make-source-error (&key
+                            (type :error)
+                            span
+                            source
+                            (highlight :all)
+                            message
+                            primary-note
+                            notes
+                            help-notes
+                            context)
   "Construct a `SOURCE-ERROR' with a message and primary note attached to the provided form."
   (declare (type cons span)
-           (type file file)
            (type (member :all :end) highlight)
            (type string message)
            (type string primary-note)
@@ -166,31 +112,40 @@
            (type source-error-help-list help-notes)
            (type source-error-context-list context)
            (values source-error))
-
   (let ((start (car span))
         (end (cdr span)))
-    (make-source-error
-     :type type
-     :file file
-     :location (ecase highlight
-                 (:all (car span))
-                 (:end (cdr span)))
-     :message message
-     :notes (list*
-             (ecase highlight
-               (:all
-                (make-source-error-note
-                 :type :primary
-                 :span (cons start end)
-                 :message primary-note))
-               (:end
-                (make-source-error-note
-                 :type :primary
-                 :span (cons (1- end) end)
-                 :message primary-note)))
-             notes)
-     :help-notes help-notes
-     :context context)))
+    (%make-source-error :type type
+                        :source source
+                        :location (ecase highlight
+                                    (:all (car span))
+                                    (:end (cdr span)))
+                        :message message
+                        :notes (list*
+                                (ecase highlight
+                                  (:all
+                                   (make-source-error-note
+                                    :type :primary
+                                    :span (cons start end)
+                                    :message primary-note))
+                                  (:end
+                                   (make-source-error-note
+                                    :type :primary
+                                    :span (cons (1- end) end)
+                                    :message primary-note)))
+                                notes)
+                        :help-notes help-notes
+                        :context context)))
+
+(defmacro source-error (&key (type :error) span source (highlight :all) message primary-note notes help-notes)
+  `(make-source-error :type ,type
+                      :span ,span
+                      :source ,source
+                      :highlight ,highlight
+                      :message ,message
+                      :primary-note ,primary-note
+                      :notes ,notes
+                      :help-notes ,help-notes
+                      :context *source-error-context*))
 
 (defstruct (source-error-resolved-note
             (:copier nil))
@@ -204,26 +159,20 @@
 
 (defun display-source-error (stream error)
   (declare (type stream stream)
-           (type function error))
+           (type source-error error))
 
-  (let* ((*print-circle* nil)
-
-         (error (funcall error))
-
-         (file-stream (file-stream (source-error-file error)))
-         (file-stream-pos (file-position file-stream)))
-
-    (progn
+  (let ((*print-circle* nil))
+    (with-open-stream (source-stream (source-stream (source-error-source error)))
 
       ;; Print the error message and location
       (multiple-value-bind (line-number line-start-index)
-          (get-line-from-index file-stream (source-error-location error))
+          (get-line-from-index source-stream (source-error-location error))
 
         (format stream
                 "~(~A~): ~A~%  --> ~A:~D:~D~%"
                 (source-error-type error)
                 (source-error-message error)
-                (file-name (source-error-file error))
+                (source-name (source-error-source error))
                 line-number
                 (- (source-error-location error) line-start-index)))
 
@@ -252,11 +201,11 @@
                         (end (cdr (source-error-note-span note))))
                     ;; Get line info for the start of the span
                     (multiple-value-bind (start-line start-line-start)
-                        (get-line-from-index file-stream start)
+                        (get-line-from-index source-stream start)
 
                       ;; Get line info for the end of the span
                       (multiple-value-bind (end-line end-line-start)
-                          (get-line-from-index file-stream (1- end))
+                          (get-line-from-index source-stream (1- end))
 
                         ;; Compute column numbers
                         (let ((start-column (- start start-line-start))
@@ -337,7 +286,7 @@
                      (format stream " ~v@{ ~}~A~%"
                              (- multiline-note-max-depth
                                  multiline-note-current-depth)
-                             (get-nth-line file-stream line-number)))
+                             (get-nth-line source-stream line-number)))
 
                    (note-highlight-char (note)
                      (ecase (source-error-resolved-note-type note)
@@ -457,9 +406,9 @@
             :for start := (car (source-error-help-span help))
             :for end := (cdr (source-error-help-span help))
             :do (multiple-value-bind (start-line start-line-start)
-                    (get-line-from-index file-stream start)
+                    (get-line-from-index source-stream start)
                   (multiple-value-bind (end-line end-line-start)
-                      (get-line-from-index file-stream (1- end))
+                      (get-line-from-index source-stream (1- end))
 
                     (unless (= start-line end-line)
                       (error "multiline help messages not supported yet."))
@@ -471,16 +420,16 @@
                       (format stream " ~vD | ~A"
                               line-number-width
                               start-line
-                              (subseq (get-nth-line file-stream start-line)
+                              (subseq (get-nth-line source-stream start-line)
                                       0 (- start start-line-start)))
 
                       (let ((replaced-text (funcall (source-error-help-replacement help)
-                                                    (subseq (get-nth-line file-stream start-line)
+                                                    (subseq (get-nth-line source-stream start-line)
                                                             (- start start-line-start)
                                                             (- end end-line-start)))))
                         (format stream "~A~A~%"
                                 replaced-text
-                                (subseq (get-nth-line file-stream start-line)
+                                (subseq (get-nth-line source-stream start-line)
                                         (- end end-line-start)))
 
                         (format stream
@@ -494,40 +443,37 @@
 
       ;; Print error context
       (loop :for context :in (source-error-context error)
-            :do (format stream "note: ~A~%" (source-error-context-message context)))
+            :do (format stream "note: ~A~%" (source-error-context-message context))))))
 
-      ;; Reset our file position to avoid messing things up.
-      (file-position file-stream file-stream-pos))))
-
-(defun get-line-from-index (file index)
+(defun get-line-from-index (stream index)
   "Get the line number corresponding to the character offset INDEX.
 
 Returns (VALUES LINE-NUM LINE-START-INDEX)"
-  (declare (type stream file)
+  (declare (type stream stream)
            (type integer index)
            (values integer integer))
-  (file-position file 0)
+  (file-position stream 0)
   (loop :with line-num := 1
         :with line-start-index := 0
-        :for char := (read-char file nil nil)
+        :for char := (read-char stream nil nil)
         :for char-index :from 0
         :when (null char)
-          :do (error "Index ~D out of bounds for file ~A" char-index file)
+          :do (error "Index ~D out of bounds for stream ~A" char-index stream)
         :when (= index char-index)
           :return (values line-num line-start-index)
         :when (char= char #\Newline)
           :do (incf line-num)
               (setf line-start-index (1+ char-index))))
 
-(defun get-nth-line (file index)
-  "Get the INDEXth line FILE. This function uses 1 based indexing."
-  (declare (type stream file)
+(defun get-nth-line (stream index)
+  "Get the INDEXth line in STREAM. This function uses 1 based indexing."
+  (declare (type stream stream)
            (type integer index)
            (values string &optional))
-  (file-position file 0)
+  (file-position stream 0)
   (loop :for i :from 1 :to index
-        :for line := (read-line file)
+        :for line := (read-line stream)
         :when (= i index)
           :do (return-from get-nth-line line))
 
-  (error "Line number ~D out of bounds for file ~A" index file))
+  (error "Line number ~D out of bounds for stream ~A" index stream))

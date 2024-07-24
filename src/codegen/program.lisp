@@ -24,6 +24,7 @@
   (:local-nicknames
    (#:util #:coalton-impl/util)
    (#:parser #:coalton-impl/parser)
+   (#:source #:coalton-impl/source)
    (#:settings #:coalton-impl/settings)
    (#:global-lexical #:coalton-impl/global-lexical)
    (#:rt #:coalton-impl/runtime)
@@ -105,7 +106,7 @@ Example:
                         :collect (cons (bindings-offset bindings offsets)
                                        (compile-scc bindings env))))
         (lisp-forms (mapcar (lambda (lisp-form)
-                              (cons (car (parser:toplevel-lisp-form-source lisp-form))
+                              (cons (car (source:location-span (parser:toplevel-lisp-form-location lisp-form)))
                                     (parser:toplevel-lisp-form-body lisp-form)))
                             lisp-forms)))
     (mapcan #'cdr (merge-forms bindings lisp-forms))))
@@ -113,7 +114,7 @@ Example:
 (defun definition-bindings (definitions env offsets)
   "Translate the DEFINITIONS in this TU into bindings, updating an OFFSETS hashtable to record the source offset of each binding's source definition."
   (loop :for define :in definitions
-        :for offset := (car (tc:toplevel-define-source define))
+        :for offset := (car (source:location-span (tc:toplevel-define-location define)))
         :for name := (tc:node-variable-name (tc:toplevel-define-name define))
         :for compiled-node := (translate-toplevel define env name)
 
@@ -129,7 +130,7 @@ Example:
 (defun instance-bindings (instances env offsets)
   "Translate the INSTANCES defined by this TU into bindings, updating an OFFSETS hashtable to record the source offset of each binding's source instance."
   (loop :for instance :in instances
-        :for offset := (car (tc:toplevel-define-instance-source instance))
+        :for offset := (car (source:location-span (tc:toplevel-define-instance-location instance)))
         :for instance-bindings := (translate-instance instance env)
 
         :do (dolist (binding instance-bindings)

@@ -6,9 +6,9 @@
   (:local-nicknames
    (#:se #:source-error)
    (#:settings #:coalton-impl/settings)
-   (#:stream #:coalton-impl/stream)
    (#:util #:coalton-impl/util)
    (#:parser #:coalton-impl/parser)
+   (#:source #:coalton-impl/source)
    (#:tc #:coalton-impl/typechecker)
    (#:analysis #:coalton-impl/analysis)
    (#:codegen #:coalton-impl/codegen))
@@ -29,43 +29,37 @@
 (defun entry-point (program)
   (declare (type parser:program program))
 
-  (let* ((*package* (parser:program-lisp-package program))
+  (let ((*package* (parser:program-lisp-package program))
 
-         (program (parser:rename-variables program))
+        (program (parser:rename-variables program))
 
-         (file (parser:program-file program))
-
-         (env *global-environment*))
+        (env *global-environment*))
 
     (multiple-value-bind (type-definitions instances env)
         (tc:toplevel-define-type (parser:program-types program)
                                  (parser:program-structs program)
-                                 file
                                  env)
 
       (let ((all-instances (append instances (parser:program-instances program))))
 
         (multiple-value-bind (class-definitions env)
             (tc:toplevel-define-class (parser:program-classes program)
-                                      file
                                       env)
 
           (multiple-value-bind (ty-instances env)
-              (tc:toplevel-define-instance all-instances env file)
+              (tc:toplevel-define-instance all-instances env)
 
             (multiple-value-bind (toplevel-definitions env)
                 (tc:toplevel-define (parser:program-defines program)
                                     (parser:program-declares program)
-                                    file
                                     env)
 
               (multiple-value-bind (toplevel-instances)
                   (tc:toplevel-typecheck-instance ty-instances
                                                   all-instances
-                                                  env
-                                                  file)
+                                                  env)
 
-                (setf env (tc:toplevel-specialize (parser:program-specializations program) env file))
+                (setf env (tc:toplevel-specialize (parser:program-specializations program) env))
 
                 (let ((monomorphize-table (make-hash-table :test #'eq))
 
@@ -90,14 +84,13 @@
                                              monomorphize-table)
                                     t))
 
-                  (analysis:analyze-translation-unit translation-unit env file)
+                  (analysis:analyze-translation-unit translation-unit env)
 
                   (codegen:compile-translation-unit translation-unit monomorphize-table env))))))))))
 
 
-(defun expression-entry-point (node file)
-  (declare (type parser:node node)
-           (type se:file file))
+(defun expression-entry-point (node)
+  (declare (type parser:node node))
 
   (let ((env *global-environment*))
 
@@ -105,8 +98,7 @@
         (tc:infer-expression-type (parser:rename-variables node)
                                   (tc:make-variable)
                                   nil
-                                  (tc:make-tc-env :env env)
-                                  file)
+                                  (tc:make-tc-env :env env))
 
       (multiple-value-bind (preds subs)
           (tc:solve-fundeps env preds subs)
@@ -114,16 +106,13 @@
         (setf accessors (tc:apply-substitution subs accessors))
 
         (multiple-value-bind (accessors subs_)
-            (tc:solve-accessors accessors file env)
+            (tc:solve-accessors accessors env)
           (setf subs (tc:compose-substitution-lists subs subs_))
 
           (when accessors
-            (error 'tc:tc-error
-                   :err (se:source-error
-                         :span (tc:accessor-source (first accessors))
-                         :file file
-                         :message "Ambiguous accessor"
-                         :primary-note "accessor is ambiguous")))
+            (tc:tc-error (tc:accessor-location (first accessors))
+                         "Amqbiguous accessor"
+                         "accessor is ambiguous"))
 
           (let* ((preds (tc:reduce-context env preds subs))
                  (subs (tc:compose-substitution-lists
@@ -142,7 +131,7 @@
                 (let ((node (codegen:optimize-node
                              (codegen:translate-expression node nil env)
                              env)))
-                  (codegen:codegen-expression 
+                  (codegen:codegen-expression
                    (codegen:direct-application
                     node
                     (codegen:make-function-table env))
@@ -156,29 +145,25 @@
                                tvars
                                (tc:ty-scheme-type scheme))))
 
-              (error 'tc:tc-error
-                     :err (se:source-error
-                           :span (tc:node-source node)
-                           :file file
-                           :message "Unable to codegen"
-                           :primary-note (format nil
-                                                 "expression has type ~A~{ ~S~}.~{ (~S)~} => ~S with unresolved constraint~A ~S"
-                                                 (if settings:*coalton-print-unicode*
-                                                     "∀"
-                                                     "FORALL")
-                                                 tvars
-                                                 (tc:qualified-ty-predicates qual-type)
-                                                 (tc:qualified-ty-type qual-type)
-                                                 (if (= (length (tc:qualified-ty-predicates qual-type)) 1)
-                                                     ""
-                                                     "s")
-                                                 (tc:qualified-ty-predicates qual-type))
-                           :notes
+              (tc:tc-error (tc:node-location node)
+                           "Unable to codegen"
+                           (format nil
+                                   "expression has type ~A~{ ~S~}.~{ (~S)~} => ~S with unresolved constraint~A ~S"
+                                   (if settings:*coalton-print-unicode*
+                                       "∀"
+                                       "FORALL")
+                                   tvars
+                                   (tc:qualified-ty-predicates qual-type)
+                                   (tc:qualified-ty-type qual-type)
+                                   (if (= (length (tc:qualified-ty-predicates qual-type)) 1)
+                                       ""
+                                       "s")
+                                   (tc:qualified-ty-predicates qual-type))
                            (list
                             (se:make-source-error-note
                              :type :secondary
-                             :span (tc:node-source node)
-                             :message "Add a type assertion with THE to resolve ambiguity")))))))))))
+                             :span (source:location-span (tc:node-location node))
+                             :message "Add a type assertion with THE to resolve ambiguity"))))))))))
 
 (defmacro with-environment-updates (updates &body body)
   "Collect environment updates into a vector bound to UPDATES."
@@ -237,40 +222,39 @@
       (terpri stream)
       (terpri stream))))
 
-(defun compile-to-lisp (stream name output)
-  "Read Coalton source from STREAM and write Lisp source to OUTPUT. NAME may be the filename related to the input stream."
+(defun compile-to-lisp (source output)
+  "Read Coalton source from SOURCE and write Lisp source to OUTPUT. NAME may be the filename related to the input stream."
   (declare (optimize (debug 3)))
-  (parser:with-reader-context stream
-    (with-environment-updates updates
-      (let* ((file (se:make-file :stream stream
-                                 :name name))
-             (program (parser:read-program stream file ':file))
-             (program-text (entry-point program))
-             (program-package (parser:program-package program))
-             (package-name (parser:toplevel-package-name program-package)))
-        (print-form output (make-prologue))
-        (print-form output (make-environment-updater updates))
-        (print-form output (parser:make-defpackage program-package))
-        (print-form output `(in-package ,package-name))
-        ;; coalton-impl/codegen/program:compile-translation-unit wraps
-        ;; definitions in progn to provide a single expression as the
-        ;; macroexpansion of coalton-toplevel: unwrap for better
-        ;; readability
-        (dolist (form (cdr program-text))
-          (print-form output form package-name))))))
+  (with-open-stream (stream (se:source-stream source))
+    (parser:with-reader-context stream
+      (with-environment-updates updates
+        (let* ((program (parser:read-program stream source ':file))
+               (program-text (entry-point program))
+               (program-package (parser:program-package program))
+               (package-name (parser:toplevel-package-name program-package)))
+          (print-form output (make-prologue))
+          (print-form output (make-environment-updater updates))
+          (print-form output (parser:make-defpackage program-package))
+          (print-form output `(in-package ,package-name))
+          ;; coalton-impl/codegen/program:compile-translation-unit wraps
+          ;; definitions in progn to provide a single expression as the
+          ;; macroexpansion of coalton-toplevel: unwrap for better
+          ;; readability
+          (dolist (form (cdr program-text))
+            (print-form output form package-name)))))))
 
-(defun codegen (stream name)
-  "Compile Coalton source from STREAM and return Lisp program text. NAME may be the filename related to the input stream."
+(defun codegen (source)
+  "Compile Coalton source from SOURCE and return Lisp program text. NAME may be the filename related to the input stream."
   (with-output-to-string (output)
-    (compile-to-lisp stream name output)))
+    (compile-to-lisp source output)))
 
-(defun compile (stream name &key (load t) (output-file nil))
-   "Compile Coalton code in STREAM, returning the pathname of the generated .fasl file. If OUTPUT-FILE is nil, the built-in compiler default output location will be used."
+(defun compile (source &key (load t) (output-file nil))
+   "Compile Coalton code in SOURCE, returning the pathname of the generated .fasl file. If OUTPUT-FILE is nil, the built-in compiler default output location will be used."
    (uiop:with-temporary-file (:stream lisp-stream
                               :pathname lisp-file
                               :type "lisp"
                               :direction ':output)
-     (compile-to-lisp stream name lisp-stream)
+     (compile-to-lisp source lisp-stream)
      :close-stream
      (cond ((null output-file)
             (setf output-file (compile-file lisp-file)))

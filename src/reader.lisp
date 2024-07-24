@@ -17,43 +17,6 @@
   "Is the Coalton reader allowed to parse the current input?
 Used to forbid reading while inside quasiquoted forms.")
 
-
-
-(defmacro with-coalton-file ((file stream) &body body)
-  "Given a stream STREAM, bind a COALTON-IMPL/ERROR:COALTON-FILE instance to the symbol FILE and execute BODY. In the event of a Coalton compiler error or warning, render the error message (which may rely on operations on STREAM)."
-  (let ((opened-streams (gensym))
-        (pathname (gensym))
-        (filename (gensym))
-        (file-input-stream (gensym)))
-    `(let ((,opened-streams nil))
-       (unwind-protect
-            (let* ((,pathname (or *compile-file-truename* *load-truename*))
-                   (,filename (if ,pathname (namestring ,pathname) "<unknown>"))
-                   ;; Ensure that coalton-file has a reference to an
-                   ;; FD-STREAM, so that stream positioning works.
-                   (,file-input-stream
-                     (cond
-                       ((or #+sbcl (sb-int:form-tracking-stream-p ,stream)
-                            nil)
-                        (let ((s (open (pathname ,stream))))
-                          (push s ,opened-streams)
-                          s))
-                       (t
-                        ,stream)))
-                   (,file (se:make-file :stream ,file-input-stream :name ,filename)))
-              (handler-bind
-                  ;; Render errors and set highlights
-                  ((se:source-base-error
-                     (lambda (c)
-                       (set-highlight-position-for-error stream (funcall (se:source-base-error-err c)))
-                       (se:render-source-error c)))
-                   (se:source-base-warning
-                     #'se:render-source-warning))
-                ,@body))
-         ;; Clean up any opened file streams
-         (dolist (s ,opened-streams)
-           (close s))))))
-
 (defun read-coalton-toplevel-open-paren (stream char)
   (declare (optimize (debug 2)))
 
@@ -62,43 +25,41 @@ Used to forbid reading while inside quasiquoted forms.")
       (funcall (get-macro-character #\( (named-readtables:ensure-readtable :standard)) stream char)))
 
   (parser:with-reader-context stream
-    (let ((first-form
-            (multiple-value-bind (form presentp)
-                (parser:maybe-read-form stream)
-              (unless presentp
-                (return-from read-coalton-toplevel-open-paren
-                  nil))
-              form)))
+    (let* ((file
+             (coalton-impl/source:make-source-file *compile-file-truename*
+                                                   :offset (file-position stream)))
+           (first-form
+             (multiple-value-bind (form presentp)
+                 (parser:maybe-read-form stream file)
+               (unless presentp
+                 (return-from read-coalton-toplevel-open-paren
+                   nil))
+               form)))
       (case (cst:raw first-form)
         (coalton:coalton-toplevel
-          (with-coalton-file (file stream)
-            (entry:compile-coalton-toplevel (parser:read-program stream file ':macro))))
+          (entry:compile-coalton-toplevel (parser:read-program stream file ':macro)))
 
         (coalton:coalton-codegen
-          (with-coalton-file (file stream)
-            (let ((settings:*emit-type-annotations* nil))
-              `',(entry:entry-point (parser:read-program stream file ':macro)))))
+          (let ((settings:*emit-type-annotations* nil))
+            `',(entry:entry-point (parser:read-program stream file ':macro))))
 
         (coalton:coalton-codegen-types
-          (with-coalton-file (file stream)
-            (let ((settings:*emit-type-annotations* t))
-              `',(entry:entry-point (parser:read-program stream file ':macro)))))
+          (let ((settings:*emit-type-annotations* t))
+            `',(entry:entry-point (parser:read-program stream file ':macro))))
 
         (coalton:coalton-codegen-ast
-          (with-coalton-file (file stream)
-            (let* ((settings:*emit-type-annotations* nil)
-                   (ast nil)
-                   (codegen:*codegen-hook* (lambda (op &rest args)
-                                             (when (eql op ':AST)
-                                               (push args ast)))))
-              (entry:entry-point (parser:read-program stream file ':macro))
-              (loop :for (name type value) :in (nreverse ast)
-                    :do (format t "~A :: ~A~%~A~%~%~%" name type value))))
+          (let* ((settings:*emit-type-annotations* nil)
+                 (ast nil)
+                 (codegen:*codegen-hook* (lambda (op &rest args)
+                                           (when (eql op ':AST)
+                                             (push args ast)))))
+            (entry:entry-point (parser:read-program stream file ':macro))
+            (loop :for (name type value) :in (nreverse ast)
+                  :do (format t "~A :: ~A~%~A~%~%~%" name type value)))
           nil)
 
         (coalton:coalton
-          (with-coalton-file (file stream)
-            (entry:expression-entry-point (parser:read-expression stream file) file)))
+         (entry:expression-entry-point (parser:read-expression stream file)))
 
         ;; Fall back to reading the list manually
         (t
@@ -107,7 +68,7 @@ Used to forbid reading while inside quasiquoted forms.")
            (loop :do
              (handler-case
                  (multiple-value-bind (form presentp)
-                     (parser:maybe-read-form stream)
+                     (parser:maybe-read-form stream file)
 
                    (cond
                      ((and (not presentp)
@@ -119,7 +80,7 @@ Used to forbid reading while inside quasiquoted forms.")
                         (nreverse collected-forms)))
 
                      (dotted-context
-                      (when (nth-value 1 (parser:maybe-read-form stream))
+                      (when (nth-value 1 (parser:maybe-read-form stream file))
                         (error "Invalid dotted list"))
 
                       (return-from read-coalton-toplevel-open-paren
@@ -132,33 +93,6 @@ Used to forbid reading while inside quasiquoted forms.")
                    (error "Invalid dotted list"))
                  (setf dotted-context t)
                  (eclector.reader:recover c))))))))))
-
-(defun set-highlight-position-for-error (stream error)
-  "Set the highlight position within the editor using implementation specific magic."
-  #+sbcl
-  ;; We need some way of setting FILE-POSITION so that
-  ;; when Slime grabs the location of the error it
-  ;; highlights the correct form.
-  ;;
-  ;; In SBCL, we can't unread more than ~512
-  ;; characters due to limitations with ANSI streams,
-  ;; which breaks our old method of unreading
-  ;; characters until the file position is
-  ;; correct. Instead, we now patch in our own
-  ;; version of FILE-POSITION.
-  ;;
-  ;; This is a massive hack and might start breaking
-  ;; with future changes in SBCL.
-  (when (typep stream 'sb-impl::form-tracking-stream)
-    (let* ((file-offset
-             (- (sb-impl::fd-stream-get-file-position stream)
-                (file-position stream)))
-           (loc (se:source-error-location error)))
-      (setf (sb-impl::fd-stream-misc stream)
-            (lambda (stream operation arg1)
-              (if (= (sb-impl::%stream-opcode :get-file-position) operation)
-                  (+ file-offset loc 1)
-                  (sb-impl::tracking-stream-misc stream operation arg1)))))))
 
 (named-readtables:defreadtable coalton:coalton
   (:merge :standard)
@@ -179,9 +113,7 @@ Used to forbid reading while inside quasiquoted forms.")
 
 (defun compile-forms (mode forms)
   "Compile FORMS as Coalton using the indicated MODE."
-  (let ((*readtable* (named-readtables:ensure-readtable 'coalton:coalton))
-        (*compile-file-truename*
-          (pathname (format nil "COALTON-TOPLEVEL (~A)" *compile-file-truename*))))
+  (let ((*readtable* (named-readtables:ensure-readtable 'coalton:coalton)))
     (with-input-from-string (stream (print-form (cons mode forms)))
       (cl:read stream))))
 

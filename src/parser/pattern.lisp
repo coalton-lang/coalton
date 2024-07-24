@@ -1,6 +1,7 @@
 (defpackage #:coalton-impl/parser/pattern
   (:use
    #:cl
+   #:coalton-impl/source
    #:coalton-impl/parser/base)
   (:shadowing-import-from
    #:coalton-impl/parser/base
@@ -11,7 +12,7 @@
    (#:util #:coalton-impl/util))
   (:export
    #:pattern                            ; STRUCT
-   #:pattern-source                     ; ACCESSOR
+   #:pattern-location                     ; ACCESSOR
    #:pattern-list                       ; TYPE
    #:pattern-var                        ; STRUCT
    #:make-pattern-var                   ; ACCESSOR
@@ -47,7 +48,7 @@
 (defstruct (pattern
             (:constructor nil)
             (:copier nil))
-  (source (util:required 'source) :type cons :read-only t))
+  (location (util:required 'location) :type location :read-only t))
 
 (defmethod make-load-form ((self pattern) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -87,21 +88,20 @@
   (name     (util:required 'name)     :type identifier   :read-only t)
   (patterns (util:required 'patterns) :type pattern-list :read-only t))
 
-(defun parse-pattern (form file)
-  (declare (type cst:cst form)
-           (type se:file file))
+(defun parse-pattern (form source)
+  (declare (type cst:cst form))
 
   (cond
     ((and (cst:atom form)
           (typep (cst:raw form) 'util:literal-value))
      (make-pattern-literal
       :value (cst:raw form)
-      :source (cst:source form)))
+      :location (make-location source form)))
 
     ((and (cst:atom form)
           (eq (cst:raw form) 'coalton:_))
      (make-pattern-wildcard
-      :source (cst:source form)))
+      :location (make-location source form)))
 
     ((and (cst:atom form)
           (identifierp (cst:raw form)))
@@ -109,19 +109,19 @@
        (error 'parse-error
               :err  (se:source-error
                      :span (cst:source form)
-                     :file file
+                     :source source
                      :message "Invalid variable"
                      :primary-note "invalid variable name '_'")))
      (make-pattern-var
       :name (cst:raw form)
       :orig-name (cst:raw form)
-      :source (cst:source form)))
+      :location (make-location source form)))
 
     ((cst:atom form)
      (error 'parse-error
             :err (se:source-error
                   :span (cst:source form)
-                  :file file
+                  :source source
                   :message "Invalid pattern"
                   :primary-note "unknown pattern literal")))
 
@@ -129,7 +129,7 @@
      (error 'parse-error
             :err (se:source-error
                   :span (cst:source form)
-                  :file file
+                  :source source
                   :message "Invalid match branch"
                   :primary-note "unexpected dotted list")))
 
@@ -138,7 +138,7 @@
      (error 'parse-error
             :err (se:source-error
                   :span (cst:source (cst:first form))
-                  :file file
+                  :source source
                   :message "Invalid pattern"
                   :primary-note "invalid constructor in pattern")))
 
@@ -147,8 +147,8 @@
       :name (cst:raw (cst:first form))
       :patterns (loop :for patterns := (cst:rest form) :then (cst:rest patterns)
                       :while (cst:consp patterns)
-                      :collect (parse-pattern (cst:first patterns) file))
-      :source (cst:source form)))))
+                      :collect (parse-pattern (cst:first patterns) source))
+      :location (make-location source form)))))
 
 (defun pattern-variables (pattern)
   (declare (type t pattern)

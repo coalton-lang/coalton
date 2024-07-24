@@ -199,3 +199,20 @@ error: Malformed package declaration
    |
  2 |    (shadow ()))
    |            ^^ value must be a symbol
+
+================================================================================
+Unterminated package form
+================================================================================
+
+(package test
+  (import (something as s))
+
+--------------------------------------------------------------------------------
+
+error: Unterminated form
+  --> test:1:0
+   |
+ 1 |   (package test
+   |  _^
+ 2 | |   (import (something as s))
+   | |___________________________^ Missing close parenthesis for form starting at offset 0

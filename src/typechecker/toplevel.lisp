@@ -8,6 +8,7 @@
 (defpackage #:coalton-impl/typechecker/toplevel
   (:use
    #:cl
+   #:coalton-impl/source
    #:coalton-impl/typechecker/pattern
    #:coalton-impl/typechecker/expression)
   (:local-nicknames
@@ -20,22 +21,22 @@
    #:toplevel-define-name               ; ACCESSOR
    #:toplevel-define-params             ; ACCESSOR
    #:toplevel-define-body               ; ACCESSOR
-   #:toplevel-define-source             ; ACCESSOR
+   #:toplevel-define-location             ; ACCESSOR
    #:toplevel-define-list               ; TYPE
    #:instance-method-definition         ; STRUCT
    #:make-instance-method-definition    ; CONSTRUCTOR
    #:instance-method-definition-name    ; ACCESSOR
    #:instance-method-definition-params  ; ACCESSOR
    #:instance-method-definition-body    ; ACCESSOR
-   #:instance-method-definition-source  ; ACCESSOR
+   #:instance-method-definition-location  ; ACCESSOR
    #:instance-method-definition-list    ; TYPE
    #:toplevel-define-instance           ; STRUCT
    #:make-toplevel-define-instance      ; CONSTRUCTOR
    #:toplevel-define-instance-context   ; ACCESSOR
    #:toplevel-define-instance-pred      ; ACCESSOR
    #:toplevel-define-instance-methods   ; ACCESSOR
-   #:toplevel-define-instance-source    ; ACCESSOR
-   #:toplevel-define-instance-head-src  ; ACCESSOR
+   #:toplevel-define-instance-location    ; ACCESSOR
+   #:toplevel-define-instance-head-location  ; ACCESSOR
    #:toplevel-define-instance-list      ; TYPE
    ))
 
@@ -43,10 +44,10 @@
 
 (defstruct (toplevel-define
             (:copier nil))
-  (name    (util:required 'name)   :type node-variable :read-only t)
-  (params  (util:required 'params) :type pattern-list  :read-only t)
-  (body    (util:required 'body)   :type node-body     :read-only t)
-  (source  (util:required 'source) :type cons          :read-only t))
+  (name    (util:required 'name)   :type node-variable   :read-only t)
+  (params  (util:required 'params) :type pattern-list    :read-only t)
+  (body    (util:required 'body)   :type node-body       :read-only t)
+  (location  (util:required 'location) :type location :read-only t))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-define-list-p (x)
@@ -64,14 +65,14 @@
    :name (tc:apply-substitution subs (toplevel-define-name node))
    :params (tc:apply-substitution subs (toplevel-define-params node))
    :body (tc:apply-substitution subs (toplevel-define-body node))
-   :source (toplevel-define-source node)))
+   :location (toplevel-define-location node)))
 
 (defstruct (instance-method-definition
             (:copier nil))
-  (name    (util:required 'name)    :type node-variable :read-only t)
-  (params  (util:required 'params)  :type pattern-list  :read-only t)
-  (body    (util:required 'body)    :type node-body     :read-only t)
-  (source  (util:required 'source)  :type cons          :read-only t))
+  (name    (util:required 'name)    :type node-variable   :read-only t)
+  (params  (util:required 'params)  :type pattern-list    :read-only t)
+  (body    (util:required 'body)    :type node-body       :read-only t)
+  (location  (util:required 'location)  :type location :read-only t))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun instance-method-definition-list-p (x)
@@ -89,15 +90,20 @@
    :name (tc:apply-substitution subs (instance-method-definition-name method))
    :params (tc:apply-substitution subs (instance-method-definition-params method))
    :body (tc:apply-substitution subs (instance-method-definition-body method))
-   :source (instance-method-definition-source method)))
+   :location (instance-method-definition-location method)))
 
 (defstruct (toplevel-define-instance
             (:copier nil))
-  (context  (util:required 'context)  :type tc:ty-predicate-list :read-only t)
-  (pred     (util:required 'pred)     :type tc:ty-predicate      :read-only t)
-  (methods  (util:required 'methods)  :type hash-table           :read-only t)
-  (source   (util:required 'source)   :type cons                 :read-only t)
-  (head-src (util:required 'head-src) :type cons                 :read-only t))
+  (context
+   (util:required 'context)       :type tc:ty-predicate-list :read-only t)
+  (pred
+   (util:required 'pred)          :type tc:ty-predicate      :read-only t)
+  (methods
+   (util:required 'methods)       :type hash-table           :read-only t)
+  (location
+   (util:required 'location)      :type location             :read-only t)
+  (head-location
+   (util:required 'head-location) :type location             :read-only t))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-define-instance-list-p (x)

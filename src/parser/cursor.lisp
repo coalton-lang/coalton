@@ -187,14 +187,14 @@ If UNWRAP is NIL, return the CST node, otherwise, return the raw value."
                              :replacement #'identity
                              :message (note-text note)))
 
-(defun parse-error (file message syntax-error &optional notes)
+(defun parse-error (source message syntax-error &optional notes)
   "Rethrow SYNTAX-ERROR as a PARSE-ERROR."
   (destructuring-bind (primary-note &rest secondary-notes)
       (append (error-notes syntax-error) notes)
     (error
      'parse-error
      :err (se:source-error :span (note-span primary-note)
-                           :file file
+                           :source source
                            :message message
                            :primary-note (note-text primary-note)
                            :notes (mapcar #'note->source-note

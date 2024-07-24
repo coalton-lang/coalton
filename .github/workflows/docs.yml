@@ -42,7 +42,7 @@ jobs:
           cat <<EOF > run-docs.lisp
           (defun main (&rest args)
             (ql:quickload :coalton/doc)
-            (uiop:symbol-call :coalton-doc :write-stdlib-documentation-to-file
+            (uiop:symbol-call :coalton/doc :write-stdlib-documentation-to-file
               "/__w/coalton/coalton/coalton-website/content/reference.md" 
               :backend :hugo))
           EOF
