@@ -310,6 +310,43 @@
             (append funs binding-list-traversals)
             (list :bound-variables nil)))
 
+(defmethod tc:apply-substitution (subs (node node))
+  (declare (type tc:substitution-list subs)
+           (values node &optional))
+  (traverse
+   node
+   (list
+    (cons :after-each
+          (lambda (node)
+            (declare (type node node)
+                     (values node &optional))
+            (let ((result (copy-structure node)))
+              (setf (slot-value result 'type)
+                    (tc:apply-substitution subs (node-type result)))
+              result)))
+    (cons :after-direct-application
+          (lambda (node)
+            (declare (type node-direct-application node)
+                     (values node-direct-application &optional))
+            (make-node-direct-application
+             :type (node-type node)
+             :rator-type (tc:apply-substitution subs (node-direct-application-rator-type node))
+             :rator (node-direct-application-rator node)
+             :rands (node-direct-application-rands node))))
+    (cons :after-match
+          (lambda (node)
+            (declare (type node-match node)
+                     (values node-match &optional))
+            (make-node-match
+             :type (node-type node)
+             :expr (node-match-expr node)
+             :branches (mapcar
+                        (lambda (branch)
+                          (make-match-branch
+                           :pattern (tc:apply-substitution subs (match-branch-pattern branch))
+                           :body (match-branch-body branch)))
+                        (node-match-branches node))))))))
+
 (defmethod tc:type-variables ((node node))
   (declare (values tc:tyvar-list &optional))
   (let ((tyvars nil))
