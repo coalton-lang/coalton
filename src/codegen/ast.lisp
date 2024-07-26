@@ -478,7 +478,7 @@ both CL namespaces appearing in NODE"
 
 (defmethod tc:apply-substitution (subs (node match-branch))
   (make-match-branch
-   :pattern (match-branch-pattern node)
+   :pattern (tc:apply-substitution subs (match-branch-pattern node))
    :body (tc:apply-substitution subs (match-branch-body node))))
 
 (defmethod tc:apply-substitution (subs (node node-match))

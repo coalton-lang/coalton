@@ -24,8 +24,8 @@
    #:make-candidate-manager)
   (:import-from
    #:coalton-impl/codegen/transformations
-   #:traverse-bindings
    #:traverse
+   #:traverse-with-binding-list
    #:update-function-env
    #:make-function-table)
   (:local-nicknames
@@ -108,9 +108,7 @@
   (declare (type node node)
            (type hash-table table)
            (values node &optional))
-  (labels ((rewrite-direct-application (node &rest rest)
-             (declare (ignore rest)
-                      (dynamic-extent rest))
+  (labels ((rewrite-direct-application (node)
              (when (node-variable-p (node-application-rator node))
                (let ((name (node-variable-value (node-application-rator node))))
                  (when (and (gethash name table)
@@ -123,16 +121,12 @@
                       :rator name
                       :rands (node-application-rands node)))))))
 
-           (add-local-funs (node &rest rest)
-             (declare (ignore rest)
-                      (dynamic-extent rest))
+           (add-local-funs (node)
              (loop :for (name . node) :in (node-let-bindings node)
                    :when (node-abstraction-p node) :do
                      (setf (gethash name table) (length (node-abstraction-vars node)))))
 
-           (add-bind-fun (node &rest rest)
-             (declare (ignore rest)
-                      (dynamic-extent rest))
+           (add-bind-fun (node)
              (when (node-abstraction-p (node-bind-expr node))
                (setf (gethash (node-bind-name node) table) (length (node-abstraction-vars (node-bind-expr node)))))
              nil))
@@ -140,10 +134,9 @@
     (traverse
      node
      (list
-      (cons :application #'rewrite-direct-application)
+      (cons :after-application #'rewrite-direct-application)
       (cons :before-let #'add-local-funs)
-      (cons :before-bind #'add-bind-fun))
-     nil)))
+      (cons :before-bind #'add-bind-fun)))))
 
 (defun optimize-bindings-initial (bindings package env)
   (declare (type binding-list bindings)
@@ -274,9 +267,7 @@
 (defun canonicalize (node)
   (declare (type node node)
            (values node &optional))
-  (labels ((rewrite-application (node &rest rest)
-             (declare (ignore rest)
-                      (dynamic-extent rest))
+  (labels ((rewrite-application (node)
              (let ((rator (node-application-rator node))
                    (rands (node-application-rands node)))
                (when (node-application-p rator)
@@ -289,17 +280,13 @@
     (traverse
      node
      (list
-      (cons :application #'rewrite-application))
-     nil)))
-
+      (cons :after-application #'rewrite-application)))))
 
 (defun inline-methods (node env)
   (declare (type node node)
            (type tc:environment env)
            (values node &optional))
-  (labels ((inline-method (node &rest rest)
-             (declare (ignore rest)
-                      (dynamic-extent rest))
+  (labels ((inline-method (node)
              (let ((rator (node-application-rator node))
                    (rands (node-application-rands node)))
                (when (node-variable-p rator)
@@ -335,9 +322,7 @@
                                     :value inline-method-name)
                             :rands rands_))))))))
 
-           (inline-direct-method (node &rest rest)
-             (declare (ignore rest)
-                      (dynamic-extent rest))
+           (inline-direct-method (node)
              (let ((rands (node-direct-application-rands node)))
                (let (dict rands_)
                  (cond
@@ -368,14 +353,13 @@
                                          (mapcar #'node-type rands_)
                                          (node-type node))
                                   :value inline-method-name)
-                          :rands rands_)))))))) 
+                          :rands rands_))))))))
 
     (traverse
      node
      (list
-      (cons :application #'inline-method)
-      (cons :direct-application #'inline-direct-method))
-     nil)))
+      (cons :after-application #'inline-method)
+      (cons :after-direct-application #'inline-direct-method)))))
 
 (defun static-dict-lift (node name hoister package env)
   (declare (type node node)
@@ -384,9 +368,7 @@
            (type package package)
            (type tc:environment env)
            (values node &optional))
-  (labels ((lift-static-dict (node &rest rest)
-             (declare (ignore rest)
-                      (dynamic-extent rest))
+  (labels ((lift-static-dict (node)
              (unless (and
                       ;; The function is a variable
                       (node-variable-p (node-application-rator node))
@@ -404,15 +386,11 @@
 
              (hoist-definition node package hoister))
 
-           (handle-push-hoist-point (node &rest rest)
-             (declare (ignore rest)
-                      (dynamic-extent rest))
+           (handle-push-hoist-point (node)
              (push-hoist-point (node-abstraction-vars node) hoister)
              nil)
 
-           (handle-pop-hoist-point (node &rest rest)
-             (declare (ignore rest)
-                      (dynamic-extent rest))
+           (handle-pop-hoist-point (node)
              ;; If definitions were hoisted to this lambda
              ;; then add them to the ast
              (let ((hoisted (pop-hoist-point hoister)))
@@ -430,10 +408,9 @@
     (traverse
      node
      (list
-      (cons :application #'lift-static-dict)
+      (cons :after-application #'lift-static-dict)
       (cons :before-abstraction #'handle-push-hoist-point)
-      (cons :abstraction #'handle-pop-hoist-point))
-     nil)))
+      (cons :after-abstraction #'handle-pop-hoist-point)))))
 
 (defun resolve-compount-superclass (node env)
   (declare (type (or node-application node-direct-application node-variable) node)
@@ -514,11 +491,10 @@
                ;; Re-resolve the dictionary
                (resolve-static-dict superclass-pred nil env))))
 
-    (traverse
+    (traverse-with-binding-list
      node
      (list
-      (cons :field #'handle-static-superclass))
-     nil)))
+      (cons :after-field #'handle-static-superclass)))))
 
 (defun apply-specializations (node env)
   (declare (type node node)
@@ -528,9 +504,7 @@
   (when settings:*coalton-disable-specialization*
     (return-from apply-specializations node))
 
-  (labels ((apply-specialization (node &rest rest)
-             (declare (dynamic-extent rest)
-                      (ignore rest))
+  (labels ((apply-specialization (node)
              (let ((rator-name (node-rator-name node)))
                (unless rator-name
                  (return-from apply-specialization))
@@ -574,14 +548,13 @@
                      (t
                       (util:coalton-bug "Invalid specialization ~A~%" specialization))))))))
     (traverse
-     node 
+     node
      (list
-      (cons :application #'apply-specialization)
-      (cons :direct-application #'apply-specialization))
-     nil)))
+      (cons :after-application #'apply-specialization)
+      (cons :after-direct-application #'apply-specialization)))))
 
 (defun match-dynamic-extent-lift (node env)
-  "Stack allocates uncaptured ADTs constructed in the head of a match expression" 
+  "Stack allocates uncaptured ADTs constructed in the head of a match expression"
   (declare (type node node)
            (type tc:environment env)
            (values node &optional))
@@ -591,9 +564,7 @@
   (unless (settings:coalton-release-p)
     (return-from match-dynamic-extent-lift node))
 
-  (labels ((apply-lift (node &rest rest)
-             (declare (dynamic-extent rest)
-                      (ignore rest))
+  (labels ((apply-lift (node)
 
              ;; If the constructed value is captured by a variable
              ;; pattern, then it can escape the match branches scope,
@@ -633,5 +604,4 @@
     (traverse
      node
      (list
-      (cons :match #'apply-lift))
-     nil)))
+      (cons :after-match #'apply-lift)))))

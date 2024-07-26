@@ -11,204 +11,181 @@
    (#:tc #:coalton-impl/typechecker))
   (:export
    #:traverse
-   #:traverse-bindings
+   #:traverse-with-binding-list
    #:update-function-env
-   #:make-function-t))
+   #:make-function-t
+   #:substitute-fresh-type-variables))
 
 (in-package #:coalton-impl/codegen/transformations)
 
-(defun traverse-bindings (bindings funs)
-  (declare (type binding-list bindings)
-           (values binding-list))
-  (loop :for (name . node) :in bindings
-        :collect (cons name (traverse node funs nil))))
-
-(defun call-if (node key funs bound-variables)
-  (declare (type node node)
-           (type symbol key)
+(defun call-if (key funs args node)
+  (declare (type symbol key)
+           (type list   funs)
+           (type list   args)
+           (type node   node)
            (values node &optional))
-  (let ((f (cdr (assoc key funs))))
-    (if f
-        (or (funcall f node :bound-variables bound-variables) node)
-        node)))
+  (or
+   (alexandria:when-let ((f (cdr (assoc key funs))))
+     (apply f (cons node args)))
+   node))
 
-(defgeneric traverse (node funs bound-variables)
-  (:method ((node node-literal) funs bound-variables)
-    (declare (type util:symbol-list bound-variables)
-             (values node &optional))
-    (call-if node :literal funs bound-variables))
+(defmacro traverse-if (key funs args before-node else-expr)
+  (let ((before-key
+          (alexandria:make-keyword (concatenate 'string "BEFORE-" (symbol-name key))))
+        (traverse-key
+          (alexandria:make-keyword (concatenate 'string "TRAVERSE-" (symbol-name key))))
+        (after-key
+          (alexandria:make-keyword (concatenate 'string "AFTER-" (symbol-name key)))))
+    `(let* ((node
+              (call-if ,before-key ,funs ,args ,before-node))
+            (after-node
+              (alexandria:if-let ((f (cdr (assoc ,traverse-key ,funs))))
+                (apply f (cons node (cons ,funs ,args)))
+                ,else-expr)))
+       (call-if ,after-key ,funs ,args after-node))))
 
-  (:method ((node node-variable) funs bound-variables)
-    (declare (type util:symbol-list bound-variables)
-             (values node &optional))
-    (call-if node :variable funs bound-variables))
+(defun traverse (node funs &optional (args nil))
+  "Wrap `in-traverse` with a pre-operation and a post-operation"
+  (declare (type node node)
+           (type list funs)
+           (type list args)
+           (values node &optional))
+  (call-if :after-each funs args
+           (in-traverse (call-if :before-each funs args node)
+                        funs
+                        args)))
 
-  (:method ((node node-application) funs bound-variables)
-    (declare (type util:symbol-list bound-variables)
-             (values node &optional))
-    (let ((node
-            (make-node-application
-             :type (node-type node)
-             :rator (traverse (node-application-rator node) funs bound-variables)
-             :rands (mapcar
-                     (lambda (node)
-                       (traverse node funs bound-variables))
-                     (node-application-rands node)))))
-      (call-if node :application funs bound-variables)))
+(defgeneric in-traverse (node funs args)
+  (:method ((node node-literal) funs args)
+    (call-if :literal funs args node))
 
-  (:method ((node node-direct-application) funs bound-variables)
-    (declare (type util:symbol-list bound-variables))
-    (let ((node
-            (make-node-direct-application
-             :type (node-type node)
-             :rator-type (node-direct-application-rator-type node)
-             :rator (node-direct-application-rator node)
-             :rands (mapcar
-                     (lambda (node)
-                       (traverse node funs bound-variables))
-                     (node-direct-application-rands node)))))
-      (call-if node :direct-application funs bound-variables)))
+  (:method ((node node-variable) funs args)
+    (call-if :variable funs args node))
 
-  (:method ((node node-abstraction) funs bound-variables)
-    (declare (type util:symbol-list bound-variables))
-    (call-if node :before-abstraction funs bound-variables)
-    (let ((node
-            (make-node-abstraction
-             :type (node-type node)
-             :vars (node-abstraction-vars node)
-             :subexpr (traverse
-                       (node-abstraction-subexpr node)
-                       funs
-                       (append (node-abstraction-vars node) bound-variables)))))
-      (call-if node :abstraction funs bound-variables)))
+  (:method ((node node-application) funs args)
+    (traverse-if :application funs args node
+                 (make-node-application
+                  :type (node-type node)
+                  :rator (traverse (node-application-rator node) funs args)
+                  :rands (mapcar
+                          (lambda (node)
+                            (traverse node funs args))
+                          (node-application-rands node)))))
 
-  (:method ((node node-let) funs bound-variables)
-    (declare (type util:symbol-list bound-variables))
-    (call-if node :before-let funs bound-variables)
-    (let* ((new-bound-variables (append (mapcar #'car (node-let-bindings node)) bound-variables))
-           (node
-             (make-node-let
-              :type (node-type node)
-              :bindings (loop :for (name . node) :in (node-let-bindings node)
-                              :collect (cons name (traverse node funs new-bound-variables)))
-              :subexpr (traverse (node-let-subexpr node) funs new-bound-variables))))
-      (call-if node :let funs bound-variables)))
+  (:method ((node node-direct-application) funs args)
+    (traverse-if :direct-application funs args node
+                 (make-node-direct-application
+                  :type (node-type node)
+                  :rator-type (node-direct-application-rator-type node)
+                  :rator (node-direct-application-rator node)
+                  :rands (mapcar
+                          (lambda (node)
+                            (traverse node funs args))
+                          (node-direct-application-rands node)))))
 
-  (:method ((node node-lisp) funs bound-variables)
-    (declare (type util:symbol-list bound-variables))
-    (call-if node :lisp funs bound-variables))
+  (:method ((node node-abstraction) funs args)
+    (traverse-if :abstraction funs args node
+                 (make-node-abstraction
+                  :type (node-type node)
+                  :vars (node-abstraction-vars node)
+                  :subexpr (traverse
+                            (node-abstraction-subexpr node)
+                            funs
+                            args))))
 
-  (:method ((node match-branch) funs bound-variables)
-    (declare (type util:symbol-list bound-variables))
-    (make-match-branch
-     :pattern (match-branch-pattern node)
-     :body (traverse
-            (match-branch-body node)
-            funs
-            (append (pattern-variables (match-branch-pattern node)) bound-variables))))
+  (:method ((node node-let) funs args)
+    (traverse-if :let funs args node
+                 (make-node-let
+                  :type (node-type node)
+                  :bindings (loop :for (name . node) :in (node-let-bindings node)
+                                  :collect (cons name (traverse node funs args)))
+                  :subexpr (traverse (node-let-subexpr node) funs args))))
 
-  (:method ((node node-match) funs bound-variables)
-    (declare (type util:symbol-list bound-variables))
-    (let ((node
-            (make-node-match
-             :type (node-type node)
-             :expr (traverse (node-match-expr node) funs bound-variables)
-             :branches (mapcar
-                        (lambda (node)
-                          (traverse node funs bound-variables))
-                        (node-match-branches node)))))
-      (call-if node :match funs bound-variables)))
+  (:method ((node node-lisp) funs args)
+    (call-if :lisp funs args node))
 
-  (:method ((node node-while) funs bound-variables)
-    (declare (type util:symbol-list bound-variables))
-    (let ((node
-            (make-node-while
-             :type (node-type node)
-             :label (node-while-label node)
-             :expr (traverse (node-while-expr node) funs bound-variables)
-             :body (traverse (node-while-body node) funs bound-variables))))
-      (call-if node :while funs bound-variables)))
+  (:method ((node node-match) funs args)
+    (traverse-if :match funs args node
+                 (make-node-match
+                  :type (node-type node)
+                  :expr (traverse (node-match-expr node) funs args)
+                  :branches (mapcar
+                             (lambda (branch)
+                               (make-match-branch
+                                :pattern (match-branch-pattern branch)
+                                :body (traverse
+                                       (match-branch-body branch)
+                                       funs
+                                       args)))
+                             (node-match-branches node)))))
 
-  (:method ((node node-while-let) funs bound-variables)
-    (declare (type util:symbol-list bound-variables))
-    (let ((node
-            (make-node-while-let
-             :type tc:*unit-type*
-             :label (node-while-let-label node)
-             :pattern (node-while-let-pattern node)
-             :expr (traverse (node-while-let-expr node) funs bound-variables)
-             :body (traverse (node-while-let-body node) funs bound-variables))))
-      (call-if node :while-let funs bound-variables)))
+  (:method ((node node-while) funs args)
+    (traverse-if :while funs args node
+                 (make-node-while
+                  :type (node-type node)
+                  :label (node-while-label node)
+                  :expr (traverse (node-while-expr node) funs args)
+                  :body (traverse (node-while-body node) funs args))))
 
-  (:method ((node node-loop) funs bound-variables)
-    (declare (type util:symbol-list bound-variables))
-    (let ((node
-            (make-node-loop
-             :type tc:*unit-type*
-             :label (node-loop-label node)
-             :body (traverse (node-loop-body node) funs bound-variables))))
-      (call-if node :loop funs bound-variables)))
+  (:method ((node node-while-let) funs args)
+    (traverse-if :while-let funs args node
+                 (make-node-while-let
+                  :type (node-type node)
+                  :label (node-while-let-label node)
+                  :pattern (node-while-let-pattern node)
+                  :expr (traverse (node-while-let-expr node) funs args)
+                  :body (traverse (node-while-let-body node) funs args))))
 
-  (:method ((node node-break) funs bound-variables)
-    (declare (type util:symbol-list bound-variables))
-    (call-if node :break funs bound-variables))
+  (:method ((node node-loop) funs args)
+    (traverse-if :loop funs args node
+                 (make-node-loop
+                  :type (node-type node)
+                  :label (node-loop-label node)
+                  :body (traverse (node-loop-body node) funs args))))
 
-  (:method ((node node-continue) funs bound-variables)
-    (declare (type util:symbol-list bound-variables))
-    (call-if node :continue funs bound-variables))
+  (:method ((node node-break) funs args)
+    (call-if :break funs args node))
 
-  (:method ((node node-seq) funs bound-variables)
-    (declare (type util:symbol-list bound-variables))
-    (let ((node
-            (make-node-seq
-             :type (node-type node)
-             :nodes (mapcar
-                     (lambda (node)
-                       (traverse node funs bound-variables))
-                     (node-seq-nodes node)))))
-      (call-if node :seq funs bound-variables)))
+  (:method ((node node-continue) funs args)
+    (call-if :continue funs args node))
 
-  (:method ((node node-return) funs bound-variables)
-    (declare (type util:symbol-list bound-variables))
-    (let ((node
-            (make-node-return
-             :type (node-type node)
-             :expr (traverse (node-return-expr node) funs bound-variables))))
-      (call-if node :return funs bound-variables)))
+  (:method ((node node-seq) funs args)
+    (traverse-if :seq funs args node
+                 (make-node-seq
+                  :type (node-type node)
+                  :nodes (mapcar
+                          (lambda (node)
+                            (traverse node funs args))
+                          (node-seq-nodes node)))))
 
-  (:method ((node node-field) funs bound-variables)
-    (declare (type util:symbol-list bound-variables))
-    (let ((node
-            (make-node-field
-             :type (node-type node)
-             :name (node-field-name node)
-             :dict (traverse (node-field-dict node) funs bound-variables))))
-      (call-if node :field funs bound-variables)))
+  (:method ((node node-return) funs args)
+    (traverse-if :return funs args node
+                 (make-node-return
+                  :type (node-type node)
+                  :expr (traverse (node-return-expr node) funs args))))
 
-  (:method ((node node-dynamic-extent) funs bound-variables)
-    (declare (type util:symbol-list bound-variables))
-    (let* ((new-bound-variables (cons (node-dynamic-extent-name node) bound-variables))
+  (:method ((node node-field) funs args)
+    (traverse-if :field funs args node
+                 (make-node-field
+                  :type (node-type node)
+                  :name (node-field-name node)
+                  :dict (traverse (node-field-dict node) funs args))))
 
-           (node
-             (make-node-dynamic-extent
-              :type (node-type node)
-              :name (node-dynamic-extent-name node)
-              :node (traverse (node-dynamic-extent-node node) funs new-bound-variables)
-              :body (traverse (node-dynamic-extent-body node) funs new-bound-variables))))
-      (call-if node :dynamic-extent funs bound-variables)))
+  (:method ((node node-dynamic-extent) funs args)
+    (traverse-if :dynamic-extent funs args node
+                 (make-node-dynamic-extent
+                  :type (node-type node)
+                  :name (node-dynamic-extent-name node)
+                  :node (traverse (node-dynamic-extent-node node) funs args)
+                  :body (traverse (node-dynamic-extent-body node) funs args))))
 
-  (:method ((node node-bind) funs bound-variables)
-    (declare (type util:symbol-list bound-variables))
-    (call-if node :before-bind funs bound-variables)
-    (let* ((new-bound-variables (cons (node-bind-name node) bound-variables))
-
-           (node
-             (make-node-bind
-              :type (node-type node)
-              :name (node-bind-name node)
-              :expr (traverse (node-bind-expr node) funs new-bound-variables)
-              :body (traverse (node-bind-body node) funs new-bound-variables))))
-      (call-if node :bind funs bound-variables))))
+  (:method ((node node-bind) funs args)
+    (traverse-if :bind funs args node
+                 (make-node-bind
+                  :type (node-type node)
+                  :name (node-bind-name node)
+                  :expr (traverse (node-bind-expr node) funs args)
+                  :body (traverse (node-bind-body node) funs args)))))
 
 (defun split-binding-definitions (bindings)
   (let ((functions nil)
@@ -246,3 +223,134 @@
     (fset:do-map (name entry (immutable-map-data (tc:environment-function-environment env)))
       (setf (gethash name table) (tc:function-env-entry-arity entry)))
     table))
+
+(defvar binding-list-traversals
+  (list
+   (cons :traverse-abstraction
+         (lambda (node funs &key bound-variables)
+           (declare (type node-abstraction node)
+                    (type list funs)
+                    (type util:symbol-list bound-variables)
+                    (values node-abstraction &optional))
+           (make-node-abstraction
+            :type (node-type node)
+            :vars (node-abstraction-vars node)
+            :subexpr (traverse
+                      (node-abstraction-subexpr node)
+                      funs
+                      (list :bound-variables
+                            (append (node-abstraction-vars node) bound-variables))))))
+   (cons :traverse-let
+         (lambda (node funs &key bound-variables)
+           (declare (type node-let node)
+                    (type list funs)
+                    (type util:symbol-list bound-variables)
+                    (values node-let &optional))
+           (let ((new-args (list :bound-variables
+                                 (append
+                                  (mapcar #'car (node-let-bindings node))
+                                  bound-variables))))
+             (make-node-let
+              :type (node-type node)
+              :bindings (loop :for (name . node) :in (node-let-bindings node)
+                              :collect (cons name (traverse node funs new-args)))
+              :subexpr (traverse (node-let-subexpr node) funs new-args)))))
+   (cons :traverse-match
+         (lambda (node funs &key bound-variables)
+           (declare (type node-match node)
+                    (type list funs)
+                    (type util:symbol-list bound-variables)
+                    (values node-match &optional))
+           (make-node-match
+            :type (node-type node)
+            :expr (traverse (node-match-expr node) funs (list :bound-variables bound-variables))
+            :branches (mapcar
+                       (lambda (branch)
+                         (make-match-branch
+                          :pattern (match-branch-pattern branch)
+                          :body (traverse
+                                 (match-branch-body branch)
+                                 funs
+                                 (list :bound-variables
+                                       (append (pattern-variables (match-branch-pattern branch))
+                                               bound-variables)))))
+                       (node-match-branches node)))))
+   (cons :traverse-dynamic-extent
+         (lambda (node funs &key bound-variables)
+           (declare (type node-dynamic-extent node)
+                    (type list funs)
+                    (type util:symbol-list bound-variables)
+                    (values node-dynamic-extent &optional))
+           (let ((new-args (list :bound-variables
+                                 (cons (node-dynamic-extent-name node) bound-variables))))
+             (make-node-dynamic-extent
+              :type (node-type node)
+              :name (node-dynamic-extent-name node)
+              :node (traverse (node-dynamic-extent-node node) funs new-args)
+              :body (traverse (node-dynamic-extent-body node) funs new-args)))))
+   (cons :traverse-bind
+         (lambda (node funs &key bound-variables)
+           (declare (type node-bind node)
+                    (type list funs)
+                    (type util:symbol-list bound-variables)
+                    (values node-bind &optional))
+           (let ((new-args (list :bound-variables
+                                 (cons (node-bind-name node) bound-variables))))
+             (make-node-bind
+              :type (node-type node)
+              :name (node-bind-name node)
+              :expr (traverse (node-bind-expr node) funs new-args)
+              :body (traverse (node-bind-body node) funs new-args)))))))
+
+(defun traverse-with-binding-list (node funs)
+  (declare (type node node)
+           (type list funs)
+           (values node &optional))
+  (traverse node
+            (append funs binding-list-traversals)
+            (list :bound-variables nil)))
+
+(defmethod tc:type-variables ((node node))
+  (declare (values tc:tyvar-list &optional))
+  (let ((tyvars nil))
+    (traverse
+     node
+     (list
+      (cons :after-each
+            (lambda (node)
+              (declare (type node node)
+                       (values))
+              (alexandria:unionf tyvars
+                                 (tc:type-variables (node-type node)))
+              (values)))
+      (cons :after-direct-application
+            (lambda (node)
+              (declare (type node-direct-application node)
+                       (values))
+              (alexandria:unionf tyvars
+                                 (tc:type-variables (node-direct-application-rator-type node)))
+              (values)))
+      (cons :after-match
+            (lambda (node)
+              (declare (type node-match node)
+                       (values))
+              (mapcar
+               (lambda (branch)
+                 (alexandria:unionf tyvars
+                                    (tc:type-variables (match-branch-pattern branch))))
+               (node-match-branches node))
+              (values)))))
+    tyvars))
+
+(defun substitute-fresh-type-variables (node)
+  (declare (type node node)
+           (values node &optional))
+  (alexandria:if-let ((old-type-variables (tc:type-variables node)))
+    (tc:apply-substitution
+     (mapcar (lambda (tyvar)
+               (tc:make-substitution
+                :from tyvar
+                :to (tc:make-variable (tc:kind-of tyvar))))
+             old-type-variables)
+     node)
+    node))

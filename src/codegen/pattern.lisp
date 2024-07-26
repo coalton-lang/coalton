@@ -92,30 +92,44 @@
 ;;; Methods
 ;;;
 
-(defmethod tc:apply-substitution (subs (node pattern-var))
+(defmethod tc:apply-substitution (subs (pattern pattern-var))
   (declare (type tc:substitution-list subs)
            (values pattern-var &optional))
   (make-pattern-var
-   :type (tc:apply-substitution subs (pattern-type node))
-   :name (pattern-var-name node)))
+   :type (tc:apply-substitution subs (pattern-type pattern))
+   :name (pattern-var-name pattern)))
 
-(defmethod tc:apply-substitution (subs (node pattern-literal))
+(defmethod tc:apply-substitution (subs (pattern pattern-literal))
   (declare (type tc:substitution-list subs)
            (values pattern-literal &optional))
   (make-pattern-literal
-   :type (tc:apply-substitution subs (pattern-type node))
-   :value (pattern-literal-value node)))
+   :type (tc:apply-substitution subs (pattern-type pattern))
+   :value (pattern-literal-value pattern)))
 
-(defmethod tc:apply-substitution (subs (node pattern-wildcard))
+(defmethod tc:apply-substitution (subs (pattern pattern-wildcard))
   (declare (type tc:substitution-list subs)
            (values pattern-wildcard &optional))
   (make-pattern-wildcard
-   :type (tc:apply-substitution subs (pattern-type node))))
+   :type (tc:apply-substitution subs (pattern-type pattern))))
 
-(defmethod tc:apply-substitution (subs (node pattern-constructor))
+(defmethod tc:apply-substitution (subs (pattern pattern-constructor))
   (declare (type tc:substitution-list subs)
            (values pattern-constructor &optional))
   (make-pattern-constructor
-   :type (tc:apply-substitution subs (pattern-type node))
-   :name (pattern-constructor-name node)
-   :patterns (tc:apply-substitution subs (pattern-constructor-patterns node))))
+   :type (tc:apply-substitution subs (pattern-type pattern))
+   :name (pattern-constructor-name pattern)
+   :patterns (tc:apply-substitution subs (pattern-constructor-patterns pattern))))
+
+(defmethod tc:type-variables ((pattern pattern-var))
+  (tc:type-variables (pattern-type pattern)))
+
+(defmethod tc:type-variables ((pattern pattern-literal))
+  (tc:type-variables (pattern-type pattern)))
+
+(defmethod tc:type-variables ((pattern pattern-wildcard))
+  (tc:type-variables (pattern-type pattern)))
+
+(defmethod tc:type-variables ((pattern pattern-constructor))
+  (remove-duplicates (alexandria:mappend #'tc:type-variables
+                                         (cons (pattern-type pattern)
+                                               (pattern-constructor-patterns pattern)))))
