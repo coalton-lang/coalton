@@ -311,6 +311,9 @@
       (cons :application #'rewrite-application))
      nil)))
 
+(defvar *inline-expansion-limit* 50
+  "The depth until which inline-application or inline-direct-application will be called.")
+(declaim (type (integer 0) *inline-expansion-limit*))
 
 (defun inline-applications (node env)
   (declare (type node node)
@@ -360,8 +363,8 @@
                                          subs
                                          (node-abstraction-subexpr code))
                                         (list
-                                         (cons :application #'inline-application)
-                                         (cons :direct-application #'inline-direct-application))
+                                         (cons :application (inline-with-guards #'inline-application))
+                                         (cons :direct-application (inline-with-guards #'inline-direct-application)))
                                         nil))
                              env)))
                          (t
@@ -373,19 +376,19 @@
                                           (node-type node))
                                    :value name)
                            :rands rands)))))))
+
            (inline-direct-application (node &rest rest)
              (declare (ignore rest)
                       (dynamic-extent rest)
                       (optimize debug))
-             ;; FIXME: This code is probably never called.
              (let* ((rator (node-direct-application-rator node))
                     (rands (node-direct-application-rands node)))
-
                (let (dict rands_)
                  (cond
                    ((node-variable-p (first rands))
                     (setf dict (node-variable-value (first rands)))
                     (setf rands_ (cdr rands)))
+                   ;; FIXME: Is the below cond clause necessary?
                    ((and (node-application-p (first rands))
                          (node-variable-p (node-application-rator (first rands))))
                     (setf dict (node-variable-value (node-application-rator (first rands))))
@@ -431,8 +434,8 @@
                                            subs
                                            (node-abstraction-subexpr code))
                                           (list
-                                           (cons :application #'inline-application)
-                                           (cons :direct-application #'inline-direct-application))
+                                           (cons :application (inline-with-guards #'inline-application))
+                                           (cons :direct-application (inline-with-guards #'inline-direct-application)))
                                           nil))
                                env)))
                            (t
@@ -440,13 +443,20 @@
                              :type (node-type node)
                              :rator-type (node-direct-application-rator-type node)
                              :rator (node-direct-application-rator node)
-                             :rands rands)))))))))
+                             :rands rands))))))))
+
+           (inline-with-guards (inliner)
+             (lambda (node &rest rest)
+               (if (zerop *inline-expansion-limit*)
+                   node
+                   (let ((*inline-expansion-limit* (1- *inline-expansion-limit*)))
+                     (apply inliner node rest))))))
 
     (traverse
      node
      (list
-      (cons :application #'inline-application)
-      (cons :direct-application #'inline-direct-application))
+      (cons :application (inline-with-guards #'inline-application))
+      (cons :direct-application (inline-with-guards #'inline-direct-application)))
      nil)))
 
 

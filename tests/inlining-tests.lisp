@@ -91,3 +91,17 @@
                (coalton-impl/codegen/ast:node-abstraction-subexpr
                 (coalton:lookup-code
                  'coalton-native-tests::method-for-inline-test-caller)))))))
+
+(deftest recursive-inline-test ()
+  (signals nil
+    (check-coalton-types
+     "(inline)
+      (define (factorial-1 n)
+        (if (== n 0)
+            1
+            (* n (factorial-2 (- n 1)))))
+      (inline)
+      (define (factorial-2 n)
+        (if (== n 0)
+            1
+            (* n (factorial-1 (- n 1)))))")))
