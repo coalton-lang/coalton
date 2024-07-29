@@ -142,24 +142,32 @@ Recommendations:
 \item coalton/class/iterator
 \item coalton/class/monad
 \item coalton/data
-\item coalton/data/array
 \item coalton/data/byte
 \item coalton/data/char
+\item coalton/data/mutable
+\item coalton/data/string
+
 \item coalton/data/hash
+\item coalton/data/array
 \item coalton/data/list
 \item coalton/data/map
-\item coalton/data/mutable
 \item coalton/data/queue
 \item coalton/data/seq
-\item coalton/data/string
 \item coalton/data/tuple
 \item coalton/data/tree
 \item coalton/data/vector
+
 \item coalton/function
 \item coalton/math
 \item coalton/sys
 \item coalton/sys/file
 \end {itemize}
+
+\todo{note on 'data'}
+
+Char and list are pretty different: grouping them under the heading of 'data' doesn't seem right. One is a very primitive, concrete system thing, the other a higher level abstraction/composite type.
+
+
 
 Note the idea to merge slice and array
 \todo{note}
@@ -183,7 +191,9 @@ clearly mark that this is a CL rational
 
 \section{Hashing}
 
-do other langauges "Expose an interface to hashing"
+Question: do other languages "expose an interface to hashing."
+
+\todo{note} add example: hashable label type with string-typed label.
 
 \section{ADTs}
 
@@ -193,18 +203,19 @@ write a whole para on traverse. the methods all need descriptions
 
 talk about traversable and sequence
 
-there should be a simple syntax for defining new byte types
-
 \subsubsection{coalton-library/classes}
 
 All of the stuff about tuples should be defined in the same file. Some
-is in classes, somme is in tuple.
+is in classes, some is in tuple.
 
 The statement 'heterogeneous collection of itsm' is inaccurate.
 
 What is the core stuff that belongs in classes
 
-Note: there should be some way to easily define a bit or byte type - for U7, or whatever particular value.
+Note: there should be some way to easily define a bit or byte type -
+for U7, or whatever particular value. See also notes in ... math bits?
+... about taking machine types (U8, I8) and 1 taking their definitions
+out of core 2) into a single package in std lib.
 
 N: rationalization of max and min
 
@@ -360,5 +371,31 @@ DO dpb and variable width bitfield operations go into bits?
 ascii - really means utf8 or whatever the platform uses
 
 the char package needs to have all of its assumptions checked
+
+\section{Quasar Notes, Late July}
+
+MPFR dependency is annoying because it will tend to crash you out if
+you have a standard SBCL and run the test suites.
+
+Recommendation: move big float (and associated tests) to secondary library.
+
+Build and test the secondary libraries in a separate, optional phase.
+
+Maybe 'math' (and all of its subpackages) is the 'premiere' secondary
+library. What in primary might depend on it?
+
+Discussion of IO and the difficulty of writing simple parsers, like,
+for common stuff, like CSV.
+
+Put regular expressions into the standard library, i.e., wrap CL-PPCRE.
+
+Concrete syntax: (, {, [ .. can it be done?
+
+  
+
+
+
+
+
 
 \end{document}

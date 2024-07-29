@@ -2,6 +2,10 @@
 ;;;;
 ;;;; Instances for primitive numerical types
 
+;; discussing which parts of this file ought to remain if math and its
+;; many subpackages are moved into a secondary library.
+
+
 (coalton-library/utils:defstdlib-package #:coalton-library/math/num
   (:use
    #:coalton
@@ -43,15 +47,21 @@
   (cl:defmacro define-eq (type)
     `(define-instance (Eq ,type)
        (define (== a b)
-         (lisp Boolean (a b)
+           (lisp Boolean (a b) ; NOTE: lisp, lisp-toplevel, repr are a "ffi package"
+                 
            ;; Use cl:= so that (== 0.0 -0.0) => True
            (cl:= a b))))))
 
 (coalton-toplevel
-  (define-eq Integer)
+  (define-eq Integer)                   ; These 3 should remain
+                                        ; 'core standard library'
   (define-eq IFix)
   (define-eq UFix)
-  (define-eq I8)
+  (define-eq I8)                        ; TODO all of these
+                                        ; machine-word-width types are
+                                        ; smeared across dozens of
+                                        ; files -- put it all in one
+                                        ; places
   (define-eq U8)
   (define-eq I16)
   (define-eq U16)
@@ -59,8 +69,9 @@
   (define-eq U32)
   (define-eq I64)
   (define-eq U64)
-  (define-eq Single-Float)
-  (define-eq Double-Float))
+  (define-eq Single-Float)              ; Evict this one?
+  (define-eq Double-Float))             ; Just cal it 'float' like other common modern languages (js, python, swift, etc)
+
 
 ;;;
 ;;; Ord Instances
