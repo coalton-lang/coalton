@@ -9,7 +9,8 @@
    (#:tc #:coalton-impl/typechecker))
   (:export
    #:node                               ; STRUCT
-   #:node-type                          ; ACCESSOR
+   #:node-type                          ; READER
+   #:copy-node                          ; FUNCTION
    #:node-list                          ; TYPE
    #:binding-list                       ; TYPE
    #:node-literal                       ; STRUCT
@@ -112,8 +113,19 @@
 ;;;
 
 
-(defstruct (node (:constructor nil))
-  (type (util:required 'type) :type tc:ty :read-only t))
+(defstruct (node (:constructor nil)
+                 (:copier %copy-node))
+  (type (util:required 'type) :type tc:ty))
+
+(defun copy-node (node &optional (new-type nil supplied-p))
+  "Make a copy of `node`, optionally with a new type `new-type`."
+  (declare (type node node)
+           (type (or null tc:ty) new-type)
+           (values node &optional))
+  (let ((result (%copy-node node)))
+    (when supplied-p
+      (setf (node-type result) new-type))
+    result))
 
 (defmethod make-load-form ((self node) &optional env)
   (make-load-form-saving-slots self :environment env))

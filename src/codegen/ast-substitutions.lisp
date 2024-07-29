@@ -36,7 +36,7 @@
   (traverse
    node
    (list
-    (cons :variable
+    (cons ':variable
           (lambda (node)
             (declare (type node-variable node)
                      (values node &optional))
@@ -44,7 +44,7 @@
                 ((res (find (node-variable-value node) subs :key #'ast-substitution-from)))
               (ast-substitution-to res)
               node)))
-    (cons :lisp
+    (cons ':lisp
           (lambda (node)
             (declare (type node-lisp node)
                      (values (or node-lisp node-let) &optional))
@@ -72,7 +72,7 @@
                      :type (node-type node)
                      :bindings let-bindings
                      :subexpr new-lisp-node))))))
-    (cons :before-direct-application
+    (cons ':before-direct-application
           (lambda (node)
             (declare (type node-direct-application node)
                      (values))
@@ -80,7 +80,7 @@
               (util:coalton-bug
                "Failure to apply ast substitution on variable ~A to node-direct-application"
                (node-direct-application-rator node)))))
-    (cons :before-let
+    (cons ':before-let
           (lambda (node)
             (declare (type node-let node)
                      (values))

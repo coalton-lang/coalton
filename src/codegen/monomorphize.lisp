@@ -347,8 +347,8 @@ propagate dictionaries that have been moved by the hoister."
     (traverse-with-binding-list
      node
      (list
-      (cons :after-direct-application #'validate-candidate)
-      (cons :after-application #'validate-candidate))))
+      (cons ':after-direct-application #'validate-candidate)
+      (cons ':after-application #'validate-candidate))))
   (values))
 
 
@@ -409,8 +409,8 @@ propagate dictionaries that have been moved by the hoister."
     (traverse-with-binding-list
      node
      (list
-      (cons :after-application #'apply-candidate)
-      (cons :after-direct-application #'apply-candidate)))))
+      (cons ':after-application #'apply-candidate)
+      (cons ':after-direct-application #'apply-candidate)))))
 
 (defun monomorphize (name manager package resolve-table optimize-node env)
   (declare (type symbol name)
