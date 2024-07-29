@@ -1,0 +1,364 @@
+\documentclass[12pt]{article}
+\usepackage[]{todonotes}
+
+\title{The Coalton Standard Library}
+
+\begin{document}
+
+\maketitle
+\section{Introduction}
+The Coalton standard library is a set of foundational packages that
+are developed alongside the core language and share a common release
+and versioning schedule. This report provides recommendations for the
+scope, organization and content of these packages.
+
+A principle: the core language should be as small as is reasonable,
+and when possible, types should be defined in the standard library,
+rather than as intrinsic to the core language. A more complex set of
+criteria guide the distinction between standard library, and secondary
+libraries.
+
+\todo {naming} Neither 'secondary' nor 'contributed' libraries
+captures the idea clearly.
+
+The standard library should be sufficient to self-update.
+\todo {update principle}
+
+\section{Recommendations}
+
+Discuss extended data syntax, with proposal to adopt EDN-style
+notation for maps and vectors.
+\todo {readable data syntax}
+
+\subsection{General Recommendations}
+
+\begin{itemize}
+\item All docs should have a trivial but illustrative example with a
+  known output.
+\item Avoid ambiguity resulting from short nicknames, for instance,
+  'ORD' for 'ORDER'
+\item Avoid terse portmanteau prefixes such as "mk" or "to"
+\end{itemize}
+
+\todo{give example}
+
+\subsection{Types}
+
+\subsubsection{Primitive Types}
+
+which types are core types? It may be the best that no types are
+primitive types. What Coalton is really providing is abstraction.
+\todo{primitive}
+
+should both single and double floats be present in core? In which
+languages does this matter? When is the past time that a programmer
+reached for a short float? (Answer, recently, all the time: but
+they've transcended the short float to demand hardware for bfloats,
+and beyond)
+
+\subsubsection{Tuples}
+
+The ought be no need to characterize tuples as Tuple2, Tuple3,
+Tupld4. At very least the numerically-suffixed structure classes that
+provide tuple storage ought to be obscured by notation.
+
+Tuples receive ordinal accessors (first, second, third).
+
+It may be desirable to support named tuples, to provide better cues
+about function.
+\todo{question}
+Is there a conflict or overlap with coalton-library/struct?
+
+tuples as an existential type.
+\todo{what did we mean?}
+
+\subsection{Casting}
+
+There are a lot of disparate casting functions that ought to be
+replaced by into -- notable, as below, tointeger.
+
+\subsection{Package Audit}
+
+Recommendations:
+
+\begin{itemize}
+\item Make some of the packages under coalton-library secondary
+  libraries. Criterion: anything that isn't used almost immediately in
+  a moderately complex program, for instance, specialized kinds of
+  math.
+\item Replace ``coalton-library'' with ``coalton''.
+\item Group concrete data types under ``coalton/data''.
+\item Group typeclass definitions under ``coalton/class''.
+\item Group system and host resource access under ``coalton/sys''.
+\end{itemize}
+
+\subsubsection{Existing Layout}
+
+\begin{itemize}
+\item coalton
+\item coalton-library/classes
+\item coalton-library/hash
+\item coalton-library/types
+\item coalton-library/builtin
+\item coalton-library/functions
+\item coalton-library/math/arith
+\item coalton-library/math/bounded
+\item coalton-library/math/fraction
+\item coalton-library/math/integral
+\item coalton-library/math/real
+\item coalton-library/math/complex
+\item coalton-library/math/elementary
+\item coalton-library/math/dyadic
+\item coalton-library/math/dual
+\item coalton-library/bits
+\item coalton-library/char
+\item coalton-library/string
+\item coalton-library/tuple
+\item coalton-library/lisparray
+\item coalton-library/optional
+\item coalton-library/list
+\item coalton-library/result
+\item coalton-library/cell
+\item coalton-library/randomaccess
+\item coalton-library/vector
+\item coalton-library/slice
+\item coalton-library/hashtable
+\item coalton-library/queue
+\item coalton-library/monad/state
+\item coalton-library/monad/free
+\item coalton-library/iterator
+\item coalton-library/ord-tree
+\item coalton-library/ord-map
+\item coalton-library/seq
+\item coalton-library/system
+\item coalton-library/file
+\end {itemize}
+
+\subsubsection{Proposed Layout}
+
+\begin{itemize}
+\item coalton
+\item coalton/class
+\item coalton/class/iterator
+\item coalton/class/monad
+\item coalton/data
+\item coalton/data/array
+\item coalton/data/byte
+\item coalton/data/char
+\item coalton/data/hash
+\item coalton/data/list
+\item coalton/data/map
+\item coalton/data/mutable
+\item coalton/data/queue
+\item coalton/data/seq
+\item coalton/data/string
+\item coalton/data/tuple
+\item coalton/data/tree
+\item coalton/data/vector
+\item coalton/function
+\item coalton/math
+\item coalton/sys
+\item coalton/sys/file
+\end {itemize}
+
+Note the idea to merge slice and array
+\todo{note}
+
+FIXME: which existing packages are in each category?
+
+\subsubsection{coalton-library/math/fraction}
+
+R: mkfraction - the 'mk' prefix is unique here: is there a naming convention to apply?
+
+Q: Fraction is a primitive type, just a wrapper for a lisp fraction, and appears in primitive-types.
+
+N: implementation of primitive types is kind of a mess, for instance
+the defvar in typechecker/types.
+
+the type definition should probably be in this file
+
+clearly mark that this is a CL rational
+
+\subsubsection{coalton-library/tuple}
+
+\section{Hashing}
+
+do other langauges "Expose an interface to hashing"
+
+\section{ADTs}
+
+loading array into system - doesn't need a tmpfile
+
+write a whole para on traverse. the methods all need descriptions
+
+talk about traversable and sequence
+
+there should be a simple syntax for defining new byte types
+
+\subsubsection{coalton-library/classes}
+
+All of the stuff about tuples should be defined in the same file. Some
+is in classes, somme is in tuple.
+
+The statement 'heterogeneous collection of itsm' is inaccurate.
+
+What is the core stuff that belongs in classes
+
+Note: there should be some way to easily define a bit or byte type - for U7, or whatever particular value.
+
+N: rationalization of max and min
+
+\subsubsection{coalton-library/math/integral}
+
+Q: tointeger seems to overlap completely with (into Integer ..)
+- can it be collapsed? What is the purpose, otherwise?
+
+Q: "to-" prefix: is it like "mk-" prefix?
+
+N: it may be confusing to have multiple (semantically identical)
+definitions
+
+Q: Are there problems with integral->num? Can it be killed? It seems
+ot only add syntax, in that it could be equally well expressed as
+(into X whatever) rather than (the foo (integral->num whatever)).
+
+Q: How sound is semigroup? What is it used for, what does it support?
+
+R: HASH should be a nonexternal library: just provides one method to hash table.
+
+HASH should be in hashtablr files.
+
+There should be documentation here that proivdes a rationale for a hash user.
+
+\subsubsection{coalton-library/builtin}
+
+Q can the file builtin go away?
+
+undefined can go to functions, the others can all go to boolean.
+
+\subsubsection{coalton-library/functions}
+
+Q /= goes to classes
+
+Q can flip be gotten rid of
+
+Any time there is some arbitrary haskell thing added to a part of the
+standard library, there ought to be an example.
+
+Question: trace and trace object need ot be move to format library.
+
+trace
+
+R: The proxy system (or its interface) should be reassessed. Consider
+the example of setting the element type when reading a vector.
+
+Q: Booolean: when would you use Ord over Boolean?
+
+R: 'builtin' is chop suey of boolean and debugging: tweeze
+
+Q: are there different 'flavors' of Boolean that should be picked apart?
+
+Q: is there a way to eject builtin types from the typecheckers?
+
+Q:  How much does the typechecker need ot know about primitive types at compile time?
+
+R: "/=" should be in classes, not in fucntions
+
+Question: we need a thin wrapper on lisp format.
+
+Question: format error function
+
+Recommendation: Move dyadic and dual to secondary packages.
+
+Note: bifunctor shouldn't in core, someone can define it as part of
+      something they need
+
+There needs to be some docstring for SEQUENCE [FUNCTION] - switches between types of containers
+
+Unwrappable should be its own thing, and the gateway to the condition
+system, since it's a way to handle errors.
+
+Optional and result should also go into that file.
+
+The repr for enum types should be exposed in the documentation.
+
+The documentation needs ot be either in file or alphabetical order.
+
+\subsubsection{coalton-library/math/arith}
+
+Note:- bits documentation is outright wrong about the twos complement stuff
+
+Question: define char at the top of this file, not as an 'early type'
+
+    - same for 'string'
+
+nothing needs a char until the car file!
+
+Note: docs should be generated in alphabetical order (or file order!)
+
+Splin N string - > tuple string
+
+Note: unchecked -> unsafe
+
+Question: documentation for all of the macros
+
+Question: where is the documentation for define-struct, define-class, define-instance!
+
+QQ And the lisp form.
+
+Note: car/cdr -> first and rest
+
+NN remanticsd of remove-if are weird - only operates on  fiorts match?
+
+Question: equivalence-classes?
+
+Note: audit fpor "XXX"! with return value + side effects or mutation
+
+Question: It seems like 'cell' should be a pure (atomic?) mutation interface, that doesn'tr have any assumptions about the kind of type to which a reference is being maintained.
+
+Question: is random-access like this? Is r-a something that is stored in cell?
+
+Note: are vectors able to supersede a bunch of other stuff (cell, list)
+
+"implemented by a linked list - what?
+
+Question: Free monad - why are the type variables renamed in the documentation?
+
+NN up-to and down-from are weird.
+
+Question: elementwise-hash! is specialized to the implementation of ord-trees, and belongs there
+
+Question: remove-duplicates! shows up in a weird place and duplicates a documentation section
+
+Note: ord-tree collect! tree - should be into iterator?
+
+Question: ".like replace-or-insert" - do those really have to have names that are so similar?
+
+Q - ord-map - why is there not ord in entries?
+
+R: The SEQ types seems hollowed out or superseded by vector and iterator stuff: does it stay or go?
+
+N: In general, more consistency for foundational ADTs should be sought so that the available types conform to common understanding of roles and complexity classes.
+
+  - map
+  - vector
+  - list
+  - cons
+
+Also, mutable and immutable structures should be distinguished
+
+R: Replace -unsafe with -safe?
+
+bounded (minvalue maxvalue) is kind of like hash in that i'ts ring-0 or lower order
+
+\subsubsection{coalton-library/bits}
+
+proposal: Call it 'byte' instead.
+
+DO dpb and variable width bitfield operations go into bits?
+
+ascii - really means utf8 or whatever the platform uses
+
+the char package needs to have all of its assumptions checked
+
+\end{document}
