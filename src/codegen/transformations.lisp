@@ -19,6 +19,7 @@
 (in-package #:coalton-impl/codegen/transformations)
 
 (defun call-if (key funs args node)
+  "Look up a function in `funs` corresponding to `key`, and if it exists, call it with arguments `node` and `,@args`."
   (declare (type symbol key)
            (type list   funs)
            (type list   args)
@@ -225,6 +226,7 @@
     table))
 
 (defun make-binding-list-traversals ()
+  "These are the custom traversal behaviors needed to ensure that `traverse`'s `args` contains a list of the variables names which are bound at the given point."
   (load-time-value
    (list
     (cons ':traverse-abstraction
@@ -305,6 +307,7 @@
    t))
 
 (defun traverse-with-binding-list (node funs)
+  "Traverse `node` while keeping track of a list of `bound-variables` which gets passed as a keyword argument whenever a function from `funs` gets called."
   (declare (type node node)
            (type list funs)
            (values node &optional))
@@ -313,6 +316,7 @@
             (list ':bound-variables nil)))
 
 (defmethod tc:apply-substitution (subs (node node))
+  "Substitute type variables in the tree of `node` with other types specified in `subs`."
   (declare (type tc:substitution-list subs)
            (values node &optional))
   (traverse
@@ -358,6 +362,7 @@
              :body (node-while-let-body node)))))))
 
 (defmethod tc:type-variables ((node node))
+  "Collect all type variables from nodes and patterns in the tree of `node`."
   (declare (values tc:tyvar-list &optional))
   (let ((tyvars nil))
     (traverse

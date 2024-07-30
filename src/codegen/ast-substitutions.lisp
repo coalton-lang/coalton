@@ -30,6 +30,7 @@
   '(satisfies ast-substitution-list-p))
 
 (defun apply-ast-substitution (subs node)
+  "Substitute variables in the tree of `node` with other nodes specified in `subs`. Throw an error if a variable to be substituted is bound in a subtree of `node`."
   (declare (type ast-substitution-list subs)
            (type node node)
            (values node &optional))

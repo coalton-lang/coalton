@@ -123,6 +123,7 @@
     (incf *next-variable-id*)))
 
 (defun fresh-type-renamer (tyvar)
+  "Create a new type variable with the same kind as `tyvar`."
   (make-variable (kind-of tyvar)))
 
 ;;;
