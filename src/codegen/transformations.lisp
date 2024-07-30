@@ -224,90 +224,92 @@
       (setf (gethash name table) (tc:function-env-entry-arity entry)))
     table))
 
-(defvar binding-list-traversals
-  (list
-   (cons ':traverse-abstraction
-         (lambda (node funs &key bound-variables)
-           (declare (type node-abstraction node)
-                    (type list funs)
-                    (type util:symbol-list bound-variables)
-                    (values node-abstraction &optional))
-           (make-node-abstraction
-            :type (node-type node)
-            :vars (node-abstraction-vars node)
-            :subexpr (traverse
-                      (node-abstraction-subexpr node)
-                      funs
-                      (list ':bound-variables
-                            (append (node-abstraction-vars node) bound-variables))))))
-   (cons ':traverse-let
-         (lambda (node funs &key bound-variables)
-           (declare (type node-let node)
-                    (type list funs)
-                    (type util:symbol-list bound-variables)
-                    (values node-let &optional))
-           (let ((new-args (list ':bound-variables
-                                 (append
-                                  (mapcar #'car (node-let-bindings node))
-                                  bound-variables))))
-             (make-node-let
-              :type (node-type node)
-              :bindings (loop :for (name . node) :in (node-let-bindings node)
-                              :collect (cons name (traverse node funs new-args)))
-              :subexpr (traverse (node-let-subexpr node) funs new-args)))))
-   (cons ':traverse-match
-         (lambda (node funs &key bound-variables)
-           (declare (type node-match node)
-                    (type list funs)
-                    (type util:symbol-list bound-variables)
-                    (values node-match &optional))
-           (make-node-match
-            :type (node-type node)
-            :expr (traverse (node-match-expr node) funs (list ':bound-variables bound-variables))
-            :branches (mapcar
-                       (lambda (branch)
-                         (make-match-branch
-                          :pattern (match-branch-pattern branch)
-                          :body (traverse
-                                 (match-branch-body branch)
-                                 funs
-                                 (list ':bound-variables
-                                       (append (pattern-variables (match-branch-pattern branch))
-                                               bound-variables)))))
-                       (node-match-branches node)))))
-   (cons ':traverse-dynamic-extent
-         (lambda (node funs &key bound-variables)
-           (declare (type node-dynamic-extent node)
-                    (type list funs)
-                    (type util:symbol-list bound-variables)
-                    (values node-dynamic-extent &optional))
-           (let ((new-args (list ':bound-variables
-                                 (cons (node-dynamic-extent-name node) bound-variables))))
-             (make-node-dynamic-extent
-              :type (node-type node)
-              :name (node-dynamic-extent-name node)
-              :node (traverse (node-dynamic-extent-node node) funs new-args)
-              :body (traverse (node-dynamic-extent-body node) funs new-args)))))
-   (cons ':traverse-bind
-         (lambda (node funs &key bound-variables)
-           (declare (type node-bind node)
-                    (type list funs)
-                    (type util:symbol-list bound-variables)
-                    (values node-bind &optional))
-           (let ((new-args (list ':bound-variables
-                                 (cons (node-bind-name node) bound-variables))))
-             (make-node-bind
-              :type (node-type node)
-              :name (node-bind-name node)
-              :expr (traverse (node-bind-expr node) funs new-args)
-              :body (traverse (node-bind-body node) funs new-args)))))))
+(defun make-binding-list-traversals ()
+  (load-time-value
+   (list
+    (cons ':traverse-abstraction
+          (lambda (node funs &key bound-variables)
+            (declare (type node-abstraction node)
+                     (type list funs)
+                     (type util:symbol-list bound-variables)
+                     (values node-abstraction &optional))
+            (make-node-abstraction
+             :type (node-type node)
+             :vars (node-abstraction-vars node)
+             :subexpr (traverse
+                       (node-abstraction-subexpr node)
+                       funs
+                       (list ':bound-variables
+                             (append (node-abstraction-vars node) bound-variables))))))
+    (cons ':traverse-let
+          (lambda (node funs &key bound-variables)
+            (declare (type node-let node)
+                     (type list funs)
+                     (type util:symbol-list bound-variables)
+                     (values node-let &optional))
+            (let ((new-args (list ':bound-variables
+                                  (append
+                                   (mapcar #'car (node-let-bindings node))
+                                   bound-variables))))
+              (make-node-let
+               :type (node-type node)
+               :bindings (loop :for (name . node) :in (node-let-bindings node)
+                               :collect (cons name (traverse node funs new-args)))
+               :subexpr (traverse (node-let-subexpr node) funs new-args)))))
+    (cons ':traverse-match
+          (lambda (node funs &key bound-variables)
+            (declare (type node-match node)
+                     (type list funs)
+                     (type util:symbol-list bound-variables)
+                     (values node-match &optional))
+            (make-node-match
+             :type (node-type node)
+             :expr (traverse (node-match-expr node) funs (list ':bound-variables bound-variables))
+             :branches (mapcar
+                        (lambda (branch)
+                          (make-match-branch
+                           :pattern (match-branch-pattern branch)
+                           :body (traverse
+                                  (match-branch-body branch)
+                                  funs
+                                  (list ':bound-variables
+                                        (append (pattern-variables (match-branch-pattern branch))
+                                                bound-variables)))))
+                        (node-match-branches node)))))
+    (cons ':traverse-dynamic-extent
+          (lambda (node funs &key bound-variables)
+            (declare (type node-dynamic-extent node)
+                     (type list funs)
+                     (type util:symbol-list bound-variables)
+                     (values node-dynamic-extent &optional))
+            (let ((new-args (list ':bound-variables
+                                  (cons (node-dynamic-extent-name node) bound-variables))))
+              (make-node-dynamic-extent
+               :type (node-type node)
+               :name (node-dynamic-extent-name node)
+               :node (traverse (node-dynamic-extent-node node) funs new-args)
+               :body (traverse (node-dynamic-extent-body node) funs new-args)))))
+    (cons ':traverse-bind
+          (lambda (node funs &key bound-variables)
+            (declare (type node-bind node)
+                     (type list funs)
+                     (type util:symbol-list bound-variables)
+                     (values node-bind &optional))
+            (let ((new-args (list ':bound-variables
+                                  (cons (node-bind-name node) bound-variables))))
+              (make-node-bind
+               :type (node-type node)
+               :name (node-bind-name node)
+               :expr (traverse (node-bind-expr node) funs new-args)
+               :body (traverse (node-bind-body node) funs new-args))))))
+   t))
 
 (defun traverse-with-binding-list (node funs)
   (declare (type node node)
            (type list funs)
            (values node &optional))
   (traverse node
-            (append funs binding-list-traversals)
+            (append funs (make-binding-list-traversals))
             (list ':bound-variables nil)))
 
 (defmethod tc:apply-substitution (subs (node node))
