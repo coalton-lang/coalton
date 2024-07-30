@@ -14,7 +14,7 @@
    #:traverse-with-binding-list
    #:update-function-env
    #:make-function-t
-   #:substitute-fresh-type-variables))
+   #:rename-type-variables))
 
 (in-package #:coalton-impl/codegen/transformations)
 
@@ -396,15 +396,17 @@
               (values)))))
     tyvars))
 
-(defun substitute-fresh-type-variables (node)
+(defun rename-type-variables (node &optional (renamer #'tc:fresh-type-renamer))
+  "Rename the type variables of `node` and its subnodes according to the function `renamer`."
   (declare (type node node)
+           (type function renamer)
            (values node &optional))
   (alexandria:if-let ((old-type-variables (tc:type-variables node)))
     (tc:apply-substitution
      (mapcar (lambda (tyvar)
                (tc:make-substitution
                 :from tyvar
-                :to (tc:make-variable (tc:kind-of tyvar))))
+                :to (funcall renamer tyvar)))
              old-type-variables)
      node)
     node))
