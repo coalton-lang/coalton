@@ -1,6 +1,8 @@
 \documentclass[12pt]{article}
 \usepackage[]{todonotes}
 
+\newcommand{\code}{\texttt}
+
 \title{The Coalton Standard Library}
 
 \begin{document}
@@ -8,39 +10,154 @@
 \maketitle
 \section{Introduction}
 The Coalton standard library is a set of foundational packages that
-are developed alongside the core language and share a common release
-and versioning schedule. This report provides recommendations for the
-scope, organization and content of these packages.
+support practical application development, and are maintained alongside
+the core language, sharing a common release and versioning
+schedule. This report provides recommendations for the scope,
+organization and content of these packages.
 
-A principle: the core language should be as small as is reasonable,
-and when possible, types should be defined in the standard library,
-rather than as intrinsic to the core language. A more complex set of
-criteria guide the distinction between standard library, and secondary
+\section{General Recommendations}
+
+\subsection{Compact Core}
+
+The core language and compiler should be as small as is reasonable.
+When possible, types should be defined in the standard library, rather
+than as part of the core language. The core language should have
+little need for knowledge about the structure and contents of its
 libraries.
 
-\todo {naming} Neither 'secondary' nor 'contributed' libraries
-captures the idea clearly.
-
-The standard library should be sufficient to self-update.
-\todo {update principle}
-
-\section{Recommendations}
-
-Discuss extended data syntax, with proposal to adopt EDN-style
-notation for maps and vectors.
-\todo {readable data syntax}
-
-\subsection{General Recommendations}
+\medskip
+\underline{Recommendations}
 
 \begin{itemize}
-\item All docs should have a trivial but illustrative example with a
-  known output.
-\item Avoid ambiguity resulting from short nicknames, for instance,
-  'ORD' for 'ORDER'
-\item Avoid terse portmanteau prefixes such as "mk" or "to"
+\item Relocate the definition of \code{char} to
+  \code{coalton/data/char}, etc.
 \end{itemize}
 
-\todo{give example}
+\subsection{Standard and Contributed Libraries}
+
+Outside of the core language implementation, libraries can be
+classified as either ``standard'' or ``contributed''.  The standard
+library should contain definitions that are frequently used by most
+applications written in Coalton, whereas contributed libraries should
+contain definitions that support specific application domains, for
+instance computer algebra, special kinds of network protocols, or io.
+
+\medskip
+\underline{Recommendations}
+
+\begin{itemize}
+\item Move parts of \code{coalton-library/math/*} that are not
+  relevant to common arithmetic and trigonometric operations with
+  primitive types into a contributed library.
+\item Build and test contributed libraries in a separate phasea
+  subsequent to building the core language and standard library.
+\end{itemize}
+
+\subsection{Documentation}
+
+Full documentation is very important for both beginning and advanced
+users.
+
+\medskip
+\underline{Recommendations}
+
+\begin{itemize}
+\item Systematically vet the documentation string of every definition.
+\item For each definition, provide a trivial but illustrative example
+  with a known output.
+\item Provide direct links from generated documentation to
+  corresponding, versioned definitions in GitHub.
+\end{itemize}
+
+\subsection{Self Sufficiency}
+
+The language should be self sufficient, to the extent that the
+standard library is able to self-update, and load contributed
+libraries.
+
+\medskip
+\underline{Recommendations}
+
+\begin{itemize}
+\item Plan to include network protocol and encryption support
+  necessary to implement a secure package manager.
+\end{itemize}
+
+\subsection{Approachability}
+
+Judge the contents of the standard library in light of commonly used
+languages: how different are the core types, data and control
+structures? How hard is it to read and write data? How hard is it to
+write a CSV parser? Things that sound easy ought to be easy, and this
+should be demonstrable.
+
+\medskip
+\underline{Recommendations}
+
+\begin{itemize}
+\item Provide a rosetta stone comparing Coalton to js, python, etc.
+\item Avoid ambiguity resulting from short nicknames, for instance,
+  'ORD' for 'ORDER'
+\item Avoid terse portmanteau prefixes such as ``mk''.
+\item Provide extended data syntax for vectors, maps and sets.
+\item Provide regular expression support in the standard library,
+  i.e., wrap CL-PPCRE.
+
+\end{itemize}
+
+\section{IO}
+
+\todo {readable data syntax}
+Discuss extended data syntax, with proposal to adopt EDN-style
+notation for maps and vectors.
+
+\section{Naming}
+
+\subsection{Symbols}
+
+\medskip
+\underline{Recommendations}
+\begin{itemize}
+\item Apply consistent naming to symbols: Python case for classes and instances, lisp-style hyphenation for functions.
+\end{itemize}
+
+\subsection{Packages}
+
+The existing packages can have shorter names and better logical grouping.
+
+\medskip
+\underline{Recommendations}
+\begin{itemize}
+\item Replace \code{coalton-library} with \code{coalton}.
+\item Define a shallow package hierachy of maximum depth 3, with
+  general features at the root, and specific features at the second
+  level.
+\item Put primitive types under \code{coalton/type}.
+\item Put concrete data types under \code{coalton/data}.
+\item Put typeclass definitions under \code{coalton/class}.
+\item Put system and host resource access under \code{coalton/sys}.
+\end{itemize}
+
+\subsubsection{Proposed Layout}
+
+\begin{itemize}
+\item coalton
+\item coalton/class
+\item coalton/class/iterator, monad
+\item coalton/class/monad
+\item coalton/data
+\item coalton/data/array, hash, list, map, queue, seq, tree, tuple, vector
+\item coalton/function
+\item coalton/math
+\item coalton/mutable
+\item coalton/sys
+\item coalton/sys/{file
+\item coalton/type
+\item coalton/type/bit, byte, char, string
+\end {itemize}
+
+The toplevel packages ('data', 'type') are good places to relocate
+type classes that may apply to more than one concrete type.
 
 \subsection{Types}
 
@@ -66,6 +183,7 @@ Tuples receive ordinal accessors (first, second, third).
 
 It may be desirable to support named tuples, to provide better cues
 about function.
+
 \todo{question}
 Is there a conflict or overlap with coalton-library/struct?
 
@@ -77,102 +195,6 @@ tuples as an existential type.
 There are a lot of disparate casting functions that ought to be
 replaced by into -- notable, as below, tointeger.
 
-\subsection{Package Audit}
-
-Recommendations:
-
-\begin{itemize}
-\item Make some of the packages under coalton-library secondary
-  libraries. Criterion: anything that isn't used almost immediately in
-  a moderately complex program, for instance, specialized kinds of
-  math.
-\item Replace ``coalton-library'' with ``coalton''.
-\item Group concrete data types under ``coalton/data''.
-\item Group typeclass definitions under ``coalton/class''.
-\item Group system and host resource access under ``coalton/sys''.
-\end{itemize}
-
-\subsubsection{Existing Layout}
-
-\begin{itemize}
-\item coalton
-\item coalton-library/classes
-\item coalton-library/hash
-\item coalton-library/types
-\item coalton-library/builtin
-\item coalton-library/functions
-\item coalton-library/math/arith
-\item coalton-library/math/bounded
-\item coalton-library/math/fraction
-\item coalton-library/math/integral
-\item coalton-library/math/real
-\item coalton-library/math/complex
-\item coalton-library/math/elementary
-\item coalton-library/math/dyadic
-\item coalton-library/math/dual
-\item coalton-library/bits
-\item coalton-library/char
-\item coalton-library/string
-\item coalton-library/tuple
-\item coalton-library/lisparray
-\item coalton-library/optional
-\item coalton-library/list
-\item coalton-library/result
-\item coalton-library/cell
-\item coalton-library/randomaccess
-\item coalton-library/vector
-\item coalton-library/slice
-\item coalton-library/hashtable
-\item coalton-library/queue
-\item coalton-library/monad/state
-\item coalton-library/monad/free
-\item coalton-library/iterator
-\item coalton-library/ord-tree
-\item coalton-library/ord-map
-\item coalton-library/seq
-\item coalton-library/system
-\item coalton-library/file
-\end {itemize}
-
-\subsubsection{Proposed Layout}
-
-\begin{itemize}
-\item coalton
-\item coalton/class
-\item coalton/class/iterator
-\item coalton/class/monad
-\item coalton/data
-\item coalton/data/byte
-\item coalton/data/char
-\item coalton/data/mutable
-\item coalton/data/string
-
-\item coalton/data/hash
-\item coalton/data/array
-\item coalton/data/list
-\item coalton/data/map
-\item coalton/data/queue
-\item coalton/data/seq
-\item coalton/data/tuple
-\item coalton/data/tree
-\item coalton/data/vector
-
-\item coalton/function
-\item coalton/math
-\item coalton/sys
-\item coalton/sys/file
-\end {itemize}
-
-\todo{note on 'data'}
-
-Char and list are pretty different: grouping them under the heading of 'data' doesn't seem right. One is a very primitive, concrete system thing, the other a higher level abstraction/composite type.
-
-
-
-Note the idea to merge slice and array
-\todo{note}
-
-FIXME: which existing packages are in each category?
 
 \subsubsection{coalton-library/math/fraction}
 
@@ -203,14 +225,38 @@ write a whole para on traverse. the methods all need descriptions
 
 talk about traversable and sequence
 
+\subsection{Package Audit}
+
+\subsubsection{coalton-library/bits}
+
+Support for bitwise operations. The implementations are present in \code{coalton-library/math/num}.
+
+\medskip
+\underline{Recommendations}
+
+\begin{itemize}
+\item Rename to \code{coalton/type/bit} to represent that these operations are generally against concrete machine values defined there.
+\end{itemize}
+
+
+ascii - really means utf8 or whatever the platform uses
+
+the char package needs to have all of its assumptions checked
+
 \subsubsection{coalton-library/classes}
 
-All of the stuff about tuples should be defined in the same file. Some
-is in classes, some is in tuple.
+This package contains a mixture of comparison (Eq, Ord), control flow
+(Optional, Result, Signalable, Unwrappable), and storage (Tuple)
+classes.
 
-The statement 'heterogeneous collection of itsm' is inaccurate.
+\medskip
+\underline{Recommendations}
 
-What is the core stuff that belongs in classes
+\begin{itemize}
+\item Relocate tuple definition to \code{coalton/data/tuple}
+\item Relocate control flow and error classes to ``coalton/error''
+\item Improve tuple documentation ('heterogeneous collection of items')
+\end{itemize}
 
 Note: there should be some way to easily define a bit or byte type -
 for U7, or whatever particular value. See also notes in ... math bits?
@@ -239,7 +285,7 @@ R: HASH should be a nonexternal library: just provides one method to hash table.
 
 HASH should be in hashtablr files.
 
-There should be documentation here that proivdes a rationale for a hash user.
+There should be documentation here that provides a rationale for a hash user.
 
 \subsubsection{coalton-library/builtin}
 
@@ -362,16 +408,6 @@ R: Replace -unsafe with -safe?
 
 bounded (minvalue maxvalue) is kind of like hash in that i'ts ring-0 or lower order
 
-\subsubsection{coalton-library/bits}
-
-proposal: Call it 'byte' instead.
-
-DO dpb and variable width bitfield operations go into bits?
-
-ascii - really means utf8 or whatever the platform uses
-
-the char package needs to have all of its assumptions checked
-
 \section{Quasar Notes, Late July}
 
 MPFR dependency is annoying because it will tend to crash you out if
@@ -379,23 +415,9 @@ you have a standard SBCL and run the test suites.
 
 Recommendation: move big float (and associated tests) to secondary library.
 
-Build and test the secondary libraries in a separate, optional phase.
-
 Maybe 'math' (and all of its subpackages) is the 'premiere' secondary
 library. What in primary might depend on it?
 
-Discussion of IO and the difficulty of writing simple parsers, like,
-for common stuff, like CSV.
-
-Put regular expressions into the standard library, i.e., wrap CL-PPCRE.
-
 Concrete syntax: (, {, [ .. can it be done?
-
-  
-
-
-
-
-
 
 \end{document}
