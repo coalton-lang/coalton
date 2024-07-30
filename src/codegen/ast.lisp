@@ -113,19 +113,28 @@
 ;;;
 
 
-(defstruct (node (:constructor nil)
+(defstruct (node (:conc-name %node-)
+                 (:constructor nil)
                  (:copier %copy-node))
+  ;; The `type` slot can be accessed by the exported function
+  ;; `node-type`.
   (type (util:required 'type) :type tc:ty))
 
 (defun copy-node (node &optional (new-type nil supplied-p))
-  "Make a copy of `node`, optionally with a new type `new-type`."
+  "Make a copy of `node`, optionally with a `new-type`."
   (declare (type node node)
            (type (or null tc:ty) new-type)
            (values node &optional))
   (let ((result (%copy-node node)))
     (when supplied-p
-      (setf (node-type result) new-type))
+      (setf (%node-type result) new-type))
     result))
+
+(defun node-type (node)
+  "Get the stored type of `node`."
+  (declare (type node node)
+           (values tc:ty &optional))
+  (%node-type node))
 
 (defmethod make-load-form ((self node) &optional env)
   (make-load-form-saving-slots self :environment env))
