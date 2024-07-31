@@ -134,9 +134,9 @@
     (traverse
      node
      (list
-      (cons (cons ':after 'node-application) #'rewrite-direct-application)
-      (cons (cons ':before 'node-let) #'add-local-funs)
-      (cons (cons ':before 'node-bind) #'add-bind-fun)))))
+      (cons '(:after . node-application) #'rewrite-direct-application)
+      (cons '(:before . node-let) #'add-local-funs)
+      (cons '(:before . node-bind) #'add-bind-fun)))))
 
 (defun optimize-bindings-initial (bindings package env)
   (declare (type binding-list bindings)
@@ -280,7 +280,7 @@
     (traverse
      node
      (list
-      (cons (cons ':after 'node-application) #'rewrite-application)))))
+      (cons '(:after . node-application) #'rewrite-application)))))
 
 (defun inline-methods (node env)
   (declare (type node node)
@@ -358,8 +358,8 @@
     (traverse
      node
      (list
-      (cons (cons ':after 'node-application) #'inline-method)
-      (cons (cons ':after 'node-direct-application) #'inline-direct-method)))))
+      (cons '(:after . node-application) #'inline-method)
+      (cons '(:after . node-direct-application) #'inline-direct-method)))))
 
 (defun static-dict-lift (node name hoister package env)
   (declare (type node node)
@@ -408,9 +408,9 @@
     (traverse
      node
      (list
-      (cons (cons ':after 'node-application) #'lift-static-dict)
-      (cons (cons ':before 'node-abstraction) #'handle-push-hoist-point)
-      (cons (cons ':after 'node-abstraction) #'handle-pop-hoist-point)))))
+      (cons '(:after . node-application) #'lift-static-dict)
+      (cons '(:before . node-abstraction) #'handle-push-hoist-point)
+      (cons '(:after . node-abstraction) #'handle-pop-hoist-point)))))
 
 (defun resolve-compount-superclass (node env)
   (declare (type (or node-application node-direct-application node-variable) node)
@@ -494,7 +494,7 @@
     (traverse-with-binding-list
      node
      (list
-      (cons (cons ':after 'node-field) #'handle-static-superclass)))))
+      (cons '(:after . node-field) #'handle-static-superclass)))))
 
 (defun apply-specializations (node env)
   (declare (type node node)
@@ -550,8 +550,8 @@
     (traverse
      node
      (list
-      (cons (cons ':after 'node-application) #'apply-specialization)
-      (cons (cons ':after 'node-direct-application) #'apply-specialization)))))
+      (cons '(:after . node-application) #'apply-specialization)
+      (cons '(:after . node-direct-application) #'apply-specialization)))))
 
 (defun match-dynamic-extent-lift (node env)
   "Stack allocates uncaptured ADTs constructed in the head of a match expression"
@@ -604,4 +604,4 @@
     (traverse
      node
      (list
-      (cons (cons ':after 'node-match) #'apply-lift)))))
+      (cons '(:after . node-match) #'apply-lift)))))
