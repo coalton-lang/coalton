@@ -44,7 +44,7 @@
                  (stak-aux))))
         (stak-aux))))
 
-(declaim (ftype (function (fixnum) fixnum) lisp-stak))
+(declaim (ftype (function (fixnum fixnum fixnum) fixnum) lisp-stak))
 (defun lisp-stak (x y z)
   (stak-aux))
 
