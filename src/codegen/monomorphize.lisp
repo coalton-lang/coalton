@@ -43,6 +43,7 @@
    #:coalton-impl/codegen/ast)
   (:import-from
    #:coalton-impl/codegen/transformations
+   #:make-action
    #:traverse-with-binding-list)
   (:import-from
    #:coalton-impl/codegen/ast-substitutions
@@ -347,8 +348,8 @@ propagate dictionaries that have been moved by the hoister."
     (traverse-with-binding-list
      node
      (list
-      (cons (cons ':after 'node-direct-application) #'validate-candidate)
-      (cons (cons ':after 'node-application) #'validate-candidate))))
+      (make-action ':after 'node-direct-application #'validate-candidate)
+      (make-action ':after 'node-application #'validate-candidate))))
   (values))
 
 
@@ -409,8 +410,8 @@ propagate dictionaries that have been moved by the hoister."
     (traverse-with-binding-list
      node
      (list
-      (cons (cons ':after 'node-application) #'apply-candidate)
-      (cons (cons ':after 'node-direct-application) #'apply-candidate)))))
+      (make-action ':after 'node-application #'apply-candidate)
+      (make-action ':after 'node-direct-application #'apply-candidate)))))
 
 (defun monomorphize (name manager package resolve-table optimize-node env)
   (declare (type symbol name)
