@@ -40,7 +40,7 @@
          ;; Build a context for the instance
          (ctx
            (loop :for pred :in (tc:toplevel-define-instance-context instance)
-                 :collect (cons pred (gensym))))
+                 :collect (cons pred (gentemp))))
 
          (ctx-ty
            (loop :for pred :in (tc:toplevel-define-instance-context instance)

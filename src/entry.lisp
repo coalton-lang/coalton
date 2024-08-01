@@ -43,53 +43,56 @@
                                  file
                                  env)
 
-      (multiple-value-bind (class-definitions env)
-          (tc:toplevel-define-class (parser:program-classes program)
+      (let ((all-instances (append instances (parser:program-instances program))))
+
+        (multiple-value-bind (class-definitions env)
+            (tc:toplevel-define-class (parser:program-classes program)
+                                      file
+                                      env)
+
+          (multiple-value-bind (ty-instances env)
+              (tc:toplevel-define-instance all-instances env file)
+
+            (multiple-value-bind (toplevel-definitions env)
+                (tc:toplevel-define (parser:program-defines program)
+                                    (parser:program-declares program)
                                     file
                                     env)
 
-        (multiple-value-bind (ty-instances env)
-            (tc:toplevel-define-instance (append instances (parser:program-instances program)) env file)
+              (multiple-value-bind (toplevel-instances)
+                  (tc:toplevel-typecheck-instance ty-instances
+                                                  all-instances
+                                                  env
+                                                  file)
 
-          (multiple-value-bind (toplevel-definitions env)
-              (tc:toplevel-define (parser:program-defines program)
-                                  (parser:program-declares program)
-                                  file
-                                  env)
+                (setf env (tc:toplevel-specialize (parser:program-specializations program) env file))
 
-            (multiple-value-bind (toplevel-instances)
-                (tc:toplevel-typecheck-instance ty-instances
-                                                (append instances (parser:program-instances program))
-                                                env
-                                                file)
+                (let ((monomorphize-table (make-hash-table :test #'eq))
 
-              (setf env (tc:toplevel-specialize (parser:program-specializations program) env file))
+                      (translation-unit
+                        (tc:make-translation-unit
+                         :types type-definitions
+                         :definitions toplevel-definitions
+                         :classes class-definitions
+                         :instances toplevel-instances
+                         :lisp-forms (parser:program-lisp-forms program)
+                         :package *package*)))
 
-              (let ((monomorphize-table (make-hash-table :test #'eq))
+                  (loop :for define :in (parser:program-defines program)
+                        :when (parser:toplevel-define-monomorphize define)
+                          :do (setf (gethash (parser:node-variable-name (parser:toplevel-define-name define))
+                                             monomorphize-table)
+                                    t))
 
-                    (translation-unit
-                      (tc:make-translation-unit
-                       :types type-definitions
-                       :definitions toplevel-definitions
-                       :classes class-definitions
-                       :instances toplevel-instances
-                       :package *package*)))
+                  (loop :for declare :in (parser:program-declares program)
+                        :when (parser:toplevel-declare-monomorphize declare)
+                          :do (setf (gethash (parser:identifier-src-name (parser:toplevel-declare-name declare))
+                                             monomorphize-table)
+                                    t))
 
-                (loop :for define :in (parser:program-defines program)
-                      :when (parser:toplevel-define-monomorphize define)
-                        :do (setf (gethash (parser:node-variable-name (parser:toplevel-define-name define))
-                                           monomorphize-table)
-                                  t))
+                  (analysis:analyze-translation-unit translation-unit env file)
 
-                (loop :for declare :in (parser:program-declares program)
-                      :when (parser:toplevel-declare-monomorphize declare)
-                        :do (setf (gethash (parser:identifier-src-name (parser:toplevel-declare-name declare))
-                                           monomorphize-table)
-                                  t))
-
-                (analysis:analyze-translation-unit translation-unit env file)
-
-                (codegen:compile-translation-unit translation-unit monomorphize-table env)))))))))
+                  (codegen:compile-translation-unit translation-unit monomorphize-table env))))))))))
 
 
 (defun expression-entry-point (node file)

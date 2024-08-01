@@ -33,7 +33,7 @@
 
          (ctx
            (loop :for pred :in preds
-                 :collect (cons pred (gensym "DICT"))))
+                 :collect (cons pred (gentemp "DICT"))))
 
          (full-ctx (append ctx extra-context))
 

@@ -1,139 +1,128 @@
-(coalton-library/utils::defstdlib-package #:coalton-library/list
-  (:use
-   #:coalton
-   #:coalton-library/builtin
-   #:coalton-library/classes
-   #:coalton-library/hash
-   #:coalton-library/functions
-   #:coalton-library/tuple
-   #:coalton-library/optional)
-  (:local-nicknames
-   (#:cell #:coalton-library/cell)
-   (#:iter #:coalton-library/iterator)
-   (#:arith #:coalton-library/math/arith))
-  (:export
-   #:head
-   #:tail
-   #:car
-   #:cdr
-   #:last
-   #:init
-   #:null?
-   #:singleton
-   #:repeat
-   #:reverse
-   #:drop
-   #:take
-   #:find
-   #:filter
-   #:length
-   #:index
-   #:nth
-   #:nth-cdr
-   #:elemIndex
-   #:findIndex
-   #:range
-   #:append
-   #:concat
-   #:concatMap
-   #:member
-   #:union
-   #:intersection
-   #:lookup
-   #:remove-duplicates
-   #:remove-if
-   #:remove
-   #:difference
-   #:zipWith
-   #:zipWith3
-   #:zipWith4
-   #:zipWith5
-   #:zip
-   #:countBy
-   #:insert
-   #:insertBy
-   #:sort
-   #:sortBy
-   #:intersperse
-   #:intercalate
-   #:insertions
-   #:transpose
-   #:partition
-   #:equivalence-classes
-   #:equivalence-classes-by
-   #:optimumBy
-   #:maximum
-   #:minimum
-   #:sum
-   #:product
-   #:all
-   #:any
-   #:split
-   #:perms
-   #:combs
-   #:combsOf))
+(package coalton-library/list
+         (import
+          coalton-library/builtin
+          coalton-library/classes
+          coalton-library/hash
+          coalton-library/functions
+          coalton-library/tuple
+          coalton-library/optional
+          (coalton-library/cell as cell)
+          (coalton-library/iterator as iter)
+          (coalton-library/math/arith as arith))
+         (export
+          head
+          tail
+          car
+          cdr
+          last
+          init
+          null?
+          singleton
+          repeat
+          reverse
+          drop
+          take
+          find
+          filter
+          length
+          index
+          nth
+          nth-cdr
+          elemIndex
+          findIndex
+          range
+          append
+          concat
+          concatMap
+          member
+          union
+          intersection
+          lookup
+          remove-duplicates
+          remove-if
+          remove
+          difference
+          zipWith
+          zipWith3
+          zipWith4
+          zipWith5
+          zip
+          countBy
+          insert
+          insertBy
+          sort
+          sortBy
+          intersperse
+          intercalate
+          insertions
+          transpose
+          partition
+          equivalence-classes
+          equivalence-classes-by
+          optimumBy
+          maximum
+          minimum
+          sum
+          product
+          all
+          any
+          split
+          perms
+          combs
+          combsOf))
 
-(in-package #:coalton-library/list)
+;;
+;; Cons Lists
+;;
 
-(named-readtables:in-readtable coalton:coalton)
+;; List is an early type
 
-#+coalton-release
-(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
-
-(coalton-toplevel
-
-  ;;
-  ;; Cons Lists
-  ;;
-
-  ;; List is an early type
-
-  (declare head (List :a -> Optional :a))
-  (define (head l)
-    "Returns the first element of a list."
-    (match l
+(declare head (List :a -> Optional :a))
+(define (head l)
+  "Returns the first element of a list."
+  (match l
       ((Cons x _) (Some x))
       ((Nil) None)))
 
-  (declare tail (List :a -> Optional (List :a)))
-  (define (tail l)
-    "Returns every element except the first in a list."
-    (match l
+(declare tail (List :a -> Optional (List :a)))
+(define (tail l)
+  "Returns every element except the first in a list."
+  (match l
       ((Cons _ xs) (Some xs))
       ((Nil) None)))
 
-  (declare car (List :a -> :a))
-  (define (car x)
-    "Return the traditional car of a list. This function is partial"
-    (match x
+(declare car (List :a -> :a))
+(define (car x)
+  "Return the traditional car of a list. This function is partial"
+  (match x
       ((Cons x _) x)
       ((Nil) (error "there is no first element"))))
 
-  (declare cdr (List :a -> List :a))
-  (define (cdr xs)
-    "Return the traditional cdr of a list."
-    (match xs
+(declare cdr (List :a -> List :a))
+(define (cdr xs)
+  "Return the traditional cdr of a list."
+  (match xs
       ((Cons _ xs) xs)
       ((Nil) Nil)))
 
-  (declare last (List :a -> Optional :a))
-  (define (last l)
-    "Returns the last element of a list."
-    (match l
+(declare last (List :a -> Optional :a))
+(define (last l)
+  "Returns the last element of a list."
+  (match l
       ((Cons x (Nil)) (Some x))
       ((Cons _ xs) (last xs))
       ((Nil) None)))
 
-  (declare init (List :a -> List :a))
-  (define (init l)
-    "Returns every element except the last in a list."
-    (lisp (List :a) (l)
-      (cl:butlast l)))
+(declare init (List :a -> List :a))
+(define (init l)
+  "Returns every element except the last in a list."
+  (lisp (List :a) (l)
+    (cl:butlast l)))
 
-  (declare null? (List :a -> Boolean))
-  (define (null? xs)
-    "Returns TRUE if XS is an empty list."
-    (match xs
+(declare null? (List :a -> Boolean))
+(define (null? xs)
+  "Returns TRUE if XS is an empty list."
+  (match xs
       ((Nil) True)
       (_ False)))
 
@@ -761,8 +750,5 @@ This function is equivalent to all size-N elements of `(COMBS L)`."
         ((None) Nil)
         ((Some a) (Cons a Nil)))))
 
-  (define-instance (Default (List :a))
-    (define (default) Nil)))
-
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/LIST")
+(define-instance (Default (List :a))
+  (define (default) Nil))
