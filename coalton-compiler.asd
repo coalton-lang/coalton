@@ -95,11 +95,11 @@
                 :serial t
                 :components ((:file "pattern")
                              (:file "ast")
+                             (:file "transformations")
                              (:file "ast-substitutions")
                              (:file "resolve-instance")
                              (:file "typecheck-node")
                              (:file "hoister")
-                             (:file "transformations")
                              (:file "translate-expression")
                              (:file "translate-instance")
                              (:file "struct-or-class")
