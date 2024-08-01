@@ -193,7 +193,8 @@
            (type action-list  actions)
            (type function     traverse)
            (type list         args)
-           (type node         node))
+           (type node         node)
+           (values node &optional))
   (or
    (alexandria:when-let*
        ((action (find-if (lambda (action)
@@ -267,6 +268,7 @@
 
 (defun make-binding-list-traversals ()
   "These are the custom traversal behaviors needed to ensure that `traverse`'s `args` contains a list of the variables names which are bound at the given point."
+  (declare (values action-list &optional))
   (load-time-value
    (list
     (make-action ':traverse 'node-abstraction
@@ -344,13 +346,13 @@
                       :body (funcall traverse (node-bind-body node) new-args))))))
    t))
 
-(defun traverse-with-binding-list (node funs)
-  "Traverse `node` while keeping track of a list of `bound-variables` which gets passed as a keyword argument whenever a function from `funs` gets called."
-  (declare (type node node)
-           (type list funs)
+(defun traverse-with-binding-list (node actions)
+  "Traverse `node` while keeping track of a list of `bound-variables` which gets passed as a keyword argument whenever a function from `actions` gets called."
+  (declare (type node        node)
+           (type action-list actions)
            (values node &optional))
   (traverse node
-            (append funs (make-binding-list-traversals))
+            (append actions (make-binding-list-traversals))
             (list ':bound-variables nil)))
 
 (defmethod tc:apply-substitution (subs (node node))
@@ -441,7 +443,7 @@
 
 (defun rename-type-variables (node &optional (renamer #'tc:fresh-type-renamer))
   "Rename the type variables of `node` and its subnodes according to the function `renamer`."
-  (declare (type node node)
+  (declare (type node     node)
            (type function renamer)
            (values node &optional))
   (alexandria:if-let ((old-type-variables (tc:type-variables node)))
