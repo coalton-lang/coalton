@@ -7,6 +7,7 @@
    #:coalton-impl/algorithm
    #:immutable-map-data)
   (:local-nicknames
+   (#:parser #:coalton-impl/parser)
    (#:util #:coalton-impl/util)
    (#:tc #:coalton-impl/typechecker))
   (:export
@@ -15,7 +16,9 @@
    #:traverse-with-binding-list
    #:update-function-env
    #:make-function-t
-   #:rename-type-variables))
+   #:rename-type-variables
+   #:node-variables
+   #:node-free-p))
 
 (in-package #:coalton-impl/codegen/transformations)
 
@@ -426,11 +429,9 @@
                    (lambda (node)
                      (declare (type node-match node)
                               (values))
-                     (mapcar
-                      (lambda (branch)
-                        (alexandria:unionf tyvars
-                                           (tc:type-variables (match-branch-pattern branch))))
-                      (node-match-branches node))
+                     (dolist (branch (node-match-branches node))
+                       (alexandria:unionf tyvars
+                                          (tc:type-variables (match-branch-pattern branch))))
                      (values)))
       (make-action ':after 'node-while-let
                    (lambda (node)
@@ -455,3 +456,43 @@
              old-type-variables)
      node)
     node))
+
+(defun node-variables (node &key (variable-namespace-only nil))
+  "Returns a deduplicated list of identifiers representing variables in both CL namespaces appearing in `node`"
+  (declare (type node    node)
+           (type boolean variable-namespace-only)
+           (values parser:identifier-list &optional))
+  (let ((node-vars nil))
+    (traverse
+     node
+     (list
+      (make-action ':after 'node-variable
+                   (lambda (node)
+                     (declare (type node-variable node)
+                              (values))
+                     (setf node-vars
+                           (adjoin (node-variable-value node) node-vars))
+                     (values)))
+      (make-action ':after 'node-direct-application
+                   (lambda (node)
+                     (declare (type node-direct-application node)
+                              (values))
+                     (unless variable-namespace-only
+                       (setf node-vars
+                             (adjoin (node-direct-application-rator node) node-vars)))
+                     (values)))
+      (make-action ':after 'node-lisp
+                   (lambda (node)
+                     (declare (type node-lisp node)
+                              (values))
+                     (alexandria:unionf node-vars
+                                        (mapcar #'cdr (node-lisp-vars node)))
+                     (values)))))
+    node-vars))
+
+(defun node-free-p (node bound-variables)
+  "Returns true if every variable in `node` is free with respect to `bound-variables`"
+  (declare (type node                   node)
+           (type parser:identifier-list bound-variables)
+           (values boolean &optional))
+  (null (intersection (node-variables node) bound-variables)))

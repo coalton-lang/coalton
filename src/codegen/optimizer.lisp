@@ -28,7 +28,8 @@
    #:traverse
    #:traverse-with-binding-list
    #:update-function-env
-   #:make-function-table)
+   #:make-function-table
+   #:node-free-p)
   (:local-nicknames
    (#:settings #:coalton-impl/settings)
    (#:util #:coalton-impl/util)

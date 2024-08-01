@@ -9,6 +9,9 @@
   (:import-from
    #:coalton-impl/codegen/codegen-type-definition
    #:constructor-slot-name)
+  (:import-from
+   #:coalton-impl/codegen/transformations
+   #:node-variables)
   (:local-nicknames
    (#:settings #:coalton-impl/settings)
    (#:util #:coalton-impl/util)

@@ -263,14 +263,6 @@ call to (break)."
 ;;; Functions
 ;;;
 
-(defun node-variables (node &key variable-namespace-only)
-  "Returns a deduplicated list of identifiers representing variables in
-both CL namespaces appearing in NODE"
-  (declare (type node node)
-           (type boolean variable-namespace-only)
-           (values parser:identifier-list &optional))
-  (remove-duplicates (node-variables-g node :variable-namespace-only variable-namespace-only) :test #'equalp))
-
 (defun node-binding-sccs (bindings)
   "Returns a list of SCCs ordered from least to most depended on."
   (declare (type binding-list bindings))
@@ -279,13 +271,6 @@ both CL namespaces appearing in NODE"
      (algo:tarjan-scc
       (loop :for (name . node) :in bindings
             :collect (cons name (intersection binding-names (node-variables node))))))))
-
-(defun node-free-p (node bound-variables)
-  "Returns true if every variable in NODE is free with respect to BOUND-VARIABLES"
-  (declare (type node node)
-           (type parser:identifier-list bound-variables)
-           (values boolean))
-  (null (intersection (node-variables node) bound-variables)))
 
 (defun node-application-symbol-rator (node)
   "Returns the name of the function being called if it is known"
@@ -331,120 +316,3 @@ both CL namespaces appearing in NODE"
 
     (node-application
      (node-type (node-application-rator node)))))
-
-;;;
-;;; Methods
-;;;
-
-
-(defgeneric node-variables-g (node &key variable-namespace-only)
-  (:method ((node node-literal) &key variable-namespace-only)
-    (declare (ignore node variable-namespace-only)
-             (values parser:identifier-list))
-    nil)
-
-  (:method ((node node-variable) &key variable-namespace-only)
-    (declare (ignore variable-namespace-only)
-             (values parser:identifier-list &optional))
-    (list (node-variable-value node)))
-
-  (:method ((node node-application) &key variable-namespace-only)
-    (declare (values parser:identifier-list &optional))
-    (append
-     (node-variables-g (node-application-rator node) :variable-namespace-only variable-namespace-only)
-     (mapcan
-      (lambda (node)
-        (node-variables-g node :variable-namespace-only variable-namespace-only))
-      (node-application-rands node))))
-
-  (:method ((node node-abstraction) &key variable-namespace-only)
-    (declare (values parser:identifier-list &optional))
-    (node-variables-g (node-abstraction-subexpr node) :variable-namespace-only variable-namespace-only))
-
-  (:method ((node node-direct-application) &key variable-namespace-only)
-    (declare (values parser:identifier-list &optional))
-    (if variable-namespace-only
-        (mapcan
-         (lambda (node)
-           (node-variables-g node :variable-namespace-only variable-namespace-only))
-         (node-direct-application-rands node))
-        (cons (node-direct-application-rator node)
-              (mapcan
-               (lambda (node)
-                 (node-variables-g node :variable-namespace-only variable-namespace-only))
-               (node-direct-application-rands node)))))
-
-  (:method ((node node-let) &key variable-namespace-only)
-    (declare (values parser:identifier-list))
-    (append
-     (loop :for (name . node) :in (node-let-bindings node)
-           :nconc (node-variables-g node :variable-namespace-only variable-namespace-only))
-     (node-variables-g (node-let-subexpr node) :variable-namespace-only variable-namespace-only)))
-
-  (:method ((node node-lisp) &key variable-namespace-only)
-    (declare (ignore variable-namespace-only))
-    (mapcar #'cdr (node-lisp-vars node)))
-
-  (:method ((node match-branch) &key variable-namespace-only)
-    (declare (values parser:identifier-list &optional))
-    (node-variables-g (match-branch-body node) :variable-namespace-only variable-namespace-only))
-
-  (:method ((node node-match) &key variable-namespace-only)
-    (declare (values parser:identifier-list &optional))
-    (nconc
-     (node-variables-g (node-match-expr node) :variable-namespace-only variable-namespace-only)
-     (mapcan
-      (lambda (node)
-        (node-variables-g node :variable-namespace-only variable-namespace-only))
-      (node-match-branches node))))
-
-  (:method ((node node-while) &key variable-namespace-only)
-    (declare (values parser:identifier-list &optional))
-    (nconc (node-variables-g (node-while-expr node) :variable-namespace-only variable-namespace-only)
-           (node-variables-g (node-while-body node) :variable-namespace-only variable-namespace-only)))
-
-  (:method ((node node-while-let) &key variable-namespace-only)
-    (declare (values parser:identifier-list &optional))
-    (nconc (node-variables-g (node-while-let-expr node) :variable-namespace-only variable-namespace-only)
-           (node-variables-g (node-while-let-body node) :variable-namespace-only variable-namespace-only)))
-
-  (:method ((node node-loop) &key variable-namespace-only)
-    (declare (values parser:identifier-list &optional))
-    (node-variables-g (node-loop-body node) :variable-namespace-only variable-namespace-only))
-
-  (:method ((node node-break) &key variable-namespace-only)
-    (declare (values parser:identifier-list &optional))
-    (declare (ignore variable-namespace-only))
-    nil)
-
-  (:method ((node node-continue) &key variable-namespace-only)
-    (declare (values parser:identifier-list &optional))
-    (declare (ignore variable-namespace-only))
-    nil)
-  
-  (:method ((node node-seq) &key variable-namespace-only)
-    (declare (values parser:identifier-list &optional))
-    (mapcan
-     (lambda (node)
-       (node-variables-g node :variable-namespace-only variable-namespace-only))
-     (node-seq-nodes node)))
-
-  (:method ((node node-return) &key variable-namespace-only)
-    (declare (values parser:identifier-list &optional))
-    (node-variables-g (node-return-expr node) :variable-namespace-only variable-namespace-only))
-
-  (:method ((node node-field) &key variable-namespace-only)
-    (declare (values parser:identifier-list &optional))
-    (node-variables-g (node-field-dict node) :variable-namespace-only variable-namespace-only))
-
-  (:method ((node node-dynamic-extent) &key variable-namespace-only)
-    (declare (values parser:identifier-list &optional))
-    (nconc
-     (node-variables-g (node-dynamic-extent-node node) :variable-namespace-only variable-namespace-only)
-     (node-variables-g (node-dynamic-extent-body node) :variable-namespace-only variable-namespace-only)))
-
-  (:method ((node node-bind) &key variable-namespace-only)
-    (declare (values parser:identifier-list &optional))
-    (nconc
-     (node-variables-g (node-bind-expr node) :variable-namespace-only variable-namespace-only)
-     (node-variables-g (node-bind-body node) :variable-namespace-only variable-namespace-only))))

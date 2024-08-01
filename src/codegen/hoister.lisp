@@ -2,6 +2,9 @@
   (:use
    #:cl
    #:coalton-impl/codegen/ast)
+  (:import-from
+   #:coalton-impl/codegen/transformations
+   #:node-variables)
   (:local-nicknames
    (#:util #:coalton-impl/util))
   (:export

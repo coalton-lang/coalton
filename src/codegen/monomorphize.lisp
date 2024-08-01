@@ -44,7 +44,8 @@
   (:import-from
    #:coalton-impl/codegen/transformations
    #:make-action
-   #:traverse-with-binding-list)
+   #:traverse-with-binding-list
+   #:node-free-p)
   (:import-from
    #:coalton-impl/codegen/ast-substitutions
    #:ast-substitution
