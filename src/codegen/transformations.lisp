@@ -43,20 +43,20 @@
   (check-type type         symbol)
   (assert (subtypep type 'node))
   (cond
-    ((not args)
+    ((endp args)
      (assert (= 1 (length body)))
      `(make-action ',when ',type ,@body))
-    ((equal ':traverse when)
+    ((eq ':traverse when)
      (assert (< 1 (length args)))
      `(make-action ',when ',type
                    (lambda (,@args)
-                     (declare (type ,(car args) ,type)
-                              (type ,(cadr args) function))
+                     (declare (type ,(first args) ,type)
+                              (type ,(second args) function))
                      ,@body)))
     (t
      `(make-action ',when ',type
                    (lambda (,@args)
-                     (declare (type ,(car args) ,type))
+                     (declare (type ,(first args) ,type))
                      ,@body)))))
 
 (defun action-list-p (x)
@@ -160,7 +160,7 @@
    t))
 
 (defun optional-call (when-key type-key actions traverse args node)
-  "Look up a function in `actions` corresponding to `when-key` and `type-key`, and if it exists, call it with arguments `node`, `traverse` (if `(equal ':traverse (car key))`) and (spread) `args`."
+  "Look up a function in `actions` corresponding to `when-key` and `type-key`, and if it exists, call it with arguments `node`, `traverse` (if `(eq ':traverse (car key))`) and (spread) `args`."
   (declare (type when-keyword when-key)
            (type node-subtype type-key)
            (type action-list  actions)
@@ -173,11 +173,11 @@
        ((action (find-if (lambda (action)
                            (declare (type action action)
                                     (values boolean &optional))
-                           (and (equal when-key (action-when action))
-                                (equal type-key (action-type action))))
+                           (and (eq when-key (action-when action))
+                                (eq type-key (action-type action))))
                          actions))
         (f (action-function action)))
-     (if (equal ':traverse when-key)
+     (if (eq ':traverse when-key)
          (apply f node traverse args)
          (apply f node args)))
    node))
