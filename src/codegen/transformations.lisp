@@ -11,7 +11,7 @@
    (#:util #:coalton-impl/util)
    (#:tc #:coalton-impl/typechecker))
   (:export
-   #:make-action
+   #:action
    #:traverse
    #:traverse-with-binding-list
    #:update-function-env
@@ -37,6 +37,28 @@
   (type     'node                     :type node-subtype :read-only t)
   (function (util:required 'function) :type function     :read-only t))
 
+(defmacro action ((when type &rest args) &body body)
+  "Construct an action block, turning `body` into a lambda function accepting `args` if provided"
+  (check-type when         keyword)
+  (check-type type         symbol)
+  (assert (subtypep type 'node))
+  (cond
+    ((not args)
+     (assert (= 1 (length body)))
+     `(make-action ',when ',type ,@body))
+    ((equal ':traverse when)
+     (assert (< 1 (length args)))
+     `(make-action ',when ',type
+                   (lambda (,@args)
+                     (declare (type ,(car args) ,type)
+                              (type ,(cadr args) function))
+                     ,@body)))
+    (t
+     `(make-action ',when ',type
+                   (lambda (,@args)
+                     (declare (type ,(car args) ,type))
+                     ,@body)))))
+
 (defun action-list-p (x)
   (and (alexandria:proper-list-p x)
        (every #'action-p x)))
@@ -49,144 +71,92 @@
   (declare (values action-list &optional))
   (load-time-value
    (list
-    (make-action ':traverse 'node-application
-                 (lambda (node traverse &rest args)
-                   (declare (type function traverse)
-                            (type node-application node)
-                            (values node-application &optional))
-                   (make-node-application
-                    :type (node-type node)
-                    :rator (funcall traverse (node-application-rator node) args)
-                    :rands (mapcar
-                            (lambda (node)
-                              (funcall traverse node args))
-                            (node-application-rands node)))))
-    (make-action ':traverse 'node-direct-application
-                 (lambda (node traverse &rest args)
-                   (declare (type function traverse)
-                            (type node-direct-application node)
-                            (values node-direct-application &optional))
-                   (make-node-direct-application
-                    :type (node-type node)
-                    :rator-type (node-direct-application-rator-type node)
-                    :rator (node-direct-application-rator node)
-                    :rands (mapcar
-                            (lambda (node)
-                              (funcall traverse node args))
-                            (node-direct-application-rands node)))))
-    (make-action ':traverse 'node-abstraction
-                 (lambda (node traverse &rest args)
-                   (declare (type function traverse)
-                            (type node-abstraction node)
-                            (values node-abstraction &optional))
-                   (make-node-abstraction
-                    :type (node-type node)
-                    :vars (node-abstraction-vars node)
-                    :subexpr (funcall traverse (node-abstraction-subexpr node) args))))
-    (make-action ':traverse 'node-let
-                 (lambda (node traverse &rest args)
-                   (declare (type function traverse)
-                            (type node-let node)
-                            (values node-let &optional))
-                   (make-node-let
-                    :type (node-type node)
-                    :bindings (loop :for (name . node) :in (node-let-bindings node)
-                                    :collect (cons name (funcall traverse node args)))
-                    :subexpr (funcall traverse (node-let-subexpr node) args))))
-    (make-action ':traverse 'node-match
-                 (lambda (node traverse &rest args)
-                   (declare (type function traverse)
-                            (type node-match node)
-                            (values node-match &optional))
-                   (make-node-match
-                    :type (node-type node)
-                    :expr (funcall traverse (node-match-expr node) args)
-                    :branches (mapcar
-                               (lambda (branch)
-                                 (make-match-branch
-                                  :pattern (match-branch-pattern branch)
-                                  :body (funcall traverse
-                                                 (match-branch-body branch)
-                                                 args)))
-                               (node-match-branches node)))))
-    (make-action ':traverse 'node-while
-                 (lambda (node traverse &rest args)
-                   (declare (type function traverse)
-                            (type node-while node)
-                            (values node-while &optional))
-                   (make-node-while
-                    :type (node-type node)
-                    :label (node-while-label node)
-                    :expr (funcall traverse (node-while-expr node) args)
-                    :body (funcall traverse (node-while-body node) args))))
-    (make-action ':traverse 'node-while-let
-                 (lambda (node traverse &rest args)
-                   (declare (type function traverse)
-                            (type node-while-let node)
-                            (values node-while-let &optional))
-                   (make-node-while-let
-                    :type (node-type node)
-                    :label (node-while-let-label node)
-                    :pattern (node-while-let-pattern node)
-                    :expr (funcall traverse (node-while-let-expr node) args)
-                    :body (funcall traverse (node-while-let-body node) args))))
-    (make-action ':traverse 'node-loop
-                 (lambda (node traverse &rest args)
-                   (declare (type function traverse)
-                            (type node-loop node)
-                            (values node-loop &optional))
-                   (make-node-loop
-                    :type (node-type node)
-                    :label (node-loop-label node)
-                    :body (funcall traverse (node-loop-body node) args))))
-    (make-action ':traverse 'node-seq
-                 (lambda (node traverse &rest args)
-                   (declare (type function traverse)
-                            (type node-seq node)
-                            (values node-seq &optional))
-                   (make-node-seq
-                    :type (node-type node)
-                    :nodes (mapcar
-                            (lambda (node)
-                              (funcall traverse node args))
-                            (node-seq-nodes node)))))
-    (make-action ':traverse 'node-return
-                 (lambda (node traverse &rest args)
-                   (declare (type function traverse)
-                            (type node-return node)
-                            (values node-return &optional))
-                   (make-node-return
-                    :type (node-type node)
-                    :expr (funcall traverse (node-return-expr node) args))))
-    (make-action ':traverse 'node-field
-                 (lambda (node traverse &rest args)
-                   (declare (type function traverse)
-                            (type node-field node)
-                            (values node-field &optional))
-                   (make-node-field
-                    :type (node-type node)
-                    :name (node-field-name node)
-                    :dict (funcall traverse (node-field-dict node) args))))
-    (make-action ':traverse 'node-dynamic-extent
-                 (lambda (node traverse &rest args)
-                   (declare (type function traverse)
-                            (type node-dynamic-extent node)
-                            (values node-dynamic-extent &optional))
-                   (make-node-dynamic-extent
-                    :type (node-type node)
-                    :name (node-dynamic-extent-name node)
-                    :node (funcall traverse (node-dynamic-extent-node node) args)
-                    :body (funcall traverse (node-dynamic-extent-body node) args))))
-    (make-action ':traverse 'node-bind
-                 (lambda (node traverse &rest args)
-                   (declare (type function traverse)
-                            (type node-bind node)
-                            (values node-bind &optional))
-                   (make-node-bind
-                    :type (node-type node)
-                    :name (node-bind-name node)
-                    :expr (funcall traverse (node-bind-expr node) args)
-                    :body (funcall traverse (node-bind-body node) args)))))
+    (action (:traverse node-application node traverse &rest args)
+      (make-node-application
+       :type (node-type node)
+       :rator (funcall traverse (node-application-rator node) args)
+       :rands (mapcar
+               (lambda (node)
+                 (funcall traverse node args))
+               (node-application-rands node))))
+    (action (:traverse node-direct-application node traverse &rest args)
+      (make-node-direct-application
+       :type (node-type node)
+       :rator-type (node-direct-application-rator-type node)
+       :rator (node-direct-application-rator node)
+       :rands (mapcar
+               (lambda (node)
+                 (funcall traverse node args))
+               (node-direct-application-rands node))))
+    (action (:traverse node-abstraction node traverse &rest args)
+      (make-node-abstraction
+       :type (node-type node)
+       :vars (node-abstraction-vars node)
+       :subexpr (funcall traverse (node-abstraction-subexpr node) args)))
+    (action (:traverse node-let node traverse &rest args)
+      (make-node-let
+       :type (node-type node)
+       :bindings (loop :for (name . node) :in (node-let-bindings node)
+                       :collect (cons name (funcall traverse node args)))
+       :subexpr (funcall traverse (node-let-subexpr node) args)))
+    (action (:traverse node-match node traverse &rest args)
+      (make-node-match
+       :type (node-type node)
+       :expr (funcall traverse (node-match-expr node) args)
+       :branches (mapcar
+                  (lambda (branch)
+                    (make-match-branch
+                     :pattern (match-branch-pattern branch)
+                     :body (funcall traverse
+                                    (match-branch-body branch)
+                                    args)))
+                  (node-match-branches node))))
+    (action (:traverse node-while node traverse &rest args)
+      (make-node-while
+       :type (node-type node)
+       :label (node-while-label node)
+       :expr (funcall traverse (node-while-expr node) args)
+       :body (funcall traverse (node-while-body node) args)))
+    (action (:traverse node-while-let node traverse &rest args)
+      (make-node-while-let
+       :type (node-type node)
+       :label (node-while-let-label node)
+       :pattern (node-while-let-pattern node)
+       :expr (funcall traverse (node-while-let-expr node) args)
+       :body (funcall traverse (node-while-let-body node) args)))
+    (action (:traverse node-loop node traverse &rest args)
+      (make-node-loop
+       :type (node-type node)
+       :label (node-loop-label node)
+       :body (funcall traverse (node-loop-body node) args)))
+    (action (:traverse node-seq node traverse &rest args)
+      (make-node-seq
+       :type (node-type node)
+       :nodes (mapcar
+               (lambda (node)
+                 (funcall traverse node args))
+               (node-seq-nodes node))))
+    (action (:traverse node-return node traverse &rest args)
+      (make-node-return
+       :type (node-type node)
+       :expr (funcall traverse (node-return-expr node) args)))
+    (action (:traverse node-field node traverse &rest args)
+      (make-node-field
+       :type (node-type node)
+       :name (node-field-name node)
+       :dict (funcall traverse (node-field-dict node) args)))
+    (action (:traverse node-dynamic-extent node traverse &rest args)
+      (make-node-dynamic-extent
+       :type (node-type node)
+       :name (node-dynamic-extent-name node)
+       :node (funcall traverse (node-dynamic-extent-node node) args)
+       :body (funcall traverse (node-dynamic-extent-body node) args)))
+    (action (:traverse node-bind node traverse &rest args)
+      (make-node-bind
+       :type (node-type node)
+       :name (node-bind-name node)
+       :expr (funcall traverse (node-bind-expr node) args)
+       :body (funcall traverse (node-bind-body node) args))))
    t))
 
 (defun optional-call (when-key type-key actions traverse args node)
@@ -274,79 +244,54 @@
   (declare (values action-list &optional))
   (load-time-value
    (list
-    (make-action ':traverse 'node-abstraction
-                 (lambda (node traverse &key bound-variables)
-                   (declare (type node-abstraction node)
-                            (type function traverse)
-                            (type util:symbol-list bound-variables)
-                            (values node-abstraction &optional))
-                   (make-node-abstraction
-                    :type (node-type node)
-                    :vars (node-abstraction-vars node)
-                    :subexpr (funcall traverse
-                                      (node-abstraction-subexpr node)
-                                      (list ':bound-variables
-                                            (append (node-abstraction-vars node) bound-variables))))))
-    (make-action ':traverse 'node-let
-                 (lambda (node traverse &key bound-variables)
-                   (declare (type node-let node)
-                            (type function traverse)
-                            (type util:symbol-list bound-variables)
-                            (values node-let &optional))
-                   (let ((new-args (list ':bound-variables
-                                         (append
-                                          (mapcar #'car (node-let-bindings node))
-                                          bound-variables))))
-                     (make-node-let
-                      :type (node-type node)
-                      :bindings (loop :for (name . node) :in (node-let-bindings node)
-                                      :collect (cons name (funcall traverse node new-args)))
-                      :subexpr (funcall traverse (node-let-subexpr node) new-args)))))
-    (make-action ':traverse 'node-match
-                 (lambda (node traverse &key bound-variables)
-                   (declare (type node-match node)
-                            (type function traverse)
-                            (type util:symbol-list bound-variables)
-                            (values node-match &optional))
-                   (make-node-match
-                    :type (node-type node)
-                    :expr (funcall traverse (node-match-expr node) (list ':bound-variables bound-variables))
-                    :branches (mapcar
-                               (lambda (branch)
-                                 (make-match-branch
-                                  :pattern (match-branch-pattern branch)
-                                  :body (funcall traverse
-                                                 (match-branch-body branch)
-                                                 (list ':bound-variables
-                                                       (append (pattern-variables (match-branch-pattern branch))
-                                                               bound-variables)))))
-                               (node-match-branches node)))))
-    (make-action ':traverse 'node-dynamic-extent
-                 (lambda (node traverse &key bound-variables)
-                   (declare (type node-dynamic-extent node)
-                            (type function traverse)
-                            (type util:symbol-list bound-variables)
-                            (values node-dynamic-extent &optional))
-                   (let ((new-args (list ':bound-variables
-                                         (cons (node-dynamic-extent-name node) bound-variables))))
-                     (make-node-dynamic-extent
-                      :type (node-type node)
-                      :name (node-dynamic-extent-name node)
-                      :node (funcall traverse (node-dynamic-extent-node node) new-args)
-                      :body (funcall traverse (node-dynamic-extent-body node) new-args)))))
-    (make-action ':traverse 'node-bind
-                 (lambda (node traverse &key bound-variables)
-                   (declare (type node-bind node)
-                            (type function traverse)
-                            (type util:symbol-list bound-variables)
-                            (values node-bind &optional))
-                   (let ((new-args (list ':bound-variables
-                                         (cons (node-bind-name node) bound-variables))))
-                     (make-node-bind
-                      :type (node-type node)
-                      :name (node-bind-name node)
-                      :expr (funcall traverse (node-bind-expr node) new-args)
-                      :body (funcall traverse (node-bind-body node) new-args))))))
+    (action (:traverse node-abstraction node traverse &key bound-variables)
+      (make-node-abstraction
+       :type (node-type node)
+       :vars (node-abstraction-vars node)
+       :subexpr (funcall traverse
+                         (node-abstraction-subexpr node)
+                         (list ':bound-variables
+                               (append (node-abstraction-vars node) bound-variables)))))
+    (action (:traverse node-let node traverse &key bound-variables)
+      (let ((new-args (list ':bound-variables
+                            (append
+                             (mapcar #'car (node-let-bindings node))
+                             bound-variables))))
+        (make-node-let
+         :type (node-type node)
+         :bindings (loop :for (name . node) :in (node-let-bindings node)
+                         :collect (cons name (funcall traverse node new-args)))
+         :subexpr (funcall traverse (node-let-subexpr node) new-args))))
+    (action (:traverse node-match node traverse &key bound-variables)
+      (make-node-match
+       :type (node-type node)
+       :expr (funcall traverse (node-match-expr node) (list ':bound-variables bound-variables))
+       :branches (mapcar
+                  (lambda (branch)
+                    (make-match-branch
+                     :pattern (match-branch-pattern branch)
+                     :body (funcall traverse
+                                    (match-branch-body branch)
+                                    (list ':bound-variables
+                                          (append (pattern-variables (match-branch-pattern branch))
+                                                  bound-variables)))))
+                  (node-match-branches node))))
+    (action (:traverse node-dynamic-extent node traverse &key bound-variables)
+      (let ((new-args (list ':bound-variables
+                            (cons (node-dynamic-extent-name node) bound-variables))))
+        (make-node-dynamic-extent
+         :type (node-type node)
+         :name (node-dynamic-extent-name node)
+         :node (funcall traverse (node-dynamic-extent-node node) new-args)
+         :body (funcall traverse (node-dynamic-extent-body node) new-args))))
+    (action (:traverse node-bind node traverse &key bound-variables)
+      (let ((new-args (list ':bound-variables
+                            (cons (node-bind-name node) bound-variables))))
+        (make-node-bind
+         :type (node-type node)
+         :name (node-bind-name node)
+         :expr (funcall traverse (node-bind-expr node) new-args)
+         :body (funcall traverse (node-bind-body node) new-args)))))
    t))
 
 (defun traverse-with-binding-list (node actions)
@@ -365,44 +310,32 @@
   (traverse
    node
    (list
-    (make-action ':after 'node
-                 (lambda (node)
-                   (declare (type node node)
-                            (values node &optional))
-                   (copy-node node
-                              (tc:apply-substitution subs (node-type node)))))
-    (make-action ':after 'node-direct-application
-                 (lambda (node)
-                   (declare (type node-direct-application node)
-                            (values node-direct-application &optional))
-                   (make-node-direct-application
-                    :type (node-type node)
-                    :rator-type (tc:apply-substitution subs (node-direct-application-rator-type node))
-                    :rator (node-direct-application-rator node)
-                    :rands (node-direct-application-rands node))))
-    (make-action ':after 'node-match
-                 (lambda (node)
-                   (declare (type node-match node)
-                            (values node-match &optional))
-                   (make-node-match
-                    :type (node-type node)
-                    :expr (node-match-expr node)
-                    :branches (mapcar
-                               (lambda (branch)
-                                 (make-match-branch
-                                  :pattern (tc:apply-substitution subs (match-branch-pattern branch))
-                                  :body (match-branch-body branch)))
-                               (node-match-branches node)))))
-    (make-action ':after 'node-while-let
-                 (lambda (node)
-                   (declare (type node-while-let node)
-                            (values node-while-let &optional))
-                   (make-node-while-let
-                    :type (node-type node)
-                    :label (node-while-let-label node)
-                    :pattern (tc:apply-substitution subs (node-while-let-pattern node))
-                    :expr (node-while-let-expr node)
-                    :body (node-while-let-body node)))))))
+    (action (:after node node)
+      (copy-node node
+                 (tc:apply-substitution subs (node-type node))))
+    (action (:after node-direct-application node)
+      (make-node-direct-application
+       :type (node-type node)
+       :rator-type (tc:apply-substitution subs (node-direct-application-rator-type node))
+       :rator (node-direct-application-rator node)
+       :rands (node-direct-application-rands node)))
+    (action (:after node-match node)
+      (make-node-match
+       :type (node-type node)
+       :expr (node-match-expr node)
+       :branches (mapcar
+                  (lambda (branch)
+                    (make-match-branch
+                     :pattern (tc:apply-substitution subs (match-branch-pattern branch))
+                     :body (match-branch-body branch)))
+                  (node-match-branches node))))
+    (action (:after node-while-let node)
+      (make-node-while-let
+       :type (node-type node)
+       :label (node-while-let-label node)
+       :pattern (tc:apply-substitution subs (node-while-let-pattern node))
+       :expr (node-while-let-expr node)
+       :body (node-while-let-body node))))))
 
 (defmethod tc:type-variables ((node node))
   "Collect all type variables from nodes and patterns in the tree of `node`."
@@ -411,35 +344,23 @@
     (traverse
      node
      (list
-      (make-action ':after 'node
-                   (lambda (node)
-                     (declare (type node node)
-                              (values))
-                     (alexandria:unionf tyvars
-                                        (tc:type-variables (node-type node)))
-                     (values)))
-      (make-action ':after 'node-direct-application
-                   (lambda (node)
-                     (declare (type node-direct-application node)
-                              (values))
-                     (alexandria:unionf tyvars
-                                        (tc:type-variables (node-direct-application-rator-type node)))
-                     (values)))
-      (make-action ':after 'node-match
-                   (lambda (node)
-                     (declare (type node-match node)
-                              (values))
-                     (dolist (branch (node-match-branches node))
-                       (alexandria:unionf tyvars
-                                          (tc:type-variables (match-branch-pattern branch))))
-                     (values)))
-      (make-action ':after 'node-while-let
-                   (lambda (node)
-                     (declare (type node-while-let node)
-                              (values))
-                     (alexandria:unionf tyvars
-                                        (tc:type-variables (node-while-let-pattern node)))
-                     (values)))))
+      (action (:after node node)
+        (alexandria:unionf tyvars
+                           (tc:type-variables (node-type node)))
+        (values))
+      (action (:after node-direct-application node)
+        (alexandria:unionf tyvars
+                           (tc:type-variables (node-direct-application-rator-type node)))
+        (values))
+      (action (:after node-match node)
+        (dolist (branch (node-match-branches node))
+          (alexandria:unionf tyvars
+                             (tc:type-variables (match-branch-pattern branch))))
+        (values))
+      (action (:after node-while-let node)
+        (alexandria:unionf tyvars
+                           (tc:type-variables (node-while-let-pattern node)))
+        (values))))
     tyvars))
 
 (defun rename-type-variables (node &optional (renamer #'tc:fresh-type-renamer))
@@ -466,28 +387,19 @@
     (traverse
      node
      (list
-      (make-action ':after 'node-variable
-                   (lambda (node)
-                     (declare (type node-variable node)
-                              (values))
-                     (setf node-vars
-                           (adjoin (node-variable-value node) node-vars))
-                     (values)))
-      (make-action ':after 'node-direct-application
-                   (lambda (node)
-                     (declare (type node-direct-application node)
-                              (values))
-                     (unless variable-namespace-only
-                       (setf node-vars
-                             (adjoin (node-direct-application-rator node) node-vars)))
-                     (values)))
-      (make-action ':after 'node-lisp
-                   (lambda (node)
-                     (declare (type node-lisp node)
-                              (values))
-                     (alexandria:unionf node-vars
-                                        (mapcar #'cdr (node-lisp-vars node)))
-                     (values)))))
+      (action (:after node-variable node)
+        (setf node-vars
+              (adjoin (node-variable-value node) node-vars))
+        (values))
+      (action (:after node-direct-application node)
+        (unless variable-namespace-only
+          (setf node-vars
+                (adjoin (node-direct-application-rator node) node-vars)))
+        (values))
+      (action (:after node-lisp node)
+        (alexandria:unionf node-vars
+                           (mapcar #'cdr (node-lisp-vars node)))
+        (values))))
     node-vars))
 
 (defun node-free-p (node bound-variables)

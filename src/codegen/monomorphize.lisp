@@ -43,7 +43,7 @@
    #:coalton-impl/codegen/ast)
   (:import-from
    #:coalton-impl/codegen/transformations
-   #:make-action
+   #:action
    #:traverse-with-binding-list
    #:node-free-p)
   (:import-from
@@ -324,7 +324,7 @@ propagate dictionaries that have been moved by the hoister."
            (type hash-table resolve-table)
            (type package package)
            (type tc:environment env))
-  (labels ((validate-candidate (node &key bound-variables &allow-other-keys)
+  (labels ((validate-candidate (node &key bound-variables)
              (let ((name (node-rator-name node))
                    (rands (node-rands node)))
 
@@ -349,8 +349,8 @@ propagate dictionaries that have been moved by the hoister."
     (traverse-with-binding-list
      node
      (list
-      (make-action ':after 'node-direct-application #'validate-candidate)
-      (make-action ':after 'node-application #'validate-candidate))))
+      (action (:after node-direct-application) #'validate-candidate)
+      (action (:after node-application) #'validate-candidate))))
   (values))
 
 
@@ -361,7 +361,7 @@ propagate dictionaries that have been moved by the hoister."
            (type tc:environment env)
            (values node &optional))
 
-  (labels ((apply-candidate (node &key bound-variables &allow-other-keys)
+  (labels ((apply-candidate (node &key bound-variables)
              (let ((name (node-rator-name node))
                    (rands (node-rands node)))
 
@@ -411,8 +411,8 @@ propagate dictionaries that have been moved by the hoister."
     (traverse-with-binding-list
      node
      (list
-      (make-action ':after 'node-application #'apply-candidate)
-      (make-action ':after 'node-direct-application #'apply-candidate)))))
+      (action (:after node-application) #'apply-candidate)
+      (action (:after node-direct-application) #'apply-candidate)))))
 
 (defun monomorphize (name manager package resolve-table optimize-node env)
   (declare (type symbol name)

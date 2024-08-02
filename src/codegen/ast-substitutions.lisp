@@ -4,7 +4,7 @@
    #:coalton-impl/codegen/ast)
   (:import-from
    #:coalton-impl/codegen/transformations
-   #:make-action
+   #:action
    #:traverse)
   (:local-nicknames
    (#:util #:coalton-impl/util))
@@ -38,56 +38,44 @@
   (traverse
    node
    (list
-    (make-action ':after 'node-variable
-                 (lambda (node)
-                   (declare (type node-variable node)
-                            (values node &optional))
-                   (alexandria:if-let
-                       ((res (find (node-variable-value node) subs :key #'ast-substitution-from)))
-                     (ast-substitution-to res)
-                     node)))
-    (make-action ':after 'node-lisp
-                 (lambda (node)
-                   (declare (type node-lisp node)
-                            (values (or node-lisp node-let) &optional))
-                   (multiple-value-bind (let-bindings lisp-var-bindings)
-                       (loop :for (lisp-var . coalton-var) :in (node-lisp-vars node)
-                             :for new-var := (gentemp (symbol-name coalton-var))
-                             :for res := (find coalton-var subs :key #'ast-substitution-from)
-                             :if (and res (node-variable-p (ast-substitution-to res)))
-                               :collect (cons lisp-var (node-variable-value (ast-substitution-to res)))
-                                 :into lisp-var-bindings
-                             :else :if res
-                                     :collect (cons lisp-var new-var) :into lisp-var-bindings
-                                     :and :collect (cons new-var (ast-substitution-to res))
-                                            :into let-bindings
-                             :else
-                               :collect (cons lisp-var coalton-var) :into lisp-var-bindings
-                             :finally (return (values let-bindings lisp-var-bindings)))
-                     (let ((new-lisp-node (make-node-lisp
-                                           :type (node-type node)
-                                           :vars lisp-var-bindings
-                                           :form (node-lisp-form node))))
-                       (if (null let-bindings)
-                           new-lisp-node
-                           (make-node-let
-                            :type (node-type node)
-                            :bindings let-bindings
-                            :subexpr new-lisp-node))))))
-    (make-action ':before 'node-direct-application
-                 (lambda (node)
-                   (declare (type node-direct-application node)
-                            (values))
-                   (when (find (node-direct-application-rator node) subs :key #'ast-substitution-from)
-                     (util:coalton-bug
-                      "Failure to apply ast substitution on variable ~A to node-direct-application"
-                      (node-direct-application-rator node)))))
-    (make-action ':before 'node-let
-                 (lambda (node)
-                   (declare (type node-let node)
-                            (values))
-                   (loop :for (name . _) :in (node-let-bindings node)
-                         :do (when (find name subs :key #'ast-substitution-from)
-                               (util:coalton-bug
-                                "Failure to apply ast substitution on variable ~A to node-let"
-                                name))))))))
+    (action (:after node-variable node)
+      (alexandria:if-let
+          ((res (find (node-variable-value node) subs :key #'ast-substitution-from)))
+        (ast-substitution-to res)
+        node))
+    (action (:after node-lisp node)
+      (multiple-value-bind (let-bindings lisp-var-bindings)
+          (loop :for (lisp-var . coalton-var) :in (node-lisp-vars node)
+                :for new-var := (gentemp (symbol-name coalton-var))
+                :for res := (find coalton-var subs :key #'ast-substitution-from)
+                :if (and res (node-variable-p (ast-substitution-to res)))
+                  :collect (cons lisp-var (node-variable-value (ast-substitution-to res)))
+                    :into lisp-var-bindings
+                :else :if res
+                        :collect (cons lisp-var new-var) :into lisp-var-bindings
+                        :and :collect (cons new-var (ast-substitution-to res))
+                               :into let-bindings
+                :else
+                  :collect (cons lisp-var coalton-var) :into lisp-var-bindings
+                :finally (return (values let-bindings lisp-var-bindings)))
+        (let ((new-lisp-node (make-node-lisp
+                              :type (node-type node)
+                              :vars lisp-var-bindings
+                              :form (node-lisp-form node))))
+          (if (null let-bindings)
+              new-lisp-node
+              (make-node-let
+               :type (node-type node)
+               :bindings let-bindings
+               :subexpr new-lisp-node)))))
+    (action (:before node-direct-application node)
+      (when (find (node-direct-application-rator node) subs :key #'ast-substitution-from)
+        (util:coalton-bug
+         "Failure to apply ast substitution on variable ~A to node-direct-application"
+         (node-direct-application-rator node))))
+    (action (:before node-let node)
+      (loop :for (name . _) :in (node-let-bindings node)
+            :do (when (find name subs :key #'ast-substitution-from)
+                  (util:coalton-bug
+                   "Failure to apply ast substitution on variable ~A to node-let"
+                   name)))))))

@@ -24,7 +24,7 @@
    #:make-candidate-manager)
   (:import-from
    #:coalton-impl/codegen/transformations
-   #:make-action
+   #:action
    #:traverse
    #:traverse-with-binding-list
    #:update-function-env
@@ -136,9 +136,9 @@
     (traverse
      node
      (list
-      (make-action ':after 'node-application #'rewrite-direct-application)
-      (make-action ':before 'node-let #'add-local-funs)
-      (make-action ':before 'node-bind #'add-bind-fun)))))
+      (action (:after node-application) #'rewrite-direct-application)
+      (action (:before node-let) #'add-local-funs)
+      (action (:before node-bind) #'add-bind-fun)))))
 
 (defun optimize-bindings-initial (bindings package env)
   (declare (type binding-list bindings)
@@ -282,7 +282,7 @@
     (traverse
      node
      (list
-      (make-action ':after 'node-application #'rewrite-application)))))
+      (action (:after node-application) #'rewrite-application)))))
 
 (defun inline-methods (node env)
   (declare (type node node)
@@ -360,8 +360,8 @@
     (traverse
      node
      (list
-      (make-action ':after 'node-application #'inline-method)
-      (make-action ':after 'node-direct-application #'inline-direct-method)))))
+      (action (:after node-application) #'inline-method)
+      (action (:after node-direct-application) #'inline-direct-method)))))
 
 (defun static-dict-lift (node name hoister package env)
   (declare (type node node)
@@ -410,9 +410,9 @@
     (traverse
      node
      (list
-      (make-action ':after 'node-application #'lift-static-dict)
-      (make-action ':before 'node-abstraction #'handle-push-hoist-point)
-      (make-action ':after 'node-abstraction #'handle-pop-hoist-point)))))
+      (action (:after node-application) #'lift-static-dict)
+      (action (:before node-abstraction) #'handle-push-hoist-point)
+      (action (:after node-abstraction) #'handle-pop-hoist-point)))))
 
 (defun resolve-compount-superclass (node env)
   (declare (type (or node-application node-direct-application node-variable) node)
@@ -496,7 +496,7 @@
     (traverse-with-binding-list
      node
      (list
-      (make-action ':after 'node-field #'handle-static-superclass)))))
+      (action (:after node-field) #'handle-static-superclass)))))
 
 (defun apply-specializations (node env)
   (declare (type node node)
@@ -552,8 +552,8 @@
     (traverse
      node
      (list
-      (make-action ':after 'node-application #'apply-specialization)
-      (make-action ':after 'node-direct-application #'apply-specialization)))))
+      (action (:after node-application) #'apply-specialization)
+      (action (:after node-direct-application) #'apply-specialization)))))
 
 (defun match-dynamic-extent-lift (node env)
   "Stack allocates uncaptured ADTs constructed in the head of a match expression"
@@ -606,4 +606,4 @@
     (traverse
      node
      (list
-      (make-action ':after 'node-match #'apply-lift)))))
+      (action (:after node-match) #'apply-lift)))))
