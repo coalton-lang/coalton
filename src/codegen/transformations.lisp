@@ -26,19 +26,51 @@
   (and (symbolp symbol) (subtypep symbol 'node)))
 
 (deftype node-subtype ()
+  "A symbol signifying either `'node` or a particular type of node like
+`'node-application`. This is used in `action` structures to determine
+what types of nodes an operation should be performed on when using
+`traverse`."
   '(satisfies node-subtype-p))
 
 (deftype when-keyword ()
+  "A keyword used in `action` structures to determine at what time an
+operation should be performed when using `traverse`. The keyword
+`:traverse` represents the main call of the traversal which recurses
+through sub-nodes of a given node. The keywords `:before` and `:after`
+tag actions to be performed before or after the recursive call of a
+traversal."
   '(member :before :after :traverse))
 
 (defstruct (action (:constructor make-action (when type function)))
-  "Container for a function to call on nodes of a particular type - before, after, or instead of the recursive call in the traversal"
+  "Container for a function to call on nodes of a particular `type` -
+before, after, or in place of the recursive call in a traversal. If
+`type` is `'node`, then the function will be called before or after
+every node in the traversal; otherwise, the action only applies to
+nodes of the specified `type`. The when-keyword `:traverse` will have
+no effect when paired with type `'node`; a recursive call defined for
+every node would have to be an entire generic already. The `function`
+will be called with `(apply function node args)` if `when` is
+`:before` or `:after`, and it will be called with `(apply function
+node traverse args)` if `when` is `:traverse`, so that the `function`
+can call the provided `traverse` to invoke recursion. The `function`
+should return either a modified `node` to take its place in the newly
+constructed tree, or void to indicate that the input node should be
+kept unchanged."
   (when     ':after                   :type when-keyword :read-only t)
   (type     'node                     :type node-subtype :read-only t)
   (function (util:required 'function) :type function     :read-only t))
 
 (defmacro action ((when type &rest args) &body body)
-  "Construct an action block, turning `body` into a lambda function accepting `args` if provided"
+  "Construct an action block, turning `body` into a lambda function
+accepting `args` if `args` are provided. If there are no `args`, then
+`body` is assumed to be a function object and is used directly with
+`when` and `type` to create an `action` instance. If there are `args`
+and `when` is `:traverse`, then `args` must include at least the node
+to traverse and the recursive function object as the first two
+arguments, which are declared to have types `type` and `function`,
+respectively, inside the generated lambda function. Otherwise, the
+first argument is declared to be a node of type `type`, and the `args`
+and `body` are again used to generate a lambda function."
   (check-type when         keyword)
   (check-type type         symbol)
   (assert (subtypep type 'node))
@@ -64,10 +96,15 @@
        (every #'action-p x)))
 
 (deftype action-list ()
+  "A list of actions for use in `traverse`."
   '(satisfies action-list-p))
 
-(defun make-default-traversals ()
-  "Create traversal functions which recurse through the AST, passing arguments unchanged."
+(defun make-default-actions ()
+  "Traversal actions which recurse through the AST, passing arguments
+unchanged. With no other actions, this will simply create a mostly
+deep copy of internal `node`s (and `match-branch`es) of the AST, but
+shallow copy all other slots, including types, patterns, and leaf
+nodes."
   (declare (values action-list &optional))
   (load-time-value
    (list
@@ -159,8 +196,12 @@
        :body (apply traverse (node-bind-body node) args))))
    t))
 
-(defun optional-call (when-key type-key actions traverse args node)
-  "Look up a function in `actions` corresponding to `when-key` and `type-key`, and if it exists, call it with arguments `node`, `traverse` (if `(eq ':traverse (car key))`) and (spread) `args`."
+(defun fire-action (when-key type-key actions traverse args node)
+  "Look up a function in `actions` corresponding to `when-key` and
+`type-key`, and if it exists, call it with arguments `node`,
+`traverse` (if `(eq ':traverse (car key))`) and (spread) `args`. The
+return value is the value returned by the action, or the original node
+if the action returned `nil` or no action was found."
   (declare (type when-keyword when-key)
            (type node-subtype type-key)
            (type action-list  actions)
@@ -183,23 +224,45 @@
    node))
 
 (defun traverse (initial-node custom-actions &rest initial-args)
-  "Create a recursive \"generic\" traversal with pre-, in-, and post-operations fixed by `custom-actions` (with the default traversals as a fallback), and evaluate this traversal with `initial-node` and `initial-args`."
+  "The intended use case of `traverse` is to recursively propagate an
+operation through the AST when only a few nodes need custom behavior,
+obviating the need to copy an entire `defgeneric` for each new AST
+traversal. This function creates a recursive \"generic\" traversal
+with pre-, in-, and post-operations fixed by `custom-actions` (with
+the default traversals as a fallback), and evaluates the traversal
+with `initial-node` and `initial-args`. For each node type, the action
+tagged with `:traverse` will be the most general, so the `:before` and
+`:after` should not be necessary. The `:before` and `:after` are
+mainly useful if the default deep-copy recursion behavior is desired,
+but a small change has to be made depending on the node type, or if
+some external state is mutated to keep track of some information about
+the recursion stack. The `:before 'node` and `:after 'node` actions
+may also be useful for operations that must be performed uniformly on
+every node, such as type collection and substitution.
+
+Note that the wrapped traversal pipes the node through three actions
+corresponding to its original class, so it is important to not define
+any node-specific actions that will run after another action which may
+return a node of a different type. For example, if there is an action
+on `:traverse 'node-variable` to substitute variables with arbitrary
+other nodes, then it would be inappropriate to also define an action
+`:after 'node-variable`."
   (declare (type node        initial-node)
            (type action-list custom-actions)
            (type list        initial-args)
            (values node &optional))
-  (let ((actions (append custom-actions (make-default-traversals))))
+  (let ((actions (append custom-actions (make-default-actions))))
     (labels ((traverse (current-node &rest args)
                (declare (type node current-node)
                         (type list args)
                         (values node &optional))
                (alexandria-2:line-up-last
                 current-node
-                (optional-call ':before   'node                                actions #'traverse args)
-                (optional-call ':before   (class-name (class-of current-node)) actions #'traverse args)
-                (optional-call ':traverse (class-name (class-of current-node)) actions #'traverse args)
-                (optional-call ':after    (class-name (class-of current-node)) actions #'traverse args)
-                (optional-call ':after    'node                                actions #'traverse args))))
+                (fire-action ':before   'node                                actions #'traverse args)
+                (fire-action ':before   (class-name (class-of current-node)) actions #'traverse args)
+                (fire-action ':traverse (class-name (class-of current-node)) actions #'traverse args)
+                (fire-action ':after    (class-name (class-of current-node)) actions #'traverse args)
+                (fire-action ':after    'node                                actions #'traverse args))))
       (apply #'traverse initial-node initial-args))))
 
 (defun split-binding-definitions (bindings)
@@ -239,8 +302,10 @@
       (setf (gethash name table) (tc:function-env-entry-arity entry)))
     table))
 
-(defun make-binding-list-traversals ()
-  "These are the custom traversal behaviors needed to ensure that `traverse`'s `args` contains a list of the variables names which are bound at the given point."
+(defun make-binding-list-actions ()
+  "These are the custom traversal actions needed to ensure that
+`traverse`'s `args` consists of a list of the variable names which are
+bound at the given point."
   (declare (values action-list &optional))
   (load-time-value
    (list
@@ -290,16 +355,19 @@
    t))
 
 (defun traverse-with-binding-list (node actions)
-  "Traverse `node` while keeping track of a list of `bound-variables` which gets passed as a keyword argument whenever a function from `actions` gets called."
+  "Traverse `node` while keeping track of a list of `bound-variables`
+which gets passed as an argument whenever a function from `actions`
+gets called."
   (declare (type node        node)
            (type action-list actions)
            (values node &optional))
   (traverse node
-            (append actions (make-binding-list-traversals))
+            (append actions (make-binding-list-actions))
             nil))
 
 (defmethod tc:apply-substitution (subs (node node))
-  "Substitute type variables in the tree of `node` with other types specified in `subs`."
+  "Substitute type variables in the tree of `node` with other types
+specified in `subs`."
   (declare (type tc:substitution-list subs)
            (values node &optional))
   (traverse
@@ -359,7 +427,8 @@
     tyvars))
 
 (defun rename-type-variables (node &optional (renamer #'tc:fresh-type-renamer))
-  "Rename the type variables of `node` and its subnodes according to the function `renamer`."
+  "Rename the type variables of `node` and its subnodes according to the
+function `renamer`, returning the new node tree."
   (declare (type node     node)
            (type function renamer)
            (values node &optional))
@@ -374,7 +443,8 @@
     node))
 
 (defun node-variables (node &key (variable-namespace-only nil))
-  "Returns a deduplicated list of identifiers representing variables in both CL namespaces appearing in `node`"
+  "Return a deduplicated list of identifiers representing variables in
+both CL namespaces appearing in `node`"
   (declare (type node    node)
            (type boolean variable-namespace-only)
            (values parser:identifier-list &optional))
@@ -398,7 +468,8 @@
     node-vars))
 
 (defun node-free-p (node bound-variables)
-  "Returns true if every variable in `node` is free with respect to `bound-variables`"
+  "Return true if every variable in `node` is free with respect to
+`bound-variables`"
   (declare (type node                   node)
            (type parser:identifier-list bound-variables)
            (values boolean &optional))
