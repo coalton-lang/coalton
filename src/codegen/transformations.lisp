@@ -74,10 +74,10 @@
     (action (:traverse node-application node traverse &rest args)
       (make-node-application
        :type (node-type node)
-       :rator (funcall traverse (node-application-rator node) args)
+       :rator (apply traverse (node-application-rator node) args)
        :rands (mapcar
                (lambda (node)
-                 (funcall traverse node args))
+                 (apply traverse node args))
                (node-application-rands node))))
     (action (:traverse node-direct-application node traverse &rest args)
       (make-node-direct-application
@@ -86,77 +86,77 @@
        :rator (node-direct-application-rator node)
        :rands (mapcar
                (lambda (node)
-                 (funcall traverse node args))
+                 (apply traverse node args))
                (node-direct-application-rands node))))
     (action (:traverse node-abstraction node traverse &rest args)
       (make-node-abstraction
        :type (node-type node)
        :vars (node-abstraction-vars node)
-       :subexpr (funcall traverse (node-abstraction-subexpr node) args)))
+       :subexpr (apply traverse (node-abstraction-subexpr node) args)))
     (action (:traverse node-let node traverse &rest args)
       (make-node-let
        :type (node-type node)
        :bindings (loop :for (name . node) :in (node-let-bindings node)
-                       :collect (cons name (funcall traverse node args)))
-       :subexpr (funcall traverse (node-let-subexpr node) args)))
+                       :collect (cons name (apply traverse node args)))
+       :subexpr (apply traverse (node-let-subexpr node) args)))
     (action (:traverse node-match node traverse &rest args)
       (make-node-match
        :type (node-type node)
-       :expr (funcall traverse (node-match-expr node) args)
+       :expr (apply traverse (node-match-expr node) args)
        :branches (mapcar
                   (lambda (branch)
                     (make-match-branch
                      :pattern (match-branch-pattern branch)
-                     :body (funcall traverse
-                                    (match-branch-body branch)
-                                    args)))
+                     :body (apply traverse
+                                  (match-branch-body branch)
+                                  args)))
                   (node-match-branches node))))
     (action (:traverse node-while node traverse &rest args)
       (make-node-while
        :type (node-type node)
        :label (node-while-label node)
-       :expr (funcall traverse (node-while-expr node) args)
-       :body (funcall traverse (node-while-body node) args)))
+       :expr (apply traverse (node-while-expr node) args)
+       :body (apply traverse (node-while-body node) args)))
     (action (:traverse node-while-let node traverse &rest args)
       (make-node-while-let
        :type (node-type node)
        :label (node-while-let-label node)
        :pattern (node-while-let-pattern node)
-       :expr (funcall traverse (node-while-let-expr node) args)
-       :body (funcall traverse (node-while-let-body node) args)))
+       :expr (apply traverse (node-while-let-expr node) args)
+       :body (apply traverse (node-while-let-body node) args)))
     (action (:traverse node-loop node traverse &rest args)
       (make-node-loop
        :type (node-type node)
        :label (node-loop-label node)
-       :body (funcall traverse (node-loop-body node) args)))
+       :body (apply traverse (node-loop-body node) args)))
     (action (:traverse node-seq node traverse &rest args)
       (make-node-seq
        :type (node-type node)
        :nodes (mapcar
                (lambda (node)
-                 (funcall traverse node args))
+                 (apply traverse node args))
                (node-seq-nodes node))))
     (action (:traverse node-return node traverse &rest args)
       (make-node-return
        :type (node-type node)
-       :expr (funcall traverse (node-return-expr node) args)))
+       :expr (apply traverse (node-return-expr node) args)))
     (action (:traverse node-field node traverse &rest args)
       (make-node-field
        :type (node-type node)
        :name (node-field-name node)
-       :dict (funcall traverse (node-field-dict node) args)))
+       :dict (apply traverse (node-field-dict node) args)))
     (action (:traverse node-dynamic-extent node traverse &rest args)
       (make-node-dynamic-extent
        :type (node-type node)
        :name (node-dynamic-extent-name node)
-       :node (funcall traverse (node-dynamic-extent-node node) args)
-       :body (funcall traverse (node-dynamic-extent-body node) args)))
+       :node (apply traverse (node-dynamic-extent-node node) args)
+       :body (apply traverse (node-dynamic-extent-body node) args)))
     (action (:traverse node-bind node traverse &rest args)
       (make-node-bind
        :type (node-type node)
        :name (node-bind-name node)
-       :expr (funcall traverse (node-bind-expr node) args)
-       :body (funcall traverse (node-bind-body node) args))))
+       :expr (apply traverse (node-bind-expr node) args)
+       :body (apply traverse (node-bind-body node) args))))
    t))
 
 (defun optional-call (when-key type-key actions traverse args node)
@@ -182,14 +182,14 @@
          (apply f node args)))
    node))
 
-(defun traverse (initial-node custom-actions &optional (initial-args nil))
+(defun traverse (initial-node custom-actions &rest initial-args)
   "Create a recursive \"generic\" traversal with pre-, in-, and post-operations fixed by `custom-actions` (with the default traversals as a fallback), and evaluate this traversal with `initial-node` and `initial-args`."
   (declare (type node        initial-node)
            (type action-list custom-actions)
            (type list        initial-args)
            (values node &optional))
   (let ((actions (append custom-actions (make-default-traversals))))
-    (labels ((traverse (current-node args)
+    (labels ((traverse (current-node &rest args)
                (declare (type node current-node)
                         (type list args)
                         (values node &optional))
@@ -200,7 +200,7 @@
                 (optional-call ':traverse (class-name (class-of current-node)) actions #'traverse args)
                 (optional-call ':after    (class-name (class-of current-node)) actions #'traverse args)
                 (optional-call ':after    'node                                actions #'traverse args))))
-      (traverse initial-node initial-args))))
+      (apply #'traverse initial-node initial-args))))
 
 (defun split-binding-definitions (bindings)
   (let ((functions nil)
@@ -250,8 +250,8 @@
        :vars (node-abstraction-vars node)
        :subexpr (funcall traverse
                          (node-abstraction-subexpr node)
-                         (list ':bound-variables
-                               (append (node-abstraction-vars node) bound-variables)))))
+                         ':bound-variables
+                         (append (node-abstraction-vars node) bound-variables))))
     (action (:traverse node-let node traverse &key bound-variables)
       (let ((new-args (list ':bound-variables
                             (append
@@ -260,21 +260,21 @@
         (make-node-let
          :type (node-type node)
          :bindings (loop :for (name . node) :in (node-let-bindings node)
-                         :collect (cons name (funcall traverse node new-args)))
-         :subexpr (funcall traverse (node-let-subexpr node) new-args))))
+                         :collect (cons name (apply traverse node new-args)))
+         :subexpr (apply traverse (node-let-subexpr node) new-args))))
     (action (:traverse node-match node traverse &key bound-variables)
       (make-node-match
        :type (node-type node)
-       :expr (funcall traverse (node-match-expr node) (list ':bound-variables bound-variables))
+       :expr (funcall traverse (node-match-expr node) ':bound-variables bound-variables)
        :branches (mapcar
                   (lambda (branch)
                     (make-match-branch
                      :pattern (match-branch-pattern branch)
                      :body (funcall traverse
                                     (match-branch-body branch)
-                                    (list ':bound-variables
-                                          (append (pattern-variables (match-branch-pattern branch))
-                                                  bound-variables)))))
+                                    ':bound-variables
+                                    (append (pattern-variables (match-branch-pattern branch))
+                                            bound-variables))))
                   (node-match-branches node))))
     (action (:traverse node-dynamic-extent node traverse &key bound-variables)
       (let ((new-args (list ':bound-variables
@@ -282,16 +282,16 @@
         (make-node-dynamic-extent
          :type (node-type node)
          :name (node-dynamic-extent-name node)
-         :node (funcall traverse (node-dynamic-extent-node node) new-args)
-         :body (funcall traverse (node-dynamic-extent-body node) new-args))))
+         :node (apply traverse (node-dynamic-extent-node node) new-args)
+         :body (apply traverse (node-dynamic-extent-body node) new-args))))
     (action (:traverse node-bind node traverse &key bound-variables)
       (let ((new-args (list ':bound-variables
                             (cons (node-bind-name node) bound-variables))))
         (make-node-bind
          :type (node-type node)
          :name (node-bind-name node)
-         :expr (funcall traverse (node-bind-expr node) new-args)
-         :body (funcall traverse (node-bind-body node) new-args)))))
+         :expr (apply traverse (node-bind-expr node) new-args)
+         :body (apply traverse (node-bind-body node) new-args)))))
    t))
 
 (defun traverse-with-binding-list (node actions)
@@ -301,7 +301,7 @@
            (values node &optional))
   (traverse node
             (append actions (make-binding-list-traversals))
-            (list ':bound-variables nil)))
+            ':bound-variables nil))
 
 (defmethod tc:apply-substitution (subs (node node))
   "Substitute type variables in the tree of `node` with other types specified in `subs`."
