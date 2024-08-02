@@ -454,7 +454,7 @@
   (declare (type node node)
            (type tc:environment env)
            (values node &optional))
-  (labels ((handle-static-superclass (node &key bound-variables &allow-other-keys)
+  (labels ((handle-static-superclass (node bound-variables)
              (declare (type util:symbol-list bound-variables))
 
              (unless (or (node-variable-p (node-field-dict node))

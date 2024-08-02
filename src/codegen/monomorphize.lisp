@@ -324,7 +324,7 @@ propagate dictionaries that have been moved by the hoister."
            (type hash-table resolve-table)
            (type package package)
            (type tc:environment env))
-  (labels ((validate-candidate (node &key bound-variables)
+  (labels ((validate-candidate (node bound-variables)
              (let ((name (node-rator-name node))
                    (rands (node-rands node)))
 
@@ -361,7 +361,7 @@ propagate dictionaries that have been moved by the hoister."
            (type tc:environment env)
            (values node &optional))
 
-  (labels ((apply-candidate (node &key bound-variables)
+  (labels ((apply-candidate (node bound-variables)
              (let ((name (node-rator-name node))
                    (rands (node-rands node)))
 
