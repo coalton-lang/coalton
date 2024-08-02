@@ -3,7 +3,7 @@
    #:cl
    #:coalton-impl/codegen/ast)
   (:import-from
-   #:coalton-impl/codegen/transformations
+   #:coalton-impl/codegen/traverse
    #:action
    #:traverse)
   (:local-nicknames

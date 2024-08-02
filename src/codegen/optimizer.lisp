@@ -4,6 +4,9 @@
    #:coalton-impl/codegen/pattern
    #:coalton-impl/codegen/ast)
   (:import-from
+   #:coalton-impl/algorithm
+   #:immutable-map-data)
+  (:import-from
    #:coalton-impl/codegen/typecheck-node
    #:typecheck-node)
   (:import-from
@@ -26,9 +29,9 @@
    #:coalton-impl/codegen/transformations
    #:action
    #:traverse
-   #:traverse-with-binding-list
-   #:update-function-env
-   #:make-function-table
+   #:traverse-with-binding-list)
+  (:import-from
+   #:coalton-impl/codegen/transformations
    #:node-free-p)
   (:local-nicknames
    (#:settings #:coalton-impl/settings)
@@ -36,10 +39,44 @@
    (#:parser #:coalton-impl/parser)
    (#:tc #:coalton-impl/typechecker))
   (:export
+   #:make-function-table
    #:optimize-bindings
    #:optimize-node))
 
 (in-package #:coalton-impl/codegen/optimizer)
+
+(defun update-function-env (bindings env)
+  (declare (type binding-list bindings)
+           (type tc:environment env)
+           (values tc:environment))
+  (multiple-value-bind (toplevel-functions toplevel-values)
+      (loop :for (name . node) :in bindings
+            :if (node-abstraction-p node)
+              :collect (cons name (length (node-abstraction-vars node))) :into functions
+            :else
+              :collect name :into variables
+            :finally (return (values functions variables)))
+    (loop :for (name . arity) :in toplevel-functions
+          :do
+             (setf env
+                   (tc:set-function
+                    env
+                    name
+                    (tc:make-function-env-entry
+                     :name name
+                     :arity arity))))
+    (dolist (name toplevel-values)
+      (when (tc:lookup-function env name :no-error t)
+        (setf env (tc:unset-function env name)))))
+  env)
+
+(defun make-function-table (env)
+  (declare (type tc:environment env)
+           (values hash-table))
+  (let ((table (make-hash-table)))
+    (fset:do-map (name entry (immutable-map-data (tc:environment-function-environment env)))
+      (setf (gethash name table) (tc:function-env-entry-arity entry)))
+    table))
 
 (defun optimize-bindings (bindings monomorphize-table package env)
   (declare (type binding-list bindings)
