@@ -39,10 +39,9 @@
    node
    (list
     (action (:after node-variable node)
-      (alexandria:if-let
+      (alexandria:when-let
           ((res (find (node-variable-value node) subs :key #'ast-substitution-from)))
-        (ast-substitution-to res)
-        node))
+        (ast-substitution-to res)))
     (action (:after node-lisp node)
       (multiple-value-bind (let-bindings lisp-var-bindings)
           (loop :for (lisp-var . coalton-var) :in (node-lisp-vars node)

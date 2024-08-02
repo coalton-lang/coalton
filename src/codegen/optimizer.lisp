@@ -208,21 +208,16 @@
                     ;; And expressions that build instance dictionaries
                     ((node-application-p node)
                      (and (valid-pointfree-argument (node-application-rator node))
-                          (reduce
-                           (lambda (old new)
-                             (and old (valid-pointfree-argument new)))
-                           (node-application-rands node)
-                           :initial-value t)
+                          (every #'valid-pointfree-argument
+                                 (node-application-rands node))
                           t))
 
                     (t
                      nil))))
 
          ;; The applications arguments must all be valid
-         (unless (reduce (lambda (old new)
-                           (and old (valid-pointfree-argument new)))
-                         (node-application-rands node)
-                         :initial-value t)
+         (unless (every #'valid-pointfree-argument
+                        (node-application-rands node))
            (return-from pointfree node))
 
          (setf function (node-application-rator node))
