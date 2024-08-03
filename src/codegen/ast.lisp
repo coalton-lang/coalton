@@ -153,6 +153,15 @@
 (deftype binding-list ()
   '(satisfies binding-list-p))
 
+(defun lisp-coalton-var-alist-p (x)
+  (and (alexandria:proper-list-p x)
+       (every (lambda (b) (typep b '(cons symbol parser:identifier))) x)))
+
+(deftype lisp-coalton-var-alist ()
+  "An association list of cons cells pairing lisp symbols (`symbol`) with
+coalton symbols (`parser:identifier`)"
+  '(satisfies lisp-coalton-var-alist-p))
+
 (defstruct (node-literal (:include node))
   "Literal values like 1 or \"hello\""
   (value (util:required 'value) :type util:literal-value :read-only t))
@@ -184,13 +193,13 @@
 
 (defstruct (node-lisp (:include node))
   "An embedded lisp form"
-  (vars (util:required 'vars) :type list :read-only t)
-  (form (util:required 'form) :type t    :read-only t))
+  (vars (util:required 'vars) :type lisp-coalton-var-alist :read-only t)
+  (form (util:required 'form) :type t                      :read-only t))
 
 (defstruct match-branch
   "A branch of a match statement"
-  (pattern  (util:required 'pattern)  :type pattern            :read-only t)
-  (body     (util:required 'body)     :type node               :read-only t))
+  (pattern (util:required 'pattern) :type pattern :read-only t)
+  (body    (util:required 'body)    :type node    :read-only t))
 
 (defmethod make-load-form ((self match-branch) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -204,7 +213,7 @@
 
 (defstruct (node-match (:include node))
   "A pattern matching construct. Uses MATCH-BRANCH to represent branches"
-  (expr (util:required 'expr) :type node :read-only t)
+  (expr     (util:required 'expr)     :type node        :read-only t)
   (branches (util:required 'branches) :type branch-list :read-only t))
 
 (defstruct (node-while (:include node))
