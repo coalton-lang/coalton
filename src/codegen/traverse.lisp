@@ -61,8 +61,8 @@ arguments, which are declared to have types `type` and `function`,
 respectively, inside the generated lambda function. Otherwise, the
 first argument is declared to be a node of type `type`, and the `args`
 and `body` are again used to generate a lambda function."
-  (check-type when         keyword)
-  (check-type type         symbol)
+  (check-type when keyword)
+  (check-type type symbol)
   (assert (subtypep type 'node))
   (cond
     ((endp args)
@@ -340,14 +340,14 @@ gets called."
       ;; (`:before` or `:after` work equally well if we just
       ;; want a single external mutation per node.)
       (alexandria:whichever
-       ;; the `action` macro needs either a function as the body
+       ;; The `action` macro needs either a function as the body ...
        (action (:after node)
          (lambda (_node)
            (declare (ignore _node))
            (incf counter)
            (values)))
-       ;; or arguments to be used in order to create a lambda function
-       ;; with the given body
+       ;; ... or arguments to be used in order to create a lambda
+       ;; function with the given body.
        (action (:before node _node)
          (declare (ignore _node))
          (incf counter)
