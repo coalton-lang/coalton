@@ -7,6 +7,7 @@
    #:action
    #:traverse)
   (:local-nicknames
+   (#:parser #:coalton-impl/parser)
    (#:util #:coalton-impl/util))
   (:export
    #:ast-substitution                   ; STRUCT
@@ -20,8 +21,8 @@
 (in-package #:coalton-impl/codegen/ast-substitutions)
 
 (defstruct ast-substitution
-  (from (util:required 'from) :type symbol :read-only t)
-  (to   (util:required 'to)   :type node   :read-only t))
+  (from (util:required 'from) :type parser:identifier :read-only t)
+  (to   (util:required 'to)   :type node              :read-only t))
 
 (defun ast-substitution-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -31,7 +32,9 @@
   '(satisfies ast-substitution-list-p))
 
 (defun apply-ast-substitution (subs node)
-  "Substitute variables in the tree of `node` with other nodes specified in `subs`. Throw an error if a variable to be substituted is bound in a subtree of `node`."
+  "Substitute variables in the tree of `node` with other nodes specified
+in `subs`. Throw an error if a variable to be substituted is bound in
+a subtree of `node`."
   (declare (type ast-substitution-list subs)
            (type node node)
            (values node &optional))
@@ -61,7 +64,7 @@
                               :type (node-type node)
                               :vars lisp-var-bindings
                               :form (node-lisp-form node))))
-          (if (null let-bindings)
+          (if (endp let-bindings)
               new-lisp-node
               (make-node-let
                :type (node-type node)
