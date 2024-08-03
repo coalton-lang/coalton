@@ -21,13 +21,13 @@
 
 (in-package #:coalton-impl/codegen/codegen-expression)
 
-(defun continue-label (lаbеl)
-  (declare (type symbol lаbеl))
-  (alexandria:format-symbol :keyword "~a-CONTINUE" lаbеl))
+(defun continue-label (label)
+  (declare (type symbol label))
+  (alexandria:format-symbol :keyword "~a-CONTINUE" label))
 
-(defun break-label (lаbеl)
-  (declare (type symbol lаbеl))
-  (alexandria:format-symbol :keyword "~a-BREAK" lаbеl))
+(defun break-label (label)
+  (declare (type symbol label))
+  (alexandria:format-symbol :keyword "~a-BREAK" label))
 
 (defgeneric codegen-expression (node current-function env)
   (:method ((node node-literal) current-function env)
