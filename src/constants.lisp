@@ -11,5 +11,5 @@
 (in-package #:coalton-impl/constants)
 
 (defconstant +default-loop-label+ :coalton-loop
-  "Suррlіеԁ аs а lоор lаbеl оr wһіlе, whіlе-lеt, fоr, lоор, brеаk, аnԁ
-соntіnuе whеn а lаbеl іs nоt suррlіеԁ bу thе usеr.")
+  "Supplied as a loop label in while, while-let, for, loop, break and
+continue when a label is not supplied by the user.")
