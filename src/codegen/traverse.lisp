@@ -330,14 +330,29 @@ gets called."
   "Count the number of nodes in the AST corresponding to `node`."
   (declare (type node node)
            (values (integer 0) &optional))
+  ;; Create a counter variable to store the number of nodes seen.
   (let ((counter 0))
+    ;; Traverse the node with no extra arguments, and one action.
     (traverse
      node
      (list
-      (action (:after node _)
-        (declare) (ignore _)
-        (incf counter)
-        (values))))
+      ;; Create an action to perform once for each node.
+      ;; (`:before` or `:after` work equally well if we just
+      ;; want a single external mutation per node.)
+      (alexandria:whichever
+       ;; the `action` macro needs either a function as the body
+       (action (:after node)
+         (lambda (_node)
+           (declare (ignore _node))
+           (incf counter)
+           (values)))
+       ;; or arguments to be used in order to create a lambda function
+       ;; with the given body
+       (action (:before node _node)
+         (declare (ignore _node))
+         (incf counter)
+         (values))
+       )))
     counter))
 
 (defun print-node-traversal-order (node)
