@@ -54,7 +54,7 @@
 
   (declare boolean-and (Boolean -> Boolean -> Boolean))
   (define (boolean-and x y)
-    "Are both `x` and `y` true? Note that this is a *function* which means both `x` and `y` will be evaluated. Use the AND macro for short-circuiting behavior."
+    "Are both `x` and `y` true? Note that this is a *function* which means both `x` and `y` will be evaluated. Use the `and` macro for short-circuiting behavior."
     (match x
       ((True) y)
       ((False) False)))

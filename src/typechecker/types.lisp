@@ -30,6 +30,7 @@
    #:tgen-id                            ; ACCESSOR
    #:tgen-p                             ; FUNCTION
    #:make-variable                      ; FUNCTION
+   #:fresh-type-renamer                 ; FUNCTION
    #:instantiate                        ; FUNCTION
    #:kind-of                            ; FUNCTION
    #:type-constructors                  ; FUNCTION
@@ -120,6 +121,10 @@
 (defun make-variable (&optional (kind +kstar+))
   (prog1 (make-tyvar :id *next-variable-id* :kind kind)
     (incf *next-variable-id*)))
+
+(defun fresh-type-renamer (tyvar)
+  "Create a new type variable with the same kind as `tyvar`."
+  (make-variable (kind-of tyvar)))
 
 ;;;
 ;;; Methods
