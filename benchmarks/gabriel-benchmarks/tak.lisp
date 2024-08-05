@@ -1,6 +1,6 @@
 ;;;; gabriel-benchmarks/tak.lisp
 ;;;;
-;;;; 
+;;;;
 
 (cl:in-package #:coalton-benchmarks)
 
@@ -8,7 +8,7 @@
   (declare (optimize speed))
   (loop :repeat 1000
         :do (with-benchmark-sampling
-              (coalton:coalton (coalton-benchmarks/native:tak 18 12 6))))
+              (coalton-benchmarks/native:tak 18 12 6)))
   (report trivial-benchmark::*current-timer*))
 
 (define-benchmark tak-lisp ()
