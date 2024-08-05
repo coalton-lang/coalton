@@ -2,7 +2,7 @@
 
 ;;;; Macros used to implement the Coalton language
 
-(cl:defmacro as (type expr)
+(cl:defmacro as (type cl:&optional (expr cl:nil expr-supplied-p))
   "A syntactic convenience for type casting.
 
     (as <type> <expr>)
@@ -11,12 +11,23 @@ is equivalent to
 
     (the <type> (into <expr>))
 
+and
+
+    (as <type>)
+
+is equivalent to
+
+    (fn (expr) (the <type> (into expr))).
+
 Note that this may copy the object or allocate memory."
 
   (cl:let ((into (cl:ignore-errors (cl:find-symbol "INTO" "COALTON-LIBRARY/CLASSES"))))
     (cl:assert into () "`as` macro does not have access to `into` yet.")
-    `(the ,type (,into ,expr))))
-
+    (cl:if expr-supplied-p
+           `(the ,type (,into ,expr))
+           (alexandria:with-gensyms (lexpr)
+             `(fn (,lexpr)
+                (the ,type (,into ,lexpr)))))))
 
 (cl:defmacro nest (cl:&rest items)
   "A syntactic convenience for function application. Transform

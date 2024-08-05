@@ -20,6 +20,7 @@
    #:init
    #:null?
    #:singleton
+   #:singleton?
    #:repeat
    #:reverse
    #:drop
@@ -141,6 +142,12 @@
   (define (singleton x)
     "Returns a list containing one element."
     (Cons x Nil))
+
+  (declare singleton? (List :a -> Boolean))
+  (define (singleton? xs)
+    "Returns `True` if `xs` is a list containing one element."
+    (and (not (null? xs))
+         (null? (cdr xs))))
 
   (declare repeat (UFix -> :a -> List :a))
   (define (repeat n x)

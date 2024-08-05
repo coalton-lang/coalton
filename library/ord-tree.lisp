@@ -290,7 +290,7 @@
                       ((GT) (map (fn (new-right) (balance clr left pivot new-right))
                                  (ins right)))))
                    ((DoubleBlackEmpty) (error "Found double-black node outside of removal process"))))))
-      (ins tre)))
+      (map as-black (ins tre))))
 
   (declare replace ((Ord :elt) => ((Tree :elt) -> :elt -> (Optional (Tuple (Tree :elt) :elt)))))
   (define (replace tre elt)
@@ -311,7 +311,7 @@ If TRE did not have an element `==' to ELT, return None."
                       ((GT) (map (uncurry (fn (new-right removed-elt) (Tuple (balance clr left pivot new-right) removed-elt)))
                                  (ins right)))))
                    ((DoubleBlackEmpty) (error "Found double-black node outside of removal process"))))))
-      (ins tre)))
+      (map (map-fst as-black) (ins tre))))
 
   (declare replace-or-insert ((Ord :elt) => ((Tree :elt) -> :elt -> (Tuple (Tree :elt) (Optional :elt)))))
   (define (replace-or-insert tre elt)

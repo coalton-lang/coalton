@@ -6,6 +6,7 @@
   (:export
    #:trace
    #:traceObject
+   #:print
    #:unsafe-pointer-eq?
    #:fix
    #:id
@@ -16,6 +17,7 @@
    #:conjoin
    #:disjoin
    #:complement
+   #:curry
    #:uncurry
    #:msum
    #:asum
@@ -43,6 +45,12 @@
     (progn
       (lisp :a (str item) (cl:format cl:t "~A: ~A~%" str item))
       Unit))
+
+  (declare print ((Into :a String) => :a -> :a))
+  (define (print item)
+      "Print the String representation of an item to `cl:*standard-output*` and return the item."
+      (progn (trace (into item))
+             item))
 
   (declare unsafe-pointer-eq? (:a -> :a -> Boolean))
   (define (unsafe-pointer-eq? a b)
@@ -110,6 +118,10 @@
   (define (complement f x)
     "Compute the complement of a unary Boolean function."
     (not (f x)))
+
+  (declare curry ((Tuple :left :right -> :result) -> :left -> :right -> :result))
+  (define (curry func left right)
+      (func (tuple left right)))
 
   (declare uncurry ((:left -> :right -> :result) -> Tuple :left :right -> :result))
   (define (uncurry func tpl)

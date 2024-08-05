@@ -39,6 +39,13 @@
 ;;; String
 ;;;
 
+(cl:eval-when (:compile-toplevel :load-toplevel)
+  (cl:defmacro define-instance-into-rational-string (type)
+    `(define-instance (Into ,type String)
+       (define (into z)
+         (lisp String (z)
+           (cl:format cl:nil "~D" z))))))
+
 (coalton-toplevel
   (declare concat (String -> String -> String))
   (define (concat str1 str2)
@@ -177,6 +184,11 @@ does not have that suffix."
       (lisp (List Char) (str)
         (cl:coerce str 'cl:list))))
 
+  (define-instance (Into Char String)
+    (define (into chr)
+      (lisp String (chr)
+        (cl:string chr))))
+
   (define-instance (Into (List Char) String)
     (define (into lst)
       (lisp String (lst)
@@ -184,10 +196,18 @@ does not have that suffix."
 
   (define-instance (Iso (List Char) String))
 
-  (define-instance (Into Integer String)
-    (define (into z)
-      (lisp String (z)
-        (cl:format cl:nil "~D" z))))
+  (define-instance-into-rational-string Integer)
+  (define-instance-into-rational-string IFix)
+  (define-instance-into-rational-string UFix)
+  (define-instance-into-rational-string I8)
+  (define-instance-into-rational-string U8)
+  (define-instance-into-rational-string I16)
+  (define-instance-into-rational-string U16)
+  (define-instance-into-rational-string I32)
+  (define-instance-into-rational-string U32)
+  (define-instance-into-rational-string I64)
+  (define-instance-into-rational-string U64)
+  (define-instance-into-rational-string Fraction)
 
   (define-instance (Into Single-Float String)
     (define (into z)
@@ -206,6 +226,13 @@ does not have that suffix."
           (cl:if (cl:null z)
                  (Err (concat "Cannot parse string as integer: " s))
                  (Ok z))))))
+
+  (define-instance ((Into :a String) (Into :b String) => (Into (Tuple :a :b) String))
+    (define (into (Tuple a b))
+      (let ((str-a (as String a))
+            (str-b (as String b)))
+        (lisp String (str-a str-b)
+          (cl:format cl:nil "(~A, ~A)" str-a str-b)))))
 
   (define-instance (Default String)
     (define (default) "")))
