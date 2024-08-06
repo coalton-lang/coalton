@@ -7,6 +7,8 @@
    (#:util #:coalton-impl/util))
   (:export
    #:action
+   #:count-applications
+   #:count-nodes
    #:traverse
    #:traverse-with-binding-list))
 
@@ -72,13 +74,13 @@ and `body` are again used to generate a lambda function."
      (assert (< 1 (length args)))
      `(make-action ',when ',type
                    (lambda (,@args)
-                     (declare (type ,(first args) ,type)
-                              (type ,(second args) function))
+                     (declare (type ,type ,(first args))
+                              (type function ,(second args)))
                      ,@body)))
     (t
      `(make-action ',when ',type
                    (lambda (,@args)
-                     (declare (type ,(first args) ,type))
+                     (declare (type ,type ,(first args)))
                      ,@body)))))
 
 (defun action-list-p (x)
@@ -353,6 +355,25 @@ gets called."
          (incf counter)
          (values))
        )))
+    counter))
+
+(defun count-applications (node)
+  "Count the number of function application nodes in the AST
+corresponding to `node`."
+  (declare (type node node)
+           (values (integer 0) &optional))
+  (let ((counter 0))
+    (traverse
+     node
+     (list
+      (action (:after node-application _node)
+        (declare (ignore _node))
+        (incf counter)
+        (values))
+      (action (:after node-direct-application _node)
+        (declare (ignore _node))
+        (incf counter)
+        (values))))
     counter))
 
 (defun print-node-traversal-order (node)

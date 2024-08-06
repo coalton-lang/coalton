@@ -281,20 +281,6 @@ call to (break)."
       (loop :for (name . node) :in bindings
             :collect (cons name (intersection binding-names (node-variables node))))))))
 
-(defun node-application-symbol-rator (node)
-  "Returns the name of the function being called if it is known"
-  (declare (type (or node-application node-direct-application) node)
-           (values (or null parser:identifier)))
-  (etypecase node
-    (node-direct-application
-     (node-direct-application-rator node))
-
-    (node-application
-     (unless (node-variable-p (node-application-rator node))
-       (return-from node-application-symbol-rator))
-
-     (node-variable-value (node-application-rator node)))))
-
 (defun node-rands (node)
   (declare (type (or node-application node-direct-application))
            (values node-list))
@@ -306,6 +292,7 @@ call to (break)."
      (node-application-rands node))))
 
 (defun node-rator-name (node)
+  "Returns the name of the function being called if it is known"
   (declare (type (or node-application node-direct-application))
            (values (or null parser:identifier)))
   (etypecase node
