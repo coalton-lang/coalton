@@ -59,7 +59,7 @@ Used to forbid reading while inside quasiquoted forms.")
           nil)
 
         (coalton:coalton
-         (entry:expression-entry-point (parser:read-expression stream file) file))
+         (entry:expression-entry-point (parser:read-expression stream file)))
 
         ;; Fall back to reading the list manually
         (t

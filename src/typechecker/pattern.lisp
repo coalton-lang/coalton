@@ -41,7 +41,7 @@
             (:constructor nil)
             (:copier nil))
   (type   (util:required 'type)   :type tc:qualified-ty :read-only t)
-  (source (util:required 'source) :type cons            :read-only t))
+  (source (util:required 'source) :type (or parser:source-location null) :read-only t))
 
 (defun pattern-list-p (x)
   (and (alexandria:proper-list-p x)

@@ -53,7 +53,7 @@
                                  (let* ((ast-type (parser:parse-qualified-type
                                                    (eclector.concrete-syntax-tree:read stream)
                                                    file))
-                                        (parsed-type (tc:parse-ty-scheme ast-type env file)))
+                                        (parsed-type (tc:parse-ty-scheme ast-type env)))
                                    (is (equalp
                                         (tc:lookup-value-type env symbol)
                                         parsed-type))))))))))

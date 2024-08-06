@@ -29,41 +29,35 @@
 (defun entry-point (program)
   (declare (type parser:program program))
 
-  (let* ((*package* (parser:program-lisp-package program))
-
-         (program (parser:rename-variables program))
-
-         (file (parser:program-file program))
-
-         (env *global-environment*))
-
+  (let ((*package*
+          (parser:program-lisp-package program))
+        (program
+          (parser:rename-variables program))
+        (env
+          *global-environment*))
     (multiple-value-bind (type-definitions instances env)
         (tc:toplevel-define-type (parser:program-types program)
                                  (parser:program-structs program)
-                                 file
                                  env)
 
       (multiple-value-bind (class-definitions env)
           (tc:toplevel-define-class (parser:program-classes program)
-                                    file
                                     env)
 
         (multiple-value-bind (ty-instances env)
-            (tc:toplevel-define-instance (append instances (parser:program-instances program)) env file)
+            (tc:toplevel-define-instance (append instances (parser:program-instances program)) env)
 
           (multiple-value-bind (toplevel-definitions env)
               (tc:toplevel-define (parser:program-defines program)
                                   (parser:program-declares program)
-                                  file
                                   env)
 
             (multiple-value-bind (toplevel-instances)
                 (tc:toplevel-typecheck-instance ty-instances
                                                 (append instances (parser:program-instances program))
-                                                env
-                                                file)
+                                                env)
 
-              (setf env (tc:toplevel-specialize (parser:program-specializations program) env file))
+              (setf env (tc:toplevel-specialize (parser:program-specializations program) env))
 
               (let ((monomorphize-table (make-hash-table :test #'eq))
 
@@ -87,14 +81,13 @@
                                            monomorphize-table)
                                   t))
 
-                (analysis:analyze-translation-unit translation-unit env file)
+                (analysis:analyze-translation-unit translation-unit env)
 
                 (codegen:compile-translation-unit translation-unit monomorphize-table env)))))))))
 
 
-(defun expression-entry-point (node file)
-  (declare (type parser:node node)
-           (type se:file file))
+(defun expression-entry-point (node)
+  (declare (type parser:node node))
 
   (let ((env *global-environment*))
 
@@ -102,8 +95,7 @@
         (tc:infer-expression-type (parser:rename-variables node)
                                   (tc:make-variable)
                                   nil
-                                  (tc:make-tc-env :env env)
-                                  file)
+                                  (tc:make-tc-env :env env))
 
       (multiple-value-bind (preds subs)
           (tc:solve-fundeps env preds subs)
@@ -111,16 +103,13 @@
         (setf accessors (tc:apply-substitution subs accessors))
 
         (multiple-value-bind (accessors subs_)
-            (tc:solve-accessors accessors file env)
+            (tc:solve-accessors accessors env)
           (setf subs (tc:compose-substitution-lists subs subs_))
 
           (when accessors
-            (error 'tc:tc-error
-                   :err (se:source-error
-                         :span (tc:accessor-source (first accessors))
-                         :file file
-                         :message "Ambiguous accessor"
-                         :primary-note "accessor is ambiguous")))
+            (tc:tc-error (tc:accessor-source (first accessors))
+                         "Amqbiguous accessor"
+                         "accessor is ambiguous"))
 
           (let* ((preds (tc:reduce-context env preds subs))
                  (subs (tc:compose-substitution-lists
@@ -139,7 +128,7 @@
                 (let ((node (codegen:optimize-node
                              (codegen:translate-expression node nil env)
                              env)))
-                  (codegen:codegen-expression 
+                  (codegen:codegen-expression
                    (codegen:direct-application
                     node
                     (codegen:make-function-table env))
@@ -153,29 +142,25 @@
                                tvars
                                (tc:ty-scheme-type scheme))))
 
-              (error 'tc:tc-error
-                     :err (se:source-error
-                           :span (tc:node-source node)
-                           :file file
-                           :message "Unable to codegen"
-                           :primary-note (format nil
-                                                 "expression has type ~A~{ ~S~}.~{ (~S)~} => ~S with unresolved constraint~A ~S"
-                                                 (if settings:*coalton-print-unicode*
-                                                     "∀"
-                                                     "FORALL")
-                                                 tvars
-                                                 (tc:qualified-ty-predicates qual-type)
-                                                 (tc:qualified-ty-type qual-type)
-                                                 (if (= (length (tc:qualified-ty-predicates qual-type)) 1)
-                                                     ""
-                                                     "s")
-                                                 (tc:qualified-ty-predicates qual-type))
-                           :notes
+              (tc:tc-error (tc:node-source node)
+                           "Unable to codegen"
+                           (format nil
+                                   "expression has type ~A~{ ~S~}.~{ (~S)~} => ~S with unresolved constraint~A ~S"
+                                   (if settings:*coalton-print-unicode*
+                                       "∀"
+                                       "FORALL")
+                                   tvars
+                                   (tc:qualified-ty-predicates qual-type)
+                                   (tc:qualified-ty-type qual-type)
+                                   (if (= (length (tc:qualified-ty-predicates qual-type)) 1)
+                                       ""
+                                       "s")
+                                   (tc:qualified-ty-predicates qual-type))
                            (list
                             (se:make-source-error-note
                              :type :secondary
-                             :span (tc:node-source node)
-                             :message "Add a type assertion with THE to resolve ambiguity")))))))))))
+                             :span (parser:source-location-span (tc:node-source node))
+                             :message "Add a type assertion with THE to resolve ambiguity"))))))))))
 
 (defmacro with-environment-updates (updates &body body)
   "Collect environment updates into a vector bound to UPDATES."

@@ -5,6 +5,7 @@
    #:coalton-impl/typechecker/types
    #:coalton-impl/typechecker/substitutions)
   (:local-nicknames
+   (#:parser #:coalton-impl/parser)
    (#:util #:coalton-impl/util)
    (#:settings #:coalton-impl/settings))
   (:export
@@ -35,9 +36,9 @@
 
 (defstruct ty-predicate
   "A type predicate indicating that TYPE is of the CLASS"
-  (class (util:required 'class) :type symbol         :read-only t)
-  (types (util:required 'types) :type ty-list        :read-only t)
-  (source nil                   :type (or cons null) :read-only t))
+  (class (util:required 'class) :type symbol                           :read-only t)
+  (types (util:required 'types) :type ty-list                          :read-only t)
+  (source nil                   :type (or parser:source-location null) :read-only t))
 
 (defmethod make-load-form ((self ty-predicate) &optional env)
   (make-load-form-saving-slots self :environment env))

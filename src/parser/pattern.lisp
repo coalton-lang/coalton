@@ -47,7 +47,7 @@
 (defstruct (pattern
             (:constructor nil)
             (:copier nil))
-  (source (util:required 'source) :type cons :read-only t))
+  (source (util:required 'source) :type source-location :read-only t))
 
 (defmethod make-load-form ((self pattern) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -96,12 +96,12 @@
           (typep (cst:raw form) 'util:literal-value))
      (make-pattern-literal
       :value (cst:raw form)
-      :source (cst:source form)))
+      :source (source-location form file)))
 
     ((and (cst:atom form)
           (eq (cst:raw form) 'coalton:_))
      (make-pattern-wildcard
-      :source (cst:source form)))
+      :source (source-location form file)))
 
     ((and (cst:atom form)
           (identifierp (cst:raw form)))
@@ -115,7 +115,7 @@
      (make-pattern-var
       :name (cst:raw form)
       :orig-name (cst:raw form)
-      :source (cst:source form)))
+      :source (source-location form file)))
 
     ((cst:atom form)
      (error 'parse-error
@@ -148,7 +148,7 @@
       :patterns (loop :for patterns := (cst:rest form) :then (cst:rest patterns)
                       :while (cst:consp patterns)
                       :collect (parse-pattern (cst:first patterns) file))
-      :source (cst:source form)))))
+      :source (source-location form file)))))
 
 (defun pattern-variables (pattern)
   (declare (type t pattern)

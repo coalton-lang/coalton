@@ -2,7 +2,7 @@ error: Malformed function
   --> test:4:14
    |
  4 |  (define f (fn x 1))
-   |                ^ malformed arugment list
+   |                ^ malformed argument list
 help: add parentheses
  4 | (define f (fn (x) 1))
    |               ---

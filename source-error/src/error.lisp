@@ -146,6 +146,18 @@ In the case of source that is copied to a different location during compilation 
            :reader file-offset))
   (:documentation "A source that supplies error context from a FILE."))
 
+(defmethod print-object ((self file-source) stream)
+  (if *print-readably*
+      (format stream "#.(make-instance 'source-error/error::file-source~@[ :name ~s~] :file ~s~:[~; :offset ~s~])"
+              (original-file-name self)
+              (input-file-name self)
+              (< 0 (file-offset self))
+              (file-offset self))
+      (call-next-method)))
+
+(defmethod make-load-form ((self file-source) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
 (defun make-source-file (file &key name (offset 0))
   "Make a source that supplies error context from a FILE.
 
