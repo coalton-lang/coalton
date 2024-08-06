@@ -7,6 +7,7 @@
    #:trace
    #:traceObject
    #:print
+   #:and-return
    #:unsafe-pointer-eq?
    #:fix
    #:id
@@ -19,6 +20,7 @@
    #:complement
    #:curry
    #:uncurry
+   #:pair-with
    #:msum
    #:asum
    #:/=
@@ -36,7 +38,7 @@
   (define (trace str)
     "Print a line to `cl:*standard-output*`."
     (progn
-      (lisp :a (str) (cl:format cl:t"~A~%" str))
+      (lisp :a (str) (cl:format cl:t "~A~%" str))
       Unit))
 
   (declare traceObject (String -> :a -> Unit))
@@ -46,11 +48,16 @@
       (lisp :a (str item) (cl:format cl:t "~A: ~A~%" str item))
       Unit))
 
-  (declare print ((Into :a String) => :a -> :a))
-  (define (print item)
-      "Print the String representation of an item to `cl:*standard-output*` and return the item."
-      (progn (trace (into item))
-             item))
+  (declare print ((Into :a String) => :a -> Unit))
+  (define print
+    "Print the String representation of an item to `cl:*standard-output*`."
+    (compose trace into))
+
+  (declare and-return ((:a -> :b) -> :a -> :a))
+  (define (and-return func item)
+    "Apply `func` to `item` and then return `item`."
+    (progn (func item)
+           item))
 
   (declare unsafe-pointer-eq? (:a -> :a -> Boolean))
   (define (unsafe-pointer-eq? a b)
@@ -121,13 +128,18 @@
 
   (declare curry ((Tuple :left :right -> :result) -> :left -> :right -> :result))
   (define (curry func left right)
-      (func (tuple left right)))
+      (func (Tuple left right)))
 
   (declare uncurry ((:left -> :right -> :result) -> Tuple :left :right -> :result))
   (define (uncurry func tpl)
     (match tpl
       ((Tuple left right)
        (func left right))))
+
+  (declare pair-with ((:left -> :right) -> :left -> Tuple :left :right))
+  (define (pair-with func left)
+      "Create a `Tuple` from `left` paired with the its output through `func`."
+      (Tuple left (func left)))
 
   ;;
   ;; Monadic operators

@@ -146,8 +146,9 @@
   (declare singleton? (List :a -> Boolean))
   (define (singleton? xs)
     "Returns `True` if `xs` is a list containing one element."
-    (and (not (null? xs))
-         (null? (cdr xs))))
+    (match xs
+      ((Cons _ (Nil)) True)
+      (_ False)))
 
   (declare repeat (UFix -> :a -> List :a))
   (define (repeat n x)

@@ -227,13 +227,6 @@ does not have that suffix."
                  (Err (concat "Cannot parse string as integer: " s))
                  (Ok z))))))
 
-  (define-instance ((Into :a String) (Into :b String) => (Into (Tuple :a :b) String))
-    (define (into (Tuple a b))
-      (let ((str-a (as String a))
-            (str-b (as String b)))
-        (lisp String (str-a str-b)
-          (cl:format cl:nil "(~A, ~A)" str-a str-b)))))
-
   (define-instance (Default String)
     (define (default) "")))
 

@@ -351,7 +351,7 @@ Typical `fail` continuations are:
   (declare default? ((Default :a) (Eq :a) => :a -> Boolean))
   (define (default? x)
       "Is `x` the default item of its type?"
-      (== (default) x)))
+      (== x (default))))
 
 
 #+sb-package-locks
