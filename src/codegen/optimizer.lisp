@@ -26,13 +26,20 @@
    #:monomorphize
    #:make-candidate-manager)
   (:import-from
-   #:coalton-impl/codegen/transformations
+   #:coalton-impl/codegen/traverse
    #:action
+   #:count-applications
+   #:count-nodes
    #:traverse
    #:traverse-with-binding-list)
   (:import-from
    #:coalton-impl/codegen/transformations
-   #:node-free-p)
+   #:node-free-p
+   #:rename-type-variables)
+  (:import-from
+   #:coalton-impl/codegen/ast-substitutions
+   #:apply-ast-substitution
+   #:make-ast-substitution)
   (:local-nicknames
    (#:settings #:coalton-impl/settings)
    (#:util #:coalton-impl/util)
@@ -194,16 +201,12 @@
            (values node &optional))
   (alexandria-2:line-up-first
    node
-
    canonicalize
-
    (match-dynamic-extent-lift env)
-
    (apply-specializations env)
-
    (resolve-static-superclass env)
-
-   (inline-methods env)))
+   (inline-methods env)
+   (inline-applications env)))
 
 (defun pointfree (node table env)
   (declare (type node node)
@@ -315,6 +318,107 @@
      node
      (list
       (action (:after node-application) #'rewrite-application)))))
+
+(defun heuristic-inline-applications (node
+                                      env
+                                      &key
+                                        (max-depth  0)
+                                        (max-unroll 0)
+                                        (heuristic  (constantly nil)))
+  "Recursively inline function calls in `node`, using the environment
+`env` to look up the function bodies to substitute. The traversal
+keeps a call stack and will not continue past the specified
+`max-depth`. For recursive functions, traversal will not continue if
+the function already appears more than `max-unroll` times in the call
+stack. Otherwise, if a function's code can be found in `env` and the
+`heuristic` returns true, then the body will be inlined.
+
+Currently, this may break recursive data let expressions, since the
+codegen requires direct constructor calls."
+  (declare (type node           node)
+           (type tc:environment env)
+           (type (integer 0)    max-depth)
+           (type (integer 0)    max-unroll)
+           (type function       heuristic)
+           (values node &optional))
+  (flet ((try-inline (node traverse call-stack)
+           (declare (type (or node-application node-direct-application) node)
+                    (type function                                      traverse)
+                    (type parser:identifier-list                        call-stack)
+                    (values (or node-let node-application node-direct-application) &optional))
+           (or
+            (alexandria:when-let*
+                ((name (node-rator-name node))
+                 (code (tc:lookup-code env name :no-error t))
+                 (_    (and (node-abstraction-p code)
+                            (funcall heuristic code)
+                            (<= (length call-stack)
+                                max-depth)
+                            (<= (count name call-stack)
+                                max-unroll)
+                            (= (length (node-abstraction-vars code))
+                               (length (node-rands node))))))
+              (multiple-value-bind (bindings subs)
+                  (loop :for var :in (node-abstraction-vars code)
+                        :for val :in (node-rands node)
+                        :for new-var := (gentemp (symbol-name var))
+                        :collect (cons new-var val) :into bindings
+                        :collect (make-ast-substitution
+                                  :from var
+                                  :to (make-node-variable
+                                       :type (node-type val)
+                                       :value new-var))
+                          :into subs
+                        :finally (return (values bindings subs)))
+                (make-node-let
+                 :type     (node-type node)
+                 :bindings bindings
+                 :subexpr  (funcall traverse
+                                    (rename-type-variables (apply-ast-substitution
+                                                            subs
+                                                            (node-abstraction-subexpr code)))
+                                    (cons name call-stack)))))
+            node)))
+    (traverse
+     node
+     (list
+      (action (:traverse node-application node traverse call-stack)
+        (declare (type parser:identifier-list call-stack)
+                 (values (or node-let node-application) &optional))
+        (try-inline
+         (make-node-application
+          :type  (node-type node)
+          :rator (funcall traverse (node-application-rator node) call-stack)
+          :rands (mapcar
+                  (lambda (rand)
+                    (funcall traverse rand call-stack))
+                  (node-application-rands node)))
+         traverse
+         call-stack))
+      (action (:traverse node-direct-application node traverse call-stack)
+        (declare (type parser:identifier-list call-stack)
+                 (values (or node-let node-direct-application) &optional))
+        (try-inline
+         (make-node-direct-application
+          :type       (node-type node)
+          :rator-type (node-direct-application-rator-type node)
+          :rator      (node-direct-application-rator node)
+          :rands      (mapcar
+                       (lambda (rand)
+                         (funcall traverse rand call-stack))
+                       (node-direct-application-rands node)))
+         traverse
+         call-stack)))
+     nil)))
+
+(defun aggressive-heuristic (node)
+  (and (<= (count-applications node)
+           4)
+       (<= (count-nodes node)
+           32)))
+
+(defun inline-applications (node env)
+  (heuristic-inline-applications node env))
 
 (defun inline-methods (node env)
   (declare (type node node)
