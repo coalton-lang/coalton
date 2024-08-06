@@ -30,6 +30,7 @@
    #:action
    #:count-applications
    #:count-nodes
+   #:*traverse*
    #:traverse
    #:traverse-with-binding-list)
   (:import-from
@@ -341,9 +342,8 @@ codegen requires direct constructor calls."
            (type (integer 0)    max-unroll)
            (type function       heuristic)
            (values node &optional))
-  (flet ((try-inline (node traverse call-stack)
+  (flet ((try-inline (node call-stack)
            (declare (type (or node-application node-direct-application) node)
-                    (type function                                      traverse)
                     (type parser:identifier-list                        call-stack)
                     (values (or node-let node-application node-direct-application) &optional))
            (or
@@ -373,7 +373,7 @@ codegen requires direct constructor calls."
                 (make-node-let
                  :type     (node-type node)
                  :bindings bindings
-                 :subexpr  (funcall traverse
+                 :subexpr  (funcall *traverse*
                                     (rename-type-variables (apply-ast-substitution
                                                             subs
                                                             (node-abstraction-subexpr code)))
@@ -382,33 +382,8 @@ codegen requires direct constructor calls."
     (traverse
      node
      (list
-      (action (:traverse node-application node traverse call-stack)
-        (declare (type parser:identifier-list call-stack)
-                 (values (or node-let node-application) &optional))
-        (try-inline
-         (make-node-application
-          :type  (node-type node)
-          :rator (funcall traverse (node-application-rator node) call-stack)
-          :rands (mapcar
-                  (lambda (rand)
-                    (funcall traverse rand call-stack))
-                  (node-application-rands node)))
-         traverse
-         call-stack))
-      (action (:traverse node-direct-application node traverse call-stack)
-        (declare (type parser:identifier-list call-stack)
-                 (values (or node-let node-direct-application) &optional))
-        (try-inline
-         (make-node-direct-application
-          :type       (node-type node)
-          :rator-type (node-direct-application-rator-type node)
-          :rator      (node-direct-application-rator node)
-          :rands      (mapcar
-                       (lambda (rand)
-                         (funcall traverse rand call-stack))
-                       (node-direct-application-rands node)))
-         traverse
-         call-stack)))
+      (action (:after node-application) #'try-inline)
+      (action (:after node-direct-application) #'try-inline))
      nil)))
 
 (defun aggressive-heuristic (node)
