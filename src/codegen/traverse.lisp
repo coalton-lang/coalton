@@ -9,10 +9,17 @@
    #:action
    #:count-applications
    #:count-nodes
+   #:*traverse*
    #:traverse
    #:traverse-with-binding-list))
 
 (in-package #:coalton-impl/codegen/traverse)
+
+(defvar *traverse*)
+(setf (documentation '*traverse* 'variable)
+      "The recursive function reference for the current traversal. This will
+be bound for the extent of any traversal. Inside of an
+`action`, `(funcall *traverse* node)` may be used to invoke recursion.")
 
 (defun node-subtype-p (symbol)
   (and (symbolp symbol) (subtypep symbol 'node)))
@@ -29,8 +36,8 @@ what types of nodes an operation should be performed on when using
 operation should be performed when using `traverse`. The keyword
 `:traverse` represents the main call of the traversal which recurses
 through sub-nodes of a given node. The keywords `:before` and `:after`
-tag actions to be performed before or after the recursive call of a
-traversal."
+tag actions to be performed before or after the main recursive call of
+a traversal."
   '(member :before :after :traverse))
 
 (defstruct (action (:constructor make-action (when type function)))
@@ -38,13 +45,10 @@ traversal."
 before, after, or in place of the recursive call in a traversal. If
 `type` is `'node`, then the function will be called before or after
 every node in the traversal; otherwise, the action only applies to
-nodes of the specified `type`. The when-keyword `:traverse` will have
+nodes of the specified `type`. (The when-keyword `:traverse` will have
 no effect when paired with type `'node`; a recursive call defined for
-every node would have to be an entire generic already. The `function`
-will be called with `(apply function node args)` if `when` is
-`:before` or `:after`, and it will be called with `(apply function
-node traverse args)` if `when` is `:traverse`, so that the `function`
-can call the provided `traverse` to invoke recursion. The `function`
+every node would have to be an entire generic already.) The `function`
+will be called with `(apply function node args)`. The `function`
 should return either a modified `node` to take its place in the newly
 constructed tree, or void to indicate that the input node should be
 kept unchanged."
@@ -56,32 +60,19 @@ kept unchanged."
   "Construct an action block, turning `body` into a lambda function
 accepting `args` if `args` are provided. If there are no `args`, then
 `body` is assumed to be a function object and is used directly with
-`when` and `type` to create an `action` instance. If there are `args`
-and `when` is `:traverse`, then `args` must include at least the node
-to traverse and the recursive function object as the first two
-arguments, which are declared to have types `type` and `function`,
-respectively, inside the generated lambda function. Otherwise, the
-first argument is declared to be a node of type `type`, and the `args`
-and `body` are again used to generate a lambda function."
+`when` and `type` to create an `action` instance. Otherwise, the first
+argument in `args` is declared to be a node of type `type`, and the
+`args` and `body` are used to generate a lambda function."
   (check-type when keyword)
   (check-type type symbol)
   (assert (subtypep type 'node))
-  (cond
-    ((endp args)
-     (assert (= 1 (length body)))
-     `(make-action ',when ',type ,@body))
-    ((eq ':traverse when)
-     (assert (< 1 (length args)))
-     `(make-action ',when ',type
-                   (lambda (,@args)
-                     (declare (type ,type ,(first args))
-                              (type function ,(second args)))
-                     ,@body)))
-    (t
-     `(make-action ',when ',type
-                   (lambda (,@args)
-                     (declare (type ,type ,(first args)))
-                     ,@body)))))
+  (assert (or (not (endp args)) (= 1 (length body))))
+  (if (endp args)
+      `(make-action ',when ',type ,@body)
+      `(make-action ',when ',type
+                    (lambda (,@args)
+                      (declare (type ,type ,(first args)))
+                      ,@body))))
 
 (defun action-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -100,104 +91,103 @@ nodes."
   (declare (values action-list &optional))
   (load-time-value
    (list
-    (action (:traverse node-application node traverse &rest args)
+    (action (:traverse node-application node &rest args)
       (make-node-application
        :type (node-type node)
-       :rator (apply traverse (node-application-rator node) args)
+       :rator (apply *traverse* (node-application-rator node) args)
        :rands (mapcar
                (lambda (node)
-                 (apply traverse node args))
+                 (apply *traverse* node args))
                (node-application-rands node))))
-    (action (:traverse node-direct-application node traverse &rest args)
+    (action (:traverse node-direct-application node &rest args)
       (make-node-direct-application
        :type (node-type node)
        :rator-type (node-direct-application-rator-type node)
        :rator (node-direct-application-rator node)
        :rands (mapcar
                (lambda (node)
-                 (apply traverse node args))
+                 (apply *traverse* node args))
                (node-direct-application-rands node))))
-    (action (:traverse node-abstraction node traverse &rest args)
+    (action (:traverse node-abstraction node &rest args)
       (make-node-abstraction
        :type (node-type node)
        :vars (node-abstraction-vars node)
-       :subexpr (apply traverse (node-abstraction-subexpr node) args)))
-    (action (:traverse node-let node traverse &rest args)
+       :subexpr (apply *traverse* (node-abstraction-subexpr node) args)))
+    (action (:traverse node-let node &rest args)
       (make-node-let
        :type (node-type node)
        :bindings (loop :for (name . node) :in (node-let-bindings node)
-                       :collect (cons name (apply traverse node args)))
-       :subexpr (apply traverse (node-let-subexpr node) args)))
-    (action (:traverse node-match node traverse &rest args)
+                       :collect (cons name (apply *traverse* node args)))
+       :subexpr (apply *traverse* (node-let-subexpr node) args)))
+    (action (:traverse node-match node &rest args)
       (make-node-match
        :type (node-type node)
-       :expr (apply traverse (node-match-expr node) args)
+       :expr (apply *traverse* (node-match-expr node) args)
        :branches (mapcar
                   (lambda (branch)
                     (make-match-branch
                      :pattern (match-branch-pattern branch)
-                     :body (apply traverse
+                     :body (apply *traverse*
                                   (match-branch-body branch)
                                   args)))
                   (node-match-branches node))))
-    (action (:traverse node-while node traverse &rest args)
+    (action (:traverse node-while node &rest args)
       (make-node-while
        :type (node-type node)
        :label (node-while-label node)
-       :expr (apply traverse (node-while-expr node) args)
-       :body (apply traverse (node-while-body node) args)))
-    (action (:traverse node-while-let node traverse &rest args)
+       :expr (apply *traverse* (node-while-expr node) args)
+       :body (apply *traverse* (node-while-body node) args)))
+    (action (:traverse node-while-let node &rest args)
       (make-node-while-let
        :type (node-type node)
        :label (node-while-let-label node)
        :pattern (node-while-let-pattern node)
-       :expr (apply traverse (node-while-let-expr node) args)
-       :body (apply traverse (node-while-let-body node) args)))
-    (action (:traverse node-loop node traverse &rest args)
+       :expr (apply *traverse* (node-while-let-expr node) args)
+       :body (apply *traverse* (node-while-let-body node) args)))
+    (action (:traverse node-loop node &rest args)
       (make-node-loop
        :type (node-type node)
        :label (node-loop-label node)
-       :body (apply traverse (node-loop-body node) args)))
-    (action (:traverse node-seq node traverse &rest args)
+       :body (apply *traverse* (node-loop-body node) args)))
+    (action (:traverse node-seq node &rest args)
       (make-node-seq
        :type (node-type node)
        :nodes (mapcar
                (lambda (node)
-                 (apply traverse node args))
+                 (apply *traverse* node args))
                (node-seq-nodes node))))
-    (action (:traverse node-return node traverse &rest args)
+    (action (:traverse node-return node &rest args)
       (make-node-return
        :type (node-type node)
-       :expr (apply traverse (node-return-expr node) args)))
-    (action (:traverse node-field node traverse &rest args)
+       :expr (apply *traverse* (node-return-expr node) args)))
+    (action (:traverse node-field node &rest args)
       (make-node-field
        :type (node-type node)
        :name (node-field-name node)
-       :dict (apply traverse (node-field-dict node) args)))
-    (action (:traverse node-dynamic-extent node traverse &rest args)
+       :dict (apply *traverse* (node-field-dict node) args)))
+    (action (:traverse node-dynamic-extent node &rest args)
       (make-node-dynamic-extent
        :type (node-type node)
        :name (node-dynamic-extent-name node)
-       :node (apply traverse (node-dynamic-extent-node node) args)
-       :body (apply traverse (node-dynamic-extent-body node) args)))
-    (action (:traverse node-bind node traverse &rest args)
+       :node (apply *traverse* (node-dynamic-extent-node node) args)
+       :body (apply *traverse* (node-dynamic-extent-body node) args)))
+    (action (:traverse node-bind node &rest args)
       (make-node-bind
        :type (node-type node)
        :name (node-bind-name node)
-       :expr (apply traverse (node-bind-expr node) args)
-       :body (apply traverse (node-bind-body node) args))))
+       :expr (apply *traverse* (node-bind-expr node) args)
+       :body (apply *traverse* (node-bind-body node) args))))
    t))
 
-(defun fire-action (when-key type-key actions traverse args node)
+(defun fire-action (when-key type-key actions args node)
   "Look up a function in `actions` corresponding to `when-key` and
-`type-key`, and if it exists, call it with arguments `node`,
-`traverse` (if `(eq ':traverse (car key))`) and (spread) `args`. The
-return value is the value returned by the action, or the original node
-if the action returned `nil` or no action was found."
+`type-key`, and if it exists, apply it with arguments `node`
+and (spread) `args`. The return value is the value returned by the
+action, or the original node if the action returned `nil` or no action
+was found."
   (declare (type when-keyword when-key)
            (type node-subtype type-key)
            (type action-list  actions)
-           (type function     traverse)
            (type list         args)
            (type node         node)
            (values node &optional))
@@ -210,9 +200,7 @@ if the action returned `nil` or no action was found."
                                 (eq type-key (action-type action))))
                          actions))
         (f (action-function action)))
-     (if (eq ':traverse when-key)
-         (apply f node traverse args)
-         (apply f node args)))
+     (apply f node args))
    node))
 
 (defun traverse (initial-node custom-actions &rest initial-args)
@@ -222,15 +210,15 @@ obviating the need to copy an entire `defgeneric` for each new AST
 traversal. This function creates a recursive \"generic\" traversal
 with pre-, in-, and post-operations fixed by `custom-actions` (with
 the default traversals as a fallback), and evaluates the traversal
-with `initial-node` and `initial-args`. For each node type, the action
-tagged with `:traverse` will be the most general, so the `:before` and
-`:after` should not be necessary. The `:before` and `:after` are
+with `initial-node` and `initial-args`. The `:before` and `:after` are
 mainly useful if the default deep-copy recursion behavior is desired,
 but a small change has to be made depending on the node type, or if
 some external state is mutated to keep track of some information about
 the recursion stack. The `:before 'node` and `:after 'node` actions
 may also be useful for operations that must be performed uniformly on
-every node, such as type collection and substitution.
+every node, such as type collection and substitution. The `:traverse`
+action is necessary if special traversal behavior is required, such as
+recursing with modified arguments.
 
 Note that the wrapped traversal pipes the node through three actions
 corresponding to its original class, so it is important to not define
@@ -244,18 +232,19 @@ other nodes, then it would be inappropriate to also define an action
            (type list        initial-args)
            (values node &optional))
   (let ((actions (append custom-actions (make-default-actions))))
-    (labels ((traverse (current-node &rest args)
-               (declare (type node current-node)
-                        (type list args)
-                        (values node &optional))
-               (alexandria-2:line-up-last
-                current-node
-                (fire-action ':before   'node                                actions #'traverse args)
-                (fire-action ':before   (class-name (class-of current-node)) actions #'traverse args)
-                (fire-action ':traverse (class-name (class-of current-node)) actions #'traverse args)
-                (fire-action ':after    (class-name (class-of current-node)) actions #'traverse args)
-                (fire-action ':after    'node                                actions #'traverse args))))
-      (apply #'traverse initial-node initial-args))))
+    (flet ((current-traverse (current-node &rest args)
+             (declare (type node current-node)
+                      (type list args)
+                      (values node &optional))
+             (alexandria-2:line-up-last
+              current-node
+              (fire-action ':before   'node                                actions args)
+              (fire-action ':before   (class-name (class-of current-node)) actions args)
+              (fire-action ':traverse (class-name (class-of current-node)) actions args)
+              (fire-action ':after    (class-name (class-of current-node)) actions args)
+              (fire-action ':after    'node                                actions args))))
+      (let ((*traverse* #'current-traverse))
+        (apply *traverse* initial-node initial-args)))))
 
 ;;;
 ;;; Traversals with bound variables
@@ -268,49 +257,49 @@ bound at the given point."
   (declare (values action-list &optional))
   (load-time-value
    (list
-    (action (:traverse node-abstraction node traverse bound-variables)
+    (action (:traverse node-abstraction node bound-variables)
       (make-node-abstraction
        :type (node-type node)
        :vars (node-abstraction-vars node)
-       :subexpr (funcall traverse
+       :subexpr (funcall *traverse*
                          (node-abstraction-subexpr node)
                          (append (node-abstraction-vars node) bound-variables))))
-    (action (:traverse node-let node traverse bound-variables)
+    (action (:traverse node-let node bound-variables)
       (let ((new-bound-variables (append
                                   (mapcar #'car (node-let-bindings node))
                                   bound-variables)))
         (make-node-let
          :type (node-type node)
          :bindings (loop :for (name . node) :in (node-let-bindings node)
-                         :collect (cons name (funcall traverse node new-bound-variables)))
-         :subexpr (funcall traverse (node-let-subexpr node) new-bound-variables))))
-    (action (:traverse node-match node traverse bound-variables)
+                         :collect (cons name (funcall *traverse* node new-bound-variables)))
+         :subexpr (funcall *traverse* (node-let-subexpr node) new-bound-variables))))
+    (action (:traverse node-match node bound-variables)
       (make-node-match
        :type (node-type node)
-       :expr (funcall traverse (node-match-expr node) bound-variables)
+       :expr (funcall *traverse* (node-match-expr node) bound-variables)
        :branches (mapcar
                   (lambda (branch)
                     (make-match-branch
                      :pattern (match-branch-pattern branch)
-                     :body (funcall traverse
+                     :body (funcall *traverse*
                                     (match-branch-body branch)
                                     (append (pattern-variables (match-branch-pattern branch))
                                             bound-variables))))
                   (node-match-branches node))))
-    (action (:traverse node-dynamic-extent node traverse bound-variables)
+    (action (:traverse node-dynamic-extent node bound-variables)
       (let ((new-bound-variables (cons (node-dynamic-extent-name node) bound-variables)))
         (make-node-dynamic-extent
          :type (node-type node)
          :name (node-dynamic-extent-name node)
-         :node (funcall traverse (node-dynamic-extent-node node) new-bound-variables)
-         :body (funcall traverse (node-dynamic-extent-body node) new-bound-variables))))
-    (action (:traverse node-bind node traverse bound-variables)
+         :node (funcall *traverse* (node-dynamic-extent-node node) new-bound-variables)
+         :body (funcall *traverse* (node-dynamic-extent-body node) new-bound-variables))))
+    (action (:traverse node-bind node bound-variables)
       (let ((new-bound-variables (cons (node-bind-name node) bound-variables)))
         (make-node-bind
          :type (node-type node)
          :name (node-bind-name node)
-         :expr (funcall traverse (node-bind-expr node) new-bound-variables)
-         :body (funcall traverse (node-bind-body node) new-bound-variables)))))
+         :expr (funcall *traverse* (node-bind-expr node) new-bound-variables)
+         :body (funcall *traverse* (node-bind-body node) new-bound-variables)))))
    t))
 
 (defun traverse-with-binding-list (node actions)
