@@ -39,12 +39,12 @@
 ;;; String
 ;;;
 
-(cl:eval-when (:compile-toplevel :load-toplevel)
-  (cl:defmacro define-instance-into-integral-string (type)
-    `(define-instance (Into ,type String)
-       (define (into z)
-         (lisp String (z)
-           (cl:format cl:nil "~D" z))))))
+
+(cl:defmacro define-instance-into-integral-string (type)
+  `(define-instance (Into ,type String)
+      (define (into z)
+        (lisp String (z)
+          (cl:format cl:nil "~D" z)))))
 
 (coalton-toplevel
   (declare concat (String -> String -> String))

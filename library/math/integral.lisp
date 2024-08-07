@@ -208,12 +208,13 @@ are floored and truncated division, respectively."
            (isqrt (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-ISQRT"))))
     `(cl:progn 
        (%define-remainder-native ,type)
+       
        (coalton-toplevel
         (define-instance (Integral ,type)
           (define toInteger into))
 
         (specialize even? ,even? (,type -> Boolean))
-        (declare ,even? (,type -> boolean))
+        (declare ,even? (,type -> Boolean))
         (define (,even? n)
           (lisp Boolean (n) (to-boolean (cl:evenp n))))
 

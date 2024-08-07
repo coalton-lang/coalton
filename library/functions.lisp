@@ -121,7 +121,7 @@
 
   (declare curry ((Tuple :left :right -> :result) -> :left -> :right -> :result))
   (define (curry func left right)
-      "Take a function whose input is a tuple and enable curried application of the left and right parameters: `(func (Tuple left right)`."
+      "Take a function whose input is a tuple and enable curried application of the left and right parameters, equivalent to `(func (Tuple left right))`."
       (func (Tuple left right)))
 
   (declare uncurry ((:left -> :right -> :result) -> Tuple :left :right -> :result))
