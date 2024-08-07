@@ -9,6 +9,7 @@
    #:action
    #:count-applications
    #:count-nodes
+   #:make-traverse-let-action-skipping-cons-bindings
    #:*traverse*
    #:traverse
    #:traverse-with-binding-list))
@@ -382,3 +383,36 @@ without any slot information."
         (decf counter)
         (format t "POST: ~v@{|   ~}~A~%" counter (class-name (class-of node)))
         (values))))))
+
+(defun make-traverse-let-action-skipping-cons-bindings ()
+  "This is an action to ensure that let-bindings to fully saturated
+applications of `'coalton:Cons` are untouched by a traversal. The
+current `codegen:codegen-let` code for recursive data requires direct
+applications of a constructor, so transformations like inlining may
+produce a form which the codegen is unable to recognize. Overriding
+the default `:traverse node-let` action with this action will ensure
+that let-bindings to saturated applications of `'coalton:Cons` will
+always be returned with the syntactic form of a direct application
+with rator `'coalton:Cons`."
+  (declare (values action &optional))
+  (load-time-value
+   (action (:traverse node-let node &rest args)
+     (make-node-let
+      :type     (node-type node)
+      :bindings (loop :for (name . subnode) :in (node-let-bindings node)
+                      :collect (cons name
+                                     (if (and (typep subnode '(or node-application
+                                                               node-direct-application))
+                                              (eq 'coalton:Cons (node-rator-name subnode))
+                                              (= 2 (length (node-rands subnode))))
+                                         (make-node-direct-application
+                                          :type (node-type subnode)
+                                          :rator-type (node-rator-type subnode)
+                                          :rator 'coalton:Cons
+                                          :rands (mapcar
+                                                  (lambda (rand)
+                                                    (apply *traverse* rand args))
+                                                  (node-rands subnode)))
+                                         (apply *traverse* subnode args))))
+      :subexpr  (apply *traverse* (node-let-subexpr node) args)))
+   t))

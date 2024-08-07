@@ -30,6 +30,7 @@
    #:action
    #:count-applications
    #:count-nodes
+   #:make-traverse-let-action-skipping-cons-bindings
    #:*traverse*
    #:traverse
    #:traverse-with-binding-list)
@@ -334,8 +335,9 @@ the function already appears more than `max-unroll` times in the call
 stack. Otherwise, if a function's code can be found in `env` and the
 `heuristic` returns true, then the body will be inlined.
 
-Currently, this may break recursive data let expressions, since the
-codegen requires direct constructor calls."
+Special logic prevents inlining `coalton:Cons` in let bindings to
+avoid breaking recursive data let expressions, since the codegen
+requires direct constructor calls."
   (declare (type node           node)
            (type tc:environment env)
            (type (integer 0)    max-depth)
@@ -383,7 +385,8 @@ codegen requires direct constructor calls."
      node
      (list
       (action (:after node-application) #'try-inline)
-      (action (:after node-direct-application) #'try-inline))
+      (action (:after node-direct-application) #'try-inline)
+      (make-traverse-let-action-skipping-cons-bindings))
      nil)))
 
 (defun aggressive-heuristic (node)
