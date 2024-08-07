@@ -245,7 +245,7 @@ Equivalent to reversing `range-increasing`"
              (progn (cell:write! unread? False)
                     (Some item))
              None))
-       None)))
+       (Some 1))))
 
   (declare cycle (List :item -> Iterator :item))
   (define (cycle list)
