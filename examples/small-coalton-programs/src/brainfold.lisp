@@ -137,8 +137,8 @@
     "Converts an ASCII character code into a string."
     (into (make-list (unwrap (char:code-char ascii-value)))))
 
-  (declare print (Unit -> (state:ST BF-State Unit)))
-  (define (print)
+  (declare display (Unit -> (state:ST BF-State Unit)))
+  (define (display)
     "Prints the value at the pointer to the print buffer."
     (do
      (bfs <- state:get)
@@ -236,7 +236,7 @@
       ((BFLeft) (move-left))
       ((BFPlus) (incr))
       ((BFMinus) (decr))
-      ((BFPRint) (print))
+      ((BFPRint) (display))
       ((BFInput) (take-input))
       ((BFLoop v) (exec-loop (into v)))))
 

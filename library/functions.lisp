@@ -6,6 +6,7 @@
   (:export
    #:trace
    #:traceObject
+   #:print
    #:unsafe-pointer-eq?
    #:fix
    #:id
@@ -16,7 +17,9 @@
    #:conjoin
    #:disjoin
    #:complement
+   #:curry
    #:uncurry
+   #:pair-with
    #:msum
    #:asum
    #:/=
@@ -34,7 +37,7 @@
   (define (trace str)
     "Print a line to `cl:*standard-output*`."
     (progn
-      (lisp :a (str) (cl:format cl:t"~A~%" str))
+      (lisp :a (str) (cl:format cl:t "~A~%" str))
       Unit))
 
   (declare traceObject (String -> :a -> Unit))
@@ -43,6 +46,11 @@
     (progn
       (lisp :a (str item) (cl:format cl:t "~A: ~A~%" str item))
       Unit))
+
+  (declare print ((Into :a String) => :a -> Unit))
+  (define (print item)
+    "Print the String representation of `item` to `cl:*standard-output*`."
+    (trace (into item)))
 
   (declare unsafe-pointer-eq? (:a -> :a -> Boolean))
   (define (unsafe-pointer-eq? a b)
@@ -111,11 +119,22 @@
     "Compute the complement of a unary Boolean function."
     (not (f x)))
 
+  (declare curry ((Tuple :left :right -> :result) -> :left -> :right -> :result))
+  (define (curry func left right)
+    "Take a function whose input is a tuple and enable curried application of the left and right parameters, equivalent to `(func (Tuple left right))`."
+    (func (Tuple left right)))
+
   (declare uncurry ((:left -> :right -> :result) -> Tuple :left :right -> :result))
   (define (uncurry func tpl)
+    "Take a function with two currying parameters and enable their input as a single `Tuple`."
     (match tpl
       ((Tuple left right)
        (func left right))))
+
+  (declare pair-with ((:left -> :right) -> :left -> Tuple :left :right))
+  (define (pair-with func left)
+    "Create a `Tuple` of the form `(Tuple left (func left))`."
+    (Tuple left (func left)))
 
   ;;
   ;; Monadic operators

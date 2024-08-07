@@ -29,6 +29,7 @@
    #:count-forever
    #:repeat
    #:repeat-for
+   #:once
    #:char-range
    #:interleave!
    #:zip!
@@ -233,6 +234,18 @@ Equivalent to reversing `range-increasing`"
   (define (repeat-for item count)
     "Yield ITEM COUNT times, then stop."
     (take! count (repeat item)))
+
+  (declare once (:item -> Iterator :item))
+  (define (once item)
+    "Yield `item` once."
+    (let ((unread? (cell:new True)))
+      (%Iterator
+       (fn ()
+         (if (cell:read unread?)
+             (progn (cell:write! unread? False)
+                    (Some item))
+             None))
+       (Some 1))))
 
   (declare cycle (List :item -> Iterator :item))
   (define (cycle list)
@@ -521,9 +534,9 @@ Return `None` if ITER is empty."
     (optimize! < iter))
 
   (declare optimize-by! ((:b -> :b -> Boolean) ->
-                        (:a -> :b) ->
-                        Iterator :a ->
-                        Optional :a))
+                         (:a -> :b) ->
+                         Iterator :a ->
+                         Optional :a))
   (define (optimize-by! better? f iter)
     "For an order BETTER? which returns `True` if its first argument is better than its second argument, return the element of ITER where (F ELT) is the best.
 

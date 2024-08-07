@@ -31,7 +31,7 @@
    #:TryInto
    #:Iso
    #:Unwrappable #:unwrap-or-else #:with-default #:unwrap #:expect #:as-optional
-   #:default #:defaulting-unwrap))
+   #:default #:defaulting-unwrap #:default?))
 
 (in-package #:coalton-library/classes)
 
@@ -346,7 +346,12 @@ Typical `fail` continuations are:
     "Unwrap an `unwrappable`, returning `(default)` of the wrapped type on failure. "
     (unwrap-or-else (fn (elt) elt)
                     (fn () (default))
-                    container)))
+                    container))
+
+  (declare default? ((Default :a) (Eq :a) => :a -> Boolean))
+  (define (default? x)
+      "Is `x` the default item of its type?"
+      (== x (default))))
 
 
 #+sb-package-locks

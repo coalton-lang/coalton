@@ -15,9 +15,11 @@
    #:new
    #:with-capacity
    #:with-initial-element
+   #:singleton
    #:length
    #:capacity
    #:empty?
+   #:singleton?
    #:copy
    #:set-capacity!
    #:clear!
@@ -74,6 +76,11 @@
     (extend! v (iter:repeat-for x n))
     v)
 
+  (declare singleton (:a -> Vector :a))
+  (define (singleton x)
+    "Create a new vector with a single element equal to `x`"
+    (with-initial-element 1 x))
+
   (declare length (Vector :a -> UFix))
   (define (length v)
     "Returns the length of `v`."
@@ -90,6 +97,11 @@
   (define (empty? v)
     "Is `v` empty?"
     (== 0 (length v)))
+
+  (declare singleton? (Vector :a -> Boolean))
+  (define (singleton? v)
+    "Is `v` a singleton?"
+    (== 1 (length v)))
 
   (declare copy (Vector :a -> Vector :a))
   (define (copy v)
