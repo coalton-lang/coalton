@@ -48,9 +48,9 @@
       Unit))
 
   (declare print ((Into :a String) => :a -> Unit))
-  (define print
-    "Print the String representation of an item to `cl:*standard-output*`."
-    (compose trace into))
+  (define (print item)
+    "Print the String representation of `item` to `cl:*standard-output*`."
+    (trace (into item)))
 
   (declare unsafe-pointer-eq? (:a -> :a -> Boolean))
   (define (unsafe-pointer-eq? a b)
@@ -131,8 +131,8 @@
 
   (declare pair-with ((:left -> :right) -> :left -> Tuple :left :right))
   (define (pair-with func left)
-      "Create a `Tuple` from `left` paired with the its output through `func`."
-      (Tuple left (func left)))
+    "Create a `Tuple` from `left` paired with the its output through `func`."
+    (Tuple left (func left)))
 
   ;;
   ;; Monadic operators
