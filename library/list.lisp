@@ -145,7 +145,7 @@
 
   (declare singleton? (List :a -> Boolean))
   (define (singleton? xs)
-    "Returns `True` if `xs` is a list containing one element."
+    "Is `xs` a list containing exactly one element?"
     (match xs
       ((Cons _ (Nil)) True)
       (_ False)))

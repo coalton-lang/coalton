@@ -121,17 +121,19 @@
 
   (declare curry ((Tuple :left :right -> :result) -> :left -> :right -> :result))
   (define (curry func left right)
-    (func (Tuple left right)))
+      "Take a function whose input is a tuple and enable curried application of the left and right parameters: `(func (Tuple left right)`."
+      (func (Tuple left right)))
 
   (declare uncurry ((:left -> :right -> :result) -> Tuple :left :right -> :result))
   (define (uncurry func tpl)
-    (match tpl
-      ((Tuple left right)
-       (func left right))))
+      "Take a function with two currying parameters and enable their input as a single `Tuple`."
+      (match tpl
+        ((Tuple left right)
+         (func left right))))
 
   (declare pair-with ((:left -> :right) -> :left -> Tuple :left :right))
   (define (pair-with func left)
-    "Create a `Tuple` from `left` paired with the its output through `func`."
+    "Create a `Tuple` of the form `(Tuple left (func left))`."
     (Tuple left (func left)))
 
   ;;
