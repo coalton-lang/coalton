@@ -321,12 +321,19 @@
      (list
       (action (:after node-application) #'rewrite-application)))))
 
+(defun aggressive-heuristic (node)
+  "This will probably inline more than is optimal."
+  (and (<= (count-applications node)
+           8)
+       (<= (count-nodes node)
+           32)))
+
 (defun heuristic-inline-applications (node
                                       env
                                       &key
-                                        (max-depth  0)
-                                        (max-unroll 0)
-                                        (heuristic  (constantly nil)))
+                                        (max-depth  16)
+                                        (max-unroll 4)
+                                        (heuristic  #'aggressive-heuristic))
   "Recursively inline function calls in `node`, using the environment
 `env` to look up the function bodies to substitute. The traversal
 keeps a call stack and will not continue past the specified
@@ -389,14 +396,10 @@ requires direct constructor calls."
       (make-traverse-let-action-skipping-cons-bindings))
      nil)))
 
-(defun aggressive-heuristic (node)
-  (and (<= (count-applications node)
-           4)
-       (<= (count-nodes node)
-           32)))
-
 (defun inline-applications (node env)
-  (heuristic-inline-applications node env))
+  (if settings:*coalton-heuristic-inlining*
+      (heuristic-inline-applications node env)
+      node))
 
 (defun inline-methods (node env)
   (declare (type node node)
