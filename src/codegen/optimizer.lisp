@@ -351,43 +351,97 @@ requires direct constructor calls."
            (type (integer 0)    max-unroll)
            (type function       heuristic)
            (values node &optional))
-  (flet ((try-inline (node call-stack)
-           (declare (type (or node-application node-direct-application) node)
-                    (type parser:identifier-list                        call-stack)
-                    (values (or node-let node-application node-direct-application) &optional))
-           (or
-            (alexandria:when-let*
-                ((name (node-rator-name node))
-                 (code (tc:lookup-code env name :no-error t))
-                 (_    (and (node-abstraction-p code)
+  (labels ((inline-abstraction-from-application (node abstraction process-body)
+             "If NODE is an abstraction (f e1 e2 ... en) and ABSTRACTION is a
+              function (fn (x1 x2 ... xn) body), then produce a node which is
+              something like
+
+                  `(let ((x1 e1) (x2 e2) ... (xn en))
+                     ,(funcall process-body body))
+
+              where body has been processed by PROCESS-BODY. (The
+              body may be processed by this function in other ways.)"
+             (declare (type (or node-application node-direct-application) node)
+                      (type node-abstraction                              abstraction)
+                      (type function                                      process-body)
+                      (values node-let &optional))
+             (loop
+               ;; (x1 ... xn)
+               :with vars := (node-abstraction-vars abstraction)
+               ;; (e1 ... en)
+               :with vals := (node-rands node)
+               ;; body, as described above
+               :with body := (node-abstraction-subexpr abstraction)
+
+               ;; Collect the LET-node bindings. We also generate new
+               ;; generated variable names (i.e., each xi is renamed to
+               ;; a unique xi').
+               :for var :in vars
+               :for val :in vals
+               :for new-var := (gentemp (symbol-name var))
+               :collect (cons new-var val)
+                 :into bindings
+               :collect (make-ast-substitution
+                         :from var
+                         :to (make-node-variable
+                              :type (node-type val)
+                              :value new-var))
+                 :into subs
+
+               ;; Return the inlined abstraction as a LET.
+               :finally (return
+                          (make-node-let
+                           :type     (node-type node)
+                           :bindings bindings
+                           :subexpr  (funcall
+                                      process-body
+                                      ;; Rename the type variables
+                                      ;; so they aren't
+                                      ;; inadvertently unified
+                                      ;; across substitutions.
+                                      (rename-type-variables
+                                       (apply-ast-substitution subs body)))))))
+
+           (try-inline (node call-stack)
+             "Attempt to perform an inlining of the application node NODE. The
+            CALL-STACK is a stack (represented as a list) of node names seen so
+            far recursively by the inliner."
+             (declare (type (or node-application node-direct-application) node)
+                      (type parser:identifier-list                        call-stack)
+                      (values (or node-let node-application node-direct-application) &optional))
+             ;; There are multiple cases that can be inlined.
+             ;;
+             ;; Case #1: (f e1 ... en) where f is global, known, and arity n.
+             (alexandria:when-let*
+                 ((name (node-rator-name node))
+                  (code (tc:lookup-code env name :no-error t))
+                  (_    (and (node-abstraction-p code)
+                             (funcall heuristic code)
+                             (<= (length call-stack)
+                                 max-depth)
+                             (<= (count name call-stack)
+                                 max-unroll)
+                             (= (length (node-abstraction-vars code))
+                                (length (node-rands node))))))
+               (return-from try-inline
+                 (inline-abstraction-from-application
+                  node code (lambda (body)
+                              (funcall *traverse* body (cons name call-stack))))))
+
+             ;; Case #2: ((fn (x1 ... xn) ...) e1 ... en)
+             (when (node-application-p node)
+               (let ((code (node-application-rator node)))
+                 (when (and (node-abstraction-p code)
                             (funcall heuristic code)
-                            (<= (length call-stack)
-                                max-depth)
-                            (<= (count name call-stack)
-                                max-unroll)
                             (= (length (node-abstraction-vars code))
-                               (length (node-rands node))))))
-              (multiple-value-bind (bindings subs)
-                  (loop :for var :in (node-abstraction-vars code)
-                        :for val :in (node-rands node)
-                        :for new-var := (gentemp (symbol-name var))
-                        :collect (cons new-var val) :into bindings
-                        :collect (make-ast-substitution
-                                  :from var
-                                  :to (make-node-variable
-                                       :type (node-type val)
-                                       :value new-var))
-                          :into subs
-                        :finally (return (values bindings subs)))
-                (make-node-let
-                 :type     (node-type node)
-                 :bindings bindings
-                 :subexpr  (funcall *traverse*
-                                    (rename-type-variables (apply-ast-substitution
-                                                            subs
-                                                            (node-abstraction-subexpr code)))
-                                    (cons name call-stack)))))
-            node)))
+                               (length (node-rands node))))
+                   (return-from try-inline
+                     (inline-abstraction-from-application
+                      node code (lambda (body)
+                                  (funcall *traverse* body call-stack)))))))
+
+             ;; Inlining did not satisfy heuristics or was inapplicable.
+             (return-from try-inline node)))
     (traverse
      node
      (list
@@ -397,6 +451,8 @@ requires direct constructor calls."
      nil)))
 
 (defun inline-applications (node env)
+  "If inlining is globally enabled, perform function inlining on the node
+NODE in the environment ENV."
   (if settings:*coalton-heuristic-inlining*
       (heuristic-inline-applications node env)
       node))
