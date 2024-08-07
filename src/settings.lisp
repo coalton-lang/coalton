@@ -8,6 +8,7 @@
   (:export
    #:coalton-release-p                  ; FUNCTION
    #:*coalton-disable-specialization*   ; VARIABLE
+   #:*coalton-heuristic-inlining*       ; VARIABLE
    #:*coalton-print-unicode*            ; VARIABLE
    #:*emit-type-annotations*            ; VARIABLE
    #:*coalton-optimize*                 ; VARIABLE
@@ -49,8 +50,17 @@ Enable release mode either by setting the UNIX environment variable COALTON_ENV 
 (when (find (uiop:getenv "COALTON_DISABLE_SPECIALIZATION")
             '("t" "true" "1")
             :test #'string-equal)
-  (format t "~&;; COALTON starting with specializations disabled")
+  (format t "~&;; COALTON starting with specializations disabled~%")
   (setf *coalton-disable-specialization* t))
+
+(declaim (type boolean *coalton-heuristic-inlining*))
+(defvar *coalton-heuristic-inlining* nil)
+
+(when (find (uiop:getenv "COALTON_HEURISTIC_INLINING")
+            '("t" "true" "1")
+            :test #'string-equal)
+  (format t "~&;; COALTON starting with heuristic inlining enabled~%")
+  (setf *coalton-heuristic-inlining* t))
 
 ;; Configure the backend to remove type annotations from the generated code
 (declaim (type boolean *emit-type-annotations*))
