@@ -21,6 +21,7 @@
    #:values
    #:entries
    #:collect!
+   #:collect
    #:update
    #:merge))
 
@@ -154,13 +155,23 @@ Like `replace-or-insert', but prioritizing insertion as a use case."
 
   (declare collect! ((Ord :key) => ((iter:Iterator (Tuple :key :value)) -> (Map :key :value))))
   (define (collect! iter)
-    "Construct a Map containing all the (key value) pairs in ITER.
+    "Construct a `Map` containing all the `(key value)` pairs in `iter`.
 
-If ITER contains duplicate keys, later values will overwrite earlier values."
+If `iter` contains duplicate keys, later values will overwrite earlier values."
     (iter:fold! (fn (mp tpl)
                   (uncurry (insert-or-replace mp) tpl))
                 empty
                 iter))
+
+  (declare collect ((Ord :key) (Foldable :collection) => ((:collection (Tuple :key :value)) -> (Map :key :value))))
+  (define (collect coll)
+    "Construct a `Map` containing all the `(key value)` pairs in `coll`.
+
+If `coll` contains duplicate keys, later values will overwrite earlier values."
+    (fold (fn (mp tpl)
+            (uncurry (insert-or-replace mp) tpl))
+          empty
+          coll))
 
   (define-instance (Ord :key => iter:FromIterator (Map :key :value) (Tuple :key :value))
     (define iter:collect! collect!))
