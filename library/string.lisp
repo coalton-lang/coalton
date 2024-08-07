@@ -41,10 +41,11 @@
 
 
 (cl:defmacro define-instance-into-integral-string (type)
-  `(define-instance (Into ,type String)
-     (define (into z)
-       (lisp String (z)
-         (cl:format cl:nil "~D" z)))))
+  `(coalton-toplevel
+     (define-instance (Into ,type String)
+       (define (into z)
+         (lisp String (z)
+           (cl:format cl:nil "~D" z))))))
 
 (coalton-toplevel
   (declare concat (String -> String -> String))
@@ -194,20 +195,21 @@ does not have that suffix."
       (lisp String (lst)
         (cl:coerce lst 'cl:string))))
 
-  (define-instance (Iso (List Char) String))
+  (define-instance (Iso (List Char) String)))
 
-  (define-instance-into-integral-string Integer)
-  (define-instance-into-integral-string IFix)
-  (define-instance-into-integral-string UFix)
-  (define-instance-into-integral-string I8)
-  (define-instance-into-integral-string U8)
-  (define-instance-into-integral-string I16)
-  (define-instance-into-integral-string U16)
-  (define-instance-into-integral-string I32)
-  (define-instance-into-integral-string U32)
-  (define-instance-into-integral-string I64)
-  (define-instance-into-integral-string U64)
+(define-instance-into-integral-string Integer)
+(define-instance-into-integral-string IFix)
+(define-instance-into-integral-string UFix)
+(define-instance-into-integral-string I8)
+(define-instance-into-integral-string U8)
+(define-instance-into-integral-string I16)
+(define-instance-into-integral-string U16)
+(define-instance-into-integral-string I32)
+(define-instance-into-integral-string U32)
+(define-instance-into-integral-string I64)
+(define-instance-into-integral-string U64)
 
+(coalton-toplevel
   (define-instance (Into Fraction String)
     (define (into frc)
       (lisp String (frc)
