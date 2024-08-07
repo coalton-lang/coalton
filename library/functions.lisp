@@ -7,7 +7,6 @@
    #:trace
    #:traceObject
    #:print
-   #:and-return
    #:unsafe-pointer-eq?
    #:fix
    #:id
@@ -52,12 +51,6 @@
   (define print
     "Print the String representation of an item to `cl:*standard-output*`."
     (compose trace into))
-
-  (declare and-return ((:a -> :b) -> :a -> :a))
-  (define (and-return func item)
-    "Apply `func` to `item` and then return `item`."
-    (progn (func item)
-           item))
 
   (declare unsafe-pointer-eq? (:a -> :a -> Boolean))
   (define (unsafe-pointer-eq? a b)
@@ -128,7 +121,7 @@
 
   (declare curry ((Tuple :left :right -> :result) -> :left -> :right -> :result))
   (define (curry func left right)
-      (func (Tuple left right)))
+    (func (Tuple left right)))
 
   (declare uncurry ((:left -> :right -> :result) -> Tuple :left :right -> :result))
   (define (uncurry func tpl)

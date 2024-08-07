@@ -79,7 +79,7 @@
   (declare singleton (:a -> Vector :a))
   (define (singleton x)
     "Create a new vector with a single element equal to `x`"
-    (and-return (push! x) (new)))
+    (with-initial-element 1 x))
 
   (declare length (Vector :a -> UFix))
   (define (length v)
