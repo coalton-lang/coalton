@@ -60,7 +60,7 @@
 
   (:method ((binding toplevel-define))
     (declare (values cons))
-    (toplevel-define-source binding))
+    (source-location-span (toplevel-define-source binding)))
 
   (:method ((binding instance-method-definition))
     (declare (values cons))

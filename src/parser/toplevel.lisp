@@ -322,7 +322,7 @@
   (orig-params  (util:required 'orig-params)  :type pattern-list                     :read-only t)
   (docstring    (util:required 'docstring)    :type (or null string)                 :read-only t)
   (body         (util:required 'body)         :type node-body                        :read-only t)
-  (source       (util:required 'source)       :type cons                             :read-only t)
+  (source       (util:required 'source)       :type source-location                  :read-only t)
   (monomorphize (util:required 'monomorphize) :type (or null attribute-monomorphize) :read-only nil))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
@@ -1102,7 +1102,8 @@ consume all attributes")))
        :docstring docstring
        :body body
        :monomorphize nil
-       :source (cst:source form)))))
+       :source (make-source-location :file (se:file-name file)
+                                     :span (cst:source form))))))
 
 (defun parse-declare (form file)
   (declare (type cst:cst form)
