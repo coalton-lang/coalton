@@ -129,7 +129,7 @@
     "Take a function with two currying parameters and enable their input as a single `Tuple`."
     (match tpl
       ((Tuple left right)
-        (func left right))))
+       (func left right))))
 
   (declare pair-with ((:left -> :right) -> :left -> Tuple :left :right))
   (define (pair-with func left)
