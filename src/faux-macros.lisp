@@ -45,6 +45,9 @@
 (define-coalton-editor-macro coalton:define-instance (instance &body method-definitions)
   "Define an instance of a type class. (Coalton top-level operator.)")
 
+(define-coalton-editor-macro coalton:lisp-toplevel (options &body lisp-toplevel-forms)
+  "Include lisp forms. (Coalton top-level operator.)")
+
 (define-coalton-editor-macro coalton:specialize (name from-ty to-ty)
   "Declare a specialization for a function. (Coalton top-level operator.)")
 
