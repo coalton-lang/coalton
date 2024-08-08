@@ -140,6 +140,10 @@
    #:parse-toplevel-form                         ; FUNCTION
    #:read-program                                ; FUNCTION
    #:read-expression                             ; FUNCTION
+   #:source-location
+   #:make-source-location
+   #:source-location-file
+   #:source-location-span
    ))
 
 (in-package #:coalton-impl/parser/toplevel)
@@ -228,11 +232,15 @@
 ;; Toplevel Structures
 ;;
 
+(defstruct source-location
+  (file (util:required 'file) :type string               :read-only t)
+  (span (util:required 'span) :type (cons fixnum fixnum) :read-only t))
+
 (defstruct (constructor
             (:copier nil))
-  (name   (util:required 'name)   :type identifier-src :read-only t)
-  (fields (util:required 'fields) :type ty-list        :read-only t)
-  (source (util:required 'source) :type cons           :read-only t))
+  (name   (util:required 'name)   :type identifier-src  :read-only t)
+  (fields (util:required 'fields) :type ty-list         :read-only t)
+  (source (util:required 'source) :type source-location :read-only t))
 
 (defun constructor-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -247,7 +255,7 @@
   (vars      (util:required 'vars)      :type keyword-src-list         :read-only t)
   (docstring (util:required 'docstring) :type (or null string)         :read-only t)
   (ctors     (util:required 'ctors)     :type constructor-list         :read-only t)
-  (source    (util:required 'source)    :type cons                     :read-only t)
+  (source    (util:required 'source)    :type source-location          :read-only t)
   (repr      (util:required 'repr)      :type (or null attribute-repr) :read-only nil)
   (head-src  (util:required 'head-src)  :type cons                     :read-only t))
 
@@ -280,7 +288,7 @@
   (vars      (util:required 'vars)      :type keyword-src-list         :read-only t)
   (docstring (util:required 'docstring) :type (or null string)         :read-only t)
   (fields    (util:required 'fields)    :type struct-field-list        :read-only t)
-  (source    (util:required 'source)    :type cons                     :read-only t)
+  (source    (util:required 'source)    :type source-location          :read-only t)
   (repr      (util:required 'repr)      :type (or null attribute-repr) :read-only nil)
   (head-src  (util:required 'head-src)  :type cons                     :read-only t))
 
@@ -314,7 +322,7 @@
   (orig-params  (util:required 'orig-params)  :type pattern-list                     :read-only t)
   (docstring    (util:required 'docstring)    :type (or null string)                 :read-only t)
   (body         (util:required 'body)         :type node-body                        :read-only t)
-  (source       (util:required 'source)       :type cons                             :read-only t)
+  (source       (util:required 'source)       :type source-location                  :read-only t)
   (monomorphize (util:required 'monomorphize) :type (or null attribute-monomorphize) :read-only nil))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
@@ -1094,7 +1102,8 @@ consume all attributes")))
        :docstring docstring
        :body body
        :monomorphize nil
-       :source (cst:source form)))))
+       :source (make-source-location :file (se:file-name file)
+                                     :span (cst:source form))))))
 
 (defun parse-declare (form file)
   (declare (type cst:cst form)
@@ -1246,7 +1255,8 @@ consume all attributes")))
                   :while (cst:consp constructors_)
                   :collect (parse-constructor (cst:first constructors_) form file))
      :repr nil
-     :source (cst:source form)
+     :source (make-source-location :file (se:file-name file)
+                                   :span (cst:source form))
      :head-src (cst:source (cst:second form)))))
 
 (defun parse-define-struct (form file)
@@ -1293,7 +1303,8 @@ consume all attributes")))
               #'parse-struct-field
               (cst:nthrest (if docstring 3 2) form)
               file)
-     :source (cst:source form)
+     :source (make-source-location :file (se:file-name file)
+                                   :span (cst:source form))
      :repr nil
      :head-src (cst:source (cst:second form)))))
 
@@ -1884,7 +1895,8 @@ consume all attributes")))
             :source (cst:source unparsed-name))
      :fields (loop :for field :in unparsed-fields
                    :collect (parse-type field file))
-     :source (cst:source form))))
+     :source (make-source-location :file (se:file-name file)
+                                   :span (cst:source form)))))
 
 
 (defun parse-argument-list (form file)

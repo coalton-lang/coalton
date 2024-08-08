@@ -53,11 +53,11 @@
 
 (defgeneric type-definition-source (def)
   (:method ((def toplevel-define-type))
-    (declare (values cons))
+    (declare (values source-location))
     (toplevel-define-type-source def))
 
   (:method ((def toplevel-define-struct))
-    (declare (values cons))
+    (declare (values source-location))
     (toplevel-define-struct-source def)))
 
 (defgeneric type-definition-vars (def)
@@ -107,11 +107,11 @@
 
 (defgeneric type-definition-ctor-source (ctor)
   (:method ((ctor constructor))
-    (declare (values cons))
+    (declare (values source-location))
     (constructor-source ctor))
 
   (:method ((ctor toplevel-define-struct))
-    (declare (values cons))
+    (declare (values source-location))
     (toplevel-define-struct-source ctor)))
 
 (defgeneric type-definition-ctor-field-types (ctor)

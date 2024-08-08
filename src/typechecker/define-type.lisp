@@ -391,14 +391,14 @@
                    ;; Check that repr :transparent types have a single constructor
              :when (eq repr-type :transparent)
                :do (unless (= 1 (length (parser:type-definition-ctors type)))
-                     (error 'tc:tc-error
-                            :err (se:source-error
-                                  :span (parser:toplevel-define-type-source type)
-                                  :file file
-                                  :message "Invalid repr :transparent attribute"
-                                  :primary-note "repr :transparent types must have a single constructor")))
+                     (let ((source-location (parser:toplevel-define-type-source type)))
+                       (error 'tc:tc-error
+                              :err (se:source-error
+                                    :span (parser:source-location-span source-location)
+                                    :file file
+                                    :message "Invalid repr :transparent attribute"
+                                    :primary-note "repr :transparent types must have a single constructor"))))
 
-                   
                    ;; Check that the single constructor of a repr :transparent type has a single field
              :when (eq repr-type :transparent)
                :do (unless (= 1 (length (parser:type-definition-ctor-field-types (first (parser:type-definition-ctors type)))))
@@ -457,7 +457,7 @@
                                 :constructor-types constructor-types
                                 :constructor-args constructor-args
                                 :docstring (parser:type-definition-docstring type)
-                                :source (parser:type-definition-source type)))
+                                :source (parser:source-location-span (parser:type-definition-source type))))
 
                              (runtime-repr-instance (maybe-runtime-repr-instance type-definition)))
 
