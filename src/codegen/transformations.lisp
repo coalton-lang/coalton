@@ -10,7 +10,8 @@
   (:export
    #:rename-type-variables
    #:node-variables
-   #:node-free-p))
+   #:node-free-p
+   #:localize-returns))
 
 (in-package #:coalton-impl/codegen/transformations)
 

@@ -13,7 +13,8 @@
    #:codegen-class-definitions)
   (:import-from
    #:coalton-impl/codegen/codegen-expression
-   #:codegen-expression)
+   #:codegen-expression
+   #:function-declarations)
   (:import-from
    #:coalton-impl/codegen/codegen-type-definition
    #:codegen-type-definition)
@@ -51,7 +52,7 @@ A function bound here will be called with a keyword category, and one or more ad
             (loop :for define :in (tc:translation-unit-definitions translation-unit)
                   :for name := (tc:node-variable-name (tc:toplevel-define-name define))
 
-                  :for compiled-node := (translate-toplevel define env)
+                  :for compiled-node := (translate-toplevel define env name)
 
                   :do (when *codegen-hook*
                         (funcall *codegen-hook*
@@ -125,20 +126,9 @@ A function bound here will be called with a keyword category, and one or more ad
   (declare (type symbol name)
            (type node-abstraction node)
            (type tc:environment env))
-  (let ((type-decs
-           (when settings:*emit-type-annotations*
-             (append
-              (loop :for name :in (node-abstraction-vars node)
-                    :for i :from 0
-                    :for arg-ty := (nth i (tc:function-type-arguments (node-type node)))
-                    :collect `(type ,(tc:lisp-type arg-ty env) ,name))
-              (list `(values ,(tc:lisp-type (node-type (node-abstraction-subexpr node)) env)
-                             &optional))))))
-
-    `(defun ,name ,(node-abstraction-vars node)
-       (declare (ignorable ,@(node-abstraction-vars node))
-                ,@type-decs)
-       ,(codegen-expression (node-abstraction-subexpr node) name env))))
+  `(defun ,name ,(node-abstraction-vars node)
+     ,(function-declarations node env)
+     ,(codegen-expression (node-abstraction-subexpr node) env)))
 
 (defun compile-scc (bindings env)
   "Compile SCC definitions in a translation unit."
@@ -164,7 +154,7 @@ A function bound here will be called with a keyword category, and one or more ad
         :if (not (node-abstraction-p node))
           :collect `(setf
                       ,name
-                      ,(codegen-expression node nil env)))
+                      ,(codegen-expression node env)))
 
   ;; Print types of definitions
   (when settings:*compile-print-types*

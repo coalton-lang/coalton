@@ -157,10 +157,19 @@
       (setf subs (tc:unify subs (node-type last-node) (node-type expr)))
       (node-type last-node)))
 
-  (:method ((expr node-return) env)
+  (:method ((expr node-return-from) env)
     (declare (type tc:environment env)
              (values tc:ty))
-    (typecheck-node (node-return-expr expr) env)
+    (typecheck-node (node-return-from-expr expr) env)
+    (node-type expr))
+
+  (:method ((expr node-block) env)
+    (declare (type tc:environment env)
+             (values tc:ty))
+    (tc:unify
+     nil
+     (node-type expr)
+     (typecheck-node (node-block-body expr) env))
     (node-type expr))
 
   (:method ((expr node-field) env)

@@ -453,3 +453,11 @@
    "(define x (even? 2))"
 
    '("x" . "Boolean")))
+
+
+(deftest test-nameless-overapplication ()
+  ;; See gh #1208
+  (check-coalton-types
+   "(define f (fn (x) (fn (y) (+ x y))))"
+
+   '("f" . "(Num :a => :a -> :a -> :a)")))

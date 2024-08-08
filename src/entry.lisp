@@ -143,7 +143,6 @@
                    (codegen:direct-application
                     node
                     (codegen:make-function-table env))
-                   nil
                    env))))
 
             (let* ((tvars

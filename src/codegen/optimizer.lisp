@@ -37,7 +37,8 @@
   (:import-from
    #:coalton-impl/codegen/transformations
    #:node-free-p
-   #:rename-type-variables)
+   #:rename-type-variables
+   #:localize-returns)
   (:import-from
    #:coalton-impl/codegen/ast-substitutions
    #:apply-ast-substitution

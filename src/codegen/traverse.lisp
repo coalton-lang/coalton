@@ -157,10 +157,16 @@ nodes."
                (lambda (node)
                  (apply *traverse* node args))
                (node-seq-nodes node))))
-    (action (:traverse node-return node &rest args)
-      (make-node-return
+    (action (:traverse node-return-from node &rest args)
+      (make-node-return-from
        :type (node-type node)
-       :expr (apply *traverse* (node-return-expr node) args)))
+       :name (node-return-from-name node)
+       :expr (apply *traverse* (node-return-from-expr node) args)))
+    (action (:traverse node-block node &rest args)
+      (make-node-block
+       :type (node-type node)
+       :name (node-block-name node)
+       :body (apply *traverse* (node-block-body node) args)))
     (action (:traverse node-field node &rest args)
       (make-node-field
        :type (node-type node)

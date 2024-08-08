@@ -22,12 +22,21 @@
 
 (in-package #:coalton-impl/codegen/translate-expression)
 
-(defun translate-toplevel (binding env &key extra-context)
+(defvar *current-function-name*)
+(setf (documentation '*current-function* 'variable)
+      "The symbol name of the function currently being translated.
+This will be bound for the extent of any TRANSLATE-TOPLEVEL call, or
+TRANSLATE-EXPRESSION when an abstraction is being translated.")
+
+(defun translate-toplevel (binding env name &key extra-context)
   (declare (type tc:binding-type binding)
            (type tc:environment env)
+           (type symbol name)
            (type pred-context extra-context))
 
-  (let* ((qual-ty (tc:binding-type binding))
+  (let* ((*current-function-name* name)
+
+         (qual-ty (tc:binding-type binding))
 
          (preds (tc:qualified-ty-predicates qual-ty))
 
@@ -70,9 +79,10 @@
                                   (push (cons name param) pattern-params)
                                   name)))
 
-        :subexpr (wrap-with-pattern-params
-                  pattern-params
-                  (translate-expression (tc:node-abstraction-body (tc:binding-last-node binding)) full-ctx env))))
+        :subexpr (wrap-in-block
+                  (wrap-with-pattern-params
+                   pattern-params
+                   (translate-expression (tc:node-abstraction-body (tc:binding-last-node binding)) full-ctx env)))))
 
       ;; If the binding has parameters and/or predicates then wrap the body in a lambda.
       ((or (tc:binding-parameters binding) preds)
@@ -101,9 +111,10 @@
                                   (push (cons name param) pattern-params)
                                   name)))
 
-        :subexpr (wrap-with-pattern-params
-                  pattern-params
-                  (translate-expression (tc:binding-value binding) full-ctx env))))
+        :subexpr (wrap-in-block
+                  (wrap-with-pattern-params
+                   pattern-params
+                   (translate-expression (tc:binding-value binding) full-ctx env)))))
 
       (t
        (translate-expression (tc:binding-value binding) full-ctx env)))))
@@ -289,7 +300,9 @@ Returns a `node'.")
              (type tc:environment env)
              (values node))
 
-    (let* ((qual-ty (tc:node-type expr))
+    (let* ((*current-function-name* '@@local)
+
+           (qual-ty (tc:node-type expr))
 
            (preds (tc:qualified-ty-predicates qual-ty))
 
@@ -343,7 +356,7 @@ Returns a `node'.")
                                    :pattern (translate-pattern pattern)
                                    :body inner))))
 
-                      :finally (return inner)))))
+                      :finally (return (wrap-in-block inner))))))
 
   (:method ((expr tc:node-let) ctx env)
     (declare (type pred-context ctx)
@@ -359,7 +372,7 @@ Returns a `node'.")
                        :for name := (tc:node-variable-name (tc:node-let-binding-name binding))
                        :for var := (tc:node-let-binding-name binding)
 
-                       :collect (cons name (translate-toplevel binding env :extra-context ctx)))
+                       :collect (cons name (translate-toplevel binding env name :extra-context ctx)))
        :subexpr (translate-expression (tc:node-let-body expr) ctx env))))
 
   (:method ((expr tc:node-lisp) ctx env)
@@ -417,8 +430,9 @@ Returns a `node'.")
 
       (let ((unit-value (util:find-symbol "UNIT" "COALTON")))
 
-        (make-node-return
+        (make-node-return-from
          :type (tc:qualified-ty-type qual-ty)
+         :name *current-function-name*
          :expr (if (tc:node-return-expr expr)
                    (translate-expression (tc:node-return-expr expr) ctx env)
                    (make-node-variable
@@ -968,3 +982,12 @@ dictionaries applied."
                            :body inner))))
 
         :finally (return inner)))
+
+(defun wrap-in-block (inner)
+  "Wrap INNER in a block named for the current function."
+  (declare (type node inner)
+           (values node &optional))
+  (make-node-block
+   :type (node-type inner)
+   :name *current-function-name*
+   :body inner))

@@ -20,6 +20,7 @@
    (#:const #:coalton-impl/constants))
   (:export
    #:codegen-expression                 ; FUNCTION
+   #:function-declarations              ; FUNCTION
    ))
 
 (in-package #:coalton-impl/codegen/codegen-expression)
@@ -32,76 +33,61 @@
   (declare (type symbol label))
   (alexandria:format-symbol :keyword "~a-BREAK" label))
 
-(defgeneric codegen-expression (node current-function env)
-  (:method ((node node-literal) current-function env)
+(defun block-label (label)
+  (declare (type symbol label))
+  (alexandria:format-symbol :keyword "~a-BLOCK" label))
+
+(defgeneric codegen-expression (node env)
+  (:method ((node node-literal) env)
     (declare (type tc:environment env)
-             (type (or null symbol) current-function)
-             (ignore current-function env))
+             (ignore env))
     (node-literal-value node))
 
-  (:method ((node node-variable) current-function env)
+  (:method ((node node-variable) env)
     (declare (type tc:environment env)
-             (type (or null symbol) current-function)
-             (ignore current-function env))
+             (ignore env))
     (node-variable-value node))
 
-  (:method ((node node-application) current-function env)
-    (declare (type tc:environment env)
-             (type (or null symbol) current-function))
+  (:method ((node node-application) env)
+    (declare (type tc:environment env))
     `(rt:call-coalton-function
-      ,(codegen-expression (node-application-rator node) current-function env)
+      ,(codegen-expression (node-application-rator node) env)
       ,@(mapcar
          (lambda (node)
-           (codegen-expression node current-function env))
+           (codegen-expression node env))
          (node-application-rands node))))
 
-  (:method ((node node-direct-application) current-function env)
-    (declare (type tc:environment env)
-             (type (or null symbol) current-function))
+  (:method ((node node-direct-application) env)
+    (declare (type tc:environment env))
     `(,(node-direct-application-rator node)
       ,@(mapcar
          (lambda (node)
-           (codegen-expression node current-function env))
+           (codegen-expression node env))
          (node-direct-application-rands node))))
 
-  (:method ((expr node-abstraction) current-function env)
-    (declare (type tc:environment env)
-             (type (or null symbol) current-function))
+  (:method ((expr node-abstraction) env)
+    (declare (type tc:environment env))
     (let* ((var-names (node-abstraction-vars expr))
 
-           (arity (length var-names))
-
-           (type-decs
-             (when settings:*emit-type-annotations*
-               (append
-                (loop :for name :in (node-abstraction-vars expr)
-                      :for i :from 0
-                      :for arg-ty := (nth i (tc:function-type-arguments (node-type expr)))
-                      :collect `(type ,(tc:lisp-type arg-ty env) ,name))
-                (list `(values ,(tc:lisp-type (node-type (node-abstraction-subexpr expr)) env) &optional))))))
+           (arity (length var-names)))
 
       (rt:construct-function-entry
        `(lambda ,var-names
-          (declare ,@type-decs
-                   (ignorable ,@var-names))
-          (block @@local
-            ,(codegen-expression (node-abstraction-subexpr expr) '@@local env)))
+          ,(function-declarations expr env)
+          ,(codegen-expression (node-abstraction-subexpr expr) env))
        arity)))
 
-  (:method ((expr node-let) current-function env)
-    (declare (type tc:environment env)
-             (type (or null symbol) current-function))
+  (:method ((expr node-let) env)
+    (declare (type tc:environment env))
     (let ((sccs (node-binding-sccs (node-let-bindings expr))))
       (codegen-let
        expr
        sccs
-       current-function
        (node-variables expr :variable-namespace-only t)
        env)))
 
-  (:method ((expr node-lisp) current-function env)
-    (declare (type tc:environment env)
-             (type (or null symbol) current-function))
+  (:method ((expr node-lisp) env)
+    (declare (type tc:environment env))
     (let* ((inner `(progn ,@(butlast (node-lisp-form expr))
                           (values ,(car (last (node-lisp-form expr))))))
            (inner
@@ -119,12 +105,11 @@
                 ,inner)
           inner)))
 
-  (:method ((expr node-while) current-function env)
-    (declare (type tc:environment env)
-             (type (or null symbol) current-function))
+  (:method ((expr node-while) env)
+    (declare (type tc:environment env))
 
-    (let ((pred-expr (codegen-expression (node-while-expr expr) current-function env))
-          (body-expr (codegen-expression (node-while-body expr) current-function env))
+    (let ((pred-expr (codegen-expression (node-while-expr expr) env))
+          (body-expr (codegen-expression (node-while-body expr) env))
           (label (node-while-label expr)))
       `(loop
          :named ,(break-label label)
@@ -132,12 +117,11 @@
          :do (block ,(continue-label label) ,body-expr)
          :finally (return-from ,(break-label label) coalton:Unit))))
 
-  (:method ((expr node-while-let) current-function env)
-    (declare (type tc:environment env)
-             (type (or null symbol) current-function))
+  (:method ((expr node-while-let) env)
+    (declare (type tc:environment env))
 
-    (let ((match-expr (codegen-expression (node-while-let-expr expr) current-function env))
-          (body-expr (codegen-expression (node-while-let-body expr) current-function env))
+    (let ((match-expr (codegen-expression (node-while-let-expr expr) env))
+          (body-expr (codegen-expression (node-while-let-body expr) env))
           (label (node-while-let-label expr))
           (match-var (gentemp "MATCH")))
 
@@ -157,29 +141,25 @@
                               ,body-expr))))
            :finally (return-from ,(break-label label) coalton:Unit)))))
 
-  (:method ((expr node-loop) current-function env)
-    (declare (type tc:environment env)
-             (type (or null symbol) current-function))
-    (let ((body-expr (codegen-expression (node-loop-body expr) current-function env))
+  (:method ((expr node-loop) env)
+    (declare (type tc:environment env))
+    (let ((body-expr (codegen-expression (node-loop-body expr) env))
           (label (node-loop-label expr)))
       `(loop :named ,(break-label label)
              :do (block ,(continue-label label)
                    ,body-expr)
              :finally (return-from ,(break-label label) coalton:Unit))))
 
-  (:method ((expr node-break) current-function env)
-    (declare (type tc:environment env)
-             (type (or null symbol) current-function))
+  (:method ((expr node-break) env)
+    (declare (type tc:environment env))
     `(return-from ,(break-label (node-break-label expr)) coalton:Unit))
 
-  (:method ((expr node-continue) current-function env)
-    (declare (type tc:environment env)
-             (type (or null symbol) current-function))
+  (:method ((expr node-continue) env)
+    (declare (type tc:environment env))
     `(return-from ,(continue-label (node-continue-label expr))))
 
-  (:method ((expr node-match) current-function env)
-    (declare (type tc:environment env)
-             (type (or null symbol) current-function))
+  (:method ((expr node-match) env)
+    (declare (type tc:environment env))
     ;; If possible codegen a cl:if instead of a trivia:match
     (when (and (equalp (node-type (node-match-expr expr)) tc:*boolean-type*)
                (= 2 (length (node-match-branches expr)))
@@ -188,12 +168,12 @@
                (equalp (match-branch-pattern (second (node-match-branches expr)))
                        (make-pattern-constructor :type tc:*boolean-type* :name 'coalton:False :patterns nil)))
       (return-from codegen-expression
-        `(if ,(codegen-expression (node-match-expr expr) current-function env)
-             ,(codegen-expression (match-branch-body (first (node-match-branches expr))) current-function env)
-             ,(codegen-expression (match-branch-body (second (node-match-branches expr))) current-function env))))
+        `(if ,(codegen-expression (node-match-expr expr) env)
+             ,(codegen-expression (match-branch-body (first (node-match-branches expr))) env)
+             ,(codegen-expression (match-branch-body (second (node-match-branches expr))) env))))
 
     ;; Otherwise do the thing
-    (let ((subexpr (codegen-expression (node-match-expr expr) current-function env))
+    (let ((subexpr (codegen-expression (node-match-expr expr) env))
           (match-var (gentemp "MATCH")))
       `(let ((,match-var
                ,(if settings:*emit-type-annotations*
@@ -206,7 +186,7 @@
              (cond
                ,@(loop :for branch :in (node-match-branches expr)
                        :for pattern := (match-branch-pattern branch)
-                       :for expr := (codegen-expression (match-branch-body branch) current-function env)
+                       :for expr := (codegen-expression (match-branch-body branch) env)
                        :collect
                        (multiple-value-bind (pred bindings)
                            (codegen-pattern pattern match-var env)
@@ -228,34 +208,35 @@
                    `((t
                       (error "Pattern match not exhaustive error")))))))))
 
-  (:method ((expr node-seq) current-function env)
-    (declare (type tc:environment env)
-             (type (or null symbol) current-function))
+  (:method ((expr node-seq) env)
+    (declare (type tc:environment env))
     `(progn
        ,@(mapcar
           (lambda (node)
-            (codegen-expression node current-function env))
+            (codegen-expression node env))
           (node-seq-nodes expr))))
 
-  (:method ((expr node-return) current-function env)
-    (assert (not (null current-function)))
-    `(return-from ,current-function ,(codegen-expression (node-return-expr expr) current-function env)))
+  (:method ((expr node-return-from) env)
+    `(return-from ,(block-label (node-return-from-name expr))
+       ,(codegen-expression (node-return-from-expr expr) env)))
 
-  (:method ((expr node-field) current-function env)
-    (declare (type tc:environment env)
-             (type (or null symbol) current-function))
+  (:method ((expr node-block) env)
+    `(block ,(block-label (node-block-name expr))
+       ,(codegen-expression (node-block-body expr) env)))
+
+  (:method ((expr node-field) env)
+    (declare (type tc:environment env))
     `(,(node-field-name expr)
-      ,(codegen-expression (node-field-dict expr) current-function env)))
+      ,(codegen-expression (node-field-dict expr) env)))
 
-  (:method ((expr node-dynamic-extent) current-function env)
-    (declare (type tc:environment env)
-             (type (or null symbol) current-function))
+  (:method ((expr node-dynamic-extent) env)
+    (declare (type tc:environment env))
     `(let ((,(node-dynamic-extent-name expr)
-             ,(codegen-expression (node-dynamic-extent-node expr) current-function env)))
+             ,(codegen-expression (node-dynamic-extent-node expr) env)))
        (declare (dynamic-extent ,(node-dynamic-extent-name expr)))
-       ,(codegen-expression (node-dynamic-extent-body expr) current-function env)))
+       ,(codegen-expression (node-dynamic-extent-body expr) env)))
 
-  (:method ((expr node-bind) current-function env)
+  (:method ((expr node-bind) env)
     (let ((name (node-bind-name expr)))
       (cond
         ((and (node-abstraction-p (node-bind-expr expr))
@@ -265,26 +246,22 @@
               (declare (ignorable ,name))
               (flet ((,name
                          ,(node-abstraction-vars (node-bind-expr expr))
-                       (declare (ignorable ,@(node-abstraction-vars (node-bind-expr expr)))
-                                ,@(argument-types (node-bind-expr expr) env)
-                                (values ,(tc:lisp-type (tc:function-return-type (node-type (node-bind-expr expr))) env) &optional))
-                       ,(codegen-expression (node-abstraction-subexpr (node-bind-expr expr)) name env)))
+                       ,(function-declarations (node-bind-expr expr) env)
+                       ,(codegen-expression (node-abstraction-subexpr (node-bind-expr expr)) env)))
                 (setf ,name ,(rt:construct-function-entry `#',name arity))
-                ,(codegen-expression (node-bind-body expr) current-function env)))))
+                ,(codegen-expression (node-bind-body expr) env)))))
 
         ((node-abstraction-p (node-bind-expr expr))
          `(flet ((,name
                      ,(node-abstraction-vars (node-bind-expr expr))
-                   (declare (ignorable ,@(node-abstraction-vars (node-bind-expr expr)))
-                            ,@(argument-types (node-bind-expr expr) env)
-                            (values ,(tc:lisp-type (tc:function-return-type (node-type (node-bind-expr expr))) env) &optional))
-                   ,(codegen-expression (node-abstraction-subexpr (node-bind-expr expr)) name env)))
-            ,(codegen-expression (node-bind-body expr) current-function env)))
+                   ,(function-declarations (node-bind-expr expr) env)
+                   ,(codegen-expression (node-abstraction-subexpr (node-bind-expr expr)) env)))
+            ,(codegen-expression (node-bind-body expr) env)))
 
         (t
-         `(let ((,name ,(codegen-expression (node-bind-expr expr) current-function env)))
+         `(let ((,name ,(codegen-expression (node-bind-expr expr) env)))
             (declare (ignorable ,name))
-            ,(codegen-expression (node-bind-body expr) current-function env)))))))
+            ,(codegen-expression (node-bind-body expr) env)))))))
 
 (defun find-constructor (initform env)
   (if (or (node-application-p initform) (node-direct-application-p initform))
@@ -311,15 +288,14 @@
         (1 `(cdr ,instance)))
       `(slot-value ,instance ',(constructor-slot-name ctor-ent nth-slot))))
 
-(defun codegen-let (node sccs current-function local-vars env)
+(defun codegen-let (node sccs local-vars env)
   (declare (type node-let node)
            (type list sccs)
-           (type (or null symbol) current-function)
            (type util:symbol-list local-vars)
            (type tc:environment env))
 
   (when (null sccs)
-    (return-from codegen-let (codegen-expression (node-let-subexpr node) current-function env)))
+    (return-from codegen-let (codegen-expression (node-let-subexpr node) env)))
 
   (let* ((scc (car sccs))
          (scc-bindings
@@ -334,7 +310,7 @@
        (let* (;; functions in this scc referenced in the variable namespace
               (binding-names-vars (intersection (mapcar #'car scc-bindings) local-vars))
 
-              (inner (codegen-let node (cdr sccs) current-function local-vars env))
+              (inner (codegen-let node (cdr sccs) local-vars env))
 
               (inner
                 (if binding-names-vars
@@ -352,13 +328,8 @@
                 `(labels ,(loop :for (name . node) :in scc-bindings
                                 :collect `(,name
                                            ,(node-abstraction-vars node)
-                                           (declare (ignorable ,@(node-abstraction-vars node))
-                                                    ,@(argument-types node env)
-                                                    (values ,(tc:lisp-type
-                                                              (tc:function-return-type (node-type node))
-                                                              env)
-                                                            &optional))
-                                           ,(codegen-expression (node-abstraction-subexpr node) name env)))
+                                           ,(function-declarations node env)
+                                           ,(codegen-expression (node-abstraction-subexpr node) env)))
                    ,@inner))
 
               (node
@@ -376,13 +347,13 @@
                 (data-letrec-able-p (cdr pair)
                                     env))
               scc-bindings)
-       (let* ((inner (codegen-let node (cdr sccs) current-function local-vars env))
+       (let* ((inner (codegen-let node (cdr sccs) local-vars env))
               (assignments (loop :for (name . initform) :in scc-bindings
                                  :for ctor-info := (find-constructor initform env)
                                  :appending (loop :for arg :in (node-rands initform)
                                                   :for i :from 0
                                                   :collect `(setf ,(setf-accessor ctor-info i name)
-                                                                  ,(codegen-expression arg current-function env)))))
+                                                                  ,(codegen-expression arg env)))))
               (allocations (loop :for (name . initform) :in scc-bindings
                                  :for ctor-info := (find-constructor initform env)
                                  :for ctor-classname := (tc:constructor-entry-classname ctor-info)
@@ -403,16 +374,19 @@
        (let ((name (car (first scc-bindings)))
              (node_ (cdr (first scc-bindings))))
 
-         `(let ((,name ,(codegen-expression node_ current-function env)))
+         `(let ((,name ,(codegen-expression node_ env)))
             (declare (ignorable ,name))
-            ,(codegen-let node (cdr sccs) current-function local-vars env))))
+            ,(codegen-let node (cdr sccs) local-vars env))))
 
       (t (error "Invalid scc binding group. This should have been detected during typechecking.")))))
 
 
-(defun argument-types (node env)
+(defun function-declarations (node env)
   (declare (type node-abstraction node)
            (type tc:environment env))
-  (loop :for var :in (node-abstraction-vars node)
-        :for ty :in (tc:function-type-arguments (node-type node))
-        :collect `(type ,(tc:lisp-type ty env) ,var)))
+  `(declare (ignorable ,@(node-abstraction-vars node))
+            ,@(when settings:*emit-type-annotations*
+                `(,@(loop :for var :in (node-abstraction-vars node)
+                          :for ty :in (tc:function-type-arguments (node-type node))
+                          :collect `(type ,(tc:lisp-type ty env) ,var))
+                  (values ,(tc:lisp-type (node-type (node-abstraction-subexpr node)) env) &optional)))))
