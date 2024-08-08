@@ -305,7 +305,7 @@
   (declare (type ty ty)
            (type fixnum num))
 
-  (assert (>= num (length (function-type-arguments ty))))
+  (assert (<= num (length (function-type-arguments ty))))
 
   (make-function-type*
    (subseq (function-type-arguments ty) num)

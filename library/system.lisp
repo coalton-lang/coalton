@@ -88,7 +88,7 @@ While the result will always contain microseconds, some implementations may retu
       (cl:let ((env (uiop:getenvp var)))
         (cl:if env
                (Some env)
-               (None)))))
+               None))))
 
   
   (declare setenv! (String -> String -> Unit))
@@ -164,7 +164,7 @@ While the result will always contain microseconds, some implementations may retu
       (cl:let ((arg (uiop:argv0)))
         (cl:if arg
                (Some (uiop:argv0))
-               (None))))))
+               None)))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/SYSTEM")
