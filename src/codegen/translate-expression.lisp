@@ -656,7 +656,7 @@ Returns a `node'.")
              (tc:apply-type-argument
               (tc:make-tycon :name iterator
                              :kind (tc:make-kfun :from tc:+kstar+ :to tc:+kstar+))
-              into-iter-arg-ty))
+              pat-arg-ty))
 
            (intoiterator-pred
              (tc:make-ty-predicate
@@ -666,7 +666,7 @@ Returns a `node'.")
 
            (into-iter-node
              (make-node-application
-              :type optional-pat-arg-ty
+              :type iter-ty
               :rator (make-node-variable
                       :type (tc:make-function-type*
                              (list (pred-type intoiterator-pred env)

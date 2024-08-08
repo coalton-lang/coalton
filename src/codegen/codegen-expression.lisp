@@ -129,8 +129,8 @@
       `(loop
          :named ,(break-label label)
          :while ,pred-expr
-         :do
-            (block ,(continue-label label) ,body-expr))))
+         :do (block ,(continue-label label) ,body-expr)
+         :finally (return-from ,(break-label label) coalton:Unit))))
 
   (:method ((expr node-while-let) current-function env)
     (declare (type tc:environment env)
@@ -154,21 +154,23 @@
                  ,(cond ((null bindings) body-expr)
                         (t `(let ,bindings
                               (declare (ignorable ,@(mapcar #'car bindings)))
-                              ,body-expr))))))))
+                              ,body-expr))))
+           :finally (return-from ,(break-label label) coalton:Unit)))))
 
   (:method ((expr node-loop) current-function env)
     (declare (type tc:environment env)
              (type (or null symbol) current-function))
     (let ((body-expr (codegen-expression (node-loop-body expr) current-function env))
           (label (node-loop-label expr)))
-      `(loop :named  ,(break-label label)
+      `(loop :named ,(break-label label)
              :do (block ,(continue-label label)
-                   ,body-expr))))
+                   ,body-expr)
+             :finally (return-from ,(break-label label) coalton:Unit))))
 
   (:method ((expr node-break) current-function env)
     (declare (type tc:environment env)
              (type (or null symbol) current-function))
-    `(return-from ,(break-label (node-break-label expr))))
+    `(return-from ,(break-label (node-break-label expr)) coalton:Unit))
 
   (:method ((expr node-continue) current-function env)
     (declare (type tc:environment env)

@@ -214,6 +214,17 @@
 	   (iter:flat-map! (fn (x) (iter:into-iter (make-list x (+ x 2))))
 			   (iter:up-to 4))))))
 
+(coalton-toplevel
+  (define (gh1197)
+    ;; A late unification failure occured on this code when run with the
+    ;; inliner. This will fail to compile in that case.
+    (for x in (iter:once 1)
+      (is (== 1 x)))))
+
+(define-test gh1200-for-loop-type-error ()
+  ;; Incidentally, the function for testing gh1197 also tests gh1200.
+  (gh1197))
+
 ;;; FIXME: define more tests
 ;; - vector-iter
 ;; - recursive-iter
