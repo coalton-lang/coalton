@@ -167,7 +167,7 @@ A function bound here will be called with a keyword category, and one or more ad
                       ,(codegen-expression node nil env)))
 
   ;; Print types of definitions
-  (when (or *compile-print* settings:*compile-print-types*) 
+  (when settings:*compile-print-types*
     (dolist (binding bindings)
       (let* ((name (car binding))
              (type (tc:lookup-value-type env name :no-error t)))
