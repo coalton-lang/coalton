@@ -37,7 +37,8 @@
   (:import-from
    #:coalton-impl/codegen/transformations
    #:node-free-p
-   #:rename-type-variables)
+   #:rename-type-variables
+   #:localize-returns)
   (:import-from
    #:coalton-impl/codegen/ast-substitutions
    #:apply-ast-substitution
@@ -399,8 +400,9 @@ requires direct constructor calls."
                                       ;; so they aren't
                                       ;; inadvertently unified
                                       ;; across substitutions.
-                                      (rename-type-variables
-                                       (apply-ast-substitution subs body)))))))
+                                      (localize-returns
+                                       (rename-type-variables
+                                        (apply-ast-substitution subs body))))))))
 
            (try-inline (node call-stack)
              "Attempt to perform an inlining of the application node NODE. The

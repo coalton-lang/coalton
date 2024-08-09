@@ -161,6 +161,16 @@ nodes."
       (make-node-return
        :type (node-type node)
        :expr (apply *traverse* (node-return-expr node) args)))
+    (action (:traverse node-return-from node &rest args)
+      (make-node-return-from
+       :type (node-type node)
+       :name (node-return-from-name node)
+       :expr (apply *traverse* (node-return-from-expr node) args)))
+    (action (:traverse node-block node &rest args)
+      (make-node-block
+       :type (node-type node)
+       :name (node-block-name node)
+       :expr (apply *traverse* (node-block-expr node) args)))
     (action (:traverse node-field node &rest args)
       (make-node-field
        :type (node-type node)

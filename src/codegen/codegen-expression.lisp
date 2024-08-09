@@ -32,6 +32,10 @@
   (declare (type symbol label))
   (alexandria:format-symbol :keyword "~a-BREAK" label))
 
+(defun block-label (label)
+  (declare (type symbol label))
+  (alexandria:format-symbol :keyword "~a-BLOCK" label))
+
 (defgeneric codegen-expression (node current-function env)
   (:method ((node node-literal) current-function env)
     (declare (type tc:environment env)
@@ -240,6 +244,12 @@
   (:method ((expr node-return) current-function env)
     (assert (not (null current-function)))
     `(return-from ,current-function ,(codegen-expression (node-return-expr expr) current-function env)))
+
+  (:method ((expr node-return-from) current-function env)
+    `(return-from ,(block-label (node-return-from-name expr)) ,(codegen-expression (node-return-from-expr expr) current-function env)))
+
+  (:method ((expr node-block) current-function env)
+    `(block ,(block-label (node-block-name expr)) ,(codegen-expression (node-block-expr expr) current-function env)))
 
   (:method ((expr node-field) current-function env)
     (declare (type tc:environment env)

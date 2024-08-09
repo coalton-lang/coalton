@@ -10,7 +10,8 @@
   (:export
    #:rename-type-variables
    #:node-variables
-   #:node-free-p))
+   #:node-free-p
+   #:localize-returns))
 
 (in-package #:coalton-impl/codegen/transformations)
 
@@ -123,3 +124,37 @@ both CL namespaces appearing in `node`"
            (type parser:identifier-list bound-variables)
            (values boolean &optional))
   (null (intersection (node-variables node) bound-variables)))
+
+(defun node-returns-p (node)
+  "Does `node` contain a `node-return` subnode?"
+  (declare (type node node)
+           (values boolean &optional))
+  (traverse
+   node
+   (list
+    (action (:before node-return _node)
+      (declare (ignore _node))
+      (return-from node-returns-p t))))
+  nil)
+
+(defun localize-returns (node)
+  "If `node` contains any `node-return` subnodes, wrap `node` in a new
+`node-block` and rewrite all `node-return` subnodes to return from
+this block."
+  (declare (type node node)
+           (values node &optional))
+  (unless (node-returns-p node)
+    (return-from localize-returns node))
+
+  (let ((block-name (gentemp)))
+    (make-node-block
+     :type (node-type node)
+     :name block-name
+     :expr (traverse
+            node
+            (list
+             (action (:after node-return node)
+               (make-node-return-from
+                :type (node-type node)
+                :name block-name
+                :expr (node-return-expr node))))))))

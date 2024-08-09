@@ -82,6 +82,14 @@
    #:node-return                        ; STRUCT
    #:make-node-return                   ; CONSTRUCTOR
    #:node-return-expr                   ; ACCESSOR
+   #:node-return-from                   ; STRUCT
+   #:make-node-return-from              ; CONSTRUCTOR
+   #:node-return-from-name              ; ACCESSOR
+   #:node-return-from-expr              ; ACCESSOR
+   #:node-block                         ; STRUCT
+   #:make-node-block                    ; CONSTRUCTOR
+   #:node-block-name                    ; ACCESSOR
+   #:node-block-expr                    ; ACCESSOR
    #:node-field                         ; STRUCT
    #:make-node-field                    ; CONSTRUCTOR
    #:node-field-name                    ; ACCESSOR
@@ -250,6 +258,16 @@ call to (break)."
 (defstruct (node-return (:include node))
   "A return statement, used for early returns in functions"
   (expr (util:required 'expr) :type node :read-only t))
+
+(defstruct (node-return-from (:include node))
+  "A return statement, used for early returns in inlined functions"
+  (name (util:required 'name) :type symbol :read-only t)
+  (expr (util:required 'expr) :type node   :read-only t))
+
+(defstruct (node-block (:include node))
+  "A return target, used for early returns from inlined functions"
+  (name (util:required 'node) :type symbol :read-only t)
+  (expr (util:required 'expr) :type node   :read-only t))
 
 (defstruct (node-field (:include node))
   "Accessing a superclass on a typeclass dictionary"
