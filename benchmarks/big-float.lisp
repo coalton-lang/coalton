@@ -1,67 +1,19 @@
 ;;;; big-float.lisp
 ;;;;
 ;;;; Benchmarks for arbitrary precision floats
+(defpackage #:coalton/benchmarks/big-float
+  (:use #:coalton
+        #:coalton-prelude
+        #:coalton-library/math
+        #:coalton-library/big-float)
+  (:export
+   #:big-trig
+   #:big-inv-trig
+   #:big-ln-exp
+   #:big-sqrt
+   #:big-mult-constants))
 
-(cl:in-package #:coalton-benchmarks)
-
-(cl:defvar *big-float-bench-precision*
-  #-coalton-portable-bigfloat 10000
-  #+coalton-portable-bigfloat 100)
-(cl:defvar *big-float-bench-iterations*
-  #-coalton-portable-bigfloat 1000
-  #+coalton-portable-bigfloat 10)
-
-(define-benchmark big-trig ()
-  "Benchmark at N precision big-float trigonometric functions."
-  (declare (optimize speed))
-  (loop :repeat  *big-float-bench-iterations*
-        :do (with-benchmark-sampling
-              (coalton-benchmarks/native::big-trig
-               *big-float-bench-precision*
-               (* (- (random 2)) (random 100.0d0)))))
-  (report trivial-benchmark::*current-timer*))
-
-(define-benchmark big-inv-trig ()
-  "Benchmark at N precision big-float inverse trigonometric functions."
-  (declare (optimize speed))
-  (loop :repeat *big-float-bench-iterations*
-        :do (with-benchmark-sampling
-              (coalton-benchmarks/native::big-inv-trig
-               *big-float-bench-precision*
-               (* (- (random 2)) (random 1.0d0)))))
-  (report trivial-benchmark::*current-timer*))
-
-(define-benchmark big-ln-exp ()
-  "Benchmark at N precision big-float ln and exp."
-  (declare (optimize speed))
-  (loop :repeat *big-float-bench-iterations*
-        :do (with-benchmark-sampling
-              (coalton-benchmarks/native::big-ln-exp
-               *big-float-bench-precision*
-               (* (- (random 2)) (random 100.0d0)))))
-  (report trivial-benchmark::*current-timer*))
-
-(define-benchmark big-sqrt ()
-  "Benchmark at N precision big-float square roots."
-  (declare (optimize speed))
-  (loop :repeat *big-float-bench-iterations*
-        :do (with-benchmark-sampling
-              (coalton-benchmarks/native::big-sqrt
-               *big-float-bench-precision*
-               (random 100.0d0))))
-  (report trivial-benchmark::*current-timer*))
-
-(define-benchmark big-mult-constants ()
-  "Benchmark at N precision big-float multiplication of pi and euler's number."
-  (declare (optimize speed))
-  (loop :repeat *big-float-bench-iterations*
-        :do (with-benchmark-sampling
-              (coalton-benchmarks/native::big-sqrt
-               *big-float-bench-precision*
-               (* (- (random 2)) (random 100.0d0)))))
-  (report trivial-benchmark::*current-timer*))
-
-(cl:in-package #:coalton-benchmarks/native)
+(cl:in-package #:coalton/benchmarks/big-float)
 
 (cl:declaim (cl:optimize (cl:speed 3) (cl:safety 1)))
 
@@ -99,3 +51,63 @@
       (fn ()
         (let x = (into x))
         (* x (* pi ee))))))
+
+;;(cl:in-package #:coalton-benchmarks)
+
+#+ig
+(cl:defvar *big-float-bench-precision*
+  #-coalton-portable-bigfloat 10000
+  #+coalton-portable-bigfloat 100)
+#+ig(cl:defvar *big-float-bench-iterations*
+  #-coalton-portable-bigfloat 1000
+  #+coalton-portable-bigfloat 10)
+
+#+ig(define-benchmark big-trig ()
+  "Benchmark at N precision big-float trigonometric functions."
+  (declare (optimize speed))
+  (loop :repeat  *big-float-bench-iterations*
+        :do (with-benchmark-sampling
+              (coalton-benchmarks/native::big-trig
+               *big-float-bench-precision*
+               (* (- (random 2)) (random 100.0d0)))))
+  (report trivial-benchmark::*current-timer*))
+
+#+ig(define-benchmark big-inv-trig ()
+  "Benchmark at N precision big-float inverse trigonometric functions."
+  (declare (optimize speed))
+  (loop :repeat *big-float-bench-iterations*
+        :do (with-benchmark-sampling
+              (coalton-benchmarks/native::big-inv-trig
+               *big-float-bench-precision*
+               (* (- (random 2)) (random 1.0d0)))))
+  (report trivial-benchmark::*current-timer*))
+
+#+ig(define-benchmark big-ln-exp ()
+  "Benchmark at N precision big-float ln and exp."
+  (declare (optimize speed))
+  (loop :repeat *big-float-bench-iterations*
+        :do (with-benchmark-sampling
+              (coalton-benchmarks/native::big-ln-exp
+               *big-float-bench-precision*
+               (* (- (random 2)) (random 100.0d0)))))
+  (report trivial-benchmark::*current-timer*))
+
+#+ig(define-benchmark big-sqrt ()
+  "Benchmark at N precision big-float square roots."
+  (declare (optimize speed))
+  (loop :repeat *big-float-bench-iterations*
+        :do (with-benchmark-sampling
+              (coalton-benchmarks/native::big-sqrt
+               *big-float-bench-precision*
+               (random 100.0d0))))
+  (report trivial-benchmark::*current-timer*))
+
+#+ig(define-benchmark big-mult-constants ()
+  "Benchmark at N precision big-float multiplication of pi and euler's number."
+  (declare (optimize speed))
+  (loop :repeat *big-float-bench-iterations*
+        :do (with-benchmark-sampling
+              (coalton-benchmarks/native::big-sqrt
+               *big-float-bench-precision*
+               (* (- (random 2)) (random 100.0d0)))))
+  (report trivial-benchmark::*current-timer*))
