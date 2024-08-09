@@ -18,8 +18,54 @@
 
 (in-package #:coalton-impl/settings)
 
+;;; Configuration reaches the Coalton compiler in 3 ways.
+;;;
+;;;    1. When Coalton is compiled, several environment variables are
+;;;    inquired. These are
+;;;
+;;;        - COALTON_ENV: Whether to be in development or release mode.
+;;;
+;;;        - COALTON_DISABLE_SPECIALIZATION: Whether to disable
+;;;          function specialization.
+;;;
+;;;        - COALTON_HEURISTIC_INLINING: Whether to enable automatic
+;;;          inlining.
+;;;
+;;;    2. When Coalton is compiled, configuration on properties of the
+;;;    :COALTON-CONFIG symbol are inquired. These are secondary to the
+;;;    environment variables.
+;;;
+;;;    3. When the Coalton compiler is run, several special variables
+;;;    control how the code is compiled. The values of the special
+;;;    variables are affected by the aforementioned configuration.
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defvar *config-keys*
+    '(:compiler-mode                    ; [string] compiler mode
+      :print-unicode                    ; [boolean] print unicode?
+      :perform-specialization           ; [boolean] use specializations?
+      :perform-inlining                 ; [boolean] automatic inlining?
+      :emit-type-annotations            ; [boolean] emit type annotations?
+      :print-types                      ; [boolean] print types when compiling?
+      )
+    "Valid configuration keys that can be (SETF GET) on the user configuration variable :COALTON-CONFIG.")
+
+  (defun config (key &key (default nil defaultp))
+    "Get the user configuration associated with the key KEY. If it's not
+found, return DEFAULT instead."
+    (assert defaultp () "A default must be supplied to CONFIG.")
+    (cond
+      ((member key *config-keys*)
+       (get ':coalton-config key default))
+      (t
+       (warn "Unknown Coalton configuration key: ~A" key)
+       default))))
+
+
+;;; Compiler and runtime configuration
+
 (declaim (type boolean *coalton-print-unicode*))
-(defvar *coalton-print-unicode* t
+(defvar *coalton-print-unicode* (config ':print-unicode :default t)
   "Whether to print coalton info using unicode symbols")
 
 (defun coalton-release-p ()
@@ -33,43 +79,54 @@ not support redefinition.
 
 Development mode is the default.
 
-Enable release mode either by setting the UNIX environment variable COALTON_ENV to \"release\", or by pushing
-`:coalton-release' into `*features*'. Either of these must be done before loading Coalton.
-"
-  (uiop:featurep :coalton-release))
+Enable release mode either by setting the UNIX environment variable COALTON_ENV to \"release\", by
 
-(when (string-equal (uiop:getenv "COALTON_ENV") "release")
-  (pushnew :coalton-release *features*))
+    (setf (get ':coalton-config ':compiler-mode) \"release\")
 
-(when (coalton-release-p)
-  (format t "~&;; COALTON starting in release mode~%"))
+or by pushing `:coalton-release' into `*features*'. Any of these must be done before loading Coalton."
+  (uiop:featurep ':coalton-release))
+
+(when (or (string-equal (uiop:getenv "COALTON_ENV")           "release")
+          (string-equal (config ':compiler-mode :default nil) "release"))
+  (pushnew ':coalton-release *features*))
 
 (declaim (type boolean *coalton-disable-specialization*))
-(defvar *coalton-disable-specialization* nil)
-
-(when (find (uiop:getenv "COALTON_DISABLE_SPECIALIZATION")
-            '("t" "true" "1")
-            :test #'string-equal)
-  (format t "~&;; COALTON starting with specializations disabled~%")
-  (setf *coalton-disable-specialization* t))
+(defvar *coalton-disable-specialization*
+  (cond
+    ((find (uiop:getenv "COALTON_DISABLE_SPECIALIZATION")
+           '("t" "true" "1")
+           :test #'string-equal)
+     t)
+    (t
+     ;; NOT because this variable disables specializations.
+     (not (config ':perform-specialization :default t)))))
 
 (declaim (type boolean *coalton-heuristic-inlining*))
-(defvar *coalton-heuristic-inlining* nil)
+(defvar *coalton-heuristic-inlining*
+  (cond
+    ((find (uiop:getenv "COALTON_HEURISTIC_INLINING")
+           '("t" "true" "1")
+           :test #'string-equal)
+     t)
+    (t
+     (config ':perform-inlining :default nil))))
 
-(when (find (uiop:getenv "COALTON_HEURISTIC_INLINING")
-            '("t" "true" "1")
-            :test #'string-equal)
-  (format t "~&;; COALTON starting with heuristic inlining enabled~%")
-  (setf *coalton-heuristic-inlining* t))
-
-;; Configure the backend to remove type annotations from the generated code
 (declaim (type boolean *emit-type-annotations*))
-(defvar *emit-type-annotations* t)
+(defvar *emit-type-annotations* (config ':emit-type-annotations :default t)
+  "Configure the backend to insert or remove type annotations from the generated code.")
 
 (declaim (type boolean *compile-print-types*))
-(defvar *compile-print-types* nil
+(defvar *compile-print-types* (config ':print-types :default nil)
   "Print types of definitions to standard output on compile.")
 
 (defvar *coalton-optimize* '(optimize (speed 3) (safety 0)))
 
 (defvar *coalton-optimize-library* '(optimize (speed 3) (safety 1)))
+
+
+;;; Print (some of) the configuration
+
+(format t "~&;; COALTON starting in ~:[development~;release~] mode~%" (coalton-release-p))
+(format t "~&;; COALTON starting with specializations ~:[enabled~;disabled~]~%" *coalton-disable-specialization*)
+(format t "~&;; COALTON starting with heuristic inlining ~:[disabled~;enabled~]~%" *coalton-heuristic-inlining*)
+(format t "~&;; COALTON will~:[ not~;~] emit type annotations~%" *emit-type-annotations*)
