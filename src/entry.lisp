@@ -231,40 +231,39 @@
       (terpri stream)
       (terpri stream))))
 
-(defun compile-to-lisp (stream name output)
-  "Read Coalton source from STREAM and write Lisp source to OUTPUT. NAME may be the filename related to the input stream."
+(defun compile-to-lisp (file output)
+  "Read Coalton source from FILE and write Lisp source to OUTPUT. NAME may be the filename related to the input stream."
   (declare (optimize (debug 3)))
-  (parser:with-reader-context stream
-    (with-environment-updates updates
-      (let* ((file (se:make-file :stream stream
-                                 :name name))
-             (program (parser:read-program stream file ':file))
-             (program-text (entry-point program))
-             (program-package (parser:program-package program))
-             (package-name (parser:toplevel-package-name program-package)))
-        (print-form output (make-prologue))
-        (print-form output (make-environment-updater updates))
-        (print-form output (parser:make-defpackage program-package))
-        (print-form output `(in-package ,package-name))
-        ;; coalton-impl/codegen/program:compile-translation-unit wraps
-        ;; definitions in progn to provide a single expression as the
-        ;; macroexpansion of coalton-toplevel: unwrap for better
-        ;; readability
-        (dolist (form (cdr program-text))
-          (print-form output form package-name))))))
+  (with-open-stream (stream (se:file-stream file))
+    (parser:with-reader-context stream
+      (with-environment-updates updates
+        (let* ((program (parser:read-program stream file ':file))
+               (program-text (entry-point program))
+               (program-package (parser:program-package program))
+               (package-name (parser:toplevel-package-name program-package)))
+          (print-form output (make-prologue))
+          (print-form output (make-environment-updater updates))
+          (print-form output (parser:make-defpackage program-package))
+          (print-form output `(in-package ,package-name))
+          ;; coalton-impl/codegen/program:compile-translation-unit wraps
+          ;; definitions in progn to provide a single expression as the
+          ;; macroexpansion of coalton-toplevel: unwrap for better
+          ;; readability
+          (dolist (form (cdr program-text))
+            (print-form output form package-name)))))))
 
-(defun codegen (stream name)
-  "Compile Coalton source from STREAM and return Lisp program text. NAME may be the filename related to the input stream."
+(defun codegen (file)
+  "Compile Coalton source from FILE and return Lisp program text. NAME may be the filename related to the input stream."
   (with-output-to-string (output)
-    (compile-to-lisp stream name output)))
+    (compile-to-lisp file output)))
 
-(defun compile (stream name &key (load t) (output-file nil))
-   "Compile Coalton code in STREAM, returning the pathname of the generated .fasl file. If OUTPUT-FILE is nil, the built-in compiler default output location will be used."
+(defun compile (file &key (load t) (output-file nil))
+   "Compile Coalton code in FILE, returning the pathname of the generated .fasl file. If OUTPUT-FILE is nil, the built-in compiler default output location will be used."
    (uiop:with-temporary-file (:stream lisp-stream
                               :pathname lisp-file
                               :type "lisp"
                               :direction ':output)
-     (compile-to-lisp stream name lisp-stream)
+     (compile-to-lisp file lisp-stream)
      :close-stream
      (cond ((null output-file)
             (setf output-file (compile-file lisp-file)))

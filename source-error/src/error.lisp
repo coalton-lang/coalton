@@ -14,7 +14,8 @@
    #:render-source-error                ; FUNCTION
    #:render-source-warning              ; FUNCTION
    #:file                               ; TYPE
-   #:make-file                          ; CONSTRUCTOR
+   #:make-source-file                   ; CONSTRUCTOR
+   #:make-source-string                 ; CONSTRUCTOR
    #:file-stream                        ; ACCESSOR
    #:file-name                          ; ACCESSOR
    #:make-source-error-note             ; FUNCTION
@@ -117,10 +118,72 @@
 
 (defvar *source-error-context* nil)
 
-(defstruct (file
-            (:copier nil))
-  (stream nil :type stream :read-only t)
-  (name   nil :type string :read-only t))
+;;; Protocol 'file'
+;;;
+;;; An object that implements #'file-name and #'file-stream provides
+;;; access to a source-error condition's source text and metadata
+;;; about its origin, so that the condition printer can decorate that
+;;; text with notes and line numbers.
+
+(defgeneric file-name (file)
+  (:documentation "The name of an error's source, suitable for reporting in errors. If the source is a file, file will likely be that file's absolute path."))
+
+(defgeneric file-stream (file)
+  (:documentation "An open stream from which source text may be read. Caller is responsible for closing, and file position may be greater than zero."))
+
+(defclass file ()
+  ((name :initarg :name
+         :reader original-file-name))
+  (:documentation "An abstract base class for sources that provide error context during condition printing.
+
+In the case of source that is copied to a different location during compilation (e.g., by emacs+slime), original file name preserves the original location."))
+
+(defclass file-source (file)
+  ((file :initarg :file
+         :reader input-file-name)
+   (offset :initarg :offset
+           :initform 0
+           :reader file-offset))
+  (:documentation "A source that supplies error context from a FILE."))
+
+(defun make-source-file (file &key name (offset 0))
+  "Make a source that supplies error context from a FILE.
+
+OFFSET indicates starting character offset within the file."
+  (make-instance 'file-source
+    :file file
+    :name name
+    :offset offset))
+
+(defmethod file-name ((self file-source))
+  (or (original-file-name self)
+      (input-file-name self)))
+
+(defmethod file-stream ((self file-source))
+  (let ((stream (open (input-file-name self)
+                      :direction ':input
+                      :element-type 'character
+                      :external-format ':utf-8)))
+    (when (plusp (file-offset self))
+      (file-position stream (file-offset self)))
+    stream))
+
+(defclass string-source (file)
+  ((string :initarg :string
+           :reader source-string))
+  (:documentation "A source that supplies error context from a STRING."))
+
+(defun make-source-string (string &key name)
+  "Make a source that supplies error context from a string."
+  (make-instance 'string-source
+    :string string
+    :name name))
+
+(defmethod file-stream ((self string-source))
+  (make-string-input-stream (source-string self)))
+
+(defmethod file-name ((self string-source))
+  (or (original-file-name self) "<string input>"))
 
 (defstruct (source-error
             (:copier nil))
@@ -206,14 +269,9 @@
   (declare (type stream stream)
            (type function error))
 
-  (let* ((*print-circle* nil)
-
-         (error (funcall error))
-
-         (file-stream (file-stream (source-error-file error)))
-         (file-stream-pos (file-position file-stream)))
-
-    (progn
+  (let ((*print-circle* nil)
+        (error (funcall error)))
+    (with-open-stream (file-stream (file-stream (source-error-file error)))
 
       ;; Print the error message and location
       (multiple-value-bind (line-number line-start-index)
@@ -494,10 +552,7 @@
 
       ;; Print error context
       (loop :for context :in (source-error-context error)
-            :do (format stream "note: ~A~%" (source-error-context-message context)))
-
-      ;; Reset our file position to avoid messing things up.
-      (file-position file-stream file-stream-pos))))
+            :do (format stream "note: ~A~%" (source-error-context-message context))))))
 
 (defun get-line-from-index (file index)
   "Get the line number corresponding to the character offset INDEX.

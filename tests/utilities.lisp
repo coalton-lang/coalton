@@ -36,32 +36,27 @@
                                      "COALTON-TEST-COMPILE-PACKAGE")
                                  :use '("COALTON" "COALTON-PRELUDE"))))
     (unwind-protect
-         (let* ((stream (make-string-input-stream toplevel-string))
+         (let ((file (se:make-source-string toplevel-string)))
+           (with-open-stream (stream (se:file-stream file))
+             (let ((program (parser:with-reader-context stream
+                              (parser:read-program stream file))))
 
-                (file (se:make-file :stream stream :name "<test>"))
-
-                (program (parser:with-reader-context stream
-                           (parser:read-program stream file))))
-
-           (multiple-value-bind (program env)
-               (entry:entry-point program)
-             (declare (ignore program))
-             
-             (when expected-types
-               (loop :for (unparsed-symbol . unparsed-type) :in expected-types
-                     :for symbol := (intern (string-upcase unparsed-symbol) *package*)
-
-                     :for stream := (make-string-input-stream unparsed-type)
-                     :for file := (se:make-file :stream stream :name "<unknown>")
-
-                     :for ast-type := (parser:parse-qualified-type
-                                       (eclector.concrete-syntax-tree:read stream)
-                                       file)
-                     :for parsed-type := (tc:parse-ty-scheme ast-type env file)
-                     :do (is (equalp
-                              (tc:lookup-value-type env symbol)
-                              parsed-type)))))
-
+               (multiple-value-bind (program env)
+                   (entry:entry-point program)
+                 (declare (ignore program))
+ 
+                 (when expected-types
+                   (loop :for (unparsed-symbol . unparsed-type) :in expected-types
+                         :do (let ((symbol (intern (string-upcase unparsed-symbol) *package*))
+                                   (file (se:make-source-string unparsed-type)))
+                               (with-open-stream (stream (se:file-stream file))
+                                 (let* ((ast-type (parser:parse-qualified-type
+                                                   (eclector.concrete-syntax-tree:read stream)
+                                                   file))
+                                        (parsed-type (tc:parse-ty-scheme ast-type env file)))
+                                   (is (equalp
+                                        (tc:lookup-value-type env symbol)
+                                        parsed-type))))))))))
            (values))
       (delete-package *package*))))
 
@@ -97,10 +92,10 @@ Returns (values SOURCE-PATHNAME COMPILED-PATHNAME)."
   (merge-pathnames pathname (asdf:system-source-directory "coalton/tests")))
 
 (defun collect-compiler-error (program)
-  (with-input-from-string (stream program)
+  (let ((source (se:make-source-string program :name "test")))
     (handler-case
         (progn
-          (entry:compile stream "test")
+          (entry:compile source)
           nil)
       (se:source-base-error (c)
         (string-trim '(#\Space #\Newline)

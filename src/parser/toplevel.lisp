@@ -482,7 +482,7 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
 
       (loop :do
         (multiple-value-bind (form presentp eofp)
-            (maybe-read-form stream *coalton-eclector-client*)
+            (maybe-read-form stream file *coalton-eclector-client*)
 
           (when (and eofp (eq mode ':macro))
             (error 'parse-error
@@ -525,7 +525,7 @@ consume all attributes"))))
 
     ;; Read the coalton form
     (multiple-value-bind (form presentp)
-        (maybe-read-form stream *coalton-eclector-client*)
+        (maybe-read-form stream file *coalton-eclector-client*)
 
       (unless presentp
         (error 'parse-error
@@ -538,7 +538,7 @@ consume all attributes"))))
 
       ;; Ensure there is only one form
       (multiple-value-bind (form presentp)
-          (maybe-read-form stream *coalton-eclector-client*)
+          (maybe-read-form stream file *coalton-eclector-client*)
 
         (when presentp
           (error 'parse-error
@@ -651,7 +651,7 @@ consume all attributes"))))
                                            "Malformed package declaration"
                                            syntax-error))))
       (multiple-value-bind (form presentp)
-          (maybe-read-form stream *coalton-eclector-client*)
+          (maybe-read-form stream file *coalton-eclector-client*)
         (unless presentp
           (cursor:span-error (cons (- (file-position stream) 2)
                                    (- (file-position stream) 1))
