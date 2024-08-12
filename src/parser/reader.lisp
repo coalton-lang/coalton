@@ -2,6 +2,9 @@
   (:use #:cl)
   (:local-nicknames
    (#:cst #:concrete-syntax-tree))
+  (:shadowing-import-from
+   #:coalton-impl/parser/base
+   #:parse-error)
   (:export
    #:*coalton-eclector-client*
    #:with-reader-context
@@ -45,28 +48,46 @@
     'eof
     nil))
 
-(defun maybe-read-form (stream &optional (eclector-client eclector.base:*client*))
+(defun maybe-read-form (stream file &optional (eclector-client eclector.base:*client*))
   "Read the next form or return if there is no next form.
 
 Returns (VALUES FORM PRESENTP EOFP)"
-  (loop :do
-    ;; On empty lists report nothing
-    (when (eq #\) (peek-char t stream nil))
-      (read-char stream)
-      (return (values nil nil nil)))
+  (let ((begin (file-position stream)))
+    (handler-case
+        (loop :do
+          ;; On empty lists report nothing
+          (when (eq #\) (peek-char t stream nil))
+            (read-char stream)
+            (return (values nil nil nil)))
 
-    ;; Otherwise, try to read in the next form
-    (multiple-value-call
-        (lambda (form type &optional parse-result)
+          ;; Otherwise, try to read in the next form
+          (multiple-value-call
+              (lambda (form type &optional parse-result)
 
-          ;; Return the read form when valid
-          (when (eq :object type)
-            (return (values (or parse-result form) t nil)))
+                ;; Return the read form when valid
+                (when (eq :object type)
+                  (return (values (or parse-result form) t nil)))
 
-          (when (eq :eof type)
-            (return (values nil nil t))))
+                (when (eq :eof type)
+                  (return (values nil nil t))))
 
-      (eclector.reader:read-maybe-nothing
-       eclector-client
-       stream
-       nil 'eof))))
+            (eclector.reader:read-maybe-nothing
+             eclector-client
+             stream
+             nil 'eof)))
+      (eclector.reader:unterminated-list ()
+        (let ((end (file-position stream)))
+          (error 'parse-error
+                 :err (source-error:source-error
+                       :span (cons begin end)
+                       :file file
+                       :message "Unterminated form"
+                       :primary-note (format nil "Missing close parenthesis for form starting at offset ~a" begin)))))
+      (error (condition)
+        (let ((end (file-position stream)))
+          (error 'parse-error
+                 :err (source-error:source-error
+                       :span (cons begin end)
+                       :file file
+                       :message "Reader error"
+                       :primary-note (format nil "reader error: ~a" condition))))))))
