@@ -48,7 +48,7 @@ a subtree of `node`."
     (action (:after node-lisp node)
       (multiple-value-bind (let-bindings lisp-var-bindings)
           (loop :for (lisp-var . coalton-var) :in (node-lisp-vars node)
-                :for new-var := (gentemp (symbol-name coalton-var))
+                :for new-var := (gensym (symbol-name coalton-var))
                 :for res := (find coalton-var subs :key #'ast-substitution-from)
                 :if (and res (node-variable-p (ast-substitution-to res)))
                   :collect (cons lisp-var (node-variable-value (ast-substitution-to res)))
