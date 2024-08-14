@@ -15,6 +15,7 @@
    #:binding-list                       ; TYPE
    #:node-literal                       ; STRUCT
    #:make-node-literal                  ; CONSTRUCTOR
+   #:node-literal-p                     ; FUNCTION
    #:node-literal-value                 ; READER
    #:node-variable                      ; STRUCT
    #:make-node-variable                 ; CONSTRUCTOR

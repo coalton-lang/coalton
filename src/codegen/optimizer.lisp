@@ -43,6 +43,9 @@
    #:coalton-impl/codegen/ast-substitutions
    #:apply-ast-substitution
    #:make-ast-substitution)
+  (:import-from
+   #:coalton-impl/codegen/constant-propagation
+   #:propagate-constants)
   (:local-nicknames
    (#:settings #:coalton-impl/settings)
    (#:util #:coalton-impl/util)
@@ -206,6 +209,8 @@
    node
    canonicalize
    (match-dynamic-extent-lift env)
+   ;; FIXME: Is this the right place to propagate-constants?
+   (propagate-constants env)
    (apply-specializations env)
    (resolve-static-superclass env)
    (inline-methods env)
