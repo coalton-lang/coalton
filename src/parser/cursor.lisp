@@ -34,8 +34,7 @@
    #:parse-error
    #:peek
    #:span-error
-   #:syntax-error
-   ))
+   #:syntax-error))
 
 (in-package #:coalton-impl/parser/cursor)
 
@@ -71,13 +70,24 @@
 
 (defstruct note
   "A source text annotation. The TYPE field is compatible with base/parse-error."
-  (span nil :type (cons integer integer)       :read-only t) ; offsets into source
-  (text nil :type string                       :read-only t) ; error message or label
-  (type ':primary))                                          ; message or label type: primary, seocndary or help
+  (span nil :type (cons integer integer) :read-only t) ; offsets into source
+  (text nil :type string                 :read-only t) ; error message or label
+  (type ':primary))                                    ; primary, secondary or help
+
+(defmethod print-object ((self note) stream)
+  (if *print-readably*
+      (call-next-method)
+      (format stream "~(~a~): for input range ~a: ~a"
+              (note-type self)
+              (note-span self)
+              (note-text self))))
 
 (define-condition syntax-error (error)
-  ((note :initarg :notes
-         :reader error-notes)))
+  ((notes :initarg :notes
+          :reader error-notes))
+  (:report (lambda (condition stream)
+             (format stream "cursor syntax-error~%~{~a~%~}"
+                     (error-notes condition)))))
 
 (defun pointer-span (cursor)
   "Return the span that CURSOR is pointing at.
@@ -144,7 +154,8 @@ If UNWRAP is NIL, return the CST node, otherwise, return the raw value."
     (syntax-error cursor (or missing "symbol is missing")))
   (next cursor
         :pred (lambda (value)
-                (when (not (symbolp value))
+                (when (or (null value)
+                          (not (symbolp value)))
                   (syntax-error cursor
                                 (or message "value must be a symbol")))
                 (when (and require (not (string-equal require value)))

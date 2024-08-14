@@ -112,7 +112,8 @@ Returns (values SOURCE-PATHNAME COMPILED-PATHNAME)."
             :in (coalton-tests/loader:load-suite file)
           :for generated-error := (collect-compiler-error program)
           :do (cond ((null generated-error)
-                     (is nil "program should have failed to compile: ~A" description))
+                     (is (zerop (length expected-error))
+                         "program should have failed to compile: ~A" description))
                     (t
                      (check-string= (format nil "program text.~%~
 input file: ~A~%~

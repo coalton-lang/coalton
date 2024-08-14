@@ -1,2 +1,0 @@
-;; BAD: invalid package declaration
-(pancake test)

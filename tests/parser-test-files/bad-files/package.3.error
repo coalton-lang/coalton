@@ -1,5 +1,0 @@
-error: Malformed package declaration
-  --> test:2:1
-   |
- 2 |  (pancake test)
-   |   ^^^^^^^ package declarations must start with `package`

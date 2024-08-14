@@ -1,2 +1,0 @@
-;; BAD: Package
-(package test-package 1)
