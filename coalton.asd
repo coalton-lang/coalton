@@ -224,6 +224,9 @@
                (:file "tarjan-scc-tests")
                (:file "reader-tests")
                (:file "error-tests")
+               (:module "parser"
+                :serial t
+                :components ((:file "cursor-tests")))
                (:file "parser-tests")
                (:file "entry-tests")
                (:file "toplevel-tests")

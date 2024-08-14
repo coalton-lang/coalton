@@ -448,12 +448,14 @@
 (defstruct (toplevel-package
             (:copier nil))
   "A Coalton package definition, which can be used to generate either a DEFPACKAGE form or a package instance directly."
-  (name        (util:required 'name) :type string           :read-only t)
-  (docstring   nil                   :type (or null string) :read-only t)
-  (import      nil                   :type list)
-  (import-as   nil                   :type list)
-  (import-from nil                   :type list)
-  (export      nil                   :type list))
+  (name        (util:required 'name)   :type string           :read-only t)
+  (docstring   nil                     :type (or null string) :read-only t)
+  (import      nil                     :type list)
+  (import-as   nil                     :type list)
+  (import-from nil                     :type list)
+  (shadow      nil                     :type list)
+  (export      nil                     :type list)
+  (source      (util:required 'source) :type cons             :read-only t))
 
 (defstruct (program
             (:copier nil))
@@ -611,10 +613,16 @@ consume all attributes"))))
         (append (toplevel-package-export package)
                 (cursor:collect-symbols cursor))))
 
+(defun parse-shadow (package cursor)
+  (setf (toplevel-package-shadow package)
+        (append (toplevel-package-shadow package)
+                (cursor:collect-symbols cursor))))
+
 (defvar *package-clauses*
   '(("IMPORT" . parse-import)
     ("IMPORT-FROM" . parse-import-from)
-    ("EXPORT" . parse-export)))
+    ("EXPORT" . parse-export)
+    ("SHADOW" . parse-shadow)))
 
 (defun package-clause-parser (name)
   (cdr (assoc name *package-clauses* :test #'string-equal)))
@@ -650,7 +658,8 @@ consume all attributes"))))
              (cursor:next cursor :pred #'stringp)))
          (package
            (make-toplevel-package :name (symbol-name package-name)
-                                  :docstring package-doc)))
+                                  :docstring package-doc
+                                  :source (cst:source (cursor:cursor-value cursor)))))
     (cursor:do-every cursor (alexandria:curry 'parse-package-clause package))
     package))
 
@@ -691,7 +700,8 @@ consume all attributes"))))
                  `(:import-from ,@form))
                (toplevel-package-import-from package))
      (:local-nicknames ,@(toplevel-package-import-as package))
-     (:export ,@(toplevel-package-export package))))
+     (:export ,@(toplevel-package-export package))
+     (:shadow ,@(toplevel-package-shadow package))))
 
 ;; The version of uiop:define-package that ships with SBCL doesn't
 ;; support package local nicknames. This could be remedied by
@@ -701,14 +711,22 @@ consume all attributes"))))
 ;; out to be places where package definition behavior should diverge
 ;; from that of common lisp.
 
-(defun lisp-package (package)
+(defun lisp-package (package file)
   "Create a Lisp package by evaluating the defpackage representation of a PACKAGE form."
-  (eval (make-defpackage package)))
+  (handler-case
+      (eval (make-defpackage package))
+    (package-error ()
+      (error 'parse-error
+             :err (se:source-error :span (toplevel-package-source package)
+                                   :file file
+                                   :message "Malformed package declaration"
+                                   :primary-note "unable to evaluate package definition")))))
 
 (defun program-lisp-package (program)
   "Return the Lisp package associated with PROGRAM, or current *PACKAGE* if none was specified."
   (if (program-package program)
-      (lisp-package (program-package program))
+      (lisp-package (program-package program)
+                    (program-file program))
       *package*))
 
 ;; end package support

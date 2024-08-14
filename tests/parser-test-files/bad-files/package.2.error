@@ -1,5 +1,0 @@
-error: Malformed package declaration
-  --> test:2:9
-   |
- 2 |  (package 5)
-   |           ^ package name must be a symbol

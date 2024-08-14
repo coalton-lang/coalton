@@ -1,34 +1,14 @@
 (in-package #:coalton-tests)
 
-(defun parse-package (string)
+(defun check-package (string fn)
   "Parse the package form present in STRING."
   (with-input-from-string (stream string)
     (parser:with-reader-context stream
-      (let ((form (parser:maybe-read-form stream parser::*coalton-eclector-client*)))
-        (coalton-impl/parser/toplevel::parse-package
-         (coalton-impl/parser/cursor:make-cursor form))))))
-       
-
-(deftest test-parse-package ()
-  "Coalton toplevel package forms are successfully parsed."
-  (not-signals
-   parser:parse-error
-   (parse-package
-    "(package coalton-unit-test/lib-example-simple)"))
-  (not-signals
-   parser:parse-error
-   (parse-package
-    "(package coalton-unit-test/lib-example-complex
-          (import
-            coalton-library/classes
-            (coalton-library/hash as hash))
-          (import-from
-            coalton-library/list
-            filter)
-          (export
-            first
-            second
-            third))")))
+      (let* ((form (parser:maybe-read-form stream parser::*coalton-eclector-client*))
+             (file (se:make-file :stream stream :name "test"))
+             (package (coalton-impl/parser/toplevel::parse-package
+                       (coalton-impl/parser/cursor:make-cursor form))))
+        (funcall fn package file)))))
 
 (deftest test-lisp-package ()
   "Lisp packages can be constructed from parsed Coalton package forms."
@@ -45,28 +25,34 @@
 
     (del-pkg 'coalton-unit-test/package-b)
     (del-pkg 'coalton-unit-test/package-a)
+    (del-pkg 'coalton-unit-test/package-c)
 
-    (let* ((pkg-a (parse-package
-                   "(package coalton-unit-test/package-a
-                      (export a b c))"))
-           (lisp-pkg-a (coalton-impl/parser/toplevel::lisp-package pkg-a)))
-      (is (= 3 (length (ext-syms lisp-pkg-a))))
-      (is (equal '("COALTON")
-                 (use-pkgs lisp-pkg-a)))
-      (let* ((pkg-b (parse-package
-                     "(package coalton-unit-test/package-b
-                        (import coalton-unit-test/package-a
-                          (coalton-library/list as list))
-                        (export d e f))"))
-             (lisp-pkg-b (coalton-impl/parser/toplevel::lisp-package pkg-b)))
-        (is (= 3 (length (ext-syms lisp-pkg-b))))
-        (is (equal '("COALTON" "COALTON-UNIT-TEST/PACKAGE-A")
-                   (use-pkgs lisp-pkg-b)))))))
+    (check-package
+     "(package coalton-unit-test/package-a
+        (export a b c))"
+     (lambda (pkg-a file)
+       (let ((lisp-pkg-a (coalton-impl/parser/toplevel::lisp-package pkg-a file)))
+         (is (= 3 (length (ext-syms lisp-pkg-a))))
+         (is (equal '("COALTON")
+                    (use-pkgs lisp-pkg-a))))))
 
-(deftest test-lisp-package-error ()
-  "An error is signaled when attempting to construct packages with missing dependencies."
-  (signals error
-    (let ((package (parse-package
-                    "(package coalton-unit-test/package-c
-                       (import coalton-unit-test/package-d))")))
-      (coalton-impl/parser/toplevel::lisp-package package))))
+    (check-package
+     "(package coalton-unit-test/package-b
+        (import coalton-unit-test/package-a
+          (coalton-library/list as list))
+        (export d e f))"
+     (lambda (pkg-b file)
+       (let ((lisp-pkg-b (coalton-impl/parser/toplevel::lisp-package pkg-b file)))
+         (is (= 3 (length (ext-syms lisp-pkg-b))))
+         (is (equal '("COALTON" "COALTON-UNIT-TEST/PACKAGE-A")
+                    (use-pkgs lisp-pkg-b))))))
+
+    (check-package
+     "(package coalton-unit-test/package-c
+        (shadow not))"
+     (lambda (pkg-c file)
+       (let ((lisp-pkg-c (coalton-impl/parser/toplevel::lisp-package pkg-c file)))
+         (is (= 1 (length (package-shadowing-symbols lisp-pkg-c))))
+         (is (equal "NOT"
+                    (symbol-name (first
+                                  (package-shadowing-symbols lisp-pkg-c))))))))))

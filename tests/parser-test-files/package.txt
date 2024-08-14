@@ -1,4 +1,44 @@
 ================================================================================
+Minimal package
+================================================================================
+
+(package coalton-unit-test/lib-example-simple)
+
+--------------------------------------------------------------------------------
+
+================================================================================
+Package with imports and exports
+================================================================================
+
+(package coalton-unit-test/lib-example-complex
+  (import
+    coalton-library/classes
+    (coalton-library/hash as hash))
+  (import-from
+    coalton-library/list
+    filter)
+  (export
+    first
+    second
+    third))
+
+--------------------------------------------------------------------------------
+
+================================================================================
+Missing package name
+================================================================================
+
+(package)
+
+--------------------------------------------------------------------------------
+
+error: Malformed package declaration
+  --> test:1:8
+   |
+ 1 |  (package)
+   |          ^ missing package name
+
+================================================================================
 Unknown package clause
 ================================================================================
 
@@ -12,7 +52,7 @@ error: Malformed package declaration
    |
  2 |    (xxx yyy zzz))
    |    ^^^^^^^^^^^^^ Unknown package clause
-help: Must be one of IMPORT, IMPORT-FROM, EXPORT
+help: Must be one of IMPORT, IMPORT-FROM, EXPORT, SHADOW
  2 |   (xxx yyy zzz))
    |    ---
 
@@ -75,3 +115,87 @@ error: Malformed package declaration
    |
  2 |    (import (something as)))
    |                         ^ missing package nickname
+
+================================================================================
+Shadow clause is accepted
+================================================================================
+
+(package test
+  (shadow and xor))
+
+--------------------------------------------------------------------------------
+
+================================================================================
+Missing dependencies
+================================================================================
+
+(package coalton-unit-test/package-c
+  (import coalton-unit-test/package-d))
+
+--------------------------------------------------------------------------------
+
+error: Malformed package declaration
+  --> test:1:0
+   |
+ 1 |   (package coalton-unit-test/package-c
+   |  _^
+ 2 | |   (import coalton-unit-test/package-d))
+   | |_______________________________________^ unable to evaluate package definition
+
+
+================================================================================
+Invalid package name
+================================================================================
+
+(package 5)
+
+--------------------------------------------------------------------------------
+
+error: Malformed package declaration
+  --> test:1:9
+   |
+ 1 |  (package 5)
+   |           ^ package name must be a symbol
+
+================================================================================
+Malformed clause
+================================================================================
+
+(package test-package 1)
+
+--------------------------------------------------------------------------------
+
+error: Malformed package declaration
+  --> test:1:22
+   |
+ 1 |  (package test-package 1)
+   |                        ^ malformed package clause
+
+================================================================================
+Invalid package declaration
+================================================================================
+
+(pancake test)
+
+--------------------------------------------------------------------------------
+
+error: Malformed package declaration
+  --> test:1:1
+   |
+ 1 |  (pancake test)
+   |   ^^^^^^^ package declarations must start with `package`
+
+================================================================================
+Invalid shadow clause
+================================================================================
+
+(package test
+  (shadow ()))
+
+--------------------------------------------------------------------------------
+
+error: Malformed package declaration
+  --> test:2:10
+   |
+ 2 |    (shadow ()))
+   |            ^^ value must be a symbol
