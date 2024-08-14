@@ -12,11 +12,14 @@
 (defmethod perform ((o compile-op) (c coalton-file))
   (let ((coal-file (first (input-files o c)))
         (fasl-file (first (output-files o c))))
-    (with-open-file (stream coal-file
-                            :direction ':INPUT
-                            :element-type 'character
-                            :external-format ':UTF8)
-      (let ((char-stream (coalton-impl/stream:make-char-position-stream stream)))
-        (coalton-impl/entry:compile char-stream (pathname-name coal-file)
-                                    :load nil
-                                    :output-file fasl-file)))))
+    (call-with-around-compile-hook
+     c (lambda (&rest flags)
+         (declare (ignore flags))
+         (with-open-file (stream coal-file
+                                 :direction ':INPUT
+                                 :element-type 'character
+                                 :external-format ':UTF8)
+           (let ((char-stream (coalton-impl/stream:make-char-position-stream stream)))
+             (coalton-impl/entry:compile char-stream (pathname-name coal-file)
+                                         :load nil
+                                         :output-file fasl-file)))))))
