@@ -76,9 +76,9 @@ TRANSLATE-EXPRESSION when an abstraction is being translated.")
                      :if (tc:pattern-var-p param)
                        :collect (tc:pattern-var-name param)
                      :else :if (tc:pattern-wildcard-p param)
-                             :collect (gentemp "_")
+                             :collect (gensym "_")
                      :else
-                       :collect (let ((name (gentemp)))
+                       :collect (let ((name (gensym)))
                                   (push (cons name param) pattern-params)
                                   name)))
 
@@ -109,7 +109,7 @@ TRANSLATE-EXPRESSION when an abstraction is being translated.")
                      :if (tc:pattern-var-p param)
                        :collect (tc:pattern-var-name param)
                      :else :if (tc:pattern-wildcard-p param)
-                             :collect (gentemp "_")
+                             :collect (gensym "_")
                      :else
                        :collect (let ((name (gensym)))
                                   (push (cons name param) pattern-params)
@@ -337,7 +337,7 @@ Returns a `node'.")
                         :if (tc:pattern-var-p param)
                           :collect (tc:pattern-var-name param)
                         :else
-                          :collect (let ((name (gentemp)))
+                          :collect (let ((name (gensym)))
                                      (push (cons name param) pattern-params)
                                      name)))))
 
@@ -838,7 +838,7 @@ Returns a `node'.")
 
                                 (callback-ty (tc:make-function-type var-type (node-type out-node)))
 
-                                (var-name (gentemp)))
+                                (var-name (gensym)))
 
                            (make-node-application
                             :type (node-type out-node)
@@ -874,7 +874,7 @@ Returns a `node'.")
 
                                 (callback-ty (tc:make-function-type var-type (node-type out-node)))
 
-                                (var-name (gentemp)))
+                                (var-name (gensym)))
 
                            (make-node-application
                             :type (node-type out-node)

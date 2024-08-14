@@ -228,6 +228,9 @@
   (with-standard-io-syntax
     (let ((*package* (find-package package))
           (*print-case* ':downcase)
+          ;; *print-circle* t allows gensym-generated, uninterned
+          ;; *symbols to serve as variables in readable source.
+          (*print-circle* t)
           (*print-pretty* t)
           (*print-right-margin* 80))
       (prin1 form stream)

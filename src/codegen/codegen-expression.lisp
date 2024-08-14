@@ -123,7 +123,7 @@
     (let ((match-expr (codegen-expression (node-while-let-expr expr) env))
           (body-expr (codegen-expression (node-while-let-body expr) env))
           (label (node-while-let-label expr))
-          (match-var (gentemp "MATCH")))
+          (match-var (gensym "MATCH")))
 
       (multiple-value-bind (pred bindings)
           (codegen-pattern (node-while-let-pattern expr) match-var env)
@@ -174,7 +174,7 @@
 
     ;; Otherwise do the thing
     (let ((subexpr (codegen-expression (node-match-expr expr) env))
-          (match-var (gentemp "MATCH")))
+          (match-var (gensym "MATCH")))
       `(let ((,match-var
                ,(if settings:*emit-type-annotations*
                     `(the ,(tc:lisp-type (node-type (node-match-expr expr)) env) ,subexpr)

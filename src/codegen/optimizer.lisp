@@ -277,12 +277,12 @@
                               :if orig-param-names
                                 :collect (let ((param (nth (+ i (length args)) orig-param-names)))
                                            (if (parser:pattern-var-p param)
-                                               (gentemp (concatenate 'string
+                                               (gensym (concatenate 'string
                                                                      (symbol-name (parser:pattern-var-name param))
                                                                      "-"))
-                                               (gentemp)))
+                                               (gensym)))
                               :else
-                                :collect (gentemp)))
+                                :collect (gensym)))
 
            (param-types (subseq (tc:function-type-arguments (node-type function)) (length args)))
 
@@ -379,7 +379,7 @@ requires direct constructor calls."
                ;; a unique xi').
                :for var :in vars
                :for val :in vals
-               :for new-var := (gentemp (symbol-name var))
+               :for new-var := (gensym (symbol-name var))
                :collect (cons new-var val)
                  :into bindings
                :collect (make-ast-substitution
