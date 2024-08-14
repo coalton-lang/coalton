@@ -12,6 +12,11 @@
   (:import-from
    #:coalton-impl/codegen/typecheck-node
    #:typecheck-node)
+  (:import-from
+   #:coalton-impl/codegen/traverse
+   #:action
+   #:*traverse*
+   #:traverse)
   (:local-nicknames
    (#:util #:coalton-impl/util)
    (#:tc #:coalton-impl/typechecker))
@@ -34,9 +39,7 @@ TRANSLATE-EXPRESSION when an abstraction is being translated.")
            (type symbol name)
            (type pred-context extra-context))
 
-  (let* ((*current-function-name* name)
-
-         (qual-ty (tc:binding-type binding))
+  (let* ((qual-ty (tc:binding-type binding))
 
          (preds (tc:qualified-ty-predicates qual-ty))
 
@@ -79,10 +82,11 @@ TRANSLATE-EXPRESSION when an abstraction is being translated.")
                                   (push (cons name param) pattern-params)
                                   name)))
 
-        :subexpr (wrap-in-block
-                  (wrap-with-pattern-params
-                   pattern-params
-                   (translate-expression (tc:node-abstraction-body (tc:binding-last-node binding)) full-ctx env)))))
+        :subexpr (let ((*current-function-name* name))
+                   (wrap-in-block
+                    (wrap-with-pattern-params
+                     pattern-params
+                     (translate-expression (tc:node-abstraction-body (tc:binding-last-node binding)) full-ctx env))))))
 
       ;; If the binding has parameters and/or predicates then wrap the body in a lambda.
       ((or (tc:binding-parameters binding) preds)
@@ -111,10 +115,11 @@ TRANSLATE-EXPRESSION when an abstraction is being translated.")
                                   (push (cons name param) pattern-params)
                                   name)))
 
-        :subexpr (wrap-in-block
-                  (wrap-with-pattern-params
-                   pattern-params
-                   (translate-expression (tc:binding-value binding) full-ctx env)))))
+        :subexpr (let ((*current-function-name* name))
+                   (wrap-in-block
+                    (wrap-with-pattern-params
+                     pattern-params
+                     (translate-expression (tc:binding-value binding) full-ctx env))))))
 
       (t
        (translate-expression (tc:binding-value binding) full-ctx env)))))
@@ -984,10 +989,28 @@ dictionaries applied."
         :finally (return inner)))
 
 (defun wrap-in-block (inner)
-  "Wrap INNER in a block named for the current function."
+  "Check whether INNER contains any return statements which need a
+block. If so, wrap INNER in a block named for the current function.
+Otherwise, return INNER unchanged.
+
+There is currently no way for any return node to jump outside its
+function's block, but this traversal handles the most general case by
+checking for any return nodes targeting *CURRENT-FUNCTION-NAME* which
+don't occur in an already existing block with a matching label."
   (declare (type node inner)
            (values node &optional))
-  (make-node-block
-   :type (node-type inner)
-   :name *current-function-name*
-   :body inner))
+  (traverse
+   inner
+   (list
+    (action (:traverse node-block node)
+      (unless (eq *current-function-name* (node-block-name node))
+        (funcall *traverse* (node-block-body node)))
+      (values))
+    (action (:before node-return-from node)
+      (when (eq *current-function-name* (node-return-from-name node))
+        (return-from wrap-in-block
+          (make-node-block
+           :type (node-type inner)
+           :name *current-function-name*
+           :body inner))))))
+  inner)
