@@ -23,10 +23,16 @@
       "Bound inside CONSTANT-PROPAGATION.")
 
 (defun constant-var-value (var &key no-error)
-  (the (or node null)
-       (or (cdr (assoc var *constant-bindings*))
-           (unless no-error
-             (error "Expected VAR ~S to be a constant but is not" var)))))
+  (declare (type symbol var)
+           (values (or node null) &optional))
+  (let ((may-be-value (cdr (assoc var *constant-bindings*))))
+    (cond (may-be-value
+           ;; Whenever it exists, it is always a NODE (thus, non-NIL)
+           may-be-value)
+          (no-error
+           nil)
+          (t
+           (error "Expected VAR ~S to be a constant but is not" var)))))
 
 (defun propagate-constants (node env)
   (declare (optimize debug))
