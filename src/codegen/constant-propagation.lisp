@@ -122,7 +122,7 @@
        node
        (list
         (action (:after node-variable) #'propagate-constants-node-variable)
-        (action (:after node-let) #'propagate-constants-node-let)
+        (action (:traverse node-let) #'propagate-constants-node-let)
         (action (:after node-lisp) #'propagate-constants-node-lisp)
         (action (:after node-direct-application) #'direct-application-better-infer-types)
         (make-traverse-let-action-skipping-cons-bindings))
