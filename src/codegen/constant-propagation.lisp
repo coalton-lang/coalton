@@ -18,14 +18,10 @@
 
 (in-package #:coalton-impl/codegen/constant-propagation)
 
-(defvar *constant-bindings*)
-(setf (documentation '*constant-bindings* 'variable)
-      "Bound inside CONSTANT-PROPAGATION.")
-
-(defun constant-var-value (var &key no-error)
+(defun constant-var-value (var constant-bindings &key no-error)
   (declare (type symbol var)
            (values (or node null) &optional))
-  (let ((may-be-value (cdr (assoc var *constant-bindings*))))
+  (let ((may-be-value (cdr (assoc var constant-bindings))))
     (cond (may-be-value
            ;; Whenever it exists, it is always a NODE (thus, non-NIL)
            may-be-value)
@@ -36,14 +32,14 @@
 
 (defun propagate-constants (node env)
   (declare (optimize debug))
-  (labels ((constant-node-p (node)
+  (labels ((constant-node-p (node constant-bindings)
              ;; FIXME: Do we need more nodes classified as constants?
              (or (node-literal-p node)
                  (and (node-variable-p node)
                       (tc:lookup-instance-by-codegen-sym env (node-variable-value node) :no-error t))
                  (and (node-variable-p node)
-                      (constant-var-value (node-variable-value node) :no-error t))))
-           (constant-node-value (node &key no-error)
+                      (constant-var-value (node-variable-value node) constant-bindings :no-error t))))
+           (constant-node-value (node constant-bindings &key no-error)
              ;; FIXME: Do we need more nodes classified as constants?
              (cond ((node-literal-p node)
                     node)
@@ -51,45 +47,43 @@
                          (tc:lookup-instance-by-codegen-sym env (node-variable-value node) :no-error t))
                     node)
                    ((node-variable-p node)
-                    (constant-var-value (node-variable-value node) :no-error no-error))
+                    (constant-var-value (node-variable-value node) constant-bindings :no-error no-error))
                    (no-error
                     nil)
                    (t
                     (error "Expected the node to be a constant but is not ~%~S" node))))
 
-           (propagate-constants-node-variable (node call-stack)
-             (declare (ignore call-stack)
-                      (type node-variable node))
-             (or (constant-node-value node :no-error t)
+           (propagate-constants-node-variable (node constant-bindings)
+             (declare (type node-variable node))
+             (or (constant-node-value node constant-bindings :no-error t)
                  node))
 
-           (propagate-constants-node-let (node call-stack)
+           (propagate-constants-node-let (node constant-bindings)
              (declare (type node-let node))
              (let ((node-bindings (node-let-bindings node))
                    (new-constant-bindings nil)
                    (nonconstant-bindings nil))
                (loop :for (var . value) :in node-bindings
-                     :for propagated-value-node := (funcall *traverse* value call-stack)
-                     :do (if (constant-node-p propagated-value-node)
+                     :for propagated-value-node := (funcall *traverse* value constant-bindings)
+                     :do (if (constant-node-p propagated-value-node constant-bindings)
                              (push (cons var propagated-value-node)
                                    new-constant-bindings)
                              (push (cons var propagated-value-node)
                                    nonconstant-bindings)))
-               (let ((*constant-bindings* (append new-constant-bindings *constant-bindings*)))
+               (let ((inner-constant-bindings (append new-constant-bindings constant-bindings)))
                  (if nonconstant-bindings
                      (make-node-let
                       :type (node-type node)
                       :bindings nonconstant-bindings
-                      :subexpr (funcall *traverse* (node-let-subexpr node) call-stack))
-                     (funcall *traverse* (node-let-subexpr node) call-stack)))))
+                      :subexpr (funcall *traverse* (node-let-subexpr node) inner-constant-bindings))
+                     (funcall *traverse* (node-let-subexpr node) inner-constant-bindings)))))
 
-           (propagate-constants-node-lisp (node call-stack)
-             (declare (type node-lisp node)
-                      (ignore call-stack))
+           (propagate-constants-node-lisp (node constant-bindings)
+             (declare (type node-lisp node))
              (let* ((new-lisp-vars nil)
                     (let-bindings
                       (loop :for (lisp-var . coalton-var) :in (node-lisp-vars node)
-                            :for constant-value := (constant-var-value coalton-var :no-error t)
+                            :for constant-value := (constant-var-value coalton-var constant-bindings :no-error t)
                             :if constant-value
                               :collect (let ((new-coalton-var (gentemp (symbol-name coalton-var))))
                                          (push (cons lisp-var new-coalton-var) new-lisp-vars)
@@ -109,11 +103,11 @@
                     :vars new-lisp-vars
                     :form (node-lisp-form node)))))
 
-           (direct-application-better-infer-types (node call-stack)
+           (direct-application-better-infer-types (node constant-bindings)
              ;; FIXME: Can we do something similar for non-direct APPLICATION?
              (let ((constant-propagated-rands
                      (mapcar (lambda (rand)
-                               (funcall *traverse* rand call-stack))
+                               (funcall *traverse* rand constant-bindings))
                              (node-direct-application-rands node))))
                (make-node-direct-application
                 :type (node-type node)
