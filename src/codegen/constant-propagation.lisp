@@ -98,18 +98,16 @@
                     :form (node-lisp-form node)))))
 
            (direct-application-better-infer-types (node constant-bindings)
+             (declare (type node-direct-application node)
+                      (ignore constant-bindings))
              ;; FIXME: Can we do something similar for non-direct APPLICATION?
-             (let ((constant-propagated-rands
-                     (mapcar (lambda (rand)
-                               (funcall *traverse* rand constant-bindings))
-                             (node-direct-application-rands node))))
-               (make-node-direct-application
-                :type (node-type node)
-                :rator-type (tc:make-function-type*
-                             (mapcar #'node-type constant-propagated-rands)
-                             (tc:function-return-type (node-type node)))
-                :rator (node-direct-application-rator node)
-                :rands constant-propagated-rands))))
+             (make-node-direct-application
+              :type (node-type node)
+              :rator-type (tc:make-function-type*
+                           (mapcar #'node-type (node-direct-application-rands node))
+                           (tc:function-return-type (node-type node)))
+              :rator (node-direct-application-rator node)
+              :rands (node-direct-application-rands node))))
 
     (let ((*constant-bindings* nil))
       (traverse
