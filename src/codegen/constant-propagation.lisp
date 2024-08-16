@@ -40,17 +40,11 @@
                  (and (node-variable-p node)
                       (constant-var-value (node-variable-value node) constant-bindings :no-error t))))
            (propagate-constants-node-variable (node constant-bindings)
-             (declare (type node-variable node))
              ;; FIXME: Do we need more nodes classified as constants?
-             (cond ((node-literal-p node)
-                    node)
-                   ((and (node-variable-p node)
-                         (tc:lookup-instance-by-codegen-sym env (node-variable-value node) :no-error t))
-                    node)
-                   ((node-variable-p node)
-                    (constant-var-value (node-variable-value node) constant-bindings :no-error t))
-                   (t
-                    nil)))
+             (declare (type node-variable node))
+             (if (tc:lookup-instance-by-codegen-sym env (node-variable-value node) :no-error t)
+                 node
+                 (constant-var-value (node-variable-value node) constant-bindings :no-error t)))
 
            (propagate-constants-node-let (node constant-bindings)
              (declare (type node-let node))
