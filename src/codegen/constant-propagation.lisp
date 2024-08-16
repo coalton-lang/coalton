@@ -103,12 +103,11 @@
               :rator (node-direct-application-rator node)
               :rands (node-direct-application-rands node))))
 
-    (let ((*constant-bindings* nil))
-      (traverse
-       node
-       (list
-        (action (:after node-variable) #'propagate-constants-node-variable)
-        (action (:traverse node-let) #'propagate-constants-node-let)
-        (action (:after node-lisp) #'propagate-constants-node-lisp)
-        (action (:after node-direct-application) #'direct-application-better-infer-types))
-       nil))))
+    (traverse
+     node
+     (list
+      (action (:after node-variable) #'propagate-constants-node-variable)
+      (action (:traverse node-let) #'propagate-constants-node-let)
+      (action (:after node-lisp) #'propagate-constants-node-lisp)
+      (action (:after node-direct-application) #'direct-application-better-infer-types))
+     nil)))
