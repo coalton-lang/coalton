@@ -7,12 +7,8 @@
   (:import-from
    #:coalton-impl/codegen/traverse
    #:action
-   #:count-applications
-   #:count-nodes
-   #:make-traverse-let-action-skipping-cons-bindings
    #:*traverse*
-   #:traverse
-   #:traverse-with-binding-list)
+   #:traverse)
   (:export
    #:propagate-constants))
 
