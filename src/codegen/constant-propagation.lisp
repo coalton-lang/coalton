@@ -37,8 +37,8 @@ If not, returns NIL"
              node
              nil))
         ((node-variable-p node)
-         (cond ((and (eq 'coalton:boolean (node-type node))
-                     (member (node-variable-value node) '(coalton:true coalton:false)))
+         (cond ((and (eq 'coalton:Boolean (node-type node))
+                     (member (node-variable-value node) '(coalton:True coalton:False)))
                 node)
                ((tc:lookup-instance-by-codegen-sym env (node-variable-value node) :no-error t)
                 node)
