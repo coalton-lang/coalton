@@ -26,21 +26,34 @@
           (t
            (error "Expected VAR ~S to be a constant but is not" var)))))
 
+(defun constant-node-p (env node constant-bindings)
+  "If NODE is a constant, returns the constant value corresponding to it.
+If not, returns NIL"
+  (declare (type tc:environment env)
+           (type node node)
+           (type list constant-bindings))
+  (cond ((node-literal-p node)
+         (if (numberp (node-literal-value node))
+             node
+             nil))
+        ((node-variable-p node)
+         (cond ((and (eq 'coalton:boolean (node-type node))
+                     (member (node-variable-value node) '(coalton:true coalton:false)))
+                node)
+               ((tc:lookup-instance-by-codegen-sym env (node-variable-value node) :no-error t)
+                node)
+               (t
+                (constant-var-value (node-variable-value node) constant-bindings :no-error t))))
+        ((node-lisp-p node)
+         (if (cl:constantp (node-lisp-form node))
+             node
+             nil))))
+
 (defun propagate-constants (node env)
   (declare (optimize debug))
-  (labels ((constant-node-p (node constant-bindings)
-             ;; FIXME: Do we need more nodes classified as constants?
-             (or (node-literal-p node)
-                 (and (node-variable-p node)
-                      (tc:lookup-instance-by-codegen-sym env (node-variable-value node) :no-error t))
-                 (and (node-variable-p node)
-                      (constant-var-value (node-variable-value node) constant-bindings :no-error t))))
-           (propagate-constants-node-variable (node constant-bindings)
-             ;; FIXME: Do we need more nodes classified as constants?
+  (labels ((propagate-constants-node-variable (node constant-bindings)
              (declare (type node-variable node))
-             (if (tc:lookup-instance-by-codegen-sym env (node-variable-value node) :no-error t)
-                 node
-                 (constant-var-value (node-variable-value node) constant-bindings :no-error t)))
+             (constant-node-p env node constant-bindings))
 
            (propagate-constants-node-let (node constant-bindings)
              (declare (type node-let node))
@@ -49,7 +62,7 @@
                    (nonconstant-bindings nil))
                (loop :for (var . value) :in node-bindings
                      :for propagated-value-node := (funcall *traverse* value constant-bindings)
-                     :do (if (constant-node-p propagated-value-node constant-bindings)
+                     :do (if (constant-node-p env propagated-value-node constant-bindings)
                              (push (cons var propagated-value-node)
                                    new-constant-bindings)
                              (push (cons var propagated-value-node)
