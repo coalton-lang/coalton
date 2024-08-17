@@ -171,7 +171,7 @@
 ;;;; toplevel-define-type := "(" "define-type" identifier docstring? constructor* ")"
 ;;;;                       | "(" "define-type" "(" identifier keyword+ ")" docstring? constructor* ")"
 ;;;;
-;;;; struct-field := "(" identifier docstring? type)"
+;;;; struct-field := "(" identifier docstring? type ")"
 ;;;;
 ;;;; toplevel-define-struct := "(" "define-struct" identifier docstring? struct-field* ")"
 ;;;;                         | "(" "define-struct" "(" identifier keyword+ ")" docstring? struct-field* ")"
