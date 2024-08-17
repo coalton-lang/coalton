@@ -2,7 +2,7 @@
 ;;;;
 ;;;; Benchmarks for arbitrary precision floats
 
-(cl:in-package #:coalton-benchmarks)
+(cl:in-package #:coalton-benchmark-big-float)
 
 (cl:defvar *big-float-bench-precision*
   #-coalton-portable-bigfloat 10000
@@ -16,7 +16,7 @@
   (declare (optimize speed))
   (loop :repeat  *big-float-bench-iterations*
         :do (with-benchmark-sampling
-              (coalton-benchmarks/native::big-trig
+              (native::big-trig
                *big-float-bench-precision*
                (* (- (random 2)) (random 100.0d0)))))
   (report trivial-benchmark::*current-timer*))
@@ -26,7 +26,7 @@
   (declare (optimize speed))
   (loop :repeat *big-float-bench-iterations*
         :do (with-benchmark-sampling
-              (coalton-benchmarks/native::big-inv-trig
+              (native::big-inv-trig
                *big-float-bench-precision*
                (* (- (random 2)) (random 1.0d0)))))
   (report trivial-benchmark::*current-timer*))
@@ -36,7 +36,7 @@
   (declare (optimize speed))
   (loop :repeat *big-float-bench-iterations*
         :do (with-benchmark-sampling
-              (coalton-benchmarks/native::big-ln-exp
+              (native::big-ln-exp
                *big-float-bench-precision*
                (* (- (random 2)) (random 100.0d0)))))
   (report trivial-benchmark::*current-timer*))
@@ -46,7 +46,7 @@
   (declare (optimize speed))
   (loop :repeat *big-float-bench-iterations*
         :do (with-benchmark-sampling
-              (coalton-benchmarks/native::big-sqrt
+              (native::big-sqrt
                *big-float-bench-precision*
                (random 100.0d0))))
   (report trivial-benchmark::*current-timer*))
@@ -56,12 +56,12 @@
   (declare (optimize speed))
   (loop :repeat *big-float-bench-iterations*
         :do (with-benchmark-sampling
-              (coalton-benchmarks/native::big-sqrt
+              (native::big-sqrt
                *big-float-bench-precision*
                (* (- (random 2)) (random 100.0d0)))))
   (report trivial-benchmark::*current-timer*))
 
-(cl:in-package #:coalton-benchmarks/native)
+(cl:in-package #:coalton-benchmark-big-float/native)
 
 (cl:declaim (cl:optimize (cl:speed 3) (cl:safety 1)))
 
