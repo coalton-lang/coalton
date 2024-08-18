@@ -33,7 +33,7 @@ If not, returns NIL"
            (type node node)
            (type list constant-bindings))
   (cond ((node-literal-p node)
-         (if (numberp (node-literal-value node))
+         (if (or (numberp (node-literal-value node)) (characterp (node-literal-value node)))
              node
              nil))
         ((node-variable-p node)
