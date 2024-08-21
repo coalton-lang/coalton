@@ -31,6 +31,7 @@
    (#:cell #:coalton-library/cell)
    (#:iter #:coalton-library/iterator)
    (#:list #:coalton-library/list)
+   (#:array #:coalton-library/lisparray)
    (#:red-black/tree #:coalton-library/ord-tree)
    (#:red-black/map #:coalton-library/ord-map)
    (#:result #:coalton-library/result)
