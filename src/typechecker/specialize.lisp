@@ -62,10 +62,8 @@
     (let ((from-qual-ty (tc:fresh-inst from-ty))
           (to-qual-ty (tc:fresh-inst to-ty)))
 
-      (when (null (tc:qualified-ty-predicates from-qual-ty))
-        (tc-error "Invalid specialization"
-                  (tc-note (parser:toplevel-specialize-from specialize)
-                           "must be a function or variable with class constraints")))
+      ;; NB: There used to be a check if from-ty contains predicates, and raises an
+      ;; error if not.  It doesn't seem necessary.
 
       (unless (equalp to-ty scheme)
         (tc-error "Invalid specialization"
