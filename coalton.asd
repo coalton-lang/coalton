@@ -240,7 +240,8 @@
                (:file "runtime-tests")
                (:module "typechecker"
                 :serial t
-                :components ((:file "map-tests")))
+                :components ((:file "map-tests")
+                             (:file "lisp-type-tests")))
                (:file "environment-persist-tests")
                (:file "slice-tests")
                (:file "float-tests")

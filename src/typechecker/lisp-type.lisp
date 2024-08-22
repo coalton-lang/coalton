@@ -102,7 +102,13 @@ USE-FUNCTION-ENTRIES specifies whether to emit FUNCTION-ENTRY for functions, emi
             (if (typep to 'tyvar)
                 `(cl:simple-array cl:* (cl:*))
                 `(cl:simple-array ,(lisp-type to env) (cl:*))))
-           
+
+           ;; When FROM is a transparent type, and we got a specialized type,
+           ;; we propagate parameterization to the inner type.
+           ((and (not (typep to 'tyvar))
+                 (try-recurse-transparent-type from to env)))
+
+
            ;; Otherwise we fall back.
            (t
             (lisp-type (tapp-from ty) env)))))
@@ -124,3 +130,51 @@ USE-FUNCTION-ENTRIES specifies whether to emit FUNCTION-ENTRY for functions, emi
   (:method ((ty qualified-ty) env)
     (lisp-type (qualified-ty-type ty) env)))
 
+
+(defun try-recurse-transparent-type (from parameter env)
+  "Called when taking a lisp-type of a parameterized type, where a
+concrete type is given to the parameter.  For example, a type `(Foo
+:t)` is defined, and we try to take a lisp-type of `(Foo UFix)`.  The
+`FROM` argument gets the type `Foo` and the `parameter` argument gets
+the type `UFix`.
+
+There is a special opportunity of optimization when `Foo` is defined
+as a transparent type, e.g. `(repr :transparent) (define-type (Foo
+:t) (Content (Lisparray :t)))`.  In that case, `(Foo UFix)` can have a
+Lisp type `(cl:simple-array cl:fixnum)`, which allows Lisp compiler to
+optimize further.  We check the conditions and returns a specialized
+Lisp type if possible.
+
+If we can't get a specialized Lisp type, this returns nil, and let the
+fallback branch take care of it.
+"
+  (labels ((transparent-type? (from)
+             (alexandria:when-let (entry (lookup-type env from :no-error t))
+               (eq (type-entry-explicit-repr entry) ':transparent)))
+           (reveal-underlying-type (from)
+             "If `from` type satisfies the optimizable condition, returns two
+values: the 'inner' type (wrappee type) and the 'outer' type (wrapper
+type)."
+             (let ((v (lookup-value-type env from :no-error t)))
+               (when (typep v 'ty-scheme)
+                 (let ((qt (qualified-ty-type (ty-scheme-type v))))
+                   ;; In transparent types, we have this in QT.
+                   ;; (Arrow <innter-type>) -> <outer-type>
+                   (when (function-type-p qt)
+                     (values (function-type-from qt)
+                             (function-type-to qt))))))))
+    (and (transparent-type? from)
+         (multiple-value-bind (inner outer) (reveal-underlying-type from)
+           (cond ((and (typep inner 'tycon)
+                       (typep outer 'tycon))
+                  (lisp-type inner env))
+                 ((and (typep inner 'tapp)
+                       (typep outer 'tapp)
+                       (typep (tapp-to inner) 'tgen)
+                       (eq (tapp-to inner) (tapp-to outer)))
+                  ;; Substitute inner type's type variable with the
+                  ;; concrete type
+                  (lisp-type (make-tapp :from (tapp-from inner)
+                                        :to parameter)
+                             env))
+                 (t nil))))))
