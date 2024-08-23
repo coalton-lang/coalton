@@ -24,7 +24,7 @@
           (no-error
            nil)
           (t
-           (error "Expected VAR ~S to be a constant but is not" var)))))
+           (error "Expected VAR ~S to be a constant but it is not" var)))))
 
 (defun constant-node-p (env node constant-bindings)
   "If NODE is a constant, returns the constant value corresponding to it.
