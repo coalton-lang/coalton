@@ -49,6 +49,9 @@
   (body    (util:required 'body)   :type node-body       :read-only t)
   (location  (util:required 'location) :type location :read-only t))
 
+(defmethod location ((self toplevel-define))
+  (toplevel-define-location self))
+
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-define-list-p (x)
     (and (alexandria:proper-list-p x)
@@ -73,6 +76,9 @@
   (params  (util:required 'params)  :type pattern-list    :read-only t)
   (body    (util:required 'body)    :type node-body       :read-only t)
   (location  (util:required 'location)  :type location :read-only t))
+
+(defmethod location ((self instance-method-definition))
+  (instance-method-definition-location self))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun instance-method-definition-list-p (x)
@@ -104,6 +110,9 @@
    (util:required 'location)      :type location             :read-only t)
   (head-location
    (util:required 'head-location) :type location             :read-only t))
+
+(defmethod location ((self toplevel-define-instance))
+  (toplevel-define-instance-location self))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-define-instance-list-p (x)

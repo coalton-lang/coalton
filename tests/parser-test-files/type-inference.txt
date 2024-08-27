@@ -1,0 +1,213 @@
+================================================================================
+You can only call callable things
+================================================================================
+
+(package test)
+
+(define x 5)
+(define y (x 1))
+
+--------------------------------------------------------------------------------
+
+error: Argument error
+  --> test:4:10
+   |
+ 4 |  (define y (x 1))
+   |            ^^^^^ Unable to call 'INTEGER': it is not a function
+
+================================================================================
+Ambiguous predicate
+================================================================================
+
+(package test)
+
+(define x (0 1))
+
+--------------------------------------------------------------------------------
+
+error: Ambiguous predicate
+  --> test:3:13
+   |
+ 3 |  (define x (0 1))
+   |               ^ Ambiguous predicate COALTON-LIBRARY/CLASSES:NUM :A
+
+================================================================================
+Declarations cannot be less specific than their associated definition
+================================================================================
+
+(package test)
+
+(declare x :a)
+(define x Unit)
+
+--------------------------------------------------------------------------------
+
+error: Declared type is too general
+  --> test:4:8
+   |
+ 4 |  (define x Unit)
+   |          ^ Declared type FORALL :A. :A is more general than inferred type UNIT.
+
+================================================================================
+Missing explicit predicates cannot be defaulted
+================================================================================
+
+(package test)
+
+(declare x :a)
+(define x 1)
+
+--------------------------------------------------------------------------------
+
+error: Explicit type is missing inferred predicate
+  --> test:4:8
+   |
+ 4 |  (define x 1)
+   |          ^ Declared type :A is missing inferred predicate COALTON-LIBRARY/CLASSES:NUM :A
+
+================================================================================
+Check that constructors are properly typed
+================================================================================
+
+(package test)
+
+(define-type (Tree_ :a)
+  (Leaf :a)
+  (Branch (Tree_ :a) (Tree_ :a)))
+
+(define x (Branch (Leaf 5) (Leaf "string")))
+
+--------------------------------------------------------------------------------
+
+error: Unknown instance
+  --> test:7:24
+   |
+ 7 |  (define x (Branch (Leaf 5) (Leaf "string")))
+   |                          ^ Unknown instance COALTON-LIBRARY/CLASSES:NUM STRING
+
+================================================================================
+Check that types of kind * cannot be applied to
+================================================================================
+
+(package test)
+
+(declare x (Integer Integer))
+(define x (undefined Unit))
+
+--------------------------------------------------------------------------------
+
+error: Kind mismatch
+  --> test:3:12
+   |
+ 3 |  (declare x (Integer Integer))
+   |              ^^^^^^^ Expected kind '* -> *' but got kind '*'
+
+================================================================================
+Check that variables can not be declared to have kind (* -> *)
+================================================================================
+
+(package test)
+
+(define-type (Maybe :a)
+  (Just :a)
+  Nothing)
+
+(declare x Maybe)
+(define x (undefined Unit))
+
+--------------------------------------------------------------------------------
+
+error: Kind mismatch
+  --> test:7:11
+   |
+ 7 |  (declare x Maybe)
+   |             ^^^^^ Expected kind '*' but got kind '* -> *'
+
+================================================================================
+Match branches must return the same type
+================================================================================
+
+(package test)
+
+(define-type (Maybe :a)
+  (Just :a)
+  Nothing)
+
+(define (f x)
+  (match x
+    ((Just 5) 5)
+    ((Just 6) "hello")))
+
+--------------------------------------------------------------------------------
+
+error: Ambiguous predicate
+  --> test:9:14
+   |
+ 9 |      ((Just 5) 5)
+   |                ^ Ambiguous predicate COALTON-LIBRARY/CLASSES:NUM STRING
+
+================================================================================
+Match branches must match on constructors
+================================================================================
+
+(package test)
+
+(define (g x) x)
+
+(define (f x)
+  (match x
+    ((g a) 5)))
+
+--------------------------------------------------------------------------------
+
+error: Unknown constructor
+  --> test:7:5
+   |
+ 7 |      ((g a) 5)))
+   |       ^^^^^ constructor is not known
+
+================================================================================
+Constructors in match branches must be fully applied
+================================================================================
+
+(package test)
+
+(define (g x)
+  (match x
+    ((Cons x) x)))
+
+--------------------------------------------------------------------------------
+
+error: Argument mismatch
+  --> test:5:5
+   |
+ 5 |      ((Cons x) x)))
+   |       ^^^^^^^^ Constructor CONS takes 2 arguments but is given 1
+
+================================================================================
+Type constraint propagation
+================================================================================
+
+(package test)
+
+(define-class (Eq_ :a)
+  (== (:a -> :a -> coalton:Boolean)))
+
+(define-instance (Eq_ :a => Eq_ (List :a))
+   (define (== a b) False))
+
+(define-type Color Red Blue Green)
+
+(declare f (List Color -> Boolean))
+(define (f a b)
+   (== a b))
+
+--------------------------------------------------------------------------------
+
+error: Type mismatch
+  --> test:12:0
+    |
+ 12 |  (define (f a b)
+    |  ^
+ 13 | |   (== a b))
+    | |___________^ Expected type '((LIST COLOR) -> BOOLEAN)' but got type '((LIST COLOR) -> (LIST COLOR) -> BOOLEAN)'

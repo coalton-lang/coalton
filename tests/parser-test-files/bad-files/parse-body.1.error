@@ -1,5 +1,5 @@
 error: Malformed function
-  --> test:4:17
+  --> test:4:16
    |
  4 |  (define x (progn))
    |                  ^ expected body

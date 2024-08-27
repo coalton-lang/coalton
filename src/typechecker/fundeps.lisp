@@ -6,10 +6,10 @@
 
 (defpackage #:coalton-impl/typechecker/fundeps
   (:use
-   #:cl)
+   #:cl
+   #:coalton-impl/source)
   (:local-nicknames
-   (#:util #:coalton-impl/util)
-   (#:settings #:coalton-impl/settings))
+   (#:util #:coalton-impl/util))
   (:export
    #:fundep                             ; STRUCT
    #:make-fundep                        ; CONSTRUCTOR
@@ -35,9 +35,7 @@
 
   (write-string "(" stream)
   (format stream "~{~S ~}" (fundep-from self))
-  (if settings:*coalton-print-unicode*
-      (write-string "→" stream)
-      (write-string "->" stream))
+  (write-string (->) stream)
   (format stream "~{ ~S~}" (fundep-to self))
   (write-string ")" stream))
 

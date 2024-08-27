@@ -32,7 +32,6 @@
    #:source
    #:source-span
    #:object-instances
-   #:source-location
    #:object-name
    #:object-type
 
@@ -75,28 +74,25 @@
 (defgeneric object-type (self)
   (:documentation "The type of a thing: class, function, value, struct"))
 
-(defgeneric source-location (self)
-  (:documentation "The source location of an object, including file and span."))
-
 (defun source (object)
-  (let ((location (source-location object)))
+  (let ((location (source:location object)))
     (and location
          (source:location-source location))))
 
 (defun source-available-p (object)
   (let ((source (source object)))
     (and source
-         (not (null (source-error:source-name source))))))
+         (not (null (source:source-name source))))))
 
 (defun source-location-href (object)
   (when (source-available-p object)
     (format nil "~a/~a"
             *remote*
             (remove-prefix (ensure-suffix #\/ *local*)
-                           (source-error:source-name (source object))))))
+                           (source:source-name (source object))))))
 
 (defun source-span (object)
-  (source:location-span (source-location object)))
+  (source:location-span (source:location object)))
 
 (defgeneric object-aname (self)
   (:documentation "The link target of a thing: <name>-class, e.g."))
@@ -154,9 +150,6 @@
 (defmethod object-doc ((self coalton-type))
   (source:docstring (type-entry self)))
 
-(defmethod source-location ((self coalton-type))
-  (tc:type-entry-location (type-entry self)))
-
 (defun make-coalton-type (entry constructors applicable-instances)
   (cond ((env:struct-entry-p entry)
          (make-instance 'coalton-struct
@@ -201,9 +194,6 @@
             (symbol-name name)
             (tc:type-entry-tyvars entry))))
 
-(defmethod source-location ((self coalton-struct))
-  (tc:type-entry-location (type-entry self)))
-
 (defmethod object-doc ((self coalton-struct))
   (source:docstring (type-entry self)))
 
@@ -222,9 +212,6 @@
 
 (defmethod object-doc ((self coalton-class))
   (source:docstring (ty-class self)))
-
-(defmethod source-location ((self coalton-class))
-  (tc:ty-class-location (ty-class self)))
 
 (defun make-coalton-class (class &key package)
   (make-instance 'coalton-class
@@ -279,15 +266,12 @@
 (defmethod object-doc ((self coalton-value))
   (source:docstring (name-entry self)))
 
-(defmethod source-location ((self coalton-value))
-  (tc:name-entry-location (name-entry self)))
-
 (defmethod object-name ((object coalton-value))
   (let ((name (tc:name-entry-name (name-entry object))))
     (if (%function-p object)
         (format nil "(~A~{ ~A~})"
                 (symbol-name name)
-                (tc:lookup-function-source-parameter-names ; todo -> env
+                (tc:lookup-function-source-parameter-names
                  entry:*global-environment* name))
         (symbol-name name))))
 

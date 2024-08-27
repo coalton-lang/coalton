@@ -1,0 +1,102 @@
+================================================================================
+Binding parameters can be unused
+================================================================================
+
+(package test-unused-variables)
+
+(define (f x) 5)
+
+--------------------------------------------------------------------------------
+
+warning: Unused variable
+  --> test:3:11
+   |
+ 3 |  (define (f x) 5)
+   |             ^ variable defined here
+help: prefix the variable with '_' to declare it unused
+ 3 | (define (f _x) 5)
+   |            --
+
+================================================================================
+Lambda parameters can be unused
+================================================================================
+
+(package test-unused-variables)
+
+(define f (fn (x) 5))
+
+--------------------------------------------------------------------------------
+
+warning: Unused variable
+  --> test:3:15
+   |
+ 3 |  (define f (fn (x) 5))
+   |                 ^ variable defined here
+help: prefix the variable with '_' to declare it unused
+ 3 | (define f (fn (_x) 5))
+   |                --
+
+================================================================================
+Local variables can be unused
+================================================================================
+
+(package test-unused-variables-b
+  (import coalton-prelude))
+
+(define (f x)
+  (let x = (+ 1 x))
+  5)
+
+--------------------------------------------------------------------------------
+
+warning: Unused variable
+  --> test:5:7
+   |
+ 5 |    (let x = (+ 1 x))
+   |         ^ variable defined here
+help: prefix the variable with '_' to declare it unused
+ 5 |   (let _x = (+ 1 x))
+   |        --
+
+================================================================================
+Pattern match variables can be unused
+================================================================================
+
+(package test-unused-variables-b
+  (import coalton-prelude))
+
+(define (f x)
+  (match x
+    ((Tuple x y) 5)))
+
+--------------------------------------------------------------------------------
+
+warning: Unused variable
+  --> test:6:12
+   |
+ 6 |      ((Tuple x y) 5)))
+   |              ^ variable defined here
+help: prefix the variable with '_' to declare it unused
+ 6 |     ((Tuple _x y) 5)))
+   |             --
+
+================================================================================
+test-hidden-bindings 1
+================================================================================
+
+(package test-unused-variables)
+
+(define (f) 5)
+
+--------------------------------------------------------------------------------
+
+================================================================================
+test-hidden-bindings 2
+================================================================================
+
+(package test-unused-variables)
+
+(define f (fn () 5))
+
+--------------------------------------------------------------------------------
+

@@ -1,5 +1,5 @@
 error: Malformed repr :native attribute
-  --> test:4:14
+  --> test:4:13
    |
  4 |  (repr :native)
    |               ^ expected a lisp type

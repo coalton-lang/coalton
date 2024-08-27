@@ -37,7 +37,7 @@
                                  :use '("COALTON" "COALTON-PRELUDE"))))
     (unwind-protect
          (let ((source (source:make-source-string toplevel-string)))
-           (with-open-stream (stream (se:source-stream source))
+           (with-open-stream (stream (source:source-stream source))
              (let ((program (parser:with-reader-context stream
                               (parser:read-program stream source))))
 
@@ -49,7 +49,7 @@
                    (loop :for (unparsed-symbol . unparsed-type) :in expected-types
                          :do (let ((symbol (intern (string-upcase unparsed-symbol) *package*))
                                    (source (source:make-source-string unparsed-type)))
-                               (with-open-stream (stream (se:source-stream source))
+                               (with-open-stream (stream (source:source-stream source))
                                  (let* ((ast-type (parser:parse-qualified-type
                                                    (eclector.concrete-syntax-tree:read stream)
                                                    source))
@@ -91,13 +91,14 @@ Returns (values SOURCE-PATHNAME COMPILED-PATHNAME)."
   "Create a pathname relative to the coalton/test system."
   (merge-pathnames pathname (asdf:system-source-directory "coalton/tests")))
 
-(defun collect-compiler-error (program)
-  (let ((source (source:make-source-string program :name "test")))
+(defun collect-source-condition (program)
+  (let ((coalton-impl/settings:*coalton-print-unicode* nil)
+        (source (source:make-source-string program :name "test")))
     (handler-case
         (progn
           (entry:compile source)
           nil)
-      (se:source-base-error (c)
+      (source:source-condition (c)
         (string-trim '(#\Space #\Newline)
                      (princ-to-string c))))))
 
@@ -105,7 +106,7 @@ Returns (values SOURCE-PATHNAME COMPILED-PATHNAME)."
   (let ((file (test-file pathname)))
     (loop :for (line description program expected-error)
             :in (coalton-tests/loader:load-suite file)
-          :for generated-error := (collect-compiler-error program)
+          :for generated-error := (collect-source-condition program)
           :do (cond ((null generated-error)
                      (is (zerop (length expected-error))
                          "program should have failed to compile: ~A" description))

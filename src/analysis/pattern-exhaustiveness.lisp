@@ -5,8 +5,6 @@
    (#:tc #:coalton-impl/typechecker)
    (#:util #:coalton-impl/util))
   (:export
-   #:non-exhaustive-match-warning
-   #:useless-pattern-warning
    #:exhaustive-patterns-p
    #:useful-pattern-p
    #:find-non-matching-value))

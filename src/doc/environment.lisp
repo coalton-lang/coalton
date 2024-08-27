@@ -54,7 +54,7 @@
   "Return all class definitions in ENVIRONMENT.
 
 By default the global environment is queried.
-If non-nil, restrict to classes defined in PACKAGE."
+If PACKAGE is non-nil, restrict to classes defined in that package."
   (remove-if (lambda (type-entry)
                (and package
                     (not (exported-symbol-p (tc:ty-class-name type-entry) package t))))
@@ -65,7 +65,7 @@ If non-nil, restrict to classes defined in PACKAGE."
   "Return all type definitions in ENVIRONMENT.
 
 By default the global environment is queried.
-If non-nil, restrict to types defined in PACKAGE."
+If PACKAGE is non-nil, restrict to types defined in that package."
   (remove-if (lambda (type-entry)
                (and package
                     (not (exported-symbol-p (tc:type-entry-name type-entry) package t))))
@@ -76,22 +76,31 @@ If non-nil, restrict to types defined in PACKAGE."
   "Return all constructors in ENVIRONMENT.
 
 By default the global environment is queried.
-If non-nil, restrict to constructors defined in PACKAGE."
+If PACKAGE is non-nil, restrict to constructors defined in that package."
   (remove-if-not (lambda (constructor-entry)
                    (and package
                         (not (exported-symbol-p (tc:constructor-entry-name constructor-entry) package t))))
                  (%values (tc:environment-constructor-environment environment))))
 
+(defun symbol-match (symbol substring)
+  (integerp (search (string-downcase substring)
+                    (string-downcase (symbol-name symbol)))))
+
 (defun find-names (&key (environment entry:*global-environment*)
                         (type nil)
+                        (name nil)
                         (package nil))
   "Return all names in ENVIRONMENT.
 
 By default the global environment is queried.
-If non-nil, restrict to names defined in PACKAGE."
+
+If NAME is non-nil, restrict to names containing the substring.
+If PACKAGE is non-nil, restrict to names defined in that package."
   (remove-if (lambda (entry)
                (or (and type
                         (not (eql type (tc:name-entry-type entry))))
+                   (and name
+                        (not (symbol-match (tc:name-entry-name entry) name)))
                    (and package
                         (not (exported-symbol-p (tc:name-entry-name entry) package t)))))
              (%values (tc:environment-name-environment environment))))
@@ -101,7 +110,7 @@ If non-nil, restrict to names defined in PACKAGE."
   "Return all instances in ENVIRONMENT.
 
 By default the global environment is queried.
-If non-nil, restrict to instances defined in PACKAGE."
+If PACKAGE is non-nil, restrict to instances defined in that package."
   (remove-if (lambda (class-instance)
                (and package
                     (not (exported-symbol-p (tc:ty-predicate-class

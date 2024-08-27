@@ -1,20 +1,14 @@
 (defpackage #:coalton-impl/analysis/unused-variables
   (:use
-   #:cl)
+   #:cl
+   #:coalton-impl/source)
   (:local-nicknames
-   (#:se #:source-error)
-   (#:source #:coalton-impl/source)
    (#:util #:coalton-impl/util)
    (#:tc #:coalton-impl/typechecker))
   (:export
-   #:find-unused-variables              ; FUNCTION
-   #:unused-variable-warning            ; CONDITION
-   ))
+   #:find-unused-variables))
 
 (in-package #:coalton-impl/analysis/unused-variables)
-
-(define-condition unused-variable-warning (se:source-base-warning)
-  ())
 
 (defun find-unused-variables (binding)
   (declare (type (or tc:toplevel-define tc:instance-method-definition) binding))
@@ -74,24 +68,18 @@
         (tc:node-variable
          (cons
           (tc:node-variable-name var)
-          (tc:node-location var)))
+          (location var)))
         (tc:pattern-var
          (cons
           (tc:pattern-var-name var)
-          (tc:pattern-location var))))
+          (location var))))
 
     (unless (char= (aref (symbol-name name) 0) #\_)
-        (unless (gethash name used-variables)
-          (warn 'unused-variable-warning
-                :err (source:source-error
-                      :type :warn
-                      :location location
-                      :message "Unused variable"
-                      :primary-note "variable defined here"
-                      :help-notes
-                      (list
-                       (se:make-source-error-help
-                        :span (source:location-span location)
-                        :replacement (lambda (name)
-                                       (concatenate 'string "_" name))
-                        :message "prefix the variable with '_' to declare it unused"))))))))
+      (unless (gethash name used-variables)
+        (source-warning "Unused variable"
+                        (make-note location "variable defined here")
+                        (make-help
+                         location
+                         "prefix the variable with '_' to declare it unused"
+                         (lambda (name)
+                           (concatenate 'string "_" name))))))))

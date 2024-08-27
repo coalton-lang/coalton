@@ -1,14 +1,14 @@
 (defpackage #:coalton-impl/typechecker/scheme
   (:use
    #:cl
+   #:coalton-impl/source
    #:coalton-impl/typechecker/base
    #:coalton-impl/typechecker/kinds
    #:coalton-impl/typechecker/types
    #:coalton-impl/typechecker/substitutions
    #:coalton-impl/typechecker/predicate)
   (:local-nicknames
-   (#:util #:coalton-impl/util)
-   (#:settings #:coalton-impl/settings))
+   (#:util #:coalton-impl/util))
   (:export
    #:ty-scheme                          ; STRUCT
    #:make-ty-scheme                     ; CONSTRUCTOR
@@ -166,17 +166,12 @@
        (let* ((types (mapcar (lambda (k) (next-pprint-variable-as-tvar k))
                              (ty-scheme-kinds scheme)))
               (new-type (instantiate types (ty-scheme-type scheme))))
-         (write-string (if settings:*coalton-print-unicode*
-                           "∀"
-                           "FORALL")
-                       stream)
+         (write-string (forall) stream)
          (loop :for ty :in types
                :do (write-char #\space stream)
                    (write ty :stream stream))
          (write-string ". " stream)
-         (write new-type :stream stream)))
-     ))
-
+         (write new-type :stream stream)))))
   nil)
 
 (defmethod print-object ((scheme ty-scheme) stream)

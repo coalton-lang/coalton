@@ -1,11 +1,11 @@
 (defpackage #:coalton-impl/typechecker/predicate
   (:use
    #:cl
+   #:coalton-impl/source
    #:coalton-impl/typechecker/kinds
    #:coalton-impl/typechecker/types
    #:coalton-impl/typechecker/substitutions)
   (:local-nicknames
-   (#:source #:coalton-impl/source)
    (#:util #:coalton-impl/util)
    (#:settings #:coalton-impl/settings))
   (:export
@@ -36,9 +36,12 @@
 
 (defstruct ty-predicate
   "A type predicate indicating that TYPE is of the CLASS"
-  (class (util:required 'class) :type symbol                    :read-only t)
-  (types (util:required 'types) :type ty-list                   :read-only t)
-  (location nil                   :type (or source:location null) :read-only t))
+  (class    (util:required 'class) :type symbol             :read-only t)
+  (types    (util:required 'types) :type ty-list            :read-only t)
+  (location nil                    :type (or location null) :read-only t))
+
+(defmethod location ((self ty-predicate))
+  (ty-predicate-location self))
 
 (defmethod make-load-form ((self ty-predicate) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -191,7 +194,6 @@
       (call-next-method)
       (pprint-predicate stream predicate)))
 
-
 (defun pprint-qualified-ty (stream qualified-ty)
   (declare (type stream stream)
            (type qualified-ty qualified-ty))
@@ -202,10 +204,7 @@
     ((= 1 (length (qualified-ty-predicates qualified-ty)))
      (write (first (qualified-ty-predicates qualified-ty))
             :stream stream)
-     (write-string (if settings:*coalton-print-unicode*
-                          " ⇒ "
-                          " => ")
-                   stream)
+     (write-string (=>) stream)
      (write (qualified-ty-type qualified-ty)
             :stream stream))
     (t
@@ -213,10 +212,7 @@
        (write-string "(" stream)
        (write pred :stream stream)
        (write-string ") " stream))
-     (write-string (if settings:*coalton-print-unicode*
-                          "⇒ "
-                          "=> ")
-                   stream)
+     (write-string (=>) stream)
      (write (qualified-ty-type qualified-ty) :stream stream)))
 
   nil)

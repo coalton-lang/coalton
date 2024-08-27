@@ -17,7 +17,6 @@
                #:float-features
                #:fset
                #:named-readtables
-               #:source-error
                #:trivial-gray-streams)
   :pathname "src/"
   :serial t

@@ -106,7 +106,7 @@ Example:
                         :collect (cons (bindings-offset bindings offsets)
                                        (compile-scc bindings env))))
         (lisp-forms (mapcar (lambda (lisp-form)
-                              (cons (car (source:location-span (parser:toplevel-lisp-form-location lisp-form)))
+                              (cons (car (source:location-span (source:location lisp-form)))
                                     (parser:toplevel-lisp-form-body lisp-form)))
                             lisp-forms)))
     (mapcan #'cdr (merge-forms bindings lisp-forms))))

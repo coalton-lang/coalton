@@ -1,6 +1,7 @@
 (defpackage #:coalton-impl/analysis/analysis
   (:use
    #:cl
+   #:coalton-impl/source
    #:coalton-impl/typechecker/base
    #:coalton-impl/analysis/pattern-exhaustiveness)
   (:import-from
@@ -10,8 +11,6 @@
    #:coalton-impl/analysis/underapplied-values
    #:find-underapplied-values)
   (:local-nicknames
-   (#:se #:source-error)
-   (#:source #:coalton-impl/source)
    (#:util #:coalton-impl/util)
    (#:tc #:coalton-impl/typechecker))
   (:export
@@ -19,25 +18,15 @@
 
 (in-package #:coalton-impl/analysis/analysis)
 
-(define-condition non-exhaustive-match-warning (se:source-base-warning)
-  ())
-
-(define-condition useless-pattern-warning (se:source-base-warning)
-  ())
-
-(define-condition pattern-var-matches-constructor (se:source-base-warning)
-  ())
-
 (defun check-pattern-exhaustiveness (pattern env)
   (declare (type tc:pattern pattern)
            (type tc:environment env))
 
   (let ((missing (find-non-matching-value (list (list pattern)) 1 env)))
     (unless (eq t missing)
-      (tc-error (tc:pattern-location pattern)
-                "Non-exhaustive match"
-                (format nil "Missing case ~W"
-                        (print-pattern (first missing)))))))
+      (tc-error "Non-exhaustive match"
+                (make-note pattern
+                           (format nil "Missing case ~W" (print-pattern (first missing))))))))
 
 (defun analyze-translation-unit (translation-unit env)
   "Perform analysis passes on TRANSLATION-UNIT, potentially producing errors or warnings."
@@ -54,33 +43,19 @@
                       (let ((exhaustive-or-missing
                               (find-non-matching-value (mapcar #'list patterns) 1 env)))
                         (unless (eq t exhaustive-or-missing)
-                          (warn 'non-exhaustive-match-warning
-                                :err (source:source-error
-                                      :type :warn
-                                      :location (tc:node-location node)
-                                      :message "Non-exhaustive match"
-                                      :primary-note "non-exhaustive match"
-                                      :notes (when (first exhaustive-or-missing)
+                          (warn 'source-warning
+                                :message "Non-exhaustive match"
+                                :notes (cons (make-note node "non-exhaustive match")
+                                             (when (first exhaustive-or-missing)
                                                (list
-                                                (se:make-source-error-note
-                                                 :type :secondary
-                                                 :span (source:location-span (tc:node-location node))
-                                                 :message (format nil "Missing case ~W"
-                                                                  (print-pattern (first exhaustive-or-missing)))))))))
+                                                (make-note node
+                                                           (format nil "Missing case ~W"
+                                                                   (print-pattern (first exhaustive-or-missing)))))))))
                         (loop :for pattern :in patterns
-                              :unless (useful-pattern-p patterns pattern env) :do
-                                (warn 'useless-pattern-warning
-                                      :err (source:source-error
-                                            :type :warn
-                                            :location (tc:pattern-location pattern)
-                                            :message "Useless match case"
-                                            :primary-note "useless match case"
-                                            :notes
-                                            (list
-                                             (se:make-source-error-note
-                                              :type :secondary
-                                              :span (source:location-span (tc:node-location node))
-                                              :message "in this match")))))))
+                              :unless (useful-pattern-p patterns pattern env)
+                                :do (source-warning "Useless match case"
+                                                    (make-note pattern "useless match case")
+                                                    (make-note node "in this match")))))
                     node)
            :abstraction (lambda (node)
                           (declare (type tc:node-abstraction node))
@@ -122,12 +97,8 @@
 
     (let ((ctor (tc:lookup-constructor env (tc:pattern-var-orig-name pat) :no-error t)))
       (when ctor
-        (warn 'pattern-var-matches-constructor
-              :err (source:source-error
-                    :type :warn
-                    :location (tc:pattern-location pat)
-                    :message "Pattern warning"
-                    :primary-note "pattern variable matches constructor name")))))
+        (source-warning "Pattern warning"
+                        (make-note pat "pattern variable matches constructor name")))))
 
   (:method ((pat tc:pattern-literal) env)
     (declare (ignore env)))

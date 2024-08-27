@@ -1,5 +1,5 @@
 error: Malformed while-let expression
-  --> test:4:38
+  --> test:4:37
    |
  4 |  (define f (while-let (Some x) = (moo)))
    |                                       ^ expected body

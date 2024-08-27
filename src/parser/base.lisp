@@ -1,12 +1,11 @@
 (defpackage #:coalton-impl/parser/base
   (:use
-   #:cl)
+   #:cl
+   #:coalton-impl/source)
   (:shadow
    #:parse-error)
   (:local-nicknames
    (#:cst #:concrete-syntax-tree)
-   (#:se #:source-error)
-   (#:source #:coalton-impl/source)
    (#:util #:coalton-impl/util))
   (:export
    #:identifier                         ; TYPE
@@ -48,7 +47,10 @@
 (defstruct (keyword-src
             (:copier nil))
   (name     (util:required 'name)     :type keyword :read-only t)
-  (location (util:required 'location) :type source:location :read-only t))
+  (location (util:required 'location) :type location :read-only t))
+
+(defmethod location ((self keyword-src))
+  (keyword-src-location self))
 
 (defun keyword-src-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -60,7 +62,10 @@
 (defstruct (identifier-src
             (:copier nil))
   (name     (util:required 'name)     :type identifier :read-only t)
-  (location (util:required 'location) :type source:location :read-only t))
+  (location (util:required 'location) :type location :read-only t))
+
+(defmethod location ((self identifier-src))
+  (identifier-src-location self))
 
 (defun identifier-src-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -69,8 +74,13 @@
 (deftype identifier-src-list ()
   '(satisfies identifier-src-list-p))
 
-(define-condition parse-error (se:source-base-error)
+(define-condition parse-error (source-error)
   ())
+
+(defun parse-error (message &rest notes)
+  (error 'parse-error
+         :message message
+         :notes notes))
 
 (defun parse-list (f list_ file)
   (declare (type function f)

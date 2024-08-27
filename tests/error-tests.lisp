@@ -32,33 +32,22 @@
     (let* ((source (source:make-source-file program-file :name "file"))
            (msg (with-output-to-string (output)
                   ;; an annotating error
-                  (se:display-source-error
-                   output
-                   (se:source-error
-                    :span '(76 . 321)
-                    :source source
+                  (source:report-source-condition
+                   (make-instance 'source:source-error
                     :message "message"
-                    :primary-note "define instance form"
-                    :notes (list
-                            (se:make-source-error-note
-                             :type :secondary
-                             :span  '(132 . 319)
-                             :message "message 2")
-                            (se:make-source-error-note
-                             :type :secondary
-                             :span  '(140 . 145)
-                             :message "message 3")
-                            (se:make-source-error-note
-                             :type :secondary
-                             :span  '(170 . 174)
-                             :message "message 4"))
-                    :help-notes
-                    (list
-                     (se:make-source-error-help
-                      :span  '(289 . 291)
-                      :replacement (lambda (existing)
-                                     (concatenate 'string "*" existing "*"))
-                      :message "message 5")))))))
+                    :notes (list (source:make-note (source:make-location source '(76 . 321))
+                                            "define instance form")
+                                 (source:make-note (source:make-location source '(132 . 319))
+                                                   "message 2")
+                                 (source:make-note (source:make-location source '(140 . 145))
+                                                   "message 3")
+                                 (source:make-note (source:make-location source '(170 . 174))
+                                                   "message 4")
+                                 (source:make-help (source:make-location source '(289 . 291))
+                                                   "message 5"
+                                                   (lambda (existing)
+                                                     (concatenate 'string "*" existing "*")))))
+                   output))))
       ;; output text
       (is (string= msg "error: message
   --> file:9:2

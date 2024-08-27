@@ -1,5 +1,5 @@
 error: Malformed do expression
-  --> test:4:14
+  --> test:4:13
    |
  4 |  (define x (do))
    |               ^ expected one or more forms

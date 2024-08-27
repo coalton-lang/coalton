@@ -48,10 +48,10 @@ Unknown package clause
 --------------------------------------------------------------------------------
 
 error: Malformed package declaration
-  --> test:2:2
+  --> test:2:3
    |
  2 |    (xxx yyy zzz))
-   |    ^^^^^^^^^^^^^ Unknown package clause
+   |     ^^^ Unknown package clause
 help: Must be one of IMPORT, IMPORT-FROM, EXPORT, SHADOW
  2 |   (xxx yyy zzz))
    |    ---
@@ -137,10 +137,10 @@ Missing dependencies
 error: Malformed package declaration
   --> test:1:0
    |
- 1 |   (package coalton-unit-test/package-c
-   |  _^
- 2 | |   (import coalton-unit-test/package-d))
-   | |_______________________________________^ unable to evaluate package definition
+ 1 |  (package coalton-unit-test/package-c
+   |  ^
+ 2 | |  (import coalton-unit-test/package-d))
+   | |______________________________________^ unable to evaluate package definition
 
 
 ================================================================================
@@ -212,7 +212,7 @@ Unterminated package form
 error: Unterminated form
   --> test:1:0
    |
- 1 |   (package test
-   |  _^
- 2 | |   (import (something as s))
-   | |___________________________^ Missing close parenthesis for form starting at offset 0
+ 1 |  (package test
+   |  ^
+ 2 | |  (import (something as s))
+   | |__________________________^ Missing close parenthesis for form starting at offset 0

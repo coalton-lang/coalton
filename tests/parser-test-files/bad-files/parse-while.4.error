@@ -1,5 +1,5 @@
 error: Malformed while expression
-  --> test:4:29
+  --> test:4:28
    |
  4 |  (define f (while :label True))
    |                              ^ expected body

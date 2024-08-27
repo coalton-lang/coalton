@@ -3,7 +3,6 @@
    #:cl)
   (:local-nicknames
    (#:source #:coalton-impl/source)
-   (#:se #:source-error)
    (#:util #:coalton-impl/util))
   (:export
    #:*coalton-pretty-print-tyvars*
@@ -11,6 +10,7 @@
    #:*pprint-variable-symbol-code*
    #:*pprint-variable-symbol-suffix*
    #:tc-error                           ; CONDITION, FUNCTION
+   #:format-note
    #:coalton-internal-type-error        ; CONDITION
    #:check-duplicates                   ; FUNCTION
    #:check-package                      ; FUNCTION
@@ -61,19 +61,22 @@ This requires a valid PPRINT-VARIABLE-CONTEXT")
 ;;; Conditions
 ;;;
 
-(define-condition tc-error (se:source-base-error)
+(define-condition tc-error (source:source-error)
   ()
   (:report
-   (lambda (c s)
+   (lambda (condition stream)
      (with-pprint-variable-context ()
-       (se:display-source-error s (se:source-condition-err c))))))
+       (source:report-source-condition condition stream)))))
 
-(defun tc-error (location message note &optional notes)
+(defun tc-error (message &rest notes)
+  (declare (type string message))
   (error 'tc-error
-         :err (source:source-error :location location
-                                   :message message
-                                   :primary-note note
-                                   :notes notes)))
+         :message message
+         :notes notes))
+
+(defun format-note (&rest format+args)
+  (with-pprint-variable-context ()
+    (apply #'format nil format+args)))
 
 (define-condition coalton-internal-type-error (error)
   ()
@@ -113,7 +116,7 @@ source tuples which are compared for ordering."
         :else
           :do (setf (gethash (funcall f elem) table) elem)))
 
-(defun check-package (elems f source)
+(defun check-package (elems f &optional (source #'identity))
   (declare (type list elems)
            (type function f)
            (type function source))
@@ -124,9 +127,9 @@ source tuples which are compared for ordering."
         :do (check-type id symbol)
 
         :unless (equalp (symbol-package id) *package*)
-          :do (tc-error (funcall source elem)
-                        "Invalid identifier name"
-                        (format nil "The symbol ~S is defined in the package ~A and not the current package ~A"
-                                id
-                                (symbol-package id)
-                                *package*))))
+          :do (tc-error "Invalid identifier name"
+                        (source:make-note (funcall source elem)
+                                          (format nil "The symbol ~S is defined in the package ~A and not the current package ~A"
+                                                  id
+                                                  (symbol-package id)
+                                                  *package*)))))

@@ -1,5 +1,5 @@
 error: Malformed match expression
-  --> test:4:17
+  --> test:4:16
    |
  4 |  (define f (match))
    |                  ^ expected expression

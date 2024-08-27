@@ -1,5 +1,5 @@
 error: Malformed match branch
-  --> test:6:7
+  --> test:6:6
    |
  6 |      (y)))
    |        ^ expected body

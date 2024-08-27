@@ -4,16 +4,15 @@
 
 (defpackage #:coalton-impl/typechecker/pattern
   (:use
-   #:cl)
+   #:cl
+   #:coalton-impl/source)
   (:local-nicknames
    (#:util #:coalton-impl/util)
    (#:parser #:coalton-impl/parser)
-   (#:source #:coalton-impl/source)
    (#:tc #:coalton-impl/typechecker/stage-1))
   (:export
    #:pattern                            ; STRUCT
    #:pattern-type                       ; ACCESSOR
-   #:pattern-location                     ; ACCESSOR
    #:pattern-list-p                     ; FUNCTION
    #:pattern-list                       ; TYPE
    #:pattern-var                        ; STRUCT
@@ -41,8 +40,11 @@
 (defstruct (pattern
             (:constructor nil)
             (:copier nil))
-  (type     (util:required 'type)   :type tc:qualified-ty           :read-only t)
-  (location nil                     :type (or source:location null) :read-only t))
+  (type     (util:required 'type) :type tc:qualified-ty    :read-only t)
+  (location nil                   :type (or location null) :read-only t))
+
+(defmethod location ((self pattern))
+  (pattern-location self))
 
 (defun pattern-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -115,7 +117,7 @@
            (values pattern-var &optional))
   (make-pattern-var
    :type (tc:apply-substitution subs (pattern-type node))
-   :location (pattern-location node)
+   :location (location node)
    :name (pattern-var-name node)
    :orig-name (pattern-var-orig-name node)))
 
@@ -124,7 +126,7 @@
            (values pattern-literal &optional))
   (make-pattern-literal
    :type (tc:apply-substitution subs (pattern-type node))
-   :location (pattern-location node)
+   :location (location node)
    :value (pattern-literal-value node)))
 
 (defmethod tc:apply-substitution (subs (node pattern-wildcard))
@@ -132,13 +134,13 @@
            (values pattern-wildcard &optional))
   (make-pattern-wildcard
    :type (tc:apply-substitution subs (pattern-type node))
-   :location (pattern-location node)))
+   :location (location node)))
 
 (defmethod tc:apply-substitution (subs (node pattern-constructor))
   (declare (type tc:substitution-list subs)
            (values pattern-constructor &optional))
   (make-pattern-constructor
    :type (tc:apply-substitution subs (pattern-type node))
-   :location (pattern-location node)
+   :location (location node)
    :name (pattern-constructor-name node)
    :patterns (tc:apply-substitution subs (pattern-constructor-patterns node))))

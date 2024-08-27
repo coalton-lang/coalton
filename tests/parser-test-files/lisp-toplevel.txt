@@ -56,9 +56,9 @@ lisp-toplevel may not have attributes
 error: Invalid lisp-toplevel form
   --> test:3:0
    |
- 3 |   (repr :lisp)
-   |   ^^^^^^^^^^^^ lisp-toplevel cannot have attributes
- 4 |   (lisp-toplevel
-   |  _-
- 5 | |   (defvar *x* nil))
-   | |___________________- when parsing lisp-toplevel
+ 3 |  (repr :lisp)
+   |  ^^^^^^^^^^^^ lisp-toplevel cannot have attributes
+ 4 |  (lisp-toplevel
+   |  -
+ 5 | |  (defvar *x* nil))
+   | |__________________- when parsing lisp-toplevel

@@ -2,7 +2,6 @@
   (:use
    #:cl)
   (:local-nicknames
-   (#:se #:source-error)
    (#:cst #:concrete-syntax-tree)
    (#:codegen #:coalton-impl/codegen)
    (#:settings #:coalton-impl/settings)
@@ -17,6 +16,19 @@
   "Is the Coalton reader allowed to parse the current input?
 Used to forbid reading while inside quasiquoted forms.")
 
+(defun probe-symbol (package-name symbol-name)
+  (let ((package (find-package package-name)))
+    (when package
+      (let ((symbol (find-symbol symbol-name package)))
+        (when (boundp symbol)
+          (symbol-value symbol))))))
+
+(defun source-plist ()
+  (probe-symbol "SB-C" "*SOURCE-PLIST*"))
+
+(defun buffer-name ()
+  (getf (source-plist) ':emacs-buffer "unknown source"))
+
 (defun read-coalton-toplevel-open-paren (stream char)
   (declare (optimize (debug 2)))
 
@@ -27,7 +39,8 @@ Used to forbid reading while inside quasiquoted forms.")
   (parser:with-reader-context stream
     (let* ((file
              (coalton-impl/source:make-source-file *compile-file-truename*
-                                                   :offset (file-position stream)))
+                                                   :name (buffer-name)
+                                                   :offset (1- (file-position stream))))
            (first-form
              (multiple-value-bind (form presentp)
                  (parser:maybe-read-form stream file)
@@ -124,7 +137,6 @@ Used to forbid reading while inside quasiquoted forms.")
 (defmacro coalton:coalton-codegen (&body forms)
   "Generate code for FORMS, excluding Lisp type declarations."
   (compile-forms 'coalton:coalton-codegen forms))
-
 (defmacro coalton:coalton-codegen-types (&body forms)
   "Generate code for FORMS, including Lisp type declarations."
   (compile-forms 'coalton:coalton-codegen-types forms))

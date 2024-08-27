@@ -1,4 +1,4 @@
-error: Duplicate repr atttribute
+error: Duplicate repr attribute
   --> test:5:0
    |
  4 |  (repr :enum)

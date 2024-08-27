@@ -1,7 +1,8 @@
 (defpackage #:coalton-impl/debug
-  (:use #:cl)
+  (:use
+   #:cl
+   #:coalton-impl/source)
   (:local-nicknames
-   (#:settings #:coalton-impl/settings)
    (#:algo #:coalton-impl/algorithm)
    (#:tc #:coalton-impl/typechecker)
    (#:entry #:coalton-impl/entry)))
@@ -127,12 +128,12 @@
                                  ((= 1 (length instance-constraints))
                                   (format t "~A ~A ~A~%"
                                           (first instance-constraints)
-                                          (if settings:*coalton-print-unicode* "⇒" "=>")
+                                          (=>)
                                           instance-predicate))
                                  (t
                                   (format t "~A ~A ~A~%"
                                           instance-constraints
-                                          (if settings:*coalton-print-unicode* "⇒" "=>")
+                                          (=>)
                                           instance-predicate))))))
 
                          (format t "~%")))

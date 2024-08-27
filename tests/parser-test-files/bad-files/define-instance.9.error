@@ -4,5 +4,5 @@ error: Malformed instance head
  4 |  (define-instance (C :a :b =>))
    |                            ^^ unexpected `=>`
 help: remove the `=>`
- 4 | (define-instance (C :a :b ))
-   |                           
+ 4 | (define-instance (C :a :b =>))
+   |                           --

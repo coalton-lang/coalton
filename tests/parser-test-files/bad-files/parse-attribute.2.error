@@ -1,4 +1,4 @@
-error: Malformed monomophize attribute
+error: Malformed monomorphize attribute
   --> test:4:0
    |
  4 |  (monomorphize 5)

@@ -1,6 +1,7 @@
 (defpackage #:coalton-impl/codegen/codegen-type-definition
   (:use
-   #:cl)
+   #:cl
+   #:coalton-impl/source)
   (:import-from
    #:coalton-impl/codegen/struct-or-class
    #:struct-or-class
@@ -8,7 +9,6 @@
    #:struct-or-class-field-name)
   (:local-nicknames
    (#:settings #:coalton-impl/settings)
-   (#:source #:coalton-impl/source)
    (#:global-lexical #:coalton-impl/global-lexical)
    (#:tc #:coalton-impl/typechecker)
    (#:rt #:coalton-impl/runtime))
@@ -47,13 +47,13 @@
              `(defstruct (,(tc:type-definition-name def)
                           (:constructor nil)
                           (:predicate nil))
-                ,@(when (source:docstring def)
-                    (list (source:docstring def))))
+                ,@(when (docstring def)
+                    (list (docstring def))))
 
              `(defclass ,(tc:type-definition-name def) ()
                 ()
-                ,@(when (source:docstring def)
-                    `((:documentation ,(source:docstring def))))))
+                ,@(when (docstring def)
+                    `((:documentation ,(docstring def))))))
 
         (defmethod make-load-form ((,(intern "OBJ") ,(tc:type-definition-name def)) &optional ,(intern "ENV"))
           (make-load-form-saving-slots ,(intern "OBJ") :environment ,(intern "ENV")))

@@ -1,26 +1,24 @@
 (defpackage #:coalton-impl/entry
   (:use
-   #:cl)
+   #:cl
+   #:coalton-impl/source)
   (:shadow
    #:compile)
   (:local-nicknames
-   (#:se #:source-error)
    (#:settings #:coalton-impl/settings)
    (#:util #:coalton-impl/util)
    (#:parser #:coalton-impl/parser)
-   (#:source #:coalton-impl/source)
    (#:tc #:coalton-impl/typechecker)
    (#:analysis #:coalton-impl/analysis)
    (#:codegen #:coalton-impl/codegen))
   (:export
    #:*global-environment*
-   #:entry-point                        ; FUNCTION
-   #:expression-entry-point             ; FUNCTION
-   #:codegen                            ; FUNCTION
-   #:compile                            ; FUNCTION
-   #:compile-coalton-toplevel           ; FUNCTION
-   #:compile-to-lisp                    ; FUNCTION
-   ))
+   #:entry-point
+   #:expression-entry-point
+   #:codegen
+   #:compile
+   #:compile-coalton-toplevel
+   #:compile-to-lisp))
 
 (in-package #:coalton-impl/entry)
 
@@ -110,9 +108,9 @@
           (setf subs (tc:compose-substitution-lists subs subs_))
 
           (when accessors
-            (tc:tc-error (tc:accessor-location (first accessors))
-                         "Amqbiguous accessor"
-                         "accessor is ambiguous"))
+            (tc:tc-error "Ambiguous accessor"
+                         (make-note (first accessors)
+                                    "accessor is ambiguous")))
 
           (let* ((preds (tc:reduce-context env preds subs))
                  (subs (tc:compose-substitution-lists
@@ -138,32 +136,29 @@
                    env))))
 
             (let* ((tvars
-                     (loop :for i :to (1- (length (remove-duplicates (tc:type-variables qual-ty)
-                                                                     :test #'equalp)))
+                     (loop :for i :below (length (remove-duplicates (tc:type-variables qual-ty)
+                                                                    :test #'equalp))
                            :collect (tc:make-variable)))
                    (qual-type (tc:instantiate
                                tvars
                                (tc:ty-scheme-type scheme))))
 
-              (tc:tc-error (tc:node-location node)
-                           "Unable to codegen"
-                           (format nil
-                                   "expression has type ~A~{ ~S~}.~{ (~S)~} => ~S with unresolved constraint~A ~S"
-                                   (if settings:*coalton-print-unicode*
-                                       "∀"
-                                       "FORALL")
-                                   tvars
-                                   (tc:qualified-ty-predicates qual-type)
-                                   (tc:qualified-ty-type qual-type)
-                                   (if (= (length (tc:qualified-ty-predicates qual-type)) 1)
-                                       ""
-                                       "s")
-                                   (tc:qualified-ty-predicates qual-type))
-                           (list
-                            (se:make-source-error-note
-                             :type :secondary
-                             :span (source:location-span (tc:node-location node))
-                             :message "Add a type assertion with THE to resolve ambiguity"))))))))))
+              (tc:tc-error "Unable to codegen"
+                           (make-note
+                            node
+                            (format nil
+                                    "expression has type ~A~{ ~S~}.~{ (~S)~} => ~S with unresolved constraint~A ~S"
+                                    (forall)
+                                    tvars
+                                    (tc:qualified-ty-predicates qual-type)
+                                    (tc:qualified-ty-type qual-type)
+                                    (if (= (length (tc:qualified-ty-predicates qual-type)) 1)
+                                        ""
+                                        "s")
+                                    (tc:qualified-ty-predicates qual-type)))
+                           (make-note
+                            node
+                            "Add a type assertion with THE to resolve ambiguity")))))))))
 
 (defmacro with-environment-updates (updates &body body)
   "Collect environment updates into a vector bound to UPDATES."
@@ -225,7 +220,7 @@
 (defun compile-to-lisp (source output)
   "Read Coalton source from SOURCE and write Lisp source to OUTPUT. NAME may be the filename related to the input stream."
   (declare (optimize (debug 3)))
-  (with-open-stream (stream (se:source-stream source))
+  (with-open-stream (stream (source-stream source))
     (parser:with-reader-context stream
       (with-environment-updates updates
         (let* ((program (parser:read-program stream source ':file))
@@ -249,17 +244,17 @@
     (compile-to-lisp source output)))
 
 (defun compile (source &key (load t) (output-file nil))
-   "Compile Coalton code in SOURCE, returning the pathname of the generated .fasl file. If OUTPUT-FILE is nil, the built-in compiler default output location will be used."
-   (uiop:with-temporary-file (:stream lisp-stream
-                              :pathname lisp-file
-                              :type "lisp"
-                              :direction ':output)
-     (compile-to-lisp source lisp-stream)
-     :close-stream
-     (cond ((null output-file)
-            (setf output-file (compile-file lisp-file)))
-           (t
-            (compile-file lisp-file :output-file output-file)))
-     (when load
-       (load output-file))
-     output-file))
+  "Compile Coalton code in SOURCE, returning the pathname of the generated .fasl file. If OUTPUT-FILE is nil, the built-in compiler default output location will be used."
+  (uiop:with-temporary-file (:stream lisp-stream
+                             :pathname lisp-file
+                             :type "lisp"
+                             :direction ':output)
+    (compile-to-lisp source lisp-stream)
+    :close-stream
+    (cond ((null output-file)
+           (setf output-file (compile-file lisp-file)))
+          (t
+           (compile-file lisp-file :output-file output-file)))
+    (when load
+      (load output-file))
+    output-file))

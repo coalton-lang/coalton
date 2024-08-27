@@ -1,11 +1,11 @@
 (defpackage #:coalton-impl/typechecker/types
   (:use
    #:cl
+   #:coalton-impl/source
    #:coalton-impl/typechecker/base
    #:coalton-impl/typechecker/kinds)
   (:local-nicknames
-   (#:util #:coalton-impl/util)
-   (#:settings #:coalton-impl/settings))
+   (#:util #:coalton-impl/util))
   (:export
    #:ty                                 ; STRUCT
    #:ty-list                            ; TYPE
@@ -382,19 +382,14 @@
        ((function-type-p ty) ;; Print function types
         (write-string "(" stream)
         (pprint-ty stream (tapp-to (tapp-from ty)))
-        (write-string (if settings:*coalton-print-unicode*
-                          " → "
-                          " -> ")
+        (write-string (->)
                       stream)
         ;; Avoid printing extra parenthesis on curried functions
         (labels ((print-subfunction (to)
                    (cond
                      ((function-type-p to)
                       (pprint-ty stream (tapp-to (tapp-from to)))
-                      (write-string (if settings:*coalton-print-unicode*
-                                        " → "
-                                        " -> ")
-                                    stream)
+                      (write-string (->) stream)
                       (print-subfunction (tapp-to to)))
                      (t (pprint-ty stream to)))))
           (print-subfunction (tapp-to ty)))

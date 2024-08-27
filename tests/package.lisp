@@ -5,7 +5,6 @@
   (:use
    #:cl)
   (:local-nicknames
-   (#:se #:source-error)
    (#:util #:coalton-impl/util)
    (#:parser #:coalton-impl/parser)
    (#:source #:coalton-impl/source)
@@ -39,5 +38,3 @@
 (in-package #:coalton-native-tests)
 
 (coalton-fiasco-init #:coalton-tests)
-
-

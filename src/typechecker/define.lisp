@@ -26,7 +26,6 @@
    #:coalton-impl/typechecker/accessor
    #:coalton-impl/typechecker/tc-env)
   (:local-nicknames
-   (#:se #:source-error)
    (#:util #:coalton-impl/util)
    (#:algo #:coalton-impl/algorithm)
    (#:parser #:coalton-impl/parser)
@@ -62,30 +61,29 @@
 (defun error-ambiguous-pred (pred)
   (declare (type tc:ty-predicate pred))
 
-  (unless (tc:ty-predicate-location pred)
+  (unless (location pred)
     (util:coalton-bug "Predicate ~S does not have source information" pred))
 
-  (tc-error (tc:ty-predicate-location pred)
-            "Ambiguous predicate"
-            (format nil "Ambiguous predicate ~S" pred)))
+  (tc-error "Ambiguous predicate"
+            (make-note pred
+                       (format-note "Ambiguous predicate ~S" pred))))
 
 (defun error-unknown-pred (pred)
   (declare (type tc:ty-predicate pred))
 
-  (unless (tc:ty-predicate-location pred)
+  (unless (location pred)
     (util:coalton-bug "Predicate ~S does not have source information" pred))
-
-  (tc-error (tc:ty-predicate-location pred)
-            "Unknown instance"
-            (format nil "Unknown instance ~S" pred)))
+  (tc-error "Unknown instance"
+            (make-note pred
+                       (format nil "Unknown instance ~S" pred))))
 
 (defun standard-expression-type-mismatch-error (node subs expected-type ty)
   "Utility for signalling a type-mismatch error in INFER-EXPRESSION-TYPE"
-  (tc-error (parser:node-location node)
-            "Type mismatch"
-            (format nil "Expected type '~S' but got '~S'"
-                    (tc:apply-substitution subs expected-type)
-                    (tc:apply-substitution subs ty))))
+  (tc-error "Type mismatch"
+            (make-note node
+                       (format nil "Expected type '~S' but got '~S'"
+                               (tc:apply-substitution subs expected-type)
+                               (tc:apply-substitution subs ty)))))
 ;;;
 ;;; Entrypoint
 ;;;
@@ -101,38 +99,31 @@
   (check-package defines
                  (alexandria:compose #'parser:node-variable-name
                                      #'parser:toplevel-define-name)
-                 (alexandria:compose #'parser:node-location
-                                     #'parser:toplevel-define-name))
+                 #'parser:toplevel-define-name)
 
   ;; Ensure that there are no duplicate definitions
   (check-duplicates
    defines
    (alexandria:compose #'parser:node-variable-name #'parser:toplevel-define-name)
-   #'parser:toplevel-define-location
+   #'location
    (lambda (first second)
-     (tc-error (parser:node-location (parser:toplevel-define-name first))
-               "Duplicate definition"
-               "first definition here"
-               (list
-                (se:make-source-error-note
-                 :type :primary
-                 :span (location-span (parser:node-location (parser:toplevel-define-name second)))
-                 :message "second definition here")))))
+     (tc-error "Duplicate definition"
+               (make-note (parser:toplevel-define-name first)
+                          "first definition here")
+               (make-note (parser:toplevel-define-name second)
+                          "second definition here"))))
 
   ;; Ensure that there are no duplicate declarations
   (check-duplicates
    declares
    (alexandria:compose #'parser:identifier-src-name #'parser:toplevel-declare-name)
-   #'parser:toplevel-define-location
+   #'location
    (lambda (first second)
-     (tc-error (parser:identifier-src-location (parser:toplevel-declare-name first))
-               "Duplicate declaration"
-               "first declaration here"
-               (list
-                (se:make-source-error-note
-                 :type :primary
-                 :span (location-span (parser:identifier-src-location (parser:toplevel-declare-name second)))
-                 :message "second declaration here")))))
+     (tc-error "Duplicate declaration"
+               (make-note (parser:toplevel-declare-name first)
+                          "first declaration here")
+               (make-note (parser:toplevel-declare-name second)
+                          "second declaration here"))))
 
   ;; Ensure that each declaration has an associated definition
   (loop :with def-table
@@ -150,9 +141,9 @@
         :for name := (parser:identifier-src-name (parser:toplevel-declare-name declare))
 
         :unless (gethash name def-table)
-          :do (tc-error (parser:identifier-src-location (parser:toplevel-declare-name declare))
-                        "Orphan declaration"
-                        "declaration does not have an associated definition"))
+          :do (tc-error "Orphan declaration"
+                        (make-note (parser:toplevel-declare-name declare)
+                                   "declaration does not have an associated definition")))
 
   (let ((dec-table (make-hash-table :test #'eq))
 
@@ -192,7 +183,7 @@
                                                    :name name
                                                    :type :value
                                                    :docstring (docstring define)
-                                                   :location (parser:binding-location define))))
+                                                   :location (location define))))
 
               :if (parser:toplevel-define-orig-params define)
                 :do (setf env (tc:set-function-source-parameter-names
@@ -239,7 +230,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                nil
                (make-node-literal
                 :type (tc:qualify nil type)
-                :location (parser:node-location node)
+                :location (location node)
                 :value (parser:node-literal-value node))
                subs)))
 
@@ -270,10 +261,10 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                  :from from-ty
                  :to to-ty
                  :field (parser:node-accessor-name node)
-                 :location (parser:node-location node)))
+                 :location (location node)))
                (make-node-accessor
                 :type (tc:qualify nil type)
-                :location (parser:node-location node)
+                :location (location node)
                 :name (parser:node-accessor-name node))
                subs))))))
 
@@ -288,7 +279,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
            (tvar
              (tc:make-variable))
            (pred
-             (tc:make-ty-predicate :class num :types (list tvar) :location (parser:node-location node))))
+             (tc:make-ty-predicate :class num :types (list tvar) :location (location node))))
       (handler-case
           (progn
             (setf subs (tc:unify subs tvar expected-type))
@@ -299,7 +290,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                nil
                (make-node-integer-literal
                 :type (tc:qualify nil type)
-                :location (parser:node-location node)
+                :location (location node)
                 :value (parser:node-integer-literal-value node))
                subs)))
         (tc:coalton-internal-type-error ()
@@ -325,7 +316,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                nil
                (make-node-variable
                 :type (tc:qualify preds type)
-                :location (parser:node-location node)
+                :location (location node)
                 :name (parser:node-variable-name node))
                subs)))
         (tc:coalton-internal-type-error ()
@@ -346,7 +337,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
       (let* ((rands (or (parser:node-application-rands node)
                         (list
                          (parser:make-node-variable
-                          :location (parser:node-location node)
+                          :location (location node)
                           :name 'coalton:unit))))
 
              (fun-ty_ fun-ty)
@@ -395,15 +386,15 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                 (t
                                  (setf fun-ty (tc:apply-substitution subs fun-ty))
 
-                                 (tc-error (parser:node-location node)
-                                           "Argument error"
-                                           (if (null (tc:function-type-arguments fun-ty))
-                                               (format nil "Unable to call '~S': it is not a function"
-                                                       fun-ty)
-                                               (format nil "Function call has ~D arguments but inferred type '~S' only takes ~D"
-                                                       (length rands)
-                                                       fun-ty
-                                                       (length (tc:function-type-arguments fun-ty))))))))))
+                                 (tc-error "Argument error"
+                                           (make-note node
+                                                      (if (null (tc:function-type-arguments fun-ty))
+                                                          (format nil "Unable to call '~S': it is not a function"
+                                                                  fun-ty)
+                                                          (format nil "Function call has ~D arguments but inferred type '~S' only takes ~D"
+                                                                  (length rands)
+                                                                  fun-ty
+                                                                  (length (tc:function-type-arguments fun-ty)))))))))))
 
         (handler-case
             (progn
@@ -413,7 +404,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                         preds
                         accessors
                         (make-node-application :type (tc:qualify nil type)
-                                               :location (parser:node-location node)
+                                               :location (location node)
                                                :rator rator-node
                                                :rands rand-nodes)
                         subs)))
@@ -445,7 +436,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                 (make-node-bind
                  ;; NOTE: We don't attach type here because NODE-BIND has no
                  ;; meaningful type.
-                 :location (parser:node-bind-location node)
+                 :location (location node)
                  :pattern pat-node
                  :expr expr-node)
          subs))))
@@ -493,15 +484,11 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
     (check-duplicates
      (parser:pattern-variables (parser:node-abstraction-params node))
      #'parser:pattern-var-name
-     #'parser:pattern-location
+     #'location
      (lambda (first second)
-       (tc-error (parser:node-location first)
-                 "Duplicate parameters name"
-                 "first parameter here"
-                 (list (se:make-source-error-note
-                        :type :primary
-                        :span (location-span (parser:node-location second))
-                        :message "second parameter here")))))
+       (tc-error "Duplicate parameters name"
+                 (make-note first "first parameter here")
+                 (make-note second "second parameter here"))))
 
     (let* (;; Setup return environment
            (*return-status* :lambda)
@@ -517,7 +504,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                  (list
                   (make-pattern-wildcard
                    :type (tc:qualify nil (first arg-tys))
-                   :location (parser:node-location node)))
+                   :location (location node)))
                  (loop :for pattern :in (parser:node-abstraction-params node)
                        :for ty :in arg-tys
                        :collect (multiple-value-bind (ty_ pattern subs_)
@@ -539,34 +526,26 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
               :do (handler-case
                       (setf subs (tc:unify subs ty1 ty2))
                     (tc:coalton-internal-type-error ()
-                      (tc-error s1
-                                "Return type mismatch"
-                                (format nil "First return is of type '~S'"
-                                        (tc:apply-substitution subs ty1))
-                                (list
-                                 (se:make-source-error-note
-                                  :type :primary
-                                  :span (location-span s2)
-                                  :message (format nil "Second return is of type '~S'"
-                                                   (tc:apply-substitution subs ty2))))))))
+                      (tc-error "Return type mismatch"
+                                (make-note s1
+                                           (format nil "First return is of type '~S'"
+                                                   (tc:apply-substitution subs ty1)))
+                                (make-note s2
+                                           (format nil "Second return is of type '~S'"
+                                                   (tc:apply-substitution subs ty2)))))))
 
         ;; Unify the function's inferred type with one of the early returns.
         (when *returns*
           (handler-case
               (setf subs (tc:unify subs (cdr (first *returns*)) body-ty))
             (tc:coalton-internal-type-error ()
-              (tc-error (car (first *returns*))
-                        "Return type mismatch"
-                        (format nil "First return is of type '~S'"
-                                (tc:apply-substitution subs (cdr (first *returns*))))
-                        (list
-                         (se:make-source-error-note
-                          :type :primary
-                          :span (location-span
-                                 (parser:node-location
-                                  (parser:node-body-last-node (parser:node-abstraction-body node))))
-                          :message (format nil "Second return is of type '~S'"
-                                           (tc:apply-substitution subs body-ty))))))))
+              (tc-error "Return type mismatch"
+                        (make-note (car (first *returns*))
+                                   (format nil "First return is of type '~S'"
+                                           (tc:apply-substitution subs (cdr (first *returns*)))))
+                        (make-note (parser:node-body-last-node (parser:node-abstraction-body node))
+                                   (format nil "Second return is of type '~S'"
+                                           (tc:apply-substitution subs body-ty)))))))
 
         (let ((ty (tc:make-function-type* arg-tys body-ty)))
           (handler-case
@@ -579,7 +558,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                    accessors
                    (make-node-abstraction
                     :type (tc:qualify nil type)
-                    :location (parser:node-location node)
+                    :location (location node)
                     :params params
                     :body body-node)
                    subs)))
@@ -596,15 +575,11 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
     (check-duplicates
      (parser:node-let-bindings node)
      (alexandria:compose #'parser:node-variable-name #'parser:node-let-binding-name)
-     #'parser:node-let-binding-location
+     #'location
      (lambda (first second)
-       (tc-error (parser:node-let-binding-location first)
-                 "Duplicate definition in let"
-                 "first definition here"
-                 (list (se:make-source-error-note
-                        :type :primary
-                        :span (location-span (parser:node-let-binding-location second))
-                        :message "second definition here")))))
+       (tc-error "Duplicate definition in let"
+                 (make-note first "first definition here")
+                 (make-note second "second definition here"))))
 
     (multiple-value-bind (preds accessors binding-nodes subs)
         (infer-let-bindings (parser:node-let-bindings node) (parser:node-let-declares node) subs env)
@@ -623,7 +598,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
          accessors
          (make-node-let
           :type (tc:qualify nil ty)
-          :location (parser:node-location node)
+          :location (location node)
           :bindings binding-nodes
           :body body-node)
          subs))))
@@ -645,7 +620,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                     (mapcar (lambda (var)
                               (make-node-variable
                                :type (tc:qualify nil (tc-env-lookup-value env var))
-                               :location (parser:node-location var)
+                               :location (location var)
                                :name (parser:node-variable-name var)))
                             (parser:node-lisp-vars node))))
               (values
@@ -654,7 +629,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                nil
                (make-node-lisp
                 :type (tc:qualify nil type)
-                :location (parser:node-location node)
+                :location (location node)
                 :vars var-nodes
                 :var-names (parser:node-lisp-var-names node)
                 :body (parser:node-lisp-body node))
@@ -706,7 +681,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                      :collect (make-node-match-branch
                                :pattern pat-node
                                :body branch-body-node
-                               :location (parser:node-match-branch-location branch)))))
+                               :location (location branch)))))
 
         (handler-case
             (progn
@@ -718,7 +693,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                  accessors
                  (make-node-match
                   :type (tc:qualify nil type)
-                  :location (parser:node-location node)
+                  :location (location node)
                   :expr expr-node
                   :branches branch-nodes)
                  subs)))
@@ -742,7 +717,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
        accessors
        (make-node-progn
         :type (tc:qualify nil body-ty)
-        :location (parser:node-location node)
+        :location (location node)
         :body body-node)
        subs)))
 
@@ -767,21 +742,21 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
         (handler-case
             (setf subs (tc:unify subs declared-ty expr-ty))
           (tc:coalton-internal-type-error ()
-            (tc-error (parser:node-location node)
-                      "Type mismatch"
-                      (format nil "Declared type '~S' does not match inferred type '~S'"
-                              (tc:apply-substitution subs declared-ty)
-                              (tc:apply-substitution subs expr-ty)))))
+            (tc-error "Type mismatch"
+                      (make-note node
+                                 (format nil "Declared type '~S' does not match inferred type '~S'"
+                                         (tc:apply-substitution subs declared-ty)
+                                         (tc:apply-substitution subs expr-ty))))))
 
         ;; Check that declared-ty is not more specific than expr-ty
         (handler-case
             (tc:match expr-ty declared-ty)
           (tc:coalton-internal-type-error ()
-            (tc-error (parser:node-location node)
-                      "Declared type too general"
-                      (format nil "Declared type '~S' is more general than inferred type '~S'"
-                              (tc:apply-substitution subs declared-ty)
-                              (tc:apply-substitution subs expr-ty)))))
+            (tc-error "Declared type too general"
+                      (make-note node
+                                 (format nil "Declared type '~S' is more general than inferred type '~S'"
+                                         (tc:apply-substitution subs declared-ty)
+                                         (tc:apply-substitution subs expr-ty))))))
 
         ;; SAFETY: If declared-ty and expr-ty unify, and expr-ty is
         ;; more general than declared-ty then matching should be
@@ -808,28 +783,26 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
 
     ;; Returns must be inside a lambda
     (when (eq *return-status* :toplevel)
-      (tc-error (parser:node-location node)
-                "Unexpected return"
-                "returns must be inside a lambda"))
+      (tc-error "Unexpected return"
+                (make-note node "returns must be inside a lambda")))
 
     ;; Returns cannot be in a do expression
     (when (eq *return-status* :do)
-      (tc-error (parser:node-location node)
-                "Invalid return"
-                "returns cannot be in a do expression"))
+      (tc-error "Invalid return"
+                (make-note node "returns cannot be in a do expression")))
 
     (multiple-value-bind (ty preds accessors expr-node subs)
         (infer-expression-type (or (parser:node-return-expr node)
                                    ;; If the return looks like (return) then it returns unit
                                    (parser:make-node-variable
-                                    :location (parser:node-location node)
+                                    :location (location node)
                                     :name 'coalton:Unit))
                                (tc:make-variable)
                                subs
                                env)
 
       ;; Add node the the list of returns
-      (push (cons (parser:node-location node) ty) *returns*)
+      (push (cons (location node) ty) *returns*)
 
       (values
        expected-type
@@ -837,7 +810,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
        accessors
        (make-node-return
         :type (tc:qualify nil expected-type)
-        :location (parser:node-location node)
+        :location (location node)
         :expr expr-node)
        subs)))
 
@@ -872,15 +845,15 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              accessors
              (make-node-or
               :type (tc:qualify nil tc:*boolean-type*)
-              :location (parser:node-location node)
+              :location (location node)
               :nodes body-nodes)
              subs))
         (tc:coalton-internal-type-error ()
-          (tc-error (parser:node-location node)
-                    "Type mismatch"
-                    (format nil "Expected type '~S' but 'or' evaluates to '~S'"
-                            (tc:apply-substitution subs expected-type)
-                            tc:*boolean-type*))))))
+          (tc-error "Type mismatch"
+                    (make-note node
+                               (format nil "Expected type '~S' but 'or' evaluates to '~S'"
+                                       (tc:apply-substitution subs expected-type)
+                                       tc:*boolean-type*)))))))
 
   (:method ((node parser:node-and) expected-type subs env)
     (declare (type tc:ty expected-type)
@@ -913,15 +886,15 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              accessors
              (make-node-and
               :type (tc:qualify nil tc:*boolean-type*)
-              :location (parser:node-location node)
+              :location (location node)
               :nodes body-nodes)
              subs))
         (tc:coalton-internal-type-error ()
-          (tc-error (parser:node-location node)
-                    "Type mismatch"
-                    (format nil "Expected type '~S' but 'and' evaluates to '~S'"
-                            (tc:apply-substitution subs expected-type)
-                            tc:*boolean-type*))))))
+          (tc-error "Type mismatch"
+                    (make-note node
+                               (format nil "Expected type '~S' but 'and' evaluates to '~S'"
+                                       (tc:apply-substitution subs expected-type)
+                                       tc:*boolean-type*)))))))
 
   (:method ((node parser:node-if) expected-type subs env)
     (declare (type tc:ty expected-type)
@@ -961,7 +934,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                  accessors
                  (make-node-if
                   :type (tc:qualify nil type)
-                  :location (parser:node-location node)
+                  :location (location node)
                   :expr expr-node
                   :then then-node
                   :else else-node)
@@ -999,7 +972,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                accessors
                (make-node-when
                 :type (tc:qualify nil tc:*unit-type*)
-                :location (parser:node-location node)
+                :location (location node)
                 :expr expr-node
                 :body body-node)
                subs))
@@ -1036,7 +1009,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                accessors
                (make-node-unless
                 :type (tc:qualify nil tc:*unit-type*)
-                :location (parser:node-location node)
+                :location (location node)
                 :expr expr-node
                 :body body-node)
                subs))
@@ -1075,7 +1048,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                accessors
                (make-node-while
                 :type (tc:qualify nil tc:*unit-type*)
-                :location (parser:node-location node)
+                :location (location node)
                 :label (parser:node-while-label node)
                 :expr expr-node
                 :body body-node)
@@ -1117,7 +1090,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                  accessors
                  (make-node-while-let
                   :type (tc:qualify nil tc:*unit-type*)
-                  :location (parser:node-location node)
+                  :location (location node)
                   :label (parser:node-while-let-label node)
                   :pattern pat-node
                   :expr expr-node
@@ -1159,12 +1132,12 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                     (tc:make-ty-predicate
                      :class intoiter-symbol
                      :types (list expr-ty pat-ty)
-                     :location (parser:node-location node))
+                     :location (location node))
                     preds)
                    accessors
                    (make-node-for
                     :type (tc:qualify nil tc:*unit-type*)
-                    :location (parser:node-location node)
+                    :location (location node)
                     :label (parser:node-for-label node)
                     :pattern pat-node
                     :expr expr-node
@@ -1194,7 +1167,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              accessors
              (make-node-loop
               :type (tc:qualify nil tc:*unit-type*)
-              :location (parser:node-location node)
+              :location (location node)
               :label (parser:node-loop-label node)
               :body body-node)
              subs))
@@ -1215,7 +1188,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
            nil
            (make-node-break
             :type (tc:qualify nil tc:*unit-type*)
-            :location (parser:node-location node)
+            :location (location node)
             :label (parser:node-break-label node))
            subs))
       (tc:coalton-internal-type-error ()
@@ -1235,7 +1208,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
            nil
            (make-node-continue
             :type (tc:qualify nil tc:*unit-type*)
-            :location (parser:node-location node)
+            :location (location node)
             :label (parser:node-continue-label node))
            subs))
       (tc:coalton-internal-type-error ()
@@ -1269,7 +1242,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
            preds
            accessors
            (make-node-cond-clause
-            :location (parser:node-cond-clause-location node)
+            :location (location node)
             :expr expr-node
             :body body-node)
            subs)))))
@@ -1308,7 +1281,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                accessors
                (make-node-cond
                 :type (tc:qualify nil type)
-                :location (parser:node-location node)
+                :location (location node)
                 :clauses clause-nodes)
                subs)))
         (tc:coalton-internal-type-error ()
@@ -1345,14 +1318,14 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                  (make-node-do-bind
                   :pattern pattern
                   :expr expr-node
-                  :location (parser:node-do-bind-location node))
+                  :location (location node))
                  subs))
             (tc:coalton-internal-type-error ()
-              (tc-error (parser:node-do-bind-location node)
-                        "Type mismatch"
-                        (format nil "Expected type '~S' but got '~S'"
-                                (tc:apply-substitution subs expected-type)
-                                (tc:apply-substitution subs expr-ty)))))))))
+              (tc-error "Type mismatch"
+                        (make-note node
+                                   (format nil "Expected type '~S' but got '~S'"
+                                           (tc:apply-substitution subs expected-type)
+                                           (tc:apply-substitution subs expr-ty))))))))))
 
   (:method ((node parser:node-do) expected-type subs env)
     (declare (type tc:ty expected-type)
@@ -1435,21 +1408,21 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                 (tc:make-ty-predicate
                  :class monad-symbol
                  :types (list m-type)
-                 :location (parser:node-location node))
+                 :location (location node))
                 preds)
                accessors
                (make-node-do
                 :type (tc:qualify nil ty)
-                :location (parser:node-location node)
+                :location (location node)
                 :nodes nodes
                 :last-node last-node) 
                subs))
           (tc:coalton-internal-type-error ()
-            (tc-error (parser:node-location node)
-                      "Type mismatch"
-                      (format nil "Expected type '~S' but do expression has type '~S'"
-                              (tc:apply-substitution subs expected-type)
-                              (tc:apply-substitution subs ty)))))))))
+            (tc-error "Type mismatch"
+                      (make-note node
+                                 (format nil "Expected type '~S' but do expression has type '~S'"
+                                         (tc:apply-substitution subs expected-type)
+                                         (tc:apply-substitution subs ty))))))))))
 
 ;;;
 ;;; Pattern Type Inference
@@ -1475,7 +1448,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
          type
          (make-pattern-var
           :type (tc:qualify nil type)
-          :location (parser:pattern-location pat)
+          :location (location pat)
           :name (parser:pattern-var-name pat)
           :orig-name (parser:pattern-var-orig-name pat))
          subs))))
@@ -1502,15 +1475,15 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                type
                (make-pattern-literal
                 :type (tc:qualify nil type)
-                :location (parser:pattern-location pat)
+                :location (location pat)
                 :value (parser:pattern-literal-value pat))
                subs)))
         (tc:coalton-internal-type-error ()
-          (tc-error (parser:pattern-location pat)
-                    "Type mismatch"
-                    (format nil "Expected type '~S' but pattern literal has type '~S'"
-                            (tc:apply-substitution subs expected-type)
-                            (tc:apply-substitution subs ty)))))))
+          (tc-error "Type mismatch"
+                    (make-note pat
+                               (format nil "Expected type '~S' but pattern literal has type '~S'"
+                                       (tc:apply-substitution subs expected-type)
+                                       (tc:apply-substitution subs ty))))))))
 
   (:method ((pat parser:pattern-wildcard) expected-type subs env)
     (declare (type tc:ty expected-type)
@@ -1522,7 +1495,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
      expected-type
      (make-pattern-wildcard
       :type (tc:qualify nil expected-type)
-      :location (parser:pattern-location pat))
+      :location (location pat))
      subs))
 
   (:method ((pat parser:pattern-constructor) expected-type subs env)
@@ -1535,33 +1508,27 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
       (check-duplicates (parser:pattern-variables pat)
                         #'parser:pattern-var-name
-                        #'parser:pattern-location
+                        #'location
                         (lambda (first second)
-                          (tc-error (parser:pattern-location first)
-                                    "Duplicate pattern variable"
-                                    "first definition here"
-                                    (list
-                                     (se:make-source-error-note
-                                      :type :primary
-                                      :span (location-span (parser:pattern-location second))
-                                      :message "second definition here")))))
+                          (tc-error "Duplicate pattern variable"
+                                    (make-note first "first definition here")
+                                    (make-note second "second definition here"))))
 
       (unless ctor
-        (tc-error (parser:pattern-location pat)
-                  "Unknown constructor"
-                  "constructor is not known"))
+        (tc-error "Unknown constructor"
+                  (make-note pat "constructor is not known")))
 
       (let ((arity
               (tc:constructor-entry-arity ctor))
             (num-args
               (length (parser:pattern-constructor-patterns pat))))
         (unless (= arity num-args)
-          (tc-error (parser:pattern-location pat)
-                    "Argument mismatch"
-                    (format nil "Constructor ~A takes ~D arguments but is given ~D"
-                            (parser:pattern-constructor-name pat)
-                            arity
-                            num-args)))
+          (tc-error "Argument mismatch"
+                    (make-note pat
+                               (format nil "Constructor ~A takes ~D arguments but is given ~D"
+                                       (parser:pattern-constructor-name pat)
+                                       arity
+                                       num-args))))
 
         (let* ((ctor-ty (tc:qualified-ty-type ;; NOTE: Constructors cannot have predicates
                          (tc:fresh-inst
@@ -1586,16 +1553,16 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                    type
                    (make-pattern-constructor
                     :type (tc:qualify nil pat-ty)
-                    :location (parser:pattern-location pat)
+                    :location (location pat)
                     :name (parser:pattern-constructor-name pat)
                     :patterns pattern-nodes)
                    subs)))
             (tc:coalton-internal-type-error ()
-              (tc-error (parser:pattern-location pat)
-                        "Type mismatch"
-                        (format nil "Expected type '~S' but pattern has type '~S'"
-                                (tc:apply-substitution subs expected-type)
-                                (tc:apply-substitution subs pat-ty))))))))))
+              (tc-error "Type mismatch"
+                        (make-note pat
+                                   (format nil "Expected type '~S' but pattern has type '~S'"
+                                           (tc:apply-substitution subs expected-type)
+                                           (tc:apply-substitution subs pat-ty)))))))))))
 
 ;;;
 ;;; Binding Group Type Inference
@@ -1617,17 +1584,12 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
           :for name := (parser:node-variable-name (parser:node-let-binding-name binding))
 
           :if (gethash name def-table)
-            :do (tc-error (parser:node-location (parser:node-let-binding-name binding))
-                          "Duplicate binding in let"
-                          "second definition here"
-                          (list
-                           (se:make-source-error-note
-                            :type :primary
-                            :span (location-span
-                                   (parser:node-location
-                                    (parser:node-let-binding-name
-                                     (gethash name def-table))))
-                            :message "first definition here")))
+            :do (tc-error "Duplicate binding in let"
+                          (make-note (parser:node-let-binding-name binding)
+                                     "second definition here")
+                          (make-note (parser:node-let-binding-name
+                                      (gethash name def-table))
+                                     "first definition here"))
           :else
             :do (setf (gethash name def-table) binding))
 
@@ -1636,17 +1598,12 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
           :for name := (parser:node-variable-name (parser:node-let-declare-name declare))
 
           :if (gethash name dec-table)
-            :do (tc-error (parser:node-location (parser:node-let-declare-name declare))
-                          "Duplicate declaration in let"
-                          "second declaration here"
-                          (list
-                           (se:make-source-error-note
-                            :type :primary
-                            :span (location-span
-                                   (parser:node-location
-                                    (parser:node-let-declare-name
-                                     (gethash name dec-table))))
-                            :message "first declaration here")))
+            :do (tc-error "Duplicate declaration in let"
+                          (make-note (parser:node-let-declare-name declare)
+                                     "second declaration here")
+                          (make-note (parser:node-let-declare-name
+                                      (gethash name dec-table))
+                                     "first declaration here"))
           :else
             :do (setf (gethash name dec-table) declare))
 
@@ -1655,9 +1612,9 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
           :for name := (parser:node-variable-name (parser:node-let-declare-name declare))
 
           :unless (gethash name def-table)
-            :do (tc-error (parser:node-location (parser:node-let-declare-name declare))
-                          "Orphan declare in let"
-                          "declaration does not have an associated definition"))
+            :do (tc-error "Orphan declare in let"
+                          (make-note (parser:node-let-declare-name declare)
+                                     "declaration does not have an associated definition")))
 
     (let ((dec-table
             (loop :with table := (make-hash-table :test #'eq)
@@ -1747,7 +1704,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                  :collect (multiple-value-bind (preds_ node_ subs_)
                               (infer-expl-binding-type binding
                                                        scheme
-                                                       (parser:node-location
+                                                       (location
                                                         (parser:binding-name binding))
                                                        subs
                                                        env)
@@ -1796,9 +1753,8 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
         (setf subs (tc:compose-substitution-lists subs subs_))
 
         (when accessors
-          (tc-error (accessor-location (first accessors))
-                    "Ambiguous accessor"
-                    "accessor is ambiguous"))
+          (tc-error "Ambiguous accessor"
+                    (make-note (first accessors) "accessor is ambiguous")))
 
         (let* ((expr-type (tc:apply-substitution subs fresh-type))
                (expr-preds (tc:apply-substitution subs fresh-preds))
@@ -1878,19 +1834,19 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
                 ;; Check that the declared and inferred schemes match
                 (unless (equalp declared-ty output-scheme)
-                  (tc-error location
-                            "Declared type is too general"
-                            (format nil "Declared type ~S is more general than inferred type ~S."
-                                    declared-ty
-                                    output-scheme)))
+                  (tc-error "Declared type is too general"
+                            (make-note location
+                                       (format-note "Declared type ~S is more general than inferred type ~S."
+                                                    declared-ty
+                                                    output-scheme))))
 
                 ;; Check for undeclared predicates
                 (when (not (null retained-preds))
-                  (tc-error location
-                            "Explicit type is missing inferred predicate"
-                            (format nil "Declared type ~S is missing inferred predicate ~S"
-                                    output-qual-type
-                                    (first retained-preds))))
+                  (tc-error "Explicit type is missing inferred predicate"
+                            (make-note location
+                                       (format-note "Declared type ~S is missing inferred predicate ~S"
+                                                    output-qual-type
+                                                    (first retained-preds)))))
 
                 (values deferred-preds
                         (attach-explicit-binding-type (tc:apply-substitution subs binding-node)
@@ -1917,14 +1873,13 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
     (let ((first-fn (find-if #'parser:binding-function-p bindings)))
       (assert first-fn)
 
-      (tc-error (parser:node-location (parser:binding-name first-fn))
-                "Invalid recursive bindings"
-                "function can not be defined recursively with variables"
-                (loop :for binding :in (remove first-fn bindings :test #'eq)
-                      :collect (se:make-source-error-note
-                                :type :secondary
-                                :span (location-span (parser:node-location (parser:binding-name binding)))
-                                :message "with definition")))))
+      (error 'tc-error
+             :message "Invalid recursive bindings"
+             :notes (cons (make-note (parser:binding-name first-fn)
+                                     "function cannot be defined recursively with variables")
+                          (loop :for binding :in (remove first-fn bindings :test #'eq)
+                                :collect (make-note (parser:binding-name binding)
+                                                    "with definition"))))))
 
   ;; If there is a single non-recursive binding then it is valid
   (when (and (= 1 (length bindings))
@@ -1936,14 +1891,13 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
   ;; Toplevel bindings cannot be recursive values
   (when (parser:binding-toplevel-p (first bindings))
-    (tc-error (parser:node-location (parser:binding-name (first bindings)))
-              "Invalid recursive bindings"
-              "invalid recursive variable bindings"
-              (loop :for binding :in (rest bindings)
-                    :collect (se:make-source-error-note
-                              :type :secondary
-                              :span (location-span (parser:node-location (parser:binding-name binding)))
-                              :message "with definition"))))
+    (error 'tc-error
+           :message "Invalid recursive bindings"
+           :notes (cons (make-note (parser:binding-name (first bindings))
+                                   "invalid recursive variable bindings")
+                        (loop :for binding :in (rest bindings)
+                              :collect (make-note (parser:binding-name binding)
+                                                  "with definition")))))
 
   (let ((binding-names (mapcar (alexandria:compose #'parser:node-variable-name
                                                    #'parser:binding-name)
@@ -2001,14 +1955,13 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
       (when (every (alexandria:compose #'valid-recursive-constructor-call-p #'parser:binding-value) bindings)
         (return-from check-for-invalid-recursive-scc))
 
-      (tc-error (parser:node-location (parser:binding-name (first bindings)))
-                "Invalid recursive bindings"
-                "invalid recursive variable bindings"
-                (loop :for binding :in (rest bindings)
-                      :collect (se:make-source-error-note
-                                :type :secondary
-                                :span (location-span (parser:node-location (parser:binding-name binding)))
-                                :message "with definition"))))))
+      (error 'tc-error
+             :message "Invalid recursive bindings"
+             :notes (cons (make-note (parser:binding-name (first bindings))
+                                     "invalid recursive variable bindings")
+                          (loop :for binding :in (rest bindings)
+                                :collect (make-note (parser:binding-name binding)
+                                                    "with definition")))))))
 
 (defun infer-impls-binding-type (bindings subs env)
   "Infer the type's of BINDINGS and then qualify those types into schemes."
@@ -2054,9 +2007,9 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
       (setf subs (tc:compose-substitution-lists subs subs_))
 
       (when accessors
-        (tc-error (accessor-location (first accessors))
-                  "Ambiguous accessor"
-                  "accessor is ambiguous"))
+        (tc-error "Ambiguous accessor"
+                  (make-note (first accessors)
+                             "accessor is ambiguous")))
 
       (let* ((expr-tys
                (tc:apply-substitution subs expr-tys))
@@ -2187,16 +2140,11 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
   (check-duplicates
    (parser:pattern-variables (parser:binding-parameters binding))
    #'parser:pattern-var-name
-   #'parser:pattern-location
+   #'location
    (lambda (first second)
-     (tc-error (parser:node-location first)
-               "Duplicate parameters name"
-               "first parameter here"
-               (list (se:make-source-error-note
-                      :type :primary
-                      :span (location-span
-                             (parser:node-location second))
-                      :message "second parameter here")))))
+     (tc-error "Duplicate parameters name"
+               (make-note first "first parameter here")
+               (make-note second "second parameter here"))))
 
   (let* ((param-tys (loop :with args := (tc:function-type-arguments expected-type)
                           :for pattern :in (parser:binding-parameters binding)
@@ -2244,33 +2192,26 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                          :do (handler-case
                                  (setf subs (tc:unify subs ty1 ty2))
                                (tc:coalton-internal-type-error ()
-                                 (tc-error s1
-                                           "Return type mismatch"
-                                            (format nil "First return is of type '~S'"
-                                                    (tc:apply-substitution subs ty1))
-                                            (list
-                                             (se:make-source-error-note
-                                              :type :primary
-                                              :span (location-span s2)
-                                              :message (format nil "Second return is of type '~S'"
-                                                               (tc:apply-substitution subs ty2))))))))
+                                 (tc-error "Return type mismatch"
+                                           (make-note s1
+                                                      (format nil "First return is of type '~S'"
+                                                              (tc:apply-substitution subs ty1)))
+                                           (make-note s2
+                                                      (format nil "Second return is of type '~S'"
+                                                              (tc:apply-substitution subs ty2)))))))
 
                    ;; Unify the function's inferred type with one of the early returns.
                    (when *returns*
                      (handler-case
                          (setf subs (tc:unify subs (cdr (first *returns*)) ret-ty))
                        (tc:coalton-internal-type-error ()
-                         (tc-error (car (first *returns*))
-                                   "Return type mismatch"
-                                   (format nil "First return is of type '~S'"
-                                           (tc:apply-substitution subs (cdr (first *returns*))))
-                                   (list
-                                    (se:make-source-error-note
-                                     :type :primary
-                                     :span (location-span
-                                            (parser:node-location (parser:binding-last-node binding)))
-                                     :message (format nil "Second return is of type '~S'"
-                                                      (tc:apply-substitution subs ret-ty))))))))
+                         (tc-error "Return type mismatch"
+                                   (make-note (car (first *returns*))
+                                              (format nil "First return is of type '~S'"
+                                                      (tc:apply-substitution subs (cdr (first *returns*)))))
+                                   (make-note (parser:binding-last-node binding)
+                                              (format nil "Second return is of type '~S'"
+                                                      (tc:apply-substitution subs ret-ty)))))))
 
                    value-node))
 
@@ -2296,7 +2237,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                    (name-node
                      (make-node-variable
                       :type (tc:qualify nil type)
-                      :location (parser:node-location (parser:binding-name binding))
+                      :location (location (parser:binding-name binding))
                       :name (parser:node-variable-name (parser:binding-name binding))))
 
                    (typed-binding (build-typed-binding binding name-node value-node params)))
@@ -2306,11 +2247,11 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                typed-binding
                subs)))
         (tc:coalton-internal-type-error ()
-          (tc-error (parser:binding-location binding)
-                    "Type mismatch"
-                    (format nil "Expected type '~S' but got type '~S'"
-                            (tc:apply-substitution subs expected-type)
-                            (tc:apply-substitution subs ty))))))))
+          (tc-error "Type mismatch"
+                    (make-note binding
+                               (format nil "Expected type '~S' but got type '~S'"
+                                       (tc:apply-substitution subs expected-type)
+                                       (tc:apply-substitution subs ty)))))))))
 
 ;;;
 ;;; Helpers
@@ -2327,7 +2268,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
      :name name
      :params params
      :body value
-     :location (parser:toplevel-define-location binding)))
+     :location (location binding)))
 
   (:method ((binding parser:node-let-binding) name value params)
     (declare (type node-variable name)
@@ -2340,7 +2281,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
     (make-node-let-binding
      :name name
      :value value
-     :location (parser:node-let-binding-location binding)))
+     :location (location binding)))
 
   (:method ((binding parser:instance-method-definition) name value params)
     (declare (type node-variable name)
@@ -2352,7 +2293,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
      :name name
      :params params
      :body value
-     :location (parser:instance-method-definition-location binding))))
+     :location (location binding))))
 
 (defgeneric attach-explicit-binding-type (binding explicit-type)
   (:method ((binding toplevel-define) explicit-type)
@@ -2363,10 +2304,10 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
     :name (make-node-variable
            :name (node-variable-name (toplevel-define-name binding))
            :type explicit-type
-           :location (node-location (toplevel-define-name binding)))
+           :location (location (toplevel-define-name binding)))
     :params (toplevel-define-params binding)
     :body (toplevel-define-body binding)
-    :location (toplevel-define-location binding)))
+    :location (location binding)))
 
   (:method ((binding node-let-binding) explicit-type)
     (declare (type tc:qualified-ty explicit-type)
@@ -2376,9 +2317,9 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
     :name (make-node-variable
            :name (node-variable-name (node-let-binding-name binding))
            :type explicit-type
-           :location (node-location (node-let-binding-name binding)))
+           :location (location (node-let-binding-name binding)))
     :value (node-let-binding-value binding)
-    :location (node-let-binding-location binding)))
+    :location (location binding)))
 
   (:method ((binding instance-method-definition) explicit-type)
     (declare (type tc:qualified-ty explicit-type)
@@ -2388,10 +2329,10 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
      :name (make-node-variable
             :name (node-variable-name (instance-method-definition-name binding))
             :type explicit-type
-            :location (node-location (instance-method-definition-name binding)))
+            :location (location (instance-method-definition-name binding)))
      :params (instance-method-definition-params binding)
      :body (instance-method-definition-body binding)
-     :location (instance-method-definition-location binding))))
+     :location (location binding))))
 
 ;;; When inferring the types of bindings in a recursive binding group,
 ;;; references to those bindings will not yet have predicates. If
@@ -2411,7 +2352,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
                  (make-node-variable
                   :type (gethash (node-variable-name node) table)
-                  :location (node-location node)
+                  :location (location node)
                   :name (node-variable-name node))
 
                  node)))
@@ -2425,7 +2366,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                (toplevel-define-body binding)
                (make-traverse-block
                 :variable #'rewrite-variable-ref))
-        :location (toplevel-define-location binding)))
+        :location (location binding)))
 
       (node-let-binding
        (make-node-let-binding
@@ -2434,7 +2375,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                 (node-let-binding-value binding)
                 (make-traverse-block
                  :variable #'rewrite-variable-ref))
-        :location (node-let-binding-location binding))))))
+        :location (location binding))))))
 
 ;;; When type checking bindings, Coalton computes the set of type
 ;;; variables that can be qualified over. Predicates that contain type

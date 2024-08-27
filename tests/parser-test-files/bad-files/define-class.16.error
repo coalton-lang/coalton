@@ -1,5 +1,5 @@
 error: Malformed functional dependency
-  --> test:4:33
+  --> test:4:32
    |
  4 |  (define-class (C :a :b (:a :b ->)))
    |                                  ^ expected one or more type variables

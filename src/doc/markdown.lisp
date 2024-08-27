@@ -74,24 +74,13 @@
 (defun file-hygienic-ref (file)
   (cl-ppcre:regex-replace-all "[^a-zA-Z\d\s:]" file "-"))
 
-(defun find-line-offsets (stream)
-  "Compute the offsets of lines in a stream."
-  (file-position stream 0)
-  (loop :with index := 0
-        :for char := (read-char stream nil nil)
-        :unless char
-          :return (coerce (cons 0 offsets) 'vector)
-        :when (char= char #\Newline)
-          :collect (1+ index) :into offsets
-        :do (incf index)))
-
 (defun line-number (backend source offset)
-  (let ((line-offsets (gethash (source-error:source-name source)
+  (let ((line-offsets (gethash (source:source-name source)
                         (slot-value backend 'file-line-offsets))))
     (unless line-offsets
-      (with-open-stream (stream (source-error:source-stream source))
-        (setf line-offsets (find-line-offsets stream)))
-      (setf (gethash (source-error:source-name source)
+      (with-open-stream (stream (source:source-stream source))
+        (setf line-offsets (coerce (source:find-line-offsets stream) 'vector)))
+      (setf (gethash (source:source-name source)
                      (slot-value backend 'file-line-offsets))
             line-offsets))
     (labels ((%find (lo hi)

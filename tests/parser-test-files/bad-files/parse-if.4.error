@@ -1,5 +1,5 @@
 error: Malformed if expression
-  --> test:4:21
+  --> test:4:20
    |
  4 |  (define x (if 1 2 3 4))
    |                      ^ unexpected trailing form

@@ -14,37 +14,37 @@
       (y \"The y value.\" :a))"))
 
 (deftest test-struct-definition-parse-errors ()
-  (signals parser:parse-error
+  (signals source:source-error
     (check-coalton-types
      "(define-struct Point
         5
         (y Integer))"))
 
-  (signals parser:parse-error
+  (signals source:source-error
     (check-coalton-types
      "(define-struct Point
         (5 Integer)
         (y Integer))"))
 
-  (signals parser:parse-error
+  (signals source:source-error
     (check-coalton-types
      "(define-struct Point
         (x)
         (y Integer))"))
 
-  (signals parser:parse-error
+  (signals source:source-error
     (check-coalton-types
      "(define-struct Point
         (x \"the x value.\")
         (y Integer))"))
 
-  (signals parser:parse-error
+  (signals source:source-error
     (check-coalton-types
      "(define-struct Point
         (x Integer \"the x value\")
         (y Integer))"))
 
-  (signals parser:parse-error
+  (signals source:source-error
     (check-coalton-types
      "(define-struct Point
         (x \"the x value\" Integer \"also, it's the x value\")

@@ -8,11 +8,9 @@
    #:parse-error)
   (:local-nicknames
    (#:cst #:concrete-syntax-tree)
-   (#:se #:source-error)
    (#:util #:coalton-impl/util))
   (:export
    #:pattern                            ; STRUCT
-   #:pattern-location                     ; ACCESSOR
    #:pattern-list                       ; TYPE
    #:pattern-var                        ; STRUCT
    #:make-pattern-var                   ; ACCESSOR
@@ -49,6 +47,9 @@
             (:constructor nil)
             (:copier nil))
   (location (util:required 'location) :type location :read-only t))
+
+(defmethod location ((self pattern))
+  (pattern-location self))
 
 (defmethod make-load-form ((self pattern) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -106,41 +107,29 @@
     ((and (cst:atom form)
           (identifierp (cst:raw form)))
      (when (string= "_" (symbol-name (cst:raw form)))
-       (error 'parse-error
-              :err  (se:source-error
-                     :span (cst:source form)
-                     :source source
-                     :message "Invalid variable"
-                     :primary-note "invalid variable name '_'")))
+       (parse-error "Invalid variable"
+                    (make-note (make-location source form)
+                               "invalid variable name '_'")))
      (make-pattern-var
       :name (cst:raw form)
       :orig-name (cst:raw form)
       :location (make-location source form)))
 
     ((cst:atom form)
-     (error 'parse-error
-            :err (se:source-error
-                  :span (cst:source form)
-                  :source source
-                  :message "Invalid pattern"
-                  :primary-note "unknown pattern literal")))
+     (parse-error "Invalid pattern"
+                  (make-note (make-location source form)
+                             "unknown pattern literal")))
 
     ((not (cst:proper-list-p form))
-     (error 'parse-error
-            :err (se:source-error
-                  :span (cst:source form)
-                  :source source
-                  :message "Invalid match branch"
-                  :primary-note "unexpected dotted list")))
+     (parse-error "Invalid match branch"
+                  (make-note (make-location source form)
+                             "unexpected dotted list")))
 
     ((not (and (cst:atom (cst:first form))
                (identifierp (cst:raw (cst:first form)))))
-     (error 'parse-error
-            :err (se:source-error
-                  :span (cst:source (cst:first form))
-                  :source source
-                  :message "Invalid pattern"
-                  :primary-note "invalid constructor in pattern")))
+     (parse-error "Invalid pattern"
+                  (make-note (make-location source (cst:first form))
+                             "invalid constructor in pattern")))
 
     (t
      (make-pattern-constructor

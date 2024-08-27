@@ -1,10 +1,10 @@
 (defpackage #:coalton-impl/typechecker/kinds
   (:use
    #:cl
+   #:coalton-impl/source
    #:coalton-impl/typechecker/base)
   (:local-nicknames
-   (#:util #:coalton-impl/util)
-   (#:settings #:coalton-impl/settings))
+   (#:util #:coalton-impl/util))
   (:export
    #:kind                               ; STRUCT
    #:kind-list                          ; TYPE
@@ -281,10 +281,7 @@
        (when (kfun-p from)
          (write-char #\) stream))
 
-       (write-string (if settings:*coalton-print-unicode*
-                         " → "
-                         " -> ")
-                     stream)
+       (write-string (->) stream)
 
        (when (kfun-p to)
          (write-char #\( stream))

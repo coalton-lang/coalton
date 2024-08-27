@@ -39,7 +39,6 @@
    #:type-entry-explicit-repr               ; ACCESSOR
    #:type-entry-enum-repr                   ; ACCESSOR
    #:type-entry-newtype                     ; ACCESSOR
-   #:type-entry-location                    ; ACCESSOR
    #:type-environment                       ; STRUCT
    #:constructor-entry                      ; STRUCT
    #:make-constructor-entry                 ; ACCESSOR
@@ -79,7 +78,6 @@
    #:ty-class-codegen-sym                   ; ACCESSOR
    #:ty-class-superclass-dict               ; ACCESSOR
    #:ty-class-superclass-map                ; ACCESSOR
-   #:ty-class-location                      ; ACCESSOR
    #:ty-class-list                          ; TYPE
    #:class-environment                      ; STRUCT
    #:ty-class-instance                      ; STRUCT
@@ -100,7 +98,6 @@
    #:make-name-entry                        ; CONSTRUCTOR
    #:name-entry-name                        ; ACCESSOR
    #:name-entry-type                        ; ACCESSOR
-   #:name-entry-location                      ; ACCESSOR
    #:name-environment                       ; STRUCT
    #:method-inline-environment              ; STRUCT
    #:code-environment                       ; STRUCT
@@ -275,6 +272,9 @@
 
 (defmethod make-load-form ((self type-entry) &optional env)
   (make-load-form-saving-slots self :environment env))
+
+(defmethod docstring ((self type-entry))
+  (type-entry-docstring self))
 
 (defmethod kind-of ((entry type-entry))
   (kind-of (type-entry-type entry)))
@@ -505,6 +505,9 @@
 (defmethod make-load-form ((self struct-field) &optional env)
   (make-load-form-saving-slots self :environment env))
 
+(defmethod docstring ((self struct-field))
+  (struct-field-docstring self))
+
 (defun struct-field-list-p (x)
   (and (alexandria:proper-list-p x)
        (every #'struct-field-p x)))
@@ -522,6 +525,9 @@
 
 (defmethod make-load-form ((self struct-entry) &optional env)
   (make-load-form-saving-slots self :environment env))
+
+(defmethod docstring ((self struct-entry))
+  (struct-entry-docstring self))
 
 (defun struct-entry-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -575,11 +581,17 @@
   ;; Methods of the class containing the same tyvars in PREDICATE for
   ;; use in pretty printing
   (unqualified-methods (util:required 'unqualified-methods) :type ty-class-method-list :read-only t)
-  (codegen-sym         (util:required 'codegen-sym)         :type symbol              :read-only t)
-  (superclass-dict     (util:required 'superclass-dict)     :type list                :read-only t)
-  (superclass-map      (util:required 'superclass-map)      :type environment-map     :read-only t)
-  (docstring           (util:required 'docstring)           :type (or null string)    :read-only t)
-  (location              (util:required 'location)              :type location :read-only t))
+  (codegen-sym         (util:required 'codegen-sym)         :type symbol               :read-only t)
+  (superclass-dict     (util:required 'superclass-dict)     :type list                 :read-only t)
+  (superclass-map      (util:required 'superclass-map)      :type environment-map      :read-only t)
+  (docstring           (util:required 'docstring)           :type (or null string)     :read-only t)
+  (location            (util:required 'location)            :type location             :read-only t))
+
+(defmethod docstring ((self ty-class))
+  (ty-class-docstring self))
+
+(defmethod location ((self ty-class))
+  (ty-class-location self))
 
 (defmethod docstring ((self ty-class))
   (ty-class-docstring self))
@@ -716,7 +728,13 @@
   (name      (util:required 'name)      :type symbol                               :read-only t)
   (type      (util:required 'type)      :type (member :value :method :constructor) :read-only t)
   (docstring (util:required 'docstring) :type (or null string)                     :read-only t)
-  (location    (util:required 'location)    :type location                      :read-only t))
+  (location  (util:required 'location)  :type location                             :read-only t))
+
+(defmethod docstring ((self name-entry))
+  (name-entry-docstring self))
+
+(defmethod location ((self name-entry))
+  (name-entry-location self))
 
 (defmethod docstring ((self name-entry))
   (name-entry-docstring self))

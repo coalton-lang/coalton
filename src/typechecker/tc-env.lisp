@@ -1,9 +1,9 @@
 (defpackage #:coalton-impl/typechecker/tc-env
   (:use
    #:cl
+   #:coalton-impl/source
    #:coalton-impl/typechecker/parse-type)
   (:local-nicknames
-   (#:se #:source-error)
    (#:util #:coalton-impl/util)
    (#:parser #:coalton-impl/parser)
    (#:source #:coalton-impl/source)
@@ -72,21 +72,16 @@
     (unless scheme
       ;; Variable is unbound: create an error
       (error 'tc:tc-error
-             :err (source:source-error
-                   :location (parser:node-location var)
-                   :message "Unknown variable"
-                   :primary-note "unknown variable"
-                   :help-notes (loop :for suggestion :in (tc-env-suggest-value env var-name)
-                                     :collect (se:make-source-error-help
-                                               :span (source:location-span (parser:node-location var))
-                                               :replacement #'identity
-                                               :message suggestion)))))
+             :message "Unknown variable"
+             :notes (cons (source:make-note var "unknown variable")
+                          (loop :for suggestion :in (tc-env-suggest-value env var-name)
+                                :collect (source:make-help var suggestion)))))
     (let ((qualified-type (tc:fresh-inst scheme)))
       (values (tc:qualified-ty-type qualified-type)
               (loop :for pred :in (tc:qualified-ty-predicates qualified-type)
                     :collect (tc:make-ty-predicate :class (tc:ty-predicate-class pred)
                                                    :types (tc:ty-predicate-types pred)
-                                                   :location (parser:node-location var)))))))
+                                                   :location (location var)))))))
 
 (defun tc-env-add-definition (env name scheme)
   "Add a type named NAME to ENV."

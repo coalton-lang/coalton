@@ -1,5 +1,5 @@
 error: Malformed lisp expression
-  --> test:4:25
+  --> test:4:24
    |
  4 |  (define f (lisp (T -> T)))
    |                          ^ expected binding list

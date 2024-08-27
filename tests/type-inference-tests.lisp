@@ -49,17 +49,7 @@
             (g id))
        (g x)))"
 
-   '("f" . "(Integer -> Integer)"))
-
-  ;; Check that you can only call callable things
-  (signals tc:tc-error
-    (check-coalton-types
-     "(define x (0 1))"))
-
-  (signals tc:tc-error
-    (check-coalton-types
-     "(define x 5)
-      (define y (x 1))")))
+   '("f" . "(Integer -> Integer)")))
 
 (deftest test-recursive-type-inference ()
   ;; Check mutually recursive definitions
@@ -90,18 +80,6 @@
     (define f (undefined \"hello\"))"
 
    '("f" . "Integer"))
-
-  ;; Declarations cannot be less specific than their associated definition
-  (signals tc:tc-error
-    (check-coalton-types
-     "(declare x :a)
-      (define x Unit)"))
-
-  ;; Missing explicit predicates cannot be defaulted
-  (signals tc:tc-error
-    (check-coalton-types
-     "(declare x :a)
-      (define x 1)"))
 
   ;; Implicitly typed functions should only infer types from the declared type signature of an explicitly typed functions
   ;; http://jeremymikkola.com/posts/2019_01_12_type_inference_for_haskell_part_12.html
@@ -147,62 +125,7 @@
    "(define-type (TFix :f)
       (InType (:f (TFix :f))))"
 
-   '("InType" . "(:f (TFix :f) -> TFix :f)"))
-
-  ;; Check that constructors are properly typed
-  (signals tc:tc-error
-    (check-coalton-types
-     "(define-type (Tree_ :a)
-        (Leaf :a)
-        (Branch (Tree_ :a) (Tree_ :a)))
-
-      (define x (Branch (Leaf 5) (Leaf \"string\")))")))
-
-(deftest test-kind-system ()
-  ;; Check that types of kind * cannot be applied to
-  (signals tc:tc-error
-    (check-coalton-types
-     "(declare x (Integer Integer))
-      (define x (undefined Unit))"))
-
-  ;; Check that variables can not be declared to have kind (* -> *)
-  (signals tc:tc-error
-    (check-coalton-types
-     "(define-type (Maybe :a)
-        (Just :a)
-        Nothing)
-
-      (declare x Maybe)
-      (define x (undefined Unit))")))
-
-(deftest test-pattern-invariants ()
-  ;; Match branches must return the same type
-  (signals tc:tc-error
-    (check-coalton-types
-     "(define-type (Maybe :a)
-        (Just :a)
-        Nothing)
-
-      (define (f x)
-        (match x
-          ((Just 5) 5)
-          ((Just 6) \"hello\")))"))
-
-  ;; Match branches must match on constructors
-  (signals tc:tc-error
-    (check-coalton-types
-     "(define (g x) x)
-
-      (define (f x)
-        (match x
-          ((g a) 5)))"))
-
-  ;; Constructors in match branches must be fully applied
-  (signals tc:tc-error
-    (check-coalton-types
-     "(define (g x)
-        (match x
-          ((Cons x) x)))")))
+   '("InType" . "(:f (TFix :f) -> TFix :f)")))
 
 (deftest test-monomorphism-restriction ()
   ;; Check that functions defined as a lambda are not subject to the
@@ -249,22 +172,7 @@
       (==_ (singleton x) (singleton y)))"
 
    '("a" . "Boolean")
-   '("g" . "(Eq_ (List :a) => List :a -> :a -> Boolean)"))
-
-
-  (signals tc:tc-error
-    (check-coalton-types
-     "(define-class (Eq_ :a)
-        (== (:a -> :a -> coalton:Boolean)))
-
-      (define-instance (Eq_ :a => Eq_ (List :a))
-         (define (== a b) False))
-
-      (define-type Color Red Blue Green)
-
-      (declare f (List Color -> Boolean))
-      (define (f a b)
-         (== a b))")))
+   '("g" . "(Eq_ (List :a) => List :a -> :a -> Boolean)")))
 
 (deftest test-typeclass-polymorphic-recursion ()
   ;; Check that polymorphic recursion is possible
