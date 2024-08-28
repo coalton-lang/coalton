@@ -2,58 +2,14 @@
 ;;;;
 ;;;;
 
-(in-package #:coalton-benchmarks)
+(defpackage #:coalton/benchmarks/gabriel/stak
+  (:use #:coalton
+        #:coalton-prelude)
+  (:export
+   #:stak
+   #:stak-main))
 
-(define-benchmark stak ()
-  (declare (optimize speed))
-  (loop :repeat 1000
-        :do (with-benchmark-sampling
-              (coalton-benchmarks/native:stak 18 12 6)))
-  (report trivial-benchmark::*current-timer*))
-
-(define-benchmark stak-lisp ()
-  (declare (optimize speed))
-  (loop :repeat 1000
-        :do (with-benchmark-sampling
-              (lisp-stak 18 12 6)))
-  (report trivial-benchmark::*current-timer*))
-
-;;;
-;;;
-;;;
-
-
-(defvar x)
-(defvar y)
-(defvar z)
-
-(declaim (ftype (function () fixnum) stak-aux))
-(defun stak-aux ()
-  (if (not (< y x))
-      z
-      (let ((x (let ((x (1- x))
-                     (y y)
-                     (z z))
-                 (stak-aux)))
-            (y (let ((x (1- y))
-                     (y z)
-                     (z x))
-                 (stak-aux)))
-            (z (let ((x (1- z))
-                     (y x)(z y))
-                 (stak-aux))))
-        (stak-aux))))
-
-(declaim (ftype (function (fixnum) fixnum) lisp-stak))
-(defun lisp-stak (x y z)
-  (stak-aux))
-
-;;;
-;;;
-;;;
-
-
-(cl:in-package #:coalton-benchmarks/native)
+(cl:in-package #:coalton/benchmarks/gabriel/stak)
 
 (cl:declaim (cl:optimize (cl:speed 3) (cl:safety 0)))
 
@@ -75,4 +31,58 @@
                          (y2 x)
                          (z2 y))
                      (stak x2 y2 z2))))
-           (stak x1 y1 z1)))))
+           (stak x1 y1 z1))))
+
+  (define (stak-main)
+    (time (fn ()
+            (stak 18 12 6)))))
+
+;; (in-package #:coalton-benchmarks)
+
+#+ig(define-benchmark stak ()
+  (declare (optimize speed))
+  (loop :repeat 1000
+        :do (with-benchmark-sampling
+              (coalton-benchmarks/native:stak 18 12 6)))
+  (report trivial-benchmark::*current-timer*))
+
+#+ig(define-benchmark stak-lisp ()
+  (declare (optimize speed))
+  (loop :repeat 1000
+        :do (with-benchmark-sampling
+              (lisp-stak 18 12 6)))
+  (report trivial-benchmark::*current-timer*))
+
+;;;
+;;;
+;;;
+
+
+;(defvar x)
+;(defvar y)
+;(defvar z)
+
+;(declaim (ftype (function () fixnum) stak-aux))
+#+ig(defun stak-aux ()
+  (if (not (< y x))
+      z
+      (let ((x (let ((x (1- x))
+                     (y y)
+                     (z z))
+                 (stak-aux)))
+            (y (let ((x (1- y))
+                     (y z)
+                     (z x))
+                 (stak-aux)))
+            (z (let ((x (1- z))
+                     (y x)(z y))
+                 (stak-aux))))
+        (stak-aux))))
+
+;(declaim (ftype (function (fixnum) fixnum) lisp-stak))
+#+ig(defun lisp-stak (x y z)
+  (stak-aux))
+
+;;;
+;;;
+;;;

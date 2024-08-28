@@ -2,71 +2,18 @@
 ;;;;
 ;;;; Benchmarks for different methods of generating fibonacci numbers
 
-(cl:in-package #:coalton-benchmarks)
+(defpackage #:coalton/benchmarks/fibonacci
+  (:use #:coalton
+        #:coalton-prelude)
+  (:export
+   #:fib
+   #:fib-generic
+   #:fib-generic-wrapped
+   #:fib-monomorphized
+   #:fib-generic-optional
+   #:fib-monomorphized-optional))
 
-(define-benchmark recursive-fib ()
-  (declare (optimize speed))
-  (loop :repeat 1000
-        :do (with-benchmark-sampling
-              (coalton-benchmarks/native:fib 20)))
-  (report trivial-benchmark::*current-timer*))
-
-(define-benchmark recursive-fib-generic ()
-  (declare (optimize speed))
-  (loop :repeat 1000
-        :do (with-benchmark-sampling
-              (coalton-benchmarks/native:fib-generic-wrapped 20)))
-  (report trivial-benchmark::*current-timer*))
-
-(define-benchmark recursive-fib-lisp ()
-  (declare (optimize speed))
-  (loop :repeat 1000
-        :do (with-benchmark-sampling
-              (lisp-fib 20)))
-  (report trivial-benchmark::*current-timer*))
-
-
-(define-benchmark recursive-fib-monomorphized ()
-  (declare (optimize speed))
-  (loop :repeat 1000
-        :do (with-benchmark-sampling
-              (coalton-benchmarks/native:fib-monomorphized 20)))
-  (report trivial-benchmark::*current-timer*))
-
-;;
-;; Benchmarks on optional are disabled by default because they compute the 10th
-;; instead of the 20th fibonacci number. Computing the 20th was exhausting the heap.
-;;
-
-#+ignore
-(define-benchmark recursive-fib-generic-optional ()
-  (declare (optimize speed))
-  (loop :repeat 1000
-        :do (with-benchmark-sampling
-              (coalton-benchmarks/native:fib-generic-optional 10)))
-  (report trivial-benchmark::*current-timer*))
-
-#+ignore
-(define-benchmark recursive-fib-monomorphized-optional ()
-  (declare (optimize speed))
-  (loop :repeat 1000
-        :do (with-benchmark-sampling
-              (coalton-benchmarks/native:fib-monomorphized-optional 10)))
-  (report trivial-benchmark::*current-timer*))
-
-(defun lisp-fib (n)
-  (declare (type integer n)
-           (values integer)
-           (optimize (speed 3) (safety 0)))
-  (when (= n 0)
-    (return-from lisp-fib 0))
-
-  (when (= n 1)
-    (return-from lisp-fib 1))
-
-  (+ (lisp-fib (- n 1)) (lisp-fib (- n 2))))
-
-(cl:in-package #:coalton-benchmarks/native)
+(in-package #:coalton/benchmarks/fibonacci)
 
 (cl:declaim (cl:optimize (cl:speed 3) (cl:safety 0)))
 
@@ -108,3 +55,73 @@
   (declare fib-monomorphized-optional (Integer -> Optional Integer))
   (define (fib-monomorphized-optional x)
     (fib-generic (Some x))))
+
+;;;
+;;; Deprecated Trivial-Benchmarks
+;;;
+
+;;(cl:in-package #:coalton-benchmarks)
+
+#+ig (define-benchmark recursive-fib ()
+  (declare (optimize speed))
+  (loop :repeat 1000
+        :do (with-benchmark-sampling
+              (coalton-benchmarks/native:fib 20)))
+  (report trivial-benchmark::*current-timer*))
+
+#+ig (define-benchmark recursive-fib-generic ()
+  (declare (optimize speed))
+  (loop :repeat 1000
+        :do (with-benchmark-sampling
+              (coalton-benchmarks/native:fib-generic-wrapped 20)))
+  (report trivial-benchmark::*current-timer*))
+
+#+ig (define-benchmark recursive-fib-lisp ()
+  (declare (optimize speed))
+  (loop :repeat 1000
+        :do (with-benchmark-sampling
+              (lisp-fib 20)))
+  (report trivial-benchmark::*current-timer*))
+
+
+#+ig(define-benchmark recursive-fib-monomorphized ()
+  (declare (optimize speed))
+  (loop :repeat 1000
+        :do (with-benchmark-sampling
+              (coalton-benchmarks/native:fib-monomorphized 20)))
+  (report trivial-benchmark::*current-timer*))
+
+;;
+;; Benchmarks on optional are disabled by default because they compute the 10th
+;; instead of the 20th fibonacci number. Computing the 20th was exhausting the heap.
+;;
+
+#+ignore
+(define-benchmark recursive-fib-generic-optional ()
+  (declare (optimize speed))
+  (loop :repeat 1000
+        :do (with-benchmark-sampling
+              (coalton-benchmarks/native:fib-generic-optional 10)))
+  (report trivial-benchmark::*current-timer*))
+
+#+ignore
+(define-benchmark recursive-fib-monomorphized-optional ()
+  (declare (optimize speed))
+  (loop :repeat 1000
+        :do (with-benchmark-sampling
+              (coalton-benchmarks/native:fib-monomorphized-optional 10)))
+  (report trivial-benchmark::*current-timer*))
+
+#+ig(defun lisp-fib (n)
+  (declare (type integer n)
+           (values integer)
+           (optimize (speed 3) (safety 0)))
+  (when (= n 0)
+    (return-from lisp-fib 0))
+
+  (when (= n 1)
+    (return-from lisp-fib 1))
+
+  (+ (lisp-fib (- n 1)) (lisp-fib (- n 2))))
+
+;; (cl:in-package #:coalton-benchmarks/native)
