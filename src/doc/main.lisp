@@ -4,8 +4,9 @@
 ;;;;
 ;;;; To generate markdown input for the static website generator, do:
 ;;;;
-;;;;   (write-stdlib-documentation-to-file "../coalton-website/content/reference.md"
-;;;;                                       :backend :hugo)
+;;;;   (write-stdlib-documentation-to-file
+;;;;     "../coalton-website/content/reference.md"
+;;;;     :backend :hugo)
 
 (defpackage #:coalton/doc
   (:documentation "Documentation generator for COALTON.")
@@ -19,18 +20,31 @@
 
 (in-package #:coalton/doc)
 
+(defvar *coalton-github*
+  "https://github.com/coalton-lang/coalton")
+
 (defun head-revision ()
-  "Look up the most recent commit, either in the env var GITHUB_SHA which is provided by github CI, or by calling out to git rev-parse."
+  "Get the current commit by checking the environment variable GITHUB_SHA set by GitHub CI. If it is unset, use the output of git rev-parse instead."
   (or (uiop:getenv "GITHUB_SHA")
       (string-trim '(#\Newline)
                    (uiop:run-program "git rev-parse HEAD" :output ':string))))
 
+;;;  In GitHub CI, the environment variable GITHUB_WORKSPACE names the
+;;;  directory containing the directory into which Coalton is cloned
+;;;  during build: appending '/coalton' produces a valid repository
+;;;  path.
+
 (defun local-path ()
-  (or (uiop:getenv "GITHUB_WORKSPACE")
-      (namestring (asdf:system-source-directory "coalton"))))
+  "Return the path to the directory containing Coalton source."
+  (let ((ci-workspace (uiop:getenv "GITHUB_WORKSPACE")))
+    (if ci-workspace
+        (format nil "~A/coalton" ci-workspace)
+        (namestring (asdf:system-source-directory "coalton")))))
 
 (defun remote-path (revision)
-  (format nil "http://github.com/coalton-lang/coalton/tree/~A"
+  "Return the URL corresponding to the local revision of Coalton source."
+  (format nil "~A/tree/~A"
+          *coalton-github*
           (or revision
               (head-revision))))
 
@@ -39,6 +53,12 @@
   "Write the documentation for a set of PACKAGES to FILENAME, using backend named by keyword BACKEND."
   (let ((*local* (local-path))
         (*remote* (remote-path revision)))
+    (format t "Generating documentation for ~D packages~%~
+Local path = ~A~%~
+Remote path = ~A~%"
+            (length packages)
+            *local*
+            *remote*)
     (with-open-file (stream filename
                             :direction ':output
                             :if-exists ':supersede
