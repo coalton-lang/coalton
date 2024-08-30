@@ -49,6 +49,7 @@
    #:coalton/doc/base
    #:coalton/doc/model)
   (:local-nicknames
+   (#:source #:coalton-impl/source)
    (#:tc #:coalton-impl/typechecker)))
 
 (in-package #:coalton/doc/markdown)
@@ -133,7 +134,7 @@
               :do (format stream "- <code>")
                   (write-string (to-markdown instance) stream)
                   (format stream "</code>~:[~;  ~%~:*~A~]~%"
-                          (tc:ty-class-instance-docstring instance)))
+                          (source:docstring instance)))
         (format stream "~%</details>~%~%")))))
 
 (defun source-location-link (backend object)

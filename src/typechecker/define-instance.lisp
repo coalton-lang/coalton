@@ -115,15 +115,13 @@
                                                          method-name))
                      :finally (return table)))
 
-             (docstring (parser:toplevel-define-instance-docstring instance))
-
              (instance-entry
                (tc:make-ty-class-instance
                 :constraints context
                 :predicate pred
                 :codegen-sym instance-codegen-sym
                 :method-codegen-syms method-codegen-syms
-                :docstring docstring)))
+                :docstring (source:docstring instance))))
 
         (cond (context
                (setf env (tc:set-function env instance-codegen-sym (tc:make-function-env-entry

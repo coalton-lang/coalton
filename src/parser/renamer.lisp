@@ -1,6 +1,7 @@
 (defpackage #:coalton-impl/parser/renamer
   (:use
    #:cl
+   #:coalton-impl/source
    #:coalton-impl/parser/base
    #:coalton-impl/parser/types
    #:coalton-impl/parser/pattern
@@ -470,7 +471,7 @@
         :name (toplevel-define-name toplevel)
         :params (rename-variables-generic% (toplevel-define-params toplevel) new-ctx)
         :orig-params (toplevel-define-orig-params toplevel)
-        :docstring (toplevel-define-docstring toplevel)
+        :docstring (docstring toplevel)
         :body (rename-variables-generic% (toplevel-define-body toplevel) new-ctx)
         :location (toplevel-define-location toplevel)
         :monomorphize (toplevel-define-monomorphize toplevel))
@@ -503,7 +504,7 @@
       :methods (rename-variables-generic% (toplevel-define-instance-methods toplevel) ctx)
       :location (toplevel-define-instance-location toplevel)
       :head-location (toplevel-define-instance-head-location toplevel)
-      :docstring (toplevel-define-instance-docstring toplevel)
+      :docstring (docstring toplevel)
       :compiler-generated (toplevel-define-instance-compiler-generated toplevel))
      ctx))
 
@@ -619,7 +620,7 @@
       (make-toplevel-define-type
        :name (toplevel-define-type-name toplevel)
        :vars (rename-type-variables-generic% (toplevel-define-type-vars toplevel) new-ctx)
-       :docstring (toplevel-define-type-docstring toplevel)
+       :docstring (docstring toplevel)
        :ctors (rename-type-variables-generic% (toplevel-define-type-ctors toplevel) new-ctx)
        :location (toplevel-define-type-location toplevel)
        :repr (toplevel-define-type-repr toplevel)
@@ -632,7 +633,7 @@
     (make-struct-field
      :name (struct-field-name field)
      :type (rename-type-variables-generic% (struct-field-type field) ctx)
-     :docstring (struct-field-docstring field)
+     :docstring (docstring field)
      :location (struct-field-location field)))
 
   (:method ((toplevel toplevel-define-struct) ctx)
@@ -648,7 +649,7 @@
       (make-toplevel-define-struct
        :name (toplevel-define-struct-name toplevel)
        :vars (rename-type-variables-generic% (toplevel-define-struct-vars toplevel) new-ctx)
-       :docstring (toplevel-define-struct-docstring toplevel)
+       :docstring (docstring toplevel)
        :fields (rename-type-variables-generic% (toplevel-define-struct-fields toplevel) new-ctx)
        :location (toplevel-define-struct-location toplevel)
        :repr (toplevel-define-struct-repr toplevel)
@@ -680,7 +681,7 @@
       (make-method-definition
        :name (method-definition-name method)
        :type (rename-type-variables-generic% (method-definition-type method) new-ctx)
-       :docstring (method-definition-docstring method)
+       :docstring (docstring method)
        :location (method-definition-location method))))
 
   (:method ((toplevel toplevel-define-class) ctx)
@@ -698,7 +699,7 @@
        :vars (rename-type-variables-generic% (toplevel-define-class-vars toplevel) new-ctx)
        :preds (rename-type-variables-generic% (toplevel-define-class-preds toplevel) new-ctx)
        :fundeps (rename-type-variables-generic% (toplevel-define-class-fundeps toplevel) new-ctx)
-       :docstring (toplevel-define-class-docstring toplevel)
+       :docstring (docstring toplevel)
        :methods (rename-type-variables-generic% (toplevel-define-class-methods toplevel) new-ctx)
        :location (toplevel-define-class-location toplevel)
        :head-location (toplevel-define-class-head-location toplevel))))

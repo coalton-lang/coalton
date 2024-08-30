@@ -241,11 +241,11 @@ Example:
         :for type := (tc:lookup-value-type env name :no-error t)
         :for docstring
           := (cond
-               ((and entry (tc:name-entry-docstring entry) type)
-                (format nil "~A :: ~A~%~A" name type (tc:name-entry-docstring entry)))
+               ((and entry (source:docstring entry) type)
+                (format nil "~A :: ~A~%~A" name type (source:docstring entry)))
 
-               ((and entry (tc:name-entry-docstring entry))
-                (tc:name-entry-docstring entry))
+               ((and entry (source:docstring entry))
+                (source:docstring entry))
 
                 (type
                  (format nil "~A :: ~A" name type)))

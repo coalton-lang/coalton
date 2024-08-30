@@ -152,7 +152,7 @@
                                          (tc:ty-scheme-type ctor-type)))))
 
 (defmethod object-doc ((self coalton-type))
-  (tc:type-entry-docstring (type-entry self)))
+  (source:docstring (type-entry self)))
 
 (defmethod source-location ((self coalton-type))
   (tc:type-entry-location (type-entry self)))
@@ -191,7 +191,7 @@
     (mapcar (lambda (field)
               (list (tc:struct-field-name field)
                     (tc:struct-field-type field)
-                    (tc:struct-field-docstring field)))
+                    (source:docstring field)))
             (tc:struct-entry-fields struct-entry))))
 
 (defmethod object-name ((self coalton-struct))
@@ -205,7 +205,7 @@
   (tc:type-entry-location (type-entry self)))
 
 (defmethod object-doc ((self coalton-struct))
-  (tc:type-entry-docstring (type-entry self)))
+  (source:docstring (type-entry self)))
 
 (defmethod object-type ((self coalton-struct))
   "STRUCT")
@@ -221,7 +221,7 @@
             :reader class-package)))
 
 (defmethod object-doc ((self coalton-class))
-  (tc:ty-class-docstring (ty-class self)))
+  (source:docstring (ty-class self)))
 
 (defmethod source-location ((self coalton-class))
   (tc:ty-class-location (ty-class self)))
@@ -244,7 +244,7 @@
     (mapcar (lambda (method)
               (list (symbol-name (tc:ty-class-method-name method))
                     (tc:ty-class-method-type method)
-                    (tc:ty-class-method-docstring method)))
+                    (source:docstring method)))
             (remove-if (lambda (method)
                          (and package (exported-symbol-p (tc:ty-class-method-name method) package t)))
                        (tc:ty-class-unqualified-methods class)))))
@@ -277,7 +277,7 @@
   (tc:function-type-p (value-type coalton-value)))
 
 (defmethod object-doc ((self coalton-value))
-  (tc:name-entry-docstring (name-entry self)))
+  (source:docstring (name-entry self)))
 
 (defmethod source-location ((self coalton-value))
   (tc:name-entry-location (name-entry self)))
