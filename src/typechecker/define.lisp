@@ -191,7 +191,7 @@
               :do (setf env (tc:set-name env name (tc:make-name-entry
                                                    :name name
                                                    :type :value
-                                                   :docstring (parser:toplevel-define-docstring define)
+                                                   :docstring (docstring define)
                                                    :location (parser:binding-location define))))
 
               :if (parser:toplevel-define-orig-params define)

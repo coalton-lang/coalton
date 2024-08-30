@@ -21,7 +21,6 @@
    #:type-definition-location             ; FUNCTION
    #:type-definition-vars               ; FUNCTION
    #:type-definition-repr               ; FUNCTION
-   #:type-definition-docstring          ; FUNCTION
    #:type-definition-ctors              ; FUNCTION
    #:type-definition-ctor-name          ; FUNCTION
    #:type-definition-ctor-location        ; FUNCTION
@@ -78,15 +77,6 @@
   (:method ((def toplevel-define-struct))
     (declare (values (or null attribute-repr)))
     (toplevel-define-struct-repr def)))
-
-(defgeneric type-definition-docstring (def)
-  (:method ((def toplevel-define-type))
-    (declare (values (or null string)))
-    (toplevel-define-type-docstring def))
-
-  (:method ((def toplevel-define-struct))
-    (declare (values (or null string)))
-    (toplevel-define-struct-docstring def)))
 
 (defgeneric type-definition-ctors (def)
   (:method ((def toplevel-define-type))

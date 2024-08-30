@@ -52,9 +52,11 @@
   (constructors      (util:required 'constructors)      :type tc:constructor-entry-list :read-only t)
   (constructor-types (util:required 'constructor-types) :type tc:scheme-list            :read-only t)
   (constructor-args  (util:required 'constructor-args)  :type list                      :read-only t)
-
   (docstring         (util:required 'docstring)         :type (or null string)          :read-only t)
-  (location            (util:required 'location)            :type location                      :read-only t))
+  (location          (util:required 'location)          :type location                  :read-only t))
+
+(defmethod docstring ((self type-definition))
+  (type-definition-docstring self))
 
 (defstruct field-definition
   (name   (util:required 'name)   :type symbol :read-only t)
@@ -237,7 +239,7 @@
                              :collect (tc:make-struct-field :name (parser:struct-field-name field)
                                                             :type ty
                                                             :index index
-                                                            :docstring (parser:struct-field-docstring field)))))
+                                                            :docstring (docstring field)))))
            (setf env (tc:set-struct
                       env
                       (type-definition-name type)
@@ -262,7 +264,7 @@
           :explicit-repr (type-definition-explicit-repr type)
           :enum-repr (type-definition-enum-repr type)
           :newtype (type-definition-newtype type)
-          :docstring (type-definition-docstring type)
+          :docstring (docstring type)
           :location (parser:type-definition-location parsed-type))))
 
   ;; Define the type's constructors in the environment
@@ -441,7 +443,7 @@
 
                                 :constructor-types constructor-types
                                 :constructor-args constructor-args
-                                :docstring (parser:type-definition-docstring type)
+                                :docstring (docstring type)
                                 :location (parser:type-definition-location type)))
 
                              (runtime-repr-instance (maybe-runtime-repr-instance type-definition)))

@@ -8,6 +8,7 @@
    #:struct-or-class-field-name)
   (:local-nicknames
    (#:settings #:coalton-impl/settings)
+   (#:source #:coalton-impl/source)
    (#:global-lexical #:coalton-impl/global-lexical)
    (#:tc #:coalton-impl/typechecker)
    (#:rt #:coalton-impl/runtime))
@@ -46,13 +47,13 @@
              `(defstruct (,(tc:type-definition-name def)
                           (:constructor nil)
                           (:predicate nil))
-                ,@(when (tc:type-definition-docstring def)
-                    (list (tc:type-definition-docstring def))))
+                ,@(when (source:docstring def)
+                    (list (source:docstring def))))
 
              `(defclass ,(tc:type-definition-name def) ()
                 ()
-                ,@(when (tc:type-definition-docstring def)
-                    `((:documentation ,(tc:type-definition-docstring def))))))
+                ,@(when (source:docstring def)
+                    `((:documentation ,(source:docstring def))))))
 
         (defmethod make-load-form ((,(intern "OBJ") ,(tc:type-definition-name def)) &optional ,(intern "ENV"))
           (make-load-form-saving-slots ,(intern "OBJ") :environment ,(intern "ENV")))

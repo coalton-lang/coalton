@@ -11,6 +11,7 @@
    #:make-location
    #:location-source
    #:location-span
+   #:docstring
    #:source-error))
 
 (in-package #:coalton-impl/source)
@@ -126,6 +127,9 @@ OFFSET indicates starting character offset within the file."
 
 (defmethod source-error:source-name ((self source-string))
   (or (original-name self) "<string input>"))
+
+(defgeneric docstring (object)
+  (:documentation "The docstring accompanying a Coalton object's definition."))
 
 (defstruct (location
             (:constructor %make-location))

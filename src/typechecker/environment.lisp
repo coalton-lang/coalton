@@ -39,7 +39,6 @@
    #:type-entry-explicit-repr               ; ACCESSOR
    #:type-entry-enum-repr                   ; ACCESSOR
    #:type-entry-newtype                     ; ACCESSOR
-   #:type-entry-docstring                   ; ACCESSOR
    #:type-entry-location                    ; ACCESSOR
    #:type-environment                       ; STRUCT
    #:constructor-entry                      ; STRUCT
@@ -56,7 +55,6 @@
    #:struct-field-name                      ; ACCESSOR
    #:struct-field-type                      ; ACCESSOR
    #:struct-field-index                     ; ACCESSOR
-   #:struct-field-docstring                 ; ACCESSOR
    #:struct-field-list                      ; TYPE
    #:struct-entry                           ; STRUCT
    #:make-struct-entry                      ; CONSTRUCTOR
@@ -69,7 +67,6 @@
    #:make-ty-class-method                   ; CONSTRUCTOR
    #:ty-class-method-name                   ; ACCESSOR
    #:ty-class-method-type                   ; ACCESSOR
-   #:ty-class-method-docstring              ; ACCESSOR
    #:ty-class                               ; STRUCT
    #:make-ty-class                          ; CONSTRUCTOR
    #:ty-class-name                          ; ACCESSOR
@@ -82,7 +79,6 @@
    #:ty-class-codegen-sym                   ; ACCESSOR
    #:ty-class-superclass-dict               ; ACCESSOR
    #:ty-class-superclass-map                ; ACCESSOR
-   #:ty-class-docstring                     ; ACCESSOR
    #:ty-class-location                      ; ACCESSOR
    #:ty-class-list                          ; TYPE
    #:class-environment                      ; STRUCT
@@ -92,7 +88,6 @@
    #:ty-class-instance-predicate            ; ACCESSOR
    #:ty-class-instance-codegen-sym          ; ACCESSOR
    #:ty-class-instance-method-codegen-syms  ; ACCESSOR
-   #:ty-class-instance-docstring            ; ACCESSOR
    #:ty-class-instance-list                 ; TYPE
    #:instance-environment                   ; STRUCT
    #:instance-environment-instances         ; ACCESSOR
@@ -105,7 +100,6 @@
    #:make-name-entry                        ; CONSTRUCTOR
    #:name-entry-name                        ; ACCESSOR
    #:name-entry-type                        ; ACCESSOR
-   #:name-entry-docstring                   ; ACCESSOR
    #:name-entry-location                      ; ACCESSOR
    #:name-environment                       ; STRUCT
    #:method-inline-environment              ; STRUCT
@@ -275,6 +269,9 @@
 
   (docstring (util:required 'docstring) :type (or null string)   :read-only t)
   (location  nil                        :type (or null location) :read-only t))
+
+(defmethod docstring ((self type-entry))
+  (type-entry-docstring self))
 
 (defmethod make-load-form ((self type-entry) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -502,6 +499,9 @@
   (index     (util:required 'index)     :type fixnum            :read-only t)
   (docstring (util:required 'docstring) :type (or null string)  :read-only t))
 
+(defmethod docstring ((self struct-field))
+  (struct-field-docstring self))
+
 (defmethod make-load-form ((self struct-field) &optional env)
   (make-load-form-saving-slots self :environment env))
 
@@ -516,6 +516,9 @@
   (name             (util:required 'name)      :type symbol            :read-only t)
   (fields           (util:required 'fields)    :type struct-field-list :read-only t)
   (docstring        (util:required 'docstring) :type (or null string)  :read-only t))
+
+(defmethod docstring ((self struct-entry))
+  (struct-entry-docstring self))
 
 (defmethod make-load-form ((self struct-entry) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -546,6 +549,9 @@
   (type      (util:required 'type)      :type ty-scheme        :read-only t)
   (docstring (util:required 'docstring) :type (or null string) :read-only t))
 
+(defmethod docstring ((self ty-class-method))
+  (ty-class-method-docstring self))
+
 (defmethod make-load-form ((self ty-class-method) &optional env)
   (make-load-form-saving-slots self :environment env))
 
@@ -574,6 +580,9 @@
   (superclass-map      (util:required 'superclass-map)      :type environment-map     :read-only t)
   (docstring           (util:required 'docstring)           :type (or null string)    :read-only t)
   (location              (util:required 'location)              :type location :read-only t))
+
+(defmethod docstring ((self ty-class))
+  (ty-class-docstring self))
 
 (defmethod make-load-form ((self ty-class) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -636,6 +645,9 @@
   (codegen-sym         (util:required 'codegen-sym)         :type symbol            :read-only t)
   (method-codegen-syms (util:required 'method-codegen-syms) :type environment-map   :read-only t)
   (docstring           (util:required 'docstring)           :type (or null string)  :read-only t))
+
+(defmethod docstring ((self ty-class-instance))
+  (ty-class-instance-docstring self))
 
 (defmethod make-load-form ((self ty-class-instance) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -705,6 +717,9 @@
   (type      (util:required 'type)      :type (member :value :method :constructor) :read-only t)
   (docstring (util:required 'docstring) :type (or null string)                     :read-only t)
   (location    (util:required 'location)    :type location                      :read-only t))
+
+(defmethod docstring ((self name-entry))
+  (name-entry-docstring self))
 
 (defmethod make-load-form ((self name-entry) &optional env)
   (make-load-form-saving-slots self :environment env))

@@ -35,7 +35,6 @@
    #:make-toplevel-define-type                   ; CONSTRUCTOR
    #:toplevel-define-type-name                   ; ACCESSOR
    #:toplevel-define-type-vars                   ; ACCESSOR
-   #:toplevel-define-type-docstring              ; ACCESSOR
    #:toplevel-define-type-ctors                  ; ACCESSOR
    #:toplevel-define-type-location               ; ACCESSOR
    #:toplevel-define-type-repr                   ; ACCESSOR
@@ -45,14 +44,12 @@
    #:make-struct-field                           ; CONSTRUCTOR
    #:struct-field-name                           ; ACCESSOR
    #:struct-field-type                           ; ACCESSOR
-   #:struct-field-docstring                      ; ACCESSOR
    #:struct-field-location                       ; ACCESSOR
    #:struct-field-list                           ; TYPE
    #:toplevel-define-struct                      ; STRUCT
    #:make-toplevel-define-struct                 ; CONSTRUCTOR
    #:toplevel-define-struct-name                 ; ACCESSOR
    #:toplevel-define-struct-vars                 ; ACCESSOR
-   #:toplevel-define-struct-docstring            ; ACCESSOR
    #:toplevel-define-struct-fields               ; ACCESSOR
    #:toplevel-define-struct-location             ; ACCESSOR
    #:toplevel-define-struct-repr                 ; ACCESSOR
@@ -70,7 +67,6 @@
    #:toplevel-define-name                        ; ACCESSOR
    #:toplevel-define-params                      ; ACCESSOR
    #:toplevel-define-orig-params                 ; ACCESSOR
-   #:toplevel-define-docstring                   ; ACCESSOR
    #:toplevel-define-body                        ; ACCESSOR
    #:toplevel-define-location                    ; ACCESSOR
    #:toplevel-define-monomorphize                ; ACCESSOR
@@ -85,7 +81,6 @@
    #:make-method-definition                      ; STRUCT
    #:method-definition-name                      ; ACCESSOR
    #:method-definition-type                      ; ACCESSOR
-   #:method-definition-docstring                 ; ACCESSOR
    #:method-definition-location                  ; ACCESSOR
    #:method-definition-list                      ; TYPE
    #:toplevel-define-class                       ; STRUCT
@@ -94,9 +89,7 @@
    #:toplevel-define-class-vars                  ; ACCESSOR
    #:toplevel-define-class-preds                 ; ACCESSOR
    #:toplevel-define-class-fundeps               ; ACCESSOR
-   #:toplevel-define-class-docstring             ; ACCESSOR
    #:toplevel-define-class-methods               ; ACCESSOR
-   #:toplevel-define-class-method-docstrings     ; ACCESSOR
    #:toplevel-define-class-location              ; ACCESSOR
    #:toplevel-define-class-head-location         ; ACCESSOR
    #:toplevel-define-class-list                  ; TYPE
@@ -114,7 +107,6 @@
    #:toplevel-define-instance-methods            ; ACCESSOR
    #:toplevel-define-instance-location           ; ACCESSOR
    #:toplevel-define-instance-head-location      ; ACCESSOR
-   #:toplevel-define-instance-docstring          ; ACCESSOR
    #:toplevel-define-instance-compiler-generated ; ACCESSOR
    #:toplevel-define-instance-list               ; TYPE
    #:toplevel-package-name                       ; ACCESSOR
@@ -259,6 +251,9 @@
   (repr      (util:required 'repr)      :type (or null attribute-repr) :read-only nil)
   (head-location  (util:required 'head-location)  :type location                     :read-only t))
 
+(defmethod docstring ((self toplevel-define-type))
+  (toplevel-define-type-docstring self))
+
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-define-type-list-p (x)
     (and (alexandria:proper-list-p x)
@@ -273,6 +268,9 @@
   (type      (util:required 'type)      :type ty               :read-only t)
   (docstring (util:required 'docstring) :type (or null string) :read-only t)
   (location    (util:required 'location)    :type location             :read-only t))
+
+(defmethod docstring ((self struct-field))
+  (struct-field-docstring self))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun struct-field-list-p (x)
@@ -291,6 +289,9 @@
   (location    (util:required 'location)    :type location          :read-only t)
   (repr      (util:required 'repr)      :type (or null attribute-repr) :read-only nil)
   (head-location  (util:required 'head-location)  :type location          :read-only t))
+
+(defmethod docstring ((self toplevel-define-struct))
+  (toplevel-define-struct-docstring self))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-define-struct-list-p (x)
@@ -325,6 +326,9 @@
   (location       (util:required 'location)       :type location                  :read-only t)
   (monomorphize (util:required 'monomorphize) :type (or null attribute-monomorphize) :read-only nil))
 
+(defmethod docstring ((self toplevel-define))
+  (toplevel-define-docstring self))
+
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-define-list-p (x)
     (and (alexandria:proper-list-p x)
@@ -353,6 +357,9 @@
   (docstring (util:required 'docstring) :type (or string null) :read-only t)
   (location    (util:required 'location)    :type location  :read-only t))
 
+(defmethod docstring ((self method-definition))
+  (method-definition-docstring self))
+
 (defmethod make-load-form ((self method-definition) &optional env)
   (make-load-form-saving-slots self :environment env))
 
@@ -374,6 +381,9 @@
   (location    (util:required 'location)    :type location        :read-only t)
   ;; Source information for context, name, and vars
   (head-location  (util:required 'head-location) :type location         :read-only t))
+
+(defmethod docstring ((self toplevel-define-class))
+  (toplevel-define-class-docstring self))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-define-class-list-p (x)
@@ -408,6 +418,9 @@
   ;; Source information for the context and the pred
   (head-location           (util:required 'head-location)           :type location                 :read-only t)
   (compiler-generated (util:required 'compiler-generated) :type boolean                         :read-only t))
+
+(defmethod docstring ((self toplevel-define-instance))
+  (toplevel-define-instance-docstring self))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-define-instance-list-p (x)

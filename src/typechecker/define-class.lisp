@@ -294,11 +294,11 @@
 
                                              :collect (tc:make-ty-class-method :name method-name
                                                                                :type (tc:quantify nil method-ty)
-                                                                               :docstring (parser:method-definition-docstring method)))
+                                                                               :docstring (source:docstring method)))
                   :codegen-sym codegen-sym
                   :superclass-dict superclass-dict
                   :superclass-map superclass-map
-                  :docstring (parser:toplevel-define-class-docstring class)
+                  :docstring (source:docstring class)
                   :location (parser:toplevel-define-class-location class))
 
            :for method-tys := (loop :for (name . qual-ty) :in unqualifed-methods
