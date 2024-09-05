@@ -17,6 +17,29 @@
   "Is the Coalton reader allowed to parse the current input?
 Used to forbid reading while inside quasiquoted forms.")
 
+(defvar *source* nil
+  "The source from which program text is being read.
+This symbol may be bound to a string source in the case of direct evaluation in a repl.")
+
+(defun probe-symbol (package-name symbol-name)
+  "Look up SYMBOL-NAME in PACKAGE-NAME, returning its value if the package exists and the symbol is bound."
+  (let ((package (find-package package-name)))
+    (when package
+      (let ((symbol (find-symbol symbol-name package)))
+        (when (boundp symbol)
+          (symbol-value symbol))))))
+
+(defun source-filename ()
+  "Return the name of the file from which program text is being compiled or loaded."
+  (or *compile-file-truename*
+      *load-truename*))
+
+(defun buffer-name ()
+  "Return the name of the Emacs buffer containing evaluated or compiled program text."
+  (or #+:sbcl (getf (probe-symbol "SB-C" "*SOURCE-PLIST*") ':emacs-buffer)
+      (source-filename)
+      "repl input"))
+
 (defun read-coalton-toplevel-open-paren (stream char)
   (declare (optimize (debug 2)))
 
@@ -25,27 +48,28 @@ Used to forbid reading while inside quasiquoted forms.")
       (funcall (get-macro-character #\( (named-readtables:ensure-readtable :standard)) stream char)))
 
   (parser:with-reader-context stream
-    (let* ((file
-             (coalton-impl/source:make-source-file *compile-file-truename*
-                                                   :offset (file-position stream)))
+    (let* ((source (or *source*
+                       (coalton-impl/source:make-source-file (source-filename)
+                                                             :name (buffer-name))))
            (first-form
              (multiple-value-bind (form presentp)
-                 (parser:maybe-read-form stream file)
+                 (parser:maybe-read-form stream source)
                (unless presentp
                  (return-from read-coalton-toplevel-open-paren
                    nil))
                form)))
+
       (case (cst:raw first-form)
         (coalton:coalton-toplevel
-          (entry:compile-coalton-toplevel (parser:read-program stream file ':macro)))
+          (entry:compile-coalton-toplevel (parser:read-program stream source ':macro)))
 
         (coalton:coalton-codegen
           (let ((settings:*emit-type-annotations* nil))
-            `',(entry:entry-point (parser:read-program stream file ':macro))))
+            `',(entry:entry-point (parser:read-program stream source ':macro))))
 
         (coalton:coalton-codegen-types
           (let ((settings:*emit-type-annotations* t))
-            `',(entry:entry-point (parser:read-program stream file ':macro))))
+            `',(entry:entry-point (parser:read-program stream source ':macro))))
 
         (coalton:coalton-codegen-ast
           (let* ((settings:*emit-type-annotations* nil)
@@ -53,13 +77,13 @@ Used to forbid reading while inside quasiquoted forms.")
                  (codegen:*codegen-hook* (lambda (op &rest args)
                                            (when (eql op ':AST)
                                              (push args ast)))))
-            (entry:entry-point (parser:read-program stream file ':macro))
+            (entry:entry-point (parser:read-program stream source ':macro))
             (loop :for (name type value) :in (nreverse ast)
                   :do (format t "~A :: ~A~%~A~%~%~%" name type value)))
           nil)
 
         (coalton:coalton
-         (entry:expression-entry-point (parser:read-expression stream file)))
+         (entry:expression-entry-point (parser:read-expression stream source)))
 
         ;; Fall back to reading the list manually
         (t
@@ -68,7 +92,7 @@ Used to forbid reading while inside quasiquoted forms.")
            (loop :do
              (handler-case
                  (multiple-value-bind (form presentp)
-                     (parser:maybe-read-form stream file)
+                     (parser:maybe-read-form stream source)
 
                    (cond
                      ((and (not presentp)
@@ -80,7 +104,7 @@ Used to forbid reading while inside quasiquoted forms.")
                         (nreverse collected-forms)))
 
                      (dotted-context
-                      (when (nth-value 1 (parser:maybe-read-form stream file))
+                      (when (nth-value 1 (parser:maybe-read-form stream source))
                         (error "Invalid dotted list"))
 
                       (return-from read-coalton-toplevel-open-paren
@@ -113,8 +137,12 @@ Used to forbid reading while inside quasiquoted forms.")
 
 (defun compile-forms (mode forms)
   "Compile FORMS as Coalton using the indicated MODE."
-  (let ((*readtable* (named-readtables:ensure-readtable 'coalton:coalton)))
-    (with-input-from-string (stream (print-form (cons mode forms)))
+  (let* ((*readtable* (named-readtables:ensure-readtable 'coalton:coalton))
+         (string (print-form (cons mode forms)))
+         (*source* (unless (source-filename)
+                     (coalton-impl/source:make-source-string string
+                                                             :name (buffer-name)))))
+    (with-input-from-string (stream string)
       (cl:read stream))))
 
 (defmacro coalton:coalton-toplevel (&body forms)
@@ -134,8 +162,4 @@ Used to forbid reading while inside quasiquoted forms.")
   (compile-forms 'coalton:coalton-codegen-ast forms))
 
 (defmacro coalton:coalton (&rest forms)
-  (let ((*readtable* (named-readtables:ensure-readtable 'coalton:coalton))
-        (*compile-file-truename*
-          (pathname (format nil "COALTON (~A)" *compile-file-truename*))))
-    (with-input-from-string (stream (print-form (cons 'coalton:coalton forms)))
-      (cl:read stream))))
+  (compile-forms 'coalton:coalton forms))

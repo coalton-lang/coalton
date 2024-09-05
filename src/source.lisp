@@ -116,6 +116,15 @@ OFFSET indicates starting character offset within the file."
            :reader source-string))
   (:documentation "A source that supplies error context from a STRING."))
 
+(defmethod print-object ((self source-string) stream)
+  (if *print-readably*
+      (format stream "#.(make-instance 'coalton-impl/source::source-string :string ~s)"
+              (source-string self))
+      (call-next-method)))
+
+(defmethod make-load-form ((self source-string) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
 (defun make-source-string (string &key name)
   "Make a source that supplies error context from a string."
   (make-instance 'source-string

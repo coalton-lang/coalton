@@ -41,4 +41,5 @@
   (let ((*features* (cons ':coalton-lisp-toplevel *features*)))
     (run-suite "tests/parser-test-files/lisp-toplevel.txt"))
   (run-suite "tests/parser-test-files/lisp-toplevel-forbid.txt")
-  (run-suite "tests/parser-test-files/package.txt"))
+  (run-suite "tests/parser-test-files/package.txt")
+  (run-suite "tests/parser-test-files/define.txt"))
