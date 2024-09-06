@@ -18,7 +18,6 @@
 
 (defun find-unused-variables (binding)
   (declare (type (or tc:toplevel-define tc:instance-method-definition) binding))
-
   (let ((used-variables (make-hash-table :test #'eq)))
 
     ;; Mark used variables

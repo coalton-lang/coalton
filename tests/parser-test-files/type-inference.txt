@@ -1,0 +1,404 @@
+================================================================================
+1 Check that you can only call callable things
+================================================================================
+
+(package coalton-unit-tests/inference)
+
+(define x (0 1))
+
+--------------------------------------------------------------------------------
+
+error: Ambiguous predicate
+  --> test:3:13
+   |
+ 3 |  (define x (0 1))
+   |               ^ Ambiguous predicate COALTON-LIBRARY/CLASSES:NUM :A
+
+================================================================================
+Check that you can only call callable things
+================================================================================
+
+(package coalton-unit-tests/inference)
+
+(define x 5)
+(define y (x 1))
+
+--------------------------------------------------------------------------------
+
+error: Argument error
+  --> test:4:10
+   |
+ 4 |  (define y (x 1))
+   |            ^^^^^ Unable to call 'INTEGER': it is not a function
+
+================================================================================
+Declarations cannot be less specific than their associated definition
+================================================================================
+
+(package coalton-unit-tests/inference)
+
+(declare x :a)
+(define x Unit)
+
+--------------------------------------------------------------------------------
+
+error: Declared type is too general
+  --> test:4:8
+   |
+ 4 |  (define x Unit)
+   |          ^ Declared type ∀ :A. :A is more general than inferred type UNIT.
+
+================================================================================
+Missing explicit predicates cannot be defaulted
+================================================================================
+
+(package coalton-unit-tests/inference)
+
+(declare x :a)
+(define x 1)
+
+--------------------------------------------------------------------------------
+
+error: Explicit type is missing inferred predicate
+  --> test:4:8
+   |
+ 4 |  (define x 1)
+   |          ^ Declared type :A is missing inferred predicate COALTON-LIBRARY/CLASSES:NUM :A
+
+================================================================================
+Check that constructors are properly typed
+================================================================================
+
+(package coalton-unit-tests/inference)
+
+(define-type (Tree_ :a)
+  (Leaf :a)
+  (Branch (Tree_ :a) (Tree_ :a)))
+
+(define x (Branch (Leaf 5) (Leaf "string")))
+
+--------------------------------------------------------------------------------
+
+error: Unknown instance
+  --> test:7:24
+   |
+ 7 |  (define x (Branch (Leaf 5) (Leaf "string")))
+   |                          ^ Unknown instance COALTON-LIBRARY/CLASSES:NUM STRING
+
+================================================================================
+Check that types of kind * cannot be applied to
+================================================================================
+
+(package coalton-unit-tests/inference)
+
+(declare x (Integer Integer))
+
+(define x (undefined Unit))
+
+--------------------------------------------------------------------------------
+
+error: Kind mismatch
+  --> test:3:12
+   |
+ 3 |  (declare x (Integer Integer))
+   |              ^^^^^^^ Expected kind '* → *' but got kind '*'
+
+================================================================================
+Check that variables can not be declared to have kind (* -> *)
+================================================================================
+
+(package coalton-unit-tests/inference)
+
+(define-type (Maybe :a)
+  (Just :a)
+  Nothing)
+
+(declare x Maybe)
+
+(define x (undefined Unit))
+
+--------------------------------------------------------------------------------
+
+error: Kind mismatch
+  --> test:7:11
+   |
+ 7 |  (declare x Maybe)
+   |             ^^^^^ Expected kind '*' but got kind '* → *'
+
+================================================================================
+Match branches must return the same type
+================================================================================
+
+(package coalton-unit-tests/inference)
+
+(define-type (Maybe :a)
+  (Just :a)
+  Nothing)
+
+(define (f x)
+  (match x
+    ((Just 5) 5)
+    ((Just 6) "hello")))
+
+--------------------------------------------------------------------------------
+
+error: Ambiguous predicate
+  --> test:9:14
+   |
+ 9 |      ((Just 5) 5)
+   |                ^ Ambiguous predicate COALTON-LIBRARY/CLASSES:NUM STRING
+
+================================================================================
+Match branches must match on constructors
+================================================================================
+
+(package coalton-unit-tests/inference)
+
+(define (g x) x)
+
+(define (f x)
+  (match x
+    ((g a) 5)))
+
+--------------------------------------------------------------------------------
+
+error: Unknown constructor
+  --> test:7:5
+   |
+ 7 |      ((g a) 5)))
+   |       ^^^^^ constructor is not known
+
+================================================================================
+Constructors in match branches must be fully applied
+================================================================================
+
+(package coalton-unit-tests/inference)
+
+(define (g x)
+  (match x
+    ((Cons x) x)))
+
+--------------------------------------------------------------------------------
+
+error: Argument mismatch
+  --> test:5:5
+   |
+ 5 |      ((Cons x) x)))
+   |       ^^^^^^^^ Constructor CONS takes 2 arguments but is given 1
+
+================================================================================
+Type mismatch
+================================================================================
+
+(package coalton-unit-tests/inference)
+
+(define-class (Eq_ :a)
+  (== (:a -> :a -> coalton:Boolean)))
+
+(define-instance (Eq_ :a => Eq_ (List :a))
+  (define (== a b) False))
+
+(define-type Color Red Blue Green)
+
+(declare f (List Color -> Boolean))
+
+(define (f a b)
+   (== a b))
+
+--------------------------------------------------------------------------------
+
+error: Type mismatch
+  --> test:13:0
+    |
+ 13 |   (define (f a b)
+    |  _^
+ 14 | |    (== a b))
+    | |____________^ Expected type '((LIST COLOR) → BOOLEAN)' but got type '((LIST COLOR) → (LIST COLOR) → BOOLEAN)'
+
+================================================================================
+Check that polymorphic recursion is not possible without an explicit binding
+================================================================================
+
+(package coalton-unit-tests/inference)
+
+(define-class (Eq_ :a)
+  (== (:a -> :a -> Boolean)))
+
+(define-instance (Eq_ :a => Eq_ (List :a))
+  (define (== a b) False))
+  
+(define (f a b)
+  (match (== a b)
+    ((True) True)
+    ((False)
+     (f (singleton a)
+       (singleton b)))))
+
+--------------------------------------------------------------------------------
+
+error: Unknown variable
+  --> test:13:9
+    |
+ 13 |       (f (singleton a)
+    |           ^^^^^^^^^ unknown variable
+
+================================================================================
+Check that typeclasses cannot have additional constraints defined in a method
+
+this is a stylistic decision and not a technical limitation
+================================================================================
+
+(package coalton-unit-tests/inference)
+
+(define-class (Test :a)
+  (test (Eq :a => :a -> :a)))
+
+--------------------------------------------------------------------------------
+
+error: Invalid method predicate
+  --> test:4:9
+   |
+ 4 |    (test (Eq :a => :a -> :a)))
+   |           ^^^^^ method predicate contains only class variables
+
+================================================================================
+Check than non overlapping instances can be defined
+================================================================================
+
+(package coalton-unit-tests/inference)
+
+(define-class (Eq_ :a)
+  (==? (:a -> :a -> Boolean)))
+
+(define-instance (Eq_ :a => Eq_ (Tuple :a Integer))
+  (define (==? a b) False))
+
+(define-instance (Eq_ :a => Eq_ (Tuple String :a))
+  (define (==? a b) False))
+
+--------------------------------------------------------------------------------
+
+error: Unknown type
+  --> test:6:33
+   |
+ 6 |  (define-instance (Eq_ :a => Eq_ (Tuple :a Integer))
+   |                                   ^^^^^ unknown type TUPLE
+
+================================================================================
+Forbid cyclic superclasses
+================================================================================
+
+(package coalton-unit-tests/inference)
+
+(define-class (TestClassA :a => TestClassB :a))
+
+(define-class (TestClassB :a => TestClassA :a))
+
+--------------------------------------------------------------------------------
+
+error: Cyclic superclasses
+  --> test:3:14
+   |
+ 3 |  (define-class (TestClassA :a => TestClassB :a))
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ in class defined here
+ 4 |  
+ 5 |  (define-class (TestClassB :a => TestClassA :a))
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ in class defined here
+
+================================================================================
+Forbid cyclic superclasses
+================================================================================
+
+(package coalton-unit-tests/inference)
+
+(define-class (TestClassB :b)
+  (example-method (TestClassA :a => :a -> :b)))
+
+(define-class (TestClassB :a => TestClassA :a))
+
+--------------------------------------------------------------------------------
+
+error: Cyclic superclasses
+  --> test:3:14
+   |
+ 3 |  (define-class (TestClassB :b)
+   |                ^^^^^^^^^^^^^^^ in class defined here
+ 4 |    (example-method (TestClassA :a => :a -> :b)))
+ 5 |  
+ 6 |  (define-class (TestClassB :a => TestClassA :a))
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ in class defined here
+
+================================================================================
+Return
+================================================================================
+
+(package coalton-unit-tests/inference)
+
+(define (f a)
+  (return "hello")
+  Unit)
+
+--------------------------------------------------------------------------------
+
+error: Return type mismatch
+  --> test:4:2
+   |
+ 4 |    (return "hello")
+   |    ^^^^^^^^^^^^^^^^ First return is of type 'STRING'
+ 5 |    Unit)
+   |    ^^^^ Second return is of type 'UNIT'
+
+================================================================================
+Return 2
+================================================================================
+
+(package coalton-unit-tests/inference)
+
+(define x (return "hello"))
+
+--------------------------------------------------------------------------------
+
+error: Unexpected return
+  --> test:3:10
+   |
+ 3 |  (define x (return "hello"))
+   |            ^^^^^^^^^^^^^^^^ returns must be inside a lambda
+
+================================================================================
+Check that the monomorphism restriction still applies to defaulted bindings
+================================================================================
+
+(package coalton-unit-tests/inference-monomorphism
+  (import coalton-prelude))
+
+(define (f x)
+  (let ((y 1))
+    (+ 0.5f0 y)
+    (+ 0.5d0 y)))
+
+--------------------------------------------------------------------------------
+
+error: Type mismatch
+  --> test:7:13
+   |
+ 7 |      (+ 0.5d0 y)))
+   |               ^ Expected type 'DOUBLE-FLOAT' but got 'SINGLE-FLOAT'
+
+================================================================================
+101 Check that ambiguous predicates are detected
+================================================================================
+
+(package coalton-unit-tests/ambiguous-predicate
+  (import coalton-prelude))
+
+(define (f x)
+  (into (into x)))
+
+--------------------------------------------------------------------------------
+
+error: Ambiguous predicate
+  --> test:5:9
+   |
+ 5 |    (into (into x)))
+   |           ^^^^ Ambiguous predicate INTO :A :B
+ 

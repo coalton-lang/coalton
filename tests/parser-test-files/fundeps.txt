@@ -1,0 +1,133 @@
+================================================================================
+Unknown type variable
+================================================================================
+
+(package coalton-unit-test/fundeps)
+
+(define-class (C :a :b (:a -> :c)))
+
+--------------------------------------------------------------------------------
+
+error: Unkown type variable
+  --> test:3:30
+   |
+ 3 |  (define-class (C :a :b (:a -> :c)))
+   |                                ^^ unknown type variable :C
+
+================================================================================
+Trivially conflicting instances
+================================================================================
+
+(package coalton-unit-test/fundeps)
+
+(define-class (C :a :b (:a -> :b)))
+
+(define-instance (C Integer String))
+
+(define-instance (C Integer Unit))
+
+--------------------------------------------------------------------------------
+
+error: Instance fundep conflict
+  --> test:7:17
+   |
+ 7 |  (define-instance (C Integer Unit))
+   |                   ^^^^^^^^^^^^^^^^ instance conflicts previous instance C INTEGER STRING
+
+================================================================================
+Instances with unequal generality should conflict in either definition order
+================================================================================
+
+(package coalton-unit-test/fundeps)
+
+(define-class (C :a :b (:a -> :b)))
+
+(define-instance (C (List :a) String))
+
+(define-instance (C (List Integer) Unit))
+
+--------------------------------------------------------------------------------
+
+error: Instance fundep conflict
+  --> test:7:17
+   |
+ 7 |  (define-instance (C (List Integer) Unit))
+   |                   ^^^^^^^^^^^^^^^^^^^^^^^ instance conflicts previous instance C (LIST :A) STRING
+
+================================================================================
+Instances with unequal generality should conflict in either definition order
+================================================================================
+
+(package coalton-unit-test/fundeps)
+
+(define-class (C :a :b (:a -> :b)))
+
+(define-instance (C (List Integer) Unit))
+
+(define-instance (C (List :a) String))
+
+--------------------------------------------------------------------------------
+
+error: Instance fundep conflict
+  --> test:7:17
+   |
+ 7 |  (define-instance (C (List :a) String))
+   |                   ^^^^^^^^^^^^^^^^^^^^ instance conflicts previous instance C (LIST INTEGER) UNIT
+
+================================================================================
+Fundeps improve type checking
+================================================================================
+
+(package coalton-unit-test/fundeps)
+
+(define-class (C :a :b)
+  (m (:a -> :b)))
+
+(define-instance (C String Integer)
+  (define (m x) 5))
+
+(define (ambig _x) Unit)
+
+(define x (ambig (m \"hello\")))
+
+--------------------------------------------------------------------------------
+
+error: Unknown variable
+  --> test:11:20
+    |
+ 11 |  (define x (ambig (m \"hello\")))
+    |                      ^^^^^^^^^ unknown variable
+
+================================================================================
+Ambiguous despite fundep
+================================================================================
+
+(package coalton-unit-test/fundeps)
+
+(define-class (C :a :b (:a -> :b))
+(m :b))
+
+--------------------------------------------------------------------------------
+
+error: Ambiguous method
+  --> test:4:0
+   |
+ 4 |  (m :b))
+   |  ^^^^^^ the method is ambiguous
+
+================================================================================
+Ambiguous without fundep
+================================================================================
+
+(package coalton-unit-test/fundeps)
+
+(define-class (C :a :b)
+  (m :a))
+
+--------------------------------------------------------------------------------
+
+error: Ambiguous method
+  --> test:4:2
+   |
+ 4 |    (m :a))
+   |    ^^^^^^ the method is ambiguous

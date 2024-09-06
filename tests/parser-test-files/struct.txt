@@ -1,0 +1,183 @@
+================================================================================
+struct-definition-parse-error
+================================================================================
+
+(package coalton-unit-tests/struct)
+
+(define-struct Point
+  5
+  (y Integer))
+
+--------------------------------------------------------------------------------
+
+error: Malformed struct field
+  --> test:4:2
+   |
+ 4 |    5
+   |    ^ unexpected form
+
+================================================================================
+struct-definition-parse-error
+================================================================================
+
+(package coalton-unit-tests/struct)
+
+(define-struct Point
+  (5 Integer)
+  (y Integer))
+
+--------------------------------------------------------------------------------
+
+error: Malformed struct field
+  --> test:4:13
+   |
+ 4 |    (5 Integer)
+   |              ^ invalid field name (must be a symbol)
+
+================================================================================
+struct-definition-parse-error
+================================================================================
+
+(package coalton-unit-tests/struct)
+
+(define-struct Point
+  (x)
+  (y Integer))
+
+--------------------------------------------------------------------------------
+
+error: Malformed struct field
+  --> test:4:2
+   |
+ 4 |    (x)
+   |    ^^^ expected field type
+
+================================================================================
+struct-definition-parse-error
+================================================================================
+
+(package coalton-unit-tests/struct)
+
+(define-struct Point
+  (x "the x value.")
+  (y Integer))
+
+--------------------------------------------------------------------------------
+
+error: Malformed struct field
+  --> test:4:20
+   |
+ 4 |    (x "the x value.")
+   |                     ^ expected field type
+
+================================================================================
+struct-definition-parse-error
+================================================================================
+
+(package coalton-unit-tests/struct)
+
+(define-struct Point
+  (x Integer "the x value")
+  (y Integer))
+
+--------------------------------------------------------------------------------
+
+error: Malformed struct field
+  --> test:4:27
+   |
+ 4 |    (x Integer "the x value")
+   |                            ^ unexpected trailing form
+
+================================================================================
+struct-definition-parse-error
+================================================================================
+
+(package coalton-unit-tests/struct)
+
+(define-struct Point
+  (x "the x value" Integer "also, it's the x value")
+  (y Integer))
+
+--------------------------------------------------------------------------------
+
+error: Malformed struct field
+  --> test:4:52
+   |
+ 4 |    (x "the x value" Integer "also, it's the x value")
+   |                                                     ^ unexpected trailing form
+
+================================================================================
+invalid-struct-accessors
+================================================================================
+
+(package coalton-unit-tests/struct)
+
+(define x (.x #\X))
+
+--------------------------------------------------------------------------------
+
+error: Invalid accessor
+  --> test:3:11
+   |
+ 3 |  (define x (.x #\X))
+   |             ^^ type 'CHAR' is not a struct
+
+================================================================================
+invalid-struct-accessors
+================================================================================
+
+(package coalton-unit-tests/struct)
+
+(define-struct Point
+  (x Integer)
+  (y Integer))
+
+(define x (.q (Point 1 2)))
+
+--------------------------------------------------------------------------------
+
+error: Invalid accessor
+  --> test:7:11
+   |
+ 7 |  (define x (.q (Point 1 2)))
+   |             ^^ struct 'POINT' does not have the field 'Q'
+
+================================================================================
+ambiguous-accessors
+================================================================================
+
+(package coalton-unit-tests/struct)
+
+(define (f p)
+
+(.x p))
+
+--------------------------------------------------------------------------------
+
+error: Ambiguous accessor
+  --> test:5:1
+   |
+ 5 |  (.x p))
+   |   ^^ accessor is ambiguous
+
+================================================================================
+ambiguous-accessors
+================================================================================
+
+(package coalton-unit-tests/struct)
+
+(define-type Point
+  (x Integer)
+  (y Integer))
+
+(define (f _)
+  (let ((g (fn (p) (.x p))))
+    (g (Point 1 2))))
+
+--------------------------------------------------------------------------------
+
+error: Ambiguous accessor
+  --> test:8:20
+   |
+ 8 |    (let ((g (fn (p) (.x p))))
+   |                      ^^ accessor is ambiguous

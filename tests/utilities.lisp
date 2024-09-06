@@ -97,6 +97,9 @@ Returns (values SOURCE-PATHNAME COMPILED-PATHNAME)."
         (progn
           (entry:compile source)
           nil)
+      (se:source-base-warning (c)
+        (string-trim '(#\Space #\Newline)
+                     (princ-to-string c)))
       (se:source-base-error (c)
         (string-trim '(#\Space #\Newline)
                      (princ-to-string c))))))
