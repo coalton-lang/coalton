@@ -14,3 +14,27 @@ error: Unknown type
    |
  3 |  (declare f (unknown -> ufix))
    |              ^^^^^^^ unknown type UNKNOWN
+
+================================================================================
+Duplicate definition
+================================================================================
+
+(package coalton-unit-test/duplicate)
+
+(define-type BigType)
+
+(define-struct BigType
+  (wow String))
+
+--------------------------------------------------------------------------------
+
+error: Duplicate type definitions
+  --> test:3:0
+   |
+ 3 |   (define-type BigType)
+   |   ^^^^^^^^^^^^^^^^^^^^^ first definition here
+ 4 |   
+ 5 |   (define-struct BigType
+   |  _^
+ 6 | |   (wow String))
+   | |_______________^ second definition here
