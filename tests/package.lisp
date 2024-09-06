@@ -13,7 +13,9 @@
    (#:analysis #:coalton-impl/analysis)
    (#:entry #:coalton-impl/entry))
   (:export
-   #:run-coalton-tests))
+   #:run-coalton-tests
+   #:run-test-file
+   #:run-test))
 
 (defpackage #:coalton-native-tests
   (:documentation "Tests for the COALTON system, written in Coalton.")
@@ -39,5 +41,3 @@
 (in-package #:coalton-native-tests)
 
 (coalton-fiasco-init #:coalton-tests)
-
-

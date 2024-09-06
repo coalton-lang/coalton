@@ -1,5 +1,5 @@
 ================================================================================
-Minimal package
+1 Minimal package
 ================================================================================
 
 (package coalton-unit-test/lib-example-simple)
@@ -7,7 +7,7 @@ Minimal package
 --------------------------------------------------------------------------------
 
 ================================================================================
-Package with imports and exports
+2 Package with imports and exports
 ================================================================================
 
 (package coalton-unit-test/lib-example-complex
@@ -25,7 +25,7 @@ Package with imports and exports
 --------------------------------------------------------------------------------
 
 ================================================================================
-Missing package name
+3 Missing package name
 ================================================================================
 
 (package)
@@ -39,7 +39,7 @@ error: Malformed package declaration
    |          ^ missing package name
 
 ================================================================================
-Unknown package clause
+4 Unknown package clause
 ================================================================================
 
 (package test
@@ -57,7 +57,7 @@ help: Must be one of IMPORT, IMPORT-FROM, EXPORT, SHADOW
    |    ---
 
 ================================================================================
-Empty import clause
+5 Empty import clause
 ================================================================================
 
 (package test
@@ -72,7 +72,7 @@ error: Malformed package declaration
    |           ^ empty IMPORT form
 
 ================================================================================
-Illegal type in import clause
+6 Illegal type in import clause
 ================================================================================
 
 (package test
@@ -87,7 +87,7 @@ error: Malformed package declaration
    |            ^^^ expected PACKAGE or (PACKAGE as NICK)
 
 ================================================================================
-Illegal import as form
+7 Illegal import as form
 ================================================================================
 
 (package test
@@ -102,7 +102,7 @@ error: Malformed package declaration
    |                       ^^ expected AS
 
 ================================================================================
-Incomplete import as form
+8 Incomplete import as form
 ================================================================================
 
 (package test
@@ -117,7 +117,7 @@ error: Malformed package declaration
    |                         ^ missing package nickname
 
 ================================================================================
-Shadow clause is accepted
+9 Shadow clause is accepted
 ================================================================================
 
 (package test
@@ -126,7 +126,7 @@ Shadow clause is accepted
 --------------------------------------------------------------------------------
 
 ================================================================================
-Missing dependencies
+10 Missing dependencies
 ================================================================================
 
 (package coalton-unit-test/package-c
@@ -144,7 +144,7 @@ error: Malformed package declaration
 
 
 ================================================================================
-Invalid package name
+11 Invalid package name
 ================================================================================
 
 (package 5)
@@ -158,7 +158,7 @@ error: Malformed package declaration
    |           ^ package name must be a symbol
 
 ================================================================================
-Malformed clause
+12 Malformed clause
 ================================================================================
 
 (package test-package 1)
@@ -172,7 +172,7 @@ error: Malformed package declaration
    |                        ^ malformed package clause
 
 ================================================================================
-Invalid package declaration
+13 Invalid package declaration
 ================================================================================
 
 (pancake test)
@@ -186,7 +186,7 @@ error: Malformed package declaration
    |   ^^^^^^^ package declarations must start with `package`
 
 ================================================================================
-Invalid shadow clause
+14 Invalid shadow clause
 ================================================================================
 
 (package test
@@ -201,7 +201,7 @@ error: Malformed package declaration
    |            ^^ value must be a symbol
 
 ================================================================================
-Unterminated package form
+15 Unterminated package form
 ================================================================================
 
 (package test
