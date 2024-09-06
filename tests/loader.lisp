@@ -1,32 +1,48 @@
-;;; This package contains the function #'load-suite for loading parser
-;;; test suites from specially formatted files.
-;;;
-;;; The format is:
-;;;
-;;;     ======
-;;;     <test name 1>
-;;;     ======
-;;;     <invalid coalton program text>
-;;;     ------
-;;;     <expeced error message>
-;;;     ======
-;;;     <test name 2>
-;;;     ...
-;;;
-;;; etc.
-;;;
-;;; See example in tests/parser-test-files/package.txt
-;;;
-;;; Use (load-suite #<pathname>) to load a suite, or (run-suite
-;;; #<pathname>) to run one.  #'run-suite is defined in
-;;; tests/utilities.lisp.
+;;;; This package contains the function LOAD-TEST-FILE for loading
+;;;; parser tests from specially formatted files.
+;;;;
+;;;; The format is:
+;;;;
+;;;;     ======
+;;;;     <header>
+;;;;     ======
+;;;;     <program>
+;;;;     ------
+;;;;     <error message>
+;;;;       or
+;;;;     <empty string, to assert that the program must compile without error>
+;;;;     ======
+;;;;     <header 2>
+;;;;     ...
+;;;;
+;;;; The first sequence of one or more consecutive numeric characters
+;;;; in the test header will be interpreted as a test number, for
+;;;; reexecution of single tests.
+;;;;
+;;;; There are examples in tests/parser-test-files/*.txt
+;;;;
+;;;; Use
+;;;;
+;;;;     (load-test-file #<pathname>)
+;;;;
+;;;; to load tests,
+;;;;
+;;;;     (run-test-file #<pathname>)
+;;;;
+;;;; to run tests, and
+;;;;
+;;;;     (run-test #<pathname> N)
+;;;;
+;;;; to run a single numbered test without condition handlers.
+;;;;
+;;;; RUN-TEST-FILE and RUN-TEST are defined in tests/utilities.lisp
 
 (defpackage #:coalton-tests/loader
-  (:documentation "Load a test suite from a delimited file.")
+  (:documentation "Load tests from a delimited file.")
   (:use
    #:cl)
   (:export
-   #:load-suite))
+   #:load-test-file))
 
 (in-package #:coalton-tests/loader)
 
@@ -64,11 +80,23 @@
   (string-trim '(#\Space #\Newline)
                (format nil "~{~A~%~}" (reverse lines))))
 
+(defun first-integer (string)
+  "Return the first integer appearing in STRING, or nil."
+  (let ((start (position-if #'digit-char-p string)))
+    (when start
+      (let* ((string (subseq string start))
+             (end (position-if (complement #'digit-char-p) string)))
+        (parse-integer (if end
+                           (subseq string 0 end)
+                           string))))))
+
 (defun get-case (state)
-  (list (loader-start state)
-        (combine-lines (loader-header state))
-        (combine-lines (loader-program state))
-        (combine-lines (loader-error state))))
+  (let ((header (combine-lines (loader-header state))))
+    (list (loader-start state)
+          (first-integer header)
+          header
+          (combine-lines (loader-program state))
+          (combine-lines (loader-error state)))))
 
 (defun collect-case (state)
   (with-next-state state
@@ -104,7 +132,8 @@
           (t
            (collect-line state line)))))
 
-(defun load-suite (pathname)
+(defun load-test-file (pathname)
+  "Load PATHNAME, a file containing multiple compiler tests."
   (with-open-file (stream pathname :direction ':input :element-type 'character)
     (loop :for state := (make-loader)
             :then (process-line state (read-line stream nil nil))

@@ -44,7 +44,7 @@
                (multiple-value-bind (program env)
                    (entry:entry-point program)
                  (declare (ignore program))
- 
+
                  (when expected-types
                    (loop :for (unparsed-symbol . unparsed-type) :in expected-types
                          :do (let ((symbol (intern (string-upcase unparsed-symbol) *package*))
@@ -101,10 +101,14 @@ Returns (values SOURCE-PATHNAME COMPILED-PATHNAME)."
         (string-trim '(#\Space #\Newline)
                      (princ-to-string c))))))
 
-(defun run-suite (pathname)
+;;; The structure of test definition files is described in the header
+;;; of ./loader.lisp
+
+(defun run-test-file (pathname)
+  "Run the test file at PATHNAME."
   (let ((file (test-file pathname)))
-    (loop :for (line description program expected-error)
-            :in (coalton-tests/loader:load-suite file)
+    (loop :for (line number description program expected-error)
+            :in (coalton-tests/loader:load-test-file file)
           :for generated-error := (collect-compiler-error program)
           :do (cond ((null generated-error)
                      (is (zerop (length expected-error))
@@ -113,8 +117,24 @@ Returns (values SOURCE-PATHNAME COMPILED-PATHNAME)."
                      (check-string= (format nil "program text.~%~
 input file: ~A~%~
 line number: ~A~%~
-test case: ~A~%~
+test number: ~A~%~
+test header: ~A~%~
 expected error (A) and generated error (B)"
-                                            file line description)
+                                            file line
+                                            (or number "(unassigned)")
+                                            description)
                                     expected-error
                                     generated-error))))))
+
+(defun run-test (pathname test-number)
+  "Run the test case TEST-NUMBER in the test file at PATHNAME without binding any condition handlers.
+This exists to simplify access to point-of-error debugging."
+  (let ((file (test-file pathname))
+        (run? nil))
+    (loop :for (line number description program expected-error)
+            :in (coalton-tests/loader:load-test-file file)
+          :when (eq test-number number)
+            :do (entry:compile (source:make-source-string program :name "test"))
+                (setf run? t))
+    (unless run?
+      (error "Test not found: ~A" test-number))))
