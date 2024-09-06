@@ -1,0 +1,5 @@
+error: Malformed alias definition
+  --> test:4:0
+   |
+ 4 |  (define-alias)
+   |  ^^^^^^^^^^^^^^ expected body

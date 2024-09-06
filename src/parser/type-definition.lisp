@@ -27,7 +27,7 @@
 (in-package #:coalton-impl/parser/type-definition)
 
 (deftype type-definition ()
-  '(or toplevel-define-type toplevel-define-struct))
+  '(or toplevel-define-type toplevel-define-struct toplevel-define-alias))
 
 (defun type-definition-p (x)
   (typep x 'type-definition))
@@ -43,6 +43,10 @@
   (:method ((def toplevel-define-type))
     (declare (values identifier-src))
     (toplevel-define-type-name def))
+
+  (:method ((def toplevel-define-alias))
+    (declare (values identifier-src))
+    (toplevel-define-alias-name def))
 
   (:method ((def toplevel-define-struct))
     (declare (values identifier-src))

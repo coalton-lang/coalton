@@ -60,6 +60,9 @@
     (declare (values tycon-list))
     (mapcan #'collect-referenced-types-generic% (toplevel-define-type-ctors type)))
 
+  (:method ((alias toplevel-define-alias))
+    (collect-referenced-types-generic% (toplevel-define-alias-base-type alias)))
+
   (:method ((field struct-field))
     (declare (values tycon-list &optional))
     (collect-referenced-types-generic% (struct-field-type field)))

@@ -1,0 +1,26 @@
+;; GOOD: Define Type
+(package test-package)
+
+(define-type T)
+(define-alias T1 T
+  "T1 is an alias of T"))
+
+(define-alias T2 UFix)
+
+(declare ft (T1 -> T1))
+(define (ft t)
+  t)
+
+(declare ft2 (T1 -> T))
+(define (ft2 t)
+  t)
+
+(declare ft3 (T2 -> UFix))
+(define (ft3 t)
+  (1+ t))
+
+(define-alias Index UFix
+  "Index is an alias of UFix.")
+
+(define-alias Trash (Vector :a)
+  "This is the trash bin.")

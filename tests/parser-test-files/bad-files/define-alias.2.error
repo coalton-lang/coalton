@@ -1,0 +1,5 @@
+error: Invalid alias variable
+  --> test:4:14
+   |
+ 4 |  (define-alias "Wow")
+   |                ^^^^^ expected identifier.

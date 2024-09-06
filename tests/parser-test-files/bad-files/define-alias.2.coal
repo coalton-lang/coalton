@@ -1,0 +1,4 @@
+;; BAD: Invalid define alias - string instead of alias name
+(package test-package)
+
+(define-alias "Wow")

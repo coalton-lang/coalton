@@ -1,0 +1,4 @@
+;; BAD: Invalid define alias -
+(package test-package)
+
+(define-alias Much-Wow "Wow")

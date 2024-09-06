@@ -1,0 +1,4 @@
+;; BAD: Invalid define alias- missing body
+(package test-package)
+
+(define-alias)
