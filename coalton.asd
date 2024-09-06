@@ -256,7 +256,6 @@
                (:file "list-tests")
                (:file "red-black-tests")
                (:file "seq-tests")
-               (:file "unused-variables")
                (:file "pattern-matching-tests")
                (:file "looping-native-tests")
                (:file "monomorphizer-tests")

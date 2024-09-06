@@ -67,7 +67,8 @@
 
   (tc-error (tc:ty-predicate-location pred)
             "Ambiguous predicate"
-            (format nil "Ambiguous predicate ~S" pred)))
+            (with-pprint-variable-context ()
+              (format nil "Ambiguous predicate ~S" pred))))
 
 (defun error-unknown-pred (pred)
   (declare (type tc:ty-predicate pred))
@@ -1888,9 +1889,10 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                 (when (not (null retained-preds))
                   (tc-error location
                             "Explicit type is missing inferred predicate"
-                            (format nil "Declared type ~S is missing inferred predicate ~S"
-                                    output-qual-type
-                                    (first retained-preds))))
+                            (with-pprint-variable-context ()
+                              (format nil "Declared type ~S is missing inferred predicate ~S"
+                                      output-qual-type
+                                      (first retained-preds)))))
 
                 (values deferred-preds
                         (attach-explicit-binding-type (tc:apply-substitution subs binding-node)

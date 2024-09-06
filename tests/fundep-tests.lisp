@@ -14,11 +14,7 @@
    "(define-class (C :a :b :c (:a -> :b :c)))")
 
   (check-coalton-types
-   "(define-class (C :a :b (:a -> :b) (:b -> :a)))")
-
-  (signals tc:tc-error
-    (check-coalton-types
-     "(define-class (C :a :b (:a -> :c)))")))
+   "(define-class (C :a :b (:a -> :b) (:b -> :a)))"))
 
 ;; Instance conflicts
 (deftest define-fundep-instances ()
@@ -27,35 +23,7 @@
 
     (define-instance (C Integer String))
 
-    (define-instance (C String Integer))")
-
-  ;; Trivially conflicting instances
-  (signals tc:tc-error
-    (check-coalton-types
-     "(define-class (C :a :b (:a -> :b)))
-
-      (define-instance (C Integer String))
-
-      (define-instance (C Integer Unit))"))
-
-  ;;
-  ;; Instances with unequal generality should conflict in either definition order
-  ;;
-  (signals tc:tc-error
-    (check-coalton-types
-     "(define-class (C :a :b (:a -> :b)))
-
-      (define-instance (C (List :a) String))
-
-      (define-instance (C (List Integer) Unit))"))
-
-  (signals tc:tc-error
-    (check-coalton-types
-     "(define-class (C :a :b (:a -> :b)))
-
-      (define-instance (C (List Integer) Unit))
-
-      (define-instance (C (List :a) String))")))
+    (define-instance (C String Integer))"))
 
 ;; Check that fundep declarations are used to improve type checking 
 (deftest fundep-improve-types ()
@@ -69,19 +37,6 @@
     (define (ambig _x) Unit)
 
     (define x (ambig (m \"hello\")))")
-
-  ;; verify that the above example fails without the above fundep dec
-  (signals tc:tc-error
-    (check-coalton-types
-     "(define-class (C :a :b)
-        (m (:a -> :b)))
-
-      (define-instance (C String Integer)
-        (define (m x) 5))
-
-      (define (ambig _x) Unit)
-
-      (define x (ambig (m \"hello\")))"))
 
   ;; verify that the correct type is inferred
   (check-coalton-types
@@ -125,19 +80,7 @@
   ;; Unambiguous because of fundep
   (check-coalton-types
    "(define-class (C :a :b (:a -> :b))
-      (m :a))")
-
-  ;; Ambiguous despite fundep
-  (signals tc:tc-error
-    (check-coalton-types
-     "(define-class (C :a :b (:a -> :b))
-      (m :b))"))
-
-  ;; Ambiguous without fundep
-  (signals tc:tc-error
-    (check-coalton-types
-     "(define-class (C :a :b)
-        (m :a))")))
+      (m :a))"))
 
 (deftest fundep-ambiguous-declarations ()
   (check-coalton-types

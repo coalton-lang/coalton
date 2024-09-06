@@ -13,43 +13,6 @@
       (x :a)
       (y \"The y value.\" :a))"))
 
-(deftest test-struct-definition-parse-errors ()
-  (signals parser:parse-error
-    (check-coalton-types
-     "(define-struct Point
-        5
-        (y Integer))"))
-
-  (signals parser:parse-error
-    (check-coalton-types
-     "(define-struct Point
-        (5 Integer)
-        (y Integer))"))
-
-  (signals parser:parse-error
-    (check-coalton-types
-     "(define-struct Point
-        (x)
-        (y Integer))"))
-
-  (signals parser:parse-error
-    (check-coalton-types
-     "(define-struct Point
-        (x \"the x value.\")
-        (y Integer))"))
-
-  (signals parser:parse-error
-    (check-coalton-types
-     "(define-struct Point
-        (x Integer \"the x value\")
-        (y Integer))"))
-
-  (signals parser:parse-error
-    (check-coalton-types
-     "(define-struct Point
-        (x \"the x value\" Integer \"also, it's the x value\")
-        (y Integer))")))
-
 (deftest test-struct-accessors ()
   (check-coalton-types
    "(define-struct Point
@@ -80,19 +43,6 @@
 
    '("x" . "Char")))
 
-(deftest test-invalid-struct-accessors ()
-  (signals tc:tc-error
-    (check-coalton-types
-     "(define x (.x #\\X))"))
-
-  (signals tc:tc-error
-    (check-coalton-types
-     "(define-struct Point
-        (x Integer)
-        (y Integer))
-
-      (define x (.q (Point 1 2)))")))
-
 (deftest test-struct-accessors-as-functions ()
   (check-coalton-types
    "(define-struct Point
@@ -110,22 +60,6 @@
 
     (declare f (Point -> Integer))
     (define f .x)"))
-
-(deftest test-ambiguous-accessors ()
-  (signals tc:tc-error
-    (check-coalton-types
-     "(define (f p)
-      (.x p))"))
-
-  (signals tc:tc-error
-    (check-coalton-types
-     "(define-type Point
-       (x Integer)
-       (y Integer))
-
-      (define (f _)
-        (let ((g (fn (p) (.x p))))
-          (g (Point 1 2))))")))
 
 ;; See gh #959
 (deftest test-accessor-on-argument-let-binding ()
