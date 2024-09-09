@@ -9,9 +9,12 @@
    #:action
    #:count-applications
    #:count-nodes
+   #:identity-traverse-hook
    #:make-traverse-let-action-skipping-cons-bindings
    #:*traverse*
    #:traverse
+   #:traverse-with-hook
+   #:traverse-with-parent-thunk
    #:traverse-with-binding-list))
 
 (in-package #:coalton-impl/codegen/traverse)
@@ -233,7 +236,11 @@ any node-specific actions that will run after another action which may
 return a node of a different type. For example, if there is an action
 on `:traverse 'node-variable` to substitute variables with arbitrary
 other nodes, then it would be inappropriate to also define an action
-`:after 'node-variable`."
+`:after 'node-variable`.
+
+See `traverse-with-hook` if you need to intercept when actions are
+called recursively.
+"
   (declare (type node        initial-node)
            (type action-list custom-actions)
            (type list        initial-args)
@@ -250,8 +257,54 @@ other nodes, then it would be inappropriate to also define an action
               (fire-action ':traverse (class-name (class-of current-node)) actions args)
               (fire-action ':after    (class-name (class-of current-node)) actions args)
               (fire-action ':after    'node                                actions args))))
-      (let ((*traverse* #'current-traverse))
+      (let ((*traverse* (lambda (node &rest args)
+                          (funcall *traverse-hook*
+                                   (lambda ()
+                                     (apply #'current-traverse node args))
+                                   node))))
         (apply *traverse* initial-node initial-args)))))
+
+(defun identity-traverse-hook (thunk node)
+  "Default traversal hook function, which doesn't do any extra operation.
+This is called when the caller does _not_ use `traverse-with-hook`."
+  (declare (ignore node)) (funcall thunk))
+
+(defvar *traverse-hook* #'identity-traverse-hook
+  "A private dynamic variable used by `traverse-with-hook`.  This is rebound
+dynamically during running `traverse-with-hook`.")
+
+(defun traverse-with-hook (hook node action-list &rest args)
+  "Like `traverse`, but uses `hook` as the traversal hook function.
+The hook function is called whenever `traverse` recurse into the sub
+nodes.  It takes two arguments: `thunk` to recurse traversal, and `node`
+that is about to be recursed.
+
+The `traverse` function is equivalent to this with passing
+`identity-traverse-hook` as the hook.
+
+One of the use cases is to record parent node of the node being traversed.
+See `print-node-parent` in traverse.lisp for the example."
+  (let ((*traverse-hook* hook))
+    (apply #'traverse node action-list args)))
+
+;; Used in traverse-with-parent-node
+(defvar *traverse-parent-node-parent* nil)
+(defvar *traverse-parent-node-current* nil)
+
+(defun traverse-with-parent-thunk (node action-list &rest args)
+  "Like 'traverse', but actions are called with a thunk in the first argument,
+which returns the node's parent node.
+This captures one of the typical use case of `traverse-with-hook`."
+  (labels ((track-parent-node-hook (thunk node)
+             (let ((*traverse-parent-node-parent* *traverse-parent-node-current*)
+                   (*traverse-parent-node-current* node))
+               (funcall thunk))))
+    (apply #'traverse-with-hook
+           #'track-parent-node-hook
+           node
+           action-list
+           (lambda () *traverse-parent-node-parent*)
+           args)))
 
 ;;;
 ;;; Traversals with bound variables
@@ -388,6 +441,27 @@ without any slot information."
       (action (:after node node)
         (decf counter)
         (format t "POST: ~v@{|   ~}~A~%" counter (class-name (class-of node)))
+        (values))))))
+
+(defun print-node-parent (node)
+  "Print visiting node and its parent, using `traverse-with-parent-thunk`."
+  (declare (type node node)
+           (values node &optional))
+  (let ((counter 0))
+    (traverse-with-parent-thunk
+     node
+     (list
+      (action (:before node node parent-thunk)
+        (format t "PRE:  ~v@{|   ~}~A ~A~%" counter
+                (class-name (class-of node))
+                (class-name (class-of (funcall parent-thunk))))
+        (incf counter)
+        (values))
+      (action (:after node node parent-thunk)
+        (decf counter)
+        (format t "POST: ~v@{|   ~}~A ~A~%" counter
+                (class-name (class-of node))
+                (class-name (class-of (funcall parent-thunk))))
         (values))))))
 
 (defun make-traverse-let-action-skipping-cons-bindings ()
