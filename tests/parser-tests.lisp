@@ -42,4 +42,5 @@
     (run-test-file "tests/parser-test-files/lisp-toplevel.txt"))
   (run-test-file "tests/parser-test-files/lisp-toplevel-forbid.txt")
   (run-test-file "tests/parser-test-files/package.txt")
+  (run-test-file "tests/parser-test-files/hashtable.txt")
   (run-test-file "tests/parser-test-files/define.txt"))

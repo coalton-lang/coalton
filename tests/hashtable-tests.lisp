@@ -68,25 +68,3 @@
 
   (is (/= (hash (the (Hashtable String String) (hashtable:make)))
           (hash (hashtable:make ("a" "b"))))))
-
-(in-package #:coalton-tests)
-
-(deftest hashtable-static-duplicate-keys ()
-  (signals coalton-library/hashtable::make-hash-table-static-duplicate-keys
-    (check-coalton-types
-     "(define my-ht
-        (coalton-library/hashtable:make (\"zero\" 0)
-                                         (\"one\" 1)
-                                         (\"two\" 2)
-                                         (\"zero\" 3)))"))
-
-  (signals coalton-library/hashtable::make-hash-table-static-duplicate-keys
-    (check-coalton-types
-     "(define my-ht
-        (let ((zero \"zero\")
-                       (one \"one\")
-                       (two \"two\"))
-           (coalton-library/hashtable:make (zero 0)
-                                           (one 1)
-                                           (two 2)
-                                           (zero 3))))")))

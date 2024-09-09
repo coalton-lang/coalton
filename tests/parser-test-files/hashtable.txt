@@ -1,0 +1,56 @@
+================================================================================
+1 duplicate keys
+================================================================================
+
+(package coalton-unit-tests/hashtable)
+
+(define my-ht
+  (coalton-library/hashtable:make ("zero" 0)
+                                  ("one" 1)
+                                  ("two" 2)
+                                  ("zero" 3)))
+
+--------------------------------------------------------------------------------
+
+error: Error during macro expansion
+  --> test:4:2
+   |
+ 4 |     (coalton-library/hashtable:make ("zero" 0)
+   |  ___^
+ 5 | |                                   ("one" 1)
+ 6 | |                                   ("two" 2)
+ 7 | |                                   ("zero" 3)))
+   | |_____________________________________________^ Statically-detected duplicate keys in `make-hash-table': key "zero" applies to both ("zero"
+                                                                                     0) and ("zero"
+                                                                                             3)
+note: Error occurs within macro context. Source locations may be imprecise
+
+================================================================================
+1 duplicate keys
+================================================================================
+
+(package coalton-unit-tests/hashtable)
+
+(define my-ht
+  (let ((zero "zero")
+        (one "one")
+        (two "two"))
+    (coalton-library/hashtable:make (zero 0)
+                                    (one 1)
+                                    (two 2)
+                                    (zero 3))))
+
+--------------------------------------------------------------------------------
+
+error: Error during macro expansion
+  --> test:7:4
+    |
+ 7  |       (coalton-library/hashtable:make (zero 0)
+    |  _____^
+ 8  | |                                     (one 1)
+ 9  | |                                     (two 2)
+ 10 | |                                     (zero 3))))
+    | |_____________________________________________^ Statically-detected duplicate keys in `make-hash-table': key ZERO applies to both (ZERO
+                                                                                   0) and (ZERO
+                                                                                           3)
+note: Error occurs within macro context. Source locations may be imprecise
