@@ -14,7 +14,7 @@
 
 (in-package #:coalton-impl/parser/macro)
 
-(defun expand-macro (form)
+(defun expand-macro (form source)
   "Expand the macro in FORM using MACROEXPAND-1, trying our best to preserve source information."
   (declare (type cst:cst form)
            (values cst:cst &optional))
@@ -25,12 +25,18 @@
         ;; to these to retrieve source information.
         (source-table (make-hash-table :test #'eq)))
     (fill-source-table form source-table (make-hash-table :test #'eq))
-    
-    (rebuild-cst
-     (macroexpand-1 (cst:raw form))
-     source-table
-     fallback-source
-     (make-hash-table :test #'eq))))
+    (handler-case
+        (rebuild-cst (macroexpand-1 (cst:raw form))
+                     source-table
+                     fallback-source
+                     (make-hash-table :test #'eq))
+      (error (condition)
+        (error 'parse-error
+               :err (source-error:source-error
+                     :span (cst:source form)
+                     :source source
+                     :message "Error during macro expansion"
+                     :primary-note (princ-to-string condition)))))))
 
 (defun fill-source-table (cst source-table seen-forms)
   "Fill SOURCE-TABLE with source information in CST and its children."

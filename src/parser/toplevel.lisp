@@ -1143,7 +1143,7 @@ consume all attributes")))
                          :message "Error occurs within macro context. Source locations may be imprecise")
                         se:*source-error-context*
                         :test #'equalp)))
-          (parse-toplevel-form (expand-macro form) program attributes source)))
+          (parse-toplevel-form (expand-macro form source) program attributes source)))
 
        ((error 'parse-error
                :err (se:source-error

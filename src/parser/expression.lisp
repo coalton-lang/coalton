@@ -1208,15 +1208,7 @@ Rebound to NIL parsing an anonymous FN.")
                         :message "Error occurs within macro context. Source locations may be imprecise")
                        se:*source-error-context*
                        :test #'equalp)))
-         (handler-case
-             (parse-expression (expand-macro form) source)
-           (error (c)
-             (error 'parse-error
-                    :err (se:source-error
-                          :span (cst:source form)
-                          :source source
-                          :message "Error during macro expansion"
-                          :primary-note (princ-to-string c))))))))
+         (parse-expression (expand-macro form source) source))))
 
     ;;
     ;; Function Application
