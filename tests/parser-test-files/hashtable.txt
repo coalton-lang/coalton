@@ -20,9 +20,7 @@ error: Error during macro expansion
  5 | |                                   ("one" 1)
  6 | |                                   ("two" 2)
  7 | |                                   ("zero" 3)))
-   | |_____________________________________________^ Statically-detected duplicate keys in `make-hash-table': key "zero" applies to both ("zero"
-                                                                                     0) and ("zero"
-                                                                                             3)
+   | |_____________________________________________^ Duplicate hashtable key: "zero"
 note: Error occurs within macro context. Source locations may be imprecise
 
 ================================================================================
@@ -50,7 +48,5 @@ error: Error during macro expansion
  8  | |                                     (one 1)
  9  | |                                     (two 2)
  10 | |                                     (zero 3))))
-    | |_____________________________________________^ Statically-detected duplicate keys in `make-hash-table': key ZERO applies to both (ZERO
-                                                                                   0) and (ZERO
-                                                                                           3)
+    | |_____________________________________________^ Duplicate hashtable key: ZERO
 note: Error occurs within macro context. Source locations may be imprecise
