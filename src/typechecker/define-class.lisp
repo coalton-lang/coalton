@@ -63,7 +63,7 @@
   (check-duplicates
    classes
    (alexandria:compose #'parser:identifier-src-name #'parser:toplevel-define-class-name)
-   #'parser:toplevel-define-class-location
+   #'source:location
    (lambda (first second)
      (error 'tc:tc-error
             :err (source:source-error
@@ -162,16 +162,17 @@
 
            ;; Classes cannot have cyclic superclasses
            :when (intersection superclass-names scc-names :test #'eq)
-             :do (error 'tc:tc-error
-                        :err (source:source-error
-                              :location (parser:toplevel-define-class-head-location (first scc))
-                              :message "Cyclic superclasses"
-                              :primary-note "in class defined here"
-                              :notes (loop :for class :in (rest scc)
-                                           :collect (se:make-source-error-note
-                                                     :type :primary
-                                                     :span (source:location-span (parser:toplevel-define-class-head-location class))
-                                                     :message "in class defined here"))))
+             :do (let ((scc (sort (copy-list scc) #'source:location< :key #'source:location)))
+                   (error 'tc:tc-error
+                          :err (source:source-error
+                                :location (parser:toplevel-define-class-head-location (first scc))
+                                :message "Cyclic superclasses"
+                                :primary-note "in class defined here"
+                                :notes (loop :for class :in (rest scc)
+                                             :collect (se:make-source-error-note
+                                                       :type :primary
+                                                       :span (source:location-span (parser:toplevel-define-class-head-location class))
+                                                       :message "in class defined here")))))
 
            :append (multiple-value-bind (classes env_)
                        (infer-class-scc-kinds scc env)
@@ -299,7 +300,7 @@
                   :superclass-dict superclass-dict
                   :superclass-map superclass-map
                   :docstring (source:docstring class)
-                  :location (parser:toplevel-define-class-location class))
+                  :location (source:location class))
 
            :for method-tys := (loop :for (name . qual-ty) :in unqualifed-methods
                                     :for type := (tc:qualified-ty-type qual-ty)
@@ -350,7 +351,7 @@
                                                  :name method-name
                                                  :type :method
                                                  :docstring nil
-                                                 :location (parser:toplevel-define-class-location class))))
+                                                 :location (source:location class))))
 
                      :if (not (zerop method-arity))
                        :do (setf env (tc:set-function env method-name (tc:make-function-env-entry

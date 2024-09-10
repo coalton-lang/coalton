@@ -23,3 +23,11 @@
         (is (equal 72                 ; byte offset would have been 76
                    (cdr (nth 71 chars)))
             "Scond kanji is at char offset, not byte offset")))))
+
+(deftest test-location ()
+  (let* ((source (source:make-source-string "1234567890"))
+         (location-a (source:make-location source '(0 . 3)))
+         (location-b (source:make-location source '(4 . 7))))
+    (is (source:location< location-a location-b))
+    (is (not (source:location< location-b location-a)))
+    (is (not (source:location< location-a location-a)))))
