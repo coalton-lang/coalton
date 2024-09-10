@@ -223,7 +223,7 @@
   :components ((:file "package")
                (:file "loader")
                (:file "utilities")
-               (:file "stream-tests")
+               (:file "source-tests")
                (:file "tarjan-scc-tests")
                (:file "reader-tests")
                (:file "error-tests")

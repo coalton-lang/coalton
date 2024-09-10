@@ -2,38 +2,40 @@
 1 Binding parameters can be unused
 ================================================================================
 
-(package coalton-unit-tests/unused-variables)
+(package coalton-unit-tests/unused-variables
+  (import coalton-prelude))
 
 (define (f x) 5)
 
 --------------------------------------------------------------------------------
 
 warn: Unused variable
-  --> test:3:11
+  --> test:4:11
    |
- 3 |  (define (f x) 5)
+ 4 |  (define (f x) 5)
    |             ^ variable defined here
 help: prefix the variable with '_' to declare it unused
- 3 | (define (f _x) 5)
+ 4 | (define (f _x) 5)
    |            --
 
 ================================================================================
 2 Lambda parameters can be unused
 ================================================================================
 
-(package coalton-unit-tests/unused-variables)
+(package coalton-unit-tests/unused-variables
+  (import coalton-prelude))
 
 (define f (fn (x) 5))
 
 --------------------------------------------------------------------------------
 
 warn: Unused variable
-  --> test:3:15
+  --> test:4:15
    |
- 3 |  (define f (fn (x) 5))
+ 4 |  (define f (fn (x) 5))
    |                 ^ variable defined here
 help: prefix the variable with '_' to declare it unused
- 3 | (define f (fn (_x) 5))
+ 4 | (define f (fn (_x) 5))
    |                --
 
 ================================================================================
@@ -84,7 +86,8 @@ help: prefix the variable with '_' to declare it unused
 5 test-hidden-bindings
 ================================================================================
 
-(package coalton-unit-tests/unused-variables)
+(package coalton-unit-tests/unused-variables
+  (import coalton-prelude))
 
 (define (f) 5)
 
@@ -94,7 +97,8 @@ help: prefix the variable with '_' to declare it unused
 6 test-hidden-bindings
 ================================================================================
 
-(package coalton-unit-tests/unused-variables)
+(package coalton-unit-tests/unused-variables
+  (import coalton-prelude))
 
 (define f (fn () 5))
 

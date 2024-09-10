@@ -90,7 +90,6 @@
    #:toplevel-define-class-preds                 ; ACCESSOR
    #:toplevel-define-class-fundeps               ; ACCESSOR
    #:toplevel-define-class-methods               ; ACCESSOR
-   #:toplevel-define-class-location              ; ACCESSOR
    #:toplevel-define-class-head-location         ; ACCESSOR
    #:toplevel-define-class-list                  ; TYPE
    #:instance-method-definition                  ; STRUCT
@@ -370,20 +369,27 @@
 (deftype method-definition-list ()
   '(satisfies method-definition-list-p))
 
+(defstruct (toplevel-definition
+            (:constructor nil))
+  (location  (util:required 'location)  :type location         :read-only t)
+  (docstring (util:required 'docstring) :type (or null string) :read-only t))
+
+(defmethod location ((self toplevel-definition))
+  (toplevel-definition-location self))
+
+(defmethod docstring ((self toplevel-definition))
+  (toplevel-definition-docstring self))
+
 (defstruct (toplevel-define-class
+            (:include toplevel-definition)
             (:copier nil))
   (name      (util:required 'name)      :type identifier-src         :read-only t)
   (vars      (util:required 'vars)      :type keyword-src-list       :read-only t)
   (preds     (util:required 'preds)     :type ty-predicate-list      :read-only t)
   (fundeps   (util:required 'fundeps)   :type fundep-list            :read-only t)
-  (docstring (util:required 'docstring) :type (or null string)       :read-only t)
   (methods   (util:required 'methods)   :type method-definition-list :read-only t)
-  (location    (util:required 'location)    :type location        :read-only t)
   ;; Source information for context, name, and vars
   (head-location  (util:required 'head-location) :type location         :read-only t))
-
-(defmethod docstring ((self toplevel-define-class))
-  (toplevel-define-class-docstring self))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-define-class-list-p (x)

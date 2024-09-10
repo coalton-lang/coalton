@@ -701,7 +701,7 @@
        :fundeps (rename-type-variables-generic% (toplevel-define-class-fundeps toplevel) new-ctx)
        :docstring (docstring toplevel)
        :methods (rename-type-variables-generic% (toplevel-define-class-methods toplevel) new-ctx)
-       :location (toplevel-define-class-location toplevel)
+       :location (location toplevel)
        :head-location (toplevel-define-class-head-location toplevel))))
 
   (:method ((list list) ctx)

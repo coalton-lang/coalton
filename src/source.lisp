@@ -11,6 +11,7 @@
    #:make-location
    #:location-source
    #:location-span
+   #:location<
    #:docstring
    #:source-error))
 
@@ -53,6 +54,10 @@
 
 ;; source input
 
+(defgeneric source< (a b)
+  (:method (a b)
+    nil))
+
 (defclass source ()
   ((name :initarg :name
          :initform nil
@@ -60,6 +65,10 @@
   (:documentation "An abstract base class for sources that provide error context during condition printing.
 
 In the case of source that is copied to a different location during compilation (e.g., by emacs+slime), original file name preserves the original location."))
+
+(defmethod source< ((a source) (b source))
+  (string< (original-name a)
+           (original-name b)))
 
 (defclass source-file (source)
   ((file :initarg :file
@@ -140,12 +149,39 @@ OFFSET indicates starting character offset within the file."
 (defgeneric docstring (object)
   (:documentation "The docstring accompanying a Coalton object's definition."))
 
+(deftype span ()
+  '(cons fixnum fixnum))
+
+(declaim (inline span-start span-end))
+
+(defun span-start (span)
+  (car span))
+
+(defun span-end (span)
+  (car span))
+
+(defun span< (a b)
+  (or (< (span-start a)
+         (span-start b))
+      (< (span-end a)
+         (span-end b))))
+
 (defstruct (location
             (:constructor %make-location))
   (source nil
    :read-only t)
   (span nil
-   :type (cons fixnum fixnum) :read-only t))
+   :type span :read-only t))
+
+(defgeneric location (object)
+  (:documentation "The location of a Coalton object's source definition."))
+
+(defun location< (a b)
+  (if (eq (location-source a)
+          (location-source b))
+      (span< (location-span a)
+             (location-span b))
+      (source< a b)))
 
 (defmethod make-load-form ((self location) &optional env)
   (make-load-form-saving-slots self :environment env))
