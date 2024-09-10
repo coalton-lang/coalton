@@ -46,7 +46,7 @@ error: Declared type is too general
   --> test:4:8
    |
  4 |  (define x Unit)
-   |          ^ Declared type ∀ :A. :A is more general than inferred type UNIT.
+   |          ^ Declared type FORALL :A. :A is more general than inferred type UNIT.
 
 ================================================================================
 Missing explicit predicates cannot be defaulted
@@ -101,7 +101,7 @@ error: Kind mismatch
   --> test:3:12
    |
  3 |  (declare x (Integer Integer))
-   |              ^^^^^^^ Expected kind '* → *' but got kind '*'
+   |              ^^^^^^^ Expected kind '* -> *' but got kind '*'
 
 ================================================================================
 Check that variables can not be declared to have kind (* -> *)
@@ -123,7 +123,7 @@ error: Kind mismatch
   --> test:7:11
    |
  7 |  (declare x Maybe)
-   |             ^^^^^ Expected kind '*' but got kind '* → *'
+   |             ^^^^^ Expected kind '*' but got kind '* -> *'
 
 ================================================================================
 Match branches must return the same type
@@ -213,7 +213,7 @@ error: Type mismatch
  13 |   (define (f a b)
     |  _^
  14 | |    (== a b))
-    | |____________^ Expected type '((LIST COLOR) → BOOLEAN)' but got type '((LIST COLOR) → (LIST COLOR) → BOOLEAN)'
+    | |____________^ Expected type '((LIST COLOR) -> BOOLEAN)' but got type '((LIST COLOR) -> (LIST COLOR) -> BOOLEAN)'
 
 ================================================================================
 Check that polymorphic recursion is not possible without an explicit binding
