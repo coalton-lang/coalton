@@ -34,7 +34,7 @@
 
   (let ((missing (find-non-matching-value (list (list pattern)) 1 env)))
     (unless (eq t missing)
-      (tc-error (tc:pattern-location pattern)
+      (tc-error pattern
                 "Non-exhaustive match"
                 (format nil "Missing case ~W"
                         (print-pattern (first missing)))))))
@@ -57,14 +57,14 @@
                           (warn 'non-exhaustive-match-warning
                                 :err (source:source-error
                                       :type :warn
-                                      :location (tc:node-location node)
+                                      :location (source:location node)
                                       :message "Non-exhaustive match"
                                       :primary-note "non-exhaustive match"
                                       :notes (when (first exhaustive-or-missing)
                                                (list
                                                 (se:make-source-error-note
                                                  :type :secondary
-                                                 :span (source:location-span (tc:node-location node))
+                                                 :span (source:location-span (source:location node))
                                                  :message (format nil "Missing case ~W"
                                                                   (print-pattern (first exhaustive-or-missing)))))))))
                         (loop :for pattern :in patterns
@@ -72,14 +72,14 @@
                                 (warn 'useless-pattern-warning
                                       :err (source:source-error
                                             :type :warn
-                                            :location (tc:pattern-location pattern)
+                                            :location (source:location pattern)
                                             :message "Useless match case"
                                             :primary-note "useless match case"
                                             :notes
                                             (list
                                              (se:make-source-error-note
                                               :type :secondary
-                                              :span (source:location-span (tc:node-location node))
+                                              :span (source:location-span (source:location node))
                                               :message "in this match")))))))
                     node)
            :abstraction (lambda (node)
@@ -125,7 +125,7 @@
         (warn 'pattern-var-matches-constructor
               :err (source:source-error
                     :type :warn
-                    :location (tc:pattern-location pat)
+                    :location (source:location pat)
                     :message "Pattern warning"
                     :primary-note "pattern variable matches constructor name")))))
 

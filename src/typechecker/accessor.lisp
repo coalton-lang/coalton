@@ -13,7 +13,6 @@
    #:accessor-from                      ; ACCESSOR
    #:accessor-to                        ; ACCESSOR
    #:accessor-field                     ; ACCESSOR
-   #:accessor-location                    ; ACCESSOR
    #:accessor-list                      ; TYPE
    #:base-type                          ; FUNCTION
    #:solve-accessors                    ; FUNCTION
@@ -27,6 +26,9 @@
   (to     (util:required 'to)     :type tc:ty           :read-only t)
   (field  (util:required 'field)  :type string          :read-only t)
   (location (util:required 'location) :type source:location :read-only t))
+
+(defmethod source:location ((self accessor))
+  (accessor-location self))
 
 (defun accessor-list-p (x)
   (and (alexandria:proper-list-p x)

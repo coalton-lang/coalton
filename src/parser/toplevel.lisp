@@ -18,7 +18,6 @@
    (#:util #:coalton-impl/util))
   (:export
    #:attribute                                   ; TYPE
-   #:attribute-location                          ; ACCESSOR
    #:attribute-monomorphize                      ; STRUCT
    #:make-attribute-monomorphize                 ; CONSTRUCTOR
    #:attribute-repr                              ; STRUCT
@@ -29,14 +28,12 @@
    #:make-constructor                            ; CONSTRUCTOR
    #:constructor-name                            ; ACCESSOR
    #:constructor-fields                          ; ACCESSOR
-   #:constructor-location                        ; ACCESSOR
    #:constructor-list                            ; TYPE
    #:toplevel-define-type                        ; STRUCT
    #:make-toplevel-define-type                   ; CONSTRUCTOR
    #:toplevel-define-type-name                   ; ACCESSOR
    #:toplevel-define-type-vars                   ; ACCESSOR
    #:toplevel-define-type-ctors                  ; ACCESSOR
-   #:toplevel-define-type-location               ; ACCESSOR
    #:toplevel-define-type-repr                   ; ACCESSOR
    #:toplevel-define-type-head-location          ; ACCESSOR
    #:toplevel-define-type-list                   ; TYPE
@@ -44,14 +41,12 @@
    #:make-struct-field                           ; CONSTRUCTOR
    #:struct-field-name                           ; ACCESSOR
    #:struct-field-type                           ; ACCESSOR
-   #:struct-field-location                       ; ACCESSOR
    #:struct-field-list                           ; TYPE
    #:toplevel-define-struct                      ; STRUCT
    #:make-toplevel-define-struct                 ; CONSTRUCTOR
    #:toplevel-define-struct-name                 ; ACCESSOR
    #:toplevel-define-struct-vars                 ; ACCESSOR
    #:toplevel-define-struct-fields               ; ACCESSOR
-   #:toplevel-define-struct-location             ; ACCESSOR
    #:toplevel-define-struct-repr                 ; ACCESSOR
    #:toplevel-define-struct-head-location        ; ACCESSOR
    #:toplevel-define-struct-list                 ; TYPE
@@ -59,7 +54,6 @@
    #:make-toplevel-declare                       ; CONSTRUCTOR
    #:toplevel-declare-name                       ; ACCESSOR
    #:toplevel-declare-type                       ; ACCESSOR
-   #:toplevel-declare-location                   ; ACCESSOR
    #:toplevel-declare-list                       ; TYPE
    #:toplevel-declare-monomorphize               ; ACCESSOR
    #:toplevel-define                             ; STRUCT
@@ -68,20 +62,17 @@
    #:toplevel-define-params                      ; ACCESSOR
    #:toplevel-define-orig-params                 ; ACCESSOR
    #:toplevel-define-body                        ; ACCESSOR
-   #:toplevel-define-location                    ; ACCESSOR
    #:toplevel-define-monomorphize                ; ACCESSOR
    #:toplevel-define-list                        ; TYPE
    #:fundep                                      ; STRUCT
    #:make-fundep                                 ; CONSTRUCTOR
    #:fundep-left                                 ; ACCESSOR
    #:fundep-right                                ; ACCESSOR
-   #:fundep-location                             ; ACCESSOR
    #:fundep-list                                 ; TYPE
    #:method-definition                           ; STRUCT
    #:make-method-definition                      ; STRUCT
    #:method-definition-name                      ; ACCESSOR
    #:method-definition-type                      ; ACCESSOR
-   #:method-definition-location                  ; ACCESSOR
    #:method-definition-list                      ; TYPE
    #:toplevel-define-class                       ; STRUCT
    #:make-toplevel-define-class                  ; CONSTRUCTOR
@@ -97,14 +88,12 @@
    #:instance-method-definition-name             ; ACCESSOR
    #:instance-method-definition-params           ; ACCESSOR
    #:instance-method-definition-body             ; ACCESSOR
-   #:instance-method-definition-location         ; ACCESSOR
    #:instance-method-definition-list             ; TYPE
    #:toplevel-define-instance                    ; STRUCT
    #:make-toplevel-define-instance               ; CONSTRUCTOR
    #:toplevel-define-instance-context            ; ACCESSOR
    #:toplevel-define-instance-pred               ; ACCESSOR
    #:toplevel-define-instance-methods            ; ACCESSOR
-   #:toplevel-define-instance-location           ; ACCESSOR
    #:toplevel-define-instance-head-location      ; ACCESSOR
    #:toplevel-define-instance-compiler-generated ; ACCESSOR
    #:toplevel-define-instance-list               ; TYPE
@@ -112,14 +101,12 @@
    #:toplevel-lisp-form                          ; STRUCT
    #:make-toplevel-lisp-form                     ; CONSTRUCTOR
    #:toplevel-lisp-form-body                     ; ACCESSOR
-   #:toplevel-lisp-form-location                 ; ACCESSOR
    #:toplevel-lisp-form-list                     ; TYPE
    #:toplevel-specialize                         ; STRUCT
    #:make-toplevel-specialize                    ; CONSTRUCTOR
    #:toplevel-specialize-from                    ; ACCESSOR
    #:toplevel-specialize-to                      ; ACCESSOR
    #:toplevel-specialize-type                    ; ACCESSOR
-   #:toplevel-specialize-location                ; ACCESSOR
    #:toplevel-specialize-list                    ; TYPE
    #:program                                     ; STRUCT
    #:make-program                                ; CONSTRUCTOR
@@ -215,6 +202,9 @@
             (:copier nil))
   (location (util:required 'location) :type location :read-only t))
 
+(defmethod location ((self attribute))
+  (attribute-location self))
+
 (defstruct (attribute-monomorphize
             (:include attribute)))
 
@@ -233,6 +223,9 @@
   (fields (util:required 'fields) :type ty-list         :read-only t)
   (location (util:required 'location) :type location :read-only t))
 
+(defmethod location ((self constructor))
+  (constructor-location self))
+
 (defun constructor-list-p (x)
   (and (alexandria:proper-list-p x)
        (every #'constructor-p x)))
@@ -240,18 +233,25 @@
 (deftype constructor-list ()
   '(satisfies constructor-list-p))
 
+(defstruct (toplevel-definition
+            (:constructor nil))
+  (location  (util:required 'location)  :type location         :read-only t)
+  (docstring (util:required 'docstring) :type (or null string) :read-only t))
+
+(defmethod location ((self toplevel-definition))
+  (toplevel-definition-location self))
+
+(defmethod docstring ((self toplevel-definition))
+  (toplevel-definition-docstring self))
+
 (defstruct (toplevel-define-type
+            (:include toplevel-definition)
             (:copier nil))
   (name      (util:required 'name)      :type identifier-src           :read-only t)
   (vars      (util:required 'vars)      :type keyword-src-list         :read-only t)
-  (docstring (util:required 'docstring) :type (or null string)         :read-only t)
   (ctors     (util:required 'ctors)     :type constructor-list         :read-only t)
-  (location    (util:required 'location)    :type location          :read-only t)
   (repr      (util:required 'repr)      :type (or null attribute-repr) :read-only nil)
   (head-location  (util:required 'head-location)  :type location                     :read-only t))
-
-(defmethod docstring ((self toplevel-define-type))
-  (toplevel-define-type-docstring self))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-define-type-list-p (x)
@@ -262,14 +262,10 @@
   '(satisfies toplevel-define-type-list-p))
 
 (defstruct (struct-field
+            (:include toplevel-definition)
             (:copier nil))
   (name      (util:required 'name)      :type string           :read-only t)
-  (type      (util:required 'type)      :type ty               :read-only t)
-  (docstring (util:required 'docstring) :type (or null string) :read-only t)
-  (location    (util:required 'location)    :type location             :read-only t))
-
-(defmethod docstring ((self struct-field))
-  (struct-field-docstring self))
+  (type      (util:required 'type)      :type ty               :read-only t))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun struct-field-list-p (x)
@@ -280,17 +276,13 @@
   '(satisfies struct-field-list-p))
 
 (defstruct (toplevel-define-struct
+            (:include toplevel-definition)
             (:copier nil))
   (name      (util:required 'name)      :type identifier-src           :read-only t)
   (vars      (util:required 'vars)      :type keyword-src-list         :read-only t)
-  (docstring (util:required 'docstring) :type (or null string)         :read-only t)
   (fields    (util:required 'fields)    :type struct-field-list        :read-only t)
-  (location    (util:required 'location)    :type location          :read-only t)
   (repr      (util:required 'repr)      :type (or null attribute-repr) :read-only nil)
   (head-location  (util:required 'head-location)  :type location          :read-only t))
-
-(defmethod docstring ((self toplevel-define-struct))
-  (toplevel-define-struct-docstring self))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-define-struct-list-p (x)
@@ -304,8 +296,11 @@
             (:copier nil))
   (name         (util:required 'name)         :type identifier-src                   :read-only t)
   (type         (util:required 'type)         :type qualified-ty                     :read-only t)
-  (location       (util:required 'location)       :type location                  :read-only t)
+  (location     (util:required 'location)     :type location                         :read-only t)
   (monomorphize (util:required 'monomorphize) :type (or null attribute-monomorphize) :read-only nil))
+
+(defmethod location ((self toplevel-declare))
+  (toplevel-declare-location self))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-declare-list-p (x)
@@ -316,17 +311,13 @@
   '(satisfies toplevel-declare-list-p))
 
 (defstruct (toplevel-define
+            (:include toplevel-definition)
             (:copier nil))
   (name         (util:required 'name)         :type node-variable                    :read-only t)
   (params       (util:required 'params)       :type pattern-list                     :read-only t)
   (orig-params  (util:required 'orig-params)  :type pattern-list                     :read-only t)
-  (docstring    (util:required 'docstring)    :type (or null string)                 :read-only t)
   (body         (util:required 'body)         :type node-body                        :read-only t)
-  (location       (util:required 'location)       :type location                  :read-only t)
   (monomorphize (util:required 'monomorphize) :type (or null attribute-monomorphize) :read-only nil))
-
-(defmethod docstring ((self toplevel-define))
-  (toplevel-define-docstring self))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-define-list-p (x)
@@ -338,9 +329,12 @@
 
 (defstruct (fundep
             (:copier nil))
-  (left   (util:required 'left)   :type keyword-src-list :read-only t)
-  (right  (util:required 'right)  :type keyword-src-list :read-only t)
-  (location (util:required 'location) :type location  :read-only t))
+  (left     (util:required 'left)     :type keyword-src-list :read-only t)
+  (right    (util:required 'right)    :type keyword-src-list :read-only t)
+  (location (util:required 'location) :type location         :read-only t))
+
+(defmethod location ((self fundep))
+  (fundep-location self))
 
 (defun fundep-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -350,14 +344,10 @@
   '(satisfies fundep-list-p))
 
 (defstruct (method-definition
+            (:include toplevel-definition)
             (:copier nil))
-  (name      (util:required 'name)      :type identifier-src   :read-only t)
-  (type      (util:required 'type)      :type qualified-ty     :read-only t)
-  (docstring (util:required 'docstring) :type (or string null) :read-only t)
-  (location    (util:required 'location)    :type location  :read-only t))
-
-(defmethod docstring ((self method-definition))
-  (method-definition-docstring self))
+  (name (util:required 'name) :type identifier-src :read-only t)
+  (type (util:required 'type) :type qualified-ty   :read-only t))
 
 (defmethod make-load-form ((self method-definition) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -401,10 +391,13 @@
 
 (defstruct (instance-method-definition
             (:copier nil))
-  (name      (util:required 'name)      :type node-variable   :read-only t)
-  (params    (util:required 'params)    :type pattern-list    :read-only t)
-  (body      (util:required 'body)      :type node-body       :read-only t)
-  (location    (util:required 'location)    :type location :read-only t))
+  (name     (util:required 'name)     :type node-variable   :read-only t)
+  (params   (util:required 'params)   :type pattern-list    :read-only t)
+  (body     (util:required 'body)     :type node-body       :read-only t)
+  (location (util:required 'location) :type location :read-only t))
+
+(defmethod location ((self instance-method-definition))
+  (instance-method-definition-location self))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun instance-method-definition-list-p (x)
@@ -415,18 +408,14 @@
   '(satisfies instance-method-definition-list-p))
 
 (defstruct (toplevel-define-instance
+            (:include toplevel-definition)
             (:copier nil))
   (context            (util:required 'context)            :type ty-predicate-list               :read-only t)
   (pred               (util:required 'pred)               :type ty-predicate                    :read-only t)
-  (docstring          (util:required 'docstring)          :type (or null string)                :read-only t)
   (methods            (util:required 'methods)            :type instance-method-definition-list :read-only t)
-  (location             (util:required 'location)             :type location                 :read-only t)
   ;; Source information for the context and the pred
   (head-location           (util:required 'head-location)           :type location                 :read-only t)
   (compiler-generated (util:required 'compiler-generated) :type boolean                         :read-only t))
-
-(defmethod docstring ((self toplevel-define-instance))
-  (toplevel-define-instance-docstring self))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-define-instance-list-p (x)
@@ -441,6 +430,9 @@
   (body   (util:required 'body)   :type cons  :read-only t)
   (location (util:required 'location) :type location :read-only t))
 
+(defmethod location ((self toplevel-lisp-form))
+  (toplevel-lisp-form-location self))
+
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-lisp-form-list-p (x)
     (and (alexandria:proper-list-p x)
@@ -451,10 +443,13 @@
 
 (defstruct (toplevel-specialize
             (:copier nil))
-  (from   (util:required 'from)   :type node-variable   :read-only t)
-  (to     (util:required 'to)     :type node-variable   :read-only t)
-  (type   (util:required 'type)   :type ty              :read-only t)
-  (location (util:required 'location) :type location :read-only t))
+  (from   (util:required 'from)       :type node-variable   :read-only t)
+  (to     (util:required 'to)         :type node-variable   :read-only t)
+  (type   (util:required 'type)       :type ty              :read-only t)
+  (location (util:required 'location) :type location        :read-only t))
+
+(defmethod location ((self toplevel-specialize))
+  (toplevel-specialize-location self))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-specialize-list-p (x)
@@ -465,16 +460,15 @@
   '(satisfies toplevel-specialize-list-p))
 
 (defstruct (toplevel-package
+            (:include toplevel-definition)
             (:copier nil))
   "A Coalton package definition, which can be used to generate either a DEFPACKAGE form or a package instance directly."
   (name        (util:required 'name)     :type string           :read-only t)
-  (docstring   nil                       :type (or null string) :read-only t)
   (import      nil                       :type list)
   (import-as   nil                       :type list)
   (import-from nil                       :type list)
   (shadow      nil                       :type list)
-  (export      nil                       :type list)
-  (location    (util:required 'location) :type location         :read-only t))
+  (export      nil                       :type list))
 
 (defstruct program
   (package         nil :type (or null toplevel-package)    :read-only t)
@@ -831,7 +825,7 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
                                  (list
                                   (se:make-source-error-note
                                    :type ':secondary
-                                   :span (location-span (node-location (toplevel-define-name define)))
+                                   :span (location-span (location (toplevel-define-name define)))
                                    :message "when parsing define")))))
 
                    (attribute-monomorphize
@@ -850,7 +844,7 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
                                      :message "previous attribute here")
                                     (se:make-source-error-note
                                      :type ':secondary
-                                     :span (location-span (node-location (toplevel-define-name define)))
+                                     :span (location-span (location (toplevel-define-name define)))
                                      :message "when parsing define")))))
 
                     (setf monomorphize attribute)
@@ -1014,7 +1008,7 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
                                  (list
                                   (se:make-source-error-note
                                    :type ':secondary
-                                   :span (location-span (identifier-src-location (toplevel-define-struct-name struct)))
+                                   :span (location-span (location (toplevel-define-struct-name struct)))
                                    :message "when parsing define-type")))))))
 
        (setf (fill-pointer attributes) 0)

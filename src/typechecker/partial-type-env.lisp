@@ -124,7 +124,7 @@
     (let ((class-entry (tc:lookup-class (partial-type-env-env env) name :no-error t)))
 
       (unless class-entry
-        (tc-error (parser:ty-predicate-location pred)
+        (tc-error pred
                   "Unknown class"
                   (format nil "unknown class ~S"
                           (parser:identifier-src-name

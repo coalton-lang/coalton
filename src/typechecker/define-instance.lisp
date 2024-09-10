@@ -212,15 +212,15 @@
     (check-duplicates
      (parser:toplevel-define-instance-methods unparsed-instance)
      (alexandria:compose #'parser:node-variable-name #'parser:instance-method-definition-name)
-     #'parser:instance-method-definition-location
+     #'source:location
      (lambda (first second)
-       (tc-error (parser:instance-method-definition-location first)
+       (tc-error first
                  "Duplicate method definition"
                  "first definition here"
                  (list
                   (se:make-source-error-note
                    :type :primary
-                   :span (source:location-span (parser:instance-method-definition-location second))
+                   :span (source:location-span (source:location second))
                    :message "second definition here")))))
 
     ;; Ensure each method is part for the class
@@ -228,7 +228,7 @@
           :for name := (parser:node-variable-name (parser:instance-method-definition-name method))
 
           :unless (gethash name method-table)
-            :do (tc-error (parser:instance-method-definition-location method)
+            :do (tc-error method
                           "Unknown method"
                           (let ((*package* util:+keyword-package+))
                             (format nil "The method ~S is not part of class ~S"
@@ -241,7 +241,7 @@
                                :key (alexandria:compose #'parser:node-variable-name
                                                         #'parser:instance-method-definition-name))
           :unless method
-            :do (tc-error (parser:toplevel-define-instance-location unparsed-instance)
+            :do (tc-error unparsed-instance
                           "Missing method"
                           (format nil "The method ~S is not defined" name)))
 
@@ -266,7 +266,7 @@
                           :do (multiple-value-bind (preds method subs)
                                   (infer-expl-binding-type method
                                                            instance-method-scheme
-                                                           (parser:instance-method-definition-location method)
+                                                           (source:location method)
                                                            nil
                                                            (make-tc-env :env env))
 
@@ -293,7 +293,7 @@
        :context context
        :pred pred
        :methods methods
-       :location (parser:toplevel-define-instance-location unparsed-instance)
+       :location (source:location unparsed-instance)
        :head-location (parser:toplevel-define-instance-head-location unparsed-instance)))))
 
 (defun check-instance-valid (instance)

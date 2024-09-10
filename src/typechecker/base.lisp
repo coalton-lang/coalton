@@ -69,11 +69,14 @@ This requires a valid PPRINT-VARIABLE-CONTEXT")
        (se:display-source-error s (se:source-condition-err c))))))
 
 (defun tc-error (location message note &optional notes)
-  (error 'tc-error
-         :err (source:source-error :location location
-                                   :message message
-                                   :primary-note note
-                                   :notes notes)))
+  (let ((location (if (typep location 'source:location)
+                      location
+                      (source:location location))))
+    (error 'tc-error
+           :err (source:source-error :location location
+                                     :message message
+                                     :primary-note note
+                                     :notes notes))))
 
 (define-condition coalton-internal-type-error (error)
   ()

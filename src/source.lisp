@@ -155,6 +155,9 @@ OFFSET indicates starting character offset within the file."
 (defmethod source-error:source-name ((self source-string))
   (or (original-name self) "<string input>"))
 
+(defgeneric location (object)
+  (:documentation "The source location of a Coalton object's definition."))
+
 (defgeneric docstring (object)
   (:documentation "The docstring accompanying a Coalton object's definition."))
 

@@ -110,7 +110,7 @@
           (setf subs (tc:compose-substitution-lists subs subs_))
 
           (when accessors
-            (tc:tc-error (tc:accessor-location (first accessors))
+            (tc:tc-error (first accessors)
                          "Amqbiguous accessor"
                          "accessor is ambiguous"))
 
@@ -145,7 +145,7 @@
                                tvars
                                (tc:ty-scheme-type scheme))))
 
-              (tc:tc-error (tc:node-location node)
+              (tc:tc-error node
                            "Unable to codegen"
                            (format nil
                                    "expression has type ~A~{ ~S~}.~{ (~S)~} => ~S with unresolved constraint~A ~S"
@@ -162,7 +162,7 @@
                            (list
                             (se:make-source-error-note
                              :type :secondary
-                             :span (source:location-span (tc:node-location node))
+                             :span (source:location-span (source:location node))
                              :message "Add a type assertion with THE to resolve ambiguity"))))))))))
 
 (defmacro with-environment-updates (updates &body body)

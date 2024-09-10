@@ -28,11 +28,9 @@
    ;; object classes and properties
    #:coalton-object
    #:object-aname
-   #:object-doc
    #:source
    #:source-span
    #:object-instances
-   #:source-location
    #:object-name
    #:object-type
 
@@ -69,17 +67,17 @@
 
 (in-package #:coalton/doc/model)
 
+(defgeneric coalton-object (self)
+  (:documentation "The Coalton object underlying a documentation model object, providing access to source location and docstring."))
+
 (defgeneric object-name (self)
   (:documentation "The name of a thing."))
 
 (defgeneric object-type (self)
   (:documentation "The type of a thing: class, function, value, struct"))
 
-(defgeneric source-location (self)
-  (:documentation "The source location of an object, including file and span."))
-
 (defun source (object)
-  (let ((location (source-location object)))
+  (let ((location (source:location (coalton-object object))))
     (and location
          (source:location-source location))))
 
@@ -96,7 +94,7 @@
                            (source-error:source-name (source object))))))
 
 (defun source-span (object)
-  (source:location-span (source-location object)))
+  (source:location-span (source:location (coalton-object object))))
 
 (defgeneric object-aname (self)
   (:documentation "The link target of a thing: <name>-class, e.g."))
@@ -114,7 +112,8 @@
       string))
 
 (defclass coalton-object ()
-  ())
+  ((object :initarg :object
+           :reader coalton-object)))
 
 (defmethod print-object ((self coalton-object) stream)
   (if *print-readably*
@@ -129,14 +128,12 @@
   (sort (copy-seq objects) #'string< :key #'object-name))
 
 (defclass coalton-type (coalton-object)
-  ((type :initarg :type-entry
-         :reader type-entry)
-   (constructors :initarg :constructors)
+  ((constructors :initarg :constructors)
    (instances :initarg :instances
               :reader object-instances)))
 
 (defun type-vars (object)
-  (loop :for i :below (tc:kind-arity (tc:kind-of (type-entry object)))
+  (loop :for i :below (tc:kind-arity (tc:kind-of (coalton-object object)))
         :collect (tc:make-variable)))
 
 (defun type-constructors (object)
@@ -151,25 +148,19 @@
    (tc:qualified-ty-type (tc:instantiate (type-vars object)
                                          (tc:ty-scheme-type ctor-type)))))
 
-(defmethod object-doc ((self coalton-type))
-  (source:docstring (type-entry self)))
-
-(defmethod source-location ((self coalton-type))
-  (tc:type-entry-location (type-entry self)))
-
 (defun make-coalton-type (entry constructors applicable-instances)
   (cond ((env:struct-entry-p entry)
          (make-instance 'coalton-struct
-           :type-entry entry
+           :object entry
            :instances (sort-objects applicable-instances)))
         (t
          (make-instance 'coalton-type
-           :type-entry entry
+           :object entry
            :constructors constructors
            :instances (sort-objects applicable-instances)))))
 
 (defmethod object-name ((object coalton-type))
-  (symbol-name (tc:type-entry-name (type-entry object))))
+  (symbol-name (tc:type-entry-name (coalton-object object))))
 
 (defmethod object-type ((object coalton-type))
   "TYPE")
@@ -178,16 +169,14 @@
   (format nil "~(~A-type~)" (object-name object)))
 
 (defclass coalton-struct (coalton-object)
-  ((type-entry :initarg :type-entry
-               :reader type-entry)
-   (instances :initarg :instances
+  ((instances :initarg :instances
               :reader object-instances)))
 
 (defun %struct-entry (type-entry)
   (tc:lookup-struct entry:*global-environment* (tc:type-entry-name type-entry) :no-error t))
 
 (defun struct-fields (coalton-struct)
-  (let ((struct-entry (%struct-entry (type-entry coalton-struct))))
+  (let ((struct-entry (%struct-entry (coalton-object coalton-struct))))
     (mapcar (lambda (field)
               (list (tc:struct-field-name field)
                     (tc:struct-field-type field)
@@ -195,52 +184,39 @@
             (tc:struct-entry-fields struct-entry))))
 
 (defmethod object-name ((self coalton-struct))
-  (let* ((entry (type-entry self))
+  (let* ((entry (coalton-object self))
          (name (tc:type-entry-name entry)))
     (format nil "~A~{ ~S~}"
             (symbol-name name)
             (tc:type-entry-tyvars entry))))
-
-(defmethod source-location ((self coalton-struct))
-  (tc:type-entry-location (type-entry self)))
-
-(defmethod object-doc ((self coalton-struct))
-  (source:docstring (type-entry self)))
 
 (defmethod object-type ((self coalton-struct))
   "STRUCT")
 
 (defmethod object-aname ((self coalton-struct))
   (format nil "~(~A-type~)"
-          (symbol-name (tc:type-entry-name (type-entry self)))))
+          (symbol-name (tc:type-entry-name (coalton-object self)))))
 
 (defclass coalton-class (coalton-object)
-  ((class :initarg :class
-          :reader ty-class)
-   (package :initarg :package
+  ((package :initarg :package
             :reader class-package)))
-
-(defmethod object-doc ((self coalton-class))
-  (source:docstring (ty-class self)))
-
-(defmethod source-location ((self coalton-class))
-  (tc:ty-class-location (ty-class self)))
 
 (defun make-coalton-class (class &key package)
   (make-instance 'coalton-class
-    :class class
+    :object class
     :package package))
 
 (defun class-constraints (coalton-class)
-  (let ((class (ty-class coalton-class)))
+  (let ((class (coalton-object coalton-class)))
     (tc:ty-class-superclasses class)))
 
 (defun class-predicate (coalton-class)
-  (let ((class (ty-class coalton-class)))
+  (let ((class (coalton-object coalton-class)))
     (tc:ty-class-predicate class)))
 
 (defun class-methods (coalton-class)
-  (with-slots (class package) coalton-class
+  (let ((class (coalton-object coalton-class))
+        (package (class-package coalton-class)))
     (mapcar (lambda (method)
               (list (symbol-name (tc:ty-class-method-name method))
                     (tc:ty-class-method-type method)
@@ -250,10 +226,10 @@
                        (tc:ty-class-unqualified-methods class)))))
 
 (defmethod object-instances ((self coalton-class))
-  (env:class-instances (ty-class self)))
+  (env:class-instances (coalton-object self)))
 
 (defmethod object-name ((self coalton-class))
-  (symbol-name (tc:ty-class-name (ty-class self))))
+  (symbol-name (tc:ty-class-name (coalton-object self))))
 
 (defmethod object-type ((object coalton-class))
   "CLASS")
@@ -264,26 +240,19 @@
 ;;; class coalton-value
 
 (defclass coalton-value (coalton-object)
-  ((name-entry :initarg :name-entry
-               :reader name-entry)))
+  ())
 
 (defun make-coalton-value (name-entry)
-  (make-instance 'coalton-value :name-entry name-entry))
+  (make-instance 'coalton-value :object name-entry))
 
 (defun value-type (coalton-value)
-  (env:value-type (name-entry coalton-value)))
+  (env:value-type (coalton-object coalton-value)))
 
 (defun %function-p (coalton-value)
   (tc:function-type-p (value-type coalton-value)))
 
-(defmethod object-doc ((self coalton-value))
-  (source:docstring (name-entry self)))
-
-(defmethod source-location ((self coalton-value))
-  (tc:name-entry-location (name-entry self)))
-
 (defmethod object-name ((object coalton-value))
-  (let ((name (tc:name-entry-name (name-entry object))))
+  (let ((name (tc:name-entry-name (coalton-object object))))
     (if (%function-p object)
         (format nil "(~A~{ ~A~})"
                 (symbol-name name)
@@ -297,28 +266,31 @@
       "VALUE"))
 
 (defmethod object-aname ((object coalton-value))
-  (format nil "~(~A-value~)" (symbol-name (tc:name-entry-name (name-entry object)))))
+  (format nil "~(~A-value~)" (symbol-name (tc:name-entry-name (coalton-object object)))))
 
 ;;; class coalton-package
 
-(defclass coalton-package (coalton-object)
+(defclass coalton-package ()
   ((package :initarg :package
-            :reader package-lisp-package)))
+            :reader lisp-package)))
 
 (defun make-coalton-package (package)
   (make-instance 'coalton-package :package package))
 
-(defmethod object-doc ((object coalton-package))
-  (documentation (package-lisp-package object) t))
+(defmethod coalton-object ((self coalton-package))
+  self)
 
-(defmethod object-name ((object coalton-package))
-  (string-upcase (package-name (package-lisp-package object))))
+(defmethod source:docstring ((self coalton-package))
+  (documentation (lisp-package self) t))
 
-(defmethod object-aname ((object coalton-package))
-  (format nil "~A-package" (string-downcase (package-name (package-lisp-package object)))))
+(defmethod object-name ((self coalton-package))
+  (string-upcase (package-name (lisp-package self))))
+
+(defmethod object-aname ((self coalton-package))
+  (format nil "~A-package" (string-downcase (package-name (lisp-package self)))))
 
 (defun package-objects (coalton-package)
-  (let ((package (package-lisp-package coalton-package)))
+  (let ((package (lisp-package coalton-package)))
     (find-objects :package package)))
 
 ;; Helpers for API queries
