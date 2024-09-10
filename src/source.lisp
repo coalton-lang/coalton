@@ -56,7 +56,8 @@
 
 (defgeneric source< (a b)
   (:method (a b)
-    nil))
+    nil)
+  (:documentation "Compare two source locations, returning T if the string name of A is lexicographically earlier than that of B."))
 
 (defclass source ()
   ((name :initarg :name
@@ -67,8 +68,10 @@
 In the case of source that is copied to a different location during compilation (e.g., by emacs+slime), original file name preserves the original location."))
 
 (defmethod source< ((a source) (b source))
-  (string< (original-name a)
-           (original-name b)))
+  (and (original-name a)
+       (original-name b)
+       (string< (original-name a)
+                (original-name b))))
 
 (defclass source-file (source)
   ((file :initarg :file
@@ -150,6 +153,7 @@ OFFSET indicates starting character offset within the file."
   (:documentation "The docstring accompanying a Coalton object's definition."))
 
 (deftype span ()
+  "A pair of offsets that indicates a range of characters in a source file."
   '(cons fixnum fixnum))
 
 (declaim (inline span-start span-end))
@@ -161,6 +165,7 @@ OFFSET indicates starting character offset within the file."
   (car span))
 
 (defun span< (a b)
+  "Return T if span A starts before span B. If both spans start at the same offset, return T if A is shorter than B."
   (or (< (span-start a)
          (span-start b))
       (< (span-end a)
@@ -177,6 +182,8 @@ OFFSET indicates starting character offset within the file."
   (:documentation "The location of a Coalton object's source definition."))
 
 (defun location< (a b)
+  "If locations A and B appear within the same source, return T if A's span starts before B's.
+If locations appear in different sources, compare the sources by name."
   (if (eq (location-source a)
           (location-source b))
       (span< (location-span a)
