@@ -17,7 +17,6 @@
   (:export
    #:binding-name                       ; FUNCTION
    #:binding-value                      ; FUNCTION
-   #:binding-location                     ; FUNCTION
    #:binding-parameters                 ; FUNCTION
    #:binding-toplevel-p                 ; FUNCTION
    #:binding-function-p                 ; FUNCTION
@@ -55,21 +54,6 @@
   (:method ((binding instance-method-definition))
     (declare (values node-body))
     (instance-method-definition-body binding)))
-
-(defgeneric binding-location (binding)    ; location
-  (:documentation "Returns the source location of BINDING")
-
-  (:method ((binding node-let-binding))
-    (declare (values location))
-    (node-let-binding-location binding))
-
-  (:method ((binding toplevel-define))
-    (declare (values location))
-    (toplevel-define-location binding))
-
-  (:method ((binding instance-method-definition))
-    (declare (values location))
-    (instance-method-definition-location binding)))
 
 (defgeneric binding-parameters (binding)
   (:documentation "Returns the parameters bound in BINDING")

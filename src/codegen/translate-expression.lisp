@@ -18,6 +18,7 @@
    #:*traverse*
    #:traverse)
   (:local-nicknames
+   (#:source #:coalton-impl/source)
    (#:util #:coalton-impl/util)
    (#:tc #:coalton-impl/typechecker))
   (:export
@@ -681,7 +682,7 @@ Returns a `node'.")
              (tc:make-ty-predicate
               :class intoiter-class
               :types (list into-iter-arg-ty pat-arg-ty)
-              :location (tc:node-location expr)))
+              :location (source:location expr)))
 
            (into-iter-node
              (make-node-application
@@ -806,7 +807,7 @@ Returns a `node'.")
            (pred (tc:make-ty-predicate
                   :class monad-symbol
                   :types (list m-type)
-                  :location (tc:node-location node))))
+                  :location (source:location node))))
 
       (loop :with out-node := (translate-expression (tc:node-do-last-node node) ctx env)
 

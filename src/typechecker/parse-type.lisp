@@ -126,7 +126,7 @@
     (unless (subsetp (tc:type-variables preds) unambiguous-vars :test #'equalp)
       (let* ((ambiguous-vars (set-difference (tc:type-variables preds) unambiguous-vars :test #'equalp))
              (single-variable (= 1 (length ambiguous-vars))))
-        (tc-error (parser:qualified-ty-location qual-ty)
+        (tc-error qual-ty
                   "Invalid qualified type"
                   (format nil "The type ~A ~{~S ~}ambiguous in the type ~S"
                           (if single-variable
@@ -273,7 +273,7 @@
 
     ;; Check that pred has the correct number of arguments
     (unless (= class-arity (length (parser:ty-predicate-types pred)))
-      (tc-error (parser:ty-predicate-location pred)
+      (tc-error pred
                 "Predicate arity mismatch"
                 (format nil "Expected ~D arguments but received ~D"
                         class-arity

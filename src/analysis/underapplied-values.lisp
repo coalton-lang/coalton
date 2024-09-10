@@ -27,7 +27,7 @@
                     :do (warn 'underapplied-value-warning
                               :err (source:source-error
                                     :type :warn
-                                    :location (tc:node-location elem)
+                                    :location (source:location elem)
                                     :message "Value may be underapplied"
                                     :primary-note "discard explicitly with (let _ = ...) to ignore this warning")))
             node))))

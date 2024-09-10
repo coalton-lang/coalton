@@ -73,6 +73,9 @@
                (:copier nil))
   (location (util:required 'location) :type location :read-only t))
 
+(defmethod location ((self ty))
+  (ty-location self))
+
 (defun ty-list-p (x)
   (and (alexandria:proper-list-p x)
        (every #'ty-p x)))
@@ -115,6 +118,9 @@
   (types    (util:required 'types)    :type ty-list         :read-only t)
   (location (util:required 'location) :type location        :read-only t))
 
+(defmethod location ((self ty-predicate))
+  (ty-predicate-location self))
+
 (defun ty-predicate-list-p (x)
   (and (alexandria:proper-list-p x)
        (every #'ty-predicate-p x)))
@@ -128,6 +134,9 @@
   (predicates (util:required 'predicates) :type ty-predicate-list :read-only t)
   (type       (util:required 'type)       :type ty                :read-only t)
   (location   (util:required 'location)   :type location          :read-only t))
+
+(defmethod location ((self qualified-ty))
+  (qualified-ty-location self))
 
 (defun parse-qualified-type (form source)
   (declare (type cst:cst form))
