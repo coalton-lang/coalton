@@ -116,7 +116,9 @@ Coalton is currently used in production to build [quantum computing software](ht
 
 **Install**: Clone this repository into a place your Lisp can see (e.g., `~/quicklisp/local-projects/`).
 
-**Use**: Either run `(ql:quickload :coalton)`, or add `#:coalton` to your ASD's `:depends-on` list. Quicklisp will automatically download all of Coalton's dependencies.
+**Add dependencies** Quicklisp will automatically download almost all of Coalton's dependencies, though you will need to manually clone [FSET](https://github.com/slburson/fset/) and [MISC-EXTENSIONS](https://github.com/slburson/misc-extensions/) and add them to your asdf/quicklisp path (e.g., `~/quicklisp/local-projects/`). This is required until Quicklisp updates.
+
+**Use**: Either run `(ql:quickload :coalton)`, or add `#:coalton` to your ASD's `:depends-on` list. 
 
 **Test**: Compile the tests with `(ql:quickload :coalton/tests)`, then run the tests with `(asdf:test-system :coalton)`.
 
