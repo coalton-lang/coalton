@@ -116,9 +116,17 @@ Coalton is currently used in production to build [quantum computing software](ht
 
 **Install**: Clone this repository into a place your Lisp can see (e.g., `~/quicklisp/local-projects/`).
 
-**Use**: Either run `(ql:quickload :coalton)`, or add `#:coalton` to your ASD's `:depends-on` list. Quicklisp will automatically download all of Coalton's dependencies.
+> [!NOTE]
+> While Quicklisp will automatically ensure almost all of Coalton's dependencies, you will need to manually clone the newest versions of [FSET](https://github.com/slburson/fset/) and [MISC-EXTENSIONS](https://github.com/slburson/misc-extensions/) and add them to your ASDF/Quicklisp path (e.g., `~/quicklisp/local-projects/`).
 
-**Test**: Compile the tests with `(ql:quickload :coalton/tests)`, then run the tests with `(asdf:test-system :coalton)`.
+**Use**: Either run `(ql:quickload :coalton)`, or add `#:coalton` to your ASD's `:depends-on` list.
+
+**Test**: Compile the tests with `(ql:quickload :coalton/tests)`, then run the tests with `(asdf:test-system :coalton)`. 
+
+> [!NOTE] 
+> Running the Coalton test suite on SBCL requires [GNU MPFR](https://www.mpfr.org/mpfr-current/mpfr.html#Installing-MPFR) in order to run `Big-Float` tests. 
+>
+> If you would like to run tests without installing `gnu-mpfr`, you can use Coalton's portable `Big-Float` implementation by running `(pushnew :coalton-portable-bigfloat *features*)` before loading Coalton.
 
 **Learn**: Start with [*Intro to Coalton*](docs/intro-to-coalton.md) and the [standard library reference](https://coalton-lang.github.io/reference/), and then take a peek at the [examples directory](examples/). It may also be helpful to check out the [introductory blog post](https://coalton-lang.github.io/20211010-introducing-coalton/).
 
