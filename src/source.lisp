@@ -108,6 +108,9 @@ OFFSET indicates starting character offset within the file."
     :name (ensure-namestring name)
     :offset offset))
 
+(defmethod source-error:source-available-p ((self source-file))
+  (not (null (input-name self))))
+
 (defmethod source-error:source-name ((self source-file))
   (or (original-name self)
       (input-name self)))
@@ -142,6 +145,9 @@ OFFSET indicates starting character offset within the file."
   (make-instance 'source-string
     :string string
     :name (ensure-namestring name)))
+
+(defmethod source-error:source-available-p ((self source-string))
+  (not (null (source-string self))))
 
 (defmethod source-error:source-stream ((self source-string))
   (make-string-input-stream (source-string self)))
