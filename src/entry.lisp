@@ -111,7 +111,7 @@
 
           (when accessors
             (tc:tc-error (first accessors)
-                         "Amqbiguous accessor"
+                         "Ambiguous accessor"
                          "accessor is ambiguous"))
 
           (let* ((preds (tc:reduce-context env preds subs))

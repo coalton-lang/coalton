@@ -68,7 +68,7 @@
 
   (declare with-capacity (Hash :key => Integer -> Hashtable :key :value))
   (define (with-capacity capacity)
-    "Crate a new empty hashtable with a given capacity"
+    "Create a new empty hashtable with a given capacity"
     (match (%get-hash-test-funcs)
       ((Tuple test hash)
        (%make-hashtable test hash capacity))))
