@@ -42,6 +42,8 @@
    #:take!
    #:flatten!
    #:flat-map!
+   #:mconcat!
+   #:mconcatmap!
    #:chain!
    #:remove-duplicates! ; defined in library/hashtable.lisp
    #:pair-with!
@@ -423,6 +425,15 @@ interleaving. (interleave empty ITER) is equivalent to (id ITER)."
     "Flatten! wrapped around map."
     (flatten! (map func iter)))
 
+  (declare mconcat! ((Monoid :a) => (Iterator :a) -> :a))
+  (define mconcat!
+    "Fold an iterator of monoids into a single element."
+    (fold! <> mempty))
+
+  (declare mconcatmap! ((Monoid :a) => (:b -> :a) -> (Iterator :b) -> :a))
+  (define (mconcatmap! f)
+    "Map an iterator to an iterator of monoids, and then fold that iterator into a single element."
+    (compose (fold! <> mempty) (map f)))
 
   (declare pair-with! ((:key -> :value) -> Iterator :key -> Iterator (Tuple :key :value)))
   (define (pair-with! func keys)

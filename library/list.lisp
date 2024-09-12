@@ -43,8 +43,8 @@
    #:lookup
    #:remove-duplicates
    #:remove-if
-   #:remove
-   #:difference
+   #:remove #:without
+   #:difference #:sdifference
    #:zipWith
    #:zipWith3
    #:zipWith4
@@ -390,10 +390,23 @@
     "Return a new list with the first element equal to `x` removed."
     (remove-if (== x) ys))
 
+  (declare without (Eq :a => :a -> (List :a) -> (List :a)))
+  (define (without x)
+    "Return a new list without all elements equal to `x` removed"
+    (filter (/= x)))
+
   (declare difference (Eq :a => ((List :a) -> (List :a) -> (List :a))))
   (define (difference xs ys)
     "Returns a new list with the first occurence of each element in `ys` removed from `xs`."
-    (fold (fn (a b) (remove b a)) xs ys))
+    (fold (flip remove) xs ys))
+
+  (declare sdifference (Eq :a => (List :a) -> (List :a) -> (List :a)))
+  (define (sdifference xs ys)
+    "Symmetric difference.
+
+Returns a new list with only those elements of `xs` and `ys` which are not `==' to any elements in the other."
+    (append (difference xs ys)
+            (difference ys xs)))
 
   (declare zipWith ((:a -> :b -> :c) -> (List :a) -> (List :b) -> (List :c)))
   (define (zipWith f xs ys)
