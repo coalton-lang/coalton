@@ -20,10 +20,10 @@
    #:Functor #:map
    #:Applicative #:pure #:liftA2
    #:Monad #:>>=
-   #:>>
+   #:>> #:join
    #:MonadFail #:fail
    #:Alternative #:alt #:empty
-   #:Foldable #:fold #:foldr #:mconcat
+   #:Foldable #:fold #:foldr #:mconcat #:mconcatmap
    #:Traversable #:traverse
    #:Bifunctor #:bimap #:map-fst #:map-snd
    #:sequence
@@ -211,7 +211,13 @@
 
   (declare >> (Monad :m => (:m :a) -> (:m :b) -> (:m :b)))
   (define (>> a b)
+    "Equivalent to `(>>= a (fn (_) b))`."
     (>>= a (fn (_) b)))
+
+  (declare join ((Monad :m) => :m (:m :a) -> :m :a))
+  (define (join m)
+    "Equivalent to `(>>= m id)`."
+    (>>= m (fn (x) x)))
 
   (define-class (Monad :m => MonadFail :m)
     (fail (String -> :m :a)))
@@ -230,6 +236,11 @@
   (define mconcat
     "Fold a container of monoids into a single element."
     (fold <> mempty))
+
+  (declare mconcatmap ((Foldable :f) (Monoid :a) => (:b -> :a) -> :f :b -> :a))
+  (define (mconcatmap f)
+    "Map a container to a container of monoids, and then fold that container into a single element."
+    (fold (fn (a b) (<> a (f b))) mempty))
 
   (define-class (Traversable :t)
     (traverse (Applicative :f => (:a -> :f :b) -> :t :a -> :f (:t :b))))
