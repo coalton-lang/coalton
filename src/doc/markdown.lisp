@@ -159,7 +159,7 @@
 
 (defun write-doc (backend object)
   "When OBJECT has a nonempty docstring, write it using BACKEND's stream."
-  (let ((string (source:docstring (coalton-object object)))
+  (let ((string (object-docstring object))
         (stream (output-stream backend)))
     (when (and string (not (zerop (length string))))
       (terpri stream)
