@@ -196,17 +196,17 @@ There are two ways to call Coalton from Lisp.
 The safe way to call Coalton is to use the `coalton` operator. This will type check, compile, and evaluate a Coalton expression and return its value to Lisp. Note that `coalton` does not accept definitions or top-level forms. For example:
 
 ```lisp
-CL-USER> (format t "~R" (coalton:coalton coalton-library::(length (cons 1 (cons 2 nil)))))
+CL-USER> (format t "~R" (coalton:coalton (coalton-prelude:length (coalton:cons 1 (coalton:cons 2 coalton:nil)))))
 two     ; <- printed output
 NIL     ; <- returned value
-CL-USER> (format t "~R" (coalton:coalton coalton-library::(length 1)))
+CL-USER> (format t "~R" (coalton:coalton (coalton-prelude:length (coalton:the coalton:UFix 1))))
 ; (Guaranteed Compile-Time Error:)
-;
-; Failed to unify types COALTON:INTEGER 
-;                   and (COALTON-LIBRARY:LIST :B)
-; in unification of types (COALTON:INTEGER → :A)
-;                     and ((COALTON-LIBRARY:LIST :B) → COALTON:INTEGER)
-; in COALTON
+; error: Type mismatch
+;   --> repl input:1:46
+;    |
+;  1 |  (COALTON:COALTON (COALTON-LIBRARY/LIST:LENGTH (COALTON:THE COALTON:UFIX 1)))
+;    |                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Expected type '(COALTON:LIST #T53400)' but got 'COALTON:UFIX'
+;    [Condition of type COALTON-IMPL/TYPECHECKER/BASE:TC-ERROR]
 ```
 
 ### Unsafe Calls
@@ -214,10 +214,10 @@ CL-USER> (format t "~R" (coalton:coalton coalton-library::(length 1)))
 Using the aforementioned promises, it's possible to call into raw Coalton-compiled code by using the generated functions. These calls are not checked in any way!
 
 ```lisp
-CL-USER> (format t "~R" coalton-library::(length (cons 1 (cons 2 nil))))
+CL-USER> (format t "~R" (coalton-prelude:length (coalton:cons 1 (coalton:cons 2 coalton:nil))))
 two     ; <- printed output
 NIL     ; <- returned value
-CL-USER> (format t "~R" coalton-library::(length 1))
+CL-USER> (format t "~R" (coalton-prelude:length 1))
 ; (Possible Run-Time Error #1:)
 ;
 ; The value
