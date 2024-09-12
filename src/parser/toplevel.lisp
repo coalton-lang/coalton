@@ -359,17 +359,6 @@
 (deftype method-definition-list ()
   '(satisfies method-definition-list-p))
 
-(defstruct (toplevel-definition
-            (:constructor nil))
-  (location  (util:required 'location)  :type location         :read-only t)
-  (docstring (util:required 'docstring) :type (or null string) :read-only t))
-
-(defmethod location ((self toplevel-definition))
-  (toplevel-definition-location self))
-
-(defmethod docstring ((self toplevel-definition))
-  (toplevel-definition-docstring self))
-
 (defstruct (toplevel-define-class
             (:include toplevel-definition)
             (:copier nil))

@@ -1878,20 +1878,20 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
                 ;; Check that the declared and inferred schemes match
                 (unless (equalp declared-ty output-scheme)
-                  (tc-error location
-                            "Declared type is too general"
-                            (format nil "Declared type ~S is more general than inferred type ~S."
-                                    declared-ty
-                                    output-scheme)))
+                  (tc-located-error location
+                                    "Declared type is too general"
+                                    (format nil "Declared type ~S is more general than inferred type ~S."
+                                            declared-ty
+                                            output-scheme)))
 
                 ;; Check for undeclared predicates
                 (when (not (null retained-preds))
-                  (tc-error location
-                            "Explicit type is missing inferred predicate"
-                            (with-pprint-variable-context ()
-                              (format nil "Declared type ~S is missing inferred predicate ~S"
-                                      output-qual-type
-                                      (first retained-preds)))))
+                  (tc-located-error location
+                                    "Explicit type is missing inferred predicate"
+                                    (with-pprint-variable-context ()
+                                      (format nil "Declared type ~S is missing inferred predicate ~S"
+                                              output-qual-type
+                                              (first retained-preds)))))
 
                 (values deferred-preds
                         (attach-explicit-binding-type (tc:apply-substitution subs binding-node)
@@ -2245,33 +2245,33 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                          :do (handler-case
                                  (setf subs (tc:unify subs ty1 ty2))
                                (tc:coalton-internal-type-error ()
-                                 (tc-error s1
-                                           "Return type mismatch"
-                                            (format nil "First return is of type '~S'"
-                                                    (tc:apply-substitution subs ty1))
-                                            (list
-                                             (se:make-source-error-note
-                                              :type :primary
-                                              :span (location-span s2)
-                                              :message (format nil "Second return is of type '~S'"
-                                                               (tc:apply-substitution subs ty2))))))))
+                                 (tc-located-error s1
+                                                   "Return type mismatch"
+                                                   (format nil "First return is of type '~S'"
+                                                           (tc:apply-substitution subs ty1))
+                                                   (list
+                                                    (se:make-source-error-note
+                                                     :type :primary
+                                                     :span (location-span s2)
+                                                     :message (format nil "Second return is of type '~S'"
+                                                                      (tc:apply-substitution subs ty2))))))))
 
                    ;; Unify the function's inferred type with one of the early returns.
                    (when *returns*
                      (handler-case
                          (setf subs (tc:unify subs (cdr (first *returns*)) ret-ty))
                        (tc:coalton-internal-type-error ()
-                         (tc-error (car (first *returns*))
-                                   "Return type mismatch"
-                                   (format nil "First return is of type '~S'"
-                                           (tc:apply-substitution subs (cdr (first *returns*))))
-                                   (list
-                                    (se:make-source-error-note
-                                     :type :primary
-                                     :span (location-span
-                                            (location (parser:binding-last-node binding)))
-                                     :message (format nil "Second return is of type '~S'"
-                                                      (tc:apply-substitution subs ret-ty))))))))
+                         (tc-located-error (car (first *returns*))
+                                           "Return type mismatch"
+                                           (format nil "First return is of type '~S'"
+                                                   (tc:apply-substitution subs (cdr (first *returns*))))
+                                           (list
+                                            (se:make-source-error-note
+                                             :type :primary
+                                             :span (location-span
+                                                    (location (parser:binding-last-node binding)))
+                                             :message (format nil "Second return is of type '~S'"
+                                                              (tc:apply-substitution subs ret-ty))))))))
 
                    value-node))
 

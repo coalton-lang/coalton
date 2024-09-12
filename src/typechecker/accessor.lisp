@@ -105,7 +105,7 @@
            (struct-entry (tc:lookup-struct env ty-name :no-error t)))
 
       (unless struct-entry
-        (tc-error (accessor-location accessor)
+        (tc-error accessor
                   "Invalid accessor"
                   (format nil "type '~S' is not a struct" ty-name)))
 
@@ -113,7 +113,7 @@
             (field (tc:get-field struct-entry (accessor-field accessor) :no-error t)))
 
         (unless field
-          (tc-error (accessor-location accessor)
+          (tc-error accessor
                     "Invalid accessor"
                     (format nil "struct '~S' does not have the field '~A'"
                             ty-name
