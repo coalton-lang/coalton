@@ -11,13 +11,31 @@
     (is (= y 5))))
 
 (deftest read-eval-error ()
-  (handler-case
-      (let ((*compile-file-truename* nil)
-            (*load-truename* nil))
-        (eval (read-from-string
-               "(coalton:coalton-toplevel (coalton:define 1 x))"))
-        (is nil "error was not signalled"))
-    (coalton-impl/parser/base:parse-error (c)
-      ;; Just confirm the error is printable - read/eval/reread will
-      ;; reindent code differently on different platforms
-      (is (princ-to-string c)))))
+  "Check that errors signalled during direct evaluation of Coalton have correct messages and are printable."
+  (let ((*compile-file-truename* nil)
+        (*load-truename* nil)
+        (*package* (find-package "COALTON-USER")))
+    (handler-case
+        (progn
+          (eval (read-from-string
+                 "(coalton-toplevel (define 1 x))"))
+          (is nil "error was not signalled"))
+      (coalton-impl/parser/base:parse-error (c)
+        (is (string= "Invalid variable"
+                     (source-error/error::source-error-message
+                      (source-error:source-condition-err c)))
+            "condition message is correct")
+        (is (princ-to-string c)
+            "condition prints without error")))
+
+    (eval (read-from-string "(coalton-toplevel
+  (declare add-3 (UFix -> UFix))
+  (define (add-3 x)
+    (+ 3 x)))"))
+    (handler-case
+        (eval (read-from-string "(coalton (add-3 \"two\"))"))
+      (coalton-impl/typechecker/base:tc-error (c)
+        (is (string= "Type mismatch"
+                     (source-error/error::source-error-message
+                      (source-error:source-condition-err c)))
+            "condition message is correct")))))
