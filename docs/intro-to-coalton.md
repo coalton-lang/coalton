@@ -458,8 +458,6 @@ Division is complicated; see the next section. But here are some quick tips.
 
 - The division operator `/` and its variants can produce run-time errors if the divisor is zero. Use `safe/` if you prefer an `Optional` return type.
 
-- If you have single- or double-floats, use `single/` or `double/` respectively.
-
 - If you have integers and you want a double-float, use `inexact/`. (For a single-float, use `into`.)
 
 - If you have integers and you want an integer answer, use `floor/`, `ceiling/`, or `round/`.
@@ -547,8 +545,6 @@ All of these cases are sufficiently common that we provide a few shorthands:
 - `inexact/` for integer-to-double division,
 
 - `floor/`, `ceiling/`, and `round/` for integer-to-integer division, and
-
-- `single/`, `double/` for single- and double-float division.
 
 ## Lists
 

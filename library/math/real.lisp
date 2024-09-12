@@ -31,9 +31,7 @@
    #:inexact/
    #:floor/
    #:ceiling/
-   #:round/
-   #:single/
-   #:double/))
+   #:round/))
 
 (in-package #:coalton-library/math/real)
 
