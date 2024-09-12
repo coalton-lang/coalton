@@ -491,16 +491,14 @@ COALTON-USER> (type-of '/)
 ∀ :A :B. DIVIDABLE :A :B ⇒ (:A → :A → :B)
 ```
 
-Because of the generic nature of division, if you're computing some values at the REPL, "raw division" simply does not work.
+Because of [Instance Defaulting](#instance-defaulting), division of `Integer` constants without any additional context defaults to `Double-Float` division:
 
 ```
 COALTON-USER> (coalton (/ 1 2))
-Failed to reduce context for DIVIDABLE INTEGER :A
-in COALTON
-   [Condition of type COALTON-IMPL/TYPECHECKER::COALTON-TYPE-ERROR-CONTEXT]
+0.5d0
 ```
 
-You have to constrain the result type of the `Dividable` instance. You can do this with the `the` operator. There are lots of `Dividable` instances made for you.
+We can inform Coalton that our constants are of another type by constraining them with `the` or relying on type inference. For example, in order to get a non-Double-Float result from `Integer` inputs, you have to constrain the result type to your desired type (as long as the type has a defined instance of the `Dividable` type class):
 
 ```
 COALTON-USER> (coalton (the Single-Float (/ 4 2)))
@@ -509,13 +507,17 @@ COALTON-USER> (coalton (the Fraction (/ 4 2)))
 #.(COALTON-LIBRARY::%FRACTION 2 1)
 ```
 
-But division of integers does not work.
+An `Integer` result from division with `/` is not possible, as the instance `Dividable Integer Integer` is not defined:
 
 ```
 COALTON-USER> (coalton (the Integer (/ 4 2)))
-Failed to reduce context for DIVIDABLE INTEGER :A
-in COALTON
-   [Condition of type COALTON-IMPL/TYPECHECKER::COALTON-TYPE-ERROR-CONTEXT]
+; error: Unable to codegen
+;   --> repl input:1:22
+;    |
+;  1 |  (COALTON (THE INTEGER (/ 4 2)))
+;    |                        ^^^^^^^ expression has type ∀. (RECIPROCABLE INTEGER) => INTEGER with unresolved constraint (RECIPROCABLE INTEGER)
+;    |                        ------- Add a type assertion with THE to resolve ambiguity
+;    [Condition of type COALTON-IMPL/TYPECHECKER/BASE:TC-ERROR]
 ```
 
 Why shouldn't this just be `2`?! The unfortunate answer is because `/` might not *always* produce an integer `2`, and when it doesn't divide exactly, Coalton doesn't force a particular way of rounding. As such, the proper way to do it is divide exactly, then round as you please with `floor`, `ceiling`, or `round`.
@@ -561,13 +563,13 @@ Lists must be homogeneous. This means the following produces a type error.
 
 ```
 COALTON-USER> (coalton-toplevel
-                (define wut (make-list 1 2 3.0)))
-
-Failed to unify types SINGLE-FLOAT and INTEGER
-in unification of types (INTEGER → (LIST SINGLE-FLOAT) → :A) and (:B → (LIST :B) → (LIST :B))
-in definition of WUT
-in COALTON-TOPLEVEL
-   [Condition of type COALTON-IMPL/TYPECHECKER::COALTON-TYPE-ERROR-CONTEXT]
+                (define wut (make-list 1.0d0 2.0d0 3.0)))
+; error: Type mismatch
+;   --> repl input:3:4
+;    |
+;  3 |      (MAKE-LIST 1.0d0 2.0d0 3.0)))
+;    |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Expected type '(LIST DOUBLE-FLOAT)' but got '(LIST SINGLE-FLOAT)' 
+;    [Condition of type COALTON-IMPL/TYPECHECKER/BASE:TC-ERROR]
 ```
 
 Lists can also be deconstructed with `match`.
@@ -587,14 +589,14 @@ Coalton code is statically typechecked. Types are inferred.
 ```lisp
 (coalton-toplevel
   (define (fun x)
-    (map (+ 2) (parse-int x))))
+    (map (+ 2) (string:parse-int x))))
 ```
 
 The type of a variable or function can be checked with `coalton:type-of`.
 
 ```
 COALTON-USER> (type-of 'fun)
-(STRING -> (OPTIONAL INT)
+(STRING -> (OPTIONAL INTEGER)
 ```
 
 Type declarations can always be added manually.
@@ -603,7 +605,7 @@ Type declarations can always be added manually.
 (coalton-toplevel
   (declare fun (String -> (Optional Integer)))
   (define (fun x)
-    (map (+ 2) (parse-int x))))
+    (map (+ 2) (string:parse-int x))))
 ```
 
 Type declarations can also be added in let expressions
@@ -684,13 +686,19 @@ The into method is used only when a conversion can always be performed from one 
       ((Some (Some x_)) (Some x_))
       (_ None)))
 
-
-  ;; Literal values can also be matched on
+  ;; Integers or Strings can also be matched on
   (define (is-5-or-7 x)
     (match x
       (5 True)
       (7 True)
-      (_ False))))
+      (_ False)))
+      
+  (define (is-five-or-seven x)
+    (match x
+      ("five"  True)
+      ("seven" True)
+      (_       False))))
+    
 ```
 
 Functions can pattern match on their arguments, but the patterns must be exhaustive.
