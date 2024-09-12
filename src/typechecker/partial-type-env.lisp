@@ -92,7 +92,7 @@
     (let ((type-entry (tc:lookup-type (partial-type-env-env env) name :no-error t)))
 
       (unless type-entry
-        (tc-error (parser:ty-location tycon)
+        (tc-error tycon
                   "Unknown type"
                   (format nil "unknown type ~S" (parser:tycon-name tycon))))
 

@@ -316,9 +316,9 @@
            ;; Fundeps cannot be redefined
            :when (and prev-class (not (equalp (tc:ty-class-fundeps prev-class)
                                               fundeps))) 
-             :do (tc-error (parser:toplevel-define-class-head-location class)
-                           "Invalid fundep redefinition"
-                           (format nil "unable to redefine the fudndeps of class ~S." class-name))
+             :do (tc-located-error (parser:toplevel-define-class-head-location class)
+                                   "Invalid fundep redefinition"
+                                   (format nil "unable to redefine the fudndeps of class ~S." class-name))
 
            :when fundeps
              :do (setf env (tc:initialize-fundep-environment env class-name))

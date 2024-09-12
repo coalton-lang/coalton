@@ -173,7 +173,7 @@
             (setf ksubs (tc:kunify kvar expected-kind ksubs))
             (values (tc:apply-ksubstitution ksubs tvar) ksubs))
         (tc:coalton-internal-type-error ()
-          (tc-error (parser:ty-location type)
+          (tc-error type
                     "Kind mismatch"
                     (format nil "Expected kind '~S' but variable is of kind '~S'"
                             expected-kind
@@ -191,7 +191,7 @@
             (setf ksubs (tc:kunify (tc:kind-of type_) expected-kind ksubs))
             (values (tc:apply-ksubstitution ksubs type_) ksubs))
         (tc:coalton-internal-type-error ()
-          (tc-error (parser:ty-location type)
+          (tc-error type
                     "Kind mismatch"
                     (format nil "Expected kind '~S' but got kind '~S'"
                             expected-kind
@@ -228,7 +228,7 @@
                  (tc:apply-type-argument fun-ty arg-ty :ksubs ksubs)
                  ksubs))
             (tc:coalton-internal-type-error ()
-              (tc-error (parser:ty-location (parser:tapp-from type))
+              (tc-error (parser:tapp-from type)
                         "Kind mismatch"
                         (format nil "Expected kind '~S' but got kind '~S'"
                                 (tc:make-kfun
