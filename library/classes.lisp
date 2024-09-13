@@ -23,7 +23,7 @@
    #:>> #:join
    #:MonadFail #:fail
    #:Alternative #:alt #:empty
-   #:Foldable #:fold #:foldr #:mconcat #:mconcatmap
+   #:Foldable #:fold #:foldr #:mconcat #:mconcatmap #:mcommute?
    #:Traversable #:traverse
    #:Bifunctor #:bimap #:map-fst #:map-snd
    #:sequence
@@ -241,6 +241,11 @@
   (define (mconcatmap f)
     "Map a container to a container of monoids, and then fold that container into a single element."
     (fold (fn (a b) (<> a (f b))) mempty))
+
+  (declare mcommute? ((Eq :a) (Monoid :a) => :a -> :a -> Boolean))
+  (define (mcommute? a b)
+    "Does `a <> b` `==' `b <> a`?"
+    (== (<> a b) (<> b a)))
 
   (define-class (Traversable :t)
     (traverse (Applicative :f => (:a -> :f :b) -> :t :a -> :f (:t :b))))
