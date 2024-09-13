@@ -113,6 +113,19 @@ to
   (cl:assert (cl:<= 2 (cl:list-length items)))
   `(nest ,@(cl:reverse items)))
 
+(cl:defmacro apply (cl:&rest items)
+  "A syntactic convenience for function application. Transform
+
+    (APPLY w x y z)
+
+to
+
+    (fn (f) (f w x y z))."
+
+  (alexandria:with-gensyms (f)
+    `(fn (,f)
+       (,f ,@items))))
+
 (cl:defmacro .< (cl:&rest items)
   "Right associative compose operator. Creates a new functions that will run the
 functions right to left when applied. This is the same as the NEST macro without supplying
