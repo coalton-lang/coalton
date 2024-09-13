@@ -529,7 +529,7 @@ B'. Which one is chosen for the result is undefined."
   (define (intersection a b)
     "Construct a Tree containing only those elements from `b` which are `==' to at least one element in `a`."
     (fold (fn (tre elt)
-            (if (contains? elt tre)
+            (if (contains? elt b)
                 (insert-or-replace tre elt)
                 tre))
           Empty
