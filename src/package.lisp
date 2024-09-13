@@ -92,7 +92,6 @@
    #:unwrap-as
    #:nest
    #:pipe
-   #:apply
    #:.<
    #:.>
    #:make-list
