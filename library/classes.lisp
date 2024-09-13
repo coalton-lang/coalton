@@ -30,7 +30,7 @@
    #:Into
    #:TryInto
    #:Iso
-   #:Unwrappable #:unwrap-or-else #:with-default #:unwrap #:expect #:as-optional
+   #:Unwrappable #:unwrap-or-else #:with-default #:unwrap #:unwrap-into #:expect #:as-optional
    #:default #:defaulting-unwrap #:default?))
 
 (in-package #:coalton-library/classes)
@@ -324,6 +324,11 @@ Typical `fail` continuations are:
                                     (cl:format cl:nil "Unexpected ~a in UNWRAP"
                                                container))))
                     container))
+
+  (declare unwrap-into ((Unwrappable (Result :c)) (TryInto :a :b :c) => :a -> :b))
+  (define unwrap-into
+    "Same as `tryInto` followed by `unwrap`."
+    (fn (x) (unwrap (tryinto x))))
 
   (declare with-default ((Unwrappable :container) =>
                          :element

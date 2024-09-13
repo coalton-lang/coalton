@@ -34,6 +34,7 @@
    #:elemIndex
    #:findIndex
    #:range
+   #:enumerate
    #:append
    #:concat
    #:concatMap
@@ -288,6 +289,11 @@
       (if (<= start end)
           (%reverse! (inner start end Nil))
           (inner end start Nil))))
+
+  (declare enumerate ((Num :int) (Ord :int) => List :a -> List (Tuple :int :a)))
+  (define (enumerate xs)
+    "Pair successive zero-based indices with elements from `xs`."
+    (iter:collect! (iter:enumerate! (iter:into-iter xs))))
 
   (define (append-rev list result)
     (match list
