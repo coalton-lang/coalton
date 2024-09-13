@@ -73,12 +73,12 @@
       ;; Variable is unbound: create an error
       (error 'tc:tc-error
              :err (source:source-error
-                   :location (parser:node-location var)
+                   :location (source:location var)
                    :message "Unknown variable"
                    :primary-note "unknown variable"
                    :help-notes (loop :for suggestion :in (tc-env-suggest-value env var-name)
                                      :collect (se:make-source-error-help
-                                               :span (source:location-span (parser:node-location var))
+                                               :span (source:location-span (source:location var))
                                                :replacement #'identity
                                                :message suggestion)))))
     (let ((qualified-type (tc:fresh-inst scheme)))
@@ -86,7 +86,7 @@
               (loop :for pred :in (tc:qualified-ty-predicates qualified-type)
                     :collect (tc:make-ty-predicate :class (tc:ty-predicate-class pred)
                                                    :types (tc:ty-predicate-types pred)
-                                                   :location (parser:node-location var)))))))
+                                                   :location (source:location var)))))))
 
 (defun tc-env-add-definition (env name scheme)
   "Add a type named NAME to ENV."

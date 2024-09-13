@@ -12,7 +12,6 @@
    (#:util #:coalton-impl/util))
   (:export
    #:pattern                            ; STRUCT
-   #:pattern-location                     ; ACCESSOR
    #:pattern-list                       ; TYPE
    #:pattern-var                        ; STRUCT
    #:make-pattern-var                   ; ACCESSOR
@@ -52,6 +51,9 @@
 
 (defmethod make-load-form ((self pattern) &optional env)
   (make-load-form-saving-slots self :environment env))
+
+(defmethod location ((self pattern))
+  (pattern-location self))
 
 (defun pattern-list-p (x)
   (and (alexandria:proper-list-p x)

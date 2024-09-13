@@ -16,7 +16,6 @@
    (#:const #:coalton-impl/constants))
   (:export
    #:node                               ; STRUCT
-   #:node-location                        ; ACCESSOR
    #:node-list                          ; TYPE
    #:node-variable                      ; STRUCT
    #:make-node-variable                 ; CONSTRUCTOR
@@ -35,7 +34,6 @@
    #:make-node-bind                     ; CONSTRUCTOR
    #:node-bind-pattern                  ; ACCESSOR
    #:node-bind-expr                     ; ACCESSOR
-   #:node-bind-location                   ; ACCESSOR
    #:node-body-element                  ; TYPE
    #:node-body-element-list             ; TYPE
    #:node-body                          ; STRUCT
@@ -51,13 +49,11 @@
    #:make-node-let-binding              ; CONSTRUCTOR
    #:node-let-binding-name              ; ACCESSOR
    #:node-let-binding-value             ; ACCESSOR
-   #:node-let-binding-location            ; ACCESSOR
    #:node-let-binding-list              ; TYPE
    #:node-let-declare                   ; STRUCT
    #:make-node-let-declare              ; CONSTRUCTOR
    #:node-let-declare-name              ; ACCESSOR
    #:node-let-declare-type              ; ACCESSOR
-   #:node-let-declare-location            ; ACCESSOR
    #:node-let-declare-list              ; TYPE
    #:node-let                           ; STRUCT
    #:make-node-let                      ; CONSTRUCTOR
@@ -74,7 +70,6 @@
    #:make-node-match-branch             ; CONSTRUCTOR
    #:node-match-branch-pattern          ; ACCESSOR
    #:node-match-branch-body             ; ACCESSOR
-   #:node-match-branch-location           ; ACCESSOR
    #:node-match-branch-list             ; TYPE
    #:node-match                         ; STRUCT
    #:make-node-match                    ; CONSTRUCTOR
@@ -117,7 +112,6 @@
    #:make-node-cond-clause              ; CONSTRUCTOR
    #:node-cond-clause-expr              ; ACCESSOR
    #:node-cond-clause-body              ; ACCESSOR
-   #:node-cond-clause-location            ; ACCESSOR
    #:node-cond-clause-list              ; TYPE
    #:node-cond                          ; STRUCT
    #:make-node-cond                     ; CONSTRUCTOR
@@ -126,7 +120,6 @@
    #:make-node-do-bind                  ; CONSTRUCTOR
    #:node-do-bind-pattern               ; ACCESSOR
    #:node-do-bind-expr                  ; ACCESSOR
-   #:node-do-bind-location                ; ACCESSOR
    #:node-do-body-element               ; TYPE
    #:node-body-element-list             ; TYPE
    #:node-do                            ; STRUCT
@@ -272,6 +265,9 @@ Rebound to NIL parsing an anonymous FN.")
             (:copier nil))
   (location (util:required 'location) :type location :read-only t))
 
+(defmethod location ((self node))
+  (node-location self))
+
 (defun node-list-p (x)
   (and (alexandria:proper-list-p x)
        (every #'node-p x)))
@@ -311,9 +307,12 @@ Rebound to NIL parsing an anonymous FN.")
 ;;
 (defstruct (node-bind
             (:copier nil))
-  (pattern (util:required 'pattern) :type pattern :read-only t)
-  (expr    (util:required 'expr)    :type node    :read-only t)
-  (location  (util:required 'location)  :type location    :read-only t))
+  (pattern  (util:required 'pattern)   :type pattern  :read-only t)
+  (expr     (util:required 'expr)      :type node     :read-only t)
+  (location (util:required 'location)  :type location :read-only t))
+
+(defmethod location ((self node-bind))
+  (node-bind-location self))
 
 (deftype node-body-element ()
   '(or node node-bind))
@@ -352,6 +351,9 @@ Rebound to NIL parsing an anonymous FN.")
   (value  (util:required 'value)  :type node            :read-only t)
   (location (util:required 'location) :type location :read-only t))
 
+(defmethod location ((self node-let-binding))
+  (node-let-binding-location self))
+
 (defun node-let-binding-list-p (x)
   (and (alexandria:proper-list-p x)
        (every #'node-let-binding-p x)))
@@ -364,6 +366,9 @@ Rebound to NIL parsing an anonymous FN.")
   (name   (util:required 'name)   :type node-variable   :read-only t)
   (type   (util:required 'type)   :type qualified-ty    :read-only t)
   (location (util:required 'location) :type location :read-only t))
+
+(defmethod location ((self node-let-declare))
+  (node-let-declare-location self))
 
 (defun node-let-declare-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -392,6 +397,9 @@ Rebound to NIL parsing an anonymous FN.")
   (pattern (util:required 'pattern) :type pattern         :read-only t)
   (body    (util:required 'body)    :type node-body       :read-only t)
   (location  (util:required 'location)  :type location :read-only t))
+
+(defmethod location ((self node-match-branch))
+  (node-match-branch-location self))
 
 (defun node-match-branch-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -463,6 +471,9 @@ Rebound to NIL parsing an anonymous FN.")
   (body   (util:required 'body)   :type node-body       :read-only t)
   (location (util:required 'location) :type location :read-only t))
 
+(defmethod location ((self node-cond-clause))
+  (node-cond-clause-location self))
+
 (defun node-cond-clause-list-p (x)
   (and (alexandria:proper-list-p x)
        (every #'node-cond-clause-p x)))
@@ -480,6 +491,9 @@ Rebound to NIL parsing an anonymous FN.")
   (pattern (util:required 'name)   :type pattern         :read-only t)
   (expr    (util:required 'expr)   :type node            :read-only t)
   (location  (util:required 'location) :type location :read-only t))
+
+(defmethod location ((self node-do-bind))
+  (node-do-bind-location self))
 
 (deftype node-do-body-element ()
   '(or node node-bind node-do-bind))

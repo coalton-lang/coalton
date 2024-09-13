@@ -13,7 +13,6 @@
    #:make-ty-predicate                  ; CONSTRUCTOR
    #:ty-predicate-class                 ; ACCESSOR
    #:ty-predicate-types                 ; ACCESSOR
-   #:ty-predicate-location                ; ACCESSOR
    #:ty-predicate-p                     ; FUNCTION
    #:ty-predicate-list                  ; TYPE
    #:qualified-ty                       ; STRUCT
@@ -36,12 +35,15 @@
 
 (defstruct ty-predicate
   "A type predicate indicating that TYPE is of the CLASS"
-  (class (util:required 'class) :type symbol                    :read-only t)
-  (types (util:required 'types) :type ty-list                   :read-only t)
-  (location nil                   :type (or source:location null) :read-only t))
+  (class    (util:required 'class) :type symbol                    :read-only t)
+  (types    (util:required 'types) :type ty-list                   :read-only t)
+  (location nil                    :type (or source:location null) :read-only t))
 
 (defmethod make-load-form ((self ty-predicate) &optional env)
   (make-load-form-saving-slots self :environment env))
+
+(defmethod source:location ((self ty-predicate))
+  (ty-predicate-location self))
 
 (defun ty-predicate-list-p (x)
   (and (alexandria:proper-list-p x)

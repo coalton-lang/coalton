@@ -11,6 +11,7 @@
    #:*pprint-variable-symbol-code*
    #:*pprint-variable-symbol-suffix*
    #:tc-error                           ; CONDITION, FUNCTION
+   #:tc-located-error                   ; CONDITION, FUNCTION
    #:coalton-internal-type-error        ; CONDITION
    #:check-duplicates                   ; FUNCTION
    #:check-package                      ; FUNCTION
@@ -68,12 +69,19 @@ This requires a valid PPRINT-VARIABLE-CONTEXT")
      (with-pprint-variable-context ()
        (se:display-source-error s (se:source-condition-err c))))))
 
-(defun tc-error (location message note &optional notes)
+(defun tc-located-error (location message note &optional notes)
+  "Signal a typechecker error with a NOTE about a LOCATION."
+  (declare (type source:location location)
+           (type string message note))
   (error 'tc-error
          :err (source:source-error :location location
                                    :message message
                                    :primary-note note
                                    :notes notes)))
+
+(defun tc-error (object message note &optional notes)
+  "Signal a typechecker error with a NOTE about an OBJECT that implements SOURCE:LOCATION."
+  (tc-located-error (source:location object) message note notes))
 
 (define-condition coalton-internal-type-error (error)
   ()

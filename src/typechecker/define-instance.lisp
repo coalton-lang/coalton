@@ -134,18 +134,18 @@
           (handler-case 
               (setf env (tc:update-instance-fundeps env pred))
             (tc:fundep-conflict (e)
-              (tc-error (parser:toplevel-define-instance-head-location instance)
-                        "Instance fundep conflict"
-                        (let ((*print-escape* nil))
-                          (with-output-to-string (s)
-                            (print-object e s)))))))
+              (tc-located-error (parser:toplevel-define-instance-head-location instance)
+                                "Instance fundep conflict"
+                                (let ((*print-escape* nil))
+                                  (with-output-to-string (s)
+                                    (print-object e s)))))))
 
         (handler-case
             (setf env (tc:add-instance env class-name instance-entry))
           (tc:overlapping-instance-error (e)
-            (tc-error (parser:toplevel-define-instance-head-location instance)
-                      "Overlapping instance"
-                      (format nil "instance overlaps with ~S" (tc:overlapping-instance-error-inst2 e)))))
+            (tc-located-error (parser:toplevel-define-instance-head-location instance)
+                              "Overlapping instance"
+                              (format nil "instance overlaps with ~S" (tc:overlapping-instance-error-inst2 e)))))
 
         (loop :for method-name :in method-names
               :for method-codegen-sym := (tc:get-value method-codegen-syms method-name) :do
@@ -189,9 +189,9 @@
                     env
                     superclass
                     :no-error t)
-                   (tc-error (parser:toplevel-define-instance-head-location unparsed-instance)
-                             "Instance missing context"
-                             (format nil "No instance for ~S" superclass)))
+                   (tc-located-error (parser:toplevel-define-instance-head-location unparsed-instance)
+                                     "Instance missing context"
+                                     (format nil "No instance for ~S" superclass)))
 
           :for additional-context
             := (tc:apply-substitution
@@ -202,25 +202,25 @@
 
           :do (loop :for pred :in additional-context
                     :do (unless (tc:entail env context pred)
-                          (tc-error (parser:toplevel-define-instance-head-location unparsed-instance)
-                                     "Instance missing context"
-                                     (format nil
-                                             "No instance for ~S arising from constraints of superclasses ~S"
-                                             pred
-                                             superclass)))))
+                          (tc-located-error (parser:toplevel-define-instance-head-location unparsed-instance)
+                                            "Instance missing context"
+                                            (format nil
+                                                    "No instance for ~S arising from constraints of superclasses ~S"
+                                                    pred
+                                                    superclass)))))
 
     (check-duplicates
      (parser:toplevel-define-instance-methods unparsed-instance)
      (alexandria:compose #'parser:node-variable-name #'parser:instance-method-definition-name)
-     #'parser:instance-method-definition-location
+     #'source:location
      (lambda (first second)
-       (tc-error (parser:instance-method-definition-location first)
+       (tc-error first
                  "Duplicate method definition"
                  "first definition here"
                  (list
                   (se:make-source-error-note
                    :type :primary
-                   :span (source:location-span (parser:instance-method-definition-location second))
+                   :span (source:location-span (source:location second))
                    :message "second definition here")))))
 
     ;; Ensure each method is part for the class
@@ -228,7 +228,7 @@
           :for name := (parser:node-variable-name (parser:instance-method-definition-name method))
 
           :unless (gethash name method-table)
-            :do (tc-error (parser:instance-method-definition-location method)
+            :do (tc-error method
                           "Unknown method"
                           (let ((*package* util:+keyword-package+))
                             (format nil "The method ~S is not part of class ~S"
@@ -241,7 +241,7 @@
                                :key (alexandria:compose #'parser:node-variable-name
                                                         #'parser:instance-method-definition-name))
           :unless method
-            :do (tc-error (parser:toplevel-define-instance-location unparsed-instance)
+            :do (tc-error unparsed-instance
                           "Missing method"
                           (format nil "The method ~S is not defined" name)))
 
@@ -266,7 +266,7 @@
                           :do (multiple-value-bind (preds method subs)
                                   (infer-expl-binding-type method
                                                            instance-method-scheme
-                                                           (parser:instance-method-definition-location method)
+                                                           (source:location method)
                                                            nil
                                                            (make-tc-env :env env))
 
@@ -293,7 +293,7 @@
        :context context
        :pred pred
        :methods methods
-       :location (parser:toplevel-define-instance-location unparsed-instance)
+       :location (source:location unparsed-instance)
        :head-location (parser:toplevel-define-instance-head-location unparsed-instance)))))
 
 (defun check-instance-valid (instance)
@@ -313,9 +313,9 @@
 
 
     (when (eq (parser:identifier-src-name (parser:ty-predicate-class (parser:toplevel-define-instance-pred instance))) runtime-repr)
-      (tc-error (parser:toplevel-define-instance-head-location instance)
-                "Invalid instance"
-                "RuntimeRepr instances cannot be written manually"))))
+      (tc-located-error (parser:toplevel-define-instance-head-location instance)
+                        "Invalid instance"
+                        "RuntimeRepr instances cannot be written manually"))))
 
 (defun check-for-orphan-instance (instance)
   (declare (type parser:toplevel-define-instance instance)
@@ -355,6 +355,6 @@
                  :append (mapcar #'parser:tycon-name (parser:collect-referenced-types type))))))
 
     (unless (find *package* instance-syms :key #'symbol-package)
-      (tc-error (parser:toplevel-define-instance-head-location instance)
-                "Invalid orphan instance"
-                "instances must be defined in the same package as their class or reference one or more types in their defining package"))))
+      (tc-located-error (parser:toplevel-define-instance-head-location instance)
+                        "Invalid orphan instance"
+                        "instances must be defined in the same package as their class or reference one or more types in their defining package"))))

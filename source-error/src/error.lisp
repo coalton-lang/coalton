@@ -5,6 +5,7 @@
    #:source-base-error                  ; CONDITION
    #:source-condition-err               ; ACCESSOR
    #:source-base-warning                ; CONDITION
+   #:source-available-p                 ; GENERIC
    #:source-stream                      ; GENERIC
    #:source-name                        ; GENERIC
    #:make-source-error-note             ; FUNCTION
@@ -79,6 +80,9 @@
 
 (defgeneric source-stream (source)
   (:documentation "Open and return a stream from which source text may be read. The caller is responsible for closing the stream, and the stream's initial position may be greater than zero."))
+
+(defgeneric source-available-p (source)
+  (:documentation "Return T if a stream containing SOURCE's source text can be opened."))
 
 (defgeneric source-name (source)
   (:documentation "The name of an error's source, suitable for reporting in errors. If the source is a file, SOURCE-NAME will be that file's absolute path."))
@@ -161,8 +165,17 @@
   (declare (type stream stream)
            (type source-error error))
 
-  (let ((*print-circle* nil))
-    (with-open-stream (source-stream (source-stream (source-error-source error)))
+  (let ((*print-circle* nil)
+        (source (source-error-source error)))
+    (unless (source-available-p source)
+      (format stream
+              "~(~A~): ~A~%  --> ~A (source unavailable)~%"
+              (source-error-type error)
+              (source-error-message error)
+              (source-name (source-error-source error)))
+      (return-from display-source-error nil))
+
+    (with-open-stream (source-stream (source-stream source))
 
       ;; Print the error message and location
       (multiple-value-bind (line-number line-start-index)

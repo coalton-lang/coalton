@@ -38,26 +38,49 @@ This symbol may be bound to a string source in the case of direct evaluation in 
   "Return the name of the Emacs buffer containing evaluated or compiled program text."
   (or #+:sbcl (getf (probe-symbol "SB-C" "*SOURCE-PLIST*") ':emacs-buffer)
       (source-filename)
-      "repl input"))
+      "repl"))
 
-(defun read-coalton-toplevel-open-paren (stream char)
-  (declare (optimize (debug 2)))
+(defun read-lisp (stream source first-form)
+  "Helper for MAYBE-READ-COALTON when the first form wasn't Coalton: revert to reading plain Lisp."
+  (let ((collected-forms (list (cst:raw first-form)))
+        (dotted-context nil))
+    (loop :do
+      (handler-case
+          (multiple-value-bind (form presentp)
+              (parser:maybe-read-form stream source)
 
-  (unless *coalton-reader-allowed*
-    (return-from read-coalton-toplevel-open-paren
-      (funcall (get-macro-character #\( (named-readtables:ensure-readtable :standard)) stream char)))
+            (cond
+              ((and (not presentp)
+                    dotted-context)
+               (error "Invalid dotted list"))
 
+              ((not presentp)
+               (return-from read-lisp (nreverse collected-forms)))
+
+              (dotted-context
+               (when (nth-value 1 (parser:maybe-read-form stream source))
+                 (error "Invalid dotted list"))
+
+               (return-from read-lisp (nreconc collected-forms (cst:raw form))))
+
+              (t
+               (push (cst:raw form) collected-forms))))
+        (eclector.reader:invalid-context-for-consing-dot (c)
+          (when dotted-context
+            (error "Invalid dotted list"))
+          (setf dotted-context t)
+          (eclector.reader:recover c))))))
+
+(defun maybe-read-coalton (stream source)
+  "If the first form on STREAM indicates that Coalton code is present, read a program, and perform the indicated operation (compile, codegen, etc.).
+SOURCE provides metadata for the stream argument, for error messages."
   (parser:with-reader-context stream
-    (let* ((source (or *source*
-                       (coalton-impl/source:make-source-file (source-filename)
-                                                             :name (buffer-name))))
-           (first-form
-             (multiple-value-bind (form presentp)
-                 (parser:maybe-read-form stream source)
-               (unless presentp
-                 (return-from read-coalton-toplevel-open-paren
-                   nil))
-               form)))
+    (let ((first-form
+            (multiple-value-bind (form presentp)
+                (parser:maybe-read-form stream source)
+              (unless presentp
+                (return-from maybe-read-coalton nil))
+              form)))
 
       (case (cst:raw first-form)
         (coalton:coalton-toplevel
@@ -87,36 +110,37 @@ This symbol may be bound to a string source in the case of direct evaluation in 
 
         ;; Fall back to reading the list manually
         (t
-         (let ((collected-forms (list (cst:raw first-form)))
-               (dotted-context nil))
-           (loop :do
-             (handler-case
-                 (multiple-value-bind (form presentp)
-                     (parser:maybe-read-form stream source)
+         (read-lisp stream source first-form))))))
 
-                   (cond
-                     ((and (not presentp)
-                           dotted-context)
-                      (error "Invalid dotted list"))
+(defun read-coalton-toplevel-open-paren (stream char)
+  "This is the dispatch function for open paren in the Coalton readtable.
+It ensures the presence of source metadata for STREAM and then calls MAYBE-READ-COALTON."
+  (unless *coalton-reader-allowed*
+    (return-from read-coalton-toplevel-open-paren
+      (funcall (get-macro-character #\( (named-readtables:ensure-readtable :standard)) stream char)))
 
-                     ((not presentp)
-                      (return-from read-coalton-toplevel-open-paren
-                        (nreverse collected-forms)))
-
-                     (dotted-context
-                      (when (nth-value 1 (parser:maybe-read-form stream source))
-                        (error "Invalid dotted list"))
-
-                      (return-from read-coalton-toplevel-open-paren
-                        (nreconc collected-forms (cst:raw form))))
-
-                     (t
-                      (push (cst:raw form) collected-forms))))
-               (eclector.reader:invalid-context-for-consing-dot (c)
-                 (when dotted-context
-                   (error "Invalid dotted list"))
-                 (setf dotted-context t)
-                 (eclector.reader:recover c))))))))))
+  (cond (*source*
+         ;; source metadata exists, probably courtesy of
+         ;; compile-forms: do nothing
+         (maybe-read-coalton stream *source*))
+        ((source-filename)
+         ;; no metadata, and a compile or load operation is occurring:
+         ;; bind a source-file
+         (let ((*source* (coalton-impl/source:make-source-file
+                          (source-filename)
+                          :name (buffer-name))))
+           (maybe-read-coalton stream *source*)))
+        (t
+         ;; no metadata, no file operation, therefore we are in a
+         ;; repl: bind a source-string containing cloned input
+         (let ((*source* (coalton-impl/source:make-source-string
+                          (with-output-to-string (out)
+                            (write-char #\( out)
+                            (alexandria:copy-stream stream out))
+                          :name "repl")))
+           (with-open-stream (stream (source-error:source-stream *source*))
+             (read-char stream)
+             (maybe-read-coalton stream *source*))))))
 
 (named-readtables:defreadtable coalton:coalton
   (:merge :standard)

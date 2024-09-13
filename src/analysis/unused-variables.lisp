@@ -73,11 +73,11 @@
         (tc:node-variable
          (cons
           (tc:node-variable-name var)
-          (tc:node-location var)))
+          (source:location var)))
         (tc:pattern-var
          (cons
           (tc:pattern-var-name var)
-          (tc:pattern-location var))))
+          (source:location var))))
 
     (unless (char= (aref (symbol-name name) 0) #\_)
         (unless (gethash name used-variables)

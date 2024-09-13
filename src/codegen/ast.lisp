@@ -15,6 +15,7 @@
    #:binding-list                       ; TYPE
    #:node-literal                       ; STRUCT
    #:make-node-literal                  ; CONSTRUCTOR
+   #:node-literal-p                     ; FUNCTION
    #:node-literal-value                 ; READER
    #:node-variable                      ; STRUCT
    #:make-node-variable                 ; CONSTRUCTOR
@@ -43,6 +44,7 @@
    #:node-let-subexpr                   ; READER
    #:node-lisp                          ; STRUCT
    #:make-node-lisp                     ; CONSTRUCTOR
+   #:node-lisp-p                        ; FUNCTION
    #:node-lisp-vars                     ; READER
    #:node-lisp-form                     ; READER
    #:match-branch                       ; STRUCT

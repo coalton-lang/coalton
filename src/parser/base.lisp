@@ -15,12 +15,10 @@
    #:keyword-src                        ; STRUCT
    #:make-keyword-src                   ; CONSTRUCTOR
    #:keyword-src-name                   ; ACCESSOR
-   #:keyword-src-location                 ; ACCESSOR
    #:keyword-src-list                   ; TYPE
    #:identifier-src                     ; STRUCT
    #:make-identifier-src                ; CONSTRUCTOR
    #:identifier-src-name                ; ACCESSOR
-   #:identifier-src-location              ; ACCESSOR
    #:identifier-src-list                ; TYPE
    #:parse-error                        ; CONDITION
    #:parse-list                         ; FUNCTION
@@ -50,6 +48,9 @@
   (name     (util:required 'name)     :type keyword :read-only t)
   (location (util:required 'location) :type source:location :read-only t))
 
+(defmethod source:location ((self keyword-src))
+  (keyword-src-location self))
+
 (defun keyword-src-list-p (x)
   (and (alexandria:proper-list-p x)
        (every #'keyword-src-p x)))
@@ -61,6 +62,9 @@
             (:copier nil))
   (name     (util:required 'name)     :type identifier :read-only t)
   (location (util:required 'location) :type source:location :read-only t))
+
+(defmethod source:location ((self identifier-src))
+  (identifier-src-location self))
 
 (defun identifier-src-list-p (x)
   (and (alexandria:proper-list-p x)

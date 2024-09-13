@@ -108,6 +108,9 @@ OFFSET indicates starting character offset within the file."
     :name (ensure-namestring name)
     :offset offset))
 
+(defmethod source-error:source-available-p ((self source-file))
+  (not (null (input-name self))))
+
 (defmethod source-error:source-name ((self source-file))
   (or (original-name self)
       (input-name self)))
@@ -143,11 +146,17 @@ OFFSET indicates starting character offset within the file."
     :string string
     :name (ensure-namestring name)))
 
+(defmethod source-error:source-available-p ((self source-string))
+  (not (null (source-string self))))
+
 (defmethod source-error:source-stream ((self source-string))
   (make-string-input-stream (source-string self)))
 
 (defmethod source-error:source-name ((self source-string))
   (or (original-name self) "<string input>"))
+
+(defgeneric location (object)
+  (:documentation "The source location of a Coalton object's definition."))
 
 (defgeneric docstring (object)
   (:documentation "The docstring accompanying a Coalton object's definition."))

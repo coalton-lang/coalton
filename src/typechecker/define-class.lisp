@@ -57,7 +57,7 @@
                          classes)
                  (alexandria:compose #'parser:identifier-src-name
                                      #'parser:method-definition-name)
-                 #'parser:method-definition-location)
+                 #'source:location)
 
   ;; Check for duplicate class definitions
   (check-duplicates
@@ -81,18 +81,18 @@
   (check-duplicates
    (mapcan (alexandria:compose #'copy-list #'parser:toplevel-define-class-methods) classes)
    (alexandria:compose #'parser:identifier-src-name #'parser:method-definition-name)
-   #'parser:method-definition-location
+   #'source:location
    (lambda (first second)
      (error 'tc:tc-error
             :err (source:source-error
-                  :location (parser:method-definition-location first)
+                  :location (source:location first)
                   :message "Duplicate method definition"
                   :primary-note "first definition here"
                   :notes
                   (list
                    (se:make-source-error-note
                     :type :primary
-                    :span (source:location-span (parser:method-definition-location second))
+                    :span (source:location-span (source:location second))
                     :message "second definition here"))))))
 
   (loop :for class :in classes :do
@@ -100,18 +100,18 @@
     (check-duplicates
      (parser:toplevel-define-class-vars class)
      #'parser:keyword-src-name
-     #'parser:keyword-src-location
+     #'source:location
      (lambda (first second)
        (error 'tc:tc-error
               :err (source:source-error
-                    :location (parser:keyword-src-location first)
+                    :location (source:location first)
                     :message "Duplicate class variable"
                     :primary-note "first usage here"
                     :notes
                     (list
                      (se:make-source-error-note
                       :type :primary
-                      :span (source:location-span (parser:keyword-src-location second))
+                      :span (source:location-span (source:location second))
                       :message "second usage here")))))))
 
   (let* ((class-table
@@ -316,9 +316,9 @@
            ;; Fundeps cannot be redefined
            :when (and prev-class (not (equalp (tc:ty-class-fundeps prev-class)
                                               fundeps))) 
-             :do (tc-error (parser:toplevel-define-class-head-location class)
-                           "Invalid fundep redefinition"
-                           (format nil "unable to redefine the fudndeps of class ~S." class-name))
+             :do (tc-located-error (parser:toplevel-define-class-head-location class)
+                                   "Invalid fundep redefinition"
+                                   (format nil "unable to redefine the fudndeps of class ~S." class-name))
 
            :when fundeps
              :do (setf env (tc:initialize-fundep-environment env class-name))
@@ -372,23 +372,23 @@
 
   (let ((var-names (mapcar #'parser:keyword-src-name (parser:toplevel-define-class-vars class))))
 
-    ;; Ensure fudneps don't have duplicate variables
+    ;; Ensure fundeps don't have duplicate variables
     (labels ((check-duplicate-fundep-variables (vars)
                (check-duplicates
                 vars
                 #'parser:keyword-src-name
-                #'parser:keyword-src-location
+                #'source:location
                 (lambda (first second)
                   (error 'tc:tc-error
                          :err (source:source-error
-                               :location (parser:keyword-src-location first)
+                               :location (source:location first)
                                :message "Duplicate variable in function dependency"
                                :primary-note "first usage here"
                                :notes
                                (list
                                 (se:make-source-error-note
                                  :type :primary
-                                 :span (source:location-span (parser:keyword-src-location second))
+                                 :span (source:location-span (source:location second))
                                  :message "second usage here"))))))))
       (loop :for fundep :in (parser:toplevel-define-class-fundeps class)
             :do (check-duplicate-fundep-variables (parser:fundep-left fundep))
@@ -398,7 +398,7 @@
     (labels ((check-fundep-variables (vars)
                (loop :for var :in vars
                      :unless (find (parser:keyword-src-name var) var-names :test #'eq)
-                       :do (tc-error (parser:keyword-src-location var)
+                       :do (tc-error var
                                      "Unkown type variable"
                                      (format nil "unknown type variable ~S"
                                              (parser:keyword-src-name var))))))
@@ -438,7 +438,7 @@
 
                    ;; Ensure that methods are not ambiguous
                    :unless (subsetp var-names (tc:closure tyvars fundeps) :test #'eq)
-                     :do (tc-error (parser:method-definition-location method)
+                     :do (tc-error method
                                    "Ambiguous method"
                                    "the method is ambiguous")
 
@@ -451,7 +451,7 @@
                                              :test #'eq)
 
                              :when (subsetp tyvars var-names)
-                               :do (tc-error (parser:ty-predicate-location pred)
+                               :do (tc-error pred
                                              "Invalid method predicate"
                                              "method predicate contains only class variables"))
 
