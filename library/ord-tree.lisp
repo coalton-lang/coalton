@@ -139,7 +139,7 @@
 
   (declare contains? ((Ord :elt) => :elt -> (Tree :elt) -> Boolean))
   (define (contains? elt tre)
-    "Does `tre` containan element `=='`to `elt`."
+    "Does `tre` contain an element `==` to `elt`."
     (match (lookup tre elt)
       ((None) False)
       ((Some _) True)))
