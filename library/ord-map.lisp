@@ -247,7 +247,7 @@ operation, and therefore Map cannot implement Monoid."
   (define (sdifference a b)
     "Symmetric difference.
 
-Construct a Map containing only those mapping sof `a` and `b` which do not associate keys `==' keys in the other."
+Construct a Map containing only those mappings of `a` and `b` which do not associate keys `==' keys in the other."
     (let (%Map a) = a)
     (let (%Map b) = b)
     (%Map (tree:sdifference a b)))
