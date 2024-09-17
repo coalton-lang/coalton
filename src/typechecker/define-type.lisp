@@ -7,7 +7,6 @@
 (defpackage #:coalton-impl/typechecker/define-type
   (:use
    #:cl
-   #:coalton-impl/source
    #:coalton-impl/typechecker/base
    #:coalton-impl/typechecker/parse-type
    #:coalton-impl/typechecker/partial-type-env)
@@ -17,6 +16,7 @@
    #:check-duplicates)
   (:local-nicknames
    (#:se #:source-error)
+   (#:source #:coalton-impl/source)
    (#:util #:coalton-impl/util)
    (#:algo #:coalton-impl/algorithm)
    (#:parser #:coalton-impl/parser)
@@ -53,20 +53,20 @@
   (constructor-types (util:required 'constructor-types) :type tc:scheme-list            :read-only t)
   (constructor-args  (util:required 'constructor-args)  :type list                      :read-only t)
   (docstring         (util:required 'docstring)         :type (or null string)          :read-only t)
-  (location          (util:required 'location)          :type location                  :read-only t))
+  (location          (util:required 'location)          :type source:location           :read-only t))
 
-(defmethod location ((self type-definition))
+(defmethod source:location ((self type-definition))
   (type-definition-location self))
 
-(defmethod docstring ((self type-definition))
+(defmethod source:docstring ((self type-definition))
   (type-definition-docstring self))
 
 (defstruct field-definition
-  (name   (util:required 'name)   :type symbol :read-only t)
-  (type   (util:required 'type)   :type tc:ty  :read-only t)
-  (location (util:required 'location) :type location   :read-only t))
+  (name     (util:required 'name)     :type symbol          :read-only t)
+  (type     (util:required 'type)     :type tc:ty           :read-only t)
+  (location (util:required 'location) :type source:location :read-only t))
 
-(defmethod location ((self field-definition))
+(defmethod source:location ((self field-definition))
   (field-definition-location self))
 
 (defun type-definition-list-p (x)
@@ -86,7 +86,7 @@
   (check-package (append types structs)
                  (alexandria:compose #'parser:identifier-src-name
                                      #'parser:type-definition-name)
-                 (alexandria:compose #'location
+                 (alexandria:compose #'source:location
                                      #'parser:type-definition-name))
 
   ;; Ensure that all constructors are defined in the current package
@@ -94,24 +94,24 @@
                          types)
                  (alexandria:compose #'parser:identifier-src-name
                                      #'parser:constructor-name)
-                 (alexandria:compose #'location
+                 (alexandria:compose #'source:location
                                      #'parser:constructor-name))
 
   ;; Ensure that there are no duplicate type definitions
   (check-duplicates
    (append types structs)
    (alexandria:compose #'parser:identifier-src-name #'parser:type-definition-name)
-   #'location
+   #'source:location
    (lambda (first second)
      (error 'tc:tc-error
-            :err (source-error
-                  :location (location first)
+            :err (source:source-error
+                  :location (source:location first)
                   :message "Duplicate type definitions"
                   :primary-note "first definition here"
                   :notes (list (se:make-source-error-note
                                 :type :primary
-                                :span (location-span
-                                       (location second))
+                                :span (source:location-span
+                                       (source:location second))
                                 :message "second definition here"))))))
 
   ;; Ensure that there are no duplicate constructors
@@ -120,16 +120,16 @@
    (mapcan (alexandria:compose #'copy-list #'parser:type-definition-ctors)
            (append types structs))
    (alexandria:compose #'parser:identifier-src-name #'parser:type-definition-ctor-name)
-   #'location
+   #'source:location
    (lambda (first second)
      (error 'tc:tc-error
-            :err (source-error
-                  :location (location first)
+            :err (source:source-error
+                  :location (source:location first)
                   :message "Duplicate constructor definitions"
                   :primary-note "first definition here"
                   :notes (list (se:make-source-error-note
                                 :type :primary
-                                :span (location-span (location second))
+                                :span (source:location-span (source:location second))
                                 :message "second definition here"))))))
 
   ;; Ensure that no type has duplicate type variables
@@ -137,17 +137,17 @@
         :do (check-duplicates
              (parser:type-definition-vars type)
              #'parser:keyword-src-name
-             #'location
+             #'source:location
              (lambda (first second)
                (error 'tc:tc-error
-                      :err (source-error
-                            :location (location first)
+                      :err (source:source-error
+                            :location (source:location first)
                             :message "Duplicate type variable definitions"
                             :primary-note "first definition here"
                             :notes
                             (list (se:make-source-error-note
                                    :type :primary
-                                   :span (location-span (location second))
+                                   :span (source:location-span (source:location second))
                                    :message "second definition here")))))))
 
   (let* ((type-names (mapcar (alexandria:compose #'parser:identifier-src-name
@@ -245,7 +245,7 @@
                              :collect (tc:make-struct-field :name (parser:struct-field-name field)
                                                             :type ty
                                                             :index index
-                                                            :docstring (docstring field)))))
+                                                            :docstring (source:docstring field)))))
            (setf env (tc:set-struct
                       env
                       (type-definition-name type)
@@ -270,8 +270,8 @@
           :explicit-repr (type-definition-explicit-repr type)
           :enum-repr (type-definition-enum-repr type)
           :newtype (type-definition-newtype type)
-          :docstring (docstring type)
-          :location (location parsed-type))))
+          :docstring (source:docstring type)
+          :location (source:location parsed-type))))
 
   ;; Define the type's constructors in the environment
   (loop :for ctor :in (type-definition-constructors type)
@@ -293,7 +293,7 @@
                       :name ctor-name
                       :type :constructor
                       :docstring nil
-                      :location (location parsed-type))))
+                      :location (source:location parsed-type))))
 
           ;; If the constructor takes parameters then
           ;; add it to the function environment
@@ -356,7 +356,7 @@
                                       (partial-type-env-lookup-var
                                        env
                                        (parser:keyword-src-name var)
-                                       (location var)))
+                                       (source:location var)))
                                     (parser:type-definition-vars type)))
 
              :for repr := (parser:type-definition-repr type)
@@ -449,8 +449,8 @@
 
                                 :constructor-types constructor-types
                                 :constructor-args constructor-args
-                                :docstring (docstring type)
-                                :location (location type)))
+                                :docstring (source:docstring type)
+                                :location (source:location type)))
 
                              (runtime-repr-instance (maybe-runtime-repr-instance type-definition)))
 
@@ -470,7 +470,7 @@
   (declare (type type-definition type))
 
   (let* ((location
-           (location type))
+           (source:location type))
          (types-package
            (util:find-package "COALTON-LIBRARY/TYPES"))
          (runtime-repr

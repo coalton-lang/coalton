@@ -1,8 +1,9 @@
 (defpackage #:coalton-impl/typechecker/traverse
   (:use
    #:cl
-   #:coalton-impl/source
    #:coalton-impl/typechecker/expression)
+  (:local-nicknames
+   (#:source #:coalton-impl/source))
   (:export
    #:traverse-block                     ; STRUCT
    #:make-traverse-block                ; CONSTRUCTOR
@@ -78,7 +79,7 @@
      (make-node-bind
       :pattern (node-bind-pattern node)
       :expr (traverse (node-bind-expr node) block)
-      :location (location node))))
+      :location (source:location node))))
 
   (:method ((node node-body) block)
     (declare (type traverse-block block)
@@ -98,7 +99,7 @@
      (traverse-abstraction block)
      (make-node-abstraction
       :type (node-type node)
-      :location (location node)
+      :location (source:location node)
       :params (node-abstraction-params node)
       :body (traverse (node-abstraction-body node) block))))
 
@@ -111,7 +112,7 @@
      (make-node-let-binding
       :name (node-let-binding-name node)
       :value (traverse (node-let-binding-value node) block)
-      :location (location node))))
+      :location (source:location node))))
 
   (:method ((node node-let) block)
     (declare (type traverse-block block)
@@ -121,7 +122,7 @@
      (traverse-let block)
      (make-node-let
       :type (node-type node)
-      :location (location node)
+      :location (source:location node)
       :bindings (traverse (node-let-bindings node) block)
       :body (traverse (node-let-body node) block))))
 
@@ -133,7 +134,7 @@
      (traverse-lisp block)
      (make-node-lisp
       :type (node-type node)
-      :location (location node)
+      :location (source:location node)
       :vars (traverse (node-lisp-vars node) block)
       :var-names (node-lisp-var-names node)
       :body (node-lisp-body node))))
@@ -147,7 +148,7 @@
      (make-node-match-branch
       :pattern (node-match-branch-pattern node)
       :body (traverse (node-match-branch-body node) block)
-      :location (location node))))
+      :location (source:location node))))
 
   (:method ((node node-match) block)
     (declare (type traverse-block block)
@@ -157,7 +158,7 @@
      (traverse-match block)
      (make-node-match
       :type (node-type node)
-      :location (location node)
+      :location (source:location node)
       :expr (traverse (node-match-expr node) block)
       :branches (traverse (node-match-branches node) block))))
 
@@ -169,7 +170,7 @@
      (traverse-progn block)
      (make-node-progn
       :type (node-type node)
-      :location (location node)
+      :location (source:location node)
       :body (traverse (node-progn-body node) block))))
 
   (:method ((node node-return) block)
@@ -180,7 +181,7 @@
      (traverse-return block)
      (make-node-return
       :type (node-type node)
-      :location (location node)
+      :location (source:location node)
       :expr (traverse (node-return-expr node) block) ; the nil case is handled by the list instance
       )))
 
@@ -192,7 +193,7 @@
      (traverse-application block)
      (make-node-application
       :type (node-type node)
-      :location (location node)
+      :location (source:location node)
       :rator (traverse (node-application-rator node) block)
       :rands (traverse (node-application-rands node) block))))
 
@@ -204,7 +205,7 @@
      (traverse-or block)
      (make-node-or
       :type (node-type node)
-      :location (location node)
+      :location (source:location node)
       :nodes (traverse (node-or-nodes node) block))))
 
   (:method ((node node-and) block)
@@ -215,7 +216,7 @@
      (traverse-and block)
      (make-node-and
       :type (node-type node)
-      :location (location node)
+      :location (source:location node)
       :nodes (traverse (node-and-nodes node) block))))
 
   (:method ((node node-if) block)
@@ -226,7 +227,7 @@
      (traverse-if block)
      (make-node-if
       :type (node-type node)
-      :location (location node)
+      :location (source:location node)
       :expr (traverse (node-if-expr node) block)
       :then (traverse (node-if-then node) block)
       :else (traverse (node-if-else node) block))))
@@ -239,7 +240,7 @@
      (traverse-when block)
      (make-node-when
       :type (node-type node)
-      :location (location node)
+      :location (source:location node)
       :expr (traverse (node-when-expr node) block)
       :body (traverse (node-when-body node) block))))
 
@@ -251,7 +252,7 @@
      (traverse-unless block)
      (make-node-unless
       :type (node-type node)
-      :location (location node)
+      :location (source:location node)
       :expr (traverse (node-unless-expr node) block)
       :body (traverse (node-unless-body node) block))))
 
@@ -264,7 +265,7 @@
      (make-node-cond-clause
       :expr (traverse (node-cond-clause-expr node) block)
       :body (traverse (node-cond-clause-body node) block)
-      :location (location node))))
+      :location (source:location node))))
 
   (:method ((node node-cond) block)
     (declare (type traverse-block block)
@@ -274,7 +275,7 @@
      (traverse-cond block)
      (make-node-cond
       :type (node-type node)
-      :location (location node)
+      :location (source:location node)
       :clauses (traverse (node-cond-clauses node) block))))
 
   (:method ((node node-while) block)
@@ -284,7 +285,7 @@
      (traverse-while block)
      (make-node-while
       :type (node-type node)
-      :location (location node)
+      :location (source:location node)
       :label (node-while-label node)
       :expr (traverse (node-while-expr node) block)
       :body (traverse (node-while-body node) block))))
@@ -296,7 +297,7 @@
      (traverse-while-let block)
      (make-node-while-let
       :type (node-type node)
-      :location (location node)
+      :location (source:location node)
       :label (node-while-let-label node)
       :pattern (node-while-let-pattern node)
       :expr (traverse (node-while-let-expr node) block)
@@ -309,7 +310,7 @@
      (traverse-for block)
      (make-node-for
       :type (node-type node)
-      :location (location node)
+      :location (source:location node)
       :label (node-for-label node)
       :pattern (node-for-pattern node)
       :expr (traverse (node-for-expr node) block)
@@ -322,7 +323,7 @@
      (traverse-loop block)
      (make-node-loop
       :type (node-type node)
-      :location (location node)
+      :location (source:location node)
       :label (node-loop-label node)
       :body (traverse (node-loop-body node) block))))
 
@@ -349,7 +350,7 @@
      (make-node-do-bind
       :pattern (node-do-bind-pattern node)
       :expr (traverse (node-do-bind-expr node) block)
-      :location (location node))))
+      :location (source:location node))))
 
   (:method ((node node-do) block)
     (declare (type traverse-block block)
@@ -359,7 +360,7 @@
      (traverse-do block)
      (make-node-do
       :type (node-type node)
-      :location (location node)
+      :location (source:location node)
       :nodes (traverse (node-do-nodes node) block)
       :last-node (traverse (node-do-last-node node) block))))
 

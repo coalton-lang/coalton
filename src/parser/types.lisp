@@ -1,7 +1,6 @@
 (defpackage #:coalton-impl/parser/types
   (:use
    #:cl
-   #:coalton-impl/source
    #:coalton-impl/parser/base)
   (:shadowing-import-from
    #:coalton-impl/parser/base
@@ -9,6 +8,7 @@
   (:local-nicknames
    (#:cst #:concrete-syntax-tree)
    (#:se #:source-error)
+   (#:source #:coalton-impl/source)
    (#:util #:coalton-impl/util))
   (:export
    #:ty                                 ; STRUCT
@@ -63,7 +63,7 @@
 ;;;;     | tycon
 ;;;;     | "(" type-list ")"
 ;;;;
-;;;; ty-predicate := class ty+ 
+;;;; ty-predicate := class ty+
 ;;;;
 ;;;; qualified-ty := ty
 ;;;;               | "(" ty-predicate "=>" type-list ")"
@@ -71,9 +71,9 @@
 
 (defstruct (ty (:constructor nil)
                (:copier nil))
-  (location (util:required 'location) :type location :read-only t))
+  (location (util:required 'location) :type source:location :read-only t))
 
-(defmethod location ((self ty))
+(defmethod source:location ((self ty))
   (ty-location self))
 
 (defun ty-list-p (x)
@@ -116,9 +116,9 @@
             (:copier nil))
   (class    (util:required 'class)    :type identifier-src  :read-only t)
   (types    (util:required 'types)    :type ty-list         :read-only t)
-  (location (util:required 'location) :type location        :read-only t))
+  (location (util:required 'location) :type source:location :read-only t))
 
-(defmethod location ((self ty-predicate))
+(defmethod source:location ((self ty-predicate))
   (ty-predicate-location self))
 
 (defun ty-predicate-list-p (x)
@@ -133,9 +133,9 @@
             (:copier nil))
   (predicates (util:required 'predicates) :type ty-predicate-list :read-only t)
   (type       (util:required 'type)       :type ty                :read-only t)
-  (location   (util:required 'location)   :type location          :read-only t))
+  (location   (util:required 'location)   :type source:location   :read-only t))
 
-(defmethod location ((self qualified-ty))
+(defmethod source:location ((self qualified-ty))
   (qualified-ty-location self))
 
 (defun parse-qualified-type (form source)
@@ -146,7 +146,7 @@
       (make-qualified-ty
        :predicates nil
        :type (parse-type form source)
-       :location (make-location source form))
+       :location (source:make-location source form))
 
       (multiple-value-bind (left right)
           (util:take-until (lambda (cst)
@@ -158,8 +158,8 @@
           ((null right)
            (make-qualified-ty
             :predicates nil
-            :type (parse-type-list left (make-location source form))
-            :location (make-location source form)))
+            :type (parse-type-list left (source:make-location source form))
+            :location (source:make-location source form)))
 
           ;; (=> T -> T)
           ((and (null left) right)
@@ -208,9 +208,9 @@
              (if (cst:atom (first left))
                  (setf predicates (list (parse-predicate
                                          left
-                                         (make-location source
-                                                        (cons (car (cst:source (first left)))
-                                                              (cdr (cst:source (car (last left)))))))))
+                                         (source:make-location source
+                                                               (cons (car (cst:source (first left)))
+                                                                     (cdr (cst:source (car (last left)))))))))
 
                  (loop :for pred :in left
                        :unless (cst:consp pred)
@@ -221,26 +221,26 @@
                                           :message "Malformed type predicate"
                                           :primary-note "expected predicate"))
                        :do (push (parse-predicate (cst:listify pred)
-                                                  (make-location source
-                                                                 (cst:source form)))
+                                                  (source:make-location source
+                                                                        (cst:source form)))
                                  predicates)))
 
              (make-qualified-ty
               :predicates (reverse predicates)
               :type (parse-type-list
                      (cdr right)
-                     (make-location source
-                                    (cons (car (cst:source (second right)))
-                                          (cdr (cst:source (car (last right)))))))
-              :location (make-location source form))))))))
+                     (source:make-location source
+                                           (cons (car (cst:source (second right)))
+                                                 (cdr (cst:source (car (last right)))))))
+              :location (source:make-location source form))))))))
 
 (defun parse-predicate (forms location)
   (declare (type util:cst-list forms)
-           (type location location)
+           (type source:location location)
            (values ty-predicate))
 
   (assert forms)
-  (let ((source (location-source location)))
+  (let ((source (source:location-source location)))
     (cond
       ;; (T) ... => ....
       ((not (cst:atom (first forms)))
@@ -281,7 +281,7 @@
          (make-ty-predicate
           :class (make-identifier-src
                   :name name
-                  :location (make-location source (first forms)))
+                  :location (source:make-location source (first forms)))
           :types (loop :for form :in (cdr forms)
                        :collect (parse-type form source))
           :location location))))))
@@ -296,8 +296,8 @@
           (cst:raw form))
 
      (if (equalp (symbol-package (cst:raw form)) util:+keyword-package+)
-         (make-tyvar :name (cst:raw form) :location (make-location source form))
-         (make-tycon :name (cst:raw form) :location (make-location source form))))
+         (make-tyvar :name (cst:raw form) :location (source:make-location source form))
+         (make-tycon :name (cst:raw form) :location (source:make-location source form))))
 
     ((cst:atom form)
      (error 'parse-error
@@ -317,17 +317,17 @@
                   :primary-note "unexpected nullary type")))
 
     (t
-     (parse-type-list (cst:listify form) (make-location source form)))))
+     (parse-type-list (cst:listify form) (source:make-location source form)))))
 
 (defun parse-type-list (forms location)
   (declare (type util:cst-list forms)
-           (type location location)
+           (type source:location location)
            (values ty &optional))
 
   (assert forms)
 
   (if (= 1 (length forms))
-      (parse-type (first forms) (location-source location))
+      (parse-type (first forms) (source:location-source location))
       (multiple-value-bind (left right)
           (util:take-until (lambda (cst)
                              (and (cst:atom cst)
@@ -340,7 +340,7 @@
            (error 'parse-error
                   :err (se:source-error
                         :span (cst:source (car right))
-                        :source (location-source location)
+                        :source (source:location-source location)
                         :message "Malformed function type"
                         :primary-note "missing return type")))
 
@@ -349,14 +349,14 @@
            (error 'parse-error
                   :err (se:source-error
                         :span (cst:source (car right))
-                        :source (location-source location)
+                        :source (source:location-source location)
                         :message "Malformed function type"
                         :primary-note "invalid function syntax")))
 
           (t
-           (let ((ty (parse-type (car left) (location-source location))))
+           (let ((ty (parse-type (car left) (source:location-source location))))
              (loop :for form_ :in (cdr left)
-                   :for ty_ := (parse-type form_ (location-source location))
+                   :for ty_ := (parse-type form_ (source:location-source location))
                    :do (setf ty (make-tapp :from ty
                                            :to ty_
                                            :location location)))
@@ -368,15 +368,15 @@
                   :from (make-tapp
                          :from (make-tycon
                                 :name 'coalton:Arrow
-                                :location (make-location (location-source location)
-                                                         (first right)))
+                                :location (source:make-location (source:location-source location)
+                                                                (first right)))
                          :to ty
-                         :location (make-location (location-source location)
-                                                  (cons (car (location-span (ty-location ty)))
-                                                        (cdr (cst:source (first right))))))
+                         :location (source:make-location (source:location-source location)
+                                                         (cons (car (source:location-span (ty-location ty)))
+                                                               (cdr (cst:source (first right))))))
                   :to (parse-type-list
                        (cdr right)
-                       (make-location (location-source location)
-                                      (cons (car (cst:source (first right)))
-                                            (cdr (cst:source (car (last right)))))))
+                       (source:make-location (source:location-source location)
+                                             (cons (car (cst:source (first right)))
+                                                   (cdr (cst:source (car (last right)))))))
                   :location location))))))))
