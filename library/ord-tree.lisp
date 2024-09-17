@@ -19,8 +19,10 @@
    #:remove #:without
    #:increasing-order
    #:decreasing-order
-   #:collect!
+   #:collect! #:collect
+   #:filter-collect! #:filter-collect
    #:merge #:union #:intersection #:difference #:sdifference
+   #:filter
    #:make))
 
 (in-package :coalton-library/ord-tree)
@@ -509,8 +511,32 @@ The result tree may be in an intermediate state with a double-black node."
 If ITER contains duplicates, later elements will overwrite earlier elements."
     (iter:fold! insert-or-replace Empty iter))
 
+  (declare filter-collect! ((Ord :elt) => (:elt -> Boolean) -> (iter:Iterator :elt) -> (Tree :elt)))
+  (define (filter-collect! keep? iter)
+    "Construct a Tree containing only those elements of `iter` which satisfy `keep?`.
+
+If ITER contains duplicates, later elements will overwrite earlier elements."
+    (collect! (iter:filter! keep? iter)))
+
   (define-instance (Ord :elt => iter:FromIterator (Tree :elt) :elt)
     (define iter:collect! collect!))
+
+  (declare collect ((Ord :elt) (Foldable :collection) => (:collection :elt)-> (Tree :elt)))
+  (define (collect coll)
+    "Construct a Tree containing all the elements of COLL.
+
+If COLL contains duplicates, later elements will overwrite earlier elements."
+    (fold insert-or-replace Empty coll))
+
+  (declare filter-collect ((Ord :elt) (Foldable :collection) => (:elt -> Boolean) -> (:collection :elt)-> (Tree :elt)))
+  (define (filter-collect keep? coll)
+    "Construct a Tree containing only those elements of `coll` which satisfy `keep?`.
+
+If COLL contains duplicates, later elements will overwrite earlier elements."
+    (fold (fn (tre elt) (if (keep? elt) (insert-or-replace tre elt) tre)) Empty coll))
+
+  (define-instance ((Ord :elt) (Foldable :collection) => (Into (:collection :elt) (Tree :elt)))
+    (define into collect))
 
   (declare merge (Ord :elt => Tree :elt -> Tree :elt -> Tree :elt))
   (define (merge a b)
@@ -547,6 +573,11 @@ B'. Which one is chosen for the result is undefined."
 Construct a Tree containing only those elements of `a` and `b` which are not `==' to any elements in the other."
     (merge (difference a b)
            (difference b a)))
+
+  (declare filter (Ord :elt => (:elt -> Boolean) -> Tree :elt -> Tree :elt))
+  (define (filter keep? tre)
+    "Construct a Tree containing only those elements of `tre` which satisfy `keep?`."
+    (fold (fn (new-tre elt) (if (keep? elt) (insert-or-replace new-tre elt) new-tre)) Empty tre))
 
   (define-instance (Ord :elt => Semigroup (Tree :elt))
     (define <> merge))
