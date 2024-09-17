@@ -1,7 +1,6 @@
 (defpackage #:coalton-impl/parser/expression
   (:use
    #:cl
-   #:coalton-impl/source
    #:coalton-impl/parser/base
    #:coalton-impl/parser/types
    #:coalton-impl/parser/pattern
@@ -12,6 +11,7 @@
   (:local-nicknames
    (#:cst #:concrete-syntax-tree)
    (#:se #:source-error)
+   (#:source #:coalton-impl/source)
    (#:util #:coalton-impl/util)
    (#:const #:coalton-impl/constants))
   (:export
@@ -263,9 +263,9 @@ Rebound to NIL parsing an anonymous FN.")
 (defstruct (node
             (:constructor nil)
             (:copier nil))
-  (location (util:required 'location) :type location :read-only t))
+  (location (util:required 'location) :type source:location :read-only t))
 
-(defmethod location ((self node))
+(defmethod source:location ((self node))
   (node-location self))
 
 (defun node-list-p (x)
@@ -309,9 +309,9 @@ Rebound to NIL parsing an anonymous FN.")
             (:copier nil))
   (pattern  (util:required 'pattern)   :type pattern  :read-only t)
   (expr     (util:required 'expr)      :type node     :read-only t)
-  (location (util:required 'location)  :type location :read-only t))
+  (location (util:required 'location)  :type source:location :read-only t))
 
-(defmethod location ((self node-bind))
+(defmethod source:location ((self node-bind))
   (node-bind-location self))
 
 (deftype node-body-element ()
@@ -347,11 +347,11 @@ Rebound to NIL parsing an anonymous FN.")
 
 (defstruct (node-let-binding
             (:copier nil))
-  (name   (util:required 'name)   :type node-variable   :read-only t)
-  (value  (util:required 'value)  :type node            :read-only t)
-  (location (util:required 'location) :type location :read-only t))
+  (name     (util:required 'name)     :type node-variable   :read-only t)
+  (value    (util:required 'value)    :type node            :read-only t)
+  (location (util:required 'location) :type source:location :read-only t))
 
-(defmethod location ((self node-let-binding))
+(defmethod source:location ((self node-let-binding))
   (node-let-binding-location self))
 
 (defun node-let-binding-list-p (x)
@@ -363,11 +363,11 @@ Rebound to NIL parsing an anonymous FN.")
 
 (defstruct (node-let-declare
             (:copier nil))
-  (name   (util:required 'name)   :type node-variable   :read-only t)
-  (type   (util:required 'type)   :type qualified-ty    :read-only t)
-  (location (util:required 'location) :type location :read-only t))
+  (name     (util:required 'name)     :type node-variable   :read-only t)
+  (type     (util:required 'type)     :type qualified-ty    :read-only t)
+  (location (util:required 'location) :type source:location :read-only t))
 
-(defmethod location ((self node-let-declare))
+(defmethod source:location ((self node-let-declare))
   (node-let-declare-location self))
 
 (defun node-let-declare-list-p (x)
@@ -394,11 +394,11 @@ Rebound to NIL parsing an anonymous FN.")
 
 (defstruct (node-match-branch
             (:copier nil))
-  (pattern (util:required 'pattern) :type pattern         :read-only t)
-  (body    (util:required 'body)    :type node-body       :read-only t)
-  (location  (util:required 'location)  :type location :read-only t))
+  (pattern  (util:required 'pattern)  :type pattern         :read-only t)
+  (body     (util:required 'body)     :type node-body       :read-only t)
+  (location (util:required 'location) :type source:location :read-only t))
 
-(defmethod location ((self node-match-branch))
+(defmethod source:location ((self node-match-branch))
   (node-match-branch-location self))
 
 (defun node-match-branch-list-p (x)
@@ -469,9 +469,9 @@ Rebound to NIL parsing an anonymous FN.")
             (:copier nil))
   (expr   (util:required 'expr)   :type node            :read-only t)
   (body   (util:required 'body)   :type node-body       :read-only t)
-  (location (util:required 'location) :type location :read-only t))
+  (location (util:required 'location) :type source:location :read-only t))
 
-(defmethod location ((self node-cond-clause))
+(defmethod source:location ((self node-cond-clause))
   (node-cond-clause-location self))
 
 (defun node-cond-clause-list-p (x)
@@ -490,9 +490,9 @@ Rebound to NIL parsing an anonymous FN.")
             (:copier nil))
   (pattern (util:required 'name)   :type pattern         :read-only t)
   (expr    (util:required 'expr)   :type node            :read-only t)
-  (location  (util:required 'location) :type location :read-only t))
+  (location  (util:required 'location) :type source:location :read-only t))
 
-(defmethod location ((self node-do-bind))
+(defmethod source:location ((self node-do-bind))
   (node-do-bind-location self))
 
 (deftype node-do-body-element ()
@@ -653,7 +653,7 @@ Rebound to NIL parsing an anonymous FN.")
          (make-node-abstraction
           :params params
           :body body
-          :location (make-location source form)))))
+          :location (source:make-location source form)))))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:let (cst:raw (cst:first form))))
@@ -705,7 +705,7 @@ Rebound to NIL parsing an anonymous FN.")
         :bindings bindings
         :declares (nreverse declares)
         :body (parse-body (cst:nthrest 2 form) form source)
-        :location (make-location source form))))
+        :location (source:make-location source form))))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:lisp (cst:raw (cst:first form))))
@@ -747,7 +747,7 @@ Rebound to NIL parsing an anonymous FN.")
         :vars vars
         :var-names (mapcar #'node-variable-name vars)
         :body (cst:raw (cst:nthrest 3 form))
-        :location (make-location source form))))
+        :location (source:make-location source form))))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:match (cst:raw (cst:first form))))
@@ -767,13 +767,13 @@ Rebound to NIL parsing an anonymous FN.")
       :branches (loop :for branches := (cst:nthrest 2 form) :then (cst:rest branches)
                       :while (cst:consp branches)
                       :collect (parse-match-branch (cst:first branches) source))
-      :location (make-location source form)))
+      :location (source:make-location source form)))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:progn (cst:raw (cst:first form))))
      (make-node-progn
       :body (parse-body (cst:rest form) form source)
-      :location (make-location source form)))
+      :location (source:make-location source form)))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:the (cst:raw (cst:first form))))
@@ -809,7 +809,7 @@ Rebound to NIL parsing an anonymous FN.")
      (make-node-the
       :type (parse-type (cst:second form) source)
       :expr (parse-expression (cst:third form) source)
-      :location (make-location source form)))
+      :location (source:make-location source form)))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:return (cst:raw (cst:first form))))
@@ -830,7 +830,7 @@ Rebound to NIL parsing an anonymous FN.")
 
        (make-node-return
         :expr expr
-        :location (make-location source form))))
+        :location (source:make-location source form))))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:or (cst:raw (cst:first form))))
@@ -848,7 +848,7 @@ Rebound to NIL parsing an anonymous FN.")
                    :while (cst:consp args)
                    :for arg := (cst:first args)
                    :collect (parse-expression arg source))
-      :location (make-location source form)))
+      :location (source:make-location source form)))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:and (cst:raw (cst:first form))))
@@ -866,7 +866,7 @@ Rebound to NIL parsing an anonymous FN.")
                    :while (cst:consp args)
                    :for arg := (cst:first args)
                    :collect (parse-expression arg source))
-      :location (make-location source form)))
+      :location (source:make-location source form)))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:if (cst:raw (cst:first form))))
@@ -910,7 +910,7 @@ Rebound to NIL parsing an anonymous FN.")
       :expr (parse-expression (cst:second form) source)
       :then (parse-expression (cst:third form) source)
       :else (parse-expression (cst:fourth form) source)
-      :location (make-location source form)))
+      :location (source:make-location source form)))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:when (cst:raw (cst:first form))))
@@ -926,7 +926,7 @@ Rebound to NIL parsing an anonymous FN.")
      (make-node-when
       :expr (parse-expression (cst:second form) source)
       :body (parse-body (cst:rest (cst:rest form)) form source)
-      :location (make-location source form)))
+      :location (source:make-location source form)))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:unless (cst:raw (cst:first form))))
@@ -942,7 +942,7 @@ Rebound to NIL parsing an anonymous FN.")
      (make-node-unless
       :expr (parse-expression (cst:second form) source)
       :body (parse-body (cst:rest (cst:rest form)) form source)
-      :location (make-location source form)))
+      :location (source:make-location source form)))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:cond (cst:raw (cst:first form))))
@@ -960,7 +960,7 @@ Rebound to NIL parsing an anonymous FN.")
                      :while (cst:consp clauses)
                      :for clause := (cst:first clauses)
                      :collect (parse-cond-clause clause source))
-      :location (make-location source form)))
+      :location (source:make-location source form)))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:do (cst:raw (cst:first form))))
@@ -994,7 +994,7 @@ Rebound to NIL parsing an anonymous FN.")
                    (cons const:+default-loop-label+ *loop-label-context*))))
 
          (make-node-while
-          :location (make-location source form)
+          :location (source:make-location source form)
           :label (or label const:+default-loop-label+)
           :expr (parse-expression (cst:first labelled-body) source)
           :body (parse-body (cst:rest labelled-body) form source)))))
@@ -1048,7 +1048,7 @@ Rebound to NIL parsing an anonymous FN.")
                     (list* label const:+default-loop-label+ *loop-label-context*)
                     (cons const:+default-loop-label+ *loop-label-context*))))
          (make-node-while-let
-          :location (make-location source form)
+          :location (source:make-location source form)
           :label (or label const:+default-loop-label+)
           :pattern (parse-pattern (cst:first labelled-body) source) 
           :expr (parse-expression (cst:third labelled-body) source)
@@ -1071,7 +1071,7 @@ Rebound to NIL parsing an anonymous FN.")
                     (list* label const:+default-loop-label+ *loop-label-context*)
                     (cons const:+default-loop-label+ *loop-label-context*))))
          (make-node-loop
-          :location (make-location source form)
+          :location (source:make-location source form)
           :label (or label const:+default-loop-label+)
           :body (parse-body labelled-body form source)))))
 
@@ -1105,7 +1105,7 @@ Rebound to NIL parsing an anonymous FN.")
                           :message "Invalid break"
                           :primary-note "break does not appear in an enclosing loop"))))
        
-       (make-node-break :location (make-location source form)
+       (make-node-break :location (source:make-location source form)
                         :label (or label (car *loop-label-context*)))))
 
     ((and (cst:atom (cst:first form))
@@ -1138,7 +1138,7 @@ Rebound to NIL parsing an anonymous FN.")
                           :message "Invalid continue"
                           :primary-note "continue does not appear in an enclosing loop"))))
        
-       (make-node-continue :location (make-location source form)
+       (make-node-continue :location (source:make-location source form)
                            :label (or label (car *loop-label-context*)))))
     
 
@@ -1193,7 +1193,7 @@ Rebound to NIL parsing an anonymous FN.")
                    (list* label const:+default-loop-label+ *loop-label-context*)
                    (cons const:+default-loop-label+ *loop-label-context*))))
          (make-node-for
-          :location (make-location source form)
+          :location (source:make-location source form)
           :label (or label const:+default-loop-label+)
           :pattern (parse-pattern (cst:first labelled-body) source) 
           :expr (parse-expression (cst:third labelled-body) source)
@@ -1235,7 +1235,7 @@ Rebound to NIL parsing an anonymous FN.")
                    :while (cst:consp rands)
                    :for rand := (cst:first rands)
                    :collect (parse-expression rand source))
-      :location (make-location source form)))))
+      :location (source:make-location source form)))))
 
 (defun parse-variable (form source)
   (declare (type cst:cst form)
@@ -1268,7 +1268,7 @@ Rebound to NIL parsing an anonymous FN.")
 
   (make-node-variable
    :name (cst:raw form)
-   :location (make-location source form)))
+   :location (source:make-location source form)))
 
 (defun parse-accessor (form source)
   (declare (type cst:cst form)
@@ -1280,7 +1280,7 @@ Rebound to NIL parsing an anonymous FN.")
 
   (make-node-accessor
    :name (subseq (symbol-name (cst:raw form)) 1)
-   :location (make-location source form)))
+   :location (source:make-location source form)))
 
 (defun parse-literal (form source)
   (declare (type cst:cst form)
@@ -1292,12 +1292,12 @@ Rebound to NIL parsing an anonymous FN.")
     (integer
      (make-node-integer-literal
       :value (cst:raw form)
-      :location (make-location source form)))
+      :location (source:make-location source form)))
 
     (util:literal-value
      (make-node-literal
       :value (cst:raw form)
-      :location (make-location source form)))
+      :location (source:make-location source form)))
 
     (t
      (error 'parse-error
@@ -1383,7 +1383,7 @@ Rebound to NIL parsing an anonymous FN.")
   (make-node-bind
    :pattern (parse-pattern (cst:second form) source)
    :expr (parse-expression (cst:fourth form) source)
-   :location (make-location source form)))
+   :location (source:make-location source form)))
 
 (defun parse-body-element (form source)
   (declare (type cst:cst form)
@@ -1462,7 +1462,7 @@ Rebound to NIL parsing an anonymous FN.")
   (make-node-let-binding
    :name (parse-variable (cst:first form) source)
    :value (parse-expression (cst:second form) source)
-   :location (make-location source form)))
+   :location (source:make-location source form)))
 
 (defun parse-match-branch (form source)
   (declare (type cst:cst form)
@@ -1497,7 +1497,7 @@ Rebound to NIL parsing an anonymous FN.")
   (make-node-match-branch
    :pattern (parse-pattern (cst:first form) source)
    :body (parse-body (cst:rest form) form source)
-   :location (make-location source form)))
+   :location (source:make-location source form)))
 
 (defun parse-cond-clause (form source)
   (declare (type cst:cst form)
@@ -1522,7 +1522,7 @@ Rebound to NIL parsing an anonymous FN.")
   (make-node-cond-clause
    :expr (parse-expression (cst:first form) source)
    :body (parse-body (cst:rest form) form source)
-   :location (make-location source form)))
+   :location (source:make-location source form)))
 
 (defun parse-do (form source)
   (declare (type cst:cst form))
@@ -1554,7 +1554,7 @@ Rebound to NIL parsing an anonymous FN.")
     (make-node-do
      :nodes nodes
      :last-node last-node
-     :location (make-location source form))))
+     :location (source:make-location source form))))
 
 (defun do-bind-p (form)
   "Returns t if FORM is in the form of (x <- y+)"
@@ -1596,7 +1596,7 @@ Rebound to NIL parsing an anonymous FN.")
   (make-node-do-bind
    :pattern (parse-pattern (cst:first form) source)
    :expr (parse-expression (cst:third form) source)
-   :location (make-location source form)))
+   :location (source:make-location source form)))
 
 (defun parse-do-body-element (form source)
   (declare (type cst:cst form)
@@ -1666,11 +1666,10 @@ Rebound to NIL parsing an anonymous FN.")
                  :message "Malformed declare"
                  :primary-note "unexpected form")))
 
-
   (make-node-let-declare
    :name (parse-variable (cst:second form) source)
    :type (parse-qualified-type (cst:third form) source)
-   :location (make-location source form)))
+   :location (source:make-location source form)))
 
 (defun take-label (form)
   "Takes form (HEAD . (MAYBEKEYWORD . REST)) and returns two values,

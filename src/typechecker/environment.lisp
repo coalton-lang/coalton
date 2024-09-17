@@ -2,7 +2,6 @@
   (:use
    #:cl
    #:coalton-impl/algorithm
-   #:coalton-impl/source
    #:coalton-impl/typechecker/base
    #:coalton-impl/typechecker/map
    #:coalton-impl/typechecker/type-errors
@@ -24,6 +23,7 @@
    #:+fundep-max-depth+)
   (:local-nicknames
    (#:util #:coalton-impl/util)
+   (#:source #:coalton-impl/source)
    (#:parser #:coalton-impl/parser))
   (:export
    #:*update-hook*                          ; VARIABLE
@@ -265,12 +265,12 @@
   (newtype (util:required 'newtype)     :type boolean :read-only t)
 
   (docstring (util:required 'docstring) :type (or null string)   :read-only t)
-  (location  nil                        :type (or null location) :read-only t))
+  (location  nil                        :type (or null source:location) :read-only t))
 
-(defmethod location ((self type-entry))
+(defmethod source:location ((self type-entry))
   (type-entry-location self))
 
-(defmethod docstring ((self type-entry))
+(defmethod source:docstring ((self type-entry))
   (type-entry-docstring self))
 
 (defmethod make-load-form ((self type-entry) &optional env)
@@ -499,7 +499,7 @@
   (index     (util:required 'index)     :type fixnum            :read-only t)
   (docstring (util:required 'docstring) :type (or null string)  :read-only t))
 
-(defmethod docstring ((self struct-field))
+(defmethod source:docstring ((self struct-field))
   (struct-field-docstring self))
 
 (defmethod make-load-form ((self struct-field) &optional env)
@@ -517,7 +517,7 @@
   (fields           (util:required 'fields)    :type struct-field-list :read-only t)
   (docstring        (util:required 'docstring) :type (or null string)  :read-only t))
 
-(defmethod docstring ((self struct-entry))
+(defmethod source:docstring ((self struct-entry))
   (struct-entry-docstring self))
 
 (defmethod make-load-form ((self struct-entry) &optional env)
@@ -549,7 +549,7 @@
   (type      (util:required 'type)      :type ty-scheme        :read-only t)
   (docstring (util:required 'docstring) :type (or null string) :read-only t))
 
-(defmethod docstring ((self ty-class-method))
+(defmethod source:docstring ((self ty-class-method))
   (ty-class-method-docstring self))
 
 (defmethod make-load-form ((self ty-class-method) &optional env)
@@ -579,12 +579,12 @@
   (superclass-dict     (util:required 'superclass-dict)     :type list                 :read-only t)
   (superclass-map      (util:required 'superclass-map)      :type environment-map      :read-only t)
   (docstring           (util:required 'docstring)           :type (or null string)     :read-only t)
-  (location            (util:required 'location)            :type location             :read-only t))
+  (location            (util:required 'location)            :type source:location             :read-only t))
 
-(defmethod location ((self ty-class))
+(defmethod source:location ((self ty-class))
   (ty-class-location self))
 
-(defmethod docstring ((self ty-class))
+(defmethod source:docstring ((self ty-class))
   (ty-class-docstring self))
 
 (defmethod make-load-form ((self ty-class) &optional env)
@@ -621,8 +621,8 @@
                                     (cdr entry)))
                             (ty-class-superclass-dict class))
    :superclass-map (ty-class-superclass-map class)
-   :docstring (docstring class)
-   :location (location class)))
+   :docstring (source:docstring class)
+   :location (source:location class)))
 
 (defstruct (class-environment (:include immutable-map)))
 
@@ -649,7 +649,7 @@
   (method-codegen-syms (util:required 'method-codegen-syms) :type environment-map   :read-only t)
   (docstring           (util:required 'docstring)           :type (or null string)  :read-only t))
 
-(defmethod docstring ((self ty-class-instance))
+(defmethod source:docstring ((self ty-class-instance))
   (ty-class-instance-docstring self))
 
 (defmethod make-load-form ((self ty-class-instance) &optional env)
@@ -719,12 +719,12 @@
   (name      (util:required 'name)      :type symbol                               :read-only t)
   (type      (util:required 'type)      :type (member :value :method :constructor) :read-only t)
   (docstring (util:required 'docstring) :type (or null string)                     :read-only t)
-  (location  (util:required 'location)  :type location                             :read-only t))
+  (location  (util:required 'location)  :type source:location                      :read-only t))
 
-(defmethod location ((self name-entry))
+(defmethod source:location ((self name-entry))
   (name-entry-location self))
 
-(defmethod docstring ((self name-entry))
+(defmethod source:docstring ((self name-entry))
   (name-entry-docstring self))
 
 (defmethod make-load-form ((self name-entry) &optional env)
@@ -1465,7 +1465,7 @@
                  :else
                    :collect (make-variable)))
 
-         (new-pred (make-ty-predicate :class class-name :types vars :location (location pred))))
+         (new-pred (make-ty-predicate :class class-name :types vars :location (source:location pred))))
 
     (fset:do-seq (inst (lookup-class-instances env class-name))
       (handler-case

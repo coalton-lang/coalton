@@ -1,7 +1,6 @@
 (defpackage #:coalton-impl/parser/toplevel
   (:use
    #:cl
-   #:coalton-impl/source
    #:coalton-impl/parser/base
    #:coalton-impl/parser/reader
    #:coalton-impl/parser/types
@@ -15,6 +14,7 @@
    (#:cst #:concrete-syntax-tree)
    (#:cursor #:coalton-impl/parser/cursor)
    (#:se #:source-error)
+   (#:source #:coalton-impl/source)
    (#:util #:coalton-impl/util))
   (:export
    #:attribute                                   ; TYPE
@@ -200,9 +200,9 @@
 (defstruct (attribute
             (:constructor nil)
             (:copier nil))
-  (location (util:required 'location) :type location :read-only t))
+  (location (util:required 'location) :type source:location :read-only t))
 
-(defmethod location ((self attribute))
+(defmethod source:location ((self attribute))
   (attribute-location self))
 
 (defstruct (attribute-monomorphize
@@ -219,11 +219,11 @@
 
 (defstruct (constructor
             (:copier nil))
-  (name   (util:required 'name)   :type identifier-src  :read-only t)
-  (fields (util:required 'fields) :type ty-list         :read-only t)
-  (location (util:required 'location) :type location :read-only t))
+  (name     (util:required 'name)     :type identifier-src  :read-only t)
+  (fields   (util:required 'fields)   :type ty-list         :read-only t)
+  (location (util:required 'location) :type source:location :read-only t))
 
-(defmethod location ((self constructor))
+(defmethod source:location ((self constructor))
   (constructor-location self))
 
 (defun constructor-list-p (x)
@@ -235,23 +235,23 @@
 
 (defstruct (toplevel-definition
             (:constructor nil))
-  (location  (util:required 'location)  :type location         :read-only t)
+  (location  (util:required 'location)  :type source:location  :read-only t)
   (docstring (util:required 'docstring) :type (or null string) :read-only t))
 
-(defmethod location ((self toplevel-definition))
+(defmethod source:location ((self toplevel-definition))
   (toplevel-definition-location self))
 
-(defmethod docstring ((self toplevel-definition))
+(defmethod source:docstring ((self toplevel-definition))
   (toplevel-definition-docstring self))
 
 (defstruct (toplevel-define-type
             (:include toplevel-definition)
             (:copier nil))
-  (name      (util:required 'name)      :type identifier-src           :read-only t)
-  (vars      (util:required 'vars)      :type keyword-src-list         :read-only t)
-  (ctors     (util:required 'ctors)     :type constructor-list         :read-only t)
-  (repr      (util:required 'repr)      :type (or null attribute-repr) :read-only nil)
-  (head-location  (util:required 'head-location)  :type location                     :read-only t))
+  (name          (util:required 'name)          :type identifier-src           :read-only t)
+  (vars          (util:required 'vars)          :type keyword-src-list         :read-only t)
+  (ctors         (util:required 'ctors)         :type constructor-list         :read-only t)
+  (repr          (util:required 'repr)          :type (or null attribute-repr) :read-only nil)
+  (head-location (util:required 'head-location) :type source:location          :read-only t))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-define-type-list-p (x)
@@ -264,8 +264,8 @@
 (defstruct (struct-field
             (:include toplevel-definition)
             (:copier nil))
-  (name      (util:required 'name)      :type string           :read-only t)
-  (type      (util:required 'type)      :type ty               :read-only t))
+  (name (util:required 'name) :type string :read-only t)
+  (type (util:required 'type) :type ty     :read-only t))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun struct-field-list-p (x)
@@ -278,11 +278,11 @@
 (defstruct (toplevel-define-struct
             (:include toplevel-definition)
             (:copier nil))
-  (name      (util:required 'name)      :type identifier-src           :read-only t)
-  (vars      (util:required 'vars)      :type keyword-src-list         :read-only t)
-  (fields    (util:required 'fields)    :type struct-field-list        :read-only t)
-  (repr      (util:required 'repr)      :type (or null attribute-repr) :read-only nil)
-  (head-location  (util:required 'head-location)  :type location          :read-only t))
+  (name          (util:required 'name)          :type identifier-src           :read-only t)
+  (vars          (util:required 'vars)          :type keyword-src-list         :read-only t)
+  (fields        (util:required 'fields)        :type struct-field-list        :read-only t)
+  (repr          (util:required 'repr)          :type (or null attribute-repr) :read-only nil)
+  (head-location (util:required 'head-location) :type source:location          :read-only t))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-define-struct-list-p (x)
@@ -296,10 +296,10 @@
             (:copier nil))
   (name         (util:required 'name)         :type identifier-src                   :read-only t)
   (type         (util:required 'type)         :type qualified-ty                     :read-only t)
-  (location     (util:required 'location)     :type location                         :read-only t)
+  (location     (util:required 'location)     :type source:location                  :read-only t)
   (monomorphize (util:required 'monomorphize) :type (or null attribute-monomorphize) :read-only nil))
 
-(defmethod location ((self toplevel-declare))
+(defmethod source:location ((self toplevel-declare))
   (toplevel-declare-location self))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
@@ -331,9 +331,9 @@
             (:copier nil))
   (left     (util:required 'left)     :type keyword-src-list :read-only t)
   (right    (util:required 'right)    :type keyword-src-list :read-only t)
-  (location (util:required 'location) :type location         :read-only t))
+  (location (util:required 'location) :type source:location  :read-only t))
 
-(defmethod location ((self fundep))
+(defmethod source:location ((self fundep))
   (fundep-location self))
 
 (defun fundep-list-p (x)
@@ -368,7 +368,7 @@
   (fundeps   (util:required 'fundeps)   :type fundep-list            :read-only t)
   (methods   (util:required 'methods)   :type method-definition-list :read-only t)
   ;; Source information for context, name, and vars
-  (head-location  (util:required 'head-location) :type location         :read-only t))
+  (head-location (util:required 'head-location) :type source:location :read-only t))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-define-class-list-p (x)
@@ -383,9 +383,9 @@
   (name     (util:required 'name)     :type node-variable   :read-only t)
   (params   (util:required 'params)   :type pattern-list    :read-only t)
   (body     (util:required 'body)     :type node-body       :read-only t)
-  (location (util:required 'location) :type location :read-only t))
+  (location (util:required 'location) :type source:location :read-only t))
 
-(defmethod location ((self instance-method-definition))
+(defmethod source:location ((self instance-method-definition))
   (instance-method-definition-location self))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
@@ -403,7 +403,7 @@
   (pred               (util:required 'pred)               :type ty-predicate                    :read-only t)
   (methods            (util:required 'methods)            :type instance-method-definition-list :read-only t)
   ;; Source information for the context and the pred
-  (head-location           (util:required 'head-location)           :type location                 :read-only t)
+  (head-location      (util:required 'head-location)      :type source:location                 :read-only t)
   (compiler-generated (util:required 'compiler-generated) :type boolean                         :read-only t))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
@@ -416,10 +416,10 @@
 
 (defstruct (toplevel-lisp-form
             (:copier nil))
-  (body   (util:required 'body)   :type cons  :read-only t)
-  (location (util:required 'location) :type location :read-only t))
+  (body   (util:required 'body)       :type cons            :read-only t)
+  (location (util:required 'location) :type source:location :read-only t))
 
-(defmethod location ((self toplevel-lisp-form))
+(defmethod source:location ((self toplevel-lisp-form))
   (toplevel-lisp-form-location self))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
@@ -435,9 +435,9 @@
   (from   (util:required 'from)       :type node-variable   :read-only t)
   (to     (util:required 'to)         :type node-variable   :read-only t)
   (type   (util:required 'type)       :type ty              :read-only t)
-  (location (util:required 'location) :type location        :read-only t))
+  (location (util:required 'location) :type source:location :read-only t))
 
-(defmethod location ((self toplevel-specialize))
+(defmethod source:location ((self toplevel-specialize))
   (toplevel-specialize-location self))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
@@ -646,7 +646,7 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
          (package
            (make-toplevel-package :name (symbol-name package-name)
                                   :docstring package-doc
-                                  :location (make-location source
+                                  :location (source:make-location source
                                                            (cursor:cursor-value cursor)))))
     (cursor:do-every cursor (alexandria:curry 'parse-package-clause package))
     package))
@@ -705,8 +705,8 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
       (eval (make-defpackage package))
     (package-error ()
       (error 'parse-error
-             :err (se:source-error :span (location-span (toplevel-package-location package))
-                                   :source (location-source (toplevel-package-location package))
+             :err (se:source-error :span (source:location-span (toplevel-package-location package))
+                                   :source (source:location-source (toplevel-package-location package))
                                    :message "Malformed package declaration"
                                    :primary-note "unable to evaluate package definition")))))
 
@@ -754,7 +754,7 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
           :do (dolist (form (cddr form))
                 (eval form)))
   (push (make-toplevel-lisp-form :body (cddr (cst:raw form))
-                                 :location (make-location source form))
+                                 :location (source:make-location source form))
         (program-lisp-forms program)))
 
 (defun parse-toplevel-form (form program attributes source)
@@ -814,7 +814,7 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
                                  (list
                                   (se:make-source-error-note
                                    :type ':secondary
-                                   :span (location-span (location (toplevel-define-name define)))
+                                   :span (source:location-span (source:location (toplevel-define-name define)))
                                    :message "when parsing define")))))
 
                    (attribute-monomorphize
@@ -833,7 +833,7 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
                                      :message "previous attribute here")
                                     (se:make-source-error-note
                                      :type ':secondary
-                                     :span (location-span (location (toplevel-define-name define)))
+                                     :span (source:location-span (source:location (toplevel-define-name define)))
                                      :message "when parsing define")))))
 
                     (setf monomorphize attribute)
@@ -917,7 +917,7 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
                                      :message "previous attribute here")
                                     (se:make-source-error-note
                                      :type ':secondary
-                                     :span (location-span (toplevel-define-type-head-location type))
+                                     :span (source:location-span (toplevel-define-type-head-location type))
                                      :message "when parsing define-type")))))
 
                     (setf repr attribute)
@@ -934,7 +934,7 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
                                  (list
                                   (se:make-source-error-note
                                    :type ':secondary
-                                   :span (location-span (toplevel-define-type-head-location type))
+                                   :span (source:location-span (toplevel-define-type-head-location type))
                                    :message "when parsing define-type")))))))
 
        (setf (fill-pointer attributes) 0)
@@ -966,7 +966,7 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
                                      :message "previous attribute here")
                                     (se:make-source-error-note
                                      :type ':secondary
-                                     :span (location-span (toplevel-define-struct-head-location struct) )
+                                     :span (source:location-span (toplevel-define-struct-head-location struct) )
                                      :message "when parsing define-struct")))))
 
                     (unless (eq :transparent (keyword-src-name (attribute-repr-type attribute)))
@@ -980,7 +980,7 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
                                    (list
                                     (se:make-source-error-note
                                      :type ':secondary
-                                     :span (location-span (toplevel-define-struct-head-location struct))
+                                     :span (source:location-span (toplevel-define-struct-head-location struct))
                                      :message "when parsing define-struct")))))
 
                     (setf repr attribute)
@@ -997,7 +997,7 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
                                  (list
                                   (se:make-source-error-note
                                    :type ':secondary
-                                   :span (location-span (location (toplevel-define-struct-name struct)))
+                                   :span (source:location-span (source:location (toplevel-define-struct-name struct)))
                                    :message "when parsing define-type")))))))
 
        (setf (fill-pointer attributes) 0)
@@ -1019,7 +1019,7 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
                       (list
                        (se:make-source-error-note
                         :type ':secondary
-                        :span (location-span (toplevel-define-class-head-location class))
+                        :span (source:location-span (toplevel-define-class-head-location class))
                         :message "while parsing define-class")))))
 
        (push class (program-classes program))
@@ -1039,7 +1039,7 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
                       (list
                        (se:make-source-error-note
                         :type ':secondary
-                        :span (location-span (toplevel-define-instance-head-location instance))
+                        :span (source:location-span (toplevel-define-instance-head-location instance))
                         :message "while parsing define-instance")))))
 
 
@@ -1179,7 +1179,7 @@ consume all attributes")))
        :docstring docstring
        :body body
        :monomorphize nil
-       :location (make-location source form)))))
+       :location (source:make-location source form)))))
 
 (defun parse-declare (form source)
   (declare (type cst:cst form)
@@ -1226,10 +1226,10 @@ consume all attributes")))
   (make-toplevel-declare
    :name (make-identifier-src
           :name (cst:raw (cst:second form))
-          :location (make-location source (cst:second form)))
+          :location (source:make-location source (cst:second form)))
    :type (parse-qualified-type (cst:third form) source)
    :monomorphize nil
-   :location (make-location source form)))
+   :location (source:make-location source form)))
 
 (defun parse-define-type (form source)
   (declare (type cst:cst form)
@@ -1263,7 +1263,7 @@ consume all attributes")))
                       :primary-note "expected symbol")))
 
        (setf name (make-identifier-src :name (cst:raw (cst:second form))
-                                       :location (make-location source form))))
+                                       :location (source:make-location source form))))
 
       (t                                ; (define-type (T ...) ...)
        ;; (define-type ((T) ...) ...)
@@ -1293,7 +1293,7 @@ consume all attributes")))
                       :primary-note "expected symbol")))
 
        (setf name (make-identifier-src :name (cst:raw (cst:first (cst:second form)))
-                                       :location (make-location source (cst:first (cst:second form)))))
+                                       :location (source:make-location source (cst:first (cst:second form)))))
 
        ;; (define-type (T) ...)
        (when (cst:atom (cst:rest (cst:second form)))
@@ -1329,8 +1329,8 @@ consume all attributes")))
                   :while (cst:consp constructors_)
                   :collect (parse-constructor (cst:first constructors_) form source))
      :repr nil
-     :location (make-location source form)
-     :head-location (make-location source (cst:second form)))))
+     :location (source:make-location source form)
+     :head-location (source:make-location source (cst:second form)))))
 
 (defun parse-define-struct (form source)
   (declare (type cst:cst form))
@@ -1375,9 +1375,9 @@ consume all attributes")))
               #'parse-struct-field
               (cst:nthrest (if docstring 3 2) form)
               source)
-     :location (make-location source form)
+     :location (source:make-location source form)
      :repr nil
-     :head-location (make-location source (cst:second form)))))
+     :head-location (source:make-location source (cst:second form)))))
 
 (defun parse-define-class (form source)
   (declare (type cst:cst form)
@@ -1565,13 +1565,13 @@ consume all attributes")))
         (if (cst:atom (first left))
             ;; (C1 ... => C2 ...)
             (setf predicates (list (parse-predicate left
-                                                    (make-location source
+                                                    (source:make-location source
                                                                    (util:cst-source-range left)))))
 
             ;; ((C1 ...) (C2 ...) ... => C3 ...)
             (setf predicates
                   (loop :for pred :in left
-                        :collect (parse-predicate (cst:listify pred) (make-location source pred))))))
+                        :collect (parse-predicate (cst:listify pred) (source:make-location source pred))))))
 
       (when (and (cst:consp (cst:rest (cst:rest form)))
                  (cst:atom (cst:third form))
@@ -1586,14 +1586,14 @@ consume all attributes")))
       (make-toplevel-define-class
        :name (make-identifier-src
               :name name
-              :location (make-location source unparsed-name))
+              :location (source:make-location source unparsed-name))
        :vars variables
        :preds predicates
        :fundeps fundeps
        :docstring docstring
        :methods methods
-       :location (make-location source form)
-       :head-location (make-location source (cst:second form))))))
+       :location (source:make-location source form)
+       :head-location (source:make-location source (cst:second form))))))
 
 (defun parse-define-instance (form source)
   (declare (type cst:cst form)
@@ -1707,12 +1707,12 @@ consume all attributes")))
         (if (cst:atom (first unparsed-context))
             (setf context
                   (list (parse-predicate unparsed-context
-                                         (make-location source
+                                         (source:make-location source
                                                         (util:cst-source-range unparsed-context)))))
 
             (setf context
                   (loop :for unparsed :in unparsed-context
-                        :collect (parse-predicate (cst:listify unparsed) (make-location source unparsed))))))
+                        :collect (parse-predicate (cst:listify unparsed) (source:make-location source unparsed))))))
 
       (when (and (cst:consp (cst:rest (cst:rest form)))
                  (cst:atom (cst:third form))
@@ -1722,15 +1722,15 @@ consume all attributes")))
       (make-toplevel-define-instance
        :context context
        :pred (parse-predicate unparsed-predicate
-                              (make-location source
+                              (source:make-location source
                                              (util:cst-source-range unparsed-predicate)))
        :docstring docstring
        :methods (loop :for methods := (cst:nthrest (if docstring 3 2) form) :then (cst:rest methods)
                       :while (cst:consp methods)
                       :for method := (cst:first methods)
                       :collect (parse-instance-method-definition method (cst:second form) source))
-       :location (make-location source form)
-       :head-location (make-location source (cst:second form))
+       :location (source:make-location source form)
+       :head-location (source:make-location source (cst:second form))
        :compiler-generated nil))))
 
 (defun parse-specialize (form source)
@@ -1782,7 +1782,7 @@ consume all attributes")))
    :from (parse-variable (cst:second form) source)
    :to (parse-variable (cst:third form) source)
    :type (parse-type (cst:fourth form) source)
-   :location (make-location source form)))
+   :location (source:make-location source form)))
 
 (defun parse-method (method-form form source)
   (declare (type cst:cst method-form)
@@ -1880,13 +1880,13 @@ consume all attributes")))
     (make-method-definition
      :name (make-identifier-src
             :name (node-variable-name (parse-variable (cst:first method-form) source))
-            :location (make-location source (cst:first method-form)))
+            :location (source:make-location source (cst:first method-form)))
      :docstring docstring
      :type (parse-qualified-type (if docstring
                                      (cst:third method-form)
                                      (cst:second method-form))
                                  source)
-     :location (make-location source method-form))))
+     :location (source:make-location source method-form))))
 
 (defun parse-type-variable (form source)
   (declare (type cst:cst form)
@@ -1918,7 +1918,7 @@ consume all attributes")))
 
   (make-keyword-src
    :name (cst:raw form)
-   :location (make-location source form)))
+   :location (source:make-location source form)))
 
 (defun parse-constructor (form enclosing-form source)
   (declare (type cst:cst form enclosing-form)
@@ -1964,10 +1964,10 @@ consume all attributes")))
     (make-constructor
      :name (make-identifier-src
             :name (cst:raw unparsed-name)
-            :location (make-location source unparsed-name))
+            :location (source:make-location source unparsed-name))
      :fields (loop :for field :in unparsed-fields
                    :collect (parse-type field source))
-     :location (make-location source form))))
+     :location (source:make-location source form))))
 
 (defun parse-argument-list (form source)
   (declare (type cst:cst form)
@@ -1991,7 +1991,7 @@ consume all attributes")))
    (if (cst:null (cst:rest form))
        (list
         (make-pattern-wildcard
-         :location (make-location source form)))
+         :location (source:make-location source form)))
        (loop :for vars := (cst:rest form) :then (cst:rest vars)
              :while (cst:consp vars)
              :collect (parse-pattern (cst:first vars) source)))))
@@ -2034,7 +2034,7 @@ consume all attributes")))
 
   (make-identifier-src
    :name (cst:raw form)
-   :location (make-location source form)))
+   :location (source:make-location source form)))
 
 (defun parse-definition-body (form enclosing-form source)
   (declare (type cst:cst form)
@@ -2113,7 +2113,7 @@ consume all attributes")))
        :name name
        :params params
        :body (parse-body (cst:rest (cst:rest form)) form source)
-       :location (make-location source form)))))
+       :location (source:make-location source form)))))
 
 (defun parse-fundep (form source)
   (declare (type cst:cst form)
@@ -2164,7 +2164,7 @@ consume all attributes")))
                  :collect (parse-type-variable var source))
      :right (loop :for var :in (cdr right)
                   :collect (parse-type-variable var source))
-     :location (make-location source form))))
+     :location (source:make-location source form))))
 
 
 (defun parse-monomorphize (form source)
@@ -2182,7 +2182,7 @@ consume all attributes")))
                  :primary-note "unexpected form")))
 
   (make-attribute-monomorphize
-   :location (make-location source form)))
+   :location (source:make-location source form)))
 
 (defun parse-repr (form source)
   (declare (type cst:cst form)
@@ -2223,7 +2223,7 @@ consume all attributes")))
           (make-attribute-repr
            :type type
            :arg (cst:third form)
-           :location (make-location source form)))
+           :location (source:make-location source form)))
 
         (progn ;; other reprs do not have an argument
           (when (cst:consp (cst:rest (cst:rest form)))
@@ -2249,7 +2249,7 @@ consume all attributes")))
           (make-attribute-repr
            :type type
            :arg nil
-           :location (make-location source form))))))
+           :location (source:make-location source form))))))
 
 (defun parse-struct-field (form source)
   (declare (type cst:cst form)
@@ -2314,4 +2314,4 @@ consume all attributes")))
      :type (parse-type (cst:first rest-field)
                        source)
      :docstring docstring
-     :location (make-location source form))))
+     :location (source:make-location source form))))
