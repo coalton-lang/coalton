@@ -51,6 +51,7 @@
    #:and!
    #:or!
    #:count!
+   #:countBy!
    #:for-each!
    #:find!
    #:find-map!
@@ -488,6 +489,11 @@ interleaving. (interleave empty ITER) is equivalent to (id ITER)."
 This operation could be called `length!`, but `count!` emphasizes the fact that it consumes ITER, and
 afterwards, ITER will be exhausted."
     (sum! (map (const 1) iter)))
+
+  (declare countBy! ((:elt -> Boolean) -> Iterator :elt -> UFix))
+  (define (countBy! f iter)
+    "Count the number of items in `iter` that satisfy the predicate `f`."
+    (sum! (map (fn (elt) (if (f elt) 1 0)) iter)))
 
   (declare for-each! ((:elt -> Unit) -> Iterator :elt -> Unit))
   (define (for-each! thunk iter)
