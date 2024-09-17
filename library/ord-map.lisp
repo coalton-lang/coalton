@@ -24,6 +24,7 @@
    #:collect
    #:update
    #:merge #:union #:intersection #:difference #:sdifference
+   #:filter-by-key #:filter-by-value #:filter-by-entry
    #:zip #:zip-with-default))
 
 (in-package :coalton-library/ord-map)
@@ -176,6 +177,9 @@ If `iter` contains duplicate keys, later values will overwrite earlier values."
                 empty
                 iter))
 
+  (define-instance (Ord :key => iter:FromIterator (Map :key :value) (Tuple :key :value))
+    (define iter:collect! collect!))
+
   (declare collect ((Ord :key) (Foldable :collection) => ((:collection (Tuple :key :value)) -> (Map :key :value))))
   (define (collect coll)
     "Construct a `Map` containing all the `(key value)` pairs in `coll`.
@@ -186,8 +190,8 @@ If `coll` contains duplicate keys, later values will overwrite earlier values."
           empty
           coll))
 
-  (define-instance (Ord :key => iter:FromIterator (Map :key :value) (Tuple :key :value))
-    (define iter:collect! collect!))
+  (define-instance ((Ord :key) (Foldable :collection) => (Into (:collection (Tuple :key :value)) (Map :key :value)))
+    (define into collect))
 
   (declare update ((Ord :key) => (:value -> :value) -> (Map :key :value) -> :key -> (Optional (Map :key :value))))
   (define (update func mp key)
@@ -251,6 +255,24 @@ Construct a Map containing only those mappings of `a` and `b` which do not assoc
     (let (%Map a) = a)
     (let (%Map b) = b)
     (%Map (tree:sdifference a b)))
+
+  (declare filter-by-key (Ord :key => (:key -> Boolean) -> Map :key :value -> Map :key :value))
+  (define (filter-by-key keep? mp)
+    "Construct a Map containing only those entries of `mp` which contain keys which satisfy `keep?`."
+    (let (%Map mp) = mp)
+    (%Map (tree:filter (compose keep? key) mp)))
+
+  (declare filter-by-value (Ord :key => (:value -> Boolean) -> Map :key :value -> Map :key :value))
+  (define (filter-by-value keep? mp)
+    "Construct a Map containing only those entries of `mp` which contain values which satisfy `keep?`."
+    (let (%Map mp) = mp)
+    (%Map (tree:filter (compose keep? value) mp)))
+
+  (declare filter-by-entry (Ord :key => ((Tuple :key :value) -> Boolean) -> Map :key :value -> Map :key :value))
+  (define (filter-by-entry keep? mp)
+    "Construct a Map containing only those entries of `mp` which satisfy `keep?`."
+    (let (%Map mp) = mp)
+    (%Map (tree:filter (compose keep? into) mp)))
 
   (declare zip (Ord :key => Map :key :value1 -> Map :key :value2 -> Map :key (Tuple :value1 :value2)))
   (define (zip a b)
