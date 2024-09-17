@@ -7,7 +7,6 @@
 (defpackage #:coalton-impl/parser/type-definition
   (:use
    #:cl
-   #:coalton-impl/source
    #:coalton-impl/parser/base
    #:coalton-impl/parser/types
    #:coalton-impl/parser/toplevel)

@@ -1,7 +1,6 @@
 (defpackage #:coalton-impl/parser/pattern
   (:use
    #:cl
-   #:coalton-impl/source
    #:coalton-impl/parser/base)
   (:shadowing-import-from
    #:coalton-impl/parser/base
@@ -9,6 +8,7 @@
   (:local-nicknames
    (#:cst #:concrete-syntax-tree)
    (#:se #:source-error)
+   (#:source #:coalton-impl/source)
    (#:util #:coalton-impl/util))
   (:export
    #:pattern                            ; STRUCT
@@ -47,12 +47,12 @@
 (defstruct (pattern
             (:constructor nil)
             (:copier nil))
-  (location (util:required 'location) :type location :read-only t))
+  (location (util:required 'location) :type source:location :read-only t))
 
 (defmethod make-load-form ((self pattern) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-(defmethod location ((self pattern))
+(defmethod source:location ((self pattern))
   (pattern-location self))
 
 (defun pattern-list-p (x)
@@ -98,12 +98,12 @@
           (typep (cst:raw form) 'util:literal-value))
      (make-pattern-literal
       :value (cst:raw form)
-      :location (make-location source form)))
+      :location (source:make-location source form)))
 
     ((and (cst:atom form)
           (eq (cst:raw form) 'coalton:_))
      (make-pattern-wildcard
-      :location (make-location source form)))
+      :location (source:make-location source form)))
 
     ((and (cst:atom form)
           (identifierp (cst:raw form)))
@@ -117,7 +117,7 @@
      (make-pattern-var
       :name (cst:raw form)
       :orig-name (cst:raw form)
-      :location (make-location source form)))
+      :location (source:make-location source form)))
 
     ((cst:atom form)
      (error 'parse-error
@@ -150,7 +150,7 @@
       :patterns (loop :for patterns := (cst:rest form) :then (cst:rest patterns)
                       :while (cst:consp patterns)
                       :collect (parse-pattern (cst:first patterns) source))
-      :location (make-location source form)))))
+      :location (source:make-location source form)))))
 
 (defun pattern-variables (pattern)
   (declare (type t pattern)
