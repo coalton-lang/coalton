@@ -1,7 +1,8 @@
 (defpackage #:coalton-impl/parser/reader
   (:use #:cl)
   (:local-nicknames
-   (#:cst #:concrete-syntax-tree))
+   (#:cst #:concrete-syntax-tree)
+   (#:source #:coalton-impl/source))
   (:shadowing-import-from
    #:coalton-impl/parser/base
    #:parse-error)
@@ -77,17 +78,11 @@ Returns (VALUES FORM PRESENTP EOFP)"
              nil 'eof)))
       (eclector.reader:unterminated-list ()
         (let ((end (file-position stream)))
-          (error 'parse-error
-                 :err (source-error:source-error
-                       :span (cons begin end)
-                       :source source
-                       :message "Unterminated form"
-                       :primary-note (format nil "Missing close parenthesis for form starting at offset ~a" begin)))))
+          (parse-error "Unterminated form"
+                       (source:note (source:make-location source (cons begin end))
+                                    "Missing close parenthesis for form starting at offset ~a" begin))))
       (error (condition)
         (let ((end (file-position stream)))
-          (error 'parse-error
-                 :err (source-error:source-error
-                       :span (cons begin end)
-                       :source source
-                       :message "Reader error"
-                       :primary-note (format nil "reader error: ~a" condition))))))))
+          (parse-error "Reader error"
+                       (source:note (source:make-location source (cons begin end))
+                                    "reader error: ~a" condition)))))))

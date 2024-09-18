@@ -31,12 +31,8 @@
                      fallback-source
                      (make-hash-table :test #'eq))
       (error (condition)
-        (error 'parse-error
-               :err (source-error:source-error
-                     :span (cst:source form)
-                     :source source
-                     :message "Error during macro expansion"
-                     :primary-note (princ-to-string condition)))))))
+        (parse-error "Error during macro expansion"
+                     (note source form (princ-to-string condition)))))))
 
 (defun fill-source-table (cst source-table seen-forms)
   "Fill SOURCE-TABLE with source information in CST and its children."

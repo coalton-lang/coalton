@@ -11,7 +11,10 @@
    #:*pprint-variable-symbol-code*
    #:*pprint-variable-symbol-suffix*
    #:tc-error                           ; CONDITION, FUNCTION
-   #:tc-located-error                   ; CONDITION, FUNCTION
+   #:tc-location
+   #:tc-primary-location
+   #:tc-note
+   #:tc-primary-note
    #:coalton-internal-type-error        ; CONDITION
    #:check-duplicates                   ; FUNCTION
    #:check-package                      ; FUNCTION
@@ -62,26 +65,29 @@ This requires a valid PPRINT-VARIABLE-CONTEXT")
 ;;; Conditions
 ;;;
 
+(defun tc-location (location format-string &rest format-args)
+  (source:note location
+               (with-pprint-variable-context ()
+                 (apply #'format nil format-string format-args))))
+
+(defun tc-primary-location (location format-string &rest format-args)
+  (source:primary-note location
+                       (with-pprint-variable-context ()
+                         (apply #'format nil format-string format-args))))
+
+(defun tc-note (located format-string &rest format-args)
+  (apply #'tc-location (source:location located) format-string format-args))
+
+(defun tc-primary-note (located format-string &rest format-args)
+  (apply #'tc-primary-location (source:location located) format-string format-args))
+
 (define-condition tc-error (se:source-base-error)
-  ()
-  (:report
-   (lambda (c s)
-     (with-pprint-variable-context ()
-       (se:display-source-error s (se:source-condition-err c))))))
+  ())
 
-(defun tc-located-error (location message note &optional notes)
-  "Signal a typechecker error with a NOTE about a LOCATION."
-  (declare (type source:location location)
-           (type string message note))
-  (error 'tc-error
-         :err (source:source-error :location location
-                                   :message message
-                                   :primary-note note
-                                   :notes notes)))
-
-(defun tc-error (object message note &optional notes)
-  "Signal a typechecker error with a NOTE about an OBJECT that implements SOURCE:LOCATION."
-  (tc-located-error (source:location object) message note notes))
+(defun tc-error (message &rest notes)
+  "Signal a typechecker error with MESSAGE, and optional NOTES that label source locations."
+  (declare (type string message))
+  (error 'tc-error :err (source:make-source-error ':error message notes)))
 
 (define-condition coalton-internal-type-error (error)
   ()

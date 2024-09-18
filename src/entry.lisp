@@ -110,9 +110,9 @@
           (setf subs (tc:compose-substitution-lists subs subs_))
 
           (when accessors
-            (tc:tc-error (first accessors)
-                         "Ambiguous accessor"
-                         "accessor is ambiguous"))
+            (tc:tc-error "Ambiguous accessor"
+                         (source:note (first accessors)
+                                      "accessor is ambiguous")))
 
           (let* ((preds (tc:reduce-context env preds subs))
                  (subs (tc:compose-substitution-lists
@@ -145,25 +145,21 @@
                                tvars
                                (tc:ty-scheme-type scheme))))
 
-              (tc:tc-error node
-                           "Unable to codegen"
-                           (format nil
-                                   "expression has type ~A~{ ~S~}.~{ (~S)~} => ~S with unresolved constraint~A ~S"
-                                   (if settings:*coalton-print-unicode*
-                                       "∀"
-                                       "FORALL")
-                                   tvars
-                                   (tc:qualified-ty-predicates qual-type)
-                                   (tc:qualified-ty-type qual-type)
-                                   (if (= (length (tc:qualified-ty-predicates qual-type)) 1)
-                                       ""
-                                       "s")
-                                   (tc:qualified-ty-predicates qual-type))
-                           (list
-                            (se:make-source-error-note
-                             :type :secondary
-                             :span (source:location-span (source:location node))
-                             :message "Add a type assertion with THE to resolve ambiguity"))))))))))
+              (tc:tc-error "Unable to codegen"
+                           (tc:tc-note node
+                                       "expression has type ~A~{ ~S~}.~{ (~S)~} => ~S with unresolved constraint~A ~S"
+                                       (if settings:*coalton-print-unicode*
+                                           "∀"
+                                           "FORALL")
+                                       tvars
+                                       (tc:qualified-ty-predicates qual-type)
+                                       (tc:qualified-ty-type qual-type)
+                                       (if (= (length (tc:qualified-ty-predicates qual-type)) 1)
+                                           ""
+                                           "s")
+                                       (tc:qualified-ty-predicates qual-type))
+                           (tc:tc-note node
+                                       "Add a type assertion with THE to resolve ambiguity")))))))))
 
 (defmacro with-environment-updates (updates &body body)
   "Collect environment updates into a vector bound to UPDATES."

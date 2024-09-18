@@ -14,6 +14,7 @@
    #:warn
    #:help
    #:note
+   #:primary-note
    #:message
    #:make-source-error
    #:make-source-file
@@ -24,6 +25,7 @@
    #:location-source
    #:location-span
    #:location<
+   #:span
    #:span-start
    #:span-end
    #:docstring
@@ -233,13 +235,11 @@ If locations appear in different sources, compare the sources by name."
 (defmethod make-load-form ((self location) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-(defun make-location (source form)
-  "Make a source location structure from a SOURCE and a form, which may be either a cons of start, end or a cst node."
-  (etypecase form
-    (cst:cst (%make-location :source source
-                             :span (cst:source form)))
-    (cons (%make-location :source source
-                          :span form))))
+(defun make-location (source span)
+  "Make a source location structure from a SOURCE and a SPAN."
+  (declare (type cons span))
+  (%make-location :source source
+                  :span span))
 
 (defgeneric message (object)
   (:documentation "The primary message associated with an object."))
@@ -265,18 +265,34 @@ If locations appear in different sources, compare the sources by name."
               (location self)
               (message self))))
 
+(defun ensure-location (locatable)
+  (typecase locatable
+    (location locatable)
+    (t (location locatable))))
+
 (defun note (location format-string &rest format-args)
   "Return a note that describes a source LOCATION."
+  (declare (type string format-string))
   (make-instance 'note
-    :location location
+    :location (ensure-location location)
     :message (apply #'format nil format-string format-args)))
+
+(defun primary-note (location format-string &rest format-args)
+  "Return a note that describes a primary source LOCATION."
+  (declare (type string format-string))
+  (make-instance 'note
+    :location (ensure-location location)
+    :message (apply #'format nil format-string format-args)
+    :type ':primary))
 
 (defun help (location replace format-string &rest format-args)
   "Return a help note related to a source LOCATION.
 
 REPLACE is a 1-argument function that accepts and returns a string to suggest an edit or fix."
+  (declare (type function replace)
+           (type string format-string))
   (make-instance 'note
-    :location location
+    :location (ensure-location location)
     :message (apply #'format nil format-string format-args)
     :replace replace
     :type ':help))
@@ -336,4 +352,4 @@ REPLACE is a 1-argument function that accepts and returns a string to suggest an
 (defun warn (message note &rest notes)
   "Signal a warning related to one or more source locations."
   (cl:warn 'se:source-base-warning
-           :err (make-source-error ':warning message (cons note notes))))
+           :err (make-source-error ':warn message (cons note notes))))

@@ -4,7 +4,6 @@
    #:coalton-impl/typechecker/base
    #:coalton-impl/typechecker/parse-type)
   (:local-nicknames
-   (#:se #:source-error)
    (#:parser #:coalton-impl/parser)
    (#:tc #:coalton-impl/typechecker/stage-1))
   (:export
@@ -43,47 +42,44 @@
                               (tc:qualify nil type))))
 
     (unless from-ty
-      (tc-error (parser:toplevel-specialize-from specialize)
-                "Invalid specialization"
-                "unknown function or variable"))
+      (tc-error "Invalid specialization"
+                (tc-note (parser:toplevel-specialize-from specialize)
+                         "unknown function or variable")))
     (unless to-ty
-      (tc-error (parser:toplevel-specialize-to specialize)
-                "Invalid specialization"
-                "unknown function or variable"))
+      (tc-error "Invalid specialization"
+                (tc-note (parser:toplevel-specialize-to specialize)
+                         "unknown function or variable")))
 
     (unless (eq :value (tc:name-entry-type from-name-entry))
-      (tc-error (parser:toplevel-specialize-from specialize)
-                "Invalid specialization"
-                (format nil "must be a function or variable, not a ~A" (tc:name-entry-type from-name-entry))))
+      (tc-error "Invalid specialization"
+                (tc-note (parser:toplevel-specialize-from specialize)
+                         "must be a function or variable, not a ~A" (tc:name-entry-type from-name-entry))))
     (unless (eq :value (tc:name-entry-type to-name-entry))
-      (tc-error (parser:toplevel-specialize-to specialize)
-                "Invalid specialization"
-                (format nil "must be a function or variable, not a ~A" (tc:name-entry-type from-name-entry))))
+      (tc-error "Invalid specialization"
+                (tc-note (parser:toplevel-specialize-to specialize)
+                         "must be a function or variable, not a ~A" (tc:name-entry-type from-name-entry))))
 
     (let ((from-qual-ty (tc:fresh-inst from-ty))
           (to-qual-ty (tc:fresh-inst to-ty)))
 
       (when (null (tc:qualified-ty-predicates from-qual-ty))
-        (tc-error (parser:toplevel-specialize-from specialize)
-                  "Invalid specialization"
-                  "must be a function or variable with class constraints"))
+        (tc-error "Invalid specialization"
+                  (tc-note (parser:toplevel-specialize-from specialize)
+                           "must be a function or variable with class constraints")))
 
       (unless (equalp to-ty scheme)
-        (tc-error specialize
-                  "Invalid specialization"
-                  (format nil "function ~S does not match declared type" to-name)))
+        (tc-error "Invalid specialization"
+                  (tc-note specialize "function ~S does not match declared type" to-name)))
 
       (when (equalp from-ty to-ty)
-        (tc-error specialize
-                  "Invalid specialization"
-                  "specialize must result in a more specific type"))
+        (tc-error "Invalid specialization"
+                  (tc-note specialize "specialize must result in a more specific type")))
 
       (handler-case
           (tc:match (tc:qualified-ty-type from-qual-ty) (tc:qualified-ty-type to-qual-ty))
         (tc:coalton-internal-type-error ()
-          (tc-error specialize
-                    "Invalid specialization"
-                    "cannot specialize to declared type")))
+          (tc-error "Invalid specialization"
+                    (tc-note specialize "cannot specialize to declared type"))))
 
       (let ((entry (tc:make-specialization-entry :from from-name
                                                  :to to-name
@@ -91,7 +87,6 @@
         (handler-case
             (tc:add-specialization env entry)
           (tc:overlapping-specialization-error (c)
-            (tc-error specialize
-                      "Overlapping specialization"
-                       (format nil "overlaps with specialization ~S"
+            (tc-error "Overlapping specialization"
+                      (tc-note specialize "overlaps with specialization ~S"
                                (tc:overlapping-specialization-error-existing c)))))))))

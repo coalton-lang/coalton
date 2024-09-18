@@ -7,7 +7,6 @@
    #:parse-error)
   (:local-nicknames
    (#:cst #:concrete-syntax-tree)
-   (#:se #:source-error)
    (#:source #:coalton-impl/source)
    (#:util #:coalton-impl/util))
   (:export
@@ -146,7 +145,7 @@
       (make-qualified-ty
        :predicates nil
        :type (parse-type form source)
-       :location (source:make-location source form))
+       :location (form-location source form))
 
       (multiple-value-bind (left right)
           (util:take-until (lambda (cst)
@@ -158,50 +157,36 @@
           ((null right)
            (make-qualified-ty
             :predicates nil
-            :type (parse-type-list left (source:make-location source form))
-            :location (source:make-location source form)))
+            :type (parse-type-list left (form-location source form))
+            :location (form-location source form)))
 
           ;; (=> T -> T)
           ((and (null left) right)
-           (error 'parse-error
-                  :err (se:source-error
-                        :span (cst:source (cst:first form))
-                        :source source
-                        :message "Malformed type"
-                        :primary-note "unnecessary `=>`"
-                        :help-notes
+           (apply #'parse-error "Malformed type"
+                  (cons (note source (cst:first form) "unnecessary `=>`")
                         (cond
                           ;; If this is the only thing in the list then don't suggest anything
                           ((cst:atom (cst:rest form))
                            nil)
                           ;; If there is nothing to the right of C then emit without list
                           ((cst:atom (cst:rest (cst:rest form)))
-                           (list
-                            (se:make-source-error-help
-                             :span (cst:source form)
-                             :replacement
-                             (lambda (existing)
-                               (subseq existing 4 (1- (length existing))))
-                             :message "remove `=>`")))
+                           (list (help source form
+                                       (lambda (existing)
+                                         (subseq existing 4 (1- (length existing))))
+                                       "remove `=>`")))
                           (t
-                           (list
-                            (se:make-source-error-help
-                             :span (cst:source form)
-                             :replacement
-                             (lambda (existing)
-                               (concatenate 'string
-                                            (subseq existing 0 1)
-                                            (subseq existing 4)))
-                             :message "remove `=>`")))))))
+                           (list (help source form
+                                       (lambda (existing)
+                                         (concatenate 'string
+                                                      (subseq existing 0 1)
+                                                      (subseq existing 4)))
+                                       "remove `=>`")))))))
 
           ;; (... =>)
           ((null (rest right))
-           (error 'parse-error
-                  :err (se:source-error
-                        :span (cst:source (cst:second form))
-                        :source source
-                        :message "Malformed type"
-                        :primary-note "missing type after `=>`")))
+           (parse-error "Malformed type"
+                        (note source (cst:source (cst:second form))
+                              "missing type after `=>`")))
 
           (t
            (let (predicates)
@@ -214,15 +199,11 @@
 
                  (loop :for pred :in left
                        :unless (cst:consp pred)
-                         :do (error 'parse-error
-                                    :err (se:source-error
-                                          :span (cst:source (cst:second form))
-                                          :source source
-                                          :message "Malformed type predicate"
-                                          :primary-note "expected predicate"))
+                         :do (parse-error "Malformed type predicate"
+                                          (note source (cst:second form)
+                                                "expected predicate"))
                        :do (push (parse-predicate (cst:listify pred)
-                                                  (source:make-location source
-                                                                        (cst:source form)))
+                                                  (form-location source form))
                                  predicates)))
 
              (make-qualified-ty
@@ -232,7 +213,7 @@
                      (source:make-location source
                                            (cons (car (cst:source (second right)))
                                                  (cdr (cst:source (car (last right)))))))
-              :location (source:make-location source form))))))))
+              :location (form-location source form))))))))
 
 (defun parse-predicate (forms location)
   (declare (type util:cst-list forms)
@@ -244,44 +225,30 @@
     (cond
       ;; (T) ... => ....
       ((not (cst:atom (first forms)))
-       (error 'parse-error
-              :err (se:source-error
-                    :span (cst:source (first forms))
-                    :source source
-                    :message "Malformed type predicate"
-                    :primary-note "expected class name"
-                    :help-notes
-                    (list
-                     (se:make-source-error-help
-                      :span (cst:source (first forms))
-                      :replacement
-                      (lambda (existing)
-                        (subseq existing 1 (1- (length existing))))
-                      :message "remove parentheses")))))
+       (parse-error "Malformed type predicate"
+                    (note source (first forms)
+                          "expected class name")
+                    (help source (first forms)
+                          (lambda (existing)
+                            (subseq existing 1 (1- (length existing))))
+                          "remove parentheses")))
 
       ;; "T" ... => ...
       ((not (identifierp (cst:raw (first forms))))
-       (error 'parse-error
-              :err (se:source-error
-                    :span (cst:source (first forms))
-                    :source source
-                    :message "Malformed type predicate"
-                    :primary-note "expected identifier")))
+       (parse-error "Malformed type predicate"
+                    (note source (first forms) "expected identifier")))
 
       (t
        (let ((name (cst:raw (first forms))))
          (when (= 1 (length forms))
-           (error 'parse-error
-                  :err (se:source-error
-                        :span (cst:source (first forms))
-                        :source source
-                        :message "Malformed type predicate"
-                        :primary-note "expected predicate")))
+           (parse-error "Malformed type predicate"
+                        (note source (first forms)
+                              "expected predicate")))
 
          (make-ty-predicate
           :class (make-identifier-src
                   :name name
-                  :location (source:make-location source (first forms)))
+                  :location (form-location source (first forms)))
           :types (loop :for form :in (cdr forms)
                        :collect (parse-type form source))
           :location location))))))
@@ -296,28 +263,20 @@
           (cst:raw form))
 
      (if (equalp (symbol-package (cst:raw form)) util:+keyword-package+)
-         (make-tyvar :name (cst:raw form) :location (source:make-location source form))
-         (make-tycon :name (cst:raw form) :location (source:make-location source form))))
+         (make-tyvar :name (cst:raw form) :location (form-location source form))
+         (make-tycon :name (cst:raw form) :location (form-location source form))))
 
     ((cst:atom form)
-     (error 'parse-error
-            :err (se:source-error
-                  :span (cst:source form)
-                  :source source
-                  :message "Malformed type"
-                  :primary-note "expected identifier")))
+     (parse-error "Malformed type"
+                  (note source form "expected identifier")))
 
     ;; (T)
     ((cst:atom (cst:rest form))
-     (error 'parse-error
-            :err (se:source-error
-                  :span (cst:source form)
-                  :source source
-                  :message "Malformed type"
-                  :primary-note "unexpected nullary type")))
+     (parse-error "Malformed type"
+                  (note source form "unexpected nullary type")))
 
     (t
-     (parse-type-list (cst:listify form) (source:make-location source form)))))
+     (parse-type-list (cst:listify form) (form-location source form)))))
 
 (defun parse-type-list (forms location)
   (declare (type util:cst-list forms)
@@ -337,21 +296,15 @@
         ;; (T ... ->)
         (cond
           ((and right (null (rest right)))
-           (error 'parse-error
-                  :err (se:source-error
-                        :span (cst:source (car right))
-                        :source (source:location-source location)
-                        :message "Malformed function type"
-                        :primary-note "missing return type")))
+           (parse-error "Malformed function type"
+                        (note (source:location-source location) (car right)
+                              "missing return type")))
 
           ;; (-> ...)
           ((and (null left) right)
-           (error 'parse-error
-                  :err (se:source-error
-                        :span (cst:source (car right))
-                        :source (source:location-source location)
-                        :message "Malformed function type"
-                        :primary-note "invalid function syntax")))
+           (parse-error "Malformed function type"
+                        (note (source:location-source location) (car right)
+                              "invalid function syntax")))
 
           (t
            (let ((ty (parse-type (car left) (source:location-source location))))
@@ -368,7 +321,7 @@
                   :from (make-tapp
                          :from (make-tycon
                                 :name 'coalton:Arrow
-                                :location (source:make-location (source:location-source location)
+                                :location (form-location (source:location-source location)
                                                                 (first right)))
                          :to ty
                          :location (source:make-location (source:location-source location)

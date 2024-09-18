@@ -98,51 +98,35 @@
           (typep (cst:raw form) 'util:literal-value))
      (make-pattern-literal
       :value (cst:raw form)
-      :location (source:make-location source form)))
+      :location (form-location source form)))
 
     ((and (cst:atom form)
           (eq (cst:raw form) 'coalton:_))
      (make-pattern-wildcard
-      :location (source:make-location source form)))
+      :location (form-location source form)))
 
     ((and (cst:atom form)
           (identifierp (cst:raw form)))
      (when (string= "_" (symbol-name (cst:raw form)))
-       (error 'parse-error
-              :err  (se:source-error
-                     :span (cst:source form)
-                     :source source
-                     :message "Invalid pattern"
-                     :primary-note "invalid variable name '_'")))
+       (parse-error "Invalid pattern"
+                    (note source form "invalid variable name '_'")))
      (make-pattern-var
       :name (cst:raw form)
       :orig-name (cst:raw form)
-      :location (source:make-location source form)))
+      :location (form-location source form)))
 
     ((cst:atom form)
-     (error 'parse-error
-            :err (se:source-error
-                  :span (cst:source form)
-                  :source source
-                  :message "Invalid pattern"
-                  :primary-note "unknown pattern literal")))
+     (parse-error "Invalid pattern"
+                  (note source form "unknown pattern literal")))
 
     ((not (cst:proper-list-p form))
-     (error 'parse-error
-            :err (se:source-error
-                  :span (cst:source form)
-                  :source source
-                  :message "Invalid pattern"
-                  :primary-note "unexpected dotted list")))
+     (parse-error "Invalid pattern"
+                  (note source form "unexpected dotted list")))
 
     ((not (and (cst:atom (cst:first form))
                (identifierp (cst:raw (cst:first form)))))
-     (error 'parse-error
-            :err (se:source-error
-                  :span (cst:source (cst:first form))
-                  :source source
-                  :message "Invalid pattern"
-                  :primary-note "invalid constructor in pattern")))
+     (parse-error "Invalid pattern"
+                  (note source (cst:first form) "invalid constructor in pattern")))
 
     (t
      (make-pattern-constructor
@@ -150,7 +134,7 @@
       :patterns (loop :for patterns := (cst:rest form) :then (cst:rest patterns)
                       :while (cst:consp patterns)
                       :collect (parse-pattern (cst:first patterns) source))
-      :location (source:make-location source form)))))
+      :location (form-location source form)))))
 
 (defun pattern-variables (pattern)
   (declare (type t pattern)

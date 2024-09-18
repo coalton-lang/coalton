@@ -9,7 +9,6 @@
    #:check-package
    #:check-duplicates)
   (:local-nicknames
-   (#:se #:source-error)
    (#:util #:coalton-impl/util)
    (#:algo #:coalton-impl/algorithm)
    (#:parser #:coalton-impl/parser)
@@ -65,17 +64,11 @@
    (alexandria:compose #'parser:identifier-src-name #'parser:toplevel-define-class-name)
    #'source:location
    (lambda (first second)
-     (error 'tc:tc-error
-            :err (source:source-error
-                  :location (parser:toplevel-define-class-head-location first)
-                  :message "Duplicate class definition"
-                  :primary-note "first definition here"
-                  :notes
-                  (list
-                   (se:make-source-error-note
-                    :type :primary
-                    :span (source:location-span (parser:toplevel-define-class-head-location second))
-                    :message "second definition here"))))))
+     (tc:tc-error "Duplicate class definition"
+                  (tc:tc-location (parser:toplevel-define-class-head-location first)
+                                  "first definition here")
+                  (tc:tc-primary-location (parser:toplevel-define-class-head-location second)
+                                          "second definition here"))))
 
   ;; Check for duplicate method definitions
   (check-duplicates
@@ -83,17 +76,9 @@
    (alexandria:compose #'parser:identifier-src-name #'parser:method-definition-name)
    #'source:location
    (lambda (first second)
-     (error 'tc:tc-error
-            :err (source:source-error
-                  :location (source:location first)
-                  :message "Duplicate method definition"
-                  :primary-note "first definition here"
-                  :notes
-                  (list
-                   (se:make-source-error-note
-                    :type :primary
-                    :span (source:location-span (source:location second))
-                    :message "second definition here"))))))
+     (tc:tc-error "Duplicate method definition"
+                  (tc:tc-note first "first definition here")
+                  (tc:tc-primary-note second "second definition here"))))
 
   (loop :for class :in classes :do
     ;; Classes cannot have duplicate variables
@@ -102,17 +87,9 @@
      #'parser:keyword-src-name
      #'source:location
      (lambda (first second)
-       (error 'tc:tc-error
-              :err (source:source-error
-                    :location (source:location first)
-                    :message "Duplicate class variable"
-                    :primary-note "first usage here"
-                    :notes
-                    (list
-                     (se:make-source-error-note
-                      :type :primary
-                      :span (source:location-span (source:location second))
-                      :message "second usage here")))))))
+       (tc:tc-error "Duplicate class variable"
+                    (tc:tc-note first "first usage here")
+                    (tc:tc-primary-note second "second usage here")))))
 
   (let* ((class-table
            (loop :with table := (make-hash-table :test #'eq)
@@ -163,16 +140,12 @@
            ;; Classes cannot have cyclic superclasses
            :when (intersection superclass-names scc-names :test #'eq)
              :do (let ((scc (sort (copy-list scc) #'source:location< :key #'source:location)))
-                   (error 'tc:tc-error
-                          :err (source:source-error
-                                :location (parser:toplevel-define-class-head-location (first scc))
-                                :message "Cyclic superclasses"
-                                :primary-note "in class defined here"
-                                :notes (loop :for class :in (rest scc)
-                                             :collect (se:make-source-error-note
-                                                       :type :primary
-                                                       :span (source:location-span (parser:toplevel-define-class-head-location class))
-                                                       :message "in class defined here")))))
+                   (apply #'tc:tc-error "Cyclic superclasses"
+                          (cons (tc:tc-location (parser:toplevel-define-class-head-location (first scc))
+                                                "in class defined here")
+                                (loop :for class :in (rest scc)
+                                      :collect (tc:tc-primary-location (parser:toplevel-define-class-head-location class)
+                                                                       "in class defined here")))))
 
            :append (multiple-value-bind (classes env_)
                        (infer-class-scc-kinds scc env)
@@ -194,7 +167,7 @@
            (loop :for class :in renamed-classes
 
                  :for class-name := (parser:identifier-src-name (parser:toplevel-define-class-name class))
-          
+
                  :for vars := (mapcar #'parser:keyword-src-name
                                       (parser:toplevel-define-class-vars class))
 
@@ -316,9 +289,9 @@
            ;; Fundeps cannot be redefined
            :when (and prev-class (not (equalp (tc:ty-class-fundeps prev-class)
                                               fundeps))) 
-             :do (tc-located-error (parser:toplevel-define-class-head-location class)
-                                   "Invalid fundep redefinition"
-                                   (format nil "unable to redefine the fundeps of class ~S." class-name))
+             :do (tc-error "Invalid fundep redefinition"
+                           (tc-location (parser:toplevel-define-class-head-location class)
+                                        "unable to redefine the fundeps of class ~S." class-name))
 
            :when fundeps
              :do (setf env (tc:initialize-fundep-environment env class-name))
@@ -379,17 +352,9 @@
                 #'parser:keyword-src-name
                 #'source:location
                 (lambda (first second)
-                  (error 'tc:tc-error
-                         :err (source:source-error
-                               :location (source:location first)
-                               :message "Duplicate variable in function dependency"
-                               :primary-note "first usage here"
-                               :notes
-                               (list
-                                (se:make-source-error-note
-                                 :type :primary
-                                 :span (source:location-span (source:location second))
-                                 :message "second usage here"))))))))
+                  (tc:tc-error "Duplicate variable in function dependency"
+                               (tc:tc-note first "first usage here")
+                               (tc:tc-note second "second usage here"))))))
       (loop :for fundep :in (parser:toplevel-define-class-fundeps class)
             :do (check-duplicate-fundep-variables (parser:fundep-left fundep))
             :do (check-duplicate-fundep-variables (parser:fundep-right fundep))))
@@ -398,10 +363,9 @@
     (labels ((check-fundep-variables (vars)
                (loop :for var :in vars
                      :unless (find (parser:keyword-src-name var) var-names :test #'eq)
-                       :do (tc-error var
-                                     "Unknown type variable"
-                                     (format nil "unknown type variable ~S"
-                                             (parser:keyword-src-name var))))))
+                       :do (tc-error "Unknown type variable"
+                                     (tc-note var "unknown type variable ~S"
+                                              (parser:keyword-src-name var))))))
       (loop :for fundep :in (parser:toplevel-define-class-fundeps class)
             :do (check-fundep-variables (parser:fundep-left fundep))
             :do (check-fundep-variables (parser:fundep-right fundep))))
@@ -438,9 +402,9 @@
 
                    ;; Ensure that methods are not ambiguous
                    :unless (subsetp var-names (tc:closure tyvars fundeps) :test #'eq)
-                     :do (tc-error method
-                                   "Ambiguous method"
-                                   "the method is ambiguous")
+                     :do (tc-error "Ambiguous method"
+                                   (tc-note method
+                                            "the method is ambiguous"))
 
                          ;; Ensure that the type variables in each
                          ;; pred are not a subset of the class
@@ -451,9 +415,9 @@
                                              :test #'eq)
 
                              :when (subsetp tyvars var-names)
-                               :do (tc-error pred
-                                             "Invalid method predicate"
-                                             "method predicate contains only class variables"))
+                               :do (tc-error "Invalid method predicate"
+                                             (tc-note pred
+                                                      "method predicate contains only class variables")))
 
                    :do (loop :for tyvar :in new-tyvars
                              :do (partial-type-env-add-var env tyvar))
