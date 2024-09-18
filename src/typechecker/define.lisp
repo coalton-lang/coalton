@@ -25,11 +25,11 @@
    #:coalton-impl/typechecker/accessor
    #:coalton-impl/typechecker/tc-env)
   (:local-nicknames
-   (#:se #:source-error)
    (#:source #:coalton-impl/source)
    (#:util #:coalton-impl/util)
    (#:algo #:coalton-impl/algorithm)
    (#:parser #:coalton-impl/parser)
+   (#:source #:coalton-impl/source)
    (#:tc #:coalton-impl/typechecker/stage-1)
    (#:types #:coalton-impl/typechecker/types))
   (:export
@@ -65,10 +65,7 @@
   (unless (source:location pred)
     (util:coalton-bug "Predicate ~S does not have source information" pred))
 
-  (tc-error pred
-            "Ambiguous predicate"
-            (with-pprint-variable-context ()
-              (format nil "Ambiguous predicate ~S" pred))))
+  (tc-error "Ambiguous predicate" (tc-note pred "Ambiguous predicate ~S" pred)))
 
 (defun error-unknown-pred (pred)
   (declare (type tc:ty-predicate pred))
@@ -76,17 +73,14 @@
   (unless (source:location pred)
     (util:coalton-bug "Predicate ~S does not have source information" pred))
 
-  (tc-error pred
-            "Unknown instance"
-            (format nil "Unknown instance ~S" pred)))
+  (tc-error "Unknown instance" (tc-note pred "Unknown instance ~S" pred)))
 
 (defun standard-expression-type-mismatch-error (node subs expected-type ty)
   "Utility for signalling a type-mismatch error in INFER-EXPRESSION-TYPE"
-  (tc-error node
-            "Type mismatch"
-            (format nil "Expected type '~S' but got '~S'"
-                    (tc:apply-substitution subs expected-type)
-                    (tc:apply-substitution subs ty))))
+  (tc-error "Type mismatch"
+            (tc-note node "Expected type '~S' but got '~S'"
+                     (tc:apply-substitution subs expected-type)
+                     (tc:apply-substitution subs ty))))
 ;;;
 ;;; Entrypoint
 ;;;
@@ -111,14 +105,11 @@
    (alexandria:compose #'parser:node-variable-name #'parser:toplevel-define-name)
    #'source:location
    (lambda (first second)
-     (tc-error (parser:toplevel-define-name first)
-               "Duplicate definition"
-               "first definition here"
-               (list
-                (se:make-source-error-note
-                 :type :primary
-                 :span (source:location-span (source:location (parser:toplevel-define-name second)))
-                 :message "second definition here")))))
+     (tc-error "Duplicate definition"
+               (tc-note (parser:toplevel-define-name first)
+                        "first definition here")
+               (tc-note (parser:toplevel-define-name second)
+                        "second definition here"))))
 
   ;; Ensure that there are no duplicate declarations
   (check-duplicates
@@ -126,14 +117,11 @@
    (alexandria:compose #'parser:identifier-src-name #'parser:toplevel-declare-name)
    #'source:location
    (lambda (first second)
-     (tc-error (parser:toplevel-declare-name first)
-               "Duplicate declaration"
-               "first declaration here"
-               (list
-                (se:make-source-error-note
-                 :type :primary
-                 :span (source:location-span (source:location (parser:toplevel-declare-name second)))
-                 :message "second declaration here")))))
+     (tc-error "Duplicate declaration"
+               (tc-note (parser:toplevel-declare-name first)
+                        "first declaration here")
+               (tc-note (parser:toplevel-declare-name second)
+                        "second declaration here"))))
 
   ;; Ensure that each declaration has an associated definition
   (loop :with def-table
@@ -151,9 +139,9 @@
         :for name := (parser:identifier-src-name (parser:toplevel-declare-name declare))
 
         :unless (gethash name def-table)
-          :do (tc-error (parser:toplevel-declare-name declare)
-                        "Orphan declaration"
-                        "declaration does not have an associated definition"))
+          :do (tc-error "Orphan declaration"
+                        (tc-note (parser:toplevel-declare-name declare)
+                                 "declaration does not have an associated definition")))
 
   (let ((dec-table (make-hash-table :test #'eq))
 
@@ -283,7 +271,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc:substitution-list subs)
              (type tc-env env)
              (values tc:ty tc:ty-predicate-list accessor-list node-integer-literal tc:substitution-list &optional))
-
+    
     (let* ((num
              (util:find-symbol "NUM" "COALTON-LIBRARY/CLASSES"))
            (tvar
@@ -395,15 +383,14 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                 ;; Otherwise signal an error
                                 (t
                                  (setf fun-ty (tc:apply-substitution subs fun-ty))
-                                 (tc-error node
-                                           "Argument error"
+                                 (tc-error "Argument error"
                                            (if (null (tc:function-type-arguments fun-ty))
-                                               (format nil "Unable to call '~S': it is not a function"
-                                                       fun-ty)
-                                               (format nil "Function call has ~D arguments but inferred type '~S' only takes ~D"
-                                                       (length rands)
-                                                       fun-ty
-                                                       (length (tc:function-type-arguments fun-ty))))))))))
+                                               (tc-note node "Unable to call '~S': it is not a function"
+                                                        fun-ty)
+                                               (tc-note node "Function call has ~D arguments but inferred type '~S' only takes ~D"
+                                                        (length rands)
+                                                        fun-ty
+                                                        (length (tc:function-type-arguments fun-ty))))))))))
 
         (handler-case
             (progn
@@ -448,7 +435,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                  :location (source:location node)
                  :pattern pat-node
                  :expr expr-node)
-         subs))))
+                subs))))
 
   (:method ((node parser:node-body) expected-type subs env)
     (declare (type tc:ty expected-type)
@@ -495,13 +482,9 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
      #'parser:pattern-var-name
      #'source:location
      (lambda (first second)
-       (tc-error first
-                 "Duplicate parameters name"
-                 "first parameter here"
-                 (list (se:make-source-error-note
-                        :type :primary
-                        :span (source:location-span (source:location second))
-                        :message "second parameter here")))))
+       (tc-error "Duplicate parameters name"
+                 (tc-note first "first parameter here")
+                 (tc-note second "second parameter here"))))
 
     (let* (;; Setup return environment
            (*return-status* :lambda)
@@ -539,34 +522,26 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
               :do (handler-case
                       (setf subs (tc:unify subs ty1 ty2))
                     (tc:coalton-internal-type-error ()
-                      (tc-error s1
-                                "Return type mismatch"
-                                (format nil "First return is of type '~S'"
-                                        (tc:apply-substitution subs ty1))
-                                (list
-                                 (se:make-source-error-note
-                                  :type :primary
-                                  :span (source:location-span s2)
-                                  :message (format nil "Second return is of type '~S'"
-                                                   (tc:apply-substitution subs ty2))))))))
+                      (tc-error "Return type mismatch"
+                                (tc-primary-note s1
+                                                 "First return is of type '~S'"
+                                                 (tc:apply-substitution subs ty1))
+                                (tc-primary-note s2
+                                                 "Second return is of type '~S'"
+                                                 (tc:apply-substitution subs ty2))))))
 
         ;; Unify the function's inferred type with one of the early returns.
         (when *returns*
           (handler-case
               (setf subs (tc:unify subs (cdr (first *returns*)) body-ty))
             (tc:coalton-internal-type-error ()
-              (tc-error (car (first *returns*))
-                        "Return type mismatch"
-                        (format nil "First return is of type '~S'"
-                                (tc:apply-substitution subs (cdr (first *returns*))))
-                        (list
-                         (se:make-source-error-note
-                          :type :primary
-                          :span (source:location-span
-                                 (source:location
-                                  (parser:node-body-last-node (parser:node-abstraction-body node))))
-                          :message (format nil "Second return is of type '~S'"
-                                           (tc:apply-substitution subs body-ty))))))))
+              (tc-error "Return type mismatch"
+                        (tc-primary-note (car (first *returns*))
+                                         "First return is of type '~S'"
+                                         (tc:apply-substitution subs (cdr (first *returns*))))
+                        (tc-primary-note (parser:node-body-last-node (parser:node-abstraction-body node))
+                                         "Second return is of type '~S'"
+                                         (tc:apply-substitution subs body-ty))))))
 
         (let ((ty (tc:make-function-type* arg-tys body-ty)))
           (handler-case
@@ -598,13 +573,9 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
      (alexandria:compose #'parser:node-variable-name #'parser:node-let-binding-name)
      #'source:location
      (lambda (first second)
-       (tc-error first
-                 "Duplicate definition in let"
-                 "first definition here"
-                 (list (se:make-source-error-note
-                        :type :primary
-                        :span (source:location-span (source:location second))
-                        :message "second definition here")))))
+       (tc-error "Duplicate definition in let"
+                 (tc-note first "first definition here")
+                 (tc-primary-note second "second definition here"))))
 
     (multiple-value-bind (preds accessors binding-nodes subs)
         (infer-let-bindings (parser:node-let-bindings node) (parser:node-let-declares node) subs env)
@@ -767,21 +738,19 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
         (handler-case
             (setf subs (tc:unify subs declared-ty expr-ty))
           (tc:coalton-internal-type-error ()
-            (tc-error node
-                      "Type mismatch"
-                      (format nil "Declared type '~S' does not match inferred type '~S'"
-                              (tc:apply-substitution subs declared-ty)
-                              (tc:apply-substitution subs expr-ty)))))
+            (tc-error "Type mismatch"
+                      (tc-note node "Declared type '~S' does not match inferred type '~S'"
+                               (tc:apply-substitution subs declared-ty)
+                               (tc:apply-substitution subs expr-ty)))))
 
         ;; Check that declared-ty is not more specific than expr-ty
         (handler-case
             (tc:match expr-ty declared-ty)
           (tc:coalton-internal-type-error ()
-            (tc-error node
-                      "Declared type too general"
-                      (format nil "Declared type '~S' is more general than inferred type '~S'"
-                              (tc:apply-substitution subs declared-ty)
-                              (tc:apply-substitution subs expr-ty)))))
+            (tc-error "Declared type too general"
+                      (tc-note node "Declared type '~S' is more general than inferred type '~S'"
+                               (tc:apply-substitution subs declared-ty)
+                               (tc:apply-substitution subs expr-ty)))))
 
         ;; SAFETY: If declared-ty and expr-ty unify, and expr-ty is
         ;; more general than declared-ty then matching should be
@@ -808,15 +777,13 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
 
     ;; Returns must be inside a lambda
     (when (eq *return-status* :toplevel)
-      (tc-error node
-                "Unexpected return"
-                "returns must be inside a lambda"))
+      (tc-error "Unexpected return"
+                (tc-note node "returns must be inside a lambda")))
 
     ;; Returns cannot be in a do expression
     (when (eq *return-status* :do)
-      (tc-error node
-                "Invalid return"
-                "returns cannot be in a do expression"))
+      (tc-error "Invalid return"
+                (tc-note node "returns cannot be in a do expression")))
 
     (multiple-value-bind (ty preds accessors expr-node subs)
         (infer-expression-type (or (parser:node-return-expr node)
@@ -876,12 +843,11 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
               :nodes body-nodes)
              subs))
         (tc:coalton-internal-type-error ()
-          (tc-error node
-                    "Type mismatch"
-                    (format nil "Expected type '~S' but 'or' evaluates to '~S'"
-                            (tc:apply-substitution subs expected-type)
-                            tc:*boolean-type*))))))
-
+          (tc-error "Type mismatch"
+                    (tc-note node "Expected type '~S' but 'or' evaluates to '~S'"
+                             (tc:apply-substitution subs expected-type)
+                             tc:*boolean-type*))))))
+  
   (:method ((node parser:node-and) expected-type subs env)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
@@ -917,11 +883,10 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
               :nodes body-nodes)
              subs))
         (tc:coalton-internal-type-error ()
-          (tc-error node
-                    "Type mismatch"
-                    (format nil "Expected type '~S' but 'and' evaluates to '~S'"
-                            (tc:apply-substitution subs expected-type)
-                            tc:*boolean-type*))))))
+          (tc-error "Type mismatch"
+                    (tc-note node "Expected type '~S' but 'and' evaluates to '~S'"
+                             (tc:apply-substitution subs expected-type)
+                             tc:*boolean-type*))))))
 
   (:method ((node parser:node-if) expected-type subs env)
     (declare (type tc:ty expected-type)
@@ -1348,11 +1313,10 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                   :location (source:location node))
                  subs))
             (tc:coalton-internal-type-error ()
-              (tc-error node
-                        "Type mismatch"
-                        (format nil "Expected type '~S' but got '~S'"
-                                (tc:apply-substitution subs expected-type)
-                                (tc:apply-substitution subs expr-ty)))))))))
+              (tc-error "Type mismatch"
+                        (tc-note node "Expected type '~S' but got '~S'"
+                                 (tc:apply-substitution subs expected-type)
+                                 (tc:apply-substitution subs expr-ty)))))))))
 
   (:method ((node parser:node-do) expected-type subs env)
     (declare (type tc:ty expected-type)
@@ -1445,17 +1409,16 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                 :last-node last-node) 
                subs))
           (tc:coalton-internal-type-error ()
-            (tc-error node
-                      "Type mismatch"
-                      (format nil "Expected type '~S' but do expression has type '~S'"
-                              (tc:apply-substitution subs expected-type)
-                              (tc:apply-substitution subs ty)))))))))
+            (tc-error "Type mismatch"
+                      (tc-note node "Expected type '~S' but do expression has type '~S'"
+                               (tc:apply-substitution subs expected-type)
+                               (tc:apply-substitution subs ty)))))))))
 
 ;;;
 ;;; Pattern Type Inference
 ;;;
 
-(defgeneric infer-pattern-type (pat expected-type subs env)
+(defgeneric infer-pattern-type (pat expected-typ subs env)
   (:documentation "Infer the type of pattern PAT and then unify against EXPECTED-TYPE.
 
 Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
@@ -1506,11 +1469,10 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                 :value (parser:pattern-literal-value pat))
                subs)))
         (tc:coalton-internal-type-error ()
-          (tc-error pat
-                    "Type mismatch"
-                    (format nil "Expected type '~S' but pattern literal has type '~S'"
-                            (tc:apply-substitution subs expected-type)
-                            (tc:apply-substitution subs ty)))))))
+          (tc-error "Type mismatch"
+                    (tc-note pat "Expected type '~S' but pattern literal has type '~S'"
+                             (tc:apply-substitution subs expected-type)
+                             (tc:apply-substitution subs ty)))))))
 
   (:method ((pat parser:pattern-wildcard) expected-type subs env)
     (declare (type tc:ty expected-type)
@@ -1537,31 +1499,24 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                         #'parser:pattern-var-name
                         #'source:location
                         (lambda (first second)
-                          (tc-error first
-                                    "Duplicate pattern variable"
-                                    "first definition here"
-                                    (list
-                                     (se:make-source-error-note
-                                      :type :primary
-                                      :span (source:location-span (source:location second))
-                                      :message "second definition here")))))
+                          (tc-error "Duplicate pattern variable"
+                                    (tc-note first "first definition here")
+                                    (tc-primary-note second "second definition here"))))
 
       (unless ctor
-        (tc-error pat
-                  "Unknown constructor"
-                  "constructor is not known"))
+        (tc-error "Unknown constructor"
+                  (tc-note pat "constructor is not known")))
 
       (let ((arity
               (tc:constructor-entry-arity ctor))
             (num-args
               (length (parser:pattern-constructor-patterns pat))))
         (unless (= arity num-args)
-          (tc-error pat
-                    "Argument mismatch"
-                    (format nil "Constructor ~A takes ~D arguments but is given ~D"
-                            (parser:pattern-constructor-name pat)
-                            arity
-                            num-args)))
+          (tc-error "Argument mismatch"
+                    (tc-note pat "Constructor ~A takes ~D arguments but is given ~D"
+                             (parser:pattern-constructor-name pat)
+                             arity
+                             num-args)))
 
         (let* ((ctor-ty (tc:qualified-ty-type ;; NOTE: Constructors cannot have predicates
                          (tc:fresh-inst
@@ -1591,11 +1546,10 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                     :patterns pattern-nodes)
                    subs)))
             (tc:coalton-internal-type-error ()
-              (tc-error pat
-                        "Type mismatch"
-                        (format nil "Expected type '~S' but pattern has type '~S'"
-                                (tc:apply-substitution subs expected-type)
-                                (tc:apply-substitution subs pat-ty))))))))))
+              (tc-error "Type mismatch"
+                        (tc-note pat "Expected type '~S' but pattern has type '~S'"
+                                 (tc:apply-substitution subs expected-type)
+                                 (tc:apply-substitution subs pat-ty))))))))))
 
 ;;;
 ;;; Binding Group Type Inference
@@ -1617,17 +1571,12 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
           :for name := (parser:node-variable-name (parser:node-let-binding-name binding))
 
           :if (gethash name def-table)
-            :do (tc-error (parser:node-let-binding-name binding)
-                          "Duplicate binding in let"
-                          "second definition here"
-                          (list
-                           (se:make-source-error-note
-                            :type :primary
-                            :span (source:location-span
-                                   (source:location
-                                    (parser:node-let-binding-name
-                                     (gethash name def-table))))
-                            :message "first definition here")))
+            :do (tc-error "Duplicate binding in let"
+                          (tc-note (parser:node-let-binding-name binding)
+                                   "second definition here")
+                          (tc-note (parser:node-let-binding-name
+                                    (gethash name def-table))
+                                   "first definition here"))
           :else
             :do (setf (gethash name def-table) binding))
 
@@ -1636,17 +1585,12 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
           :for name := (parser:node-variable-name (parser:node-let-declare-name declare))
 
           :if (gethash name dec-table)
-            :do (tc-error (parser:node-let-declare-name declare)
-                          "Duplicate declaration in let"
-                          "second declaration here"
-                          (list
-                           (se:make-source-error-note
-                            :type :primary
-                            :span (source:location-span
-                                   (source:location
-                                    (parser:node-let-declare-name
-                                     (gethash name dec-table))))
-                            :message "first declaration here")))
+            :do (tc-error "Duplicate declaration in let"
+                          (tc-note (parser:node-let-declare-name declare)
+                                   "second declaration here")
+                          (tc-note (parser:node-let-declare-name
+                                    (gethash name dec-table))
+                                   "first declaration here"))
           :else
             :do (setf (gethash name dec-table) declare))
 
@@ -1655,9 +1599,9 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
           :for name := (parser:node-variable-name (parser:node-let-declare-name declare))
 
           :unless (gethash name def-table)
-            :do (tc-error (parser:node-let-declare-name declare)
-                          "Orphan declare in let"
-                          "declaration does not have an associated definition"))
+            :do (tc-error "Orphan declare in let"
+                          (tc-note (parser:node-let-declare-name declare)
+                                   "declaration does not have an associated definition")))
 
     (let ((dec-table
             (loop :with table := (make-hash-table :test #'eq)
@@ -1796,9 +1740,9 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
         (setf subs (tc:compose-substitution-lists subs subs_))
 
         (when accessors
-          (tc-error (first accessors)
-                    "Ambiguous accessor"
-                    "accessor is ambiguous"))
+          (tc-error "Ambiguous accessor"
+                    (tc-note (first accessors)
+                             "accessor is ambiguous")))
 
         (let* ((expr-type (tc:apply-substitution subs fresh-type))
                (expr-preds (tc:apply-substitution subs fresh-preds))
@@ -1878,20 +1822,19 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
                 ;; Check that the declared and inferred schemes match
                 (unless (equalp declared-ty output-scheme)
-                  (tc-located-error location
-                                    "Declared type is too general"
-                                    (format nil "Declared type ~S is more general than inferred type ~S."
-                                            declared-ty
-                                            output-scheme)))
+                  (tc-error "Declared type is too general"
+                            (tc-location location
+                                         "Declared type ~S is more general than inferred type ~S."
+                                         declared-ty
+                                         output-scheme)))
 
                 ;; Check for undeclared predicates
                 (when (not (null retained-preds))
-                  (tc-located-error location
-                                    "Explicit type is missing inferred predicate"
-                                    (with-pprint-variable-context ()
-                                      (format nil "Declared type ~S is missing inferred predicate ~S"
-                                              output-qual-type
-                                              (first retained-preds)))))
+                  (tc-error "Explicit type is missing inferred predicate"
+                            (tc-location location
+                                         "Declared type ~S is missing inferred predicate ~S"
+                                         output-qual-type
+                                         (first retained-preds))))
 
                 (values deferred-preds
                         (attach-explicit-binding-type (tc:apply-substitution subs binding-node)
@@ -1918,14 +1861,12 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
     (let ((first-fn (find-if #'parser:binding-function-p bindings)))
       (assert first-fn)
 
-      (tc-error (parser:binding-name first-fn)
-                "Invalid recursive bindings"
-                "function can not be defined recursively with variables"
-                (loop :for binding :in (remove first-fn bindings :test #'eq)
-                      :collect (se:make-source-error-note
-                                :type :secondary
-                                :span (source:location-span (source:location (parser:binding-name binding)))
-                                :message "with definition")))))
+      (apply #'tc-error
+             "Invalid recursive bindings"
+             (tc-note (parser:binding-name first-fn)
+                      "function can not be defined recursively with variables")
+             (loop :for binding :in (remove first-fn bindings :test #'eq)
+                   :collect (tc-note (parser:binding-name binding) "with definition")))))
 
   ;; If there is a single non-recursive binding then it is valid
   (when (and (= 1 (length bindings))
@@ -1937,14 +1878,13 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
   ;; Toplevel bindings cannot be recursive values
   (when (parser:binding-toplevel-p (first bindings))
-    (tc-error (parser:binding-name (first bindings))
-              "Invalid recursive bindings"
-              "invalid recursive variable bindings"
-              (loop :for binding :in (rest bindings)
-                    :collect (se:make-source-error-note
-                              :type :secondary
-                              :span (source:location-span (source:location (parser:binding-name binding)))
-                              :message "with definition"))))
+    (apply #'tc-error
+           "Invalid recursive bindings"
+           (tc-note (parser:binding-name (first bindings))
+                    "invalid recursive variable bindings")
+           (loop :for binding :in (rest bindings)
+                 :collect (tc-note (parser:binding-name binding)
+                                   "with definition"))))
 
   (let ((binding-names (mapcar (alexandria:compose #'parser:node-variable-name
                                                    #'parser:binding-name)
@@ -2002,14 +1942,11 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
       (when (every (alexandria:compose #'valid-recursive-constructor-call-p #'parser:binding-value) bindings)
         (return-from check-for-invalid-recursive-scc))
 
-      (tc-error (parser:binding-name (first bindings))
-                "Invalid recursive bindings"
-                "invalid recursive variable bindings"
-                (loop :for binding :in (rest bindings)
-                      :collect (se:make-source-error-note
-                                :type :secondary
-                                :span (source:location-span (source:location (parser:binding-name binding)))
-                                :message "with definition"))))))
+      (apply #'tc-error "Invalid recursive bindings"
+             (tc-note (parser:binding-name (first bindings))
+                      "invalid recursive variable bindings")
+             (loop :for binding :in (rest bindings)
+                   :collect (tc-note (parser:binding-name binding) "with definition"))))))
 
 (defun infer-impls-binding-type (bindings subs env)
   "Infer the type's of BINDINGS and then qualify those types into schemes."
@@ -2055,9 +1992,8 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
       (setf subs (tc:compose-substitution-lists subs subs_))
 
       (when accessors
-        (tc-error (first accessors)
-                  "Ambiguous accessor"
-                  "accessor is ambiguous"))
+        (tc-error "Ambiguous accessor"
+                  (tc-note (first accessors) "accessor is ambiguous")))
 
       (let* ((expr-tys
                (tc:apply-substitution subs expr-tys))
@@ -2190,14 +2126,9 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
    #'parser:pattern-var-name
    #'source:location
    (lambda (first second)
-     (tc-error first
-               "Duplicate parameters name"
-               "first parameter here"
-               (list (se:make-source-error-note
-                      :type :primary
-                      :span (source:location-span
-                             (source:location second))
-                      :message "second parameter here")))))
+     (tc-error "Duplicate parameters name"
+               (tc-note first "first parameter here")
+               (tc-note second "second parameter here"))))
 
   (let* ((param-tys (loop :with args := (tc:function-type-arguments expected-type)
                           :for pattern :in (parser:binding-parameters binding)
@@ -2245,33 +2176,26 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                          :do (handler-case
                                  (setf subs (tc:unify subs ty1 ty2))
                                (tc:coalton-internal-type-error ()
-                                 (tc-located-error s1
-                                                   "Return type mismatch"
-                                                   (format nil "First return is of type '~S'"
-                                                           (tc:apply-substitution subs ty1))
-                                                   (list
-                                                    (se:make-source-error-note
-                                                     :type :primary
-                                                     :span (source:location-span s2)
-                                                     :message (format nil "Second return is of type '~S'"
-                                                                      (tc:apply-substitution subs ty2))))))))
+                                 (tc-error "Return type mismatch"
+                                           (tc-location s1
+                                                        "First return is of type '~S'"
+                                                        (tc:apply-substitution subs ty1))
+                                           (tc-primary-location s2
+                                                                "Second return is of type '~S'"
+                                                                (tc:apply-substitution subs ty2))))))
 
                    ;; Unify the function's inferred type with one of the early returns.
                    (when *returns*
                      (handler-case
                          (setf subs (tc:unify subs (cdr (first *returns*)) ret-ty))
                        (tc:coalton-internal-type-error ()
-                         (tc-located-error (car (first *returns*))
-                                           "Return type mismatch"
-                                           (format nil "First return is of type '~S'"
-                                                   (tc:apply-substitution subs (cdr (first *returns*))))
-                                           (list
-                                            (se:make-source-error-note
-                                             :type :primary
-                                             :span (source:location-span
-                                                    (source:location (parser:binding-last-node binding)))
-                                             :message (format nil "Second return is of type '~S'"
-                                                              (tc:apply-substitution subs ret-ty))))))))
+                         (tc-error "Return type mismatch"
+                                   (tc-location (car (first *returns*))
+                                                "First return is of type '~S'"
+                                                (tc:apply-substitution subs (cdr (first *returns*))))
+                                   (tc-primary-note (parser:binding-last-node binding)
+                                                    "Second return is of type '~S'"
+                                                    (tc:apply-substitution subs ret-ty))))))
 
                    value-node))
 
@@ -2307,11 +2231,10 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                typed-binding
                subs)))
         (tc:coalton-internal-type-error ()
-          (tc-error binding
-                    "Type mismatch"
-                    (format nil "Expected type '~S' but got type '~S'"
-                            (tc:apply-substitution subs expected-type)
-                            (tc:apply-substitution subs ty))))))))
+          (tc-error "Type mismatch"
+                    (tc-note binding "Expected type '~S' but got type '~S'"
+                             (tc:apply-substitution subs expected-type)
+                             (tc:apply-substitution subs ty))))))))
 
 ;;;
 ;;; Helpers

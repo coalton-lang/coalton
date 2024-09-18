@@ -4,7 +4,6 @@
    #:coalton-impl/typechecker/base)
   (:local-nicknames
    (#:source #:coalton-impl/source)
-   (#:se #:source-error)
    (#:tc #:coalton-impl/typechecker/stage-1)
    (#:util #:coalton-impl/util))
   (:export
@@ -105,19 +104,17 @@
            (struct-entry (tc:lookup-struct env ty-name :no-error t)))
 
       (unless struct-entry
-        (tc-error accessor
-                  "Invalid accessor"
-                  (format nil "type '~S' is not a struct" ty-name)))
+        (tc-error "Invalid accessor"
+                  (tc-note accessor "type '~S' is not a struct" ty-name)))
 
       (let ((subs (tc:match struct-ty (accessor-from accessor)))
             (field (tc:get-field struct-entry (accessor-field accessor) :no-error t)))
 
         (unless field
-          (tc-error accessor
-                    "Invalid accessor"
-                    (format nil "struct '~S' does not have the field '~A'"
-                            ty-name
-                            (accessor-field accessor))))
+          (tc-error "Invalid accessor"
+                    (tc-note accessor "struct '~S' does not have the field '~A'"
+                             ty-name
+                             (accessor-field accessor))))
 
         ;; the order of unification matters here
         (setf subs (tc:unify subs (accessor-to accessor)

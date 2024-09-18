@@ -12,7 +12,6 @@
    #:coalton-impl/typechecker/base
    #:coalton-impl/typechecker/partial-type-env)
   (:local-nicknames
-   (#:se #:source-error)
    (#:util #:coalton-impl/util)
    (#:parser #:coalton-impl/parser)
    (#:source #:coalton-impl/source)
@@ -126,15 +125,14 @@
     (unless (subsetp (tc:type-variables preds) unambiguous-vars :test #'equalp)
       (let* ((ambiguous-vars (set-difference (tc:type-variables preds) unambiguous-vars :test #'equalp))
              (single-variable (= 1 (length ambiguous-vars))))
-        (tc-error qual-ty
-                  "Invalid qualified type"
-                  (format nil "The type ~A ~{~S ~}ambiguous in the type ~S"
-                          (if single-variable
-                              "variable is"
-                              "variables are")
-                          ambiguous-vars
-                          (tc:make-qualified-ty :predicates preds
-                                                :type type)))))))
+        (tc-error "Invalid qualified type"
+                  (tc-note qual-ty "The type ~A ~{~S ~}ambiguous in the type ~S"
+                           (if single-variable
+                               "variable is"
+                               "variables are")
+                           ambiguous-vars
+                           (tc:make-qualified-ty :predicates preds
+                                                 :type type)))))))
 
 (defun check-for-reducible-context (preds qual-ty env)
   (declare (type tc:ty-predicate-list preds)
@@ -142,12 +140,9 @@
            (type tc:environment env))
   (let ((reduced-preds (tc:reduce-context env preds nil)))
     (unless (null (set-exclusive-or preds reduced-preds :test #'tc:type-predicate=))
-      (warn 'se:source-base-warning
-            :err (source:source-error
-                  :type :warn
-                  :location (parser:qualified-ty-location qual-ty)
-                  :message "Declared context can be reduced"
-                  :primary-note (if (null reduced-preds)
+      (source:warn "Declared context can be reduced"
+                   (source:note (source:location qual-ty)
+                                (if (null reduced-preds)
                                     "declared predicates are redundant"
                                     (format nil "context can be reduced to ~{ ~S~}"
                                             reduced-preds)))))))
@@ -173,11 +168,10 @@
             (setf ksubs (tc:kunify kvar expected-kind ksubs))
             (values (tc:apply-ksubstitution ksubs tvar) ksubs))
         (tc:coalton-internal-type-error ()
-          (tc-error type
-                    "Kind mismatch"
-                    (format nil "Expected kind '~S' but variable is of kind '~S'"
-                            expected-kind
-                            kvar))))))
+          (tc-error "Kind mismatch"
+                    (tc-note type "Expected kind '~S' but variable is of kind '~S'"
+                             expected-kind
+                             kvar))))))
 
   (:method ((type parser:tycon) expected-kind ksubs env)
     (declare (type tc:kind expected-kind)
@@ -191,11 +185,10 @@
             (setf ksubs (tc:kunify (tc:kind-of type_) expected-kind ksubs))
             (values (tc:apply-ksubstitution ksubs type_) ksubs))
         (tc:coalton-internal-type-error ()
-          (tc-error type
-                    "Kind mismatch"
-                    (format nil "Expected kind '~S' but got kind '~S'"
-                            expected-kind
-                            (tc:kind-of type_)))))))
+          (tc-error "Kind mismatch"
+                    (tc-note type "Expected kind '~S' but got kind '~S'"
+                             expected-kind
+                             (tc:kind-of type_)))))))
 
   (:method ((type parser:tapp) expected-kind ksubs env)
     (declare (type tc:kind expected-kind)
@@ -228,13 +221,12 @@
                  (tc:apply-type-argument fun-ty arg-ty :ksubs ksubs)
                  ksubs))
             (tc:coalton-internal-type-error ()
-              (tc-error (parser:tapp-from type)
-                        "Kind mismatch"
-                        (format nil "Expected kind '~S' but got kind '~S'"
-                                (tc:make-kfun
-                                 :from (tc:apply-ksubstitution ksubs arg-kind)
-                                 :to (tc:apply-ksubstitution ksubs expected-kind))
-                                (tc:apply-ksubstitution ksubs fun-kind)))))))))
+              (tc-error "Kind mismatch"
+                        (tc-note (parser:tapp-from type) "Expected kind '~S' but got kind '~S'"
+                                 (tc:make-kfun
+                                  :from (tc:apply-ksubstitution ksubs arg-kind)
+                                  :to (tc:apply-ksubstitution ksubs expected-kind))
+                                 (tc:apply-ksubstitution ksubs fun-kind)))))))))
 
   (:method ((type parser:qualified-ty) expected-kind ksubs env)
     (declare (type tc:kind expected-kind)
@@ -273,11 +265,10 @@
 
     ;; Check that pred has the correct number of arguments
     (unless (= class-arity (length (parser:ty-predicate-types pred)))
-      (tc-error pred
-                "Predicate arity mismatch"
-                (format nil "Expected ~D arguments but received ~D"
-                        class-arity
-                        (length (parser:ty-predicate-types pred)))))
+      (tc-error "Predicate arity mismatch"
+                (tc-note pred "Expected ~D arguments but received ~D"
+                         class-arity
+                         (length (parser:ty-predicate-types pred)))))
 
     (let ((types (loop :for ty :in (parser:ty-predicate-types pred)
                        :for class-ty :in (tc:ty-predicate-types class-pred)
@@ -289,4 +280,4 @@
                                   ty))))
       (values (tc:make-ty-predicate :class class-name
                                     :types types)
-       ksubs))))
+              ksubs))))

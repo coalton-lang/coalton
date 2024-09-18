@@ -566,12 +566,8 @@ Rebound to NIL parsing an anonymous FN.")
     ((cst:atom form)
      (typecase (cst:raw form)
        (null
-        (error 'parse-error
-               :err (se:source-error
-                     :span (cst:source form)
-                     :source source
-                     :message "Malformed expression"
-                     :primary-note "unexpected `nil` or `()`")))
+        (parse-error "Malformed expression"
+                     (note source form "unexpected `nil` or `()`")))
 
        (symbol
         (if (char= #\. (aref (symbol-name (cst:raw form)) 0))
@@ -586,12 +582,8 @@ Rebound to NIL parsing an anonymous FN.")
     ;;
 
     ((not (cst:proper-list-p form))
-     (error 'parse-error
-            :err (se:source-error
-                  :span (cst:source form)
-                  :source source
-                  :message "Malformed expression"
-                  :primary-note "unexpected dotted list")))
+     (parse-error "Malformed expression"
+                  (note source form "unexpected dotted list")))
 
     ;;
     ;; Keywords
@@ -605,43 +597,26 @@ Rebound to NIL parsing an anonymous FN.")
 
        ;; (fn)
        (unless (cst:consp (cst:rest form))
-         (error 'parse-error
-                :err (se:source-error
-                      :span (cst:source form)
-                      :source source
-                      :highlight :end
-                      :message "Malformed function"
-                      :primary-note "expected function arguments")))
+         (parse-error "Malformed function"
+                      (note-end source form "expected function arguments")))
 
        ;; (fn (...))
        (unless (cst:consp (cst:rest (cst:rest form)))
-         (error 'parse-error
-                :err (se:source-error
-                      :span (cst:source form)
-                      :source source
-                      :highlight :end
-                      :message "Malformed function"
-                      :primary-note "expected function body")))
+         (parse-error "Malformed function"
+                      (note-end source form "expected function body")))
 
        ;; (fn x ...)
        ;;
        ;; NOTE: (fn () ...) is allowed
        (when (and (cst:atom (cst:second form))
                   (not (null (cst:raw (cst:second form)))))
-         (error 'parse-error
-                :err (se:source-error
-                      :span (cst:source (cst:second form))
-                      :source source
-                      :message "Malformed function"
-                      :primary-note "malformed argument list"
-                      :help-notes
-                      (list
-                       (se:make-source-error-help
-                        :span (cst:source (cst:second form))
-                        :replacement
-                        (lambda (existing)
-                          (concatenate 'string "(" existing ")"))
-                        :message "add parentheses")))))
+         (parse-error "Malformed function"
+                      (note source (cst:second form)
+                            "malformed argument list")
+                      (help source (cst:second form)
+                            (lambda (existing)
+                              (concatenate 'string "(" existing ")"))
+                            "add parentheses")))
        ;; Bind *LOOP-LABEL-CONTEXT* to NIL to disallow BREAKing from
        ;; or CONTINUING with loops that enclose the FN form.
        (let ((*loop-label-context* nil))
@@ -653,38 +628,24 @@ Rebound to NIL parsing an anonymous FN.")
          (make-node-abstraction
           :params params
           :body body
-          :location (source:make-location source form)))))
+          :location (form-location source form)))))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:let (cst:raw (cst:first form))))
 
      ;; (let)
      (unless (cst:consp (cst:rest form))
-       (error 'parse-error
-              :err (se:source-error
-                    :span (cst:source form)
-                    :source source
-                    :highlight :end
-                    :message "Malformed let"
-                    :primary-note "expected let binding list")))
+       (parse-error "Malformed let"
+                    (note-end source form "expected let binding list")))
 
      ;; (let (...))
      (unless (cst:consp (cst:rest (cst:rest form)))
-       (error 'parse-error
-              :err (se:source-error
-                    :span (cst:source form)
-                    :source source
-                    :highlight :end
-                    :message "Malformed let"
-                    :primary-note "expected let body")))
+       (parse-error "Malformed let"
+                    (note-end source form "expected let body")))
 
-     (unless (cst:proper-list-p (cst:second form)) 
-       (error 'parse-error
-              :err (se:source-error
-                    :span (cst:source (cst:second form))
-                    :source source
-                    :message "Malformed let"
-                    :primary-note "expected binding list")))
+     (unless (cst:proper-list-p (cst:second form))
+       (parse-error "Malformed let"
+                    (note source (cst:second form) "expected binding list")))
 
      (let* (declares
 
@@ -705,39 +666,24 @@ Rebound to NIL parsing an anonymous FN.")
         :bindings bindings
         :declares (nreverse declares)
         :body (parse-body (cst:nthrest 2 form) form source)
-        :location (source:make-location source form))))
+        :location (form-location source form))))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:lisp (cst:raw (cst:first form))))
      ;; (lisp)
      (unless (cst:consp (cst:rest form))
-       (error 'parse-error
-              :err (se:source-error
-                    :span (cst:source form)
-                    :source source
-                    :highlight :end
-                    :message "Malformed lisp expression"
-                    :primary-note "expected expression type")))
+       (parse-error "Malformed lisp expression"
+                    (note-end source form "expected expression type")))
 
      ;; (lisp T)
      (unless (cst:consp (cst:rest (cst:rest form)))
-       (error 'parse-error
-              :err (se:source-error
-                    :span (cst:source form)
-                    :source source
-                    :highlight :end
-                    :message "Malformed lisp expression"
-                    :primary-note "expected binding list")))
+       (parse-error "Malformed lisp expression"
+                    (note-end source form "expected binding list")))
 
      ;; (lisp T (...))
      (unless (cst:consp (cst:rest (cst:rest (cst:rest form))))
-       (error 'parse-error
-              :err (se:source-error
-                    :span (cst:source form)
-                    :source source
-                    :highlight :all
-                    :message "Malformed lisp expression"
-                    :primary-note "expected body")))
+       (parse-error "Malformed lisp expression"
+                    (note source form "expected body")))
 
      (let ((vars (loop :for vars := (cst:third form) :then (cst:rest vars)
                        :while (cst:consp vars)
@@ -747,69 +693,51 @@ Rebound to NIL parsing an anonymous FN.")
         :vars vars
         :var-names (mapcar #'node-variable-name vars)
         :body (cst:raw (cst:nthrest 3 form))
-        :location (source:make-location source form))))
+        :location (form-location source form))))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:match (cst:raw (cst:first form))))
 
      ;; (match)
      (unless (cst:consp (cst:rest form))
-       (error 'parse-error
-              :err (se:source-error
-                    :span (cst:source form)
-                    :source source
-                    :highlight :end
-                    :message "Malformed match expression"
-                    :primary-note "expected expression")))
+       (parse-error "Malformed match expression"
+                    (note-end source form "expected expression")))
 
      (make-node-match
       :expr (parse-expression (cst:second form) source)
       :branches (loop :for branches := (cst:nthrest 2 form) :then (cst:rest branches)
                       :while (cst:consp branches)
                       :collect (parse-match-branch (cst:first branches) source))
-      :location (source:make-location source form)))
+      :location (form-location source form)))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:progn (cst:raw (cst:first form))))
      (make-node-progn
       :body (parse-body (cst:rest form) form source)
-      :location (source:make-location source form)))
+      :location (form-location source form)))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:the (cst:raw (cst:first form))))
      ;; (the)
      (unless (cst:consp (cst:rest form))
-       (error 'parse-error
-              :err (se:source-error
-                    :span (cst:source form)
-                    :source source
-                    :highlight :end
-                    :message "Malformed the expression"
-                    :primary-note "expected type")))
+       (parse-error "Malformed the expression"
+                    (note-end source form "expected type")))
 
      ;; (the T)
      (unless (cst:consp (cst:rest (cst:rest form)))
-       (error 'parse-error
-              :err (se:source-error
-                    :span (cst:source form)
-                    :source source
-                    :highlight :end
-                    :message "Malformed the expression"
-                    :primary-note "expected value")))
+       (parse-error "Malformed the expression"
+                    (note-end source form "expected value")))
 
      ;; (the a b c)
      (when (cst:consp (cst:rest (cst:rest (cst:rest form))))
-       (error 'parse-error
-              :err (se:source-error
-                    :span (cst:source (cst:first (cst:rest (cst:rest (cst:rest form)))))
-                    :source source
-                    :message "Malformed the expression"
-                    :primary-note "unexpected trailing form")))
+       (parse-error "Malformed the expression"
+                    (note source (cst:first (cst:rest (cst:rest (cst:rest form))))
+                          "unexpected trailing form")))
 
      (make-node-the
       :type (parse-type (cst:second form) source)
       :expr (parse-expression (cst:third form) source)
-      :location (source:make-location source form)))
+      :location (form-location source form)))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:return (cst:raw (cst:first form))))
@@ -819,148 +747,101 @@ Rebound to NIL parsing an anonymous FN.")
        (when (cst:consp (cst:rest form))
          ;; (return a b ...)
          (when (cst:consp (cst:rest (cst:rest form)))
-           (error 'parse-error
-                  :err (se:source-error
-                        :span (cst:source (cst:first (cst:rest (cst:rest form))))
-                        :source source
-                        :message "Malformed return expression"
-                        :primary-note "unexpected trailing form")))
+           (parse-error "Malformed return expression"
+                        (note source (cst:first (cst:rest (cst:rest form)))
+                              "unexpected trailing form")))
 
          (setf expr (parse-expression (cst:second form) source)))
 
        (make-node-return
         :expr expr
-        :location (source:make-location source form))))
+        :location (form-location source form))))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:or (cst:raw (cst:first form))))
      (unless (cst:consp (cst:rest form))
-       (error 'parse-error
-              :err (se:source-error
-                    :span (cst:source form)
-                    :source source
-                    :highlight :end
-                    :message "Malformed or expression"
-                    :primary-note "expected one or more arguments")))
+       (parse-error "Malformed or expression"
+                    (note-end source form "expected one or more arguments")))
 
      (make-node-or
       :nodes (loop :for args := (cst:rest form) :then (cst:rest args)
                    :while (cst:consp args)
                    :for arg := (cst:first args)
                    :collect (parse-expression arg source))
-      :location (source:make-location source form)))
+      :location (form-location source form)))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:and (cst:raw (cst:first form))))
      (unless (cst:consp (cst:rest form))
-       (error 'parse-error
-              :err (se:source-error
-                    :span (cst:source form)
-                    :source source
-                    :highlight :end
-                    :message "Malformed and expression"
-                    :primary-note "expected one or more arguments")))
+       (parse-error "Malformed and expression"
+                    (note-end source form "expected one or more arguments")))
 
      (make-node-and
       :nodes (loop :for args := (cst:rest form) :then (cst:rest args)
                    :while (cst:consp args)
                    :for arg := (cst:first args)
                    :collect (parse-expression arg source))
-      :location (source:make-location source form)))
+      :location (form-location source form)))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:if (cst:raw (cst:first form))))
      (unless (cst:consp (cst:rest form))
-       (error 'parse-error
-              :err (se:source-error
-                    :span (cst:source form)
-                    :source source
-                    :highlight :end
-                    :message "Malformed if expression"
-                    :primary-note "expected a predicate")))
+       (parse-error "Malformed if expression"
+                    (note-end source form "expected a predicate")))
 
      (unless (cst:consp (cst:rest (cst:rest form)))
-       (error 'parse-error
-              :err (se:source-error
-                    :span (cst:source form)
-                    :source source
-                    :highlight :end
-                    :message "Malformed if expression"
-                    :primary-note "expected a form")))
+       (parse-error "Malformed if expression"
+                    (note-end source form "expected a form")))
 
      (unless (cst:consp (cst:rest (cst:rest (cst:rest form))))
-       (error 'parse-error
-              :err (se:source-error
-                    :span (cst:source form)
-                    :source source
-                    :highlight :end
-                    :message "Malformed if expression"
-                    :primary-note "expected a form")))
+       (parse-error "Malformed if expression"
+                    (note-end source form "expected a form")))
 
      (when (cst:consp (cst:rest (cst:rest (cst:rest (cst:rest form)))))
-       (error 'parse-error
-              :err (se:source-error
-                    :span (cst:source (cst:first (cst:rest (cst:rest (cst:rest (cst:rest form))))))
-                    :source source
-                    :highlight :end
-                    :message "Malformed if expression"
-                    :primary-note "unexpected trailing form")))
+       (parse-error "Malformed if expression"
+                    (note-end source (cst:first (cst:rest (cst:rest (cst:rest (cst:rest form)))))
+                              "unexpected trailing form")))
 
      (make-node-if
       :expr (parse-expression (cst:second form) source)
       :then (parse-expression (cst:third form) source)
       :else (parse-expression (cst:fourth form) source)
-      :location (source:make-location source form)))
+      :location (form-location source form)))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:when (cst:raw (cst:first form))))
      (unless (cst:consp (cst:rest form))
-       (error 'parse-error
-              :err (se:source-error
-                    :span (cst:source form)
-                    :source source
-                    :highlight :end
-                    :message "Malformed when expression"
-                    :primary-note "expected a predicate")))
+       (parse-error "Malformed when expression"
+                    (note-end source form "expected a predicate")))
 
      (make-node-when
       :expr (parse-expression (cst:second form) source)
       :body (parse-body (cst:rest (cst:rest form)) form source)
-      :location (source:make-location source form)))
+      :location (form-location source form)))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:unless (cst:raw (cst:first form))))
      (unless (cst:consp (cst:rest form))
-       (error 'parse-error
-              :err (se:source-error
-                    :span (cst:source form)
-                    :source source
-                    :highlight :end
-                    :message "Malformed unless expression"
-                    :primary-note "expected a predicate")))
+       (parse-error "Malformed unless expression"
+                    (note-end source form "expected a predicate")))
 
      (make-node-unless
       :expr (parse-expression (cst:second form) source)
       :body (parse-body (cst:rest (cst:rest form)) form source)
-      :location (source:make-location source form)))
+      :location (form-location source form)))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:cond (cst:raw (cst:first form))))
      (unless (cst:consp (cst:rest form))
-       (error 'parse-error
-              :err (se:source-error
-                    :span (cst:source form)
-                    :source source
-                    :highlight :end
-                    :message "Malformed cond expression"
-                    :primary-note "expected one or more clauses")))
+       (parse-error "Malformed cond expression"
+                    (note-end source form "expected one or more clauses")))
 
      (make-node-cond
       :clauses (loop :for clauses := (cst:rest form) :then (cst:rest clauses)
                      :while (cst:consp clauses)
                      :for clause := (cst:first clauses)
                      :collect (parse-cond-clause clause source))
-      :location (source:make-location source form)))
+      :location (form-location source form)))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:do (cst:raw (cst:first form))))
@@ -972,29 +853,19 @@ Rebound to NIL parsing an anonymous FN.")
      (multiple-value-bind (label labelled-body) (take-label form)
        ;; (while [label])
        (unless (cst:consp labelled-body)
-         (error 'parse-error
-                :err (se:source-error
-                      :span (cst:source form)
-                      :source source
-                      :highlight :end
-                      :message "Malformed while expression"
-                      :primary-note "expected condition")))
+         (parse-error "Malformed while expression"
+                      (note-end source form "expected condition")))
        ;; (while [label] condition)
        (unless (cst:consp (cst:rest labelled-body))
-         (error 'parse-error
-                :err (se:source-error
-                      :span (cst:source form)
-                      :source source
-                      :highlight :end
-                      :message "Malformed while expression"
-                      :primary-note "expected body")))
+         (parse-error "Malformed while expression"
+                      (note-end source form "expected body")))
        (let ((*loop-label-context*
-               (if label 
+               (if label
                    (list* label const:+default-loop-label+ *loop-label-context*)
                    (cons const:+default-loop-label+ *loop-label-context*))))
 
          (make-node-while
-          :location (source:make-location source form)
+          :location (form-location source form)
           :label (or label const:+default-loop-label+)
           :expr (parse-expression (cst:first labelled-body) source)
           :body (parse-body (cst:rest labelled-body) form source)))))
@@ -1005,52 +876,32 @@ Rebound to NIL parsing an anonymous FN.")
      (multiple-value-bind (label labelled-body) (take-label form)
        ;; (while-let [label])
        (unless (cst:consp labelled-body)
-         (error 'parse-error
-                :err (se:source-error
-                      :span (cst:source form)
-                      :source source
-                      :highlight :end
-                      :message "Malformed while-let expression"
-                      :primary-note  "expected pattern"))) 
+         (parse-error "Malformed while-let expression"
+                      (note-end source form "expected pattern")))
 
        ;; (while-let [label] pattern)
        (unless (and (cst:consp (cst:rest labelled-body))
                     (eq 'coalton:= (cst:raw (cst:second labelled-body))))
-         (error 'parse-error
-                :err (se:source-error
-                      :span (cst:source form)
-                      :source source
-                      :highlight :end
-                      :message "Malformed while-let expression"
-                      :primary-note  "expected =")))
-       
+         (parse-error "Malformed while-let expression"
+                      (note-end source form "expected =")))
+
        ;; (when-let [label] pattern =)
        (unless (cst:consp (cst:nthrest 2 labelled-body))
-         (error 'parse-error
-                :err (se:source-error
-                      :span (cst:source form)
-                      :source source
-                      :highlight :end
-                      :message "Malformed while-let expression"
-                      :primary-note "expected expression")))
-       
+         (parse-error "Malformed while-let expression"
+                      (note-end source form "expected expression")))
+
        ;; (when-let pattern = expr)
        (unless (cst:consp (cst:nthrest 3 labelled-body))
-         (error 'parse-error
-                :err (se:source-error
-                      :span (cst:source form)
-                      :source source
-                      :highlight :end
-                      :message "Malformed while-let expression"
-                      :primary-note "expected body")))
+         (parse-error "Malformed while-let expression"
+                      (note-end source form "expected body")))
        (let* ((*loop-label-context*
                 (if label
                     (list* label const:+default-loop-label+ *loop-label-context*)
                     (cons const:+default-loop-label+ *loop-label-context*))))
          (make-node-while-let
-          :location (source:make-location source form)
+          :location (form-location source form)
           :label (or label const:+default-loop-label+)
-          :pattern (parse-pattern (cst:first labelled-body) source) 
+          :pattern (parse-pattern (cst:first labelled-body) source)
           :expr (parse-expression (cst:third labelled-body) source)
           :body (parse-body (cst:nthrest 3 labelled-body) form source)))))
 
@@ -1058,20 +909,15 @@ Rebound to NIL parsing an anonymous FN.")
           (eq 'coalton:loop (cst:raw (cst:first form))))
      (multiple-value-bind (label labelled-body) (take-label form)
        (unless (cst:consp labelled-body)
-         (error 'parse-error
-                :err (se:source-error
-                      :span (cst:source form)
-                      :source source
-                      :highlight :end
-                      :message "Malformed loop expression"
-                      :primary-note "expected a loop body")))
+         (parse-error "Malformed loop expression"
+                      (note-end source form "expected a loop body")))
 
        (let* ((*loop-label-context*
                 (if label
                     (list* label const:+default-loop-label+ *loop-label-context*)
                     (cons const:+default-loop-label+ *loop-label-context*))))
          (make-node-loop
-          :location (source:make-location source form)
+          :location (form-location source form)
           :label (or label const:+default-loop-label+)
           :body (parse-body labelled-body form source)))))
 
@@ -1080,32 +926,23 @@ Rebound to NIL parsing an anonymous FN.")
 
      (multiple-value-bind (label postlabel) (take-label form)
        (unless (cst:null postlabel)
-         (error 'parse-error
-                :err (se:source-error
-                      :span (cst:source form)
-                      :source source
-                      :message "Invalid argument in break"
-                      :primary-note (if label
-                                        "unexpected argument after label"
-                                        "expected a keyword"))))
+         (parse-error "Invalid argument in break"
+                      (note-end source form
+                                (if label
+                                    "unexpected argument after label"
+                                    "expected a keyword"))))
 
        (if label
            (unless (member label *loop-label-context*)
-             (error 'parse-error
-                    :err (se:source-error
-                          :span (cst:source (cst:second form))
-                          :source source
-                          :message "Invalid label in break"
-                          :primary-note "label not found in any enclosing loop")))
+             (parse-error "Invalid label in break"
+                          (note source (cst:second form)
+                                "label not found in any enclosing loop")))
            (unless *loop-label-context*
-             (error 'parse-error
-                    :err (se:source-error
-                          :span (cst:source form)
-                          :source source
-                          :message "Invalid break"
-                          :primary-note "break does not appear in an enclosing loop"))))
-       
-       (make-node-break :location (source:make-location source form)
+             (parse-error "Invalid break"
+                          (note source form
+                                "break does not appear in an enclosing loop"))))
+
+       (make-node-break :location (form-location source form)
                         :label (or label (car *loop-label-context*)))))
 
     ((and (cst:atom (cst:first form))
@@ -1113,34 +950,25 @@ Rebound to NIL parsing an anonymous FN.")
 
      (multiple-value-bind (label postlabel) (take-label form)
        (unless (cst:null postlabel)
-         (error 'parse-error
-                :err (se:source-error
-                      :span (cst:source form)
-                      :source source
-                      :message "Invalid argument in continue"
-                      :primary-note (if label
-                                        "unexpected argument after label"
-                                        "expected a keyword"))))
+         (parse-error "Invalid argument in continue"
+                      (note source form
+                            (if label
+                                "unexpected argument after label"
+                                "expected a keyword"))))
 
        (if label
            (unless (member label *loop-label-context*)
-             (error 'parse-error
-                    :err (se:source-error
-                          :span (cst:source (cst:second form))
-                          :source source
-                          :message "Invalid label in continue"
-                          :primary-note "label not found in any enclosing loop")))
+             (parse-error "Invalid label in continue"
+                          (note source (cst:second form)
+                                "label not found in any enclosing loop")))
            (unless *loop-label-context*
-             (error 'parse-error
-                    :err (se:source-error
-                          :span (cst:source form)
-                          :source source
-                          :message "Invalid continue"
-                          :primary-note "continue does not appear in an enclosing loop"))))
-       
-       (make-node-continue :location (source:make-location source form)
+             (parse-error "Invalid continue"
+                          (note source form
+                                "continue does not appear in an enclosing loop"))))
+
+       (make-node-continue :location (form-location source form)
                            :label (or label (car *loop-label-context*)))))
-    
+
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:for (cst:raw (cst:first form))))
@@ -1148,54 +976,34 @@ Rebound to NIL parsing an anonymous FN.")
      (multiple-value-bind (label labelled-body) (take-label form)
        ;; (for [label])
        (unless (cst:consp labelled-body)
-         (error 'parse-error
-                :err (se:source-error
-                      :span (cst:source form)
-                      :source source
-                      :highlight :end
-                      :message "Malformed for expression"
-                      :primary-note  "expected pattern"))) 
-       
+         (parse-error "Malformed for expression"
+                      (note-end source form "expected pattern")))
+
        ;; (for [label] pattern)
        (unless (and (cst:consp (cst:rest labelled-body))
                     (cst:atom (cst:second labelled-body))
                     (eq 'coalton:in (cst:raw (cst:second labelled-body))))
-         (error 'parse-error
-                :err (se:source-error
-                      :span (cst:source form)
-                      :source source
-                      :highlight :end
-                      :message "Malformed for expression"
-                      :primary-note "expected in")))
+         (parse-error "Malformed for expression"
+                      (note-end source form "expected in")))
 
        ;; (for [label] pattern in)
        (unless (cst:consp (cst:nthrest 2 labelled-body))
-         (error 'parse-error
-                :err (se:source-error
-                      :span (cst:source form)
-                      :source source
-                      :highlight :end
-                      :message "Malformed for expression"
-                      :primary-note  "expected expression")))
-       
+         (parse-error "Malformed for expression"
+                      (note-end source form "expected expression")))
+
        ;; (for [label] pattern in expr)
        (unless (cst:consp (cst:nthrest 3 labelled-body))
-         (error 'parse-error
-                :err (se:source-error
-                      :span (cst:source form)
-                      :source source
-                      :highlight :end
-                      :message "Malformed for expression"
-                      :primary-note "expected body")))
-       
+         (parse-error "Malformed for expression"
+                      (note-end source form "expected body")))
+
        (let ((*loop-label-context*
                (if label
                    (list* label const:+default-loop-label+ *loop-label-context*)
                    (cons const:+default-loop-label+ *loop-label-context*))))
          (make-node-for
-          :location (source:make-location source form)
+          :location (form-location source form)
           :label (or label const:+default-loop-label+)
-          :pattern (parse-pattern (cst:first labelled-body) source) 
+          :pattern (parse-pattern (cst:first labelled-body) source)
           :expr (parse-expression (cst:third labelled-body) source)
           :body (parse-body (cst:nthrest 3 labelled-body) form  source)))))
 
@@ -1210,12 +1018,8 @@ Rebound to NIL parsing an anonymous FN.")
      (let ((*macro-expansion-count* (+ 1 *macro-expansion-count*)))
 
        (when (= *macro-expansion-count* +macro-expansion-max+)
-         (error 'parse-error
-                :err (se:source-error
-                      :span (cst:source form)
-                      :source source
-                      :message "Invalid macro expansion"
-                      :primary-note "macro expansion limit hit")))
+         (parse-error "Invalid macro expansion"
+                      (note source form "macro expansion limit hit")))
 
        (let ((se:*source-error-context*
                (adjoin (se:make-source-error-context
@@ -1235,7 +1039,7 @@ Rebound to NIL parsing an anonymous FN.")
                    :while (cst:consp rands)
                    :for rand := (cst:first rands)
                    :collect (parse-expression rand source))
-      :location (source:make-location source form)))))
+      :location (form-location source form)))))
 
 (defun parse-variable (form source)
   (declare (type cst:cst form)
@@ -1243,32 +1047,20 @@ Rebound to NIL parsing an anonymous FN.")
 
   (unless (and (cst:atom form)
                (identifierp (cst:raw form)))
-    (error 'parse-error
-           :err (se:source-error
-                 :span (cst:source form)
-                 :source source
-                 :message "Invalid variable"
-                 :primary-note "expected identifier")))
+    (parse-error "Invalid variable"
+                 (note source form "expected identifier")))
 
   (when (string= "_" (symbol-name (cst:raw form)))
-    (error 'parse-error
-           :err (se:source-error
-                 :span (cst:source form)
-                 :source source
-                 :message "Invalid variable"
-                 :primary-note "invalid variable name '_'")))
+    (parse-error "Invalid variable"
+                 (note source form "invalid variable name '_'")))
 
   (when (char= #\. (aref (symbol-name (cst:raw form)) 0))
-    (error 'parse-error
-           :err (se:source-error
-                 :span (cst:source form)
-                 :source source
-                 :message "Invalid variable"
-                 :primary-note "variables cannot start with '.'")))
+    (parse-error "Invalid variable"
+                 (note source form "variables cannot start with '.'")))
 
   (make-node-variable
    :name (cst:raw form)
-   :location (source:make-location source form)))
+   :location (form-location source form)))
 
 (defun parse-accessor (form source)
   (declare (type cst:cst form)
@@ -1280,7 +1072,7 @@ Rebound to NIL parsing an anonymous FN.")
 
   (make-node-accessor
    :name (subseq (symbol-name (cst:raw form)) 1)
-   :location (source:make-location source form)))
+   :location (form-location source form)))
 
 (defun parse-literal (form source)
   (declare (type cst:cst form)
@@ -1292,33 +1084,24 @@ Rebound to NIL parsing an anonymous FN.")
     (integer
      (make-node-integer-literal
       :value (cst:raw form)
-      :location (source:make-location source form)))
+      :location (form-location source form)))
 
     (util:literal-value
      (make-node-literal
       :value (cst:raw form)
-      :location (source:make-location source form)))
+      :location (form-location source form)))
 
     (t
-     (error 'parse-error
-            :err (se:source-error
-                  :span (cst:source form)
-                  :source source
-                  :message "Invalid literal"
-                  :primary-note "unknown literal type")))))
+     (parse-error "Invalid literal"
+                  (note source form "unknown literal type")))))
 
 (defun parse-body (form enclosing-form source)
   (declare (type cst:cst form)
            (values node-body &optional))
 
   (when (cst:atom form)
-    (error 'parse-error
-           :err (se:source-error
-                 :span (cst:source enclosing-form)
-                 :source source
-                 :highlight :end
-                 :message "Malformed function"
-                 :primary-note "expected body")))
+    (parse-error "Malformed function"
+                 (note-end source enclosing-form "expected body")))
 
   (assert (cst:proper-list-p form))
 
@@ -1373,17 +1156,14 @@ Rebound to NIL parsing an anonymous FN.")
            (values node-bind))
 
   (when (cst:consp (cst:rest (cst:rest (cst:rest (cst:rest form)))))
-    (error 'parse-error
-           :err (se:source-error
-                 :span (cst:source (cst:first (cst:rest (cst:rest (cst:rest (cst:rest form))))))
-                 :source source
-                 :message "Malformed shorthand let"
-                 :primary-note "unexpected trailing form")))
+    (parse-error "Malformed shorthand let"
+                 (note source (cst:first (cst:rest (cst:rest (cst:rest (cst:rest form)))))
+                       "unexpected trailing form")))
 
   (make-node-bind
    :pattern (parse-pattern (cst:second form) source)
    :expr (parse-expression (cst:fourth form) source)
-   :location (source:make-location source form)))
+   :location (form-location source form)))
 
 (defun parse-body-element (form source)
   (declare (type cst:cst form)
@@ -1394,12 +1174,8 @@ Rebound to NIL parsing an anonymous FN.")
       (parse-expression form source)))
 
   (unless (cst:proper-list-p form)
-    (error 'parse-error
-           :err (se:source-error
-                 :span (cst:source form)
-                 :source source
-                 :message "Malformed body expression"
-                 :primary-note "unexpected dotted list")))
+    (parse-error "Malformed body expression"
+                 (note source form "unexpected dotted list")))
 
 
   (if (shorthand-let-p form)
@@ -1411,12 +1187,9 @@ Rebound to NIL parsing an anonymous FN.")
            (values node &optional))
 
   (when (shorthand-let-p form)
-    (error 'parse-error
-           :err (se:source-error
-                 :span (cst:source form)
-                 :source source
-                 :message "Malformed body expression"
-                 :primary-note "body forms cannot be terminated by a shorthand let")))
+    (parse-error "Malformed body expression"
+                 (note source form
+                       "body forms cannot be terminated by a shorthand let")))
 
   (parse-expression form source))
 
@@ -1425,104 +1198,68 @@ Rebound to NIL parsing an anonymous FN.")
            (values node-let-binding &optional))
 
   (when (cst:atom form)
-    (error 'parse-error
-           :err (se:source-error
-                 :span (cst:source form)
-                 :source source
-                 :message "Malformed let binding"
-                 :primary-note "expected list")))
+    (parse-error "Malformed let binding"
+                 (note source form "expected list")))
 
   (unless (cst:proper-list-p form)
-    (error 'parse-error
-           :err (se:source-error
-                 :span (cst:source form)
-                 :source source
-                 :message "Malformed let binding"
-                 :primary-note "unexpected dotted list")))
+    (parse-error "Malformed let binding"
+                 (note source form "unexpected dotted list")))
 
   ;; (x)
   (unless (cst:consp (cst:rest form))
-    (error 'parse-error
-           :err (se:source-error
-                 :span (cst:source form)
-                 :source source
-                 :highlight :end
-                 :message "Malformed let binding"
-                 :primary-note "let bindings must have a value")))
+    (parse-error "Malformed let binding"
+                 (note-end source form
+                           "let bindings must have a value")))
 
   ;; (a b c ...)
   (when (cst:consp (cst:rest (cst:rest form)))
-    (error 'parse-error
-           :err (se:source-error
-                 :span (cst:source (cst:first (cst:rest (cst:rest form))))
-                 :source source
-                 :message "Malformed let binding"
-                 :primary-note "unexpected trailing form")))
+    (parse-error "Malformed let binding"
+                 (note source (cst:first (cst:rest (cst:rest form)))
+                       "unexpected trailing form")))
 
   (make-node-let-binding
    :name (parse-variable (cst:first form) source)
    :value (parse-expression (cst:second form) source)
-   :location (source:make-location source form)))
+   :location (form-location source form)))
 
 (defun parse-match-branch (form source)
   (declare (type cst:cst form)
            (values node-match-branch &optional))
 
   (when (cst:atom form)
-    (error 'parse-error
-           :err (se:source-error
-                 :span (cst:source form)
-                 :source source
-                 :message "Malformed match branch"
-                 :primary-note "expected list")))
+    (parse-error "Malformed match branch"
+                 (note source form "expected list")))
 
   (unless (cst:proper-list-p form)
-    (error 'parse-error
-           :err (se:source-error
-                 :span (cst:source form)
-                 :source source
-                 :message "Malformed match branch"
-                 :primary-note "unexpected dotted list")) )
+    (parse-error "Malformed match branch"
+                 (note source form "unexpected dotted list")))
 
   ;; (P)
   (unless (cst:consp (cst:rest form))
-    (error 'parse-error
-           :err (se:source-error
-                 :span (cst:source form)
-                 :source source
-                 :highlight :end
-                 :message "Malformed match branch"
-                 :primary-note "expected body")))
+    (parse-error "Malformed match branch"
+                 (note-end source form "expected body")))
 
   (make-node-match-branch
    :pattern (parse-pattern (cst:first form) source)
    :body (parse-body (cst:rest form) form source)
-   :location (source:make-location source form)))
+   :location (form-location source form)))
 
 (defun parse-cond-clause (form source)
   (declare (type cst:cst form)
            (values node-cond-clause))
 
   (when (cst:atom form)
-    (error 'parse-error
-           :err (se:source-error
-                 :span (cst:source form)
-                 :source source
-                 :message "Malformed cond clause"
-                 :primary-note "expected list")))
+    (parse-error "Malformed cond clause"
+                 (note source form "expected list")))
 
   (unless (cst:proper-list-p form)
-    (error 'parse-error
-           :err (se:source-error
-                 :span (cst:source form)
-                 :source source
-                 :message "Malformed cond clause"
-                 :primary-note "unexpected dotted list")))
+    (parse-error "Malformed cond clause"
+                 (note source form "unexpected dotted list")))
 
   (make-node-cond-clause
    :expr (parse-expression (cst:first form) source)
    :body (parse-body (cst:rest form) form source)
-   :location (source:make-location source form)))
+   :location (form-location source form)))
 
 (defun parse-do (form source)
   (declare (type cst:cst form))
@@ -1530,13 +1267,8 @@ Rebound to NIL parsing an anonymous FN.")
   (assert (cst:consp form))
 
   (unless (cst:consp (cst:rest form))
-    (error 'parse-error
-           :err (se:source-error
-                 :span (cst:source form)
-                 :source source
-                 :highlight :end
-                 :message "Malformed do expression"
-                 :primary-note "expected one or more forms")))
+    (parse-error "Malformed do expression"
+                 (note-end source form "expected one or more forms")))
 
   (let* (last-node
 
@@ -1554,7 +1286,7 @@ Rebound to NIL parsing an anonymous FN.")
     (make-node-do
      :nodes nodes
      :last-node last-node
-     :location (source:make-location source form))))
+     :location (form-location source form))))
 
 (defun do-bind-p (form)
   "Returns t if FORM is in the form of (x <- y+)"
@@ -1586,17 +1318,14 @@ Rebound to NIL parsing an anonymous FN.")
            (values node-do-bind))
 
   (when (cst:consp (cst:rest (cst:rest (cst:rest form))))
-    (error 'parse-error
-           :err (se:source-error
-                 :span (cst:source (cst:first (cst:rest (cst:rest (cst:rest form)))))
-                 :source source
-                 :message "Malformed bind form"
-                 :primary-note "unexpected trailing form")))
+    (parse-error "Malformed bind form"
+                 (note source (cst:first (cst:rest (cst:rest (cst:rest form))))
+                       "unexpected trailing form")))
 
   (make-node-do-bind
    :pattern (parse-pattern (cst:first form) source)
    :expr (parse-expression (cst:third form) source)
-   :location (source:make-location source form)))
+   :location (form-location source form)))
 
 (defun parse-do-body-element (form source)
   (declare (type cst:cst form)
@@ -1618,32 +1347,16 @@ Rebound to NIL parsing an anonymous FN.")
            (values node &optional))
 
   (when (shorthand-let-p form)
-    (error 'parse-error
-           :err (se:source-error
-                 :span (cst:source form)
-                 :source source
-                 :message "Malformed do expression"
-                 :primary-note "do expressions cannot be terminated by a shorthand let"
-                 :notes
-                 (list
-                  (se:make-source-error-note
-                   :type :secondary
-                   :span (cst:source parent-form)
-                   :message "when parsing do expression")))))
+    (parse-error "Malformed do expression"
+                 (note source form
+                       "do expressions cannot be terminated by a shorthand let")
+                 (note source parent-form "when parsing do expression")))
 
   (when (do-bind-p form)
-    (error 'parse-error
-           :err (se:source-error
-                 :span (cst:source form)
-                 :source source
-                 :message "Malformed do expression"
-                 :primary-note "do expression cannot be terminated by a bind"
-                 :notes
-                 (list
-                  (se:make-source-error-note
-                   :type :secondary
-                   :span (cst:source parent-form)
-                   :message "when parsing do expression")))))
+    (parse-error "Malformed do expression"
+                 (note source form
+                       "do expression cannot be terminated by a bind")
+                 (note source parent-form "when parsing do expression")))
 
   (parse-expression form source))
 
@@ -1659,27 +1372,23 @@ Rebound to NIL parsing an anonymous FN.")
   (assert (eq (cst:raw (cst:first form)) 'coalton:declare))
 
   (when (cst:consp (cst:rest (cst:rest (cst:rest form))))
-    (error 'parse-error
-           :err (se:source-error
-                 :span (cst:source (cst:fourth form))
-                 :source source
-                 :message "Malformed declare"
-                 :primary-note "unexpected form")))
+    (parse-error "Malformed declare"
+                 (note source (cst:fourth form) "unexpected form")))
 
   (make-node-let-declare
    :name (parse-variable (cst:second form) source)
    :type (parse-qualified-type (cst:third form) source)
-   :location (source:make-location source form)))
+   :location (form-location source form)))
 
 (defun take-label (form)
   "Takes form (HEAD . (MAYBEKEYWORD . REST)) and returns two values,
 either
 
-MAYBEKEYWORD REST 
+MAYBEKEYWORD REST
 
 if MAYBEKEYWORD is a keyword, or else
 
-NIL (MAYBEKEYWORD . REST)  
+NIL (MAYBEKEYWORD . REST)
 
 if (CST:SECOND FORM) is not a keyword."
   (declare (type cst:cst form)

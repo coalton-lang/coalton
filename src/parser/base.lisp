@@ -20,10 +20,12 @@
    #:make-identifier-src                ; CONSTRUCTOR
    #:identifier-src-name                ; ACCESSOR
    #:identifier-src-list                ; TYPE
-   #:parse-error                        ; CONDITION
-   #:source-note                        ; FUNCTION
    #:parse-list                         ; FUNCTION
-   ))
+   #:parse-error
+   #:note
+   #:note-end
+   #:help
+   #:form-location))
 
 (in-package #:coalton-impl/parser/base)
 
@@ -89,8 +91,8 @@
 ;;; A complex parse error may be signaled with:
 ;;;
 ;;;   (parse-error "Overall description of condition"
-;;;                (source-note SOURCE CST1 "Primary ~A: ~A" ARG1 ARG2)
-;;;                (source-note SOURCE CST2 "Related ~A: ~A" ARG3 ARG4)
+;;;                (note SOURCE CST1 "Primary ~A: ~A" ARG1 ARG2)
+;;;                (note SOURCE CST2 "Related: ~A" ARG3)
 ;;;                ... )
 
 (define-condition parse-error (se:source-base-error)
@@ -98,13 +100,35 @@
   (:documentation "A condition indicating a syntax error in Coalton source code."))
 
 (defun parse-error (message &rest notes)
-  "Signal a PARSE-ERROR with provided MESSAGE and source NOTES."
+  "Signal PARSE-ERROR with provided MESSAGE and source NOTES."
   (error 'parse-error :err (source:make-source-error ':error message notes)))
 
-(defun source-note (source cst format-string &rest format-args)
-  "Helper function to make a source note using SOURCE and CST:SOURCE as location."
-  (declare (type cst:cst cst)
-           (type string format-string))
-  (apply #'source:note
-         (source:make-location source (cst:source cst))
+(defun ensure-span (spanning)
+  "Is SPANNING is a span, return it unchanged; if it is a cst node, return the node's span."
+  (etypecase spanning
+    (cst:cst     (cst:source spanning))
+    (source:span spanning)))
+
+(defun note (source locatable format-string &rest format-args)
+  "Make a source note using SOURCE and CST:SOURCE as location."
+  (declare (type string format-string))
+  (apply #'source:note (source:make-location source (ensure-span locatable))
          format-string format-args))
+
+(defun note-end (source locatable format-string &rest format-args)
+  "Make a source note using SOURCE and the location immediately following CST:SOURCE as location."
+  (apply #'source:note
+         (source:end-location (source:make-location source
+                                                    (ensure-span locatable)))
+         format-string format-args))
+
+(defun help (source locatable replace format-string &rest format-args)
+  "Make a help note using SOURCE and CST:SOURCE as location."
+  (declare (type string format-string))
+  (apply #'source:help (source:make-location source (ensure-span locatable))
+         replace format-string format-args))
+
+(defun form-location (source cst)
+  "Make a source location from a SOURCE and a CST node."
+  (declare (type cst:cst cst))
+  (source:make-location source (cst:source cst)))
