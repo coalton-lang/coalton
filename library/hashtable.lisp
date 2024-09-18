@@ -246,7 +246,7 @@ Examples:
   (cl:let* ((keys (cl:mapcar #'cl:first pairs))
             (values (cl:mapcar #'cl:second pairs))
             (ht (cl:gensym "HASH-TABLE-")))
-    (cl:multiple-value-bind (duplicatep dup-a dup-b)
+    (cl:multiple-value-bind (duplicatep dup-a)
         (find-duplicate-entry pairs)
       (cl:if duplicatep
              (cl:error 'static-duplicate-key

@@ -592,7 +592,7 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
 
 (defun parse-import (package cursor)
   (when (cursor:empty-p cursor)
-    (cursor:syntax-error cursor "empty IMPORT form"))
+    (cursor:syntax-error cursor "empty IMPORT form" :end t))
   (cursor:do-every cursor (alexandria:curry 'parse-import-statement package)))
 
 (defun parse-export (package cursor)
@@ -618,19 +618,19 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
   "Parse a package clause form CURSOR and add it to PACKAGE."
   (unless (consp (cursor:peek cursor))
     (cursor:syntax-error cursor "malformed package clause"))
-  (let ((parser (package-clause-parser (cursor:next-symbol cursor))))
+  (let ((clause-name-location (cursor:cursor-location cursor))
+        (parser (package-clause-parser (cursor:next-symbol cursor))))
     (when (null parser)
-      (let ((form (cursor:cursor-value cursor)))
-        (error 'cursor:syntax-error
-               :notes (list (cursor:make-note :span (cst:source form)
-                                              :text "Unknown package clause")
-                            (cursor:make-note :span (cst:source (cst:first form))
-                                              :text (format nil "Must be one of ~{~a~^, ~}"
-                                                            (mapcar #'car *package-clauses*))
-                                              :type ':help)))))
+      (parse-error (cursor:cursor-message cursor)
+                   (source:note (source:location cursor)
+                                "Unknown package clause")
+                   (source:help clause-name-location
+                                #'identity
+                                "Must be one of ~{~a~^, ~}"
+                                (mapcar #'car *package-clauses*))))
     (funcall parser package cursor)))
 
-(defun parse-package (cursor source)
+(defun parse-package (cursor)
   "Parse a coalton package declaration."
   (cursor:next-symbol cursor
                       :require "PACKAGE"
@@ -646,8 +646,8 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
          (package
            (make-toplevel-package :name (symbol-name package-name)
                                   :docstring package-doc
-                                  :location (source:make-location source
-                                                           (cursor:cursor-value cursor)))))
+                                  :location (source:make-location (cursor:cursor-source cursor)
+                                                                  (cursor:cursor-value cursor)))))
     (cursor:do-every cursor (alexandria:curry 'parse-package-clause package))
     package))
 
@@ -667,18 +667,15 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
 (defun read-toplevel-package (stream source)
   "Read and parse a Coalton toplevel package form."
   (with-parser-package
-    (handler-bind ((cursor:syntax-error
-                     (lambda (syntax-error)
-                       (cursor:parse-error source
-                                           "Malformed package declaration"
-                                           syntax-error))))
-      (multiple-value-bind (form presentp)
-          (maybe-read-form stream source *coalton-eclector-client*)
-        (unless presentp
-          (cursor:span-error (cons (- (file-position stream) 2)
-                                   (- (file-position stream) 1))
-                      "missing package form"))
-        (parse-package (cursor:make-cursor form) source)))))
+    (multiple-value-bind (form presentp)
+        (maybe-read-form stream source *coalton-eclector-client*)
+      (unless presentp
+        (parse-error "Malformed package declarations"
+                     (source:note (source:make-location source
+                                                        (cons (- (file-position stream) 2)
+                                                              (- (file-position stream) 1)))
+                                  "missing package form")))
+      (parse-package (cursor:make-cursor form source "Malformed package declaration")))))
 
 (defun make-defpackage (package)
   "Generate a Lisp defpackage form from a Caolton toplevel-package structure."
@@ -741,13 +738,17 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
          (options (cst:raw options-node)))
     (unless (null options)
       (cond ((maybe-def-p (car options))
-             (cursor:span-error
-              (cst:source (cst:first (cst:rest form)))
-              "saw 'def' form: in lisp-toplevel, code must be preceded by an empty options list"))
+             (parse-error "Invalid lisp-toplevel form"
+                          (source-note source (cst:first (cst:rest form))
+                                       "saw 'def' form: in lisp-toplevel, code must be preceded by an empty options list")
+                          (source-note source form
+                                       "when parsing lisp-toplevel")))
             (t
-             (cursor:span-error
-              (cst:source (cst:first (cst:rest form)))
-              "lisp-toplevel must be followed by an empty options list")))))
+             (parse-error "Invalid lisp-toplevel form"
+                          (source-note source (cst:first (cst:rest form))
+                                       "lisp-toplevel must be followed by an empty options list")
+                          (source-note source form
+                                       "when parsing lisp-toplevel"))))))
 
   (loop :for form :in (cst:raw (cst:rest (cst:rest form)))
         :when (eval-toplevel-p form)
@@ -1047,22 +1048,19 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
        t))
 
     ((coalton:lisp-toplevel)
-     (handler-bind ((cursor:syntax-error
-                      (lambda (syntax-error)
-                        (cursor:parse-error source
-                                            "Invalid lisp-toplevel form"
-                                            syntax-error
-                                            (list
-                                             (cursor:make-note :span (cst:source form)
-                                                               :text "when parsing lisp-toplevel"
-                                                               :type ':secondary))))))
-       (unless (alexandria:featurep ':coalton-lisp-toplevel)
-         (cursor:span-error (cst:source form)
-                            "lisp-toplevel is only allowed in library source code. To enable elsewhere, (pushnew :coalton-lisp-toplevel *features*)"))
-       (unless (zerop (length attributes))
-         (cursor:span-error (cst:source (cdr (aref attributes 0)))
-                            "lisp-toplevel cannot have attributes"))
-       (parse-lisp-toplevel-form form program source))
+     (unless (alexandria:featurep ':coalton-lisp-toplevel)
+       (parse-error "Invalid lisp-toplevel form"
+                    (source-note source form
+                                 "lisp-toplevel is only allowed in library source code. To enable elsewhere, (pushnew :coalton-lisp-toplevel *features*)")
+                    (source-note source form
+                                 "when parsing lisp-toplevel")))
+     (unless (zerop (length attributes))
+       (parse-error "Invalid lisp-toplevel form"
+                    (source-note source (cdr (aref attributes 0))
+                                 "lisp-toplevel cannot have attributes")
+                    (source-note source form
+                                 "when parsing lisp-toplevel")))
+     (parse-lisp-toplevel-form form program source)
      t)
 
     ((coalton:specialize)
