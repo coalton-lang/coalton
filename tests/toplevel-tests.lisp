@@ -7,8 +7,7 @@
       (parser:with-reader-context stream
         (let* ((form (parser:maybe-read-form stream parser::*coalton-eclector-client*))
                (package (coalton-impl/parser/toplevel::parse-package
-                         (coalton-impl/parser/cursor:make-cursor form)
-                         source)))
+                         (coalton-impl/parser/cursor:make-cursor form source "Unit Test"))))
           (funcall fn package))))))
 
 (deftest test-lisp-package ()
