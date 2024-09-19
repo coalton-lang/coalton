@@ -318,7 +318,7 @@
                                               fundeps))) 
              :do (tc-located-error (parser:toplevel-define-class-head-location class)
                                    "Invalid fundep redefinition"
-                                   (format nil "unable to redefine the fudndeps of class ~S." class-name))
+                                   (format nil "unable to redefine the fundeps of class ~S." class-name))
 
            :when fundeps
              :do (setf env (tc:initialize-fundep-environment env class-name))
@@ -399,7 +399,7 @@
                (loop :for var :in vars
                      :unless (find (parser:keyword-src-name var) var-names :test #'eq)
                        :do (tc-error var
-                                     "Unkown type variable"
+                                     "Unknown type variable"
                                      (format nil "unknown type variable ~S"
                                              (parser:keyword-src-name var))))))
       (loop :for fundep :in (parser:toplevel-define-class-fundeps class)

@@ -8,7 +8,7 @@ Unknown type variable
 
 --------------------------------------------------------------------------------
 
-error: Unkown type variable
+error: Unknown type variable
   --> test:3:30
    |
  3 |  (define-class (C :a :b (:a -> :c)))

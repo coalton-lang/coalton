@@ -2,7 +2,7 @@
 Empty options
 
 To support future extension, lisp-toplevel expects an empty options list in the
-first poisition.
+first position.
 ================================================================================
 
 (package test)

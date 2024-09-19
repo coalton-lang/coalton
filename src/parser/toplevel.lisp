@@ -918,7 +918,7 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
                                      :message "previous attribute here")
                                     (se:make-source-error-note
                                      :type ':secondary
-                                     :span (source:location-span (toplevel-define-type-head-location type))
+                                     :span (source:location-span (source:location type))
                                      :message "when parsing define-type")))))
 
                     (setf repr attribute)
@@ -935,7 +935,7 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
                                  (list
                                   (se:make-source-error-note
                                    :type ':secondary
-                                   :span (source:location-span (toplevel-define-type-head-location type))
+                                   :span (source:location-span (source:location type))
                                    :message "when parsing define-type")))))))
 
        (setf (fill-pointer attributes) 0)
@@ -1051,9 +1051,7 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
      (unless (alexandria:featurep ':coalton-lisp-toplevel)
        (parse-error "Invalid lisp-toplevel form"
                     (source-note source form
-                                 "lisp-toplevel is only allowed in library source code. To enable elsewhere, (pushnew :coalton-lisp-toplevel *features*)")
-                    (source-note source form
-                                 "when parsing lisp-toplevel")))
+                                 "lisp-toplevel is only allowed in library source code. To enable elsewhere, (pushnew :coalton-lisp-toplevel *features*)")))
      (unless (zerop (length attributes))
        (parse-error "Invalid lisp-toplevel form"
                     (source-note source (cdr (aref attributes 0))

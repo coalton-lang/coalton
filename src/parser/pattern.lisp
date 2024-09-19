@@ -112,7 +112,7 @@
               :err  (se:source-error
                      :span (cst:source form)
                      :source source
-                     :message "Invalid variable"
+                     :message "Invalid pattern"
                      :primary-note "invalid variable name '_'")))
      (make-pattern-var
       :name (cst:raw form)
@@ -132,7 +132,7 @@
             :err (se:source-error
                   :span (cst:source form)
                   :source source
-                  :message "Invalid match branch"
+                  :message "Invalid pattern"
                   :primary-note "unexpected dotted list")))
 
     ((not (and (cst:atom (cst:first form))
