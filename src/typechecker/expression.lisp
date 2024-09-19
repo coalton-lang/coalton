@@ -205,9 +205,9 @@
 
 (defstruct (node-bind
             (:copier nil))
-  (pattern  (util:required 'pattern)   :type pattern         :read-only t)
-  (expr     (util:required 'expr)      :type node            :read-only t)
-  (location (util:required 'location)  :type source:location :read-only t))
+  (pattern  (util:required 'pattern)  :type pattern         :read-only t)
+  (expr     (util:required 'expr)     :type node            :read-only t)
+  (location (util:required 'location) :type source:location :read-only t))
 
 (defmethod source:location ((self node-bind))
   (node-bind-location self))

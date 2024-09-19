@@ -513,9 +513,9 @@
   '(satisfies struct-field-list-p))
 
 (defstruct struct-entry
-  (name             (util:required 'name)      :type symbol            :read-only t)
-  (fields           (util:required 'fields)    :type struct-field-list :read-only t)
-  (docstring        (util:required 'docstring) :type (or null string)  :read-only t))
+  (name      (util:required 'name)      :type symbol            :read-only t)
+  (fields    (util:required 'fields)    :type struct-field-list :read-only t)
+  (docstring (util:required 'docstring) :type (or null string)  :read-only t))
 
 (defmethod source:docstring ((self struct-entry))
   (struct-entry-docstring self))

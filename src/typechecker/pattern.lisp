@@ -40,8 +40,8 @@
 (defstruct (pattern
             (:constructor nil)
             (:copier nil))
-  (type     (util:required 'type)   :type tc:qualified-ty           :read-only t)
-  (location nil                     :type (or source:location null) :read-only t))
+  (type     (util:required 'type) :type tc:qualified-ty           :read-only t)
+  (location nil                   :type (or source:location null) :read-only t))
 
 (defmethod source:location ((self pattern))
   (pattern-location self))

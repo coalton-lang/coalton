@@ -12,9 +12,7 @@ Forbid outside of library code
 error: Invalid lisp-toplevel form
   --> test:3:0
    |
- 3 |    (lisp-toplevel
-   |  __^
-   | | _-
- 4 | ||   (defvar *x* nil))
-   | ||___________________- when parsing lisp-toplevel
-   | |____________________^ lisp-toplevel is only allowed in library source code. To enable elsewhere, (pushnew :coalton-lisp-toplevel *features*)
+ 3 |   (lisp-toplevel
+   |  _^
+ 4 | |   (defvar *x* nil))
+   | |___________________^ lisp-toplevel is only allowed in library source code. To enable elsewhere, (pushnew :coalton-lisp-toplevel *features*)

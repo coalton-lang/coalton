@@ -10,7 +10,6 @@
    #:cl)
   (:local-nicknames
    (#:cst #:concrete-syntax-tree)
-   (#:se #:source-error)
    (#:source #:coalton-impl/source)
    (#:util #:coalton-impl/util))
   (:shadowing-import-from
@@ -25,7 +24,6 @@
    #:do-every
    #:empty-p
    #:make-cursor
-   #:make-note
    #:next
    #:next-symbol
    #:parse-error
