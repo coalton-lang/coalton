@@ -189,6 +189,7 @@
   :version (:read-file-form "VERSION.txt")
   :depends-on (#:coalton
                #:coalton/library/big-float
+               #:coalton/library/computable-reals
                #:html-entities
                #:yason
                #:uiop)
