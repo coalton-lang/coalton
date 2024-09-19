@@ -133,9 +133,10 @@ source locations whose spans are compared for ordering."
         :do (check-type id symbol)
 
         :unless (equalp (symbol-package id) *package*)
-          :do (tc-error (funcall source elem)
-                        "Invalid identifier name"
-                        (format nil "The symbol ~S is defined in the package ~A and not the current package ~A"
-                                id
-                                (symbol-package id)
-                                *package*))))
+          :do (tc-located-error
+               (funcall source elem)
+               "Invalid identifier name"
+               (format nil "The symbol ~S is defined in the package ~A and not the current package ~A"
+                       id
+                       (symbol-package id)
+                       *package*))))

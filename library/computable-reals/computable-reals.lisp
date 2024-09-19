@@ -17,7 +17,7 @@
    #:approx
    #:rational-approx
    #:rationalize
-   #:print))
+   #:cr-print))
 
 (in-package #:coalton-library/computable-reals)
 
@@ -317,8 +317,8 @@ See `rational` or `rationalize` to produce a rational approximation of `Creal`."
     (lisp Integer (x)
       (cr:raw-approx-r x)))
 
-  (declare print (CReal -> UFix -> Boolean))
-  (define (print x k)
+  (declare cr-print (CReal -> UFix -> Boolean))
+  (define (cr-print x k)
     "Prints a real `R` up to `K` bits of precision."
     (lisp Boolean (x k)
       (cr:print-r x k))))
