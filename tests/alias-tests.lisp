@@ -14,16 +14,14 @@
   (is (== (index-incr 3)
           4)))
 
-;; question
 (coalton-toplevel
-  (define-alias Stuff (List :a))
+  (define-alias (Stuff :a) (List :a))
 
-  ;; (declare first-element (Stuff -> :a))
   (declare first-element ((Stuff :a) -> :a))
-  (define (first-element ))
-  )
+  (define (first-element s)
+    (list:head s)))
 
-;; Two definition options:
-(define-alias Stuff (List :a))
-
-(define-alias (Stuff :a) (List :a))
+(define-test test-alias-parametric ()
+  (let assorted = (the (Stuff Integer) (make-list 1 0 -1)))
+  (is (== (first-element assorted)
+          1)))

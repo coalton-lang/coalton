@@ -31,7 +31,7 @@
                               (alexandria:read-file-into-string error-file)
                               (parse-error-text file)))
               (t
-               (signals parser:parse-error
+               (signals source-error:source-base-error ;parser:parse-error
                  (parse-file file))))))
 
     (dolist (file (test-files "tests/parser-test-files/good-files/*.coal"))

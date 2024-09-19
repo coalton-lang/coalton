@@ -40,6 +40,7 @@
    #:toplevel-define-alias
    #:toplevel-define-alias-base-type
    #:toplevel-define-alias-name
+   #:toplevel-define-alias-vars
    #:toplevel-define-alias-location
    #:toplevel-define-alias-list
    #:struct-field                                ; STRUCT
@@ -273,8 +274,9 @@
             (:copier nil))
   (base-type (util:required 'base-type) :type qualified-ty             :read-only t)
   (name      (util:required 'name)      :type identifier-src           :read-only t)
+  (vars      (util:required 'vars)      :type keyword-src-list         :read-only t)
   (docstring (util:required 'docstring) :type (or null string)         :read-only t)
-  (location  (util:required 'location)  :type location                 :read-only t))
+  (location  (util:required 'location)  :type source:location          :read-only t))
 
 (defmethod docstring ((self toplevel-define-alias))
   (toplevel-define-alias-docstring self))
@@ -1429,10 +1431,11 @@ consume all attributes")))
                        :primary-note "third argument can only be an optional docstring."))))
 
     (make-toplevel-define-alias
-     :base-type (parse-qualified-type unparsed-type source)
+     :base-type (parse-qualified-type unparsed-type source) ;; this will get awkward- I need to handle unqualified types
      :name      (parse-identifier unparsed-alias source)
+     :vars      (parse-)
      :docstring docstring
-     :location  (make-location source form))))
+     :location  (source:make-location source form))))
 
 (defun parse-define-struct (form source)
   (declare (type cst:cst form))

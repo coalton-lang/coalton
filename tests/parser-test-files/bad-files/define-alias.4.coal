@@ -1,4 +1,0 @@
-;; BAD: Invalid define alias - Self Recursion
-(package test-package)
-
-(define-alias Index Index)
