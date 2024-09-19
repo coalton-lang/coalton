@@ -323,3 +323,8 @@ See `rational` or `rationalize` to produce a rational approximation of `Creal`."
     (lisp Boolean (x k)
       (cr:print-r x k))))
 
+(coalton-toplevel
+
+  (define-instance (math:Real CReal)
+    (define (real-approx prec x)
+      (rational-approx x prec))))
