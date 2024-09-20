@@ -50,7 +50,8 @@
    #:coalton/doc/model)
   (:local-nicknames
    (#:source #:coalton-impl/source)
-   (#:tc #:coalton-impl/typechecker)))
+   (#:tc #:coalton-impl/typechecker)
+   (#:entry #:coalton-impl/entry)))
 
 (in-package #:coalton/doc/markdown)
 
@@ -172,12 +173,16 @@
 (defmethod write-object-body ((backend markdown-backend) (object coalton-type))
   (let ((stream (output-stream backend)))
     (tc:with-pprint-variable-context ()
-      (loop :for (ctor-name . ctor-type) :in (type-constructors object)
+      (loop :for ctor :in (coalton-type-constructors object)
+            :for ctor-name := (tc:constructor-entry-name ctor)
+            :for ctor-type := (tc:lookup-value-type entry:*global-environment* ctor-name)
+            :for ctor-docstring := (source:docstring ctor)
             :do (let ((args (type-constructor-args object ctor-type)))
                   (cond (args
-                         (format stream "- <code>(~A~{ ~A~})</code>~%"
+                         (format stream "- <code>(~A~{ ~A~} ~A)</code>~%"
                                  (html-entities:encode-entities (symbol-name ctor-name))
-                                 (mapcar #'to-markdown args)))
+                                 (mapcar #'to-markdown args)
+                                 (or ctor-docstring "")))
                         (t
                          (format stream "- <code>~A</code>~%"
                                  (html-entities:encode-entities (symbol-name ctor-name))))))))

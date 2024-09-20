@@ -393,11 +393,15 @@
                                                         "~A/~A"
                                                         name
                                                         ctor-name)
+
+                                     :for ctor-docstring := (source:docstring ctor)
+
                                      :collect (tc:make-constructor-entry
                                                :name ctor-name
                                                :arity (length (parser:type-definition-ctor-field-types ctor))
                                                :constructs name
                                                :classname classname
+                                               :docstring ctor-docstring
                                                :compressed-repr (if (eq repr-type :enum)
                                                                     classname
                                                                     nil))))

@@ -113,9 +113,9 @@
   (repr :enum)
   (define-type Ord
     "The result of an ordered comparison."
-    LT
-    EQ
-    GT)
+    LT "Less than"
+    EQ "Equal to"
+    GT "Greater than")
 
   (define-instance (Eq Ord)
     (define (== a b)

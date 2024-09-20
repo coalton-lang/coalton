@@ -164,8 +164,9 @@
 ;;;; toplevel-define := "(" "define" identifier node-body ")"
 ;;;;                  | "(" "define" "(" identifier pattern* ")" docstring? node-body ")"
 ;;;;
-;;;; constructor := identifier
-;;;;              | "(" identifier ty+ ")"
+;;;; constructor := identifier docstring?
+;;;;              | "(" identifier ")" docstring?
+;;;;              | "(" identifier ty+ ")" docstring?
 ;;;;
 ;;;; toplevel-define-type := "(" "define-type" identifier docstring? constructor* ")"
 ;;;;                       | "(" "define-type" "(" identifier keyword+ ")" docstring? constructor* ")"
@@ -220,12 +221,16 @@
 
 (defstruct (constructor
             (:copier nil))
-  (name     (util:required 'name)     :type identifier-src  :read-only t)
-  (fields   (util:required 'fields)   :type ty-list         :read-only t)
-  (location (util:required 'location) :type source:location :read-only t))
+  (name      (util:required 'name)      :type identifier-src   :read-only t)
+  (fields    (util:required 'fields)    :type ty-list          :read-only t)
+  (docstring (util:required 'docstring) :type (or null string) :read-only t)
+  (location  (util:required 'location)  :type source:location  :read-only t))
 
 (defmethod source:location ((self constructor))
   (constructor-location self))
+
+(defmethod source:docstring ((self constructor))
+  (constructor-docstring self))
 
 (defun constructor-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -1129,13 +1134,56 @@ consume all attributes")))
                (stringp (cst:raw (cst:third form))))
       (setf docstring (cst:raw (cst:third form))))
 
+    (when (and docstring
+               (cst:consp (cst:nthrest 3 form))
+               (stringp (cst:raw (cst:fourth form))))
+      (error 'parse-error
+             :err (se:source-error
+                   :span (cst:source (cst:fourth form))
+                   :source source
+                   :message "Malformed type definition"
+                   :primary-note "only one docstring allowed."
+                   :help-notes
+                   (list
+                    (se:make-source-error-help
+                     :span (cst:source (cst:fourth form))
+                     :replacement
+                     (lambda (existing)
+                       (subseq existing 1 (1- (length existing))))
+                     :message "remove additional docstring")))))
+
     (make-toplevel-define-type
      :name name
      :vars (reverse variables)
      :docstring docstring
      :ctors (loop :for constructors_ := (cst:nthrest (if docstring 3 2) form) :then (cst:rest constructors_)
+                  :with ctors := nil
                   :while (cst:consp constructors_)
-                  :collect (parse-constructor (cst:first constructors_) form source))
+
+                  ;; check for duplicate docstrings
+                  :when (and (cst:atom (cst:first constructors_))
+                             (stringp (cst:raw (cst:first constructors_)))
+                             (not (cst:null (cst:rest constructors_)))
+                             (cst:atom (cst:second constructors_))
+                             (stringp (cst:raw (cst:second constructors_))))
+                    :do (error 'parse-error
+                               :err (se:source-error
+                                     :span (cst:source (cst:second constructors_))
+                                     :source source
+                                     :message "Malformed type definition"
+                                     :primary-note "only one docstring allowed per constructor"))
+
+                        ;; collect constructors with docstrings if they follow
+                  :do (let ((ctor-docstring (if (and (not (cst:null (cst:rest constructors_)))
+                                                     (cst:atom (cst:second constructors_))
+                                                     (stringp (cst:raw (cst:second constructors_))))
+                                                (cst:raw (cst:second constructors_))
+                                                nil)))
+
+
+                        (unless (stringp (cst:raw (cst:first constructors_)))
+                            (push (parse-constructor (cst:first constructors_) form ctor-docstring source) ctors)))
+                  :finally (return ctors))
      :repr nil
      :location (form-location source form)
      :head-location (form-location source (cst:second form)))))
@@ -1575,18 +1623,20 @@ consume all attributes")))
    :name (cst:raw form)
    :location (form-location source form)))
 
-(defun parse-constructor (form enclosing-form source)
+(defun parse-constructor (form enclosing-form docstring source)
   (declare (type cst:cst form enclosing-form)
            (values constructor))
 
   (let (unparsed-name
         unparsed-fields)
 
-    (if (cst:atom form)
-        (setf unparsed-name form)
-        (progn
-          (setf unparsed-name (cst:first form))
-          (setf unparsed-fields (cst:listify (cst:rest form)))))
+    (cond
+      ((cst:atom form)
+       (setf unparsed-name form))
+      (t
+       (progn
+         (setf unparsed-name (cst:first form))
+         (setf unparsed-fields (cst:listify (cst:rest form))))))
 
     (unless (cst:atom unparsed-name)
       (parse-error "Malformed constructor"
@@ -1604,7 +1654,9 @@ consume all attributes")))
             :location (form-location source unparsed-name))
      :fields (loop :for field :in unparsed-fields
                    :collect (parse-type field source))
-     :location (form-location source form))))
+     :location (form-location source form)
+     :docstring docstring)))
+
 
 (defun parse-argument-list (form source)
   (declare (type cst:cst form)

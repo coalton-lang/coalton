@@ -13,3 +13,8 @@
 
 (repr :enum)
 (define-type T)
+
+(define-type (T :a)
+  T1         "This is an empty constructor"
+  (T2 :a)    "This is a constructor"
+  (T3 :a :a) "This is a well-nourished constructor"))

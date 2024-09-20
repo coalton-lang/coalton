@@ -13,6 +13,8 @@
   (:shadowing-import-from
    #:coalton-impl/parser/base
    #:parse-error)
+  (:local-nicknames
+   (#:source #:coalton-impl/source))
   (:export
    #:type-definition                    ; TYPE
    #:type-definition-list               ; TYPE

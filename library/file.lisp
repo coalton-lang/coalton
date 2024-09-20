@@ -364,9 +364,9 @@ Automatically returns the lisp condition if one is thrown."
 
   (define-type StreamOptions
     "A type for providing parameters for opening streams. StreamOptions take strings for pathnames, but they will error if they are not proper and appropriate pathnames."
-    (Input Pathname)
-    (Output Pathname IfExists)
-    (Bidirectional Pathname IfExists))
+    (Input Pathname)                  "Constructor for opening an input stream"
+    (Output Pathname IfExists)        "Constructor for opening an output stream."
+    (Bidirectional Pathname IfExists) "Constructor for opening a bidirectional stream.")
 
   ;;
   ;; Opening Streams
