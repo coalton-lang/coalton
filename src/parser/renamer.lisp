@@ -593,6 +593,7 @@
     (make-constructor
      :name (constructor-name ctor)
      :fields (rename-type-variables-generic% (constructor-fields ctor) ctx)
+     :docstring (source:docstring ctor)
      :location (source:location ctor)))
 
   (:method ((keyword keyword-src) ctx)

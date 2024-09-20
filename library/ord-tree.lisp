@@ -79,19 +79,15 @@
 
   (define-type (Tree :elt)
     "A red-black balanced binary tree, sorted by `<=>` and unique by `==`."
-    ;; exported; an empty tree.
-    ;; considered black for the purpose of the invariants.
+
     Empty
+    "exported; an empty tree. considered black for the purpose of the invariants."
 
-    ;; unexported; a tree with at least one element, and possibly children.
-    ;; (Branch clr less elt right)
-    ;; every element of LESS is less than ELT, and every element of RIGHT is greater than ELT.
     (Branch Color (Tree :elt) :elt (Tree :elt))
+    "unexported; a tree with at least one element, and possibly children. (Branch clr less elt right). Every element of LESS is less than ELT, and every element of RIGHT is greater than ELT."
 
-    ;; unexported: a double-black leaf node. intermediate stage during deletion; will never exist outside of a
-    ;; `remove' operation.
     DoubleBlackEmpty
-    )
+    "unexported: a double-black leaf node. Intermediate stage during deletion; will never exist outside of a `remove` operation.")
 
   ;;; color operations
 

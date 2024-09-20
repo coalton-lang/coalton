@@ -48,7 +48,7 @@
    #:value-type
 
    #:coalton-type
-   #:type-constructors
+   #:coalton-type-constructors
    #:type-constructor-args
 
    #:coalton-package
@@ -134,7 +134,8 @@
 (defclass coalton-type (coalton-object)
   ((type-entry :initarg :type-entry
                :reader type-entry)
-   (constructors :initarg :constructors)
+   (constructors :initarg :constructors
+                 :accessor coalton-type-constructors)
    (instances :initarg :instances
               :reader object-instances)))
 
@@ -147,13 +148,6 @@
 (defun type-vars (coalton-type)
   (loop :for i :below (tc:kind-arity (tc:kind-of (type-entry coalton-type)))
         :collect (tc:make-variable)))
-
-(defun type-constructors (coalton-type)
-  (mapcar (lambda (ctor)
-            (let ((name (tc:constructor-entry-name ctor)))
-              (cons name
-                    (tc:lookup-value-type entry:*global-environment* name))))
-          (slot-value coalton-type 'constructors)))
 
 (defun type-constructor-args (coalton-type ctor-type)
   (tc:function-type-arguments

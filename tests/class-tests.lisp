@@ -4,8 +4,11 @@
   (define-type Mock-Monoid
     "A monoid that tracks its structure"
     (XValue Integer)
-    (XEmpty)
-    (X<> Mock-Monoid Mock-Monoid))
+    "Constructor for a monoid with a value"
+    XEmpty
+    "Constructor for an empty monoid"
+    (X<> Mock-Monoid Mock-Monoid)
+    "Constructor representing a relationship between monoids")
 
   (define-instance (Semigroup Mock-Monoid)
     (define <> X<>))

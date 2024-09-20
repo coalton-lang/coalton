@@ -421,10 +421,14 @@
   (arity           (util:required 'arity)           :type alexandria:non-negative-fixnum :read-only t)
   (constructs      (util:required 'constructs)      :type symbol                         :read-only t)
   (classname       (util:required 'classname)       :type symbol                         :read-only t)
+  (docstring       (util:required 'docstring)       :type (or string null)               :read-only t)
 
   ;; If this constructor constructs a compressed-repr type then
   ;; compressed-repr is the runtime value of this nullary constructor
   (compressed-repr (util:required 'compressed-repr) :type t                              :read-only t))
+
+(defmethod source:docstring ((self constructor-entry))
+  (constructor-entry-docstring self))
 
 (defmethod make-load-form ((self constructor-entry) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -452,6 +456,7 @@
             :arity 0
             :constructs 'coalton:Boolean
             :classname 'coalton::Boolean/True
+            :docstring "Boolean `True`"
             :compressed-repr 't))
 
           ('coalton:False
@@ -460,6 +465,7 @@
             :arity 0
             :constructs 'coalton:Boolean
             :classname 'coalton::Boolean/False
+            :docstring "Boolean `False`"
             :compressed-repr 'nil))
 
           ('coalton:Unit
@@ -468,6 +474,7 @@
             :arity 0
             :constructs 'coalton:Unit
             :classname 'coalton::Unit/Unit
+            :docstring "`Unit` represents nullary parameters and return types."
             :compressed-repr 'coalton::Unit/Unit))
 
           ('coalton:Cons
@@ -476,6 +483,7 @@
             :arity 2
             :constructs 'coalton:List
             :classname nil
+            :docstring "`Cons` represents a `List` containing a first element (`car`) and a nested `Cons` (`cdr`)."
             :compressed-repr 'nil))
 
           ('coalton:Nil
@@ -484,6 +492,7 @@
             :arity 0
             :constructs 'coalton:List
             :classname nil
+            :docstring "`Nil` represents an empty `List`."
             :compressed-repr 'nil)))))
 
 #+(and sbcl coalton-release)
