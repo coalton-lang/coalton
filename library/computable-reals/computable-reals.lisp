@@ -325,6 +325,19 @@ See `rational` or `rationalize` to produce a rational approximation of `Creal`."
 
 (coalton-toplevel
 
+  (define-instance (math:Quantizable CReal)
+    (define (floor x)
+      (lisp Integer (x)
+        (cr:floor-r x)))
+    (define (ceiling x)
+      (lisp Integer (x)
+        (cr:ceiling-r x)))
+    (define (proper x)
+      (lisp (Tuple Integer CReal) (x)
+        (cl:multiple-value-bind (integer-part decimal-part)
+            (cr:truncate-r x)
+          (Tuple integer-part decimal-part)))))
+
   (define-instance (math:Real CReal)
     (define (real-approx prec x)
       (rational-approx x prec))))
