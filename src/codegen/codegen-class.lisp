@@ -6,6 +6,7 @@
    #:struct-or-class
    #:make-struct-or-class-field)
   (:local-nicknames
+   (#:source #:coalton-impl/source)
    (#:settings #:coalton-impl/settings)
    (#:global-lexical #:coalton-impl/global-lexical)
    (#:rt #:coalton-impl/runtime)
@@ -65,6 +66,8 @@
            (tc:ty-class-codegen-sym class))
          (method-name
            (tc:ty-class-method-name method))
+         (method-docstring
+           (source:docstring method))
          (method-accessor
            (alexandria:format-symbol (symbol-package class-codegen-sym)
                                      "~A-~A" class-codegen-sym method-name)))
@@ -80,6 +83,12 @@
             ;; We need a function of arity + 1 to account for DICT
             ,(rt:construct-function-entry `#',method-name (+ arity 1))
             (documentation ',method-name 'variable)
-            ,(format nil "~A :: ~A" method-name (tc:lookup-value-type env method-name))
+            ,(format nil "~A :: ~A~@[~%~A~]~%"
+                     method-name
+                     (tc:lookup-value-type env method-name)
+                     method-docstring)
             (documentation ',method-name 'function)
-            ,(format nil "~A :: ~A" method-name (tc:lookup-value-type env method-name))))))
+            ,(format nil "~A :: ~A~@[~%~A~]~%"
+                     method-name
+                     (tc:lookup-value-type env method-name)
+                     method-docstring)))))
