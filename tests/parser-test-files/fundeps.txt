@@ -92,11 +92,11 @@ Fundeps improve type checking
 
 --------------------------------------------------------------------------------
 
-error: Unknown variable
+error: Unknown variable "HELLO"
   --> test:11:20
     |
  11 |  (define x (ambig (m \"hello\")))
-    |                      ^^^^^^^^^ unknown variable
+    |                      ^^^^^^^^^ unknown variable "HELLO"
 
 ================================================================================
 Ambiguous despite fundep
