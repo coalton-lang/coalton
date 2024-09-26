@@ -236,11 +236,11 @@ Check that polymorphic recursion is not possible without an explicit binding
 
 --------------------------------------------------------------------------------
 
-error: Unknown variable
+error: Unknown variable SINGLETON
   --> test:13:9
     |
  13 |       (f (singleton a)
-    |           ^^^^^^^^^ unknown variable
+    |           ^^^^^^^^^ unknown variable SINGLETON
 
 ================================================================================
 Check that typeclasses cannot have additional constraints defined in a method
