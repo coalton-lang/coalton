@@ -74,8 +74,8 @@
       (error 'tc:tc-error
              :err (source:source-error
                    :location (source:location var)
-                   :message "Unknown variable"
-                   :primary-note "unknown variable"
+                   :message (format nil "Unknown variable ~a" var-name)
+                   :primary-note (format nil "unknown variable ~a" var-name)
                    :help-notes (loop :for suggestion :in (tc-env-suggest-value env var-name)
                                      :collect (se:make-source-error-help
                                                :span (source:location-span (source:location var))
