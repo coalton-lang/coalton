@@ -187,7 +187,9 @@ in expressions. May not include all bound variables."
 
   (:method ((node node-return))
     (declare (values node-variable-list &optional))
-    (collect-variables-generic% (node-return-expr node)))
+    ;; node-return's return expression may be null (and default to Unit)
+    (when (node-return-expr node)
+      (collect-variables-generic% (node-return-expr node))))
 
   (:method ((node node-application))
     (declare (values node-variable-list &optional))
