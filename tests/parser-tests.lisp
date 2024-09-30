@@ -49,4 +49,5 @@
   (run-test-file "tests/parser-test-files/type-inference.txt")
   (run-test-file "tests/parser-test-files/unused-variables.txt")
   (run-test-file "tests/parser-test-files/define.txt")
-  (run-test-file "tests/parser-test-files/define-class.txt"))
+  (run-test-file "tests/parser-test-files/define-class.txt")
+  (run-test-file "tests/parser-test-files/return.txt"))
