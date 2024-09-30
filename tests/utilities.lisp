@@ -92,17 +92,20 @@ Returns (values SOURCE-PATHNAME COMPILED-PATHNAME)."
   (merge-pathnames pathname (asdf:system-source-directory "coalton/tests")))
 
 (defun collect-compiler-error (program)
-  (let ((source (source:make-source-string program :name "test")))
-    (handler-case
-        (progn
-          (entry:compile source)
-          nil)
-      (se:source-base-warning (c)
-        (string-trim '(#\Space #\Newline)
-                     (princ-to-string c)))
-      (se:source-base-error (c)
-        (string-trim '(#\Space #\Newline)
-                     (princ-to-string c))))))
+  (let ((source (source:make-source-string program :name "test"))
+        (saved-environment entry:*global-environment*))
+    (unwind-protect
+         (handler-case
+             (progn
+               (entry:compile source)
+               nil)
+           (se:source-base-warning (c)
+             (string-trim '(#\Space #\Newline)
+                          (princ-to-string c)))
+           (error (c)
+             (string-trim '(#\Space #\Newline)
+                          (princ-to-string c))))
+      (setf entry:*global-environment* saved-environment))))
 
 ;;; The structure of test definition files is described in the header
 ;;; of ./loader.lisp
@@ -123,10 +126,20 @@ input file: ~A~%~
 line number: ~A~%~
 test number: ~A~%~
 test header: ~A~%~
-expected error (A) and generated error (B)"
+~%~
+Rerun single test case with:~%~
+  (coalton-tests:run-test ~S ~A)~%~
+~A~%~
+~A"
                                             file line
                                             (or number "(unassigned)")
-                                            description)
+                                            description
+                                            pathname
+                                            (or number "N")
+                                            (if number "" "after assigning a number to this test case")
+                                            (if (zerop (length expected-error))
+                                                "unexpected error"
+                                                "expected error (A) and generated error (B)"))
                                     expected-error
                                     generated-error))))))
 

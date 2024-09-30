@@ -70,10 +70,11 @@
 (defun collect-line (state line)
   "Collect a line into a given section"
   (with-next-state state
-    (ecase (loader-state state)
+    (case (loader-state state)
       (:header (push line (loader-header state)))
       (:program (push line (loader-program state)))
-      (:error (push line (loader-error state))))
+      (:error (push line (loader-error state)))
+      (error "Invalid state, collecting line ~A" (loader-line state)))
     state))
 
 (defun combine-lines (lines)
@@ -119,21 +120,24 @@
   (with-next-state state
     (incf (loader-line state))
     (cond ((null line)
-           (ecase (loader-state state)
-             (:error  (next-state (collect-case state) ':done))))
+           (case (loader-state state)
+             ((:error :program) (next-state (collect-case state) ':done))
+             (error "Invalid state at end of input, collecting line ~A" (loader-line state))))
           ((line-start-p line #\=)
-           (ecase (loader-state state)
+           (case (loader-state state)
              (:init (next-state (start-case state) ':header))
              (:header (next-state state ':program))
-             (:error (next-state (start-case (collect-case state)) ':header))))
+             ((:error :program) (next-state (start-case (collect-case state)) ':header))
+             (error "Invalid state at header divider, collecting line ~A" (loader-line state))))
           ((line-start-p line #\-)
            (ecase (loader-state state)
-             (:program (next-state state ':error))))
+             (:program (next-state state ':error))
+             (error "Invalid state at output divider, collecting line ~A" (loader-line state))))
           (t
            (collect-line state line)))))
 
 (defun load-test-file (pathname)
-  "Load PATHNAME, a file containing multiple compiler tests."
+  "Load PATHNAME, a file containing multiple tests."
   (with-open-file (stream pathname :direction ':input :element-type 'character)
     (loop :for state := (make-loader)
             :then (process-line state (read-line stream nil nil))
