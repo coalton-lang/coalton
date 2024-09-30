@@ -1,6 +1,6 @@
 # Testing Your Coalton Code
 
-By now, hopefully, you've read the [Whirlwind Tour of Coalton](intro-to-coalton.md) and
+By now, hopefully, you've read the [Intro to Coalton](intro-to-coalton.md) and
 written some non-trivial Coalton code. Now the question is, "how do I know it works?"
 
 The fact that your code type-checks and compiles should assure you that it's free from a

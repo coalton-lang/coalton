@@ -96,3 +96,7 @@ Generally (although with some exceptions), parameters should be ordered:
 
 3. Individual items, such as the new value in `cell-write!` or `insert`, or the needle in
    `contains?`.
+
+## Documentation
+
+See the [Documentation Guide](coalton-documentation-guide.md) for documentation style suggestions.

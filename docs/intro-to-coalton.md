@@ -1,4 +1,4 @@
-# Whirlwind Tour of Coalton
+# Intro to Coalton
 
 Coalton is a statically typed language that is embedded in, and compiles to, Common Lisp.
 
