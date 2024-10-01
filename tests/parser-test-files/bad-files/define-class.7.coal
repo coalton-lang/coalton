@@ -1,4 +1,0 @@
-;; BAD: Define Class
-(package test-package)
-
-(define-class)

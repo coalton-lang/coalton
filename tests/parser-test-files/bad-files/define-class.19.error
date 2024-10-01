@@ -1,5 +1,0 @@
-error: Malformed class definition
-  --> test:4:31
-   |
- 4 |  (define-class (Eq :a => (C :a) :b))
-   |                                 ^^ unexpected form

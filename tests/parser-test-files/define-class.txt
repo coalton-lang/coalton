@@ -1,5 +1,131 @@
 ================================================================================
-1 Class name must be a symbol
+1 Define class, single var
+
+Define a class with a single type variable and no methods.
+================================================================================
+
+(package coalton-unit-tests)
+
+(define-class (C :a))
+
+================================================================================
+2 Define class, two vars
+
+Define a class with two type variables and no methods.
+================================================================================
+
+(package coalton-unit-tests)
+
+(define-class (C1 :a :b))
+
+================================================================================
+3 Define class, context
+
+Define a class with a context.
+================================================================================
+
+(package coalton-unit-tests)
+
+(define-class (C1 :a :b))
+
+(define-class (C1 :a :b => C2 :a :b))
+
+================================================================================
+4 Define class, nested contexts
+================================================================================
+
+(package coalton-unit-tests)
+
+(define-class (C1 :a :b))
+
+(define-class (C1 :a :b => C2 :a :b))
+
+(define-class ((C1 :a :b) (C2 :a :b) => C3 :a :b))
+
+================================================================================
+5 Define class, methods
+================================================================================
+
+(package coalton-unit-tests)
+
+(define-class (C4 :a)
+  (m1 :a)
+  (m2 (:a -> :a)))
+
+================================================================================
+6 Define class, with methods, docstrings
+================================================================================
+
+(package coalton-unit-tests)
+
+(define-class (C5 :a)
+  (m3 "Method m3" :a)
+  (m4 (:a -> :a)))
+
+================================================================================
+7 Define class, with methods, docstrings
+================================================================================
+
+(package coalton-unit-tests)
+
+(define-class (C6 :a)
+  (m5 :a)
+  (m6 "Method m6" (:a -> :a)))
+
+================================================================================
+8 Define class, with methods, docstrings
+================================================================================
+
+(package coalton-unit-tests)
+
+(define-class (C7 :a)
+  (m7 "Method m7" :a)
+  (m8 "Method m8" (:a -> :a)))
+
+================================================================================
+9 Define class
+================================================================================
+
+(package coalton-unit-tests)
+
+(define-class (C :a :b (:a -> :a)))
+
+================================================================================
+10 Define class
+================================================================================
+
+(package coalton-unit-tests)
+
+(define-class (C :a :b :c :d (:a :b -> :c :d)))
+
+================================================================================
+11 Define class
+================================================================================
+
+(package coalton-unit-tests)
+
+(define-class (C :a :b (:a -> :b) (:b -> :a)))
+
+================================================================================
+12 Define class
+================================================================================
+
+(package coalton-unit-tests/prelude
+  (import coalton-prelude))
+
+(define-class (Eq :a => (C :a)))
+
+================================================================================
+13 Define class
+================================================================================
+
+(package coalton-unit-tests/prelude
+  (import coalton-prelude))
+
+(define-class ((Eq :a) => (C :a)))
+
+================================================================================
+100 Class name must be a symbol
 ================================================================================
 
 (package test-package)
@@ -13,3 +139,351 @@ error: Malformed class definition
    |
  3 |  (define-class ("C" :a :b))
    |                 ^^^ expected symbol
+
+================================================================================
+101 Malformed class definition: expected class type variables
+================================================================================
+
+(package test-package)
+
+(define-class (C))
+
+--------------------------------------------------------------------------------
+
+error: Malformed class definition
+  --> test:3:15
+   |
+ 3 |  (define-class (C))
+   |                 ^ expected class type variable(s)
+help: add class type variable `:a`
+ 3 | (define-class (C :a))
+   |                ----
+
+================================================================================
+102 Malformed class definition: unnecessary arrow
+================================================================================
+
+(package test-package)
+
+(define-class (=> C :a :b))
+
+--------------------------------------------------------------------------------
+
+error: Malformed class definition
+  --> test:3:15
+   |
+ 3 |  (define-class (=> C :a :b))
+   |                 ^^ unnecessary `=>`
+help: remove `=>`
+ 3 | (define-class (C :a :b))
+   |               ---------
+
+================================================================================
+103 Malformed method definition: missing method type
+================================================================================
+
+(package test-package)
+
+(define-class (C :a :b)
+  m)
+
+--------------------------------------------------------------------------------
+
+error: Malformed method definition
+  --> test:4:2
+   |
+ 3 |  (define-class (C :a :b)
+   |                --------- in this class definition
+ 4 |    m)
+   |    ^ missing method type
+
+================================================================================
+104 Malformed method definition: trailing junk
+================================================================================
+
+(package test-package)
+
+(define-class (C :a)
+ (m :a :b))
+
+--------------------------------------------------------------------------------
+
+error: Malformed method definition
+  --> test:4:7
+   |
+ 3 |  (define-class (C :a)
+   |                ------ in this class definition
+ 4 |   (m :a :b))
+   |         ^^ unexpected trailing form
+
+================================================================================
+105 Malformed class definition: missing class name
+================================================================================
+
+(package test-package)
+
+(define-class (C :a :b =>))
+
+--------------------------------------------------------------------------------
+
+error: Malformed class definition
+  --> test:3:14
+   |
+ 3 |  (define-class (C :a :b =>))
+   |                ^^^^^^^^^^^^ missing class name
+
+================================================================================
+106 Malformed class definition: missing class type variable
+================================================================================
+
+(package test-package)
+
+(define-class C)
+
+--------------------------------------------------------------------------------
+
+error: Malformed class definition
+  --> test:3:14
+   |
+ 3 |  (define-class C)
+   |                ^ expected class type variable(s)
+help: add class type variable `:a`
+ 3 | (define-class (C :a))
+   |               ------
+
+================================================================================
+107 Malformed class definition: missing class body
+================================================================================
+
+(package test-package)
+
+(define-class)
+
+--------------------------------------------------------------------------------
+
+error: Malformed class definition
+  --> test:3:0
+   |
+ 3 |  (define-class)
+   |  ^^^^^^^^^^^^^^ expected body
+
+================================================================================
+108 Malformed class definition: unnecessary arrow
+================================================================================
+
+(package test-package)
+
+(define-class (=> C))
+
+--------------------------------------------------------------------------------
+
+error: Malformed class definition
+  --> test:3:15
+   |
+ 3 |  (define-class (=> C))
+   |                 ^^ unnecessary `=>`
+help: remove `=>`
+ 3 | (define-class C)
+   |               -
+
+================================================================================
+109 Malformed class definition: unnecessary arrow
+================================================================================
+
+(package test-package)
+
+(define-class (=>))
+
+--------------------------------------------------------------------------------
+
+error: Malformed class definition
+  --> test:3:15
+   |
+ 3 |  (define-class (=>))
+   |                 ^^ unnecessary `=>`
+
+================================================================================
+110 Malformed class definition: unnecessary parentheses
+================================================================================
+
+(package test-package)
+
+(define-class ((C) :a))
+
+--------------------------------------------------------------------------------
+
+error: Malformed class definition
+  --> test:3:15
+   |
+ 3 |  (define-class ((C) :a))
+   |                 ^^^ unnecessary parentheses
+help: remove unnecessary parentheses
+ 3 | (define-class (C :a))
+   |                -
+
+================================================================================
+111 Malformed class definition: illegal string-valued class name
+================================================================================
+
+(package test-package)
+
+(define-class ("C" :a :b))
+
+--------------------------------------------------------------------------------
+
+error: Malformed class definition
+  --> test:3:15
+   |
+ 3 |  (define-class ("C" :a :b))
+   |                 ^^^ expected symbol
+
+================================================================================
+112 Malformed method definition: illegal method name
+================================================================================
+
+(package test-package)
+
+(define-class (C :a)
+  (0.5 (:a -> :a)))
+
+--------------------------------------------------------------------------------
+
+error: Malformed method definition
+  --> test:4:3
+   |
+ 3 |  (define-class (C :a)
+   |                ------ in this class definition
+ 4 |    (0.5 (:a -> :a)))
+   |     ^^^ expected symbol
+
+================================================================================
+113 Malformed class definition: dotten list
+================================================================================
+
+(package test-package)
+
+(define-class (C :a . :b))
+
+--------------------------------------------------------------------------------
+
+error: Malformed class definition
+  --> test:3:14
+   |
+ 3 |  (define-class (C :a . :b))
+   |                ^^^^^^^^^^^ unexpected dotted list
+
+================================================================================
+114 Malformed functional dependency: atom in fundeps
+================================================================================
+
+(package test-package)
+
+(define-class (C :a :b (:a -> :b) :c))
+
+--------------------------------------------------------------------------------
+
+error: Malformed functional dependency
+  --> test:3:34
+   |
+ 3 |  (define-class (C :a :b (:a -> :b) :c))
+   |                                    ^^ expected a list
+
+================================================================================
+115 Malformed functional dependency: dotted list
+================================================================================
+
+(package test-package)
+
+(define-class (C :a :b (:a :b . :c)))
+
+--------------------------------------------------------------------------------
+
+error: Malformed functional dependency
+  --> test:3:23
+   |
+ 3 |  (define-class (C :a :b (:a :b . :c)))
+   |                         ^^^^^^^^^^^^ unexpected dotted list
+
+================================================================================
+116 Malformed functional dependency: missing type variables
+================================================================================
+
+(package test-class)
+
+(define-class (C :a :b (:a :b ->)))
+
+--------------------------------------------------------------------------------
+
+error: Malformed functional dependency
+  --> test:3:33
+   |
+ 3 |  (define-class (C :a :b (:a :b ->)))
+   |                                  ^ expected one or more type variables
+
+================================================================================
+117 Malformed functional dependency: missing type variables (2)
+================================================================================
+
+(package test-package)
+
+(define-class (C :a :b (-> :b :c)))
+
+--------------------------------------------------------------------------------
+
+error: Malformed functional dependency
+  --> test:3:23
+   |
+ 3 |  (define-class (C :a :b (-> :b :c)))
+   |                         ^^^^^^^^^^ expected one or more type variables
+
+================================================================================
+118 Invalid attribute for define-class: illegal attribute
+================================================================================
+
+(package test-package)
+
+(repr :enum)
+(define-class (C :a))
+
+--------------------------------------------------------------------------------
+
+error: Invalid attribute for define-class
+  --> test:3:0
+   |
+ 3 |  (repr :enum)
+   |  ^^^^^^^^^^^^ define-class cannot have attributes
+ 4 |  (define-class (C :a))
+   |                ------ while parsing define-class
+
+================================================================================
+119 Malformed class definition
+================================================================================
+
+(package test-package)
+
+(define-class (Eq :a => (C :a) :b))
+
+--------------------------------------------------------------------------------
+
+error: Malformed class definition
+  --> test:3:31
+   |
+ 3 |  (define-class (Eq :a => (C :a) :b))
+   |                                 ^^ unexpected form
+
+================================================================================
+120 Invalid variable
+================================================================================
+
+(package test-package)
+
+(define-class (C :a)
+  (.m (:a -> :a)))
+
+--------------------------------------------------------------------------------
+
+error: Invalid variable
+  --> test:4:3
+   |
+ 4 |    (.m (:a -> :a)))
+   |     ^^ variables cannot start with '.'

@@ -96,7 +96,14 @@ Returns (values SOURCE-PATHNAME COMPILED-PATHNAME)."
         (saved-environment entry:*global-environment*))
     (unwind-protect
          (handler-case
-             (progn
+             (handler-bind ((simple-error
+                              (lambda (c)
+                                (if (search "incompatibly with the current definition"
+                                            (princ-to-string c))
+                                    (progn
+                                      (format t "~%;; Allowing redefinition and continuing.~%")
+                                      (invoke-restart 'continue))
+                                    (signal c)))))
                (entry:compile source)
                nil)
            (se:source-base-warning (c)
@@ -114,14 +121,15 @@ Returns (values SOURCE-PATHNAME COMPILED-PATHNAME)."
   "Run the test file at PATHNAME."
   (let ((file (test-file pathname))
         (coalton-impl/settings:*coalton-print-unicode* nil))
-    (loop :for (line number description program expected-error)
+    (loop :for (line number flags description program expected-error)
             :in (coalton-tests/loader:load-test-file file)
-          :for generated-error := (collect-compiler-error program)
-          :do (cond ((null generated-error)
-                     (is (zerop (length expected-error))
-                         "program should have failed to compile: ~A" description))
-                    (t
-                     (check-string= (format nil "program text.~%~
+          :unless (position :disable flags)
+            :do (let ((generated-error (collect-compiler-error program)))
+                  (cond ((null generated-error)
+                         (is (zerop (length expected-error))
+                             "program should have failed to compile: ~A" description))
+                        (t
+                         (check-string= (format nil "program text.~%~
 input file: ~A~%~
 line number: ~A~%~
 test number: ~A~%~
@@ -131,24 +139,24 @@ Rerun single test case with:~%~
   (coalton-tests:run-test ~S ~A)~%~
 ~A~%~
 ~A"
-                                            file line
-                                            (or number "(unassigned)")
-                                            description
-                                            pathname
-                                            (or number "N")
-                                            (if number "" "after assigning a number to this test case")
-                                            (if (zerop (length expected-error))
-                                                "unexpected error"
-                                                "expected error (A) and generated error (B)"))
-                                    expected-error
-                                    generated-error))))))
+                                                file line
+                                                (or number "(unassigned)")
+                                                description
+                                                pathname
+                                                (or number "N")
+                                                (if number "" "after assigning a number to this test case")
+                                                (if (zerop (length expected-error))
+                                                    "unexpected error"
+                                                    "expected error (A) and generated error (B)"))
+                                        expected-error
+                                        generated-error)))))))
 
 (defun run-test (pathname test-number)
   "Run the test case TEST-NUMBER in the test file at PATHNAME without binding any condition handlers.
 This exists to simplify access to point-of-error debugging."
   (let ((file (test-file pathname))
         (run? nil))
-    (loop :for (line number description program expected-error)
+    (loop :for (line number flags description program expected-error)
             :in (coalton-tests/loader:load-test-file file)
           :when (eq test-number number)
             :do (entry:compile (source:make-source-string program :name "test"))

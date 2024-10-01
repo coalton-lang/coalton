@@ -1,5 +1,0 @@
-error: Malformed class definition
-  --> test:4:15
-   |
- 4 |  (define-class ("C" :a :b))
-   |                 ^^^ expected symbol

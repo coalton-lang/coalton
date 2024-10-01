@@ -1,7 +1,0 @@
-error: Invalid attribute for define-class
-  --> test:4:0
-   |
- 4 |  (repr :enum)
-   |  ^^^^^^^^^^^^ define-class cannot have attributes
- 5 |  (define-class (C :a))
-   |                ------ while parsing define-class

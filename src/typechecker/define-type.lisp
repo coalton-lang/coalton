@@ -336,7 +336,7 @@
                                       (partial-type-env-lookup-var
                                        env
                                        (parser:keyword-src-name var)
-                                       (source:location var)))
+                                       var))
                                     (parser:type-definition-vars type)))
 
              :for repr := (parser:type-definition-repr type)

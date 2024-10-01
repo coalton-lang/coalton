@@ -1,41 +1,19 @@
 ;;;; This package contains the function LOAD-TEST-FILE for loading
 ;;;; parser tests from specially formatted files.
 ;;;;
-;;;; The format is:
+;;;; - The format is documented in tests/test-files/README.md
+;;;; - Tests are defined in tests/test-files/*.txt
+;;;; - These tests are loaded and run by tests/coalton-tests.lisp
+;;;; - COALTON-TESTS:RUN-TEST-FILE and COALTON-TESTS:RUN-TEST are
+;;;;   defined in tests/utilities.lisp
 ;;;;
-;;;;     ======
-;;;;     <header>
-;;;;     ======
-;;;;     <program>
-;;;;     ------
-;;;;     <error message>
-;;;;       or
-;;;;     <empty string, to assert that the program must compile without error>
-;;;;     ======
-;;;;     <header 2>
-;;;;     ...
+;;;; To execute a single suite:
 ;;;;
-;;;; The first sequence of one or more consecutive numeric characters
-;;;; in the test header will be interpreted as a test number, for
-;;;; reexecution of single tests.
+;;;;   (coalton-tests:run-test-file #<pathname>)
 ;;;;
-;;;; There are examples in tests/parser-test-files/*.txt
+;;;; To run a single numbered test without condition handlers:
 ;;;;
-;;;; Use
-;;;;
-;;;;     (load-test-file #<pathname>)
-;;;;
-;;;; to load tests,
-;;;;
-;;;;     (run-test-file #<pathname>)
-;;;;
-;;;; to run tests, and
-;;;;
-;;;;     (run-test #<pathname> N)
-;;;;
-;;;; to run a single numbered test without condition handlers.
-;;;;
-;;;; RUN-TEST-FILE and RUN-TEST are defined in tests/utilities.lisp
+;;;;   (coalton-tests:run-test #<pathname> N)
 
 (defpackage #:coalton-tests/loader
   (:documentation "Load tests from a delimited file.")
@@ -68,7 +46,7 @@
     state))
 
 (defun collect-line (state line)
-  "Collect a line into a given section"
+  "Collect a line in a given section."
   (with-next-state state
     (case (loader-state state)
       (:header (push line (loader-header state)))
@@ -78,6 +56,7 @@
     state))
 
 (defun combine-lines (lines)
+  "Reassemble collected lines into a single string."
   (string-trim '(#\Space #\Newline)
                (format nil "~{~A~%~}" (reverse lines))))
 
@@ -91,15 +70,26 @@
                            (subseq string 0 end)
                            string))))))
 
+(defun read-flags (string)
+  "Read the first parenthesis-delimited form appearing in STRING, or nil."
+  (let ((open (position #\( string))
+        (close (position #\) string)))
+    (when (and open close (< open close))
+      (with-input-from-string (stream (subseq string open (1+ close)))
+        (read stream)))))
+
 (defun get-case (state)
+  "Assemble a complete test case based on collected header and section values."
   (let ((header (combine-lines (loader-header state))))
     (list (loader-start state)
           (first-integer header)
+          (read-flags header)
           header
           (combine-lines (loader-program state))
           (combine-lines (loader-error state)))))
 
 (defun collect-case (state)
+  "Assemble a test case, collect it, and reset to empty state."
   (with-next-state state
     (push (get-case state) (loader-cases state))
     (setf (loader-header state) nil
@@ -108,15 +98,18 @@
     state))
 
 (defun start-case (state)
+  "Perform bookkeeping to begin collecting a test case."
   (with-next-state state
     (setf (loader-start state) (loader-line state))
     state))
 
 (defun line-start-p (line char)
+  "Return T if LINE begins with CHAR."
   (and (plusp (length line))
        (char= (aref line 0) char)))
 
 (defun process-line (state line)
+  "Step the case reader state machine by consuming a single line of input."
   (with-next-state state
     (incf (loader-line state))
     (cond ((null line)
@@ -137,7 +130,7 @@
            (collect-line state line)))))
 
 (defun load-test-file (pathname)
-  "Load PATHNAME, a file containing multiple tests."
+  "Load a set of test cases from PATHNAME."
   (with-open-file (stream pathname :direction ':input :element-type 'character)
     (loop :for state := (make-loader)
             :then (process-line state (read-line stream nil nil))

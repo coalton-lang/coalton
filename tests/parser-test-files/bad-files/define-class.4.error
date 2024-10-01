@@ -1,7 +1,0 @@
-error: Malformed method definition
-  --> test:5:7
-   |
- 4 |  (define-class (C :a)
-   |                ------ in this class definition
- 5 |   (m :a :b))
-   |         ^^ unexpected trailing form

@@ -1,7 +1,0 @@
-error: Malformed method definition
-  --> test:5:3
-   |
- 4 |  (define-class (C :a)
-   |                ------ in this class definition
- 5 |    (0.5 (:a -> :a)))
-   |     ^^^ expected symbol

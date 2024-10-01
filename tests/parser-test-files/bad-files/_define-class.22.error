@@ -1,5 +1,0 @@
-error: Invalid variable
-  --> test:6:3
-   |
- 6 |    (.方法 (:a -> :a)))
-   |     ^^^ variables cannot start with '.'
