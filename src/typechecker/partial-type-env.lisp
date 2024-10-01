@@ -43,7 +43,6 @@
 (defun partial-type-env-lookup-var (env var source)
   (declare (type partial-type-env env)
            (type symbol var)
-           (type source:location source)
            (values tc:tyvar))
   (let ((ty (gethash var (partial-type-env-ty-table env))))
     (unless ty

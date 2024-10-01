@@ -11,7 +11,6 @@
    (#:util #:coalton-impl/util))
   (:export
    #:ty                                 ; STRUCT
-   #:ty-location                        ; ACCESSOR
    #:ty-list                            ; TYPE
    #:tyvar                              ; STRUCT
    #:make-tyvar                         ; CONSTRUCTOR
@@ -32,13 +31,11 @@
    #:make-ty-predicate                  ; CONSTRUCTOR
    #:ty-predicate-class                 ; ACCESSOR
    #:ty-predicate-types                 ; ACCESSOR
-   #:ty-predicate-location              ; ACCESSOR
    #:ty-predicate-list                  ; TYPE
    #:qualified-ty                       ; STRUCT
    #:make-qualified-ty                  ; CONSTRUCTOR
    #:qualified-ty-predicates            ; ACCESSOR
    #:qualified-ty-type                  ; ACCESSOR
-   #:qualified-ty-location              ; ACCESSOR
    #:qualified-ty-list                  ; TYPE
    #:parse-qualified-type               ; FUNCTION
    #:parse-type                         ; FUNCTION

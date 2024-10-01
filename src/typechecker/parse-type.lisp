@@ -158,7 +158,7 @@
     (let* ((tvar (partial-type-env-lookup-var
                   env
                   (parser:tyvar-name type)
-                  (parser:ty-location type)))
+                  type))
            (kvar (tc:kind-of tvar)))
 
       (setf kvar (tc:apply-ksubstitution ksubs kvar))
