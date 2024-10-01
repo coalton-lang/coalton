@@ -1,7 +1,0 @@
-error: Malformed method definition
-  --> test:5:2
-   |
- 4 |  (define-class (C :a :b)
-   |                --------- in this class definition
- 5 |    m)
-   |    ^ missing method type

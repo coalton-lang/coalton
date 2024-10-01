@@ -1,6 +1,0 @@
-;; BAD: Define Class
-(package test-package)
-
-(define-class (C :a)
-  (m "非常に重要な方法" (:a -> :a))
-  (.方法 (:a -> :a)))

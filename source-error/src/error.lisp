@@ -470,10 +470,10 @@ Returns (VALUES LINE-NUM LINE-START-INDEX)"
         :with line-start-index := 0
         :for char := (read-char stream nil nil)
         :for char-index :from 0
-        :when (null char)
-          :do (error "Index ~D out of bounds for stream ~A" char-index stream)
         :when (= index char-index)
           :return (values line-num line-start-index)
+        :when (null char)
+          :do (error "Index ~D out of bounds for stream ~A" char-index stream)
         :when (char= char #\Newline)
           :do (incf line-num)
               (setf line-start-index (1+ char-index))))
