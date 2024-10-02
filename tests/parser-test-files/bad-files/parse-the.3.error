@@ -1,5 +1,0 @@
-error: Malformed the expression
-  --> test:4:26
-   |
- 4 |  (define x (the (T -> T) y z))
-   |                            ^ unexpected trailing form

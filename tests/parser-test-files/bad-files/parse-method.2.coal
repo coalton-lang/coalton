@@ -1,4 +1,0 @@
-(package test)
-
-(define-class (Oops :a)
-  (Ouch "This method stubbed its toe" :a Unit))

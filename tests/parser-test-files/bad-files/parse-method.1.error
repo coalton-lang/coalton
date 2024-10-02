@@ -1,7 +1,0 @@
-error: Malformed method definition
-  --> test:4:12
-   |
- 3 |  (define-class (Greetable :a)
-   |                -------------- in this class definition
- 4 |    (Greet :a Unit))
-   |              ^^^^ unexpected trailing form

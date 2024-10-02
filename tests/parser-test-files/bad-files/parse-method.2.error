@@ -1,7 +1,0 @@
-error: Malformed method definition
-  --> test:4:41
-   |
- 3 |  (define-class (Oops :a)
-   |                --------- in this class definition
- 4 |    (Ouch "This method stubbed its toe" :a Unit))
-   |                                           ^^^^ unexpected trailing form

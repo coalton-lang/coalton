@@ -1,4 +1,0 @@
-;; BAD: Parse Do
-(package test-package)
-
-(define x (do))

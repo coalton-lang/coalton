@@ -1,6 +1,0 @@
-error: Malformed do expression
-  --> test:5:6
-   |
- 5 |    (do (x <- mx)))
-   |     -- when parsing do expression
-   |        ^^^^^^^^^ do expression cannot be terminated by a bind

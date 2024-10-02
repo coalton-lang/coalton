@@ -1,5 +1,0 @@
-error: Malformed for expression
-  --> test:4:17
-   |
- 4 |  (define f (for x))
-   |                  ^ expected in

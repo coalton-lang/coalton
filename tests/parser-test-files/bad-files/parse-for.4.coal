@@ -1,4 +1,0 @@
-;; BAD: Parse For
-(package test-parser)
-
-(define f (for x in iter))

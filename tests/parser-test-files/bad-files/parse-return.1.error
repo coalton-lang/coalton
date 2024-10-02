@@ -1,5 +1,0 @@
-error: Malformed return expression
-  --> test:4:20
-   |
- 4 |  (define x (return y z))
-   |                      ^ unexpected trailing form

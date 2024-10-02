@@ -1,0 +1,58 @@
+================================================================================
+Parse toplevel progn
+================================================================================
+
+(package coalton-unit-tests)
+
+(progn
+  (repr :transparent)
+  (define-type T
+    (T Integer))
+
+  (define (f x) x))
+
+================================================================================
+Invalid attribute for progn
+================================================================================
+
+(package test-package)
+
+(repr :transparent)
+(progn
+  (define-type T
+    (T Integer)))
+
+--------------------------------------------------------------------------------
+
+error: Invalid attribute for progn
+  --> test:3:0
+   |
+ 3 |   (repr :transparent)
+   |   ^^^^^^^^^^^^^^^^^^^ progn cannot have attributes
+ 4 |   (progn
+   |  _-
+ 5 | |   (define-type T
+ 6 | |     (T Integer)))
+   | |_________________- when parsing progn
+
+================================================================================
+Trailing attributes in progn
+================================================================================
+
+(package test-package)
+
+(progn
+  (repr :transparent))
+(define-type T
+  (T Integer))
+
+--------------------------------------------------------------------------------
+
+error: Trailing attributes in progn
+  --> test:4:2
+   |
+ 3 |   (progn
+   |  _-
+ 4 | |   (repr :transparent))
+   | |   ^^^^^^^^^^^^^^^^^^^ progn cannot have trailing attributes
+   | |______________________- when parsing progn

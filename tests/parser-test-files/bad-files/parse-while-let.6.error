@@ -1,5 +1,0 @@
-error: Malformed while-let expression
-  --> test:4:28
-   |
- 4 |  (define f (while-let :label))
-   |                             ^ expected pattern

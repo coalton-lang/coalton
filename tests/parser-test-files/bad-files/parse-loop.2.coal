@@ -1,4 +1,0 @@
-;; BAD: Parse Loop
-(package test-parser)
-
-(define f (loop :alabel))

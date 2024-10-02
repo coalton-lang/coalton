@@ -1,4 +1,0 @@
-;; BAD: Parse Return
-(package test-package)
-
-(define x (return y z))
