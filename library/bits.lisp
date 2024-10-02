@@ -27,11 +27,16 @@
 (coalton-toplevel
   (define-class (Num :int => Bits :int)
     "Operations on the bits of twos-complement integers"
-    (and "The bitwise logical and of two integers" (:int -> :int -> :int))
-    (or "The bitwise logical or of two integers" (:int -> :int -> :int))
-    (xor "The bitwise logical exclusive or of two integers" (:int -> :int -> :int))
-    (not "The bitwise logical not of two integers" (:int -> :int))
-    (shift "The arithmetic left-shift of an integer by an integer number of bits" (Integer -> :int -> :int))))
+    (and   "The bitwise logical `and` of two integers"
+           (:int -> :int -> :int))
+    (or    "The bitwise logical `or` of two integers"
+           (:int -> :int -> :int))
+    (xor   "The bitwise logical exclusive `or` of two integers"
+           (:int -> :int -> :int))
+    (not   "The bitwise logical `not` of two integers"
+           (:int -> :int))
+    (shift "The arithmetic left-shift of an integer by an integer number of bits"
+           (Integer -> :int -> :int))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/BITS")
