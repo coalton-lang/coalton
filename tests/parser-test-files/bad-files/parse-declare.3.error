@@ -1,5 +1,0 @@
-error: Malformed declaration
-  --> test:4:20
-   |
- 4 |  (declare x (T -> T) z)
-   |                      ^ unexpected trailing form

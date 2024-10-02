@@ -1,5 +1,0 @@
-error: Malformed cond expression
-  --> test:4:16
-   |
- 4 |  (define x (cond))
-   |                 ^ expected one or more clauses

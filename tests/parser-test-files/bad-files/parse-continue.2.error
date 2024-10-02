@@ -1,5 +1,0 @@
-error: Invalid argument in continue
-  --> test:6:4
-   |
- 6 |      (continue notakeyword)))
-   |      ^^^^^^^^^^^^^^^^^^^^^^ expected a keyword

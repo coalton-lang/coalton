@@ -1,8 +1,0 @@
-;; BAD: Parse Continue
-(package test-parser)
-
-(define f
-  (loop :blech
-        (let ((continuer (fn () (continue :blech))))
-          (continuer))))
-

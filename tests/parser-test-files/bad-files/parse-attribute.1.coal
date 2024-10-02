@@ -1,4 +1,0 @@
-;; BAD: Parse Attribute
-(package test-package)
-
-(repr :enum)

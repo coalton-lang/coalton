@@ -1,9 +1,0 @@
-error: Duplicate monomorphize attribute
-  --> test:5:0
-   |
- 4 |  (monomorphize)
-   |  -------------- previous attribute here
- 5 |  (monomorphize)
-   |  ^^^^^^^^^^^^^^ monomorphize attribute here
- 6 |  (declare f T)
-   |  ------------- when parsing declare

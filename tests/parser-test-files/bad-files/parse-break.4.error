@@ -1,5 +1,0 @@
-error: Invalid break
-  --> test:5:29
-   |
- 5 |    (while True (return (fn () (break)))))
-   |                               ^^^^^^^ break does not appear in an enclosing loop

@@ -1,5 +1,0 @@
-;; BAD: Parse-Break
-(package test-parser)
-
-(define f
-  (while True (return (fn () (break)))))

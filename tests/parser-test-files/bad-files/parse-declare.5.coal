@@ -1,5 +1,0 @@
-;; BAD: Parse Declare
-(package test-package)
-
-(repr :enum)
-(declare x T)

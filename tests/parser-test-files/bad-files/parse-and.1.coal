@@ -1,4 +1,0 @@
-;; BAD: Parse And
-(package test-package)
-
-(define x (and))

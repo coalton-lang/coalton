@@ -1,5 +1,0 @@
-error: Invalid continue
-  --> test:6:28
-   |
- 6 |      (let ((continuer (fn () (continue))))
-   |                              ^^^^^^^^^^ continue does not appear in an enclosing loop

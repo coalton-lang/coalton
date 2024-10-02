@@ -1,5 +1,0 @@
-error: Malformed shorthand let
-  --> test:6:15
-   |
- 6 |      (let x = 1 2)
-   |                 ^ unexpected trailing form

@@ -1,5 +1,0 @@
-;; BAD: Parse Attribute
-(package test-package)
-
-(monomorphize 5)
-(define x 5)

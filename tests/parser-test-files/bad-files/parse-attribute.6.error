@@ -1,5 +1,0 @@
-error: Malformed repr :native attribute
-  --> test:4:6
-   |
- 4 |  (repr :native :native :native)
-   |        ^^^^^^^ unexpected form

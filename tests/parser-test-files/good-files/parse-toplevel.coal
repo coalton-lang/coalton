@@ -1,5 +1,0 @@
-;; GOOD: Parse Toplevel
-(package test-package)
-
-(monomorphize)
-(declare x T)

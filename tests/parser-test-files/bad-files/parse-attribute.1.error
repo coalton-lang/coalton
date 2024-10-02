@@ -1,5 +1,0 @@
-error: Orphan attribute
-  --> test:4:0
-   |
- 4 |  (repr :enum)
-   |  ^^^^^^^^^^^^ attribute must be attached to another form
