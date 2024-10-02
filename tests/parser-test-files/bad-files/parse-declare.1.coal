@@ -1,4 +1,0 @@
-;; BAD: Invalid Declare
-(package test-package)
-
-(declare)

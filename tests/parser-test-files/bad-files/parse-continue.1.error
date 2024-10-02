@@ -1,5 +1,0 @@
-error: Invalid continue
-  --> test:4:10
-   |
- 4 |  (define f (continue))
-   |            ^^^^^^^^^^ continue does not appear in an enclosing loop

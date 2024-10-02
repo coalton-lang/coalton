@@ -1,5 +1,0 @@
-error: Malformed monomophize attribute
-  --> test:4:0
-   |
- 4 |  (monomorphize 5)
-   |  ^^^^^^^^^^^^^^^^ unexpected form

@@ -1,5 +1,0 @@
-error: Malformed body expression
-  --> test:6:4
-   |
- 6 |      (let x = 5 . 5)
-   |      ^^^^^^^^^^^^^^^ unexpected dotted list

@@ -1,5 +1,0 @@
-error: Invalid toplevel form
-  --> test:4:1
-   |
- 4 |  (unknown)
-   |   ^^^^^^^ unknown toplevel form

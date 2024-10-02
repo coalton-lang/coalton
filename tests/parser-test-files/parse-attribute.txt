@@ -1,0 +1,117 @@
+================================================================================
+Orphan attribute
+================================================================================
+
+(package test-package)
+
+(repr :enum)
+
+--------------------------------------------------------------------------------
+
+error: Orphan attribute
+  --> test:3:0
+   |
+ 3 |  (repr :enum)
+   |  ^^^^^^^^^^^^ attribute must be attached to another form
+
+================================================================================
+Malformed monomophize attribute
+================================================================================
+
+(package test-package)
+
+(monomorphize 5)
+(define x 5)
+
+--------------------------------------------------------------------------------
+
+error: Malformed monomophize attribute
+  --> test:3:0
+   |
+ 3 |  (monomorphize 5)
+   |  ^^^^^^^^^^^^^^^^ unexpected form
+
+================================================================================
+Invalid type variable
+================================================================================
+
+(package test-package)
+
+(repr (:enum))
+(define-type T)
+
+--------------------------------------------------------------------------------
+
+error: Invalid type variable
+  --> test:3:6
+   |
+ 3 |  (repr (:enum))
+   |        ^^^^^^^ expected keyword symbol
+
+================================================================================
+Malformed repr attribute
+================================================================================
+
+(package test-package)
+
+(repr :enum 5)
+(define-type T)
+
+--------------------------------------------------------------------------------
+
+error: Malformed repr attribute
+  --> test:3:12
+   |
+ 3 |  (repr :enum 5)
+   |              ^ unexpected form
+
+================================================================================
+Malformed repr :native attribute
+================================================================================
+
+(package test-package)
+
+(repr :native)
+(define-type T)
+
+--------------------------------------------------------------------------------
+
+error: Malformed repr :native attribute
+  --> test:3:14
+   |
+ 3 |  (repr :native)
+   |               ^ expected a lisp type
+
+================================================================================
+Malformed repr :native attribute
+================================================================================
+
+(package test-package)
+
+(repr :native :native :native)
+(define-type T)
+
+--------------------------------------------------------------------------------
+
+error: Malformed repr :native attribute
+  --> test:3:6
+   |
+ 3 |  (repr :native :native :native)
+   |        ^^^^^^^ unexpected form
+
+================================================================================
+Unknown repr attribute
+================================================================================
+
+(package test-package)
+
+(repr :hello)
+(define-type T)
+
+--------------------------------------------------------------------------------
+
+error: Unknown repr attribute
+  --> test:3:6
+   |
+ 3 |  (repr :hello)
+   |        ^^^^^^ expected one of :lisp, :transparent, :enum, or :native

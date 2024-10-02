@@ -1,4 +1,0 @@
-;; BAD: Parse Declare
-(package test-package)
-
-(declare x)

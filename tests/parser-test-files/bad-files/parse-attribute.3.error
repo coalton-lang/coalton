@@ -1,5 +1,0 @@
-error: Invalid type variable
-  --> test:4:6
-   |
- 4 |  (repr (:enum))
-   |        ^^^^^^^ expected keyword symbol

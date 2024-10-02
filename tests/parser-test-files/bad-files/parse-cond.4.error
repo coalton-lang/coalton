@@ -1,5 +1,0 @@
-error: Malformed function
-  --> test:4:19
-   |
- 4 |  (define x (cond (y)))
-   |                    ^ expected body

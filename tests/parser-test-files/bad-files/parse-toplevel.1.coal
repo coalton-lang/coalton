@@ -1,4 +1,0 @@
-;; BAD: Parse Toplevel
-(package test-package)
-
-((define) x 5)

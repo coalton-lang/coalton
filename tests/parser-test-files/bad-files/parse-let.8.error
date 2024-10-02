@@ -1,5 +1,0 @@
-error: Malformed declare
-  --> test:5:28
-   |
- 5 |    (let ((declare x (T -> T) 5))
-   |                              ^ unexpected form
