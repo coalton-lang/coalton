@@ -1,5 +1,5 @@
 ================================================================================
-Parse expression
+1 Parse expression
 ================================================================================
 
 (package coalton-unit-tests)
@@ -7,7 +7,7 @@ Parse expression
 (define f 5)
 
 ================================================================================
-Parse expression
+2 Parse expression
 ================================================================================
 
 (package coalton-unit-tests)
@@ -15,7 +15,7 @@ Parse expression
 (define (f _x) 5)
 
 ================================================================================
-Parse expression
+3 Parse expression
 ================================================================================
 
 (package coalton-unit-tests)
@@ -23,7 +23,7 @@ Parse expression
 (define (f _x _y) 5)
 
 ================================================================================
-Parse expression
+4 Parse expression
 ================================================================================
 
 (package coalton-unit-tests/prelude
@@ -34,7 +34,7 @@ Parse expression
     (+ x x)))
 
 ================================================================================
-Parse expression
+5 Parse expression
 ================================================================================
 
 (package coalton-unit-tests/prelude
@@ -45,67 +45,56 @@ Parse expression
     (+ 1 2)))
 
 ================================================================================
-Parse expression (:disable)
+6 Parse expression
 ================================================================================
 
 (package coalton-unit-tests/prelude
   (import coalton-prelude))
 
 (define (f)
-  (let ((x 1)
-        (declare y (T -> T))
-        (y (+ 1 2)))
-    (f x y)))
+  (let ((x (the UFix 1))
+        (declare y (Unit -> UFix))
+        (y (fn () (+ 1 2))))
+    (+ x (y))))
 
 ================================================================================
-Parse expression
+7 Parse expression
 ================================================================================
 
 (package coalton-unit-tests/prelude
   (import coalton-prelude))
 
 (define (f a b c)
-  (lisp (Integer -> Integer) (a b c)
-    (cl:+ 1 2)))
+  (lisp Integer (a b c)
+    (cl:+ a b c)))
 
 ================================================================================
-Parse expression (:disable)
+8 Parse expression
 ================================================================================
 
 (package coalton-unit-tests/prelude
   (import coalton-prelude))
 
-(define (f x)
-  (match x
-    ((Some (Some x)) x)
-    ((Some x) x)
-    (y 1)
-    (1 z)
-    (_ 2)))
+(declare f ((Default :a) => (Optional :a) -> :a))
+  (define (f x)
+    (match x
+      ((Some y) y)
+      (_ (default))))
 
 ================================================================================
-Parse expression (:disable)
-================================================================================
-
-(package coalton-unit-tests)
-
-(define (g x)
-  (match x))
-
-================================================================================
-Parse expression (:disable)
+9 Parse expression
 ================================================================================
 
 (package coalton-unit-tests/prelude
   (import coalton-prelude))
 
 (define (f)
-  (let x = 1)
-  (let (Some y) = 2)
-  (+ x y))
+    (let x = 1)
+    (let ((y (from-some "invalid y" (Some 2))))
+      (+ x y)))
 
 ================================================================================
-Parse expression
+10 Parse expression
 ================================================================================
 
 (package coalton-unit-tests/prelude
@@ -115,7 +104,7 @@ Parse expression
   (the String "value"))
 
 ================================================================================
-Parse expression
+11 Parse expression
 ================================================================================
 
 (package coalton-unit-tests)
@@ -123,7 +112,7 @@ Parse expression
 (define (x) (return))
 
 ================================================================================
-Parse expression
+12 Parse expression
 ================================================================================
 
 (package coalton-unit-tests)
@@ -131,7 +120,7 @@ Parse expression
 (define (y) (return 5))
 
 ================================================================================
-Parse expression
+13 Parse expression
 ================================================================================
 
 (package coalton-unit-tests/prelude
@@ -140,7 +129,7 @@ Parse expression
 (define z (+ 1 (+ 2 (* 3 5))))
 
 ================================================================================
-Parse expression
+14 Parse expression
 ================================================================================
 
 (package coalton-unit-tests/prelude
@@ -154,7 +143,7 @@ Parse expression
     (+ x y)))
 
 ================================================================================
-Parse expression
+15 Parse expression
 ================================================================================
 
 (package coalton-unit-tests/prelude
@@ -166,7 +155,7 @@ Parse expression
     2))
 
 ================================================================================
-Parse expression (:disable)
+16 Parse expression
 ================================================================================
 
 (package coalton-unit-tests/prelude
@@ -174,58 +163,40 @@ Parse expression (:disable)
 
 (define (f x y)
   (when (== x y)
-    (let z = 3)
+    (let _z = 3)
     (print "hello"))
   (unless (== x y)
-    (let z = 4)
+    (let _z = 4)
     (print "hello")))
 
 ================================================================================
-Parse expression (:disable)
+17 Parse expression
 ================================================================================
 
-(package coalton-unit-tests)
+(package coalton-unit-tests/prelude
+  (import coalton-prelude))
 
-(define x (and 1 2 3))
-
-================================================================================
-Parse expression (:disable)
-================================================================================
-
-(package coalton-unit-tests)
-
-(define y (or 1 2))
-
-================================================================================
-Parse expression (:disable)
-================================================================================
-
-(package coalton-unit-tests)
-
-(define (x mx)
+(define (f ax bx)
   (do
-    (x <- mx)
-    (let y = 5)
-    (z 1 2 3)
-    z
-    (z)
-    (z x)
-    (x (y) z)))
+   (a <- ax)
+   (b <- bx)
+    (let c = (+ a b))
+    (pure c)))
 
 ================================================================================
-Parse expression (:disable)
+18 Parse expression
 ================================================================================
 
 (package coalton-unit-tests/prelude
   (import coalton-prelude))
 
 (define x
-  (cond
-    (1 1)
-    ((+ 1 2) 3)))
+  (cond 
+    (True 1)
+    ((> 2 3) 2)))
 
 ================================================================================
-Parse expression
+19 Parse expression
 ================================================================================
 
 (package coalton-unit-tests/prelude
@@ -235,7 +206,7 @@ Parse expression
   (fn ((Tuple x _y)) x))
 
 ================================================================================
-Malformed expression
+100 Malformed expression
 ================================================================================
 
 (package test-package)
@@ -251,7 +222,7 @@ error: Malformed expression
    |            ^^ unexpected `nil` or `()`
 
 ================================================================================
-Malformed expression
+101 Malformed expression
 ================================================================================
 
 (package test-package)
@@ -267,7 +238,7 @@ error: Malformed expression
    |            ^^^^^^^ unexpected dotted list
 
 ================================================================================
-Invalid literal
+102 Invalid literal
 ================================================================================
 
 (package test-package)
@@ -283,7 +254,7 @@ error: Invalid literal
    |            ^^^^^^^ unknown literal type
 
 ================================================================================
-Malformed expression
+103 Malformed expression
 ================================================================================
 
 (package test-package)
@@ -297,3 +268,21 @@ error: Malformed expression
    |
  3 |  (define x (f . 3))
    |            ^^^^^^^ unexpected dotted list
+
+================================================================================
+104 Nonexhaustive match
+================================================================================
+
+(package coalton-unit-tests)
+
+(define (g x)
+  (match x))
+
+--------------------------------------------------------------------------------
+
+warn: non-exhaustive match
+  --> test:4:2
+   |
+ 4 |    (match x))
+   |    ^^^^^^^^^ non-exhaustive match
+   |    --------- missing case "_"

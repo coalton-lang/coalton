@@ -48,7 +48,10 @@
 (package coalton-unit-tests)
 
 (repr :enum)
-(define-type T)
+(define-type T
+  First
+  Second
+  Third)
 
 
 ================================================================================
@@ -222,7 +225,7 @@ error: Malformed constructor
    |    ^^^ expected symbol
 
 ================================================================================
-109 icate repr atttribute
+109 Duplicate repr attribute
 ================================================================================
 
 (package test-package)
@@ -233,7 +236,7 @@ error: Malformed constructor
 
 --------------------------------------------------------------------------------
 
-error: Duplicate repr atttribute
+error: Duplicate repr attribute
   --> test:4:0
    |
  3 |  (repr :enum)

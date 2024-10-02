@@ -28,7 +28,7 @@
 
 (define-class (C2 :a :b))
 
-(define-instance (C :a => C2 :b :c))
+(define-instance (C :a => C2 :a :b))
 
 ================================================================================
 4 Define instance
