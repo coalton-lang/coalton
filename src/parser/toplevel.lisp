@@ -853,7 +853,7 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
              :do (etypecase attribute
                    (attribute-repr
                     (when repr
-                      (parse-error "Duplicate repr atttribute"
+                      (parse-error "Duplicate repr attribute"
                                    (note source attribute-form
                                          "repr attribute here")
                                    (note source repr-form
