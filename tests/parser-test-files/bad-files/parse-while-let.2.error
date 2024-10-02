@@ -1,5 +1,0 @@
-error: Malformed while-let expression
-  --> test:4:30
-   |
- 4 |  (define f (while-let (Some x)))
-   |                               ^ expected =

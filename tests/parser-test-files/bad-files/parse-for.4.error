@@ -1,5 +1,0 @@
-error: Malformed for expression
-  --> test:4:25
-   |
- 4 |  (define f (for x in iter))
-   |                          ^ expected body

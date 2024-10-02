@@ -1,5 +1,0 @@
-error: Malformed loop expression
-  --> test:4:16
-   |
- 4 |  (define f (loop))
-   |                 ^ expected a loop body

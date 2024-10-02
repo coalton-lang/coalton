@@ -1,6 +1,0 @@
-;; BAD: Parse Match
-(package test-package)
-
-(define f
-  (match x
-    (y)))

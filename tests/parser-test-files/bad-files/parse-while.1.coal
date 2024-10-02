@@ -1,4 +1,0 @@
-;; BAD: Parse While
-(package test-parser)
-
-(define f (while))

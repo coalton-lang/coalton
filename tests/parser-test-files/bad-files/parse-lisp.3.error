@@ -1,5 +1,0 @@
-error: Malformed lisp expression
-  --> test:4:10
-   |
- 4 |  (define f (lisp (T -> T) (x y)))
-   |            ^^^^^^^^^^^^^^^^^^^^^ expected body

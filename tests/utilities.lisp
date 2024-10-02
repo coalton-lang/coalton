@@ -129,7 +129,7 @@ Returns (values SOURCE-PATHNAME COMPILED-PATHNAME)."
                          (is (zerop (length expected-error))
                              "program should have failed to compile: ~A" description))
                         (t
-                         (check-string= (format nil "program text.~%~
+                         (check-string= (format nil "error text.~%~
 input file: ~A~%~
 line number: ~A~%~
 test number: ~A~%~

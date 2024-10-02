@@ -1,4 +1,0 @@
-(package test)
-
-(define-class (Greetable :a)
-  (Greet :a Unit))

@@ -1,5 +1,0 @@
-error: Invalid pattern
-  --> test:5:8
-   |
- 5 |    (let (5 x y) = g)
-   |          ^ invalid constructor in pattern

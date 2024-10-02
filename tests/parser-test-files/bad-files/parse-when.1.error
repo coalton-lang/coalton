@@ -1,5 +1,0 @@
-error: Malformed when expression
-  --> test:4:16
-   |
- 4 |  (define f (when))
-   |                 ^ expected a predicate

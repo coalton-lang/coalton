@@ -1,6 +1,0 @@
-error: Malformed do expression
-  --> test:5:6
-   |
- 5 |    (do (let x = 5)))
-   |     -- when parsing do expression
-   |        ^^^^^^^^^^^ do expressions cannot be terminated by a shorthand let

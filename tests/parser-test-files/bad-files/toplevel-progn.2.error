@@ -1,8 +1,0 @@
-error: Trailing attributes in progn
-  --> test:5:2
-   |
- 4 |   (progn
-   |  _-
- 5 | |   (repr :transparent))
-   | |   ^^^^^^^^^^^^^^^^^^^ progn cannot have trailing attributes
-   | |______________________- when parsing progn

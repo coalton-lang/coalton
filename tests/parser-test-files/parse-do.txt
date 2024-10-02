@@ -1,0 +1,70 @@
+================================================================================
+Malformed bind form
+================================================================================
+
+(package test-package)
+
+(define x 
+  (do 
+    (x <- mx y)
+    5))
+
+--------------------------------------------------------------------------------
+
+error: Malformed bind form
+  --> test:5:13
+   |
+ 5 |      (x <- mx y)
+   |               ^ unexpected trailing form
+
+================================================================================
+Malformed do expression
+================================================================================
+
+(package test-package)
+
+(define x
+  (do (x <- mx)))
+
+--------------------------------------------------------------------------------
+
+error: Malformed do expression
+  --> test:4:6
+   |
+ 4 |    (do (x <- mx)))
+   |     -- when parsing do expression
+   |        ^^^^^^^^^ do expression cannot be terminated by a bind
+
+================================================================================
+Malformed do expression
+================================================================================
+
+(package test-package)
+
+(define x
+  (do (let x = 5)))
+
+--------------------------------------------------------------------------------
+
+error: Malformed do expression
+  --> test:4:6
+   |
+ 4 |    (do (let x = 5)))
+   |     -- when parsing do expression
+   |        ^^^^^^^^^^^ do expressions cannot be terminated by a shorthand let
+
+================================================================================
+Malformed do expression
+================================================================================
+
+(package test-package)
+
+(define x (do))
+
+--------------------------------------------------------------------------------
+
+error: Malformed do expression
+  --> test:3:14
+   |
+ 3 |  (define x (do))
+   |               ^ expected one or more forms

@@ -1,9 +1,0 @@
-;; GOOD: Toplevel Progn
-(package test-package)
-
-(progn
-  (repr :transparent)
-  (define-type T
-    (T Integer))
-
-  (define (f x) x))

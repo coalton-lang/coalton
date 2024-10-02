@@ -12,7 +12,7 @@
                    := (read-char stream nil nil)
                  :while char
                  :collect (cons char (file-position stream)))))
-    (with-open-file (stream (test-file "tests/parser-test-files/bad-files/define-class.21.coal")
+    (with-open-file (stream (test-file "tests/parser-test-files/unicode.coal")
                             :direction ':input
                             :element-type 'character
                             :external-format :utf-8)

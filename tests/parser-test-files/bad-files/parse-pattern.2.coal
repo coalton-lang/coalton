@@ -1,6 +1,0 @@
-;; BAD: Parse Pattern
-(package test-package)
-
-(define f
-  (let (x y . z) = g)
-  Unit)

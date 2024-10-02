@@ -1,5 +1,0 @@
-error: Malformed function
-  --> test:4:17
-   |
- 4 |  (define f (fn ()))
-   |                  ^ expected function body
