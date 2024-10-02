@@ -38,7 +38,7 @@ web-docs:
 	sbcl --noinform \
 		 --non-interactive \
 		 --eval "(ql:quickload :coalton/doc :silent t)" \
-		 --eval "(coalton/doc:write-stdlib-documentation-to-file \"../coalton-website/content/reference.md\" :backend :hugo)"
+		 --eval "(coalton/doc:write-stdlib-documentation-to-file \"../coalton-website/content/reference.md\" :backend :hugo :revision \"main\")"
 
 
 .PHONY: bench
