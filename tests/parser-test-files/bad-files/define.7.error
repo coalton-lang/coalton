@@ -1,7 +1,0 @@
-error: Invalid target for repr attribute
-  --> test:4:0
-   |
- 4 |  (repr :enum)
-   |  ^^^^^^^^^^^^ repr must be attached to a define-type
- 5 |  (define f x)
-   |          - when parsing define

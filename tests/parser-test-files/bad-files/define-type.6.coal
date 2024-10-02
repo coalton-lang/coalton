@@ -1,4 +1,0 @@
-;; BAD: Define Type
-(package test-package)
-
-(define-type ((T) :a))

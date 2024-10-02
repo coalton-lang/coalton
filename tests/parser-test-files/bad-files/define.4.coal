@@ -1,4 +1,0 @@
-;; BAD: Define
-(package test-package)
-
-(define x)

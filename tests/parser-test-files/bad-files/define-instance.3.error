@@ -1,7 +1,0 @@
-error: Malformed method definition
-  --> test:5:3
-   |
- 4 |  (define-instance (C :a)
-   |                   ------ when parsing instance
- 5 |    (f x y))
-   |     ^ expected method definition

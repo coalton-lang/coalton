@@ -1,5 +1,0 @@
-(package test-package)
-
-(define-type T
-  "This is a docstring"
-  "This is also a docstring")

@@ -1,5 +1,0 @@
-error: Malformed expression
-  --> test:4:10
-   |
- 4 |  (define x (f . 3))
-   |            ^^^^^^^ unexpected dotted list

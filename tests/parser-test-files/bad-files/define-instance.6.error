@@ -1,5 +1,0 @@
-error: Malformed instance definition
-  --> test:4:17
-   |
- 4 |  (define-instance 5)
-   |                   ^ expected a list

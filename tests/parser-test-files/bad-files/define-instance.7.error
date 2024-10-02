@@ -1,5 +1,0 @@
-error: Malformed instance definition
-  --> test:4:17
-   |
- 4 |  (define-instance)
-   |                  ^ expected an instance head

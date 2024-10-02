@@ -1,5 +1,0 @@
-error: Invalid literal
-  --> test:4:10
-   |
- 4 |  (define x #C(1 2))
-   |            ^^^^^^^ unknown literal type

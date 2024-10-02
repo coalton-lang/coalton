@@ -1,5 +1,0 @@
-error: Invalid type variable
-  --> test:4:16
-   |
- 4 |  (define-type (T (:a)))
-   |                  ^^^^ expected keyword symbol
