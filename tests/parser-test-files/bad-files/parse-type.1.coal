@@ -1,4 +1,0 @@
-;; BAD: Parse type nullary
-(package test-package)
-
-(declare f (T -> (G)))

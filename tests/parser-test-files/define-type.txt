@@ -1,0 +1,301 @@
+================================================================================
+1 Define type
+================================================================================
+
+(package coalton-unit-tests)
+
+(define-type T)
+
+================================================================================
+2 Define type
+================================================================================
+
+(package coalton-unit-tests)
+
+(define-type (T :a))
+
+================================================================================
+3 Define type
+================================================================================
+
+(package coalton-unit-tests)
+
+(define-type T T1)
+
+================================================================================
+4 Define type
+================================================================================
+
+(package coalton-unit-tests/define-type-4)
+
+(define-type (T :a :b :c)
+  (T1 :a)
+  (T2 :b :c))
+
+================================================================================
+5 Define type
+================================================================================
+
+(package coalton-unit-tests)
+
+(repr :native cl:t)
+(define-type T)
+
+================================================================================
+6 Define type
+================================================================================
+
+(package coalton-unit-tests)
+
+(repr :enum)
+(define-type T)
+
+
+================================================================================
+7 Define type with docstrings
+================================================================================
+
+(package coalton-unit-tests)
+
+(define-type (T :a)
+  T1         "This is an empty constructor"
+  (T2 :a)    "This is a constructor"
+  (T3 :a :a) "This is a well-nourished constructor"))
+
+================================================================================
+100 Malformed type definition
+================================================================================
+
+(package test-package)
+
+(define-type)
+
+--------------------------------------------------------------------------------
+
+error: Malformed type definition
+  --> test:3:0
+   |
+ 3 |  (define-type)
+   |  ^^^^^^^^^^^^^ expected body
+
+================================================================================
+101 Invalid type variable
+================================================================================
+
+(package test-package)
+
+(define-type (T a))
+
+--------------------------------------------------------------------------------
+
+error: Invalid type variable
+  --> test:3:16
+   |
+ 3 |  (define-type (T a))
+   |                  ^ expected keyword symbol
+help: add `:` to symbol
+ 3 | (define-type (T :a))
+   |                 --
+
+================================================================================
+102 Malformed type definition
+================================================================================
+
+(package test-package)
+
+(define-type (T))
+
+--------------------------------------------------------------------------------
+
+error: Malformed type definition
+  --> test:3:13
+   |
+ 3 |  (define-type (T))
+   |               ^^^ nullary types should not have parentheses
+help: remove unnecessary parentheses
+ 3 | (define-type T)
+   |              -
+
+================================================================================
+103 Malformed constructor
+================================================================================
+
+(package test-package)
+
+(define-type (T :a)
+  ((T) :a))
+
+--------------------------------------------------------------------------------
+
+error: Malformed constructor
+  --> test:4:3
+   |
+ 3 |  (define-type (T :a)
+   |               ------ in this type definition
+ 4 |    ((T) :a))
+   |     ^^^ expected symbol
+
+================================================================================
+104 Malformed type definition
+================================================================================
+
+(package test-package)
+
+(define-type "T")
+
+--------------------------------------------------------------------------------
+
+error: Malformed type definition
+  --> test:3:13
+   |
+ 3 |  (define-type "T")
+   |               ^^^ expected symbol
+
+================================================================================
+105 Malformed type definition
+================================================================================
+
+(package test-package)
+
+(define-type ((T) :a))
+
+--------------------------------------------------------------------------------
+
+error: Malformed type definition
+  --> test:3:14
+   |
+ 3 |  (define-type ((T) :a))
+   |                ^^^ expected symbol
+help: remove parentheses
+ 3 | (define-type (T) :a)
+   |              ------
+
+================================================================================
+106 Malformed type definition
+================================================================================
+
+(package test-package)
+
+(define-type ("T" :a :b))
+
+--------------------------------------------------------------------------------
+
+error: Malformed type definition
+  --> test:3:14
+   |
+ 3 |  (define-type ("T" :a :b))
+   |                ^^^ expected symbol
+
+================================================================================
+107 Invalid type variable
+================================================================================
+
+(package test-package)
+
+(define-type (T (:a)))
+
+--------------------------------------------------------------------------------
+
+error: Invalid type variable
+  --> test:3:16
+   |
+ 3 |  (define-type (T (:a)))
+   |                  ^^^^ expected keyword symbol
+
+================================================================================
+108 Malformed constructor
+================================================================================
+
+(package test-package)
+
+(define-type (T :a)
+  0.5)
+
+--------------------------------------------------------------------------------
+
+error: Malformed constructor
+  --> test:4:2
+   |
+ 3 |  (define-type (T :a)
+   |               ------ in this type definition
+ 4 |    0.5)
+   |    ^^^ expected symbol
+
+================================================================================
+109 icate repr atttribute
+================================================================================
+
+(package test-package)
+
+(repr :enum)
+(repr :enum)
+(define-type T)
+
+--------------------------------------------------------------------------------
+
+error: Duplicate repr atttribute
+  --> test:4:0
+   |
+ 3 |  (repr :enum)
+   |  ------------ previous attribute here
+ 4 |  (repr :enum)
+   |  ^^^^^^^^^^^^ repr attribute here
+ 5 |  (define-type T)
+   |  --------------- when parsing define-type
+
+================================================================================
+110 Invalid target for monomorphize attribute
+================================================================================
+
+(package test-package)
+
+(monomorphize)
+(define-type T)
+
+--------------------------------------------------------------------------------
+
+error: Invalid target for monomorphize attribute
+  --> test:3:0
+   |
+ 3 |  (monomorphize)
+   |  ^^^^^^^^^^^^^^ monomorphize must be attached to a define or declare form
+ 4 |  (define-type T)
+   |  --------------- when parsing define-type
+
+================================================================================
+111 define-type, multiple constructor docstrings
+================================================================================
+
+(package test-package)
+
+(define-type T
+  T1 "one docstring" "another docstring")
+
+--------------------------------------------------------------------------------
+
+error: Malformed type definition
+  --> test:4:21
+   |
+ 4 |    T1 "one docstring" "another docstring")
+   |                       ^^^^^^^^^^^^^^^^^^^ only one docstring allowed per constructor
+
+================================================================================
+112 define-type, multiple type docstrings
+================================================================================
+
+(package test-package)
+
+(define-type T
+  "This is a docstring"
+  "This is also a docstring")
+
+--------------------------------------------------------------------------------
+
+error: Malformed type definition
+  --> test:5:2
+   |
+ 5 |    "This is also a docstring")
+   |    ^^^^^^^^^^^^^^^^^^^^^^^^^^ only one docstring allowed.
+help: remove additional docstring
+ 5 |   This is also a docstring)
+   |   ------------------------

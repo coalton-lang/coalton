@@ -1,8 +1,0 @@
-error: Malformed type definition
-  --> test:5:2
-   |
- 5 |    "This is also a docstring")
-   |    ^^^^^^^^^^^^^^^^^^^^^^^^^^ only one docstring allowed.
-help: remove additional docstring
- 5 |   This is also a docstring)
-   |   ------------------------

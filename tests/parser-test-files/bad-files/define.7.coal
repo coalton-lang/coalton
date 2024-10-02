@@ -1,5 +1,0 @@
-;; BAD: Parse Define
-(package test-package)
-
-(repr :enum)
-(define f x)

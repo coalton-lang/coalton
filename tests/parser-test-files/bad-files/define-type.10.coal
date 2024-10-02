@@ -1,6 +1,0 @@
-;; BAD: Define Type
-(package test-package)
-
-(repr :enum)
-(repr :enum)
-(define-type T)

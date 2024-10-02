@@ -1,232 +1,239 @@
 ================================================================================
-1 Define
+1 Parse type (:disable)
 ================================================================================
 
 (package coalton-unit-tests)
 
-(define x "hi")
+(declare f (T))
+(define (f)
+  1)
+
+(declare g (T :a))
+(declare h (T :a :b :c))
+(declare j (T -> T))
+(declare k (T :a -> T :b -> T :c))
+(declare l (T (:a -> :b) -> T :d))
+
+(declare m (T :a => T))
+(declare n ((T :a) => T))
+(declare o ((T :a) (T :b) => T)) 
 
 ================================================================================
-2 Define with docstring
+Malformed type
 ================================================================================
 
-(package coalton-unit-tests)
+(package test-package)
 
-(define x
-  "hello"
-  2)
-
-================================================================================
-3 Define (?)
-================================================================================
-
-(package coalton-unit-tests)
-
-(define x
-  "hello"
-  1
-  2
-  3)
-
-================================================================================
-4 Define with monomorphize attribute
-================================================================================
-
-(package coalton-unit-tests)
-
-(monomorphize)
-(define x 5)
-
-================================================================================
-5 Define (?)
-================================================================================
-
-(package coalton-unit-tests/prelude
-  (import coalton-prelude))
-
-(define (f (Tuple x _y)) x)
-
-================================================================================
-100 Unknown type
-================================================================================
-
-(package coalton-unit-tests)
-
-(declare f (unknown -> ufix))
-(define (f x) x)
+(declare f (T -> (G)))
 
 --------------------------------------------------------------------------------
 
-error: Unknown type
+error: Malformed type
+  --> test:3:17
+   |
+ 3 |  (declare f (T -> (G)))
+   |                   ^^^ unexpected nullary type
+
+================================================================================
+Malformed type
+================================================================================
+
+(package test-package)
+
+(declare f (=> T -> T))
+
+--------------------------------------------------------------------------------
+
+error: Malformed type
   --> test:3:12
    |
- 3 |  (declare f (unknown -> ufix))
-   |              ^^^^^^^ unknown type UNKNOWN
+ 3 |  (declare f (=> T -> T))
+   |              ^^ unnecessary `=>`
+help: remove `=>`
+ 3 | (declare f (T -> T))
+   |            --------
 
 ================================================================================
-101 Duplicate definition
-================================================================================
-
-(package coalton-unit-tests)
-
-(define-type BigType)
-
-(define-struct BigType
-  (wow String))
-
---------------------------------------------------------------------------------
-
-error: Duplicate type definitions
-  --> test:3:0
-   |
- 3 |   (define-type BigType)
-   |   ^^^^^^^^^^^^^^^^^^^^^ first definition here
- 4 |   
- 5 |   (define-struct BigType
-   |  _^
- 6 | |   (wow String))
-   | |_______________^ second definition here
-
-================================================================================
-Malformed definition
+Malformed type
 ================================================================================
 
 (package test-package)
 
-(define)
+(declare f (T :a =>))
 
 --------------------------------------------------------------------------------
 
-error: Malformed definition
-  --> test:3:0
+error: Malformed type
+  --> test:3:14
    |
- 3 |  (define)
-   |  ^^^^^^^^ expected define body
+ 3 |  (declare f (T :a =>))
+   |                ^^ missing type after `=>`
 
 ================================================================================
-Invalid variable
+Malformed type predicate
 ================================================================================
 
 (package test-package)
 
-(define "x" 1.5)
+(declare f (T => T -> T))
 
 --------------------------------------------------------------------------------
 
-error: Invalid variable
-  --> test:3:8
-   |
- 3 |  (define "x" 1.5)
-   |          ^^^ expected identifier
-
-================================================================================
-Duplicate monomorphize attribute
-================================================================================
-
-(package test-package)
-
-(monomorphize)
-(monomorphize)
-(define f x)
-
---------------------------------------------------------------------------------
-
-error: Duplicate monomorphize attribute
-  --> test:4:0
-   |
- 3 |  (monomorphize)
-   |  -------------- previous attribute here
- 4 |  (monomorphize)
-   |  ^^^^^^^^^^^^^^ monomorphize attribute here
- 5 |  (define f x)
-   |          - when parsing define
-
-================================================================================
-Malformed definition
-================================================================================
-
-(package test-package)
-
-(define x)
-
---------------------------------------------------------------------------------
-
-error: Malformed definition
-  --> test:3:0
-   |
- 3 |  (define x)
-   |  ^^^^^^^^^^ expected value
-
-================================================================================
-Malformed function definition
-================================================================================
-
-(package test-package)
-
-(define (0.5 x y) 2)
-
---------------------------------------------------------------------------------
-
-error: Malformed function definition
-  --> test:3:9
-   |
- 3 |  (define (0.5 x y) 2)
-   |           ^^^ expected symbol
-
-================================================================================
-Invalid pattern
-================================================================================
-
-(package test-parser)
-
-(define (f (0.5) x) 1)
-
---------------------------------------------------------------------------------
-
-error: Invalid pattern
+error: Malformed type predicate
   --> test:3:12
    |
- 3 |  (define (f (0.5) x) 1)
-   |              ^^^ invalid constructor in pattern
+ 3 |  (declare f (T => T -> T))
+   |              ^ expected predicate
 
 ================================================================================
-Invalid target for repr attribute
-================================================================================
-
-(package test-package)
-
-(repr :enum)
-(define f x)
-
---------------------------------------------------------------------------------
-
-error: Invalid target for repr attribute
-  --> test:3:0
-   |
- 3 |  (repr :enum)
-   |  ^^^^^^^^^^^^ repr must be attached to a define-type
- 4 |  (define f x)
-   |          - when parsing define
-
-================================================================================
-Unknown variable
+Malformed type predicate
 ================================================================================
 
 (package test-package)
 
-(define-type DataType
-  (Data1 Integer))
-
-(define (return-data int)
-  (DataType int))
+(declare f ("T" :a => T))
 
 --------------------------------------------------------------------------------
 
-error: Unknown variable DATATYPE
-  --> test:7:3
+error: Malformed type predicate
+  --> test:3:12
    |
- 7 |    (DataType int))
-   |     ^^^^^^^^ unknown variable DATATYPE
-help: Did you mean a constructor of type DATATYPE?
- 7 |   (DataType int))
-   |    --------
+ 3 |  (declare f ("T" :a => T))
+   |              ^^^ expected identifier
+
+================================================================================
+Malformed type
+================================================================================
+
+(package test-package)
+
+(declare f (=>))
+
+--------------------------------------------------------------------------------
+
+error: Malformed type
+  --> test:3:12
+   |
+ 3 |  (declare f (=>))
+   |              ^^ unnecessary `=>`
+
+================================================================================
+Malformed type
+================================================================================
+
+(package test-package)
+
+(declare f (=> T -> T))
+
+--------------------------------------------------------------------------------
+
+error: Malformed type
+  --> test:3:12
+   |
+ 3 |  (declare f (=> T -> T))
+   |              ^^ unnecessary `=>`
+help: remove `=>`
+ 3 | (declare f (T -> T))
+   |            --------
+
+================================================================================
+Malformed type predicate
+================================================================================
+
+(package test-package)
+
+(declare f ((T :a) T => T -> T))
+
+--------------------------------------------------------------------------------
+
+error: Malformed type predicate
+  --> test:3:19
+   |
+ 3 |  (declare f ((T :a) T => T -> T))
+   |                     ^ expected predicate
+
+================================================================================
+Malformed type predicate
+================================================================================
+
+(package test-package)
+
+(declare f ((T :a) ((T) :a) => T -> T))
+
+--------------------------------------------------------------------------------
+
+error: Malformed type predicate
+  --> test:3:20
+   |
+ 3 |  (declare f ((T :a) ((T) :a) => T -> T))
+   |                      ^^^ expected class name
+help: remove parentheses
+ 3 | (declare f ((T :a) (T :a) => T -> T))
+   |                     -
+
+================================================================================
+Malformed type
+================================================================================
+
+(package test-package)
+
+(declare f (T -> "T"))
+
+--------------------------------------------------------------------------------
+
+error: Malformed type
+  --> test:3:17
+   |
+ 3 |  (declare f (T -> "T"))
+   |                   ^^^ expected identifier
+
+================================================================================
+Malformed function type
+================================================================================
+
+(package test-package)
+
+(declare f (-> T))
+
+--------------------------------------------------------------------------------
+
+error: Malformed function type
+  --> test:3:12
+   |
+ 3 |  (declare f (-> T))
+   |              ^^ invalid function syntax
+
+================================================================================
+Malformed function type
+================================================================================
+
+(package test-package)
+
+(declare f (T ->))
+
+--------------------------------------------------------------------------------
+
+error: Malformed function type
+  --> test:3:14
+   |
+ 3 |  (declare f (T ->))
+   |                ^^ missing return type
+
+================================================================================
+Malformed type
+================================================================================
+
+(package test-package)
+
+(declare f (=> T))
+
+--------------------------------------------------------------------------------
+
+error: Malformed type
+  --> test:3:12
+   |
+ 3 |  (declare f (=> T))
+   |              ^^ unnecessary `=>`
+help: remove `=>`
+ 3 | (declare f T)
+   |            -

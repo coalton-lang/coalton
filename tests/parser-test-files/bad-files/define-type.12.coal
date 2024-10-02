@@ -1,5 +1,0 @@
-;; BAD: Define Type- multiple constructor docstrings
-(package test-package)
-
-(define-type T
-  T1 "one docstring" "another docstring")

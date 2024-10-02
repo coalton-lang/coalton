@@ -1,4 +1,0 @@
-;; BAD: Define
-(package test-parser)
-
-(define (f (0.5) x) 1)

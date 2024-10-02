@@ -1,8 +1,0 @@
-error: Malformed instance head
-  --> test:4:18
-   |
- 4 |  (define-instance (=> C :a :b))
-   |                    ^^ unexpected `=>`
-help: remove the `=>`
- 4 | (define-instance ( C :a :b))
-   |                   

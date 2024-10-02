@@ -1,6 +1,0 @@
-;; BAD: Parse Define
-(package test-package)
-
-(monomorphize)
-(monomorphize)
-(define f x)

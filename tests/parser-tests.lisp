@@ -50,4 +50,8 @@
   (run-test-file "tests/parser-test-files/unused-variables.txt")
   (run-test-file "tests/parser-test-files/define.txt")
   (run-test-file "tests/parser-test-files/define-class.txt")
+  (run-test-file "tests/parser-test-files/define-instance.txt")
+  (run-test-file "tests/parser-test-files/define-type.txt")
+  (run-test-file "tests/parser-test-files/parse-expression.txt")
+  (run-test-file "tests/parser-test-files/parse-type.txt")
   (run-test-file "tests/parser-test-files/return.txt"))

@@ -1,5 +1,0 @@
-error: Malformed type definition
-  --> test:4:13
-   |
- 4 |  (define-type "T")
-   |               ^^^ expected symbol

@@ -1,4 +1,0 @@
-;; BAD: Parse Expression
-(package test-package)
-
-(define x (f . x))

@@ -1,5 +1,0 @@
-error: Malformed function definition
-  --> test:4:9
-   |
- 4 |  (define (0.5 x y) 2)
-   |           ^^^ expected symbol

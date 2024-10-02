@@ -1,8 +1,0 @@
-error: Malformed type definition
-  --> test:4:14
-   |
- 4 |  (define-type ((T) :a))
-   |                ^^^ expected symbol
-help: remove parentheses
- 4 | (define-type (T) :a)
-   |              ------
