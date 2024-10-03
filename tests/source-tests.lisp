@@ -1,10 +1,10 @@
 (in-package #:coalton-tests)
 
-;; Check that wrapping a character input stream with
-;; char-position-stream class allows callers to collect character
-;; offset using 'file-position'. This is for gathering source offsets
-;; that remain copmpatible with the offsets reported for source parsed
-;; from internal strings.
+;;; Check that wrapping a character input stream with
+;;; char-position-stream class allows callers to collect character
+;;; offset using 'file-position'. This is for gathering source offsets
+;;; that remain compatible with the offsets reported for source parsed
+;;; from internal strings.
 
 (deftest test-char-position-stream ()
   (flet ((stream-contents (stream)
@@ -12,7 +12,7 @@
                    := (read-char stream nil nil)
                  :while char
                  :collect (cons char (file-position stream)))))
-    (with-open-file (stream (test-file "tests/parser-test-files/unicode.coal")
+    (with-open-file (stream (test-file "tests/test-files/unicode.coal")
                             :direction ':input
                             :element-type 'character
                             :external-format :utf-8)
@@ -22,7 +22,7 @@
             (format nil "File expected length 86 != ~A" (length chars)))
         (is (equal 72                 ; byte offset would have been 76
                    (cdr (nth 71 chars)))
-            "Scond kanji is at char offset, not byte offset")))))
+            "Second kanji is at char offset, not byte offset")))))
 
 (deftest test-location ()
   (let* ((source (source:make-source-string "1234567890"))

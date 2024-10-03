@@ -316,19 +316,6 @@ REPLACE is a 1-argument function that accepts and returns a string to suggest an
                              :replacement (replace-function note)
                              :message (message note)))
 
-(defun source-error (&key (type :error) location (highlight :all)
-                          message primary-note notes help-notes)
-  "Convenience function to unpack a LOCATION into source and span and create a source-error structure."
-  (declare (type location location))
-  (source-error:source-error :type type
-                             :span (location-span location)
-                             :source (location-source location)
-                             :highlight highlight
-                             :message message
-                             :primary-note primary-note
-                             :notes notes
-                             :help-notes help-notes))
-
 (defun make-source-error (type message notes)
   "Build a SOURCE-ERROR:SOURCE-ERROR structure by destructuring the first note in NOTES, and translating remaining notes to SOURCE-ERROR versions."
   (destructuring-bind (primary &rest secondary) notes
