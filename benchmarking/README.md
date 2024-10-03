@@ -4,4 +4,4 @@
 
 `(in-package #:coalton-benchmarks)`
 
-`(run-benchmarks)`
+`(run-coalton-benchmarks)`
