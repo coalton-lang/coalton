@@ -1,5 +1,5 @@
 (asdf:defsystem #:small-coalton-programs
-  :depends-on (#:coalton)
+  :depends-on (#:coalton #:coalton/benchmarking)
   :pathname "src/"
   :serial t
   :components ((:file "package")
