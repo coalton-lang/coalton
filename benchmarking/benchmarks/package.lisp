@@ -2,37 +2,28 @@
 ;;;;
 ;;;; Benchmarks packages and common functions
 
-(benchmark:define-benchmark-package #:coalton-benchmarks
-  (:export #:run-benchmarks
-           #:run-benchmarks-ci))
-
-(cl:defpackage #:coalton-benchmarks/native
-  (:use
-   #:coalton
-   #:coalton-prelude
-   #:coalton-library/big-float
-   #:coalton-library/math)
-  (:local-nicknames (#:list #:coalton-library/list))
+(uiop:define-package #:coalton-benchmarks
+  (:use #:coalton
+        #:coalton-prelude
+        #:coalton-benchmarking)
+  (:mix-reexport
+   #:coalton-benchmarks/fibonacci
+   #:coalton-benchmarks/big-float
+   #:coalton-benchmarks/gabriel)
   (:export
-   #:fib
-   #:fib-fixnum
-   #:fib-generic-wrapped
-   #:fib-monomorphized
-   #:fib-generic-optional
-   #:fib-monomorphized-optional)
+   #:run-coalton-benchmarks))
 
-  ;; gabriel-benchmarks/
-  (:export
-   #:tak
-   #:stak
-   #:takl
-   #:takr))
+(in-package #:coalton-benchmarks)
 
-(cl:in-package #:coalton-benchmarks)
+(reexport-benchmarks
+   "coalton-benchmarks/fibonacci"
+   "coalton-benchmarks/big-float"
+   "coalton-benchmarks/gabriel")
 
-(defun run-benchmarks ()
-  (run-package-benchmarks :package '#:coalton-benchmarks :verbose t))
+(cl:defun run-coalton-benchmarks ()
+  (coalton (run-package-benchmarks "coalton-benchmarks")))
 
+#+ig
 (defun run-benchmarks-ci ()
   (let ((result (run-package-benchmarks :package '#:coalton-benchmarks :verbose t)))
     (with-open-file (out "bench.json" :direction :output :if-exists :supersede)
