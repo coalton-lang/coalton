@@ -1,14 +1,14 @@
 ;;;; Run test suites that parse and compile programs to exercise
 ;;;; specific areas of functionality.
 ;;;;
-;;;; See tests/parser-test-files/README.md for input format and options.
+;;;; See tests/test-files/README.md for input format and options.
 ;;;; See tests/loader.lisp and tests/utilities.lisp for load and
 ;;;; execution functions.
 
 (in-package #:coalton-tests)
 
 (defun %run-tests (name)
-  (run-test-file (format nil "tests/parser-test-files/~a" name)))
+  (run-test-file (format nil "tests/test-files/~a" name)))
 
 (deftest test-coalton-lang ()
   (%run-tests "define-class.txt")

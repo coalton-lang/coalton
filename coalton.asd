@@ -231,7 +231,6 @@
                (:module "parser"
                 :serial t
                 :components ((:file "cursor-tests")))
-               (:file "parser-tests")
                (:file "entry-tests")
                (:file "toplevel-tests")
                (:file "type-inference-tests")
@@ -243,6 +242,7 @@
                 :components ((:file "map-tests")
                              (:file "lisp-type-tests")))
                (:file "environment-persist-tests")
+               (:file "coalton-tests")
                (:file "slice-tests")
                (:file "float-tests")
                (:file "dual-tests")

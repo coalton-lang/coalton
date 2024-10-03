@@ -1,9 +1,9 @@
 ;;;; This package contains the function LOAD-TEST-FILE for loading
 ;;;; parser tests from specially formatted files.
 ;;;;
-;;;; - The format is documented in tests/parser-test-files/README.md
-;;;; - Tests are defined in tests/parser-test-files/*.txt
-;;;; - These tests are loaded and run by tests/parser-tests.lisp
+;;;; - The format is documented in tests/test-files/README.md
+;;;; - Tests are defined in tests/test-files/*.txt
+;;;; - These tests are loaded and run by tests/coalton-tests.lisp
 ;;;; - COALTON-TESTS:RUN-TEST-FILE and COALTON-TESTS:RUN-TEST are
 ;;;;   defined in tests/utilities.lisp
 ;;;;
