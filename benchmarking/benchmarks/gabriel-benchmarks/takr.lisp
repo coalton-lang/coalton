@@ -2,22 +2,12 @@
 ;;;;
 ;;;;
 
-(cl:in-package #:coalton-benchmarks)
+(cl:defpackage #:coalton-benchmarks/gabriel/takr-lisp
+  (:use #:cl)
+  (:export
+   #:lisp-takr))
 
-(define-benchmark takr ()
-  (declare (optimize speed))
-  (loop :repeat 1000
-        :do (with-benchmark-sampling
-              (coalton-benchmarks/native:takr 18 12 6)))
-  (report trivial-benchmark::*current-timer*))
-
-(define-benchmark takr-lisp ()
-  (declare (optimize speed))
-  (loop :repeat 1000
-        :do (with-benchmark-sampling
-              (lisp-takr 18 12 6)))
-  (report trivial-benchmark::*current-timer*))
-
+(in-package #:coalton-benchmarks/gabriel/takr-lisp)
 ;;;
 ;;;
 ;;;
@@ -726,8 +716,16 @@
 ;;;
 ;;;
 
+(defpackage #:coalton-benchmarks/gabriel/takr
+  (:use
+   #:coalton
+   #:coalton-prelude
+   #:coalton-benchmarking
+   #:coalton-benchmarks/gabriel/takr-lisp)
+  (:export
+   #:takr))
 
-(cl:in-package #:coalton-benchmarks/native)
+(in-package #:coalton-benchmarks/gabriel/takr)
 
 (cl:declaim (cl:optimize (cl:speed 3) (cl:safety 0)))
 
@@ -1432,3 +1430,16 @@
           (True (takr (takr (- x 1) y z)
                       (takr (- y 1) z x)
                       (takr (- z 1) x y))))))
+
+;; Defining the Coalton benchmark
+(define-benchmark takr 1000
+  (fn ()
+    (takr 18 12 6)
+    Unit))
+
+;; Defining the Lisp Benchmark
+(define-benchmark lisp-takr 1000
+    (fn ()
+      (lisp Unit ()
+        (lisp-takr 18 12 6)
+        Unit)))

@@ -134,6 +134,17 @@
   :components ((:file "package")
                (:file "coalton-native-test-utils")))
 
+(asdf:defsystem #:coalton/benchmarking
+  :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
+  :license "MIT"
+  :version (:read-file-form "VERSION.txt")
+  :depends-on (#:coalton)
+  :pathname "benchmarking"
+  :serial t
+  :components ((:file "printing")
+               (:file "benchmarking")
+               (:file "package")))
+
 (asdf:defsystem #:coalton/benchmarks
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
   :license "MIT"
@@ -142,22 +153,21 @@
                     (let (#+sbcl (sb-ext:*derive-function-types* t)
                           #+sbcl (sb-ext:*block-compile-default* :specified))
                       (funcall compile)))
-
   :depends-on (#:coalton
                #:coalton/library/big-float
-               #:trivial-benchmark
-               #:yason)
-  :pathname "benchmarks"
+               #:coalton/benchmarking)
+  :pathname "benchmarking/benchmarks"
   :serial t
-  :components ((:file "package")
-               (:file "fibonacci")
+  :components ((:file "fibonacci")
                (:file "big-float")
                (:module "gabriel-benchmarks"
                 :serial t
                 :components ((:file "tak")
                              (:file "stak")
                              (:file "takl")
-                             (:file "takr")))))
+                             (:file "takr")
+                             (:file "package")))
+               (:file "package")))
 
 ;;; we need to inspect the sbcl version in order to decide which version of the hashtable shim to load,
 ;;; because 2.1.12 includes (or will include) a bugfix that allows a cleaner, more maintainable
@@ -213,6 +223,7 @@
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
   :license "MIT"
   :depends-on (#:coalton
+               #:coalton/library/computable-reals
                #:coalton/library/big-float
                #:coalton/testing
                #:fiasco
