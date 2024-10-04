@@ -658,7 +658,7 @@
   (predicate           (util:required 'predicate)           :type ty-predicate      :read-only t)
   (codegen-sym         (util:required 'codegen-sym)         :type symbol            :read-only t)
   (method-codegen-syms (util:required 'method-codegen-syms) :type environment-map   :read-only t)
-  (method-inline-p     (util:required 'method-inline-p)     :type hash-table        :read-only t)
+  (method-inline-p     (util:required 'method-inline-p)     :type environment-map   :read-only t)
   (docstring           (util:required 'docstring)           :type (or null string)  :read-only t))
 
 (defmethod source:docstring ((self ty-class-instance))
