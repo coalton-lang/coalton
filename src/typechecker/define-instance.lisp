@@ -132,7 +132,7 @@
                (setf env (tc:unset-function env instance-codegen-sym))))
 
         (when (tc:ty-class-fundeps class)
-          (handler-case 
+          (handler-case
               (setf env (tc:update-instance-fundeps env pred))
             (tc:fundep-conflict (e)
               (tc-error "Instance fundep conflict"
