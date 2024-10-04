@@ -91,6 +91,7 @@
    #:ty-class-instance-predicate            ; ACCESSOR
    #:ty-class-instance-codegen-sym          ; ACCESSOR
    #:ty-class-instance-method-codegen-syms  ; ACCESSOR
+   #:ty-class-instance-method-inline-p      ; ACCESSOR
    #:ty-class-instance-list                 ; TYPE
    #:instance-environment                   ; STRUCT
    #:instance-environment-instances         ; ACCESSOR
@@ -689,6 +690,7 @@
   (predicate           (util:required 'predicate)           :type ty-predicate      :read-only t)
   (codegen-sym         (util:required 'codegen-sym)         :type symbol            :read-only t)
   (method-codegen-syms (util:required 'method-codegen-syms) :type util:symbol-list  :read-only t)
+  (method-inline-p     (util:required 'method-inline-p)     :type hash-table        :read-only t)
   (docstring           (util:required 'docstring)           :type (or null string)  :read-only t))
 
 (defmethod source:docstring ((self ty-class-instance))
@@ -718,6 +720,7 @@
    :predicate (apply-substitution subst-list (ty-class-instance-predicate instance))
    :codegen-sym (ty-class-instance-codegen-sym instance)
    :method-codegen-syms (ty-class-instance-method-codegen-syms instance)
+   :method-inline-p (ty-class-instance-method-inline-p instance)
    :docstring (ty-class-instance-docstring instance)))
 
 (defstruct instance-environment
