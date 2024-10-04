@@ -474,7 +474,8 @@
         :docstring (source:docstring toplevel)
         :body (rename-variables-generic% (toplevel-define-body toplevel) new-ctx)
         :location (source:location toplevel)
-        :monomorphize (toplevel-define-monomorphize toplevel))
+        :monomorphize (toplevel-define-monomorphize toplevel)
+        :inline (toplevel-define-inline toplevel))
        ctx)))
 
   (:method ((method instance-method-definition) ctx)
@@ -490,7 +491,8 @@
         :name (instance-method-definition-name method)
         :params (rename-variables-generic% (instance-method-definition-params method) new-ctx)
         :body (rename-variables-generic% (instance-method-definition-body method) new-ctx)
-        :location (source:location method))
+        :location (source:location method)
+        :inline (instance-method-definition-inline method))
        ctx)))
 
   (:method ((toplevel toplevel-define-instance) ctx)
