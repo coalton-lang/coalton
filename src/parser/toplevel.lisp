@@ -932,8 +932,8 @@ If the parsed form is an attribute (e.g., repr or monomorphize), add it to to AT
 
     ((coalton:declare)
      (let* ((declare (parse-declare form source))
-            (monomorphize (consume-optimize-attribute :monomorphize attributes define "when parsing declare"))
-            (inline (consume-optimize-attribute :inline attributes define "when parsing declare")))
+            (monomorphize (consume-optimize-attribute :monomorphize attributes declare "when parsing declare"))
+            (inline (consume-optimize-attribute :inline attributes declare "when parsing declare")))
        (setf (toplevel-declare-monomorphize declare) monomorphize)
        (setf (toplevel-declare-inline declare) inline)
        (setf (fill-pointer attributes) 0)
