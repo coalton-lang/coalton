@@ -77,7 +77,8 @@
                     name
                     (tc:make-function-env-entry
                      :name name
-                     :arity arity))))
+                     :arity arity
+                     :inline-p nil))))
     (dolist (name toplevel-values)
       (when (tc:lookup-function env name :no-error t)
         (setf env (tc:unset-function env name)))))
