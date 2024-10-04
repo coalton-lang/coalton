@@ -424,8 +424,10 @@ requires direct constructor calls."
              (alexandria:when-let*
                  ((name (node-rator-name node))
                   (code (tc:lookup-code env name :no-error t))
+                  (fun-env-entry (tc:lookup-function env name :no-error t))
+                  (inline-p (when fun-env-entry (tc:function-env-entry-inline-p fun-env-entry)))
                   (_    (and (node-abstraction-p code)
-                             (funcall heuristic code)
+                             (or inline-p (funcall heuristic code))
                              (<= (length call-stack)
                                  max-depth)
                              (<= (count name call-stack)
@@ -464,7 +466,7 @@ requires direct constructor calls."
 NODE in the environment ENV."
   (if settings:*coalton-heuristic-inlining*
       (heuristic-inline-applications node env)
-      node))
+      (heuristic-inline-applications node env :heuristic (constantly nil))))
 
 (defun inline-methods (node env)
   (declare (type node node)
