@@ -34,6 +34,6 @@
             "Test function was bound as side effect of loading fasl")
         (is (= 120 (funcall fact 5))
             "Test function is callable")
-        (is (equalp (tc:make-function-env-entry :name fact :arity 1)
+        (is (equalp (tc:make-function-env-entry :name fact :arity 1 :inline-p nil)
                     (tc:lookup-function entry:*global-environment* fact :no-error t))
             "Environment was restored")))))
