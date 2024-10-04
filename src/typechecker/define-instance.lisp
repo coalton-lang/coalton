@@ -122,14 +122,13 @@
                                (if method-inline-p t nil))
                      :finally (return table)))
 
-             (docstring (parser:toplevel-define-instance-docstring instance))
-
              (instance-entry
                (tc:make-ty-class-instance
                 :constraints context
                 :predicate pred
                 :codegen-sym instance-codegen-sym
                 :method-codegen-syms method-codegen-syms
+                :method-inline-p method-inline-p
                 :docstring (source:docstring instance))))
 
         (cond (context
