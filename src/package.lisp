@@ -29,6 +29,7 @@
    #:repr
    #:lisp-toplevel
    #:monomorphize
+   #:inline
    #:specialize
    #:unable-to-codegen)
   
