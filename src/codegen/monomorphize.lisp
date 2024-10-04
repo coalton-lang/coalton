@@ -436,8 +436,10 @@ propagate dictionaries that have been moved by the hoister."
 
           :for name := (compile-candidate-name candidate)
           :for code := (tc:lookup-code env name)
+          :for function-env-entry := (tc:lookup-function env name :no-error t)
           :for inline-p := (and (node-abstraction-p code)
-                                (tc:function-env-entry-inline-p (tc:lookup-function env name)))
+                                function-env-entry
+                                (tc:function-env-entry-inline-p function-env-entry))
           :for new-code := (funcall optimize-node (compile-candidate candidate code env) env)
 
           :for new-code_ := (progn

@@ -1608,7 +1608,7 @@ consume all attributes")))
                                                 (if (null (cst:raw (cst:rest form)))
                                                     (progn
                                                       (setq forms (cst:rest forms))
-                                                      (parse-inline form file))
+                                                      (parse-inline form source))
                                                     (parse-error "Malformed inline form"
                                                                  (note source form "expected list")))))
                            :for method := (parse-instance-method-definition (cst:first forms) (cst:second form) source)
