@@ -57,6 +57,7 @@
    #:toplevel-declare-type                       ; ACCESSOR
    #:toplevel-declare-list                       ; TYPE
    #:toplevel-declare-monomorphize               ; ACCESSOR
+   #:toplevel-declare-inline-p                   ; ACCESSOR
    #:toplevel-define                             ; STRUCT
    #:make-toplevel-define                        ; CONSTRUCTOR
    #:toplevel-define-name                        ; ACCESSOR
@@ -65,6 +66,7 @@
    #:toplevel-define-body                        ; ACCESSOR
    #:toplevel-define-monomorphize                ; ACCESSOR
    #:toplevel-define-list                        ; TYPE
+   #:toplevel-define-inline-p                    ; ACCESSOR
    #:fundep                                      ; STRUCT
    #:make-fundep                                 ; CONSTRUCTOR
    #:fundep-left                                 ; ACCESSOR
@@ -89,6 +91,7 @@
    #:instance-method-definition-name             ; ACCESSOR
    #:instance-method-definition-params           ; ACCESSOR
    #:instance-method-definition-body             ; ACCESSOR
+   #:instance-method-definition-inline-p         ; ACCESSOR
    #:instance-method-definition-list             ; TYPE
    #:toplevel-define-instance                    ; STRUCT
    #:make-toplevel-define-instance               ; CONSTRUCTOR
@@ -148,6 +151,8 @@
 ;;;; docstring := <a lisp string>
 ;;;;
 ;;;; attribute-monomorphize := "(" "monomorphize" ")"
+;;;;
+;;;; attribute-inline := "(" "inline" ")"
 ;;;;
 ;;;; attribute-repr := "(" "repr" ( ":enum" | ":lisp" | ":transparent" ) ")"
 ;;;;                 | "(" "repr" ":native" lisp-form ")"
@@ -214,6 +219,9 @@
             (:include attribute))
   (type (util:required 'type) :type keyword-src       :read-only t)
   (arg  (util:required 'arg)  :type (or null cst:cst) :read-only t))
+
+(defstruct (attribute-inline
+            (:include attribute)))
 
 ;;
 ;; Toplevel Structures
@@ -303,7 +311,8 @@
   (name         (util:required 'name)         :type identifier-src                   :read-only t)
   (type         (util:required 'type)         :type qualified-ty                     :read-only t)
   (location     (util:required 'location)     :type source:location                  :read-only t)
-  (monomorphize (util:required 'monomorphize) :type (or null attribute-monomorphize) :read-only nil))
+  (monomorphize (util:required 'monomorphize) :type (or null attribute-monomorphize) :read-only nil)
+  (inline-p     (util:required 'inline-p)     :type (or null attribute-inline)       :read-only nil))
 
 (defmethod source:location ((self toplevel-declare))
   (toplevel-declare-location self))
@@ -323,7 +332,8 @@
   (params       (util:required 'params)       :type pattern-list                     :read-only t)
   (orig-params  (util:required 'orig-params)  :type pattern-list                     :read-only t)
   (body         (util:required 'body)         :type node-body                        :read-only t)
-  (monomorphize (util:required 'monomorphize) :type (or null attribute-monomorphize) :read-only nil))
+  (monomorphize (util:required 'monomorphize) :type (or null attribute-monomorphize) :read-only nil)
+  (inline-p     (util:required 'inline-p)     :type (or null attribute-inline)       :read-only nil))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-define-list-p (x)
@@ -389,7 +399,8 @@
   (name     (util:required 'name)     :type node-variable   :read-only t)
   (params   (util:required 'params)   :type pattern-list    :read-only t)
   (body     (util:required 'body)     :type node-body       :read-only t)
-  (location (util:required 'location) :type source:location :read-only t))
+  (location (util:required 'location) :type source:location :read-only t)
+  (inline-p (util:required 'inline-p) :type (or null attribute-inline) :read-only nil))
 
 (defmethod source:location ((self instance-method-definition))
   (instance-method-definition-location self))
@@ -779,12 +790,25 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
        (parse-repr form source)
        form)
       attributes)
+
+     nil)
+
+    ((coalton:inline)
+     (vector-push-extend
+      (cons
+       (parse-inline form source)
+       form)
+      attributes)
+
      nil)
 
     ((coalton:define)
      (let ((define (parse-define form source))
            monomorphize
-           monomorphize-form)
+           monomorphize-form
+
+           inline-p
+           inline-form)
        (loop :for (attribute . attribute-form) :across attributes
              :do (etypecase attribute
                    (attribute-repr
@@ -805,10 +829,22 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
                                                 "when parsing define")))
 
                     (setf monomorphize attribute)
-                    (setf monomorphize-form attribute-form))))
+                    (setf monomorphize-form attribute-form))
+                   (attribute-inline
+                    (when inline-p
+                      (parse-error "Duplicate inline attribute"
+                                   (note source attribute-form
+                                         "inline attribute here")
+                                   (note source inline-form
+                                         "previous attribute here")
+                                   (source:note (toplevel-define-name define)
+                                                "when parsing define")))
+                    (setf inline-p attribute)
+                    (setf inline-form attribute-form))))
 
        (setf (fill-pointer attributes) 0)
        (setf (toplevel-define-monomorphize define) monomorphize)
+       (setf (toplevel-define-inline-p define) inline-p)
        (push define (program-defines program))
        t))
 
@@ -816,7 +852,10 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
      (let ((declare (parse-declare form source))
 
            monomorphize
-           monomorphize-form)
+           monomorphize-form
+
+           inline-p
+           inline-form)
 
        (loop :for (attribute . attribute-form) :across attributes
              :do (etypecase attribute
@@ -836,10 +875,21 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
                                    (note source form "when parsing declare")))
 
                     (setf monomorphize attribute)
-                    (setf monomorphize-form attribute-form))))
+                    (setf monomorphize-form attribute-form))
+                   (attribute-inline
+                    (when inline-p
+                      (parse-error "Duplicate inline attribute"
+                                   (note source attribute-form
+                                         "inline attribute here")
+                                   (note source inline-form
+                                         "inline attribute here")
+                                   (note source form "when parsing declare")))
+                    (setf inline-p attribute)
+                    (setf inline-form attribute-form))))
 
        (setf (fill-pointer attributes) 0)
        (setf (toplevel-declare-monomorphize declare) monomorphize)
+       (setf (toplevel-declare-inline-p declare) inline-p)
        (push declare (program-declares program))
        t))
 
@@ -1031,7 +1081,8 @@ consume all attributes")))
        :docstring docstring
        :body body
        :monomorphize nil
-       :location (form-location source form)))))
+       :location (form-location source form)
+       :inline-p nil))))
 
 (defun parse-declare (form source)
   (declare (type cst:cst form)
@@ -1067,7 +1118,8 @@ consume all attributes")))
           :location (form-location source (cst:second form)))
    :type (parse-qualified-type (cst:third form) source)
    :monomorphize nil
-   :location (form-location source form)))
+   :location (form-location source form)
+   :inline-p nil))
 
 (defun parse-define-type (form source)
   (declare (type cst:cst form)
@@ -1488,19 +1540,35 @@ consume all attributes")))
                  (stringp (cst:raw (cst:third form))))
         (setf docstring (cst:raw (cst:third form))))
 
-      (make-toplevel-define-instance
-       :context context
-       :pred (parse-predicate unparsed-predicate
-                              (source:make-location source
-                                                    (util:cst-source-range unparsed-predicate)))
-       :docstring docstring
-       :methods (loop :for methods := (cst:nthrest (if docstring 3 2) form) :then (cst:rest methods)
-                      :while (cst:consp methods)
-                      :for method := (cst:first methods)
-                      :collect (parse-instance-method-definition method (cst:second form) source))
-       :location (form-location source form)
-       :head-location (form-location source (cst:second form))
-       :compiler-generated nil))))
+      (let ((methods (loop :with forms := (cst:nthrest (if docstring 3 2) form)
+                           :while (cst:raw forms)
+                           :for inline-p := (let ((form (cst:first forms)))
+                                              (when (and (cst:consp form)
+                                                         (eq 'coalton:inline (cst:raw (cst:first form))))
+                                                (if (null (cst:raw (cst:rest form)))
+                                                    (progn
+                                                      (setq forms (cst:rest forms))
+                                                      (parse-inline form source))
+                                                    (parse-error "Malformed inline form"
+                                                                 (note source form "expected list")))))
+                           :for method := (parse-instance-method-definition (cst:first forms) (cst:second form) source)
+                           :collect
+                           (progn
+                             (when inline-p
+                               (setf (instance-method-definition-inline-p method) inline-p))
+                             (setq forms (cst:rest forms))
+                             method))))
+
+        (make-toplevel-define-instance
+         :context context
+         :pred (parse-predicate unparsed-predicate
+                                (source:make-location source
+                                                      (util:cst-source-range unparsed-predicate)))
+         :docstring docstring
+         :methods methods
+         :location (form-location source form)
+         :head-location (form-location source (cst:second form))
+         :compiler-generated nil)))))
 
 (defun parse-specialize (form source)
   (declare (type cst:cst form)
@@ -1762,7 +1830,8 @@ consume all attributes")))
        :name name
        :params params
        :body (parse-body (cst:rest (cst:rest form)) form source)
-       :location (form-location source form)))))
+       :location (form-location source form)
+       :inline-p nil))))
 
 (defun parse-fundep (form source)
   (declare (type cst:cst form)
@@ -1810,6 +1879,19 @@ consume all attributes")))
                  (note source form "unexpected form")))
 
   (make-attribute-monomorphize
+   :location (form-location source form)))
+
+(defun parse-inline (form source)
+  (declare (type cst:cst form)
+           (values attribute-inline))
+
+  (assert (cst:consp form))
+
+  (when (cst:consp (cst:rest form))
+    (parse-error "Malformed inline attribute"
+                 (note source form "unexpected form")))
+
+  (make-attribute-inline
    :location (form-location source form)))
 
 (defun parse-repr (form source)

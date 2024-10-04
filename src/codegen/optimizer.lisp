@@ -58,7 +58,7 @@
 
 (in-package #:coalton-impl/codegen/optimizer)
 
-(defun update-function-env (bindings env)
+(defun update-function-env (bindings inline-p-table env)
   (declare (type binding-list bindings)
            (type tc:environment env)
            (values tc:environment))
@@ -77,7 +77,8 @@
                     name
                     (tc:make-function-env-entry
                      :name name
-                     :arity arity))))
+                     :arity arity
+                     :inline-p (gethash name inline-p-table)))))
     (dolist (name toplevel-values)
       (when (tc:lookup-function env name :no-error t)
         (setf env (tc:unset-function env name)))))
@@ -91,9 +92,10 @@
       (setf (gethash name table) (tc:function-env-entry-arity entry)))
     table))
 
-(defun optimize-bindings (bindings monomorphize-table package env)
+(defun optimize-bindings (bindings monomorphize-table inline-p-table package env)
   (declare (type binding-list bindings)
            (type hash-table monomorphize-table)
+           (type hash-table inline-p-table)
            (type package package)
            (type tc:environment env)
            (values binding-list tc:environment))
@@ -129,6 +131,7 @@
                               manager
                               package
                               resolve-table
+                              inline-p-table
                               (lambda (node env)
                                 (optimize-node node env))
                               env)
@@ -138,7 +141,7 @@
 
 
       ;; Update function env
-      (setf env (update-function-env bindings env))
+      (setf env (update-function-env bindings inline-p-table env))
 
 
       (let ((function-table (make-function-table env)))
@@ -421,8 +424,10 @@ requires direct constructor calls."
              (alexandria:when-let*
                  ((name (node-rator-name node))
                   (code (tc:lookup-code env name :no-error t))
+                  (fun-env-entry (tc:lookup-function env name :no-error t))
+                  (inline-p (when fun-env-entry (tc:function-env-entry-inline-p fun-env-entry)))
                   (_    (and (node-abstraction-p code)
-                             (funcall heuristic code)
+                             (or inline-p (funcall heuristic code))
                              (<= (length call-stack)
                                  max-depth)
                              (<= (count name call-stack)
@@ -461,7 +466,7 @@ requires direct constructor calls."
 NODE in the environment ENV."
   (if settings:*coalton-heuristic-inlining*
       (heuristic-inline-applications node env)
-      node))
+      (heuristic-inline-applications node env :heuristic (constantly nil))))
 
 (defun inline-methods (node env)
   (declare (type node node)

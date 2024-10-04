@@ -86,6 +86,7 @@
    #:ty-class-instance-predicate            ; ACCESSOR
    #:ty-class-instance-codegen-sym          ; ACCESSOR
    #:ty-class-instance-method-codegen-syms  ; ACCESSOR
+   #:ty-class-instance-method-inline-p      ; ACCESSOR
    #:ty-class-instance-list                 ; TYPE
    #:instance-environment                   ; STRUCT
    #:instance-environment-instances         ; ACCESSOR
@@ -93,6 +94,7 @@
    #:make-function-env-entry                ; CONSTRUCTOR
    #:function-env-entry-name                ; ACCESSOR
    #:function-env-entry-arity               ; ACCESSOR
+   #:function-env-entry-inline-p            ; ACCESSOR
    #:function-environment                   ; STRUCT
    #:name-entry                             ; STRUCT
    #:make-name-entry                        ; CONSTRUCTOR
@@ -656,6 +658,7 @@
   (predicate           (util:required 'predicate)           :type ty-predicate      :read-only t)
   (codegen-sym         (util:required 'codegen-sym)         :type symbol            :read-only t)
   (method-codegen-syms (util:required 'method-codegen-syms) :type environment-map   :read-only t)
+  (method-inline-p     (util:required 'method-inline-p)     :type environment-map   :read-only t)
   (docstring           (util:required 'docstring)           :type (or null string)  :read-only t))
 
 (defmethod source:docstring ((self ty-class-instance))
@@ -685,6 +688,7 @@
    :predicate (apply-substitution subst-list (ty-class-instance-predicate instance))
    :codegen-sym (ty-class-instance-codegen-sym instance)
    :method-codegen-syms (ty-class-instance-method-codegen-syms instance)
+   :method-inline-p (ty-class-instance-method-inline-p instance)
    :docstring (ty-class-instance-docstring instance)))
 
 (defstruct instance-environment
@@ -699,8 +703,9 @@
 ;;;
 
 (defstruct function-env-entry
-  (name  (util:required 'name)  :type symbol :read-only t)
-  (arity (util:required 'arity) :type fixnum :read-only t))
+  (name     (util:required 'name)     :type symbol  :read-only t)
+  (arity    (util:required 'arity)    :type fixnum  :read-only t)
+  (inline-p (util:required 'inline-p) :type boolean :read-only t))
 
 (defmethod make-load-form ((self function-env-entry) &optional env)
   (make-load-form-saving-slots self :environment env))

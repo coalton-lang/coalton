@@ -137,9 +137,10 @@ Example:
               (setf (gethash (car binding) offsets) offset))
         :append instance-bindings))
 
-(defun compile-translation-unit (translation-unit monomorphize-table env)
+(defun compile-translation-unit (translation-unit monomorphize-table inline-p-table env)
   (declare (type tc:translation-unit translation-unit)
            (type hash-table monomorphize-table)
+           (type hash-table inline-p-table)
            (type tc:environment env))
 
   (let* ((offsets (make-hash-table))
@@ -150,7 +151,7 @@ Example:
          (definition-names (mapcar #'car definitions)))
 
     (multiple-value-bind (definitions env)
-        (optimize-bindings definitions monomorphize-table *package* env)
+        (optimize-bindings definitions monomorphize-table inline-p-table *package* env)
 
       (let ((sccs (node-binding-sccs definitions))
             (lisp-forms (tc:translation-unit-lisp-forms translation-unit)))

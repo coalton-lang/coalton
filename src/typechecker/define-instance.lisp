@@ -114,18 +114,31 @@
                                                          method-name))
                      :finally (return table)))
 
+             (method-inline-p
+               (loop :with table := (tc:make-map :test 'eq)
+                     :for method-def :in (parser:toplevel-define-instance-methods instance)
+                     :for method-name := (parser:node-variable-name
+                                          (parser:instance-method-definition-name method-def))
+                     :for method-inline-p := (parser:instance-method-definition-inline-p method-def)
+                     :do (setf (tc:get-value table method-name)
+                               ;; Convert from attribute inline to boolean
+                               (if method-inline-p t nil))
+                     :finally (return table)))
+
              (instance-entry
                (tc:make-ty-class-instance
                 :constraints context
                 :predicate pred
                 :codegen-sym instance-codegen-sym
                 :method-codegen-syms method-codegen-syms
+                :method-inline-p method-inline-p
                 :docstring (source:docstring instance))))
 
         (cond (context
                (setf env (tc:set-function env instance-codegen-sym (tc:make-function-env-entry
                                                                     :name instance-codegen-sym
-                                                                    :arity (length context)))))
+                                                                    :arity (length context)
+                                                                    :inline-p nil))))
               ((tc:lookup-function env instance-codegen-sym :no-error t)
                (setf env (tc:unset-function env instance-codegen-sym))))
 
