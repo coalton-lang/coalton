@@ -114,6 +114,10 @@
                                                          method-name))
                      :finally (return table)))
 
+             (method-inline-p (make-hash-table :test 'eq))
+
+             (docstring (parser:toplevel-define-instance-docstring instance))
+
              (instance-entry
                (tc:make-ty-class-instance
                 :constraints context
