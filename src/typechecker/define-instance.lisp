@@ -111,7 +111,16 @@
                                                                       method-name))
                                           method-names))
 
-             (method-inline-p (make-hash-table :test 'eq))
+             (method-inline-p
+               (loop :with table := (tc:make-map :test 'eq)
+                     :for method-def :in (parser:toplevel-define-instance-methods instance)
+                     :for method-name := (parser:node-variable-name
+                                          (parser:instance-method-definition-name method-def))
+                     :for method-inline-p := (parser:instance-method-definition-inline-p method-def)
+                     :do (setf (tc:get-value table method-name)
+                               ;; Convert from attribute inline to boolean
+                               (if method-inline-p t nil))
+                     :finally (return table)))
 
              (docstring (parser:toplevel-define-instance-docstring instance))
 

@@ -58,7 +58,7 @@
 
 (in-package #:coalton-impl/codegen/optimizer)
 
-(defun update-function-env (bindings env)
+(defun update-function-env (bindings inline-p-table env)
   (declare (type binding-list bindings)
            (type tc:environment env)
            (values tc:environment))
@@ -78,7 +78,7 @@
                     (tc:make-function-env-entry
                      :name name
                      :arity arity
-                     :inline-p nil))))
+                     :inline-p (gethash name inline-p-table)))))
     (dolist (name toplevel-values)
       (when (tc:lookup-function env name :no-error t)
         (setf env (tc:unset-function env name)))))
@@ -92,9 +92,10 @@
       (setf (gethash name table) (tc:function-env-entry-arity entry)))
     table))
 
-(defun optimize-bindings (bindings monomorphize-table package env)
+(defun optimize-bindings (bindings monomorphize-table inline-p-table package env)
   (declare (type binding-list bindings)
            (type hash-table monomorphize-table)
+           (type hash-table inline-p-table)
            (type package package)
            (type tc:environment env)
            (values binding-list tc:environment))
@@ -139,7 +140,7 @@
 
 
       ;; Update function env
-      (setf env (update-function-env bindings env))
+      (setf env (update-function-env bindings inline-p-table env))
 
 
       (let ((function-table (make-function-table env)))
