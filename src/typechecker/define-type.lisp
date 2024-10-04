@@ -506,7 +506,7 @@
                                    :vars nil
                                    :var-names nil
                                    :body (list (util:runtime-quote (type-definition-runtime-type type)))))
-                :location location)
+                :location location
                 :inline-p nil))
      :location location
      :head-location location

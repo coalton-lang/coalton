@@ -796,7 +796,7 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
     ((coalton:inline)
      (vector-push-extend
       (cons
-       (parse-inline form file)
+       (parse-inline form source)
        form)
       attributes)
 
@@ -807,7 +807,8 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
            monomorphize
            monomorphize-form
 
-           inline-p)
+           inline-p
+           inline-form)
        (loop :for (attribute . attribute-form) :across attributes
              :do (etypecase attribute
                    (attribute-repr
@@ -830,7 +831,16 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
                     (setf monomorphize attribute)
                     (setf monomorphize-form attribute-form))
                    (attribute-inline
-                    (setf inline-p attribute))))
+                    (when inline-p
+                      (parse-error "Duplicate inline attribute"
+                                   (note source attribute-form
+                                         "inline attribute here")
+                                   (note source inline-form
+                                         "previous attribute here")
+                                   (source:note (toplevel-define-name define)
+                                                "when parsing define")))
+                    (setf inline-p attribute)
+                    (setf inline-form attribute-form))))
 
        (setf (fill-pointer attributes) 0)
        (setf (toplevel-define-monomorphize define) monomorphize)
@@ -842,7 +852,10 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
      (let ((declare (parse-declare form source))
 
            monomorphize
-           monomorphize-form)
+           monomorphize-form
+
+           inline-p
+           inline-form)
 
        (loop :for (attribute . attribute-form) :across attributes
              :do (etypecase attribute
@@ -862,10 +875,21 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
                                    (note source form "when parsing declare")))
 
                     (setf monomorphize attribute)
-                    (setf monomorphize-form attribute-form))))
+                    (setf monomorphize-form attribute-form))
+                   (attribute-inline
+                    (when inline-p
+                      (parse-error "Duplicate inline attribute"
+                                   (note source attribute-form
+                                         "inline attribute here")
+                                   (note source inline-form
+                                         "inline attribute here")
+                                   (note source form "when parsing declare")))
+                    (setf inline-p attribute)
+                    (setf inline-form attribute-form))))
 
        (setf (fill-pointer attributes) 0)
        (setf (toplevel-declare-monomorphize declare) monomorphize)
+       (setf (toplevel-declare-inline-p declare) inline-p)
        (push declare (program-declares program))
        t))
 

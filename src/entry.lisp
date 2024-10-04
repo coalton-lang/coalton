@@ -106,7 +106,7 @@
                                          (setf (gethash method-codegen-sym inline-p-table) t)))
                                      method-codegen-syms))
 
-                  (analysis:analyze-translation-unit translation-unit env file)
+                  (analysis:analyze-translation-unit translation-unit env)
 
                   (codegen:compile-translation-unit translation-unit monomorphize-table inline-p-table env))))))))))
 
