@@ -122,7 +122,8 @@
         (cond (context
                (setf env (tc:set-function env instance-codegen-sym (tc:make-function-env-entry
                                                                     :name instance-codegen-sym
-                                                                    :arity (length context)))))
+                                                                    :arity (length context)
+                                                                    :inline-p nil))))
               ((tc:lookup-function env instance-codegen-sym :no-error t)
                (setf env (tc:unset-function env instance-codegen-sym))))
 

@@ -314,7 +314,8 @@
                         ctor-name
                         (tc:make-function-env-entry
                          :name ctor-name
-                         :arity (tc:constructor-entry-arity ctor)))))
+                         :arity (tc:constructor-entry-arity ctor)
+                         :inline-p nil))))
                 ((tc:lookup-function env ctor-name :no-error t)
                  ;; If the constructor does not take
                  ;; parameters then remove it from the

@@ -98,6 +98,7 @@
    #:make-function-env-entry                ; CONSTRUCTOR
    #:function-env-entry-name                ; ACCESSOR
    #:function-env-entry-arity               ; ACCESSOR
+   #:function-env-entry-inline-p            ; ACCESSOR
    #:function-environment                   ; STRUCT
    #:name-entry                             ; STRUCT
    #:make-name-entry                        ; CONSTRUCTOR
@@ -731,8 +732,9 @@
 ;;;
 
 (defstruct function-env-entry
-  (name  (util:required 'name)  :type symbol :read-only t)
-  (arity (util:required 'arity) :type fixnum :read-only t))
+  (name     (util:required 'name)     :type symbol  :read-only t)
+  (arity    (util:required 'arity)    :type fixnum  :read-only t)
+  (inline-p (util:required 'inline-p) :type boolean :read-only t))
 
 (defmethod make-load-form ((self function-env-entry) &optional env)
   (make-load-form-saving-slots self :environment env))
