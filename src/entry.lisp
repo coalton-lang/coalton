@@ -63,6 +63,8 @@
 
                 (let ((monomorphize-table (make-hash-table :test #'eq))
 
+                      (inline-p-table (make-hash-table :test #'eq))
+
                       (translation-unit
                         (tc:make-translation-unit
                          :types type-definitions
@@ -84,9 +86,29 @@
                                              monomorphize-table)
                                     t))
 
-                  (analysis:analyze-translation-unit translation-unit env)
+                  (loop :for define :in (parser:program-defines program)
+                        :when (parser:toplevel-define-inline-p define)
+                          :do (setf (gethash (parser:node-variable-name (parser:toplevel-define-name define))
+                                             inline-p-table)
+                                    t))
 
-                  (codegen:compile-translation-unit translation-unit monomorphize-table env))))))))))
+                  (loop :for declare :in (parser:program-declares program)
+                        :when (parser:toplevel-declare-inline-p declare)
+                          :do (setf (gethash (parser:identifier-src-name (parser:toplevel-declare-name declare))
+                                             inline-p-table)
+                                    t))
+
+                  (loop :for ty-instance :in ty-instances
+                        :for method-codegen-syms := (tc:get-table (tc:ty-class-instance-method-codegen-syms ty-instance))
+                        :for method-inline-p := (tc:ty-class-instance-method-inline-p ty-instance)
+                        :do (maphash (lambda (method-name method-codegen-sym)
+                                       (when (tc:get-value method-inline-p method-name)
+                                         (setf (gethash method-codegen-sym inline-p-table) t)))
+                                     method-codegen-syms))
+
+                  (analysis:analyze-translation-unit translation-unit env file)
+
+                  (codegen:compile-translation-unit translation-unit monomorphize-table inline-p-table env))))))))))
 
 
 (defun expression-entry-point (node)
