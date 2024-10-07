@@ -76,14 +76,15 @@
 (deftype type-definition-list ()
   '(satisfies type-definition-list-p))
 
-(defun toplevel-define-type (types structs env)
+(defun toplevel-define-type (types structs aliases env)
   (declare (type parser:toplevel-define-type-list types)
            (type parser:toplevel-define-struct-list structs)
+           (type parser:toplevel-define-alias-list aliases)
            (type tc:environment env)
            (values type-definition-list parser:toplevel-define-instance-list tc:environment))
 
   ;; Ensure that all types are defined in the current package
-  (check-package (append types structs)
+  (check-package (append types structs aliases)
                  (alexandria:compose #'parser:identifier-src-name
                                      #'parser:type-definition-name)
                  (alexandria:compose #'source:location
@@ -99,7 +100,7 @@
 
   ;; Ensure that there are no duplicate type definitions
   (check-duplicates
-   (append types structs)
+   (append types structs aliases)
    (alexandria:compose #'parser:identifier-src-name #'parser:type-definition-name)
    #'source:location
    (lambda (first second)
@@ -111,7 +112,7 @@
   ;; NOTE: structs define a constructor with the same name
   (check-duplicates
    (mapcan (alexandria:compose #'copy-list #'parser:type-definition-ctors)
-           (append types structs))
+           (append types structs aliases))
    (alexandria:compose #'parser:identifier-src-name #'parser:type-definition-ctor-name)
    #'source:location
    (lambda (first second)
@@ -120,7 +121,7 @@
                   (tc:tc-primary-note second "second definition here"))))
 
   ;; Ensure that no type has duplicate type variables
-  (loop :for type :in (append types structs)
+  (loop :for type :in (append types structs aliases)
         :do (check-duplicates
              (parser:type-definition-vars type)
              #'parser:keyword-src-name
@@ -132,10 +133,10 @@
 
   (let* ((type-names (mapcar (alexandria:compose #'parser:identifier-src-name
                                                  #'parser:type-definition-name)
-                             (append types structs)))
+                             (append types structs aliases)))
 
          (type-dependencies
-           (loop :for type :in (append types structs)
+           (loop :for type :in (append types structs aliases)
                  :for referenced-types := (parser:collect-referenced-types type)
                  :collect (list*
                            (parser:identifier-src-name (parser:type-definition-name type))
@@ -145,7 +146,7 @@
 
          (type-table
            (loop :with table := (make-hash-table :test #'eq)
-                 :for type :in (append types structs)
+                 :for type :in (append types structs aliases)
                  :for type-name := (parser:identifier-src-name (parser:type-definition-name type))
                  :do (setf (gethash type-name table) type)
                  :finally (return table)))
@@ -174,7 +175,9 @@
                                 :collect (tc:kind-of (partial-type-env-add-var partial-env var)))
 
                      :for kind := (tc:make-kind-function* kvars tc:+kstar+)
-                     :for ty := (tc:make-tycon :name name :kind kind)
+                     :for ty := (if (not (typep type 'parser:toplevel-define-alias))
+                                    (tc:make-tycon :name name :kind kind)
+                                    (parse-type (parser:toplevel-define-alias-type type) env))
                      :do (partial-type-env-add-type partial-env name ty))
 
            :append  (multiple-value-bind (type-definitions instances_ ksubs)
@@ -215,6 +218,17 @@
                   (setf env (tc:unset-name env constructor))
                   (when (plusp (tc:constructor-entry-arity ctor-entry))
                     (setf env (tc:unset-function env constructor))))))
+
+  (cond ((typep parsed-type 'parser:toplevel-define-alias)
+         (setf env (tc:set-alias
+                      env
+                      (type-definition-name type)
+                      (tc:make-alias-entry
+                       :name (type-definition-name type)
+                       :type (parse-type (parser:toplevel-define-alias-type parsed-type) env)
+                       :docstring nil))))
+        ((tc:lookup-alias env (type-definition-name type) :no-error t)
+         (setf env (tc:unset-alias env (type-definition-name type)))))
 
   (cond ((typep parsed-type 'parser:toplevel-define-struct)
          (let ((fields (loop :for field
@@ -319,7 +333,7 @@
     (loop :for type :in types
           :for name := (parser:identifier-src-name (parser:type-definition-name type))
           :for ty := (gethash name (partial-type-env-ty-table env))
-          :for kind := (tc:apply-ksubstitution ksubs (tc:tycon-kind ty))
+          :for kind := (tc:apply-ksubstitution ksubs (tc:kind-of ty))
           :do (setf ksubs (tc:kind-monomorphize-subs (tc:kind-variables kind) ksubs))
           :do (partial-type-env-replace-type env name (tc:make-tycon
                                                        :name name
@@ -356,9 +370,9 @@
                         :collect (tc:quantify-using-tvar-order tvars (tc:qualify nil ty)))
 
              :for constructor-args
-              := (loop :for ctor :in (parser:type-definition-ctors type)
-                       :for ctor-name := (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
-                       :collect (tc:apply-ksubstitution ksubs (gethash ctor-name ctor-table)))
+               := (loop :for ctor :in (parser:type-definition-ctors type)
+                        :for ctor-name := (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
+                        :collect (tc:apply-ksubstitution ksubs (gethash ctor-name ctor-table)))
 
              ;; Check that repr :enum types do not have any constructors with fields
              :when (eq repr-type :enum)

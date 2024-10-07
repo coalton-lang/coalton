@@ -30,6 +30,35 @@
 ;;; Entrypoints
 ;;;
 
+(defgeneric apply-alias-substitutions (ty env)
+  (:documentation "Replace aliases in TY with their underlying types.")
+
+  (:method ((ty tc:tyvar) env)
+    (declare (ignore env)
+             (values tc:tyvar))
+    ty)
+
+  (:method ((ty tc:tycon) env)
+    (declare (type tc:environment env)
+             (values tc:ty))
+
+    (let ((alias (tc:lookup-alias env (tc:tycon-name ty) :no-error t)))
+      (when alias
+        (setf ty (tc:alias-entry-type alias)))
+      ty))
+
+  (:method ((ty tc:tapp) env)
+    (declare (type tc:environment env)
+             (values tc:tapp))
+    (tc:make-tapp
+     :from (apply-alias-substitutions (tc:tapp-from ty) env)
+     :to (apply-alias-substitutions (tc:tapp-to ty) env)))
+
+  (:method ((ty tc:tgen) env)
+    (declare (ignore env)
+             (values tc:tgen))
+    ty))
+
 (defun parse-type (ty env)
   (declare (type parser:ty ty)
            (type tc:environment env)
@@ -50,6 +79,7 @@
                           partial-env)
 
       (setf ty (tc:apply-ksubstitution ksubs ty))
+      (setf ty (apply-alias-substitutions ty env))
       (setf ksubs (tc:kind-monomorphize-subs (tc:kind-variables ty) ksubs))
       (tc:apply-ksubstitution ksubs ty))))
 
@@ -70,6 +100,9 @@
         (infer-type-kinds unparsed-ty tc:+kstar+ nil partial-env)
 
       (setf qual-ty (tc:apply-ksubstitution ksubs qual-ty))
+      (setf qual-ty (tc:make-qualified-ty
+                     :predicates (tc:qualified-ty-predicates qual-ty)
+                     :type (apply-alias-substitutions (tc:qualified-ty-type qual-ty) env)))
       (setf ksubs (tc:kind-monomorphize-subs (tc:kind-variables qual-ty) ksubs))
 
       (let* ((qual-ty (tc:apply-ksubstitution ksubs qual-ty))

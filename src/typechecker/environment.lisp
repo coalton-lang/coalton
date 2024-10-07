@@ -49,6 +49,12 @@
    #:constructor-entry-compressed-repr      ; ACCESSOR
    #:constructor-entry-list                 ; TYPE
    #:constructor-environment                ; STRUCT
+   #:alias-entry
+   #:make-alias-entry
+   #:alias-entry-name
+   #:alias-entry-type
+   #:alias-entry-list
+   #:alias-environment
    #:struct-field                           ; STRUCT
    #:make-struct-field                      ; CONSTRUCTOR
    #:struct-field-name                      ; ACCESSOR
@@ -112,6 +118,7 @@
    #:make-default-environment               ; FUNCTION
    #:environment-value-environment          ; ACCESSOR
    #:environment-type-environment           ; ACCESSOR
+   #:environment-alias-environment          ; ACCESSOR
    #:environment-constructor-environment    ; ACCESSOR
    #:environment-class-environment          ; ACCESSOR
    #:environment-fundep-environment         ; ACCESSOR
@@ -129,6 +136,9 @@
    #:lookup-constructor                     ; FUNCTION
    #:set-constructor                        ; FUNCTION
    #:unset-constructor                      ; FUNCTION
+   #:lookup-alias                           ; FUNCTION
+   #:set-alias                              ; FUNCTION
+   #:unset-alias                            ; FUNCTION
    #:lookup-struct                          ; FUNCTION
    #:set-struct                             ; FUNCTION
    #:unset-struct                           ; FUNCTION
@@ -499,6 +509,36 @@
 (declaim (sb-ext:freeze-type constructor-environment))
 
 ;;;
+;;; Alias environment
+;;;
+
+(defstruct alias-entry
+  (name      (util:required 'name)      :type symbol)
+  (type      (util:required 'type)      :type ty)
+  (docstring (util:required 'docstring) :type (or null string)))
+
+(defmethod source:docstring ((self alias-entry))
+  (alias-entry-docstring self))
+
+(defmethod make-load-form ((self alias-entry) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
+#+(and sbcl coalton-release)
+(declaim sb-ext:freeze-type alias-entry)
+
+(defun alias-entry-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'alias-entry-p x)))
+
+(deftype alias-entry-list ()
+  '(satisfies alias-entry-list-p))
+
+(defstruct (alias-environment (:include immutable-map)))
+
+#+(and sbcl coalton-release)
+(declaim (sb-ext:freeze-type alias-environment))
+
+;;;
 ;;; Struct environment
 ;;;
 
@@ -802,6 +842,7 @@
   (value-environment          (util:required 'value-environment)          :type value-environment          :read-only t)
   (type-environment           (util:required 'type-environment)           :type type-environment           :read-only t)
   (constructor-environment    (util:required 'constructor-environment)    :type constructor-environment    :read-only t)
+  (alias-environment          (util:required 'alias-environment)          :type alias-environment          :read-only t)
   (struct-environment         (util:required 'struct-environment)         :type struct-environment         :read-only t)
   (class-environment          (util:required 'class-environment)          :type class-environment          :read-only t)
   (fundep-environment         (util:required 'fundep-environment)         :type fundep-environment         :read-only t)
@@ -830,6 +871,7 @@
   (make-environment
    :value-environment (make-value-environment)
    :type-environment (make-default-type-environment)
+   :alias-environment (make-alias-environment)
    :struct-environment (make-struct-environment)
    :constructor-environment (make-default-constructor-environment)
    :class-environment (make-class-environment)
@@ -846,6 +888,7 @@
                            &key
                              (value-environment (environment-value-environment env))
                              (type-environment (environment-type-environment env))
+                             (alias-environment (environment-alias-environment env))
                              (constructor-environment (environment-constructor-environment env))
                              (struct-environment (environment-struct-environment env))
                              (class-environment (environment-class-environment env))
@@ -860,6 +903,7 @@
   (declare (type environment env)
            (type value-environment value-environment)
            (type constructor-environment constructor-environment)
+           (type alias-environment alias-environment)
            (type struct-environment struct-environment)
            (type class-environment class-environment)
            (type fundep-environment fundep-environment)
@@ -875,6 +919,7 @@
    :value-environment value-environment
    :type-environment type-environment
    :constructor-environment constructor-environment
+   :alias-environment alias-environment
    :struct-environment struct-environment
    :class-environment class-environment
    :fundep-environment fundep-environment
@@ -989,6 +1034,35 @@
                              (environment-constructor-environment env)
                              symbol
                              #'make-constructor-environment)))
+
+(defun lookup-alias (env symbol &key no-error)
+  (declare (type environment env)
+           (type symbol symbol))
+  (or (immutable-map-lookup (environment-alias-environment env) symbol)
+      (unless no-error
+        (util:coalton-bug "Unknown alias ~S" symbol))))
+
+(define-env-updater set-alias (env symbol value)
+  (declare (type environment env)
+           (type symbol symbol)
+           (type alias-entry value))
+  (update-environment
+   env
+   :alias-environment (immutable-map-set
+                       (environment-alias-environment env)
+                       symbol
+                       value
+                       #'make-alias-environment)))
+
+(define-env-updater unset-alias (env symbol)
+  (declare (type environment env)
+           (type symbol symbol))
+  (update-environment
+   env
+   :alias-environment (immutable-map-remove
+                       (environment-alias-environment env)
+                       symbol
+                       #'make-alias-environment)))
 
 (defun lookup-struct (env symbol &key no-error)
   (declare (type environment env)
