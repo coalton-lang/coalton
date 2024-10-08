@@ -523,10 +523,10 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                       (setf subs (tc:unify subs ty1 ty2))
                     (tc:coalton-internal-type-error ()
                       (tc-error "Return type mismatch"
-                                (tc-primary-note s1
+                                (tc-note s1
                                                  "First return is of type '~S'"
                                                  (tc:apply-substitution subs ty1))
-                                (tc-primary-note s2
+                                (tc-note s2
                                                  "Second return is of type '~S'"
                                                  (tc:apply-substitution subs ty2))))))
 
@@ -536,10 +536,10 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
               (setf subs (tc:unify subs (cdr (first *returns*)) body-ty))
             (tc:coalton-internal-type-error ()
               (tc-error "Return type mismatch"
-                        (tc-primary-note (car (first *returns*))
+                        (tc-note (car (first *returns*))
                                          "First return is of type '~S'"
                                          (tc:apply-substitution subs (cdr (first *returns*))))
-                        (tc-primary-note (parser:node-body-last-node (parser:node-abstraction-body node))
+                        (tc-note (parser:node-body-last-node (parser:node-abstraction-body node))
                                          "Second return is of type '~S'"
                                          (tc:apply-substitution subs body-ty))))))
 
@@ -575,7 +575,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
      (lambda (first second)
        (tc-error "Duplicate definition in let"
                  (tc-note first "first definition here")
-                 (tc-primary-note second "second definition here"))))
+                 (tc-note second "second definition here"))))
 
     (multiple-value-bind (preds accessors binding-nodes subs)
         (infer-let-bindings (parser:node-let-bindings node) (parser:node-let-declares node) subs env)
@@ -1501,7 +1501,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                         (lambda (first second)
                           (tc-error "Duplicate pattern variable"
                                     (tc-note first "first definition here")
-                                    (tc-primary-note second "second definition here"))))
+                                    (tc-note second "second definition here"))))
 
       (unless ctor
         (tc-error "Unknown constructor"
@@ -1866,7 +1866,8 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
              (tc-note (parser:binding-name first-fn)
                       "function can not be defined recursively with variables")
              (loop :for binding :in (remove first-fn bindings :test #'eq)
-                   :collect (tc-note (parser:binding-name binding) "with definition")))))
+                   :collect (tc-secondary-note (parser:binding-name binding)
+                                               "with definition")))))
 
   ;; If there is a single non-recursive binding then it is valid
   (when (and (= 1 (length bindings))
@@ -1883,8 +1884,8 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
            (tc-note (parser:binding-name (first bindings))
                     "invalid recursive variable bindings")
            (loop :for binding :in (rest bindings)
-                 :collect (tc-note (parser:binding-name binding)
-                                   "with definition"))))
+                 :collect (tc-secondary-note (parser:binding-name binding)
+                                             "with definition"))))
 
   (let ((binding-names (mapcar (alexandria:compose #'parser:node-variable-name
                                                    #'parser:binding-name)
@@ -2180,9 +2181,9 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                                            (tc-location s1
                                                         "First return is of type '~S'"
                                                         (tc:apply-substitution subs ty1))
-                                           (tc-primary-location s2
-                                                                "Second return is of type '~S'"
-                                                                (tc:apply-substitution subs ty2))))))
+                                           (tc-location s2
+                                                        "Second return is of type '~S'"
+                                                        (tc:apply-substitution subs ty2))))))
 
                    ;; Unify the function's inferred type with one of the early returns.
                    (when *returns*
@@ -2193,9 +2194,9 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                                    (tc-location (car (first *returns*))
                                                 "First return is of type '~S'"
                                                 (tc:apply-substitution subs (cdr (first *returns*))))
-                                   (tc-primary-note (parser:binding-last-node binding)
-                                                    "Second return is of type '~S'"
-                                                    (tc:apply-substitution subs ret-ty))))))
+                                   (tc-note (parser:binding-last-node binding)
+                                            "Second return is of type '~S'"
+                                            (tc:apply-substitution subs ret-ty))))))
 
                    value-node))
 

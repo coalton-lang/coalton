@@ -5,7 +5,6 @@
   (:use
    #:cl)
   (:local-nicknames
-   (#:se #:source-error)
    (#:util #:coalton-impl/util)
    (#:parser #:coalton-impl/parser)
    (#:source #:coalton-impl/source)
