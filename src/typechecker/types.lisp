@@ -9,7 +9,6 @@
   (:export
    #:ty                                 ; STRUCT
    #:ty-alias                           ; ACCESSOR
-   #:ty=                                ; FUNCTION
    #:ty-list                            ; TYPE
    #:tyvar                              ; STRUCT
    #:make-tyvar                         ; CONSTRUCTOR
@@ -36,7 +35,7 @@
    #:instantiate                        ; FUNCTION
    #:kind-of                            ; FUNCTION
    #:type-constructors                  ; FUNCTION
-   #:with-aliases-from                  ; FUNCTION
+   #:ty=                                ; FUNCTION
    #:*boolean-type*                     ; VARIABLE
    #:*unit-type*                        ; VARIABLE
    #:*char-type*                        ; VARIABLE
@@ -206,34 +205,6 @@
 
   (:method ((lst list))
     (mapcan #'type-constructors-generic% lst)))
-
-(defgeneric with-aliases-from (type1 type2)
-  (:documentation "For equal types, apply the aliases in TYPE1 to TYPE2.")
-
-  (:method ((type1 tyvar) (type2 tyvar))
-    (make-tyvar
-     :alias (ty-alias type1)
-     :id (tyvar-id type2)
-     :kind (tyvar-kind type2)))
-
-  (:method ((type1 tycon) (type2 tycon))
-    (make-tycon
-     :alias (ty-alias type1)
-     :name (tycon-name type2)
-     :kind (tycon-kind type2)))
-
-  (:method ((type1 tapp) (type2 tapp))
-    (make-tapp
-     :alias (ty-alias type1)
-     :from (with-aliases-from (tapp-from type1)
-             (tapp-from type2))
-     :to (with-aliases-from (tapp-to type1)
-           (tapp-to type2))))
-
-  (:method ((type1 tgen) (type2 tgen))
-    (make-tgen
-     :alias (ty-alias type1)
-     :id (tgen-id type2))))
 
 (defgeneric ty= (type1 type2)
   (:documentation "For equal types, apply the aliases in TYPE1 to TYPE2.")

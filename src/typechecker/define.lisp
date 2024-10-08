@@ -761,8 +761,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
             (progn
               (setf subs (tc:unify subs expr-ty expected-type))
               (values
-               (tc:with-aliases-from declared-ty
-                 (tc:apply-substitution subs expr-ty))
+               (tc:apply-substitution subs expr-ty)
                preds
                accessors
                expr-node
