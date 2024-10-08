@@ -524,7 +524,7 @@
   (make-load-form-saving-slots self :environment env))
 
 #+(and sbcl coalton-release)
-(declaim sb-ext:freeze-type alias-entry)
+(declaim (sb-ext:freeze-type alias-entry))
 
 (defun alias-entry-list-p (x)
   (and (alexandria:proper-list-p x)
