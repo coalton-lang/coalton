@@ -326,7 +326,7 @@
                                          :collect (multiple-value-bind (type ksubs_)
                                                       (infer-type-kinds field tc:+kstar+ ksubs env)
                                                     (setf ksubs ksubs_)
-                                                    type))
+                                                    (apply-alias-substitutions type (partial-type-env-env env))))
                     :do (setf (gethash ctor-name ctor-table) fields)))
 
     ;; Redefine types with final inferred kinds in the environment

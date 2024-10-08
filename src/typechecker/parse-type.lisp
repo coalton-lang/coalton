@@ -17,6 +17,7 @@
    (#:source #:coalton-impl/source)
    (#:tc #:coalton-impl/typechecker/stage-1))
   (:export
+   #:apply-alias-substitutions          ; FUNCTION
    #:parse-type                         ; FUNCTION
    #:parse-qualified-type               ; FUNCTION
    #:parse-ty-scheme                    ; FUNCTION
