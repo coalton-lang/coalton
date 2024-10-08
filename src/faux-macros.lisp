@@ -37,7 +37,7 @@
   "Create a new alias named NAME. (Coalton top-level operator.)")
 
 (define-coalton-editor-macro coalton:define-struct (name &body definition)
-    "Create a new sruct named NAME. (Coalton top-level operator.)")
+  "Create a new sruct named NAME. (Coalton top-level operator.)")
 
 (define-coalton-editor-macro coalton:declare (var type)
   "Declare the type of a variable. (Coalton top-level operator.)")

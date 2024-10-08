@@ -220,13 +220,16 @@
                     (setf env (tc:unset-function env constructor))))))
 
   (cond ((typep parsed-type 'parser:toplevel-define-alias)
-         (setf env (tc:set-alias
+         (let ((name (type-definition-name type))
+               (alias-type (parse-type (parser:toplevel-define-alias-type parsed-type) env)))
+           (setf (tc:ty-alias alias-type) name)
+           (setf env (tc:set-alias
                       env
-                      (type-definition-name type)
+                      name
                       (tc:make-alias-entry
-                       :name (type-definition-name type)
-                       :type (parse-type (parser:toplevel-define-alias-type parsed-type) env)
-                       :docstring nil))))
+                       :name name
+                       :type alias-type
+                       :docstring nil)))))
         ((tc:lookup-alias env (type-definition-name type) :no-error t)
          (setf env (tc:unset-alias env (type-definition-name type)))))
 

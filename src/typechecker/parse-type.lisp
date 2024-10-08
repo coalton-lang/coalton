@@ -52,6 +52,7 @@
     (declare (type tc:environment env)
              (values tc:tapp))
     (tc:make-tapp
+     :alias (tc:ty-alias ty)
      :from (apply-alias-substitutions (tc:tapp-from ty) env)
      :to (apply-alias-substitutions (tc:tapp-to ty) env)))
 

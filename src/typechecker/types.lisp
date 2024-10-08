@@ -8,6 +8,8 @@
    (#:settings #:coalton-impl/settings))
   (:export
    #:ty                                 ; STRUCT
+   #:ty-alias                           ; ACCESSOR
+   #:ty=                                ; FUNCTION
    #:ty-list                            ; TYPE
    #:tyvar                              ; STRUCT
    #:make-tyvar                         ; CONSTRUCTOR
@@ -34,6 +36,7 @@
    #:instantiate                        ; FUNCTION
    #:kind-of                            ; FUNCTION
    #:type-constructors                  ; FUNCTION
+   #:with-aliases-from                  ; FUNCTION
    #:*boolean-type*                     ; VARIABLE
    #:*unit-type*                        ; VARIABLE
    #:*char-type*                        ; VARIABLE
@@ -71,7 +74,8 @@
 ;;; Types
 ;;;
 
-(defstruct (ty (:constructor nil)))
+(defstruct (ty (:constructor nil))
+  (alias nil :type (or null symbol) :read-only nil))
 
 (defmethod make-load-form ((self ty) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -133,6 +137,7 @@
 (defgeneric instantiate (types type)
   (:method (types (type tapp))
     (make-tapp
+     :alias (ty-alias type)
      :from (instantiate types (tapp-from type))
      :to (instantiate types (tapp-to type))))
   (:method (types (type tgen))
@@ -156,16 +161,19 @@
 
 (defmethod apply-ksubstitution (subs (type tyvar))
   (make-tyvar
+   :alias (ty-alias type)
    :id (tyvar-id type)
    :kind (apply-ksubstitution subs (tyvar-kind type))))
 
 (defmethod apply-ksubstitution (subs (type tycon))
   (make-tycon
+   :alias (ty-alias type)
    :name (tycon-name type)
    :kind (apply-ksubstitution subs (tycon-kind type))))
 
 (defmethod apply-ksubstitution (subs (type tapp))
   (make-tapp
+   :alias (ty-alias type)
    :from (apply-ksubstitution subs (tapp-from type))
    :to (apply-ksubstitution subs (tapp-to type))))
 
@@ -198,6 +206,64 @@
 
   (:method ((lst list))
     (mapcan #'type-constructors-generic% lst)))
+
+(defgeneric with-aliases-from (type1 type2)
+  (:documentation "For equal types, apply the aliases in TYPE1 to TYPE2.")
+
+  (:method ((type1 tyvar) (type2 tyvar))
+    (make-tyvar
+     :alias (ty-alias type1)
+     :id (tyvar-id type2)
+     :kind (tyvar-kind type2)))
+
+  (:method ((type1 tycon) (type2 tycon))
+    (make-tycon
+     :alias (ty-alias type1)
+     :name (tycon-name type2)
+     :kind (tycon-kind type2)))
+
+  (:method ((type1 tapp) (type2 tapp))
+    (make-tapp
+     :alias (ty-alias type1)
+     :from (with-aliases-from (tapp-from type1)
+             (tapp-from type2))
+     :to (with-aliases-from (tapp-to type1)
+           (tapp-to type2))))
+
+  (:method ((type1 tgen) (type2 tgen))
+    (make-tgen
+     :alias (ty-alias type1)
+     :id (tgen-id type2))))
+
+(defgeneric ty= (type1 type2)
+  (:documentation "For equal types, apply the aliases in TYPE1 to TYPE2.")
+
+  (:method ((type1 tyvar) (type2 tyvar))
+    (and (equalp (tyvar-id type1)
+                 (tyvar-id type2))
+         (equalp (tyvar-kind type1)
+                 (tyvar-kind type2))))
+
+  (:method ((type1 tycon) (type2 tycon))
+    (and (equalp (tycon-name type1)
+                 (tycon-name type2))
+         (equalp (tycon-kind type1)
+                 (tycon-kind type2))))
+
+  (:method ((type1 tapp) (type2 tapp))
+    (and (ty= (tapp-from type1)
+              (tapp-from type2))
+         (ty= (tapp-to type1)
+              (tapp-to type2))))
+
+  (:method ((type1 tgen) (type2 tgen))
+    (equalp (tgen-id type1)
+            (tgen-id type2)))
+
+  (:method (type1 type2)
+    (declare (ignore type1)
+             (ignore type2))
+    nil))
 
 ;;;
 ;;; Early types
@@ -367,6 +433,8 @@
   (declare (type stream stream)
            (type ty ty)
            (values ty))
+  (when (ty-alias ty)
+    (format stream "[~S := " (ty-alias ty)))
   (etypecase ty
     (tyvar
      (if *coalton-pretty-print-tyvars*
@@ -424,6 +492,8 @@
     (tgen
      (write-string "#GEN" stream)
      (write (tgen-id ty) :stream stream)))
+  (when (ty-alias ty)
+    (format stream "]"))
   ty)
 
 (defmethod print-object ((ty ty) stream)

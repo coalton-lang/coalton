@@ -40,8 +40,7 @@
   (:method ((type1 ty) (type2 tyvar))
     (bind-variable type2 type1))
   (:method ((type1 tycon) (type2 tycon))
-    (if (equalp type1
-                type2)
+    (if (ty= type1 type2)
         nil
         (error 'unification-error :type1 type1 :type2 type2)))
   (:method ((type1 ty) (type2 ty))
@@ -50,7 +49,7 @@
 (defun bind-variable (tyvar type)
   (cond
     ((and (tyvar-p type)
-          (equalp type tyvar))
+          (ty= type tyvar))
      nil)
     ((find tyvar (type-variables type))
      (error 'infinite-type-unification-error :type type))
@@ -74,7 +73,7 @@ apply s type1 == type2")
         (list (make-substitution :from type1 :to type2))
         (error 'type-kind-mismatch-error :type1 type1 :type2 type2)))
   (:method ((type1 tycon) (type2 tycon))
-    (if (equalp type1 type2)
+    (if (ty= type1 type2)
         nil
         (error 'unification-error :type1 type1 :type2 type2)))
   (:method ((type1 ty) (type2 ty))
