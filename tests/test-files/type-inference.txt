@@ -1,5 +1,5 @@
 ================================================================================
-1 Check that you can only call callable things
+100 Check that you can only call callable things
 ================================================================================
 
 (package coalton-unit-tests/inference)
@@ -15,7 +15,7 @@ error: Ambiguous predicate
    |               ^ Ambiguous predicate COALTON-LIBRARY/CLASSES:NUM :A
 
 ================================================================================
-Check that you can only call callable things
+101 Check that you can only call callable things
 ================================================================================
 
 (package coalton-unit-tests/inference)
@@ -32,7 +32,7 @@ error: Argument error
    |            ^^^^^ Unable to call 'INTEGER': it is not a function
 
 ================================================================================
-Declarations cannot be less specific than their associated definition
+102 Declarations cannot be less specific than their associated definition
 ================================================================================
 
 (package coalton-unit-tests/inference)
@@ -49,7 +49,7 @@ error: Declared type is too general
    |          ^ Declared type FORALL :A. :A is more general than inferred type UNIT.
 
 ================================================================================
-Missing explicit predicates cannot be defaulted
+103 Missing explicit predicates cannot be defaulted
 ================================================================================
 
 (package coalton-unit-tests/inference)
@@ -66,7 +66,7 @@ error: Explicit type is missing inferred predicate
    |          ^ Declared type :A is missing inferred predicate COALTON-LIBRARY/CLASSES:NUM :A
 
 ================================================================================
-Check that constructors are properly typed
+104 Check that constructors are properly typed
 ================================================================================
 
 (package coalton-unit-tests/inference)
@@ -86,7 +86,7 @@ error: Unknown instance
    |                          ^ Unknown instance COALTON-LIBRARY/CLASSES:NUM STRING
 
 ================================================================================
-Check that types of kind * cannot be applied to
+105 Check that types of kind * cannot be applied to
 ================================================================================
 
 (package coalton-unit-tests/inference)
@@ -104,7 +104,7 @@ error: Kind mismatch
    |              ^^^^^^^ Expected kind '* -> *' but got kind '*'
 
 ================================================================================
-Check that variables can not be declared to have kind (* -> *)
+106 Check that variables can not be declared to have kind (* -> *)
 ================================================================================
 
 (package coalton-unit-tests/inference)
@@ -126,7 +126,7 @@ error: Kind mismatch
    |             ^^^^^ Expected kind '*' but got kind '* -> *'
 
 ================================================================================
-Match branches must return the same type
+107 Match branches must return the same type
 ================================================================================
 
 (package coalton-unit-tests/inference)
@@ -149,7 +149,7 @@ error: Ambiguous predicate
    |                ^ Ambiguous predicate COALTON-LIBRARY/CLASSES:NUM STRING
 
 ================================================================================
-Match branches must match on constructors
+108 Match branches must match on constructors
 ================================================================================
 
 (package coalton-unit-tests/inference)
@@ -169,7 +169,7 @@ error: Unknown constructor
    |       ^^^^^ constructor is not known
 
 ================================================================================
-Constructors in match branches must be fully applied
+109 Constructors in match branches must be fully applied
 ================================================================================
 
 (package coalton-unit-tests/inference)
@@ -187,9 +187,8 @@ error: Argument mismatch
    |       ^^^^^^^^ Constructor CONS takes 2 arguments but is given 1
 
 ================================================================================
-Type mismatch
+110 Type mismatch
 ================================================================================
-
 (package coalton-unit-tests/inference)
 
 (define-class (Eq_ :a)

@@ -1,5 +1,5 @@
 ================================================================================
-Malformed bind form
+100 Malformed bind form
 ================================================================================
 
 (package test-package)
@@ -18,7 +18,7 @@ error: Malformed bind form
    |               ^ unexpected trailing form
 
 ================================================================================
-Malformed do expression
+101 Malformed do expression
 ================================================================================
 
 (package test-package)
@@ -36,7 +36,7 @@ error: Malformed do expression
    |        ^^^^^^^^^ do expression cannot be terminated by a bind
 
 ================================================================================
-Malformed do expression
+102 Malformed do expression
 ================================================================================
 
 (package test-package)
@@ -54,7 +54,7 @@ error: Malformed do expression
    |        ^^^^^^^^^^^ do expressions cannot be terminated by a shorthand let
 
 ================================================================================
-Malformed do expression
+103 Malformed do expression
 ================================================================================
 
 (package test-package)
@@ -64,7 +64,7 @@ Malformed do expression
 --------------------------------------------------------------------------------
 
 error: Malformed do expression
-  --> test:3:14
+  --> test:3:13
    |
  3 |  (define x (do))
    |               ^ expected one or more forms

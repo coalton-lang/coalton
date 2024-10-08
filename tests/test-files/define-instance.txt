@@ -221,7 +221,7 @@ error: Malformed instance definition
 --------------------------------------------------------------------------------
 
 error: Malformed instance definition
-  --> test:3:17
+  --> test:3:16
    |
  3 |  (define-instance)
    |                  ^ expected an instance head

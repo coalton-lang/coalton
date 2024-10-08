@@ -1,5 +1,5 @@
 ================================================================================
-Malformed cond expression
+100 Malformed cond expression
 ================================================================================
 
 (package test-package)
@@ -9,13 +9,13 @@ Malformed cond expression
 --------------------------------------------------------------------------------
 
 error: Malformed cond expression
-  --> test:3:16
+  --> test:3:15
    |
  3 |  (define x (cond))
    |                 ^ expected one or more clauses
 
 ================================================================================
-Malformed cond clause
+101 Malformed cond clause
 ================================================================================
 
 (package test-package)
@@ -31,7 +31,7 @@ error: Malformed cond clause
    |                  ^ expected list
 
 ================================================================================
-Malformed cond clause
+102 Malformed cond clause
 ================================================================================
 
 (package test-package)
@@ -47,7 +47,7 @@ error: Malformed cond clause
    |                  ^^^^^^^^^ unexpected dotted list
 
 ================================================================================
-Malformed function
+103 Malformed function
 ================================================================================
 
 (package test-package)
@@ -57,7 +57,7 @@ Malformed function
 --------------------------------------------------------------------------------
 
 error: Malformed function
-  --> test:3:19
+  --> test:3:18
    |
  3 |  (define x (cond (y)))
    |                    ^ expected body

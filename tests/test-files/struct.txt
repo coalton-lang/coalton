@@ -1,5 +1,5 @@
 ================================================================================
-struct-definition-parse-error
+100 struct-definition-parse-error
 ================================================================================
 
 (package coalton-unit-tests/struct)
@@ -17,7 +17,7 @@ error: Malformed struct field
    |    ^ unexpected form
 
 ================================================================================
-struct-definition-parse-error
+101 struct-definition-parse-error
 ================================================================================
 
 (package coalton-unit-tests/struct)
@@ -29,13 +29,13 @@ struct-definition-parse-error
 --------------------------------------------------------------------------------
 
 error: Malformed struct field
-  --> test:4:13
+  --> test:4:3
    |
  4 |    (5 Integer)
-   |              ^ invalid field name (must be a symbol)
+   |     ^ invalid field name (must be a symbol)
 
 ================================================================================
-struct-definition-parse-error
+102 struct-definition-parse-error
 ================================================================================
 
 (package coalton-unit-tests/struct)
@@ -47,13 +47,13 @@ struct-definition-parse-error
 --------------------------------------------------------------------------------
 
 error: Malformed struct field
-  --> test:4:2
+  --> test:4:4
    |
  4 |    (x)
-   |    ^^^ expected field type
+   |      ^ expected field type
 
 ================================================================================
-struct-definition-parse-error
+103 struct-definition-parse-error
 ================================================================================
 
 (package coalton-unit-tests/struct)
@@ -65,13 +65,13 @@ struct-definition-parse-error
 --------------------------------------------------------------------------------
 
 error: Malformed struct field
-  --> test:4:20
+  --> test:4:19
    |
  4 |    (x "the x value.")
    |                     ^ expected field type
 
 ================================================================================
-struct-definition-parse-error
+104 struct-definition-parse-error
 ================================================================================
 
 (package coalton-unit-tests/struct)
@@ -83,13 +83,13 @@ struct-definition-parse-error
 --------------------------------------------------------------------------------
 
 error: Malformed struct field
-  --> test:4:27
+  --> test:4:13
    |
  4 |    (x Integer "the x value")
-   |                            ^ unexpected trailing form
+   |               ^^^^^^^^^^^^^ unexpected trailing form
 
 ================================================================================
-struct-definition-parse-error
+105 struct-definition-parse-error
 ================================================================================
 
 (package coalton-unit-tests/struct)
@@ -101,13 +101,13 @@ struct-definition-parse-error
 --------------------------------------------------------------------------------
 
 error: Malformed struct field
-  --> test:4:52
+  --> test:4:27
    |
  4 |    (x "the x value" Integer "also, it's the x value")
-   |                                                     ^ unexpected trailing form
+   |                             ^^^^^^^^^^^^^^^^^^^^^^^^ unexpected trailing form
 
 ================================================================================
-invalid-struct-accessors
+106 invalid-struct-accessors
 ================================================================================
 
 (package coalton-unit-tests/struct)
@@ -123,7 +123,7 @@ error: Invalid accessor
    |             ^^ type 'CHAR' is not a struct
 
 ================================================================================
-invalid-struct-accessors
+107 invalid-struct-accessors
 ================================================================================
 
 (package coalton-unit-tests/struct)
@@ -143,7 +143,7 @@ error: Invalid accessor
    |             ^^ struct 'POINT' does not have the field 'Q'
 
 ================================================================================
-ambiguous-accessors
+108 ambiguous-accessors
 ================================================================================
 
 (package coalton-unit-tests/struct)
@@ -161,7 +161,7 @@ error: Ambiguous accessor
    |   ^^ accessor is ambiguous
 
 ================================================================================
-ambiguous-accessors
+109 ambiguous-accessors
 ================================================================================
 
 (package coalton-unit-tests/struct)

@@ -1,5 +1,5 @@
 ================================================================================
-Malformed when expression
+100 Malformed when expression
 ================================================================================
 
 (package test-parser)
@@ -9,13 +9,13 @@ Malformed when expression
 --------------------------------------------------------------------------------
 
 error: Malformed when expression
-  --> test:3:16
+  --> test:3:15
    |
  3 |  (define f (when))
    |                 ^ expected a predicate
 
 ================================================================================
-Malformed function
+101 Malformed function
 ================================================================================
 
 (package test-package)
@@ -25,7 +25,7 @@ Malformed function
 --------------------------------------------------------------------------------
 
 error: Malformed function
-  --> test:3:18
+  --> test:3:17
    |
  3 |  (define x (when 1))
    |                   ^ expected body
