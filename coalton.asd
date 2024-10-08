@@ -255,6 +255,7 @@
                (:file "recursive-let-tests")
                (:file "class-tests")
                (:file "struct-tests")
+               (:file "alias-tests")
                (:file "list-tests")
                (:file "red-black-tests")
                (:file "seq-tests")
