@@ -1,5 +1,5 @@
 ================================================================================
-Malformed lisp expression
+100 Missing expression type
 ================================================================================
 
 (package test-package)
@@ -9,13 +9,13 @@ Malformed lisp expression
 --------------------------------------------------------------------------------
 
 error: Malformed lisp expression
-  --> test:3:16
+  --> test:3:15
    |
  3 |  (define f (lisp))
    |                 ^ expected expression type
 
 ================================================================================
-Malformed lisp expression
+101 Missing binding list
 ================================================================================
 
 (package test-package)
@@ -25,13 +25,13 @@ Malformed lisp expression
 --------------------------------------------------------------------------------
 
 error: Malformed lisp expression
-  --> test:3:25
+  --> test:3:24
    |
  3 |  (define f (lisp (T -> T)))
    |                          ^ expected binding list
 
 ================================================================================
-Malformed lisp expression
+102 Missing body
 ================================================================================
 
 (package test-package)

@@ -9,7 +9,7 @@
 --------------------------------------------------------------------------------
 
 error: Malformed if expression
-  --> test:3:14
+  --> test:3:13
    |
  3 |  (define x (if))
    |               ^ expected a predicate
@@ -25,7 +25,7 @@ error: Malformed if expression
 --------------------------------------------------------------------------------
 
 error: Malformed if expression
-  --> test:3:19
+  --> test:3:18
    |
  3 |  (define x (if True))
    |                    ^ expected a form
@@ -41,7 +41,7 @@ error: Malformed if expression
 --------------------------------------------------------------------------------
 
 error: Malformed if expression
-  --> test:3:21
+  --> test:3:20
    |
  3 |  (define x (if True 2))
    |                      ^ expected a form
@@ -57,7 +57,7 @@ error: Malformed if expression
 --------------------------------------------------------------------------------
 
 error: Malformed if expression
-  --> test:3:24
+  --> test:3:23
    |
  3 |  (define x (if True 2 3 4))
    |                         ^ unexpected trailing form

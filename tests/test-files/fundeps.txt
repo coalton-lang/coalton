@@ -1,5 +1,5 @@
 ================================================================================
-Unknown type variable
+100 Unknown type variable
 ================================================================================
 
 (package coalton-unit-test/fundeps)
@@ -15,7 +15,7 @@ error: Unknown type variable
    |                                ^^ unknown type variable :C
 
 ================================================================================
-Trivially conflicting instances
+101 Trivially conflicting instances
 ================================================================================
 
 (package coalton-unit-test/fundeps)
@@ -35,7 +35,7 @@ error: Instance fundep conflict
    |                   ^^^^^^^^^^^^^^^^ instance conflicts previous instance C INTEGER STRING
 
 ================================================================================
-Instances with unequal generality should conflict in either definition order
+102 Instances with unequal generality should conflict in either definition order
 ================================================================================
 
 (package coalton-unit-test/fundeps)
@@ -55,7 +55,7 @@ error: Instance fundep conflict
    |                   ^^^^^^^^^^^^^^^^^^^^^^^ instance conflicts previous instance C (LIST :A) STRING
 
 ================================================================================
-Instances with unequal generality should conflict in either definition order
+103 Instances with unequal generality should conflict in either definition order
 ================================================================================
 
 (package coalton-unit-test/fundeps)
@@ -75,7 +75,7 @@ error: Instance fundep conflict
    |                   ^^^^^^^^^^^^^^^^^^^^ instance conflicts previous instance C (LIST INTEGER) UNIT
 
 ================================================================================
-Fundeps improve type checking
+104 Fundeps improve type checking
 ================================================================================
 
 (package coalton-unit-test/fundeps)
@@ -99,7 +99,7 @@ error: Unknown variable "HELLO"
     |                      ^^^^^^^^^ unknown variable "HELLO"
 
 ================================================================================
-Ambiguous despite fundep
+105 Ambiguous despite fundep
 ================================================================================
 
 (package coalton-unit-test/fundeps)
@@ -116,7 +116,7 @@ error: Ambiguous method
    |  ^^^^^^ the method is ambiguous
 
 ================================================================================
-Ambiguous without fundep
+106 Ambiguous without fundep
 ================================================================================
 
 (package coalton-unit-test/fundeps)

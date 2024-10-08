@@ -9,7 +9,7 @@
 --------------------------------------------------------------------------------
 
 error: Malformed unless expression
-  --> test:3:18
+  --> test:3:17
    |
  3 |  (define x (unless))
    |                   ^ expected a predicate
@@ -25,7 +25,7 @@ error: Malformed unless expression
 --------------------------------------------------------------------------------
 
 error: Malformed function
-  --> test:3:23
+  --> test:3:22
    |
  3 |  (define x (unless True))
    |                        ^ expected body

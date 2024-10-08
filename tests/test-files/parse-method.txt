@@ -1,5 +1,5 @@
 ================================================================================
-Malformed method definition
+100 Malformed method definition
 ================================================================================
 
 (package test)
@@ -18,7 +18,7 @@ error: Malformed method definition
    |              ^^^^ unexpected trailing form
 
 ================================================================================
-Malformed method definition
+101 Malformed method definition
 ================================================================================
 
 (package test)

@@ -1,5 +1,5 @@
 ================================================================================
-1 duplicate keys
+100 duplicate keys
 ================================================================================
 
 (package coalton-unit-tests/hashtable)
@@ -24,7 +24,7 @@ error: Error during macro expansion
 note: Error occurs within macro context. Source locations may be imprecise
 
 ================================================================================
-1 duplicate keys
+101 duplicate keys
 ================================================================================
 
 (package coalton-unit-tests/hashtable)

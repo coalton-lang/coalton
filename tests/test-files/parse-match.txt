@@ -1,5 +1,5 @@
 ================================================================================
-Malformed match expression
+100 Malformed match expression
 ================================================================================
 
 (package test-package)
@@ -9,13 +9,13 @@ Malformed match expression
 --------------------------------------------------------------------------------
 
 error: Malformed match expression
-  --> test:3:17
+  --> test:3:16
    |
  3 |  (define f (match))
    |                  ^ expected expression
 
 ================================================================================
-Malformed match branch
+101 Malformed match branch
 ================================================================================
 
 (package test-package)
@@ -27,13 +27,13 @@ Malformed match branch
 --------------------------------------------------------------------------------
 
 error: Malformed match branch
-  --> test:5:7
+  --> test:5:6
    |
  5 |      (y)))
    |        ^ expected body
 
 ================================================================================
-Malformed match branch
+102 Malformed match branch
 ================================================================================
 
 (package test-package)
@@ -51,7 +51,7 @@ error: Malformed match branch
    |      ^ expected list
 
 ================================================================================
-Malformed match branch
+103 Malformed match branch
 ================================================================================
 
 (package test-package)

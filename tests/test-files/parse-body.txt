@@ -1,5 +1,5 @@
 ================================================================================
-Malformed function
+100 Malformed function
 ================================================================================
 
 (package test-package)
@@ -9,13 +9,13 @@ Malformed function
 --------------------------------------------------------------------------------
 
 error: Malformed function
-  --> test:3:17
+  --> test:3:16
    |
  3 |  (define x (progn))
    |                  ^ expected body
 
 ================================================================================
-Malformed expression
+101 Malformed expression
 ================================================================================
 
 (package test-package)
@@ -31,7 +31,7 @@ error: Malformed expression
    |            ^^^^^^^^^^^^^^^ unexpected dotted list
 
 ================================================================================
-Malformed body expression
+102 Malformed body expression
 ================================================================================
 
 (package test-package)
@@ -50,7 +50,7 @@ error: Malformed body expression
    |      ^^^^^^^^^^^^^^^ unexpected dotted list
 
 ================================================================================
-Malformed body expression
+103 Malformed body expression
 ================================================================================
 
 (package test-package)
@@ -68,7 +68,7 @@ error: Malformed body expression
    |      ^^^^^^^^^^^ body forms cannot be terminated by a shorthand let
 
 ================================================================================
-Malformed shorthand let
+104 Malformed shorthand let
 ================================================================================
 
 (package test-package)

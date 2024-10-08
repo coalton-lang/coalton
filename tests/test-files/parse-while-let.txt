@@ -1,5 +1,5 @@
 ================================================================================
-Malformed while-let expression
+100 Malformed while-let expression
 ================================================================================
 
 (package test-parser)
@@ -9,13 +9,13 @@ Malformed while-let expression
 --------------------------------------------------------------------------------
 
 error: Malformed while-let expression
-  --> test:3:21
+  --> test:3:20
    |
  3 |  (define f (while-let))
    |                      ^ expected pattern
 
 ================================================================================
-Malformed while-let expression
+101 Malformed while-let expression
 ================================================================================
 
 (package test-parser)
@@ -25,13 +25,13 @@ Malformed while-let expression
 --------------------------------------------------------------------------------
 
 error: Malformed while-let expression
-  --> test:3:30
+  --> test:3:29
    |
  3 |  (define f (while-let (Some x)))
    |                               ^ expected =
 
 ================================================================================
-Malformed while-let expression
+102 Malformed while-let expression
 ================================================================================
 
 (package test-parser)
@@ -41,13 +41,13 @@ Malformed while-let expression
 --------------------------------------------------------------------------------
 
 error: Malformed while-let expression
-  --> test:3:32
+  --> test:3:30
    |
  3 |  (define f (while-let (Some x) z))
-   |                                 ^ expected =
+   |                                ^ expected =
 
 ================================================================================
-Malformed while-let expression
+103 Malformed while-let expression
 ================================================================================
 
 (package test-parser)
@@ -57,13 +57,13 @@ Malformed while-let expression
 --------------------------------------------------------------------------------
 
 error: Malformed while-let expression
-  --> test:3:38
+  --> test:3:37
    |
  3 |  (define f (while-let (Some x) = (moo)))
    |                                       ^ expected body
 
 ================================================================================
-Malformed while-let expression
+104 Malformed while-let expression
 ================================================================================
 
 (package test-parser)
@@ -73,13 +73,13 @@ Malformed while-let expression
 --------------------------------------------------------------------------------
 
 error: Malformed while-let expression
-  --> test:3:45
+  --> test:3:44
    |
  3 |  (define f (while-let :label (Some x) = (moo)))
    |                                              ^ expected body
 
 ================================================================================
-Malformed while-let expression
+105 Malformed while-let expression
 ================================================================================
 
 (package test-parser)
@@ -89,13 +89,13 @@ Malformed while-let expression
 --------------------------------------------------------------------------------
 
 error: Malformed while-let expression
-  --> test:3:28
+  --> test:3:27
    |
  3 |  (define f (while-let :label))
    |                             ^ expected pattern
 
 ================================================================================
-Malformed while-let expression
+106 Malformed while-let expression
 ================================================================================
 
 (package test-parser)
@@ -105,13 +105,13 @@ Malformed while-let expression
 --------------------------------------------------------------------------------
 
 error: Malformed while-let expression
-  --> test:3:32
+  --> test:3:31
    |
  3 |  (define f (while-let :label foo))
    |                                 ^ expected =
 
 ================================================================================
-Malformed while-let expression
+107 Malformed while-let expression
 ================================================================================
 
 (package test-parser)
@@ -121,13 +121,13 @@ Malformed while-let expression
 --------------------------------------------------------------------------------
 
 error: Malformed while-let expression
-  --> test:3:37
+  --> test:3:32
    |
  3 |  (define f (while-let :label foo nope))
-   |                                      ^ expected =
+   |                                  ^^^^ expected =
 
 ================================================================================
-Malformed while-let expression
+108 Malformed while-let expression
 ================================================================================
 
 (package test-parser)
@@ -137,7 +137,7 @@ Malformed while-let expression
 --------------------------------------------------------------------------------
 
 error: Malformed while-let expression
-  --> test:3:38
+  --> test:3:37
    |
  3 |  (define f (while-let :label foo = bar))
    |                                       ^ expected body

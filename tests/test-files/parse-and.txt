@@ -1,5 +1,5 @@
 ================================================================================
-Malformed and expression
+100 Malformed and expression
 ================================================================================
 
 (package test-package)
@@ -9,7 +9,7 @@ Malformed and expression
 --------------------------------------------------------------------------------
 
 error: Malformed and expression
-  --> test:3:15
+  --> test:3:14
    |
  3 |  (define x (and))
    |                ^ expected one or more arguments
