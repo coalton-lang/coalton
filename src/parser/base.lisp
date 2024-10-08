@@ -5,7 +5,6 @@
    #:parse-error)
   (:local-nicknames
    (#:cst #:concrete-syntax-tree)
-   (#:se #:source-error)
    (#:source #:coalton-impl/source)
    (#:util #:coalton-impl/util))
   (:export
@@ -23,6 +22,7 @@
    #:parse-list                         ; FUNCTION
    #:parse-error
    #:note
+   #:secondary-note
    #:note-end
    #:help
    #:form-location))
@@ -95,13 +95,13 @@
 ;;;                (note SOURCE CST2 "Related: ~A" ARG3)
 ;;;                ... )
 
-(define-condition parse-error (se:source-base-error)
+(define-condition parse-error (source:source-error)
   ()
   (:documentation "A condition indicating a syntax error in Coalton source code."))
 
 (defun parse-error (message &rest notes)
   "Signal PARSE-ERROR with provided MESSAGE and source NOTES."
-  (error 'parse-error :err (source:make-source-error ':error message notes)))
+  (error 'parse-error :message message :notes notes))
 
 (defun ensure-span (spanning)
   "Is SPANNING is a span, return it unchanged; if it is a cst node, return the node's span."
@@ -113,6 +113,12 @@
   "Make a source note using SOURCE and CST:SOURCE as location."
   (declare (type string format-string))
   (apply #'source:note (source:make-location source (ensure-span locatable))
+         format-string format-args))
+
+(defun secondary-note (source locatable format-string &rest format-args)
+  "Make a source note using SOURCE and CST:SOURCE as location."
+  (declare (type string format-string))
+  (apply #'source:secondary-note (source:make-location source (ensure-span locatable))
          format-string format-args))
 
 (defun note-end (source locatable format-string &rest format-args)

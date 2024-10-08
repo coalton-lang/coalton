@@ -7,7 +7,6 @@
    #:parse-error)
   (:local-nicknames
    (#:cst #:concrete-syntax-tree)
-   (#:se #:source-error)
    (#:source #:coalton-impl/source)
    (#:util #:coalton-impl/util))
   (:export

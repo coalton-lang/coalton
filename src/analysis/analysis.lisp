@@ -25,8 +25,8 @@
   (let ((missing (find-non-matching-value (list (list pattern)) 1 env)))
     (unless (eq t missing)
       (tc-error "Non-exhaustive match"
-                (source:note pattern "missing case ~w"
-                             (print-pattern (first missing)))))))
+                (source:secondary-note pattern "missing case ~w"
+                                       (print-pattern (first missing)))))))
 
 (defun analyze-translation-unit (translation-unit env)
   "Perform analysis passes on TRANSLATION-UNIT, potentially producing errors or warnings."
@@ -47,9 +47,9 @@
                                  (cons (source:note node "non-exhaustive match")
                                        (when (first exhaustive-or-missing)
                                          (list
-                                          (source:note node "missing case ~w"
-                                                       (print-pattern
-                                                        (first exhaustive-or-missing))))))))
+                                          (source:secondary-note node "missing case ~w"
+                                                                 (print-pattern
+                                                                  (first exhaustive-or-missing))))))))
                         (loop :for pattern :in patterns
                               :unless (useful-pattern-p patterns pattern env) :do
                                 (source:warn "Useless match case"

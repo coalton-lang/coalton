@@ -3,13 +3,8 @@
 ;; Test that error messages containing source spans are correctly
 ;; printed.
 
-(deftest test-error ()
-  (uiop:with-temporary-file (:stream output-stream
-                             :pathname program-file
-                             :suffix "coalton"
-                             :direction :output)
-    ;; input text
-    (write-string "  ;;
+(defvar *error-test-program*
+  "  ;;
   ;; Kinds
   ;;
 
@@ -26,41 +21,32 @@
          (and (== a1 b1)
               (== a2 b2)))
         (_ False))))
-"
-                  output-stream)
-    :close-stream
-    (let* ((source (source:make-source-file program-file :name "file"))
-           (msg (with-output-to-string (output)
-                  ;; an annotating error
-                  (se:display-source-error
-                   output
-                   (se:source-error
-                    :span '(76 . 321)
-                    :source source
-                    :message "message"
-                    :primary-note "define instance form"
-                    :notes (list
-                            (se:make-source-error-note
-                             :type :secondary
-                             :span  '(132 . 319)
-                             :message "message 2")
-                            (se:make-source-error-note
-                             :type :secondary
-                             :span  '(140 . 145)
-                             :message "message 3")
-                            (se:make-source-error-note
-                             :type :secondary
-                             :span  '(170 . 174)
-                             :message "message 4"))
-                    :help-notes
-                    (list
-                     (se:make-source-error-help
-                      :span  '(289 . 291)
-                      :replacement (lambda (existing)
-                                     (concatenate 'string "*" existing "*"))
-                      :message "message 5")))))))
-      ;; output text
-      (is (string= msg "error: message
+")
+
+(deftest test-error ()
+  (let* ((source (source:make-source-string *error-test-program* :name "file"))
+         (msg (with-output-to-string (output)
+                ;; an annotating error
+                (handler-case
+                    (source:error "message"
+                                  (source:note (source:make-location source '(76 . 321))
+                                               "define instance form")
+                                  (source:secondary-note (source:make-location source '(132 . 319))
+                                                         "message 2")
+                                  (source:secondary-note (source:make-location source '(140 . 145))
+                                                         "message 3")
+                                  (source:secondary-note (source:make-location source '(170 . 174))
+                                                         "message 4")
+                                  (source:help (source:make-location source '(289 . 291))
+                                               (lambda (existing)
+                                                 (concatenate 'string "*" existing "*"))
+                                               "message 5"))
+                  (source:source-error (c)
+                    (princ c output))))))
+    ;; output text
+    (is (check-string= "error printer"
+                       msg
+                       "error: message
   --> file:9:2
     |
  9  |      (define-instance (Eq Kind)
@@ -80,4 +66,4 @@
 help: message 5
  16 |               (*==* a2 b2)))
     |                ----
-")))))
+"))))

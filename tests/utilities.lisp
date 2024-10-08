@@ -37,7 +37,7 @@
                                  :use '("COALTON" "COALTON-PRELUDE"))))
     (unwind-protect
          (let ((source (source:make-source-string toplevel-string)))
-           (with-open-stream (stream (se:source-stream source))
+           (with-open-stream (stream (source:source-stream source))
              (let ((program (parser:with-reader-context stream
                               (parser:read-program stream source))))
 
@@ -49,7 +49,7 @@
                    (loop :for (unparsed-symbol . unparsed-type) :in expected-types
                          :do (let ((symbol (intern (string-upcase unparsed-symbol) *package*))
                                    (source (source:make-source-string unparsed-type)))
-                               (with-open-stream (stream (se:source-stream source))
+                               (with-open-stream (stream (source:source-stream source))
                                  (let* ((ast-type (parser:parse-qualified-type
                                                    (eclector.concrete-syntax-tree:read stream)
                                                    source))
@@ -106,7 +106,7 @@ Returns (values SOURCE-PATHNAME COMPILED-PATHNAME)."
                                     (signal c)))))
                (entry:compile source)
                nil)
-           (se:source-base-warning (c)
+           (source:source-warning (c)
              (string-trim '(#\Space #\Newline)
                           (princ-to-string c)))
            (error (c)

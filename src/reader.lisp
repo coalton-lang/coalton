@@ -2,10 +2,10 @@
   (:use
    #:cl)
   (:local-nicknames
-   (#:se #:source-error)
    (#:cst #:concrete-syntax-tree)
    (#:codegen #:coalton-impl/codegen)
    (#:settings #:coalton-impl/settings)
+   (#:source #:coalton-impl/source)
    (#:util #:coalton-impl/util)
    (#:parser #:coalton-impl/parser)
    (#:tc #:coalton-impl/typechecker)
@@ -138,7 +138,7 @@ It ensures the presence of source metadata for STREAM and then calls MAYBE-READ-
                             (write-char #\( out)
                             (alexandria:copy-stream stream out))
                           :name "repl")))
-           (with-open-stream (stream (source-error:source-stream *source*))
+           (with-open-stream (stream (source:source-stream *source*))
              (read-char stream)
              (maybe-read-coalton stream *source*))))))
 
