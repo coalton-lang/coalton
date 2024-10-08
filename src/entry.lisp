@@ -4,7 +4,6 @@
   (:shadow
    #:compile)
   (:local-nicknames
-   (#:se #:source-error)
    (#:settings #:coalton-impl/settings)
    (#:util #:coalton-impl/util)
    (#:parser #:coalton-impl/parser)
@@ -222,7 +221,7 @@
 (defun compile-to-lisp (source output)
   "Read Coalton source from SOURCE and write Lisp source to OUTPUT. NAME may be the filename related to the input stream."
   (declare (optimize (debug 3)))
-  (with-open-stream (stream (se:source-stream source))
+  (with-open-stream (stream (source:source-stream source))
     (parser:with-reader-context stream
       (with-environment-updates updates
         (let* ((program (parser:read-program stream source ':file))

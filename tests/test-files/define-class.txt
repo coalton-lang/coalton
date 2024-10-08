@@ -415,7 +415,7 @@ error: Malformed functional dependency
 --------------------------------------------------------------------------------
 
 error: Malformed functional dependency
-  --> test:3:33
+  --> test:3:32
    |
  3 |  (define-class (C :a :b (:a :b ->)))
    |                                  ^ expected one or more type variables
@@ -431,10 +431,10 @@ error: Malformed functional dependency
 --------------------------------------------------------------------------------
 
 error: Malformed functional dependency
-  --> test:3:23
+  --> test:3:24
    |
  3 |  (define-class (C :a :b (-> :b :c)))
-   |                         ^^^^^^^^^^ expected one or more type variables
+   |                          ^ expected one or more type variables
 
 ================================================================================
 118 Invalid attribute for define-class: illegal attribute

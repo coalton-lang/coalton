@@ -214,7 +214,7 @@
      (lambda (first second)
        (tc-error "Duplicate method definition"
                  (tc-note first "first definition here")
-                 (tc-primary-note second "second definition here"))))
+                 (tc-note second "second definition here"))))
 
     ;; Ensure each method is part for the class
     (loop :for method :in (parser:toplevel-define-instance-methods unparsed-instance)

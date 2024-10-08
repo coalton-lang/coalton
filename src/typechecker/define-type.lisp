@@ -106,7 +106,7 @@
    (lambda (first second)
      (tc:tc-error "Duplicate type definitions"
                   (tc:tc-note first "first definition here")
-                  (tc:tc-primary-note second "second definition here"))))
+                  (tc:tc-note second "second definition here"))))
 
   ;; Ensure that there are no duplicate constructors
   ;; NOTE: structs define a constructor with the same name
@@ -118,7 +118,7 @@
    (lambda (first second)
      (tc:tc-error "Duplicate constructor definitions"
                   (tc:tc-note first "first definition here")
-                  (tc:tc-primary-note second "second definition here"))))
+                  (tc:tc-note second "second definition here"))))
 
   ;; Ensure that no type has duplicate type variables
   (loop :for type :in (append types structs aliases)
@@ -129,7 +129,7 @@
              (lambda (first second)
                (tc:tc-error "Duplicate type variable definitions"
                             (tc:tc-note first "first definition here")
-                            (tc:tc-primary-note second "second definition here")))))
+                            (tc:tc-note second "second definition here")))))
 
   (let* ((type-names (mapcar (alexandria:compose #'parser:identifier-src-name
                                                  #'parser:type-definition-name)

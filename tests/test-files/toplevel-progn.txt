@@ -1,5 +1,5 @@
 ================================================================================
-Parse toplevel progn
+1 Parse toplevel progn
 ================================================================================
 
 (package coalton-unit-tests)
@@ -12,7 +12,7 @@ Parse toplevel progn
   (define (f x) x))
 
 ================================================================================
-Invalid attribute for progn
+100 Invalid attribute for progn
 ================================================================================
 
 (package test-package)
@@ -36,7 +36,7 @@ error: Invalid attribute for progn
    | |_________________- when parsing progn
 
 ================================================================================
-Trailing attributes in progn
+101 Trailing attributes in progn
 ================================================================================
 
 (package test-package)

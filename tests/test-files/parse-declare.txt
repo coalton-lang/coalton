@@ -1,5 +1,5 @@
 ================================================================================
-Malformed declaration
+100 Malformed declaration
 ================================================================================
 
 (package test-package)
@@ -15,7 +15,7 @@ error: Malformed declaration
    |  ^^^^^^^^^ expected body
 
 ================================================================================
-Malformed declaration
+101 Malformed declaration
 ================================================================================
 
 (package test-package)
@@ -31,7 +31,7 @@ error: Malformed declaration
    |  ^^^^^^^^^^^ expected declared type
 
 ================================================================================
-Malformed declaration
+102 Malformed declaration
 ================================================================================
 
 (package test-package)
@@ -47,7 +47,7 @@ error: Malformed declaration
    |                      ^ unexpected trailing form
 
 ================================================================================
-Malformed declaration
+103 Malformed declaration
 ================================================================================
 
 (package test-package)
@@ -63,7 +63,7 @@ error: Malformed declaration
    |           ^^^ expected symbol
 
 ================================================================================
-Invalid target for repr attribute
+104 Invalid target for repr attribute
 ================================================================================
 
 (package test-package)
@@ -82,7 +82,7 @@ error: Invalid target for repr attribute
    |  ------------- when parsing declare
 
 ================================================================================
-Duplicate monomorphize attribute
+105 Duplicate monomorphize attribute
 ================================================================================
 
 (package test-pacakage)

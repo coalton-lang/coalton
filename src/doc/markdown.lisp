@@ -87,12 +87,12 @@
         :do (incf index)))
 
 (defun line-number (backend source offset)
-  (let ((line-offsets (gethash (source-error:source-name source)
+  (let ((line-offsets (gethash (source:source-name source)
                         (slot-value backend 'file-line-offsets))))
     (unless line-offsets
-      (with-open-stream (stream (source-error:source-stream source))
+      (with-open-stream (stream (source:source-stream source))
         (setf line-offsets (find-line-offsets stream)))
-      (setf (gethash (source-error:source-name source)
+      (setf (gethash (source:source-name source)
                      (slot-value backend 'file-line-offsets))
             line-offsets))
     (labels ((%find (lo hi)

@@ -1,5 +1,5 @@
 ================================================================================
-recursively-construct-via-non-constructor-function
+100 recursively-construct-via-non-constructor-function
 ================================================================================
 
 (package coalton-unit-tests/recursive-let)
@@ -20,7 +20,7 @@ error: Invalid recursive bindings
    |                   ^^^^ invalid recursive variable bindings
 
 ================================================================================
-recursively-construct-bad-repr-types
+101 recursively-construct-bad-repr-types
 ================================================================================
 
 (package coalton-unit-tests/recursive-let)
@@ -40,7 +40,7 @@ error: Invalid recursive bindings
    |           ^^^^ invalid recursive variable bindings
 
 ================================================================================
-recursively-construct-bad-repr-types
+102 recursively-construct-bad-repr-types
 ================================================================================
 
 (package coalton-unit-tests/recursive-let)
@@ -63,7 +63,7 @@ error: Invalid recursive bindings
    |           ^^ invalid recursive variable bindings
 
 ================================================================================
-recursive-partial-constructor-application
+103 recursive-partial-constructor-application
 ================================================================================
 
 (package coalton-unit-tests/recursive-let)
@@ -83,7 +83,7 @@ error: Invalid recursive bindings
    |           ^^ invalid recursive variable bindings
 
 ================================================================================
-recursive-indirect-constructor-application
+104 recursive-indirect-constructor-application
 ================================================================================
 
 (package coalton-unit-tests/recursive-let)
@@ -104,7 +104,7 @@ error: Invalid recursive bindings
    |             ^^ invalid recursive variable bindings
 
 ================================================================================
-mutually-recursive-data-and-function
+105 mutually-recursive-data-and-function
 ================================================================================
 
 (package coalton-unit-tests/recursive-let)

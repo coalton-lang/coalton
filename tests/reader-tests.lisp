@@ -22,8 +22,7 @@
           (is nil "error was not signalled"))
       (coalton-impl/parser/base:parse-error (c)
         (is (string= "Invalid variable"
-                     (source-error/error::source-error-message
-                      (source-error:source-condition-err c)))
+                     (source:message c))
             "condition message is correct")
         (is (princ-to-string c)
             "condition prints without error")))
@@ -36,6 +35,5 @@
         (eval (read-from-string "(coalton (add-3 \"two\"))"))
       (coalton-impl/typechecker/base:tc-error (c)
         (is (string= "Type mismatch"
-                     (source-error/error::source-error-message
-                      (source-error:source-condition-err c)))
+                     (source:message c))
             "condition message is correct")))))

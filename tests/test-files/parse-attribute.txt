@@ -1,5 +1,5 @@
 ================================================================================
-Orphan attribute
+100 Orphan attribute
 ================================================================================
 
 (package test-package)
@@ -15,7 +15,7 @@ error: Orphan attribute
    |  ^^^^^^^^^^^^ attribute must be attached to another form
 
 ================================================================================
-Malformed monomophize attribute
+101 Malformed monomophize attribute
 ================================================================================
 
 (package test-package)
@@ -32,7 +32,7 @@ error: Malformed monomophize attribute
    |  ^^^^^^^^^^^^^^^^ unexpected form
 
 ================================================================================
-Invalid type variable
+102 Invalid type variable
 ================================================================================
 
 (package test-package)
@@ -49,7 +49,7 @@ error: Invalid type variable
    |        ^^^^^^^ expected keyword symbol
 
 ================================================================================
-Malformed repr attribute
+103 Malformed repr attribute
 ================================================================================
 
 (package test-package)
@@ -66,7 +66,7 @@ error: Malformed repr attribute
    |              ^ unexpected form
 
 ================================================================================
-Malformed repr :native attribute
+104 Malformed repr :native attribute
 ================================================================================
 
 (package test-package)
@@ -77,13 +77,13 @@ Malformed repr :native attribute
 --------------------------------------------------------------------------------
 
 error: Malformed repr :native attribute
-  --> test:3:14
+  --> test:3:13
    |
  3 |  (repr :native)
    |               ^ expected a lisp type
 
 ================================================================================
-Malformed repr :native attribute
+105 Malformed repr :native attribute
 ================================================================================
 
 (package test-package)
@@ -100,7 +100,7 @@ error: Malformed repr :native attribute
    |        ^^^^^^^ unexpected form
 
 ================================================================================
-Unknown repr attribute
+106 Unknown repr attribute
 ================================================================================
 
 (package test-package)

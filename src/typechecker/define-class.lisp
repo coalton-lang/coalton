@@ -67,8 +67,8 @@
      (tc:tc-error "Duplicate class definition"
                   (tc:tc-location (parser:toplevel-define-class-head-location first)
                                   "first definition here")
-                  (tc:tc-primary-location (parser:toplevel-define-class-head-location second)
-                                          "second definition here"))))
+                  (tc:tc-location (parser:toplevel-define-class-head-location second)
+                                  "second definition here"))))
 
   ;; Check for duplicate method definitions
   (check-duplicates
@@ -78,7 +78,7 @@
    (lambda (first second)
      (tc:tc-error "Duplicate method definition"
                   (tc:tc-note first "first definition here")
-                  (tc:tc-primary-note second "second definition here"))))
+                  (tc:tc-note second "second definition here"))))
 
   (loop :for class :in classes :do
     ;; Classes cannot have duplicate variables
@@ -89,7 +89,7 @@
      (lambda (first second)
        (tc:tc-error "Duplicate class variable"
                     (tc:tc-note first "first usage here")
-                    (tc:tc-primary-note second "second usage here")))))
+                    (tc:tc-note second "second usage here")))))
 
   (let* ((class-table
            (loop :with table := (make-hash-table :test #'eq)
@@ -144,8 +144,8 @@
                           (cons (tc:tc-location (parser:toplevel-define-class-head-location (first scc))
                                                 "in class defined here")
                                 (loop :for class :in (rest scc)
-                                      :collect (tc:tc-primary-location (parser:toplevel-define-class-head-location class)
-                                                                       "in class defined here")))))
+                                      :collect (tc:tc-location (parser:toplevel-define-class-head-location class)
+                                                               "in class defined here")))))
 
            :append (multiple-value-bind (classes env_)
                        (infer-class-scc-kinds scc env)

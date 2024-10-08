@@ -3,7 +3,6 @@
    #:cl)
   (:local-nicknames
    (#:source #:coalton-impl/source)
-   (#:se #:source-error)
    (#:util #:coalton-impl/util))
   (:export
    #:*coalton-pretty-print-tyvars*
@@ -12,9 +11,9 @@
    #:*pprint-variable-symbol-suffix*
    #:tc-error                           ; CONDITION, FUNCTION
    #:tc-location
-   #:tc-primary-location
+   #:tc-secondary-location
    #:tc-note
-   #:tc-primary-note
+   #:tc-secondary-note
    #:coalton-internal-type-error        ; CONDITION
    #:check-duplicates                   ; FUNCTION
    #:check-package                      ; FUNCTION
@@ -70,24 +69,24 @@ This requires a valid PPRINT-VARIABLE-CONTEXT")
                (with-pprint-variable-context ()
                  (apply #'format nil format-string format-args))))
 
-(defun tc-primary-location (location format-string &rest format-args)
-  (source:primary-note location
+(defun tc-secondary-location (location format-string &rest format-args)
+  (source:secondary-note location
                        (with-pprint-variable-context ()
                          (apply #'format nil format-string format-args))))
 
 (defun tc-note (located format-string &rest format-args)
   (apply #'tc-location (source:location located) format-string format-args))
 
-(defun tc-primary-note (located format-string &rest format-args)
-  (apply #'tc-primary-location (source:location located) format-string format-args))
+(defun tc-secondary-note (located format-string &rest format-args)
+  (apply #'tc-secondary-location (source:location located) format-string format-args))
 
-(define-condition tc-error (se:source-base-error)
+(define-condition tc-error (source:source-error)
   ())
 
 (defun tc-error (message &rest notes)
   "Signal a typechecker error with MESSAGE, and optional NOTES that label source locations."
   (declare (type string message))
-  (error 'tc-error :err (source:make-source-error ':error message notes)))
+  (error 'tc-error :message message :notes notes))
 
 (define-condition coalton-internal-type-error (error)
   ()
@@ -139,10 +138,9 @@ source locations whose spans are compared for ordering."
         :do (check-type id symbol)
 
         :unless (equalp (symbol-package id) *package*)
-          :do (tc-located-error
-               (funcall source elem)
-               "Invalid identifier name"
-               (format nil "The symbol ~S is defined in the package ~A and not the current package ~A"
-                       id
-                       (symbol-package id)
-                       *package*))))
+          :do (tc-error "Invalid identifier name"
+                        (tc-location (funcall source elem)
+                                     "The symbol ~S is defined in the package ~A and not the current package ~A"
+                                     id
+                                     (symbol-package id)
+                                     *package*))))

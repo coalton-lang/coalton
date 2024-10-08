@@ -1,5 +1,5 @@
 ================================================================================
-Parse while
+1 Parse while
 ================================================================================
 
 (package coalton-unit-tests/parse-while
@@ -9,7 +9,7 @@ Parse while
   (while :alabel True (trace "one") (trace "two")))
 
 ================================================================================
-Malformed while expression
+100 Missing condition
 ================================================================================
 
 (package test-parser)
@@ -19,13 +19,13 @@ Malformed while expression
 --------------------------------------------------------------------------------
 
 error: Malformed while expression
-  --> test:3:17
+  --> test:3:16
    |
  3 |  (define f (while))
    |                  ^ expected condition
 
 ================================================================================
-Malformed while expression
+101 Missing body
 ================================================================================
 
 (package test-parser)
@@ -35,13 +35,13 @@ Malformed while expression
 --------------------------------------------------------------------------------
 
 error: Malformed while expression
-  --> test:3:23
+  --> test:3:22
    |
  3 |  (define f (while false))
    |                        ^ expected body
 
 ================================================================================
-Malformed while expression
+102 Missing condition
 ================================================================================
 
 (package test-parser)
@@ -51,13 +51,13 @@ Malformed while expression
 --------------------------------------------------------------------------------
 
 error: Malformed while expression
-  --> test:3:24
+  --> test:3:23
    |
  3 |  (define f (while :label))
    |                         ^ expected condition
 
 ================================================================================
-Malformed while expression
+103 Missing body, with label
 ================================================================================
 
 (package test-parser)
@@ -67,7 +67,7 @@ Malformed while expression
 --------------------------------------------------------------------------------
 
 error: Malformed while expression
-  --> test:3:29
+  --> test:3:28
    |
  3 |  (define f (while :label True))
    |                              ^ expected body

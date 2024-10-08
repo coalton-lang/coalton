@@ -36,7 +36,7 @@ error: Malformed package declaration
   --> test:1:8
    |
  1 |  (package)
-   |         ^ missing package name
+   |          ^ missing package name
 
 ================================================================================
 4 Unknown package clause
@@ -48,10 +48,10 @@ error: Malformed package declaration
 --------------------------------------------------------------------------------
 
 error: Malformed package declaration
-  --> test:2:2
+  --> test:2:3
    |
  2 |    (xxx yyy zzz))
-   |    ^^^^^^^^^^^^^ Unknown package clause
+   |     ^^^ Unknown package clause
 help: Must be one of IMPORT, IMPORT-FROM, EXPORT, SHADOW
  2 |   (xxx yyy zzz))
    |    ---
@@ -66,7 +66,7 @@ help: Must be one of IMPORT, IMPORT-FROM, EXPORT, SHADOW
 --------------------------------------------------------------------------------
 
 error: Malformed package declaration
-  --> test:2:10
+  --> test:2:9
    |
  2 |    (import))
    |           ^ empty IMPORT form
@@ -114,7 +114,7 @@ error: Malformed package declaration
   --> test:2:23
    |
  2 |    (import (something as)))
-   |                        ^ missing package nickname
+   |                         ^ missing package nickname
 
 ================================================================================
 9 Shadow clause is accepted
@@ -198,7 +198,7 @@ error: Malformed package declaration
   --> test:2:10
    |
  2 |    (shadow ()))
-   |            ^^ value must be a symbol
+   |            ^^ expected symbol
 
 ================================================================================
 15 Unterminated package form

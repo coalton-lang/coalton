@@ -1,5 +1,5 @@
 ================================================================================
-Empty options
+100 Empty options
 
 To support future extension, lisp-toplevel expects an empty options list in the
 first position.
@@ -22,7 +22,7 @@ error: Invalid lisp-toplevel form
    | |____- when parsing lisp-toplevel
 
 ================================================================================
-lisp-toplevel must receive an options list
+101 lisp-toplevel must receive an options list
 ================================================================================
 
 (package test)
@@ -42,7 +42,7 @@ error: Invalid lisp-toplevel form
    | |___________________- when parsing lisp-toplevel
 
 ================================================================================
-lisp-toplevel may not have attributes
+102 lisp-toplevel may not have attributes
 ================================================================================
 
 (package test)

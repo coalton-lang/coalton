@@ -4,7 +4,6 @@
   (:local-nicknames
    (#:parser #:coalton-impl/parser)
    (#:source #:coalton-impl/source)
-   (#:se #:source-error)
    (#:cursor #:coalton-impl/parser/cursor)
    (#:cst #:concrete-syntax-tree)))
 
@@ -12,7 +11,7 @@
 
 (defun make-cursor (string)
   (let ((source (source:make-source-string string)))
-    (with-open-stream (stream (se:source-stream source))
+    (with-open-stream (stream (source:source-stream source))
       (parser:with-reader-context stream
         (cursor:make-cursor (parser:maybe-read-form stream parser::*coalton-eclector-client*)
                             source
@@ -27,11 +26,3 @@
     (is (cursor:empty-p c))
     (signals parser:parse-error
       (cursor:next c))))
-
-(deftest collect-symbols ()
-  (let ((c (make-cursor "(a b c)")))
-    (is (equal '(a b c)
-               (cursor:collect-symbols c))))
-
-  (signals parser:parse-error
-    (cursor:collect-symbols (make-cursor "(a () c)"))))
