@@ -103,7 +103,6 @@
   (check-duplicates
    defines
    (alexandria:compose #'parser:node-variable-name #'parser:toplevel-define-name)
-   #'source:location
    (lambda (first second)
      (tc-error "Duplicate definition"
                (tc-note (parser:toplevel-define-name first)
@@ -115,7 +114,6 @@
   (check-duplicates
    declares
    (alexandria:compose #'parser:identifier-src-name #'parser:toplevel-declare-name)
-   #'source:location
    (lambda (first second)
      (tc-error "Duplicate declaration"
                (tc-note (parser:toplevel-declare-name first)
@@ -480,7 +478,6 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
     (check-duplicates
      (parser:pattern-variables (parser:node-abstraction-params node))
      #'parser:pattern-var-name
-     #'source:location
      (lambda (first second)
        (tc-error "Duplicate parameters name"
                  (tc-note first "first parameter here")
@@ -571,7 +568,6 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
     (check-duplicates
      (parser:node-let-bindings node)
      (alexandria:compose #'parser:node-variable-name #'parser:node-let-binding-name)
-     #'source:location
      (lambda (first second)
        (tc-error "Duplicate definition in let"
                  (tc-note first "first definition here")
@@ -1497,7 +1493,6 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
       (check-duplicates (parser:pattern-variables pat)
                         #'parser:pattern-var-name
-                        #'source:location
                         (lambda (first second)
                           (tc-error "Duplicate pattern variable"
                                     (tc-note first "first definition here")
@@ -2125,7 +2120,6 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
   (check-duplicates
    (parser:pattern-variables (parser:binding-parameters binding))
    #'parser:pattern-var-name
-   #'source:location
    (lambda (first second)
      (tc-error "Duplicate parameters name"
                (tc-note first "first parameter here")
