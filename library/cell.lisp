@@ -144,6 +144,10 @@
   (define-instance (Into (Cell :a) :a)
     (define into read))
 
+  (define-instance (Into :a String => Into (Cell :a) String)
+    (define (into c)
+      (into (read c))))
+
   (define-instance (Default :a => Default (Cell :a))
     (define (default) (new (default)))))
 
