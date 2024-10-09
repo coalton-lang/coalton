@@ -281,7 +281,7 @@ error: Invalid attribute for define-instance
  3 |  (repr :enum)
    |  ^^^^^^^^^^^^ define-instance cannot have attributes
  4 |  (define-instance (C :a))
-   |                   ------ while parsing define-instance
+   |  ------------------------ when parsing define-instance
 
 ================================================================================
 110 Malformed instance definition
