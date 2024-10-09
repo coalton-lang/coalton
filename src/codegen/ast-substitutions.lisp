@@ -5,6 +5,7 @@
   (:import-from
    #:coalton-impl/codegen/traverse
    #:action
+   #:*traverse*
    #:traverse)
   (:local-nicknames
    (#:parser #:coalton-impl/parser)
@@ -31,21 +32,23 @@
 (deftype ast-substitution-list ()
   '(satisfies ast-substitution-list-p))
 
-(defun apply-ast-substitution (subs node)
+(defun apply-ast-substitution (subs node &optional (rename-bound-variables nil))
   "Substitute variables in the tree of `node` with other nodes specified
 in `subs`. Throw an error if a variable to be substituted is bound in
-a subtree of `node`."
+a subtree of `node`. Also rename all bound variables if `rename-bound-variables`
+is true."
   (declare (type ast-substitution-list subs)
            (type node node)
+           (type boolean rename-bound-variables)
            (values node &optional))
   (traverse
    node
    (list
-    (action (:after node-variable node)
+    (action (:after node-variable node subs)
       (alexandria:when-let
           ((res (find (node-variable-value node) subs :key #'ast-substitution-from)))
         (ast-substitution-to res)))
-    (action (:after node-lisp node)
+    (action (:after node-lisp node subs)
       (multiple-value-bind (let-bindings lisp-var-bindings)
           (loop :for (lisp-var . coalton-var) :in (node-lisp-vars node)
                 :for new-var := (gensym (symbol-name coalton-var))
@@ -70,14 +73,34 @@ a subtree of `node`."
                :type (node-type node)
                :bindings let-bindings
                :subexpr new-lisp-node)))))
-    (action (:before node-direct-application node)
+    (action (:before node-direct-application node subs)
       (when (find (node-direct-application-rator node) subs :key #'ast-substitution-from)
         (util:coalton-bug
          "Failure to apply ast substitution on variable ~A to node-direct-application"
          (node-direct-application-rator node))))
-    (action (:before node-let node)
-      (loop :for (name . _) :in (node-let-bindings node)
+    (action (:traverse node-let node subs)
+      (loop :for (name . expr) :in (node-let-bindings node)
             :do (when (find name subs :key #'ast-substitution-from)
                   (util:coalton-bug
                    "Failure to apply ast substitution on variable ~A to node-let"
-                   name)))))))
+                   name))
+            :do (when rename-bound-variables
+                  (push (make-ast-substitution
+                         :from name
+                         :to (make-node-variable
+                              :type (node-type expr)
+                              :value (gensym (symbol-name name))))
+                        subs)))
+      (make-node-let
+       :type (node-type node)
+       :bindings
+       (loop :for (name . node) :in (node-let-bindings node)
+             :collect
+             (cons (if rename-bound-variables
+                       (node-variable-value
+                        (ast-substitution-to
+                         (find name subs :key #'ast-substitution-from)))
+                       name)
+                   (funcall *traverse* node subs)))
+       :subexpr (funcall *traverse* (node-let-subexpr node) subs))))
+   subs))
