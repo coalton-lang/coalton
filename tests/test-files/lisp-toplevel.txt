@@ -53,7 +53,7 @@ error: Invalid lisp-toplevel form
 
 --------------------------------------------------------------------------------
 
-error: Invalid lisp-toplevel form
+error: Invalid attribute for lisp-toplevel
   --> test:3:0
    |
  3 |   (repr :lisp)
