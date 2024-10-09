@@ -8,6 +8,12 @@
    #:time
    #:sleep)
   (:export
+   #:get-real-time
+   #:get-run-time
+   #+sbcl #:get-bytes-consed
+   #:Profile
+   #:capture-profile)
+  (:export
 
    #:LispCondition
 
@@ -61,6 +67,64 @@ While the result will always contain microseconds, some implementations may retu
     (lisp Unit (n)
       (cl:sleep n)
       Unit)))
+
+;;;
+;;; Pofiling
+;;;
+
+(coalton-toplevel
+
+  (declare get-run-time (Unit -> UFix))
+  (define (get-run-time)
+    "Gets the run-time."
+    (lisp UFix ()
+      (cl:get-internal-run-time)))
+
+  (declare get-real-time (Unit -> UFix))
+  (define (get-real-time)
+    "Gets the real-time."
+    (lisp UFix ()
+      (cl:get-internal-real-time)))
+
+  #+sbcl
+  (declare get-bytes-consed (Unit -> UFix))
+  #+sbcl
+  (define (get-bytes-consed)
+    "Gets the number of bytes consed (only implemented for SBCL"
+    (lisp UFix ()
+      (sb-ext:get-bytes-consed)))
+
+  (define-struct (Profile :a)
+    "A profile of a run function."
+    (output
+     "The output of the function" :a)
+    (run-time
+     "The run time of the run" UFix)
+    (real-time
+     "The real time of the run" UFix)
+    #+sbcl
+    (bytes-consed
+     "The number of bytes consed during the run." UFix))
+
+  (declare capture-profile ((Unit -> :a) -> (Profile :a)))
+  (define (capture-profile f)
+    "Runs a function, recording profile information and returning a Profile object."
+    (gc)
+    (let (#+sbcl
+          (start-bytes-consed (get-bytes-consed))
+          (start-run-time     (get-run-time))
+          (start-real-time    (get-real-time))
+          (value              (f))
+          #+sbcl
+          (end-bytes-consed   (get-bytes-consed))
+          (end-run-time       (get-run-time))
+          (end-real-time      (get-real-time)))
+      (Profile
+       value
+       (- end-run-time start-run-time)
+       (- end-real-time start-real-time)
+       #+sbcl
+       (- end-bytes-consed start-bytes-consed)))))
 
 ;;;
 ;;; Gathering System information
