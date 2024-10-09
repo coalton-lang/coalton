@@ -406,7 +406,7 @@ requires direct constructor calls."
                                       ;; inadvertently unified
                                       ;; across substitutions.
                                       (rename-type-variables
-                                       (apply-ast-substitution subs body)))))))
+                                       (apply-ast-substitution subs body t)))))))
 
            (try-inline (node call-stack)
              "Attempt to perform an inlining of the application node NODE. The
