@@ -23,6 +23,7 @@
    #:declare
    #:define
    #:define-type
+   #:define-alias
    #:define-struct
    #:define-class
    #:define-instance

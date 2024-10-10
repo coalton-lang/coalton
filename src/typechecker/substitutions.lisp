@@ -74,6 +74,7 @@
   ;; For a type application, recurse down into all the types
   (:method (subst-list (type tapp))
     (make-tapp
+     :alias (ty-alias type)
      :from (apply-substitution subst-list (tapp-from type))
      :to (apply-substitution subst-list (tapp-to type))))
   ;; Otherwise, do nothing

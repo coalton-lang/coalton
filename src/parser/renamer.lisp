@@ -516,6 +516,7 @@
      (make-program
       :package (program-package program)
       :types (rename-type-variables (program-types program))
+      :aliases (rename-type-variables (program-aliases program))
       :structs (rename-type-variables (program-structs program))
       :declares (program-declares program)
       :defines (rename-variables-generic% (program-defines program) ctx)
@@ -626,6 +627,12 @@
        :location (source:location toplevel)
        :repr (toplevel-define-type-repr toplevel)
        :head-location (toplevel-define-type-head-location toplevel))))
+
+  (:method ((toplevel toplevel-define-alias) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values toplevel-define-alias))
+
+    toplevel)
 
   (:method ((field struct-field) ctx)
     (declare (type algo:immutable-map ctx)
