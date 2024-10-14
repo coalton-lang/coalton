@@ -3,6 +3,8 @@
    #:coalton
    #:coalton-library/builtin
    #:coalton-library/classes)
+  (:local-nicknames
+   (#:math #:coalton-library/math))
   (:export
    #:gc
    #:time
@@ -61,12 +63,17 @@ While the result will always contain microseconds, some implementations may retu
                (cl:* 1000000 (cl:- end start))
                cl:internal-time-units-per-second)))))
 
-  (declare sleep (Integer -> Unit))
+  (declare sleep ((math:Rational :a) => :a -> Unit))
   (define (sleep n)
-    "Sleep for `n` seconds."
-    (lisp Unit (n)
-      (cl:sleep n)
-      Unit)))
+    "Sleep for `n` seconds, where `n` can be of any type with an instance of `Rational`.
+
+Sleep uses type class `Rational`'s `best-approx` instead of `Real`'s `real-approx` because it handles the approximation without arbitrary precision. The only `Real` type excluded by this decision is `CReal`."
+    (if (math:negative? n)
+        (error "sleep must be a nonnegative number.")
+        (let ((frac (math:best-approx n)))
+          (lisp Unit (frac)
+            (cl:sleep frac)
+            Unit)))))
 
 ;;;
 ;;; Pofiling
