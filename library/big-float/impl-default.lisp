@@ -352,7 +352,7 @@
         ((BFNegInf) (error "Cannot rationalize -Inf"))
         ((BFNaN) (error "Cannot rationalize NaN"))))
     (define (best-approx x)
-      (coalton-library/math/real::rational-approx (get-precision) x)))
+      (real-approx (get-precision) x)))
 
   (define-instance (Quantizable Big-Float)
     (define (proper x)
@@ -434,7 +434,7 @@
       ((BFInf) 0)
       (_ BFNaN))))
 
-(coalton-library/math/complex::%define-standard-complex-instances Big-Float)
+(complex::%define-standard-complex-instances Big-Float)
 
 (coalton-toplevel
   ;; SeriesSplit/SeriesResult could be extended to any ring (e.g. polynomials)
