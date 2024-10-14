@@ -6,11 +6,11 @@
   (:use #:coalton
         #:coalton-library/classes
         #:coalton-library/functions
-        #:coalton-library/math
-        #:coalton-library/math/integral)
+        #:coalton-library/math)
   (:import-from #:coalton-library/math/dyadic #:Dyadic)
   (:local-nicknames
    (#:dyadic #:coalton-library/math/dyadic)
+   (#:complex #:coalton-library/math/complex)
    (#:bits #:coalton-library/bits))
   (:export
    #:RoundingMode
