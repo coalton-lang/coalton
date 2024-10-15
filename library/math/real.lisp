@@ -31,7 +31,8 @@
    #:inexact/
    #:floor/
    #:ceiling/
-   #:round/))
+   #:round/
+   #:fromfrac))
 
 (in-package #:coalton-library/math/real)
 
@@ -264,7 +265,16 @@ Note: This does *not* divide double-float arguments."
   (declare round/ (Integer -> Integer -> Integer))
   (define (round/ a b)
     "Divide two integers and round the quotient."
-    (round (exact/ a b))))
+    (round (exact/ a b)))
+
+  (declare fromfrac (Dividable Integer :a => Fraction -> :a))
+  (define (fromfrac q)
+    "Converts a fraction to a target type.
+
+Specifically, target types must have an instance of `Dividable Integer :a`.
+
+This conversion may result in loss of fidelity."
+    (general/ (numerator q) (denominator q))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/MATH/REAL")

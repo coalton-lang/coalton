@@ -548,6 +548,16 @@ All of these cases are sufficiently common that we provide a few shorthands:
 
 - `floor/`, `ceiling/`, and `round/` for integer-to-integer division, and
 
+Fractions can be converted to other dividable types using `fromfrac` (Note: This may result in precision loss):
+
+```
+COALTON-LIBRARY/MATH/REAL> (coalton (the Double-Float (fromfrac 1/2)))
+0.5d0
+COALTON-LIBRARY/MATH/REAL> (coalton (the Single-Float (fromfrac 999/1000)))
+0.999
+```
+
+
 ## Lists
 
 Coalton uses Lisp lists under the hood. Lists can be constructed with `make-list`.
