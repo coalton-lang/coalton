@@ -33,6 +33,16 @@ that contains a filling of various sweet or savoury ingredients."
     (Meat String)  "A meat pie with the type of meat."))
 ```
 
+### `define-alias`
+
+`define-alias` allows for the same docstring style as `define`.
+
+```lisp
+(coalton-toplevel
+
+  (define-alias Index Integer
+    "This is an alias for a discrete numeric type: INTEGER"))
+
 ### `define-class`
 
 `define-class` allows for documentation both on the main form and in each method.
