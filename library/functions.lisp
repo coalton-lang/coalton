@@ -168,7 +168,7 @@
 
 (cl:defmacro %unwind-protect (obj exit thunk)
   "A wrapper on `cl:unwind-protect.`"
-  (cl:let ((output (cl:gensym "OUTPUT")))
+  (cl:let ((output (cl:gentemp "OUTPUT")))
     `(cl:let (,output)
        (cl:unwind-protect (cl:setq ,output (call-coalton-function ,thunk ,obj))
           (call-coalton-function ,exit ,obj))
