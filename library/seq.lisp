@@ -6,7 +6,7 @@
    #:coalton-library/classes)
   (:local-nicknames
    (#:types #:coalton-library/types)
-   (#:math #:coalton-library/math/integral)
+   (#:math #:coalton-library/math)
    (#:optional #:coalton-library/optional)
    (#:cell #:coalton-library/cell)
    (#:vector #:coalton-library/vector)

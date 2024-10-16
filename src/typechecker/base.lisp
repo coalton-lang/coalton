@@ -103,13 +103,11 @@ This requires a valid PPRINT-VARIABLE-CONTEXT")
 ;;; Assertions
 ;;;
 
-(defun check-duplicates (elems f g callback)
-  "Check for duplicate elements in ELEMS. F maps items in ELEMS to
-symbols which are compared for equality. G maps items in ELEMS to
-source locations whose spans are compared for ordering."
+(defun check-duplicates (elems f callback)
+  "Check for duplicate elements in ELEMS.  F maps items in ELEMS to symbols which are compared for equality.
+As soon as two duplicate elements are detected, CALLBACK is invoked with those two elements, ordered by source location."
   (declare (type list elems)
            (type function f)
-           (type function g)
            (type function callback))
 
   (loop :with table := (make-hash-table :test #'eq)
@@ -123,8 +121,8 @@ source locations whose spans are compared for ordering."
           :do (let ((first (gethash id table))
                     (second elem))
 
-                (when (> (car (source:location-span (funcall g first)))
-                         (car (source:location-span (funcall g second))))
+                (unless (source:location< (source:location first)
+                                          (source:location second))
                   (psetf first second second first))
 
                 (funcall callback first second))

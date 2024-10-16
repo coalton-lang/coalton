@@ -72,7 +72,41 @@ WARNING: The consequences are undefined if an uninitialized element is read befo
     "Set the `i`th value of the `LispArray` `v` to `x`."
     (lisp Unit (v i x)
       (cl:setf (cl:aref v i) x)
-      Unit)))
+      Unit))
+
+  (lisp-toplevel ()
+    (cl:eval-when (:compile-toplevel :load-toplevel)
+      (cl:defmacro define-lisparray-specialization (coalton-type lisp-type)
+        "Specialize lisparray access to known primitive types.  This allows the lisp compiler to inline array access."
+        (cl:let ((ref (cl:intern (cl:format cl:nil "aref/~a" coalton-type)))
+                 (set (cl:intern (cl:format cl:nil "set!/~a" coalton-type))))
+          `(progn
+             (specialize aref ,ref (LispArray ,coalton-type -> UFix -> ,coalton-type))
+             (declare ,ref (LispArray ,coalton-type -> UFix -> ,coalton-type))
+             (define (,ref v i)
+               (lisp ,coalton-type (v i)
+                 (cl:aref (cl:the (cl:simple-array ,lisp-type) v) i)))
+             (specialize set! ,set (LispArray ,coalton-type -> UFix -> ,coalton-type -> Unit))
+             (declare ,set (LispArray ,coalton-type -> UFix -> ,coalton-type -> Unit))
+             (define (,set v i x)
+               (lisp Unit (v i x)
+                 (cl:setf (cl:aref (cl:the (cl:simple-array ,lisp-type) v) i) x)
+                 Unit))))))
+    )
+
+  (define-lisparray-specialization Single-Float cl:single-float)
+  (define-lisparray-specialization Double-Float cl:double-float)
+  (define-lisparray-specialization IFix cl:fixnum)
+  (define-lisparray-specialization UFix (cl:and cl:fixnum cl:unsigned-byte))
+  (define-lisparray-specialization I8 (cl:signed-byte 8))
+  (define-lisparray-specialization U8 (cl:unsigned-byte 8))
+  (define-lisparray-specialization I16 (cl:signed-byte 16))
+  (define-lisparray-specialization U16 (cl:unsigned-byte 16))
+  (define-lisparray-specialization I32 (cl:signed-byte 32))
+  (define-lisparray-specialization U32 (cl:unsigned-byte 32))
+  (define-lisparray-specialization I64 (cl:signed-byte 64))
+  (define-lisparray-specialization U64 (cl:unsigned-byte 64))
+)
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/LISPARRAY")

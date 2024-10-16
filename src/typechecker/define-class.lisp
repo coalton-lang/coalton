@@ -62,7 +62,6 @@
   (check-duplicates
    classes
    (alexandria:compose #'parser:identifier-src-name #'parser:toplevel-define-class-name)
-   #'source:location
    (lambda (first second)
      (tc:tc-error "Duplicate class definition"
                   (tc:tc-location (parser:toplevel-define-class-head-location first)
@@ -74,7 +73,6 @@
   (check-duplicates
    (mapcan (alexandria:compose #'copy-list #'parser:toplevel-define-class-methods) classes)
    (alexandria:compose #'parser:identifier-src-name #'parser:method-definition-name)
-   #'source:location
    (lambda (first second)
      (tc:tc-error "Duplicate method definition"
                   (tc:tc-note first "first definition here")
@@ -85,7 +83,6 @@
     (check-duplicates
      (parser:toplevel-define-class-vars class)
      #'parser:keyword-src-name
-     #'source:location
      (lambda (first second)
        (tc:tc-error "Duplicate class variable"
                     (tc:tc-note first "first usage here")
@@ -350,7 +347,6 @@
                (check-duplicates
                 vars
                 #'parser:keyword-src-name
-                #'source:location
                 (lambda (first second)
                   (tc:tc-error "Duplicate variable in function dependency"
                                (tc:tc-note first "first usage here")

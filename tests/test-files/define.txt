@@ -139,7 +139,7 @@ error: Duplicate monomorphize attribute
  4 |  (monomorphize)
    |  ^^^^^^^^^^^^^^ monomorphize attribute here
  5 |  (define f x)
-   |          - when parsing define
+   |  ------------ when parsing define
 
 ================================================================================
 Malformed definition
@@ -206,7 +206,7 @@ error: Invalid target for repr attribute
  3 |  (repr :enum)
    |  ^^^^^^^^^^^^ repr must be attached to a define-type
  4 |  (define f x)
-   |          - when parsing define
+   |  ------------ when parsing define
 
 ================================================================================
 Unknown variable

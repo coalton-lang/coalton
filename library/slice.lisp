@@ -4,8 +4,7 @@
    #:coalton-library/builtin
    #:coalton-library/functions
    #:coalton-library/classes
-   #:coalton-library/math/arith
-   #:coalton-library/math/integral)
+   #:coalton-library/math)
   (:local-nicknames
    (#:types #:coalton-library/types)
    (#:cell #:coalton-library/cell)

@@ -544,8 +544,8 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
 
     (unless (zerop (length attributes))
       (parse-error "Orphan attribute"
-                   (note source (cdr (aref attributes 0))
-                         "attribute must be attached to another form")))
+                   (source:note (aref attributes 0)
+                                "attribute must be attached to another form")))
 
     (setf (program-types program) (nreverse (program-types program)))
     (setf (program-aliases program) (nreverse (program-aliases program)))
@@ -783,10 +783,69 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
                                  :location (form-location source form))
         (program-lisp-forms program)))
 
+
+;;; Functions for working with attributes (repr, monomorphize)
+
+(defun consume-repr (attributes toplevel-form message)
+  "Return the unique repr attribute in ATTRIBUTES, or NIL.
+If the attribute is not unique, or a monomorphize attribute is present, signal a parse error."
+  (let (repr)
+    (loop :for attribute :across attributes
+          :do (etypecase attribute
+                (attribute-repr
+                 (when repr
+                   (parse-error "Duplicate repr attribute"
+                                (source:note attribute "repr attribute here")
+                                (source:secondary-note repr "previous attribute here")
+                                (source:secondary-note toplevel-form message)))
+                 (setf repr attribute))
+                (attribute-monomorphize
+                 (parse-error "Invalid target for monomorphize attribute"
+                              (source:note attribute "monomorphize must be attached to a define or declare form")
+                              (source:secondary-note toplevel-form message)))))
+    (setf (fill-pointer attributes) 0)
+    repr))
+
+(defun consume-monomorphize (attributes toplevel-form message)
+  "Return the unique monomorphize attribute in ATTRIBUTES, or NIL.
+If the attribute is not unique, or a repr attribute is present, signal a parse error."
+  (let (monomorphize)
+    (loop :for attribute :across attributes
+          :do (etypecase attribute
+                (attribute-repr
+                 (parse-error "Invalid target for repr attribute"
+                              (source:note attribute "repr must be attached to a define-type")
+                              (source:secondary-note toplevel-form message)))
+                (attribute-monomorphize
+                 (when monomorphize
+                   (parse-error "Duplicate monomorphize attribute"
+                                (source:note attribute "monomorphize attribute here")
+                                (source:secondary-note monomorphize "previous attribute here")
+                                (source:secondary-note toplevel-form message)))
+                 (setf monomorphize attribute))))
+    (setf (fill-pointer attributes) 0)
+    monomorphize))
+
+(defun forbid-attributes (attributes form source)
+  "If ATTRIBUTES is non-zero length, signal a parse error using FORM and SOURCE for location context."
+  (unless (zerop (length attributes))
+    (let ((toplevel-form-name (string-downcase (cst:raw (cst:first form)))))
+      (parse-error (format nil "Invalid attribute for ~A" toplevel-form-name)
+                   (source:note (aref attributes 0) "~A cannot have attributes" toplevel-form-name)
+                   (secondary-note source form "when parsing ~A" toplevel-form-name)))))
+
+
+;;; This is the parser for complete toplevel Coalton attributes,
+;;; declarations and definitions. It selects a sub-parser by examining
+;;; the first symbol in the form.
+
 (defun parse-toplevel-form (form program attributes source)
+  "Parse a toplevel Coalton form in FORM, recording source locations that refer to SOURCE.
+If the parsed form is a program definition, add it to PROGRAM and return T.
+If the parsed form is an attribute (e.g., repr or monomorphize), add it to to ATTRIBUTES and return NIL."
   (declare (type cst:cst form)
            (type program program)
-           (type (vector (cons attribute cst:cst)) attributes)
+           (type (vector attribute) attributes)
            (values boolean &optional))
 
   (when (cst:atom form)
@@ -800,110 +859,30 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
 
   (case (cst:raw (cst:first form))
     ((coalton:monomorphize)
-     (vector-push-extend
-      (cons
-       (parse-monomorphize form source)
-       form)
-      attributes)
+     (vector-push-extend (parse-monomorphize form source) attributes)
      nil)
 
     ((coalton:repr)
-     (vector-push-extend
-      (cons
-       (parse-repr form source)
-       form)
-      attributes)
+     (vector-push-extend (parse-repr form source) attributes)
      nil)
 
     ((coalton:define)
-     (let ((define (parse-define form source))
-           monomorphize
-           monomorphize-form)
-       (loop :for (attribute . attribute-form) :across attributes
-             :do (etypecase attribute
-                   (attribute-repr
-                    (parse-error "Invalid target for repr attribute"
-                                 (note source attribute-form
-                                       "repr must be attached to a define-type")
-                                 (source:secondary-note (toplevel-define-name define)
-                                                        "when parsing define")))
-
-                   (attribute-monomorphize
-                    (when monomorphize
-                      (parse-error "Duplicate monomorphize attribute"
-                                   (note source attribute-form
-                                         "monomorphize attribute here")
-                                   (secondary-note source monomorphize-form
-                                                   "previous attribute here")
-                                   (source:secondary-note (toplevel-define-name define)
-                                                          "when parsing define")))
-
-                    (setf monomorphize attribute)
-                    (setf monomorphize-form attribute-form))))
-
-       (setf (fill-pointer attributes) 0)
+     (let* ((define (parse-define form source))
+            (monomorphize (consume-monomorphize attributes define "when parsing define")))
        (setf (toplevel-define-monomorphize define) monomorphize)
        (push define (program-defines program))
        t))
 
     ((coalton:declare)
-     (let ((declare (parse-declare form source))
-
-           monomorphize
-           monomorphize-form)
-
-       (loop :for (attribute . attribute-form) :across attributes
-             :do (etypecase attribute
-                   (attribute-repr
-                    (parse-error "Invalid target for repr attribute"
-                                 (note source attribute-form
-                                       "repr must be attached to a define-type")
-                                 (secondary-note source form "when parsing declare")))
-
-                   (attribute-monomorphize
-                    (when monomorphize
-                      (parse-error "Duplicate monomorphize attribute"
-                                   (note source attribute-form
-                                         "monomorphize attribute here")
-                                   (secondary-note source monomorphize-form
-                                                   "previous attribute here")
-                                   (secondary-note source form "when parsing declare")))
-
-                    (setf monomorphize attribute)
-                    (setf monomorphize-form attribute-form))))
-
-       (setf (fill-pointer attributes) 0)
+     (let* ((declare (parse-declare form source))
+            (monomorphize (consume-monomorphize attributes declare "when parsing declare")))
        (setf (toplevel-declare-monomorphize declare) monomorphize)
        (push declare (program-declares program))
        t))
 
     ((coalton:define-type)
      (let* ((type (parse-define-type form source))
-
-            repr
-            repr-form)
-
-       (loop :for (attribute . attribute-form) :across attributes
-             :do (etypecase attribute
-                   (attribute-repr
-                    (when repr
-                      (parse-error "Duplicate repr attribute"
-                                   (note source attribute-form
-                                         "repr attribute here")
-                                   (secondary-note source repr-form
-                                                   "previous attribute here")
-                                   (source:secondary-note type "when parsing define-type")))
-
-                    (setf repr attribute)
-                    (setf repr-form attribute-form))
-
-                   (attribute-monomorphize
-                    (parse-error "Invalid target for monomorphize attribute"
-                                 (note source attribute-form
-                                       "monomorphize must be attached to a define or declare form")
-                                 (source:secondary-note type "when parsing define-type")))))
-
-       (setf (fill-pointer attributes) 0)
+            (repr (consume-repr attributes type "when parsing define-type")))
        (setf (toplevel-define-type-repr type) repr)
        (push type (program-types program))
        t))
@@ -930,66 +909,26 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
        t))
 
     ((coalton:define-struct)
-
-     (let ((struct (parse-define-struct form source))
-           repr
-           repr-form)
-
-       (loop :for (attribute . attribute-form) :across attributes
-             :do (etypecase attribute
-                   (attribute-repr
-                    (when repr
-                      (parse-error "Duplicate repr attribute"
-                                   (note source attribute-form "repr attribute here")
-                                   (secondary-note source repr-form "previous attribute here")
-                                   (note source (toplevel-define-struct-head-location struct)
-                                         "when parsing define-struct")))
-
-                    (unless (eq :transparent (keyword-src-name (attribute-repr-type attribute)))
-                      (parse-error "Invalid repr attribute"
-                                   (note source attribute-form
-                                         "structs can only be repr transparent")
-                                   (secondary-note source (toplevel-define-struct-head-location struct)
-                                                   "when parsing define-struct")))
-
-                    (setf repr attribute)
-                    (setf repr-form attribute-form))
-
-                   (attribute-monomorphize
-                    (parse-error "Invalid target for monomorphize attribute"
-                                 (note source attribute-form
-                                       "monomorphize must be attached to a define or declare form")
-                                 (secondary-note source (toplevel-define-struct-name struct)
-                                                 "when parsing define-type")))))
-
-       (setf (fill-pointer attributes) 0)
+     (let* ((struct (parse-define-struct form source))
+            (repr (consume-repr attributes struct "when parsing define-struct")))
+       (when (and repr
+                  (not (eq :transparent (keyword-src-name (attribute-repr-type repr)))))
+         (parse-error "Invalid repr attribute"
+                      (source:note repr "structs can only be repr transparent")
+                      (source:secondary-note struct "when parsing define-struct")))
        (setf (toplevel-define-struct-repr struct) repr)
        (push struct (program-structs program))
        t))
 
     ((coalton:define-class)
+     (forbid-attributes attributes form source)
      (let ((class (parse-define-class form source)))
-
-       (unless (zerop (length attributes))
-         (parse-error "Invalid attribute for define-class"
-                      (note source (cdr (aref attributes 0))
-                            "define-class cannot have attributes")
-                      (source:secondary-note (toplevel-define-class-head-location class)
-                                             "while parsing define-class")))
-
        (push class (program-classes program))
        t))
 
     ((coalton:define-instance)
+     (forbid-attributes attributes form source)
      (let ((instance (parse-define-instance form source)))
-
-       (unless (zerop (length attributes))
-         (parse-error "Invalid attribute for define-instance"
-                      (note source (cdr (aref attributes 0))
-                            "define-instance cannot have attributes")
-                      (source:secondary-note (toplevel-define-instance-head-location instance)
-                                             "while parsing define-instance")))
-
        (push instance (program-instances program))
        t))
 
@@ -998,35 +937,18 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
        (parse-error "Invalid lisp-toplevel form"
                     (note source form
                           "lisp-toplevel is only allowed in library source code. To enable elsewhere, (pushnew :coalton-lisp-toplevel *features*)")))
-     (unless (zerop (length attributes))
-       (parse-error "Invalid lisp-toplevel form"
-                    (note source (cdr (aref attributes 0))
-                          "lisp-toplevel cannot have attributes")
-                    (secondary-note source form
-                                    "when parsing lisp-toplevel")))
+     (forbid-attributes attributes form source)
      (parse-lisp-toplevel-form form program source)
      t)
 
     ((coalton:specialize)
+     (forbid-attributes attributes form source)
      (let ((spec (parse-specialize form source)))
-
-       (unless (zerop (length attributes))
-         (source:error "Invalid attribute for specialize"
-                       (note source (cdr (aref attributes 0))
-                             "specialize cannot have attributes")
-                       (secondary-note source form "when parsing specialize")))
-
        (push spec (program-specializations program))
        t))
 
     ((coalton:progn)
-     (unless (zerop (length attributes))
-       (parse-error "Invalid attribute for progn"
-                    (note source (cdr (aref attributes 0))
-                          "progn cannot have attributes")
-                    (secondary-note source form
-                                    "when parsing progn")))
-
+     (forbid-attributes attributes form source)
      (loop :for inner-form := (cst:rest form) :then (cst:rest inner-form)
            :while (not (cst:null inner-form)) :do
              (when (and (parse-toplevel-form (cst:first inner-form) program attributes source)
@@ -1036,10 +958,8 @@ consume all attributes")))
 
      (unless (zerop (length attributes))
        (parse-error "Trailing attributes in progn"
-                    (note source (cdr (aref attributes 0))
-                          "progn cannot have trailing attributes")
-                    (secondary-note source form
-                                    "when parsing progn")))
+                    (source:note (aref attributes 0) "progn cannot have trailing attributes")
+                    (secondary-note source form "when parsing progn")))
      t)
 
     (t

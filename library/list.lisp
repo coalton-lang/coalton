@@ -10,7 +10,7 @@
   (:local-nicknames
    (#:cell #:coalton-library/cell)
    (#:iter #:coalton-library/iterator)
-   (#:arith #:coalton-library/math/arith))
+   (#:math #:coalton-library/math))
   (:export
    #:head
    #:tail
@@ -250,10 +250,10 @@
     "Returns the nth-cdr of a list."
     (cond ((null? l)
 	   Nil)
-	  ((arith:zero? n)
+	  ((math:zero? n)
 	   l)
 	  (True
-	   (nth-cdr (arith:1- n) (cdr l)))))
+	   (nth-cdr (math:1- n) (cdr l)))))
   
   (declare elemIndex (Eq :a => :a -> List :a -> Optional UFix))
   (define (elemIndex x xs)

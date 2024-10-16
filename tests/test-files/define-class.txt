@@ -453,7 +453,7 @@ error: Invalid attribute for define-class
  3 |  (repr :enum)
    |  ^^^^^^^^^^^^ define-class cannot have attributes
  4 |  (define-class (C :a))
-   |                ------ while parsing define-class
+   |  --------------------- when parsing define-class
 
 ================================================================================
 119 Malformed class definition

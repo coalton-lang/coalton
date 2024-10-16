@@ -105,6 +105,12 @@ This threshold is used to ensure `Eq` and `Ord` instances terminate. (In general
         (cr:/r n)))))
 
 (coalton-toplevel
+
+  (define-instance (Dividable Integer CReal)
+    (define (general/ a b)
+      (/ (fromint a) (fromint b)))))
+
+(coalton-toplevel
   
   (define-instance (math:Exponentiable Creal)
 

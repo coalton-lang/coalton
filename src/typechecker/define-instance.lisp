@@ -210,7 +210,6 @@
     (check-duplicates
      (parser:toplevel-define-instance-methods unparsed-instance)
      (alexandria:compose #'parser:node-variable-name #'parser:instance-method-definition-name)
-     #'source:location
      (lambda (first second)
        (tc-error "Duplicate method definition"
                  (tc-note first "first definition here")

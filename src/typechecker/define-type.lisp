@@ -104,7 +104,6 @@
   (check-duplicates
    (append types structs aliases)
    (alexandria:compose #'parser:identifier-src-name #'parser:type-definition-name)
-   #'source:location
    (lambda (first second)
      (tc:tc-error "Duplicate type definitions"
                   (tc:tc-note first "first definition here")
@@ -116,7 +115,6 @@
    (mapcan (alexandria:compose #'copy-list #'parser:type-definition-ctors)
            (append types structs aliases))
    (alexandria:compose #'parser:identifier-src-name #'parser:type-definition-ctor-name)
-   #'source:location
    (lambda (first second)
      (tc:tc-error "Duplicate constructor definitions"
                   (tc:tc-note first "first definition here")
@@ -127,7 +125,6 @@
         :do (check-duplicates
              (parser:type-definition-vars type)
              #'parser:keyword-src-name
-             #'source:location
              (lambda (first second)
                (tc:tc-error "Duplicate type variable definitions"
                             (tc:tc-note first "first definition here")
