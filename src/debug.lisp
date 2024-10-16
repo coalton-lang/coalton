@@ -180,9 +180,16 @@
     (format t "~S~%" type)
     type))
 
+(defun coalton:describe-alias (symbol)
+  "Lookup the type represented by the alias SYMBOL in the global environment"
+  (let ((tc:*pprint-aliases* t)
+        (type (tc:alias-entry-type (tc:lookup-alias entry:*global-environment* symbol))))
+    (format t "~S~%" type)
+    type))
+
 (defun coalton:kind-of (symbol)
   "Lookup the kind of type SYMBOL in the global environment"
-  (tc:kind-of (coalton-impl/typechecker::type-entry-type (tc:lookup-type entry:*global-environment* symbol))))
+  (tc:kind-of (tc:type-entry-type (tc:lookup-type entry:*global-environment* symbol))))
 
 (defun coalton:lookup-code (name)
   "Lookup the compiled code of a given definition"

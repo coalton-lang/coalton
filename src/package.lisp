@@ -110,6 +110,7 @@
    #:lookup-fundeps
    #:type-of
    #:describe-type-of
+   #:describe-alias
    #:kind-of)
 
   (:intern
