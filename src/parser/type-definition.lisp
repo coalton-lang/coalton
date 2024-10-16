@@ -21,6 +21,7 @@
    #:type-definition-name               ; FUNCTION
    #:type-definition-vars               ; FUNCTION
    #:type-definition-repr               ; FUNCTION
+   #:type-definition-aliased-type       ; FUNCTION
    #:type-definition-ctors              ; FUNCTION
    #:type-definition-ctor-name          ; FUNCTION
    #:type-definition-ctor-field-types   ; FUNCTION
@@ -65,7 +66,7 @@
 
   (:method ((def toplevel-define-alias))
     (declare (values keyword-src-list))
-    (list)))
+    (toplevel-define-alias-vars def)))
 
 (defgeneric type-definition-repr (def)
   (:method ((def toplevel-define-type))
@@ -79,6 +80,19 @@
   (:method ((def toplevel-define-alias))
     (declare (values (or null attribute-repr)))
     nil))
+
+(defgeneric type-definition-aliased-type (def)
+  (:method ((def toplevel-define-type))
+    (declare (values (or null ty)))
+    nil)
+
+  (:method ((def toplevel-define-struct))
+    (declare (values (or null ty)))
+    nil)
+
+  (:method ((def toplevel-define-alias))
+    (declare (values (or null ty)))
+    (toplevel-define-alias-type def)))
 
 (defgeneric type-definition-ctors (def)
   (:method ((def toplevel-define-type))

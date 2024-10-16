@@ -632,7 +632,19 @@
     (declare (type algo:immutable-map ctx)
              (values toplevel-define-alias))
 
-    toplevel)
+    (let* ((tvars (mapcar #'keyword-src-name (toplevel-define-alias-vars toplevel)))
+
+           (new-bindings (make-local-vars tvars :package util:+keyword-package+))
+
+           (new-ctx (algo:immutable-map-set-multiple ctx new-bindings)))
+
+      (make-toplevel-define-alias
+       :name (toplevel-define-alias-name toplevel)
+       :vars (rename-type-variables-generic% (toplevel-define-alias-vars toplevel) new-ctx)
+       :docstring (source:docstring toplevel)
+       :type (rename-type-variables-generic% (toplevel-define-alias-type toplevel) new-ctx)
+       :location (source:location toplevel)
+       :head-location (toplevel-define-alias-head-location toplevel))))
 
   (:method ((field struct-field) ctx)
     (declare (type algo:immutable-map ctx)

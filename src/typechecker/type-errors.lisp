@@ -37,7 +37,8 @@
   (:report
    (lambda (c s)
      (let ((*print-circle* nil) ; Prevent printing using reader macros
-           )
+           (*print-readably* nil)
+           (*pprint-aliases* nil))
        (format s "Failed to unify types ~S and ~S"
                (unification-error-type1 c)
                (unification-error-type2 c))))))
@@ -48,7 +49,8 @@
   (:report
    (lambda (c s)
      (let ((*print-circle* nil) ; Prevent printing using reader macros
-           )
+           (*print-readably* nil)
+           (*pprint-aliases* nil))
        (format s "Cannot construct infinite type by unifying ~S with internal variable."
                (infinite-type-unification-error-type c))))))
 
@@ -61,7 +63,8 @@
   (:report
    (lambda (c s)
      (let ((*print-circle* nil) ; Prevent printing using reader macros
-           )
+           (*print-readably* nil)
+           (*pprint-aliases* nil))
        (format s "Kind mismatch between type ~S of kind ~S and kind ~S"
                (kind-mismatch-error-type c)
                (kind-of (kind-mismatch-error-type c))
@@ -75,7 +78,8 @@
   (:report
    (lambda (c s)
      (let ((*print-circle* nil) ; Prevent printing using reader macros
-           )
+           (*print-readably* nil)
+           (*pprint-aliases* nil))
        (format s "Kind mismatch between type ~S of kind ~S and type ~S kind ~S"
                (type-kind-mismatch-error-type1 c)
                (kind-of (type-kind-mismatch-error-type1 c))
@@ -90,7 +94,8 @@
   (:report
    (lambda (c s)
      (let ((*print-circle* nil) ; Prevent printing using reader macros
-           )
+           (*print-readably* nil)
+           (*pprint-aliases* nil))
        (format s "Failed to unify types ~S and ~S"
                (unification-error-pred1 c)
                (unification-error-pred2 c))))))
@@ -101,7 +106,8 @@
   (:report
    (lambda (c s)
      (let ((*print-circle* nil) ; Prevent printing using reader macros
-           )
+           (*print-readably* nil)
+           (*pprint-aliases* nil))
        (format s "Ambiguous constraint ~S~%"
                (ambiguous-constraint-pred c))))))
 
@@ -113,7 +119,8 @@
   (:report
    (lambda (c s)
      (let ((*print-circle* nil) ; Prevent printing using reader macros
-           )
+           (*print-readably* nil)
+           (*pprint-aliases* nil))
        (format s "Instance ~S overlaps with instance ~S"
                (overlapping-instance-error-inst1 c)
                (overlapping-instance-error-inst2 c))))))
@@ -152,7 +159,8 @@
   (:report
    (lambda (c s)
      (let ((*print-circle* nil) ; Prevent printing using reader macros
-           )
+           (*print-readably* nil)
+           (*pprint-aliases* nil))
        (with-pprint-variable-context ()
          (format s "instance conflicts previous instance ~S"
                  (fundep-conflict-old-pred c)))))))

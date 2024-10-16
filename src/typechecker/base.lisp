@@ -9,6 +9,7 @@
    #:*pprint-tyvar-dict*
    #:*pprint-variable-symbol-code*
    #:*pprint-variable-symbol-suffix*
+   #:*pprint-aliases*
    #:tc-error                           ; CONDITION, FUNCTION
    #:tc-location
    #:tc-secondary-location
@@ -60,6 +61,8 @@ This requires a valid PPRINT-VARIABLE-CONTEXT")
      (with-pprint-variable-scope ()
        ,@body)))
 
+(defvar *pprint-aliases* nil)
+
 ;;;
 ;;; Conditions
 ;;;
@@ -75,7 +78,8 @@ This requires a valid PPRINT-VARIABLE-CONTEXT")
                          (apply #'format nil format-string format-args))))
 
 (defun tc-note (located format-string &rest format-args)
-  (apply #'tc-location (source:location located) format-string format-args))
+  (let ((*pprint-aliases* t))
+    (apply #'tc-location (source:location located) format-string format-args)))
 
 (defun tc-secondary-note (located format-string &rest format-args)
   (apply #'tc-secondary-location (source:location located) format-string format-args))

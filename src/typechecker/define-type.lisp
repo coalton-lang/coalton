@@ -28,6 +28,7 @@
    #:type-definition-name               ; ACCESSOR
    #:type-definition-type               ; ACCESSOR
    #:type-definition-runtime-type       ; ACCESSOR
+   #:type-definition-aliased-type       ; ACCESSOR
    #:type-definition-explicit-repr      ; ACCESSOR
    #:type-definition-enum-repr          ; ACCESSOR
    #:type-definition-newtype            ; ACCESSOR
@@ -43,6 +44,7 @@
   (name              (util:required 'name)              :type symbol                   :read-only t)
   (type              (util:required 'type)              :type tc:ty                    :read-only t)
   (runtime-type      (util:required 'runtime-type)      :type t                        :read-only t)
+  (aliased-type      (util:required 'runtime-type)      :type (or null tc:ty)          :read-only t)
 
   ;; See the fields with the same name on type-entry
   (explicit-repr     (util:required 'explicit-repr)     :type tc:explicit-repr          :read-only t)
@@ -175,9 +177,7 @@
                                 :collect (tc:kind-of (partial-type-env-add-var partial-env var)))
 
                      :for kind := (tc:make-kind-function* kvars tc:+kstar+)
-                     :for ty := (if (not (typep type 'parser:toplevel-define-alias))
-                                    (tc:make-tycon :name name :kind kind)
-                                    (parse-type (parser:toplevel-define-alias-type type) env))
+                     :for ty := (tc:make-tycon :name name :kind kind)
                      :do (partial-type-env-add-type partial-env name ty))
 
            :append  (multiple-value-bind (type-definitions instances_ ksubs)
@@ -220,15 +220,20 @@
                     (setf env (tc:unset-function env constructor))))))
 
   (cond ((typep parsed-type 'parser:toplevel-define-alias)
-         (let ((name (type-definition-name type))
-               (alias-type (parse-type (parser:toplevel-define-alias-type parsed-type) env)))
-           (setf (tc:ty-alias alias-type) name)
+         (let ((alias (tc:apply-type-argument-list (type-definition-type type) tyvars))
+               (aliased-type (type-definition-aliased-type type)))
+           (setf aliased-type
+                 (tc:push-alias aliased-type
+                                (tc:apply-ksubstitution
+                                 (tc:kind-monomorphize-subs (tc:kind-variables tyvars) nil)
+                                 alias)))
            (setf env (tc:set-alias
                       env
-                      name
+                      (type-definition-name type)
                       (tc:make-alias-entry
-                       :name name
-                       :type alias-type
+                       :name (type-definition-name type)
+                       :tyvars tyvars
+                       :type aliased-type
                        :docstring nil)))))
         ((tc:lookup-alias env (type-definition-name type) :no-error t)
          (setf env (tc:unset-alias env (type-definition-name type)))))
@@ -310,6 +315,24 @@
 
   env)
 
+(defun check-for-unused-alias-type-variables (aliased-type parsed-type partial-env)
+  (declare (type tc:ty aliased-type)
+           (type parser:type-definition parsed-type)
+           (type partial-type-env partial-env))
+  (let* ((defined-variables (mapcar #'parser:keyword-src-name (parser:type-definition-vars parsed-type)))
+         (used-variables (mapcar #'tc:tyvar-id (tc:type-variables aliased-type)))
+         (unused-variables (loop :for tyvar :in defined-variables
+                                 :when (not (member (tc:tyvar-id (partial-type-env-lookup-var partial-env tyvar parsed-type))
+                                                    used-variables))
+                                 :collect tyvar))
+         (number-of-unused-variables (length unused-variables)))
+    (unless (zerop number-of-unused-variables)
+      (tc-error (format nil "Alias type variable~P defined but never used" number-of-unused-variables)
+                (tc-note parsed-type "Alias ~S defines unused type variable~P ~{:~A~^ ~}"
+                         (parser:identifier-src-name (parser:type-definition-name parsed-type))
+                         number-of-unused-variables
+                         (mapcar (lambda (str) (subseq str 0 (- (length str) 5)))
+                                 (mapcar #'string unused-variables)))))))
 
 (defun infer-define-type-scc-kinds (types env)
   (declare (type parser:type-definition-list types)
@@ -327,9 +350,9 @@
                     :for ctor-name := (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
                     :for fields := (loop :for field :in (parser:type-definition-ctor-field-types ctor)
                                          :collect (multiple-value-bind (type ksubs_)
-                                                      (infer-type-kinds field tc:+kstar+ ksubs env)
+                                                      (parse-type field env ksubs)
                                                     (setf ksubs ksubs_)
-                                                    (apply-alias-substitutions type (partial-type-env-env env))))
+                                                    type))
                     :do (setf (gethash ctor-name ctor-table) fields)))
 
     ;; Redefine types with final inferred kinds in the environment
@@ -358,7 +381,7 @@
 
              :for repr := (parser:type-definition-repr type)
              :for repr-type := (and repr (parser:keyword-src-name (parser:attribute-repr-type repr)))
-             :for repr-arg := (and repr (eq repr-type :native) (cst:raw (parser:attribute-repr-arg repr))) 
+             :for repr-arg := (and repr (eq repr-type :native) (cst:raw (parser:attribute-repr-arg repr)))
 
              ;; Apply ksubs to find the type of each constructor
              :for constructor-types
@@ -440,6 +463,12 @@
                                                  `(member ,@(mapcar #'tc:constructor-entry-compressed-repr ctors)))
                                                 (t
                                                  name))
+                                :aliased-type (let ((parser-aliased-type
+                                                      (parser:type-definition-aliased-type type)))
+                                                (when parser-aliased-type
+                                                  (let ((aliased-type (parse-type parser-aliased-type env)))
+                                                    (check-for-unused-alias-type-variables aliased-type type env)
+                                                    aliased-type)))
                                 :explicit-repr (if (eq repr-type :native)
                                                    (list repr-type repr-arg)
                                                    repr-type)
@@ -464,7 +493,8 @@
 
 (defun maybe-runtime-repr-instance (type)
   (declare (type type-definition type))
-  (unless (equalp *package* (find-package "COALTON-LIBRARY/TYPES"))
+  (unless (or (equalp *package* (find-package "COALTON-LIBRARY/TYPES"))
+              (type-definition-aliased-type type))
     (make-runtime-repr-instance type)))
 
 (defun make-runtime-repr-instance (type)

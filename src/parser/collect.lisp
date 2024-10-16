@@ -110,6 +110,10 @@
     (declare (values tyvar-list))
     (mapcan #'collect-type-variables-generic% (toplevel-define-type-ctors type)))
 
+  (:method ((alias toplevel-define-alias))
+    (declare (values tyvar-list))
+    (collect-type-variables-generic% (toplevel-define-alias-type alias)))
+
   (:method ((method method-definition))
     (declare (values tyvar-list &optional))
     (collect-type-variables-generic% (method-definition-type method)))

@@ -37,8 +37,9 @@
    #:toplevel-define-type-head-location          ; ACCESSOR
    #:toplevel-define-type-list                   ; TYPE
    #:toplevel-define-alias                       ; STRUCT
-   #:toplevel-make-toplevel-define-alias         ; CONSTRUCTOR
+   #:make-toplevel-define-alias                  ; CONSTRUCTOR
    #:toplevel-define-alias-name                  ; ACCESSOR
+   #:toplevel-define-alias-vars                  ; ACCESSOR
    #:toplevel-define-alias-type                  ; ACCESSOR
    #:toplevel-define-alias-head-location         ; ACCESSOR
    #:toplevel-define-alias-list                  ; TYPE
@@ -176,7 +177,8 @@
 ;;;; toplevel-define-type := "(" "define-type" identifier docstring? constructor* ")"
 ;;;;                       | "(" "define-type" "(" identifier keyword+ ")" docstring? constructor* ")"
 ;;;;
-;;;; toplevel-define-alias := "(" "define-alias" identifier type docstring? ")"
+;;;; toplevel-define-alias := "(" "define-alias" identifier ty docstring? ")"
+;;;;                        | "(" "define-alias" "(" identifier keyword+ ")" ty docstring? ")"
 ;;;;
 ;;;; struct-field := "(" identifier docstring? type ")"
 ;;;;
@@ -278,6 +280,7 @@
             (:include toplevel-definition)
             (:copier :nil))
   (name          (util:required 'name)          :type identifier-src           :read-only t)
+  (vars          (util:required 'vars)          :type keyword-src-list         :read-only t)
   (type          (util:required 'type)          :type ty                       :read-only t)
   (head-location (util:required 'head-location) :type source:location          :read-only t))
 
@@ -1240,41 +1243,86 @@ consume all attributes")))
 
   (assert (cst:consp form))
 
-  (let ((docstring))
+  (let (docstring
+        name
+        variables)
 
     ;; (define-alias)
     (unless (cst:consp (cst:rest form))
       (parse-error "Malformed alias definition"
                    (note source form "expected body")))
 
-    ;; (define-alias alias)
+    (cond
+      ;; (define-alias _ ...)
+      ((cst:atom (cst:second form))
+       ;; (define-alias 0.5 ...)
+       (unless (identifierp (cst:raw (cst:second form)))
+         (parse-error "Malformed alias definition"
+                      (note source (cst:second form) "expected symbol")))
+
+       ;; (define-alias name ...)
+       (setf name (make-identifier-src :name (cst:raw (cst:second form))
+                                       :location (form-location source form))))
+
+      ;; (define-alias (_ ...) ...)
+      (t
+       ;; (define-alias((name) ...) ...)
+       (unless (cst:atom (cst:first (cst:second form)))
+         (parse-error "Malformed alias definition"
+                      (note source (cst:first (cst:second form))
+                            "expected symbol")
+                      (help source (cst:second form)
+                            (lambda (existing)
+                              (subseq existing 1 (1- (length existing))))
+                            "remove parentheses")))
+
+       ;; (define-alias (0.5 ...) ...)
+       (unless (identifierp (cst:raw (cst:first (cst:second form))))
+         (parse-error "Malformed alias definition"
+                      (note source (cst:first (cst:second form))
+                            "expected symbol")))
+
+       ;; (define-alias (name ...) ...)
+       (setf name (make-identifier-src :name (cst:raw (cst:first (cst:second form)))
+                                       :location (form-location source
+                                                                (cst:first (cst:second form)))))
+
+       ;; (define-alias (name) ...)
+       (when (cst:atom (cst:rest (cst:second form)))
+         (parse-error "Malformed alias definition"
+                      (note source (cst:second form)
+                            "nullary aliases should not have parentheses")
+                      (help source (cst:second form)
+                            (lambda (existing)
+                              (subseq existing 1 (1- (length existing))))
+                            "remove unnecessary parentheses")))
+
+       ;; (define-alias (name type-variables+) ...)
+       (loop :for vars := (cst:rest (cst:second form)) :then (cst:rest vars)
+             :while (cst:consp vars)
+             :do (push (parse-type-variable (cst:first vars) source) variables))))
+
+    ;; (define-alias name)
     (unless (cst:consp (cst:rest (cst:rest form)))
       (parse-error "Malformed alias definition"
                    (note source form "expected type")))
 
-    ;; (define-alias alias type docstring)
+    ;; (define-alias name type docstring)
     (when (and (cst:consp (cst:nthrest 3 form))
                (cst:atom (cst:fourth form))
                (stringp (cst:raw (cst:fourth form))))
       (setf docstring (cst:raw (cst:fourth form))))
 
-    ;; (define-alias alias type docstring ...)
+    ;; (define-alias name type docstring ...)
     (when (and docstring
                (cst:consp (cst:nthrest 4 form)))
       (parse-error "Malformed alias definition"
                    (note source (cst:fifth form)
                          "unexpected trailing form")))
 
-    ;; (define-alias 0.5 type)
-    (unless (identifierp (cst:raw (cst:second form)))
-      (parse-error "Malformed define-alias"
-                   (note source (cst:second form)
-                         "expected symbol")))
-
     (make-toplevel-define-alias
-     :name (make-identifier-src
-            :name (cst:raw (cst:second form))
-            :location (form-location source (cst:second form)))
+     :name name
+     :vars (reverse variables)
      :type (parse-type (cst:third form) source)
      :docstring docstring
      :location (form-location source form)

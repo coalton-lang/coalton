@@ -109,6 +109,7 @@
    #:lookup-class
    #:lookup-fundeps
    #:type-of
+   #:describe-type-of
    #:kind-of)
 
   (:intern

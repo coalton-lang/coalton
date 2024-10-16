@@ -48,6 +48,7 @@
    #:*fraction-type*                    ; VARIABLE
    #:*arrow-type*                       ; VARIABLE
    #:*list-type*                        ; VARIABLE
+   #:push-alias                         ; FUNCTION
    #:apply-type-argument                ; FUNCTION
    #:apply-type-argument-list           ; FUNCTION
    #:make-function-type                 ; FUNCTION
@@ -74,7 +75,7 @@
 ;;;
 
 (defstruct (ty (:constructor nil))
-  (alias nil :type (or null symbol) :read-only nil))
+  (alias nil :type (or null ty-list) :read-only nil))
 
 (defmethod make-load-form ((self ty) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -136,7 +137,7 @@
 (defgeneric instantiate (types type)
   (:method (types (type tapp))
     (make-tapp
-     :alias (ty-alias type)
+     :alias (mapcar (lambda (alias) (instantiate types alias)) (ty-alias type))
      :from (instantiate types (tapp-from type))
      :to (instantiate types (tapp-to type))))
   (:method (types (type tgen))
@@ -256,6 +257,14 @@
 ;;;
 ;;; Operations on Types
 ;;;
+
+(defun push-alias (type alias)
+  (declare (type ty type)
+           (type ty alias)
+           (values ty &optional))
+  (let ((new-type (copy-structure type)))
+    (setf (ty-alias new-type) (cons alias (ty-alias new-type)))
+    new-type))
 
 (defun apply-type-argument (tcon arg &key ksubs)
   (declare (type (or tycon tapp tyvar) tcon)
@@ -404,8 +413,8 @@
   (declare (type stream stream)
            (type ty ty)
            (values ty))
-  (when (ty-alias ty)
-    (format stream "[~S := " (ty-alias ty)))
+  (when (and *pprint-aliases* (ty-alias ty))
+    (format stream "[~{~S := ~}" (ty-alias ty)))
   (etypecase ty
     (tyvar
      (if *coalton-pretty-print-tyvars*
@@ -463,7 +472,7 @@
     (tgen
      (write-string "#GEN" stream)
      (write (tgen-id ty) :stream stream)))
-  (when (ty-alias ty)
+  (when (and *pprint-aliases* (ty-alias ty))
     (format stream "]"))
   ty)
 
@@ -484,7 +493,8 @@
   (:report
    (lambda (c s)
      (let ((*print-circle* nil) ; Prevent printing using reader macros
-           )
+           (*print-readably* nil)
+           (*print-aliases* nil))
        (format s "Cannot apply ~S of kind ~S to ~S of kind ~S"
                (type-application-error-argument c)
                (kind-of (type-application-error-argument c))

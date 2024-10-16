@@ -49,12 +49,13 @@
    #:constructor-entry-compressed-repr      ; ACCESSOR
    #:constructor-entry-list                 ; TYPE
    #:constructor-environment                ; STRUCT
-   #:alias-entry
-   #:make-alias-entry
-   #:alias-entry-name
-   #:alias-entry-type
-   #:alias-entry-list
-   #:alias-environment
+   #:alias-entry                            ; STRUCT
+   #:make-alias-entry                       ; CONSTRUCTOR
+   #:alias-entry-name                       ; ACCESSOR
+   #:alias-entry-tyvars                     ; ACCESSOR
+   #:alias-entry-type                       ; ACCESSOR
+   #:alias-entry-list                       ; ACCESSOR
+   #:alias-environment                      ; STRUCT
    #:struct-field                           ; STRUCT
    #:make-struct-field                      ; CONSTRUCTOR
    #:struct-field-name                      ; ACCESSOR
@@ -513,9 +514,10 @@
 ;;;
 
 (defstruct alias-entry
-  (name      (util:required 'name)      :type symbol)
-  (type      (util:required 'type)      :type ty)
-  (docstring (util:required 'docstring) :type (or null string)))
+  (name      (util:required 'name)      :type symbol           :read-only t)
+  (tyvars    (util:required 'tyvars)    :type tyvar-list       :read-only t)
+  (type      (util:required 'type)      :type ty               :read-only t)
+  (docstring (util:required 'docstring) :type (or null string) :read-only t))
 
 (defmethod source:docstring ((self alias-entry))
   (alias-entry-docstring self))
