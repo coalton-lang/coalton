@@ -184,7 +184,8 @@
   "Lookup the type represented by the alias SYMBOL in the global environment"
   (let ((tc:*pprint-aliases* t)
         (type (tc:alias-entry-type (tc:lookup-alias entry:*global-environment* symbol))))
-    (format t "~S~%" type)
+    (tc:with-pprint-variable-context ()
+        (format t "~S~%" type))
     type))
 
 (defun coalton:kind-of (symbol)
