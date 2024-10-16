@@ -20,17 +20,17 @@
    #:Functor #:map
    #:Applicative #:pure #:liftA2
    #:Monad #:>>=
-   #:>>
+   #:>> #:join
    #:MonadFail #:fail
    #:Alternative #:alt #:empty
-   #:Foldable #:fold #:foldr #:mconcat
+   #:Foldable #:fold #:foldr #:mconcat #:mconcatmap #:mcommute?
    #:Traversable #:traverse
    #:Bifunctor #:bimap #:map-fst #:map-snd
    #:sequence
    #:Into
    #:TryInto
    #:Iso
-   #:Unwrappable #:unwrap-or-else #:with-default #:unwrap #:expect #:as-optional
+   #:Unwrappable #:unwrap-or-else #:with-default #:unwrap #:unwrap-into #:expect #:as-optional
    #:default #:defaulting-unwrap #:default?))
 
 (in-package #:coalton-library/classes)
@@ -211,7 +211,13 @@
 
   (declare >> (Monad :m => (:m :a) -> (:m :b) -> (:m :b)))
   (define (>> a b)
+    "Equivalent to `(>>= a (fn (_) b))`."
     (>>= a (fn (_) b)))
+
+  (declare join ((Monad :m) => :m (:m :a) -> :m :a))
+  (define (join m)
+    "Equivalent to `(>>= m id)`."
+    (>>= m (fn (x) x)))
 
   (define-class (Monad :m => MonadFail :m)
     (fail (String -> :m :a)))
@@ -230,6 +236,16 @@
   (define mconcat
     "Fold a container of monoids into a single element."
     (fold <> mempty))
+
+  (declare mconcatmap ((Foldable :f) (Monoid :a) => (:b -> :a) -> :f :b -> :a))
+  (define (mconcatmap f)
+    "Map a container to a container of monoids, and then fold that container into a single element."
+    (fold (fn (a b) (<> a (f b))) mempty))
+
+  (declare mcommute? ((Eq :a) (Monoid :a) => :a -> :a -> Boolean))
+  (define (mcommute? a b)
+    "Does `a <> b` `==' `b <> a`?"
+    (== (<> a b) (<> b a)))
 
   (define-class (Traversable :t)
     (traverse (Applicative :f => (:a -> :f :b) -> :t :a -> :f (:t :b))))
@@ -313,6 +329,11 @@ Typical `fail` continuations are:
                                     (cl:format cl:nil "Unexpected ~a in UNWRAP"
                                                container))))
                     container))
+
+  (declare unwrap-into ((Unwrappable (Result :c)) (TryInto :a :b :c) => :a -> :b))
+  (define unwrap-into
+    "Same as `tryInto` followed by `unwrap`."
+    (fn (x) (unwrap (tryinto x))))
 
   (declare with-default ((Unwrappable :container) =>
                          :element
