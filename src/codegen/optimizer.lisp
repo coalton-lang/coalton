@@ -424,10 +424,10 @@ requires direct constructor calls."
              (alexandria:when-let*
                  ((name (node-rator-name node))
                   (code (tc:lookup-code env name :no-error t))
-                  (fun-env-entry (tc:lookup-function env name :no-error t))
-                  (inline-p (when fun-env-entry (tc:function-env-entry-inline-p fun-env-entry)))
                   (_    (and (node-abstraction-p code)
-                             (or inline-p (funcall heuristic code))
+                             (or (alexandria:when-let (fun-env-entry (tc:lookup-function env name :no-error t))
+                                   (tc:function-env-entry-inline-p fun-env-entry))
+                                 (funcall heuristic code))
                              (<= (length call-stack)
                                  max-depth)
                              (<= (count name call-stack)
