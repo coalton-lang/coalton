@@ -1,0 +1,142 @@
+================================================================================
+1 Define alias
+================================================================================
+
+(package coalton-unit-tests)
+
+(define-alias Index Integer)
+
+================================================================================
+2 Define alias
+================================================================================
+
+(package coalton-unit-tests)
+
+(define-alias UnaryIntegerOperator (Integer -> Integer))
+
+================================================================================
+3 Define alias
+================================================================================
+
+(package coalton-unit-tests)
+
+(define-alias (UnaryOperator :a) (:a -> :a))
+
+================================================================================
+4 Define alias
+================================================================================
+
+(package coalton-unit-tests)
+
+(define-alias (ReverseTranslationRules :a :b) (:b -> :a))
+
+================================================================================
+5 Define alias
+================================================================================
+
+(package coalton-unit-tests)
+
+(define-alias Index Integer)
+
+(define-alias MyIndex Index)
+
+(define-alias (Collection :a) (List :a))
+
+(define-alias MyIndices (Collection MyIndex))
+
+================================================================================
+100 define-alias, parse-error
+================================================================================
+
+(package test-package)
+
+(define-alias "Index" UFix)
+
+--------------------------------------------------------------------------------
+
+error: Malformed alias definition
+  --> test:3:14
+   |
+ 3 |  (define-alias "Index" UFix)
+   |                ^^^^^^^ expected symbol
+
+================================================================================
+101 define-alias, parse-error
+================================================================================
+
+(package test-package)
+
+(define-alias Index UFix
+  "An index"
+  "A really good index")
+
+--------------------------------------------------------------------------------
+
+error: Malformed alias definition
+  --> test:5:2
+   |
+ 5 |    "A really good index")
+   |    ^^^^^^^^^^^^^^^^^^^^^ unexpected trailing form
+
+================================================================================
+102 define-alias, type variables
+================================================================================
+
+(package test-package)
+
+(define-alias (Collection :a) (List :b))
+
+--------------------------------------------------------------------------------
+
+error: Unknown type variable
+  --> test:3:36
+   |
+ 3 |  (define-alias (Collection :a) (List :b))
+   |                                      ^^ Unknown type variable :B
+
+================================================================================
+103 define-alias, type variables
+================================================================================
+
+(package test-package)
+
+(define-alias (Collection :a) (List Integer))
+
+--------------------------------------------------------------------------------
+
+error: Alias type variable defined but never used
+  --> test:3:0
+   |
+ 3 |  (define-alias (Collection :a) (List Integer))
+   |  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Alias COLLECTION defines unused type variable :A
+
+================================================================================
+104 define-alias, type errors
+================================================================================
+
+(package test-package)
+
+(define-alias Index UFix)
+
+(define-alias MyIndex Index)
+
+(define-alias (UnaryOperator :a) (:a -> :a))
+
+(declare increment-my-index (UnaryOperator MyIndex))
+(define increment-my-index (+ 1))
+
+(declare x Integer)
+(define x 5)
+
+(define new-x (increment-my-index x))
+
+--------------------------------------------------------------------------------
+
+error: Type mismatch
+  --> test:15:34
+    |
+ 15 |  (define new-x (increment-my-index x))
+    |                                    ^ Expected type '[MYINDEX := INDEX := UFIX]' but got 'INTEGER'
+
+
+
