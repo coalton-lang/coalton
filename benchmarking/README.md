@@ -1,4 +1,4 @@
-# To run Coalton Benchmarks:
+## To run the Coalton library Benchmarks:
 
 `(ql:quickload :coalton/benchmarks)` or `(asdf:load-system :coalton/benchmarks)`
 
@@ -6,7 +6,24 @@
 
 `(run-coalton-benchmarks)`
 
-# Using Coalton Benchmarks
+# Using Coalton benchmarking
+
+## Benchmark Settings
+
+### Verbose
+Coalton benchmarking prints to the repl by default, though this setting can be turned off with:
+
+```
+(cl:setf *coalton-verbose-benchmarking* cl:nil)
+```
+### Printing width
+This controls how wide the benchmark is printed to the repl, in characters. This can be changed using:
+```
+(cl:setf *coalton-benchmark-width* 90) 
+```
+
+###  Print time in cientific notation
+By default, times are printed using scientific notation. This can be turned off using:
 
 ## Defining benchmarks:
 
@@ -26,23 +43,6 @@ Benchmarks can be defined in any Coalton package:
       (lisp-stak 18 12 6)
       Unit)))
 ```
-
-## Benchmark Settings
-
-### Verbose
-Coalton benchmarking prints to the repl by default, though this setting can be turned off with:
-
-```
-(cl:setf *coalton-verbose-benchmarking* cl:nil)
-```
-### Printing width
-This controls how wide the benchmark is printed to the repl, in characters. This can be changed using:
-```
-(cl:setf *coalton-benchmark-width* 90) 
-```
-
-###  Print time in cientific notation
-By default, times are printed using scientific notation. This can be turned off using:
 
 ```
 (cl:setf *coalton-benchmark-sci-notation* cl:nil) 
@@ -111,4 +111,4 @@ Package benchmarks can be reexported to other packages:
    "coalton-benchmarks/gabriel")
 ```
 
-This is useful unifying benchmarks at the top of package-per-file projects.
+This is especially useful for package-per-file projects.
