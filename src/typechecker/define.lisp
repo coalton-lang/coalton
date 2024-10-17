@@ -1446,7 +1446,14 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
              (values tc:ty pattern-literal tc:substitution-list))
 
     (let ((ty (etypecase (parser:pattern-literal-value pat)
-                (integer tc:*integer-type*)
+                (integer (let* ((num
+                                  (util:find-symbol "NUM" "COALTON-LIBRARY/CLASSES"))
+                                (tvar
+                                  (tc:make-variable))
+                                (pred
+                                  (tc:make-ty-predicate :class num :types (list tvar) :location (source:location pat))))
+                           (setf subs (tc:compose-substitution-lists (tc:default-subs (tc-env-env env) (list tvar) (list pred)) subs))
+                           tvar))
                 (ratio tc:*fraction-type*)
                 (single-float tc:*single-float-type*)
                 (double-float tc:*double-float-type*)
