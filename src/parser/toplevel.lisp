@@ -36,13 +36,13 @@
    #:toplevel-define-type-repr                   ; ACCESSOR
    #:toplevel-define-type-head-location          ; ACCESSOR
    #:toplevel-define-type-list                   ; TYPE
-   #:toplevel-define-alias                       ; STRUCT
-   #:make-toplevel-define-alias                  ; CONSTRUCTOR
-   #:toplevel-define-alias-name                  ; ACCESSOR
-   #:toplevel-define-alias-vars                  ; ACCESSOR
-   #:toplevel-define-alias-type                  ; ACCESSOR
-   #:toplevel-define-alias-head-location         ; ACCESSOR
-   #:toplevel-define-alias-list                  ; TYPE
+   #:toplevel-define-type-alias                  ; STRUCT
+   #:make-toplevel-define-type-alias             ; CONSTRUCTOR
+   #:toplevel-define-type-alias-name             ; ACCESSOR
+   #:toplevel-define-type-alias-vars             ; ACCESSOR
+   #:toplevel-define-type-alias-type             ; ACCESSOR
+   #:toplevel-define-type-alias-head-location    ; ACCESSOR
+   #:toplevel-define-type-alias-list             ; TYPE
    #:struct-field                                ; STRUCT
    #:make-struct-field                           ; CONSTRUCTOR
    #:struct-field-name                           ; ACCESSOR
@@ -119,7 +119,7 @@
    #:program-package                             ; ACCESSOR
    #:program-lisp-forms                          ; ACCESSOR
    #:program-types                               ; ACCESSOR
-   #:program-aliases                             ; ACCESSOR
+   #:program-type-aliases                        ; ACCESSOR
    #:program-structs                             ; ACCESSOR
    #:program-declares                            ; ACCESSOR
    #:program-defines                             ; ACCESSOR
@@ -177,8 +177,8 @@
 ;;;; toplevel-define-type := "(" "define-type" identifier docstring? constructor* ")"
 ;;;;                       | "(" "define-type" "(" identifier keyword+ ")" docstring? constructor* ")"
 ;;;;
-;;;; toplevel-define-alias := "(" "define-alias" identifier ty docstring? ")"
-;;;;                        | "(" "define-alias" "(" identifier keyword+ ")" ty docstring? ")"
+;;;; toplevel-define-type-alias := "(" "define-type-alias" identifier ty docstring? ")"
+;;;;                             | "(" "define-type-alias" "(" identifier keyword+ ")" ty docstring? ")"
 ;;;;
 ;;;; struct-field := "(" identifier docstring? type ")"
 ;;;;
@@ -276,7 +276,7 @@
 (deftype toplevel-define-type-list ()
   '(satisfies toplevel-define-type-list-p))
 
-(defstruct (toplevel-define-alias
+(defstruct (toplevel-define-type-alias
             (:include toplevel-definition)
             (:copier nil))
   (name          (util:required 'name)          :type identifier-src           :read-only t)
@@ -285,12 +285,12 @@
   (head-location (util:required 'head-location) :type source:location          :read-only t))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
-  (defun toplevel-define-alias-list-p (x)
+  (defun toplevel-define-type-alias-list-p (x)
     (and (alexandria:proper-list-p x)
-         (every #'toplevel-define-alias-p x))))
+         (every #'toplevel-define-type-alias-p x))))
 
-(deftype toplevel-define-alias-list ()
-  '(satisfies toplevel-define-alias-list-p))
+(deftype toplevel-define-type-alias-list ()
+  '(satisfies toplevel-define-type-alias-list-p))
 
 (defstruct (struct-field
             (:include toplevel-definition)
@@ -491,16 +491,16 @@
   (export      nil                       :type list))
 
 (defstruct program
-  (package         nil :type (or null toplevel-package)    :read-only t)
-  (types           nil :type toplevel-define-type-list     :read-only nil)
-  (aliases         nil :type toplevel-define-alias-list    :read-only nil)
-  (structs         nil :type toplevel-define-struct-list   :read-only nil)
-  (declares        nil :type toplevel-declare-list         :read-only nil)
-  (defines         nil :type toplevel-define-list          :read-only nil)
-  (classes         nil :type toplevel-define-class-list    :read-only nil)
-  (instances       nil :type toplevel-define-instance-list :read-only nil)
-  (lisp-forms      nil :type toplevel-lisp-form-list       :read-only nil)
-  (specializations nil :type toplevel-specialize-list      :read-only nil))
+  (package         nil :type (or null toplevel-package)      :read-only t)
+  (types           nil :type toplevel-define-type-list       :read-only nil)
+  (type-aliases    nil :type toplevel-define-type-alias-list :read-only nil)
+  (structs         nil :type toplevel-define-struct-list     :read-only nil)
+  (declares        nil :type toplevel-declare-list           :read-only nil)
+  (defines         nil :type toplevel-define-list            :read-only nil)
+  (classes         nil :type toplevel-define-class-list      :read-only nil)
+  (instances       nil :type toplevel-define-instance-list   :read-only nil)
+  (lisp-forms      nil :type toplevel-lisp-form-list         :read-only nil)
+  (specializations nil :type toplevel-specialize-list        :read-only nil))
 
 (defun read-program (stream source &optional mode)
   "Read a PROGRAM from SOURCE (an instance of source-error:source).
@@ -548,7 +548,7 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
                                 "attribute must be attached to another form")))
 
     (setf (program-types program) (nreverse (program-types program)))
-    (setf (program-aliases program) (nreverse (program-aliases program)))
+    (setf (program-type-aliases program) (nreverse (program-type-aliases program)))
     (setf (program-structs program) (nreverse (program-structs program)))
     (setf (program-declares program) (nreverse (program-declares program)))
     (setf (program-defines program) (nreverse (program-defines program)))
@@ -887,25 +887,10 @@ If the parsed form is an attribute (e.g., repr or monomorphize), add it to to AT
        (push type (program-types program))
        t))
 
-    ((coalton:define-alias)
-     (let* ((alias (parse-define-alias form source)))
-
-       (loop :for (attribute . attribute-form) :across attributes
-             :do (etypecase attribute
-                   (attribute-repr
-                    (parse-error "Invalid target for repr attribute"
-                                 (note source attribute-form
-                                       "repr must be attached to a define-type")
-                                 (source:note alias "when parsing define-alias")))
-
-                   (attribute-monomorphize
-                    (parse-error "Invalid target for monomorphize attribute"
-                                 (note source attribute-form
-                                       "monomorphize must be attached to a define or declare form")
-                                 (source:note alias "when parsing define-alias")))))
-
-       (setf (fill-pointer attributes) 0)
-       (push alias (program-aliases program))
+    ((coalton:define-type-alias)
+     (forbid-attributes attributes form source)
+     (let ((alias (parse-define-type-alias form source)))
+       (push alias (program-type-aliases program))
        t))
 
     ((coalton:define-struct)
@@ -1157,9 +1142,9 @@ consume all attributes")))
      :location (form-location source form)
      :head-location (form-location source (cst:second form)))))
 
-(defun parse-define-alias (form source)
+(defun parse-define-type-alias (form source)
   (declare (type cst:cst form)
-           (values toplevel-define-alias))
+           (values toplevel-define-type-alias))
 
   (assert (cst:consp form))
 
@@ -1167,28 +1152,28 @@ consume all attributes")))
         name
         variables)
 
-    ;; (define-alias)
+    ;; (define-type-alias)
     (unless (cst:consp (cst:rest form))
-      (parse-error "Malformed alias definition"
+      (parse-error "Malformed type alias definition"
                    (note source form "expected body")))
 
     (cond
-      ;; (define-alias _ ...)
+      ;; (define-type-alias _ ...)
       ((cst:atom (cst:second form))
-       ;; (define-alias 0.5 ...)
+       ;; (define-type-alias 0.5 ...)
        (unless (identifierp (cst:raw (cst:second form)))
-         (parse-error "Malformed alias definition"
+         (parse-error "Malformed type alias definition"
                       (note source (cst:second form) "expected symbol")))
 
-       ;; (define-alias name ...)
+       ;; (define-type-alias name ...)
        (setf name (make-identifier-src :name (cst:raw (cst:second form))
                                        :location (form-location source form))))
 
-      ;; (define-alias (_ ...) ...)
+      ;; (define-type-alias (_ ...) ...)
       (t
-       ;; (define-alias((name) ...) ...)
+       ;; (define-type-alias((name) ...) ...)
        (unless (cst:atom (cst:first (cst:second form)))
-         (parse-error "Malformed alias definition"
+         (parse-error "Malformed type alias definition"
                       (note source (cst:first (cst:second form))
                             "expected symbol")
                       (help source (cst:second form)
@@ -1196,51 +1181,51 @@ consume all attributes")))
                               (subseq existing 1 (1- (length existing))))
                             "remove parentheses")))
 
-       ;; (define-alias (0.5 ...) ...)
+       ;; (define-type-alias (0.5 ...) ...)
        (unless (identifierp (cst:raw (cst:first (cst:second form))))
-         (parse-error "Malformed alias definition"
+         (parse-error "Malformed type alias definition"
                       (note source (cst:first (cst:second form))
                             "expected symbol")))
 
-       ;; (define-alias (name ...) ...)
+       ;; (define-type-alias (name ...) ...)
        (setf name (make-identifier-src :name (cst:raw (cst:first (cst:second form)))
                                        :location (form-location source
                                                                 (cst:first (cst:second form)))))
 
-       ;; (define-alias (name) ...)
+       ;; (define-type-alias (name) ...)
        (when (cst:atom (cst:rest (cst:second form)))
-         (parse-error "Malformed alias definition"
+         (parse-error "Malformed type alias definition"
                       (note source (cst:second form)
-                            "nullary aliases should not have parentheses")
+                            "nullary type aliases should not have parentheses")
                       (help source (cst:second form)
                             (lambda (existing)
                               (subseq existing 1 (1- (length existing))))
                             "remove unnecessary parentheses")))
 
-       ;; (define-alias (name type-variables+) ...)
+       ;; (define-type-alias (name type-variables+) ...)
        (loop :for vars := (cst:rest (cst:second form)) :then (cst:rest vars)
              :while (cst:consp vars)
              :do (push (parse-type-variable (cst:first vars) source) variables))))
 
-    ;; (define-alias name)
+    ;; (define-type-alias name)
     (unless (cst:consp (cst:rest (cst:rest form)))
-      (parse-error "Malformed alias definition"
+      (parse-error "Malformed type alias definition"
                    (note source form "expected type")))
 
-    ;; (define-alias name type docstring)
+    ;; (define-type-alias name type docstring)
     (when (and (cst:consp (cst:nthrest 3 form))
                (cst:atom (cst:fourth form))
                (stringp (cst:raw (cst:fourth form))))
       (setf docstring (cst:raw (cst:fourth form))))
 
-    ;; (define-alias name type docstring ...)
+    ;; (define-type-alias name type docstring ...)
     (when (and docstring
                (cst:consp (cst:nthrest 4 form)))
-      (parse-error "Malformed alias definition"
+      (parse-error "Malformed type alias definition"
                    (note source (cst:fifth form)
                          "unexpected trailing form")))
 
-    (make-toplevel-define-alias
+    (make-toplevel-define-type-alias
      :name name
      :vars (reverse variables)
      :type (parse-type (cst:third form) source)

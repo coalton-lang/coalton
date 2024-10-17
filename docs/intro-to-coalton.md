@@ -274,14 +274,14 @@ We'll see how to unpack these types using `match` later in this document.
 
 ## Type Aliases
 
-Coalton allows the definition of parametric type aliases. Type aliases can be defined on primitive types and types created with `define-type` or `define-alias`.
+Coalton allows the definition of parametric type aliases. Type aliases can be defined on primitive types and types created with `define-type` or `define-type-alias`.
 
 ```lisp
 (coalton-toplevel
-  ;; New aliases are created with the DEFINE-ALIAS operator
-  (define-alias Coordinate Integer)
-  (define-alias (Pair :a) (Tuple :a :a))
-  (define-alias Translation (Pair Coordinate -> Pair Coordinate))
+  ;; New type aliases are created with the DEFINE-TYPE-ALIAS operator
+  (define-type-alias Coordinate Integer)
+  (define-type-alias (Pair :a) (Tuple :a :a))
+  (define-type-alias Translation (Pair Coordinate -> Pair Coordinate))
   
   (declare shift-right Translation)
   (define (shift-right (Tuple x y))
@@ -290,7 +290,7 @@ Coalton allows the definition of parametric type aliases. Type aliases can be de
   (define shifted-coordinate (shift-right (Tuple 0 0))))
 ```
 
-Outside of a Coalton expression, `describe-type-of` displays the type of a symbol, including its aliases, and returns the type. `describe-alias` displays the alias along with its base type and returns the base type.
+Outside of a Coalton expression, `describe-type-of` displays the type of a symbol, including its aliases, and returns the type. `describe-type-alias` displays the alias along with its base type and returns the base type.
 
 ```lisp
 COALTON-USER> shifted-coordinate
@@ -302,7 +302,7 @@ COALTON-USER> (type-of 'shifted-coordinate)
 COALTON-USER> (describe-type-of 'shifted-coordinate)
 [(PAIR COORDINATE) := (TUPLE [COORDINATE := INTEGER] [COORDINATE := INTEGER])]
 
-COALTON-USER> (describe-alias 'Pair)
+COALTON-USER> (describe-type-alias 'Pair)
 [(PAIR :A) := (TUPLE :A :A)]
 ```
   

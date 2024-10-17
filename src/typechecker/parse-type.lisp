@@ -17,7 +17,7 @@
    (#:source #:coalton-impl/source)
    (#:tc #:coalton-impl/typechecker/stage-1))
   (:export
-   #:apply-alias-substitutions          ; FUNCTION
+   #:apply-type-alias-substitutions          ; FUNCTION
    #:parse-type                         ; FUNCTION
    #:parse-qualified-type               ; FUNCTION
    #:parse-ty-scheme                    ; FUNCTION
@@ -31,22 +31,22 @@
 ;;; Entrypoints
 ;;;
 
-(defgeneric apply-alias-substitutions (type parser-type env)
+(defgeneric apply-type-alias-substitutions (type parser-type env)
   (:method ((type tc:tycon) parser-type env)
     (declare (type parser:ty parser-type)
              (type partial-type-env env)
              (values tc:ty))
-    (let ((alias (tc:lookup-alias (partial-type-env-env env) (tc:tycon-name type) :no-error t)))
+    (let ((alias (tc:lookup-type-alias (partial-type-env-env env) (tc:tycon-name type) :no-error t)))
       (when alias
         (handler-case
-            (let ((substs (tc:match (first (tc:ty-alias (tc:alias-entry-type alias))) type)))
-              (setf type (tc:apply-substitution substs (tc:alias-entry-type alias))))
+            (let ((substs (tc:match (first (tc:ty-alias (tc:type-alias-entry-type alias))) type)))
+              (setf type (tc:apply-substitution substs (tc:type-alias-entry-type alias))))
           (tc:unification-error ()
-              (tc-error "Incomplete alias application"
+              (tc-error "Incomplete type alias application"
                         (tc-note parser-type
                                  "Type alias ~S is applied to 0 arguments, but ~D argument~:P ~:*~[are~;is~:;are~] required."
-                                 (tc:alias-entry-name alias)
-                                 (length (tc:alias-entry-tyvars alias)))))))
+                                 (tc:type-alias-entry-name alias)
+                                 (length (tc:type-alias-entry-tyvars type-alias)))))))
       type))
 
   (:method ((type tc:tapp) parser-type env)
@@ -54,25 +54,25 @@
              (type partial-type-env env)
              (values tc:tapp))
     (when (typep (tc:tapp-from type) 'tc:tycon)
-      (let ((alias (tc:lookup-alias (partial-type-env-env env) (tc:tycon-name (tc:tapp-from type)) :no-error t)))
+      (let ((alias (tc:lookup-type-alias (partial-type-env-env env) (tc:tycon-name (tc:tapp-from type)) :no-error t)))
         (when alias
           (handler-case
-              (let ((substs (tc:match (first (tc:ty-alias (tc:alias-entry-type alias))) type)))
-                (setf type (tc:apply-substitution substs (tc:alias-entry-type alias))))
+              (let ((substs (tc:match (first (tc:ty-alias (tc:type-alias-entry-type alias))) type)))
+                (setf type (tc:apply-substitution substs (tc:type-alias-entry-type alias))))
             (tc:unification-error ()
-              (tc-error "Incomplete alias application"
+              (tc-error "Incomplete type alias application"
                         (tc-note parser-type
                                  "Type alias ~S is applied to ~D argument~:P, but ~D argument~:P ~:*~[are~;is~:;are~] required."
-                                 (tc:alias-entry-name alias)
+                                 (tc:type-alias-entry-name alias)
                                  (let ((type_ (copy-structure type)))
                                    (loop :while (tc:tapp-p type_)
                                          :sum 1
                                          :do (setf type_ (tc:tapp-to type_))))
-                                 (length (tc:alias-entry-tyvars alias)))))))))
+                                 (length (tc:type-alias-entry-tyvars alias)))))))))
     (tc:make-tapp
      :alias (tc:ty-alias type)
-     :from (apply-alias-substitutions (tc:tapp-from type) parser-type env)
-     :to (apply-alias-substitutions (tc:tapp-to type) parser-type env)))
+     :from (apply-type-alias-substitutions (tc:tapp-from type) parser-type env)
+     :to (apply-type-alias-substitutions (tc:tapp-to type) parser-type env)))
 
   (:method ((type tc:qualified-ty) parser-type env)
     (declare (type parser:qualified-ty parser-type)
@@ -80,7 +80,7 @@
              (values tc:qualified-ty))
     (tc:make-qualified-ty
      :predicates (tc:qualified-ty-predicates type)
-     :type (apply-alias-substitutions (tc:qualified-ty-type type)
+     :type (apply-type-alias-substitutions (tc:qualified-ty-type type)
                                       (parser:qualified-ty-type parser-type)
                                       env)))
 
@@ -116,7 +116,7 @@
       (setf ty (tc:apply-ksubstitution ksubs ty))
       (setf ksubs (tc:kind-monomorphize-subs (tc:kind-variables ty) ksubs))
       (setf ty (tc:apply-ksubstitution ksubs ty))
-      (setf ty (apply-alias-substitutions ty parser-ty partial-env))
+      (setf ty (apply-type-alias-substitutions ty parser-ty partial-env))
       (values ty ksubs))))
 
 (defun parse-qualified-type (unparsed-ty env)
@@ -149,7 +149,7 @@
         (check-for-ambiguous-variables preds ty unparsed-ty env)
         (check-for-reducible-context preds unparsed-ty env)
 
-        (apply-alias-substitutions qual-ty unparsed-ty partial-env)))))
+        (apply-type-alias-substitutions qual-ty unparsed-ty partial-env)))))
 
 (defun parse-ty-scheme (ty env)
   (declare (type parser:qualified-ty ty)

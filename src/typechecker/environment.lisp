@@ -49,13 +49,13 @@
    #:constructor-entry-compressed-repr      ; ACCESSOR
    #:constructor-entry-list                 ; TYPE
    #:constructor-environment                ; STRUCT
-   #:alias-entry                            ; STRUCT
-   #:make-alias-entry                       ; CONSTRUCTOR
-   #:alias-entry-name                       ; ACCESSOR
-   #:alias-entry-tyvars                     ; ACCESSOR
-   #:alias-entry-type                       ; ACCESSOR
-   #:alias-entry-list                       ; ACCESSOR
-   #:alias-environment                      ; STRUCT
+   #:type-alias-entry                       ; STRUCT
+   #:make-type-alias-entry                  ; CONSTRUCTOR
+   #:type-alias-entry-name                  ; ACCESSOR
+   #:type-alias-entry-tyvars                ; ACCESSOR
+   #:type-alias-entry-type                  ; ACCESSOR
+   #:type-alias-entry-list                  ; ACCESSOR
+   #:type-alias-environment                 ; STRUCT
    #:struct-field                           ; STRUCT
    #:make-struct-field                      ; CONSTRUCTOR
    #:struct-field-name                      ; ACCESSOR
@@ -119,7 +119,7 @@
    #:make-default-environment               ; FUNCTION
    #:environment-value-environment          ; ACCESSOR
    #:environment-type-environment           ; ACCESSOR
-   #:environment-alias-environment          ; ACCESSOR
+   #:environment-type-alias-environment     ; ACCESSOR
    #:environment-constructor-environment    ; ACCESSOR
    #:environment-class-environment          ; ACCESSOR
    #:environment-fundep-environment         ; ACCESSOR
@@ -137,9 +137,9 @@
    #:lookup-constructor                     ; FUNCTION
    #:set-constructor                        ; FUNCTION
    #:unset-constructor                      ; FUNCTION
-   #:lookup-alias                           ; FUNCTION
-   #:set-alias                              ; FUNCTION
-   #:unset-alias                            ; FUNCTION
+   #:lookup-type-alias                      ; FUNCTION
+   #:set-type-alias                         ; FUNCTION
+   #:unset-type-alias                       ; FUNCTION
    #:lookup-struct                          ; FUNCTION
    #:set-struct                             ; FUNCTION
    #:unset-struct                           ; FUNCTION
@@ -510,35 +510,35 @@
 (declaim (sb-ext:freeze-type constructor-environment))
 
 ;;;
-;;; Alias environment
+;;; Type alias environment
 ;;;
 
-(defstruct alias-entry
+(defstruct type-alias-entry
   (name      (util:required 'name)      :type symbol           :read-only t)
   (tyvars    (util:required 'tyvars)    :type tyvar-list       :read-only t)
   (type      (util:required 'type)      :type ty               :read-only t)
   (docstring (util:required 'docstring) :type (or null string) :read-only t))
 
-(defmethod source:docstring ((self alias-entry))
-  (alias-entry-docstring self))
+(defmethod source:docstring ((self type-alias-entry))
+  (type-alias-entry-docstring self))
 
-(defmethod make-load-form ((self alias-entry) &optional env)
+(defmethod make-load-form ((self type-alias-entry) &optional env)
   (make-load-form-saving-slots self :environment env))
 
 #+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type alias-entry))
+(declaim (sb-ext:freeze-type type-alias-entry))
 
-(defun alias-entry-list-p (x)
+(defun type-alias-entry-list-p (x)
   (and (alexandria:proper-list-p x)
-       (every #'alias-entry-p x)))
+       (every #'type-alias-entry-p x)))
 
-(deftype alias-entry-list ()
-  '(satisfies alias-entry-list-p))
+(deftype type-alias-entry-list ()
+  '(satisfies type-alias-entry-list-p))
 
-(defstruct (alias-environment (:include immutable-map)))
+(defstruct (type-alias-environment (:include immutable-map)))
 
 #+(and sbcl coalton-release)
-(declaim (sb-ext:freeze-type alias-environment))
+(declaim (sb-ext:freeze-type type-alias-environment))
 
 ;;;
 ;;; Struct environment
@@ -844,7 +844,7 @@
   (value-environment          (util:required 'value-environment)          :type value-environment          :read-only t)
   (type-environment           (util:required 'type-environment)           :type type-environment           :read-only t)
   (constructor-environment    (util:required 'constructor-environment)    :type constructor-environment    :read-only t)
-  (alias-environment          (util:required 'alias-environment)          :type alias-environment          :read-only t)
+  (type-alias-environment     (util:required 'type-alias-environment)     :type type-alias-environment     :read-only t)
   (struct-environment         (util:required 'struct-environment)         :type struct-environment         :read-only t)
   (class-environment          (util:required 'class-environment)          :type class-environment          :read-only t)
   (fundep-environment         (util:required 'fundep-environment)         :type fundep-environment         :read-only t)
@@ -873,7 +873,7 @@
   (make-environment
    :value-environment (make-value-environment)
    :type-environment (make-default-type-environment)
-   :alias-environment (make-alias-environment)
+   :type-alias-environment (make-type-alias-environment)
    :struct-environment (make-struct-environment)
    :constructor-environment (make-default-constructor-environment)
    :class-environment (make-class-environment)
@@ -890,7 +890,7 @@
                            &key
                              (value-environment (environment-value-environment env))
                              (type-environment (environment-type-environment env))
-                             (alias-environment (environment-alias-environment env))
+                             (type-alias-environment (environment-type-alias-environment env))
                              (constructor-environment (environment-constructor-environment env))
                              (struct-environment (environment-struct-environment env))
                              (class-environment (environment-class-environment env))
@@ -905,7 +905,7 @@
   (declare (type environment env)
            (type value-environment value-environment)
            (type constructor-environment constructor-environment)
-           (type alias-environment alias-environment)
+           (type type-alias-environment type-alias-environment)
            (type struct-environment struct-environment)
            (type class-environment class-environment)
            (type fundep-environment fundep-environment)
@@ -921,7 +921,7 @@
    :value-environment value-environment
    :type-environment type-environment
    :constructor-environment constructor-environment
-   :alias-environment alias-environment
+   :type-alias-environment type-alias-environment
    :struct-environment struct-environment
    :class-environment class-environment
    :fundep-environment fundep-environment
@@ -1037,34 +1037,34 @@
                              symbol
                              #'make-constructor-environment)))
 
-(defun lookup-alias (env symbol &key no-error)
+(defun lookup-type-alias (env symbol &key no-error)
   (declare (type environment env)
            (type symbol symbol))
-  (or (immutable-map-lookup (environment-alias-environment env) symbol)
+  (or (immutable-map-lookup (environment-type-alias-environment env) symbol)
       (unless no-error
-        (util:coalton-bug "Unknown alias ~S" symbol))))
+        (util:coalton-bug "Unknown type-alias ~S" symbol))))
 
-(define-env-updater set-alias (env symbol value)
+(define-env-updater set-type-alias (env symbol value)
   (declare (type environment env)
            (type symbol symbol)
-           (type alias-entry value))
+           (type type-alias-entry value))
   (update-environment
    env
-   :alias-environment (immutable-map-set
-                       (environment-alias-environment env)
-                       symbol
-                       value
-                       #'make-alias-environment)))
+   :type-alias-environment (immutable-map-set
+                            (environment-type-alias-environment env)
+                            symbol
+                            value
+                            #'make-type-alias-environment)))
 
-(define-env-updater unset-alias (env symbol)
+(define-env-updater unset-type-alias (env symbol)
   (declare (type environment env)
            (type symbol symbol))
   (update-environment
    env
-   :alias-environment (immutable-map-remove
-                       (environment-alias-environment env)
-                       symbol
-                       #'make-alias-environment)))
+   :type-alias-environment (immutable-map-remove
+                            (environment-type-alias-environment env)
+                            symbol
+                            #'make-type-alias-environment)))
 
 (defun lookup-struct (env symbol &key no-error)
   (declare (type environment env)

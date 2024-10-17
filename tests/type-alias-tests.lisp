@@ -1,34 +1,34 @@
-;;;; alias-tests.lisp
+;;;; type-alias-tests.lisp
 
 (in-package #:coalton-tests)
 
-(deftest test-alias-definition ()
+(deftest test-type-alias-definition ()
   (check-coalton-types
-   "(define-alias UnaryIntegerOperator (Integer -> Integer))")
+   "(define-type-alias UnaryIntegerOperator (Integer -> Integer))")
 
   (check-coalton-types
-   "(define-alias UnaryIntegerOperator (Integer -> Integer)
+   "(define-type-alias UnaryIntegerOperator (Integer -> Integer)
       \"An alias for functions mapping integers to integers.\")"))
 
-(deftest test-alias-the ()
+(deftest test-type-alias-the ()
   (check-coalton-types
-   "(define-alias Index UFix)
+   "(define-type-alias Index UFix)
 
     (define i (the Index 5))"
 
    '("i" . "UFix"))
 
   (check-coalton-types
-   "(define-alias Index UFix)
-    (define-alias IndexList (List Index))
+   "(define-type-alias Index UFix)
+    (define-type-alias IndexList (List Index))
 
     (define indices (the IndexList (make-list 0 1 2 3 4 5)))"
 
    '("indices" . "(List UFix)")))
 
-(deftest test-alias-declare ()
+(deftest test-type-alias-declare ()
   (check-coalton-types
-   "(define-alias Index UFix)
+   "(define-type-alias Index UFix)
 
     (declare i Index)
     (define i 5)"
@@ -36,17 +36,17 @@
    '("i" . "UFix"))
 
   (check-coalton-types
-   "(define-alias Index UFix)
-    (define-alias IndexList (List Index))
+   "(define-type-alias Index UFix)
+    (define-type-alias IndexList (List Index))
 
     (declare indices IndexList)
     (define indices (make-list 0 1 2 3 4 5))"
 
    '("indices" . "(List UFix)")))
 
-(deftest test-alias-constructors ()
+(deftest test-type-alias-constructors ()
   (check-coalton-types
-   "(define-alias Coordinate IFix)
+   "(define-type-alias Coordinate IFix)
 
     (define-type Point
       (Point Coordinate Coordinate))
@@ -62,7 +62,7 @@
    '("x" . "IFix"))
 
   (check-coalton-types
-   "(define-alias Coordinate IFix)
+   "(define-type-alias Coordinate IFix)
 
     (define-struct Point
       (x Coordinate)
@@ -74,26 +74,26 @@
    '("p" . "Point")
    '("x" . "IFix")))
 
-(deftest test-parametric-alias-definition ()
+(deftest test-parametric-type-alias-definition ()
 
   (check-coalton-types
-   "(define-alias (UnaryOperator :a) (:a -> :a))")
+   "(define-type-alias (UnaryOperator :a) (:a -> :a))")
 
   (check-coalton-types
-   "(define-alias (Collapse :a :b :c :d) (:d -> :c -> :b -> :a))"))
+   "(define-type-alias (Collapse :a :b :c :d) (:d -> :c -> :b -> :a))"))
 
-(deftest test-parametric-alias-the ()
+(deftest test-parametric-type-alias-the ()
   (check-coalton-types
-   "(define-alias Index UFix)
-    (define-alias (Collection :a) (List :a))
+   "(define-type-alias Index UFix)
+    (define-type-alias (Collection :a) (List :a))
 
     (define l (the (Collection Index) (make-list 1 2 3 4)))"
 
    '("l" . "(List UFix)")))
 
-(deftest test-parametric-alias-declare ()
+(deftest test-parametric-type-alias-declare ()
   (check-coalton-types
-   "(define-alias (UnaryOperator :a) (:a -> :a))
+   "(define-type-alias (UnaryOperator :a) (:a -> :a))
 
     (declare f (UnaryOperator Integer))
     (define f 1+)"
@@ -101,14 +101,14 @@
    '("f" . "(Integer -> Integer)"))
 
   (check-coalton-types
-   "(define-alias (UnaryOperator :a) (:a -> :a))
+   "(define-type-alias (UnaryOperator :a) (:a -> :a))
 
     (declare f ((Num :a) => (UnaryOperator :a)))
     (define f 1+)"))
 
-(deftest test-parametric-alias-constructors ()
+(deftest test-parametric-type-alias-constructors ()
   (check-coalton-types
-   "(define-alias (Pair :a) (Tuple :a :a))
+   "(define-type-alias (Pair :a) (Tuple :a :a))
 
     (define-type (Translation :a)
       (Translation (Pair (Pair :a))))
@@ -124,7 +124,7 @@
    '("x" . "Integer"))
 
   (check-coalton-types
-   "(define-alias (Pair :a) (Tuple :a :a))
+   "(define-type-alias (Pair :a) (Tuple :a :a))
 
     (define-struct (Translation :a)
       (from (Pair :a))

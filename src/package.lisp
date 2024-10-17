@@ -23,7 +23,7 @@
    #:declare
    #:define
    #:define-type
-   #:define-alias
+   #:define-type-alias
    #:define-struct
    #:define-class
    #:define-instance
@@ -110,7 +110,7 @@
    #:lookup-fundeps
    #:type-of
    #:describe-type-of
-   #:describe-alias
+   #:describe-type-alias
    #:kind-of)
 
   (:intern

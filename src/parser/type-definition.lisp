@@ -30,7 +30,7 @@
 (in-package #:coalton-impl/parser/type-definition)
 
 (deftype type-definition ()
-  '(or toplevel-define-type toplevel-define-struct toplevel-define-alias))
+  '(or toplevel-define-type toplevel-define-struct toplevel-define-type-alias))
 
 (defun type-definition-p (x)
   (typep x 'type-definition))
@@ -51,9 +51,9 @@
     (declare (values identifier-src))
     (toplevel-define-struct-name def))
 
-  (:method ((def toplevel-define-alias))
+  (:method ((def toplevel-define-type-alias))
     (declare (values identifier-src))
-    (toplevel-define-alias-name def)))
+    (toplevel-define-type-alias-name def)))
 
 (defgeneric type-definition-vars (def)
   (:method ((def toplevel-define-type))
@@ -64,9 +64,9 @@
     (declare (values keyword-src-list))
     (toplevel-define-struct-vars def))
 
-  (:method ((def toplevel-define-alias))
+  (:method ((def toplevel-define-type-alias))
     (declare (values keyword-src-list))
-    (toplevel-define-alias-vars def)))
+    (toplevel-define-type-alias-vars def)))
 
 (defgeneric type-definition-repr (def)
   (:method ((def toplevel-define-type))
@@ -77,7 +77,7 @@
     (declare (values (or null attribute-repr)))
     (toplevel-define-struct-repr def))
 
-  (:method ((def toplevel-define-alias))
+  (:method ((def toplevel-define-type-alias))
     (declare (values (or null attribute-repr)))
     nil))
 
@@ -90,9 +90,9 @@
     (declare (values (or null ty)))
     nil)
 
-  (:method ((def toplevel-define-alias))
+  (:method ((def toplevel-define-type-alias))
     (declare (values (or null ty)))
-    (toplevel-define-alias-type def)))
+    (toplevel-define-type-alias-type def)))
 
 (defgeneric type-definition-ctors (def)
   (:method ((def toplevel-define-type))
@@ -103,7 +103,7 @@
     (declare (values toplevel-define-struct-list))
     (list def))
 
-  (:method ((def toplevel-define-alias))
+  (:method ((def toplevel-define-type-alias))
     (declare (values null))
     nil))
 

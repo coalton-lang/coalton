@@ -60,9 +60,9 @@
     (declare (values tycon-list))
     (mapcan #'collect-referenced-types-generic% (toplevel-define-type-ctors type)))
 
-  (:method ((alias toplevel-define-alias))
+  (:method ((alias toplevel-define-type-alias))
     (declare (values (tycon-list)))
-    (collect-referenced-types-generic% (toplevel-define-alias-type alias)))
+    (collect-referenced-types-generic% (toplevel-define-type-alias-type alias)))
 
   (:method ((field struct-field))
     (declare (values tycon-list &optional))
@@ -110,9 +110,9 @@
     (declare (values tyvar-list))
     (mapcan #'collect-type-variables-generic% (toplevel-define-type-ctors type)))
 
-  (:method ((alias toplevel-define-alias))
+  (:method ((alias toplevel-define-type-alias))
     (declare (values tyvar-list))
-    (collect-type-variables-generic% (toplevel-define-alias-type alias)))
+    (collect-type-variables-generic% (toplevel-define-type-alias-type alias)))
 
   (:method ((method method-definition))
     (declare (values tyvar-list &optional))

@@ -48,7 +48,7 @@
    #:*fraction-type*                    ; VARIABLE
    #:*arrow-type*                       ; VARIABLE
    #:*list-type*                        ; VARIABLE
-   #:push-alias                         ; FUNCTION
+   #:push-type-alias                    ; FUNCTION
    #:apply-type-argument                ; FUNCTION
    #:apply-type-argument-list           ; FUNCTION
    #:make-function-type                 ; FUNCTION
@@ -208,7 +208,7 @@
     (mapcan #'type-constructors-generic% lst)))
 
 (defgeneric ty= (type1 type2)
-  (:documentation "For equal types, apply the aliases in TYPE1 to TYPE2.")
+  (:documentation "Are TYPE1 to TYPE2 EQUALP, ignoring their aliases.")
 
   (:method ((type1 tyvar) (type2 tyvar))
     (and (equalp (tyvar-id type1)
@@ -258,7 +258,7 @@
 ;;; Operations on Types
 ;;;
 
-(defun push-alias (type alias)
+(defun push-type-alias (type alias)
   (declare (type ty type)
            (type ty alias)
            (values ty &optional))
@@ -413,7 +413,7 @@
   (declare (type stream stream)
            (type ty ty)
            (values ty))
-  (when (and *pprint-aliases* (ty-alias ty))
+  (when (and *pprint-type-aliases* (ty-alias ty))
     (format stream "[~{~S := ~}" (ty-alias ty)))
   (etypecase ty
     (tyvar
@@ -472,7 +472,7 @@
     (tgen
      (write-string "#GEN" stream)
      (write (tgen-id ty) :stream stream)))
-  (when (and *pprint-aliases* (ty-alias ty))
+  (when (and *pprint-type-aliases* (ty-alias ty))
     (format stream "]"))
   ty)
 
@@ -494,7 +494,7 @@
    (lambda (c s)
      (let ((*print-circle* nil) ; Prevent printing using reader macros
            (*print-readably* nil)
-           (*print-aliases* nil))
+           (*print-type-aliases* nil))
        (format s "Cannot apply ~S of kind ~S to ~S of kind ~S"
                (type-application-error-argument c)
                (kind-of (type-application-error-argument c))

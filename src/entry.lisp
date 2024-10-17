@@ -37,7 +37,7 @@
     (multiple-value-bind (type-definitions instances env)
         (tc:toplevel-define-type (parser:program-types program)
                                  (parser:program-structs program)
-                                 (parser:program-aliases program)
+                                 (parser:program-type-aliases program)
                                  env)
 
       (let ((all-instances (append instances (parser:program-instances program))))

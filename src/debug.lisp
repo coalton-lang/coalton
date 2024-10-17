@@ -175,15 +175,15 @@
 
 (defun coalton:describe-type-of (symbol)
   "Print the type of value SYMBOL along with its type aliases and return it"
-  (let ((tc:*pprint-aliases* t)
+  (let ((tc:*pprint-type-aliases* t)
         (type (tc:lookup-value-type entry:*global-environment* symbol)))
     (format t "~S~%" type)
     type))
 
-(defun coalton:describe-alias (symbol)
-  "Lookup the type represented by the alias SYMBOL in the global environment"
-  (let ((tc:*pprint-aliases* t)
-        (type (tc:alias-entry-type (tc:lookup-alias entry:*global-environment* symbol))))
+(defun coalton:describe-type-alias (symbol)
+  "Lookup the type represented by the type alias SYMBOL in the global environment"
+  (let ((tc:*pprint-type-aliases* t)
+        (type (tc:type-alias-entry-type (tc:lookup-type-alias entry:*global-environment* symbol))))
     (tc:with-pprint-variable-context ()
         (format t "~S~%" type))
     type))
