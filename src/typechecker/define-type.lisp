@@ -333,7 +333,7 @@
                 (tc-note parsed-type "Type alias ~S defines unused type variable~P ~{:~A~^ ~}"
                          (parser:identifier-src-name (parser:type-definition-name parsed-type))
                          number-of-unused-variables
-                         (mapcar (lambda (str) (subseq str 0 (- (length str) 5)))
+                         (mapcar (lambda (str) (subseq str 0 (- (1+ (length str) (position #\- (reverse str))))))
                                  (mapcar #'string unused-variables)))))))
 
 (defun infer-define-type-scc-kinds (types env)
