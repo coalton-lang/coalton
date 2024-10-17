@@ -39,7 +39,6 @@ that contains a filling of various sweet or savoury ingredients."
 
 ```lisp
 (coalton-toplevel
-
   (define-alias Index Integer
     "This is an alias for a discrete numeric type: INTEGER"))
 
