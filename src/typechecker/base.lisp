@@ -61,7 +61,8 @@ This requires a valid PPRINT-VARIABLE-CONTEXT")
      (with-pprint-variable-scope ()
        ,@body)))
 
-(defvar *pprint-aliases* nil)
+(defvar *pprint-aliases* nil
+  "Whether to display aliases associated with the type of a symbol, when displaying its type")
 
 ;;;
 ;;; Conditions
