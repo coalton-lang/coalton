@@ -1,4 +1,4 @@
-# To run Coalton Benchmarks:
+## To run the Coalton library Benchmarks:
 
 `(ql:quickload :coalton/benchmarks)` or `(asdf:load-system :coalton/benchmarks)`
 
@@ -6,7 +6,7 @@
 
 `(run-coalton-benchmarks)`
 
-# Using Coalton Benchmarks
+# Using Coalton benchmarking
 
 ## Defining benchmarks:
 
@@ -111,4 +111,4 @@ Package benchmarks can be reexported to other packages:
    "coalton-benchmarks/gabriel")
 ```
 
-This is useful unifying benchmarks at the top of package-per-file projects.
+This is especially useful for package-per-file projects.
