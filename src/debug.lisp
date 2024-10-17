@@ -173,9 +173,24 @@
   "Lookup the type of value SYMBOL in the global environment"
   (tc:lookup-value-type entry:*global-environment* symbol))
 
+(defun coalton:describe-type-of (symbol)
+  "Print the type of value SYMBOL along with its type aliases and return it"
+  (let ((tc:*pprint-type-aliases* t)
+        (type (tc:lookup-value-type entry:*global-environment* symbol)))
+    (format t "~S~%" type)
+    type))
+
+(defun coalton:describe-type-alias (symbol)
+  "Lookup the type represented by the type alias SYMBOL in the global environment"
+  (let ((tc:*pprint-type-aliases* t)
+        (type (tc:type-alias-entry-type (tc:lookup-type-alias entry:*global-environment* symbol))))
+    (tc:with-pprint-variable-context ()
+        (format t "~S~%" type))
+    type))
+
 (defun coalton:kind-of (symbol)
   "Lookup the kind of type SYMBOL in the global environment"
-  (tc:kind-of (coalton-impl/typechecker::type-entry-type (tc:lookup-type entry:*global-environment* symbol))))
+  (tc:kind-of (tc:type-entry-type (tc:lookup-type entry:*global-environment* symbol))))
 
 (defun coalton:lookup-code (name)
   "Lookup the compiled code of a given definition"

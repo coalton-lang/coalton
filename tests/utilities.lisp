@@ -54,7 +54,7 @@
                                                    (eclector.concrete-syntax-tree:read stream)
                                                    source))
                                         (parsed-type (tc:parse-ty-scheme ast-type env)))
-                                   (is (equalp
+                                   (is (tc:ty-scheme=
                                         (tc:lookup-value-type env symbol)
                                         parsed-type))))))))))
            (values))
