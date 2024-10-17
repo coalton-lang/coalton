@@ -278,7 +278,7 @@
 
 (defstruct (toplevel-define-alias
             (:include toplevel-definition)
-            (:copier :nil))
+            (:copier nil))
   (name          (util:required 'name)          :type identifier-src           :read-only t)
   (vars          (util:required 'vars)          :type keyword-src-list         :read-only t)
   (type          (util:required 'type)          :type ty                       :read-only t)
