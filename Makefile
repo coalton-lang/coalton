@@ -45,8 +45,8 @@ web-docs:
 bench:
 	COALTON_ENV=release sbcl --noinform \
 		 --non-interactive \
-		 --eval "(ql:quickload :coalton/benchmarks :silent t)" \
-		 --eval "(sb-ext::without-gcing (coalton-benchmarks:run-benchmarks))"
+                 --eval "(ql:quickload :coalton/benchmarks :silent t)" \
+		 --eval "(coalton-benchmarks:run-coalton-benchmarks)"
 
 .PHONY: parser-coverage
 parser-coverage:
