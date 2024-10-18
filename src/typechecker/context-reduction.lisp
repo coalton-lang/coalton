@@ -279,9 +279,9 @@ substitutions."
          (subs (mapcan #'match
                        (ty-predicate-types (ty-class-predicate class))
                        (ty-predicate-types pred))))
-    (cons pred
-          (apply #'append (mapcar (lambda (p) (expand-pred-into-superclasses env (apply-substitution subs p)))
-                                  (ty-class-superclasses class))))))
+    (cons pred (loop :for super-pred :in (ty-class-superclasses class)
+                     :for corrected-super-pred := (apply-substitution subs super-pred)
+                     :append (expand-pred-into-superclasses env corrected-super-pred)))))
 
 (defun fundep-entail% (env expr-preds pred known-tyvars)
   (let ((class (lookup-class env (ty-predicate-class pred))))
