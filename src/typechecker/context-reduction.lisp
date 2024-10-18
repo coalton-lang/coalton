@@ -269,11 +269,19 @@ Returns (VALUES deferred-preds retained-preds defaultable-preds)"
         :finally (return subs)))
 
 (defun expand-pred-into-superclasses (env pred)
+  "This function finds the class in ENV associated with PRED and
+recursively appends superclass predicates, with appropriate type
+substitutions."
+  (declare (type environment env)
+           (type ty-predicate pred)
+           (values ty-predicate-list &optional))
   (let* ((class (lookup-class env (ty-predicate-class pred)))
          (subs (mapcan #'match
                        (ty-predicate-types (ty-class-predicate class))
                        (ty-predicate-types pred))))
-    (cons pred (mapcan (lambda (p) (expand-pred-into-superclasses env (apply-substitution subs p))) (ty-class-superclasses class)))))
+    (cons pred
+          (apply #'append (mapcar (lambda (p) (expand-pred-into-superclasses env (apply-substitution subs p)))
+                                  (ty-class-superclasses class))))))
 
 (defun fundep-entail% (env expr-preds pred known-tyvars)
   (let ((class (lookup-class env (ty-predicate-class pred))))
