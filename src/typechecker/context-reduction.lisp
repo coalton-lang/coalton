@@ -268,10 +268,19 @@ Returns (VALUES deferred-preds retained-preds defaultable-preds)"
         :do (setf subs (compose-substitution-lists subs (fundep-entail% env expr-preds pred known-tyvars)))
         :finally (return subs)))
 
+(defun expand-pred-into-superclasses (env pred)
+  (let* ((class (lookup-class env (ty-predicate-class pred)))
+         (subs (mapcan #'match
+                       (ty-predicate-types (ty-class-predicate class))
+                       (ty-predicate-types pred))))
+    (cons pred (mapcan (lambda (p) (expand-pred-into-superclasses env (apply-substitution subs p))) (ty-class-superclasses class)))))
+
 (defun fundep-entail% (env expr-preds pred known-tyvars)
   (let ((class (lookup-class env (ty-predicate-class pred))))
     (unless (ty-class-fundeps class)
       (return-from fundep-entail% nil))
+
+    (setf expr-preds (mapcan (lambda (p) (expand-pred-into-superclasses env p)) expr-preds))
 
     (let* ((unknown-indices nil)
 
