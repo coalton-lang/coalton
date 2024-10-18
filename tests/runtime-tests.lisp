@@ -191,3 +191,18 @@
 (define-test test-transparent-wrapper ()
   (is (== (make-list "x")
           (map .inner (make-list (TransparentWrapper "x"))))))
+
+;; Test iter:into-iter (see i1198)
+
+(coalton-toplevel
+  (define (gh-974)
+    (iter:into-iter iter:Empty))
+  (define (gh-975)
+    (iter:into-iter Nil))
+  (define (gh-976)
+    (iter:into-iter (iter:into-iter iter:Empty))))
+
+(define-test test-into-iter-iter-empty ()
+  (is (none? (iter:next! (gh-974))))
+  (is (none? (iter:next! (gh-975))))
+  (is (none? (iter:next! (gh-976)))))
