@@ -272,6 +272,41 @@ Type definitions introduce type constructors. For example, we may construct a so
 
 We'll see how to unpack these types using `match` later in this document.
 
+## Type Aliases
+
+Coalton allows the definition of parametric type aliases. Type aliases can be defined on primitive types and types created with `define-type` or `define-type-alias`.
+
+```lisp
+(coalton-toplevel
+  ;; New type aliases are created with the DEFINE-TYPE-ALIAS operator
+  (define-type-alias Coordinate Integer)
+  (define-type-alias (Pair :a) (Tuple :a :a))
+  (define-type-alias Translation (Pair Coordinate -> Pair Coordinate))
+  
+  (declare shift-right Translation)
+  (define (shift-right (Tuple x y))
+    (Tuple (1+ x) y))
+    
+  (define shifted-coordinate (shift-right (Tuple 0 0))))
+```
+
+Outside of a Coalton expression, `describe-type-of` displays the type of a symbol, including its aliases, and returns the type. `describe-type-alias` displays the alias along with its base type and returns the base type.
+
+```lisp
+COALTON-USER> shifted-coordinate
+#.(TUPLE 1 0)
+
+COALTON-USER> (type-of 'shifted-coordinate)
+(TUPLE INTEGER INTEGER)
+
+COALTON-USER> (describe-type-of 'shifted-coordinate)
+[(PAIR COORDINATE) := (TUPLE [COORDINATE := INTEGER] [COORDINATE := INTEGER])]
+
+COALTON-USER> (describe-type-alias 'Pair)
+[(PAIR :A) := (TUPLE :A :A)]
+```
+  
+
 
 ### Structs
 
