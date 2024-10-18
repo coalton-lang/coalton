@@ -147,3 +147,19 @@
       (let ((filled?
               (fn (i) (coalton-library/optional:some? (moo-find moo i)))))
         (coalton-library/iterator:filter! filled? (coalton-library/iterator:up-to (moo-size moo)))))"))
+
+(deftest fundep-superclass-resolution ()
+  ;; See https://github.com/coalton-lang/coalton/issues/1050
+  (check-coalton-types
+   "(define-class (RandomAccessBase :f :t (:f -> :t))
+      (make (UFix -> :t -> :f))
+      (rab-length (:f -> UFix)))
+
+    (define-class (RandomAccessBase :f :t => RandomAccessReadable :f :t (:f -> :t))
+      (unsafe-set! (:f -> UFix -> :t)))
+
+    (declare aref (RandomAccessReadable :f :t => :f -> UFix -> (Optional :t)))
+    (define (aref storage index)
+      (if (and (<= 0 index) (< index (rab-length storage)))
+          (Some (unsafe-set! storage index))
+          None)))"))
