@@ -15,7 +15,9 @@
    #:or
    #:xor
    #:not
-   #:shift))
+   #:shift
+   #:dpb
+   #:ldb))
 
 (in-package #:coalton-library/bits)
 
@@ -36,7 +38,19 @@
     (not   "The bitwise logical `not` of two integers"
            (:int -> :int))
     (shift "The arithmetic left-shift of an integer by an integer number of bits"
-           (Integer -> :int -> :int))))
+           (Integer -> :int -> :int)))
+
+  (declare dpb (Bits :a => :a -> UFix -> UFix -> :a -> :a))
+  (define (dpb newbyte size position bitstring)
+    "Deposits a byte `newbyte` of size `size` into a bitstring `bitstring` at a position `position`."
+    (lisp :a (newbyte bitstring size position)
+      (cl:dpb newbyte (cl:byte size position) bitstring)))
+
+  (declare ldb (Bits :a => UFix -> UFix -> :a -> :a))
+  (define (ldb size position bitstring)
+    "Deposits a byte of size `size` into a bitstring at a position `position`."
+    (lisp :a (bitstring size position)
+      (cl:ldb (cl:byte size position) bitstring))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/BITS")
