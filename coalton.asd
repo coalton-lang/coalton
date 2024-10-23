@@ -88,8 +88,8 @@
                (:file "file")
                (:file "prelude")))
 
-(when (member (getenv "COALTON_PORTABLE_BIGFLOAT") '("1" "true" "t") :test 'equalp)
-  (pushnew :coalton-portable-bigfloat *features*))
+(cl:when (cl:member (uiop:getenv "COALTON_PORTABLE_BIGFLOAT") '("1" "true" "t") :test #'cl:equalp)
+  (cl:pushnew ':coalton-portable-bigfloat cl:*features*))
 
 (asdf:defsystem #:coalton/library/big-float
   :description "An arbitrary precision floating point library."
@@ -163,13 +163,14 @@
 ;;; because 2.1.12 includes (or will include) a bugfix that allows a cleaner, more maintainable
 ;;; implementation.
 
-(cl:if (uiop:featurep :sbcl)
-       (cl:pushnew
-        (cl:if (uiop:version< (cl:lisp-implementation-version)
-                              "2.2.2")
-               :sbcl-pre-2-2-2
-               :sbcl-post-2-2-2)
-        cl:*features*))
+#+sbcl
+(cl:handler-case
+    (cl:progn
+      (sb-ext:assert-version->= 2 2 2)
+      (cl:pushnew ':sbcl-post-2-2-2 cl:*features*))
+  (cl:error (c)
+    (declare (ignore c))
+    (cl:pushnew ':sbcl-pre-2-2-2 cl:*features*)))
 
 (asdf:defsystem #:coalton/hashtable-shim
   :description "Shim over Common Lisp hash tables with custom hash functions, for use by the Coalton standard library."
