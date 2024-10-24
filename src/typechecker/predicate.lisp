@@ -19,6 +19,7 @@
    #:make-qualified-ty                  ; CONSTRUCTOR
    #:qualified-ty-predicates            ; ACCESSOR
    #:qualified-ty-type                  ; ACCESSOR
+   #:qualified-ty=                      ; FUNCTION
    #:qualified-ty-list                  ; TYPE
    #:remove-source-info                 ; FUNCTION
    #:static-predicate-p                 ; FUNCTION
@@ -68,6 +69,12 @@
 (defstruct qualified-ty
   (predicates (util:required 'predicates) :type ty-predicate-list :read-only t)
   (type       (util:required 'type)       :type ty                :read-only t))
+
+(defun qualified-ty= (qualified-ty1 qualified-ty2)
+  (and (equalp (qualified-ty-predicates qualified-ty1)
+               (qualified-ty-predicates qualified-ty2))
+       (ty= (qualified-ty-type qualified-ty1)
+            (qualified-ty-type qualified-ty2))))
 
 (defmethod make-load-form ((self qualified-ty) &optional env)
   (make-load-form-saving-slots self :environment env))
