@@ -17,7 +17,8 @@
 (cl:defpackage #:brainfold
   (:use
    #:coalton
-   #:coalton-prelude)
+   #:coalton-prelude
+   #:coalton-benchmarking)
   (:local-nicknames
    (#:vec #:coalton-library/vector)
    (#:iter #:coalton-library/iterator)
@@ -31,12 +32,14 @@
   (:export
    #:eval
    #:run-program
-   #:run-file
-
+   #:run-file)
+  (:export
    ;; Examples
    #:hello-world
    #:gnarly-hello-world
-   #:squares))
+   #:squares)
+  (:export
+   #:run-brainfold-benchmarks))
 
 (in-package #:brainfold)
 
@@ -305,3 +308,36 @@
 
   (define (squares)
     (run-program "++++[>+++++<-]>[<+++++>-]+<+[>[>+>+<<-]++>>[<<+>>-]>>>[-]++>[-]+>>>+[[-]++++++>>>]<<<[[<++++++++<++>>-]+<.<[>----<-]<]<<[>>>>>[>>>[-]+++++++++<[>-<-]+++++++++>[-[<->-]+[<<<]]<[>+<-]>]<<-]<<-]")))
+
+(define-benchmark bf-hello 1
+  (fn ()
+    (hello-world)
+    Unit))
+
+(define-benchmark bf-hello10 10
+  (fn ()
+    (hello-world)
+    Unit))
+
+(define-benchmark bf-gnarly 1
+  (fn ()
+    (gnarly-hello-world)
+    Unit))
+
+(define-benchmark bf-gnarly10 10
+  (fn ()
+    (gnarly-hello-world)
+    Unit))
+
+(define-benchmark squares 1
+  (fn ()
+    (squares)
+    Unit))
+
+(define-benchmark squares10 10
+  (fn ()
+    (squares)
+    Unit))
+
+(cl:defun run-brainfold-benchmarks ()
+  (run-package-benchmarks "brainfold"))
