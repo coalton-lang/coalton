@@ -8,7 +8,6 @@
    #:lisp-takr))
 
 (in-package #:coalton-benchmarks/gabriel/takr-lisp)
-
 ;;;
 ;;;
 ;;;
@@ -1434,9 +1433,9 @@
 
 ;; Defining the Coalton benchmark
 (define-benchmark takr 1000
-    (fn ()
-      (takr 18 12 6)
-      Unit))
+  (fn ()
+    (takr 18 12 6)
+    Unit))
 
 ;; Defining the Lisp Benchmark
 (define-benchmark lisp-takr 1000

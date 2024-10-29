@@ -3,13 +3,14 @@
    #:coalton
    #:coalton-prelude)
   (:local-nicknames
-   (#:iter #:coalton-library/iterator)
-   (#:vec  #:coalton-library/vector)
-   (#:math #:coalton-library/math)
-   (#:str  #:coalton-library/string)
-   (#:list #:coalton-library/list)
-   (#:cell #:coalton-library/cell)
-   (#:state #:coalton-library/monad/state))
+   (#:iter  #:coalton-library/iterator)
+   (#:vec   #:coalton-library/vector)
+   (#:math  #:coalton-library/math)
+   (#:str   #:coalton-library/string)
+   (#:list  #:coalton-library/list)
+   (#:cell  #:coalton-library/cell)
+   (#:state #:coalton-library/monad/state)
+   (#:seq   #:coalton-library/seq))
   (:export
    #:render
 
@@ -37,7 +38,7 @@
    #:TableRow
    #:TopTableRow
 
-   #:Table
+   #:TableState
    #:Header
    #:SecondaryHeader
    #:Row
@@ -51,8 +52,9 @@
 
   (define-class (Render :a)
     "Class for rendering portions of tables."
-    (render "Renders a portion of a table in string form."
-            (:a -> String))))
+    (render
+     "Renders a portion of a table in string form."
+     (:a -> String))))
 
 (coalton-toplevel
 
@@ -74,10 +76,15 @@
   (define-type TableComponent
     "Coalton table printing combinations."
     (TopEdge UFix)
+    "The top edge of a table (above the header)."
     (TopInternalEdge UFix UFix)
+    "The top edge of the top row."
     (InternalEdge UFix UFix)
+    "An internal edge between rows."
     (BottomEdge UFix UFix)
-    (TCell String UFix))
+    "The bottom edge of the table."
+    (TCell String UFix)
+    "A Table cell with text and width.")
 
   (declare %column-spacing (UFix -> UFix -> (Tuple UFix UFix)))
   (define (%column-spacing width columns)
@@ -153,10 +160,10 @@
   ;;
   ;;
 
-  (declare %write-row-component (UFix -> (vec:Vector String) -> TableComponent -> String))
+  (declare %write-row-component (UFix -> (seq:Seq String) -> TableComponent -> String))
   (define (%write-row-component width column-texts top-edge)
     "Writes a full table row of width `width` containing `column-texts`."
-    (let ((columns (vec:length column-texts))
+    (let ((columns (seq:size column-texts))
           (spacing (%column-spacing width columns))
           (out (the (vec:Vector String) (vec:new))))
       (vec:push! (render top-edge) out)
@@ -168,15 +175,15 @@
       (vec:push! (render NewLine) out)
       (mconcat out)))
 
-  (declare %write-top-row (UFix -> (vec:Vector String) -> String))
+  (declare %write-top-row (UFix -> (seq:Seq String) -> String))
   (define (%write-top-row width column-texts)
     "Writes the top-row of a table- has no lines crossing above the top."
-    (%write-row-component width column-texts (TopInternalEdge width (vec:length column-texts))))
+    (%write-row-component width column-texts (TopInternalEdge width (seq:size column-texts))))
 
-  (declare %write-row (UFix -> (vec:Vector String) -> String))
+  (declare %write-row (UFix -> (seq:Seq String) -> String))
   (define (%write-row width column-texts)
     "Writes a row of a table."
-    (%write-row-component width column-texts (InternalEdge width (vec:length column-texts))))
+    (%write-row-component width column-texts (InternalEdge width (seq:size column-texts))))
 
   (define-instance (Render TableComponent)
     (define (render tc)
@@ -226,12 +233,12 @@
   (define-struct TableRow
     "A struct that can be used to generate a printed table row."
     (width           "The width of the table row." UFix)
-    (column-contents "A vector of column contents." (vec:Vector String)))
+    (column-contents "A vector of column contents." (seq:Seq String)))
 
   (define-struct TopTableRow
     "A struct that can be used to generate a printed table row with no row above."
     (width           UFix)
-    (column-contents (vec:Vector String)))
+    (column-contents (seq:Seq String)))
 
   (define-instance (Render TableRow)
     (define (render (TableRow width contents))
@@ -260,7 +267,7 @@
 
 (coalton-toplevel
 
-  (declare %add-component ((Render :a) => :a -> (state:ST Table Unit)))
+  (declare %add-component ((Render :a) => :a -> (state:ST TableState Unit)))
   (define (%add-component component)
     "Adds a rendered component to the table printout."
     (do
@@ -270,21 +277,21 @@
                          (.printout table)))
       (state:put table)))
 
-  (define-struct Table
-    (printout "The table being rendered." (Cell String))
+  (define-struct TableState
+    (printout "The table string being rendered." (Cell String))
     (width    "The width of the table" UFix))
 
-  (define-instance (Into Table String)
-    (define (into (Table printout width))
+  (define-instance (Into TableState String)
+    (define (into (TableState printout width))
       (cell:read printout)))
 
-  (define-instance (Default Table)
+  (define-instance (Default TableState)
     (define (default)
-      (Table
+      (TableState
        (cell:new "")
        90)))
 
-  (declare Header (String -> (state:ST Table Unit)))
+  (declare Header (String -> (state:ST TableState Unit)))
   (define (Header text)
     "Add a header to the table printout."
     (do
@@ -295,23 +302,23 @@
     "Adds a header below the first header."
     (do
      (table <- state:get)
-     (%add-component (TableRow (1- (.width table)) (vec:make text)))))
+     (%add-component (TableRow (1- (.width table)) (seq:make text)))))
 
-  (declare Row ((Vector String) -> (state:ST Table Unit)))
+  (declare Row ((seq:Seq String) -> (state:ST TableState Unit)))
   (define (Row texts)
     "Add a row to the table printout."
     (do
      (table <- state:get)
      (%add-component (TableRow (.width table) texts))))
 
-  (declare TopRow ((Vector String) -> (state:ST Table Unit)))
+  (declare TopRow ((seq:Seq String) -> (state:ST TableState Unit)))
   (define (TopRow texts)
     "Add a top row to the table printout (no upward cross characters)."
     (do
      (table <- state:get)
      (%add-component (TopTableRow (.width table) texts))))
 
-  (declare Bottom (UFix -> (state:ST Table Unit)))
+  (declare Bottom (UFix -> (state:ST TableState Unit)))
   (define (Bottom columns)
     "Add the bottom edge to the table printout."
     (do
@@ -322,4 +329,4 @@
   "Can be used for building tables or portions of tables.
 Forms should be provided with the understanding that they are embedded in a `do` form."
   (cl:let ((forms (cl:append '(do) forms)))
-    `(cell:read (.printout (fst (state:run ,forms (Table (cell:new "") ,width)))))))
+    `(cell:read (.printout (fst (state:run ,forms (TableState (cell:new "") ,width)))))))

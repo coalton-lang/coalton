@@ -11,7 +11,6 @@
 
 (in-package #:coalton-benchmarks/gabriel/tak)
 
-
 ;; Defining the lisp version
 (cl:declaim (cl:ftype (cl:function (cl:fixnum cl:fixnum cl:fixnum) cl:fixnum) lisp-tak))
 (cl:defun lisp-tak (x y z)
@@ -44,4 +43,4 @@
   (fn ()
     (lisp Unit ()
       (lisp-tak 18 12 6)
-      Unit)))()
+      Unit)))

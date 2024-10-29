@@ -10,10 +10,6 @@
 
 Benchmarks can be written in any Coalton project, as long as the package imports or nicknames `#:coalton-benchmarking`. 
 
-Benchmarks are attached to the package they are defined in, though they can be reexported to other packages.
-
-This allows them to be embedded amongst the relevant code, in a standalone suite, or both!
-
 ## Benchmark Settings
 
 ### Verbose
@@ -53,7 +49,7 @@ Benchmarks can be defined in any Coalton package (that imports or nicknames `#:c
     Unit))
 
 ;; Defining a Lisp Benchmark
-(define-benchmark lisp-stak 1000 ; iterations
+(define-benchmark lisp-stak 1000
   (fn ()
     (lisp Unit ()
       (lisp-stak 18 12 6)
@@ -62,7 +58,7 @@ Benchmarks can be defined in any Coalton package (that imports or nicknames `#:c
 
 ## Running individual benchmarks
 
-Individual benchmarks can be run with `#'run-benchmark`, as long as the benchmark is defined.
+Individual benchmarks can be run with `#'run-benchmark`, as long as the benchmark is defined in the current package.
 
 `#'run-benchmark` returns a `BenchmarkResults` object.
 
@@ -85,7 +81,7 @@ COALTON-BENCHMARKS> (coalton (run-benchmark "tak"))
 
 ## Running package benchmarks
 
-Package benchmarks can be run with #'run-package-benchmarks, from any package that imports coalton-benchmarking.
+Package benchmarks can be run with `#'run-package-benchmarks`.
 
 `#'run-package-benchmarks` returns a `PackageBenchmarkResults` object.
 
@@ -109,14 +105,19 @@ COALTON-BENCHMARKS> (coalton (run-package-benchmarks "coalton-benchmarks/gabriel
                                                                                                                                                                                             #.(BENCHMARKRESULTS "LISP-TAK" 1000 83104 83040 65520)))
 ```
 
+`#:run-benchmarks` runs the current package's benchmarks.
+
 ## Reexporting package benchmarks
-Package benchmarks can be reexported to other packages:
+Package benchmarks can be manually run from other packages simply by defining a helper function, as in `#:coalton-benchmarks/gabriel`.
 
 ```
-(reexport-benchmarks
-   "coalton-benchmarks/fibonacci"
-   "coalton-benchmarks/big-float"
-   "coalton-benchmarks/gabriel")
+(coalton-toplevel
+
+  (define (run-gabriel-benchmarks)
+    (run-package-benchmarks "coalton-benchmarks/gabriel/tak")
+    (run-package-benchmarks "coalton-benchmarks/gabriel/takr")
+    (run-package-benchmarks "coalton-benchmarks/gabriel/stak")
+    (run-package-benchmarks "coalton-benchmarks/gabriel/takl")))
 ```
 
 This is useful for package-per-file projects.

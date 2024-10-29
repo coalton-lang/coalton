@@ -85,9 +85,9 @@
 ;;;
 
 (define-benchmark rec-fib 1000
-  (fn ()
-    (fib 20)
-    Unit))
+    (fn ()
+      (fib 20)
+      Unit))
 
 (define-benchmark rec-fib-generic 1000
   (fn ()

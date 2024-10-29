@@ -4,26 +4,47 @@
    #:coalton-prelude
    #:coalton-benchmarking/printing)
   (:local-nicknames
-   (#:vec #:coalton-library/vector)
-   (#:cell #:coalton-library/cell)
-   (#:hash #:coalton-library/hashtable)
-   (#:iter #:coalton-library/iterator)
-   (#:sys #:coalton-library/system)
-   (#:list #:coalton-library/list)
-   (#:state #:coalton-library/monad/state))
+   (#:vec   #:coalton-library/vector)
+   (#:cell  #:coalton-library/cell)
+   (#:hash  #:coalton-library/hashtable)
+   (#:iter  #:coalton-library/iterator)
+   (#:sys   #:coalton-library/system)
+   (#:list  #:coalton-library/list)
+   (#:state #:coalton-library/monad/state)
+   (#:math  #:coalton-library/math)
+   (#:seq   #:coalton-library/seq))
   (:export
+
+   ;; settings/options
+   #:*verbose-benchmarking*
+   #:verbose?
+   #:*benchmark-width*
+   #:benchmark-width
+   #:*benchmark-sci-notation*
+   #:sci-notation?
+
+   #:BenchmarkName
+
    #:Benchmark
+   #:BenchmarkSuite
+   #:add-benchmark-suite
+   #:find-benchmark-suite
+   #:current-package
+   #:ensure-benchmark-suite
+   #:add-benchmark
+   #:package-benchmarks
+   #:local-benchmarks
+   #:find-benchmark
+   #:define-benchmark
+
    #:BenchmarkResults
+   #:BenchmarkSystem
+   #:benchmark-system-info
    #:PackageBenchmarkResults
 
-   #:define-benchmark
-   #:find-benchmark
-   #:find-package-benchmarks
    #:run-benchmark
    #:run-package-benchmarks
-
-   #:import-benchmarks
-   #:reexport-benchmarks))
+   #:run-benchmarks))
 
 (in-package #:coalton-benchmarking/benchmarking)
 
@@ -31,49 +52,181 @@
 ;;; Settings/options
 ;;;
 
-(cl:defvar *coalton-verbose-benchmarking* cl:t
-  "Toggles whether benchmarking will print to the repl.")
-
-(cl:defvar *coalton-benchmark-width* 90
-  "The width that benchmarks will be printed to.")
-
-(cl:defvar *coalton-benchmark-sci-notation* cl:t
-  "Coalton benchmarks should use scientific notation for times (or not).")
-
 (coalton-toplevel
 
-  (declare verbose-benchmarking (Unit -> Boolean))
-  (define (verbose-benchmarking)
-    "This returns whether benchmarks will print to the repl or just return a BenchmarkResults object."
-    (lisp Boolean () *coalton-verbose-benchmarking*))
+  (declare *verbose-benchmarking* (Cell Boolean))
+  (define *verbose-benchmarking*
+    "When true, benchmarks will print to the repl in addition to returning a BenchmarkResults object."
+    (cell:new True))
+
+  (declare verbose? (Unit -> Boolean))
+  (define (verbose?)
+    "Should benchmarks print to the repl?
+
+Is `*verbose-benchmarking*` set to `True`?"
+    (cell:read *verbose-benchmarking*))
+
+  (declare *benchmark-width* (Cell UFix))
+  (define *benchmark-width*
+    "This is the printed width of the benchmark table output."
+    (cell:new 80))
 
   (declare benchmark-width (Unit -> UFix))
   (define (benchmark-width)
-    "This returns the width of the benchmark table output. Ideally should be divisible by 5."
-    (lisp UFix () *coalton-benchmark-width*))
+    "Returns the width in characters for printing benchmark table output."
+    (cell:read *benchmark-width*))
 
-  (declare benchmark-sci-notation (Unit -> Boolean))
-  (define (benchmark-sci-notation)
-    "This returns whether benchmarks will print time with scientific notation."
-    (lisp Boolean () *coalton-benchmark-sci-notation*)))
+  (declare *benchmark-sci-notation* (Cell Boolean))
+  (define *benchmark-sci-notation*
+    "When `True`, benchmarks will print times with scientific notation.
+
+When `False`, they will print in microseconds."
+    (cell:new False))
+
+  (declare sci-notation? (Unit -> Boolean))
+  (define (sci-notation?)
+    "Should benchmark times be printed in scientific notation?
+
+Is `*benchmark-sci-notation*` set to `True`?"
+    (cell:read *benchmark-sci-notation*)))
+
 
 ;;;
-;;; Benchmark environment
+;;; BenchmarkName type for handling package symbols
+;;;
+
+(coalton-toplevel
+
+  (repr :native cl:symbol)
+  (define-type BenchmarkName
+    "Benchmark names are interned as symbols in their associated package.")
+
+  (define-instance (EQ BenchmarkName)
+    (define (== a b)
+      (lisp Boolean (a b)
+        (cl:eq a b))))
+
+  (define-instance (Into BenchmarkName String)
+    (define (into s)
+      (lisp String (s)
+        (cl:string s))))
+
+  (define-instance (Into String BenchmarkName)
+    (define (into s)
+      (lisp BenchmarkName (s)
+        (cl:intern s))))
+
+  (declare BenchmarkName (String -> BenchmarkName))
+  (define (BenchmarkName str)
+    "A constructor that takes a string and returns a BenchmarkName symbol."
+    (into str)))
+
+(coalton-library/hash:define-sxhash-hasher BenchmarkName)
+
+;;;
+;;; Benchmark, BenchmarkSuite, and benchmark environment
 ;;;
 
 (coalton-toplevel
 
   (define-struct Benchmark
-    "A benchmark object"
-    (name       String)
-    (iterations UFix)
-    (code       (Unit -> Unit))
-    (packages   (Vector String)))
+    "A Coalton `Benchmark` object."
+    (name
+     "The name of the `Benchmark`, interned as a symbol in the local package."
+     BenchmarkName)
+    (iterations
+     "The number of times the code will be run."
+     UFix)
+    (code
+     "A function to be benchmarked."
+     (Unit -> Unit)))
 
-  (declare benchmark-environment (hash:Hashtable String Benchmark))
-  (define benchmark-environment
-    "A global environment holding Coalton benchmarks. Key is benchmark name."
-    (hash:new)))
+  (define-struct BenchmarkSuite
+    "A suite of benchmarks, associated with a Coalton package."
+    (package-name
+     "The name of the package associated with the `BenchmarkSuite`." String)
+    (benchmarks
+     "The benchmarks contained in the `BenchmarkSuite`."
+     (Hashtable BenchmarkName Benchmark)))
+
+  (declare *benchmark-environment* (hash:Hashtable String BenchmarkSuite))
+  (define *benchmark-environment*
+    "A global environment holding Coalton benchmark suites.
+
+Key is package name."
+    (hash:new))
+
+  (declare add-benchmark-suite (BenchmarkSuite -> Unit))
+  (define (add-benchmark-suite suite)
+    "Adds a `BenchmarkSuite` to `*benchmark-environment*`."
+    (hash:set! *benchmark-environment*
+               (.package-name suite)
+               suite))
+
+  (declare find-benchmark-suite (String -> (Optional BenchmarkSuite)))
+  (define (find-benchmark-suite name)
+    "Finds a `BenchmarkSuite` given the package's name."
+    (let package = (lisp String (name)
+                     (cl:string-upcase name)))
+    (hash:get *benchmark-environment* package))
+
+  (declare current-package (Unit -> String))
+  (define (current-package)
+    "Returns the current local package, `cl:*package*`"
+    (lisp String ()
+      (cl:package-name cl:*package*)))
+
+  (declare ensure-benchmark-suite (Unit -> BenchmarkSuite))
+  (define (ensure-benchmark-suite)
+    "Ensures that a local `BenchmarkSuite` exists for the current package, returns the suite."
+    (unwrap-or-else (fn (suite)
+                      suite)
+                    (fn ()
+                      (let ((suite (BenchmarkSuite
+                                    (current-package)
+                                    (hash:new))))
+                        (add-benchmark-suite suite)
+                        suite))
+                    (find-benchmark-suite (current-package))))
+
+  (declare add-benchmark (Benchmark -> Unit))
+  (define (add-benchmark bmark)
+    "Adds a `Benchmark` to the current package's `BenchmarkSuite`."
+    (let suite = (ensure-benchmark-suite))
+    (hash:set! (.benchmarks suite)
+               (.name bmark)
+               bmark))
+
+  (declare package-benchmarks (String -> (Iterator Benchmark)))
+  (define (package-benchmarks package-name)
+    "Returns an `Iterator` of all benchmarks contained within a specified package."
+    (hash:values (.benchmarks (unwrap (find-benchmark-suite package-name)))))
+
+  (declare local-benchmarks (Unit -> (Iterator Benchmark)))
+  (define (local-benchmarks)
+    "Returns an `Iterator` of all benchmarks contained within the current package."
+    (package-benchmarks (current-package)))
+
+  (declare find-benchmark (BenchmarkName -> (Optional Benchmark)))
+  (define (find-benchmark name)
+    "Finds a `Benchmark` in the current package."
+    (iter:find! (fn (b)
+                  (== (.name b) name))
+                (local-benchmarks)))
+
+  (declare %define-benchmark (String -> UFix -> (Unit -> Unit) -> Unit))
+  (define (%define-benchmark name iterations fn)
+    "Define a Coalton `Benchmark` in the local package."
+    (add-benchmark
+     (Benchmark
+      (into name)
+      iterations
+      fn))))
+
+(cl:defmacro define-benchmark (name iterations func)
+  "Define a Coalton `Benchmark` in the local package- called outside of Coalton."
+  (cl:let* ((name (cl:string name)))
+    `(coalton (%define-benchmark ,name ,iterations ,func))))
 
 ;;;
 ;;; Benchmark Results
@@ -83,20 +236,40 @@
 
 
   (define-struct BenchmarkResults
-    "Results from a Benchmark run."
-    (name         String)
-    (iterations   UFix)
-    (time-elapsed Integer)
-    (bytes-consed (Optional Integer)))
+    "Results from a `Benchmark` run."
+    (name
+     "The name of the `Benchmark`, interned as a symbol in the local package."
+     BenchmarkName)
+    (iterations
+     "The number of times the benchmarked function was run."
+     UFix)
+    (time-elapsed
+     "The amount of time in internal time units that all iterations took to run."
+     Integer)
+    (bytes-consed
+     "The amount of space used during the benchmark run."
+     (Optional Integer)))
 
   (define-struct BenchmarkSystem
     "Information about the system the benchmark is run on."
-    (architecture String)
-    (OS           String)
-    (lisp-impl    String)
-    (lisp-version String)
-    (release?     "Is this in release mode or development mode?" Boolean)
-    (inlining?    "Is inlining enabled?" Boolean))
+    (architecture
+     "The architecture of the system."
+     String)
+    (OS
+     "The operating system."
+     String)
+    (lisp-impl
+     "The Lisp implementation used."
+     String)
+    (lisp-version
+     "The version of the Lisp Implementation"
+     String)
+    (release?
+     "Is this in release mode or development mode?"
+     Boolean)
+    (inlining?
+     "Is inlining enabled?"
+     Boolean))
 
   (declare benchmark-system-info (Unit -> BenchmarkSystem))
   (define (benchmark-system-info)
@@ -115,116 +288,53 @@
 
   (define-struct PackageBenchmarkResults
     "This is information about a run of package benchmarks."
-    (package-name String)
-    (system       BenchmarkSystem)
-    (Results      (vector BenchmarkResults))))
+    (package-name
+     "The name of the package containing the benchmark suite." String)
+    (system
+     "Information about the system the benchmark was run on."
+     BenchmarkSystem)
+    (Results
+     "The results of each benchmark."
+     (vector BenchmarkResults))))
 
 ;;;
-;;; Benchmark definition
-;;;
-
-(coalton-toplevel
-
-  (declare current-package (Unit -> String))
-  (define (current-package)
-    "Returns the current local package."
-    (lisp String ()
-      (cl:package-name cl:*package*)))
-
-  (declare %define-benchmark (String -> UFix -> (Unit -> Unit) -> Unit))
-  (define (%define-benchmark name iterations fn)
-    "Defines a Coalton benchmark, stored in `benchmark-environment`."
-    (hash:set!
-     benchmark-environment
-     name
-     (Benchmark
-      name
-      iterations
-      fn
-      (vec:make (current-package)))))
-
-  (declare find-benchmark (String -> (Optional Benchmark)))
-  (define (find-benchmark name)
-    "Finds a benchmark given its name."
-    (hash:get benchmark-environment name))
-
-  (declare find-package-benchmarks (String -> (Iterator Benchmark)))
-  (define (find-package-benchmarks package)
-    "Finds all benchmarks defined in a `package`"
-    (let pkg = (lisp String (package) (cl:string-upcase package)))
-    (iter:filter! (fn (b) (unwrap-or-else (fn (_x) True)
-                                          (fn () False)
-                                          (vec:find-elem pkg (.packages b))))
-                  (hash:values benchmark-environment))))
-
-(cl:defmacro define-benchmark (name iterations func)
-  "Defines a Coalton benchmark"
-  (cl:let ((name (cl:string name)))
-    `(coalton (%define-benchmark ,name ,iterations ,func))))
-
-;;;
-;;; Allow importing of benchmarks into other packages,
-;;; for the sake of building package-per-file benchmark hierarchies.
-;;;
-
-(coalton-toplevel
-
-  (declare %add-package (String -> Benchmark -> Unit))
-  (define (%add-package package-name benchmark)
-    "Adds a package to the benchmark's packages."
-    (vec:push! package-name (.packages benchmark))
-    Unit)
-
-  (declare %reexport-package-benchmarks (String -> Unit))
-  (define (%reexport-package-benchmarks package)
-    (for bmark in (find-package-benchmarks package)
-      (%add-package (current-package) bmark)
-      Unit)))
-
-(cl:defun reexport-benchmarks (cl:&rest packages)
-  "This imports and reexports benchmarks from another package, for package-per-file hierarchy."
-  (cl:loop :for pkg :in packages
-     :do (%reexport-package-benchmarks pkg)))
-
-;;;
-;;; Running and Printing
+;;; Print formatting utilities
 ;;;
 
 (coalton-toplevel
 
   (declare print-item ((Into :a String) => :a -> Unit))
   (define (print-item item)
-    "Equivalent to coalton's `print` function except without a trailing newline."
+    "Equivalent to Coalton's `print` function except without a trailing newline."
     (let str = (as String item))
     (lisp Unit (str)
       (cl:format cl:*standard-output* "~A" str)
       Unit))
 
+  (define (%format-time-microseconds rtime)
+    "Formats time units into microseconds."
+    (let t = (math:round/ (sys:time-units->rounded-microseconds rtime) 1000))
+    (lisp String (t)
+      (cl:format cl:nil "~d" t)))
+
+  (define (%format-time-scientific rtime)
+    "Formats time units into seconds in scientific notation."
+    (let t = (sys:time-units->seconds rtime))
+    (lisp String (t)
+      (cl:format cl:nil "~,4e" t)))
+
   (declare format-time (Integer -> String))
   (define (format-time rtime)
     "Converts time from microseconds to seconds then prunes down to a 10 characters."
-    (let t = (sys:time-units->seconds rtime))
-    (lisp String (t)
-      (cl:let ((control-string (cl:if *coalton-benchmark-sci-notation*
-                                      "~,4e s"
-                                      "~,7f s")))
-        (cl:format cl:nil control-string t))))
+    (if (sci-notation?)
+        (%format-time-scientific rtime)
+        (%format-time-microseconds rtime))))
 
-  (declare benchmark-column-names (Vector String))
-  (define benchmark-column-names (vec:make "Benchmark"
-                                             "Time Elapsed"
-                                             "Bytes consed"
-                                             "# Iterations"))
+;;;
+;;; Table gathering
+;;;
 
-  (declare column-values (BenchmarkResults -> (Vector String)))
-  (define (column-values (BenchmarkResults name iterations time-elapsed bytes-consed))
-    "Returns the column values for a row."
-    (vec:make name
-              (format-time time-elapsed)
-              (unwrap-or-else into
-                              (fn () "n/a")
-                              bytes-consed)
-              (into iterations)))
+(coalton-toplevel
 
   (declare system-header-text (BenchmarkSystem -> (Tuple String String)))
   (define (system-header-text (BenchmarkSystem architecture os lisp-impl lisp-version release inlining))
@@ -244,39 +354,24 @@
                                "with"
                                "without")))))
 
-  (declare %run-benchmark (Benchmark -> BenchmarkResults))
-  (define (%run-benchmark (Benchmark name iterations func _package))
-    "Runs a benchmark."
-    (let profile = (sys:spacetime (fn ()
-                                    (for i in (iter:up-to iterations)
-                                      (func)
-                                      Unit))))
-    (BenchmarkResults
-     name
-     iterations
-     (.time-elapsed profile)
-     (.bytes-consed profile)))
+  (declare benchmark-column-names (seq:Seq String))
+  (define benchmark-column-names
+    "The column headers for benchmark table printing."
+    (seq:make "Benchmark"
+              "Time (ms)"
+              "Space (B)"
+              "# Iterations"))
 
-  (declare run-benchmark (String -> BenchmarkResults))
-  (define (run-benchmark name)
-    "Looks up a benchmark by name and runs it if it exists."
-    (let ((results (unwrap-or-else %run-benchmark
-                                   (fn () (error (lisp String (name)
-                                                   (cl:format cl:nil "No benchmark defined by this name: ~a" name))))
-                                   (find-benchmark (lisp string (name)
-                                                     (cl:string-upcase name)))))
-          (sys (system-header-text (benchmark-system-info))))
-      (when (verbose-benchmarking)
-        (print
-         (coalton-table
-          (benchmark-width)
-          (Header (lisp String (name) (cl:format cl:nil "Benchmark ~a" name)))
-          (SecondaryHeader (fst sys))
-          (SecondaryHeader (snd sys))
-          (TopRow benchmark-column-names)
-          (Row (column-values results))
-          (Bottom (vec:length benchmark-column-names)))))
-      results))
+  (declare column-values (BenchmarkResults -> (seq:Seq String)))
+  (define (column-values (BenchmarkResults name iterations time-elapsed bytes-consed))
+    "Returns the column values for a row of the benchmark table."
+    (seq:make (the String (into name))
+              (format-time time-elapsed)
+              (unwrap-or-else (fn (x)
+                                (into x))
+                              (fn () "n/a")
+                              bytes-consed)
+              (the String (into iterations))))
 
   (declare package-header (String -> BenchmarkSystem -> String))
   (define (package-header name system)
@@ -288,37 +383,80 @@
                (cl:format cl:nil "Package '~a'" name)))
      (SecondaryHeader (fst sys))
      (SecondaryHeader (snd sys))
-     (TopRow benchmark-column-names)))
+     (TopRow benchmark-column-names))))
+
+;;;
+;;; Running Benchmarks
+;;;
+
+(coalton-toplevel
+
+  (declare %run-benchmark (Benchmark -> BenchmarkResults))
+  (define (%run-benchmark (Benchmark name iterations func))
+    "Runs a `Benchmark`."
+    (let profile = (sys:spacetime (fn ()
+                                    (for i in (iter:up-to iterations)
+                                      (func)
+                                      Unit))))
+    (BenchmarkResults
+     name
+     iterations
+     (.time-elapsed profile)
+     (.bytes-consed profile)))
+
+  (declare run-benchmark (BenchmarkName -> BenchmarkResults))
+  (define (run-benchmark name)
+    "Runs a `Benchmark` in the current package."
+    (let ((results (unwrap-or-else %run-benchmark
+                                   (fn () (error (lisp String (name)
+                                                   (cl:format cl:nil "No benchmark defined by this name: ~a" name))))
+                                   (find-benchmark name)))
+          (sys (system-header-text (benchmark-system-info))))
+      (when (verbose?)
+        (print
+         (coalton-table
+          (benchmark-width)
+          (Header (lisp String (name) (cl:format cl:nil "Benchmark ~a" name)))
+          (SecondaryHeader (fst sys))
+          (SecondaryHeader (snd sys))
+          (TopRow benchmark-column-names)
+          (Row (column-values results))
+          (Bottom (seq:size benchmark-column-names)))))
+      results))
 
   (declare run-package-benchmarks (String -> PackageBenchmarkResults))
   (define (run-package-benchmarks name)
     "Runs all benchmarks for a package"
     (let system = (benchmark-system-info))
     (let results = (vec:new))
-    (when (verbose-benchmarking)
+    (when (verbose?)
       (print-item (package-header name system)))
 
-    (for b in (find-package-benchmarks name)
+    (for b in (package-benchmarks name)
       (let res = (%run-benchmark b))
-      (when (verbose-benchmarking)
+      (when (verbose?)
         (print-item (coalton-table
-                (benchmark-width)
-                (Row (column-values res)))))
+                     (benchmark-width)
+                     (Row (column-values res)))))
       (vec:push! res results))
 
-    (when (verbose-benchmarking)
+    (when (verbose?)
       (print-item (coalton-table
-              (benchmark-width)
-              (Bottom 4))))
+                   (benchmark-width)
+                   (Bottom 4))))
 
     (PackageBenchmarkResults
      name
      system
      results))
 
-  (declare print-results ((List BenchmarkResults) -> (state:ST Table Unit)))
+  (define (run-benchmarks)
+    "Runs the benchmarks for the current package."
+    (run-package-benchmarks (current-package)))
+
+  (declare print-results ((List BenchmarkResults) -> (state:ST TableState Unit)))
   (define (print-results results)
-    "Adds results to the table object."
+    "Adds results to the table printout."
     (match results
       ((Cons x xs)
        (do
