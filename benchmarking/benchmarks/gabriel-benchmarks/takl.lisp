@@ -77,12 +77,14 @@
   (define (takl x y z)
     (mas (listn x) (listn y) (listn z))))
 
-(define-benchmark takl 2000
+(define-benchmark takl 500
   (fn ()
     (takl 18 12 6)
-    Unit))
+    Unit)
+  :comprehensive? cl:t)
 
-(define-benchmark lisp-takl 2000
+(define-benchmark lisp-takl 500
   (fn ()
     (takl 18 12 6)
-    Unit))
+    Unit)
+  :comprehensive? cl:t)

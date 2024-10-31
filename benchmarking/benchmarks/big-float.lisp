@@ -84,11 +84,13 @@
   (cl:let ((func name)
            (name (cl:string name))
            (rand (cl:* (cl:- (cl:random 2)) (cl:random 100.0d0))))
-    `(coalton (coalton-benchmarking/benchmarking::%define-benchmark ,name (big-float-bench-iterations)
+    `(coalton (coalton-benchmarking/benchmarking::%define-benchmark ,name
+                                                                    (big-float-bench-iterations)
                                                                     (fn ()
                                                                       (,func (big-float-bench-precision)
                                                                              ,rand)
-                                                                      Unit)))))
+                                                                      Unit)
+                                                                    False))))
 
 
 (define-big-float-benchmark big-trig)

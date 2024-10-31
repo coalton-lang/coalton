@@ -28,6 +28,11 @@
    #:Cross
    #:Newline
 
+   #:Alignment
+   #:Right
+   #:Left
+   #:Center
+   #:TableCell
    #:TableComponent
    #:TopEdge
    #:TopInternalEdge
@@ -83,8 +88,9 @@
     "An internal edge between rows."
     (BottomEdge UFix UFix)
     "The bottom edge of the table."
-    (TCell String UFix)
-    "A Table cell with text and width.")
+    ;(TCell String Width)
+    ;"A Table cell with text and width."
+    )
 
   (declare %column-spacing (UFix -> UFix -> (Tuple UFix UFix)))
   (define (%column-spacing width columns)
@@ -135,55 +141,80 @@
   ;; Writing text, cells, headers
   ;;
 
+   (define-type Alignment
+    "The direction the cell is aligned."
+    Right
+    Left
+    Center)
+
+  (define-struct TableCell
+    (text String)
+    (alignment Alignment))
+
   (declare %whitespace (UFix -> String))
   (define (%whitespace width)
     "Generates whitespace with a given width."
     (mconcat (vec:with-initial-element width " ")))
 
-  (declare %write-cell (String -> UFix -> String))
-  (define (%write-cell cell-text width)
+  (declare %right-cell (String -> UFix -> String))
+  (define (%right-cell text blank)
     "Writes text as if to a cell, with appropriate whitespace"
-    ;; this handles text too long for a table cell
+    (mconcat (vec:make (%whitespace blank) text)))
+
+  (declare %left-cell (String -> UFix -> String))
+  (define (%left-cell text blank)
+    "Writes text as if to a cell, with appropriate whitespace"
+    (mconcat (vec:make text (%whitespace blank))))
+
+  (declare %center-cell (String -> UFix -> String))
+  (define (%center-cell text blank)
+    "Writes text as if to a cell, with appropriate whitespace"
+    (let ((offsets (Tuple (%whitespace (fromint (math:floor/ (into blank) 2)))
+                          (%whitespace (fromint (math:ceiling/ (into blank) 2))))))
+      (mconcat (vec:make (fst offsets) text (snd offsets)))))
+
+  (declare %write-cell (TableCell -> UFix -> String))
+  (define (%write-cell (TableCell cell-text alignment) width)
     (let ((text (if (>= (str:length cell-text) width)
                     (str:substring cell-text 0 (1- width))
                     cell-text))
-          (blank (- width (str:length text)))
-          (offsets (Tuple (%whitespace (fromint (math:floor/ (into blank) 2)))
-                          (%whitespace (fromint (math:ceiling/ (into blank) 2)))))
-          (out (the (vec:Vector String) (vec:new))))
-      (vec:push! (fst offsets) out)
-      (vec:push! text out)
-      (vec:push! (snd offsets) out)
-      (mconcat out)))
+          (blank (- width (str:length text))))
+      (match alignment
+        ((Right)
+         (%right-cell text blank))
+        ((Left)
+         (%left-cell text blank))
+        ((Center)
+         (%center-cell text blank)))))
 
   ;;
   ;;
   ;;
 
-  (declare %write-row-component (UFix -> (seq:Seq String) -> TableComponent -> String))
-  (define (%write-row-component width column-texts top-edge)
-    "Writes a full table row of width `width` containing `column-texts`."
-    (let ((columns (seq:size column-texts))
+  (declare %write-row-component (UFix -> (seq:Seq TableCell) -> TableComponent -> String))
+  (define (%write-row-component width cells top-edge)
+    "Writes a full table row of width `width` containing `cells`."
+    (let ((columns (seq:size cells))
           (spacing (%column-spacing width columns))
           (out (the (vec:Vector String) (vec:new))))
       (vec:push! (render top-edge) out)
       (vec:push! (render Vertical) out)
       (vec:push! (%whitespace (snd spacing)) out)
-      (for txt in column-texts
-        (vec:push! (%write-cell txt (fst spacing)) out)
+      (for cell in cells
+        (vec:push! (%write-cell cell (fst spacing)) out)
         (vec:push! (render Vertical) out))
       (vec:push! (render NewLine) out)
       (mconcat out)))
 
-  (declare %write-top-row (UFix -> (seq:Seq String) -> String))
-  (define (%write-top-row width column-texts)
+  (declare %write-top-row (UFix -> (seq:Seq TableCell) -> String))
+  (define (%write-top-row width cells)
     "Writes the top-row of a table- has no lines crossing above the top."
-    (%write-row-component width column-texts (TopInternalEdge width (seq:size column-texts))))
+    (%write-row-component width cells (TopInternalEdge width (seq:size cells))))
 
-  (declare %write-row (UFix -> (seq:Seq String) -> String))
-  (define (%write-row width column-texts)
+  (declare %write-row (UFix -> (seq:Seq TableCell) -> String))
+  (define (%write-row width cells)
     "Writes a row of a table."
-    (%write-row-component width column-texts (InternalEdge width (seq:size column-texts))))
+    (%write-row-component width cells (InternalEdge width (seq:size cells))))
 
   (define-instance (Render TableComponent)
     (define (render tc)
@@ -196,8 +227,8 @@
          (%internal-edge width columns))
         ((BottomEdge width columns)
          (%bottom-edge width columns))
-        ((TCell text width)
-         (%write-cell text width)))))
+        #+ig((TCell text width alignment)
+         (%write-cell (TableCell text alignment) width)))))
 
   (define-instance (Render BoxChar)
     (define (render bc)
@@ -233,12 +264,12 @@
   (define-struct TableRow
     "A struct that can be used to generate a printed table row."
     (width           "The width of the table row." UFix)
-    (column-contents "A vector of column contents." (seq:Seq String)))
+    (cells "A vector of column contents." (seq:Seq TableCell)))
 
   (define-struct TopTableRow
     "A struct that can be used to generate a printed table row with no row above."
     (width           UFix)
-    (column-contents (seq:Seq String)))
+    (cells (seq:Seq TableCell)))
 
   (define-instance (Render TableRow)
     (define (render (TableRow width contents))
@@ -250,16 +281,13 @@
 
   (define-instance (Render TableHeader)
     (define (render (TableHeader width text))
-      (let ((blank (the Integer (into (- width (str:length text)))))
-            (offsets (Tuple (%whitespace (fromint (math:floor/ blank 2)))
-                            (%whitespace (fromint (math:ceiling/ blank 2)))))
-            (out (the (vec:Vector String) (vec:new))))
-        (vec:push! (%top-edge (math:1- width)) out)
-        (vec:push! (render Vertical) out)
-        (vec:push! (render (TCell text (math:1- width))) out)
-        (vec:push! (render Vertical) out)
-        (vec:push! (render NewLine) out)
-        (mconcat (as (List String) out))))))
+      (mconcat
+       (vec:make
+        (%top-edge (math:1- width))
+        (render Vertical)
+        (%write-cell (TableCell text Center) (math:1- width))
+        (render Vertical)
+        (render NewLine))))))
 
 ;;;
 ;;; Monadic table building
@@ -304,19 +332,19 @@
      (table <- state:get)
      (%add-component (TableRow (1- (.width table)) (seq:make text)))))
 
-  (declare Row ((seq:Seq String) -> (state:ST TableState Unit)))
-  (define (Row texts)
+  (declare Row ((seq:Seq TableCell) -> (state:ST TableState Unit)))
+  (define (Row cells)
     "Add a row to the table printout."
     (do
      (table <- state:get)
-     (%add-component (TableRow (.width table) texts))))
+     (%add-component (TableRow (.width table) cells))))
 
-  (declare TopRow ((seq:Seq String) -> (state:ST TableState Unit)))
-  (define (TopRow texts)
+  (declare TopRow ((seq:Seq TableCell) -> (state:ST TableState Unit)))
+  (define (TopRow cells)
     "Add a top row to the table printout (no upward cross characters)."
     (do
      (table <- state:get)
-     (%add-component (TopTableRow (.width table) texts))))
+     (%add-component (TopTableRow (.width table) cells))))
 
   (declare Bottom (UFix -> (state:ST TableState Unit)))
   (define (Bottom columns)

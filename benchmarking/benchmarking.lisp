@@ -12,7 +12,8 @@
    (#:list  #:coalton-library/list)
    (#:state #:coalton-library/monad/state)
    (#:math  #:coalton-library/math)
-   (#:seq   #:coalton-library/seq))
+   (#:seq   #:coalton-library/seq)
+   (#:str   #:coalton-library/string))
   (:export
 
    ;; settings/options
@@ -36,6 +37,9 @@
    #:local-benchmarks
    #:find-benchmark
    #:define-benchmark
+
+   #:ScalingBenchmark
+   #:define-scaling-benchmark
 
    #:BenchmarkResults
    #:BenchmarkSystem
@@ -69,7 +73,7 @@ Is `*verbose-benchmarking*` set to `True`?"
   (declare *benchmark-width* (Cell UFix))
   (define *benchmark-width*
     "This is the printed width of the benchmark table output."
-    (cell:new 80))
+    (cell:new 90))
 
   (declare benchmark-width (Unit -> UFix))
   (define (benchmark-width)
@@ -134,12 +138,17 @@ Is `*benchmark-sci-notation*` set to `True`?"
     (name
      "The name of the `Benchmark`, interned as a symbol in the local package."
      BenchmarkName)
-    (iterations
+    (samples
      "The number of times the code will be run."
      UFix)
     (code
      "A function to be benchmarked."
-     (Unit -> Unit)))
+     (Unit -> Unit))
+    (Comprehensive?
+     "Should this benchmark be run comprehensively?
+
+Comprehensive benchmarks provide additional information and dynamic sample scaling, though sacrifice time efficiency."
+     Boolean))
 
   (define-struct BenchmarkSuite
     "A suite of benchmarks, associated with a Coalton package."
@@ -200,7 +209,12 @@ Key is package name."
   (declare package-benchmarks (String -> (Iterator Benchmark)))
   (define (package-benchmarks package-name)
     "Returns an `Iterator` of all benchmarks contained within a specified package."
-    (hash:values (.benchmarks (unwrap (find-benchmark-suite package-name)))))
+    (unwrap-or-else
+       (fn (suite)
+         (hash:values (.benchmarks suite)))
+       (fn ()
+         (error "Benchmark suite not found."))
+       (find-benchmark-suite package-name)))
 
   (declare local-benchmarks (Unit -> (Iterator Benchmark)))
   (define (local-benchmarks)
@@ -214,26 +228,74 @@ Key is package name."
                   (== (.name b) name))
                 (local-benchmarks)))
 
-  (declare %define-benchmark (String -> UFix -> (Unit -> Unit) -> Unit))
-  (define (%define-benchmark name iterations fn)
+  (declare %define-benchmark (String -> UFix -> (Unit -> Unit) -> Boolean -> Unit))
+  (define (%define-benchmark name iterations fn comprehensive?)
     "Define a Coalton `Benchmark` in the local package."
     (add-benchmark
      (Benchmark
       (into name)
       iterations
-      fn))))
+      fn
+      comprehensive?))))
 
-(cl:defmacro define-benchmark (name iterations func)
+(cl:defmacro define-benchmark (name iterations func cl:&key (comprehensive? cl:nil))
   "Define a Coalton `Benchmark` in the local package- called outside of Coalton."
   (cl:let* ((name (cl:string name)))
-    `(coalton (%define-benchmark ,name ,iterations ,func))))
+    `(coalton (%define-benchmark ,name ,iterations ,func (lisp Boolean () ,comprehensive?)))))
 
+;;;
+;;;
+;;;
+
+(coalton-toplevel
+
+  (define-struct (ScalingBenchmark :a)
+    "Scaling benchmarks allow for multiple inputs."
+    (name
+     "The name of the benchmark. This will be combined with an index for each element in the series."
+     String)
+    (samples
+     "The number of samples to take of each benchmark.
+
+If comprehensive, this is the minimum number of samples."
+     UFix)
+    (code
+     "The function to benchmark."
+     (:a -> Unit))
+    (inputs
+     "A sequence of inputs to run this benchmark on."
+     (seq:Seq :a))
+    (Comprehensive?
+     "Should this be run comprehensively?"
+     Boolean))
+
+  (define (%add-scaling-benchmark (ScalingBenchmark name samples func inputs comprehensive?))
+    "Adds a benchmark for each ScalingBenchmark input."
+    (for i in (iter:zip! (iter:into-iter inputs)
+                         (iter:range-increasing 1 0 (seq:size inputs)))
+      (add-benchmark
+       (Benchmark
+        (BenchmarkName (str:concat name
+                                   (into (snd i))))
+        samples
+        (fn () (func (fst i)))
+        comprehensive?)))))
+
+(cl:defmacro define-scaling-benchmark (name samples func inputs cl:&key (comprehensive? cl:nil))
+  "Defines a series of benchmarks on a function taking a series of inputs."
+  (cl:let ((name (cl:string name)))
+    `(coalton (%add-scaling-benchmark
+               (ScalingBenchmark
+                ,name
+                ,samples
+                ,func
+                ,inputs
+                (lisp Boolean () ,comprehensive?))))))
 ;;;
 ;;; Benchmark Results
 ;;;
 
 (coalton-toplevel
-
 
   (define-struct BenchmarkResults
     "Results from a `Benchmark` run."
@@ -243,9 +305,15 @@ Key is package name."
     (iterations
      "The number of times the benchmarked function was run."
      UFix)
-    (time-elapsed
+    (total-time-elapsed
      "The amount of time in internal time units that all iterations took to run."
      Integer)
+    (average-time-elapsed
+     "The amount of time in internal time units that the average iteration took to run."
+     Integer)
+    (time-std-dev
+     "The standard deviation of times."
+     (Optional Double-Float))
     (bytes-consed
      "The amount of space used during the benchmark run."
      (Optional Integer)))
@@ -328,50 +396,62 @@ Key is package name."
     "Converts time from microseconds to seconds then prunes down to a 10 characters."
     (if (sci-notation?)
         (%format-time-scientific rtime)
-        (%format-time-microseconds rtime))))
+        (%format-time-microseconds rtime)))
 
-;;;
-;;; Table gathering
-;;;
+  (declare %format-time-std-dev (Double-Float -> String))
+  (define (%format-time-std-dev sdev)
+    (let ms = (/ (/ (* 1000000 sdev)
+                    (fromint sys:internal-time-units-per-second))
+                 1000))
+    (into ms))
 
-(coalton-toplevel
-
-  (declare system-header-text (BenchmarkSystem -> (Tuple String String)))
+  (declare system-header-text (BenchmarkSystem -> (Tuple TableCell TableCell)))
   (define (system-header-text (BenchmarkSystem architecture os lisp-impl lisp-version release inlining))
     "Returns formatted system information for printing purposes."
-    (Tuple (lisp String (architecture os lisp-impl lisp-version)
-             (cl:format cl:nil "System: ~a ~a ~a~a"
-                        architecture
-                        os
-                        lisp-impl
-                        lisp-version))
-           (lisp String (release inlining)
-             (cl:format cl:nil "Coalton ~a mode ~a heuristic inlining"
-                        (cl:if release
-                               "release"
-                               "development")
-                        (cl:if inlining
-                               "with"
-                               "without")))))
+    (Tuple (TableCell (lisp String (architecture os lisp-impl lisp-version)
+                        (cl:format cl:nil "System: ~a ~a ~a~a"
+                                   architecture
+                                   os
+                                   lisp-impl
+                                   lisp-version))
+                      Center)
+           (TableCell (lisp String (release inlining)
+                        (cl:format cl:nil "Coalton ~a mode ~a heuristic inlining"
+                                   (cl:if release
+                                          "release"
+                                          "development")
+                                   (cl:if inlining
+                                          "with"
+                                          "without")))
+                      Center)))
 
-  (declare benchmark-column-names (seq:Seq String))
+  (declare benchmark-column-names (seq:Seq TableCell))
   (define benchmark-column-names
     "The column headers for benchmark table printing."
-    (seq:make "Benchmark"
-              "Time (ms)"
-              "Space (B)"
-              "# Iterations"))
+    (seq:make (TableCell "Benchmark" Center)
+              (TableCell "Time (ms)" Center)
+              (TableCell "Avg Time (ms)" Center)
+              (TableCell "Time std dev" Center)
+              (TableCell "Space (B)" Center)
+              (TableCell "# Samples" Center)))
 
-  (declare column-values (BenchmarkResults -> (seq:Seq String)))
-  (define (column-values (BenchmarkResults name iterations time-elapsed bytes-consed))
+  (declare column-values (BenchmarkResults -> (seq:Seq TableCell)))
+  (define (column-values (BenchmarkResults name iterations time-elapsed avg-time time-std-dev bytes-consed))
     "Returns the column values for a row of the benchmark table."
-    (seq:make (the String (into name))
-              (format-time time-elapsed)
-              (unwrap-or-else (fn (x)
-                                (into x))
-                              (fn () "n/a")
-                              bytes-consed)
-              (the String (into iterations))))
+    (seq:make (TableCell (the String (into name)) Left)
+              (TableCell (format-time time-elapsed) Right)
+              (TableCell (format-time avg-time) Right)
+              (TableCell (unwrap-or-else %format-time-std-dev
+                                         (fn () "n/a")
+                                         time-std-dev)
+                         Right)
+              (TableCell (unwrap-or-else (fn (x)
+                                           (into x))
+                                         (fn () "n/a")
+                                         bytes-consed)
+                         Right)
+              (TableCell (the String (into iterations))
+                         Right)))
 
   (declare package-header (String -> BenchmarkSystem -> String))
   (define (package-header name system)
@@ -386,13 +466,140 @@ Key is package name."
      (TopRow benchmark-column-names))))
 
 ;;;
-;;; Running Benchmarks
+;;; Comprehensive Benchmarking
 ;;;
 
 (coalton-toplevel
 
+  (define *benchmarking-convergence-threshold* 0.01d0)
+
+  (define-struct BenchState
+    "State for a Benchmark Run."
+    (samples           (Cell Integer))
+    (times             (Vector Integer))
+    (total-time        (Cell Integer))
+    (bytes-consed      (Vector (Optional Integer)))
+    (std-dev           (Cell Double-Float)))
+
+  (define-instance (Default BenchState)
+    (define (default)
+      (BenchState (cell:new 0)
+                  (vec:new)
+                  (cell:new 0)
+                  (vec:new)
+                  (cell:new 0.0d0))))
+
+  (declare increment-samples (Unit -> (state:ST BenchState Unit)))
+  (define (increment-samples)
+    "Increment the number of samples."
+    (do
+     (bench <- state:get)
+     (pure (cell:increment! (.samples bench)))
+      (state:put bench)))
+
+  (declare add-time (Integer -> (state:ST BenchState Unit)))
+  (define (add-time t)
+    "Add a profiled time to both the vector of times and the total-time."
+    (do
+     (bench <- state:get)
+     (pure (vec:push! t (.times bench)))
+      (pure (cell:update! (fn (x) (+ t x)) (.total-time bench)))
+      (state:put bench)))
+
+  (declare add-bytes ((Optional Integer) -> (state:ST BenchState Unit)))
+  (define (add-bytes b)
+    (do
+     (bench <- state:get)
+     (pure (vec:push! b (.bytes-consed bench)))
+      (state:put bench)))
+
+  (declare mean-time (Unit -> (state:ST BenchState Double-Float)))
+  (define (mean-time)
+    (do
+     (bench <- state:get)
+     (pure (math:inexact/
+            (cell:read (.total-time bench))
+            (cell:read (.samples bench))))))
+
+  (declare total-bytes-consed (BenchState -> (Optional Integer)))
+  (define (total-bytes-consed (BenchState _ _ _ bytes-consed _))
+    (fold + (Some 0) bytes-consed))
+
+  (declare mean-bytes-consed (BenchState -> (Optional Double-Float)))
+  (define (mean-bytes-consed (BenchState samples _ _ bytes-consed _))
+    (match (vec:index-unsafe 0 bytes-consed)
+      ((Some _x)
+       (Some (math:inexact/ (fold + 0 (map unwrap bytes-consed))
+                            (cell:read samples))))
+      ((None)
+       None)))
+
+  (declare std-deviation-time (Unit -> (state:ST BenchState Double-Float)))
+  (define (std-deviation-time)
+    (do
+     (bench <- state:get)
+     (mean <- (mean-time))
+      (pure (math:sqrt (math:general/ (fold + 0 (map (fn (x)
+                                                       (^ (- (fromint x) mean) 2))
+                                                     (.times bench)))
+                                      (1- (fromint (cell:read (.samples bench)))))))))
+
+  (declare std-deviation-convergence? (Double-Float -> (state:ST BenchState Boolean)))
+  (define (std-deviation-convergence? new-std-dev)
+    (do
+     (bench <- state:get)
+     (pure (< (abs (- new-std-dev (cell:read (.std-dev bench)))) *benchmarking-convergence-threshold*))))
+
+  (declare update-std-deviation (Double-Float -> (state:ST BenchState Unit)))
+  (define (update-std-deviation new-std-dev)
+    (do
+     (bench <- state:get)
+     (pure (cell:write! (.std-dev bench) new-std-dev))
+      (state:put bench)))
+
+  (declare profile-benchmark ((Unit -> Unit) -> Integer -> (state:ST BenchState Unit)))
+  (define (profile-benchmark func min-samples)
+    (do
+     (let profile = (sys:spacetime func))
+     (bench <- state:get)
+      (increment-samples)
+      (add-time (.time-elapsed profile))
+      (add-bytes (.bytes-consed profile))
+      (cond ((> (cell:read (.samples bench)) min-samples)
+             (do
+              (std-dev <- (std-deviation-time))
+              (converges? <- (std-deviation-convergence? std-dev))
+               (if converges?
+                   (pure Unit)
+                   (do
+                    (update-std-deviation std-dev)
+                    (profile-benchmark func min-samples)))))
+            (True
+             (profile-benchmark func min-samples)))))
+
+  (declare %run-comprehensive-benchmark (Benchmark -> BenchmarkResults))
+  (define (%run-comprehensive-benchmark (Benchmark name samples code _))
+    (let results = (fst (state:run (profile-benchmark code (into samples)) (default))))
+    results
+
+    (BenchmarkResults
+     name
+     (unwrap (tryinto (cell:read (.samples results))))
+     (cell:read (.total-time results))
+     (math:round/ (cell:read (.total-time results))
+                  (cell:read (.samples results)))
+     (Some (cell:read (.std-dev results)))
+     (total-bytes-consed results))))
+
+
+;;;
+;;; Running benchmarks
+;;;
+
+(Coalton-toplevel
+
   (declare %run-benchmark (Benchmark -> BenchmarkResults))
-  (define (%run-benchmark (Benchmark name iterations func))
+  (define (%run-benchmark (Benchmark name iterations func _))
     "Runs a `Benchmark`."
     (let profile = (sys:spacetime (fn ()
                                     (for i in (iter:up-to iterations)
@@ -400,14 +607,20 @@ Key is package name."
                                       Unit))))
     (BenchmarkResults
      name
-     iterations
+     (into iterations)
      (.time-elapsed profile)
+     (math:round/ (.time-elapsed profile)
+                  (into iterations))
+     None
      (.bytes-consed profile)))
 
   (declare run-benchmark (BenchmarkName -> BenchmarkResults))
   (define (run-benchmark name)
     "Runs a `Benchmark` in the current package."
-    (let ((results (unwrap-or-else %run-benchmark
+    (let ((results (unwrap-or-else (fn (b)
+                                     (if (.comprehensive? b)
+                                         (%run-comprehensive-benchmark b)
+                                         (%run-benchmark b)))
                                    (fn () (error (lisp String (name)
                                                    (cl:format cl:nil "No benchmark defined by this name: ~a" name))))
                                    (find-benchmark name)))
@@ -433,7 +646,9 @@ Key is package name."
       (print-item (package-header name system)))
 
     (for b in (package-benchmarks name)
-      (let res = (%run-benchmark b))
+      (let res = (if (.comprehensive? b)
+                     (%run-comprehensive-benchmark b)
+                     (%run-benchmark b)))
       (when (verbose?)
         (print-item (coalton-table
                      (benchmark-width)
@@ -474,4 +689,4 @@ Key is package name."
                      (SecondaryHeader (snd sys))
                      (TopRow benchmark-column-names)
                      (print-results (into results))
-                     (Bottom 5)))))
+                     (Bottom 6)))))

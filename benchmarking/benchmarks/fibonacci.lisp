@@ -7,6 +7,8 @@
    #:coalton
    #:coalton-prelude
    #:coalton-benchmarking)
+  (:local-nicknames
+   (#:seq #:coalton-library/seq))
   (:export
    #:lisp-fib
    #:fib
@@ -84,26 +86,29 @@
 ;;; Benchmarks
 ;;;
 
-(define-benchmark rec-fib 1000
-    (fn ()
-      (fib 20)
-      Unit))
+(define-scaling-benchmark rec-fib 1000
+    (fn (x)
+      (fib x)
+      Unit)
+    (seq:make 10 15 20 25))
 
-(define-benchmark rec-fib-generic 1000
-  (fn ()
-    (fib-generic-wrapped 20)
-    Unit))
+(define-scaling-benchmark rec-fib-generic 100
+  (fn (x)
+    (fib-generic-wrapped x)
+    Unit)
+  (seq:make 10 15 20 25 30)
+  :comprehensive? cl:t)
 
 (define-benchmark rec-fib-lisp 1000
   (fn ()
     (lisp Unit ()
-      (lisp-fib 20)
+      (lisp-fib 25)
       Unit)))
 
 (define-benchmark rec-fib-mono 1000
   (fn ()
     (lisp Unit ()
-      (fib-monomorphized 20)
+      (fib-monomorphized 25)
       Unit)))
 
 ;;
