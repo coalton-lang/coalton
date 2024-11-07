@@ -42,6 +42,8 @@
    #:take!
    #:flatten!
    #:flat-map!
+   #:mconcat!
+   #:mconcatmap!
    #:chain!
    #:remove-duplicates! ; defined in library/hashtable.lisp
    #:pair-with!
@@ -49,6 +51,7 @@
    #:and!
    #:or!
    #:count!
+   #:countBy!
    #:for-each!
    #:find!
    #:find-map!
@@ -423,6 +426,15 @@ interleaving. (interleave empty ITER) is equivalent to (id ITER)."
     "Flatten! wrapped around map."
     (flatten! (map func iter)))
 
+  (declare mconcat! ((Monoid :a) => (Iterator :a) -> :a))
+  (define mconcat!
+    "Fold an iterator of monoids into a single element."
+    (fold! <> mempty))
+
+  (declare mconcatmap! ((Monoid :a) => (:b -> :a) -> (Iterator :b) -> :a))
+  (define (mconcatmap! f)
+    "Map an iterator to an iterator of monoids, and then fold that iterator into a single element."
+    (compose (fold! <> mempty) (map f)))
 
   (declare pair-with! ((:key -> :value) -> Iterator :key -> Iterator (Tuple :key :value)))
   (define (pair-with! func keys)
@@ -477,6 +489,11 @@ interleaving. (interleave empty ITER) is equivalent to (id ITER)."
 This operation could be called `length!`, but `count!` emphasizes the fact that it consumes ITER, and
 afterwards, ITER will be exhausted."
     (sum! (map (const 1) iter)))
+
+  (declare countBy! ((:elt -> Boolean) -> Iterator :elt -> UFix))
+  (define (countBy! f iter)
+    "Count the number of items in `iter` that satisfy the predicate `f`."
+    (sum! (map (fn (elt) (if (f elt) 1 0)) iter)))
 
   (declare for-each! ((:elt -> Unit) -> Iterator :elt -> Unit))
   (define (for-each! thunk iter)
