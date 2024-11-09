@@ -882,7 +882,7 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
                                    (note source attribute-form
                                          "inline attribute here")
                                    (note source inline-form
-                                         "inline attribute here")
+                                         "previous attribute here")
                                    (note source form "when parsing declare")))
                     (setf inline-p attribute)
                     (setf inline-form attribute-form))))
