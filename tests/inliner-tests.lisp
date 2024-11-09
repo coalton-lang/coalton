@@ -114,13 +114,12 @@
 (deftest recursive-inline-test ()
   (check-coalton-types
    "(inline)
-      (define (factorial-1 n)
-        (if (== n 0)
-            1
-            (* n (factorial-2 (- n 1)))))
-      (inline)
-      (define (factorial-2 n)
-        (if (== n 0)
-            1
-            (* n (factorial-1 (- n 1)))))"))
->>>>>>> d65b577 (Add more inliner-tests)
+    (define (factorial-1 n)
+      (if (== n 0)
+          1
+          (* n (factorial-2 (- n 1)))))
+    (inline)
+    (define (factorial-2 n)
+      (if (== n 0)
+          1
+          (* n (factorial-1 (- n 1)))))"))
