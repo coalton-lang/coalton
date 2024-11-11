@@ -12,6 +12,10 @@
   (:import-from
    #:coalton-impl/codegen/transformations
    #:node-variables)
+  (:import-from
+   #:coalton-impl/runtime/exceptions
+   #:exception-condition
+   #:exception-condition-datum)
   (:local-nicknames
    (#:settings #:coalton-impl/settings)
    (#:util #:coalton-impl/util)
@@ -209,12 +213,16 @@
                       (error "Pattern match not exhaustive error")))))))))
 
   (:method ((expr node-handle) env)
-    (codegen-expression
-     (make-node-match
-      :type (node-type expr)
-      :expr (node-handle-expr expr)
-      :branches (node-handle-branches expr))
-     env))
+    (let ((condition-var (gensym "CONDITION")))
+      `(handler-case
+	   ,(codegen-expression (node-handle-expr expr) env)
+	 (exception-condition (,condition-var)
+	   ,(codegen-expression
+	     (make-node-match
+	      :type (tc:make-variable)
+	      :expr (make-node-lisp :type (tc:make-variable) :vars nil :form `((exception-condition-datum ,condition-var)))
+	      :branches (node-handle-branches expr))
+	     env)))))
 
   (:method ((expr node-seq) env)
     (declare (type tc:environment env))

@@ -9,6 +9,12 @@
    #:coalton-library/functions)
 
   (:import-from
+   #:coalton-library/exceptions
+   #:raise)
+  (:export
+   #:raise)
+
+  (:import-from
    #:coalton-library/hash
    #:hash)
   (:export

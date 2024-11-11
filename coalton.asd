@@ -46,6 +46,7 @@
                (:file "types")
                (:file "primitive-types")
                (:file "classes")
+               (:file "exceptions")
                (:file "hash")
                (:file "builtin")
                (:file "functions")
