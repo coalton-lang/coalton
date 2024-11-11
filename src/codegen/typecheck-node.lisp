@@ -113,6 +113,20 @@
                 (setf subs (tc:unify subs subexpr-ty type))))
       type))
 
+  (:method ((expr node-handle) env)
+    (declare (type tc:environment env)
+             (values tc:ty))
+    (let ((type (node-type expr))
+
+          (subs nil))
+
+      (loop :for branch :in (node-handle-branches expr)
+            :for subexpr-ty := (typecheck-node branch env) :do
+              (progn
+                (setf subs (tc:unify subs type subexpr-ty))
+                (setf subs (tc:unify subs subexpr-ty type))))
+      type))
+
   (:method ((expr node-while) env)
     (declare (type tc:environment env)
              (values tc:ty))
