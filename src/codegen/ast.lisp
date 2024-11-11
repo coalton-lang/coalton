@@ -57,6 +57,10 @@
    #:make-node-match                    ; CONSTRUCTOR
    #:node-match-expr                    ; READER
    #:node-match-branches                ; READER
+   #:node-handle                        ; STRUCT
+   #:make-node-handle                   ; CONSTRUCTOR
+   #:node-handle-expr                   ; READER
+   #:node-handle-branches               ; READER
    #:node-while                         ; STRUCT
    #:make-node-while                    ; CONSTRUCTOR
    #:node-while-label                   ; READER
@@ -220,6 +224,11 @@ coalton symbols (`parser:identifier`)"
 
 (defstruct (node-match (:include node))
   "A pattern matching construct. Uses MATCH-BRANCH to represent branches"
+  (expr     (util:required 'expr)     :type node        :read-only t)
+  (branches (util:required 'branches) :type branch-list :read-only t))
+
+(defstruct (node-handle (:include node))
+  "An exception handling construct. Uses MATCH-BRANCH to represent branches"
   (expr     (util:required 'expr)     :type node        :read-only t)
   (branches (util:required 'branches) :type branch-list :read-only t))
 
