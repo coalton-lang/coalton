@@ -63,6 +63,7 @@
   (:export
    #:fn #:λ
    #:match
+   #:handle
    #:let
    #:=                                  ; Syntax
    #:lisp

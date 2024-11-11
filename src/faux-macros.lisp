@@ -75,6 +75,9 @@
 (define-coalton-editor-macro coalton:match (expr &body patterns)
   "Pattern matching construct.")
 
+(define-coalton-editor-macro coalton:handle (expr &body patterns)
+    "Exception handling construct.")
+
 (define-coalton-editor-macro coalton:progn (&body body)
   "A sequence of expressions.")
 
