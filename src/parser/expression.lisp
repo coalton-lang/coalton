@@ -74,6 +74,10 @@
    #:make-node-match                    ; CONSTRUCTOR
    #:node-match-expr                    ; ACCESSOR
    #:node-match-branches                ; ACCESSOR
+   #:node-handle                        ; STRUCT
+   #:make-node-handle                   ; CONSTRUCTOR
+   #:node-handle-expr                   ; ACCESSOR
+   #:node-handle-branches               ; ACCESSOR
    #:node-progn                         ; STRUCT
    #:make-node-progn                    ; CONSTRUCTOR
    #:node-progn-body                    ; ACCESSOR
@@ -197,6 +201,7 @@ Rebound to NIL parsing an anonymous FN.")
 ;;;;             | node-let
 ;;;;             | node-lisp 
 ;;;;             | node-match
+                 | node-handle
 ;;;;             | node-progn
 ;;;;             | node-the
 ;;;;             | node-return
@@ -228,6 +233,8 @@ Rebound to NIL parsing an anonymous FN.")
 ;;;; node-match-branch := "(" pattern body ")"
 ;;;;
 ;;;; node-match := "(" "match" pattern match-branch* ")"
+;;;;
+;;;; node-handle := "(" "handle" pattern match-branch* ")"
 ;;;;
 ;;;; node-progn := "(" "progn" body ")"
 ;;;;
@@ -408,6 +415,12 @@ Rebound to NIL parsing an anonymous FN.")
   '(satisfies node-match-branch-list-p))
 
 (defstruct (node-match
+            (:include node)
+            (:copier nil))
+  (expr     (util:required 'expr)     :type node                   :read-only t)
+  (branches (util:required 'branches) :type node-match-branch-list :read-only t))
+
+(defstruct (node-handle
             (:include node)
             (:copier nil))
   (expr     (util:required 'expr)     :type node                   :read-only t)
@@ -702,6 +715,21 @@ Rebound to NIL parsing an anonymous FN.")
                     (note-end source (cst:first form) "expected expression")))
 
      (make-node-match
+      :expr (parse-expression (cst:second form) source)
+      :branches (loop :for branches := (cst:nthrest 2 form) :then (cst:rest branches)
+                      :while (cst:consp branches)
+                      :collect (parse-match-branch (cst:first branches) source))
+      :location (form-location source form)))
+
+    ((and (cst:atom (cst:first form))
+          (eq 'coalton:handle (cst:raw (cst:first form))))
+
+     ;; (handle)
+     (unless (cst:consp (cst:rest form))
+       (parse-error "Malformed handle expression"
+                    (note-end source (cst:first form) "expected expression")))
+
+     (make-node-handle
       :expr (parse-expression (cst:second form) source)
       :branches (loop :for branches := (cst:nthrest 2 form) :then (cst:rest branches)
                       :while (cst:consp branches)
