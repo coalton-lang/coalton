@@ -401,3 +401,116 @@ error: Ambiguous predicate
  5 |    (into (into x)))
    |           ^^^^ Ambiguous predicate INTO :A :B
  
+================================================================================
+111 Check that raising a non-exception value fails
+================================================================================
+
+(package coalton-unit-tests/raise-non-exception
+  (import coalton-prelude))
+
+(define (f x)
+  (raise 42))
+
+--------------------------------------------------------------------------------
+
+error: Ambiguous predicate
+  --> test:5:9
+   |
+ 5 |    (raise 42))
+   |           ^^ Ambiguous predicate NUM :A
+
+================================================================================
+112 Check that handle branch patterns cannot have a non-exception type
+================================================================================
+
+(package coalton-unit-tests/handle-non-exception-pattern
+  (import coalton-prelude))
+
+(define-type Foo Foo)
+(define-instance (Exception Foo))
+
+(define (f x)
+  (handle (raise Foo)
+    ((Foo) 0)
+    (42 1)))
+
+--------------------------------------------------------------------------------
+
+error: Invalid handle branch
+  --> test:10:5
+    |
+ 10 |      (42 1)))
+    |       ^^ Pattern type 'INTEGER' is not an instance of the typeclass 'Exception'
+
+================================================================================
+113 Handle branches must return the same type
+================================================================================
+
+(package coalton-unit-tests/handle-mismatch-branch-types
+  (import coalton-prelude))
+
+(define-type Foo
+  Bar
+  Baz)
+(define-instance (Exception Foo))
+
+(define (f x)
+  (handle (raise Bar)
+    ((Bar) 5)
+    ((Baz) "hello")))
+
+--------------------------------------------------------------------------------
+
+error: Ambiguous predicate
+  --> test:11:11
+    |
+ 11 |      ((Bar) 5)
+    |             ^ Ambiguous predicate NUM STRING
+
+================================================================================
+114 Handle branches must match on constructors
+================================================================================
+
+(package coalton-unit-tests/handle-non-constructor-pattern
+  (import coalton-prelude))
+
+(define-type Foo Foo)
+(define-instance (Exception Foo))
+
+(define (g x) x)
+
+(define (f x)
+  (handle (raise Foo)
+    ((g a) 5)
+    ((Foo) 6)))
+
+--------------------------------------------------------------------------------
+
+error: Unknown constructor
+  --> test:11:5
+    |
+ 11 |      ((g a) 5)
+    |       ^^^^^ constructor is not known
+
+================================================================================
+115 Constructors in handle branches must be fully applied
+================================================================================
+
+(package coalton-unit-tests/handle-partial-constructor-pattern
+  (import coalton-prelude))
+
+(define-type Foo (Bar Integer Integer))
+(define-instance (Exception Foo))
+
+(define (f x)
+  (handle (raise (Bar 1 2))
+    ((Bar x) x)
+    ((Bar x y) (+ x y))))
+
+--------------------------------------------------------------------------------
+
+error: Argument mismatch
+  --> test:9:5
+   |
+ 9 |      ((Bar x) x)
+   |       ^^^^^^^ Constructor BAR takes 2 arguments but is given 1
