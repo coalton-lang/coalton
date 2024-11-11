@@ -692,6 +692,73 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
           (tc:coalton-internal-type-error ()
             (standard-expression-type-mismatch-error node subs expr-node ret-ty))))))
 
+  (:method ((node parser:node-handle) expected-type subs env)
+    (declare (type tc:ty expected-type)
+             (type tc:substitution-list subs)
+             (type tc-env env)
+             (values tc:ty tc:ty-predicate-list accessor-list node-handle tc:substitution-list &optional))
+
+    ;; Infer the type of the expression being cased on
+    (multiple-value-bind (expr-ty preds accessors expr-node subs)
+        (infer-expression-type (parser:node-handle-expr node)
+                               (tc:make-variable)
+                               subs
+                               env)
+
+      (declare (ignore expr-ty))
+      (let* (;; Infer the type of each pattern, unifying against a
+	     ;; dummy type variable. Type checking will check that the
+	     ;; type of each pattern is an instance of the Exception
+	     ;; typeclass.
+             (pat-nodes
+               (loop :for branch :in (parser:node-handle-branches node)
+                     :for pattern := (parser:node-match-branch-pattern branch)
+                     :collect (multiple-value-bind (pat-ty pat-node subs_)
+                                  (infer-pattern-type pattern (tc:make-variable) subs env)
+				(declare (ignore pat-ty))
+                                (setf subs subs_)
+                                pat-node)))
+
+             (ret-ty (tc:make-variable))
+
+             ;; Infer the type of each branch, unifying against ret-ty
+             (branch-body-nodes
+               (loop :for branch :in (parser:node-handle-branches node)
+                     :for body := (parser:node-match-branch-body branch)
+                     :collect (multiple-value-bind (body-ty preds_ accessors_ body-node subs_)
+                                  (infer-expression-type body ret-ty subs env)
+                                (declare (ignore body-ty))
+                                (setf subs subs_)
+                                (setf preds (append preds preds_))
+                                (setf accessors (append accessors accessors_))
+                                body-node)))
+
+             (branch-nodes
+               (loop :for branch :in (parser:node-handle-branches node)
+                     :for pat-node :in pat-nodes
+                     :for branch-body-node :in branch-body-nodes
+                     :collect (make-node-match-branch
+                               :pattern pat-node
+                               :body branch-body-node
+                               :location (source:location branch)))))
+
+        (handler-case
+            (progn
+              (setf subs (tc:unify subs ret-ty expected-type))
+              (let ((type (tc:apply-substitution subs ret-ty)))
+                (values
+                 type
+                 preds
+                 accessors
+                 (make-node-handle
+                  :type (tc:qualify nil type)
+                  :location (source:location node)
+                  :expr expr-node
+                  :branches branch-nodes)
+                 subs)))
+          (tc:coalton-internal-type-error ()
+            (standard-expression-type-mismatch-error node subs expr-node ret-ty))))))
+
   (:method ((node parser:node-progn) expected-type subs env)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
