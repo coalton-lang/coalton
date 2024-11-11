@@ -74,6 +74,10 @@
    #:make-node-match                    ; CONSTRUCTOR
    #:node-match-expr                    ; ACCESSOR
    #:node-match-branches                ; ACCESSOR
+   #:node-handle                        ; STRUCT
+   #:make-node-handle                   ; CONSTRUCTOR
+   #:node-handle-expr                   ; ACCESSOR
+   #:node-handle-branches               ; ACCESSOR
    #:node-progn                         ; STRUCT
    #:make-node-progn                    ; CONSTRUCTOR
    #:node-progn-body                    ; ACCESSOR
@@ -282,6 +286,12 @@
   '(satisfies node-match-branch-list-p))
 
 (defstruct (node-match
+            (:include node)
+            (:copier nil))
+  (expr     (util:required 'expr)         :type node                   :read-only t)
+  (branches (util:required 'branches)     :type node-match-branch-list :read-only t))
+
+(defstruct (node-handle
             (:include node)
             (:copier nil))
   (expr     (util:required 'expr)         :type node                   :read-only t)
@@ -526,6 +536,15 @@
    :location (source:location node)
    :expr (tc:apply-substitution subs (node-match-expr node))
    :branches (tc:apply-substitution subs (node-match-branches node))))
+
+(defmethod tc:apply-substitution (subs (node node-handle))
+  (declare (type tc:substitution-list subs)
+           (values node-handle))
+  (make-node-handle
+   :type (tc:apply-substitution subs (node-type node))
+   :location (source:location node)
+   :expr (tc:apply-substitution subs (node-handle-expr node))
+   :branches (tc:apply-substitution subs (node-handle-branches node))))
 
 (defmethod tc:apply-substitution (subs (node node-progn))
   (declare (type tc:substitution-list subs)
