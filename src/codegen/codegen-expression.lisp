@@ -208,6 +208,14 @@
                    `((t
                       (error "Pattern match not exhaustive error")))))))))
 
+  (:method ((expr node-handle) env)
+    (codegen-expression
+     (make-node-match
+      :type (node-type expr)
+      :expr (node-handle-expr expr)
+      :branches (node-handle-branches expr))
+     env))
+
   (:method ((expr node-seq) env)
     (declare (type tc:environment env))
     `(progn
