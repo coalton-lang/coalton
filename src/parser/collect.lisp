@@ -177,6 +177,12 @@ in expressions. May not include all bound variables."
      (collect-variables-generic% (node-match-expr node))
      (mapcan #'collect-variables-generic% (node-match-branches node))))
 
+  (:method ((node node-handle))
+    (declare (values node-variable-list))
+    (nconc
+     (collect-variables-generic% (node-handle-expr node))
+     (mapcan #'collect-variables-generic% (node-handle-branches node))))
+
   (:method ((node node-progn))
     (declare (values node-variable-list &optional))
     (collect-variables-generic% (node-progn-body node)))

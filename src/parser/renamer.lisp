@@ -193,6 +193,17 @@
       :location (source:location node))
      ctx))
 
+  (:method ((node node-handle) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values node algo:immutable-map))
+
+    (values
+     (make-node-handle
+      :expr (rename-variables-generic% (node-handle-expr node) ctx)
+      :branches (rename-variables-generic% (node-handle-branches node) ctx)
+      :location (source:location node))
+     ctx))
+
   (:method ((node node-progn) ctx)
     (declare (type algo:immutable-map ctx)
              (values node algo:immutable-map))
