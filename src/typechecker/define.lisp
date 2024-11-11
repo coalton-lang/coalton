@@ -707,21 +707,21 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
 
       (declare (ignore expr-ty))
       (let* (;; Infer the type of each pattern, unifying against a
-	     ;; dummy type variable. Check that the type of each
-	     ;; pattern is an instance of the Exception typeclass.
+             ;; dummy type variable. Check that the type of each
+             ;; pattern is an instance of the Exception typeclass.
              (pat-nodes
                (loop :for branch :in (parser:node-handle-branches node)
                      :for pattern := (parser:node-match-branch-pattern branch)
                      :collect (multiple-value-bind (pat-ty pat-node subs_)
                                   (infer-pattern-type pattern (tc:make-variable) subs env)
-				(unless (tc:lookup-class-instance
-					 (tc-env-env env)
-					 (tc:make-ty-predicate :class (util:find-symbol "EXCEPTION" "COALTON-LIBRARY/CLASSES")
-							       :types (list pat-ty))
-					 :no-error t)
-				  (tc-error "Invalid handle branch"
-					    (tc-note pattern "Pattern type '~S' is not an instance of the typeclass 'Exception'"
-						     pat-ty)))
+                                (unless (tc:lookup-class-instance
+                                         (tc-env-env env)
+                                         (tc:make-ty-predicate :class (util:find-symbol "EXCEPTION" "COALTON-LIBRARY/CLASSES")
+                                                               :types (list pat-ty))
+                                         :no-error t)
+                                  (tc-error "Invalid handle branch"
+                                            (tc-note pattern "Pattern type '~S' is not an instance of the typeclass 'Exception'"
+                                                     pat-ty)))
                                 (setf subs subs_)
                                 pat-node)))
 

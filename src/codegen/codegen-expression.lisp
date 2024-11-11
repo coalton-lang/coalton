@@ -215,14 +215,14 @@
   (:method ((expr node-handle) env)
     (let ((condition-var (gensym "CONDITION")))
       `(handler-case
-	   ,(codegen-expression (node-handle-expr expr) env)
-	 (exception-condition (,condition-var)
-	   ,(codegen-expression
-	     (make-node-match
-	      :type (tc:make-variable)
-	      :expr (make-node-lisp :type (tc:make-variable) :vars nil :form `((exception-condition-datum ,condition-var)))
-	      :branches (node-handle-branches expr))
-	     env)))))
+           ,(codegen-expression (node-handle-expr expr) env)
+         (exception-condition (,condition-var)
+           ,(codegen-expression
+             (make-node-match
+              :type (tc:make-variable)
+              :expr (make-node-lisp :type (tc:make-variable) :vars nil :form `((exception-condition-datum ,condition-var)))
+              :branches (node-handle-branches expr))
+             env)))))
 
   (:method ((expr node-seq) env)
     (declare (type tc:environment env))
