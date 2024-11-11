@@ -414,6 +414,24 @@ Returns a `node'.")
                      :body (translate-expression (tc:node-match-branch-body branch) ctx env)))
                   (tc:node-match-branches expr)))))
 
+  (:method ((expr tc:node-handle) ctx env)
+    (declare (type pred-context ctx)
+             (type tc:environment env)
+             (values node))
+
+    (let ((qual-ty (tc:node-type expr)))
+      (assert (null (tc:qualified-ty-predicates qual-ty)))
+
+      (make-node-handle
+       :type (tc:qualified-ty-type qual-ty)
+       :expr (translate-expression (tc:node-handle-expr expr) ctx env)
+       :branches (mapcar
+                  (lambda (branch)
+                    (make-match-branch
+                     :pattern (translate-pattern (tc:node-match-branch-pattern branch))
+                     :body (translate-expression (tc:node-match-branch-body branch) ctx env)))
+                  (tc:node-handle-branches expr)))))
+
   (:method ((expr tc:node-progn) ctx env)
     (declare (type pred-context ctx)
              (type tc:environment env)
