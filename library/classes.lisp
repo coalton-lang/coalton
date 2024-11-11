@@ -31,7 +31,8 @@
    #:TryInto
    #:Iso
    #:Unwrappable #:unwrap-or-else #:with-default #:unwrap #:expect #:as-optional
-   #:default #:defaulting-unwrap #:default?))
+   #:default #:defaulting-unwrap #:default?
+   #:Exception))
 
 (in-package #:coalton-library/classes)
 
@@ -351,7 +352,15 @@ Typical `fail` continuations are:
   (declare default? ((Default :a) (Eq :a) => :a -> Boolean))
   (define (default? x)
       "Is `x` the default item of its type?"
-      (== x (default))))
+      (== x (default)))
+
+
+  ;;
+  ;; Exceptions
+  ;;
+
+  (define-class (Exception :a)
+    "Exceptions that can be thrown by calling RAISE and caught by HANDLE expressions."))
 
 
 #+sb-package-locks
