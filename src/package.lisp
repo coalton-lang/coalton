@@ -62,6 +62,7 @@
   ;; Primitive Syntax
   (:export
    #:fn #:λ
+   #:forall
    #:match
    #:let
    #:=                                  ; Syntax
