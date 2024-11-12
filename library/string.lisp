@@ -234,9 +234,11 @@ does not have that suffix."
                  (Ok z))))))
 
   (define-instance (Default String)
-    (define (default) "")))
+    (define (default) ""))
 
-(define-sxhash-hasher String)
+  (define-sxhash-hasher String))
+
+
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/STRING")

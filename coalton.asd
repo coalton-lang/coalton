@@ -64,6 +64,7 @@
                              (:file "elementary")
                              (:file "dyadic")
                              (:file "dual")
+                             (:file "define-byte-types")
                              (:file "package")))
                (:file "randomaccess")
                (:file "cell")

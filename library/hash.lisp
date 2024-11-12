@@ -88,14 +88,15 @@ The hash function must satisfy the invariant that `(== left right)` implies `(==
       (lisp Hash ()
         0))))
 
-(cl:defmacro define-sxhash-hasher (type)
-  `(coalton-toplevel
-     (define-instance (Hash ,type)
+(cl:eval-when (:compile-toplevel :load-toplevel)
+  (cl:defmacro define-sxhash-hasher (type)
+    `(define-instance (Hash ,type)
        (define (hash item)
          (lisp Hash (item)
            (cl:sxhash item))))))
 
-(define-sxhash-hasher Hash)
+(coalton-toplevel
+  (define-sxhash-hasher Hash))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/HASH")

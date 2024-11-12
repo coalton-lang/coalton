@@ -142,8 +142,8 @@
       ;; This is the two's complement conversion of X (interpreted as BITS
       ;; bits) to a signed integer (as a Lisp object).
       (cl:-
-       (cl:ldb (cl:byte (cl:1- bits) 0) x)
-       (cl:dpb 0 (cl:byte (cl:1- bits) 0) x)))
+          (cl:ldb (cl:byte (cl:1- bits) 0) x)
+          (cl:dpb 0 (cl:byte (cl:1- bits) 0) x)))
 
     (cl:defmacro %define-overflow-handler (name bits)
       `(cl:progn
@@ -445,29 +445,27 @@
   (define-bits-wrapping U64 64)
   (define-bits-wrapping UFix #.+unsigned-fixnum-bits+)
 
-
-  (lisp-toplevel ()
-
 ;;; `Hash' instances
 
-    (define-sxhash-hasher Integer)
-    (define-sxhash-hasher I8)
-    (define-sxhash-hasher I16)
-    (define-sxhash-hasher I32)
-    (define-sxhash-hasher I64)
-    (define-sxhash-hasher U8)
-    (define-sxhash-hasher U16)
-    (define-sxhash-hasher U32)
-    (define-sxhash-hasher U64)
-    (define-sxhash-hasher IFix)
-    (define-sxhash-hasher UFix)
-    (define-sxhash-hasher Single-Float)
-    (define-sxhash-hasher Double-Float)
+  (define-sxhash-hasher Integer)
+  (define-sxhash-hasher I8)
+  (define-sxhash-hasher I16)
+  (define-sxhash-hasher I32)
+  (define-sxhash-hasher I64)
+  (define-sxhash-hasher U8)
+  (define-sxhash-hasher U16)
+  (define-sxhash-hasher U32)
+  (define-sxhash-hasher U64)
+  (define-sxhash-hasher IFix)
+  (define-sxhash-hasher UFix)
+  (define-sxhash-hasher Single-Float)
+  (define-sxhash-hasher Double-Float)
 
 ;;;
 ;;; Default instances
 ;;;
 
+  (lisp-toplevel ()
     (cl:eval-when (:compile-toplevel :load-toplevel)
       (cl:defmacro define-default-num (type)
         `(define-instance (Default ,type)

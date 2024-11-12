@@ -145,9 +145,9 @@
      (iter:range-increasing
       1
       (char-code start)
-      (+ 1 (char-code end))))))
+      (+ 1 (char-code end)))))
 
-(define-sxhash-hasher Char)
+  (define-sxhash-hasher Char))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/CHAR")

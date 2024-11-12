@@ -36,9 +36,9 @@
            ((False) EQ))))))
 
   (define-instance (Default Boolean)
-    (define (default) False)))
+    (define (default) False))
 
-(define-sxhash-hasher Boolean)
+  (define-sxhash-hasher Boolean))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/BOOLEAN")
