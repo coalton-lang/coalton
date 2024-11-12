@@ -28,6 +28,10 @@
    #:constructor-name                            ; ACCESSOR
    #:constructor-fields                          ; ACCESSOR
    #:constructor-list                            ; TYPE
+   #:existential-constructor                     ; STRUCT
+   #:make-existential-constructor                ; CONSTRUCTOR
+   #:existential-constructor-preds               ; ACCESSOR
+   #:existential-constructor-vars                ; ACCESSOR
    #:toplevel-define-type                        ; STRUCT
    #:make-toplevel-define-type                   ; CONSTRUCTOR
    #:toplevel-define-type-name                   ; ACCESSOR
@@ -166,8 +170,11 @@
 ;;;;              | "(" identifier ")" docstring?
 ;;;;              | "(" identifier ty+ ")" docstring?
 ;;;;
-;;;; toplevel-define-type := "(" "define-type" identifier docstring? constructor* ")"
-;;;;                       | "(" "define-type" "(" identifier keyword+ ")" docstring? constructor* ")"
+;;;; existential-constructor :=  "(" "forall" "(" keyword+ ")" identifier ty+ ")" docstring?
+;;;;                          |  "(" "forall" "(" keyword+ ")" ( "(" ty-predicate ")" )+ "=>" identifier ty+ ")" docstring?
+;;;;
+;;;; toplevel-define-type := "(" "define-type" identifier docstring? ( constructor | existential-constructor )* ")"
+;;;;                       | "(" "define-type" "(" identifier keyword+ ")" docstring? ( constructor | existential-constructor )* ")"
 ;;;;
 ;;;; struct-field := "(" identifier docstring? type ")"
 ;;;;
@@ -236,6 +243,12 @@
 
 (deftype constructor-list ()
   '(satisfies constructor-list-p))
+
+(defstruct (existential-constructor
+            (:include constructor)
+            (:copier nil))
+  (vars  (util:required 'vars)  :type keyword-src-list  :read-only t)
+  (preds (util:required 'preds) :type ty-predicate-list :read-only t))
 
 (defstruct (toplevel-definition
             (:constructor nil))
@@ -1101,7 +1114,12 @@ consume all attributes")))
 
 
                         (unless (stringp (cst:raw (cst:first constructors_)))
-                            (push (parse-constructor (cst:first constructors_) form ctor-docstring source) ctors)))
+                          (let ((ctor (cst:first constructors_)))
+                            (push (if (and (cst:consp ctor)
+                                           (eq 'coalton:forall (cst:raw (cst:first ctor))))
+                                      (parse-existential-constructor ctor form ctor-docstring source)
+                                      (parse-constructor ctor form ctor-docstring source))
+                                  ctors))))
                   :finally (return ctors))
      :repr nil
      :location (form-location source form)
@@ -1579,6 +1597,150 @@ consume all attributes")))
             :location (form-location source unparsed-name))
      :fields (loop :for field :in unparsed-fields
                    :collect (parse-type field source))
+     :location (form-location source form)
+     :docstring docstring)))
+
+(defun parse-existential-constructor (form enclosing-form docstring source)
+  (declare (type cst:cst form enclosing-form)
+           (values existential-constructor))
+
+  (let (variables
+        predicates
+        name
+        fields
+        unparsed-name
+        unparsed-fields)
+
+    ;; Check for a malformed type variables list
+    ;; (forall)
+    (unless (cst:consp (cst:rest form))
+      (parse-error "Malformed existential constructor"
+                   (note source form "'forall' must be followed by a non-empty list of type variables")
+                   (secondary-note source (cst:second enclosing-form)
+                                   "in this type definition")))
+
+    ;; (forall :a ...)
+    ;; (forall 2 ...)
+    (unless (cst:consp (cst:second form))
+      (parse-error "Malformed existential constructor"
+                   (note source (cst:second form) "expected a non-empty list of type variables")
+                   (secondary-note source (cst:second enclosing-form)
+                                   "in this type definition")
+                   (help source (cst:second form)
+                         (lambda (existing)
+                           (declare (ignore existing))
+                           "(:a :b) ...")
+                         "for example, add type variables `:a` and `:b`")))
+
+    ;; (forall (:a . :b) ...)
+    (unless (cst:proper-list-p (cst:second form))
+      (parse-error "Malformed existential constructor"
+       (note source (cst:second form) "unexpected dotted list")
+       (secondary-note source (cst:second enclosing-form)
+                       "in this type definition")))
+
+    ;; Parse the type variables list
+    (setf variables (parse-list #'parse-type-variable (cst:second form) source))
+
+    ;; Split the rest of form on =>
+    (multiple-value-bind (left right)
+        (util:take-until (lambda (cst)
+                           (and (cst:atom cst)
+                                (eq 'coalton:=> (cst:raw cst))))
+                         (cst:listify (cst:nthrest 2 form)))
+
+      ;; (=> C ...)
+      (when (and (null left) right)
+        (apply #'parse-error "Malformed existential constructor"
+               (cons
+                (note source (first right)
+                      "unnecessary `=>`")
+                (cons
+                 (secondary-note source (cst:second enclosing-form)
+                                 "in this type definition")
+                 ;; If this is the only thing in the list then don't suggest anything
+                 (if (null (cdr right))
+                     nil
+                     (list (help source form
+                                 (lambda (existing)
+                                   (let ((arrow-pos (search "=>" existing)))
+                                     (concatenate 'string
+                                                  (subseq existing 0 arrow-pos)
+                                                  (subseq existing (+ 3 arrow-pos)))))
+                                 "remove `=>`")))))))
+
+      ;; (... =>)
+      (when (and left right (null (cdr right)))
+        (parse-error "Malformed existential constructor"
+                     (note source form "missing constructor after '=>'")
+                     (secondary-note source (cst:second enclosing-form)
+                                     "in this type definition")))
+
+      (cond
+        ;; No predicates
+        ((null right)
+         (setf unparsed-name (first left))
+         (setf unparsed-fields (rest left)))
+
+        ;; (... => (...) ...)
+        ((and (cst:consp (second right))
+              (consp (cdr (cdr right))))
+         (parse-error "Malformed existential constructor"
+                      (note source (third right) "unexpected form")))
+
+        ;; (... => (...))
+        ((cst:consp (second right))
+         (setf unparsed-name (cst:first (second right)))
+         (setf unparsed-fields (cst:listify (cst:rest (second right)))))
+
+        ;; (... => C ...)
+        (t
+         (setf unparsed-name (second right))
+         (setf unparsed-fields (nthcdr 2 right))))
+
+      ;; (... (C) ...))
+      (unless (cst:atom unparsed-name)
+        (parse-error "Malformed existential constructor"
+                     (note source unparsed-name "unnecessary parentheses")
+                     (help source unparsed-name
+                           (lambda (existing)
+                             (subseq existing 1 (1- (length existing))))
+                           "remove unnecessary parentheses")))
+
+      (unless (identifierp (cst:raw unparsed-name))
+        (parse-error "Malformed existential constructor"
+                     (note source unparsed-name "expected symbol")))
+
+      (setf name (make-identifier-src
+                  :name (cst:raw unparsed-name)
+                  :location (form-location source unparsed-name)))
+
+      (when (null unparsed-fields)
+        (parse-error "Malformed existential quantifier"
+                     (note source unparsed-name
+                           "an existential quantified data constructor must at least have one field corresponding to each type variable")))
+
+      (setf fields (parse-list #'parse-type (cst:cstify unparsed-fields) source))
+
+      ;; (... => C ...)
+      (when right
+        (if (cst:atom (first left))
+            ;; (C1 ... => C2 ...)
+            (setf predicates
+                  (list (parse-predicate left
+                                         (source:make-location source
+                                                               (util:cst-source-range left)))))
+
+            ;; ((C1 ...) (C2 ...) ... => C3 ...)
+            (setf predicates
+                  (loop :for pred :in left
+                        :collect (parse-predicate (cst:listify pred)
+                                                  (form-location source pred)))))))
+    (make-existential-constructor
+     :name name
+     :fields fields
+     :vars variables
+     :preds predicates
      :location (form-location source form)
      :docstring docstring)))
 
