@@ -705,7 +705,6 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                subs
                                env)
 
-      (declare (ignore expr-ty))
       (let* (;; Infer the type of each pattern, unifying against a
              ;; dummy type variable. Check that the type of each
              ;; pattern is an instance of the Exception typeclass.
@@ -725,14 +724,12 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                 (setf subs subs_)
                                 pat-node)))
 
-             (ret-ty (tc:make-variable))
-
-             ;; Infer the type of each branch, unifying against ret-ty
+             ;; Infer the type of each branch, unifying against expr-ty
              (branch-body-nodes
                (loop :for branch :in (parser:node-handle-branches node)
                      :for body := (parser:node-match-branch-body branch)
                      :collect (multiple-value-bind (body-ty preds_ accessors_ body-node subs_)
-                                  (infer-expression-type body ret-ty subs env)
+                                  (infer-expression-type body expr-ty subs env)
                                 (declare (ignore body-ty))
                                 (setf subs subs_)
                                 (setf preds (append preds preds_))
@@ -750,8 +747,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
 
         (handler-case
             (progn
-              (setf subs (tc:unify subs ret-ty expected-type))
-              (let ((type (tc:apply-substitution subs ret-ty)))
+              (setf subs (tc:unify subs expr-ty expected-type))
+              (let ((type (tc:apply-substitution subs expr-ty)))
                 (values
                  type
                  preds
@@ -763,7 +760,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                   :branches branch-nodes)
                  subs)))
           (tc:coalton-internal-type-error ()
-            (standard-expression-type-mismatch-error node subs expr-node ret-ty))))))
+            (standard-expression-type-mismatch-error node subs expr-node expr-ty))))))
 
   (:method ((node parser:node-progn) expected-type subs env)
     (declare (type tc:ty expected-type)

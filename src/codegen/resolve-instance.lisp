@@ -10,6 +10,7 @@
    #:pred-type                          ; FUNCTION
    #:resolve-dict                       ; FUNCTION
    #:resolve-static-dict                ; FUNCTION
+   #:unqualify                          ; FUNCTION
    ))
 
 (in-package #:coalton-impl/codegen/resolve-instance)
@@ -180,3 +181,40 @@
   (or
    (resolve-context-super pred context env)
    (resolve-static-dict pred context env)))
+
+(defun unqualify (qual-ty env &key class types)
+  (declare (type tc:qualified-ty qual-ty)
+	   (type tc:environment env)
+	   (type (or null symbol) class)
+	   (type tc:ty-list types)
+	   (values (or tc:qualified-ty tc:ty)))
+  (let ((preds (tc:qualified-ty-predicates qual-ty)))
+    (if (and (null class) (< 1 (length preds)))
+	(util:coalton-bug "The CLASS of the predicate being instantiated must be provided because type '~S' is qualified by multiple predicates"
+			  qual-ty)
+	(let* ((pred-class (or class (tc:ty-predicate-class (first preds))))
+	       (open-pred (find pred-class preds :key #'tc:ty-predicate-class))
+	       (closed-pred (tc:make-ty-predicate
+			    :class pred-class
+			    :types types))
+	      (expected-count (length (tc:ty-predicate-types open-pred)))
+	      (actual-count (length types)))
+	  #+nil
+	  (if (/= actual-count expected-count)
+	      (util:coalton-bug "Predicate '~S' expected ~D types but got ~D ~S"
+				open-pred expected-count
+				actual-count types))
+	  (let* ((subs (tc:predicate-match open-pred closed-pred))
+		 (remaining-preds (tc:reduce-context env preds subs))
+		 (inner-type (tc:make-function-type
+			      (pred-type closed-pred env)
+			      (tc:apply-substitution
+			       subs
+			       (tc:qualified-ty-type qual-ty)))))
+	    (values
+	     (if remaining-preds
+		 (tc:make-qualified-ty
+		  :predicates remaining-preds
+		  :type inner-type)
+		 inner-type)
+	     closed-pred))))))

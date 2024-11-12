@@ -213,14 +213,17 @@
                       (error "Pattern match not exhaustive error")))))))))
 
   (:method ((expr node-handle) env)
-    (let ((condition-var (gensym "CONDITION")))
+    (let ((exception-var (gensym "EXCEPTION")))
       `(handler-case
            ,(codegen-expression (node-handle-expr expr) env)
-         (exception-condition (,condition-var)
+         (exception-condition (,exception-var)
            ,(codegen-expression
              (make-node-match
               :type (tc:make-variable)
-              :expr (make-node-lisp :type (tc:make-variable) :vars nil :form `((exception-condition-datum ,condition-var)))
+              :expr (make-node-lisp
+		     :type (node-type expr)
+		     :vars nil
+		     :form `((exception-condition-datum ,exception-var)))
               :branches (node-handle-branches expr))
              env)))))
 

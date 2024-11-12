@@ -10,7 +10,10 @@
    (#:source #:coalton-impl/source)
    (#:tc #:coalton-impl/typechecker)
    (#:analysis #:coalton-impl/analysis)
-   (#:codegen #:coalton-impl/codegen))
+   (#:codegen #:coalton-impl/codegen)
+   (#:ast #:coalton-impl/codegen/ast)
+   (#:pattern #:coalton-impl/codegen/pattern)
+   (#:resolve-instance #:coalton-impl/codegen/resolve-instance))
   (:export
    #:*global-environment*
    #:entry-point                        ; FUNCTION
@@ -87,6 +90,47 @@
 
                   (codegen:compile-translation-unit translation-unit monomorphize-table env))))))))))
 
+(defun wrap-with-toplevel-handle (node env)
+  (declare (type ast:node node))
+
+  node
+  #+nil
+  (let* ((exception-var (gensym "EXCEPTION"))
+	 (ret-ty (tc:make-variable))
+	 (pattern-ty (tc:make-variable))
+	 (classes-package (util:find-package "COALTON-LIBRARY/CLASSES"))
+	 (error (util:find-symbol "ERROR" classes-package))
+	 (into (util:find-symbol "INTO" classes-package))
+	 (string-ty (tc:type-entry-type (tc:lookup-type env (util:find-symbol "STRING" "COALTON")))))
+    (multiple-value-bind (error-ty error-pred)
+	(resolve-instance:unqualify
+	 (tc:fresh-inst (tc:lookup-value-type env error))
+	 env
+	 :types (list string-ty))
+      (multiple-value-bind (into-ty into-pred)
+	  (resolve-instance:unqualify
+	   (tc:fresh-inst (tc:lookup-value-type env into))
+	   env
+	   :types (list pattern-ty string-ty))
+	(ast:make-node-handle
+	 :type ret-ty
+	 :expr node
+	 :branches (list (ast:make-match-branch
+			  :pattern (pattern:make-pattern-var
+				    :type pattern-ty
+				    :name exception-var)
+			  :body (ast:make-node-application
+				 :type ret-ty
+				 :rator (ast:make-node-variable
+					 :type error-ty
+					 :value error)
+				 :rands (list (resolve-instance:resolve-dict error-pred nil env)
+					      (ast:make-node-application
+					       :type string-ty
+					       :rator (ast:make-node-variable
+						       :type into-ty
+						       :value into)
+					       :rands (list (resolve-instance:resolve-dict into-pred nil env))))))))))))
 
 (defun expression-entry-point (node)
   (declare (type parser:node node))
@@ -131,9 +175,11 @@
                              (codegen:translate-expression node nil env)
                              env)))
                   (codegen:codegen-expression
-                   (codegen:direct-application
-                    node
-                    (codegen:make-function-table env))
+		   (wrap-with-toplevel-handle
+		    (codegen:direct-application
+		     node
+		     (codegen:make-function-table env))
+		    env)
                    env))))
 
             (let* ((tvars

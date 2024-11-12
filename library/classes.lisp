@@ -32,7 +32,8 @@
    #:Iso
    #:Unwrappable #:unwrap-or-else #:with-default #:unwrap #:expect #:as-optional
    #:default #:defaulting-unwrap #:default?
-   #:Exception))
+   #:Exception
+   #:ErasedException))
 
 (in-package #:coalton-library/classes)
 
@@ -359,8 +360,11 @@ Typical `fail` continuations are:
   ;; Exceptions
   ;;
 
-  (define-class (Exception :a)
-    "Exceptions that can be thrown by calling RAISE and caught by HANDLE expressions."))
+  (define-class ((Into :a String) => Raisable :a)
+    "Types that can be thrown by RAISE and caught by HANDLE expressions.")
+
+  (define-type Exception
+    ((Raisable :a) => (Exception :a))))
 
 
 #+sb-package-locks

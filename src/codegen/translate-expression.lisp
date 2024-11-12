@@ -24,6 +24,7 @@
   (:export
    #:translate-toplevel                   ; FUNCTION
    #:translate-expression                 ; FUNCTION
+   #:apply-dicts                          ; FUNCTION
    ))
 
 (in-package #:coalton-impl/codegen/translate-expression)

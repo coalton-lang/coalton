@@ -17,8 +17,11 @@
 (coalton-toplevel
   (declare raise ((Exception :e) => :e -> :a))
   (define (raise exc)
-    (lisp :a (exc)
-      (cl:signal 'exception-condition :datum exc))))
+    (let ((erase (fn () (ErasedException (fn () (into exc))))))
+      (lisp :a (exc erase)
+	(cl:signal 'exception-condition
+		   :datum exc
+		   :erase erase)))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/EXCEPTIONS")
