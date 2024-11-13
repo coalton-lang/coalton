@@ -5,6 +5,7 @@
 (package coalton-unit-tests)
 
 (monomorphize)
+(inline)
 (declare x UFix)
 (define x 2)
 

@@ -32,7 +32,24 @@ error: Malformed monomophize attribute
    |  ^^^^^^^^^^^^^^^^ unexpected form
 
 ================================================================================
-102 Invalid type variable
+102 Malformed inline attribute
+================================================================================
+
+(package test-package)
+
+(inline 5)
+(define x 5)
+
+--------------------------------------------------------------------------------
+
+error: Malformed inline attribute
+  --> test:3:0
+   |
+ 3 |  (inline 5)
+   |  ^^^^^^^^^^ unexpected form
+
+================================================================================
+103 Invalid type variable
 ================================================================================
 
 (package test-package)
@@ -49,7 +66,7 @@ error: Invalid type variable
    |        ^^^^^^^ expected keyword symbol
 
 ================================================================================
-103 Malformed repr attribute
+104 Malformed repr attribute
 ================================================================================
 
 (package test-package)
@@ -66,7 +83,7 @@ error: Malformed repr attribute
    |              ^ unexpected form
 
 ================================================================================
-104 Malformed repr :native attribute
+105 Malformed repr :native attribute
 ================================================================================
 
 (package test-package)
@@ -83,7 +100,7 @@ error: Malformed repr :native attribute
    |               ^ expected a lisp type
 
 ================================================================================
-105 Malformed repr :native attribute
+106 Malformed repr :native attribute
 ================================================================================
 
 (package test-package)
@@ -100,7 +117,7 @@ error: Malformed repr :native attribute
    |        ^^^^^^^ unexpected form
 
 ================================================================================
-106 Unknown repr attribute
+107 Unknown repr attribute
 ================================================================================
 
 (package test-package)
