@@ -913,10 +913,15 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
                     (setf repr attribute)
                     (setf repr-form attribute-form))
 
-                   (attribute-monomorphize
-                    (parse-error "Invalid target for monomorphize attribute"
+                    (attribute-monomorphize
+                     (parse-error "Invalid target for monomorphize attribute"
+                                  (note source attribute-form
+                                        "monomorphize must be attached to a define or declare form")
+                                  (source:note type "when parsing define-type")))
+                    (attribute-inline
+                     (parse-error "Invalid target for inline attribute"
                                  (note source attribute-form
-                                       "monomorphize must be attached to a define or declare form")
+                                       "inline must be attached to a define or declare form")
                                  (source:note type "when parsing define-type")))))
 
        (setf (fill-pointer attributes) 0)
@@ -954,6 +959,13 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
                     (parse-error "Invalid target for monomorphize attribute"
                                  (note source attribute-form
                                        "monomorphize must be attached to a define or declare form")
+                                 (note source (toplevel-define-struct-name struct)
+                                       "when parsing define-type")))
+
+                   (attribute-inline
+                    (parse-error "Invalid target for inline attribute"
+                                 (note source attribute-form
+                                       "inline must be attached to a define or declare form")
                                  (note source (toplevel-define-struct-name struct)
                                        "when parsing define-type")))))
 
