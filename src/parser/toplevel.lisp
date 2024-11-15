@@ -29,6 +29,7 @@
    #:constructor-fields                          ; ACCESSOR
    #:constructor-list                            ; TYPE
    #:existential-constructor                     ; STRUCT
+   #:existential-constructor-p                   ; FUNCTION
    #:make-existential-constructor                ; CONSTRUCTOR
    #:existential-constructor-preds               ; ACCESSOR
    #:existential-constructor-vars                ; ACCESSOR
