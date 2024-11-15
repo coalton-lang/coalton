@@ -596,6 +596,22 @@
      :docstring (source:docstring ctor)
      :location (source:location ctor)))
 
+  (:method ((ctor existential-constructor) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values existential-constructor))
+    (let* ((tvars (mapcar #'keyword-src-name (existential-constructor-vars ctor)))
+
+           (new-bindings (make-local-vars tvars :package util:+keyword-package+))
+
+           (new-ctx (algo:immutable-map-set-multiple ctx new-bindings)))
+      (make-existential-constructor
+       :vars (rename-type-variables-generic% (existential-constructor-vars ctor) new-ctx)
+       :preds (rename-type-variables-generic% (existential-constructor-preds ctor) new-ctx)
+       :name (constructor-name ctor)
+       :fields (rename-type-variables-generic% (constructor-fields ctor) new-ctx)
+       :docstring (source:docstring ctor)
+       :location (source:location ctor))))
+
   (:method ((keyword keyword-src) ctx)
     (declare (type algo:immutable-map ctx)
              (values keyword-src))
