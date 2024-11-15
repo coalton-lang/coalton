@@ -298,19 +298,32 @@
 
   (let ((ksubs nil)
 
-        (ctor-table (make-hash-table :test #'eq)))
+        (ctor-table (make-hash-table :test #'eq))
+        (ctor-preds-table (make-hash-table :test #'eq)))
 
     ;; Infer the kinds of each type
     (loop :for type :in types
           :for name := (parser:identifier-src-name (parser:type-definition-name type))
           :do (loop :for ctor :in (parser:type-definition-ctors type)
                     :for ctor-name := (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
+                    :for _ := (when (parser:existential-constructor-p ctor)
+                                (loop :for var :in (parser:existential-constructor-vars ctor)
+                                      :do (partial-type-env-add-var env (parser:keyword-src-name var))))
+                    :for preds := (when (parser:existential-constructor-p ctor)
+                                    (loop :for pred :in (parser:existential-constructor-preds ctor)
+                                          :collect (multiple-value-bind (pred ksubs_)
+                                                       (infer-predicate-kinds pred ksubs env)
+                                                     (setf ksubs ksubs_)
+                                                     pred)))
                     :for fields := (loop :for field :in (parser:type-definition-ctor-field-types ctor)
                                          :collect (multiple-value-bind (type ksubs_)
                                                       (infer-type-kinds field tc:+kstar+ ksubs env)
                                                     (setf ksubs ksubs_)
                                                     type))
-                    :do (setf (gethash ctor-name ctor-table) fields)))
+                    :do (progn
+                          (setf (gethash ctor-name ctor-table) fields)
+                          (when (parser:existential-constructor-p ctor)
+                            (setf (gethash ctor-name ctor-preds-table) preds)))))
 
     ;; Redefine types with final inferred kinds in the environment
     (loop :for type :in types
@@ -344,13 +357,26 @@
              :for constructor-types
                := (loop :for ctor :in (parser:type-definition-ctors type)
                         :for ctor-name := (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
+                        :for ctor-vars := (when (parser:existential-constructor-p ctor)
+                                            (tc:apply-ksubstitution
+                                             ksubs
+                                             (mapcar (lambda (var)
+                                                       (partial-type-env-lookup-var
+                                                        env
+                                                        (parser:keyword-src-name var)
+                                                        var))
+                                                     (parser:existential-constructor-vars ctor))))
+                        :for ctor-preds := (when (parser:existential-constructor-p ctor)
+                                             (tc:apply-ksubstitution
+                                              ksubs
+                                              (gethash ctor-name ctor-preds-table)))
                         :for ty
                           := (tc:make-function-type*
                               (tc:apply-ksubstitution ksubs (gethash ctor-name ctor-table))
                               (tc:apply-type-argument-list
                                (tc:apply-ksubstitution ksubs (gethash name (partial-type-env-ty-table env)))
                                tvars))
-                        :collect (tc:quantify-using-tvar-order tvars (tc:qualify nil ty)))
+                        :collect (tc:quantify-using-tvar-order (append tvars ctor-vars) (tc:qualify ctor-preds ty)))
 
              :for constructor-args
               := (loop :for ctor :in (parser:type-definition-ctors type)
