@@ -1414,36 +1414,40 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
 ;;; Pattern Type Inference
 ;;;
 
-(defgeneric infer-pattern-type (pat expected-typ subs env)
+(defgeneric infer-pattern-type (pat expected-typ subs env &optional preds)
   (:documentation "Infer the type of pattern PAT and then unify against EXPECTED-TYPE.
 
-Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
-  (:method ((pat parser:pattern-var) expected-type subs env)
+Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS PREDS)")
+  (:method ((pat parser:pattern-var) expected-type subs env &optional preds)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (values tc:ty pattern-var tc:substitution-list))
+             (type tc:ty-predicate-list preds)
+             (values tc:ty pattern tc:substitution-list tc:ty-predicate-list))
 
     (let ((ty (tc-env-add-variable env (parser:pattern-var-name pat))))
 
       ;; SAFETY: unification against a variable will never fail
       (setf subs (tc:unify subs ty expected-type))
 
-      (let ((type (tc:apply-substitution subs ty)))
+      (let ((type (tc:apply-substitution subs ty))
+            (preds (tc:apply-substitution subs preds)))
         (values
          type
          (make-pattern-var
-          :type (tc:qualify nil type)
+          :type (tc:qualify preds type)
           :location (source:location pat)
           :name (parser:pattern-var-name pat)
           :orig-name (parser:pattern-var-orig-name pat))
-         subs))))
+         subs
+         preds))))
 
-  (:method ((pat parser:pattern-literal) expected-type subs env)
+  (:method ((pat parser:pattern-literal) expected-type subs env &optional preds)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (values tc:ty pattern-literal tc:substitution-list))
+             (type tc:ty-predicate-list preds)
+             (values tc:ty pattern tc:substitution-list tc:ty-predicate-list))
 
     (let ((ty (etypecase (parser:pattern-literal-value pat)
                 (integer tc:*integer-type*)
@@ -1456,38 +1460,43 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
       (handler-case
           (progn
             (setf subs (tc:unify subs ty expected-type))
-            (let ((type (tc:apply-substitution subs ty)))
+            (let ((type (tc:apply-substitution subs ty))
+                  (preds (tc:apply-substitution subs preds)))
               (values
                type
                (make-pattern-literal
                 :type (tc:qualify nil type)
                 :location (source:location pat)
                 :value (parser:pattern-literal-value pat))
-               subs)))
+               subs
+               preds)))
         (tc:coalton-internal-type-error ()
           (tc-error "Type mismatch"
                     (tc-note pat "Expected type '~S' but pattern literal has type '~S'"
                              (tc:apply-substitution subs expected-type)
                              (tc:apply-substitution subs ty)))))))
 
-  (:method ((pat parser:pattern-wildcard) expected-type subs env)
+  (:method ((pat parser:pattern-wildcard) expected-type subs env &optional preds)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (values tc:ty pattern-wildcard tc:substitution-list))
+             (type tc:ty-predicate-list preds)
+             (values tc:ty pattern tc:substitution-list tc:ty-predicate-list))
 
     (values
      expected-type
      (make-pattern-wildcard
       :type (tc:qualify nil expected-type)
       :location (source:location pat))
-     subs))
+     subs
+     preds))
 
-  (:method ((pat parser:pattern-constructor) expected-type subs env)
+  (:method ((pat parser:pattern-constructor) expected-type subs env &optional preds)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (values tc:ty pattern-constructor tc:substitution-list))
+             (type tc:ty-predicate-list preds)
+             (values tc:ty pattern tc:substitution-list tc:ty-predicate-list))
 
     (let ((ctor (tc:lookup-constructor (tc-env-env env) (parser:pattern-constructor-name pat) :no-error t)))
 
@@ -1513,25 +1522,28 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                              arity
                              num-args)))
 
-        (let* ((ctor-ty (tc:qualified-ty-type ;; NOTE: Constructors cannot have predicates
-                         (tc:fresh-inst
-                          (tc:lookup-value-type (tc-env-env env) (parser:pattern-constructor-name pat)))))
+        (let* ((ctor-ty (tc:fresh-inst
+                         (tc:lookup-value-type (tc-env-env env) (parser:pattern-constructor-name pat))))
+               (ctor-preds (tc:qualified-ty-predicates ctor-ty))
 
-               (pat-ty (tc:function-return-type ctor-ty))
+               (pat-ty (tc:function-return-type (tc:qualified-ty-type ctor-ty)))
 
                (pattern-nodes
-                 (loop :for arg :in (parser:pattern-constructor-patterns pat)
+                 (loop :initially (setf preds (append preds ctor-preds))
+                       :for arg :in (parser:pattern-constructor-patterns pat)
                        :for arg-ty :in (tc:function-type-arguments ctor-ty)
-                       :collect (multiple-value-bind (ty_ node_ subs_)
-                                    (infer-pattern-type arg arg-ty subs env)
+                       :collect (multiple-value-bind (ty_ node_ subs_ preds_)
+                                    (infer-pattern-type arg arg-ty subs env preds)
                                   (declare (ignore ty_))
                                   (setf subs subs_)
+                                  (setf preds preds_)
                                   node_))))
 
           (handler-case
               (progn
                 (setf subs (tc:unify subs pat-ty expected-type))
-                (let ((type (tc:apply-substitution subs pat-ty)))
+                (let ((type (tc:apply-substitution subs pat-ty))
+                      (preds (tc:apply-substitution subs preds)))
                   (values
                    type
                    (make-pattern-constructor
@@ -1539,7 +1551,8 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                     :location (source:location pat)
                     :name (parser:pattern-constructor-name pat)
                     :patterns pattern-nodes)
-                   subs)))
+                   subs
+                   preds)))
             (tc:coalton-internal-type-error ()
               (tc-error "Type mismatch"
                         (tc-note pat "Expected type '~S' but pattern has type '~S'"
