@@ -1162,7 +1162,10 @@
            (type environment env)
            (values ty-list &optional))
   (lookup-constructor env name)
-  (function-type-arguments (lookup-value-type env name)))
+  (let ((qual-ty (fresh-inst (lookup-value-type env name))))
+    (append (loop :for _ :in (qualified-ty-predicates qual-ty)
+                  :collect (make-variable))
+            (function-type-arguments qual-ty))))
 
 (define-env-updater add-instance (env class value)
   (declare (type environment env)
