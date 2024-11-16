@@ -81,10 +81,12 @@
   (:method ((ty ty))
     (to-scheme (qualify nil ty))))
 
-(defun fresh-inst (ty-scheme)
+(defun fresh-inst (ty-scheme &key skolemize)
   (declare (type ty-scheme ty-scheme)
            (values qualified-ty &optional))
-  (let ((types (mapcar (lambda (k) (make-variable k))
+  (let ((types (mapcar (lambda (k) (if skolemize
+                                       (make-skolem k)
+                                       (make-variable k)))
                        (ty-scheme-kinds ty-scheme))))
     (instantiate types (ty-scheme-type ty-scheme))))
 
