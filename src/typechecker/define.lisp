@@ -303,7 +303,12 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
         (tc-env-lookup-value env node)
       (handler-case
           (progn
-            (setf subs (tc:unify subs ty expected-type))
+            (if (and (tc:tyskolem-p ty)
+                     (tc:tyvar-p expected-type))
+                (setf subs (tc:compose-substitution-lists
+                            (list (tc:make-substitution :from expected-type :to ty))
+                            subs))
+                (setf subs (tc:unify subs ty expected-type)))
 
             (let ((type (tc:apply-substitution subs ty))
                   (preds (tc:apply-substitution subs preds)))
@@ -341,60 +346,73 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (rand-nodes
                ;; Apply arguments one at a time for better error messages
                (loop :for rand :in rands
-                     :collect (cond
-                                ;; If the rator is a function then unify against its argument
-                                ((tc:function-type-p fun-ty_)
-                                 (multiple-value-bind (ty_ preds_ accessors_ node_ subs_)
-                                     (infer-expression-type rand
-                                                            (tc:function-type-from fun-ty_)
-                                                            subs
-                                                            env)
-                                   (declare (ignore ty_))
-                                   (setf preds (append preds preds_))
-                                   (setf accessors (append accessors accessors_))
-                                   (setf subs subs_)
-                                   (setf fun-ty_ (tc:function-type-to fun-ty_))
+                     :collect
+                     (flet ((check-skolem-preds (skolem-preds expected-preds expected-type subs env)
+                              (loop :for expected-pred :in (remove-if-not #'(lambda (pred) (member expected-type (tc:type-variables pred)))
+                                                                          expected-preds)
+                                    :unless (tc:entail (tc-env-env env) skolem-preds (tc:apply-substitution subs expected-pred))
+                                      :do (tc-error "Argument error"
+                                                    (tc-note rand "Operand constraints '~S' do not entail constraint '~S' required by argument"
+                                                             skolem-preds expected-pred)))))
+                       (cond
+                         ;; If the rator is a function then unify against its argument
+                         ((tc:function-type-p fun-ty_)
+                          (let ((expected-type (tc:function-type-from fun-ty_)))
+                            (multiple-value-bind (ty_ preds_ accessors_ node_ subs_)
+                                (infer-expression-type rand
+                                                       expected-type
+                                                       subs
+                                                       env)
+                              (when (tc:tyskolem-p ty_)
+                                (check-skolem-preds preds_ preds expected-type subs_ env))
+                              (setf preds (append preds preds_))
+                              (setf accessors (append accessors accessors_))
+                              (setf subs subs_)
+                              (setf fun-ty_ (tc:function-type-to fun-ty_))
 
-                                   node_))
+                              node_)))
 
-                                ;; If the rator is variable then unify against a new function type
-                                ((tc:tyvar-p fun-ty_)
-                                 (let* ((new-from (tc:make-variable))
+                         ;; If the rator is variable then unify against a new function type
+                         ((tc:tyvar-p fun-ty_)
+                          (let* ((new-from (tc:make-variable))
 
-                                        (new-to (tc:make-variable))
+                                 (new-to (tc:make-variable))
 
-                                        (new-ty (tc:make-function-type new-from new-to)))
+                                 (new-ty (tc:make-function-type new-from new-to)))
 
-                                   (setf subs (tc:unify subs fun-ty_ new-ty))
-                                   (multiple-value-bind (ty_ preds_ accessors_ node_ subs_)
-                                       (infer-expression-type rand
-                                                              new-from
-                                                              subs
-                                                              env)
-                                     (declare (ignore ty_))
-                                     (setf preds (append preds preds_))
-                                     (setf accessors (append accessors accessors_))
-                                     (setf subs subs_)
-                                     (setf fun-ty_ new-to)
+                            (setf subs (tc:unify subs fun-ty_ new-ty))
+                            (multiple-value-bind (ty_ preds_ accessors_ node_ subs_)
+                                (infer-expression-type rand
+                                                       new-from
+                                                       subs
+                                                       env)
+                              (when (tc:tyskolem-p ty_)
+                                (check-skolem-preds preds_ preds expected-type subs_ env))
+                              (setf preds (append preds preds_))
+                              (setf accessors (append accessors accessors_))
+                              (setf subs subs_)
+                              (setf fun-ty_ new-to)
 
-                                     node_)))
+                              node_)))
 
-                                ;; Otherwise signal an error
-                                (t
-                                 (setf fun-ty (tc:apply-substitution subs fun-ty))
-                                 (tc-error "Argument error"
-                                           (if (null (tc:function-type-arguments fun-ty))
-                                               (tc-note node "Unable to call '~S': it is not a function"
-                                                        fun-ty)
-                                               (tc-note node "Function call has ~D arguments but inferred type '~S' only takes ~D"
-                                                        (length rands)
-                                                        fun-ty
-                                                        (length (tc:function-type-arguments fun-ty))))))))))
+                         ;; Otherwise signal an error
+                         (t
+                          (setf fun-ty (tc:apply-substitution subs fun-ty))
+                          (tc-error "Argument error"
+                                    (if (null (tc:function-type-arguments fun-ty))
+                                        (tc-note node "Unable to call '~S': it is not a function"
+                                                 fun-ty)
+                                        (tc-note node "Function call has ~D arguments but inferred type '~S' only takes ~D"
+                                                 (length rands)
+                                                 fun-ty
+                                                 (length (tc:function-type-arguments fun-ty)))))))))))
 
         (handler-case
             (progn
               (setf subs (tc:unify subs fun-ty_ expected-type))
-              (let ((type (tc:apply-substitution subs fun-ty_)))
+              (let ((type (tc:apply-substitution subs fun-ty_))
+                    (preds (remove-if (lambda (pred) (some #'tc:tyskolem-p (tc:type-variables pred)))
+                                      (tc:apply-substitution subs preds))))
                 (values type
                         preds
                         accessors
