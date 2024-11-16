@@ -15,6 +15,9 @@
    #:tyvar-kind                         ; ACCESSOR
    #:tyvar-p                            ; FUNCTION
    #:tyvar-list                         ; TYPE
+   #:tyskolem                           ; STRUCT
+   #:make-tyskolem                      ; CONSTRUCTOR
+   #:tyskolem-p                         ; FUNCTION
    #:tycon                              ; STRUCT
    #:make-tycon                         ; CONSTRUCTOR
    #:tycon-name                         ; ACCESSOR
@@ -30,6 +33,7 @@
    #:tgen-id                            ; ACCESSOR
    #:tgen-p                             ; FUNCTION
    #:make-variable                      ; FUNCTION
+   #:make-skolem                        ; FUNCTION
    #:fresh-type-renamer                 ; FUNCTION
    #:instantiate                        ; FUNCTION
    #:kind-of                            ; FUNCTION
@@ -94,6 +98,8 @@
 (deftype tyvar-list ()
   '(satisfies tyvar-list-p))
 
+(defstruct (tyskolem (:include tyvar)))
+
 (defstruct (tycon (:include ty))
   (name (util:required 'name) :type symbol :read-only t)
   (kind (util:required 'kind) :type kind   :read-only t))
@@ -120,6 +126,11 @@
 (declaim (inline make-variable))
 (defun make-variable (&optional (kind +kstar+))
   (prog1 (make-tyvar :id *next-variable-id* :kind kind)
+    (incf *next-variable-id*)))
+
+(declaim (inline make-skolem))
+(defun make-skolem (&optional (kind +kstar+))
+  (prog1 (make-tyskolem :id *next-variable-id* :kind kind)
     (incf *next-variable-id*)))
 
 (defun fresh-type-renamer (tyvar)
@@ -373,7 +384,7 @@
          ;; Print the tvar using the current printing context. Requires use of PPRINT-VARIABLE-CONTEXT
          (pprint-ty stream (pprint-tvar ty))
          (progn
-           (write-string "#T" stream)
+           (write-string (if (tyskolem-p ty) "#S" "#T") stream)
            (write (tyvar-id ty) :stream stream))))
     (tycon
      (write (tycon-name ty) :stream stream))
