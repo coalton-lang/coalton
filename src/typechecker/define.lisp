@@ -199,6 +199,10 @@
 ;;; Expression Type Inference
 ;;;
 
+(defparameter *app-rand-tag* '#:application-operand-p
+  "Type variable tag indicating that it is the expected type of
+an application operand")
+
 (defgeneric infer-expression-type (node expected-type subs env)
   (:documentation "Infer the type of NODE and then unify against EXPECTED-TYPE
 
@@ -304,7 +308,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
       (handler-case
           (progn
             (if (and (tc:tyskolem-p ty)
-                     (tc:tyvar-p expected-type))
+                     (tc:tyvar-p ty)
+                     (member *app-rand-tag* (tc-env-tyvar-tags env expected-type)))
                 (setf subs (tc:compose-substitution-lists
                             (list (tc:make-substitution :from expected-type :to ty))
                             subs))
@@ -348,23 +353,29 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                (loop :for rand :in rands
                      :collect
                      (flet ((check-skolem-preds (skolem-preds expected-preds expected-type subs env)
-                              (loop :for expected-pred :in (remove-if-not #'(lambda (pred) (member expected-type (tc:type-variables pred)))
-                                                                          expected-preds)
-                                    :unless (tc:entail (tc-env-env env) skolem-preds (tc:apply-substitution subs expected-pred))
-                                      :do (tc-error "Argument error"
-                                                    (tc-note rand "Operand constraints '~S' do not entail constraint '~S' required by argument"
-                                                             skolem-preds expected-pred)))))
+                              "Check if SKOLEM-PREDS entail the EXPECTED-PREDS for the given
+EXPECTED-TYPE with the current substitutions and environment."
+                              (loop :for expected-pred :in expected-preds
+                                    :when (member expected-type (tc:type-variables expected-pred))
+                                      :unless (tc:entail (tc-env-env env)
+                                                         skolem-preds
+                                                         (tc:apply-substitution subs expected-pred))
+                                        :do (tc-error "Argument error"
+                                                      (tc-note rand "Operand constraints '~S' do not entail constraint '~S' required by argument"
+                                                               skolem-preds expected-pred)))))
                        (cond
                          ;; If the rator is a function then unify against its argument
                          ((tc:function-type-p fun-ty_)
-                          (let ((expected-type (tc:function-type-from fun-ty_)))
+                          (let ((from-type (tc:function-type-from fun-ty_)))
+                            (when (tc:tyvar-p from-type)
+                              (tc-env-add-tyvar-tags env from-type *app-rand-tag*))
                             (multiple-value-bind (ty_ preds_ accessors_ node_ subs_)
                                 (infer-expression-type rand
-                                                       expected-type
+                                                       from-type
                                                        subs
                                                        env)
                               (when (tc:tyskolem-p ty_)
-                                (check-skolem-preds preds_ preds expected-type subs_ env))
+                                (check-skolem-preds preds_ preds from-type subs_ env))
                               (setf preds (append preds preds_))
                               (setf accessors (append accessors accessors_))
                               (setf subs subs_)
@@ -381,13 +392,14 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                  (new-ty (tc:make-function-type new-from new-to)))
 
                             (setf subs (tc:unify subs fun-ty_ new-ty))
+                            (tc-env-add-tyvar-tags env new-from *app-rand-tag*)
                             (multiple-value-bind (ty_ preds_ accessors_ node_ subs_)
                                 (infer-expression-type rand
                                                        new-from
                                                        subs
                                                        env)
                               (when (tc:tyskolem-p ty_)
-                                (check-skolem-preds preds_ preds expected-type subs_ env))
+                                (check-skolem-preds preds_ preds new-from subs_ env))
                               (setf preds (append preds preds_))
                               (setf accessors (append accessors accessors_))
                               (setf subs subs_)
@@ -443,7 +455,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                               env)
         (declare (ignore pat-ty))
 
-        (values nil                ; return nil as this is always thrown away
+        (values nil         ; return nil as this is always thrown away
                 preds
                 accessors
                 (make-node-bind
