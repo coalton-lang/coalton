@@ -279,7 +279,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
       (handler-case
           (progn
             (setf subs (tc:unify subs tvar expected-type))
-            (let ((type (tc:apply-substitution subs tvar)))
+            (let ((type (tc:apply-substitution subs tvar))
+                  (pred (tc:apply-substitution subs pred)))
               (values
                type
                (list pred)
