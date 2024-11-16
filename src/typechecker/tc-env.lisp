@@ -12,9 +12,12 @@
    #:tc-env                             ; STRUCT
    #:tc-env-env                         ; ACCESSOR
    #:tc-env-ty-table                    ; ACCESSOR
+   #:tc-env-tyvar-tags-table            ; ACCESSOR
    #:tc-env-add-variable                ; FUNCTION
    #:tc-env-lookup-value                ; FUNCTION
    #:tc-env-add-definition              ; FUNCTION
+   #:tc-env-add-tyvar-tags              ; FUNCTION
+   #:tc-env-tyvar-tags                  ; FUNCTION
    #:tc-env-bound-variables             ; FUNCTION
    #:tc-env-bindings-variables          ; FUNCTION
    #:tc-env-replace-type                ; FUNCTION
@@ -33,7 +36,10 @@
   (env      (util:required 'env)          :type tc:environment :read-only t)
 
   ;; Hash table mapping variables bound in the current translation unit to types
-  (ty-table (make-hash-table :test #'eq)  :type hash-table     :read-only t))
+  (ty-table (make-hash-table :test #'eq)  :type hash-table     :read-only t)
+
+  ;; Hash table mapping a type variable to a list of tags
+  (tyvar-tags-table (make-hash-table) :type hash-table :read-only t))
 
 (defun tc-env-add-variable (env name)
   "Add a variable named NAME to ENV and return the scheme."
@@ -124,6 +130,16 @@
   (setf (gethash name (tc-env-ty-table env)) scheme)
 
   nil)
+
+(defun tc-env-add-tyvar-tags (env tyvar &rest tags)
+  (let ((id (tc:tyvar-id tyvar))
+        (table (tc-env-tyvar-tags-table env)))
+    (setf (gethash id table) (append (gethash id table nil) tags))
+
+    nil))
+
+(defun tc-env-tyvar-tags (env tyvar)
+  (gethash (tc:tyvar-id tyvar) (tc-env-tyvar-tags-table env) nil))
 
 (defmethod tc:apply-substitution (subs (env tc-env))
   "Applies SUBS to the types currently being checked in ENV. Does not update the types in the inner main environment because there should not be substitutions for them."
