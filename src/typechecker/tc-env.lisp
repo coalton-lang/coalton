@@ -13,17 +13,39 @@
    #:tc-env-env                         ; ACCESSOR
    #:tc-env-ty-table                    ; ACCESSOR
    #:tc-env-tyvar-tags-table            ; ACCESSOR
+   #:tc-env-skolem-context              ; ACCESSOR
    #:tc-env-add-variable                ; FUNCTION
    #:tc-env-lookup-value                ; FUNCTION
    #:tc-env-add-definition              ; FUNCTION
    #:tc-env-add-tyvar-tags              ; FUNCTION
    #:tc-env-tyvar-tags                  ; FUNCTION
+   #:tc-env-push-skolem-scope           ; FUNCTION
+   #:tc-env-pop-skolem-scope            ; FUNCTION
+   #:tc-env-add-skolem                  ; FUNCTION
+   #:tc-env-lookup-skolem               ; FUNCTION
    #:tc-env-bound-variables             ; FUNCTION
    #:tc-env-bindings-variables          ; FUNCTION
    #:tc-env-replace-type                ; FUNCTION
    ))
 
 (in-package #:coalton-impl/typechecker/tc-env)
+
+;;;
+;;; Skolem variable scope
+;;;
+
+(defstruct (skolem-scope
+            (:copier nil))
+  ;; Hash table mapping a Skolem ID to a
+  ;; (<pattern variable> <constructor type scheme>) list
+  (vars-table (make-hash-table) :type hash-table :read-only t))
+
+(defun skolem-scope-list-p (x)
+  (and (listp x)
+       (every #'skolem-scope-p x)))
+
+(deftype skolem-scope-list ()
+  '(satisfies skolem-scope-list-p))
 
 ;;;
 ;;; Typechecking Environment
@@ -38,8 +60,11 @@
   ;; Hash table mapping variables bound in the current translation unit to types
   (ty-table (make-hash-table :test #'eq)  :type hash-table     :read-only t)
 
-  ;; Hash table mapping a type variable to a list of tags
-  (tyvar-tags-table (make-hash-table) :type hash-table :read-only t))
+  ;; Hash table mapping a type variable ID to a list of tags
+  (tyvar-tags-table (make-hash-table) :type hash-table :read-only t)
+
+  ;; A stack of active Skolem scopes, each containing a list of Skolems.
+  (skolem-context nil :type skolem-scope-list :read-only nil))
 
 (defun tc-env-add-variable (env name)
   "Add a variable named NAME to ENV and return the scheme."
@@ -132,6 +157,10 @@
   nil)
 
 (defun tc-env-add-tyvar-tags (env tyvar &rest tags)
+  (declare (type tc-env env)
+           (type tc:tyvar tyvar)
+           (type util:symbol-list tags)
+           (values null))
   (let ((id (tc:tyvar-id tyvar))
         (table (tc-env-tyvar-tags-table env)))
     (setf (gethash id table) (append (gethash id table nil) tags))
@@ -139,7 +168,56 @@
     nil))
 
 (defun tc-env-tyvar-tags (env tyvar)
+  (declare (type tc-env env)
+           (type tc:tyvar tyvar)
+           (values util:symbol-list))
   (gethash (tc:tyvar-id tyvar) (tc-env-tyvar-tags-table env) nil))
+
+;;;
+;;; Skolem context management
+;;;
+
+(defun tc-env-push-skolem-scope (env)
+  (declare (type tc-env env)
+           (values null))
+  (push (make-skolem-scope) (tc-env-skolem-context env))
+  nil)
+
+(defun tc-env-pop-skolem-scope (env)
+  (declare (type tc-env env)
+           (values null))
+  (pop (tc-env-skolem-context env))
+  nil)
+
+(defun skolem-scope-lookup (scope skolem)
+  (gethash (tc:tyvar-id skolem) (skolem-scope-vars-table scope) nil))
+
+(defun tc-env-lookup-skolem (env skolem)
+  (declare (type tc-env env)
+           (type tc:tyskolem skolem)
+           (values (or null parser:pattern-var)
+                   (or null tc:ty-scheme)
+                   boolean))
+  (loop :for scope :in (tc-env-skolem-context env)
+        :for entry := (skolem-scope-lookup scope skolem)
+          :thereis (values-list (append entry (list t)))
+        :finally (return (values nil nil nil))))
+
+(defun tc-env-add-skolem (env skolem node ctor-scheme)
+  (declare (type tc-env env)
+           (type tc:tyskolem skolem)
+           (type parser:pattern-var node)
+           (type tc:ty-scheme ctor-scheme)
+           (values nil))
+  (let ((id (tc:tyvar-id skolem)))
+    (when (tc-env-lookup-skolem env skolem)
+      (util:coalton-bug "Attempt to add already active Skolem '~S'." skolem))
+    (setf (gethash id (tc-env-skolem-context env)) (list node ctor-scheme))
+    nil))
+
+;;;
+;;; Method implementations for type checking environment
+;;;
 
 (defmethod tc:apply-substitution (subs (env tc-env))
   "Applies SUBS to the types currently being checked in ENV. Does not update the types in the inner main environment because there should not be substitutions for them."
