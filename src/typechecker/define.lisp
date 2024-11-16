@@ -521,11 +521,11 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                     (tc:coalton-internal-type-error ()
                       (tc-error "Return type mismatch"
                                 (tc-note s1
-                                                 "First return is of type '~S'"
-                                                 (tc:apply-substitution subs ty1))
+                                         "First return is of type '~S'"
+                                         (tc:apply-substitution subs ty1))
                                 (tc-note s2
-                                                 "Second return is of type '~S'"
-                                                 (tc:apply-substitution subs ty2))))))
+                                         "Second return is of type '~S'"
+                                         (tc:apply-substitution subs ty2))))))
 
         ;; Unify the function's inferred type with one of the early returns.
         (when *returns*
@@ -534,11 +534,11 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
             (tc:coalton-internal-type-error ()
               (tc-error "Return type mismatch"
                         (tc-note (car (first *returns*))
-                                         "First return is of type '~S'"
-                                         (tc:apply-substitution subs (cdr (first *returns*))))
+                                 "First return is of type '~S'"
+                                 (tc:apply-substitution subs (cdr (first *returns*))))
                         (tc-note (parser:node-body-last-node (parser:node-abstraction-body node))
-                                         "Second return is of type '~S'"
-                                         (tc:apply-substitution subs body-ty))))))
+                                 "Second return is of type '~S'"
+                                 (tc:apply-substitution subs body-ty))))))
 
         (let ((ty (tc:make-function-type* arg-tys body-ty)))
           (handler-case

@@ -77,12 +77,12 @@ Returns (PREDS FOUNDP)"
            (type ty-predicate pred)
            (values boolean))
   (let* ((super (mapcan (lambda (p) (by-super env p)) preds))
-        (value
-          (or (true (member pred super :test #'type-predicate=))
-              (true (multiple-value-bind (inst-preds found)
-                        (by-inst env pred)
-                      (and found
-                           (every (lambda (p) (entail env preds p)) inst-preds)))))))
+         (value
+           (or (true (member pred super :test #'type-predicate=))
+               (true (multiple-value-bind (inst-preds found)
+                         (by-inst env pred)
+                       (and found
+                            (every (lambda (p) (entail env preds p)) inst-preds)))))))
     value))
 
 (defun super-entail (env preds pred)
@@ -110,8 +110,8 @@ Returns (PREDS FOUNDP)"
      (lambda (preds pred)
        (super-entail env preds pred))
      (loop :for pred :in (apply-substitution subs preds)
-          :unless (entail env nil pred)
-            :collect pred))))
+           :unless (entail env nil pred)
+             :collect pred))))
 
 (defun split-context (env environment-vars preds subs)
   "Split PREDS into retained predicates and deferred predicates
