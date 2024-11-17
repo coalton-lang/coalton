@@ -187,7 +187,10 @@
 (defun tc-env-pop-skolem-scope (env)
   (declare (type tc-env env)
            (values skolem-scope))
-  (pop (tc-env-skolem-context env)))
+  (let ((context (tc-env-skolem-context env)))
+    (unless context
+      (util:coalton-bug "Attempted to pop scope from empty Skolem context"))
+    (pop (tc-env-skolem-context env))))
 
 (defun skolem-scope-lookup (scope skolem)
   (declare (type skolem-scope scope)
@@ -219,10 +222,13 @@
            (type parser:pattern-var node)
            (type parser:identifier ctor-name)
            (type tc:ty-scheme ctor-scheme))
-  (let ((id (tc:tyvar-id skolem)))
+  (let ((context (tc-env-skolem-context env)))
+    (unless context
+      (util:coalton-bug "Attempted to add Skolem '~S' to an empty context" skolem))
     (when (fourth (multiple-value-list (tc-env-lookup-skolem env skolem)))
-      (util:coalton-bug "Attempt to add already active Skolem '~S'." skolem))
-    (let ((scope (first (tc-env-skolem-context env))))
+      (util:coalton-bug "Skolem '~S' is already in the context" skolem))
+    (let ((scope (first context))
+          (id (tc:tyvar-id skolem)))
       (setf (gethash id (skolem-scope-vars-table scope)) (list node ctor-name ctor-scheme))
       nil)))
 
