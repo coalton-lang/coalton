@@ -155,6 +155,7 @@
    #:parse-expression                   ; FUNCTION
    #:parse-body                         ; FUNCTION
    #:parse-variable                     ; FUNCTION
+   #:introduces-patterns-p              ; FUNCTION
    ))
 
 (in-package #:coalton-impl/parser/expression)
@@ -1399,3 +1400,13 @@ if (CST:SECOND FORM) is not a keyword."
               (cst:nthrest 2 form)
               (cst:second form))
       (values nil (cst:rest form) nil)))
+
+(defun introduces-patterns-p (node)
+  (member (type-of node)
+          '(node-abstraction
+            node-let
+            node-match
+            node-while-let
+            node-for
+            node-do
+            )))
