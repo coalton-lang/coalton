@@ -292,7 +292,7 @@ constructor '~S' with type signature '~S'"
              (type tc:substitution-list subs)
              (type tc-env env)
              (values tc:ty tc:ty-predicate-list accessor-list node-integer-literal tc:substitution-list &optional))
-    
+
     (let* ((num
              (util:find-symbol "NUM" "COALTON-LIBRARY/CLASSES"))
            (tvar
@@ -893,7 +893,7 @@ EXPECTED-TYPE with the current substitutions and environment."
                     (tc-note node "Expected type '~S' but 'or' evaluates to '~S'"
                              (tc:apply-substitution subs expected-type)
                              tc:*boolean-type*))))))
-  
+
   (:method ((node parser:node-and) expected-type subs env)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
@@ -1079,7 +1079,7 @@ EXPECTED-TYPE with the current substitutions and environment."
 
         (handler-case
             (progn
-              (setf subs (tc:unify subs tc:*unit-type* expected-type))              
+              (setf subs (tc:unify subs tc:*unit-type* expected-type))
               (values
                tc:*unit-type*
                preds
@@ -1102,14 +1102,14 @@ EXPECTED-TYPE with the current substitutions and environment."
 
     (multiple-value-bind (expr-ty preds accessors expr-node subs)
         (infer-expression-type (parser:node-while-let-expr node)
-                               (tc:make-variable) 
+                               (tc:make-variable)
                                subs
                                env)
 
       (multiple-value-bind (pat-ty pat-node subs)
           (infer-pattern-type (parser:node-while-let-pattern node) expr-ty subs env)
         (declare (ignore pat-ty))
-        
+
         (multiple-value-bind (body-ty preds_ accessors_ body-node subs)
             (infer-expression-type (parser:node-while-let-body node)
                                    (tc:make-variable)
@@ -1118,7 +1118,7 @@ EXPECTED-TYPE with the current substitutions and environment."
           (declare (ignore body-ty))
           (setf preds (append preds preds_))
           (setf accessors (append accessors accessors_))
-          
+
           (handler-case
               (progn
                 (setf subs (tc:unify subs tc:*unit-type* expected-type))
@@ -1197,7 +1197,7 @@ EXPECTED-TYPE with the current substitutions and environment."
                                env)
       (declare (ignore body-ty))
       (handler-case
-          (progn 
+          (progn
             (setf subs (tc:unify subs tc:*unit-type* expected-type))
             (values
              tc:*unit-type*
@@ -1219,7 +1219,7 @@ EXPECTED-TYPE with the current substitutions and environment."
              (values tc:ty tc:ty-predicate-list accessor-list node-break tc:substitution-list &optional))
     (handler-case
         (progn
-          (setf subs (tc:unify subs tc:*unit-type* expected-type)) 
+          (setf subs (tc:unify subs tc:*unit-type* expected-type))
           (values
            tc:*unit-type*
            nil
@@ -1380,7 +1380,7 @@ EXPECTED-TYPE with the current substitutions and environment."
 
            (nodes
              (loop :for elem :in (parser:node-do-nodes node)
-                   :collect (etypecase elem 
+                   :collect (etypecase elem
                               ;; Expressions are typechecked normally
                               ;; and then unified against "m a" where
                               ;; "a" is a fresh tyvar each time
@@ -1452,7 +1452,7 @@ EXPECTED-TYPE with the current substitutions and environment."
                 :type (tc:qualify nil ty)
                 :location (source:location node)
                 :nodes nodes
-                :last-node last-node) 
+                :last-node last-node)
                subs))
           (tc:coalton-internal-type-error ()
             (tc-error "Type mismatch"
@@ -1779,7 +1779,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
            (type tc:substitution-list subs)
            (type tc-env env)
            (values tc:ty-predicate-list (or toplevel-define node-let-binding instance-method-definition) tc:substitution-list &optional))
-  
+
   ;; HACK: recursive scc checking on instances is too strict
   (unless (typep binding 'parser:instance-method-definition)
     (check-for-invalid-recursive-scc (list binding) (tc-env-env env)))
