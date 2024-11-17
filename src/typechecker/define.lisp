@@ -207,6 +207,25 @@ an application operand")
   (:documentation "Infer the type of NODE and then unify against EXPECTED-TYPE
 
 Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
+  (:method :around (node expected-type subs env)
+    (cond ((parser:introduces-patterns-p node)
+           (tc-env-push-skolem-scope env)
+           (multiple-value-bind (ty preds accessors node subs)
+               (call-next-method)
+             (let ((deactivated-scope (tc-env-pop-skolem-scope env)))
+               (dolist (var (tc:type-variables ty))
+                 (when (tc:tyskolem-p var)
+                   (multiple-value-bind (pat-var ctor-name ctor-scheme escaping-p)
+                       (skolem-scope-lookup deactivated-scope var)
+                     (when escaping-p
+                       (tc-error "Type variable escaping scope"
+                                 (tc-note node "The type of this expression '~S' mentions the Skolem/rigid type
+variable '~S' bound to the pattern variable '~S' introduced by the
+constructor '~S' with type signature '~S'"
+                                          ty var pat-var ctor-name ctor-scheme))))))
+               (values ty preds accessors node subs))))
+          (t (call-next-method))))
+
   (:method ((node parser:node-literal) expected-type subs env)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
@@ -1560,7 +1579,8 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                              arity
                              num-args)))
 
-        (let* ((ctor-scheme (tc:lookup-value-type (tc-env-env env) (parser:pattern-constructor-name pat)))
+        (let* ((ctor-name (parser:pattern-constructor-name pat))
+               (ctor-scheme (tc:lookup-value-type (tc-env-env env) ctor-name))
                (ctor-ty (tc:fresh-inst ctor-scheme :skolemize (tc:scheme-predicates ctor-scheme)))
                (ctor-preds (tc:qualified-ty-predicates ctor-ty))
 
@@ -1571,12 +1591,14 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                        :for arg-ty :in (tc:function-type-arguments ctor-ty)
                        :collect (multiple-value-bind (ty_ node_ subs_)
                                     (infer-pattern-type arg
-                                                        (if ctor-preds
+                                                        (if (tc:tyskolem-p arg-ty)
                                                             (tc:qualify ctor-preds arg-ty)
                                                             arg-ty)
                                                         subs env)
                                   (declare (ignore ty_))
                                   (setf subs subs_)
+                                  (when (tc:tyskolem-p arg-ty)
+                                    (tc-env-add-skolem env arg-ty arg ctor-name ctor-scheme))
                                   node_))))
 
           (handler-case

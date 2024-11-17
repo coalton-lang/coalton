@@ -22,6 +22,7 @@
    #:tc-env-push-skolem-scope           ; FUNCTION
    #:tc-env-pop-skolem-scope            ; FUNCTION
    #:tc-env-add-skolem                  ; FUNCTION
+   #:skolem-scope-lookup                ; FUNCTION
    #:tc-env-lookup-skolem               ; FUNCTION
    #:tc-env-bound-variables             ; FUNCTION
    #:tc-env-bindings-variables          ; FUNCTION
@@ -37,7 +38,7 @@
 (defstruct (skolem-scope
             (:copier nil))
   ;; Hash table mapping a Skolem ID to a
-  ;; (<pattern variable> <constructor type scheme>) list
+  ;; (<pat var> <ctor name> <ctor type scheme>)
   (vars-table (make-hash-table) :type hash-table :read-only t))
 
 (defun skolem-scope-list-p (x)
@@ -185,12 +186,20 @@
 
 (defun tc-env-pop-skolem-scope (env)
   (declare (type tc-env env)
-           (values null))
-  (pop (tc-env-skolem-context env))
-  nil)
+           (values skolem-scope))
+  (pop (tc-env-skolem-context env)))
 
 (defun skolem-scope-lookup (scope skolem)
-  (gethash (tc:tyvar-id skolem) (skolem-scope-vars-table scope) nil))
+  (declare (type skolem-scope scope)
+           (type tc:tyskolem skolem)
+           (values (or null parser:pattern-var)
+                   (or null parser:identifier)
+                   (or null tc:ty-scheme)
+                   boolean))
+  (let ((entry (gethash (tc:tyvar-id skolem) (skolem-scope-vars-table scope) nil)))
+    (if entry
+        (values-list (append entry (list t)))
+        (values nil nil nil nil))))
 
 (defun tc-env-lookup-skolem (env skolem)
   (declare (type tc-env env)
@@ -199,21 +208,23 @@
                    (or null tc:ty-scheme)
                    boolean))
   (loop :for scope :in (tc-env-skolem-context env)
-        :for entry := (skolem-scope-lookup scope skolem)
-          :thereis (values-list (append entry (list t)))
-        :finally (return (values nil nil nil))))
+        :for result := (multiple-value-list (skolem-scope-lookup scope skolem))
+        :when (fourth result)
+          :return (values-list result)
+        :finally (return (values-list result))))
 
-(defun tc-env-add-skolem (env skolem node ctor-scheme)
+(defun tc-env-add-skolem (env skolem node ctor-name ctor-scheme)
   (declare (type tc-env env)
            (type tc:tyskolem skolem)
            (type parser:pattern-var node)
-           (type tc:ty-scheme ctor-scheme)
-           (values nil))
+           (type parser:identifier ctor-name)
+           (type tc:ty-scheme ctor-scheme))
   (let ((id (tc:tyvar-id skolem)))
-    (when (tc-env-lookup-skolem env skolem)
+    (when (fourth (multiple-value-list (tc-env-lookup-skolem env skolem)))
       (util:coalton-bug "Attempt to add already active Skolem '~S'." skolem))
-    (setf (gethash id (tc-env-skolem-context env)) (list node ctor-scheme))
-    nil))
+    (let ((scope (first (tc-env-skolem-context env))))
+      (setf (gethash id (skolem-scope-vars-table scope)) (list node ctor-name ctor-scheme))
+      nil)))
 
 ;;;
 ;;; Method implementations for type checking environment
