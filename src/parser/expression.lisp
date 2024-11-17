@@ -1404,7 +1404,6 @@ if (CST:SECOND FORM) is not a keyword."
 (defun introduces-patterns-p (node)
   (member (type-of node)
           '(node-abstraction
-            node-let
             node-match
             node-while-let
             node-for

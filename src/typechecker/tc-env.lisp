@@ -22,8 +22,8 @@
    #:tc-env-push-skolem-scope           ; FUNCTION
    #:tc-env-pop-skolem-scope            ; FUNCTION
    #:tc-env-add-skolem                  ; FUNCTION
-   #:skolem-scope-lookup                ; FUNCTION
    #:tc-env-lookup-skolem               ; FUNCTION
+   #:tc-env-check-skolem-escape         ; FUNCTION
    #:tc-env-bound-variables             ; FUNCTION
    #:tc-env-bindings-variables          ; FUNCTION
    #:tc-env-replace-type                ; FUNCTION
@@ -231,6 +231,23 @@
           (id (tc:tyvar-id skolem)))
       (setf (gethash id (skolem-scope-vars-table scope)) (list node ctor-name ctor-scheme))
       nil)))
+
+(defun tc-env-check-skolem-escape (env ty node)
+  (declare (type tc-env env)
+           (type tc:ty ty)
+           (type (or parser:node parser:toplevel-define parser:instance-method-definition) node))
+  (let ((deactivated-scope (tc-env-pop-skolem-scope env)))
+    (dolist (var (tc:type-variables ty))
+      (when (tc:tyskolem-p var)
+        (multiple-value-bind (pat-var ctor-name ctor-scheme escaping-p)
+            (skolem-scope-lookup deactivated-scope var)
+          (when escaping-p
+            (tc:tc-error "Type variable escaping scope"
+                         (tc:tc-note node "The type '~S' of this ~A mentions the Skolem/rigid type
+variable '~S' bound to the pattern variable '~S' introduced by the
+constructor '~S' with type signature '~S'"
+                                     ty (if (typep node 'parser:node) "expression" "function/method")
+                                     var pat-var ctor-name ctor-scheme))))))))
 
 ;;;
 ;;; Method implementations for type checking environment

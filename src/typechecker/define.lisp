@@ -34,7 +34,7 @@
    (#:types #:coalton-impl/typechecker/types))
   (:export
    #:infer-expression-type              ; FUNCTION
-   #:infer-expl-binging-type            ; FUNCTION
+   #:infer-expl-binding-type            ; FUNCTION
    #:attach-explicit-binding-type       ; FUNCTION
    ))
 
@@ -210,20 +210,9 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
   (:method :around (node expected-type subs env)
     (cond ((parser:introduces-patterns-p node)
            (tc-env-push-skolem-scope env)
-           (multiple-value-bind (ty preds accessors node subs)
-               (call-next-method)
-             (let ((deactivated-scope (tc-env-pop-skolem-scope env)))
-               (dolist (var (tc:type-variables ty))
-                 (when (tc:tyskolem-p var)
-                   (multiple-value-bind (pat-var ctor-name ctor-scheme escaping-p)
-                       (skolem-scope-lookup deactivated-scope var)
-                     (when escaping-p
-                       (tc-error "Type variable escaping scope"
-                                 (tc-note node "The type of this expression '~S' mentions the Skolem/rigid type
-variable '~S' bound to the pattern variable '~S' introduced by the
-constructor '~S' with type signature '~S'"
-                                          ty var pat-var ctor-name ctor-scheme))))))
-               (values ty preds accessors node subs))))
+           (let ((result (multiple-value-list (call-next-method))))
+             (tc-env-check-skolem-escape env (first result) node)
+             (values-list result)))
           (t (call-next-method))))
 
   (:method ((node parser:node-literal) expected-type subs env)
@@ -2198,6 +2187,9 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                (tc-note first "first parameter here")
                (tc-note second "second parameter here"))))
 
+  (unless (typep binding 'parser:node-let-binding)
+    (tc-env-push-skolem-scope env))
+
   (let* ((param-tys (loop :with args := (tc:function-type-arguments expected-type)
                           :for pattern :in (parser:binding-parameters binding)
 
@@ -2293,6 +2285,8 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                       :name (parser:node-variable-name (parser:binding-name binding))))
 
                    (typed-binding (build-typed-binding binding name-node value-node params)))
+              (unless (typep binding 'parser:node-let-binding)
+                (tc-env-check-skolem-escape env type binding))
               (values
                preds
                accessors
