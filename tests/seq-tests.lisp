@@ -31,7 +31,7 @@
   (declare legible-seq (UFix -> seq:Seq String))
   (define (legible-seq n)
     (iter:collect!
-     (map (fn (i) (lisp String (i) (cl:format cl:nil "~r" i)))
+     (map fmt:eng
           (iter:up-to n)))))
 
 (define-test seq-push-and-pop-implementation ()

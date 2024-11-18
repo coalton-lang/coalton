@@ -6,7 +6,8 @@
   (:use #:coalton
         #:coalton-prelude)
   (:local-nicknames
-   (#:string #:coalton-library/string))
+   (#:string #:coalton-library/string)
+   (#:fmt    #:coalton-library/format))
   (:import-from
    #:coalton-library/functions
    #:asum)
