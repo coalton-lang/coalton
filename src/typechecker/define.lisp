@@ -1570,7 +1570,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
         (let* ((ctor-name (parser:pattern-constructor-name pat))
                (ctor-scheme (tc:lookup-value-type (tc-env-env env) ctor-name))
-               (ctor-ty (tc:fresh-inst ctor-scheme :skolemize (tc:scheme-predicates ctor-scheme)))
+               (ctor-ty (tc:fresh-inst ctor-scheme :skolemize (tc:constructor-entry-existential-p ctor)))
                (ctor-preds (tc:qualified-ty-predicates ctor-ty))
 
                (pat-ty (tc:function-return-type (tc:qualified-ty-type ctor-ty)))

@@ -379,9 +379,9 @@
                         :collect (tc:quantify-using-tvar-order (append tvars ctor-vars) (tc:qualify ctor-preds ty)))
 
              :for constructor-args
-              := (loop :for ctor :in (parser:type-definition-ctors type)
-                       :for ctor-name := (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
-                       :collect (tc:apply-ksubstitution ksubs (gethash ctor-name ctor-table)))
+               := (loop :for ctor :in (parser:type-definition-ctors type)
+                        :for ctor-name := (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
+                        :collect (tc:apply-ksubstitution ksubs (gethash ctor-name ctor-table)))
 
              ;; Check that repr :enum types do not have any constructors with fields
              :when (eq repr-type :enum)
@@ -422,6 +422,7 @@
                                      :collect (tc:make-constructor-entry
                                                :name ctor-name
                                                :arity (length (parser:type-definition-ctor-field-types ctor))
+                                               :existential-p (parser:existential-constructor-p ctor)
                                                :constructs name
                                                :classname classname
                                                :docstring ctor-docstring

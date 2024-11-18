@@ -44,6 +44,7 @@
    #:make-constructor-entry                 ; ACCESSOR
    #:constructor-entry-name                 ; ACCESSOR
    #:constructor-entry-arity                ; ACCESSOR
+   #:constructor-entry-existential-p        ; ACCESSOR
    #:constructor-entry-constructs           ; ACCESSOR
    #:constructor-entry-classname            ; ACCESSOR
    #:constructor-entry-compressed-repr      ; ACCESSOR
@@ -419,6 +420,7 @@
 (defstruct constructor-entry
   (name            (util:required 'name)            :type symbol                         :read-only t)
   (arity           (util:required 'arity)           :type alexandria:non-negative-fixnum :read-only t)
+  (existential-p   (util:required 'existential-p)   :type boolean                        :read-only t)
   (constructs      (util:required 'constructs)      :type symbol                         :read-only t)
   (classname       (util:required 'classname)       :type symbol                         :read-only t)
   (docstring       (util:required 'docstring)       :type (or string null)               :read-only t)
@@ -454,6 +456,7 @@
            (make-constructor-entry
             :name 'coalton:True
             :arity 0
+            :existential-p nil
             :constructs 'coalton:Boolean
             :classname 'coalton::Boolean/True
             :docstring "Boolean `True`"
@@ -463,6 +466,7 @@
            (make-constructor-entry
             :name 'coalton:False
             :arity 0
+            :existential-p nil
             :constructs 'coalton:Boolean
             :classname 'coalton::Boolean/False
             :docstring "Boolean `False`"
@@ -472,6 +476,7 @@
            (make-constructor-entry
             :name 'coalton:Unit
             :arity 0
+            :existential-p nil
             :constructs 'coalton:Unit
             :classname 'coalton::Unit/Unit
             :docstring "`Unit` represents nullary parameters and return types."
@@ -481,6 +486,7 @@
            (make-constructor-entry
             :name 'coalton:Cons
             :arity 2
+            :existential-p nil
             :constructs 'coalton:List
             :classname nil
             :docstring "`Cons` represents a `List` containing a first element (`car`) and a nested `Cons` (`cdr`)."
@@ -490,6 +496,7 @@
            (make-constructor-entry
             :name 'coalton:Nil
             :arity 0
+            :existential-p nil
             :constructs 'coalton:List
             :classname nil
             :docstring "`Nil` represents an empty `List`."
