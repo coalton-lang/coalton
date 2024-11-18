@@ -316,7 +316,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
       (handler-case
           (progn
             (if (and (tc:tyskolem-p ty)
-                     (tc:tyvar-p ty)
+                     (tc:tyvar-p expected-type)
+                     (not (tc:tyskolem-p expected-type))
                      (member *app-rand-tag* (tc-env-tyvar-tags env expected-type)))
                 (setf subs (tc:compose-substitution-lists
                             (list (tc:make-substitution :from expected-type :to ty))
