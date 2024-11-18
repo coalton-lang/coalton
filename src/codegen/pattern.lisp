@@ -12,6 +12,10 @@
    #:make-pattern-var                   ; ACCESSOR
    #:pattern-var-name                   ; ACCESSOR
    #:pattern-var-p                      ; FUNCTION
+   #:skolem-pattern-var                 ; STRUCT
+   #:make-skolem-pattern-var            ; ACCESSOR
+   #:skolem-pattern-var-predicates      ; ACCESSOR
+   #:skolem-pattern-var-p               ; FUNCTION
    #:pattern-literal                    ; STRUCT
    #:make-pattern-literal               ; CONSTRUCTOR
    #:pattern-literal-value              ; ACCESSOR
@@ -48,6 +52,11 @@
             (:include pattern)
             (:copier nil))
   (name (util:required 'name) :type symbol :read-only t))
+
+(defstruct (skolem-pattern-var
+            (:include pattern-var)
+            (:copier nil))
+  (predicates (util:required 'predicates) :type tc:ty-predicate-list :read-only t))
 
 (defstruct (pattern-literal
             (:include pattern)

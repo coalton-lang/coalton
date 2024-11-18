@@ -899,12 +899,18 @@ Returns a `node'.")
 (defgeneric translate-pattern (pat)
   (:documentation "Translate the typechecker AST pattern to the codegen AST.")
   (:method ((pat tc:pattern-var))
-    (let ((qual-ty (tc:pattern-type pat)))
-      (assert (null (tc:qualified-ty-predicates qual-ty)))
+    (let* ((qual-ty (tc:pattern-type pat))
+           (skolem-p (every #'tc:tyskolem-p (tc:type-variables qual-ty))))
+      (assert (or skolem-p (null (tc:qualified-ty-predicates qual-ty))))
 
-      (make-pattern-var
-       :type (tc:qualified-ty-type qual-ty)
-       :name (tc:pattern-var-name pat))))
+      (if skolem-p
+          (make-skolem-pattern-var
+           :type (tc:qualified-ty-type qual-ty)
+           :name (tc:pattern-var-name pat)
+           :predicates (tc:qualified-ty-predicates qual-ty))
+          (make-pattern-var
+           :type (tc:qualified-ty-type qual-ty)
+           :name (tc:pattern-var-name pat)))))
 
   (:method ((pat tc:pattern-literal))
     (let ((qual-ty (tc:pattern-type pat)))
