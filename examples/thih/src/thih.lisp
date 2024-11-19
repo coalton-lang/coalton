@@ -555,17 +555,17 @@
   ;;
 
   (define-type Scheme
-    (Forall (List Kind) (Qual Type)))
+    (Universal (List Kind) (Qual Type)))
 
   (define-instance (Eq Scheme)
-    (define (== (Forall ks1 q1) (Forall ks2 q2))
+    (define (== (Universal ks1 q1) (Universal ks2 q2))
       (and (== ks1 ks2)
            (== q1 q2))))
 
   (define-instance (Types Scheme)
-    (define (apply s (Forall ks qt))
-      (Forall ks (apply s qt)))
-    (define (tv (Forall _ qt))
+    (define (apply s (Universal ks qt))
+      (Universal ks (apply s qt)))
+    (define (tv (Universal _ qt))
       (tv qt)))
 
   (declare quantify ((List Tyvar) -> (Qual Type) -> Scheme))
@@ -577,11 +577,11 @@
           (ks (map kind vs_))
           (gens (map TGen (range 0 (- (length vs_) 1))))
           (s (Subst (zip vs_ gens))))
-      (Forall ks (apply s qt))))
+      (Universal ks (apply s qt))))
 
   (declare toScheme (Type -> Scheme))
   (define (toScheme t)
-    (Forall Nil (Qual Nil t)))
+    (Universal Nil (Qual Nil t)))
 
 
   ;;
@@ -682,7 +682,7 @@
   (declare freshInst (Scheme -> (TI (Qual Type))))
   (define (freshInst s)
     (match s
-      ((Forall ks qt)
+      ((Universal ks qt)
        (do (ts <- (traverse newTVar ks))
            (pure (inst ts qt))))))
 

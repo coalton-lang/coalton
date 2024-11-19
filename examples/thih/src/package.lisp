@@ -50,7 +50,7 @@
    #:exampleInsts
 
    #:Scheme
-   #:Forall
+   #:Universal
 
    #:Assump
 

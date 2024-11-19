@@ -30,7 +30,7 @@
                                  (make-list
                                   (th:Assump
                                    (th:Id "f")
-                                   (th:Forall
+                                   (th:Universal
                                     (make-list th:Star)
                                     (th:Qual Nil
                                              (th:mkFn (th:TGen 0)
