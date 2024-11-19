@@ -324,8 +324,8 @@
   (let* ((defined-variables (mapcar #'parser:keyword-src-name (parser:type-definition-vars parsed-type)))
          (used-variables (mapcar #'tc:tyvar-id (tc:type-variables aliased-type)))
          (unused-variables (loop :for tyvar :in defined-variables
-                                 :when (not (member (tc:tyvar-id (partial-type-env-lookup-var partial-env tyvar parsed-type))
-                                                    used-variables))
+                                 :unless (member (tc:tyvar-id (partial-type-env-lookup-var partial-env tyvar parsed-type))
+                                                 used-variables)
                                    :collect tyvar))
          (number-of-unused-variables (length unused-variables)))
     (unless (zerop number-of-unused-variables)
@@ -333,7 +333,7 @@
                 (tc-note parsed-type "Type alias ~S defines unused type variable~P ~{:~A~^ ~}"
                          (parser:identifier-src-name (parser:type-definition-name parsed-type))
                          number-of-unused-variables
-                         (mapcar (lambda (str) (subseq str 0  (- (length str) (1+ (position #\- (reverse str))))))
+                         (mapcar (lambda (str) (subseq str 0 (position #\- str :from-end t)))
                                  (mapcar #'string unused-variables)))))))
 
 (defun infer-define-type-scc-kinds (types env)
@@ -467,7 +467,7 @@
                                                  name))
                                 :aliased-type (let ((parser-aliased-type
                                                       (parser:type-definition-aliased-type type)))
-                                                (when parser-aliased-type
+                                                (if parser-aliased-type
                                                   (let ((aliased-type (parse-type parser-aliased-type env)))
                                                     (check-for-unused-type-alias-type-variables aliased-type type env)
                                                     aliased-type)))

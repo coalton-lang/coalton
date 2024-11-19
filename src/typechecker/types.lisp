@@ -75,6 +75,18 @@
 ;;;
 
 (defstruct (ty (:constructor nil))
+  ;; When this field is not null, it comprises a head which is the
+  ;; explicit type-alias used, and a tail which consists of the
+  ;; type-aliases used to define the explicit alias.
+  ;; for example:
+  ;;   (define-type-alias T1 T)
+  ;;   (define-type-alias T2 T1)
+  ;;   (declare x T2)
+  ;;   (define x ...)
+  ;; the type of x will be T, with the alias field
+  ;; populated with (Cons T2 (Cons T1 Nil)).
+  ;;
+  ;; Could be replaced by a weak hash table.
   (alias nil :type (or null ty-list) :read-only nil))
 
 (defmethod make-load-form ((self ty) &optional env)
@@ -233,8 +245,7 @@
             (tgen-id type2)))
 
   (:method (type1 type2)
-    (declare (ignore type1)
-             (ignore type2))
+    (declare (ignore type1 type2))
     nil))
 
 ;;;
