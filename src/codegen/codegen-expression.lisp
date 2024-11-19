@@ -37,6 +37,10 @@
   (declare (type symbol label))
   (alexandria:format-symbol :keyword "~a-BLOCK" label))
 
+(defparameter *skolem-dict-table* nil
+  "Hash table mapping a Skolem predicate to the expression that carries
+its runtime dict.")
+
 (defgeneric codegen-expression (node env)
   (:method ((node node-literal) env)
     (declare (type tc:environment env)
@@ -174,7 +178,8 @@
 
     ;; Otherwise do the thing
     (let ((subexpr (codegen-expression (node-match-expr expr) env))
-          (match-var (gensym "MATCH")))
+          (match-var (gensym "MATCH"))
+          (*skolem-dict-table* (make-hash-table :test #'equalp)))
       `(let ((,match-var
                ,(if settings:*emit-type-annotations*
                     `(the ,(tc:lisp-type (node-type (node-match-expr expr)) env) ,subexpr)

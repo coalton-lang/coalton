@@ -3,6 +3,9 @@
    #:cl
    #:coalton-impl/codegen/pattern
    #:coalton-impl/codegen/ast)
+  (:import-from
+   #:coalton-impl/codegen/codegen-expression
+   #:*skolem-dict-table*)
   (:local-nicknames
    (#:util #:coalton-impl/util)
    (#:tc #:coalton-impl/typechecker))
@@ -95,6 +98,10 @@
                               field
                               `(,accessor ,expr)
                               env)
+                           (when (skolem-pattern-var-p field)
+                             (dolist (pred (skolem-pattern-var-predicates field))
+                               (unless (gethash pred *skolem-dict-table*)
+                                 (setf (gethash pred *skolem-dict-table*) expr))))
                            (push field-pred preds)
                            (push field-bindings bindings))
                      :finally (return (values (nreverse preds)
