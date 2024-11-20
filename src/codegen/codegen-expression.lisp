@@ -5,7 +5,8 @@
    #:coalton-impl/codegen/ast)
   (:import-from
    #:coalton-impl/codegen/codegen-pattern
-   #:codegen-pattern)
+   #:codegen-pattern
+   #:*skolem-dict-table*)
   (:import-from
    #:coalton-impl/codegen/codegen-type-definition
    #:constructor-slot-name)
@@ -36,10 +37,6 @@
 (defun block-label (label)
   (declare (type symbol label))
   (alexandria:format-symbol :keyword "~a-BLOCK" label))
-
-(defparameter *skolem-dict-table* nil
-  "Hash table mapping a Skolem predicate to the expression that carries
-its runtime dict.")
 
 (defgeneric codegen-expression (node env)
   (:method ((node node-literal) env)
@@ -191,18 +188,18 @@ its runtime dict.")
              (cond
                ,@(loop :for branch :in (node-match-branches expr)
                        :for pattern := (match-branch-pattern branch)
-                       :for expr := (codegen-expression (match-branch-body branch) env)
                        :collect
                        (multiple-value-bind (pred bindings)
                            (codegen-pattern pattern match-var env)
-                         `(,pred
-                           ,(cond
-                              ((null bindings)
-                               expr)
-                              (t
-                               `(let ,bindings
-                                  (declare (ignorable ,@(mapcar #'car bindings)))
-                                  ,expr))))))
+                         (let ((expr (codegen-expression (match-branch-body branch) env)))
+                           `(,pred
+                             ,(cond
+                                ((null bindings)
+                                 expr)
+                                (t
+                                 `(let ,bindings
+                                    (declare (ignorable ,@(mapcar #'car bindings)))
+                                    ,expr)))))))
 
                ;; Only emit a fallback if there is not a catch-all clause.
                ,@(unless (member-if (lambda (pat)
@@ -266,7 +263,14 @@ its runtime dict.")
         (t
          `(let ((,name ,(codegen-expression (node-bind-expr expr) env)))
             (declare (ignorable ,name))
-            ,(codegen-expression (node-bind-body expr) env)))))))
+            ,(codegen-expression (node-bind-body expr) env))))))
+
+  (:method ((expr node-runtime-dict-lookup) env)
+    (let* ((pred (node-runtime-dict-lookup-predicate expr))
+           (key (tc:predicate-to-key pred)))
+      `(rt:lookup-dict
+        ,(gethash key *skolem-dict-table*)
+        ,key))))
 
 (defun find-constructor (initform env)
   (if (or (node-application-p initform) (node-direct-application-p initform))

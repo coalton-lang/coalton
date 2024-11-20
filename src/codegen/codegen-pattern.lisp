@@ -3,9 +3,6 @@
    #:cl
    #:coalton-impl/codegen/pattern
    #:coalton-impl/codegen/ast)
-  (:import-from
-   #:coalton-impl/codegen/codegen-expression
-   #:*skolem-dict-table*)
   (:local-nicknames
    (#:util #:coalton-impl/util)
    (#:tc #:coalton-impl/typechecker))
@@ -13,6 +10,10 @@
    #:codegen-pattern))
 
 (in-package #:coalton-impl/codegen/codegen-pattern)
+
+(defparameter *skolem-dict-table* nil
+  "Hash table mapping a Skolem predicate to the expression that carries
+its runtime dict.")
 
 (defgeneric codegen-pattern (pattern expr env)
   (:documentation "Codegen the match branch PATTERN on lisp value EXPR, returning (VALUES PREDICATE BINDINGS).")
@@ -100,8 +101,9 @@
                               env)
                            (when (skolem-pattern-var-p field)
                              (dolist (pred (skolem-pattern-var-predicates field))
-                               (unless (gethash pred *skolem-dict-table*)
-                                 (setf (gethash pred *skolem-dict-table*) expr))))
+                               (let ((key (tc:predicate-to-key pred)))
+                                 (unless (gethash key *skolem-dict-table*)
+                                   (setf (gethash key *skolem-dict-table*) expr)))))
                            (push field-pred preds)
                            (push field-bindings bindings))
                      :finally (return (values (nreverse preds)
