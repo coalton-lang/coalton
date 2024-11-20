@@ -51,6 +51,7 @@
                (:module "runtime"
                 :serial t
                 :components ((:file "function-entry")
+                             (:file "dict-lookup")
                              (:file "package")))
                (:module "typechecker"
                 :serial t
