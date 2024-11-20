@@ -331,7 +331,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                preds
                nil
                (make-node-variable
-                :type (tc:qualify preds type)
+                :type (tc:qualify (if (tc:tyskolem-p ty) nil preds) type)
                 :location (source:location node)
                 :name (parser:node-variable-name node))
                subs)))
