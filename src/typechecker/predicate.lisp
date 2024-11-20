@@ -21,6 +21,7 @@
    #:qualified-ty-type                  ; ACCESSOR
    #:qualified-ty-list                  ; TYPE
    #:remove-source-info                 ; FUNCTION
+   #:predicate-to-key                   ; FUNCTION
    #:static-predicate-p                 ; FUNCTION
    #:type-predicate=                    ; FUNCTION
    #:qualify                            ; FUNCTION
@@ -102,6 +103,22 @@
     (make-qualified-ty
      :predicates (mapcar #'remove-source-info (qualified-ty-predicates qual-ty))
      :type (qualified-ty-type qual-ty))))
+
+(defun predicate-to-key (pred)
+  (declare (type ty-predicate pred)
+           (values fixnum))
+  (let ((norm-pred
+          (loop :for var :in (type-variables pred)
+                :for i :from 0
+                :for sub := (list (make-substitution :from var :to (make-tgen :id i)))
+                :for subs := sub :then (merge-substitution-lists sub subs)
+                :finally (return (apply-substitution subs pred)))))
+    (sxhash (cons (ty-predicate-class norm-pred)
+                  (mapcar (lambda (ty)
+                            (if (tgen-p ty)
+                                (tgen-id ty)
+                                ty))
+                          (ty-predicate-types norm-pred))))))
 
 ;;;
 ;;; Methods
