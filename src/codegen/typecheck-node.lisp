@@ -196,6 +196,11 @@
      nil
      (node-type expr)
      (typecheck-node (node-bind-body expr) env))
+    (node-type expr))
+
+  (:method ((expr node-runtime-dict-lookup) env)
+    (declare (type tc:environment env)
+             (values tc:ty))
     (node-type expr)))
 
 

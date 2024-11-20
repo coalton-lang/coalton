@@ -936,7 +936,6 @@ Returns a `node'.")
        :name (tc:pattern-constructor-name pat)
        :patterns (mapcar #'translate-pattern (tc:pattern-constructor-patterns pat))))))
 
-
 (defun apply-dicts (expr ctx env)
   "If there are predicates on EXPR, then find the typeclass dictionaries
 in the environment and create a NODE-APPLICATION with all required
@@ -946,10 +945,13 @@ dictionaries applied."
            (type tc:environment env)
            (values node))
   (let* ((qual-ty (tc:node-type expr))
-
          (dicts (mapcar
                  (lambda (pred)
-                   (resolve-dict pred ctx env))
+                   (if (some #'tc:tyskolem-p (tc:type-variables pred))
+                       (make-node-runtime-dict-lookup
+                        :type (tc:make-variable)
+                        :predicate pred)
+                       (resolve-dict pred ctx env)))
                  (tc:qualified-ty-predicates qual-ty)))
 
          (dict-types (mapcar #'node-type dicts))

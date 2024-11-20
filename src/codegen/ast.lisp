@@ -104,6 +104,9 @@
    #:node-bind-name                     ; READER
    #:node-bind-expr                     ; READER
    #:node-bind-body                     ; READER
+   #:node-runtime-dict-lookup           ; STRUCT
+   #:make-node-runtime-dict-lookup      ; CONSTRUCTOR
+   #:node-runtime-dict-lookup-predicate ; ACCESSOR
    #:node-variables                     ; FUNCTION
    #:node-binding-sccs                  ; FUNCTION
    #:node-free-p                        ; FUNCTION
@@ -280,6 +283,10 @@ call to (break)."
   (name (util:required 'name) :type parser:identifier :read-only t)
   (expr (util:required 'expr) :type node              :read-only t)
   (body (util:required 'body) :type node              :read-only t))
+
+(defstruct (node-runtime-dict-lookup (:include node))
+  "A placeholder for a runtime dictionary lookup for a Skolem predicate."
+  (predicate (util:required 'predicate) :type tc:ty-predicate :read-only t))
 
 ;;;
 ;;; Functions
