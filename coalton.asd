@@ -76,6 +76,7 @@
                (:file "vector")
                (:file "char")
                (:file "string")
+               (:file "format")
                (:file "slice")
                (:file "hashtable")
                (:file "queue")
