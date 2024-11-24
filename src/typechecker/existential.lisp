@@ -19,6 +19,7 @@
    #:existential-ty-list                ; TYPE
    #:remove-source-info                 ; FUNCTION
    #:existentialize                     ; FUNCTION
+   #:fresh-inst-ex                      ; FUNCTION
    ))
 
 (in-package #:coalton-impl/typechecker/existential)
@@ -67,6 +68,13 @@
     (make-existential-ty
      :kinds kinds
      :type (apply-substitution subst type))))
+
+(defun fresh-inst-ex (ex-ty &key skolemize-p)
+  (declare (type existential-ty ex-ty)
+           (values qualified-ty &optional))
+  (let ((types (mapcar (if skolemize-p #'make-skolem #'make-variable)
+                       (existential-ty-kinds ex-ty))))
+    (instantiate-ex types (existential-ty-type ex-ty))))
 
 ;;;
 ;;; Methods
