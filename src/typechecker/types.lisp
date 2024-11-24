@@ -32,10 +32,15 @@
    #:make-tgen                          ; CONSTRUCTOR
    #:tgen-id                            ; ACCESSOR
    #:tgen-p                             ; FUNCTION
+   #:tex                                ; STRUCT
+   #:make-tex                           ; CONSTRUCTOR
+   #:tex-id                             ; ACCESSOR
+   #:tex-p                              ; FUNCTION
    #:make-variable                      ; FUNCTION
    #:make-skolem                        ; FUNCTION
    #:fresh-type-renamer                 ; FUNCTION
    #:instantiate                        ; FUNCTION
+   #:instantiate-ex                     ; FUNCTION
    #:kind-of                            ; FUNCTION
    #:type-constructors                  ; FUNCTION
    #:*boolean-type*                     ; VARIABLE
@@ -111,7 +116,13 @@
 (defstruct (tgen (:include ty))
   (id (util:required 'id) :type fixnum :read-only t))
 
+(defstruct (tex (:include ty))
+  (id (util:required 'id) :type fixnum :read-only t))
+
 (defmethod make-load-form ((self tgen) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
+(defmethod make-load-form ((self tex) &optional env)
   (make-load-form-saving-slots self :environment env))
 
 ;;;
@@ -152,6 +163,18 @@
     type)
   (:method (types (type list))
     (mapcar (lambda (type) (instantiate types type)) type)))
+
+(defgeneric instantiate-ex (types type)
+  (:method (types (type tapp))
+    (make-tapp
+     :from (instantiate-ex types (tapp-from type))
+     :to (instantiate-ex types (tapp-to type))))
+  (:method (types (type tex))
+    (nth (tex-id type) types))
+  (:method (types (type ty))
+    type)
+  (:method (types (type list))
+    (mapcar (lambda (type) (instantiate-ex types type)) type)))
 
 (defgeneric kind-of (type)
   (:documentation "Get the kind of TYPE.")
@@ -434,7 +457,10 @@
              (write-string ")" stream)))))))
     (tgen
      (write-string "#GEN" stream)
-     (write (tgen-id ty) :stream stream)))
+     (write (tgen-id ty) :stream stream))
+    (tex
+     (write-string "#EX" stream)
+     (write (tex-id ty) :stream stream)))
   ty)
 
 (defmethod print-object ((ty ty) stream)

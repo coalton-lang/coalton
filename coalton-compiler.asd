@@ -60,6 +60,7 @@
                              (:file "types")
                              (:file "substitutions")
                              (:file "predicate")
+                             (:file "existential")
                              (:file "scheme")
                              (:file "type-errors")
                              (:file "unify")

@@ -5,7 +5,8 @@
    #:coalton-impl/typechecker/kinds
    #:coalton-impl/typechecker/types
    #:coalton-impl/typechecker/substitutions
-   #:coalton-impl/typechecker/predicate)
+   #:coalton-impl/typechecker/predicate
+   #:coalton-impl/typechecker/existential)
   (:local-nicknames
    (#:util #:coalton-impl/util)
    (#:settings #:coalton-impl/settings))
@@ -33,8 +34,8 @@
 ;;;
 
 (defstruct ty-scheme 
-  (kinds (util:required 'kinds) :type list         :read-only t)
-  (type  (util:required 'type)  :type qualified-ty :read-only t))
+  (kinds (util:required 'kinds) :type list                             :read-only t)
+  (type  (util:required 'type)  :type (or qualified-ty existential-ty) :read-only t))
 
 (defmethod make-load-form ((self ty-scheme) &optional env)
   (make-load-form-saving-slots self :environment env))

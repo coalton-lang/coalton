@@ -150,6 +150,11 @@
    :class (ty-predicate-class type)
    :types (instantiate types (ty-predicate-types type))))
 
+(defmethod instantiate-ex (types (type ty-predicate))
+  (make-ty-predicate
+   :class (ty-predicate-class type)
+   :types (instantiate-ex types (ty-predicate-types type))))
+
 (defmethod apply-substitution (subst-list (type qualified-ty))
   (declare (type substitution-list subst-list))
   (make-qualified-ty
@@ -178,6 +183,11 @@
   (make-qualified-ty
    :predicates (instantiate types (qualified-ty-predicates type))
    :type (instantiate types (qualified-ty-type type))))
+
+(defmethod instantiate-ex (types (type qualified-ty))
+  (make-qualified-ty
+   :predicates (instantiate-ex types (qualified-ty-predicates type))
+   :type (instantiate-ex types (qualified-ty-type type))))
 
 (defmethod kind-of ((type qualified-ty))
   (kind-of (qualified-ty-type type)))
