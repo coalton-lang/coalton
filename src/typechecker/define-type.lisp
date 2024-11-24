@@ -376,7 +376,11 @@
                               (tc:apply-type-argument-list
                                (tc:apply-ksubstitution ksubs (gethash name (partial-type-env-ty-table env)))
                                tvars))
-                        :collect (tc:quantify-using-tvar-order (append tvars ctor-vars) (tc:qualify ctor-preds ty)))
+                        :for qual-ty := (tc:qualify ctor-preds ty)
+                        :collect (tc:quantify-using-tvar-order (append tvars)
+                                                               (if (parser:existential-constructor-p ctor)
+                                                                   (tc:existentialize ctor-vars qual-ty)
+                                                                   qual-ty)))
 
              :for constructor-args
                := (loop :for ctor :in (parser:type-definition-ctors type)
