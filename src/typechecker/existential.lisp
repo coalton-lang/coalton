@@ -13,9 +13,9 @@
   (:export
    #:existential-ty                     ; STRUCT
    #:make-existential-ty                ; CONSTRUCTOR
-   #:existential-ty-p                   ; FUNCTION
    #:existential-ty-kinds               ; ACCESSOR
    #:existential-ty-type                ; ACCESSOR
+   #:existential-ty-p                   ; FUNCTION
    #:existential-ty-list                ; TYPE
    #:remove-source-info                 ; FUNCTION
    #:existentialize                     ; FUNCTION

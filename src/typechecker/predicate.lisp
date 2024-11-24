@@ -19,6 +19,7 @@
    #:make-qualified-ty                  ; CONSTRUCTOR
    #:qualified-ty-predicates            ; ACCESSOR
    #:qualified-ty-type                  ; ACCESSOR
+   #:qualified-ty-p                     ; FUNCTION
    #:qualified-ty-list                  ; TYPE
    #:remove-source-info                 ; FUNCTION
    #:predicate-to-key                   ; FUNCTION

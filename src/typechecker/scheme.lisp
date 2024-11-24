@@ -82,14 +82,19 @@
   (:method ((ty ty))
     (to-scheme (qualify nil ty))))
 
-(defun fresh-inst (ty-scheme &key skolemize)
+(defun fresh-inst (ty-scheme &key skolemize-p)
   (declare (type ty-scheme ty-scheme)
            (values qualified-ty &optional))
-  (let ((types (mapcar (lambda (k) (if skolemize
-                                       (make-skolem k)
-                                       (make-variable k)))
-                       (ty-scheme-kinds ty-scheme))))
-    (instantiate types (ty-scheme-type ty-scheme))))
+  (let ((inner-ty (ty-scheme-type ty-scheme)))
+    (when (and skolemize-p
+               (not (existential-ty-p inner-ty)))
+      (util:coalton-bug "Attempted to Skolemize non-existential type '~S'"
+                        inner-ty))
+    (let ((types (mapcar #'make-variable
+                         (ty-scheme-kinds ty-scheme))))
+      (instantiate types (if (existential-ty-p inner-ty)
+                             (fresh-inst-ex inner-ty :skolemize-p skolemize-p)
+                             inner-ty)))))
 
 (defun scheme-predicates (ty-scheme)
   "Get freshly instantiated predicates of scheme TY-SCHEME"
