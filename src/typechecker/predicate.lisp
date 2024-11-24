@@ -15,6 +15,9 @@
    #:ty-predicate-types                 ; ACCESSOR
    #:ty-predicate-p                     ; FUNCTION
    #:ty-predicate-list                  ; TYPE
+   #:ty-predicate-ex                    ; STRUCT
+   #:make-ty-predicate-ex               ; CONSTRUCTOR
+   #:ty-predicate-ex-p                  ; FUNCTION
    #:qualified-ty                       ; STRUCT
    #:make-qualified-ty                  ; CONSTRUCTOR
    #:qualified-ty-predicates            ; ACCESSOR
@@ -63,6 +66,11 @@
   (and (eq (ty-predicate-class pred1) (ty-predicate-class pred2))
        (equalp (ty-predicate-types pred1) (ty-predicate-types pred2))))
 
+(defstruct (ty-predicate-ex (:include ty-predicate))
+  "A type predicate with existentials. Carries a key for runtime dict
+lookup."
+  (key nil :type fixnum :read-only t))
+
 ;;;
 ;;; Qualified types
 ;;;
@@ -100,26 +108,17 @@
      :types (ty-predicate-types pred)
      :location nil))
 
+  (:method ((pred ty-predicate-ex))
+    (make-ty-predicate-ex
+     :class (ty-predicate-class pred)
+     :types (ty-predicate-types pred)
+     :key (ty-predicate-ex-key pred)
+     :location nil))
+
   (:method ((qual-ty qualified-ty))
     (make-qualified-ty
      :predicates (mapcar #'remove-source-info (qualified-ty-predicates qual-ty))
      :type (qualified-ty-type qual-ty))))
-
-(defun predicate-to-key (pred)
-  (declare (type ty-predicate pred)
-           (values fixnum))
-  (let ((norm-pred
-          (loop :for var :in (type-variables pred)
-                :for i :from 0
-                :for sub := (list (make-substitution :from var :to (make-tgen :id i)))
-                :for subs := sub :then (merge-substitution-lists sub subs)
-                :finally (return (apply-substitution subs pred)))))
-    (sxhash (cons (ty-predicate-class norm-pred)
-                  (mapcar (lambda (ty)
-                            (if (tgen-p ty)
-                                (tgen-id ty)
-                                ty))
-                          (ty-predicate-types norm-pred))))))
 
 ;;;
 ;;; Methods
@@ -133,11 +132,27 @@
    :types (apply-substitution subst-list (ty-predicate-types type))
    :location (ty-predicate-location type)))
 
+(defmethod apply-substitution (subst-list (type ty-predicate-ex))
+  (declare (type substitution-list subst-list)
+           (values ty-predicate-ex &optional))
+  (make-ty-predicate-ex
+   :class (ty-predicate-class type)
+   :types (apply-substitution subst-list (ty-predicate-types type))
+   :key (ty-predicate-ex-key type)
+   :location (ty-predicate-location type)))
+
 (defmethod apply-ksubstitution (subs (type ty-predicate))
   (declare (type ksubstitution-list subs))
   (make-ty-predicate
    :class (ty-predicate-class type)
    :types (apply-ksubstitution subs (ty-predicate-types type))))
+
+(defmethod apply-ksubstitution (subs (type ty-predicate-ex))
+  (declare (type ksubstitution-list subs))
+  (make-ty-predicate-ex
+   :class (ty-predicate-class type)
+   :types (apply-ksubstitution subs (ty-predicate-types type))
+   :key (ty-predicate-ex-key type)))
 
 (defmethod type-variables ((type ty-predicate))
   (type-variables (ty-predicate-types type)))
@@ -151,10 +166,27 @@
    :class (ty-predicate-class type)
    :types (instantiate types (ty-predicate-types type))))
 
-(defmethod instantiate-ex (types (type ty-predicate))
-  (make-ty-predicate
+(defmethod instantiate (types (type ty-predicate-ex))
+  (make-ty-predicate-ex
    :class (ty-predicate-class type)
-   :types (instantiate-ex types (ty-predicate-types type))))
+   :types (instantiate types (ty-predicate-types type))
+   :key (ty-predicate-ex-key type)))
+
+(defmethod instantiate-ex (types (type ty-predicate))
+  (if (every #'tyskolem-p types)
+      (let ((key (sxhash (cons (ty-predicate-class type)
+                               (mapcar (lambda (ty)
+                                         (cond ((tex-p ty) (tex-id ty))
+                                               ((tgen-p ty) nil)
+                                               (t ty)))
+                                       (ty-predicate-types type))))))
+        (make-ty-predicate-ex
+         :class (ty-predicate-class type)
+         :types (instantiate-ex types (ty-predicate-types type))
+         :key key))
+      (make-ty-predicate
+       :class (ty-predicate-class type)
+       :types (instantiate-ex types (ty-predicate-types type)))))
 
 (defmethod apply-substitution (subst-list (type qualified-ty))
   (declare (type substitution-list subst-list))
