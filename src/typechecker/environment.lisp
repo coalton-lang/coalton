@@ -48,6 +48,7 @@
    #:constructor-entry-constructs           ; ACCESSOR
    #:constructor-entry-classname            ; ACCESSOR
    #:constructor-entry-compressed-repr      ; ACCESSOR
+   #:constructor-entry-runtime-predicates   ; ACCESSOR
    #:constructor-entry-list                 ; TYPE
    #:constructor-environment                ; STRUCT
    #:struct-field                           ; STRUCT
@@ -418,16 +419,21 @@
 ;;;
 
 (defstruct constructor-entry
-  (name            (util:required 'name)            :type symbol                         :read-only t)
-  (arity           (util:required 'arity)           :type alexandria:non-negative-fixnum :read-only t)
-  (existential-p   (util:required 'existential-p)   :type boolean                        :read-only t)
-  (constructs      (util:required 'constructs)      :type symbol                         :read-only t)
-  (classname       (util:required 'classname)       :type symbol                         :read-only t)
-  (docstring       (util:required 'docstring)       :type (or string null)               :read-only t)
+  (name                  (util:required 'name)            :type symbol                         :read-only t)
+  (arity                 (util:required 'arity)           :type alexandria:non-negative-fixnum :read-only t)
+  (existential-p         (util:required 'existential-p)   :type boolean                        :read-only t)
+  (constructs            (util:required 'constructs)      :type symbol                         :read-only t)
+  (classname             (util:required 'classname)       :type symbol                         :read-only t)
+  (docstring             (util:required 'docstring)       :type (or string null)               :read-only t)
 
   ;; If this constructor constructs a compressed-repr type then
   ;; compressed-repr is the runtime value of this nullary constructor
-  (compressed-repr (util:required 'compressed-repr) :type t                              :read-only t))
+  (compressed-repr       (util:required 'compressed-repr) :type t                              :read-only t)
+  
+  ;; For existential constructors, this is the list of normalized
+  ;; predicates for which instances of the constructor carry runtime
+  ;; dictionaries.
+  (runtime-predicates    nil                              :type ty-predicate-list              :read-only t))
 
 (defmethod source:docstring ((self constructor-entry))
   (constructor-entry-docstring self))

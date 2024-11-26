@@ -299,7 +299,8 @@
   (let ((ksubs nil)
 
         (ctor-table (make-hash-table :test #'eq))
-        (ctor-preds-table (make-hash-table :test #'eq)))
+        (ctor-preds-table (make-hash-table :test #'eq))
+        (ctor-norm-preds-table (make-hash-table :test #'eq)))
 
     ;; Infer the kinds of each type
     (loop :for type :in types
@@ -377,10 +378,15 @@
                                (tc:apply-ksubstitution ksubs (gethash name (partial-type-env-ty-table env)))
                                tvars))
                         :for qual-ty := (tc:qualify ctor-preds ty)
-                        :collect (tc:quantify-using-tvar-order (append tvars)
-                                                               (if (parser:existential-constructor-p ctor)
-                                                                   (tc:existentialize ctor-vars qual-ty)
-                                                                   qual-ty)))
+                        :for scheme := (tc:quantify-using-tvar-order (append tvars)
+                                                                     (if (parser:existential-constructor-p ctor)
+                                                                         (tc:existentialize ctor-vars qual-ty)
+                                                                         qual-ty))
+                        :do (setf (gethash ctor-name ctor-norm-preds-table) (mapcar #'tc:normalize-predicate
+                                                                                    (remove-if-not (lambda (pred)
+                                                                                                     (some #'tc:tyskolem-p (tc:type-variables pred)))
+                                                                                                   (tc:scheme-predicates scheme))))
+                        :collect scheme)
 
              :for constructor-args
                := (loop :for ctor :in (parser:type-definition-ctors type)
@@ -432,7 +438,8 @@
                                                :docstring ctor-docstring
                                                :compressed-repr (if (eq repr-type :enum)
                                                                     classname
-                                                                    nil))))
+                                                                    nil)
+                                               :runtime-predicates (gethash ctor-name ctor-norm-preds-table))))
 
                              (type-definition
                                (make-type-definition

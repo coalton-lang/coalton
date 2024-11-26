@@ -900,7 +900,7 @@ Returns a `node'.")
   (:documentation "Translate the typechecker AST pattern to the codegen AST.")
   (:method ((pat tc:pattern-var))
     (let* ((qual-ty (tc:pattern-type pat))
-           (skolem-p (every #'tc:tyskolem-p (tc:type-variables qual-ty))))
+           (skolem-p (some #'tc:tyskolem-p (tc:type-variables qual-ty))))
       (assert (or skolem-p (null (tc:qualified-ty-predicates qual-ty))))
 
       (if skolem-p

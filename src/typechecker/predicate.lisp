@@ -17,6 +17,7 @@
    #:ty-predicate-list                  ; TYPE
    #:ty-predicate-ex                    ; STRUCT
    #:make-ty-predicate-ex               ; CONSTRUCTOR
+   #:ty-predicate-ex-key                ; ACCESSOR
    #:ty-predicate-ex-p                  ; FUNCTION
    #:qualified-ty                       ; STRUCT
    #:make-qualified-ty                  ; CONSTRUCTOR
@@ -25,7 +26,6 @@
    #:qualified-ty-p                     ; FUNCTION
    #:qualified-ty-list                  ; TYPE
    #:remove-source-info                 ; FUNCTION
-   #:predicate-to-key                   ; FUNCTION
    #:static-predicate-p                 ; FUNCTION
    #:type-predicate=                    ; FUNCTION
    #:qualify                            ; FUNCTION
@@ -173,20 +173,9 @@ lookup."
    :key (ty-predicate-ex-key type)))
 
 (defmethod instantiate-ex (types (type ty-predicate))
-  (if (every #'tyskolem-p types)
-      (let ((key (sxhash (cons (ty-predicate-class type)
-                               (mapcar (lambda (ty)
-                                         (cond ((tex-p ty) (tex-id ty))
-                                               ((tgen-p ty) nil)
-                                               (t ty)))
-                                       (ty-predicate-types type))))))
-        (make-ty-predicate-ex
-         :class (ty-predicate-class type)
-         :types (instantiate-ex types (ty-predicate-types type))
-         :key key))
-      (make-ty-predicate
-       :class (ty-predicate-class type)
-       :types (instantiate-ex types (ty-predicate-types type)))))
+  (make-ty-predicate
+   :class (ty-predicate-class type)
+   :types (instantiate-ex types (ty-predicate-types type))))
 
 (defmethod apply-substitution (subst-list (type qualified-ty))
   (declare (type substitution-list subst-list))

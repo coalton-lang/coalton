@@ -384,7 +384,7 @@ EXPECTED-TYPE with the current substitutions and environment."
                                                        subs
                                                        env)
                               (when (tc:tyskolem-p ty_)
-                                (check-skolem-preds preds_ preds from-type subs_ env))
+                                #+nil (check-skolem-preds preds_ preds from-type subs_ env))
                               (setf preds (append preds preds_))
                               (setf accessors (append accessors accessors_))
                               (setf subs subs_)
@@ -408,7 +408,7 @@ EXPECTED-TYPE with the current substitutions and environment."
                                                        subs
                                                        env)
                               (when (tc:tyskolem-p ty_)
-                                (check-skolem-preds preds_ preds new-from subs_ env))
+                                #+nil (check-skolem-preds preds_ preds new-from subs_ env))
                               (setf preds (append preds preds_))
                               (setf accessors (append accessors accessors_))
                               (setf subs subs_)

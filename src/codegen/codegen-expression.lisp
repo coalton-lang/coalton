@@ -266,11 +266,12 @@
             ,(codegen-expression (node-bind-body expr) env))))))
 
   (:method ((expr node-runtime-dict-lookup) env)
-    (let* ((pred (node-runtime-dict-lookup-predicate expr))
-           (key (tc:predicate-to-key pred)))
-      `(rt:lookup-dict
-        ,(gethash key *skolem-dict-table*)
-        ,key))))
+    (let ((pred (node-runtime-dict-lookup-predicate expr)))
+      (multiple-value-bind (expr index)
+          (values-list (gethash (tc:remove-source-info pred) *skolem-dict-table*))
+        `(rt:lookup-dict
+          ,expr
+          ,index)))))
 
 (defun find-constructor (initform env)
   (if (or (node-application-p initform) (node-direct-application-p initform))

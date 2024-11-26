@@ -24,6 +24,7 @@
    #:scheme-predicates                  ; FUNCTION
    #:fresh-pred                         ; FUNCTION
    #:fresh-preds                        ; FUNCTION
+   #:normalize-predicate                ; FUNCTION
    #:quantify-using-tvar-order          ; FUNCTION
    ))
 
@@ -60,7 +61,7 @@
 
 (defun quantify (tyvars type)
   (declare (type tyvar-list tyvars)
-           (type qualified-ty type)
+           (type (or qualified-ty existential-ty) type)
            (values ty-scheme))
   (let* ((vars (remove-if
                 (lambda (x) (not (find x tyvars :test #'equalp)))
@@ -98,7 +99,9 @@
 
 (defun scheme-predicates (ty-scheme)
   "Get freshly instantiated predicates of scheme TY-SCHEME"
-  (qualified-ty-predicates (fresh-inst ty-scheme)))
+  (qualified-ty-predicates (fresh-inst ty-scheme
+                                       :skolemize-p (existential-ty-p
+                                                     (ty-scheme-type ty-scheme)))))
 
 (defun fresh-pred (pred)
   "Returns PRED with fresh type variables"
@@ -117,6 +120,16 @@
          (qual-ty (make-qualified-ty :predicates preds :type var))
          (scheme (quantify (type-variables (cons var preds)) qual-ty)))
     (qualified-ty-predicates (fresh-inst scheme))))
+
+(defun normalize-predicate (pred)
+  (declare (type ty-predicate pred)
+           (values ty-predicate &optional))
+  (let* ((ex-ty (existentialize (remove-if-not #'tyskolem-p (type-variables pred))
+                                (qualify (list pred) (make-variable))))
+         (scheme (quantify (type-variables ex-ty) ex-ty)))
+    (first (qualified-ty-predicates
+            (existential-ty-type
+             (ty-scheme-type scheme))))))
 
 (defun quantify-using-tvar-order (tyvars type)
   (let* ((vars (remove-if
