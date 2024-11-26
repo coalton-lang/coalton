@@ -357,11 +357,12 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                           :name 'coalton:unit))))
 
              (fun-ty_ fun-ty)
+             (rand-checks nil)
              (rand-nodes
                ;; Apply arguments one at a time for better error messages
                (loop :for rand :in rands
                      :collect
-                     (flet ((check-skolem-preds (skolem-preds expected-preds expected-type subs env)
+                     (flet ((check-skolem-preds (rand skolem-preds expected-preds expected-type subs env)
                               "Check if SKOLEM-PREDS entail the EXPECTED-PREDS for the given
 EXPECTED-TYPE with the current substitutions and environment."
                               (loop :for expected-pred :in expected-preds
@@ -384,7 +385,9 @@ EXPECTED-TYPE with the current substitutions and environment."
                                                        subs
                                                        env)
                               (when (tc:tyskolem-p ty_)
-                                #+nil (check-skolem-preds preds_ preds from-type subs_ env))
+                                (push (lambda (rand subs env)
+                                        (check-skolem-preds rand preds_ preds from-type subs env))
+                                      rand-checks))
                               (setf preds (append preds preds_))
                               (setf accessors (append accessors accessors_))
                               (setf subs subs_)
@@ -408,7 +411,9 @@ EXPECTED-TYPE with the current substitutions and environment."
                                                        subs
                                                        env)
                               (when (tc:tyskolem-p ty_)
-                                #+nil (check-skolem-preds preds_ preds new-from subs_ env))
+                                (push (lambda (rand subs env)
+                                        (check-skolem-preds rand preds_ preds new-from subs env))
+                                      rand-checks))
                               (setf preds (append preds preds_))
                               (setf accessors (append accessors accessors_))
                               (setf subs subs_)
@@ -434,6 +439,9 @@ EXPECTED-TYPE with the current substitutions and environment."
               (let ((type (tc:apply-substitution subs fun-ty_))
                     (preds (remove-if (lambda (pred) (some #'tc:tyskolem-p (tc:type-variables pred)))
                                       (tc:apply-substitution subs preds))))
+                (loop :for node :in rand-nodes
+                      :and check :in rand-checks
+                      :do (funcall check node subs env))
                 (values type
                         preds
                         accessors
