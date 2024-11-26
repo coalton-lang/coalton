@@ -429,7 +429,7 @@
   ;; If this constructor constructs a compressed-repr type then
   ;; compressed-repr is the runtime value of this nullary constructor
   (compressed-repr       (util:required 'compressed-repr) :type t                              :read-only t)
-  
+
   ;; For existential constructors, this is the list of normalized
   ;; predicates for which instances of the constructor carry runtime
   ;; dictionaries.
