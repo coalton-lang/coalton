@@ -21,18 +21,21 @@
   (type (util:required 'type) :type t      :read-only t))
 
 (defun struct-or-class (&key
-                              (classname (error "Class Name required"))
-                              (constructor (error "Constructor required"))
-                              (superclass nil)
-                              (fields nil)
-                              mode)
+                          (classname (error "Class Name required"))
+                          (constructor (error "Constructor required"))
+                          (superclass nil)
+                          (fields nil)
+                          (dict-names nil)
+                          (runtime-dict-names nil)
+                          mode)
   (declare (type symbol classname)
            (type symbol constructor)
            (type symbol superclass)
            (type list fields)
            (type (member :class :struct) mode))
 
-  (let ((field-names (mapcar #'struct-or-class-field-name fields)))
+  (let* ((field-names (mapcar #'struct-or-class-field-name fields))
+         (non-dicts-field-names (remove "_dicts" field-names :test #'string= :key #'symbol-name)))
 
     (append
      (ecase mode
@@ -74,18 +77,26 @@
          (list
           ;; NOTE: We are omitting the inline call because this causes SBCL IR1 bugs for instance definitions.
           ;; `(declaim (inline ,constructor))
-          `(defun ,constructor ,field-names
+          `(defun ,constructor ,(append dict-names non-dicts-field-names)
              ,@(when settings:*emit-type-annotations*
                  `((declare ,@(loop :for field :in fields
-                                    :collect `(type ,(struct-or-class-field-type field) ,(struct-or-class-field-name field))))))
-             (make-instance ',classname ,@(mapcan
-                                           (lambda (field)
-                                             `(',field ,field))
-                                           field-names)))))))
+                                    :and field-name :in field-names
+                                    :unless (string= "_dicts" (symbol-name field-name))
+                                      :collect `(type ,(struct-or-class-field-type field) ,(struct-or-class-field-name field))))))
+             (declare (ignore ,@(set-difference dict-names runtime-dict-names)))
+             (make-instance ',classname
+                            ,@(mapcan
+                               (lambda (field)
+                                 (if (string= "_dicts" (symbol-name field))
+                                     `(',field (make-array '(,(length runtime-dict-names))
+                                                           :element-type t
+                                                           :initial-contents (list ,@runtime-dict-names)))
+                                     `(',field ,field)))
+                               field-names)))))))
      (if (not (null fields))
          (append
           `((global-lexical:define-global-lexical ,constructor rt:function-entry)
-            (setf ,constructor ,(rt:construct-function-entry `#',constructor (length fields))))
+            (setf ,constructor ,(rt:construct-function-entry `#',constructor (+ (length dict-names) (length non-dicts-field-names)))))
           (loop :for field :in fields
                 :for package := (symbol-package classname)
                 :for field-name := (alexandria:format-symbol package "~A-~A" classname (struct-or-class-field-name field))

@@ -84,7 +84,9 @@ its runtime dict.")
         (t
          (let* ((ctor-name (pattern-constructor-name pattern))
                 (ctor (tc:lookup-constructor env ctor-name))
-                (lisp-type-string (format nil "~A/~A" (tc:constructor-entry-constructs ctor) ctor-name)))
+                (lisp-type-string (format nil "~A/~A" (tc:constructor-entry-constructs ctor) ctor-name))
+                (dicts-accessor (when (tc:constructor-entry-existential-p ctor)
+                                  (alexandria:format-symbol package "~A-_~A" lisp-type-string "dicts"))))
            (multiple-value-bind (preds bindings)
                (loop :with preds := nil
                      :with bindings := nil
@@ -105,6 +107,7 @@ its runtime dict.")
                                  (unless (gethash hash-key *skolem-dict-table*)
                                    (setf (gethash hash-key *skolem-dict-table*)
                                          (list expr
+                                               dicts-accessor
                                                (position (tc:normalize-predicate pred)
                                                          (tc:constructor-entry-runtime-predicates ctor)
                                                          :test #'tc:type-predicate=)))))))

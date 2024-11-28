@@ -267,11 +267,9 @@
 
   (:method ((expr node-runtime-dict-lookup) env)
     (let ((pred (node-runtime-dict-lookup-predicate expr)))
-      (multiple-value-bind (expr index)
+      (multiple-value-bind (expr dicts-accessor index)
           (values-list (gethash (tc:remove-source-info pred) *skolem-dict-table*))
-        `(rt:lookup-dict
-          ,expr
-          ,index)))))
+        `(aref (funcall #',dicts-accessor ,expr) ,index)))))
 
 (defun find-constructor (initform env)
   (if (or (node-application-p initform) (node-direct-application-p initform))

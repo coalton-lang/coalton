@@ -18,9 +18,9 @@
 
 (in-package #:coalton-impl/codegen/codegen-type-definition)
 
-(defun constructor-slot-name (constructor-entry i)
+(defun constructor-slot-name (constructor-entry x)
   (alexandria:format-symbol (symbol-package (tc:constructor-entry-classname constructor-entry))
-                            "_~D" i))
+                            "_~A" x))
 
 (defun codegen-type-definition (def env)
   (append
@@ -74,6 +74,18 @@
 
             :for field-names := (mapcar #'struct-or-class-field-name fields)
 
+            :for qual-ty := (tc:fresh-inst
+                             (tc:lookup-value-type env constructor-name)
+                             :skolemize-p (tc:constructor-entry-existential-p constructor))
+            :for preds := (tc:qualified-ty-predicates qual-ty)
+            :for (dict-names . runtime-dict-names)
+              := (loop :for pred :in preds
+                       :for dict-name := (gensym "DICT")
+                       :collect dict-name :into dict-names
+                       :when (some #'tc:tyskolem-p (tc:type-variables pred))
+                         :collect dict-name :into runtime-dict-names
+                       :finally (return (cons dict-names runtime-dict-names)))
+
             ;; Declare the constructor as inline in release mode
             :append
             (when (settings:coalton-release-p)
@@ -83,7 +95,14 @@
                      :classname classname
                      :constructor constructor-name
                      :superclass superclass
-                     :fields fields
+                     :fields (if (tc:constructor-entry-existential-p constructor)
+                                 (cons (make-struct-or-class-field
+                                        :name (constructor-slot-name constructor "dicts")
+                                        :type `(simple-array t (,(length dict-names))))
+                                       fields)
+                                 fields)
+                     :dict-names dict-names
+                     :runtime-dict-names runtime-dict-names
                      :mode (if (settings:coalton-release-p)
                                :struct
                                :class))
