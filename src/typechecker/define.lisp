@@ -1843,9 +1843,9 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
                  (expr-preds (tc:apply-substitution subs expr-preds))
 
-                 (preds (remove-if-not (lambda (p)
-                                         (not (tc:entail (tc-env-env env) expr-preds p)))
-                                       (tc:apply-substitution subs preds))))
+                 (preds (remove-if (lambda (p)
+                                     (tc:entail (tc-env-env env) expr-preds p))
+                                   (tc:apply-substitution subs preds))))
 
             (setf preds (tc:apply-substitution subs preds))
             (setf local-tvars (expand-local-tvars env-tvars local-tvars preds (tc-env-env env)))

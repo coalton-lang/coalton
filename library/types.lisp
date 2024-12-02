@@ -37,6 +37,14 @@
   (define (proxy-inner _)
     Proxy)
 
+  (declare proxy-fun (Proxy (:a -> :b) -> Proxy :a))
+  (define (proxy-fun _)
+    Proxy)
+
+  (declare proxy-arg (Proxy (:a -> :b) -> Proxy :b))
+  (define (proxy-arg _)
+    Proxy)
+
   (repr :native (cl:or cl:symbol cl:list))
   (define-type LispType
     "The runtime representation of a Coalton type as a lisp type.")
@@ -84,13 +92,18 @@ The compiler will auto-generate instances of `RuntimeRepr` for all defined types
     (define (runtime-repr _)
       (lisp LispType () 'cl:rational)))
 
-  (define-instance (RuntimeRepr (:a -> :b))
-    (define (runtime-repr _)
-      (lisp LispType () 'coalton-impl/runtime/function-entry:function-entry)))
+  (define-instance ((RuntimeRepr :a) (RuntimeRepr :b) => RuntimeRepr (:a -> :b))
+    (define (runtime-repr x)
+      (let ((repr-a (runtime-repr (proxy-fun x)))
+            (repr-b (runtime-repr (proxy-arg x))))
+        (lisp LispType (repr-a repr-b)
+          `(-> ,repr-a ,repr-b)))))
 
-  (define-instance (RuntimeRepr (List :a))
-    (define (runtime-repr _)
-      (lisp LispType () 'cl:list)))
+  (define-instance (RuntimeRepr :a => RuntimeRepr (List :a))
+    (define (runtime-repr x)
+      (let ((repr-a (runtime-repr (proxy-inner x))))
+        (lisp LispType (repr-a)
+          `(cl:list ,repr-a)))))
 
   ;; The compiler will not auto-generate RuntimeRepr instances for
   ;; types defined in this file to avoid circular dependencies.

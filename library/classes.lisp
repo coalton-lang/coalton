@@ -31,7 +31,8 @@
    #:TryInto
    #:Iso
    #:Unwrappable #:unwrap-or-else #:with-default #:unwrap #:expect #:as-optional
-   #:default #:defaulting-unwrap #:default?))
+   #:default #:defaulting-unwrap #:default?
+   #:Dynamic #:fromDynamic))
 
 (in-package #:coalton-library/classes)
 
@@ -350,9 +351,20 @@ Typical `fail` continuations are:
 
   (declare default? ((Default :a) (Eq :a) => :a -> Boolean))
   (define (default? x)
-      "Is `x` the default item of its type?"
-      (== x (default))))
+    "Is `x` the default item of its type?"
+    (== x (default)))
 
+  (define-type Dynamic
+    (forall (:a) types:RuntimeRepr :a => Dynamic :a))
+
+  (declare fromDynamic (types:RuntimeRepr :a => Dynamic -> Optional :a))
+  (define (fromDynamic (Dynamic x))
+    ((fn (proxy-a)
+       (if (== (types:runtime-repr proxy-a)
+               (types:runtime-repr-of x))
+           (Some (types:as-proxy-of (lisp :a (x) x) proxy-a))
+           None))
+     types:Proxy)))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/CLASSES")
