@@ -7,6 +7,7 @@
    (#:cell #:coalton-library/cell)
    (#:iter #:coalton-library/iterator))
   (:export
+   #:from-optional
    #:from-some
    #:some?
    #:none?))
@@ -22,6 +23,13 @@
   ;;
   ;; Optional
   ;;
+
+  (declare from-optional (:a -> (Optional :a) -> :a))
+  (define (from-optional def opt)
+    "Get the value of OPT, or return DEF if OPT is None."
+    (match opt
+      ((Some x) x)
+      ((None) def)))
 
   (declare from-some (String -> (Optional :a) -> :a))
   (define (from-some str opt)

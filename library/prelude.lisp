@@ -130,10 +130,12 @@
 
   (:import-from
    #:coalton-library/optional
+   #:from-optional
    #:from-some
    #:some?
    #:none?)
   (:export
+   #:from-optional
    #:from-some
    #:some?
    #:none?)
