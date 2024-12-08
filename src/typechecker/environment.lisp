@@ -859,6 +859,7 @@
                              (source-name-environment (environment-source-name-environment env)))
   (declare (type environment env)
            (type value-environment value-environment)
+           (type type-environment type-environment)
            (type constructor-environment constructor-environment)
            (type struct-environment struct-environment)
            (type class-environment class-environment)
