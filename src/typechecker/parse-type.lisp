@@ -17,6 +17,7 @@
    (#:source #:coalton-impl/source)
    (#:tc #:coalton-impl/typechecker/stage-1))
   (:export
+   #:apply-type-alias-substitutions          ; FUNCTION
    #:parse-type                         ; FUNCTION
    #:parse-qualified-type               ; FUNCTION
    #:parse-ty-scheme                    ; FUNCTION
@@ -30,28 +31,93 @@
 ;;; Entrypoints
 ;;;
 
-(defun parse-type (ty env)
-  (declare (type parser:ty ty)
-           (type tc:environment env)
-           (values tc:ty &optional))
+(defgeneric apply-type-alias-substitutions (type parser-type env)
+  (:method ((type tc:tycon) parser-type env)
+    (declare (type parser:ty parser-type)
+             (type partial-type-env env)
+             (values tc:ty))
+    (let ((alias (tc:lookup-type-alias (partial-type-env-env env) (tc:tycon-name type) :no-error t)))
+      (when alias
+        (handler-case
+            (let ((substs (tc:match (first (tc:ty-alias (tc:type-alias-entry-type alias))) type)))
+              (setf type (tc:apply-substitution substs (tc:type-alias-entry-type alias))))
+          (tc:unification-error ()
+              (tc-error "Incomplete type alias application"
+                        (tc-note parser-type
+                                 "Type alias ~S is applied to 0 arguments, but ~D argument~:P ~:*~[are~;is~:;are~] required."
+                                 (tc:type-alias-entry-name alias)
+                                 (length (tc:type-alias-entry-tyvars type-alias)))))))
+      type))
 
-  (let ((tvars (parser:collect-type-variables ty))
+  (:method ((type tc:tapp) parser-type env)
+    (declare (type parser:ty parser-type)
+             (type partial-type-env env)
+             (values tc:tapp))
+    (when (typep (tc:tapp-from type) 'tc:tycon)
+      (let ((alias (tc:lookup-type-alias (partial-type-env-env env) (tc:tycon-name (tc:tapp-from type)) :no-error t)))
+        (when alias
+          (handler-case
+              (let ((substs (tc:match (first (tc:ty-alias (tc:type-alias-entry-type alias))) type)))
+                (setf type (tc:apply-substitution substs (tc:type-alias-entry-type alias))))
+            (tc:unification-error ()
+              (tc-error "Incomplete type alias application"
+                        (tc-note parser-type
+                                 "Type alias ~S is applied to ~D argument~:P, but ~D argument~:P ~:*~[are~;is~:;are~] required."
+                                 (tc:type-alias-entry-name alias)
+                                 (let ((type_ (copy-structure type)))
+                                   (loop :while (tc:tapp-p type_)
+                                         :sum 1
+                                         :do (setf type_ (tc:tapp-to type_))))
+                                 (length (tc:type-alias-entry-tyvars alias)))))))))
+    (tc:make-tapp
+     :alias (tc:ty-alias type)
+     :from (apply-type-alias-substitutions (tc:tapp-from type) parser-type env)
+     :to (apply-type-alias-substitutions (tc:tapp-to type) parser-type env)))
 
-        (partial-env (make-partial-type-env :env env)))
+  (:method ((type tc:qualified-ty) parser-type env)
+    (declare (type parser:qualified-ty parser-type)
+             (type partial-type-env env)
+             (values tc:qualified-ty))
+    (tc:make-qualified-ty
+     :predicates (tc:qualified-ty-predicates type)
+     :type (apply-type-alias-substitutions (tc:qualified-ty-type type)
+                                      (parser:qualified-ty-type parser-type)
+                                      env)))
 
-    (loop :for tvar :in tvars
-          :for tvar-name := (parser:tyvar-name tvar)
-          :do (partial-type-env-add-var partial-env tvar-name))
+  (:method ((type tc:ty) parser-type env)
+    (declare (type parser:ty parser-type)
+             (type partial-type-env env)
+             (ignore env)
+             (values tc:ty))
+    type))
+
+(defun parse-type (parser-ty env &optional ksubs (kind tc:+kstar+))
+  (declare (type parser:ty parser-ty)
+           (type (or tc:environment partial-type-env) env)
+           (type tc:ksubstitution-list ksubs)
+           (type tc:kind kind)
+           (values tc:ty  tc:ksubstitution-list &optional))
+
+  (let ((partial-env (if (typep env 'tc:environment)
+                         (make-partial-type-env :env env)
+                         env)))
+
+    (when (typep env 'tc:environment)
+      (loop :for tvar :in (parser:collect-type-variables parser-ty)
+            :for tvar-name := (parser:tyvar-name tvar)
+            :do (partial-type-env-add-var partial-env tvar-name)))
 
     (multiple-value-bind (ty ksubs)
-        (infer-type-kinds ty
-                          tc:+kstar+
-                          nil
+        (infer-type-kinds parser-ty
+                          kind
+                          ksubs
                           partial-env)
 
       (setf ty (tc:apply-ksubstitution ksubs ty))
       (setf ksubs (tc:kind-monomorphize-subs (tc:kind-variables ty) ksubs))
-      (tc:apply-ksubstitution ksubs ty))))
+      (setf ty (tc:apply-ksubstitution ksubs ty))
+      (setf ty (apply-type-alias-substitutions ty parser-ty partial-env))
+      (values ty ksubs))))
 
 (defun parse-qualified-type (unparsed-ty env)
   (declare (type parser:qualified-ty unparsed-ty)
@@ -59,7 +125,6 @@
            (values tc:qualified-ty &optional))
 
   (let ((tvars (parser:collect-type-variables unparsed-ty))
-
         (partial-env (make-partial-type-env :env env)))
 
     (loop :for tvar :in tvars
@@ -70,6 +135,9 @@
         (infer-type-kinds unparsed-ty tc:+kstar+ nil partial-env)
 
       (setf qual-ty (tc:apply-ksubstitution ksubs qual-ty))
+      (setf qual-ty (tc:make-qualified-ty
+                     :predicates (tc:qualified-ty-predicates qual-ty)
+                     :type (tc:qualified-ty-type qual-ty)))
       (setf ksubs (tc:kind-monomorphize-subs (tc:kind-variables qual-ty) ksubs))
 
       (let* ((qual-ty (tc:apply-ksubstitution ksubs qual-ty))
@@ -81,7 +149,7 @@
         (check-for-ambiguous-variables preds ty unparsed-ty env)
         (check-for-reducible-context preds unparsed-ty env)
 
-        qual-ty))))
+        (apply-type-alias-substitutions qual-ty unparsed-ty partial-env)))))
 
 (defun parse-ty-scheme (ty env)
   (declare (type parser:qualified-ty ty)
@@ -154,7 +222,9 @@
 (defgeneric infer-type-kinds (type expected-kind ksubs env)
   (:method ((type parser:tyvar) expected-kind ksubs env)
     (declare (type tc:kind expected-kind)
-             (type tc:ksubstitution-list ksubs))
+             (type tc:ksubstitution-list ksubs)
+             (type partial-type-env env)
+             (values tc:ty tc:ksubstitution-list &optional))
     (let* ((tvar (partial-type-env-lookup-var
                   env
                   (parser:tyvar-name type)
@@ -177,7 +247,7 @@
     (declare (type tc:kind expected-kind)
              (type tc:ksubstitution-list ksubs)
              (type partial-type-env env)
-             (values tc:ty tc:ksubstitution-list))
+             (values tc:ty tc:ksubstitution-list &optional))
 
     (let ((type_ (partial-type-env-lookup-type env type)))
       (handler-case
@@ -232,7 +302,7 @@
     (declare (type tc:kind expected-kind)
              (type tc:ksubstitution-list ksubs)
              (type partial-type-env env)
-             (values tc:qualified-ty tc:ksubstitution-list))
+             (values tc:qualified-ty tc:ksubstitution-list &optional))
 
     ;; CCL >:(
     (assert (equalp expected-kind tc:+kstar+))
@@ -273,9 +343,7 @@
     (let ((types (loop :for ty :in (parser:ty-predicate-types pred)
                        :for class-ty :in (tc:ty-predicate-types class-pred)
                        :collect (multiple-value-bind (ty ksubs_)
-                                    (infer-type-kinds ty (tc:kind-of class-ty)
-                                                      ksubs
-                                                      env)
+                                    (parse-type ty env ksubs (tc:kind-of class-ty))
                                   (setf ksubs ksubs_)
                                   ty))))
       (values (tc:make-ty-predicate :class class-name

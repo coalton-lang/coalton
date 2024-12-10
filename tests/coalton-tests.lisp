@@ -14,6 +14,7 @@
   (%run-tests "define-class.txt")
   (%run-tests "define-instance.txt")
   (%run-tests "define-type.txt")
+  (%run-tests "define-type-alias.txt")
   (%run-tests "define.txt")
   (%run-tests "fundeps.txt")
   (%run-tests "hashtable.txt")
