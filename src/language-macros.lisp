@@ -29,6 +29,64 @@ Note that this may copy the object or allocate memory."
              `(fn (,lexpr)
                 (the ,type (,into ,lexpr)))))))
 
+(cl:defmacro try-as (type cl:&optional (expr cl:nil expr-supplied-p))
+  "A syntactic convenience for type casting.
+
+    (try-as <type> <expr>)
+
+is equivalent to
+
+    (the (Result :_ <type>) (tryInto <expr>))
+
+and
+
+    (try-as <type>)
+
+is equivalent to
+
+    (fn (expr) (the (Result :_ <type>) (tryInto expr))).
+
+Note that this may copy the object or allocate memory."
+
+  (cl:let ((try-into (cl:ignore-errors (cl:find-symbol "TRYINTO" "COALTON-LIBRARY/CLASSES")))
+           (Result (cl:ignore-errors (cl:find-symbol "RESULT" "COALTON-LIBRARY/CLASSES"))))
+    (cl:assert try-into () "`try-as` macro does not have access to `try-into` yet.")
+    (cl:assert Result () "`try-as` macro does not have access to `Result` yet.")
+    (cl:if expr-supplied-p
+           `(the (,Result :_ ,type) (,try-into ,expr))
+           (alexandria:with-gensyms (lexpr)
+             `(fn (,lexpr)
+                (the (,Result :_ ,type) (,try-into ,lexpr)))))))
+
+(cl:defmacro unwrap-as (type cl:&optional (expr cl:nil expr-supplied-p))
+  "A syntactic convenience for type casting.
+
+    (unwrap-as <type> <expr>)
+
+is equivalent to
+
+    (the <type> (uwrap (tryInto <expr>)))
+
+and
+
+    (unwrap-as <type>)
+
+is equivalent to
+
+    (fn (expr) (the <type> (unwrap (tryInto expr)))).
+
+Note that this may copy the object or allocate memory."
+
+  (cl:let ((try-into (cl:ignore-errors (cl:find-symbol "TRYINTO" "COALTON-LIBRARY/CLASSES")))
+           (unwrap (cl:ignore-errors (cl:find-symbol "UNWRAP" "COALTON-LIBRARY/CLASSES"))))
+    (cl:assert try-into () "`try-as` macro does not have access to `try-into` yet.")
+    (cl:assert unwrap () "`unwrap` macro does not have access to `unwrap` yet.")
+    (cl:if expr-supplied-p
+           `(the ,type (,unwrap (,try-into ,expr)))
+           (alexandria:with-gensyms (lexpr)
+             `(fn (,lexpr)
+                (the ,type (,unwrap (,try-into ,lexpr))))))))
+
 (cl:defmacro nest (cl:&rest items)
   "A syntactic convenience for function application. Transform
 

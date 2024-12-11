@@ -12,18 +12,20 @@
   (:export
    #:Map
    #:empty
-   #:lookup
+   #:lookup #:contains?
    #:insert
    #:replace
    #:replace-or-insert #:insert-or-replace
-   #:remove
+   #:remove #:without
    #:keys
    #:values
    #:entries
    #:collect!
    #:collect
    #:update
-   #:merge))
+   #:merge #:union #:intersection #:difference #:sdifference
+   #:filter-by-key #:filter-by-value #:filter-by-entry
+   #:zip #:zip-with-default))
 
 (in-package :coalton-library/ord-map)
 
@@ -78,6 +80,13 @@
     (match mp
       ((%Map tre) (coalton-library/classes:map value (tree:lookup tre (JustKey k))))))
 
+  (declare contains? ((Ord :key) => :key -> (Map :key :value) -> Boolean))
+  (define (contains? k mp)
+    "Does `mp` contain a key `==' to `k`?"
+    (match (lookup mp k)
+      ((Some _) True)
+      ((None) False)))
+
   (declare insert ((Ord :key) => ((Map :key :value) -> :key -> :value -> (Optional (Map :key :value)))))
   (define (insert mp k v)
     "Associate K with V in MP. If MP already contains a mapping for K, return None."
@@ -124,6 +133,11 @@ Like `replace-or-insert', but prioritizing insertion as a use case."
                                  (match mp
                                    ((%Map tre) (tree:remove tre (JustKey k))))))
 
+  (declare without ((Ord :key) => :key -> (Map :key :value) -> (Map :key :value)))
+  (define (without k mp)
+    "If `mp` contains a mapping associated with a key `==' to `k`, construct a new Map without that mapping. Return `mp` if it contains no such mapping."
+    (with-default mp (remove mp k)))
+
   (declare entries ((Map :key :value) -> (iter:Iterator (Tuple :key :value))))
   (define (entries mp)
     "Iterate over the (key value) pairs in MP, sorted by the keys in least-to-greatest order."
@@ -163,6 +177,9 @@ If `iter` contains duplicate keys, later values will overwrite earlier values."
                 empty
                 iter))
 
+  (define-instance (Ord :key => iter:FromIterator (Map :key :value) (Tuple :key :value))
+    (define iter:collect! collect!))
+
   (declare collect ((Ord :key) (Foldable :collection) => ((:collection (Tuple :key :value)) -> (Map :key :value))))
   (define (collect coll)
     "Construct a `Map` containing all the `(key value)` pairs in `coll`.
@@ -173,8 +190,8 @@ If `coll` contains duplicate keys, later values will overwrite earlier values."
           empty
           coll))
 
-  (define-instance (Ord :key => iter:FromIterator (Map :key :value) (Tuple :key :value))
-    (define iter:collect! collect!))
+  (define-instance ((Ord :key) (Foldable :collection) => (Into (:collection (Tuple :key :value)) (Map :key :value)))
+    (define into collect))
 
   (declare update ((Ord :key) => (:value -> :value) -> (Map :key :value) -> :key -> (Optional (Map :key :value))))
   (define (update func mp key)
@@ -211,8 +228,78 @@ operation, and therefore Map cannot implement Monoid."
     (let (%Map b) = b)
     (%Map (tree:merge a b)))
 
+  (declare union (Ord :key => Map :key :value -> Map :key :value -> Map :key :value))
+  (define union
+    "Same as `merge`."
+    merge)
+
+  (declare intersection (Ord :key => Map :key :value -> Map :key :value -> Map :key :value))
+  (define (intersection a b)
+    "Construct a Map containing only those mappings from `b` that contain a key `==' to at least one key in `a`."
+    (let (%Map a) = a)
+    (let (%Map b) = b)
+    (%Map (tree:intersection a b)))
+
+  (declare difference (Ord :key => Map :key :value -> Map :key :value -> Map :key :value))
+  (define (difference a b)
+    "Construct a Map containing only those mappings from `b` which contain a key not `==' to any key in `a`."
+    (let (%Map a) = a)
+    (let (%Map b) = b)
+    (%Map (tree:difference a b)))
+
+  (declare sdifference (Ord :key => Map :key :value -> Map :key :value -> Map :key :value))
+  (define (sdifference a b)
+    "Symmetric difference.
+
+Construct a Map containing only those mappings of `a` and `b` which do not associate keys `==' keys in the other."
+    (let (%Map a) = a)
+    (let (%Map b) = b)
+    (%Map (tree:sdifference a b)))
+
+  (declare filter-by-key (Ord :key => (:key -> Boolean) -> Map :key :value -> Map :key :value))
+  (define (filter-by-key keep? mp)
+    "Construct a Map containing only those entries of `mp` which contain keys which satisfy `keep?`."
+    (let (%Map mp) = mp)
+    (%Map (tree:filter (compose keep? key) mp)))
+
+  (declare filter-by-value (Ord :key => (:value -> Boolean) -> Map :key :value -> Map :key :value))
+  (define (filter-by-value keep? mp)
+    "Construct a Map containing only those entries of `mp` which contain values which satisfy `keep?`."
+    (let (%Map mp) = mp)
+    (%Map (tree:filter (compose keep? value) mp)))
+
+  (declare filter-by-entry (Ord :key => ((Tuple :key :value) -> Boolean) -> Map :key :value -> Map :key :value))
+  (define (filter-by-entry keep? mp)
+    "Construct a Map containing only those entries of `mp` which satisfy `keep?`."
+    (let (%Map mp) = mp)
+    (%Map (tree:filter (compose keep? into) mp)))
+
+  (declare zip (Ord :key => Map :key :value1 -> Map :key :value2 -> Map :key (Tuple :value1 :value2)))
+  (define (zip a b)
+    "Construct a Map associating only those keys included in both `a` and `b` to the Tuple containing their respective values."
+    (fold (fn (mp k)
+            (insert-or-replace mp k (Tuple (unwrap (lookup a k))
+                                           (unwrap (lookup b k)))))
+          Empty
+          (tree:intersection (tree:collect! (keys a))
+                             (tree:collect! (keys b)))))
+
+  (declare zip-with-default ((Ord :key) (Default :value1) (Default :value2)
+                             => Map :key :value1 -> Map :key :value2 -> Map :key (Tuple :value1 :value2)))
+  (define (zip-with-default a b)
+    "Construct a Map associating all keys `a` and `b` to the Tuple containing their respective values, using the default value of the respectie types where a key is not associated."
+    (fold (fn (mp k)
+            (insert-or-replace mp k (Tuple (defaulting-unwrap (lookup a k))
+                                           (defaulting-unwrap (lookup b k)))))
+          Empty
+          (tree:intersection (tree:collect! (keys a))
+                             (tree:collect! (keys b)))))
+
   (define-instance (Ord :key => Semigroup (Map :key :value))
     (define <> merge))
+
+  (define-instance (Ord :key => (Monoid (Map :key :value)))
+    (define mempty Empty))
 
   (define-instance (Functor (Map :key))
     (define (coalton-library/classes:map func mp)
