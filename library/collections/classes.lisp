@@ -3,9 +3,29 @@
    #:coalton
    #:coalton-library/classes)
   (:local-nicknames
+   (#:l #:coalton-library/collections/immutable/list)
    (#:types #:coalton-library/types))
   (:export
-   ))
+   #:Collection
+   #:new
+   #:new-repeat
+   #:new-from
+   #:flatten
+   #:filter
+   #:remove-duplicates
+   #:empty?
+   #:length
+   #:contains-elt?
+   #:contains-where?
+   #:count-where
+   #:add
+
+   #:ImmutableCollection
+
+   #:MutableCollection
+   #:copy
+   #:filter!
+   #:add!))
 
 (in-package #:coalton-library/collections/classes)
 
@@ -54,7 +74,7 @@ use one of the Immutable collection typeclasses."
      (:m :a -> UFix))
     (contains-elt?
      "Check if the collection contains an element."
-     (Eq :a => :m :a -> Boolean))
+     (Eq :a => :a -> :m :a -> Boolean))
     (contains-where?
      "Check if the collection contanis an element satisfying the predicate."
      ((:a -> Boolean) -> :m :a -> Boolean))
@@ -81,6 +101,32 @@ the front or back, depending on which is natural for the underlying data structu
     (add!
      "Add an element to the collection in place. See `add`."
      (:a -> :m :a -> :m :a))))
+
+;; TODO: Because `List` is a predefined type, we can't define this
+;; in the new collections/immutable/list.lisp file. Define it here
+;; for now, and when we remove the deprecated versions move this
+;; into the list package.
+(coalton-toplevel
+  (define-instance (Collection List)
+    (define (new)
+      Nil)
+    (define (new-repeat n elt)
+      (l:repeat n elt))
+    (define (new-from n f)
+      (map f (l:range 0 (- n 1))))
+    (define (flatten lst)
+      (>>= lst (fn (x) x)))
+    (define filter l:filter)
+    (define remove-duplicates l:remove-duplicates)
+    (define empty? l:empty?)
+    (define length l:length)
+    (define contains-elt? l:contains-elt?)
+    (define contains-where? l:contains-where?)
+    (define count-where l:countBy)
+    (define add l:Cons))
+
+  (define-instance (ImmutableCollection List)))
+
 
 ;; #+sb-package-locks
 ;; (sb-ext:lock-package "COALTON-LIBRARY/COLLECTIONS/CLASSES")
