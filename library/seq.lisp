@@ -206,6 +206,12 @@ a new `Seq` instance."
                      (conc (vector:last-unsafe lsubts) (vector:head-unsafe rsubts))
                    (rebalance-branches
                     (fold <> (butlast lsubts) (make-list nsubts (butfirst rsubts))))))))))))
+  
+    (declare filter ((:a -> Boolean) -> (Seq :a) -> (Seq :a)))
+    (define (filter pred seq)
+      "Filter elements of `seq` using predicate `pred`, returning a new `Seq`."
+      (iter:collect!
+        (iter:filter! pred (iter:into-iter seq))))
 
   ;;
   ;; Instances
@@ -241,7 +247,6 @@ a new `Seq` instance."
   (define-instance ((Foldable :f) (types:RuntimeRepr :a) => Into (:f :a) (Seq :a))
     (define (into fld)
       (fold push (new) fld)))
-
 
   (define-instance (Eq :a => Eq (Seq :a))
     (define (== a b)
