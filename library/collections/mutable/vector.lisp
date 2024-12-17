@@ -1,4 +1,4 @@
-(coalton-library/utils:defstdlib-package #:coalton-library/vector
+(coalton-library/utils:defstdlib-package #:coalton-library/collections/mutable/vector
   (:use
    #:coalton
    #:coalton-library/builtin
@@ -44,7 +44,7 @@
    #:sort-by!
    #:make))
 
-(in-package #:coalton-library/vector)
+(in-package #:coalton-library/collections/mutable/vector)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -432,5 +432,5 @@
             :collect `(push! ,elt ,vec))
        ,vec)))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/VECTOR")
+; #+sb-package-locks
+; (sb-ext:lock-package "COALTON-LIBRARY/COLLECTIONS/MUTABLE/VECTOR")
