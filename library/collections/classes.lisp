@@ -7,7 +7,7 @@
    (#:types #:coalton-library/types))
   (:export
    #:Collection
-   #:new
+   #:new-collection
    #:new-repeat
    #:new-from
    #:flatten
@@ -24,8 +24,12 @@
 
    #:MutableCollection
    #:copy
-   #:filter!
-   #:add!))
+   #:add!
+   
+   #:LinearCollection
+   
+   #:MutableLinearCollection
+   #:reverse!))
 
 (in-package #:coalton-library/collections/classes)
 
@@ -46,7 +50,7 @@ Could be mutable or immutable. All methods are allowed to modify the
 underlying collection. If you need immutablility as part of the contract,
 use one of the Immutable collection typeclasses."
     ;; Create new collections
-    (new
+    (new-collection
      "Create a new, empty collection."
      (Unit -> :m :a))
     (new-repeat
@@ -95,12 +99,19 @@ the front or back, depending on which is natural for the underlying data structu
     (copy
      "Create a shallow copy of the collection."
      (:m :a -> :m :a))
-    (filter!
-     "Filter the collection in place."
-     ((:a -> Boolean) -> :m :a -> :m :a))
     (add!
      "Add an element to the collection in place. See `add`."
      (:a -> :m :a -> :m :a))))
+
+;; TODO: Make it so that these must all be the proper KeyedCollection types as well
+(coalton-toplevel
+  (define-class (Collection :m => LinearCollection :m))
+
+  (define-class (LinearCollection :m => MutableLinearCollection :m)
+    (reverse!
+     "Reverse the collection in place. The contract of `reverse` is that the
+value of the sequence and the return value will be the same."
+     (:m :a -> :m :a))))
 
 ;; TODO: Because `List` is a predefined type, we can't define this
 ;; in the new collections/immutable/list.lisp file. Define it here
@@ -108,7 +119,7 @@ the front or back, depending on which is natural for the underlying data structu
 ;; into the list package.
 (coalton-toplevel
   (define-instance (Collection List)
-    (define (new)
+    (define (new-collection)
       Nil)
     (define (new-repeat n elt)
       (l:repeat n elt))
@@ -126,7 +137,6 @@ the front or back, depending on which is natural for the underlying data structu
     (define add l:Cons))
 
   (define-instance (ImmutableCollection List)))
-
 
 ;; #+sb-package-locks
 ;; (sb-ext:lock-package "COALTON-LIBRARY/COLLECTIONS/CLASSES")

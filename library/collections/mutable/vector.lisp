@@ -237,6 +237,16 @@
           (let out = (index-unsafe idx vec))
           (set! idx (pop-unsafe! vec) vec)
           out)))
+  
+  (declare reverse! (Vector :a -> Vector :a))
+  (define (reverse! vec)
+    "Reverse a vector in place and return the vector for convenience."
+    (lisp :x (vec)
+      (cl:dotimes (i (cl:floor (cl:/ (cl:length vec) 2)))
+        (cl:rotatef (cl:aref vec i)
+                    (cl:aref vec (cl:- (cl:length vec) i 1)))))
+
+    vec)
 
   (declare sort-by! ((:a -> :a -> Boolean) -> Vector :a -> Unit))
   (define (sort-by! f v)
@@ -376,7 +386,7 @@
 
 (coalton-toplevel
   (define-instance (cln:Collection Vector)
-    (define cln:new new)
+    (define cln:new-collection new)
     (define cln:new-repeat with-initial-element)
     (define (cln:new-from n f)
       (let ((vec (with-capacity n)))
@@ -420,7 +430,18 @@
     (define (cln:add elt vec)
       (let ((res (with-capacity (+ 1 (length vec)))))
         (push! elt res)
-        res))))
+        res)))
+  
+  (define-instance (cln:MutableCollection Vector)
+    (define cln:copy copy)
+    (define (cln:add! elt vec)
+      (push! elt vec)
+      vec))
+  
+  (define-instance (cln:LinearCollection Vector))
+
+  (define-instance (cln:MutableLinearCollection Vector)
+    (define cln:reverse! reverse!)))
 
 (cl:defmacro make (cl:&rest elements)
   "Construct a `Vector' containing the ELEMENTS, in the order listed."
