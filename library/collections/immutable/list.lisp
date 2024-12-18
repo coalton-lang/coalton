@@ -8,7 +8,6 @@
    #:coalton-library/tuple
    #:coalton-library/optional)
   (:local-nicknames
-   (#:cln  #:coalton-library/collections/classes)
    (#:cell #:coalton-library/cell)
    (#:iter #:coalton-library/iterator)
    (#:math #:coalton-library/math))

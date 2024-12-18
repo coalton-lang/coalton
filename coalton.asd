@@ -89,6 +89,7 @@
                (:file "collections/immutable/list")
                (:file "collections/classes")
                (:file "collections/mutable/vector")
+               (:file "collections/mutable/hashtable")
                (:file "prelude")))
 
 (cl:when (cl:member (uiop:getenv "COALTON_PORTABLE_BIGFLOAT") '("1" "true" "t") :test #'cl:equalp)
