@@ -5,7 +5,7 @@
    #:coalton-library/functions
    #:coalton-library/classes)
   (:local-nicknames
-   (#:cln #:coalton-library/collections)
+   (#:cln #:coalton-library/collections/classes)
    (#:types #:coalton-library/types)
    (#:math #:coalton-library/math)
    (#:optional #:coalton-library/optional)
@@ -260,12 +260,12 @@ a new `Seq` instance."
 
   (define-instance (Into (Seq :a) (vector:Vector :a))
     (define (into seq)
-      (iter:collect! (iter:into-iter seq))))
+      (iter:collect! (iter:into-iter seq)))))
 
   ;;
   ;; Helpers
   ;; 
-
+(coalton-toplevel
   (define (height seq)
     (match seq
       ;;relaxed nodes should have a minimum height of 2
