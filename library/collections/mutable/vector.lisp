@@ -430,7 +430,10 @@
     (define (cln:add elt vec)
       (let ((res (copy vec)))
         (push! elt res)
-        res)))
+        res))
+    (define (cln:remove-elt elt vec)
+      (iter:collect! (iter:filter! (/= elt) (iter:into-iter vec)))))
+    
   
   (define-instance (cln:MutableCollection Vector)
     (define cln:copy copy)
