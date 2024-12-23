@@ -428,7 +428,7 @@
             0
             vec))
     (define (cln:add elt vec)
-      (let ((res (with-capacity (+ 1 (length vec)))))
+      (let ((res (copy vec)))
         (push! elt res)
         res)))
   

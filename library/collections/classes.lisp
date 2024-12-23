@@ -44,9 +44,10 @@
 
 Does not have an ordering of elements.
 
-Could be mutable or immutable. All methods are allowed to modify the
-underlying collection. If you need immutablility as part of the contract,
-use one of the Immutable collection typeclasses."
+Could be mutable or immutable. Methods are not allowed to modify the
+underlying collection. If you need mutability as part of the contract,
+probably to prevent defensive copying, use one of the Mutable
+collection typeclasses."
     ;; Create new collections
     (new-collection
      "Create a new, empty collection."
@@ -107,8 +108,7 @@ the front or back, depending on which is natural for the underlying data structu
 
   (define-class (LinearCollection :m => MutableLinearCollection :m)
     (reverse!
-     "Reverse the collection in place. The contract of `reverse` is that the
-value of the sequence and the return value will be the same."
+     "Reverse the collection in place. The sequence is returned for convenience."
      (:m :a -> :m :a))))
 
 ;; TODO: Because `List` is a predefined type, we can't define this
