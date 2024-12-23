@@ -1,6 +1,7 @@
 (coalton-library/utils:defstdlib-package #:coalton-library/collections/classes
   (:use
    #:coalton
+   #:coalton-library/functions
    #:coalton-library/classes)
   (:local-nicknames
    (#:l #:coalton-library/collections/immutable/list)
@@ -19,6 +20,7 @@
    #:contains-where?
    #:count-where
    #:add
+   #:remove-elt
 
    #:ImmutableCollection
 
@@ -79,7 +81,7 @@ collection typeclasses."
      "Check if the collection contains an element."
      (Eq :a => :a -> :m :a -> Boolean))
     (contains-where?
-     "Check if the collection contanis an element satisfying the predicate."
+     "Check if the collection contains an element satisfying the predicate."
      ((:a -> Boolean) -> :m :a -> Boolean))
     (count-where
      "The number of elements satisfying the predicate."
@@ -88,7 +90,10 @@ collection typeclasses."
     (add
      "Add an element to the collection. For linear collections, should add to
 the front or back, depending on which is natural for the underlying data structure."
-     (:a -> :m :a -> :m :a)))
+     (:a -> :m :a -> :m :a))
+    (remove-elt
+     "Remove all occurrences of `elt` from the collection."
+    (Eq :a => :a -> :m :a -> :m :a)))
 
   (define-class (Collection :m => ImmutableCollection :m)
     "An immutable collection.")
@@ -104,7 +109,10 @@ the front or back, depending on which is natural for the underlying data structu
 
 ;; TODO: Make it so that these must all be the proper KeyedCollection types as well
 (coalton-toplevel
-  (define-class (Collection :m => LinearCollection :m))
+  (define-class (Collection :m => LinearCollection :m)
+    )
+
+  (define-class (LinearCollection :m => ImmutableLinearCollection :m))
 
   (define-class (LinearCollection :m => MutableLinearCollection :m)
     (reverse!
@@ -132,7 +140,9 @@ the front or back, depending on which is natural for the underlying data structu
     (define contains-elt? l:contains-elt?)
     (define contains-where? l:contains-where?)
     (define count-where l:countBy)
-    (define add l:Cons))
+    (define add Cons)
+    (define (remove-elt elt lst)
+      (l:filter (/= elt) lst)))
 
   (define-instance (ImmutableCollection List)))
 
