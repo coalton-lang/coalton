@@ -5,7 +5,7 @@
    #:coalton-library/functions
    #:coalton-library/classes)
   (:local-nicknames
-   (#:cln #:coalton-library/collections)
+   (#:cln #:coalton-library/collections/classes)
    (#:types #:coalton-library/types)
    (#:math #:coalton-library/math)
    (#:optional #:coalton-library/optional)
@@ -207,6 +207,12 @@ a new `Seq` instance."
                      (conc (vector:last-unsafe lsubts) (vector:head-unsafe rsubts))
                    (rebalance-branches
                     (fold <> (butlast lsubts) (make-list nsubts (butfirst rsubts))))))))))))
+  
+  (declare filter (types:RuntimeRepr :a => (:a -> Boolean) -> (Seq :a) -> (Seq :a)))
+  (define (filter pred seq)
+    "Filter elements of `seq` using predicate `pred`, returning a new `Seq`."
+    (iter:collect!
+      (iter:filter! pred (iter:into-iter seq))))
 
   ;;
   ;; Instances

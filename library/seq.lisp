@@ -207,7 +207,7 @@ a new `Seq` instance."
                    (rebalance-branches
                     (fold <> (butlast lsubts) (make-list nsubts (butfirst rsubts))))))))))))
   
-    (declare filter ((:a -> Boolean) -> (Seq :a) -> (Seq :a)))
+    (declare filter (types:RuntimeRepr :a => (:a -> Boolean) -> (Seq :a) -> (Seq :a)))
     (define (filter pred seq)
       "Filter elements of `seq` using predicate `pred`, returning a new `Seq`."
       (iter:collect!
