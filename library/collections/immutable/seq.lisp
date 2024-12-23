@@ -266,12 +266,12 @@ a new `Seq` instance."
 
   (define-instance (Into (Seq :a) (vector:Vector :a))
     (define (into seq)
-      (iter:collect! (iter:into-iter seq))))
+      (iter:collect! (iter:into-iter seq)))))
 
   ;;
   ;; Helpers
   ;; 
-
+(coalton-toplevel
   (define (height seq)
     (match seq
       ;;relaxed nodes should have a minimum height of 2
