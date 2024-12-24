@@ -37,6 +37,8 @@
    #:last-unsafe
    #:extend!
    #:find-elem
+   #:find-where
+   #:find
    #:append
    #:swap-remove!
    #:swap-remove-unsafe!
@@ -201,6 +203,18 @@
           (cl:if pos
                  (Some pos)
                  None)))))
+  
+  (declare find-where ((:a -> Boolean) -> Vector :a -> Optional UFix))
+  (define (find-where pred vec)
+    "Find the index of the first element matching `pred` in `vec`."
+    (lisp (Optional UFix) (pred vec)
+      (cl:let ((pos (cl:position-if
+                      (cl:lambda (x)
+                        (cl:eq cl:t (call-coalton-function pred x)))
+                      vec)))
+        (cl:if pos
+               (Some pos)
+               None))))
 
   (declare contains-elt? (Eq :a => :a -> Vector :a -> Boolean))
   (define (contains-elt? elt vec)
@@ -212,6 +226,14 @@
       (when (f x)
         (return True)))
     False)
+  
+  (declare find ((:a -> Boolean) -> Vector :a -> Optional :a))
+  (define (find pred vec)
+    "Find the first element matching `pred` in `vec`."
+    (for x in vec
+      (when (pred x)
+        (return (Some x))))
+    None)
 
   (declare append (Vector :a -> Vector :a -> Vector :a))
   (define (append v1 v2)
@@ -433,7 +455,6 @@
         res))
     (define (cln:remove-elt elt vec)
       (iter:collect! (iter:filter! (/= elt) (iter:into-iter vec)))))
-    
   
   (define-instance (cln:MutableCollection Vector)
     (define cln:copy copy)
@@ -441,7 +462,18 @@
       (push! elt vec)
       vec))
   
-  (define-instance (cln:LinearCollection Vector))
+  (define-instance (cln:LinearCollection Vector)
+    (define cln:head head)
+    (define cln:head# head-unsafe)
+    (define cln:last last)
+    (define cln:last# last-unsafe)
+    (define cln:index-elt find-elem)
+    (define (cln:index-elt# elt vec)
+      (opt:from-some "Cannot find element in vector." (find-elem elt vec)))
+    (define cln:index-where find-where)
+    (define (cln:index-where# pred vec)
+      (opt:from-some "Cannot find matching element in vector." (find-where pred vec)))
+    (define cln:find-where find))
 
   (define-instance (cln:MutableLinearCollection Vector)
     (define cln:reverse! reverse!)))
