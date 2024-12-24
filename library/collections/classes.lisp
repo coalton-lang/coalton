@@ -5,7 +5,8 @@
    #:coalton-library/classes)
   (:local-nicknames
    (#:l #:coalton-library/collections/immutable/list)
-   (#:types #:coalton-library/types))
+   (#:types #:coalton-library/types)
+   (#:o #:coalton-library/optional))
   (:export
    #:Collection
    #:new-collection
@@ -29,6 +30,15 @@
    #:add!
    
    #:LinearCollection
+   #:head
+   #:head#
+   #:last
+   #:last#
+   #:index-elt
+   #:index-elt#
+   #:index-where
+   #:index-where#
+   #:find-where
    
    #:MutableLinearCollection
    #:reverse!))
@@ -110,6 +120,33 @@ the front or back, depending on which is natural for the underlying data structu
 ;; TODO: Make it so that these must all be the proper KeyedCollection types as well
 (coalton-toplevel
   (define-class (Collection :m => LinearCollection :m)
+    (head
+     "Return the first element of the collection."
+     (:m :a -> Optional :a))
+    (head#
+     "Return the first element of the collection, erroring if it does not exist."
+     (:m :a -> :a))
+    (last
+     "Return the last element of the collection."
+     (:m :a -> Optional :a))
+    (last#
+     "Return the last element of the collection, erroring if it does not exist."
+     (:m :a -> :a))
+    (index-elt
+     "Return the index of the first occurence of `elt`, if it can be found."
+     (Eq :a => :a -> :m :a -> Optional UFix))
+    (index-elt#
+     "Return the index of the first occurence of `elt`, erroring if it cannot be found."
+     (Eq :a => :a -> :m :a -> UFix))
+    (index-where
+     "Return the index of the first element matching a predicate function."
+     ((:a -> Boolean) -> :m :a -> Optional UFIx))
+    (index-where#
+     "Return the index of the first element matching a predicate function, erroring if none can be found."
+     ((:a -> Boolean) -> :m :a -> UFix))
+    (find-where
+     "Return the first element matching a predicate function."
+     ((:a -> Boolean) -> :m :a -> Optional :a))
     )
 
   (define-class (LinearCollection :m => ImmutableLinearCollection :m))
@@ -145,6 +182,23 @@ the front or back, depending on which is natural for the underlying data structu
       (l:filter (/= elt) lst)))
 
   (define-instance (ImmutableCollection List)))
+
+(coalton-toplevel
+  (define-instance (LinearCollection List)
+    (define head l:head)
+    (define (head# lst)
+      (o:from-some "Attempted to retrieve head of empty list." (l:head lst)))
+    (define last l:last)
+    (define (last# lst)
+      (o:from-some "Attempted to retrieve last element of empty list." (l:last lst)))
+    (define index-elt l:elemIndex)
+    (define (index-elt# elt lst)
+      (o:from-some "Cannot find element in list." (l:elemIndex elt lst)))
+    (define index-where l:findIndex)
+    (define (index-where# pred lst)
+      (o:from-some "Cannot find matching element in list." (l:findIndex pred lst)))
+    (define find-where l:find)
+  ))
 
 ;; #+sb-package-locks
 ;; (sb-ext:lock-package "COALTON-LIBRARY/COLLECTIONS/CLASSES")
