@@ -11,3 +11,6 @@ docs/reference.md
 coverage-report/
 
 bench.json
+
+# Editor specific files
+.vscode/
