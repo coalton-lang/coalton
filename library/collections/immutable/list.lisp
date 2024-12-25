@@ -18,6 +18,7 @@
    #:cdr
    #:last
    #:init
+   #:push-end
    #:null?
    #:singleton
    #:singleton?
@@ -133,6 +134,14 @@
     "Returns every element except the last in a list."
     (lisp (List :a) (l)
       (cl:butlast l)))
+  
+  ;; TODO: Make this more effecient. Walk the original front to back in Common Lisp,
+  ;; mutating the CDR of new Cons cells as we go until we get to the end, then mutate
+  ;; a new Cons cell with the new element at the end.
+  (declare push-end (:a -> List :a -> List :a))
+  (define (push-end elt lst)
+    "Add an element to the end of the list."
+    (reverse (Cons elt (reverse lst))))
 
   (declare null? (List :a -> Boolean))
   (define (null? xs)
