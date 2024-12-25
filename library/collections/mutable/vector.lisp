@@ -11,7 +11,11 @@
    (#:list #:coalton-library/list)
    (#:cell #:coalton-library/cell)
    (#:iter #:coalton-library/iterator)
-   (#:ram #:coalton-library/randomaccess))
+   (#:ram #:coalton-library/randomaccess)
+   (#:mth #:coalton-library/math/real)
+   (#:m-ath #:coalton-library/math/arith)
+   (#:m-int #:coalton-library/math/integral)
+   (#:m-elm #:coalton-library/math/elementary))
   (:export
    #:Vector
    #:new
@@ -24,6 +28,7 @@
    #:singleton?
    #:copy
    #:set-capacity!
+   #:ensure-capacity!
    #:clear!
    #:push!
    #:pop!
@@ -31,6 +36,7 @@
    #:index
    #:index-unsafe
    #:set!
+   #:insert-at!
    #:head
    #:head-unsafe
    #:last
@@ -125,6 +131,20 @@
       (cl:adjust-array v new-capacity :fill-pointer shrinking)
       Unit))
 
+  (declare ensure-capacity! (UFix -> Vector :a -> Unit))
+  (define (ensure-capacity! ensured-capacity v)
+    "Ensure that `v` has at least `ensured-capacity` capacity. If not, doubles the capacity until the threshold is reached. (Only sets the capacity once for efficiency.)"
+    (when (< (capacity v) ensured-capacity)
+      (let ((a (into (capacity v)))
+            (b (into ensured-capacity))
+            (k (max 0 (mth:ceiling (m-elm:log 2 (mth:inexact/ b a)))))
+            (new-capacity (* a (mth:round (m-int:^ 2 k)))))
+        (set-capacity! 
+              ;; TODO: Figure out how to actually convert an Integer into a UFix...
+              (lisp UFix (new-capacity)
+                new-capacity)
+              v))))
+
   (declare clear! (Vector :a -> Unit))
   (define (clear! v)
     "Set the capacity of `v` to `0`."
@@ -168,6 +188,15 @@
     (lisp Void (idx item v)
       (cl:setf (cl:aref v idx) item))
     Unit)
+  
+  (declare insert-at! (UFix -> :a -> Vector :a -> Vector :a))
+  (define (insert-at! idx item v)
+    "Insert `item` into `v` at index `idx`, shifting the existing elements starting at `idx` right by 1."
+    (ensure-capacity! (m-ath:1+ (length v)) v)
+    (for i in (iter:range-decreasing (length v) 1 (m-ath:1+ idx))
+      (set! i (index-unsafe (m-ath:1- i) v) v))
+    (set! idx item v)
+    v)
 
   (declare head (Vector :a -> Optional :a))
   (define (head v)
@@ -473,10 +502,34 @@
     (define cln:index-where find-where)
     (define (cln:index-where# pred vec)
       (opt:from-some "Cannot find matching element in vector." (find-where pred vec)))
-    (define cln:find-where find))
+    (define cln:find-where find)
+    (define (cln:reverse vec)
+      (reverse! (copy vec)))
+    (define (cln:sort vec)
+      (let ((result (copy vec)))
+        (sort! result)
+        result))
+    (define (cln:sort-with ord-func vec)
+      (let ((result (copy vec)))
+        (sort-by! (fn (a b) (== LT (ord-func a b)))
+                  result)
+        result))
+    (define (cln:push elt vec)
+      (insert-at! 0 elt (copy vec)))
+    (define (cln:push-end elt vec)
+      (let ((result (copy vec)))
+        (push! elt result)
+        result)))
 
   (define-instance (cln:MutableLinearCollection Vector)
-    (define cln:reverse! reverse!)))
+    (define cln:reverse! reverse!)
+    (define (cln:sort! vec)
+      (sort! vec)
+      vec)
+    (define (cln:sort-with! ord-func vec)
+      (sort-by! (fn (a b) (== LT (ord-func a b)))
+                vec)
+      vec)))
 
 (cl:defmacro make (cl:&rest elements)
   "Construct a `Vector' containing the ELEMENTS, in the order listed."

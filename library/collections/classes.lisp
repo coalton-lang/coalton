@@ -39,9 +39,16 @@
    #:index-where
    #:index-where#
    #:find-where
+   #:reverse
+   #:sort
+   #:sort-with
+   #:push
+   #:push-end
    
    #:MutableLinearCollection
-   #:reverse!))
+   #:reverse!
+   #:sort!
+   #:sort-with!))
 
 (in-package #:coalton-library/collections/classes)
 
@@ -120,6 +127,7 @@ the front or back, depending on which is natural for the underlying data structu
 ;; TODO: Make it so that these must all be the proper KeyedCollection types as well
 (coalton-toplevel
   (define-class (Collection :m => LinearCollection :m)
+    ;; Get elements from the collection
     (head
      "Return the first element of the collection."
      (:m :a -> Optional :a))
@@ -132,6 +140,7 @@ the front or back, depending on which is natural for the underlying data structu
     (last#
      "Return the last element of the collection, erroring if it does not exist."
      (:m :a -> :a))
+    ;; Query the collection
     (index-elt
      "Return the index of the first occurence of `elt`, if it can be found."
      (Eq :a => :a -> :m :a -> Optional UFix))
@@ -147,14 +156,39 @@ the front or back, depending on which is natural for the underlying data structu
     (find-where
      "Return the first element matching a predicate function."
      ((:a -> Boolean) -> :m :a -> Optional :a))
+    ;; Manipulate at the collection level
+    (reverse
+     "Return the collection with elements reversed."
+     (:m :a -> :m :a))
+    (sort
+     "Return a sorted collection of orderable elements."
+     (Ord :a => :m :a -> :m :a))
+    (sort-with
+     "Return a sorted collection under the given ordering."
+     ((:a -> :a -> Ord) -> :m :a -> :m :a))
+    ;; Manipulate at the element level
+    (push
+     "Return the collection with an element added to the front."
+     (:a -> :m :a -> :m :a))
+    (push-end
+     "Return the collection with an element added to the end."
+     (:a -> :m :a -> :m :a))
     )
 
   (define-class (LinearCollection :m => ImmutableLinearCollection :m))
 
   (define-class (LinearCollection :m => MutableLinearCollection :m)
     (reverse!
-     "Reverse the collection in place. The sequence is returned for convenience."
-     (:m :a -> :m :a))))
+     "Reverse the collection in place. The collection is returned for convenience."
+     (:m :a -> :m :a))
+    (sort!
+     "Sort a collection of orderable elements in place. The collection is returned for convenience."
+     (Ord :a => :m :a -> :m :a))
+    (sort-with!
+     "Sort a collection in place under the given ordering. The collection is returned for convenience."
+     ((:a -> :a -> Ord) -> :m :a -> :m :a)))
+  )
+
 
 ;; TODO: Because `List` is a predefined type, we can't define this
 ;; in the new collections/immutable/list.lisp file. Define it here
@@ -198,6 +232,11 @@ the front or back, depending on which is natural for the underlying data structu
     (define (index-where# pred lst)
       (o:from-some "Cannot find matching element in list." (l:findIndex pred lst)))
     (define find-where l:find)
+    (define reverse l:reverse)
+    (define sort l:sort)
+    (define sort-with l:sortBy)
+    (define push Cons)
+    (define push-end l:push-end)
   ))
 
 ;; #+sb-package-locks
