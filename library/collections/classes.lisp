@@ -44,11 +44,19 @@
    #:sort-with
    #:push
    #:push-end
+   #:insert-at
    
    #:MutableLinearCollection
    #:reverse!
    #:sort!
-   #:sort-with!))
+   #:sort-with!
+   #:push!
+   #:push-end!
+   #:pop!
+   #:pop!#
+   #:pop-end!
+   #:pop-end!
+   #:insert-at!))
 
 (in-package #:coalton-library/collections/classes)
 
@@ -164,7 +172,7 @@ the front or back, depending on which is natural for the underlying data structu
      "Return a sorted collection of orderable elements."
      (Ord :a => :m :a -> :m :a))
     (sort-with
-     "Return a sorted collection under the given ordering."
+     "Return the sorted collection under the given ordering."
      ((:a -> :a -> Ord) -> :m :a -> :m :a))
     ;; Manipulate at the element level
     (push
@@ -173,6 +181,9 @@ the front or back, depending on which is natural for the underlying data structu
     (push-end
      "Return the collection with an element added to the end."
      (:a -> :m :a -> :m :a))
+    (insert-at
+     "Return the collection with an element inserted at an index."
+     (UFix -> :a -> :m :a -> :m :a))
     )
 
   (define-class (LinearCollection :m => ImmutableLinearCollection :m))
@@ -185,8 +196,30 @@ the front or back, depending on which is natural for the underlying data structu
      "Sort a collection of orderable elements in place. The collection is returned for convenience."
      (Ord :a => :m :a -> :m :a))
     (sort-with!
-     "Sort a collection in place under the given ordering. The collection is returned for convenience."
-     ((:a -> :a -> Ord) -> :m :a -> :m :a)))
+     "Sort the collection in place under the given ordering. The collection is returned for convenience."
+     ((:a -> :a -> Ord) -> :m :a -> :m :a))
+    (push!
+     "Add an element to the front of the collection. The collection is returned for convenience."
+     (:a -> :m :a -> :m :a))
+    (push-end!
+     "Add an element to the end of the collection. The collection is returned for convenience."
+     (:a -> :m :a -> :m :a))
+    (pop!
+     "Remove the first element of the collection and return it, if any."
+     (:m :a -> Optional :a))
+    (pop!#
+     "Remove the first element of the collection and return it, erroring if none is found."
+     (:m :a -> :a))
+    (pop-end!
+     "Remove the last element of the collection and return it, if any."
+     (:m :a -> Optional :a))
+    (pop-end!#
+     "Remove the last element of the collection and return it, erroring if none is found."
+     (:m :a -> :a))
+    (insert-at!
+     "Insert an item at the given index of the collection, erroring if out of bounds. The collection is returned for convenience."
+     (UFix -> :a -> :m :a -> :m :a))
+  )
   )
 
 
@@ -237,6 +270,7 @@ the front or back, depending on which is natural for the underlying data structu
     (define sort-with l:sortBy)
     (define push Cons)
     (define push-end l:push-end)
+    (define insert-at l:insert-at)
   ))
 
 ;; #+sb-package-locks

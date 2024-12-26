@@ -37,6 +37,8 @@
    #:index-unsafe
    #:set!
    #:insert-at!
+   #:remove-at!
+   #:remove-at-unsafe!
    #:head
    #:head-unsafe
    #:last
@@ -168,7 +170,7 @@
     "Remove and return the last item of `v` without checking if the vector is empty."
     (lisp :a (v)
       (cl:vector-pop v)))
-
+  
   (declare index (UFix -> Vector :a -> Optional :a))
   (define (index index v)
     "Return the `index`th element of `v`."
@@ -197,6 +199,26 @@
       (set! i (index-unsafe (m-ath:1- i) v) v))
     (set! idx item v)
     v)
+  
+  (declare remove-at! (UFix -> Vector :a -> Optional :a))
+  (define (remove-at! idx v)
+    "Remove and return item at index `idx` in `v`, shifting the existing elements after `idx` left by 1."
+    (match (index idx v)
+      ((None) None)
+      ((Some result)
+       (for i in (iter:range-increasing idx 1 (- (length v) 1))
+         (set! i (index-unsafe (m-ath:1+ i) v) v))
+       (pop-unsafe! v)
+       (Some result))))
+  
+  (declare remove-at-unsafe! (UFix -> Vector :a -> :a))
+  (define (remove-at-unsafe! idx v)
+    "Remove and return item at index `idx` in `v`, shifting the existing elements after `idx` left by 1. Error if vector is empty."
+    (let result = (index-unsafe idx v))
+    (for i in (iter:range-increasing idx 1 (- (length v) 1))
+      (set! i (index-unsafe (m-ath:1+ i) v) v))
+    (pop-unsafe! v)
+    result)
 
   (declare head (Vector :a -> Optional :a))
   (define (head v)
@@ -519,7 +541,9 @@
     (define (cln:push-end elt vec)
       (let ((result (copy vec)))
         (push! elt result)
-        result)))
+        result))
+    (define (cln:insert-at i elt vec)
+      (insert-at! i elt (copy vec))))
 
   (define-instance (cln:MutableLinearCollection Vector)
     (define cln:reverse! reverse!)
@@ -529,7 +553,17 @@
     (define (cln:sort-with! ord-func vec)
       (sort-by! (fn (a b) (== LT (ord-func a b)))
                 vec)
-      vec)))
+      vec)
+    (define (cln:push! elt vec)
+      (insert-at! 0 elt vec))
+    (define (cln:push-end! elt vec)
+      (push! elt vec)
+      vec)
+    (define cln:pop! pop!)
+    (define cln:pop!# pop-unsafe!)
+    (define cln:pop-end! pop!)
+    (define cln:pop-end!# pop-unsafe!)
+    (define cln:insert-at! insert-at!)))
 
 (cl:defmacro make (cl:&rest elements)
   "Construct a `Vector' containing the ELEMENTS, in the order listed."
