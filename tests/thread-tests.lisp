@@ -92,10 +92,10 @@
      (iter:repeat-for 0 100))
     (sleep 1)
     (iter:for-each! threads:notify-cv (iter:repeat-for cv 25))
-    (sleep 1)
+    (sleep 2)
     (is (== 25 (threads:atomic-value atomic)))
     (threads:broadcast-cv cv)
-    (sleep 1)
+    (sleep 2)
     (is (== 100 (threads:atomic-value atomic)))))
 
 ;;---------;;
