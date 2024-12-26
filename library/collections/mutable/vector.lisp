@@ -195,7 +195,8 @@
   (define (insert-at! idx item v)
     "Insert `item` into `v` at index `idx`, shifting the existing elements starting at `idx` right by 1."
     (ensure-capacity! (m-ath:1+ (length v)) v)
-    (for i in (iter:range-decreasing (length v) 1 (m-ath:1+ idx))
+    (push! (last-unsafe v) v)
+    (for i in (iter:range-decreasing 1 (length v) (m-ath:1+ idx))
       (set! i (index-unsafe (m-ath:1- i) v) v))
     (set! idx item v)
     v)
@@ -206,7 +207,7 @@
     (match (index idx v)
       ((None) None)
       ((Some result)
-       (for i in (iter:range-increasing idx 1 (- (length v) 1))
+       (for i in (iter:range-increasing 1 idx (m-ath:1- (length v)))
          (set! i (index-unsafe (m-ath:1+ i) v) v))
        (pop-unsafe! v)
        (Some result))))
@@ -215,7 +216,7 @@
   (define (remove-at-unsafe! idx v)
     "Remove and return item at index `idx` in `v`, shifting the existing elements after `idx` left by 1. Error if vector is empty."
     (let result = (index-unsafe idx v))
-    (for i in (iter:range-increasing idx 1 (- (length v) 1))
+    (for i in (iter:range-increasing 1 idx (m-ath:1- (length v)))
       (set! i (index-unsafe (m-ath:1+ i) v) v))
     (pop-unsafe! v)
     result)
@@ -463,8 +464,8 @@
     (define cln:new-repeat with-initial-element)
     (define (cln:new-from n f)
       (let ((vec (with-capacity n)))
-        (for i in (list:range 0 (- n 1))
-          (set! i (f i) vec))
+        (for i in (iter:range-increasing 1 0 n)
+          (push! (f i) vec))
         vec))
     (define (cln:flatten vecs)
       (let ((res (with-capacity
