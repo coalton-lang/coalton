@@ -80,6 +80,7 @@
 
 (define-test condition-variable-concurrency ()
   (let ((atomic (threads:make-atomic 0))
+        (sem (threads:make-semaphore))
         (cv (threads:make-cv))
         (lock (threads:make-lock)))
     (iter:for-each! 
@@ -87,16 +88,16 @@
        (threads:spawn
          (threads:with-lock-held (lock)
            (threads:await-cv cv lock))
-         (threads:incf-atomic atomic 1))
+         (threads:incf-atomic atomic 1)
+         (threads:signal-semaphore sem 1))
        Unit)
-     (iter:repeat-for 0 100))
-    (sleep 1)
+     (iter:repeat-for 0 50))
     (iter:for-each! threads:notify-cv (iter:repeat-for cv 25))
-    (sleep 2)
+    (iter:for-each! threads:await-semaphore (iter:repeat-for sem 25))
     (is (== 25 (threads:atomic-value atomic)))
     (threads:broadcast-cv cv)
-    (sleep 2)
-    (is (== 100 (threads:atomic-value atomic)))))
+    (iter:for-each! threads:await-semaphore (iter:repeat-for sem 25))
+    (is (== 50 (threads:atomic-value atomic)))))
 
 ;;---------;;
 ;; Atomics ;;
