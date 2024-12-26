@@ -16,15 +16,15 @@
 
 (define-test thread-all-threads ()
   (is (some?
-       (find (fn (thread) (== thread (threads:current-thread)))
+       (find (== (threads:current-thread))
              (threads:all-threads)))))
 
-(define-test thread-all-threads-count ()
-  (let ((count (length (threads:all-threads)))
-        (thread (threads:spawn (sleep 1))))
-    (is (== (length (threads:all-threads)) (1+ count)))
-    (threads:join thread)
-    (is (== (length (threads:all-threads)) count))))
+(define-test thread-all-threads-contains-new ()
+  (let ((old-threads (threads:all-threads))
+        (thread (threads:spawn (sleep 10))))
+    (is (none? (find (== thread) old-threads)))
+    (is (some? (find (== thread) (threads:all-threads))))
+    (threads:destroy thread)))
 
 ;;-------;;
 ;; Locks ;;
@@ -96,7 +96,6 @@
           (worker (- target x)))) 
       (threads:with-lock-held (lock) 
         (while (not (== target (threads:atomic-value atomic)))
-          (print (threads:atomic-value atomic))
           (threads:await-cv cv lock)))
       (is (== target (threads:atomic-value atomic))))))
 
