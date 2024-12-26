@@ -183,8 +183,7 @@ the front or back, depending on which is natural for the underlying data structu
      (:a -> :m :a -> :m :a))
     (insert-at
      "Return the collection with an element inserted at an index."
-     (UFix -> :a -> :m :a -> :m :a))
-    )
+     (UFix -> :a -> :m :a -> :m :a)))
 
   (define-class (LinearCollection :m => ImmutableLinearCollection :m))
 
@@ -218,10 +217,7 @@ the front or back, depending on which is natural for the underlying data structu
      (:m :a -> :a))
     (insert-at!
      "Insert an item at the given index of the collection, erroring if out of bounds. The collection is returned for convenience."
-     (UFix -> :a -> :m :a -> :m :a))
-  )
-  )
-
+     (UFix -> :a -> :m :a -> :m :a))))
 
 ;; TODO: Because `List` is a predefined type, we can't define this
 ;; in the new collections/immutable/list.lisp file. Define it here
@@ -270,8 +266,7 @@ the front or back, depending on which is natural for the underlying data structu
     (define sort-with l:sortBy)
     (define push Cons)
     (define push-end l:push-end)
-    (define insert-at l:insert-at)
-  ))
+    (define insert-at l:insert-at)))
 
 ;; #+sb-package-locks
 ;; (sb-ext:lock-package "COALTON-LIBRARY/COLLECTIONS/CLASSES")
