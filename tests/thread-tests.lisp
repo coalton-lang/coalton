@@ -43,7 +43,7 @@
 
 ;; TODO Recursive Locks
 
-;; TODO Semaphores
+;; Semaphores
 
 (define-test semaphore-signal-await ()
   (let ((sem (threads:make-semaphore)))
@@ -61,7 +61,7 @@
       (sleep 1)
       (threads:signal-semaphore sem 4))
     ;; idk dotimes
-    (for x in (make-list 1 2 3 4 5)
+    (for x in (range 1 5)
       (threads:spawn 
         (threads:await-semaphore sem)
         (threads:incf-atomic count)))
@@ -73,6 +73,28 @@
 
 ;; TODO Condition Variables
 
-;; TODO Atomics
+;; Atomics
 
+(define-test atomic-incf-decf ()
+  (let ((atomic (threads:make-atomic 3)))
+    (threads:incf-atomic 10)
+    (threads:decf-atomic 4)
+    (is (== 9 (threads:atomic-value atomic)))))
 
+(define-test atomic-cmp-and-swap ()
+  (let ((atomic (threads:make-atomic 4)))
+    (is (not (threads:atomic-cmp-and-swap atomic 0 100)))
+    (is (threads:atomic-cmp-and-swap atomic 4 3))
+    (is (== 3 (threads:atomic-value atomic)))))
+
+(define-test atomic-concurrency ()
+  (let ((atomic (threads:make-atomic 4000))
+        (incer (threads:spawn
+                 (for x in (range 1 1000)
+                   (threads:incf-atomic atomic))))
+        (decer (threads:spawn
+                 (for x in (range 1 1000)
+                   (threads:decf-atomic atomic)))))
+    (threads:join incer)
+    (threads:join decer)
+    (is (== 4000 (threads:atomic-value atomic)))))
