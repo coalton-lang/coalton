@@ -23,7 +23,7 @@
   (let ((count (length (threads:all-threads)))
         (thread (threads:spawn (sleep 1))))
     (is (== (length (threads:all-threads)) (1+ count)))
-    (threads:destroy thread)
+    (threads:join thread)
     (is (== (length (threads:all-threads)) count))))
 
 ;;-------;;
