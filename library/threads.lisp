@@ -22,7 +22,9 @@
    #:make-lock
    #:make-recursive-lock
    #:acquire-lock
+   #:acquire-lock-no-wait
    #:acquire-recursive-lock
+   #:acquire-recursive-lock-no-wait
    #:release-lock
    #:release-recursive-lock
    ;; Condition Variables
@@ -116,17 +118,19 @@
 ;; Locks ;;
 ;;-------;;
 
+;; TODO these should have some kind of unwind protection
+
 (cl:defmacro with-lock-held ((lock) cl:&body body)
   `(progn
      (acquire-lock ,lock)
-     (cl:unwind-protect (coalton ,@body)
-       (coalton (release-lock)))))
+     ,@body
+     (release-lock ,lock)))
 
 (cl:defmacro with-recursive-lock-held ((lock) cl:&body body)
   `(progn
      (acquire-recursive-lock ,lock)
-     (cl:unwind-protect (coalton ,@body)
-       (coalton (release-recursive-lock)))))
+     ,@body
+     (release-recursive-lock ,lock)))
 
 (coalton-toplevel
   (repr :native bt2:lock)
@@ -145,6 +149,11 @@
     (lisp Boolean (lock)
       (bt2:acquire-lock lock)))
 
+  (declare acquire-lock-no-wait (Lock -> Boolean))
+  (define (acquire-lock-no-wait lock)
+    (lisp Boolean (lock)
+      (bt2:acquire-lock lock :wait nil)))
+
   (declare release-lock (Lock -> Lock))
   (define (release-lock lock)
     (lisp Lock (lock)
@@ -158,7 +167,12 @@
   (declare acquire-recursive-lock (RecursiveLock -> Boolean))
   (define (acquire-recursive-lock lock)
     (lisp Boolean (lock)
-      (bt2:acquire-lock lock)))
+      (bt2:acquire-recursive-lock lock)))
+
+  (declare acquire-recursive-lock-no-wait (Lock -> Boolean))
+  (define (acquire-recursive-lock-no-wait lock)
+    (lisp Boolean (lock)
+      (bt2:acquire-recursive-lock lock :wait nil)))
 
   (declare release-recursive-lock (RecursiveLock -> RecursiveLock))
   (define (release-recursive-lock lock)
