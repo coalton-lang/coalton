@@ -55,7 +55,7 @@
    #:pop!
    #:pop!#
    #:pop-end!
-   #:pop-end!
+   #:pop-end!#
    #:insert-at!))
 
 (in-package #:coalton-library/collections/classes)
