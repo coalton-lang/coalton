@@ -474,12 +474,10 @@
                      (fold (fn (sum v)
                              (+ sum (length v)))
                            0
-                           vecs)))
-            (i (cell:new 0)))
+                           vecs))))
         (for vec in vecs
           (for x in vec
-            (set! (cell:read i) x res)
-            (cell:increment! i)))
+            (push! x res)))
         res))
     (define (cln:filter f vec)
       (iter:collect! (iter:filter! f (iter:into-iter vec))))
