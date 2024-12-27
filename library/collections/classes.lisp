@@ -235,7 +235,9 @@ the front or back, depending on which is natural for the underlying data structu
     (define (new-repeat n elt)
       (l:repeat n elt))
     (define (new-from n f)
-      (map f (l:range 0 (- n 1))))
+      (if (== 0 n)
+        Nil
+        (map f (l:range 0 (- n 1)))))
     (define (new-convert coll)
       (itr:collect! (itr:into-iter coll)))
     (define (flatten lst)
