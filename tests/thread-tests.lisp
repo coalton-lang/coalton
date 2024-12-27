@@ -40,8 +40,7 @@
 (define-test lock-fail-acquire ()
   (let ((lock (threads:make-lock)))
     (threads:spawn
-      (threads:with-lock-held (lock)
-        (sleep 60)))
+      (threads:with-lock-held lock (fn () (sleep 60))))
     (sleep 1)
     (is (not (threads:acquire-lock-no-wait lock)))))
 
@@ -84,19 +83,21 @@
         (cv (threads:make-cv))
         (lock (threads:make-lock)))
     (let ((worker (fn (i)
-                    (threads:with-lock-held (lock)
-                      (while (not (== i (threads:atomic-value atomic)))
-                        (threads:await-cv cv lock)
-                        (sleep 0.1))
-                      (threads:incf-atomic atomic 1))
+                    (threads:with-lock-held lock
+                      (fn () 
+                        (while (not (== i (threads:atomic-value atomic)))
+                          (threads:await-cv cv lock)
+                          (sleep 0.1))
+                        (threads:incf-atomic atomic 1)))
                     (threads:broadcast-cv cv)))) 
       (for x in (range target 1)
         (threads:spawn
           (sleep 0.1)
           (worker (- target x)))) 
-      (threads:with-lock-held (lock) 
-        (while (not (== target (threads:atomic-value atomic)))
-          (threads:await-cv cv lock)))
+      (threads:with-lock-held lock 
+        (fn () 
+          (while (not (== target (threads:atomic-value atomic)))
+            (threads:await-cv cv lock))))
       (is (== target (threads:atomic-value atomic))))))
 
 ;;---------;;
