@@ -127,20 +127,6 @@ then continue with the interrupted path of execution."
 ;; Locks ;;
 ;;-------;;
 
-;; TODO these should have some kind of unwind protection
-
-(cl:defmacro with-lock-held ((lock) cl:&body body)
-  `(progn
-     (acquire-lock ,lock)
-     ,@body
-     (release-lock ,lock)))
-
-(cl:defmacro with-recursive-lock-held ((lock) cl:&body body)
-  `(progn
-     (acquire-recursive-lock ,lock)
-     ,@body
-     (release-recursive-lock ,lock)))
-
 (coalton-toplevel
   (repr :native bt2:lock)
   (define-type Lock)
@@ -179,6 +165,13 @@ Returns the lock."
       (cl:handler-case (Ok (bt2:release-lock lock))
         (cl:error (c) (Err c)))))
 
+  (declare with-lock-held (Lock -> (Unit -> :a) -> :a))
+  (define (with-lock-held lock thunk)
+    (acquire-lock lock)
+    (let ((result (thunk)))
+      (release-lock lock)
+      result))
+
   (declare make-recursive-lock (Unit -> RecursiveLock))
   (define (make-recursive-lock)
     "Creates a recursive lock."
@@ -208,7 +201,14 @@ thread. If other threads are waiting for the lock, the
 Returns the lock."
     (lisp (Result LispCondition RecursiveLock) (lock)
       (cl:handler-case (Ok (bt2:release-recursive-lock lock))
-        (cl:error (c) (Err c))))))
+        (cl:error (c) (Err c)))))
+
+  (declare with-recursive-lock-held (RecursiveLock -> (Unit -> :a) -> :a))
+  (define (with-recursive-lock-held lock thunk)
+    (acquire-recursive-lock lock)
+    (let ((result (thunk)))
+      (release-recursive-lock lock)
+      result)))
 
 ;;---------------------;;
 ;; Condition Variables ;;
@@ -317,3 +317,6 @@ Returns True if the replacement was successful, otherwise False."
     "Returns the current value of `atomic'."
     (lisp #+32-bit U32 #+64-bit U64 (atomic)
       (bt2:atomic-integer-value atomic))))
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON-LIBRARY/THREADS")
