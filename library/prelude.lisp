@@ -144,6 +144,7 @@
    #:new-collection
    #:new-repeat
    #:new-from
+   #:new-convert
    #:flatten
    #:filter
    #:remove-duplicates
@@ -195,6 +196,7 @@
    #:new-collection
    #:new-repeat
    #:new-from
+   #:new-convert
    #:flatten
    #:filter
    #:remove-duplicates

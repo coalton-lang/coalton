@@ -4,6 +4,7 @@
    #:coalton-library/functions
    #:coalton-library/classes)
   (:local-nicknames
+   (#:itr #:coalton-library/iterator)
    (#:l #:coalton-library/collections/immutable/list)
    (#:types #:coalton-library/types)
    (#:o #:coalton-library/optional))
@@ -12,6 +13,7 @@
    #:new-collection
    #:new-repeat
    #:new-from
+   #:new-convert
    #:flatten
    #:filter
    #:remove-duplicates
@@ -85,6 +87,9 @@ collection typeclasses."
     (new-from
      "Create a new collection by appling a function over the range [0, n)."
      (UFix -> (UFix -> :a) -> :m :a))
+    (new-convert
+     "Convert a collection of another type. If converting a LinearCollection to a LinearCollection, should preserve order."
+     ((Collection :f) (itr:IntoIterator (:f :a) :a) => :f :a -> :m :a))
     ;; Manipulate at the collection level
     (flatten
      "Flatten a collection of collections into a collection of their elements."
@@ -231,6 +236,8 @@ the front or back, depending on which is natural for the underlying data structu
       (l:repeat n elt))
     (define (new-from n f)
       (map f (l:range 0 (- n 1))))
+    (define (new-convert coll)
+      (itr:collect! (itr:into-iter coll)))
     (define (flatten lst)
       (>>= lst (fn (x) x)))
     (define filter l:filter)
