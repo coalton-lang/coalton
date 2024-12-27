@@ -467,6 +467,8 @@
         (for i in (iter:range-increasing 1 0 n)
           (push! (f i) vec))
         vec))
+    (define (cln:new-convert coll)
+      (iter:collect! (iter:into-iter coll)))
     (define (cln:flatten vecs)
       (let ((res (with-capacity
                      (fold (fn (sum v)
