@@ -9,9 +9,9 @@
 ;;---------;;
 
 (define-test thread-spawn-and-join ()
-  (let ((thread (threads:spawn (sleep 1))))
+  (let ((thread (threads:spawn (sleep 1) (make-list 1))))
     (is (threads:alive? thread))
-    (threads:join thread)
+    (is (== (make-list 1) (threads:join thread)))
     (is (not (threads:alive? thread)))))
 
 (define-test thread-all-threads ()
@@ -22,8 +22,8 @@
 (define-test thread-all-threads-contains-new ()
   (let ((old-threads (threads:all-threads))
         (thread (threads:spawn (sleep 10))))
-    (is (none? (find (== thread) old-threads)))
     (is (some? (find (== thread) (threads:all-threads))))
+    (is (none? (find (== thread) old-threads)))
     (threads:destroy thread)))
 
 ;;-------;;

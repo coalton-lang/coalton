@@ -64,60 +64,59 @@
 ;;---------;;
 
 (cl:defmacro spawn (cl:&body body)
-  `(make-thread (fn () ,@body Unit)))
+  `(make-thread (fn () ,@body)))
 
 (coalton-toplevel
   (repr :native bt2:thread)
-  (define-type Thread)
+  (define-type (Thread :a))
 
-  (define-instance (Eq Thread)
+  (define-instance (Eq (Thread :a))
     (define (== a b)
       (lisp Boolean (a b) (to-boolean (cl:equal a b)))))
 
-  (declare make-thread ((Unit -> Unit) -> Thread))
+  (declare make-thread ((Unit -> :a) -> Thread :a))
   (define (make-thread thunk)
     "Creates and returns a thread, which will call the function
 `thunk' with no arguments: when `thunk' returns, the thread terminates."
-    (lisp Thread (thunk)
+    (lisp (Thread :a) (thunk)
       (bt2:make-thread
        (cl:lambda () (call-coalton-function thunk Unit)))))
 
-  (declare current-thread (Unit -> Thread))
+  (declare current-thread (Unit -> Thread :a))
   (define (current-thread)
     "Returns the thread object representing the calling thread."
-    (lisp Thread ()
+    (lisp (Thread :a) ()
       (bt2:current-thread)))
 
-  (declare all-threads (Unit -> (List Thread)))
+  (declare all-threads (Unit -> (List (Thread :a))))
   (define (all-threads)
     "Returns a fresh list of all running threads."
-    (lisp (List Thread) ()
+    (lisp (List (Thread :a)) ()
       (bt2:all-threads)))
 
-  (declare join (Thread -> Unit))
+  (declare join (Thread :a -> :a))
   (define (join thread)
     "Wait until `thread' terminates, or if it has already terminated, return immediately."
-    (lisp Unit (thread)
-      (bt2:join-thread thread)
-      Unit))
+    (lisp :a (thread)
+      (bt2:join-thread thread)))
 
-  (declare interrupt (Thread -> (Unit -> Unit) -> Thread))
+  (declare interrupt (Thread :a -> (Unit -> Unit) -> Thread :a))
   (define (interrupt thread thunk)
     "Interrupt thread and call `thunk' within its dynamic context,
 then continue with the interrupted path of execution."
-    (lisp Thread (thread thunk)
+    (lisp (Thread :a) (thread thunk)
       (bt2:interrupt-thread
        thread
        (cl:lambda () (call-coalton-function thunk Unit)))))
 
-  (declare destroy (Thread -> (Result LispCondition Thread)))
+  (declare destroy ((Thread :a) -> (Result LispCondition (Thread :a))))
   (define (destroy thread)
     "Terminates the thread `thread'."
-    (lisp (Result LispCondition Thread) (thread)
+    (lisp (Result LispCondition (Thread :a)) (thread)
       (cl:handler-case (Ok (bt2:destroy-thread thread))
         (cl:error (c) (Err c)))))
 
-  (declare alive? (Thread -> Boolean))
+  (declare alive? (Thread :a -> Boolean))
   (define (alive? thread)
     "Returns True if `thread' has not finished or `destroy' has not been called on it."
     (lisp Boolean (thread)
