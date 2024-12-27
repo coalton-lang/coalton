@@ -275,6 +275,9 @@
                (:module "collections"
                 :serial t
                 :components ((:file "collection-tests")
+                             (:module "mutable"
+                              :serial t
+                              :components ((:file "vector-tests")))
                              (:module "immutable"
                               :serial t
                               :components ((:file "list-tests")))))))

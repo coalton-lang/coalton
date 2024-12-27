@@ -56,5 +56,67 @@ Example:
         (let ((source (the (List UFix) (cln:new-repeat 3 99))))
           (is (== (cln:length (,@the-ufix (cln:new-convert source))) 3))
           (is (cln:empty?
-                (cln:filter (/= 99) (,@the-ufix (cln:new-convert source)))))))        
+                (cln:filter (/= 99) (,@the-ufix (cln:new-convert source)))))))
+      (define-test ,(test-name type-symbol "add") ()
+        ;; Add to Empty Collection
+        (let ((c (,@the-type (cln:add 99 (cln:new-collection)))))
+          (is (== (cln:length c) 1))
+          (is (cln:contains-elt? 99 c)))
+        ;; Add duplicate element (can't make any guarantees about length beyond the first element)
+        (let ((c (,@the-type (cln:add 99 (cln:add 99 (cln:new-collection))))))
+          (is (cln:contains-elt? 99 c)))
+        ;; Ensure immutability
+        (let ((c (,@the-type (cln:new-collection))))
+          (cln:add 99 c)
+          (is (cln:empty? c))))
+      (define-test ,(test-name type-symbol "remove-elt") ()
+        ;; Remove from Empty Collection
+        (let ((c (,@the-type (cln:remove-elt 1 (cln:new-collection)))))
+          (is (cln:empty? c)))
+        ;; Remove Single Occurrence
+        (let ((c (,@the-type (cln:new-convert (make-list 10)))))
+          (is (cln:empty? (cln:remove-elt 10 c))))
+        ;; Remove Multiple Occurrences
+        (let ((c (,@the-type (cln:new-convert (make-list 20 20 20)))))
+          (is (cln:empty? (cln:remove-elt 20 c))))
+        ;; Remove From Heterogeous Collection
+        (let ((c (,@the-type (cln:new-convert (make-list 10 20))))
+              (removed (cln:remove-elt 10 c)))
+          (is (cln:contains-elt? 20 removed))
+          (is (not (cln:contains-elt? 10 removed))))
+        ;; Remove Missing Element
+        (let ((c (,@the-type (cln:new-convert (make-list 99))))
+              (removed (cln:remove-elt 10 c)))
+          (is (== (cln:length removed) 1)))
+        ;; Ensure immutability
+        (let ((c (,@the-type (cln:new-convert (make-list 10 20)))))
+          (cln:remove-elt 10 c)
+          (is (cln:contains-elt? 10 c))))
+      (define-test ,(test-name type-symbol "flatten") ()
+        ;; Note: Can't assume the length of flattened collections - e.g. Set
+        ;; Flatten empty
+        (let ((empty-collections
+                (the (,type-symbol (,type-symbol UFix))
+                    (cln:new-collection)))
+              (flattened (cln:flatten empty-collections)))
+          (is (cln:empty? flattened)))
+        ;; Flatten single sub-collection
+        (let ((single
+                (the (,type-symbol (,type-symbol UFix))
+                     (cln:new-convert (make-list (cln:new-convert (make-list 10)))))))
+          (is (cln:contains-elt? 10 (cln:flatten single))))
+        ;; Flatten multiple sub-collections
+        (let ((nested
+                (the (,type-symbol (,type-symbol UFix))
+                    (cln:new-convert (make-list (cln:new-convert (make-list 10 10))
+                                                (cln:new-convert (make-list 20))))))
+              (flattened (cln:flatten nested)))
+          (is (cln:contains-elt? 10 flattened))
+          (is (cln:contains-elt? 20 flattened)))
+        ; ;; Ensure immutability
+        (let ((nested
+                (the (,type-symbol (,type-symbol UFix))
+                    (cln:new-convert (make-list (cln:new-convert (make-list 10 20)))))))
+          (cln:flatten nested)
+          (is (== (cln:length nested) 1))))
     )))
