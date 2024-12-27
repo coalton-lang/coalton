@@ -14,6 +14,16 @@
     (is (== (make-list 1) (threads:join thread)))
     (is (not (threads:alive? thread)))))
 
+(define-test thread-lisp-typed-join ()
+  (let ((thread
+          (lisp (threads:Thread String) ()
+            (bt2:make-thread (cl:lambda () "string"))))
+        (thread-inferred
+          (lisp (threads:Thread :a) ()
+            (bt2:make-thread (cl:lambda () 1.01)))))
+    (is (== "string" (threads:join thread)))
+    (is (== 1.01 (threads:join thread-inferred)))))
+
 (define-test thread-all-threads ()
   (is (some?
        (find (== (threads:current-thread))
