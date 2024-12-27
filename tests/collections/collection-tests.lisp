@@ -57,6 +57,83 @@ Example:
           (is (== (cln:length (,@the-ufix (cln:new-convert source))) 3))
           (is (cln:empty?
                 (cln:filter (/= 99) (,@the-ufix (cln:new-convert source)))))))
+      (define-test ,(test-name type-symbol "flatten") ()
+        ;; Note: Can't assume the length of flattened collections - e.g. Set
+        ;; Flatten empty
+        (let ((empty-collections
+                (the (,type-symbol (,type-symbol UFix))
+                    (cln:new-collection)))
+              (flattened (cln:flatten empty-collections)))
+          (is (cln:empty? flattened)))
+        ;; Flatten single sub-collection
+        (let ((single
+                (the (,type-symbol (,type-symbol UFix))
+                     (cln:new-convert (make-list (cln:new-convert (make-list 10)))))))
+          (is (cln:contains-elt? 10 (cln:flatten single))))
+        ;; Flatten multiple sub-collections
+        (let ((nested
+                (the (,type-symbol (,type-symbol UFix))
+                    (cln:new-convert (make-list (cln:new-convert (make-list 10 10))
+                                                (cln:new-convert (make-list 20))))))
+              (flattened (cln:flatten nested)))
+          (is (cln:contains-elt? 10 flattened))
+          (is (cln:contains-elt? 20 flattened)))
+        ; ;; Ensure immutability
+        (let ((nested
+                (the (,type-symbol (,type-symbol UFix))
+                    (cln:new-convert (make-list (cln:new-convert (make-list 10 20)))))))
+          (cln:flatten nested)
+          (is (== (cln:length nested) 1))))
+      (define-test ,(test-name type-symbol "filter") ()
+        ;; Filter empty => empty
+        (let ((empty (,@the-type (cln:new-collection))))
+          (is (cln:empty? (cln:filter (== 1) empty))))
+        ;; Filter no matches
+        (let ((no-matches (,@the-type (cln:new-convert (make-list 2 4 6)))))
+          (is (cln:empty? (cln:filter (== 1) no-matches))))
+        ;; Filter partial matches
+        (let ((part (,@the-type (cln:new-convert (make-list 1 2 3 4 5))))
+              (f (cln:filter (> 3) part)))
+          (is (== (cln:length f) 2))
+          (is (cln:contains-elt? 1 f))
+          (is (cln:contains-elt? 2 f))
+          (is (not (cln:contains-elt? 3 f))))
+        ;; Filter all matches
+        (let ((all (,@the-type (cln:new-repeat 3 10)))
+              (f (cln:filter (== 10) all)))
+          (is (== (cln:length f) 3))
+          (is (cln:contains-elt? 10 f)))
+        ;; Ensure immutability
+        (let ((original (,@the-type (cln:new-convert (make-list 1 2 3 4 5)))))
+          (cln:filter (== 1) original)
+          (is (== (cln:length original) 5))))
+      (define-test ,(test-name type-symbol "remove-duplicates") ()
+        ;; Empty
+        (let ((empty-c (,@the-ufix (cln:new-collection))))
+          (is (cln:empty? (cln:remove-duplicates empty-c))))
+        ;; Single element
+        (let ((single (,@the-type (cln:new-convert (make-list 10))))
+              (rd (cln:remove-duplicates single)))
+          (is (== (cln:length rd) 1))
+          (is (cln:contains-elt? 10 rd)))
+        ;; Multiple duplicates
+        (let ((dupes (,@the-type (cln:new-convert (make-list 10 10 10 20 20))))
+              (rd (cln:remove-duplicates dupes)))
+          (is (== (cln:length rd) 2))
+          (is (cln:contains-elt? 10 rd))
+          (is (cln:contains-elt? 20 rd)))
+        ;; Some duplicates and some non-duplicates
+        (let ((mixed (,@the-type (cln:new-convert (make-list 1 2 1 3 2 4))))
+              (rd (,@the-type (cln:remove-duplicates mixed))))
+          (is (== (cln:length rd) 4))
+          (is (cln:contains-elt? 1 rd))
+          (is (cln:contains-elt? 2 rd))
+          (is (cln:contains-elt? 3 rd))
+          (is (cln:contains-elt? 4 rd)))
+        ;; Ensure immutability
+        (let ((orig (,@the-type (cln:new-convert (make-list 1 2 3 2 3)))))
+          (cln:remove-duplicates orig)
+          (is (== (cln:length orig) 5))))
       (define-test ,(test-name type-symbol "add") ()
         ;; Add to Empty Collection
         (let ((c (,@the-type (cln:add 99 (cln:new-collection)))))
@@ -92,31 +169,4 @@ Example:
         (let ((c (,@the-type (cln:new-convert (make-list 10 20)))))
           (cln:remove-elt 10 c)
           (is (cln:contains-elt? 10 c))))
-      (define-test ,(test-name type-symbol "flatten") ()
-        ;; Note: Can't assume the length of flattened collections - e.g. Set
-        ;; Flatten empty
-        (let ((empty-collections
-                (the (,type-symbol (,type-symbol UFix))
-                    (cln:new-collection)))
-              (flattened (cln:flatten empty-collections)))
-          (is (cln:empty? flattened)))
-        ;; Flatten single sub-collection
-        (let ((single
-                (the (,type-symbol (,type-symbol UFix))
-                     (cln:new-convert (make-list (cln:new-convert (make-list 10)))))))
-          (is (cln:contains-elt? 10 (cln:flatten single))))
-        ;; Flatten multiple sub-collections
-        (let ((nested
-                (the (,type-symbol (,type-symbol UFix))
-                    (cln:new-convert (make-list (cln:new-convert (make-list 10 10))
-                                                (cln:new-convert (make-list 20))))))
-              (flattened (cln:flatten nested)))
-          (is (cln:contains-elt? 10 flattened))
-          (is (cln:contains-elt? 20 flattened)))
-        ; ;; Ensure immutability
-        (let ((nested
-                (the (,type-symbol (,type-symbol UFix))
-                    (cln:new-convert (make-list (cln:new-convert (make-list 10 20)))))))
-          (cln:flatten nested)
-          (is (== (cln:length nested) 1))))
     )))
