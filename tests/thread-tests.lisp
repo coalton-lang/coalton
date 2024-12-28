@@ -23,7 +23,8 @@
 (define-test thread-destroy-and-join ()
   (let ((thread (threads:spawn (sys:sleep (the Integer 10)) 10)))
     (threads:destroy thread)
-    (is (result:err? (threads:join thread)))))
+    (is (result:err? (threads:join thread)))
+    (is (result:err? (threads:destroy thread)))))
 
 (define-test thread-all-threads ()
   (is (some?
