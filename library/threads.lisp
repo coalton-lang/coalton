@@ -94,11 +94,12 @@
     (lisp (List (Thread :a)) ()
       (bt2:all-threads)))
 
-  (declare join (Thread :a -> :a))
+  (declare join (Thread :a -> (Result LispCondition :a)))
   (define (join thread)
     "Wait until `thread' terminates, or if it has already terminated, return immediately."
-    (lisp :a (thread)
-      (bt2:join-thread thread)))
+    (lisp (Result LispCondition :a) (thread)
+      (cl:handler-case (Ok (bt2:join-thread thread))
+        (cl:error (c) (Err c)))))
 
   (declare interrupt (Thread :a -> (Unit -> Unit) -> Thread :a))
   (define (interrupt thread thunk)

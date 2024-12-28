@@ -37,6 +37,7 @@
    (#:result #:coalton-library/result)
    (#:seq #:coalton-library/seq)
    (#:file #:coalton-library/file)
+   (#:sys #:coalton-library/system)
    (#:threads #:coalton-library/threads)))
 
 (in-package #:coalton-native-tests)

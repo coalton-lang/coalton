@@ -1,17 +1,13 @@
 (in-package #:coalton-native-tests)
 
-(coalton-toplevel 
-  (define (sleep n)
-    (lisp Unit (n) (cl:sleep n) Unit)))
-
 ;;---------;;
 ;; Threads ;;
 ;;---------;;
 
 (define-test thread-spawn-and-join ()
-  (let ((thread (threads:spawn (sleep 1) (make-list 1))))
+  (let ((thread (threads:spawn (sys:sleep (the Integer 1)) (make-list 1))))
     (is (threads:alive? thread))
-    (is (== (make-list 1) (threads:join thread)))
+    (is (== (make-list 1) (unwrap (threads:join thread))))
     (is (not (threads:alive? thread)))))
 
 (define-test thread-lisp-typed-join ()
@@ -21,8 +17,13 @@
         (thread-inferred
           (lisp (threads:Thread :a) ()
             (bt2:make-thread (cl:lambda () 1.01)))))
-    (is (== "string" (threads:join thread)))
-    (is (== 1.01 (threads:join thread-inferred)))))
+    (is (== "string" (unwrap (threads:join thread))))
+    (is (== 1.01 (unwrap (threads:join thread-inferred))))))
+
+(define-test thread-destroy-and-join ()
+  (let ((thread (threads:spawn (sys:sleep (the Integer 10)) 10)))
+    (threads:destroy thread)
+    (is (result:err? (threads:join thread)))))
 
 (define-test thread-all-threads ()
   (is (some?
@@ -31,7 +32,8 @@
 
 (define-test thread-all-threads-contains-new ()
   (let ((old-threads (threads:all-threads))
-        (thread (threads:spawn (sleep 10))))
+        (thread (threads:spawn (sys:sleep (the Integer 40)))))
+    (sys:sleep (the Integer 1))
     (is (some? (find (== thread) (threads:all-threads))))
     (is (none? (find (== thread) old-threads)))
     (threads:destroy thread)))
@@ -48,11 +50,13 @@
     (threads:release-lock lock)))
 
 (define-test lock-fail-acquire ()
-  (let ((lock (threads:make-lock)))
-    (threads:spawn
-      (threads:with-lock-held lock (fn () (sleep 60))))
-    (sleep 1)
-    (is (not (threads:acquire-lock-no-wait lock)))))
+  (let ((lock (threads:make-lock))
+        (thread 
+          (threads:spawn
+            (threads:with-lock-held lock (fn () (sys:sleep (the Integer 60)))))))
+    (sys:sleep (the Integer 1))
+    (is (not (threads:acquire-lock-no-wait lock)))
+    (threads:destroy thread)))
 
 ;;------------;;
 ;; Semaphores ;;
@@ -61,7 +65,7 @@
 (define-test semaphore-signal-await ()
   (let ((sem (threads:make-semaphore)))
     (threads:spawn
-      (sleep 0.5)
+      (sys:sleep (the Single-Float 0.5))
       (threads:signal-semaphore sem 2))
     (threads:await-semaphore sem)
     (threads:await-semaphore sem)
@@ -71,16 +75,16 @@
   (let ((sem (threads:make-semaphore))
         (count (threads:make-atomic 0)))
     (threads:spawn
-      (sleep 1)
+      (sys:sleep (the Integer 1))
       (threads:signal-semaphore sem 4))
     (for x in (range 1 5)
       (threads:spawn 
         (threads:await-semaphore sem)
         (threads:incf-atomic count 1)))
-    (sleep 1)
+    (sys:sleep (the Integer 1))
     (is (== 4 (threads:atomic-value count)))
     (threads:signal-semaphore sem 1)
-    (sleep 1)
+    (sys:sleep (the Integer 1))
     (is (== 5 (threads:atomic-value count)))))
 
 ;;---------------------;;
@@ -97,12 +101,12 @@
                       (fn () 
                         (while (not (== i (threads:atomic-value atomic)))
                           (threads:await-cv cv lock)
-                          (sleep 0.1))
+                          (sys:sleep (the Single-Float 0.1)))
                         (threads:incf-atomic atomic 1)))
                     (threads:broadcast-cv cv)))) 
       (for x in (range target 1)
         (threads:spawn
-          (sleep 0.1)
+          (sys:sleep (the Single-Float 0.1))
           (worker (- target x)))) 
       (threads:with-lock-held lock 
         (fn () 
@@ -133,6 +137,6 @@
         (decer (threads:spawn
                  (for x in (range 1 1000)
                    (threads:decf-atomic atomic 1)))))
-    (threads:join incer)
-    (threads:join decer)
+    (is (result:ok? (threads:join incer)))
+    (is (result:ok? (threads:join decer)))
     (is (== 4000 (threads:atomic-value atomic)))))
