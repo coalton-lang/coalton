@@ -220,5 +220,40 @@ Example:
         ;; Ensure immutability
         (let ((c ,(make-the-cln 10 20)))
           (cln:remove-elt 10 c)
-          (is (cln:contains-elt? 10 c))))
-    ))))
+          (is (cln:contains-elt? 10 c))))))))
+
+(cl:defmacro mutable-collection-tests (type-symbol)
+  "Run a standard test suite to verify correct behavior for a MutableCollection typeclass instance.
+
+Example:
+  (mutable-collection-tests Vector)"
+  (cl:let ((the-type `(the (,type-symbol :a))))
+    (cl:labels ((make-the-cln (cl:&rest args)
+                  `(,@the-type (cln:new-convert (make-list ,@args)))))
+    `(cl:progn
+      (define-test ,(test-name type-symbol "copy") ()
+        ;; Contains the same elements
+        (let ((orig ,(make-the-cln 10))
+              (the-copy (cln:copy orig)))
+          (is (== (cln:length the-copy) 1))
+          (is (cln:contains-elt? 10 the-copy)))
+        ;; ;; Mutates separately
+        (let ((orig ,(make-the-cln 10))
+              (the-copy (cln:copy orig)))
+          (add! 20 the-copy)
+          (is (not (cln:contains-elt? 20 orig)))))
+      (define-test ,(test-name type-symbol "add!") ()
+        ;; Add to empty collection
+        (let ((c ,(make-the-cln)))
+          (add! 10 c)
+          (is (== 1 (cln:length c)))
+          (is (cln:contains-elt? 10 c)))
+        ;; Add to a full collection
+        (let ((c ,(make-the-cln 0)))
+          (add! 10 c)
+          (is (cln:contains-elt? 0 c))
+          (is (cln:contains-elt? 10 c)))
+        ;; Add duplicate element retains
+        (let ((c ,(make-the-cln 0 10)))
+          (add! 10 c)
+          (is (cln:contains-elt? 10 c))))))))
