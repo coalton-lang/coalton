@@ -1,5 +1,31 @@
 (cl:in-package #:coalton-native-tests)
 
+;;; NOTE:
+;;; The suites in this file represent the full contract of the collections typeclasses,
+;;; specifying and verifying behavior beyond what is in the docstring of the function
+;;; definitions. The tests should be comprehensive enough to verify the correctness
+;;; of any implementations, but must be careful to not over-specify the behavior.
+;;;
+;;; Valid collections could exhibit behavior that does not align with the standard
+;;; List/Vector paradigm that most are used to. For example, in the test for `add`
+;;; we verify that adding an element to an empty collection makes it length 1, making
+;;; that behavior part of the contract for all collections:
+;;;
+;;; (let ((c (,@the-type (cln:add 99 (cln:new-collection)))))
+;;;   (is (== (cln:length c) 1))
+;;;   (is (cln:contains-elt? 99 c)))
+;;;
+;;; However, we are careful to not assume that adding increases length by 1 *in general*
+;;; because this would not be true of Sets:
+;;;
+;;; (let ((c (,@the-type (cln:add 99 (cln:add 99 (cln:new-collection))))))
+;;;   (is (cln:contains-elt? 99 c)))
+;;;
+;;; Therefore, whenever a new collection is added to the library that violates a previous
+;;; assumption, the test suite should be weakened to allow for the new collection. Also,
+;;; it might be reasonable for individual collections to provide additional tests on
+;;; the standard functions to verify the guarantees they make above the generic contract.
+
 (cl:defun test-name (type-symbol test-name)
   "Intern and return a symbol of the form 'TEST-<`TYPE-SYMBOL`>-<`TEST-NAME`>
 
