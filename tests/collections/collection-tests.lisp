@@ -38,7 +38,7 @@ Example:
                 4)))
       (define-test ,(test-name type-symbol "new-from") ()
         ;; Creates a collection of length n
-        (is (== (cln:length (,@the-ufix (cln:new-from 5 (fn (x) x))))
+        (is (== (cln:length (,@the-ufix (cln:new-from 5 id)))
                 5))
         ;; Contains values produced by applying the function [0..n)
         (let ((c (,@the-ufix (cln:new-from 4 (fn (x) (* x 2))))))
@@ -49,7 +49,7 @@ Example:
           ;; Should not contain a value outside the generated set
           (is (not (cln:contains-elt? 5 c))))
         ;; n = 0 => empty collection
-        (is (cln:empty? (,@the-ufix (cln:new-from 0 (fn (x) x))))))
+        (is (cln:empty? (,@the-ufix (cln:new-from 0 id)))))
       (define-test ,(test-name type-symbol "new-convert") ()
         ;; Converting empty => empty
         (let ((source (make-list)))
