@@ -14,6 +14,7 @@
    #:make-ty-scheme                     ; CONSTRUCTOR
    #:ty-scheme-kinds                    ; ACCESSOR
    #:ty-scheme-type                     ; ACCESSOR
+   #:ty-scheme=                         ; FUNCTION
    #:ty-scheme-p                        ; FUNCTION
    #:scheme-list                        ; TYPE
    #:scheme-binding-list                ; TYPE
@@ -35,6 +36,12 @@
 (defstruct ty-scheme 
   (kinds (util:required 'kinds) :type list         :read-only t)
   (type  (util:required 'type)  :type qualified-ty :read-only t))
+
+(defun ty-scheme= (ty-scheme1 ty-scheme2)
+  (and (equalp (ty-scheme-kinds ty-scheme1)
+               (ty-scheme-kinds ty-scheme2))
+       (qualified-ty= (ty-scheme-type ty-scheme1)
+                      (ty-scheme-type ty-scheme2))))
 
 (defmethod make-load-form ((self ty-scheme) &optional env)
   (make-load-form-saving-slots self :environment env))
