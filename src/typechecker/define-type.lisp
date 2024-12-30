@@ -44,7 +44,7 @@
   (name              (util:required 'name)              :type symbol                   :read-only t)
   (type              (util:required 'type)              :type tc:ty                    :read-only t)
   (runtime-type      (util:required 'runtime-type)      :type t                        :read-only t)
-  (aliased-type      (util:required 'runtime-type)      :type (or null tc:ty)          :read-only t)
+  (aliased-type      (util:required 'aliased-type)      :type (or null tc:ty)          :read-only t)
 
   ;; See the fields with the same name on type-entry
   (explicit-repr     (util:required 'explicit-repr)     :type tc:explicit-repr          :read-only t)
@@ -113,7 +113,7 @@
   ;; NOTE: structs define a constructor with the same name
   (check-duplicates
    (mapcan (alexandria:compose #'copy-list #'parser:type-definition-ctors)
-           (append types structs type-aliases))
+           (append types structs))
    (alexandria:compose #'parser:identifier-src-name #'parser:type-definition-ctor-name)
    (lambda (first second)
      (tc:tc-error "Duplicate constructor definitions"
@@ -129,6 +129,14 @@
                (tc:tc-error "Duplicate type variable definitions"
                             (tc:tc-note first "first definition here")
                             (tc:tc-note second "second definition here")))))
+
+  ;; Ensure that no parametric type alias has unused type variables.
+  (loop :for type :in type-aliases
+        :for used-vars := (mapcar #'parser:tyvar-name (parser:collect-type-variables (parser:type-definition-aliased-type type)))
+        :do (loop :for defined-var :in (parser:type-definition-vars type)
+                  :unless (member (parser:keyword-src-name defined-var) used-vars)
+                    :do (tc:tc-error "Unused type variable in define-type-alias"
+                                     (tc:tc-note defined-var "unused variable defined here"))))
 
   (let* ((type-names (mapcar (alexandria:compose #'parser:identifier-src-name
                                                  #'parser:type-definition-name)
@@ -173,7 +181,10 @@
                        := (loop :for var :in vars
                                 :collect (tc:kind-of (partial-type-env-add-var partial-env var)))
 
-                     :for kind := (tc:make-kind-function* kvars tc:+kstar+)
+                     :for kind := (tc:make-kind-function* kvars
+                                                          (if (typep type 'parser:toplevel-define-type-alias)
+                                                              (tc:make-kvariable)
+                                                              tc:+kstar+))
                      :for ty := (tc:make-tycon :name name :kind kind)
                      :do (partial-type-env-add-type partial-env name ty))
 
@@ -312,30 +323,6 @@
 
   env)
 
-;; This function is necessary because the arguments of a type alias
-;; and its used variables are processed at different steps in the
-;; typechecker, which is unprecedented. The other main instance where
-;; we check for unused type variables is qualified types, but in that
-;; case, the type variables are processed all together.
-(defun check-for-unused-type-alias-type-variables (aliased-type parsed-type partial-env)
-  (declare (type tc:ty aliased-type)
-           (type parser:type-definition parsed-type)
-           (type partial-type-env partial-env))
-  (let* ((defined-variables (mapcar #'parser:keyword-src-name (parser:type-definition-vars parsed-type)))
-         (used-variables (mapcar #'tc:tyvar-id (tc:type-variables aliased-type)))
-         (unused-variables (loop :for tyvar :in defined-variables
-                                 :unless (member (tc:tyvar-id (partial-type-env-lookup-var partial-env tyvar parsed-type))
-                                                 used-variables)
-                                   :collect tyvar))
-         (number-of-unused-variables (length unused-variables)))
-    (unless (zerop number-of-unused-variables)
-      (tc-error (format nil "Alias type variable~P defined but never used" number-of-unused-variables)
-                (tc-note parsed-type "Type alias ~S defines unused type variable~P ~{:~A~^ ~}"
-                         (parser:identifier-src-name (parser:type-definition-name parsed-type))
-                         number-of-unused-variables
-                         (mapcar (lambda (str) (subseq str 0 (position #\- str :from-end t)))
-                                 (mapcar #'string unused-variables)))))))
-
 (defun infer-define-type-scc-kinds (types env)
   (declare (type parser:type-definition-list types)
            (type partial-type-env env)
@@ -343,7 +330,9 @@
 
   (let ((ksubs nil)
 
-        (ctor-table (make-hash-table :test #'eq)))
+        (ctor-table (make-hash-table :test #'eq))
+
+        (alias-table (make-hash-table :test #'eq)))
 
     ;; Infer the kinds of each type
     (loop :for type :in types
@@ -356,6 +345,22 @@
                                                     (setf ksubs ksubs_)
                                                     type))
                     :do (setf (gethash ctor-name ctor-table) fields)))
+
+    ;; Infer the kinds of each type alias.
+    (loop :for type :in types
+          :for name := (parser:identifier-src-name (parser:type-definition-name type))
+          :for parser-aliased-type := (parser:type-definition-aliased-type type)
+          :when parser-aliased-type
+            :do (multiple-value-bind (aliased-type ksubs_)
+                    (parse-type parser-aliased-type
+                                env
+                                ksubs
+                                (let ((kind (tc:kind-of (gethash name (partial-type-env-ty-table env)))))
+                                  (loop :while (typep kind 'tc:kfun)
+                                        :do (setf kind (tc:kfun-to kind)))
+                                  kind))
+                  (setf ksubs ksubs_)
+                  (setf (gethash name alias-table) aliased-type)))
 
     ;; Redefine types with final inferred kinds in the environment
     (loop :for type :in types
@@ -465,12 +470,7 @@
                                                  `(member ,@(mapcar #'tc:constructor-entry-compressed-repr ctors)))
                                                 (t
                                                  name))
-                                :aliased-type (let ((parser-aliased-type
-                                                      (parser:type-definition-aliased-type type)))
-                                                (if parser-aliased-type
-                                                  (let ((aliased-type (parse-type parser-aliased-type env)))
-                                                    (check-for-unused-type-alias-type-variables aliased-type type env)
-                                                    aliased-type)))
+                                :aliased-type (gethash name alias-table)
                                 :explicit-repr (if (eq repr-type :native)
                                                    (list repr-type repr-arg)
                                                    repr-type)

@@ -49,6 +49,7 @@
    #:*arrow-type*                       ; VARIABLE
    #:*list-type*                        ; VARIABLE
    #:push-type-alias                    ; FUNCTION
+   #:flatten-type                       ; FUNCTION
    #:apply-type-argument                ; FUNCTION
    #:apply-type-argument-list           ; FUNCTION
    #:make-function-type                 ; FUNCTION
@@ -173,19 +174,19 @@
 
 (defmethod apply-ksubstitution (subs (type tyvar))
   (make-tyvar
-   :alias (ty-alias type)
+   :alias (mapcar (lambda (alias) (apply-ksubstitution subs alias)) (ty-alias type))
    :id (tyvar-id type)
    :kind (apply-ksubstitution subs (tyvar-kind type))))
 
 (defmethod apply-ksubstitution (subs (type tycon))
   (make-tycon
-   :alias (ty-alias type)
+   :alias (mapcar (lambda (alias) (apply-ksubstitution subs alias)) (ty-alias type))
    :name (tycon-name type)
    :kind (apply-ksubstitution subs (tycon-kind type))))
 
 (defmethod apply-ksubstitution (subs (type tapp))
   (make-tapp
-   :alias (ty-alias type)
+   :alias (mapcar (lambda (alias) (apply-ksubstitution subs alias)) (ty-alias type))
    :from (apply-ksubstitution subs (tapp-from type))
    :to (apply-ksubstitution subs (tapp-to type))))
 
@@ -274,8 +275,18 @@
            (type ty alias)
            (values ty &optional))
   (let ((new-type (copy-structure type)))
-    (setf (ty-alias new-type) (cons alias (ty-alias new-type)))
+    (push alias (ty-alias new-type))
     new-type))
+
+(defun flatten-type (type)
+  (declare (type ty type)
+           (values ty-list &optional))
+  (let ((flattened-type nil))
+    (loop :for from := type :then (tapp-from from)
+          :while (typep from 'tapp)
+          :do (push (tapp-to from) flattened-type)
+          :finally (push from flattened-type))
+    flattened-type))
 
 (defun apply-type-argument (tcon arg &key ksubs)
   (declare (type (or tycon tapp tyvar) tcon)

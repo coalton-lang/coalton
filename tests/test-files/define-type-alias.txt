@@ -88,11 +88,11 @@ error: Malformed type alias definition
 
 --------------------------------------------------------------------------------
 
-error: Unknown type variable
-  --> test:3:41
+error: Unused type variable in define-type-alias
+  --> test:3:31
    |
  3 |  (define-type-alias (Collection :a) (List :b))
-   |                                           ^^ Unknown type variable :B
+   |                                 ^^ unused variable defined here
 
 ================================================================================
 103 define-type-alias, type variables
@@ -104,11 +104,11 @@ error: Unknown type variable
 
 --------------------------------------------------------------------------------
 
-error: Alias type variable defined but never used
-  --> test:3:0
+error: Unused type variable in define-type-alias
+  --> test:3:31
    |
  3 |  (define-type-alias (Collection :a) (List Integer))
-   |  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Type alias COLLECTION defines unused type variable :A
+   |                                 ^^ unused variable defined here
 
 ================================================================================
 104 define-type-alias, type errors
