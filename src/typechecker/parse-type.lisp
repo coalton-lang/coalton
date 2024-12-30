@@ -38,7 +38,7 @@
              (type partial-type-env env)
              (values tc:ty))
     (let ((alias (tc:lookup-type-alias (partial-type-env-env env) (tc:tycon-name type) :no-error t)))
-      (when alias
+      (if alias
         ;; Kind information is tracked with type aliases.
         ;; So, kind mismatch is caught earlier and we do not check for it here.
         (if (zerop (length (tc:type-alias-entry-tyvars alias)))
@@ -66,7 +66,7 @@
       ;; Check if the foremost tapp-from is an alias.
       (if (typep (first flattened-tapp) 'tc:tycon)
           (let ((alias (tc:lookup-type-alias (partial-type-env-env env) (tc:tycon-name (first flattened-tapp)) :no-error t)))
-            (when alias
+            (if alias
               (let ((var-count (length (tc:type-alias-entry-tyvars alias)))
                     (arg-count (length (rest flattened-tapp))))
                 ;; Kind mismatches are caught earlier.
@@ -125,7 +125,7 @@
                          (make-partial-type-env :env env)
                          env)))
 
-    (when (typep env 'tc:environment)
+    (if (typep env 'tc:environment)
       (loop :for tvar :in (parser:collect-type-variables parser-ty)
             :for tvar-name := (parser:tyvar-name tvar)
             :do (partial-type-env-add-var partial-env tvar-name)))
