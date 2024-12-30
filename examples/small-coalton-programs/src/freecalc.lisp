@@ -9,8 +9,9 @@
    #:describe
    #:disassemble)
   (:use #:coalton #:coalton-prelude)
+  (:shadow #:add)
   (:local-nicknames
-   (#:vector #:coalton-library/vector)
+   (#:vector #:coalton-library/collections/mutable/vector)
    (#:st #:coalton-library/monad/state)
    (#:free #:coalton-library/monad/free))
   (:export #:run-a-program))

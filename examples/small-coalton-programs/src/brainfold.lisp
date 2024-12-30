@@ -19,12 +19,12 @@
    #:coalton
    #:coalton-prelude)
   (:local-nicknames
-   (#:vec #:coalton-library/vector)
+   (#:vec #:coalton-library/collections/mutable/vector)
    (#:iter #:coalton-library/iterator)
    (#:cell #:coalton-library/cell)
    (#:char #:coalton-library/char)
    (#:str #:coalton-library/string)
-   (#:list #:coalton-library/list)
+   (#:list #:coalton-library/collections/immutable/list)
    (#:arith #:coalton-library/math)
    (#:state #:coalton-library/monad/state)
    (#:file #:coalton-library/file))
