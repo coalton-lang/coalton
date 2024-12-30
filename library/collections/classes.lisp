@@ -241,7 +241,7 @@ the front or back, depending on which is natural for the underlying data structu
     (define (new-convert coll)
       (itr:collect! (itr:into-iter coll)))
     (define (flatten lst)
-      (>>= lst (fn (x) x)))
+      (>>= lst id))
     (define filter l:filter)
     (define remove-duplicates l:remove-duplicates)
     (define empty? l:empty?)
