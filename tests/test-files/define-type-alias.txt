@@ -186,6 +186,3 @@ error: Type mismatch
     |
  15 |  (define new-x (increment-my-index x))
     |                                    ^ Expected type '[MYINDEX := INDEX := UFIX]' but got 'INTEGER'
-
-
-
