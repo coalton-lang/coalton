@@ -136,6 +136,8 @@
   (qualified-ty-location self))
 
 (defun flatten-type (type)
+  "If TYPE is a TAPP of the form ((((T1 T2) T3) T4) ...), then return
+the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
   (declare (type ty type)
            (values ty-list &optional))
   (let ((flattened-type nil))

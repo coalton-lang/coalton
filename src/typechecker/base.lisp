@@ -79,7 +79,7 @@ This requires a valid PPRINT-VARIABLE-CONTEXT")
                          (apply #'format nil format-string format-args))))
 
 (defun tc-note (located format-string &rest format-args)
-  (let ((*pprint-type-aliases* t))
+  (let ((*pprint-type-aliases* t)) 
     (apply #'tc-location (source:location located) format-string format-args)))
 
 (defun tc-secondary-note (located format-string &rest format-args)

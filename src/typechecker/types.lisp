@@ -271,6 +271,7 @@
 ;;;
 
 (defun push-type-alias (type alias)
+  "Update the alias field of TYPE with ALIAS as the most high-level alias."
   (declare (type ty type)
            (type ty alias)
            (values ty &optional))
@@ -279,6 +280,8 @@
     new-type))
 
 (defun flatten-type (type)
+  "If TYPE is a TAPP of the form ((((T1 T2) T3) T4) ...), then return
+the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
   (declare (type ty type)
            (values ty-list &optional))
   (let ((flattened-type nil))

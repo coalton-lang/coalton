@@ -32,12 +32,15 @@
 ;;;
 
 (defgeneric apply-type-alias-substitutions (type parser-type env)
+  (:documentation "Replace all type aliases in TYPE with the true types represented by them.")
   (:method ((type tc:tycon) parser-type env)
     (declare (type parser:ty parser-type)
              (type partial-type-env env)
              (values tc:ty))
     (let ((alias (tc:lookup-type-alias (partial-type-env-env env) (tc:tycon-name type) :no-error t)))
       (when alias
+        ;; Kind information is tracked with type aliases.
+        ;; So, kind mismatch is caught earlier and we do not check for it here.
         (if (zerop (length (tc:type-alias-entry-tyvars alias)))
             (setf type (tc:type-alias-entry-type alias))
             (tc-error "Incomplete type alias application"
@@ -51,18 +54,23 @@
     (declare (type parser:ty parser-type)
              (type partial-type-env env)
              (values tc:tapp))
+    ;; Flatten the type-checker and parser types.
     (let ((flattened-tapp (tc:flatten-type type))
           (flattened-parser-tapp (parser:flatten-type parser-type)))
+      ;; Apply substitutions to the type arguments.
       (setf flattened-tapp (cons (first flattened-tapp)
                                  (mapcar (lambda (tc-ty parser-ty)
                                            (apply-type-alias-substitutions tc-ty parser-ty env))
                                          (rest flattened-tapp)
                                          (rest flattened-parser-tapp))))
+      ;; Check if the foremost tapp-from is an alias.
       (if (typep (first flattened-tapp) 'tc:tycon)
           (let ((alias (tc:lookup-type-alias (partial-type-env-env env) (tc:tycon-name (first flattened-tapp)) :no-error t)))
             (when alias
               (let ((var-count (length (tc:type-alias-entry-tyvars alias)))
                     (arg-count (length (rest flattened-tapp))))
+                ;; Kind mismatches are caught earlier.
+                ;; Ensure sufficient parameters are supplied.
                 (if (> var-count arg-count)
                     (tc-error "Incomplete type alias application"
                               (tc-note parser-type
@@ -70,15 +78,21 @@
                                        (tc:type-alias-entry-name alias)
                                        arg-count
                                        var-count))
+                    ;; Apply the type parameters to the parametric type alias.
                     (let ((substs nil))
                       (loop :for var :in (tc:type-alias-entry-tyvars alias)
                             :for arg :in (subseq flattened-tapp 1 (1+ var-count))
                             :do (setf substs (tc:merge-substitution-lists substs (tc:match var arg))))
+                      ;; Replace the alias and its parameters with the corresponding type
+                      ;; in the flattened type.
                       (setf flattened-tapp (cons (tc:apply-substitution substs (tc:type-alias-entry-type alias))
                                                  (nthcdr var-count (rest flattened-tapp)))))))))
+          ;; If the first type in the flattened type is not a tycon,
+          ;; then apply alias substitutions directly to it.
           (setf flattened-tapp (cons (apply-type-alias-substitutions (first flattened-tapp) (first flattened-parser-tapp) env)
                                      (rest flattened-tapp))))
       (setf type (first flattened-tapp))
+      ;; Reconstruct the flattened type with any remaining types to be applied.
       (loop :for arg :in (rest flattened-tapp)
             :do (setf type (tc:apply-type-argument type arg)))
       type))

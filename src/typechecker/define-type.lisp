@@ -132,7 +132,9 @@
 
   ;; Ensure that no parametric type alias has unused type variables.
   (loop :for type :in type-aliases
-        :for used-vars := (mapcar #'parser:tyvar-name (parser:collect-type-variables (parser:type-definition-aliased-type type)))
+        :for used-vars := (mapcar #'parser:tyvar-name
+                                  (parser:collect-type-variables
+                                   (parser:type-definition-aliased-type type)))
         :do (loop :for defined-var :in (parser:type-definition-vars type)
                   :unless (member (parser:keyword-src-name defined-var) used-vars)
                     :do (tc:tc-error "Unused type variable in define-type-alias"
@@ -181,10 +183,12 @@
                        := (loop :for var :in vars
                                 :collect (tc:kind-of (partial-type-env-add-var partial-env var)))
 
-                     :for kind := (tc:make-kind-function* kvars
-                                                          (if (typep type 'parser:toplevel-define-type-alias)
-                                                              (tc:make-kvariable)
-                                                              tc:+kstar+))
+                     :for kind := (if (typep type 'parser:toplevel-define-type-alias)
+                                      ;; Type aliases may not alias a type of kind *.
+                                      (tc:make-kind-function* kvars (tc:make-kvariable))
+                                      ;; However, type and struct definitions always
+                                      ;; yield types of kind *.
+                                      (tc:make-kind-function* kvars tc:+kstar+))
                      :for ty := (tc:make-tycon :name name :kind kind)
                      :do (partial-type-env-add-type partial-env name ty))
 
@@ -230,11 +234,7 @@
   (cond ((typep parsed-type 'parser:toplevel-define-type-alias)
          (let ((alias (tc:apply-type-argument-list (type-definition-type type) tyvars))
                (aliased-type (type-definition-aliased-type type)))
-           (setf aliased-type
-                 (tc:push-type-alias aliased-type
-                                     (tc:apply-ksubstitution
-                                      (tc:kind-monomorphize-subs (tc:kind-variables tyvars) nil)
-                                      alias)))
+           (setf aliased-type (tc:push-type-alias aliased-type alias))
            (setf env (tc:set-type-alias
                       env
                       (type-definition-name type)
