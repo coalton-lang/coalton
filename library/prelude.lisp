@@ -139,7 +139,7 @@
    #:none?)
   
   (:import-from
-   #:coalton-library/collections/classes
+   #:coalton-library/collections
    #:Collection
    #:new-collection
    #:new-repeat
