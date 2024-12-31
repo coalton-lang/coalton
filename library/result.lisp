@@ -110,6 +110,12 @@
         ((Ok x) (f x))
         ((Err e) (Err e)))))
 
+  (define-instance (Traversable (Result :a))
+    (define (traverse f m)
+      (match m
+        ((Err x) (pure (Err x)))
+        ((Ok y)  (map Ok (f y))))))
+
   (define-instance (Bifunctor Result)
     (define (bimap f g res)
       (match res

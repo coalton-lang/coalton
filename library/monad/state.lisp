@@ -5,8 +5,10 @@
    #:coalton-library/classes)
   (:export
    #:ST
+   #:MonadState
    #:put
    #:get
+   #:modify
    #:run))
 
 (in-package #:coalton-library/monad/state)
@@ -35,8 +37,8 @@ Represented as a closure from initial state to updated state and value."
   (define get-st
     (ST (fn (state) (Tuple state state))))
 
-  (declare run-st (ST :state :a -> :state -> Tuple :state :a))
-  (define (run-st sc)
+  (declare run (ST :state :a -> :state -> Tuple :state :a))
+  (define (run sc)
     "Runs a StatefulComputation to produce a final updated state and value given an initial state"
     (match sc
       ((ST fstate)
@@ -46,16 +48,21 @@ Represented as a closure from initial state to updated state and value."
   ;; MonadState Typeclass
   ;;
 
-  (define-class (MonadState :state :m)
+  (define-class (Monad :m => MonadState :state :m (:m -> :state))
     "A monad capable of representing stateful computations."
     (put
      "A StatefulComputation with state set to be given state. The returned value is Unit."
-     (:state -> :m :state Unit))
+     (:state -> :m Unit))
     (get
      "A StatefulComputation which returns the current state as the value."
-     (:m :state :state))
-    (run
-     (:m :state :a -> :state -> Tuple :state :a)))
+     (:m :state)))
+
+  (declare modify (MonadState :state :m => (:state -> :state) -> :m Unit))
+  (define (modify statef)
+    "Modify the state in a StatefulComputation, discarding the old state."
+    (do
+     (state <- get)
+     (put (statef state))))
 
   ;;
   ;; State Monad instances
@@ -64,7 +71,7 @@ Represented as a closure from initial state to updated state and value."
     (define (map fa->b sca)
       (ST
        (fn (state)
-         (match (run-st sca state)
+         (match (run sca state)
            ((Tuple state2 a)
             (Tuple state2 (fa->b a))))))))
 
@@ -76,10 +83,10 @@ Represented as a closure from initial state to updated state and value."
       (ST
        (fn (state1)
          ;; Apply the initial state to sca
-         (match (run-st sca state1)
+         (match (run sca state1)
            ((Tuple state2 a)
             ;; Apply the state from sca to scb
-            (match (run-st scb state2)
+            (match (run scb state2)
               ((Tuple state3 b)
                (Tuple state3 (fab a b))))))))))
 
@@ -87,16 +94,15 @@ Represented as a closure from initial state to updated state and value."
     (define (>>= sca fa->scb)
       (ST
        (fn (state1)
-         (match (run-st sca state1)
+         (match (run sca state1)
            ((Tuple state2 a)
             ;; Use the a to compute the mb,
             ;; and apply the state from ma to the mb
-            (run-st (fa->scb a) state2)))))))
+            (run (fa->scb a) state2)))))))
 
-  (define-instance (MonadState :state ST)
+  (define-instance (MonadState :state (ST :state))
     (define put put-st)
-    (define get get-st)
-    (define run run-st)))
+    (define get get-st)))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/MONAD/STATE")
