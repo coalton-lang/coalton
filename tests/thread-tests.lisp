@@ -35,9 +35,19 @@
   (let ((old-threads (threads:all-threads))
         (thread (threads:spawn (sys:sleep (the Integer 40)))))
     (sys:sleep (the Integer 1))
-    (is (some? (find (== thread) (threads:all-threads))))
-    (is (none? (find (== thread) old-threads)))
+    (is (some? (find (== (into thread)) (threads:all-threads))))
+    (is (none? (find (== (into thread)) old-threads)))
     (threads:destroy thread)))
+
+(define-test thread-interrupt-twice ()
+  (let ((thread (threads:make-thread (fn () (sys:sleep (the Integer 40))))))
+    (is (result:ok? (threads:interrupt thread (fn () Unit))))
+    (is (result:ok? (threads:destroy thread)))
+    ;; this won't work on CCL until this issue is solved
+    ;; https://github.com/sionescu/bordeaux-threads/issues/127
+    (sys:sleep (the Integer 1))
+    #-ccl
+    (is (result:err? (threads:interrupt thread (fn () Unit))))))
 
 ;;-------;;
 ;; Locks ;;
@@ -52,7 +62,7 @@
 
 (define-test lock-fail-acquire ()
   (let ((lock (threads:make-lock))
-        (thread 
+        (thread
           (threads:spawn
             (threads:with-lock-held lock (fn () (sys:sleep (the Integer 60)))))))
     (sys:sleep (the Integer 1))
@@ -79,7 +89,7 @@
       (sys:sleep (the Integer 1))
       (threads:signal-semaphore sem 4))
     (for x in (range 1 5)
-      (threads:spawn 
+      (threads:spawn
         (threads:await-semaphore sem)
         (threads:incf-atomic count 1)))
     (sys:sleep (the Integer 1))
@@ -99,18 +109,18 @@
         (lock (threads:make-lock)))
     (let ((worker (fn (i)
                     (threads:with-lock-held lock
-                      (fn () 
+                      (fn ()
                         (while (not (== i (threads:atomic-value atomic)))
                           (threads:await-cv cv lock)
                           (sys:sleep (the Single-Float 0.1)))
                         (threads:incf-atomic atomic 1)))
-                    (threads:broadcast-cv cv)))) 
+                    (threads:broadcast-cv cv))))
       (for x in (range target 1)
         (threads:spawn
           (sys:sleep (the Single-Float 0.1))
-          (worker (- target x)))) 
-      (threads:with-lock-held lock 
-        (fn () 
+          (worker (- target x))))
+      (threads:with-lock-held lock
+        (fn ()
           (while (not (== target (threads:atomic-value atomic)))
             (threads:await-cv cv lock))))
       (is (== target (threads:atomic-value atomic))))))

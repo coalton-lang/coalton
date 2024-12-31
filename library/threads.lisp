@@ -1,8 +1,10 @@
 (coalton-library/utils:defstdlib-package #:coalton-library/threads
-  (:use
-   #:coalton
-   #:coalton-library/system
-   #:coalton-library/classes)
+    (:use
+     #:coalton
+     #:coalton-library/system
+     #:coalton-library/classes)
+  (:local-nicknames
+   (#:cell #:coalton-library/cell))
   (:export
    ;; Threads
    #:Thread
@@ -44,7 +46,12 @@
    #:atomic-cmp-and-swap
    #:decf-atomic
    #:incf-atomic
-   #:atomic-value))
+   #:atomic-value
+   ;; Mutexes
+   #:Mutex
+   #:read-mutex
+   #:write-mutex!
+   #:update-mutex!))
 
 (in-package #:coalton-library/threads)
 
@@ -55,7 +62,7 @@
 
 ;;;
 ;;; This module implements bindings to bordeaux-threads.
-;;; It will only be loaded if thread capabilities are 
+;;; It will only be loaded if thread capabilities are
 ;;; detected in `cl:*features*'.
 ;;;
 
@@ -70,9 +77,21 @@
   (repr :native bt2:thread)
   (define-type (Thread :a))
 
+  (repr :native bt2:thread)
+  (define-type LispThread)
+
+  (define-instance (Eq LispThread)
+    (define (== a b)
+      (lisp Boolean (a b) (to-boolean (cl:eq a b)))))
+
   (define-instance (Eq (Thread :a))
     (define (== a b)
-      (lisp Boolean (a b) (to-boolean (cl:equal a b)))))
+      (lisp Boolean (a b) (to-boolean (cl:eq a b)))))
+
+  (define-instance (Into (Thread :a) LispThread)
+    (define (into thread)
+      (lisp LispThread (thread)
+        thread)))
 
   (declare make-thread ((Unit -> :a) -> Thread :a))
   (define (make-thread thunk)
@@ -82,16 +101,16 @@
       (bt2:make-thread
        (cl:lambda () (call-coalton-function thunk Unit)))))
 
-  (declare current-thread (Unit -> Thread :a))
+  (declare current-thread (Unit -> LispThread))
   (define (current-thread)
     "Returns the thread object representing the calling thread."
-    (lisp (Thread :a) ()
+    (lisp LispThread ()
       (bt2:current-thread)))
 
-  (declare all-threads (Unit -> (List (Thread :a))))
+  (declare all-threads (Unit -> (List LispThread)))
   (define (all-threads)
     "Returns a fresh list of all running threads."
-    (lisp (List (Thread :a)) ()
+    (lisp (List LispThread) ()
       (bt2:all-threads)))
 
   (declare join (Thread :a -> (Result LispCondition :a)))
@@ -101,23 +120,25 @@
       (cl:handler-case (Ok (bt2:join-thread thread))
         (cl:error (c) (Err c)))))
 
-  (declare interrupt (Thread :a -> (Unit -> Unit) -> Thread :a))
+  (declare interrupt ((Into :a LispThread) => :a -> (Unit -> Unit) -> (Result LispCondition :a)))
   (define (interrupt thread thunk)
     "Interrupt thread and call `thunk' within its dynamic context,
 then continue with the interrupted path of execution."
-    (lisp (Thread :a) (thread thunk)
-      (bt2:interrupt-thread
-       thread
-       (cl:lambda () (call-coalton-function thunk Unit)))))
+    (lisp (Result LispCondition :a) (thread thunk)
+      (cl:handler-case
+          (Ok (bt2:interrupt-thread
+               thread
+               (cl:lambda () (call-coalton-function thunk Unit))))
+        (cl:error (c) (Err c)))))
 
-  (declare destroy ((Thread :a) -> (Result LispCondition (Thread :a))))
+  (declare destroy ((Into :a LispThread) => :a -> (Result LispCondition :a)))
   (define (destroy thread)
     "Terminates the thread `thread'."
-    (lisp (Result LispCondition (Thread :a)) (thread)
+    (lisp (Result LispCondition :a) (thread)
       (cl:handler-case (Ok (bt2:destroy-thread thread))
         (cl:error (c) (Err c)))))
 
-  (declare alive? (Thread :a -> Boolean))
+  (declare alive? ((Into :a LispThread) => :a -> Boolean))
   (define (alive? thread)
     "Returns True if `thread' has not finished or `destroy' has not been called on it."
     (lisp Boolean (thread)
