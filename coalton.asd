@@ -81,6 +81,7 @@
                (:file "queue")
                (:file "monad/identity")
                (:file "monad/state")
+               (:file "monad/environment")
                (:file "ord-tree")
                (:file "ord-map")
                (:file "monad/free")
