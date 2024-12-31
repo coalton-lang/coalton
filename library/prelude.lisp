@@ -249,6 +249,7 @@
    (#:id #:coalton-library/monad/identity)
    (#:st #:coalton-library/monad/state)
    (#:env #:coalton-library/monad/environment)
+   (#:resultt #:coalton-library/monad/resultt)
    (#:iter #:coalton-library/iterator)
    (#:sys #:coalton-library/system)
    (#:file #:coalton-library/file)))

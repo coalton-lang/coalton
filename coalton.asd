@@ -82,6 +82,7 @@
                (:file "monad/identity")
                (:file "monad/state")
                (:file "monad/environment")
+               (:file "monad/resultt")
                (:file "ord-tree")
                (:file "ord-map")
                (:file "monad/free")

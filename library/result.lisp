@@ -12,6 +12,7 @@
    #:err?
    #:map-err
    #:flatten
+   #:opt->result
    #:ok-or-error))
 
 (in-package #:coalton-library/result)
@@ -25,6 +26,13 @@
   ;;
   ;; Result
   ;;
+
+  (declare opt->result (:err -> Optional :a -> Result :err :a))
+  (define (opt->result failure opt)
+    "Convert OPT to a Result, using FAILURE value if None."
+    (match opt
+      ((None) (Err failure))
+      ((Some a) (Ok a))))
 
   (declare ok? (Result :a :b -> Boolean))
   (define (ok? x)
