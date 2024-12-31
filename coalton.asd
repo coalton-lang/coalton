@@ -38,7 +38,9 @@
   :depends-on (#:coalton-compiler
                #:coalton/hashtable-shim
                #:trivial-garbage
-               #:alexandria)
+               #:alexandria
+               #+(or sb-thread threads openmcl-native-threads)
+               #:bordeaux-threads)
   :pathname "library/"
   :serial t
   :components ((:file "set-float-traps")
@@ -86,6 +88,8 @@
                (:file "seq")
                (:file "system")
                (:file "file")
+               #+(or sb-thread threads openmcl-native-threads)
+               (:file "threads")
                (:file "prelude")))
 
 (cl:when (cl:member (uiop:getenv "COALTON_PORTABLE_BIGFLOAT") '("1" "true" "t") :test #'cl:equalp)
@@ -265,4 +269,6 @@
                (:file "looping-native-tests")
                (:file "monomorphizer-tests")
                (:file "inliner-tests")
-               (:file "file-tests")))
+               (:file "file-tests")
+               #+(or sb-thread threads openmcl-native-threads)
+               (:file "thread-tests")))
