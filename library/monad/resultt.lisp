@@ -10,6 +10,7 @@
    #:run-resultT
    #:map-resultT
    #:map-errT
+   #:err-ifT
    ))
 
 (in-package #:coalton-library/monad/resultt)
@@ -38,7 +39,11 @@
     (ResultT (f m)))
 
   (declare map-errT (Functor :m => (:a -> :b) -> ResultT :a :m :c -> ResultT :b :m :c))
-  (define (map-errT ferr) (map-resultT (map (map-err ferr)))))
+  (define (map-errT ferr) (map-resultT (map (map-err ferr))))
+
+  (declare err-ifT (Monad :m => Boolean -> :err -> ResultT :err :m Unit))
+  (define (err-ifT passed failure)
+    (ResultT (pure (err-if passed failure)))))
 
 ;;;
 ;;; Instances

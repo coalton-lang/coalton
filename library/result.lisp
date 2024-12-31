@@ -13,6 +13,7 @@
    #:map-err
    #:flatten
    #:opt->result
+   #:err-if
    #:ok-or-error))
 
 (in-package #:coalton-library/result)
@@ -26,6 +27,13 @@
   ;;
   ;; Result
   ;;
+
+  (declare err-if (Boolean -> :err -> Result :err Unit))
+  (define (err-if failed? failure)
+    "Fail with FAILURE value if FAILED? is True."
+    (if failed?
+        (Err failure)
+        (Ok Unit)))
 
   (declare opt->result (:err -> Optional :a -> Result :err :a))
   (define (opt->result failure opt)
