@@ -43,15 +43,10 @@
    ;; Atomics
    #:AtomicInteger
    #:make-atomic
-   #:atomic-cmp-and-swap
-   #:decf-atomic
-   #:incf-atomic
-   #:atomic-value
-   ;; Mutexes
-   #:Mutex
-   #:read-mutex
-   #:write-mutex!
-   #:update-mutex!))
+   #:cas-atomic!
+   #:decf-atomic!
+   #:incf-atomic!
+   #:atomic-value))
 
 (in-package #:coalton-library/threads)
 
@@ -75,10 +70,12 @@
 
 (coalton-toplevel
   (repr :native bt2:thread)
-  (define-type (Thread :a))
+  (define-type (Thread :a)
+    "A thread that can be joined to yield the result of the thunk used to create it.")
 
   (repr :native bt2:thread)
-  (define-type LispThread)
+  (define-type LispThread
+    "A plain lisp thread.")
 
   (define-instance (Eq LispThread)
     (define (== a b)
@@ -150,10 +147,12 @@ then continue with the interrupted path of execution."
 
 (coalton-toplevel
   (repr :native bt2:lock)
-  (define-type Lock)
+  (define-type Lock
+    "Wrapper for a native non-recursive lock.")
 
   (repr :native bt2:recursive-lock)
-  (define-type RecursiveLock)
+  (define-type RecursiveLock
+    "Wrapper for a native recursive lock.")
 
   (declare make-lock (Unit -> Lock))
   (define (make-lock)
@@ -237,7 +236,8 @@ Returns the lock."
 
 (coalton-toplevel
   (repr :native bt2:condition-variable)
-  (define-type ConditionVariable)
+  (define-type ConditionVariable
+    "Wrapper for a native condition variable.")
 
   (declare make-cv (Unit -> ConditionVariable))
   (define (make-cv)
@@ -276,7 +276,8 @@ that there is threading to be done, instead of assuming that it can go ahead."
 
 (coalton-toplevel
   (repr :native bt2:semaphore)
-  (define-type Semaphore)
+  (define-type Semaphore
+    "Wrapper for a native semaphore.")
 
   (declare make-semaphore (Unit -> Semaphore))
   (define (make-semaphore)
@@ -306,7 +307,8 @@ If the count is zero, blocks until `sem' can be decremented."
 
 (coalton-toplevel
   (repr :native bt2:atomic-integer)
-  (define-type AtomicInteger)
+  (define-type AtomicInteger
+    "An unsigned machine word that allows atomic increment, decrement and swap.")
 
   (declare make-atomic (#+32-bit U32 #+64-bit U64 -> AtomicInteger))
   (define (make-atomic value)
@@ -314,21 +316,21 @@ If the count is zero, blocks until `sem' can be decremented."
     (lisp AtomicInteger (value)
       (bt2:make-atomic-integer :value value)))
 
-  (declare atomic-cmp-and-swap (AtomicInteger -> #+32-bit U32 #+64-bit U64 -> #+32-bit U32 #+64-bit U64 -> Boolean))
-  (define (atomic-cmp-and-swap atomic old new)
+  (declare cas-atomic! (AtomicInteger -> #+32-bit U32 #+64-bit U64 -> #+32-bit U32 #+64-bit U64 -> Boolean))
+  (define (cas-atomic! atomic old new)
     "If the current value of `atomic' is equal to `old', replace it with `new'.
 Returns True if the replacement was successful, otherwise False."
     (lisp Boolean (atomic old new)
       (bt2:atomic-integer-compare-and-swap atomic old new)))
 
-  (declare decf-atomic (AtomicInteger -> #+32-bit U32 #+64-bit U64 -> #+32-bit U32 #+64-bit U64))
-  (define (decf-atomic atomic delta)
+  (declare decf-atomic! (AtomicInteger -> #+32-bit U32 #+64-bit U64 -> #+32-bit U32 #+64-bit U64))
+  (define (decf-atomic! atomic delta)
     "Decrements the value of `atomic' by `delta'."
     (lisp #+32-bit U32 #+64-bit U64 (atomic delta)
       (bt2:atomic-integer-decf atomic delta)))
 
-  (declare incf-atomic (AtomicInteger -> #+32-bit U32 #+64-bit U64 -> #+32-bit U32 #+64-bit U64))
-  (define (incf-atomic atomic delta)
+  (declare incf-atomic! (AtomicInteger -> #+32-bit U32 #+64-bit U64 -> #+32-bit U32 #+64-bit U64))
+  (define (incf-atomic! atomic delta)
     "Increments the value of `atomic' by `delta'."
     (lisp #+32-bit U32 #+64-bit U64 (atomic delta)
       (bt2:atomic-integer-incf atomic delta)))

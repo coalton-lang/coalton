@@ -91,7 +91,7 @@
     (for x in (range 1 5)
       (threads:spawn
         (threads:await-semaphore sem)
-        (threads:incf-atomic count 1)))
+        (threads:incf-atomic! count 1)))
     (sys:sleep (the Integer 1))
     (is (== 4 (threads:atomic-value count)))
     (threads:signal-semaphore sem 1)
@@ -113,7 +113,7 @@
                         (while (not (== i (threads:atomic-value atomic)))
                           (threads:await-cv cv lock)
                           (sys:sleep (the Single-Float 0.1)))
-                        (threads:incf-atomic atomic 1)))
+                        (threads:incf-atomic! atomic 1)))
                     (threads:broadcast-cv cv))))
       (for x in (range target 1)
         (threads:spawn
@@ -131,23 +131,23 @@
 
 (define-test atomic-incf-decf ()
   (let ((atomic (threads:make-atomic 3)))
-    (is (== 13 (threads:incf-atomic atomic 10)))
-    (is (== 9 (threads:decf-atomic atomic 4)))))
+    (is (== 13 (threads:incf-atomic! atomic 10)))
+    (is (== 9 (threads:decf-atomic! atomic 4)))))
 
-(define-test atomic-cmp-and-swap ()
+(define-test atomic-cas ()
   (let ((atomic (threads:make-atomic 4)))
-    (is (not (threads:atomic-cmp-and-swap atomic 0 100)))
-    (is (threads:atomic-cmp-and-swap atomic 4 3))
+    (is (not (threads:cas-atomic! atomic 0 100)))
+    (is (threads:cas-atomic! atomic 4 3))
     (is (== 3 (threads:atomic-value atomic)))))
 
 (define-test atomic-concurrency ()
   (let ((atomic (threads:make-atomic 4000))
         (incer (threads:spawn
                  (for x in (range 1 1000)
-                   (threads:incf-atomic atomic 1))))
+                   (threads:incf-atomic! atomic 1))))
         (decer (threads:spawn
                  (for x in (range 1 1000)
-                   (threads:decf-atomic atomic 1)))))
+                   (threads:decf-atomic! atomic 1)))))
     (is (result:ok? (threads:join incer)))
     (is (result:ok? (threads:join decer)))
     (is (== 4000 (threads:atomic-value atomic)))))
