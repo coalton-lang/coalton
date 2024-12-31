@@ -79,6 +79,7 @@
                (:file "slice")
                (:file "hashtable")
                (:file "queue")
+               (:file "monad/identity")
                (:file "monad/state")
                (:file "ord-tree")
                (:file "ord-map")

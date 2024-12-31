@@ -247,6 +247,7 @@
    (#:slice #:coalton-library/slice)
    (#:hashtable #:coalton-library/hashtable)
    (#:st #:coalton-library/monad/state)
+   (#:id #:coalton-library/monad/identity)
    (#:iter #:coalton-library/iterator)
    (#:sys #:coalton-library/system)
    (#:file #:coalton-library/file)))
