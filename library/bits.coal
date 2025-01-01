@@ -1,0 +1,25 @@
+(package coalton-library/bits
+  (shadow
+     and
+     or
+     xor
+     not)
+  (import-from
+   coalton-library/classes
+   Num)
+  (export
+   Bits
+   and
+   or
+   xor
+   not
+   shift))
+
+(define-class (Num :int => Bits :int)
+  "Operations on the bits of twos-complement integers"
+  (and (:int -> :int -> :int))
+  (or (:int -> :int -> :int))
+  (xor (:int -> :int -> :int))
+  (not (:int -> :int))
+  (shift (Integer -> :int -> :int)))
+
