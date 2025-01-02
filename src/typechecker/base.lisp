@@ -78,9 +78,8 @@ This requires a valid PPRINT-VARIABLE-CONTEXT")
                        (with-pprint-variable-context ()
                          (apply #'format nil format-string format-args))))
 
-(defun tc-note (located format-string &rest format-args)
-  (let ((*pprint-type-aliases* t)) 
-    (apply #'tc-location (source:location located) format-string format-args)))
+(defun tc-note (located format-string &rest format-args) 
+  (apply #'tc-location (source:location located) format-string format-args))
 
 (defun tc-secondary-note (located format-string &rest format-args)
   (apply #'tc-secondary-location (source:location located) format-string format-args))
