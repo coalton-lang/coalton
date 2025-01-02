@@ -111,6 +111,8 @@
    #:type-of
    #:describe-type-of
    #:describe-type-alias
+   #:enable-type-alias-printing
+   #:disable-type-alias-printing
    #:kind-of)
 
   (:intern

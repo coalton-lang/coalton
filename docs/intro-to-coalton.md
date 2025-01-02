@@ -315,7 +315,7 @@ Parametric type aliases must be fully applied.
   (define-type-alias A (T MyCollection2)))
 ```
 
-Outside of a Coalton expression, `describe-type-of` can be used to display the type of a symbol, including its aliases, and to return the type. `describe-type-alias` displays the alias along with its base type and returns the base type.
+There are several debugging tools which are useful when working with type aliases. Outside of a Coalton expression, `describe-type-of` can be used to display the type of a symbol, including its aliases, and to return the type. `describe-type-alias` displays the alias along with the aliased type and returns the aliased type. The functions `(enable-type-alias-printing)` and `(disable-type-alias-printing)` enable and disable printing of type aliases in error messages emitted during compilation.
 
 ```lisp
 COALTON-USER> shifted-coordinate

@@ -188,6 +188,16 @@
         (format t "~S~%" type))
     type))
 
+(defun coalton:enable-type-alias-printing ()
+  "Enable printing of type aliases in type error messages."
+  (setf tc:*pprint-type-aliases* t)
+  (values))
+
+(defun coalton:disable-type-alias-printing ()
+  "Disable printing of type aliases in type error messages."
+  (setf tc:*pprint-type-aliases* nil)
+  (values))
+
 (defun coalton:kind-of (symbol)
   "Lookup the kind of type SYMBOL in the global environment"
   (tc:kind-of (tc:type-entry-type (tc:lookup-type entry:*global-environment* symbol))))
