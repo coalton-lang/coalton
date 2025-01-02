@@ -175,28 +175,30 @@
 
 (defun coalton:describe-type-of (symbol)
   "Lookup the type of value SYMBOL in the global environment. Prints the type and type aliases."
-  (let ((tc:*pprint-type-aliases* t)
+  (let ((tc:*coalton-type-printing-mode* :types-and-aliases)
         (type (tc:lookup-value-type entry:*global-environment* symbol)))
     (format t "~S~%" type)
     type))
 
 (defun coalton:describe-type-alias (symbol)
   "Lookup the type aliased by SYMBOL in the global environment"
-  (let ((tc:*pprint-type-aliases* t)
+  (let ((tc::*coalton-type-printing-mode* :types-and-aliases)
         (type (tc:type-alias-entry-type (tc:lookup-type-alias entry:*global-environment* symbol))))
     (tc:with-pprint-variable-context ()
         (format t "~S~%" type))
     type))
 
-(defun coalton:enable-type-alias-printing ()
-  "Enable printing of type aliases in type error messages."
-  (setf tc:*pprint-type-aliases* t)
-  (values))
+(defun coalton:set-type-printing-mode (mode)
+  "Set the type printing mode for the display of types.
 
-(defun coalton:disable-type-alias-printing ()
-  "Disable printing of type aliases in type error messages."
-  (setf tc:*pprint-type-aliases* nil)
-  (values))
+MODE must be one of
+
+:TYPES             only display the types of symbols
+:ALIASES           only display the aliases of the types of symbols
+:TYPES-AND-ALIASES display types and the aliases that refer to them."
+  (unless (member mode '(:types :aliases :types-and-aliases))
+    (error "Invalid type printing mode ~A, must be :TYPES, :ALIASES, or :TYPES-AND-ALIASES." mode))
+  (setf tc:*coalton-type-printing-mode* mode))
 
 (defun coalton:kind-of (symbol)
   "Lookup the kind of type SYMBOL in the global environment"

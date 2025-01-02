@@ -4,12 +4,15 @@
   (:local-nicknames
    (#:source #:coalton-impl/source)
    (#:util #:coalton-impl/util))
+  (:import-from
+   #:coalton-impl/settings
+   #:*coalton-type-printing-mode*)
   (:export
+   #:*coalton-type-printing-mode*
    #:*coalton-pretty-print-tyvars*
    #:*pprint-tyvar-dict*
    #:*pprint-variable-symbol-code*
    #:*pprint-variable-symbol-suffix*
-   #:*pprint-type-aliases*
    #:tc-error                           ; CONDITION, FUNCTION
    #:tc-location
    #:tc-secondary-location
@@ -60,9 +63,6 @@ This requires a valid PPRINT-VARIABLE-CONTEXT")
          (*coalton-pretty-print-tyvars* t))
      (with-pprint-variable-scope ()
        ,@body)))
-
-(defvar *pprint-type-aliases* nil
-  "Whether to display aliases associated with the type of a symbol, when displaying its type")
 
 ;;;
 ;;; Conditions

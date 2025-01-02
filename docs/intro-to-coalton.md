@@ -315,10 +315,30 @@ Parametric type aliases must be fully applied.
   (define-type-alias A (T MyCollection2)))
 ```
 
-There are several debugging tools which are useful when working with type aliases. Outside of a Coalton expression, `describe-type-of` can be used to display the type of a symbol, including its aliases, and to return the type. `describe-type-alias` displays the alias along with the aliased type and returns the aliased type. The functions `(enable-type-alias-printing)` and `(disable-type-alias-printing)` enable and disable printing of type aliases in error messages emitted during compilation.
+There are several debugging tools which are useful when working with type aliases. Outside of a Coalton expression, `describe-type-of` can be used to display the type of a symbol, including its aliases, and to return the type. `describe-type-alias` displays the alias along with the aliased type and returns the aliased type. Additionally, Coalton can be configured to display only aliases, only types, or both, when displaying the type associated with a symbol. The preference can be set before compiling Coalton using `(setf (get ':coalton-config ':type-printing-mode) mode)` where `mode` is one of `:types`, `:aliases`, and `:types-and-aliases`. Thereafter, the mode can be changed among those three options using the function `set-type-printing-mode`. The default mode is `:types`.
 
 ```lisp
-COALTON-USER> shifted-coordinate
+COALTON-USER> (coalton-toplevel
+                (define-type-alias A Integer)
+                (define x (the A 5)))
+; No value
+
+COALTON-USER> (set-type-printing-mode :aliases)
+:ALIASES
+
+COALTON-USER> (type-of 'x)
+A
+
+COALTON-USER> (set-type-printing-mode :types-and-aliases)
+:TYPES-AND-ALIASES
+
+COALTON-USER> (type-of 'x)
+[A := INTEGER]
+
+COALTON-USER> (set-type-printing-mode :types)
+:TYPES
+
+COALTON-USER> shifted-coordinate ;; from the example above
 #.(TUPLE 1 0)
 
 COALTON-USER> (type-of 'shifted-coordinate)

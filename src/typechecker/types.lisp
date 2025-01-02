@@ -438,8 +438,18 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
   (declare (type stream stream)
            (type ty ty)
            (values ty))
-  (when (and *pprint-type-aliases* (ty-alias ty))
+
+  ;; If the type printing mode is :ALIASES and TY is aliased, print the
+  ;; most high-level alias that represents TY and return from PPRINT-TY.
+  (when (and (eq *coalton-type-printing-mode* :aliases) (ty-alias ty))
+    (format stream "~S" (first (ty-alias ty)))
+    (return-from pprint-ty ty))
+
+  ;; If the type printing mode is :TYPES-AND-ALIASES and TY is aliased,
+  ;; print the stack of aliases that represent TY before printing TY.
+  (when (and (eq *coalton-type-printing-mode* :types-and-aliases) (ty-alias ty))
     (format stream "[~{~S := ~}" (ty-alias ty)))
+  
   (etypecase ty
     (tyvar
      (if *coalton-pretty-print-tyvars*
@@ -497,8 +507,12 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
     (tgen
      (write-string "#GEN" stream)
      (write (tgen-id ty) :stream stream)))
-  (when (and *pprint-type-aliases* (ty-alias ty))
+
+  ;; Close the braces in the case that the type printing mode is
+  ;; :TYPES-AND-ALIASES and TY is aliased.
+  (when (and (eq *coalton-type-printing-mode* :types-and-aliases) (ty-alias ty))
     (format stream "]"))
+  
   ty)
 
 (defmethod print-object ((ty ty) stream)
@@ -519,7 +533,7 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
    (lambda (c s)
      (let ((*print-circle* nil) ; Prevent printing using reader macros
            (*print-readably* nil)
-           (*print-type-aliases* nil))
+           (*coalton-type-printing-mode* :types))
        (format s "Cannot apply ~S of kind ~S to ~S of kind ~S"
                (type-application-error-argument c)
                (kind-of (type-application-error-argument c))
