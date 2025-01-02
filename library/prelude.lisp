@@ -250,6 +250,7 @@
    (#:st #:coalton-library/monad/state)
    (#:env #:coalton-library/monad/environment)
    (#:resultt #:coalton-library/monad/resultt)
+   (#:optionalt #:coalton-library/monad/optionalt)
    (#:iter #:coalton-library/iterator)
    (#:sys #:coalton-library/system)
    (#:file #:coalton-library/file)))

@@ -83,6 +83,7 @@
                (:file "monad/state")
                (:file "monad/environment")
                (:file "monad/resultt")
+               (:file "monad/optionalt")
                (:file "ord-tree")
                (:file "ord-map")
                (:file "monad/free")
