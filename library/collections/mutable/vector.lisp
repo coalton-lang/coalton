@@ -356,6 +356,29 @@
      iter)
     Unit)
 
+  (declare subseq-vec (UFix -> UFix -> Vector :a -> Vector :a))
+  (define (subseq-vec start end vec)
+    (if (or (>= start end)
+            (>= start (length vec)))
+      (new)
+      (let ((end-point (min end (length vec)))
+            (new-length (- end-point start))
+            (new-vec (with-capacity new-length)))
+        (for i in (iter:up-to new-length)
+          (set! i (index-unsafe (+ start i) vec) new-vec))
+        new-vec)))
+  
+  (declare split-at-vec (UFix -> Vector :a -> Tuple (Vector :a) (Vector :a)))
+  (define (split-at-vec i vec)
+    (Tuple (subseq-vec 0 i vec)
+           (subseq-vec i (length vec) vec)))
+  
+  (declare split-elt-vec (Eq :a => :a -> Vector :a -> Tuple (Vector :a) (Vector :a)))
+  (define (split-elt-vec elt vec)
+    (match (find-elem elt vec)
+      ((None) (Tuple (copy vec) (new)))
+      ((Some i) (split-at-vec i vec))))
+
   ;;
   ;; Instances
   ;;
@@ -528,6 +551,9 @@
     (define (cln:index-where# pred vec)
       (opt:from-some "Cannot find matching element in vector." (find-where pred vec)))
     (define cln:find-where find)
+    (define cln:subseq subseq-vec)
+    (define cln:split-at split-at-vec)
+    (define cln:split-elt split-elt-vec)
     (define (cln:reverse vec)
       (reverse! (copy vec)))
     (define (cln:sort vec)
