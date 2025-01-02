@@ -73,8 +73,32 @@
 #+coalton-release
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
+;;; NOTE:
+;;; We have to define `Collection` with functional dependencies
+;;; to allow `KeyedCollection`s to be collections of tuples.
+;;;
+;;; Because Coalton doesn't support typeclass functions that provide
+;;; extra constraints on the typeclass's type parameters, we need
+;;; to create separate typeclasses (`EqCollection`, etc) for each
+;;; constraint we need to add. In other words, we'd like to do
+;;; this but we can't:
+;;;
+;;; (define-class (Collection :m :a (:m -> :a))
+;;;   (new-collection
+;;;     (Unit -> :m))
+;;;   ...
+;;;   (contains-elt?
+;;;     (Eq :a => :a -> :m -> Boolean)))
+;;;
+;;; Finally, for the moment we're not able to actually constrain
+;;; the type parameters in EqCollection, etc. See:
+;;; https://github.com/coalton-lang/coalton/issues/1340
+;;;
+;;; When that is fixed, we should go back and cover them in the
+;;; appropriate constraints.
+
 (coalton-toplevel
-  (define-class (Collection :m)
+  (define-class (Collection :m :a (:m -> :a))
     "Types that contain a collection of elements of another type.
 
 Does not have an ordering of elements.
@@ -86,62 +110,65 @@ collection typeclasses."
     ;; Create new collections
     (new-collection
      "Create a new, empty collection."
-     (Unit -> :m :a))
+     (Unit -> :m))
     (new-repeat
      "Create a new collection, attempting to add `elt` `n` times."
-     (UFix -> :a -> :m :a))
+     (UFix -> :a -> :m))
     (new-from
      "Create a new collection by appling a function over the range [0, n)."
-     (UFix -> (UFix -> :a) -> :m :a))
+     (UFix -> (UFix -> :a) -> :m))
     (new-convert
      "Convert a collection of another type. If converting a LinearCollection to a LinearCollection, should preserve order."
-     ((Collection :f) (itr:IntoIterator (:f :a) :a) => :f :a -> :m :a))
+     ((Collection :f :a) (itr:IntoIterator :f :a) => :f -> :m))
     ;; Manipulate at the collection level
     (flatten
      "Flatten a collection of collections into a collection of their elements."
-     (:m (:m :a) -> :m :a))
+     (Collection :n :m => :n -> :m))
     (filter
      "Create a new collection with the elements satisfying the predicate."
-     ((:a -> Boolean) -> :m :a -> :m :a))
-    (remove-duplicates
-     "Create a new collection with all distinct elements."
-     (Eq :a => :m :a -> :m :a))
+     ((:a -> Boolean) -> :m -> :m))
     ;; Query the collection
     (empty?
      "Check if the collection contains no elements."
-     (:m :a -> Boolean))
+     (:m -> Boolean))
     (length
      "The number of elements in the collection"
-     (:m :a -> UFix))
-    (contains-elt?
-     "Check if the collection contains an element."
-     (Eq :a => :a -> :m :a -> Boolean))
+     (:m -> UFix))
     (contains-where?
      "Check if the collection contains an element satisfying the predicate."
-     ((:a -> Boolean) -> :m :a -> Boolean))
+     ((:a -> Boolean) -> :m -> Boolean))
     (count-where
      "The number of elements satisfying the predicate."
-     ((:a -> Boolean) -> :m :a -> UFix))
+     ((:a -> Boolean) -> :m -> UFix))
     ;; Manipulate at the element level
     (add
      "Add an element to the collection. For linear collections, should add to
 the front or back, depending on which is natural for the underlying data structure."
-     (:a -> :m :a -> :m :a))
+     (:a -> :m -> :m)))
+
+  ;; Instances should wrap each method in Eq :a
+  (define-class (Collection :m :a => EqCollection :m :a (:m -> :a))
+    (remove-duplicates
+     "Create a new collection with all distinct elements."
+     (:m -> :m))
+    (contains-elt?
+     "Check if the collection contains an element."
+     (:a -> :m -> Boolean))
     (remove-elt
      "Remove all occurrences of `elt` from the collection."
-    (Eq :a => :a -> :m :a -> :m :a)))
+     (:a -> :m -> :m)))
 
-  (define-class (Collection :m => ImmutableCollection :m)
+  (define-class (Collection :m :a => ImmutableCollection :m :a)
     "An immutable collection.")
 
-  (define-class (Collection :m => MutableCollection :m)
+  (define-class (Collection :m :a => MutableCollection :m :a)
     "A mutable collection."
     (copy
      "Create a shallow copy of the collection."
-     (:m :a -> :m :a))
+     (:m -> :m))
     (add!
      "Add an element to the collection in place. See `add`."
-     (:a -> :m :a -> :m :a))))
+     (:a -> :m -> :m))))
 
 ;; TODO: Make it so that these must all be the proper KeyedCollection types as well
 (coalton-toplevel
