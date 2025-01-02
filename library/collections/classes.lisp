@@ -157,12 +157,12 @@ the front or back, depending on which is natural for the underlying data structu
      "Remove all occurrences of `elt` from the collection."
      (:a -> :m -> :m)))
 
-  (define-class (Collection :n (:m :a) =>
-                 NestedCollection :n :m :a (:n -> :m :a))
+  (define-class ((Collection :n :m)
+                 (Collection :m :a) =>
+                 NestedCollection :n :m :a (:n :m -> :a))
     (flatten
      "Flatten a collection of collections into a collection of their elements."
-     (:n -> :m :a))
-    )
+     (:n -> :m)))
 
   (define-class (Collection :m :a => ImmutableCollection :m :a)
     "An immutable collection.")
@@ -316,7 +316,7 @@ with that element. The second collection is empty if no element satisfied `pred`
     (define (remove-elt elt lst)
       (l:filter (/= elt) lst)))
 
-  (define-instance (NestedCollection (List (List :a)) List :a)
+  (define-instance (NestedCollection (List (List :a)) (List :a) :a)
     (define (flatten lst)
       (fold l:append (new-collection) lst)))
 
