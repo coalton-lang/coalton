@@ -77,7 +77,8 @@
    #:split
    #:perms
    #:combs
-   #:combsOf))
+   #:combsOf
+   #:subseq-list))
 
 (in-package #:coalton-library/collections/immutable/list)
 
@@ -704,7 +705,11 @@ This function is equivalent to all size-N elements of `(COMBS L)`."
                   ((Nil) Nil)
                   ((Cons x xs) (append
                                 (map (Cons x) (combsOf (- n 1) xs)) ; combs with X
-                                (combsOf n xs)))))))) ; and without x
+                                (combsOf n xs))))))) ; and without x
+  
+  (declare subseq-list (UFix -> UFix -> List :a -> List :a))
+  (define (subseq-list start end lst)
+    (take (- start end) (drop start lst))))
 
   ;;
   ;; Instances

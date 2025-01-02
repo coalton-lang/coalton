@@ -41,6 +41,9 @@
    #:index-where
    #:index-where#
    #:find-where
+   #:subseq
+   #:split-at
+   #:split-elt
    #:reverse
    #:sort
    #:sort-with
@@ -169,6 +172,18 @@ the front or back, depending on which is natural for the underlying data structu
     (find-where
      "Return the first element matching a predicate function."
      ((:a -> Boolean) -> :m :a -> Optional :a))
+    ;; Retrieve subsets of the collection.
+    ;; NOTE: In all cases, these should return collections that don't share mutable state with the original.
+    (subseq
+     "Extract the collection from `start` (inclusive) to `end` (exclusive)."
+     (UFix -> UFix -> :m :a -> :m :a))
+    (split-at
+     "Split into two collections at `i`. The second collection begins with element at index `i`."
+     (UFix -> :m :a -> Tuple (:m :a) (:m :a)))
+    (split-elt
+     "Split into two collections at the first occurrence of `elt`. The second collection begins with `elt`.
+The second collection is empty if `elt` cannot be found."
+     (Eq :a => :a -> :m :a -> Tuple (:m :a) (:m :a)))
     ;; Manipulate at the collection level
     (reverse
      "Return the collection with elements reversed."
@@ -270,6 +285,13 @@ the front or back, depending on which is natural for the underlying data structu
     (define (index-where# pred lst)
       (o:from-some "Cannot find matching element in list." (l:findIndex pred lst)))
     (define find-where l:find)
+    (define subseq l:subseq-list)
+    (define (split-at i lst)
+      (Tuple (l:take i lst) (l:drop i lst)))
+    (define (split-elt elt lst)
+      (match (l:findindex (== elt) lst)
+        ((None) (Tuple lst Nil))
+        ((Some i) (split-at i lst))))
     (define reverse l:reverse)
     (define sort l:sort)
     (define sort-with l:sortBy)
