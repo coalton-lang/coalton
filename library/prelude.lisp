@@ -172,9 +172,15 @@
    #:index-where
    #:index-where#
    #:find-where
+   #:subseq
+   #:split-at
+   #:split-elt
+   #:split-where
    #:reverse
    #:sort
    #:sort-with
+   #:zip
+   #:zip-with
    #:push
    #:push-end
    #:insert-at
@@ -257,8 +263,6 @@
    #:append
    #:concat
    #:concatMap
-   #:zip
-   #:zipWith
    #:sum
    #:product
    #:all

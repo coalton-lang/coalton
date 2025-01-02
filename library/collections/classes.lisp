@@ -44,9 +44,12 @@
    #:subseq
    #:split-at
    #:split-elt
+   #:split-where
    #:reverse
    #:sort
    #:sort-with
+   #:zip
+   #:zip-with
    #:push
    #:push-end
    #:insert-at
@@ -184,6 +187,10 @@ the front or back, depending on which is natural for the underlying data structu
      "Split into two collections at the first occurrence of `elt`. The second collection begins with `elt`.
 The second collection is empty if `elt` cannot be found."
      (Eq :a => :a -> :m :a -> Tuple (:m :a) (:m :a)))
+    (split-where
+     "Split into two collections at the first element that satisfies `pred`. The second collection begins
+with that element. The second collection is empty if no element satisfied `pred`."
+     ((:a -> Boolean) -> :m :a -> Tuple (:m :a) (:m :a)))
     ;; Manipulate at the collection level
     (reverse
      "Return the collection with elements reversed."
@@ -194,6 +201,12 @@ The second collection is empty if `elt` cannot be found."
     (sort-with
      "Return the sorted collection under the given ordering."
      ((:a -> :a -> Ord) -> :m :a -> :m :a))
+    (zip
+     "Return a collection of this collection's elements combined with elements from an iterable object."
+     (itr:IntoIterator :n :b => :m :a -> :n -> :m (Tuple :a :b)))
+    (zip-with
+     "Return a collection of this collection's elements and an iterable object's elements applied to `f`."
+     (itr:IntoIterator :n :b => (:a -> :b -> :c) -> :m :a -> :n -> :m :c))
     ;; Manipulate at the element level
     (push
      "Return the collection with an element added to the front."
@@ -289,12 +302,18 @@ The second collection is empty if `elt` cannot be found."
     (define (split-at i lst)
       (Tuple (l:take i lst) (l:drop i lst)))
     (define (split-elt elt lst)
-      (match (l:findindex (== elt) lst)
+      (match (l:elemIndex elt lst)
+        ((None) (Tuple lst Nil))
+        ((Some i) (split-at i lst))))
+    (define (split-where pred lst)
+      (match (l:findIndex pred lst)
         ((None) (Tuple lst Nil))
         ((Some i) (split-at i lst))))
     (define reverse l:reverse)
     (define sort l:sort)
     (define sort-with l:sortBy)
+    (define zip l:zip-itr)
+    (define zip-with l:zip-with-itr)
     (define push Cons)
     (define push-end l:push-end)
     (define insert-at l:insert-at)))
