@@ -505,7 +505,7 @@
 ;;
 
 (coalton-toplevel
-  (define-instance (cln:Collection Vector)
+  (define-instance (cln:Collection (Vector :a) :a)
     (define cln:new-collection new)
     (define cln:new-repeat with-initial-element)
     (define (cln:new-from n f)
@@ -515,32 +515,21 @@
         vec))
     (define (cln:new-convert coll)
       (iter:collect! (iter:into-iter coll)))
-    (define (cln:flatten vecs)
-      (let ((res (with-capacity
-                     (fold (fn (sum v)
-                             (+ sum (length v)))
-                           0
-                           vecs))))
-        (for vec in vecs
-          (for x in vec
-            (push! x res)))
-        res))
+    ;; (define (cln:flatten vecs)
+    ;;   (let ((res (with-capacity
+    ;;                  (fold (fn (sum v)
+    ;;                          (+ sum (length v)))
+    ;;                        0
+    ;;                        vecs))))
+    ;;     (for vec in vecs
+    ;;       (for x in vec
+    ;;         (push! x res)))
+    ;;     res))
     (define (cln:filter f vec)
       (iter:collect! (iter:filter! f (iter:into-iter vec))))
-    (define (cln:remove-duplicates vec)
-      (if (cln:empty? vec)
-        vec
-        (let ((res (with-capacity (length vec))))
-          (for i in (list:range 0 (- (length vec) 1))
-            (let elt = (index-unsafe i vec))
-            (unless (contains-elt? elt res)
-              (push! elt res)
-              Unit))
-          res)))
     (define (cln:empty? vec)
       (== 0 (length vec)))
     (define cln:length length)
-    (define cln:contains-elt? contains-elt?)
     (define cln:contains-where? contains-where?)
     (define (cln:count-where f vec)
       (fold (fn (sum elt)
@@ -552,11 +541,24 @@
     (define (cln:add elt vec)
       (let ((res (copy vec)))
         (push! elt res)
-        res))
+        res)))
+
+  (define-instance (Eq :a => cln:EqCollection (Vector :a) :a)
+    (define (cln:remove-duplicates vec)
+      (if (cln:empty? vec)
+        vec
+        (let ((res (with-capacity (length vec))))
+          (for i in (list:range 0 (- (length vec) 1))
+            (let elt = (index-unsafe i vec))
+            (unless (contains-elt? elt res)
+              (push! elt res)
+              Unit))
+          res)))
+    (define cln:contains-elt? contains-elt?)
     (define (cln:remove-elt elt vec)
       (iter:collect! (iter:filter! (/= elt) (iter:into-iter vec)))))
   
-  (define-instance (cln:MutableCollection Vector)
+  (define-instance (cln:MutableCollection (Vector :a) :a)
     (define cln:copy copy)
     (define (cln:add! elt vec)
       (push! elt vec)

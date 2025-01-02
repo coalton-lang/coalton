@@ -10,6 +10,8 @@
    (#:o #:coalton-library/optional))
   (:export
    #:Collection
+   #:EqCollection
+   #:NestedCollection
    #:new-collection
    #:new-repeat
    #:new-from
@@ -121,9 +123,6 @@ collection typeclasses."
      "Convert a collection of another type. If converting a LinearCollection to a LinearCollection, should preserve order."
      ((Collection :f :a) (itr:IntoIterator :f :a) => :f -> :m))
     ;; Manipulate at the collection level
-    (flatten
-     "Flatten a collection of collections into a collection of their elements."
-     (Collection :n :m => :n -> :m))
     (filter
      "Create a new collection with the elements satisfying the predicate."
      ((:a -> Boolean) -> :m -> :m))
@@ -158,10 +157,17 @@ the front or back, depending on which is natural for the underlying data structu
      "Remove all occurrences of `elt` from the collection."
      (:a -> :m -> :m)))
 
+  (define-class (Collection :n (:m :a) =>
+                 NestedCollection :n :m :a (:n -> :m :a))
+    (flatten
+     "Flatten a collection of collections into a collection of their elements."
+     (:n -> :m :a))
+    )
+
   (define-class (Collection :m :a => ImmutableCollection :m :a)
     "An immutable collection.")
 
-  (define-class (Collection :m :a => MutableCollection :m :a)
+  (define-class (Collection :m :a => MutableCollection :m :a (:m -> :a))
     "A mutable collection."
     (copy
      "Create a shallow copy of the collection."
@@ -172,7 +178,7 @@ the front or back, depending on which is natural for the underlying data structu
 
 ;; TODO: Make it so that these must all be the proper KeyedCollection types as well
 (coalton-toplevel
-  (define-class (Collection :m => LinearCollection :m)
+  (define-class (LinearCollection :m)
     ;; Get elements from the collection
     (head
      "Return the first element of the collection."
@@ -284,7 +290,7 @@ with that element. The second collection is empty if no element satisfied `pred`
 ;; for now, and when we remove the deprecated versions move this
 ;; into the list package.
 (coalton-toplevel
-  (define-instance (Collection List)
+  (define-instance (Collection (List :a) :a)
     (define (new-collection)
       Nil)
     (define (new-repeat n elt)
@@ -295,20 +301,26 @@ with that element. The second collection is empty if no element satisfied `pred`
         (map f (l:range 0 (- n 1)))))
     (define (new-convert coll)
       (itr:collect! (itr:into-iter coll)))
-    (define (flatten lst)
-      (>>= lst id))
+    ;; (define (flatten lst)
+    ;;   (fold l:append (new-collection) lst))
     (define filter l:filter)
-    (define remove-duplicates l:remove-duplicates)
     (define empty? l:empty?)
     (define length l:length)
-    (define contains-elt? l:contains-elt?)
     (define contains-where? l:contains-where?)
     (define count-where l:countBy)
-    (define add Cons)
+    (define add Cons))
+
+  (define-instance (Eq :a => EqCollection (List :a) :a)
+    (define remove-duplicates l:remove-duplicates)
+    (define contains-elt? l:contains-elt?)
     (define (remove-elt elt lst)
       (l:filter (/= elt) lst)))
 
-  (define-instance (ImmutableCollection List)))
+  (define-instance (NestedCollection (List (List :a)) List :a)
+    (define (flatten lst)
+      (fold l:append (new-collection) lst)))
+
+  (define-instance (ImmutableCollection (List :a) :a)))
 
 (coalton-toplevel
   (define-instance (LinearCollection List)
