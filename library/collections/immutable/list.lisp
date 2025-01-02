@@ -55,6 +55,8 @@
    #:zipWith4
    #:zipWith5
    #:zip
+   #:zip-with-itr
+   #:zip-itr
    #:countBy
    #:insert
    #:insertBy
@@ -462,6 +464,17 @@
                 (_ acc)))))
       (%reverse! (rec xs ys nil))))
 
+  (declare zip-with-itr (iter:IntoIterator :m :b => (:a -> :b -> :c) -> List :a -> :m -> List :c))
+  (define (zip-with-itr f lst col)
+    (let ((it (iter:into-iter col))
+          (rec
+           (fn (rem acc)
+             (match (Tuple rem (iter:next! it))
+               ((Tuple (Cons a xs) (Some b))
+                (rec xs (Cons (f a b) acc)))
+               (_ acc)))))
+      (%reverse! (rec lst Nil))))             
+
   (declare zipWith3 ((:a -> :b -> :c -> :d) -> (List :a) -> (List :b) -> (List :c) -> (List :d)))
   (define (zipWith3 f xs ys zs)
     "Build a new list by calling F with elements of XS, YS and ZS"
@@ -499,6 +512,10 @@
   (define (zip xs ys)
     "Builds a list of tuples with the elements of XS and YS."
     (zipWith Tuple xs ys))
+  
+  (declare zip-itr (iter:IntoIterator :m :b => List :a -> :m -> List (Tuple :a :b)))
+  (define (zip-itr lst col)
+    (zip-with-itr Tuple lst col))
 
   (declare countBy ((:a -> Boolean) -> (List :a) -> UFix))
   (define (countBy f things)

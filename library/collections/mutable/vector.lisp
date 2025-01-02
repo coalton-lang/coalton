@@ -378,6 +378,29 @@
     (match (find-elem elt vec)
       ((None) (Tuple (copy vec) (new)))
       ((Some i) (split-at-vec i vec))))
+  
+  (declare split-where-vec ((:a -> Boolean) -> Vector :a -> Tuple (Vector :a) (Vector :a)))
+  (define (split-where-vec pred vec)
+    (match (find-where pred vec)
+      ((None) (Tuple (copy vec) (new)))
+      ((Some i) (split-at-vec i vec))))
+  
+  (declare zip-with-itr (iter:IntoIterator :m :b => (:a -> :b -> :c) -> Vector :a -> :m -> Vector :c))
+  (define (zip-with-itr f vec col)
+    (let ((it (iter:into-iter col))
+          (size-guess (min (length vec)
+                           (with-default (length vec) (iter:size-hint it))))
+          (ret (with-capacity size-guess))
+          (i (cell:new 0)))
+      (while-let (Tuple (Some a) (Some b)) = 
+                  (Tuple (index (cell:read i) vec) (iter:next! it))
+        (push! (f a b) ret)
+        (cell:increment! i))
+      ret))
+  
+  (declare zip-itr (iter:IntoIterator :m :b => Vector :a -> :m -> Vector (Tuple :a :b)))
+  (define (zip-itr vec col)
+    (zip-with-itr Tuple vec col))
 
   ;;
   ;; Instances
@@ -554,6 +577,7 @@
     (define cln:subseq subseq-vec)
     (define cln:split-at split-at-vec)
     (define cln:split-elt split-elt-vec)
+    (define cln:split-where split-where-vec)
     (define (cln:reverse vec)
       (reverse! (copy vec)))
     (define (cln:sort vec)
@@ -565,6 +589,8 @@
         (sort-by! (fn (a b) (== LT (ord-func a b)))
                   result)
         result))
+    (define cln:zip zip-itr)
+    (define cln:zip-with zip-with-itr)
     (define (cln:push elt vec)
       (insert-at! 0 elt (copy vec)))
     (define (cln:push-end elt vec)
