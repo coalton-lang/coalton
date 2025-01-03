@@ -167,6 +167,9 @@
    #:head#
    #:last
    #:last#
+   #:tail
+   #:take
+   #:drop
    #:index-elt
    #:index-elt#
    #:index-where
@@ -225,6 +228,9 @@
    #:head#
    #:last
    #:last#
+   #:tail
+   #:take
+   #:drop
    #:index-elt
    #:index-elt#
    #:index-where
@@ -251,11 +257,8 @@
 
   (:import-from
    #:coalton-library/collections/immutable/list
-   #:tail
    #:singleton
    #:repeat
-   #:drop
-   #:take
    #:find
    #:fold
    #:foldr
@@ -269,11 +272,8 @@
    #:any
    #:split)
   (:export
-   #:tail
    #:singleton
    #:repeat
-   #:drop
-   #:take
    #:find
    #:fold
    #:foldr

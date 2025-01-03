@@ -104,12 +104,12 @@
       ((Cons x _) (Some x))
       ((Nil) None)))
 
-  (declare tail (List :a -> Optional (List :a)))
+  (declare tail (List :a -> List :a))
   (define (tail l)
     "Returns every element except the first in a list."
     (match l
-      ((Cons _ xs) (Some xs))
-      ((Nil) None)))
+      ((Cons _ xs) xs)
+      ((Nil) Nil)))
 
   (declare car (List :a -> :a))
   (define (car x)

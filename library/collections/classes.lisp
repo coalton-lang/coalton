@@ -38,6 +38,9 @@
    #:head#
    #:last
    #:last#
+   #:tail
+   #:take
+   #:drop
    #:index-elt
    #:index-elt#
    #:index-where
@@ -178,6 +181,8 @@ the front or back, depending on which is natural for the underlying data structu
 
 ;; TODO: Make it so that these must all be the proper KeyedCollection types as well
 (coalton-toplevel
+  ;; NOTE: In all cases, LinearCollection methods should return collections that don't
+  ;; share mutable state with the original.
   (define-class (LinearCollection :m)
     ;; Get elements from the collection
     (head
@@ -192,6 +197,15 @@ the front or back, depending on which is natural for the underlying data structu
     (last#
      "Return the last element of the collection, erroring if it does not exist."
      (:m :a -> :a))
+    (tail
+     "Return all except the first element of the collection."
+     (:m :a -> :m :a))
+    (take
+     "Return the first `n` elements of the collection."
+     (UFix -> :m :a -> :m :a))
+    (drop
+     "Return all except the first `n` elements of the collection."
+     (UFix -> :m :a -> :m :a))
     ;; Query the collection
     (index-elt
      "Return the index of the first occurence of `elt`, if it can be found."
@@ -209,7 +223,6 @@ the front or back, depending on which is natural for the underlying data structu
      "Return the first element matching a predicate function."
      ((:a -> Boolean) -> :m :a -> Optional :a))
     ;; Retrieve subsets of the collection.
-    ;; NOTE: In all cases, these should return collections that don't share mutable state with the original.
     (subseq
      "Extract the collection from `start` (inclusive) to `end` (exclusive)."
      (UFix -> UFix -> :m :a -> :m :a))
@@ -330,6 +343,9 @@ with that element. The second collection is empty if no element satisfied `pred`
     (define last l:last)
     (define (last# lst)
       (o:from-some "Attempted to retrieve last element of empty list." (l:last lst)))
+    (define tail l:tail)
+    (define take l:take)
+    (define drop l:drop)
     (define index-elt l:elemIndex)
     (define (index-elt# elt lst)
       (o:from-some "Cannot find element in list." (l:elemIndex elt lst)))
