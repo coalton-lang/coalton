@@ -1,10 +1,11 @@
-(coalton-library/utils:defstdlib-package #:coalton-library/seq
+(coalton-library/utils:defstdlib-package #:coalton-library/collections/immutable/seq
   (:use
    #:coalton
    #:coalton-library/builtin
    #:coalton-library/functions
    #:coalton-library/classes)
   (:local-nicknames
+   (#:cln #:coalton-library/collections/classes)
    (#:types #:coalton-library/types)
    (#:math #:coalton-library/math)
    (#:optional #:coalton-library/optional)
@@ -23,7 +24,7 @@
    #:conc
    #:make))
 
-(in-package #:coalton-library/seq)
+(in-package #:coalton-library/collections/immutable/seq)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -207,11 +208,11 @@ a new `Seq` instance."
                    (rebalance-branches
                     (fold <> (butlast lsubts) (make-list nsubts (butfirst rsubts))))))))))))
   
-    (declare filter (types:RuntimeRepr :a => (:a -> Boolean) -> (Seq :a) -> (Seq :a)))
-    (define (filter pred seq)
-      "Filter elements of `seq` using predicate `pred`, returning a new `Seq`."
-      (iter:collect!
-        (iter:filter! pred (iter:into-iter seq))))
+  (declare filter (types:RuntimeRepr :a => (:a -> Boolean) -> (Seq :a) -> (Seq :a)))
+  (define (filter pred seq)
+    "Filter elements of `seq` using predicate `pred`, returning a new `Seq`."
+    (iter:collect!
+      (iter:filter! pred (iter:into-iter seq))))
 
   ;;
   ;; Instances
@@ -248,6 +249,7 @@ a new `Seq` instance."
     (define (into fld)
       (fold push (new) fld)))
 
+
   (define-instance (Eq :a => Eq (Seq :a))
     (define (== a b)
       ;; because they're immutable, if they happen to be identical then == is true
@@ -264,12 +266,12 @@ a new `Seq` instance."
 
   (define-instance (Into (Seq :a) (vector:Vector :a))
     (define (into seq)
-      (iter:collect! (iter:into-iter seq))))
+      (iter:collect! (iter:into-iter seq)))))
 
   ;;
   ;; Helpers
   ;; 
-
+(coalton-toplevel
   (define (height seq)
     (match seq
       ;;relaxed nodes should have a minimum height of 2
@@ -577,5 +579,5 @@ It attempts to rebalance with a minimum of array copying."
                          (lisp (Seq :a) () self)))))
   self)
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/SEQ")
+; #+sb-package-locks
+; (sb-ext:lock-package "COALTON-LIBRARY/COLLECTIONS/IMMUTABLE/SEQ")

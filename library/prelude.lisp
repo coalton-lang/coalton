@@ -137,51 +137,150 @@
    #:from-some
    #:some?
    #:none?)
+  
+  (:import-from
+   #:coalton-library/collections
+   #:Collection
+   #:new-collection
+   #:new-repeat
+   #:new-from
+   #:new-convert
+   #:flatten
+   #:filter
+   #:remove-duplicates
+   #:empty?
+   #:length
+   #:contains-elt?
+   #:contains-where?
+   #:count-where
+   #:add
+   #:remove-elt
+
+   #:ImmutableCollection
+
+   #:MutableCollection
+   #:copy
+   #:add!
+
+   #:LinearCollection
+   #:head
+   #:head#
+   #:last
+   #:last#
+   #:tail
+   #:take
+   #:drop
+   #:index-elt
+   #:index-elt#
+   #:index-where
+   #:index-where#
+   #:find-where
+   #:subseq
+   #:split-at
+   #:split-elt
+   #:split-where
+   #:reverse
+   #:sort
+   #:sort-with
+   #:zip
+   #:zip-with
+   #:push
+   #:push-end
+   #:insert-at
+
+   #:MutableLinearCollection
+   #:reverse!
+   #:sort!
+   #:sort-with!
+   #:push!
+   #:push-end!
+   #:pop!
+   #:pop!#
+   #:pop-end!
+   #:pop-end!#
+   #:insert-at!)
+
+  (:export
+   #:Collection
+   #:new-collection
+   #:new-repeat
+   #:new-from
+   #:new-convert
+   #:flatten
+   #:filter
+   #:remove-duplicates
+   #:empty?
+   #:length
+   #:contains-elt?
+   #:contains-where?
+   #:count-where
+   #:add
+   #:remove-elt
+
+   #:ImmutableCollection
+
+   #:MutableCollection
+   #:copy
+   #:add!
+   
+   #:LinearCollection
+   #:head
+   #:head#
+   #:last
+   #:last#
+   #:tail
+   #:take
+   #:drop
+   #:index-elt
+   #:index-elt#
+   #:index-where
+   #:index-where#
+   #:find-where
+   #:reverse
+   #:sort
+   #:sort-with
+   #:push
+   #:push-end
+   #:insert-at
+    
+   #:MutableLinearCollection
+   #:reverse!
+   #:sort!
+   #:sort-with!
+   #:push!
+   #:push-end!
+   #:pop!
+   #:pop!#
+   #:pop-end!
+   #:pop-end!#
+   #:insert-at!)
 
   (:import-from
-   #:coalton-library/list
-   #:head
-   #:tail
+   #:coalton-library/collections/immutable/list
    #:singleton
    #:repeat
-   #:reverse
-   #:drop
-   #:take
    #:find
    #:fold
    #:foldr
-   #:filter
-   #:length
    #:range
    #:append
    #:concat
    #:concatMap
-   #:remove-duplicates
-   #:zip
-   #:zipWith
    #:sum
    #:product
    #:all
    #:any
    #:split)
   (:export
-   #:head
-   #:tail
    #:singleton
    #:repeat
-   #:reverse
-   #:drop
-   #:take
    #:find
    #:fold
    #:foldr
-   #:filter
-   #:length
    #:range
    #:append
    #:concat
    #:concatMap
-   #:remove-duplicates
    #:zip
    #:zipWith
    #:sum
@@ -197,7 +296,7 @@
    #:Cell)
 
   (:import-from
-   #:coalton-library/vector
+   #:coalton-library/collections/mutable/vector
    #:Vector)
   (:export
    #:Vector)
