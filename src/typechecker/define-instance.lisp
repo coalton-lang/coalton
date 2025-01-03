@@ -183,29 +183,31 @@
 
           :for superclass := (tc:apply-substitution instance-subs superclass_)
 
-          :for superclass-instance
-            := (or (tc:lookup-class-instance
-                    env
-                    superclass
-                    :no-error t)
-                   (tc-error "Instance missing context"
-                             (tc-location (parser:toplevel-define-instance-head-location unparsed-instance)
-                                          "No instance for ~S" superclass)))
+          :unless (tc:entail env context superclass)
 
-          :for additional-context
-            := (tc:apply-substitution
-                (tc:predicate-match
-                 (tc:apply-substitution instance-subs (tc:ty-class-instance-predicate superclass-instance))
-                 superclass)
-                (tc:ty-class-instance-constraints superclass-instance))
+            :do (loop :for superclass-instance
+                        := (or (tc:lookup-class-instance
+                                env
+                                superclass
+                                :no-error t)
+                               (tc-error "Instance missing context"
+                                         (tc-location (parser:toplevel-define-instance-head-location unparsed-instance)
+                                                      "No instance for ~S" superclass)))
 
-          :do (loop :for pred :in additional-context
-                    :do (unless (tc:entail env context pred)
-                          (tc-error "Instance missing context"
-                                    (tc-location (parser:toplevel-define-instance-head-location unparsed-instance)
-                                                 "No instance for ~S arising from constraints of superclasses ~S"
-                                                 pred
-                                                 superclass)))))
+                      :for additional-context
+                        := (tc:apply-substitution
+                            (tc:predicate-match
+                             (tc:apply-substitution instance-subs (tc:ty-class-instance-predicate superclass-instance))
+                             superclass)
+                            (tc:ty-class-instance-constraints superclass-instance))
+
+                      :do (loop :for pred :in additional-context
+                                :do (unless (tc:entail env context pred)
+                                      (tc-error "Instance missing context"
+                                                (tc-location (parser:toplevel-define-instance-head-location unparsed-instance)
+                                                             "No instance for ~S arising from constraints of superclasses ~S"
+                                                             pred
+                                                             superclass))))))
 
     (check-duplicates
      (parser:toplevel-define-instance-methods unparsed-instance)
