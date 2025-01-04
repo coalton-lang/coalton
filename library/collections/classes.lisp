@@ -148,8 +148,7 @@ collection typeclasses."
 the front or back, depending on which is natural for the underlying data structure."
      (:a -> :m -> :m)))
 
-  ;; Instances should wrap each method in Eq :a
-  (define-class (Collection :m :a => EqCollection :m :a (:m -> :a))
+  (define-class ((Eq :a) (Collection :m :a) => EqCollection :m :a (:m -> :a))
     (remove-duplicates
      "Create a new collection with all distinct elements."
      (:m -> :m))
