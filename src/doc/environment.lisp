@@ -8,7 +8,7 @@
    #:cl
    #:coalton/doc/base)
   (:local-nicknames
-   (#:algo #:coalton-impl/algorithm)
+   (#:map #:coalton-impl/algorithm/hamt)
    (#:tc #:coalton-impl/typechecker)
    (#:entry #:coalton-impl/entry))
   (:export
@@ -23,26 +23,13 @@
 
 (in-package #:coalton/doc/environment)
 
-(defun %values (immutable-map)
-  "Coerce an FSET map to a list."
-  (fset:convert 'list (fset:range (algo:immutable-map-data immutable-map))))
-
-(defun %lm-values (immutable-listmap)
-  "Coerce an FSET 'listmap' to a list."
-  (apply #'append
-         (mapcar (lambda (value)
-                   (fset:convert 'list value))
-                 (fset:convert 'list (fset:range (algo:immutable-listmap-data immutable-listmap))))))
-
 (defun value-type (name-entry)
   (tc:lookup-value-type entry:*global-environment*
                         (tc:name-entry-name name-entry)))
 
 (defun class-instances (ty-class)
-  (fset:convert 'list
-                (tc:lookup-class-instances entry:*global-environment*
-                                           (tc:ty-class-name ty-class)
-                                           :no-error t)))
+  (tc:lookup-class-instances entry:*global-environment*
+                             (tc:ty-class-name ty-class)))
 
 (defun struct-entry-p (type-entry)
   (let ((name (tc:type-entry-name type-entry)))
@@ -58,7 +45,7 @@ If non-nil, restrict to classes defined in PACKAGE."
   (remove-if (lambda (type-entry)
                (and package
                     (not (exported-symbol-p (tc:ty-class-name type-entry) package t))))
-             (%values (tc:environment-class-environment environment))))
+             (map:vals (tc:environment-class-environment environment))))
 
 (defun find-types (&key (environment entry:*global-environment*)
                         (package nil))
@@ -69,7 +56,7 @@ If non-nil, restrict to types defined in PACKAGE."
   (remove-if (lambda (type-entry)
                (and package
                     (not (exported-symbol-p (tc:type-entry-name type-entry) package t))))
-             (%values (tc:environment-type-environment environment))))
+             (map:vals (tc:environment-type-environment environment))))
 
 (defun find-constructors (&key (environment entry:*global-environment*)
                                (package nil))
@@ -80,7 +67,7 @@ If non-nil, restrict to constructors defined in PACKAGE."
   (remove-if-not (lambda (constructor-entry)
                    (and package
                         (not (exported-symbol-p (tc:constructor-entry-name constructor-entry) package t))))
-                 (%values (tc:environment-constructor-environment environment))))
+                 (map:vals (tc:environment-constructor-environment environment))))
 
 (defun find-names (&key (environment entry:*global-environment*)
                         (type nil)
@@ -94,7 +81,7 @@ If non-nil, restrict to names defined in PACKAGE."
                         (not (eql type (tc:name-entry-type entry))))
                    (and package
                         (not (exported-symbol-p (tc:name-entry-name entry) package t)))))
-             (%values (tc:environment-name-environment environment))))
+             (map:vals (tc:environment-name-environment environment))))
 
 (defun find-instances (&key (environment entry:*global-environment*)
                             (package nil))
@@ -107,5 +94,5 @@ If non-nil, restrict to instances defined in PACKAGE."
                     (not (exported-symbol-p (tc:ty-predicate-class
                                              (tc:ty-class-instance-predicate class-instance))
                                             package t))))
-             (%lm-values (tc:instance-environment-instances
-                          (tc:environment-instance-environment environment)))))
+             (apply #'append
+                    (%values (tc:environment-instance-environment environment)))))

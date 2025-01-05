@@ -2,172 +2,127 @@
   (:use #:cl)
   (:local-nicknames
    (#:settings #:coalton-impl/settings)
-   (#:algo #:coalton-impl/algorithm)
+   (#:map #:coalton-impl/algorithm/hamt)
    (#:tc #:coalton-impl/typechecker)
    (#:entry #:coalton-impl/entry)))
 
 (in-package #:coalton-impl/debug)
 
-(defun coalton:print-value-db (&optional package)
+(defun group-symbols-by-package (m)
+  (map:reduce (lambda (m sym entry)
+                (map:assoc m
+                           (symbol-package sym)
+                           (cons (cons sym entry)
+                                 (map:get m (symbol-package sym)))))
+              m))
+
+(defun print-symbols (m f package)
+  (let* ((grouped-symbols (group-symbols-by-package m))
+         (packages (if package
+                       (list (or (find-package package)
+                                 (error "Invalid package ~A" package)))
+                       (sort (map:keys grouped-symbols)
+                             #'string< :key #'package-name))))
+    (dolist (package packages)
+      (funcall f package (map:get grouped-symbols package)))))
+
+(defun coalton:print-value-db (&optional (env entry:*global-environment*) package)
   "Print the global value environment"
-  (let ((env entry:*global-environment*)
-        (sorted-by-package (make-hash-table)))
-    ;; Sort the entires by package
-    (fset:do-map (sym entry (algo:immutable-map-data (tc:environment-value-environment env)))
-      (push (cons sym entry) (gethash (symbol-package sym) sorted-by-package)))
+  (print-symbols (tc:environment-value-environment env)
+                 (lambda (package entries)
+                   (format t "[package ~A]~%~%" (package-name package))
+                   ;; Remove qualifications from package symbols
+                   (let ((*package* package))
+                     (loop :for (name . type) :in entries :do
+                       (format t "  ~A :: ~A~%" name type)))
+                   (format t "~%"))
+                 package))
 
-    ;; Print out the entries for each package
-    (labels ((print-package (package entries)
-               (format t "[package ~A]~%~%" (package-name package))
-               ;; Remove qualifications from package symbols
-               (let ((*package* package))
-                 (loop :for (name . type) :in entries :do
-                   (format t "  ~A :: ~A~%"
-                           name
-                           type)))
-               (format t "~%")))
-      (if package
-          (let ((p (find-package package)))
-            (unless p
-              (error "Invalid package ~A" package))
-            (print-package p (gethash p sorted-by-package)))
-          (maphash #'print-package sorted-by-package)))))
-
-(defun coalton:print-type-db (&optional package)
+(defun coalton:print-type-db (&optional (env entry:*global-environment*) package)
   "Print the global type environment"
-  (let ((env entry:*global-environment*)
-        (sorted-by-package (make-hash-table)))
-    ;; Sort the entires by package
-    (fset:do-map (sym entry (algo:immutable-map-data (tc:environment-type-environment env)))
-      (push (cons sym entry) (gethash (symbol-package sym) sorted-by-package)))
+  (print-symbols (tc:environment-type-environment env)
+                 (lambda (package entries)
+                   (format t "[package ~A]~%~%" (package-name package))
+                   (loop :for (name . entry) :in entries :do
+                     (format t "  ~A :: ~A~%" name (tc:kind-of entry)))
+                   (format t "~%"))
+                 package))
 
-    ;; Print out the entries for each package
-
-    (labels ((print-package (package entries)
-               (format t "[package ~A]~%~%" (package-name package))
-               (loop :for (name . entry) :in entries :do
-                 (format t "  ~A :: ~A~%"
-                         name
-                         (tc:kind-of entry)))
-               (format t "~%")))
-      (if package
-          (let ((p (find-package package)))
-            (unless p
-              (error "Invalid package ~A" package))
-            (print-package p (gethash p sorted-by-package)))
-          (maphash #'print-package sorted-by-package)))))
-
-(defun coalton:print-class-db (&optional package)
+(defun coalton:print-class-db (&optional (env entry:*global-environment*) package)
   "Print the global class environment"
-  (let ((env entry:*global-environment*)
-        (sorted-by-package (make-hash-table)))
-    ;; Sort the entires by package
-    (fset:do-map (sym entry (algo:immutable-map-data (tc:environment-class-environment env)))
-      (push (cons sym entry) (gethash (symbol-package sym) sorted-by-package)))
+  (print-symbols (tc:environment-class-environment env)
+                 (lambda (package entries)
+                   (format t "[package ~A]~%~%" (package-name package))
+                   (let ((*package* package))
+                     (loop :for (name . entry) :in entries :do
+                       (tc:with-pprint-variable-context ()
+                         (let ((class-pred (tc:ty-class-predicate entry)))
+                           (format t "  [~S (~A :: ~A)]~%"
+                                   (tc:ty-predicate-class class-pred)
+                                   (tc:ty-predicate-types class-pred)
+                                   (mapcar #'tc:kind-of (tc:ty-predicate-types class-pred))))
+                         (loop :for method :in (tc:ty-class-unqualified-methods entry) :do
+                           (format t "    ~S :: ~A~%"
+                                   (tc:ty-class-method-name method)
+                                   (tc:ty-class-method-type method))))
+                       (format t "~%")))
+                   (format t "~%"))
+                 package))
 
-    ;; Print out the entries for each package
-
-    (labels ((print-package (package entries)
-               (format t "[package ~A]~%~%" (package-name package))
-               (let ((*package* package))
-                 (loop :for (name . entry) :in entries :do
-                   (tc:with-pprint-variable-context ()
-                     (let ((class-pred (tc:ty-class-predicate entry)))
-                       (format t "  [~S (~A :: ~A)]~%"
-                               (tc:ty-predicate-class class-pred)
-                               (tc:ty-predicate-types class-pred)
-                               (mapcar #'tc:kind-of (tc:ty-predicate-types class-pred))))
-                     (loop :for method :in (tc:ty-class-unqualified-methods entry) :do
-                       (format t "    ~S :: ~A~%"
-                               (tc:ty-class-method-name method)
-                               (tc:ty-class-method-type method))))
-                   (format t "~%")))
-               (format t "~%")))
-      (if package
-          (let ((p (find-package package)))
-            (unless p
-              (error "Invalid package ~A" package))
-            (print-package p (gethash p sorted-by-package)))
-          (maphash #'print-package sorted-by-package)))))
-
-(defun coalton:print-instance-db (&optional package)
+(defun coalton:print-instance-db (&optional (env entry:*global-environment*) package)
   "Print the global instance environment"
-  (let ((env entry:*global-environment*)
-        (sorted-by-package (make-hash-table)))
-    ;; Sort the entires by package
-    (fset:do-map (sym entry (algo:immutable-map-data (tc:environment-class-environment env)))
-      (push (cons entry (tc:lookup-class-instances env sym :no-error t))
-            (gethash (symbol-package sym) sorted-by-package)))
+  (print-symbols (tc:environment-class-environment env)
+                 (lambda (package entries)
+                   (format t "[package ~A]~%~%" (package-name package))
+                   (let ((*package* package))
+                     (loop
+                       :for (entry . instances) :in entries
+                       :when (not (null instances))
+                         ;; Generate substitutions for class
+                         :do (tc:with-pprint-variable-context ()
+                               (let* ((class-pred (tc:ty-class-predicate entry)))
+                                 (format t "  [~S (~A :: ~A)]~%"
+                                         (tc:ty-predicate-class class-pred)
+                                         (tc:ty-predicate-types class-pred)
+                                         (mapcar #'tc:kind-of (tc:ty-predicate-types class-pred)))))
+                             (dolist (instance instances)
+                               (format t "    ")
+                               ;; Generate type variable substitutions from instance constraints
+                               (tc:with-pprint-variable-context ()
+                                 (let* ((instance-constraints (tc:ty-class-instance-constraints instance))
+                                        (instance-predicate (tc:ty-class-instance-predicate instance)))
+                                   (cond
+                                     ((= 0 (length instance-constraints))
+                                      (format t "~A~%" instance-predicate))
+                                     ((= 1 (length instance-constraints))
+                                      (format t "~A ~A ~A~%"
+                                              (first instance-constraints)
+                                              (if settings:*coalton-print-unicode* "⇒" "=>")
+                                              instance-predicate))
+                                     (t
+                                      (format t "~A ~A ~A~%"
+                                              instance-constraints
+                                              (if settings:*coalton-print-unicode* "⇒" "=>")
+                                              instance-predicate))))))
+                             (format t "~%")))
+                   (format t "~%"))
+                 package))
 
-    ;; Print out the entries for each package
-
-    (labels ((print-package (package entries)
-               (format t "[package ~A]~%~%" (package-name package))
-               (let ((*package* package))
-                 (loop
-                   :for (entry . instances) :in entries
-                   :when (not (null instances))
-                     ;; Generate substitutions for class
-                     :do (tc:with-pprint-variable-context ()
-                           (let* ((class-pred (tc:ty-class-predicate entry)))
-                             (format t "  [~S (~A :: ~A)]~%"
-                                     (tc:ty-predicate-class class-pred)
-                                     (tc:ty-predicate-types class-pred)
-                                     (mapcar #'tc:kind-of (tc:ty-predicate-types class-pred)))))
-
-                         (fset:do-seq (instance instances)
-                           (format t "    ")
-                           ;; Generate type variable substitutions from instance constraints
-                           (tc:with-pprint-variable-context ()
-                             (let* ((instance-constraints (tc:ty-class-instance-constraints instance))
-                                    (instance-predicate (tc:ty-class-instance-predicate instance)))
-                               (cond
-                                 ((= 0 (length instance-constraints))
-                                  (format t "~A~%" instance-predicate))
-                                 ((= 1 (length instance-constraints))
-                                  (format t "~A ~A ~A~%"
-                                          (first instance-constraints)
-                                          (if settings:*coalton-print-unicode* "⇒" "=>")
-                                          instance-predicate))
-                                 (t
-                                  (format t "~A ~A ~A~%"
-                                          instance-constraints
-                                          (if settings:*coalton-print-unicode* "⇒" "=>")
-                                          instance-predicate))))))
-
-                         (format t "~%")))
-               (format t "~%")))
-      (if package
-          (let ((p (find-package package)))
-            (unless p
-              (error "Invalid package ~A" package))
-            (print-package p (gethash p sorted-by-package)))
-          (maphash #'print-package sorted-by-package)))))
-
-(defun coalton:print-specializations (&optional package)
+(defun coalton:print-specializations (&optional (env entry:*global-environment*) package)
   "Print all specializations"
-  (let ((env entry:*global-environment*)
-        (sorted-by-package (make-hash-table)))
-    (fset:do-map (sym entry (algo:immutable-listmap-data (tc:environment-specialization-environment env)))
-      (push (cons sym entry) (gethash (symbol-package sym) sorted-by-package)))
-
-    (labels ((print-package (package entries)
-               (format t "[package ~A]~%~%" (package-name package))
-               (loop :for (name . specs) :in entries
-                     :do (progn
-                           (format t "  ~A :: ~A~%" name (tc:lookup-value-type env name))
-                           (fset:do-seq (spec specs)
-                             (format t "    ~A :: ~A~%"
-                                     (tc:specialization-entry-to spec)
-                                     (tc:specialization-entry-to-ty spec)))
-                           (format t "~%")))
-               (format t "~%")))
-      (if package
-          (let ((p (find-package package)))
-            (unless p
-              (error "Invalid package ~A" package))
-            (print-package p (gethash p sorted-by-package)))
-          (maphash #'print-package sorted-by-package)))))
+  (print-symbols (tc:environment-specialization-environment env)
+                 (lambda (package entries)
+                   (format t "[package ~A]~%~%" (package-name package))
+                   (loop :for (name . specs) :in entries
+                         :do (progn
+                               (format t "  ~A :: ~A~%" name (tc:lookup-value-type env name))
+                               (dolist (spec specs)
+                                 (format t "    ~A :: ~A~%"
+                                         (tc:specialization-entry-to spec)
+                                         (tc:specialization-entry-to-ty spec)))
+                               (format t "~%")))
+                   (format t "~%"))
+                 package))
 
 (defun coalton:type-of (symbol)
   "Lookup the type of value SYMBOL in the global environment"
