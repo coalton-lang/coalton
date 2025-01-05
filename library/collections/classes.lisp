@@ -178,6 +178,10 @@ the front or back, depending on which is natural for the underlying data structu
      "Add an element to the collection in place. See `add`."
      (:a -> :m -> :m))))
 
+(coalton-toplevel
+  (define-class (Collection :m (Tuple :k :v) => KeyedCollection :m :k :v (:m -> :k :v)))
+  )
+
 ;; TODO: Make it so that these must all be the proper KeyedCollection types as well
 (coalton-toplevel
   ;; NOTE: In all cases, LinearCollection methods should return collections that don't
