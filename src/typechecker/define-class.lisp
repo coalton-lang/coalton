@@ -391,19 +391,6 @@
                                    (tc-note method
                                             "the method is ambiguous"))
 
-                         ;; Ensure that the type variables in each
-                         ;; pred are not a subset of the class
-                         ;; variables.
-                   :do (loop :for pred :in (parser:qualified-ty-predicates ty)
-                             :for tyvars := (remove-duplicates
-                                             (mapcar #'parser:tyvar-name (parser:collect-type-variables pred))
-                                             :test #'eq)
-
-                             :when (subsetp tyvars var-names)
-                               :do (tc-error "Invalid method predicate"
-                                             (tc-note pred
-                                                      "method predicate contains only class variables")))
-
                    :do (loop :for tyvar :in new-tyvars
                              :do (partial-type-env-add-var env tyvar))
 

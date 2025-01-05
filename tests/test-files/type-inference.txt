@@ -242,23 +242,61 @@ error: Unknown variable SINGLETON
     |           ^^^^^^^^^ unknown variable SINGLETON
 
 ================================================================================
-Check that typeclasses cannot have additional constraints defined in a method
-
-this is a stylistic decision and not a technical limitation
+Typeclasses methods with additional constraints cannot be called without them
 ================================================================================
 
-(package coalton-unit-tests/inference)
+(package coalton-unit-tests/additional-constraints
+  (import coalton-prelude))
 
 (define-class (Test :a)
-  (test (Eq :a => :a -> :a)))
+  (f (Eq :a => :a -> :a)))
+
+(define-type TestType A B C)
+
+(define-instance (Test TestType)
+  (define f id))
+
+(declare test-f (Test :a => :a -> :a))
+
+(define (test-f a)
+  (f a))
 
 --------------------------------------------------------------------------------
 
-error: Invalid method predicate
-  --> test:4:9
-   |
- 4 |    (test (Eq :a => :a -> :a)))
-   |           ^^^^^ method predicate contains only class variables
+error: Explicit type is missing inferred predicate
+  --> test:14:9
+    |
+ 14 |  (define (test-f a)
+    |           ^^^^^^ Declared type TEST :A => (:A -> :A) is missing inferred predicate EQ :A
+
+================================================================================
+Typeclasses methods with additional constraints cannot be called without them,
+even through a generic interface
+================================================================================
+
+(package coalton-unit-tests/additional-constraints
+  (import coalton-prelude))
+
+(define-class (Test :a)
+  (f (Eq :a => :a -> :a)))
+
+(define-type TestType A B C)
+
+(define-instance (Test TestType)
+  (define f id))
+
+(declare test-generic (Test :a => :a -> :a))
+
+(define (test-generic a)
+  (f a))
+
+--------------------------------------------------------------------------------
+
+error: Explicit type is missing inferred predicate
+  --> test:14:9
+    |
+ 14 |  (define (test-generic a)
+    |           ^^^^^^^^^^^^ Declared type TEST :A => (:A -> :A) is missing inferred predicate EQ :A
 
 ================================================================================
 Check than non overlapping instances can be defined
