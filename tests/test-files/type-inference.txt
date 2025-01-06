@@ -256,7 +256,7 @@ Typeclasses methods with additional constraints cannot be called without them
 (define-instance (Test TestType)
   (define f id))
 
-(declare test-f (:a -> :a))
+(declare test-f (Test :a => :a -> :a))
 
 (define (test-f a)
   (f a))
@@ -267,7 +267,7 @@ error: Explicit type is missing inferred predicate
   --> test:14:9
     |
  14 |  (define (test-f a)
-    |           ^^^^^^ Declared type (:A -> :A) is missing inferred predicate EQ :A
+    |           ^^^^^^ Declared type TEST :A => (:A -> :A) is missing inferred predicate EQ :A
 
 ================================================================================
 Typeclasses methods with additional constraints cannot be called without them,
