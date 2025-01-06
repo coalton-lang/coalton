@@ -1011,12 +1011,12 @@
                               ((Impl i _) i)))
                           bs))
       (let scs   = (map toScheme ts))
-      (let as_   = (append (zipWith Assump is scs) as))
+      (let as_   = (append (zip-with Assump is scs) as))
       (let altss = (map (fn (b)
                           (match b
                             ((Impl _ a) a)))
                         bs))
-      (pss <- (sequence (zipWith (tiAlts ce as_) altss ts)))
+      (pss <- (sequence (zip-with (tiAlts ce as_) altss ts)))
       (s <- getSubst)
       (let ps_ = (apply s (concat pss)))
       (let ts_ = (apply s ts))
@@ -1042,12 +1042,12 @@
                                 (quantify gs_ (Qual Nil x)))
                               ts_)))
                (pure (Tuple (append ds rs)
-                            (zipWith Assump is scs_))))
+                            (zip-with Assump is scs_))))
              (let ((scs_ (map (fn (x)
                                 (quantify gs (Qual rs x)))
                               ts_)))
                (pure (Tuple ds
-                            (zipWith Assump is scs_)))))))))
+                            (zip-with Assump is scs_)))))))))
 
   (define-type BindGroup
     (BindGroup (List Expl) (List (List Impl))))
