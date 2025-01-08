@@ -17,6 +17,7 @@
   (:export #:+empty+
            #:immutable-map
            #:assoc
+           #:assoc-in
            #:contains-p
            #:difference
            #:dissoc
@@ -421,6 +422,16 @@ Returns (values new-node inserted-p) where inserted-p is true for new insertions
             (values (make-leaf-node :hash hash :key key :value value) t))
       (make-immutable-map new-root (+ (immutable-map-count map)
                                       (if inserted 1 0))))))
+
+(defun assoc-in (map keys value)
+  "Associate VALUE in a nested MAP structure, where KEYS is a sequence of keys."
+  (if (null keys)
+      value
+      (let ((k (car keys)))
+        (assoc map k
+               (assoc-in (get map k +empty+)
+                         (cdr keys)
+                         value)))))
 
 (defun reduce (function map &optional (initial-value +empty+))
   "Reduce over key-value pairs in the map"
