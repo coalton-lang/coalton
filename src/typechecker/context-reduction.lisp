@@ -104,7 +104,7 @@ Returns (PREDS FOUNDP)"
     (simp-loop nil preds)))
 
 (defun reduce-context (env preds subs)
-  (let ((env (apply-substitution subs env))
+  (let ((env (env-apply-substitution subs env))
         (preds (apply-substitution subs preds)))
     (simplify-context
      (lambda (preds pred)

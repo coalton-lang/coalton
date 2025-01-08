@@ -27,6 +27,7 @@
    (#:parser #:coalton-impl/parser)
    (#:map #:coalton-impl/algorithm/hamt))
   (:export
+   #:env-apply-substitution
    #:*update-hook*                          ; VARIABLE
    #:explicit-repr                          ; TYPE
    #:type-entry                             ; STRUCT
@@ -786,7 +787,7 @@
 ;;; Methods
 ;;;
 
-(defmethod apply-substitution (subst-list (env environment))
+(defun env-apply-substitution (subst-list env)
   (declare (type substitution-list subst-list)
            (type environment env)
            (values environment &optional))
@@ -795,9 +796,6 @@
                       (value-apply-substitution
                        (environment-value-environment env)
                        subst-list)))
-
-(defmethod type-variables ((env environment))
-  (value-type-variables (environment-value-environment env)))
 
 ;;;
 ;;; Functions
