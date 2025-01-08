@@ -15,6 +15,7 @@
            #:reduce
            #:seq)
   (:export #:+empty+
+           #:->
            #:immutable-map
            #:assoc
            #:assoc-in
@@ -36,10 +37,13 @@
            #:seq
            #:size
            #:subset-p
+           #:update
            #:vals))
 
 (in-package #:coalton-impl/algorithm/hamt)
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  
 (defmacro define-constant (name value &optional doc)
   "Define a constant that can be redefined if the new value is equalp to the old."
   `(defconstant ,name 
@@ -50,6 +54,19 @@
                ,value))
          ,value)
      ,@(when doc (list doc))))
+
+(defmacro -> (x &rest forms)
+  "Thread-first macro. Provide x as first argument to first form; provide return value as first argument to second form; etc."
+  (if (null forms)
+      x
+      (let ((form (car forms)))
+        (if (listp form)
+            `(-> ,(append (list (car form) x) (cdr form))
+                 ,@(cdr forms))
+            `(-> (,form ,x)
+                 ,@(cdr forms))))))
+
+)                                       ; eval-when
 
 ;; HAMT constants
 
@@ -153,7 +170,10 @@ Returns (values new-node inserted-p) where inserted-p is true for new insertions
                              (cdr pair))))
               (seq map1))))
 
-(defun print-map-pairs (map stream &key (format-fn #'write))
+(defun %write (obj s)
+  (format s "~S" obj))
+
+(defun print-map-pairs (map stream &key (format-fn #'%write))
   (write-char #\{ stream)
   (let ((first t))
     (dolist (pair (seq map))
@@ -169,8 +189,8 @@ Returns (values new-node inserted-p) where inserted-p is true for new insertions
   (if *print-readably*
       (print-map-pairs map stream)
       (print-unreadable-object (map stream :type t)
-        (print-map-pairs map stream :format-fn 
-                         (lambda (obj s) (format s "~S" obj))))))
+        (let ((*print-readably* t))
+          (print-map-pairs map stream)))))
 
 ;;; leaf-node operations
 
@@ -432,6 +452,12 @@ Returns (values new-node inserted-p) where inserted-p is true for new insertions
                (assoc-in (get map k +empty+)
                          (cdr keys)
                          value)))))
+
+(defun update (map key fn &rest args)
+  "Update a value in MAP by applying FN with extra ARGS to the existing value.
+   If the key doesn't exist, nil is provided to fn."
+  (assoc map key 
+         (apply fn (get map key nil) args)))
 
 (defun reduce (function map &optional (initial-value +empty+))
   "Reduce over key-value pairs in the map"
