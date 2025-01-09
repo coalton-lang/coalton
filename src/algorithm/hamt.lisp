@@ -22,6 +22,7 @@
            #:contains-p
            #:difference
            #:dissoc
+           #:dissoc-in
            #:enable-syntax
            #:filter
            #:from-pairs
@@ -534,6 +535,13 @@ Returns (values new-node inserted-p) where inserted-p is true for new insertions
          (new-root (and (immutable-map-root map)
                         (node-dissoc (immutable-map-root map) hash 0 key nil))))
     (make-immutable-map new-root (1- (immutable-map-count map)))))
+
+(defun dissoc-in (map keys)
+  "Remove a key from a nested MAP structure, where KEYS is a sequence of keys."
+  (destructuring-bind (k &rest ks) keys
+    (if (null ks)
+        (dissoc map k)
+        (assoc map k (dissoc-in (get map k +empty+) ks)))))
 
 (defun keys (map)
   "Return a list of all keys in the map"
