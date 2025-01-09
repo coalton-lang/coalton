@@ -123,6 +123,7 @@
    #:parse-toplevel-form                         ; FUNCTION
    #:read-program                                ; FUNCTION
    #:read-expression                             ; FUNCTION
+   #:read-expressions                            ; FUNCTION
    ))
 
 (in-package #:coalton-impl/parser/toplevel)
@@ -554,6 +555,33 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
                        (note source form "unexpected form"))))
 
       (parse-expression form source))))
+
+(defun read-expressions (stream source)
+  (let* (;; Setup eclector readtable
+         (eclector.readtable:*readtable*
+           (eclector.readtable:copy-readtable eclector.readtable:*readtable*)))
+
+    ;; Read the coalton form
+    (multiple-value-bind (form presentp)
+        (maybe-read-form stream source *coalton-eclector-client*)
+
+      (unless presentp
+        (parse-error "Malformed coalton expression"
+                     (note source (cons (- (file-position stream) 2)
+                                        (- (file-position stream) 1))
+                           "missing expression")))
+
+      (let ((forms nil))
+        ;; Read multiple forms if present.
+        (block collect-forms
+          (loop (multiple-value-bind (next-form presentp)
+                    (maybe-read-form stream source *coalton-eclector-client*)
+                  (if presentp
+                      (push next-form forms)
+                      (return-from collect-forms)))))
+        (if forms
+            (parse-expressions (cons form (nreverse forms)) source)
+            (parse-expression form source))))))
 
 ;;; Packages
 
