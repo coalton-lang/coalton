@@ -1049,7 +1049,10 @@ Rebound to NIL parsing an anonymous FN.")
      :body (make-node-body
             :nodes nodes
             :last-node (first (last nodes)))
-     :location (form-location source (first forms)))))
+     :location (source:make-location
+                source
+                (cons (source:span-start (cst:source (first forms)))
+                      (source:span-end (cst:source (first (last forms)))))))))
 
 (defun parse-variable (form source)
   (declare (type cst:cst form)
