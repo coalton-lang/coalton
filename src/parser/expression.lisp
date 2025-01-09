@@ -153,6 +153,7 @@
    #:node-do-nodes                      ; ACCESSOR
    #:node-do-last-node                  ; ACCESSOR
    #:parse-expression                   ; FUNCTION
+   #:parse-expressions                  ; FUNCTION
    #:parse-body                         ; FUNCTION
    #:parse-variable                     ; FUNCTION
    ))
@@ -1039,6 +1040,16 @@ Rebound to NIL parsing an anonymous FN.")
                    :for rand := (cst:first rands)
                    :collect (parse-expression rand source))
       :location (form-location source form)))))
+
+(defun parse-expressions (forms source)
+  (declare (type list forms)
+           (values node &optional))
+  (let ((nodes (mapcar (lambda (form) (parse-expression form source)) forms)))
+    (make-node-progn
+     :body (make-node-body
+            :nodes nodes
+            :last-node (first (last nodes)))
+     :location (form-location source (first forms)))))
 
 (defun parse-variable (form source)
   (declare (type cst:cst form)
