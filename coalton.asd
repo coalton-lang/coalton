@@ -74,8 +74,8 @@
                (:file "lisparray")
                (:module "collections"
                 :serial t
-                :components ((:file "immutable/list")
-                             (:file "classes")
+                :components ((:file "classes")
+                             (:file "immutable/list")
                              (:file "mutable/vector")
                              (:file "mutable/hashtable")
                              (:file "package")))

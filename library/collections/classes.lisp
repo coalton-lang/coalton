@@ -5,9 +5,7 @@
    #:coalton-library/classes)
   (:local-nicknames
    (#:itr #:coalton-library/iterator)
-   (#:l #:coalton-library/collections/immutable/list)
-   (#:types #:coalton-library/types)
-   (#:o #:coalton-library/optional))
+   (#:types #:coalton-library/types))
   (:export
    #:Collection
    #:EqCollection
@@ -300,81 +298,6 @@ with that element. The second collection is empty if no element satisfied `pred`
     (insert-at!
      "Insert an item at the given index of the collection, erroring if out of bounds. The collection is returned for convenience."
      (UFix -> :a -> :m :a -> :m :a))))
-
-;; TODO: Because `List` is a predefined type, we can't define this
-;; in the new collections/immutable/list.lisp file. Define it here
-;; for now, and when we remove the deprecated versions move this
-;; into the list package.
-(coalton-toplevel
-  (define-instance (Collection (List :a) :a)
-    (define (new-collection)
-      Nil)
-    (define (new-repeat n elt)
-      (l:repeat n elt))
-    (define (new-from n f)
-      (if (== 0 n)
-        Nil
-        (map f (l:range 0 (- n 1)))))
-    (define (new-convert coll)
-      (itr:collect! (itr:into-iter coll)))
-    ;; (define (flatten lst)
-    ;;   (fold l:append (new-collection) lst))
-    (define filter l:filter)
-    (define empty? l:empty?)
-    (define length l:length)
-    (define contains-where? l:contains-where?)
-    (define count-where l:countBy)
-    (define add Cons))
-
-  (define-instance (Eq :a => EqCollection (List :a) :a)
-    (define remove-duplicates l:remove-duplicates)
-    (define contains-elt? l:member)
-    (define (remove-elt elt lst)
-      (l:filter (/= elt) lst)))
-
-  (define-instance (NestedCollection (List (List :a)) (List :a) :a)
-    (define (flatten lst)
-      (fold l:append (new-collection) lst)))
-
-  (define-instance (ImmutableCollection (List :a) :a)))
-
-(coalton-toplevel
-  (define-instance (LinearCollection List)
-    (define head l:head)
-    (define (head# lst)
-      (o:from-some "Attempted to retrieve head of empty list." (l:head lst)))
-    (define last l:last)
-    (define (last# lst)
-      (o:from-some "Attempted to retrieve last element of empty list." (l:last lst)))
-    (define tail l:tail)
-    (define take l:take)
-    (define drop l:drop)
-    (define index-elt l:elemIndex)
-    (define (index-elt# elt lst)
-      (o:from-some "Cannot find element in list." (l:elemIndex elt lst)))
-    (define index-where l:findIndex)
-    (define (index-where# pred lst)
-      (o:from-some "Cannot find matching element in list." (l:findIndex pred lst)))
-    (define find-where l:find)
-    (define subseq l:subseq-list)
-    (define (split-at i lst)
-      (Tuple (l:take i lst) (l:drop i lst)))
-    (define (split-elt elt lst)
-      (match (l:elemIndex elt lst)
-        ((None) (Tuple lst Nil))
-        ((Some i) (split-at i lst))))
-    (define (split-where pred lst)
-      (match (l:findIndex pred lst)
-        ((None) (Tuple lst Nil))
-        ((Some i) (split-at i lst))))
-    (define reverse l:reverse)
-    (define sort l:sort)
-    (define sort-with l:sortBy)
-    (define zip l:zip-itr)
-    (define zip-with l:zip-with-itr)
-    (define push Cons)
-    (define push-end l:push-end)
-    (define insert-at l:insert-at)))
 
 ;; #+sb-package-locks
 ;; (sb-ext:lock-package "COALTON-LIBRARY/COLLECTIONS/CLASSES")
