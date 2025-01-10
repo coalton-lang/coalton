@@ -66,7 +66,7 @@
 
   (define-instance (Default BF-State)
     (define (default)
-      (BF-State (vec:with-initial-element bf-vector-size 0)
+      (BF-State (new-repeat bf-vector-size 0)
                 (cell:new 0)
                 (cell:new ""))))
 
@@ -189,36 +189,36 @@
   (declare parse (String -> (Vector Cmd)))
   (define (parse input-string)
     "Parses a Brainfold instruction string, returns a Vector of Brainfold Commands."
-    (let cmds = (vec:new))
-    (let vecs = (vec:new))
+    (let cmds = (new-collection))
+    (let vecs = (the (Vector (Vector Cmd)) (new-collection)))
     (let ((parser (fn (input-string v)
                     (let ((head-tail (str:split 1 input-string)))
                       (match (fst head-tail)
                         ("" cmds)
                         (">"
-                         (vec:push! BFRight v)
+                         (push-end! BFRight v)
                          (parser (snd head-tail) v))
                         ("<"
-                         (vec:push! BFLeft v)
+                         (push-end! BFLeft v)
                          (parser (snd head-tail) v))
                         ("+"
-                         (vec:push! BFPlus v)
+                         (push-end! BFPlus v)
                          (parser (snd head-tail) v))
                         ("-"
-                         (vec:push! BFMinus v)
+                         (push-end! BFMinus v)
                          (parser (snd head-tail) v))
                         ("."
-                         (vec:push! BFPrint v)
+                         (push-end! BFPrint v)
                          (parser (snd head-tail) v))
                         (","
-                         (vec:push! BFInput v)
+                         (push-end! BFInput v)
                          (parser (snd head-tail) v))
                         ("["
-                         (vec:push! v vecs)
-                         (parser (snd head-tail) (vec:new)))
+                         (push-end! v vecs)
+                         (parser (snd head-tail) (new-collection)))
                         ("]"
-                         (vec:push! (BFLoop v) (unwrap (vec:last vecs)))
-                         (parser (snd head-tail) (unwrap (vec:pop! vecs))))
+                         (push-end! (BFLoop v) (unwrap (last vecs)))
+                         (parser (snd head-tail) (unwrap (pop-end! vecs))))
                         (_ (parser (snd head-tail) v)))))))
       (parser input-string cmds))))
 

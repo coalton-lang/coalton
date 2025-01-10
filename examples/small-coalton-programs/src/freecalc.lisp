@@ -79,7 +79,7 @@ we map over."
                  ((AddE x y next) (pure (next (+ x y))))
                  ((SubE x y next) (pure (next (- x y))))
                  ((InputE next)
-                  (map (compose next (fn (vec) (defaulting-unwrap (vector:pop! vec))))
+                  (map (compose next (fn (vec) (defaulting-unwrap (pop-end! (the (Vector :a) vec)))))
                        st:get))))))
 
 
