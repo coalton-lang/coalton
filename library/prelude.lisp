@@ -188,6 +188,8 @@
    #:push-end
    #:insert-at
 
+   #:ImmutableLinearCollection
+
    #:MutableLinearCollection
    #:reverse!
    #:sort!

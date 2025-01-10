@@ -328,7 +328,7 @@ with that element. The second collection is empty if no element satisfied `pred`
 
   (define-instance (Eq :a => EqCollection (List :a) :a)
     (define remove-duplicates l:remove-duplicates)
-    (define contains-elt? l:contains-elt?)
+    (define contains-elt? l:member)
     (define (remove-elt elt lst)
       (l:filter (/= elt) lst)))
 

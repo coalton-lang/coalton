@@ -27,7 +27,6 @@
    #:reverse
    #:drop
    #:take
-   #:contains-elt?
    #:contains-where?
    #:find
    #:filter
@@ -90,12 +89,115 @@
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (coalton-toplevel
-
+  
   ;;
   ;; Cons Lists
   ;;
 
   ;; List is an early type
+  
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;;;                                                                       ;;;
+  ;;; Datatype Definition & Internal Helper Functions                       ;;;
+  ;;;                                                                       ;;;
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  ;; This is only for internal usage
+  (define (%reverse as bs)
+    (match as
+      ((Nil) bs)
+      ((Cons a as) (%reverse as (Cons a bs)))))
+
+  ;; This is only for internal usage
+  (declare %reverse! (List :a -> List :a))
+  (define (%reverse! xs)
+    "A mutating reverse operation. After (%reverse! LST), LST must not be referenced; the original list, and all its sublists, should be treated as consumed by this operation. Callers should use the return value and only the return value."
+    (lisp (List :a) (xs)
+      (cl:nreverse xs)))
+
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;;;                                                                       ;;;
+  ;;; Collections API Methods (Shouldn't be exported)                       ;;;
+  ;;;                                                                       ;;;
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  ;;;
+  ;;; Collection List
+  ;;;
+
+  (declare repeat (UFix -> :a -> List :a))
+  (define (repeat n x)
+    "Returns a list with the same value repeated multiple times."
+    (let ((rec
+            (fn (k acc)
+              (if (== k 0)
+                  acc
+                  (rec (- k 1) (Cons x acc))))))
+      (rec n Nil)))
+
+  (declare filter ((:a -> Boolean) -> List :a -> List :a))
+  (define (filter f xs)
+    "Returns a new list containing every element of XS that matches the predicate function F in the same order."
+    (let ((fun (fn (xs ys)
+                 (match xs
+                   ((Nil) (%reverse! ys))
+                   ((Cons x xs)
+                    (if (f x)
+                        (fun xs (Cons x ys))
+                        (fun xs ys)))))))
+      (fun xs Nil)))
+
+  (declare remove-duplicates (Eq :a => ((List :a) -> (List :a))))
+  (define (remove-duplicates xs)
+    "Returns a new list without duplicate elements."
+    (%reverse! (remove-duplicates-rev xs Nil)))
+
+  (declare empty? (List :a -> Boolean))
+  (define (empty? l)
+    (match l
+      ((Nil) True)
+      (_     False)))
+
+  (declare length (List :a -> UFix))
+  (define (length l)
+    "Returns the length of a list."
+    (fold (fn (a _)
+            (+ 1 a))
+          0
+          l))
+
+  (declare member (Eq :a => (:a -> (List :a) -> Boolean)))
+  (define (member e xs)
+    "Returns true if any element of XS is equal to E."
+    (match xs
+      ((Cons x xs)
+       (if (== x e)
+           True
+           (member e xs)))
+      ((Nil) False)))
+
+  (declare contains-where? ((:a -> Boolean) -> List :a -> Boolean))
+  (define (contains-where? f l)
+    (match l
+      ((Nil) False)
+      ((Cons x xs)
+       (if (f x)
+           True
+           (contains-where? f xs)))))
+
+  (declare countBy ((:a -> Boolean) -> (List :a) -> UFix))
+  (define (countBy f things)
+    "Count the number of items in THINGS that satisfy the predicate F."
+    (fold (fn (sum x)
+            (if (f x)
+                (+ 1 sum)
+                sum))
+          0
+          things))
+  
+  ;;;
+  ;;; LinearCollection List
+  ;;;
 
   (declare head (List :a -> Optional :a))
   (define (head l)
@@ -103,13 +205,128 @@
     (match l
       ((Cons x _) (Some x))
       ((Nil) None)))
-
+  
+  (declare last (List :a -> Optional :a))
+  (define (last l)
+    "Returns the last element of a list."
+    (match l
+      ((Cons x (Nil)) (Some x))
+      ((Cons _ xs) (last xs))
+      ((Nil) None)))
+  
   (declare tail (List :a -> List :a))
   (define (tail l)
     "Returns every element except the first in a list."
     (match l
       ((Cons _ xs) xs)
       ((Nil) Nil)))
+
+  (declare take (UFix -> List :a -> List :a))
+  (define (take n xs)
+    "Returns the first N elements of a list."
+    (let ((rec
+            (fn (n in out)
+              (if (== n 0)
+                  out
+                  (match in
+                    ((Cons x xs) (rec (- n 1) xs (Cons x out)))
+                    ((Nil) out))))))
+      (%reverse! (rec n xs Nil))))
+
+  (declare drop (UFix -> List :a -> List :a))
+  (define (drop n xs)
+    "Returns a list with the first N elements removed."
+    (if (== n 0)
+        xs
+        (match xs
+          ((Cons _ xs)
+           (drop (- n 1) xs))
+          ((Nil) Nil))))
+  
+  (declare elemIndex (Eq :a => :a -> List :a -> Optional UFix))
+  (define (elemIndex x xs)
+    (findIndex (== x) xs))
+
+  (declare findIndex ((:a -> Boolean) -> List :a -> Optional UFix))
+  (define (findIndex f xs)
+    "Returns the index of the first element matching the predicate function F."
+    (let ((find (fn (xs n)
+                  (match xs
+                    ((Nil) None)
+                    ((Cons x xs)
+                     (if (f x)
+                         (Some n)
+                         (find xs (+ n 1))))))))
+      (find xs 0)))
+
+  (declare find ((:a -> Boolean) -> List :a -> Optional :a))
+  (define (find f xs)
+    "Returns the first element in a list matching the predicate function F."
+    (fold (fn (a b)
+            (match a
+              ((Some _) a)
+              (_
+               (if (f b) (Some b) None))))
+          None xs))
+  
+  (declare subseq-list (UFix -> UFix -> List :a -> List :a))
+  (define (subseq-list start end lst)
+    (take (- start end) (drop start lst)))
+
+  (declare reverse (List :a -> List :a))
+  (define (reverse xs)
+    "Returns a new list containing the same elements in reverse order."
+    ;; like (fold (flip Cons) Nil xs)
+    (%reverse xs Nil))
+
+  (declare sort (Ord :a => ((List :a) -> (List :a))))
+  (define (sort xs)
+    "Performs a sort of XS."
+    (sortBy <=> xs))
+
+  (declare sortBy ((:a -> :a -> Ord) -> (List :a) -> (List :a)))
+  (define (sortBy cmp xs)
+    "Generic version of sort"
+    (lisp (List :a) (cmp xs)
+      (cl:sort (cl:copy-list xs)
+               (cl:lambda (a b)
+                 (cl:eq 'coalton-library/classes::ord/lt (call-coalton-function cmp a b))))))
+
+  (declare zip-itr (iter:IntoIterator :m :b => List :a -> :m -> List (Tuple :a :b)))
+  (define (zip-itr lst col)
+    (zip-with-itr Tuple lst col))
+
+  (declare zip-with-itr (iter:IntoIterator :m :b => (:a -> :b -> :c) -> List :a -> :m -> List :c))
+  (define (zip-with-itr f lst col)
+    (let ((it (iter:into-iter col))
+          (rec
+           (fn (rem acc)
+             (match (Tuple rem (iter:next! it))
+               ((Tuple (Cons a xs) (Some b))
+                (rec xs (Cons (f a b) acc)))
+               (_ acc)))))
+      (%reverse! (rec lst Nil))))             
+
+  ;; TODO: Make this more effecient. Walk the original front to back in Common Lisp,
+  ;; mutating the CDR of new Cons cells as we go until we get to the end, then mutate
+  ;; a new Cons cell with the new element at the end.
+  (declare push-end (:a -> List :a -> List :a))
+  (define (push-end elt lst)
+    "Add an element to the end of the list."
+    (reverse (Cons elt (reverse lst))))
+  
+  ;; TODO: Make this more effecient. Walk the original front to back in Common Lisp,
+  ;; mutating the CDR of new Cons cells as we go until we get to `i`, then mutate
+  ;; a new Cons cell with the new element at the end.
+  (declare insert-at (UFix -> :a -> List :a -> List :a))
+  (define (insert-at i elt lst)
+    (append (take i lst) (Cons elt (drop i lst))))
+
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;;;                                                                       ;;;
+  ;;; Extra Public Functions                                                ;;;
+  ;;;                                                                       ;;;
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
   (declare car (List :a -> :a))
   (define (car x)
@@ -125,34 +342,11 @@
       ((Cons _ xs) xs)
       ((Nil) Nil)))
 
-  (declare last (List :a -> Optional :a))
-  (define (last l)
-    "Returns the last element of a list."
-    (match l
-      ((Cons x (Nil)) (Some x))
-      ((Cons _ xs) (last xs))
-      ((Nil) None)))
-
   (declare init (List :a -> List :a))
   (define (init l)
     "Returns every element except the last in a list."
     (lisp (List :a) (l)
       (cl:butlast l)))
-  
-  ;; TODO: Make this more effecient. Walk the original front to back in Common Lisp,
-  ;; mutating the CDR of new Cons cells as we go until we get to the end, then mutate
-  ;; a new Cons cell with the new element at the end.
-  (declare push-end (:a -> List :a -> List :a))
-  (define (push-end elt lst)
-    "Add an element to the end of the list."
-    (reverse (Cons elt (reverse lst))))
-  
-  ;; TODO: Make this more effecient. Walk the original front to back in Common Lisp,
-  ;; mutating the CDR of new Cons cells as we go until we get to `i`, then mutate
-  ;; a new Cons cell with the new element at the end.
-  (declare insert-at (UFix -> :a -> List :a -> List :a))
-  (define (insert-at i elt lst)
-    (append (take i lst) (Cons elt (drop i lst))))
 
   (declare null? (List :a -> Boolean))
   (define (null? xs)
@@ -172,121 +366,6 @@
     (match xs
       ((Cons _ (Nil)) True)
       (_ False)))
-
-  (declare repeat (UFix -> :a -> List :a))
-  (define (repeat n x)
-    "Returns a list with the same value repeated multiple times."
-    (let ((rec
-            (fn (k acc)
-              (if (== k 0)
-                  acc
-                  (rec (- k 1) (Cons x acc))))))
-      (rec n Nil)))
-
-  (define (%reverse as bs)
-    (match as
-      ((Nil) bs)
-      ((Cons a as) (%reverse as (Cons a bs)))))
-
-  (declare reverse (List :a -> List :a))
-  (define (reverse xs)
-    "Returns a new list containing the same elements in reverse order."
-    ;; like (fold (flip Cons) Nil xs)
-    (%reverse xs Nil))
-
-  ;; This is only for internal usage
-  (declare %reverse! (List :a -> List :a))
-  (define (%reverse! xs)
-    "A mutating reverse operation. After (%reverse! LST), LST must not be referenced; the original list, and all its sublists, should be treated as consumed by this operation. Callers should use the return value and only the return value."
-    (lisp (List :a) (xs)
-      (cl:nreverse xs)))
-
-  (declare drop (UFix -> List :a -> List :a))
-  (define (drop n xs)
-    "Returns a list with the first N elements removed."
-    (if (== n 0)
-        xs
-        (match xs
-          ((Cons _ xs)
-           (drop (- n 1) xs))
-          ((Nil) Nil))))
-
-  (declare take (UFix -> List :a -> List :a))
-  (define (take n xs)
-    "Returns the first N elements of a list."
-    (let ((rec
-            (fn (n in out)
-              (if (== n 0)
-                  out
-                  (match in
-                    ((Cons x xs) (rec (- n 1) xs (Cons x out)))
-                    ((Nil) out))))))
-      (%reverse! (rec n xs Nil))))
-
-  (declare contains-elt? (Eq :a => :a -> List :a -> Boolean))
-  (define (contains-elt? elt l)
-    (match l
-      ((Nil) False)
-      ((Cons x xs)
-       (if (== x elt)
-           True
-           (contains-elt? elt xs)))))
-
-  (declare contains-where? ((:a -> Boolean) -> List :a -> Boolean))
-  (define (contains-where? f l)
-    (match l
-      ((Nil) False)
-      ((Cons x xs)
-       (if (f x)
-           True
-           (contains-where? f xs)))))
-
-  (declare count-where? ((:a -> Boolean) -> List :a -> UFix))
-  (define (count-where? f l)
-    (let ((recur (fn (rem total)
-                   (match rem
-                     ((Nil) total)
-                     ((Cons x xs)
-                      (if (f x)
-                          (recur xs (+ 1 total))
-                          (recur xs total)))))))
-      (recur l 0)))
-
-  (declare find ((:a -> Boolean) -> List :a -> Optional :a))
-  (define (find f xs)
-    "Returns the first element in a list matching the predicate function F."
-    (fold (fn (a b)
-            (match a
-              ((Some _) a)
-              (_
-               (if (f b) (Some b) None))))
-          None xs))
-
-  (declare filter ((:a -> Boolean) -> List :a -> List :a))
-  (define (filter f xs)
-    "Returns a new list containing every element of XS that matches the predicate function F in the same order."
-    (let ((fun (fn (xs ys)
-                 (match xs
-                   ((Nil) (%reverse! ys))
-                   ((Cons x xs)
-                    (if (f x)
-                        (fun xs (Cons x ys))
-                        (fun xs ys)))))))
-      (fun xs Nil)))
-
-  (declare empty? (List :a -> Boolean))
-  (define (empty? l)
-    (match l
-      ((Nil) True)
-      (_     False)))
-
-  (declare length (List :a -> UFix))
-  (define (length l)
-    "Returns the length of a list."
-    (fold (fn (a _)
-            (+ 1 a))
-          0
-          l))
 
   (declare index (UFix -> List :a -> Optional :a))
   (define (index i xs)
@@ -312,22 +391,6 @@
 	   l)
 	  (True
 	   (nth-cdr (math:1- n) (cdr l)))))
-  
-  (declare elemIndex (Eq :a => :a -> List :a -> Optional UFix))
-  (define (elemIndex x xs)
-    (findIndex (== x) xs))
-
-  (declare findIndex ((:a -> Boolean) -> List :a -> Optional UFix))
-  (define (findIndex f xs)
-    "Returns the index of the first element matching the predicate function F."
-    (let ((find (fn (xs n)
-                  (match xs
-                    ((Nil) None)
-                    ((Cons x xs)
-                     (if (f x)
-                         (Some n)
-                         (find xs (+ n 1))))))))
-      (find xs 0)))
 
   (declare range ((Num :int) (Ord :int) => :int -> :int -> List :int))
   (define (range start end)
@@ -366,16 +429,6 @@
   (define (concatMap f xs)
     "Apply F to each element in XS and concatenate the results."
     (%reverse! (fold (fn (a b) (append-rev (f b) a)) Nil xs)))
-
-  (declare member (Eq :a => (:a -> (List :a) -> Boolean)))
-  (define (member e xs)
-    "Returns true if any element of XS is equal to E."
-    (match xs
-      ((Cons x xs)
-       (if (== x e)
-           True
-           (member e xs)))
-      ((Nil) False)))
 
   (declare union (Eq :a => ((List :a) -> (List :a) -> (List :a))))
   (define (union xs ys)
@@ -424,11 +477,6 @@
            (remove-duplicates-rev xs acc)
            (remove-duplicates-rev xs (Cons x acc))))))
 
-  (declare remove-duplicates (Eq :a => ((List :a) -> (List :a))))
-  (define (remove-duplicates xs)
-    "Returns a new list without duplicate elements."
-    (%reverse! (remove-duplicates-rev xs Nil)))
-
   (declare remove-rev-if ((:a -> Boolean) -> (List :a) -> (List :a) -> (List :a)))
   (define (remove-rev-if pred ys acc)
     (match ys
@@ -463,17 +511,6 @@
                  (rec xs ys (Cons (f x y) acc)))
                 (_ acc)))))
       (%reverse! (rec xs ys nil))))
-
-  (declare zip-with-itr (iter:IntoIterator :m :b => (:a -> :b -> :c) -> List :a -> :m -> List :c))
-  (define (zip-with-itr f lst col)
-    (let ((it (iter:into-iter col))
-          (rec
-           (fn (rem acc)
-             (match (Tuple rem (iter:next! it))
-               ((Tuple (Cons a xs) (Some b))
-                (rec xs (Cons (f a b) acc)))
-               (_ acc)))))
-      (%reverse! (rec lst Nil))))             
 
   (declare zipWith3 ((:a -> :b -> :c -> :d) -> (List :a) -> (List :b) -> (List :c) -> (List :d)))
   (define (zipWith3 f xs ys zs)
@@ -512,20 +549,6 @@
   (define (zip xs ys)
     "Builds a list of tuples with the elements of XS and YS."
     (zipWith Tuple xs ys))
-  
-  (declare zip-itr (iter:IntoIterator :m :b => List :a -> :m -> List (Tuple :a :b)))
-  (define (zip-itr lst col)
-    (zip-with-itr Tuple lst col))
-
-  (declare countBy ((:a -> Boolean) -> (List :a) -> UFix))
-  (define (countBy f things)
-    "Count the number of items in THINGS that satisfy the predicate F."
-    (fold (fn (sum x)
-            (if (f x)
-                (+ 1 sum)
-                sum))
-          0
-          things))
 
   (declare insert (Ord :a => (:a -> (List :a) -> (List :a))))
   (define (insert e ls)
@@ -544,19 +567,6 @@
                    ((GT) (rec yss (Cons y acc)))
                    (_    (append-rev ys (Cons x acc)))))))))
       (%reverse! (rec ys Nil))))
-
-  (declare sort (Ord :a => ((List :a) -> (List :a))))
-  (define (sort xs)
-    "Performs a sort of XS."
-    (sortBy <=> xs))
-
-  (declare sortBy ((:a -> :a -> Ord) -> (List :a) -> (List :a)))
-  (define (sortBy cmp xs)
-    "Generic version of sort"
-    (lisp (List :a) (cmp xs)
-      (cl:sort (cl:copy-list xs)
-               (cl:lambda (a b)
-                 (cl:eq 'coalton-library/classes::ord/lt (call-coalton-function cmp a b))))))
 
   (declare intersperse (:a -> (List :a) -> (List :a)))
   (define (intersperse e xs)
@@ -722,15 +732,13 @@ This function is equivalent to all size-N elements of `(COMBS L)`."
                   ((Nil) Nil)
                   ((Cons x xs) (append
                                 (map (Cons x) (combsOf (- n 1) xs)) ; combs with X
-                                (combsOf n xs))))))) ; and without x
+                                (combsOf n xs)))))))) ; and without x
   
-  (declare subseq-list (UFix -> UFix -> List :a -> List :a))
-  (define (subseq-list start end lst)
-    (take (- start end) (drop start lst))))
-
-  ;;
-  ;; Instances
-  ;;
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;;;                                                                       ;;;
+  ;;; Instances                                                             ;;;
+  ;;;                                                                       ;;;
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
   ;; (define-instance (Eq :a => Eq (List :a))
   ;;   (define (== a b)
@@ -850,4 +858,4 @@ This function is equivalent to all size-N elements of `(COMBS L)`."
   ;;   (define (default) Nil)))
 
 ;; #+sb-package-locks
-;; (sb-ext:lock-package "COALTON-LIBRARY/LIST")
+;; (sb-ext:lock-package "COALTON-LIBRARY/COLLECTIONS/IMMUTABLE/LIST")
