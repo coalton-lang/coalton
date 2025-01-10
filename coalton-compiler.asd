@@ -63,7 +63,6 @@
                              (:file "type-errors")
                              (:file "unify")
                              (:file "fundeps")
-                             (:file "map")
                              (:file "environment")
                              (:file "lisp-type")
                              (:file "context-reduction")

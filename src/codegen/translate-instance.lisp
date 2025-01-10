@@ -50,7 +50,7 @@
            (loop :for method :in (tc:ty-class-unqualified-methods class)
                  :for method-name := (tc:ty-class-method-name method)
                  :for binding := (gethash method-name (tc:toplevel-define-instance-methods instance))
-                 :for codegen-sym := (tc:get-value method-codegen-syms method-name)
+                 :for codegen-sym :in method-codegen-syms
 
                  :collect (cons codegen-sym (translate-toplevel binding env method-name))))
 

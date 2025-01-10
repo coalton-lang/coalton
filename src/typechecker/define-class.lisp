@@ -221,20 +221,15 @@
              := (loop :for super :in (partial-class-superclasses partial)
                       :for i :from 0
                       :collect (cons super
-                                     (alexandria:format-symbol
-                                      *package*
-                                      (format nil "SUPER-~D" i))))
+                                     (alexandria:format-symbol *package* "SUPER-~D"
+                                                               i)))
 
            :for superclass-map
-             := (loop :with table := (tc:make-map :test 'eq)
-                      :for (pred . super-name) :in superclass-dict
-                      :for prefixed-name := (alexandria:format-symbol
-                                             *package*
-                                             "~A-~A"
-                                             codegen-sym
-                                             super-name)
-                      :do (setf (tc:get-value table prefixed-name) super-name)
-                      :finally (return table))
+             := (loop :for (pred . super-name) :in superclass-dict
+                      :for prefixed-name := (alexandria:format-symbol *package* "~A-~A"
+                                                                      codegen-sym
+                                                                      super-name)
+                      :collect (cons prefixed-name super-name))
 
            :for fundeps
              := (loop :for fundep :in (parser:toplevel-define-class-fundeps class)
@@ -248,15 +243,7 @@
                   :predicate pred
                   :superclasses (partial-class-superclasses partial)
                   :class-variables class-vars
-
-                  :class-variable-map (loop :with table := (tc:make-map :test 'eq)
-                                            :for var :in class-vars
-                                            :for i :from 0
-                                            :do (setf (tc:get-value table var) i)
-                                            :finally (return table))
-
                   :fundeps fundeps
-
                   :unqualified-methods (loop :for method-ty :in (partial-class-method-tys partial)
                                              :for method :in (parser:toplevel-define-class-methods class)
 

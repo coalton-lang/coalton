@@ -199,12 +199,12 @@
                       :for pred-tys := (tc:ty-predicate-types pred)
                       :for class-name := (tc:ty-predicate-class pred)
                       :for class := (tc:lookup-class env class-name)
-                      :for map := (tc:get-table (tc:ty-class-class-variable-map class))
+                      :for vars := (tc:ty-class-class-variables class)
                       :when (tc:ty-class-fundeps class) :do
                         (loop :for fundep :in (tc:ty-class-fundeps class)
-                              :for from-vars := (util:project-map (tc:fundep-from fundep) map pred-tys)
+                              :for from-vars := (util:project-elements (tc:fundep-from fundep) vars pred-tys)
                               :do (when (subsetp from-vars unambiguous-vars :test #'equalp)
-                                    (let ((to-vars (util:project-map (tc:fundep-to fundep) map pred-tys)))
+                                    (let ((to-vars (util:project-elements (tc:fundep-to fundep) vars pred-tys)))
                                       (setf unambiguous-vars
                                             (remove-duplicates (append to-vars unambiguous-vars) :test #'equalp))))))
 

@@ -1,7 +1,6 @@
 (uiop:define-package #:coalton-impl/typechecker/stage-1
   (:mix-reexport
    #:coalton-impl/typechecker/base
-   #:coalton-impl/typechecker/map
    #:coalton-impl/typechecker/kinds
    #:coalton-impl/typechecker/types
    #:coalton-impl/typechecker/substitutions
