@@ -264,38 +264,6 @@
    #:insert-at!)
 
   (:import-from
-   #:coalton-library/collections/immutable/list
-   #:singleton
-   #:repeat
-   #:find
-   #:fold
-   #:foldr
-   #:range
-   #:append
-   #:concat
-   #:concatMap
-   #:sum
-   #:product
-   #:all
-   #:any
-   #:split)
-  (:export
-   #:singleton
-   #:repeat
-   #:find
-   #:fold
-   #:foldr
-   #:range
-   #:append
-   #:concat
-   #:concatMap
-   #:sum
-   #:product
-   #:all
-   #:any
-   #:split)
-
-  (:import-from
    #:coalton-library/cell
    #:Cell)
   (:export

@@ -3,9 +3,8 @@
 (defpackage #:thih-coalton
   (:documentation "Public interface to THIH-COALTON.")
   (:use #:coalton
-        #:coalton-prelude)
-  (:local-nicknames
-   (#:list #:coalton-library/collections/immutable/list))
+        #:coalton-prelude
+        #:coalton-library/collections/immutable/list)
   (:shadow #:id #:find #:const
            #:type #:compose #:alt
            #:split #:reduce)
