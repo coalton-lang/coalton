@@ -14,55 +14,30 @@
    (#:o #:coalton-library/optional)
    (#:math #:coalton-library/math))
   (:export
-   #:head
-   #:tail
    #:car
    #:cdr
-   #:last
    #:init
-   #:push-end
-   #:insert-at
    #:null?
    #:singleton
    #:singleton?
-   #:repeat
-   #:reverse
-   #:drop
-   #:take
-   #:contains-where?
-   #:find
-   #:filter
-   #:empty?
-   #:length
    #:index
    #:nth
    #:nth-cdr
-   #:elemIndex
-   #:findIndex
    #:range
    #:append
    #:concat
    #:concatMap
-   #:member
    #:union
    #:intersection
    #:lookup
-   #:remove-duplicates
    #:remove-if
    #:remove
    #:difference
-   #:zipWith
    #:zipWith3
    #:zipWith4
    #:zipWith5
-   #:zip
-   #:zip-with-itr
-   #:zip-itr
-   #:countBy
    #:insert
    #:insertBy
-   #:sort
-   #:sortBy
    #:intersperse
    #:intercalate
    #:insertions
@@ -503,17 +478,6 @@
     "Returns a new list with the first occurence of each element in `ys` removed from `xs`."
     (fold (fn (a b) (remove b a)) xs ys))
 
-  (declare zipWith ((:a -> :b -> :c) -> (List :a) -> (List :b) -> (List :c)))
-  (define (zipWith f xs ys)
-    "Builds a new list by calling `f` with elements of `xs` and `ys`."
-    (let ((rec
-            (fn (xs ys acc)
-              (match (Tuple xs ys)
-                ((Tuple (Cons x xs) (Cons y ys))
-                 (rec xs ys (Cons (f x y) acc)))
-                (_ acc)))))
-      (%reverse! (rec xs ys nil))))
-
   (declare zipWith3 ((:a -> :b -> :c -> :d) -> (List :a) -> (List :b) -> (List :c) -> (List :d)))
   (define (zipWith3 f xs ys zs)
     "Build a new list by calling F with elements of XS, YS and ZS"
@@ -546,11 +510,6 @@
                  (rec as bs cs ds es (Cons (f a b c d e) acc)))
                 (_ acc)))))
       (%reverse! (rec as bs cs ds es nil))))
-
-  (declare zip ((List :a) -> (List :b) -> (List (Tuple :a :b))))
-  (define (zip xs ys)
-    "Builds a list of tuples with the elements of XS and YS."
-    (zipWith Tuple xs ys))
 
   (declare insert (Ord :a => (:a -> (List :a) -> (List :a))))
   (define (insert e ls)

@@ -482,7 +482,7 @@
 
   (define-instance (Into (List :a) (Vector :a))
     (define (into lst)
-      (let ((out (with-capacity (list:length lst)))
+      (let ((out (with-capacity (cln:length lst)))
             (inner
               (fn (lst)
                 (match lst

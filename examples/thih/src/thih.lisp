@@ -228,7 +228,7 @@
   (define (varBind u t_)
     (if (== t_ (TVar u))
         (pure nullSubst)
-        (if (list:member u (tv t_))
+        (if (contains-elt? u (tv t_))
             (fail "Occurs check fails")
             (if (/= (kind u) (kind t_))
                 (fail "Kinds do not match")
@@ -491,7 +491,7 @@
   (declare entail (ClassEnv -> (List Pred) -> Pred -> Boolean))
   (define (entail ce ps p)
     (or (any
-         (list:member p)
+         (contains-elt? p)
          (map (bySuper ce) ps))
         (match (byInst ce p)
           ((None)
@@ -546,7 +546,7 @@
 
   (declare scEntail (ClassEnv -> (List Pred) -> Pred -> Boolean))
   (define (scEntail ce ps p)
-    (any (list:member p)
+    (any (contains-elt? p)
          (map (bySuper ce) ps)))
 
 
@@ -572,7 +572,7 @@
   (define (quantify vs qt)
     (let ((vs_ (filter
                 (fn (e)
-                  (list:member e vs))
+                  (contains-elt? e vs))
                 (tv qt)))
           (ks (map kind vs_))
           (gens (map TGen (range 0 (- (length vs_) 1))))
@@ -872,7 +872,7 @@
   (declare split (MonadFail :m => (ClassEnv -> (List Tyvar) -> (List Tyvar) -> (List Pred) -> (:m (Tuple (List Pred) (List Pred))))))
   (define (split ce fs gs ps)
     (do (ps_ <- (reduce ce ps))
-        (match (list:partition (fn (x) (all (flip list:member fs) (tv x)))
+        (match (list:partition (fn (x) (all (flip contains-elt? fs) (tv x)))
                                ps_)
           ((Tuple ds rs)
            (do (rs_ <- (defaultedPreds ce (append fs gs) rs))
@@ -886,7 +886,7 @@
     (map (fn (v)
            (Ambiguity v (filter
                          (fn (x)
-                           (list:member v (tv x)))
+                           (contains-elt? v (tv x)))
                          ps)))
          (list:difference (tv ps) vs)))
 
@@ -919,8 +919,8 @@
                        t)))
                   qs)))
          (if (and (all (== (TVar v)) ts)
-                  (and (any (flip list:member numClasses) is)
-                       (all (flip list:member stdClasses) is)))
+                  (and (any (flip contains-elt? numClasses) is)
+                       (all (flip contains-elt? stdClasses) is)))
              (let ((ts_ (defaults ce)))
                (if (all (fn (t_)
                           (all (entail ce Nil)
