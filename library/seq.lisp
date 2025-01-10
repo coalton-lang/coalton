@@ -9,6 +9,7 @@
    (#:math #:coalton-library/math)
    (#:optional #:coalton-library/optional)
    (#:cell #:coalton-library/cell)
+   (#:cln #:coalton-library/collections)
    (#:vector #:coalton-library/collections/mutable/vector)
    (#:iter #:coalton-library/iterator))
   (:export
@@ -66,14 +67,14 @@
   (declare new (types:RuntimeRepr :a => Unit -> Seq :a))
   (define (new)
     "Create a new empty `Seq`."
-    (LeafArray (vector:new)))
+    (LeafArray (cln:new-collection)))
 
   (declare size (Seq :a -> UFix))
   (define (size seq)
     "Return the number of elements in the `seq`."
     (match seq
-      ((RelaxedNode _ _ cst _) (vector:last-unsafe cst))
-      ((LeafArray leaves) (vector:length leaves))))
+      ((RelaxedNode _ _ cst _) (cln:last# cst))
+      ((LeafArray leaves) (cln:length leaves))))
   
   (define (empty? seq)
     (== 0 (size seq)))
@@ -99,9 +100,9 @@ than `(size seq)`"
 contains `a`."
     (match seq
       ((LeafArray leaves)
-       (if (<= (vector:length leaves) idx)
+       (if (<= (cln:length leaves) idx)
            None
-           (let ((newleaves (vector:copy leaves)))
+           (let ((newleaves (cln:copy leaves)))
              (vector:set! idx a newleaves)
              (Some (LeafArray newleaves)))))
 
@@ -111,7 +112,7 @@ contains `a`."
         ((Tuple subtree-idx offset) <- (cst-search guess cst idx))
          (subtree <- (vector:index subtree-idx sts))
          (new-subtree <- (put subtree (- idx offset) a))
-         (let ((newsts (vector:copy sts)))
+         (let ((newsts (cln:copy sts)))
            (vector:set! subtree-idx new-subtree newsts)
            (pure (RelaxedNode h fss cst newsts)))))))
 
@@ -131,16 +132,16 @@ a new `Seq` instance."
     (match seq
       ((LeafArray leaves)
        (do
-        (let newleaves = (vector:copy leaves))
-        (leaf <- (vector:pop! newleaves))
+        (let newleaves = (cln:copy leaves))
+        (leaf <- (cln:pop-end! newleaves))
          (pure (Tuple leaf (LeafArray newleaves)))))
 
       ((RelaxedNode h fss cst sts)
        (do
-        ((Tuple leaf newsub) <- (pop (vector:last-unsafe sts)))
-        (let newsts = (vector:copy sts))
-        (let newcst = (vector:copy cst))
-        (let last-idx = (- (vector:length cst) 1))
+        ((Tuple leaf newsub) <- (pop (cln:last# sts)))
+        (let newsts = (cln:copy sts))
+        (let newcst = (cln:copy cst))
+        (let last-idx = (- (cln:length cst) 1))
         (let seq-size = (size seq))
          (pure
           (cond
@@ -155,12 +156,12 @@ a new `Seq` instance."
 
             ;; it wasn't, but newsub is empty
             ((== 0 (size newsub))
-             (vector:pop! newcst)
-             (vector:pop! newsts)
+             (cln:pop-end! newcst)
+             (cln:pop-end! newsts)
              (Tuple leaf (RelaxedNode h fss newcst newsts)))
 
             (True
-             (vector:set! last-idx (- (vector:last-unsafe newcst) 1) newcst)
+             (vector:set! last-idx (- (cln:last# newcst) 1) newcst)
              (vector:set! last-idx newsub newsts)
              (Tuple leaf (RelaxedNode h fss newcst newsts)))))))))
 
@@ -175,7 +176,7 @@ a new `Seq` instance."
           (rebalance-branches (vector:make left right)))
 
          ((Tuple (LeafArray _) (RelaxedNode _ht _fss _cst subts))
-          (match (conc left (vector:head-unsafe subts))
+          (match (conc left (cln:head# subts))
             ((LeafArray leaves)
              (rebalance-branches (replace-first subts (LeafArray leaves))))
             
@@ -183,7 +184,7 @@ a new `Seq` instance."
              (rebalance-branches (vector:append nsubts (butfirst subts))))))
          
          ((Tuple (RelaxedNode _ht _fss _cst subts)  (LeafArray _))
-          (match (conc (vector:last-unsafe subts) right)
+          (match (conc (cln:last# subts) right)
             ((LeafArray leaves)
              (rebalance-branches (replace-last subts (LeafArray leaves))))
             
@@ -193,17 +194,17 @@ a new `Seq` instance."
          ((Tuple (RelaxedNode lht _lfss _lcst lsubts) (RelaxedNode rht _rfss _rcst rsubts))
           (cond ((< lht rht)
                  (match1 (RelaxedNode _nht _nfss _ncst nsubts) 
-                     (conc left (vector:head-unsafe rsubts)) 
+                     (conc left (cln:head# rsubts)) 
                    (rebalance-branches
                     (vector:append nsubts (butfirst rsubts)))))
                 ((> lht rht)
                  (match1 (RelaxedNode _nht _nfss _ncst nsubts) 
-                     (conc (vector:last-unsafe lsubts) right)
+                     (conc (cln:last# lsubts) right)
                    (rebalance-branches
                     (vector:append (butlast lsubts) nsubts))))
                 (True
                  (match1 (RelaxedNode _nht _nfss _ncst nsubts)
-                     (conc (vector:last-unsafe lsubts) (vector:head-unsafe rsubts))
+                     (conc (cln:last# lsubts) (cln:head# rsubts))
                    (rebalance-branches
                     (fold <> (butlast lsubts) (make-list nsubts (butfirst rsubts))))))))))))
   
@@ -297,35 +298,35 @@ a new `Seq` instance."
   (define (%push seq a)
     (match seq
       ((LeafArray v)
-       (if (< (vector:length v) max-branching)
-           (let ((newv (vector:copy v)))
-             (vector:push! a newv)
+       (if (< (cln:length v) max-branching)
+           (let ((newv (cln:copy v)))
+             (cln:push! a newv)
              (Tuple (LeafArray newv) True))
            (Tuple (LeafArray (vector:make a)) False)))
       
       ((RelaxedNode h fss cst sts)
-       (let (Tuple new-node in-place?) = (%push (vector:last-unsafe sts) a))
+       (let (Tuple new-node in-place?) = (%push (cln:last# sts) a))
        (cond
          ;; modified "in place": i.e. height not adjusted on recursive step
          (in-place?
           (let ((newsts
-                  (vector:copy sts))
+                  (cln:copy sts))
                 (newcst
-                  (vector:copy cst))
+                  (cln:copy cst))
                 (last-idx
-                  (- (vector:length sts) 1)))
-            (vector:set! last-idx (+ 1 (vector:last-unsafe newcst)) newcst)
+                  (- (cln:length sts) 1)))
+            (vector:set! last-idx (+ 1 (cln:last# newcst)) newcst)
             (vector:set! last-idx new-node newsts)
             (Tuple (RelaxedNode h fss newcst newsts) True)))
 
          ;; wasn't in place, but there's room here
-         ((< (vector:length cst) max-branching)
+         ((< (cln:length cst) max-branching)
           (let ((newsts
-                  (vector:copy sts))
+                  (cln:copy sts))
                 (newcst
-                  (vector:copy cst)))
-            (vector:push! (+ 1 (size seq)) newcst)
-            (vector:push! new-node newsts)
+                  (cln:copy cst)))
+            (cln:push! (+ 1 (size seq)) newcst)
+            (cln:push! new-node newsts)
             (Tuple (RelaxedNode h fss newcst newsts) True)))
 
          ;; not in place, and no room here. 
@@ -344,19 +345,19 @@ a new `Seq` instance."
 ecxept for the last one which has a nonzero length less than or equal
 to `len`."
     (let ((result
-            (vector:new))
+            (cln:new-collection))
           (acc
-            (vector:new)))
+            (cln:new-collection)))
       (iter:for-each!
        (fn (elem)
-         (vector:push! elem acc)
-         (when (== len (vector:length acc))
-           (vector:push! (vector:copy acc) result)
+         (cln:push! elem acc)
+         (when (== len (cln:length acc))
+           (cln:push! (cln:copy acc) result)
            (vector:clear! acc)))
        (iter:into-iter vec))
       ;; push the last if non-empty
-      (unless (== 0 (vector:length acc)) 
-        (vector:push! acc result)
+      (unless (== 0 (cln:length acc)) 
+        (cln:push! acc result)
         Unit)
       result))
 
@@ -377,12 +378,12 @@ shifts the each member of `target` down by `n` positions.  Mutates both
 `target` and `source`. If `n` is greater than or equal to the length of the
 `source`, then the entire `source` is so shifted."
     (let ((source-len
-            (vector:length source))
+            (cln:length source))
           (n
             (min n0 source-len)))
       (iter:for-each!
        (fn (i)
-         (vector:push! (vector:index-unsafe i source) target)
+         (cln:push! (vector:index-unsafe i source) target)
          (iter:for-each!
           (fn (j)
             (do
@@ -392,33 +393,33 @@ shifts the each member of `target` down by `n` positions.  Mutates both
           (iter:range-increasing n i source-len))
          Unit)
        (iter:up-to n))
-      (iter:for-each! (fn (_i) (vector:pop! source) Unit) (iter:up-to n))))
+      (iter:for-each! (fn (_i) (cln:pop-end! source) Unit) (iter:up-to n))))
 
   (define (replace-first v a)
-    (let ((cv (vector:copy v))) 
+    (let ((cv (cln:copy v))) 
       (vector:set! 0 a cv)
       cv))
 
   (define (replace-last v a)
-    (let ((cv  (vector:copy v))) 
-      (vector:set! (- (vector:length v) 1) a cv)
+    (let ((cv  (cln:copy v))) 
+      (vector:set! (- (cln:length v) 1) a cv)
       cv))
 
   (declare butfirst (vector:Vector :a -> vector:Vector :a))
   (define (butfirst v)
     (iter:collect!
      (map (flip vector:index-unsafe v)
-          (iter:range-increasing 1 1 (vector:length v)))))
+          (iter:range-increasing 1 1 (cln:length v)))))
 
   (define (butlast v)
-    (let ((cv (vector:copy v)))
-      (vector:pop-unsafe! cv)
+    (let ((cv (cln:copy v)))
+      (cln:pop-end!# cv)
       cv))
   
   (define (branch-count seq)
     (match seq
-      ((LeafArray v) (vector:length v))
-      ((RelaxedNode _ _ v _) (vector:length v))))
+      ((LeafArray v) (cln:length v))
+      ((RelaxedNode _ _ v _) (cln:length v))))
 
   (define (%shift-n-branches-onto seq1 seq2 n)
     "Moves `n` subbranches from the front of `seq2` to the back of
@@ -444,14 +445,14 @@ table of relaxed nodes may be incaccurate."
   (define (make-node-from-branches branches)
     "Makes a `Seq` tall enough to contain all the branches. Branches are
 all assumed to have the same height."
-    (let branches-length = (vector:length branches))
+    (let branches-length = (cln:length branches))
     (cond ((== 0 branches-length)
            (new))
           ((== 1 branches-length)
-           (vector:pop-unsafe! branches))
+           (cln:pop-end!# branches))
           (True 
-           (let ht = (height (vector:head-unsafe branches)))
-           (if (<= (vector:length branches) max-branching)
+           (let ht = (height (cln:head# branches)))
+           (if (<= (cln:length branches) max-branching)
                (make-relaxed-node (+ ht 1) branches)
                (let ((groups
                        (group-vectors max-branching branches))
@@ -463,9 +464,9 @@ all assumed to have the same height."
     "A shallow copy of `seq`"
     (match seq
       ((LeafArray vec)
-       (LeafArray (vector:copy vec)))
+       (LeafArray (cln:copy vec)))
       ((RelaxedNode ht fss cst seq)
-       (RelaxedNode ht fss (vector:copy cst) (vector:copy seq)))))
+       (RelaxedNode ht fss (cln:copy cst) (cln:copy seq)))))
   
   (declare rebalance-branches (types:runtimerepr :a => vector:Vector (Seq :a) -> Seq :a))
   (define (rebalance-branches branches)
@@ -479,7 +480,7 @@ balanced.
 
 It attempts to rebalance with a minimum of array copying."
     (let ((stop
-            (- (vector:length branches) 1))
+            (- (cln:length branches) 1))
           (cached-branch
             (cell:new None))
           (branch-rebalancer
@@ -554,7 +555,7 @@ It attempts to rebalance with a minimum of array copying."
            `(LeafArray (lisp (vector:Vector :a) ,vars ,(cl:funcall make-ary (cl:car leaf-arrays)))))
           ((cl:<= la-count 32)
            `(rebuild-size-table
-             (RelaxedNode 2 32 (vector:new)
+             (RelaxedNode 2 32 (cln:new-collection)
                           (lisp (vector:Vector (Seq :a)) ,vars
                             (cl:make-array ,la-count
                                            :fill-pointer ,la-count

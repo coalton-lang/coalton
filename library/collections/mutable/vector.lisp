@@ -18,39 +18,22 @@
    (#:m-elm #:coalton-library/math/elementary))
   (:export
    #:Vector
-   #:new
    #:with-capacity
-   #:with-initial-element
    #:singleton
-   #:length
    #:capacity
-   #:empty?
    #:singleton?
-   #:copy
    #:set-capacity!
    #:ensure-capacity!
    #:clear!
-   #:push!
-   #:pop!
-   #:pop-unsafe!
    #:index
    #:index-unsafe
    #:set!
-   #:insert-at!
    #:remove-at!
    #:remove-at-unsafe!
-   #:head
-   #:head-unsafe
-   #:last
-   #:last-unsafe
    #:extend!
-   #:find-elem
-   #:find-where
-   #:find
    #:append
    #:swap-remove!
    #:swap-remove-unsafe!
-   #:sort!
    #:sort-by!
    #:make))
 
@@ -292,16 +275,26 @@
     "Append `item` to `v` and resize `v` if necessary, returning the index of the new item."
     (lisp UFix (item v)
       (cl:vector-push-extend item v)))
-
+  
   (declare pop! (Vector :a -> Optional :a))
   (define (pop! v)
+    "Remove and return the first item of `v`."
+    (remove-at! 0 v))
+  
+  (declare pop-unsafe! (Vector :a -> :a))
+  (define (pop-unsafe! v)
+    "Remove and return the first item of `v` without checking if the vector is empty."
+    (remove-at-unsafe! 0 v))
+
+  (declare pop-end! (Vector :a -> Optional :a))
+  (define (pop-end! v)
     "Remove and return the last item of `v`."
     (if (empty? v)
         None
         (Some (pop-unsafe! v))))
 
-  (declare pop-unsafe! (Vector :a -> :a))
-  (define (pop-unsafe! v)
+  (declare pop-end-unsafe! (Vector :a -> :a))
+  (define (pop-end-unsafe! v)
     "Remove and return the last item of `v` without checking if the vector is empty."
     (lisp :a (v)
       (cl:vector-pop v)))
@@ -654,8 +647,8 @@
       vec)
     (define cln:pop! pop!)
     (define cln:pop!# pop-unsafe!)
-    (define cln:pop-end! pop!)
-    (define cln:pop-end!# pop-unsafe!)
+    (define cln:pop-end! pop-end!)
+    (define cln:pop-end!# pop-end-unsafe!)
     (define cln:insert-at! insert-at!)))
 
 (cl:defmacro make (cl:&rest elements)
