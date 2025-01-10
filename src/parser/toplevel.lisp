@@ -571,17 +571,19 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
                                         (- (file-position stream) 1))
                            "missing expression")))
 
-      (let ((forms nil))
+      (let ((additional-forms nil))
         ;; Read multiple forms if present.
-        (block collect-forms
+        (block collect-additional-forms
           (loop (multiple-value-bind (next-form presentp)
                     (maybe-read-form stream source *coalton-eclector-client*)
                   (if presentp
-                      (push next-form forms)
-                      (return-from collect-forms)))))
-        (if forms
-            (parse-expressions (cons form (nreverse forms)) source)
-            (parse-expression form source))))))
+                      (push next-form additional-forms)
+                      (return-from collect-additional-forms)))))
+        (cond
+          ((consp additional-forms)
+           (parse-expressions (cons form (nreverse additional-forms)) source))
+          (t
+           (parse-expression form source)))))))
 
 ;;; Packages
 
