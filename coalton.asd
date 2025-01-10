@@ -72,6 +72,13 @@
                (:file "optional")
                (:file "result")
                (:file "lisparray")
+               (:module "collections"
+                :serial t
+                :components ((:file "immutable/list")
+                             (:file "classes")
+                             (:file "mutable/vector")
+                             (:file "mutable/hashtable")
+                             (:file "package")))
                (:file "list")
                (:file "vector")
                (:file "char")
@@ -86,13 +93,6 @@
                (:file "seq")
                (:file "system")
                (:file "file")
-               (:module "collections"
-                :serial t
-                :components ((:file "immutable/list")
-                             (:file "classes")
-                             (:file "mutable/vector")
-                             (:file "mutable/hashtable")
-                             (:file "package")))
                (:file "prelude")))
 
 (cl:when (cl:member (uiop:getenv "COALTON_PORTABLE_BIGFLOAT") '("1" "true" "t") :test #'cl:equalp)

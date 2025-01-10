@@ -8,7 +8,7 @@
    (#:cln #:coalton-library/collections/classes)
    (#:opt #:coalton-library/optional)
    (#:types #:coalton-library/types)
-   (#:list #:coalton-library/list)
+   (#:list #:coalton-library/collections/immutable/list)
    (#:cell #:coalton-library/cell)
    (#:iter #:coalton-library/iterator)
    (#:ram #:coalton-library/randomaccess)
