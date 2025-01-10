@@ -291,7 +291,7 @@
     "Remove and return the last item of `v`."
     (if (empty? v)
         None
-        (Some (pop-unsafe! v))))
+        (Some (pop-end-unsafe! v))))
 
   (declare pop-end-unsafe! (Vector :a -> :a))
   (define (pop-end-unsafe! v)
