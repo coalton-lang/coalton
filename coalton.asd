@@ -77,7 +77,6 @@
                 :components ((:file "classes")
                              (:file "immutable/list")
                              (:file "mutable/vector")
-                             (:file "mutable/hashtable")
                              (:file "package")))
                (:file "list")
                (:file "vector")
