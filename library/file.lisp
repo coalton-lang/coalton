@@ -388,7 +388,7 @@ Automatically returns the lisp condition if one is thrown."
                                       :direction ':output
                                       :element-type etype
                                       :if-exists (cl:case if-exists
-                                                   (IfExists/ExistsError ':error)
+                                                   (IfExists/EError ':error)
                                                    (IfExists/Overwrite ':overwrite)
                                                    (IfExists/Append ':append)
                                                    (IfExists/Supersede ':supersede))
@@ -402,7 +402,7 @@ Automatically returns the lisp condition if one is thrown."
                                       :direction ':io
                                       :element-type etype
                                       :if-exists (cl:case if-exists
-                                                   (IfExists/ExistsError ':error)
+                                                   (IfExists/EError ':error)
                                                    (IfExists/Overwrite ':overwrite)
                                                    (IfExists/Append ':append)
                                                    (IfExists/Supersede ':supersede))
