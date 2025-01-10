@@ -241,8 +241,7 @@
                (:file "runtime-tests")
                (:module "typechecker"
                 :serial t
-                :components ((:file "map-tests")
-                             (:file "lisp-type-tests")))
+                :components ((:file "lisp-type-tests")))
                (:file "environment-persist-tests")
                (:file "coalton-tests")
                (:file "slice-tests")

@@ -30,7 +30,7 @@
    #:find-symbol?                       ; FUNCTION
    #:take-until                         ; FUNCTION
    #:project-indices                    ; FUNCTION
-   #:project-map                        ; FUNCTION
+   #:project-elements                   ; FUNCTION
    #:maybe-read-form                    ; FUNCTION
    ))
 
@@ -197,39 +197,22 @@
   (subseq list n))
 
 (defun project-indices (indices data)
-  (declare (type list indices data)
-           (values list))
-  (labels ((inner (is xs pos out)
-             (cond
-               ;; Data is done, indices are not
-               ((and is (null xs))
-                (error "Indices ~A extend past data" is))
+  "Select items from DATA at positions specified by INDICES.
 
-               ;; Data or indices are done
-               ((or (null is)
-                    (null xs))
-                out)
+Example:
+  (project-indices '(0 2) '(a b c)) => (a c)"
+  (mapcar (lambda (i)
+            (if (>= i (length data))
+                (error "Index ~A extends past data length ~A" i (length data))
+                (nth i data)))
+          indices))
 
-               ;; match
-               ((eql (car is) pos)
-                (inner (cdr is) (cdr xs) (1+ pos) (cons (car xs) out)))
+(defun project-elements (elements list data)
+  "Select items from DATA based on positions of ELEMENTS in LIST.
 
-               ;; index is past pos
-               ((> pos (car is))
-                (inner (cdr is) xs pos out))
-
-               (t
-                (inner is (cdr xs) (1+ pos) out)))))
-    (declare (dynamic-extent #'inner))
-    (nreverse (inner indices data 0 nil))))
-
-(defun project-map (indices map data)
-  (declare (type symbol-list indices)
-           (type hash-table map)
-           (type list data))
-  (project-indices
-   (sort
-    (loop :for key :in indices
-          :collect (gethash key map))
-    #'<)
-   data))
+Examples:
+  (project-elements '(:a) '(:a :b) '(1 2)) => (1)
+  (project-elements '(:b :a) '(:a :b) '(1 2)) => (2 1)"
+  (mapcar (lambda (idx)
+            (nth (position idx list) data))
+          elements))

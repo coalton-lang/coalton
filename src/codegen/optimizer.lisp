@@ -638,7 +638,10 @@ NODE in the environment ENV."
   (declare (type node node)
            (type tc:environment env)
            (values node &optional))
-  (labels ((handle-static-superclass (node bound-variables)
+  (labels ((get-named-superclass (class name)
+             (cdr (assoc name (tc:ty-class-superclass-map class) :test #'equal)))
+
+           (handle-static-superclass (node bound-variables)
              (declare (type util:symbol-list bound-variables))
 
              (unless (or (node-variable-p (node-field-dict node))
@@ -659,7 +662,7 @@ NODE in the environment ENV."
                     (superclass-dict (tc:ty-class-superclass-dict class))
 
                     ;; Map the accessor to a named superclass
-                    (superclass-name (tc:get-value (tc:ty-class-superclass-map class) (node-field-name node)))
+                    (superclass-name (get-named-superclass class (node-field-name node)))
 
                     ;; Find the predicate of the accessed superclass
                     (superclass-pred (car (find superclass-name superclass-dict :key #'cdr)))
