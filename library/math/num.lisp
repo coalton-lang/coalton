@@ -399,14 +399,6 @@
 
       (cl:- (cl:ash 1 n-bits) int 1))
 
-    (cl:declaim (cl:inline handle-unsigned-overflow))
-    (cl:defun handle-unsigned-overflow (int n-bits)
-      (cl:declare (cl:type cl:unsigned-byte int)
-                  (cl:type cl:unsigned-byte n-bits)
-                  (cl:values cl:unsigned-byte))
-
-      (cl:logand (cl:1- (cl:ash 1 n-bits)) int))
-
     (cl:eval-when (:compile-toplevel :load-toplevel)
       (cl:defmacro define-bits-wrapping (type width)
         `(define-instance (bits:Bits ,type)
