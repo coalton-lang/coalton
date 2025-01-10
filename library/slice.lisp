@@ -9,9 +9,11 @@
    (#:types #:coalton-library/types)
    (#:cell #:coalton-library/cell)
    (#:iter #:coalton-library/iterator)
-   (#:list #:coalton-library/list)
-   (#:vector #:coalton-library/vector))
-  (:shadowing-import-from #:coalton-library/vector #:Vector)
+   (#:list #:coalton-library/collections/immutable/list)
+   (#:vector #:coalton-library/collections/mutable/vector))
+  (:shadowing-import-from
+   #:coalton-library/collections/mutable/vector
+   #:Vector)
   (:export
    #:Slice
    #:new

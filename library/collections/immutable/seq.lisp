@@ -10,7 +10,7 @@
    (#:math #:coalton-library/math)
    (#:optional #:coalton-library/optional)
    (#:cell #:coalton-library/cell)
-   (#:vector #:coalton-library/vector)
+   (#:vector #:coalton-library/collections/mutable/vector)
    (#:iter #:coalton-library/iterator))
   (:export
    #:Seq
