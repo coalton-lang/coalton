@@ -286,3 +286,195 @@ Example:
         (let ((c ,(make-the-cln 0 10)))
           (add! 10 c)
           (is (cln:contains-elt? 10 c))))))))
+
+(cl:defmacro linear-collection-tests (type-symbol)
+  "Run a standard test suite to verify correct behavior for a LinearCollection typeclass instance.
+The LinearCollection must have an Eq instance over the test type such that (== (col1 :type) (col2 :type))
+if & only if col1 and col2 are the same length and have (== col1_i col2_i) for all 0 <= i < (length col1).
+
+Example:
+  (linear-collection-tests List)"
+  (cl:let ((the-type `(the (,type-symbol :a)))
+           (the-ufix `(the (,type-symbol UFix))))
+    (cl:labels ((make-the-cln (cl:&rest args)
+                  `(,@the-type (cln:new-convert (make-list ,@args))))
+                (make-ufix-cln (cl:&rest args)
+                  `(,@the-ufix (cln:new-convert (make-list ,@args)))))
+      `(cl:progn
+        (define-test ,(test-name type-symbol "head") ()
+          ;; head of empty => NONE
+          (let ((empty (,@the-ufix (cln:new-collection))))
+            (is (== None (cln:head empty))))
+          ;; head of single => SOME(elt)
+          (let ((one ,(make-ufix-cln 10)))
+            (is (== (Some 10) (cln:head one))))
+          ;; head of multi => SOME(first-element)
+          (let ((many ,(make-ufix-cln 1 2 3 4)))
+            (is (== (Some 1) (cln:head many)))))
+        (define-test ,(test-name type-symbol "head#") ()
+          ;; Single => returns element
+          (let ((one ,(make-ufix-cln 10)))
+            (is (== 10 (cln:head# one))))
+          ;; Multiple => returns first element
+          (let ((many ,(make-ufix-cln 1 2 3 4)))
+            (is (== 1 (cln:head# many)))))
+        (define-test ,(test-name type-symbol "last") ()
+          ;; last of empty => NONE
+          (let ((empty (,@the-ufix (cln:new-collection))))
+            (is (== None (cln:last empty))))
+          ;; last of single => SOME(elt)
+          (let ((one ,(make-ufix-cln 10)))
+            (is (== (Some 10) (cln:last one))))
+          ;; last of multi => SOME(last-element)
+          (let ((many ,(make-ufix-cln 1 2 3 4)))
+            (is (== (Some 4) (cln:last many)))))
+        (define-test ,(test-name type-symbol "last#") ()
+          ;; Single => returns element
+          (let ((one ,(make-ufix-cln 10)))
+            (is (== 10 (cln:last# one))))
+          ;; Multiple => returns last element
+          (let ((many ,(make-ufix-cln 1 2 3 4)))
+            (is (== 4 (cln:last# many)))))
+        (define-test ,(test-name type-symbol "tail") ()
+          ;; tail of empty => empty
+          (let ((empty (,@the-ufix (cln:new-collection))))
+            (is (cln:empty? (cln:tail empty))))
+          ;; tail of single => empty
+          (let ((one ,(make-ufix-cln 10)))
+            (is (cln:empty? (cln:tail one))))
+          ;; tail of multi => all except first
+          (let ((many ,(make-ufix-cln 1 2 3 4))
+                (t3 (cln:tail many)))
+            (is (== ,(make-ufix-cln 2 3 4) t3))))
+        (define-test ,(test-name type-symbol "take") ()
+          ;; take 0 => empty
+          (let ((c ,(make-ufix-cln 1 2 3 4 5)))
+            (is (cln:empty? (cln:take 0 c))))
+          ;; take < length
+          (let ((c ,(make-ufix-cln 1 2 3 4 5))
+                (t2 (cln:take 2 c)))
+            (is (== ,(make-ufix-cln 1 2) t2)))
+          ;; take == length => full collection
+          (let ((c ,(make-ufix-cln 1 2 3 4 5))
+                (all (cln:take 5 c)))
+            (is (== c all)))
+          ;; take > length => full collection
+          (let ((c ,(make-ufix-cln 1 2 3 4 5))
+                (all (cln:take 10 c)))
+            (is (== c all))))
+        (define-test ,(test-name type-symbol "index-elt") ()
+          ;; empty => NONE
+          (let ((empty (,@the-ufix (cln:new-collection))))
+            (is (== None (cln:index-elt 10 empty))))
+          ;; single => SOME(0) if it matches
+          (let ((one ,(make-ufix-cln 10)))
+            (is (== (Some 0) (cln:index-elt 10 one)))
+            (is (== None (cln:index-elt 99 one))))
+          ;; multiple => SOME(index) of first occurrence
+          (let ((many ,(make-ufix-cln 1 2 3 2 4)))
+            (is (== (Some 1) (cln:index-elt 2 many)))
+            (is (== None (cln:index-elt 99 many)))))
+        (define-test ,(test-name type-symbol "index-elt#") ()
+          ;; single => returns 0
+          (let ((one ,(make-ufix-cln 10)))
+            (is (== 0 (cln:index-elt# 10 one))))
+          ;; multiple => index of first occurrence
+          (let ((many ,(make-ufix-cln 1 2 3 2 4)))
+            (is (== 1 (cln:index-elt# 2 many)))))
+        (define-test ,(test-name type-symbol "index-where") ()
+          ;; empty => NONE
+          (let ((empty (,@the-ufix (cln:new-collection))))
+            (is (== None (cln:index-where (== 10) empty))))
+          ;; single => SOME(0) if predicate matches
+          (let ((one ,(make-ufix-cln 10)))
+            (is (== (Some 0) (cln:index-where (== 10) one)))
+            (is (== None (cln:index-where (== 99) one))))
+          ;; multiple => SOME(index) of first match
+          (let ((many ,(make-ufix-cln 1 2 3 4 5)))
+            (is (== (Some 1) (cln:index-where (< 1) many)))
+            (is (== None (cln:index-where (== 99) many)))))
+        (define-test ,(test-name type-symbol "index-where#") ()
+          ;; single => returns 0 if match
+          (let ((one ,(make-ufix-cln 10)))
+            (is (== 0 (cln:index-where# (== 10) one))))
+          ;; multiple => index of first match
+          (let ((many ,(make-ufix-cln 1 2 3 4 5)))
+            (is (== 1 (cln:index-where# (< 1) many)))))
+        (define-test ,(test-name type-symbol "find-where") ()
+          ;; empty => NONE
+          (let ((empty (,@the-ufix (cln:new-collection))))
+            (is (== None (cln:find-where (== 10) empty))))
+          ;; single => SOME(elt) if match
+          (let ((one ,(make-ufix-cln 10)))
+            (is (== (Some 10) (cln:find-where (== 10) one))))
+          ;; multiple => SOME(first-match)
+          (let ((many ,(make-ufix-cln 1 2 3 4 5)))
+            (is (== (Some 2) (cln:find-where (< 1) many)))
+            (is (== None (cln:find-where (== 99) many)))))
+        (define-test ,(test-name type-symbol "subseq") ()
+          ;; 0 0 => empty
+          (let ((c ,(make-ufix-cln 1 2 3 4 5))
+                (s (cln:subseq 0 0 c)))
+            (is (cln:empty? s)))
+          ;; 0 1 => first element
+          (let ((c ,(make-ufix-cln 1 2 3 4 5))
+                (s (cln:subseq 0 1 c)))
+            (is (== ,(make-ufix-cln 1) s)))
+          ;; 1 3 => subset of the collection
+          (let ((c ,(make-ufix-cln 1 2 3 4 5))
+                (s (cln:subseq 1 3 c)))
+            (is (== ,(make-ufix-cln 2 3) s)))
+          ;; 0 length => full collection
+          (let ((c ,(make-ufix-cln 1 2 3 4 5))
+                (s (cln:subseq 0 5 c)))
+            (is (== c s)))
+          ;; 0 > length => full collection
+          (let ((c ,(make-ufix-cln 1 2 3 4 5))
+                (s (cln:subseq 0 10 c)))
+            (is (== (cln:length s) 5)))
+          ;; start beyond length => empty
+          (let ((c ,(make-ufix-cln 1 2 3 4 5))
+                (s (cln:subseq 10 20 c)))
+            (is (cln:empty? s)))
+          ;; start = end => empty
+          (let ((c ,(make-ufix-cln 1 2 3 4 5))
+                (s (cln:subseq 3 3 c)))
+            (is (cln:empty? s)))
+          ;; start > end => empty
+          (let ((c ,(make-ufix-cln 1 2 3 4 5))
+                (s (cln:subseq 3 1 c)))
+            (is (cln:empty? s)))
+          ;; Ensure immutability
+          (let ((original ,(make-ufix-cln 1 2 3 4 5)))
+            (cln:subseq 1 2 original)
+            (is (== (cln:length original) 5))))
+        (define-test ,(test-name type-symbol "split-at") ()
+          ;; split-at on empty => (empty, empty) regardless of index
+          (let ((empty (,@the-ufix (cln:new-collection))))
+            (match (cln:split-at 0 empty)
+              ((Tuple c1 c2)
+               (is (cln:empty? c1))
+               (is (cln:empty? c2)))))
+          ; split-at 0 => remove 0th element => (empty, rest)
+          (let ((c ,(make-ufix-cln 10 20 30)))
+            (match (cln:split-at 0 c)
+              ((Tuple c1 c2)
+               (is (cln:empty? c1))
+               (is (== ,(make-ufix-cln 20 30) c2)))))
+          ;; split in the middle => col1 is [0..i-1], skip i, col2 is [i+1..end]
+          (let ((c ,(make-ufix-cln 1 2 3 4 5)))
+            (match (cln:split-at 2 c)
+              ((Tuple c1 c2)
+               (is (== ,(make-ufix-cln 1 2) c1))
+               (is (== ,(make-ufix-cln 4 5) c2)))))
+          ;; split-at index >= length => entire collection in first, empty in second
+          (let ((c ,(make-ufix-cln 1 2 3)))
+            (match (cln:split-at 10 c)
+              ((Tuple c1 c2)
+               (is (== c c1))
+               (is (cln:empty? c2)))))
+          ; ;; Ensure immutability
+          (let ((orig ,(make-ufix-cln 1 2 3 4 5)))
+            (cln:split-at 2 orig)
+            (is (== ,(make-ufix-cln 1 2 3 4 5) orig))))
+        ))))

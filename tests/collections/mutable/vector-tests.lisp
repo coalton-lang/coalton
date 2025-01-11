@@ -2,3 +2,4 @@
 
 (collection-tests Vector)
 (mutable-collection-tests Vector)
+(linear-collection-tests Vector)

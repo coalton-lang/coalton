@@ -55,8 +55,7 @@
    #:split
    #:perms
    #:combs
-   #:combsOf
-   #:subseq-list))
+   #:combsOf))
 
 (in-package #:coalton-library/collections/immutable/list)
 
@@ -246,9 +245,11 @@
                (if (f b) (Some b) None))))
           None xs))
   
-  (declare subseq-list (UFix -> UFix -> List :a -> List :a))
-  (define (subseq-list start end lst)
-    (take (- start end) (drop start lst)))
+  (declare subseq (UFix -> UFix -> List :a -> List :a))
+  (define (subseq start end lst)
+    (if (> start end)
+      Nil
+      (take (- end start) (drop start lst))))
 
   (declare reverse (List :a -> List :a))
   (define (reverse xs)
@@ -867,17 +868,23 @@ This function is equivalent to all size-N elements of `(COMBS L)`."
     (define (cln:index-where# pred lst)
       (o:from-some "Cannot find matching element in list." (findIndex pred lst)))
     (define cln:find-where find)
-    (define cln:subseq subseq-list)
+    (define cln:subseq subseq)
     (define (cln:split-at i lst)
-      (Tuple (take i lst) (drop i lst)))
+      (Tuple (take i lst) (drop (+ 1 i) lst)))
     (define (cln:split-elt elt lst)
       (match (elemIndex elt lst)
-        ((None) (Tuple lst Nil))
-        ((Some i) (cln:split-at i lst))))
+        ((None) (make-list lst Nil))
+        ((Some i) 
+         (match (cln:split-at i lst)
+           ((Tuple a b)
+            (make-list a b))))))
     (define (cln:split-where pred lst)
       (match (findIndex pred lst)
-        ((None) (Tuple lst Nil))
-        ((Some i) (cln:split-at i lst))))
+        ((None) (make-list lst Nil))
+        ((Some i) 
+         (match (cln:split-at i lst)
+           ((Tuple a b)
+            (make-list a b))))))
     (define cln:reverse reverse)
     (define cln:sort sort)
     (define cln:sort-with sortBy)

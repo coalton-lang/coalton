@@ -228,16 +228,14 @@ the front or back, depending on which is natural for the underlying data structu
      "Extract the collection from `start` (inclusive) to `end` (exclusive)."
      (UFix -> UFix -> :m :a -> :m :a))
     (split-at
-     "Split into two collections at `i`. The second collection begins with element at index `i`."
+     "Split into two collections at `i`. The first collection ends at `i`-1, the second collection begins at `i`+1."
      (UFix -> :m :a -> Tuple (:m :a) (:m :a)))
     (split-elt
-     "Split into two collections at the first occurrence of `elt`. The second collection begins with `elt`.
-The second collection is empty if `elt` cannot be found."
-     (Eq :a => :a -> :m :a -> Tuple (:m :a) (:m :a)))
+     "Split into collections on the each occurrence of `elt`. `elt` will be excluded from the resulting collections."
+     (Eq :a => :a -> :m :a -> List (:m :a)))
     (split-where
-     "Split into two collections at the first element that satisfies `pred`. The second collection begins
-with that element. The second collection is empty if no element satisfied `pred`."
-     ((:a -> Boolean) -> :m :a -> Tuple (:m :a) (:m :a)))
+     "Split into collections on each element satisfying `pred`. Elements satisfying `pred` will be excluded from the resulting collections."
+     ((:a -> Boolean) -> :m :a -> List (:m :a)))
     ;; Manipulate at the collection level
     (reverse
      "Return the collection with elements reversed."
