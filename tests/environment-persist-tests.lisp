@@ -28,7 +28,7 @@
             ((style-warning (lambda (c)
                               (declare (ignore c))
                               (invoke-restart 'muffle-warning))))
-          (let ((entry:*global-environment* (tc:make-default-environment)))
+          (let ((entry:*global-environment* (tc:make-environment)))
             ;; Be sure that the environment is clean
             (is (null (tc:lookup-value-type entry:*global-environment* 'coalton-native-tests::test-id :no-error t)))
 
@@ -39,7 +39,7 @@
             (is (tc:lookup-value-type entry:*global-environment* 'coalton-native-tests::test-id :no-error t))
 
             ;; Ok, now clean the environment
-            (setf entry:*global-environment* (tc:make-default-environment))
+            (setf entry:*global-environment* (tc:make-environment))
             (is (null (tc:lookup-value-type entry:*global-environment* 'coalton-native-tests::test-id :no-error t)))
 
             ;; And compile the file
@@ -48,7 +48,7 @@
             ;; After compiling we should have the function available
             (is (not (null (tc:lookup-value-type entry:*global-environment* 'coalton-native-tests::test-id :no-error t))))
             ;; Clean
-            (setf entry:*global-environment* (tc:make-default-environment))
+            (setf entry:*global-environment* (tc:make-environment))
             (is (null (tc:lookup-value-type entry:*global-environment* 'coalton-native-tests::test-id :no-error t)))
 
             ;; Now load the fasl

@@ -61,7 +61,7 @@ Returns (PREDS FOUNDP)"
   (declare (type environment env)
            (type ty-predicate pred)
            (values ty-predicate-list boolean))
-  (fset:do-seq (inst (lookup-class-instances env (ty-predicate-class pred) :no-error t))
+  (dolist (inst (lookup-class-instances env (ty-predicate-class pred)))
     (handler-case
         (let* ((subs (predicate-match (ty-class-instance-predicate inst) pred))
                (resulting-preds (mapcar (lambda (p) (apply-substitution subs p))
@@ -104,7 +104,7 @@ Returns (PREDS FOUNDP)"
     (simp-loop nil preds)))
 
 (defun reduce-context (env preds subs)
-  (let ((env (apply-substitution subs env))
+  (let ((env (env-apply-substitution subs env))
         (preds (apply-substitution subs preds)))
     (simplify-context
      (lambda (preds pred)

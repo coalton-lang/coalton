@@ -23,7 +23,7 @@
 
 (in-package #:coalton-impl/entry)
 
-(defvar *global-environment* (tc:make-default-environment))
+(defvar *global-environment* (tc:make-environment))
 
 (defun entry-point (program)
   (declare (type parser:program program))

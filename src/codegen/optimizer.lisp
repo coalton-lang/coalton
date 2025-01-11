@@ -4,9 +4,6 @@
    #:coalton-impl/codegen/pattern
    #:coalton-impl/codegen/ast)
   (:import-from
-   #:coalton-impl/algorithm
-   #:immutable-map-data)
-  (:import-from
    #:coalton-impl/codegen/typecheck-node
    #:typecheck-node)
   (:import-from
@@ -50,7 +47,8 @@
    (#:settings #:coalton-impl/settings)
    (#:util #:coalton-impl/util)
    (#:parser #:coalton-impl/parser)
-   (#:tc #:coalton-impl/typechecker))
+   (#:tc #:coalton-impl/typechecker)
+   (#:map #:coalton-impl/algorithm/hamt))
   (:export
    #:make-function-table
    #:optimize-bindings
@@ -84,12 +82,11 @@
   env)
 
 (defun make-function-table (env)
-  (declare (type tc:environment env)
-           (values hash-table))
-  (let ((table (make-hash-table)))
-    (fset:do-map (name entry (immutable-map-data (tc:environment-function-environment env)))
-      (setf (gethash name table) (tc:function-env-entry-arity entry)))
-    table))
+  (declare (type tc:environment env))
+  (map:map (tc:environment-function-environment env)
+           (lambda (name entry)
+             (declare (ignore name))
+             (tc:function-env-entry-arity entry))))
 
 (defun optimize-bindings (bindings monomorphize-table package env)
   (declare (type binding-list bindings)
@@ -158,14 +155,13 @@
 
 (defun direct-application (node table)
   (declare (type node node)
-           (type hash-table table)
+           (type map:immutable-map table)
            (values node &optional))
   (labels ((rewrite-direct-application (node)
              (when (node-variable-p (node-application-rator node))
                (let ((name (node-variable-value (node-application-rator node))))
-                 (when (and (gethash name table)
-                            (equalp (gethash name table)
-                                    (length (node-application-rands node))))
+                 (when (equalp (map:get table name)
+                               (length (node-application-rands node)))
                    (return-from rewrite-direct-application
                      (make-node-direct-application
                       :type (node-type node)
@@ -176,11 +172,12 @@
            (add-local-funs (node)
              (loop :for (name . node) :in (node-let-bindings node)
                    :when (node-abstraction-p node) :do
-                     (setf (gethash name table) (length (node-abstraction-vars node)))))
+                     (setf table (map:assoc table name (length (node-abstraction-vars node))))))
 
            (add-bind-fun (node)
              (when (node-abstraction-p (node-bind-expr node))
-               (setf (gethash (node-bind-name node) table) (length (node-abstraction-vars (node-bind-expr node)))))
+               (setf table (map:assoc table (node-bind-name node)
+                                      (length (node-abstraction-vars (node-bind-expr node))))))
              nil))
 
     (traverse
@@ -218,7 +215,7 @@
 
 (defun pointfree (node table env)
   (declare (type node node)
-           (type hash-table table)
+           (type map:immutable-map table)
            (type tc:environment env)
            (values node))
 
@@ -237,11 +234,11 @@
          (return-from pointfree node))
 
        ;; The application must be on a known function
-       (unless (gethash (node-variable-value (node-application-rator node)) table)
+       (unless (map:get table (node-variable-value (node-application-rator node)))
          (return-from pointfree node))
 
        ;; The function must take more arguments than it is currently applied with
-       (unless (> (gethash (node-variable-value (node-application-rator node)) table)
+       (unless (> (map:get table (node-variable-value (node-application-rator node)))
                   (length (node-application-rands node)))
          (return-from pointfree node))
 
@@ -270,7 +267,7 @@
 
          (setf function (node-application-rator node))
          (setf args (node-application-rands node))
-         (setf num-params (- (gethash (node-variable-value (node-application-rator node)) table)
+         (setf num-params (- (map:get table (node-variable-value (node-application-rator node)))
                              (length (node-application-rands node))))))
 
       (t
