@@ -44,6 +44,8 @@
    #:index-where
    #:index-where#
    #:find-where
+   #:indices-elt
+   #:indices-where
    #:subseq
    #:split-at
    #:split-elt
@@ -223,6 +225,12 @@ the front or back, depending on which is natural for the underlying data structu
     (find-where
      "Return the first element matching a predicate function."
      ((:a -> Boolean) -> :m :a -> Optional :a))
+    (indices-elt
+     "Return the indices of every occurence of `elt` in the collection."
+     (Eq :a => :a -> :m :a -> List UFix))
+    (indices-where
+     "Return the indices of every element satisfying `pred` in the collection."
+     ((:a -> Boolean) -> :m :a -> List UFix))
     ;; Retrieve subsets of the collection.
     (subseq
      "Extract the collection from `start` (inclusive) to `end` (exclusive)."

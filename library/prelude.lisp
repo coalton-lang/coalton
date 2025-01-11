@@ -175,6 +175,8 @@
    #:index-where
    #:index-where#
    #:find-where
+   #:indices-elt
+   #:indices-where
    #:subseq
    #:split-at
    #:split-elt

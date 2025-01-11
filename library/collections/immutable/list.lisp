@@ -244,6 +244,17 @@
               (_
                (if (f b) (Some b) None))))
           None xs))
+ 
+  (declare indices-where ((:a -> Boolean) -> List :a -> List UFix))
+  (define (indices-where f lst)
+    (let ((recur (fn (rem n indices)
+                   (match rem
+                     ((Nil) indices)
+                     ((Cons x xs)
+                      (if (f x)
+                        (recur xs (+ 1 n) (Cons n indices))
+                        (recur xs (+ 1 n) indices)))))))
+      (%reverse! (recur lst 0 Nil))))
   
   (declare subseq (UFix -> UFix -> List :a -> List :a))
   (define (subseq start end lst)
@@ -868,6 +879,9 @@ This function is equivalent to all size-N elements of `(COMBS L)`."
     (define (cln:index-where# pred lst)
       (o:from-some "Cannot find matching element in list." (findIndex pred lst)))
     (define cln:find-where find)
+    (define (cln:indices-elt elt lst)
+      (indices-where (== elt) lst))
+    (define cln:indices-where indices-where)
     (define cln:subseq subseq)
     (define (cln:split-at i lst)
       (Tuple (take i lst) (drop (+ 1 i) lst)))

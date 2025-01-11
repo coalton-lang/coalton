@@ -411,6 +411,29 @@ Example:
           (let ((many ,(make-ufix-cln 1 2 3 4 5)))
             (is (== (Some 2) (cln:find-where (< 1) many)))
             (is (== None (cln:find-where (== 99) many)))))
+        (define-test ,(test-name type-symbol "indices-elt") ()
+          ;; empty => no indices
+          (let ((empty (,@the-ufix (cln:new-collection))))
+            (is (cln:empty? (cln:indices-elt 10 empty))))
+          ;; single => returns (0) if match, else ()
+          (let ((one ,(make-ufix-cln 10)))
+            (is (== (make-list 0) (cln:indices-elt 10 one)))
+            (is (cln:empty? (cln:indices-elt 99 one))))
+          ;; multiple => returns indices in ascending order
+          (let ((many ,(make-ufix-cln 1 2 3 2 4 2)))
+            (is (== (make-list 1 3 5) (cln:indices-elt 2 many)))))
+        (define-test ,(test-name type-symbol "indices-where") ()
+          ;; empty => no indices
+          (let ((empty (,@the-ufix (cln:new-collection))))
+            (is (cln:empty? (cln:indices-where (== 10) empty))))
+          ;; single => returns (0) if predicate matches, else ()
+          (let ((one ,(make-ufix-cln 10)))
+            (is (== (make-list 0) (cln:indices-where (== 10) one)))
+            (is (cln:empty? (cln:indices-where (== 99) one))))
+          ;; multiple => returns indices of all matches in ascending order
+          (let ((many ,(make-ufix-cln 1 2 3 4 5 2 10 2)))
+            (is (== (make-list 1 5 7) (cln:indices-where (== 2) many)))
+            (is (cln:empty? (cln:indices-where (< 99) many)))))
         (define-test ,(test-name type-symbol "subseq") ()
           ;; 0 0 => empty
           (let ((c ,(make-ufix-cln 1 2 3 4 5))
