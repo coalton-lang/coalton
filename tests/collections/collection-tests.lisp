@@ -616,5 +616,142 @@ Example:
           ;; Ensure immutability
           (let ((orig ,(make-ufix-cln 1 2 3)))
             (cln:insert-at 1 99 orig)
-            (is (== ,(make-ufix-cln 1 2 3) orig))))
-        ))))
+            (is (== ,(make-ufix-cln 1 2 3) orig))))))))
+
+(cl:defmacro mutable-linear-collection-tests (type-symbol)
+  "Run a standard test suite to verify correct behavior for a MutableLinearCollection typeclass instance.
+The collection must have an Eq instance over the test type such that (== (col1 :type) (col2 :type))
+if & only if col1 and col2 are the same length and have (== col1_i col2_i) for all 0 <= i < (length col1).
+
+Example:
+  (mutable-linear-collection-tests Vector)"
+  (cl:let ((the-ufix `(the (,type-symbol UFix))))
+    (cl:labels ((make-ufix-cln (cl:&rest args)
+                  `(,@the-ufix (cln:new-convert (make-list ,@args)))))
+      `(cl:progn
+        (define-test ,(test-name type-symbol "reverse!") ()
+          ;; reverse! empty => still empty
+          (let ((empty (,@the-ufix (cln:new-collection))))
+            (cln:reverse! empty)
+            (is (cln:empty? empty)))
+          ;; reverse! single => same
+          (let ((one ,(make-ufix-cln 10)))
+            (cln:reverse! one)
+            (is (== ,(make-ufix-cln 10) one)))
+          ;; reverse! multiple => reversed in place
+          (let ((many ,(make-ufix-cln 1 2 3 4 5)))
+            (cln:reverse! many)
+            (is (== ,(make-ufix-cln 5 4 3 2 1) many))))
+        (define-test ,(test-name type-symbol "sort!") ()
+          ;; sort! empty => empty
+          (let ((empty (,@the-ufix (cln:new-collection))))
+            (cln:sort! empty)
+            (is (cln:empty? empty)))
+          ;; sort! single => same
+          (let ((one ,(make-ufix-cln 10)))
+            (cln:sort! one)
+            (is (== ,(make-ufix-cln 10) one)))
+          ;; sort! multiple => ascending order
+          (let ((many ,(make-ufix-cln 3 1 2 5 4)))
+            (cln:sort! many)
+            (is (== ,(make-ufix-cln 1 2 3 4 5) many)))
+          ;; sort! of already sorted => stays the same
+          (let ((sorted ,(make-ufix-cln 1 2 3 4 5)))
+            (cln:sort! sorted)
+            (is (== ,(make-ufix-cln 1 2 3 4 5) sorted))))
+        (define-test ,(test-name type-symbol "sort-with!") ()
+          ;; sort-with! empty => still empty
+          (let ((empty (,@the-ufix (cln:new-collection))))
+            (cln:sort-with! <=> empty)
+            (is (cln:empty? empty)))
+          ;; sort-with! single => same
+          (let ((one ,(make-ufix-cln 10)))
+            (cln:sort-with! <=> one)
+            (is (== ,(make-ufix-cln 10) one)))
+          ;; sort-with! multiple => sorted by custom comparator (descending)
+          (let ((many ,(make-ufix-cln 3 1 2 5 4)))
+            (cln:sort-with! (fn (a b) (<=> b a)) many)
+            (is (== ,(make-ufix-cln 5 4 3 2 1) many))))
+        (define-test ,(test-name type-symbol "push!") ()
+          ;; push! on empty => single element
+          (let ((c ,(make-ufix-cln)))
+            (cln:push! 99 c)
+            (is (== ,(make-ufix-cln 99) c)))
+          ;; push! on multi-element => new element is at the front
+          (let ((c ,(make-ufix-cln 1 2 3)))
+            (cln:push! 99 c)
+            (is (== ,(make-ufix-cln 99 1 2 3) c))))
+        (define-test ,(test-name type-symbol "push-end!") ()
+          ;; push-end! on empty => single element
+          (let ((c ,(make-ufix-cln)))
+            (cln:push-end! 99 c)
+            (is (== ,(make-ufix-cln 99) c)))
+          ;; push-end! on multi-element => new element is at the end
+          (let ((c ,(make-ufix-cln 1 2 3)))
+            (cln:push-end! 99 c)
+            (is (== ,(make-ufix-cln 1 2 3 99) c))))
+        (define-test ,(test-name type-symbol "pop!") ()
+          ;; pop! on empty => None, remains empty
+          (let ((c ,(make-ufix-cln)))
+            (is (== None (cln:pop! c)))
+            (is (cln:empty? c)))
+          ;; pop! on single => Some(elt), collection becomes empty
+          (let ((c ,(make-ufix-cln 10)))
+            (is (== (Some 10) (cln:pop! c)))
+            (is (cln:empty? c)))
+          ;; pop! on multi => Some(first-elt), first elt removed
+          (let ((c ,(make-ufix-cln 1 2 3)))
+            (is (== (Some 1) (cln:pop! c)))
+            (is (== ,(make-ufix-cln 2 3) c))))
+        (define-test ,(test-name type-symbol "pop!#") ()
+          ;; pop!# on single => returns element, becomes empty
+          (let ((c ,(make-ufix-cln 10)))
+            (is (== 10 (cln:pop!# c)))
+            (is (cln:empty? c)))
+          ;; pop!# on multi => returns first element, removes it
+          (let ((c ,(make-ufix-cln 1 2 3)))
+            (is (== 1 (cln:pop!# c)))
+            (is (== ,(make-ufix-cln 2 3) c))))
+        (define-test ,(test-name type-symbol "pop-end!") ()
+          ;; pop-end! on empty => None, remains empty
+          (let ((c ,(make-ufix-cln)))
+            (is (== None (cln:pop-end! c)))
+            (is (cln:empty? c)))
+          ;; pop-end! on single => Some(elt), becomes empty
+          (let ((c ,(make-ufix-cln 10)))
+            (is (== (Some 10) (cln:pop-end! c)))
+            (is (cln:empty? c)))
+          ;; pop-end! on multi => Some(last-elt), removes it
+          (let ((c ,(make-ufix-cln 1 2 3)))
+            (is (== (Some 3) (cln:pop-end! c)))
+            (is (== ,(make-ufix-cln 1 2) c))))
+        (define-test ,(test-name type-symbol "pop-end!#") ()
+          ;; pop-end!# on single => returns element, becomes empty
+          (let ((c ,(make-ufix-cln 10)))
+            (is (== 10 (cln:pop-end!# c)))
+            (is (cln:empty? c)))
+          ;; pop-end!# on multi => returns last element, removes it
+          (let ((c ,(make-ufix-cln 1 2 3)))
+            (is (== 3 (cln:pop-end!# c)))
+            (is (== ,(make-ufix-cln 1 2) c))))
+        (define-test ,(test-name type-symbol "insert-at!") ()
+          ;; insert-at! 0 on empty => single element
+          (let ((c ,(make-ufix-cln)))
+            (cln:insert-at! 0 99 c)
+            (is (== ,(make-ufix-cln 99) c)))
+          ;; insert-at! 0 on multi => becomes first element
+          (let ((c ,(make-ufix-cln 1 2 3 4)))
+            (cln:insert-at! 0 99 c)
+            (is (== ,(make-ufix-cln 99 1 2 3 4) c)))
+          ;; insert-at! in the middle
+          (let ((c ,(make-ufix-cln 1 2 3 4 5)))
+            (cln:insert-at! 2 99 c)
+            (is (== ,(make-ufix-cln 1 2 99 3 4 5) c)))
+          ;; insert-at! at index=length => appended
+          (let ((c ,(make-ufix-cln 10 20 30)))
+            (cln:insert-at! 3 99 c)
+            (is (== ,(make-ufix-cln 10 20 30 99) c)))
+          ;; insert-at! index > length => appended
+          (let ((c ,(make-ufix-cln 1 2 3)))
+            (cln:insert-at! 99 99 c)
+            (is (== ,(make-ufix-cln 1 2 3 99) c))))))))

@@ -382,7 +382,7 @@
       ((Some result)
        (for i in (iter:range-increasing 1 idx (m-ath:1- (length v)))
          (set! i (index-unsafe (m-ath:1+ i) v) v))
-       (pop-unsafe! v)
+       (pop-end-unsafe! v)
        (Some result))))
   
   (declare remove-at-unsafe! (UFix -> Vector :a -> :a))
@@ -391,7 +391,7 @@
     (let result = (index-unsafe idx v))
     (for i in (iter:range-increasing 1 idx (m-ath:1- (length v)))
       (set! i (index-unsafe (m-ath:1+ i) v) v))
-    (pop-unsafe! v)
+    (pop-end-unsafe! v)
     result)
 
   (declare append (Vector :a -> Vector :a -> Vector :a))
@@ -413,10 +413,10 @@
   (define (swap-remove-unsafe! idx vec)
     "Remove the element `idx` from `vec` and replace it with the last element in `vec` without bounds checking. Then return the removed element."
     (if (== (+ 1 idx) (length vec))
-        (pop-unsafe! vec)
+        (pop-end-unsafe! vec)
         (progn
           (let out = (index-unsafe idx vec))
-          (set! idx (pop-unsafe! vec) vec)
+          (set! idx (pop-end-unsafe! vec) vec)
           out)))
 
   (declare sort-by! ((:a -> :a -> Boolean) -> Vector :a -> Unit))
@@ -668,7 +668,7 @@
       (sort! vec)
       vec)
     (define (cln:sort-with! ord-func vec)
-      (sort-by! (fn (a b) (== GT (ord-func a b)))
+      (sort-by! (fn (a b) (== LT (ord-func a b)))
                 vec)
       vec)
     (define (cln:push! elt vec)
