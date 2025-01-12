@@ -320,12 +320,18 @@
   (declare insert-at! (UFix -> :a -> Vector :a -> Vector :a))
   (define (insert-at! idx item v)
     "Insert `item` into `v` at index `idx`, shifting the existing elements starting at `idx` right by 1."
-    (ensure-capacity! (m-ath:1+ (length v)) v)
-    (push! (last-unsafe v) v)
-    (for i in (iter:range-decreasing 1 (length v) (m-ath:1+ idx))
-      (set! i (index-unsafe (m-ath:1- i) v) v))
-    (set! idx item v)
-    v)
+    (cond
+     ((empty? v)
+      (push! item v)
+      v)
+     (True
+      (let idx-safe = (max 0 (min (length v) idx)))
+      (ensure-capacity! (m-ath:1+ (length v)) v)
+      (push! (last-unsafe v) v)
+      (for i in (iter:range-decreasing 1 (length v) (m-ath:1+ idx-safe))
+        (set! i (index-unsafe (m-ath:1- i) v) v))
+      (set! idx-safe item v)
+      v)))
 
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;;;                                                                       ;;;
@@ -643,7 +649,12 @@
     (define cln:zip zip-itr)
     (define cln:zip-with zip-with-itr)
     (define (cln:push elt vec)
-      (insert-at! 0 elt (copy vec)))
+      (cond
+        ((empty? vec)
+         (push! elt vec)
+         vec)
+        (True
+         (insert-at! 0 elt (copy vec)))))
     (define (cln:push-end elt vec)
       (let ((result (copy vec)))
         (push! elt result)
@@ -657,7 +668,7 @@
       (sort! vec)
       vec)
     (define (cln:sort-with! ord-func vec)
-      (sort-by! (fn (a b) (== LT (ord-func a b)))
+      (sort-by! (fn (a b) (== GT (ord-func a b)))
                 vec)
       vec)
     (define (cln:push! elt vec)

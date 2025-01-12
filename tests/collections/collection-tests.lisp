@@ -294,11 +294,8 @@ if & only if col1 and col2 are the same length and have (== col1_i col2_i) for a
 
 Example:
   (linear-collection-tests List)"
-  (cl:let ((the-type `(the (,type-symbol :a)))
-           (the-ufix `(the (,type-symbol UFix))))
-    (cl:labels ((make-the-cln (cl:&rest args)
-                  `(,@the-type (cln:new-convert (make-list ,@args))))
-                (make-ufix-cln (cl:&rest args)
+  (cl:let ((the-ufix `(the (,type-symbol UFix))))
+    (cl:labels ((make-ufix-cln (cl:&rest args)
                   `(,@the-ufix (cln:new-convert (make-list ,@args)))))
       `(cl:progn
         (define-test ,(test-name type-symbol "head") ()
@@ -528,4 +525,96 @@ Example:
           (let ((orig ,(make-ufix-cln 1 2 3 4)))
             (cln:split-elt 2 orig)
             (is (== ,(make-ufix-cln 1 2 3 4) orig))))
+        (define-test ,(test-name type-symbol "reverse") ()
+          ;; Reverse of empty => empty
+          (let ((empty (,@the-ufix (cln:new-collection))))
+            (is (cln:empty? (cln:reverse empty))))
+          ;; Reverse of single => same collection
+          (let ((one ,(make-ufix-cln 10)))
+            (is (== one (cln:reverse one))))
+          ;; Reverse of multiple => elements reversed
+          (let ((many ,(make-ufix-cln 1 2 3 4 5)))
+            (is (== ,(make-ufix-cln 5 4 3 2 1) (cln:reverse many))))
+          ;; Ensure immutability
+          (let ((orig ,(make-ufix-cln 1 2 3 4 5)))
+            (cln:reverse orig)
+            (is (== ,(make-ufix-cln 1 2 3 4 5) orig))))
+        (define-test ,(test-name type-symbol "sort") ()
+          ;; Sort of empty => empty
+          (let ((empty (,@the-ufix (cln:new-collection))))
+            (is (cln:empty? (cln:sort empty))))
+          ;; Sort of single => same collection
+          (let ((one ,(make-ufix-cln 10)))
+            (is (== one (cln:sort one))))
+          ;; Sort of multiple unsorted => ascending order
+          (let ((many ,(make-ufix-cln 3 1 2 5 4)))
+            (is (== ,(make-ufix-cln 1 2 3 4 5) (cln:sort many))))
+          ;; Sort of already sorted => stays the same
+          (let ((sorted ,(make-ufix-cln 1 2 3 4 5)))
+            (is (== sorted (cln:sort sorted))))
+          ;; Ensure immutability
+          (let ((orig ,(make-ufix-cln 4 3 2)))
+            (cln:sort orig)
+            (is (== ,(make-ufix-cln 4 3 2) orig))))
+        (define-test ,(test-name type-symbol "sort-with") ()
+          ;; Sort-with on empty => empty
+          (let ((empty (,@the-ufix (cln:new-collection))))
+            (is (cln:empty? (cln:sort-with <=> empty))))
+          ;; Sort-with on single => same collection
+          (let ((one ,(make-ufix-cln 10)))
+            (is (== one (cln:sort-with <=> one))))
+          ;; Sort-with a custom comparator => sorted accordingly
+          (let ((many ,(make-ufix-cln 3 1 2 5 4))
+                (descending (cln:sort-with (fn (a b) (<=> b a)) many)))
+            (is (== ,(make-ufix-cln 5 4 3 2 1) descending)))
+          ;; Ensure immutability
+          (let ((orig ,(make-ufix-cln 4 3 2)))
+            (cln:sort-with <=> orig)
+            (is (== ,(make-ufix-cln 4 3 2) orig))))
+        (define-test ,(test-name type-symbol "push") ()
+          ;; push onto empty => single element
+          (let ((empty (,@the-ufix (cln:new-collection)))
+                (res (cln:push 99 empty)))
+            (is (== ,(make-ufix-cln 99) res)))
+          ;; push onto non-empty => new element is the first
+          (let ((orig ,(make-ufix-cln 1 2 3))
+                (res (cln:push 99 orig)))
+            (is (== ,(make-ufix-cln 99 1 2 3) res)))
+          ;; Ensure immutability
+          (let ((orig ,(make-ufix-cln 1 2 3)))
+            (cln:push 99 orig)
+            (is (== ,(make-ufix-cln 1 2 3) orig))))
+        (define-test ,(test-name type-symbol "push-end") ()
+          ;; push-end onto empty => single element
+          (let ((empty (,@the-ufix (cln:new-collection)))
+                (res (cln:push-end 99 empty)))
+            (is (== ,(make-ufix-cln 99) res)))
+          ;; push-end onto non-empty => new element is the last
+          (let ((orig ,(make-ufix-cln 1 2 3))
+                (res (cln:push-end 99 orig)))
+            (is (== ,(make-ufix-cln 1 2 3 99) res)))
+          ;; Ensure immutability
+          (let ((orig ,(make-ufix-cln 1 2 3)))
+            (cln:push-end 99 orig)
+            (is (== ,(make-ufix-cln 1 2 3) orig))))
+        (define-test ,(test-name type-symbol "insert-at") ()
+          ;; Insert at 0 on an empty collection => becomes single-element
+          (let ((empty (,@the-ufix (cln:new-collection))))
+            (is (== ,(make-ufix-cln 99) (cln:insert-at 0 99 empty))))
+          ;; Insert at 0 on multi-element collection => element becomes first
+          (let ((c ,(make-ufix-cln 1 2 3 4)))
+            (is (== ,(make-ufix-cln 99 1 2 3 4) (cln:insert-at 0 99 c))))
+          ;; Insert in the middle
+          (let ((c ,(make-ufix-cln 1 2 3 4 5)))
+            (is (== ,(make-ufix-cln 1 2 99 3 4 5) (cln:insert-at 2 99 c))))
+          ;; Insert at index = length => appended at the end
+          (let ((c ,(make-ufix-cln 10 20 30)))
+            (is (== ,(make-ufix-cln 10 20 30 99) (cln:insert-at 3 99 c))))
+          ;; Insert at index > length => appended at the end
+          (let ((c ,(make-ufix-cln 1 2 3)))
+            (is (== ,(make-ufix-cln 1 2 3 99) (cln:insert-at 99 99 c))))
+          ;; Ensure immutability
+          (let ((orig ,(make-ufix-cln 1 2 3)))
+            (cln:insert-at 1 99 orig)
+            (is (== ,(make-ufix-cln 1 2 3) orig))))
         ))))
