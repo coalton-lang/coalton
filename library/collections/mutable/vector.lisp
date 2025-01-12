@@ -234,21 +234,24 @@
   
   (declare split-elt-vec (Eq :a => :a -> Vector :a -> List (Vector :a)))
   (define (split-elt-vec elt vec)
-    (match (find-elem elt vec)
-      ((None) (make-list (copy vec) (new)))
-      ((Some i) 
-       (match (split-at-vec i vec)
-         ((Tuple a b)
-         (make-list a b))))))
+    (split-where-vec (== elt) vec))
   
+  ;; TODO: Someday when the List API has a more efficient way of building the result
+  ;; list up, so that we don't have to call reverse, use that.
   (declare split-where-vec ((:a -> Boolean) -> Vector :a -> List (Vector :a)))
   (define (split-where-vec pred vec)
-    (match (find-where pred vec)
-      ((None) (make-list (copy vec) (new)))
-      ((Some i) 
-       (match (split-at-vec i vec)
-         ((Tuple a b)
-         (make-list a b))))))
+    (let ((results (cell:new Nil))
+          (indices (cln:push-end (length vec)
+                                 (indices-where pred vec))))
+      (if (== 1 (cln:length indices))
+        (make-list (copy vec))
+        (progn
+          (cell:push! results (subseq-vec 0 (list:nth 0 indices) vec))
+          (for i in (iter:range-increasing 1 1 (cln:length indices))
+            (cell:push! results (subseq-vec (+ 1 (list:nth (- i 1) indices))
+                                            (list:nth i indices)
+                                            vec)))
+          (cln:reverse (cell:read results))))))
   
   (declare zip-itr (iter:IntoIterator :m :b => Vector :a -> :m -> Vector (Tuple :a :b)))
   (define (zip-itr vec col)
@@ -537,13 +540,12 @@
       vec))
 
   (define-instance (Default (Vector :a))
-    (define default new)))
+    (define default new))
 
 ;;
 ;; Collections Instances
 ;;
 
-(coalton-toplevel
   (define-instance (cln:Collection (Vector :a) :a)
     (define cln:new-collection new)
     (define cln:new-repeat with-initial-element)
