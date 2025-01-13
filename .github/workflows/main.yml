@@ -24,7 +24,7 @@ jobs:
           # Since we don't have a way of switching safety on allegro or ccl, we can
           # just ignore high safety tests.
           - LISP_IMPL: "allegro"
-            SAFETY: "3"
+            # SAFETY: "3" # un-comment this line once the allegro license is renewed.
           - LISP_IMPL: "ccl"
             SAFETY: "3"
 

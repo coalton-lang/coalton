@@ -31,7 +31,8 @@
    #:inexact/
    #:floor/
    #:ceiling/
-   #:round/))
+   #:round/
+   #:fromfrac))
 
 (in-package #:coalton-library/math/real)
 
@@ -198,18 +199,18 @@ Furthermore, `best-approx` returns the simplest fraction, and both functions may
 (%define-native-rationals Double-Float)
 
 (coalton-toplevel
-  (define-type (Quantization :a)
-    "Represents an integer quantization of `:a`.
-
-The fields are defined as follows:
-
-1. A value of type `:a`.
-2. The greatest integer less than or equal to a particular value.
-3. The remainder of this as a value of type `:a`.
-4. The least integer greater than or equal to a particular value.
-5. The remainder of this as a value of type `:a`.
-"
-    (Quantization :a Integer :a Integer :a))
+  (define-struct (Quantization :a)
+    "Represents an integer quantization of `:a`."
+    (value       "A value of type `:a`."
+                 :a)
+    (floor       "The greatest integer less than or equal to a particular value."
+                 Integer)
+    (floor-rem   "The remainder of the floor operation as type `:a`."
+                 :a)
+    (ceiling     "The least integer greater than or equal to a particular value."
+                 Integer)
+    (ceiling-rem "The remainder of the ceiling operation as type `:a`."
+                 :a))
 
   (declare quantize (Real :a => (:a -> (Quantization :a))))
   (define (quantize x)
@@ -264,7 +265,16 @@ Note: This does *not* divide double-float arguments."
   (declare round/ (Integer -> Integer -> Integer))
   (define (round/ a b)
     "Divide two integers and round the quotient."
-    (round (exact/ a b))))
+    (round (exact/ a b)))
+
+  (declare fromfrac (Dividable Integer :a => Fraction -> :a))
+  (define (fromfrac q)
+    "Converts a fraction to a target type.
+
+Specifically, target types must have an instance of `Dividable Integer :a`.
+
+This conversion may result in loss of fidelity."
+    (general/ (numerator q) (denominator q))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/MATH/REAL")
