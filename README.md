@@ -130,6 +130,14 @@ Coalton is currently used in production to build [quantum computing software](ht
 
 **Learn**: Start with [*Intro to Coalton*](docs/intro-to-coalton.md) and the [standard library reference](https://coalton-lang.github.io/reference/), and then take a peek at the [examples directory](examples/). It may also be helpful to check out the [introductory blog post](https://coalton-lang.github.io/20211010-introducing-coalton/).
 
+For documentation on more advanced Coalton features, refer to the other docs pages:
+* [Coalton <-> Common Lisp Interop](docs/coalton-lisp-interop.md)
+* [Coalton Collections Guide](docs/collections-guide.md)
+
+Check out the following docs to explain ancillary aspects of Coalton development, like testing and documenting your codebase:
+* [Coalton Documentation Guide](docs/coalton-documentation-guide.md)
+* [Intro to Coalton Testing](docs/intro-to-coalton-testing.md)
+
 ## What's Here?
 
 This repository contains the source code to the [Coalton compiler](src/), and the [standard library](library/).

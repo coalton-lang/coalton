@@ -6,12 +6,15 @@
    #:coalton-library/classes
    #:coalton-library/math)
   (:local-nicknames
+   (#:cln #:coalton-library/collections)
    (#:types #:coalton-library/types)
    (#:cell #:coalton-library/cell)
    (#:iter #:coalton-library/iterator)
-   (#:list #:coalton-library/list)
-   (#:vector #:coalton-library/vector))
-  (:shadowing-import-from #:coalton-library/vector #:Vector)
+   (#:list #:coalton-library/collections/immutable/list)
+   (#:vector #:coalton-library/collections/mutable/vector))
+  (:shadowing-import-from
+   #:coalton-library/collections/mutable/vector
+   #:Vector)
   (:export
    #:Slice
    #:new
@@ -42,7 +45,7 @@
     (%length (:a -> UFix)))
 
   (define-instance (Sliceable (Vector :a))
-    (define %length vector:length))
+    (define %length cln:length))
 
   (define-instance (Sliceable (Slice :a))
     (define %length length))
@@ -206,7 +209,7 @@
 
   (define-instance (Into (Vector :a) (Slice :a))
     (define (into v)
-      (new 0 (vector:length v) v)))
+      (new 0 (cln:length v) v)))
 
   (define-instance (Iso (Slice :a) (Vector :a))))
 

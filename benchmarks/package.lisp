@@ -12,7 +12,7 @@
    #:coalton-prelude
    #:coalton-library/big-float
    #:coalton-library/math)
-  (:local-nicknames (#:list #:coalton-library/list))
+  (:local-nicknames (#:list #:coalton-library/collections/immutable/list))
   (:export
    #:fib
    #:fib-fixnum
