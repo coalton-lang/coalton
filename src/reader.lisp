@@ -106,7 +106,7 @@ SOURCE provides metadata for the stream argument, for error messages."
           nil)
 
         (coalton:coalton
-         (entry:expression-entry-point (parser:read-expression stream source)))
+         (entry:expression-entry-point (parser:read-expressions stream source)))
 
         ;; Fall back to reading the list manually
         (t
