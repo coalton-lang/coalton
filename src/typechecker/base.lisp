@@ -4,7 +4,11 @@
   (:local-nicknames
    (#:source #:coalton-impl/source)
    (#:util #:coalton-impl/util))
+  (:import-from
+   #:coalton-impl/settings
+   #:*coalton-type-printing-mode*)
   (:export
+   #:*coalton-type-printing-mode*
    #:*coalton-pretty-print-tyvars*
    #:*pprint-tyvar-dict*
    #:*pprint-variable-symbol-code*
@@ -74,7 +78,7 @@ This requires a valid PPRINT-VARIABLE-CONTEXT")
                        (with-pprint-variable-context ()
                          (apply #'format nil format-string format-args))))
 
-(defun tc-note (located format-string &rest format-args)
+(defun tc-note (located format-string &rest format-args) 
   (apply #'tc-location (source:location located) format-string format-args))
 
 (defun tc-secondary-note (located format-string &rest format-args)

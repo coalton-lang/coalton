@@ -8,6 +8,7 @@
    (#:settings #:coalton-impl/settings))
   (:export
    #:ty                                 ; STRUCT
+   #:ty-alias                           ; ACCESSOR
    #:ty-list                            ; TYPE
    #:tyvar                              ; STRUCT
    #:make-tyvar                         ; CONSTRUCTOR
@@ -34,6 +35,7 @@
    #:instantiate                        ; FUNCTION
    #:kind-of                            ; FUNCTION
    #:type-constructors                  ; FUNCTION
+   #:ty=                                ; FUNCTION
    #:*boolean-type*                     ; VARIABLE
    #:*unit-type*                        ; VARIABLE
    #:*char-type*                        ; VARIABLE
@@ -46,6 +48,8 @@
    #:*fraction-type*                    ; VARIABLE
    #:*arrow-type*                       ; VARIABLE
    #:*list-type*                        ; VARIABLE
+   #:push-type-alias                    ; FUNCTION
+   #:flatten-type                       ; FUNCTION
    #:apply-type-argument                ; FUNCTION
    #:apply-type-argument-list           ; FUNCTION
    #:make-function-type                 ; FUNCTION
@@ -71,7 +75,20 @@
 ;;; Types
 ;;;
 
-(defstruct (ty (:constructor nil)))
+(defstruct (ty (:constructor nil))
+  ;; When this field is not null, it comprises a head which is the
+  ;; explicit type-alias used, and a tail which consists of the
+  ;; type-aliases used to define the explicit alias.
+  ;; for example:
+  ;;   (define-type-alias T1 T)
+  ;;   (define-type-alias T2 T1)
+  ;;   (declare x T2)
+  ;;   (define x ...)
+  ;; the type of x will be T, with the alias field
+  ;; populated with (Cons T2 (Cons T1 Nil)).
+  ;;
+  ;; Could be replaced by a weak hash table.
+  (alias nil :type (or null ty-list) :read-only nil))
 
 (defmethod make-load-form ((self ty) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -133,6 +150,7 @@
 (defgeneric instantiate (types type)
   (:method (types (type tapp))
     (make-tapp
+     :alias (mapcar (lambda (alias) (instantiate types alias)) (ty-alias type))
      :from (instantiate types (tapp-from type))
      :to (instantiate types (tapp-to type))))
   (:method (types (type tgen))
@@ -156,16 +174,19 @@
 
 (defmethod apply-ksubstitution (subs (type tyvar))
   (make-tyvar
+   :alias (mapcar (lambda (alias) (apply-ksubstitution subs alias)) (ty-alias type))
    :id (tyvar-id type)
    :kind (apply-ksubstitution subs (tyvar-kind type))))
 
 (defmethod apply-ksubstitution (subs (type tycon))
   (make-tycon
+   :alias (mapcar (lambda (alias) (apply-ksubstitution subs alias)) (ty-alias type))
    :name (tycon-name type)
    :kind (apply-ksubstitution subs (tycon-kind type))))
 
 (defmethod apply-ksubstitution (subs (type tapp))
   (make-tapp
+   :alias (mapcar (lambda (alias) (apply-ksubstitution subs alias)) (ty-alias type))
    :from (apply-ksubstitution subs (tapp-from type))
    :to (apply-ksubstitution subs (tapp-to type))))
 
@@ -199,6 +220,35 @@
   (:method ((lst list))
     (mapcan #'type-constructors-generic% lst)))
 
+(defgeneric ty= (type1 type2)
+  (:documentation "Are TYPE1 to TYPE2 EQUALP, ignoring their aliases.")
+
+  (:method ((type1 tyvar) (type2 tyvar))
+    (and (equalp (tyvar-id type1)
+                 (tyvar-id type2))
+         (equalp (tyvar-kind type1)
+                 (tyvar-kind type2))))
+
+  (:method ((type1 tycon) (type2 tycon))
+    (and (equalp (tycon-name type1)
+                 (tycon-name type2))
+         (equalp (tycon-kind type1)
+                 (tycon-kind type2))))
+
+  (:method ((type1 tapp) (type2 tapp))
+    (and (ty= (tapp-from type1)
+              (tapp-from type2))
+         (ty= (tapp-to type1)
+              (tapp-to type2))))
+
+  (:method ((type1 tgen) (type2 tgen))
+    (equalp (tgen-id type1)
+            (tgen-id type2)))
+
+  (:method (type1 type2)
+    (declare (ignore type1 type2))
+    nil))
+
 ;;;
 ;;; Early types
 ;;;
@@ -219,6 +269,27 @@
 ;;;
 ;;; Operations on Types
 ;;;
+
+(defun push-type-alias (type alias)
+  "Update the alias field of TYPE with ALIAS as the most high-level alias."
+  (declare (type ty type)
+           (type ty alias)
+           (values ty &optional))
+  (let ((new-type (copy-structure type)))
+    (push alias (ty-alias new-type))
+    new-type))
+
+(defun flatten-type (type)
+  "If TYPE is a TAPP of the form ((((T1 T2) T3) T4) ...), then return
+the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
+  (declare (type ty type)
+           (values ty-list &optional))
+  (let ((flattened-type nil))
+    (loop :for from := type :then (tapp-from from)
+          :while (typep from 'tapp)
+          :do (push (tapp-to from) flattened-type)
+          :finally (push from flattened-type))
+    flattened-type))
 
 (defun apply-type-argument (tcon arg &key ksubs)
   (declare (type (or tycon tapp tyvar) tcon)
@@ -367,6 +438,18 @@
   (declare (type stream stream)
            (type ty ty)
            (values ty))
+
+  ;; If the type printing mode is :ALIASES and TY is aliased, print the
+  ;; most high-level alias that represents TY and return from PPRINT-TY.
+  (when (and (eq *coalton-type-printing-mode* :aliases) (ty-alias ty))
+    (format stream "~S" (first (ty-alias ty)))
+    (return-from pprint-ty ty))
+
+  ;; If the type printing mode is :TYPES-AND-ALIASES and TY is aliased,
+  ;; print the stack of aliases that represent TY before printing TY.
+  (when (and (eq *coalton-type-printing-mode* :types-and-aliases) (ty-alias ty))
+    (format stream "[~{~S := ~}" (ty-alias ty)))
+  
   (etypecase ty
     (tyvar
      (if *coalton-pretty-print-tyvars*
@@ -424,6 +507,12 @@
     (tgen
      (write-string "#GEN" stream)
      (write (tgen-id ty) :stream stream)))
+
+  ;; Close the braces in the case that the type printing mode is
+  ;; :TYPES-AND-ALIASES and TY is aliased.
+  (when (and (eq *coalton-type-printing-mode* :types-and-aliases) (ty-alias ty))
+    (format stream "]"))
+  
   ty)
 
 (defmethod print-object ((ty ty) stream)
@@ -443,7 +532,8 @@
   (:report
    (lambda (c s)
      (let ((*print-circle* nil) ; Prevent printing using reader macros
-           )
+           (*print-readably* nil)
+           (*coalton-type-printing-mode* :types))
        (format s "Cannot apply ~S of kind ~S to ~S of kind ~S"
                (type-application-error-argument c)
                (kind-of (type-application-error-argument c))

@@ -23,6 +23,7 @@
    #:declare
    #:define
    #:define-type
+   #:define-type-alias
    #:define-struct
    #:define-class
    #:define-instance
@@ -108,6 +109,9 @@
    #:lookup-class
    #:lookup-fundeps
    #:type-of
+   #:describe-type-of
+   #:describe-type-alias
+   #:set-type-printing-mode
    #:kind-of)
 
   (:intern

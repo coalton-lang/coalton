@@ -37,6 +37,7 @@
    #:qualified-ty-predicates            ; ACCESSOR
    #:qualified-ty-type                  ; ACCESSOR
    #:qualified-ty-list                  ; TYPE
+   #:flatten-type                       ; FUNCTION
    #:parse-qualified-type               ; FUNCTION
    #:parse-type                         ; FUNCTION
    #:parse-predicate                    ; FUNCTION
@@ -133,6 +134,18 @@
 
 (defmethod source:location ((self qualified-ty))
   (qualified-ty-location self))
+
+(defun flatten-type (type)
+  "If TYPE is a TAPP of the form ((((T1 T2) T3) T4) ...), then return
+the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
+  (declare (type ty type)
+           (values ty-list &optional))
+  (let ((flattened-type nil))
+    (loop :for from := type :then (tapp-from from)
+          :while (typep from 'tapp)
+          :do (push (tapp-to from) flattened-type)
+          :finally (push from flattened-type))
+    flattened-type))
 
 (defun parse-qualified-type (form source)
   (declare (type cst:cst form))

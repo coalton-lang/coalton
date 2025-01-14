@@ -237,7 +237,6 @@ As suggested, one can replace `y` with `_y`, which tells the Coalton compiler th
 
 One should treat underscore prefixed variables as ignored whenever possible, and use a name not prefixed with `_` if it may be used. Reading from underscore-prefixed variables is permitted so that generated code (e.g., using macros or read-conditionals) may avoid unused variable warnings for variables which will be used in some compilation contexts but not others.
 
-
 ## Data Types
 
 Coalton allows the definition of parametric algebraic data types.
@@ -272,6 +271,85 @@ Type definitions introduce type constructors. For example, we may construct a so
 
 We'll see how to unpack these types using `match` later in this document.
 
+## Type Aliases
+
+Coalton allows the definition of parametric type aliases. Type aliases can be defined on primitive types and types created with `define-type` or `define-type-alias`.
+
+```lisp
+(coalton-toplevel
+  ;; New type aliases are created with the DEFINE-TYPE-ALIAS operator
+  (define-type-alias Coordinate Integer)
+  (define-type-alias (Pair :a) (Tuple :a :a))
+  (define-type-alias Translation (Pair Coordinate -> Pair Coordinate))
+  
+  (declare shift-right Translation)
+  (define (shift-right (Tuple x y))
+    (Tuple (1+ x) y))
+    
+  (define shifted-coordinate (shift-right (Tuple 0 0))))
+
+  ;; Type aliases can have multiple parameters
+  (define-type-alias (MyTuple3 :a :b :c) (Tuple :a (Tuple :b :c)))
+
+  ;; Type aliases can have parameters that do not have a kind of *
+  (define-type-alias (IntegerCollection :col) (:col Integer))
+
+  ;; Type aliases can alias types that do not have a kind of *
+  (define-type-alias MyCollection List)
+```
+
+Parametric type aliases must be fully applied.
+```lisp
+(coalton-toplevel
+
+  (define-type (T :a) (ConstrT (:a Integer)))
+  
+  (define-type-alias (MyCollection1 :a) (List :a))
+  (define-type-alias MyCollection2 List)
+
+  ;; This line will not compile, because MyCollection1 has a
+  ;; parameter :A which is not applied
+  (define-type-alias A (T MyCollection1))
+
+  ;; However, this line will compile
+  (define-type-alias A (T MyCollection2)))
+```
+
+There are several debugging tools which are useful when working with type aliases. Outside of a Coalton expression, `describe-type-of` can be used to display the type of a symbol, including its aliases, and to return the type. `describe-type-alias` displays the alias along with the aliased type and returns the aliased type. Additionally, Coalton can be configured to display only aliases, only types, or both, when displaying the type associated with a symbol. The preference can be set before compiling Coalton using `(setf (get ':coalton-config ':type-printing-mode) mode)` where `mode` is one of `:types`, `:aliases`, and `:types-and-aliases`. Thereafter, the mode can be changed among those three options using the function `set-type-printing-mode`. The default mode is `:types`.
+
+```lisp
+COALTON-USER> (coalton-toplevel
+                (define-type-alias A Integer)
+                (define x (the A 5)))
+; No value
+
+COALTON-USER> (set-type-printing-mode :aliases)
+:ALIASES
+
+COALTON-USER> (type-of 'x)
+A
+
+COALTON-USER> (set-type-printing-mode :types-and-aliases)
+:TYPES-AND-ALIASES
+
+COALTON-USER> (type-of 'x)
+[A := INTEGER]
+
+COALTON-USER> (set-type-printing-mode :types)
+:TYPES
+
+COALTON-USER> shifted-coordinate ;; from the example above
+#.(TUPLE 1 0)
+
+COALTON-USER> (type-of 'shifted-coordinate)
+(TUPLE INTEGER INTEGER)
+
+COALTON-USER> (describe-type-of 'shifted-coordinate)
+[(PAIR COORDINATE) := (TUPLE [COORDINATE := INTEGER] [COORDINATE := INTEGER])]
+
+COALTON-USER> (describe-type-alias 'Pair)
+[(PAIR :A) := (TUPLE :A :A)]
+```
 
 ### Structs
 
