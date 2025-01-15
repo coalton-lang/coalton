@@ -133,8 +133,9 @@ edge all have between MIN-BRANCHING and MAX-BRANCHING subnodes."
     (is (== seq1 seq2))
     (is (not (== seq1 seq3)))))
 
-(cl:defmacro make-large-seq (n)
-  `(seq:make ,@(cl:loop :for x :from 0 :to (cl:1- n) :collect x)))
+(cl:eval-when (:compile-toplevel :load-toplevel :execute)
+  (cl:defmacro make-large-seq (n)
+    `(seq:make ,@(cl:loop :for x :from 0 :to (cl:1- n) :collect x))))
 
 (define-test seq-make ()
   (let short-seq = (the (seq:Seq Integer)
