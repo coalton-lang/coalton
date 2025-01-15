@@ -521,46 +521,28 @@ It attempts to rebalance with a minimum of array copying."
   "Create a new `Seq` containing `elems`."
   (cl:let* ((l
               (cl:length elems))
-            (temp-bindings
-              (cl:loop :for e :in elems :collect (cl:list (cl:gensym) e)))
-            (vars
-              (cl:mapcar #'cl:car temp-bindings))
-            (make-ary
-              (cl:lambda (xs)
-                `(cl:make-array ,(cl:length xs)
-                                :fill-pointer ,(cl:length xs)
-                                :adjustable cl:t
-                                :element-type cl:t
-                                :initial-contents (cl:list ,@xs))))
             (leaf-arrays
               (cl:loop :for i :from 0 :to l :by 32
                  :for i+32 := (cl:+ i 32)
                  :when (cl:< i+32 l)
-                   :collect (cl:subseq vars i i+32)
+                   :collect (cl:subseq elems i i+32)
                  :else
-                   :collect (cl:subseq vars i)))
+                   :collect (cl:subseq elems i)))
             (la-count
               (cl:length leaf-arrays)))
-    `(let ,temp-bindings
-       ,(cl:cond
-          ((cl:zerop la-count)
-           '(new))
-          ((cl:= 1 la-count)
-           `(LeafArray (lisp (vector:Vector :a) ,vars ,(cl:funcall make-ary (cl:car leaf-arrays)))))
-          ((cl:<= la-count 32)
-           `(rebuild-size-table
-             (RelaxedNode 2 32 (vector:new)
-                          (lisp (vector:Vector (Seq :a)) ,vars
-                            (cl:make-array ,la-count
-                                           :fill-pointer ,la-count
-                                           :adjustable cl:t
-                                           :element-type cl:t
-                                           :initial-contents (cl:vector ,@(cl:loop :for a :in leaf-arrays :collect `(LeafArray ,(cl:funcall make-ary a)))))))))
-          (cl:t
-           `(lisp (vector:Vector (Seq :a)) ,vars
-              ,(cl:reduce (cl:lambda (acc la) `(conc ,acc (LeafArray ,(cl:funcall make-ary la))))
-                          (cl:rest leaf-arrays)
-                          :initial-value `(LeafArray ,(cl:funcall make-ary (cl:first leaf-arrays))))))))))
+    (cl:cond
+      ((cl:zerop la-count)
+       '(new))
+      ((cl:= 1 la-count)
+       `(LeafArray (vector:make ,@(cl:car leaf-arrays))))
+      ((cl:<= la-count 32)
+       `(rebuild-size-table
+         (RelaxedNode 2 32 (vector:new) (vector:make ,@(cl:loop :for a :in leaf-arrays
+                                                          :collect `(LeafArray (vector:make ,@a)))))))
+      (cl:t
+       (cl:reduce (cl:lambda (acc la) `(conc ,acc (LeafArray (vector:make ,@la))))
+                  (cl:rest leaf-arrays)
+                  :initial-value `(LeafArray (vector:make ,@ (cl:first leaf-arrays))))))))
 
 ;; This method implementation uses :around because sum types implement
 ;; cl:print-object for each representation, to avoid a brittle design
