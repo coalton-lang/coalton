@@ -135,7 +135,7 @@ edge all have between MIN-BRANCHING and MAX-BRANCHING subnodes."
 
 (cl:eval-when (:compile-toplevel :load-toplevel :execute)
   (cl:defmacro make-large-seq (n)
-    `(seq:make ,@(cl:loop :for x :from 0 :to (cl:1- n) :collect x))))
+    `(seq:make ,@(cl:loop :for x :from 0 :below n :collect x))))
 
 (define-test seq-make ()
   (let short-seq = (the (seq:Seq Integer)

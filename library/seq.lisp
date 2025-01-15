@@ -523,11 +523,11 @@ It attempts to rebalance with a minimum of array copying."
               (cl:length elems))
             (leaf-arrays
               (cl:loop :for i :from 0 :to l :by 32
-                 :for i+32 := (cl:+ i 32)
-                 :when (cl:< i+32 l)
-                   :collect (cl:subseq elems i i+32)
-                 :else
-                   :collect (cl:subseq elems i)))
+                       :for i+32 := (cl:+ i 32)
+                       :when (cl:< i+32 l)
+                         :collect (cl:subseq elems i i+32)
+                       :else
+                         :collect (cl:subseq elems i)))
             (la-count
               (cl:length leaf-arrays)))
     (cl:cond
@@ -538,11 +538,11 @@ It attempts to rebalance with a minimum of array copying."
       ((cl:<= la-count 32)
        `(rebuild-size-table
          (RelaxedNode 2 32 (vector:new) (vector:make ,@(cl:loop :for a :in leaf-arrays
-                                                          :collect `(LeafArray (vector:make ,@a)))))))
+                                                                :collect `(LeafArray (vector:make ,@a)))))))
       (cl:t
        (cl:reduce (cl:lambda (acc la) `(conc ,acc (LeafArray (vector:make ,@la))))
                   (cl:rest leaf-arrays)
-                  :initial-value `(LeafArray (vector:make ,@ (cl:first leaf-arrays))))))))
+                  :initial-value `(LeafArray (vector:make ,@(cl:first leaf-arrays))))))))
 
 ;; This method implementation uses :around because sum types implement
 ;; cl:print-object for each representation, to avoid a brittle design
