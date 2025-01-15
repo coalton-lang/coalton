@@ -2078,7 +2078,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
                        (output-schemes
                          (loop :for ty :in output-qual-tys
-                               :collect (tc:quantify (tc:apply-substitution subs local-tvars) ty)))
+                               :collect (tc:quantify (tc:type-variables (tc:apply-substitution subs local-tvars)) ty)))
 
                        (rewrite-table
                          (loop :with table := (make-hash-table :test #'eq)
