@@ -89,6 +89,8 @@
    #:or
    #:cond
    #:as
+   #:try-as
+   #:unwrap-as
    #:nest
    #:pipe
    #:.<
