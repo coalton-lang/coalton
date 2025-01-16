@@ -433,7 +433,7 @@ interleaving. (interleave empty ITER) is equivalent to (id ITER)."
   (declare mconcatmap! ((Monoid :a) => (:b -> :a) -> (Iterator :b) -> :a))
   (define (mconcatmap! func iter)
     "Map an iterator to an iterator of monoids, and then fold that iterator into a single element."
-    ((fold! <> mempty (map func iter))))
+    (fold! <> mempty (map func iter)))
 
   (declare pair-with! ((:key -> :value) -> Iterator :key -> Iterator (Tuple :key :value)))
   (define (pair-with! func keys)
