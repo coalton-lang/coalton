@@ -218,12 +218,12 @@ does not have that suffix."
   (define-instance (Into Single-Float String)
     (define (into z)
       (lisp String (z)
-        (cl:prin1-to-string z))))
+        (cl:format cl:nil "~F" z))))
 
   (define-instance (Into Double-Float String)
     (define (into z)
       (lisp String (z)
-        (cl:prin1-to-string z))))
+        (cl:format cl:nil "~F" z))))
 
   (define-instance (TryInto String Integer String)
     (define (tryInto s)
