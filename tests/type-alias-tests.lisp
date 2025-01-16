@@ -171,4 +171,14 @@
     (define from (.from t))"
 
    '("t" . "(Translation Integer)")
-   '("from" . "(Tuple Integer Integer)")))
+   '("from" . "(Tuple Integer Integer)"))
+
+  (check-coalton-types
+   "(define-type-alias S String)
+    (define-class (C :a)
+      (m (S -> :a)))
+    (define-instance (C Integer)
+    (define (m _) 5))
+    (declare s S)
+    (define s \"Hello, world!\")
+    (define x (the Integer (m s)))"))
