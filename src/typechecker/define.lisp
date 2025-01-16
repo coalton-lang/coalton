@@ -383,7 +383,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                  (setf fun-ty (tc:apply-substitution subs fun-ty))
                                  (tc-error "Argument error"
                                            (if (null (tc:function-type-arguments fun-ty))
-                                               (tc-note node "Unable to call '~S': it is not a function"
+                                               (tc-note node "Unable to call value of type '~S': it is not a function"
                                                         fun-ty)
                                                (tc-note node "Function call has ~D arguments but inferred type '~S' only takes ~D"
                                                         (length rands)
