@@ -20,7 +20,7 @@
    #:Functor #:map
    #:Applicative #:pure #:liftA2
    #:Monad #:>>=
-   #:>>
+   #:>> #:join
    #:MonadFail #:fail
    #:Alternative #:alt #:empty
    #:Foldable #:fold #:foldr #:mconcat #:mconcatmap
@@ -212,7 +212,13 @@
 
   (declare >> (Monad :m => (:m :a) -> (:m :b) -> (:m :b)))
   (define (>> a b)
+    "Equivalent to `(>>= a (fn (_) b))`."
     (>>= a (fn (_) b)))
+
+  (declare join (Monad :m => :m (:m :a) -> :m :a))
+  (define (join m)
+    "Equivalent to `(>>= m id)`."
+    (>>= m (fn (x) x)))
 
   (define-class (Monad :m => MonadFail :m)
     (fail (String -> :m :a)))
