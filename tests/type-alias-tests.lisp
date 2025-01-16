@@ -178,7 +178,7 @@
     (define-class (C :a)
       (m (S -> :a)))
     (define-instance (C Integer)
-    (define (m _) 5))
+      (define (m _) 5))
     (declare s S)
     (define s \"Hello, world!\")
     (define x (the Integer (m s)))"))
