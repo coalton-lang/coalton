@@ -36,6 +36,9 @@
   (define array/single-float (array:make 10 0.0))
   (declare array/double-float (array:LispArray Double-Float))
   (define array/double-float (array:make 10 0.0d0))
+
+  (declare array/array/complex-single-float (array:LispArray (array:LispArray (math:Complex Single-Float))))
+  (define array/array/complex-single-float (array:make 10 (array:make 10 0)))
   )
 
 (define-test array-length ()
@@ -79,3 +82,12 @@
   (is (== (array:set! array/double-float 0 2.71828d0) Unit))
   (is (== (array:aref array/double-float 0) 2.71828d0))
   )
+
+(define-test nested-complex-array-test ()
+  (let ((ty (types:runtime-repr-of array/array/complex-single-float)))
+    (is (lisp Boolean (ty)
+          (cl:equalp ty '(cl:simple-array
+                            (cl:simple-array
+                             (cl:complex cl:single-float)
+                             (cl:*))
+                            (cl:*)))))))
