@@ -29,7 +29,7 @@ error: Argument error
   --> test:4:10
    |
  4 |  (define y (x 1))
-   |            ^^^^^ Unable to call 'INTEGER': it is not a function
+   |            ^^^^^ Unable to call value of type 'INTEGER': it is not a function
 
 ================================================================================
 102 Declarations cannot be less specific than their associated definition
