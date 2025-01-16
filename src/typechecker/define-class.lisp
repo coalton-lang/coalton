@@ -405,10 +405,10 @@
                    :do (loop :for tyvar :in new-tyvars
                              :do (partial-type-env-add-var env tyvar))
 
-                   :collect (multiple-value-bind (ty ksubs_)
+                   :collect (multiple-value-bind (ty_ ksubs_)
                                 (infer-type-kinds ty tc:+kstar+ ksubs env)
                               (setf ksubs ksubs_)
-                              ty))))
+                              (apply-type-alias-substitutions ty_ ty env)))))
 
       (values (make-partial-class :superclasses preds
                                   :method-tys method-tys)
