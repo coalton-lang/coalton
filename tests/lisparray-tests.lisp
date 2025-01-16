@@ -86,7 +86,7 @@
 (define-test nested-complex-array-test ()
   (let ((ty (types:runtime-repr-of array/array/complex-single-float)))
     (is (lisp Boolean (ty)
-          (cl:equalp ty '(cl:simple-array
+          (cl:equal ty '(cl:simple-array
                             (cl:simple-array
                              (cl:complex cl:single-float)
                              (cl:*))

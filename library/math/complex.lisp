@@ -26,7 +26,9 @@
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (cl:defvar *native-complex-types* cl:nil
-  "A list of Common Lisp types that are native arguments to `cl:complex`.")
+  "A list of Common Lisp types that are native arguments to `cl:complex`.
+This list is populated by the macro `%define-native-complex-instances`
+below.")
 
 (coalton-toplevel
   ;; The representation of (Complex :t) is specially dealt with by the
@@ -41,7 +43,7 @@
         (lisp types:LispType (inner-type)
           (cl:if (cl:member inner-type *native-complex-types*)
                  `(cl:complex ,inner-type)
-                 'COMPLEX))))))
+                 'Complex))))))
 
 ;; Quirk: We had to split the above COALTON-TOPLEVEL from the bottom
 ;; one because Allegro needs to know about Complex before it gets used
@@ -148,7 +150,7 @@
        (divide (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-COMPLEX-DIVIDE"))))
 
     `(cl:progn
-       (cl:pushnew ',repr *native-complex-types*)
+       (cl:pushnew ',repr *native-complex-types* :test 'cl:equal)
 
        (coalton-toplevel
          (define-instance (Complex ,type)
