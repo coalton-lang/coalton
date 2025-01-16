@@ -1047,7 +1047,7 @@ Rebound to NIL parsing an anonymous FN.")
   (let ((nodes (mapcar (lambda (form) (parse-expression form source)) forms)))
     (make-node-progn
      :body (make-node-body
-            :nodes (nreverse (rest (reverse nodes)))
+            :nodes (butlast nodes)
             :last-node (first (last nodes)))
      :location (source:make-location
                 source
