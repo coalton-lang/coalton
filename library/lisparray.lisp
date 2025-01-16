@@ -31,6 +31,12 @@ These arrays are represented as possibly specialized `(cl:simple-array <type> (c
 
 Whether or not the arrays are specialized depends on the underlying Lisp implementation. Consult `cl:upgraded-array-element-type` to determine whether `LispArray` may get specialized.")
 
+  (define-instance (types:RuntimeRepr :t => types:RuntimeRepr (LispArray :t))
+    (define (types:runtime-repr v)
+      (let ((element-type (types:runtime-repr (types:proxy-inner v))))
+        (lisp types:LispType (element-type)
+          `(cl:simple-array ,element-type (cl:*))))))
+
   (declare make (types:RuntimeRepr :t => UFix -> :t -> LispArray :t))
   (define (make n x)
     "Make a new `LispArray` of length `n` initialized to `x`.

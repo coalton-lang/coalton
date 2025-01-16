@@ -496,6 +496,13 @@
 (defun maybe-runtime-repr-instance (type)
   (declare (type type-definition type))
   (unless (or (equalp *package* (find-package "COALTON-LIBRARY/TYPES"))
+              ;; LispArray and Complex instance of RuntimeRepr are
+              ;; defined in the standard library as specialized
+              ;; native types.
+              (and (equalp *package* (find-package "COALTON-LIBRARY/LISPARRAY"))
+                   (eq (type-definition-name type) (find-symbol "LISPARRAY" *package*)))
+              (and (equalp *package* (find-package "COALTON-LIBRARY/MATH/COMPLEX"))
+                   (eq (type-definition-name type) (find-symbol "COMPLEX" *package*)))
               (type-definition-aliased-type type))
     (make-runtime-repr-instance type)))
 
