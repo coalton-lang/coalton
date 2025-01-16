@@ -285,7 +285,7 @@ error: Invalid target for inline attribute
    |  --------------- when parsing define-type
 
 ================================================================================
-111 define-type, multiple constructor docstrings
+112 define-type, multiple constructor docstrings
 ================================================================================
 
 (package test-package)
@@ -302,7 +302,7 @@ error: Malformed type definition
    |                       ^^^^^^^^^^^^^^^^^^^ only one docstring allowed per constructor
 
 ================================================================================
-112 define-type, multiple type docstrings
+113 define-type, multiple type docstrings
 ================================================================================
 
 (package test-package)
