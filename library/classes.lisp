@@ -23,7 +23,8 @@
    #:>>
    #:MonadFail #:fail
    #:Alternative #:alt #:empty
-   #:Foldable #:fold #:foldr #:mconcat
+   #:Foldable #:fold #:foldr #:mconcat #:mconcatmap
+   #:mcommute?
    #:Traversable #:traverse
    #:Bifunctor #:bimap #:map-fst #:map-snd
    #:sequence
@@ -227,9 +228,19 @@
     (foldr "A right non-tail-recursive fold."  ((:elt -> :accum -> :accum) -> :accum -> :container :elt -> :accum)))
 
   (declare mconcat ((Foldable :f) (Monoid :a) => :f :a -> :a))
-  (define mconcat
+  (define (mconcat a)
     "Fold a container of monoids into a single element."
-    (fold <> mempty))
+    (fold <> mempty a))
+
+  (declare mconcatmap ((Foldable :f) (Monoid :a) => (:b -> :a) -> :f :b -> :a))
+  (define (mconcatmap f a)
+    "Map a container to a container of monoids, and then fold that container into a single element."
+    (fold (fn (a b) (<> a (f b))) mempty a))
+
+  (declare mcommute? ((Eq :a) (Semigroup :a) => :a -> :a -> Boolean))
+  (define (mcommute? a b)
+    "Does `a <> b` equal `b <> a`?"
+    (== (<> a b) (<> b a)))
 
   (define-class (Traversable :t)
     (traverse (Applicative :f => (:a -> :f :b) -> :t :a -> :f (:t :b))))
