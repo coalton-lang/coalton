@@ -332,9 +332,9 @@ Typical `fail` continuations are:
                     container))
 
   (declare unwrap-into ((Unwrappable (Result :c)) (TryInto :a :b :c) => :a -> :b))
-  (define unwrap-into
+  (define (unwrap-into x)
     "Same as `tryInto` followed by `unwrap`."
-    (fn (x) (unwrap (tryinto x))))
+    (unwrap (tryinto x)))
 
   (declare with-default ((Unwrappable :container) =>
                          :element
