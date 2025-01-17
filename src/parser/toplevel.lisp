@@ -1600,24 +1600,25 @@ consume all attributes")))
                  (stringp (cst:raw (cst:third form))))
         (setf docstring (cst:raw (cst:third form))))
 
-      (let ((methods (loop :with forms := (cst:nthrest (if docstring 3 2) form)
-                           :while (cst:raw forms)
-                           :for inline := (let ((form (cst:first forms)))
-                                              (when (and (cst:consp form)
-                                                         (eq 'coalton:inline (cst:raw (cst:first form))))
-                                                (if (null (cst:raw (cst:rest form)))
-                                                    (progn
-                                                      (setq forms (cst:rest forms))
-                                                      (parse-inline form source))
-                                                    (parse-error "Malformed inline form"
-                                                                 (note source form "expected list")))))
-                           :for method := (parse-instance-method-definition (cst:first forms) (cst:second form) source)
-                           :collect
-                           (progn
-                             (when inline
-                               (setf (instance-method-definition-inline method) inline))
-                             (setq forms (cst:rest forms))
-                             method))))
+      (let ((methods (loop :with inline := nil
+                           :for forms := (cst:nthrest (if docstring 3 2) form) :then (cst:rest forms)
+                           :while (cst:consp forms)
+                           :for method-or-attribute := (cst:first forms)
+                           :if (and (cst:consp method-or-attribute)
+                                    (eq 'coalton:inline (cst:raw (cst:first method-or-attribute))))
+                             :do (if inline
+                                     (parse-error "Duplicate inline attribute"
+                                                  (note source method-or-attribute "inline attribute here")
+                                                  (note source (source:location-span (attribute-inline-location inline)) "previous attribute here"))
+                                     (setf inline (parse-inline method-or-attribute source)))
+                           :else
+                             :collect (let ((method (parse-instance-method-definition method-or-attribute (cst:second form) source)))
+                                        (setf (instance-method-definition-inline-p method) inline
+                                              inline nil)
+                                        method)
+                           :finally (when inline
+                                      (parse-error "Unnecessary inline attribute"
+                                                   (note source method-or-attribute "inline attribute here"))))))
 
         (make-toplevel-define-instance
          :context context
