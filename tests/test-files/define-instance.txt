@@ -118,6 +118,19 @@
 (define-instance (P :a => PC (T :a) :a))
 
 ================================================================================
+11 Define instance with inline
+================================================================================
+
+(package coalton-unit-tests/prelude
+  (import coalton-prelude))
+
+(define-type D X Y Z)
+
+(define-instance (Eq D)
+  (inline)
+  (define (== _ _) True))
+
+================================================================================
 100 Malformed method definition
 ================================================================================
 
@@ -313,3 +326,41 @@ error: Malformed instance definition
    |
  3 |  (define-instance (C :a => (C (List :a)) :b))
    |                                          ^^ unexpected form
+
+================================================================================
+111 Malformed instance inline
+================================================================================
+
+(package test-package)
+
+(define-instance (C :a)
+  (inline))
+
+--------------------------------------------------------------------------------
+
+error: Unnecessary inline attribute
+  --> test:4:2
+   |
+ 4 |    (inline))
+   |    ^^^^^^^^ inline attribute here
+
+
+================================================================================
+112 Duplicate instance inline
+================================================================================
+
+(package test-package)
+
+(define-instance (C :a)
+  (inline)
+  (inline))
+
+--------------------------------------------------------------------------------
+
+error: Duplicate inline attribute
+  --> test:5:2
+   |
+ 4 |    (inline)
+   |    -------- previous attribute here
+ 5 |    (inline))
+   |    ^^^^^^^^ inline attribute here
