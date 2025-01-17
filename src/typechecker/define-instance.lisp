@@ -301,6 +301,16 @@
     (when (eq *package* types-package)
       (return-from check-instance-valid))
 
+    ;; Allow definition of LispArray and Complex instances of RuntimeRepr
+    (when (member *package* (list (find-package "COALTON-LIBRARY/LISPARRAY")
+                                  (find-package "COALTON-LIBRARY/MATH/COMPLEX")))
+      (let ((types (parser:ty-predicate-types (parser:toplevel-define-instance-pred instance))))
+        (when (and (= 1 (length types))
+                   (parser:tapp-p (first types))
+                   (member (parser:tycon-name (parser:tapp-from (first types)))
+                           (list (find-symbol "COMPLEX" *package*)
+                                 (find-symbol "LISPARRAY" *package*)))))
+        (return-from check-instance-valid)))
 
     (when (eq (parser:identifier-src-name (parser:ty-predicate-class (parser:toplevel-define-instance-pred instance))) runtime-repr)
       (tc-error "Invalid instance"

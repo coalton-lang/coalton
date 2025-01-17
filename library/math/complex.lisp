@@ -8,7 +8,8 @@
           #:coalton-library/utils
           #:coalton-library/math/arith)
   (:local-nicknames
-   (#:arith #:coalton-library/math/arith))
+   (#:arith #:coalton-library/math/arith)
+   (#:types #:coalton-library/types))
   (:export
    #:complex
    #:real-part
@@ -24,13 +25,25 @@
 #+coalton-release
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
+(cl:defvar *native-complex-types* cl:nil
+  "A list of Common Lisp types that are native arguments to `cl:complex`.
+This list is populated by the macro `%define-native-complex-instances`
+below.")
+
 (coalton-toplevel
   ;; The representation of (Complex :t) is specially dealt with by the
   ;; compiler in lisp-type.lisp.
   (define-type (Complex :a)
     "Complex number that may either have a native or constructed representation."
     (%Complex :a :a))
-)
+
+  (define-instance (types:RuntimeRepr :t => types:RuntimeRepr (Complex :t))
+    (define (types:runtime-repr a)
+      (let ((inner-type (types:runtime-repr (types:proxy-inner a))))
+        (lisp types:LispType (inner-type)
+          (cl:if (cl:member inner-type *native-complex-types*)
+                 `(cl:complex ,inner-type)
+                 'Complex))))))
 
 ;; Quirk: We had to split the above COALTON-TOPLEVEL from the bottom
 ;; one because Allegro needs to know about Complex before it gets used
@@ -128,6 +141,7 @@
              (general/ (imag-part dividend) divisor))))
 
 (cl:defmacro %define-native-complex-instances (type repr)
+
   (cl:let
       ((equal (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-COMPLEX-EQUAL")))
        (plus (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-COMPLEX-PLUS")))
@@ -135,53 +149,56 @@
        (times (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-COMPLEX-TIMES")))
        (divide (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-COMPLEX-DIVIDE"))))
 
-    `(coalton-toplevel
-       (define-instance (Complex ,type)
-         (define (complex a b)
+    `(cl:progn
+       (cl:pushnew ',repr *native-complex-types* :test 'cl:equal)
+
+       (coalton-toplevel
+         (define-instance (Complex ,type)
+           (define (complex a b)
+             (lisp (Complex ,type) (a b)
+               (cl:declare (cl:type ,repr a b))
+               (cl:complex a b)))
+           (define (real-part a)
+             (lisp ,type (a)
+               (cl:realpart a)))
+           (define (imag-part a)
+             (lisp ,type (a)
+               (cl:imagpart a))))
+
+         (specialize complex-equal ,equal (Complex ,type -> Complex ,type -> Boolean))
+         (declare ,equal (Complex ,type -> Complex ,type -> Boolean))
+         (define (,equal a b)
+           (lisp Boolean (a b)
+             (cl:declare (cl:type (cl:or ,repr (cl:complex ,repr))))
+             (cl:= a b)))
+
+         (specialize complex-plus ,plus (Complex ,type -> Complex ,type -> Complex ,type))
+         (declare ,plus (Complex ,type -> Complex ,type -> Complex ,type))
+         (define (,plus a b)
            (lisp (Complex ,type) (a b)
-             (cl:declare (cl:type ,repr a b))
-             (cl:complex a b)))
-         (define (real-part a)
-           (lisp ,type (a)
-             (cl:realpart a)))
-         (define (imag-part a)
-           (lisp ,type (a)
-             (cl:imagpart a))))
+             (cl:declare (cl:type (cl:or ,repr (cl:complex ,repr))))
+             (cl:+ a b)))
 
-       (specialize complex-equal ,equal (Complex ,type -> Complex ,type -> Boolean))
-       (declare ,equal (Complex ,type -> Complex ,type -> Boolean))
-       (define (,equal a b)
-         (lisp Boolean (a b)
-           (cl:declare (cl:type (cl:or ,repr (cl:complex ,repr))))
-           (cl:= a b)))
+         (specialize complex-minus ,minus (Complex ,type -> Complex ,type -> Complex ,type))
+         (declare ,minus (Complex ,type -> Complex ,type -> Complex ,type))
+         (define (,minus a b)
+           (lisp (Complex ,type) (a b)
+             (cl:declare (cl:type (cl:or ,repr (cl:complex ,repr))))
+             (cl:- a b)))
 
-       (specialize complex-plus ,plus (Complex ,type -> Complex ,type -> Complex ,type))
-       (declare ,plus (Complex ,type -> Complex ,type -> Complex ,type))
-       (define (,plus a b)
-         (lisp (Complex ,type) (a b)
-           (cl:declare (cl:type (cl:or ,repr (cl:complex ,repr))))
-           (cl:+ a b)))
+         (specialize complex-times ,times (Complex ,type -> Complex ,type -> Complex ,type))
+         (declare ,times (Complex ,type -> Complex ,type -> Complex ,type))
+         (define (,times a b)
+           (lisp (Complex ,type) (a b)
+             (cl:declare (cl:type (cl:or ,repr (cl:complex ,repr))))
+             (cl:* a b)))
 
-       (specialize complex-minus ,minus (Complex ,type -> Complex ,type -> Complex ,type))
-       (declare ,minus (Complex ,type -> Complex ,type -> Complex ,type))
-       (define (,minus a b)
-         (lisp (Complex ,type) (a b)
-           (cl:declare (cl:type (cl:or ,repr (cl:complex ,repr))))
-           (cl:- a b)))
-
-       (specialize complex-times ,times (Complex ,type -> Complex ,type -> Complex ,type))
-       (declare ,times (Complex ,type -> Complex ,type -> Complex ,type))
-       (define (,times a b)
-         (lisp (Complex ,type) (a b)
-           (cl:declare (cl:type (cl:or ,repr (cl:complex ,repr))))
-           (cl:* a b)))
-
-       (specialize complex-divide ,divide (Complex ,type -> Complex ,type -> Complex ,type))
-       (declare ,divide (Complex ,type -> Complex ,type -> Complex ,type))
-       (define (,divide a b)
-         (lisp (Complex ,type) (a b)
-           (cl:declare (cl:type (cl:or ,repr (cl:complex ,repr))))
-           (cl:/ a b))))))
+         (specialize complex-divide ,divide (Complex ,type -> Complex ,type -> Complex ,type))
+         (declare ,divide (Complex ,type -> Complex ,type -> Complex ,type))
+         (define (,divide a b)
+           (lisp (Complex ,type) (a b)
+             (cl:declare (cl:type (cl:or ,repr (cl:complex ,repr))))
+             (cl:/ a b)))))))
 
 (%define-native-complex-instances U8 (cl:unsigned-byte 8))
 (%define-native-complex-instances U16 (cl:unsigned-byte 16))
