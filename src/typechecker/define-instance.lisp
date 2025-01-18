@@ -116,10 +116,10 @@
                      :for method-def :in (parser:toplevel-define-instance-methods instance)
                      :for method-name := (parser:node-variable-name
                                           (parser:instance-method-definition-name method-def))
-                     :for method-inline-p := (parser:instance-method-definition-inline-p method-def)
+                     :for method-inline := (parser:instance-method-definition-inline method-def)
                      :do (setf (tc:get-value table method-name)
                                ;; Convert from attribute inline to boolean
-                               (if method-inline-p t nil))
+                               (if method-inline t nil))
                      :finally (return table)))
 
              (instance-entry
