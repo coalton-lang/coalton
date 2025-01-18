@@ -99,12 +99,9 @@
                                     t))
 
                   (loop :for ty-instance :in ty-instances
-                        :for method-codegen-syms := (tc:get-table (tc:ty-class-instance-method-codegen-syms ty-instance))
-                        :for method-inline-p := (tc:ty-class-instance-method-inline-p ty-instance)
-                        :do (maphash (lambda (method-name method-codegen-sym)
-                                       (when (tc:get-value method-inline-p method-name)
-                                         (setf (gethash method-codegen-sym inline-p-table) t)))
-                                     method-codegen-syms))
+                        :for method-codegen-inline-p := (tc:ty-class-instance-method-codegen-inline-p ty-instance)
+                        :do (loop :for (method-codegen-sym . inline-p) :in method-codegen-inline-p
+                                  :do (when inline-p (setf (gethash method-codegen-sym inline-p-table) t))))
 
                   (analysis:analyze-translation-unit translation-unit env)
 
