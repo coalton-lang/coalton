@@ -87,13 +87,13 @@
                                     t))
 
                   (loop :for define :in (parser:program-defines program)
-                        :when (parser:toplevel-define-inline-p define)
+                        :when (parser:toplevel-define-inline define)
                           :do (setf (gethash (parser:node-variable-name (parser:toplevel-define-name define))
                                              inline-p-table)
                                     t))
 
                   (loop :for declare :in (parser:program-declares program)
-                        :when (parser:toplevel-declare-inline-p declare)
+                        :when (parser:toplevel-declare-inline declare)
                           :do (setf (gethash (parser:identifier-src-name (parser:toplevel-declare-name declare))
                                              inline-p-table)
                                     t))

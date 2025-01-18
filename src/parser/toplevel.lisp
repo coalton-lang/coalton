@@ -338,7 +338,7 @@
   (type         (util:required 'type)         :type qualified-ty                     :read-only t)
   (location     (util:required 'location)     :type source:location                  :read-only t)
   (monomorphize (util:required 'monomorphize) :type (or null attribute-monomorphize) :read-only nil)
-  (inline       (util:required 'inline  )     :type (or null attribute-inline)       :read-only nil))
+  (inline       (util:required 'inline)       :type (or null attribute-inline)       :read-only nil))
 
 (defmethod source:location ((self toplevel-declare))
   (toplevel-declare-location self))
@@ -359,7 +359,7 @@
   (orig-params  (util:required 'orig-params)  :type pattern-list                     :read-only t)
   (body         (util:required 'body)         :type node-body                        :read-only t)
   (monomorphize (util:required 'monomorphize) :type (or null attribute-monomorphize) :read-only nil)
-  (inline       (util:required 'inline  )     :type (or null attribute-inline)       :read-only nil))
+  (inline       (util:required 'inline)       :type (or null attribute-inline)       :read-only nil))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-define-list-p (x)
@@ -1613,7 +1613,7 @@ consume all attributes")))
                                      (setf inline (parse-inline method-or-attribute source)))
                            :else
                              :collect (let ((method (parse-instance-method-definition method-or-attribute (cst:second form) source)))
-                                        (setf (instance-method-definition-inline-p method) inline
+                                        (setf (instance-method-definition-inline method) inline
                                               inline nil)
                                         method)
                            :finally (when inline
