@@ -111,16 +111,18 @@
                                                                       method-name))
                                           method-names))
 
-             (method-inline-p
-               (loop :with table := (tc:make-map :test 'eq)
-                     :for method-def :in (parser:toplevel-define-instance-methods instance)
-                     :for method-name := (parser:node-variable-name
-                                          (parser:instance-method-definition-name method-def))
+             (method-codegen-inline-p
+               (loop :with alist := ()
+                     :for method-name :in method-names
+                     :for method-codegen-sym :in method-codegen-syms
+                     :for method-def := (find method-name (parser:toplevel-define-instance-methods instance)
+                                              :key (lambda (method-def)
+                                                     (parser:node-variable-name
+                                                      (parser:instance-method-definition-name method-def))))
                      :for method-inline := (parser:instance-method-definition-inline method-def)
-                     :do (setf (tc:get-value table method-name)
-                               ;; Convert from attribute inline to boolean
-                               (if method-inline t nil))
-                     :finally (return table)))
+                     ;; Convert from attribute inline to boolean
+                     :do (push (cons method-codegen-sym (if method-inline t nil)) alist)
+                     :finally (return alist)))
 
              (instance-entry
                (tc:make-ty-class-instance
@@ -128,7 +130,7 @@
                 :predicate pred
                 :codegen-sym instance-codegen-sym
                 :method-codegen-syms method-codegen-syms
-                :method-inline-p method-inline-p
+                :method-codegen-inline-p method-codegen-inline-p
                 :docstring (source:docstring instance))))
 
         (cond (context
