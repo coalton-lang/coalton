@@ -843,6 +843,10 @@ If the attribute is not unique, or a monomorphize attribute is present, signal a
                 (attribute-monomorphize
                  (parse-error "Invalid target for monomorphize attribute"
                               (source:note attribute "monomorphize must be attached to a define or declare form")
+                              (source:secondary-note toplevel-form message)))
+                (attribute-inline
+                 (parse-error "Invalid target for inline attribute"
+                              (source:note attribute "inline must be attached to a define or declare form")
                               (source:secondary-note toplevel-form message)))))
     (setf (fill-pointer attributes) 0)
     repr))
@@ -1609,7 +1613,7 @@ consume all attributes")))
                              :do (if inline
                                      (parse-error "Duplicate inline attribute"
                                                   (note source method-or-attribute "inline attribute here")
-                                                  (note source (source:location-span (attribute-inline-location inline)) "previous attribute here"))
+                                                  (source:secondary-note (attribute-inline-location inline) "previous attribute here"))
                                      (setf inline (parse-inline method-or-attribute source)))
                            :else
                              :collect (let ((method (parse-instance-method-definition method-or-attribute (cst:second form) source)))

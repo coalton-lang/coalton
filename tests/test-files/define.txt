@@ -190,7 +190,7 @@ error: Duplicate inline attribute
  4 |  (inline)
    |  ^^^^^^^^ inline attribute here
  5 |  (define f x)
-   |          - when parsing define
+   |  ------------ when parsing define
 
 ================================================================================
 Malformed definition
