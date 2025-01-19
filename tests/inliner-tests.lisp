@@ -7,20 +7,6 @@
   (is (== 1 (1+
              ((fn (x) (return x)) 0)))))
 
-(in-package #:coalton-tests)
-
-;; See gh #1293
-(deftest test-inliner-rename-bound-variables ()
-  (check-coalton-types
-   "(declare f (Integer -> Integer))
-    (define (f n)
-      (when (== n 0)
-        (return 0))
-      (when (== n 1)
-        (return 1))
-      (+ (f (- n 1))
-         (f (- n 2))))"))
-
 (coalton-toplevel
   (declare two-arg-double-float-add
      (Double-Float -> Double-Float -> Double-Float))
@@ -78,6 +64,18 @@
 
 
 (in-package #:coalton-tests)
+
+;; See gh #1293
+(deftest test-inliner-rename-bound-variables ()
+  (check-coalton-types
+   "(declare f (Integer -> Integer))
+    (define (f n)
+      (when (== n 0)
+        (return 0))
+      (when (== n 1)
+        (return 1))
+      (+ (f (- n 1))
+         (f (- n 2))))"))
 
 (deftest function-inline-error ()
   (signals coalton-impl/parser:parse-error
