@@ -1621,7 +1621,7 @@ consume all attributes")))
                                               inline nil)
                                         method)
                            :finally (when inline
-                                      (parse-error "Unnecessary inline attribute"
+                                      (parse-error "Inline attribute must be attached to a method definition"
                                                    (note source method-or-attribute "inline attribute here"))))))
 
         (make-toplevel-define-instance
