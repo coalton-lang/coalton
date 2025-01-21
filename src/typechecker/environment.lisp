@@ -686,12 +686,12 @@
 ;;;
 
 (defstruct ty-class-instance
-  (constraints             (util:required 'constraints)         :type ty-predicate-list :read-only t)
-  (predicate               (util:required 'predicate)           :type ty-predicate      :read-only t)
-  (codegen-sym             (util:required 'codegen-sym)         :type symbol            :read-only t)
-  (method-codegen-syms     (util:required 'method-codegen-syms) :type util:symbol-list  :read-only t)
-  (method-codegen-inline-p (util:required 'method-codegen-inline-p) :type list    :read-only t)
-  (docstring               (util:required 'docstring)           :type (or null string)  :read-only t))
+  (constraints             (util:required 'constraints)             :type ty-predicate-list :read-only t)
+  (predicate               (util:required 'predicate)               :type ty-predicate      :read-only t)
+  (codegen-sym             (util:required 'codegen-sym)             :type symbol            :read-only t)
+  (method-codegen-syms     (util:required 'method-codegen-syms)     :type util:symbol-list  :read-only t)
+  (method-codegen-inline-p (util:required 'method-codegen-inline-p) :type list              :read-only t)
+  (docstring               (util:required 'docstring)               :type (or null string)  :read-only t))
 
 (defmethod source:docstring ((self ty-class-instance))
   (ty-class-instance-docstring self))
