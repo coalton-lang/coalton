@@ -338,7 +338,7 @@ error: Malformed instance definition
 
 --------------------------------------------------------------------------------
 
-error: Unnecessary inline attribute
+error: Inline attribute must be attached to a method definition
   --> test:4:2
    |
  4 |    (inline))
