@@ -173,7 +173,7 @@
              ,(codegen-expression (match-branch-body (second (node-match-branches expr))) env))))
 
     ;; If we can use case, do that because a jump table is faster than cond
-    (when (or (subtypep (print (tc:lisp-type (node-type (node-match-expr expr)) env)) 'number)
+    (when (or (subtypep (tc:lisp-type (node-type (node-match-expr expr)) env) 'number)
               (subtypep (tc:lisp-type (node-type (node-match-expr expr)) env) 'character))
       (return-from codegen-expression
         (let ((subexpr (codegen-expression (node-match-expr expr) env))
@@ -191,10 +191,12 @@
                        (multiple-value-bind (pred bindings)
                            (codegen-pattern pattern match-var env)
                          (declare (ignore pred))
-                         (if bindings
-                             `(otherwise (let ,bindings ,expr))
+                         (if (pattern-literal-p pattern)
                              `(,(pattern-literal-value pattern)
-                               ,expr))))
+                               ,expr)
+                             `(otherwise (let ,bindings ,expr)))))
+
+               ;; Only emit a fallback if there is not a catch-all clause.
                ,@(unless (member-if (lambda (pat)
                                       (or (pattern-wildcard-p pat)
                                           (pattern-var-p pat)))
