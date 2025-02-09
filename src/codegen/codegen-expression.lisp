@@ -172,6 +172,37 @@
              ,(codegen-expression (match-branch-body (first (node-match-branches expr))) env)
              ,(codegen-expression (match-branch-body (second (node-match-branches expr))) env))))
 
+    ;; If we can use case, do that because a jump table is faster than cond
+    (when (or (subtypep (print (tc:lisp-type (node-type (node-match-expr expr)) env)) 'number)
+              (subtypep (tc:lisp-type (node-type (node-match-expr expr)) env) 'character))
+      (return-from codegen-expression
+        (let ((subexpr (codegen-expression (node-match-expr expr) env))
+              (match-var (gensym "MATCH") ))
+          `(let ((,match-var
+                   ,(if settings:*emit-type-annotations*
+                        `(the ,(tc:lisp-type (node-type (node-match-expr expr)) env) ,subexpr)
+                        subexpr)))
+             (declare (ignorable ,match-var))
+             (case ,(codegen-expression (node-match-expr expr) env)
+               ,@(loop :for branch :in (node-match-branches expr)
+                       :for pattern := (match-branch-pattern branch)
+                       :for expr := (codegen-expression (match-branch-body branch) env)
+                       :collect
+                       (multiple-value-bind (pred bindings)
+                           (codegen-pattern pattern match-var env)
+                         (declare (ignore pred))
+                         (if bindings
+                             `(otherwise (let ,bindings ,expr))
+                             `(,(pattern-literal-value pattern)
+                               ,expr))))
+               ,@(unless (member-if (lambda (pat)
+                                      (or (pattern-wildcard-p pat)
+                                          (pattern-var-p pat)))
+                                    (node-match-branches expr)
+                                    :key #'match-branch-pattern)
+                   `((otherwise
+                      (error "Pattern match not exhaustive error")))))))))
+
     ;; Otherwise do the thing
     (let ((subexpr (codegen-expression (node-match-expr expr) env))
           (match-var (gensym "MATCH")))
