@@ -38,6 +38,7 @@
 The hash function must satisfy the invariant that `(== left right)` implies `(== (hash left) (hash right))`."
     (hash (:a -> Hash)))
 
+  (inline)
   (declare combine-hashes (Hash -> Hash -> Hash))
   (define (combine-hashes lhs rhs)
     (lisp Hash (lhs rhs)
@@ -56,17 +57,20 @@ The hash function must satisfy the invariant that `(== left right)` implies `(==
       ;; logand required on ccl to force the output to be a fixnum
       #+ccl (cl:logand (cl:logxor lhs (cl:+ rhs #x517cc1b727220a95 (cl:ash lhs 6) (cl:ash lhs -2))) cl:most-positive-fixnum)))
 
+  (inline)
   (declare combine-hashes-order-independent (Hash -> Hash -> Hash))
   (define (combine-hashes-order-independent lhs rhs)
     (lisp Hash (lhs rhs)
       (cl:logxor lhs rhs)))
 
   (define-instance (Eq Hash)
+    (inline)
     (define (== a b)
       (lisp Boolean (a b)
         (cl:= a b))))
 
   (define-instance (Ord Hash)
+    (inline)
     (define (<=> a b)
       (if (== a b)
           EQ
@@ -75,6 +79,7 @@ The hash function must satisfy the invariant that `(== left right)` implies `(==
               LT))))
 
   (define-instance (Semigroup Hash)
+    (inline)
     (define (<> a b)
       (combine-hashes a b)))
 
@@ -84,6 +89,7 @@ The hash function must satisfy the invariant that `(== left right)` implies `(==
         0)))
 
   (define-instance (Default Hash)
+    (inline)
     (define (default)
       (lisp Hash ()
         0))))
@@ -91,6 +97,7 @@ The hash function must satisfy the invariant that `(== left right)` implies `(==
 (cl:defmacro define-sxhash-hasher (type)
   `(coalton-toplevel
      (define-instance (Hash ,type)
+       (inline)
        (define (hash item)
          (lisp Hash (item)
            (cl:sxhash item))))))
