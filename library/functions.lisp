@@ -52,6 +52,7 @@
     "Print the String representation of `item` to `cl:*standard-output*`."
     (trace (into item)))
 
+  (inline)
   (declare unsafe-pointer-eq? (:a -> :a -> Boolean))
   (define (unsafe-pointer-eq? a b)
     (lisp Boolean (a b)
@@ -73,21 +74,25 @@
             (* n (f (- n 1)))))))"
     (f (fix f) n))
 
+  (inline)
   (declare id (:a -> :a))
   (define (id x)
     "A function that always returns its argument."
     x)
 
+  (inline)
   (declare const (:a -> :b -> :a))
   (define (const a _b)
     "A function that always returns its first argument."
     a)
 
+  (inline)
   (declare flip ((:a -> :b -> :c) -> :b -> :a -> :c))
   (define (flip f x y)
     "Returns a function that takes its arguments in reverse order."
     (f y x))
 
+  (inline)
   (declare reduce (Foldable :f => (:a -> :b -> :b) -> :b -> (:f :a) -> :b))
   (define (reduce f y xs)
     "The same as `fold` but with the argument order swapped to match `cl:reduce`"
@@ -97,6 +102,7 @@
   ;; We don't write (COMPOSE F G X) even though it's OK so that the
   ;; most common case of using compose---as a binary function---is
   ;; considered to be "saturated".
+  (inline)
   (declare compose ((:b -> :c) -> (:a -> :b) -> (:a -> :c)))
   (define (compose f g)
     "Produces a function equivalent to applying `g` followed by `f`."
@@ -104,26 +110,31 @@
     (fn (x)
       (f (g x))))
 
+  (inline)
   (declare conjoin ((:a -> Boolean) -> (:a -> Boolean) -> :a -> Boolean))
   (define (conjoin f g x)
     "Compute the conjunction of two unary Boolean functions."
     (and (f x) (g x)))
 
+  (inline)
   (declare disjoin ((:a -> Boolean) -> (:a -> Boolean) -> :a -> Boolean))
   (define (disjoin f g x)
     "Compute the disjunction of two unary Boolean functions."
     (or (f x) (g x)))
 
+  (inline)
   (declare complement ((:a -> Boolean) -> :a -> Boolean))
   (define (complement f x)
     "Compute the complement of a unary Boolean function."
     (not (f x)))
 
+  (inline)
   (declare curry ((Tuple :left :right -> :result) -> :left -> :right -> :result))
   (define (curry func left right)
     "Take a function whose input is a tuple and enable curried application of the left and right parameters, equivalent to `(func (Tuple left right))`."
     (func (Tuple left right)))
 
+  (inline)
   (declare uncurry ((:left -> :right -> :result) -> Tuple :left :right -> :result))
   (define (uncurry func tpl)
     "Take a function with two currying parameters and enable their input as a single `Tuple`."
@@ -131,6 +142,7 @@
       ((Tuple left right)
        (func left right))))
 
+  (inline)
   (declare pair-with ((:left -> :right) -> :left -> Tuple :left :right))
   (define (pair-with func left)
     "Create a `Tuple` of the form `(Tuple left (func left))`."
@@ -140,16 +152,19 @@
   ;; Monadic operators
   ;;
 
+  (inline)
   (declare msum ((Monoid :a) (Foldable :t) => :t :a -> :a))
   (define (msum xs)
     "Fold over a list using `<>`."
     (foldr <> mempty xs))
 
+  (inline)
   (declare asum ((Alternative :f) (Foldable :t) => :t (:f :a) -> :f :a))
   (define (asum xs)
     "Fold over a list using `alt`."
     (foldr alt empty xs))
 
+  (inline)
   (declare /= (Eq :a => :a -> :a -> Boolean))
   (define (/= a b)
     "Is `a` not equal to `b`?"
@@ -160,13 +175,17 @@
   ;;
 
   (define-instance (Functor (Arrow :a))
+    (inline)
     (define map compose))
 
   (define-instance (Applicative (Arrow :a))
+    (inline)
     (define (pure x) (fn (_) x))
+    (inline)
     (define (liftA2 f g h) (fn (x) (f (g x) (h x)))))
 
   (define-instance (Monad (Arrow :a))
+    (inline)
     (define (>>= f g) (fn (x) (g (f x) x)))))
 
 ;;;
