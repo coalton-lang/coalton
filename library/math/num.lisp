@@ -46,6 +46,7 @@
     (cl:eval-when (:compile-toplevel :load-toplevel)
       (cl:defmacro define-eq (type)
         `(define-instance (Eq ,type)
+           (inline)
            (define (== a b)
              (lisp Boolean (a b)
                ;; Use cl:= so that (== 0.0 -0.0) => True
@@ -83,6 +84,7 @@
 
           `(progn
              (define-instance (Ord ,type)
+               (inline)
                (define (<=> a b)
                  (lisp Ord (a b)
                    (cl:cond
@@ -94,24 +96,28 @@
                       EQ)))))
 
              (specialize > ,>-spec (,type -> ,type -> Boolean))
+             (inline)
              (declare ,>-spec (,type -> ,type -> Boolean))
              (define (,>-spec a b)
                (lisp Boolean (a b)
                  (to-boolean (cl:> a b))))
 
              (specialize >= ,>=-spec (,type -> ,type -> Boolean))
+             (inline)
              (declare ,>=-spec (,type -> ,type -> Boolean))
              (define (,>=-spec a b)
                (lisp Boolean (a b)
                  (to-boolean (cl:>= a b))))
 
              (specialize < ,<-spec (,type -> ,type -> Boolean))
+             (inline)
              (declare ,<-spec (,type -> ,type -> Boolean))
              (define (,<-spec a b)
                (lisp Boolean (a b)
                  (to-boolean (cl:< a b))))
 
              (specialize <= ,<=-spec (,type -> ,type -> Boolean))
+             (inline)
              (declare ,<=-spec (,type -> ,type -> Boolean))
              (define (,<=-spec a b)
                (lisp Boolean (a b)
@@ -171,18 +177,22 @@
       (cl:defmacro define-num-checked (type overflow-handler)
         "Define a `Num' instance for TYPE which signals on overflow."
         `(define-instance (Num ,type)
+           (inline)
            (define (+ a b)
              (lisp ,type (a b)
                (,overflow-handler (cl:+ a b))))
 
+           (inline)
            (define (- a b)
              (lisp ,type (a b)
                (,overflow-handler (cl:- a b))))
 
+           (inline)
            (define (* a b)
              (lisp ,type (a b)
                (,overflow-handler (cl:* a b))))
 
+           (inline)
            (define (fromInt x)
              (lisp ,type (x)
                (,overflow-handler x))))))
@@ -191,18 +201,22 @@
       (cl:defmacro define-num-wrapping (type bits)
         "Define a `Num' instance for TYPE which wraps on overflow."
         `(define-instance (Num ,type)
+           (inline)
            (define (+ a b)
              (lisp ,type (a b)
                (cl:values (cl:mod (cl:+ a b) ,(cl:expt 2 bits)))))
 
+           (inline)
            (define (- a b)
              (lisp ,type (a b)
                (cl:values (cl:mod (cl:- a b) ,(cl:expt 2 bits)))))
 
+           (inline)
            (define (* a b)
              (lisp ,type (a b)
                (cl:values (cl:mod (cl:* a b) ,(cl:expt 2 bits)))))
 
+           (inline)
            (define (fromInt x)
              (lisp ,type (x)
                (cl:values (cl:mod x ,(cl:expt 2 bits)))))))))
@@ -243,24 +257,28 @@
         ;;
 
         `(define-instance (Num ,type)
+           (inline)
            (define (+ a b)
              (lisp ,type (a b)
                (#+(not ccl) cl:progn
                   #+ccl ff:with-float-traps-masked #+ccl cl:t
                   (cl:+ a b))))
 
+           (inline)
            (define (- a b)
              (lisp ,type (a b)
                (#+(not ccl) cl:progn
                   #+ccl ff:with-float-traps-masked #+ccl cl:t
                   (cl:- a b))))
 
+           (inline)
            (define (* a b)
              (lisp ,type (a b)
                (#+(not ccl) cl:progn
                   #+ccl ff:with-float-traps-masked #+ccl cl:t
                   (cl:* a b))))
 
+           (inline)
            (define (fromInt x)
              (lisp ,type (x)
                (cl:or (cl:ignore-errors (cl:coerce x ',lisp-type))
@@ -280,6 +298,7 @@
     (cl:eval-when (:compile-toplevel :load-toplevel)
       (cl:defmacro define-float-fraction-conversion (type)
         `(define-instance (TryInto ,type Fraction String)
+           (inline)
            (define (tryInto x)
              (if (finite? x)
                  (Ok (lisp Fraction (x) (cl:rational x)))
@@ -297,6 +316,7 @@
     (cl:eval-when (:compile-toplevel :load-toplevel)
       (cl:defmacro define-reciprocable-float (type)
         `(define-instance (Reciprocable ,type)
+           (inline)
            (define (/ x y)
              (cond
                #+allegro
@@ -322,6 +342,7 @@
                      #+ccl ff:with-float-traps-masked #+ccl cl:t
                      (cl:/ x y))))))
 
+           (inline)
            (define (reciprocal x)
              (cond
                #+allegro
@@ -337,6 +358,7 @@
     (cl:eval-when (:compile-toplevel :load-toplevel)
       (cl:defmacro define-dividable-float (type lisp-type)
         `(define-instance (Dividable Integer ,type)
+           (inline)
            (define (general/ x y)
              (if (== y 0)
                  (/ (fromInt x) (fromInt y))
@@ -361,22 +383,27 @@
     (cl:eval-when (:compile-toplevel :load-toplevel)
       (cl:defmacro define-bits-checked (type handle-overflow)
         `(define-instance (bits:Bits ,type)
+           (inline)
            (define (bits:and a b)
              (lisp ,type (a b)
                (cl:logand a b)))
 
+           (inline)
            (define (bits:or a b)
              (lisp ,type (a b)
                (cl:logior a b)))
 
+           (inline)
            (define (bits:xor a b)
              (lisp ,type (a b)
                (cl:logxor a b)))
 
+           (inline)
            (define (bits:not x)
              (lisp ,type (x)
                (cl:lognot x)))
 
+           (inline)
            (define (bits:shift amount bits)
              (lisp ,type (amount bits)
                (,handle-overflow (cl:ash bits amount)))))))
@@ -392,22 +419,27 @@
     (cl:eval-when (:compile-toplevel :load-toplevel)
       (cl:defmacro define-bits-wrapping (type width)
         `(define-instance (bits:Bits ,type)
+           (inline)
            (define (bits:and a b)
              (lisp ,type (a b)
                (cl:logand a b)))
 
+           (inline)
            (define (bits:or a b)
              (lisp ,type (a b)
                (cl:logior a b)))
 
+           (inline)
            (define (bits:xor a b)
              (lisp ,type (a b)
                (cl:logxor a b)))
 
+           (inline)
            (define (bits:not x)
              (lisp ,type (x)
                (unsigned-lognot x ,width)))
 
+           (inline)
            (define (bits:shift amount bits)
              (lisp ,type (amount bits)
                (cl:logand (cl:ash bits amount)
@@ -453,6 +485,7 @@
     (cl:eval-when (:compile-toplevel :load-toplevel)
       (cl:defmacro define-default-num (type)
         `(define-instance (Default ,type)
+           (inline)
            (define (default) 0)))))
 
   (define-default-num I8)
