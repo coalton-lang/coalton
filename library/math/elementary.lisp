@@ -51,6 +51,7 @@
     (atan  (:a -> :a))
     (pi    (:a)))
 
+  (inline)
   (declare sincos (Trigonometric :a => :a -> (Tuple :a :a)))
   (define (sincos x)
     "Computes the sine and cosine of X."
@@ -99,6 +100,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
     (phase ((Complex :a) -> :a))
     (polar ((Complex :a) -> (Tuple :a :a))))
 
+  (inline)
   (define (magnitude z)
     "For `z = x + yi`,
 
@@ -106,6 +108,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
     (magnitude z) = (sqrt (+ (^ x 2) (^ y 2)))"
     (sqrt (square-magnitude z)))
 
+  (inline)
   (declare cis ((Trigonometric :a) (Complex :a) => :a -> (Complex :a)))
   (define (cis z)
     "A point on the complex unit circle:
@@ -124,34 +127,42 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
 
   ;; See http://clhs.lisp.se/Body/f_sinh_.htm
 
+  (inline)
   (declare sinh ((Elementary :f) => :f -> :f))
   (define (sinh x)
     (/ (- (exp x) (exp (negate x))) 2))
 
+  (inline)
   (declare cosh ((Elementary :f) => :f -> :f))
   (define (cosh x)
     (/ (+ (exp x) (exp (negate x))) 2))
 
+  (inline)
   (declare tanh ((Elementary :f) => :f -> :f))
   (define (tanh x)
     (/ (sinh x) (cosh x)))
 
+  (inline)
   (declare asinh ((Elementary :f) => :f -> :f))
   (define (asinh x)
     (ln (+ x (sqrt (+ 1 (pow x 2))))))
 
+  (inline)
   (declare acosh ((Elementary :f) => :f -> :f))
   (define (acosh x)
     (* 2 (ln (+ (sqrt (/ (+ x 1) 2)) (sqrt (/ (- x 1) 2))))))
 
+  (inline)
   (declare atanh ((Elementary :f) => :f -> :f))
   (define (atanh x)
     (/ (- (ln (+ 1 x)) (ln (- 1 x))) (fromInt 2)))
 
+  (inline)
   (define (canonical-nth-root n x)
     "By definition implementation of `nth-root` for reals"
     (pow x (reciprocal (fromInt n))))
 
+  (inline)
   (define (canonical-polar z)
     "By definition implementation of `polar`"
     (let x = (real-part z))
@@ -175,6 +186,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
   "Defines the elmentary instances for a lisp floating-point type"
   `(coalton-toplevel
      (define-instance (Trigonometric ,coalton-type)
+       (inline)
        (define (sin x)
          (cond
            ;; CCL signals errors when applying trigonometric functions to NaN and infinity
@@ -188,6 +200,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
                  #+ccl ff:with-float-traps-masked #+ccl cl:t
                  (cl:sin x))))))
 
+       (inline)
        (define (cos x)
          (cond
            ;; CCL signals errors when applying trigonometric functions to NaN and infinity
@@ -201,6 +214,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
                  #+ccl ff:with-float-traps-masked #+ccl cl:t
                  (cl:cos x))))))
 
+       (inline)
        (define (tan x)
          (cond
            ;; CCL signals errors when applying trigonometric functions to NaN and infinity
@@ -214,6 +228,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
                  #+ccl ff:with-float-traps-masked #+ccl cl:t
                  (cl:tan x))))))
 
+       (inline)
        (define (asin x)
          (cond
            ;; CCL signals errors when applying trigonometric functions to NaN and infinity
@@ -229,6 +244,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
                      #+ccl ff:with-float-traps-masked #+ccl cl:t
                      (cl:asin x)))))))
 
+       (inline)
        (define (acos x)
          (if (or (nan? x) (> x 1) (< x -1))
              nan
@@ -237,6 +253,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
                   #+ccl ff:with-float-traps-masked #+ccl cl:t
                   (cl:acos x)))))
 
+       (inline)
        (define (atan x)
          (cond
            ;; CCL signals errors when applying trigonometric functions to NaN and infinity
@@ -254,15 +271,18 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
            (cl:coerce cl:pi ',underlying-type))))
 
      (define-instance (Polar ,coalton-type)
+       (inline)
        (define (phase x)
          (lisp ,coalton-type (x)
            (#+(not ccl) cl:progn
               #+ccl ff:with-float-traps-masked #+ccl cl:t
               (cl:phase x))))
+       (inline)
        (define (polar x)
          (Tuple (magnitude x) (phase x))))
 
      (define-instance (Exponentiable ,coalton-type)
+       (inline)
        (define (pow x y)
          (cond
            ((or (nan? x) (nan? y)) nan)
@@ -285,6 +305,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
                  #+ccl ff:with-float-traps-masked #+ccl cl:t
                  (cl:expt x y))))))
 
+       (inline)
        (define (exp x)
          (cond
            ;; Allegro signals overflow and underflow errors when using infinity in exponents
@@ -304,6 +325,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
                           (cl:realpart res)
                           res)))))))
 
+       (inline)
        (define (log b x)
          (cond
            ((or (nan? b) (nan? x)) nan)
@@ -319,6 +341,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
                  (cl:log x b))))
            (True nan)))
 
+       (inline)
        (define (ln x)
          (cond
            ((nan? x) nan)
@@ -332,6 +355,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
            (cl:exp (cl:coerce 1 ',underlying-type)))))
 
      (define-instance (Radical ,coalton-type)
+       (inline)
        (define (sqrt x)
          (if (or (nan? x) (< x 0))
              nan
@@ -339,6 +363,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
                (#+(not ccl) cl:progn
                   #+ccl ff:with-float-traps-masked #+ccl cl:t
                   (cl:sqrt x)))))
+       (inline)
        (define (nth-root n x)
          (canonical-nth-root n x)))
 
@@ -350,23 +375,28 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
 (cl:defmacro %define-standard-complex-instances (type)
   `(coalton-toplevel
      (define-instance (Complex ,type)
+       (inline)
        (define (complex a b)
          (%Complex a b))
+       (inline)
        (define (real-part a)
          (match a
            ((%Complex a _) a)))
+       (inline)
        (define (imag-part a)
          (match a
            ((%Complex _ b) b))))))
 
 (coalton-toplevel
   (define-instance ((Elementary :a) => Exponentiable (Complex :a))
+    (inline)
     (define (ln z)
       ;; The principal natural log of a complex number
       (match (polar z)
         ((Tuple r theta)
          ;; ln r + iθ
          (complex (ln r) theta))))
+    (inline)
     (define (exp z)
       ;; The natural exponential map of a complex number
       (let x = (real-part z))
@@ -374,13 +404,16 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
       ;; exp(x + iy) = (exp x) * (exp iy) = (exp x) * (complex (cos y) (sin y))
       (let ex = (exp x))
       (complex (* ex (cos y)) (* ex (sin y))))
+    (inline)
     (define (pow x y)
       (exp (* y (ln x))))
+    (inline)
     (define (log b x)
       (/ (ln x) (ln b)))
     (define ee (Complex ee 0)))
 
   (define-instance ((Elementary :a) => Radical (Complex :a))
+    (inline)
     (define (sqrt z)
       (match (polar z)
         ((Tuple r theta)
@@ -388,6 +421,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
          (let phi = (/ theta 2))
          ;; sqrt(z) = sqrt(r) (cos theta/2 + i sin theta/2)
          (complex (* sqrt-r (cos phi)) (* sqrt-r (sin phi))))))
+    (inline)
     (define (nth-root n z)
       ;; nth-root(z) = nth-root(r) * exp (i theta / n)
       (match (polar z)
@@ -398,6 +432,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
          (complex (* nth-root-r (cos phi)) (* nth-root-r (sin phi)))))))
 
   (define-instance ((Elementary :a) => Trigonometric (Complex :a))
+    (inline)
     (define (sin z)
       (let ((x (real-part z))
             (y (imag-part z))
@@ -405,6 +440,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
             (e-y (exp (negate y))))
         (Complex (/ (* (+ e+y e-y) (sin x)) 2)
                  (/ (* (- e+y e-y) (cos x)) 2))))
+    (inline)
     (define (cos z)
       (let ((x (real-part z))
             (y (imag-part z))
@@ -412,6 +448,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
             (e-y (exp (negate y))))
         (Complex (/ (* (+ e+y e-y) (cos x)) 2)
                  (/ (* (- e+y e-y) (sin x)) -2))))
+    (inline)
     (define (tan z)
       (let x = (real-part z))
       (let y = (imag-part z))
@@ -420,16 +457,19 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
       ;; (i (e^(y - i x) - e^(-y + i x)))
       ;; / (e^(-y + i x) + e^(y - i x))
       (/ (* ii (- c recip-c)) (+ c recip-c)))
+    (inline)
     (define (asin z)
       ;; asin z = -i ln (sqrt (- 1 z^2) + iz)
       (* (complex 0 -1)
          (ln
           (+ (sqrt (- 1 (* z z))) (* ii z)))))
+    (inline)
     (define (acos z)
       ;; acos z = -i ln (i sqrt (-1 z^2) + z)
       (* (complex 0 -1)
          (ln
           (+ (* ii (sqrt (- 1 (* z z)))) z))))
+    (inline)
     (define (atan z)
       ;; atan = (- i/2 (ln (i - z)/(i+z))
       (* (complex 0 (/ -1 2))
@@ -439,9 +479,11 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
 
   ;; This doesn't have much mathematical meaning
   (define-instance ((Elementary :a) => Polar (Complex :a))
+    (inline)
     (define (phase zz)
       (match (polar zz)
         ((Tuple _ p) p)))
+    (inline)
     (define (polar zz)
       (let x = (real-part zz))
       (let y = (imag-part zz))

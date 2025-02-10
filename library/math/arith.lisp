@@ -98,8 +98,9 @@ The function `general/` is partial, and will error produce a run-time error if t
   (declare finite? ((Transfinite :a) => :a -> Boolean))
   (define (finite? x)
     "Neither infinite or NaN."
-    (or (infinite? x) (nan? x)))
+    (not (or (infinite? x) (nan? x))))
 
+  (inline)
   (declare negative-infinity ((Transfinite :a) (Num :a) => :a))
   (define negative-infinity
     (negate infinity))
@@ -111,12 +112,14 @@ The function `general/` is partial, and will error produce a run-time error if t
     (define nan
       (lisp Single-Float ()
         float-features:single-float-nan))
+    (inline)
     (define (nan? x)
       (Lisp Boolean (x)
         #+(not allegro)
         (float-features:float-NaN-p x)
         #+allegro
         (cl:and (float-features:float-NaN-p x) cl:t)))
+    (inline)
     (define (infinite? x)
       (Lisp Boolean (x)
         (float-features:float-infinity-p x))))
@@ -128,21 +131,25 @@ The function `general/` is partial, and will error produce a run-time error if t
     (define nan
       (lisp Double-Float ()
         float-features:double-float-nan))
+    (inline)
     (define (nan? x)
       (Lisp Boolean (x)
         #+(not allegro)
         (float-features:float-NaN-p x)
         #+allegro
         (cl:and (float-features:float-NaN-p x) cl:t)))
+    (inline)
     (define (infinite? x)
       (Lisp Boolean (x)
         (float-features:float-infinity-p x))))
 
+  (inline)
   (declare negate (Num :a => :a -> :a))
   (define (negate x)
     "The negation, or additive inverse, of `x`."
     (- 0 x))
 
+  (inline)
   (declare abs ((Ord :a) (Num :a) => :a -> :a))
   (define (abs x)
     "Absolute value of `x`."
@@ -150,6 +157,7 @@ The function `general/` is partial, and will error produce a run-time error if t
         (negate x)
         x))
 
+  (inline)
   (declare sign ((Ord :a) (Num :a) (Num :b) => :a -> :b))
   (define (sign x)
     "The sign of `x`, where `(sign 0) = 1`."
@@ -157,46 +165,55 @@ The function `general/` is partial, and will error produce a run-time error if t
         -1
         1))
 
+  (inline)
   (declare ash (Integer -> Integer -> Integer))
   (define (ash x n)
     "Compute the \"arithmetic shift\" of `x` by `n`. "
     (lisp Integer (x n) (cl:ash x n)))
 
+  (inline)
   (declare 1+ ((Num :num) => :num -> :num))
   (define (1+ num)
     "Increment `num`."
     (+ num 1))
 
+  (inline)
   (declare 1- ((Num :num) => :num -> :num))
   (define (1- num)
     "Decrement `num`."
     (- num 1))
 
+  (inline)
   (declare positive? ((Num :a) (Ord :a) => :a -> Boolean))
   (define (positive? x)
     "Is `x` positive?"
     (> x 0))
 
+  (inline)
   (declare negative? ((Num :a) (Ord :a) => :a -> Boolean))
   (define (negative? x)
     "Is `x` negative?"
     (< x 0))
 
+  (inline)
   (declare nonpositive? ((Num :a) (Ord :a) => :a -> Boolean))
   (define (nonpositive? x)
     "Is `x` not positive?"
     (<= x 0))
 
+  (inline)
   (declare nonnegative? ((Num :a) (Ord :a) => :a -> Boolean))
   (define (nonnegative? x)
     "Is `x` not negative?"
     (>= x 0))
 
+  (inline)
   (declare zero? (Num :a => :a -> Boolean))
   (define (zero? x)
     "Is `x` zero?"
     (== x 0))
 
+  (inline)
   (declare nonzero? (Num :a => :a -> Boolean))
   (define (nonzero? x)
     "Is `x` not zero?"

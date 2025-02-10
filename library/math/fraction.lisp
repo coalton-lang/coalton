@@ -26,17 +26,20 @@
   ;; generic concept than a humble fraction of integers. This
   ;; fraction is always assumed to be in reduced terms.
 
+  (inline)
   (declare mkFraction (Integer -> Integer -> Fraction))
   (define (mkFraction a b)
     (lisp Fraction (a b)
       (cl:/ a b)))
 
+  (inline)
   (declare numerator (Fraction -> Integer))
   (define (numerator q)
     "The numerator of a fraction."
     (lisp Integer (q)
       (cl:numerator q)))
 
+  (inline)
   (declare denominator (Fraction -> Integer))
   (define (denominator q)
     "The denominator of a fraction."
@@ -44,11 +47,13 @@
       (cl:denominator q)))
 
   (define-instance (Eq Fraction)
+    (inline)
     (define (== a b)
       (lisp Boolean (a b)
         (cl:= a b))))
 
   (define-instance (Ord Fraction)
+    (inline)
     (define (<=> a b)
       (lisp Ord (a b)
         (cl:cond
@@ -60,27 +65,34 @@
            EQ)))))
 
   (define-instance (Num Fraction)
+    (inline)
     (define (+ p q)
       (lisp Fraction (p q)
         (cl:+ p q)))
+    (inline)
     (define (- p q)
       (lisp Fraction (p q)
         (cl:- p q)))
+    (inline)
     (define (* p q)
       (lisp Fraction (p q)
         (cl:* p q)))
+    (inline)
     (define (fromInt z)
       (lisp Fraction (z) z)))
 
   (define-instance (Reciprocable Fraction)
+    (inline)
     (define (/ a b)
       (lisp Fraction (a b)
         (cl:/ a b)))
+    (inline)
     (define (reciprocal q)
       (lisp Fraction (q)
         (cl:/ q))))
 
   (define-instance (Dividable Integer Fraction)
+    (inline)
     (define (general/ x y)
       (mkFraction x y))))
 

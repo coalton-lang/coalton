@@ -45,11 +45,13 @@ supported 64-bit implementation."))))
     "An alist which pairs the names of Coalton's native integer types with equivalent Common Lisp type specifiers."))
 
 (coalton-toplevel
+  (inline)
   (declare unsafe-cast (:any -> :other))
   (define (unsafe-cast x)
     "Both :ANY and :OTHER must be natively represented by a subtype of `cl:integer', and X must be a valid member of :OTHER."
     (lisp :other (x) x))
 
+  (inline)
   (declare unify (:ty -> :ty -> :ty))
   (define (unify _ use)
     "Declare a constraint that two values are of the same type.
@@ -84,6 +86,7 @@ Used in `cast-if-inbounds' to force the type inference engine to read minBound a
 
 Emitted by `define-integer-conversions' only if every element of FROM-TYPE can be represented in TO-TYPE."
     `(define-instance (Into ,from-type ,to-type)
+       (inline)
        (define into unsafe-cast)))
 
   (cl:defun define-integer-try-into-instance (from-type to-type)
@@ -92,6 +95,7 @@ Emitted by `define-integer-conversions' only if every element of FROM-TYPE can b
 Emitted by `define-integer-conversions' when some elements of FROM-TYPE cannot be represented in TO-TYPE,
 either because FROM-TYPE is signed and TO-TYPE is unsigned, or because FROM-TYPE is wider than TO-TYPE."
     `(define-instance (TryInto ,from-type ,to-type String)
+       (inline)
        (define tryInto cast-if-inbounds)))
 
   (cl:defun definitely-subtype? (sub super)
@@ -146,6 +150,7 @@ cannot be represented in :TO. These fall into a few categories:
 (cl:defmacro integer-into-float (integer coalton-float lisp-float)
   `(coalton-toplevel
      (define-instance (Into ,integer ,coalton-float)
+       (inline)
        (define (into x)
          (lisp ,coalton-float (x)
            (cl:coerce x ',lisp-float))))))
@@ -167,6 +172,7 @@ cannot be represented in :TO. These fall into a few categories:
 ;; Allow Integer -> {Single,Double}-Float conversions
 (coalton-toplevel
   (define-instance (TryInto Integer Single-Float String)
+    (inline)
     (define (tryInto x)
       (lisp (Result String Single-Float) (x)
         (cl:let ((y (cl:ignore-errors (cl:coerce x 'cl:single-float))))
@@ -175,6 +181,7 @@ cannot be represented in :TO. These fall into a few categories:
                  (Ok y))))))
 
   (define-instance (TryInto Integer Double-Float String)
+    (inline)
     (define (tryInto x)
       (lisp (Result String Double-Float) (x)
         (cl:let ((y (cl:ignore-errors (cl:coerce x 'cl:double-float))))
@@ -185,6 +192,7 @@ cannot be represented in :TO. These fall into a few categories:
 (cl:eval-when (:compile-toplevel :load-toplevel)
   (cl:defmacro integer-tryinto-float (integer lisp-float float pow)
     `(define-instance (TryInto ,integer ,float String)
+       (inline)
        (define (tryInto x)
 	 (lisp (Result String ,float) (x)
            (cl:if (cl:< ,(cl:- (cl:expt 2 pow)) x ,(cl:expt 2 pow))
