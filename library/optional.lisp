@@ -23,6 +23,7 @@
   ;; Optional
   ;;
 
+  (inline)
   (declare from-some (String -> (Optional :a) -> :a))
   (define (from-some str opt)
     "Get the value of OPT, erroring with the provided string if it is None."
@@ -30,6 +31,7 @@
       ((Some x) x)
       ((None) (error str))))
 
+  (inline)
   (declare some? ((Optional :a) -> Boolean))
   (define (some? x)
     "Is X Some?"
@@ -37,6 +39,7 @@
       ((Some _) True)
       ((None) False)))
 
+  (inline)
   (declare none? ((Optional :a) -> Boolean))
   (define (none? x)
     "Is X None?"
@@ -68,12 +71,17 @@
          Eq))))
 
   (define-instance (Num :a => Num (Optional :a))
+    (inline)
     (define (+ a b) (liftA2 + a b))
+    (inline)
     (define (- a b) (liftA2 - a b))
+    (inline)
     (define (* a b) (liftA2 * a b))
+    (inline)
     (define (fromInt x) (pure (fromInt x))))
 
   (define-instance (Semigroup :a => Semigroup (Optional :a))
+    (inline)
     (define (<> a b)
       (match (Tuple a b)
         ((Tuple (Some a) (Some b)) (Some (<> a b)))
@@ -89,6 +97,7 @@
         ((None) None))))
 
   (define-instance (Applicative Optional)
+    (inline)
     (define (pure x)
       (Some x))
     (define (liftA2 f x y)
@@ -98,23 +107,27 @@
         (_ None))))
 
   (define-instance (Monad Optional)
+    (inline)
     (define (>>= x f)
       (match x
         ((Some x) (f x))
         ((None) None))))
 
   (define-instance (MonadFail Optional)
+    (inline)
     (define (fail _)
       None))
 
   (define-instance (Alternative Optional)
     (define empty None)
+    (inline)
     (define (alt x y)
       (match x
         ((Some _) x)
         (_ y))))
 
   (define-instance (Unwrappable Optional)
+    (inline)
     (define (unwrap-or-else succeed fail opt)
       (match opt
         ((Some elt) (succeed elt))
@@ -153,6 +166,7 @@
           (Some out))))
 
   (define-instance (Default (Optional :a))
+    (inline)
     (define (default) None)))
 
 #+sb-package-locks

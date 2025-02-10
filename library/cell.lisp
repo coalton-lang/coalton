@@ -41,12 +41,14 @@
   (define-type (Cell :a)
     "Internally mutable cell")
 
+  (inline)
   (declare new (:a -> Cell :a))
   (define (new data)
     "Create a new mutable cell"
     (lisp (Cell :a) (data)
       (make-cell-internal :inner data)))
 
+  (inline)
   (declare read (Cell :a -> :a))
   (define (read cel)
     "Read the value of a mutable cell"
@@ -61,6 +63,7 @@
         (cl:setf (cell-internal-inner cel) data)
         old)))
 
+  (inline)
   (declare write! (Cell :a -> :a -> :a))
   (define (write! cel data)
     "Set the value of a mutable cell, returning the new value"
@@ -93,11 +96,13 @@
       ((Nil) None)))
 
 ;;; operators on cells of numbers
+  (inline)
   (declare increment! (Num :counter => Cell :counter -> :counter))
   (define (increment! cel)
     "Add one to the contents of CEL, storing and returning the new value"
     (update! (+ 1) cel))
 
+  (inline)
   (declare decrement! (Num :counter => (Cell :counter) -> :counter))
   (define (decrement! cel)
     "Subtract one from the contents of CEL, storing and returning the new value"
@@ -105,27 +110,31 @@
 
   ;; i am very skeptical of these instances
   (define-instance (Eq :a => Eq (Cell :a))
+    (inline)
     (define (== c1 c2)
       (== (read c1) (read c2))))
 
   (define-instance (Ord :a => Ord (Cell :a))
+    (inline)
     (define (<=> c1 c2)
-      (match (<=> (read c1) (read c2))
-        ((LT) LT)
-        ((GT) GT)
-        ((EQ) EQ))))
+      (<=> (read c1) (read c2))))
 
   (define-instance (Num :a => Num (Cell :a))
+    (inline)
     (define (+ c1 c2)
       (new (+ (read c1) (read c2))))
+    (inline)
     (define (- c1 c2)
       (new (- (read c1) (read c2))))
+    (inline)
     (define (* c1 c2)
       (new (* (read c1) (read c2))))
+    (inline)
     (define (fromInt i)
       (new (fromInt i))))
 
   (define-instance (Semigroup :a => Semigroup (Cell :a))
+    (inline)
     (define (<> a b)
       (new (<> (read a) (read b)))))
 
@@ -134,21 +143,26 @@
       (new (f (read c)))))
 
   (define-instance (Applicative Cell)
+    (inline)
     (define pure new)
     (define (liftA2 f c1 c2)
       (new (f (read c1) (read c2)))))
 
   (define-instance (Into :a (Cell :a))
+    (inline)
     (define into new))
 
   (define-instance (Into (Cell :a) :a)
+    (inline)
     (define into read))
 
   (define-instance (Into :a String => Into (Cell :a) String)
+    (inline)
     (define (into c)
       (into (read c))))
 
   (define-instance (Default :a => Default (Cell :a))
+    (inline)
     (define (default) (new (default)))))
 
 #+sb-package-locks
