@@ -32,6 +32,7 @@ These arrays are represented as possibly specialized `(cl:simple-array <type> (c
 Whether or not the arrays are specialized depends on the underlying Lisp implementation. Consult `cl:upgraded-array-element-type` to determine whether `LispArray` may get specialized.")
 
   (define-instance (types:RuntimeRepr :t => types:RuntimeRepr (LispArray :t))
+    (inline)
     (define (types:runtime-repr v)
       (let ((element-type (types:runtime-repr (types:proxy-inner v))))
         (lisp types:LispType (element-type)
@@ -61,18 +62,21 @@ WARNING: The consequences are undefined if an uninitialized element is read befo
        (cl:make-array n :element-type type))
      p))
 
+  (inline)
   (declare length (LispArray :t -> UFix))
   (define (length v)
     "Return the length of the `LispArray` `v`."
     (lisp UFix (v)
       (cl:length v)))
 
+  (inline)
   (declare aref (LispArray :t -> UFix -> :t))
   (define (aref v i)
     "Read the `i`th value of the `LispArray` `v`."
     (lisp :t (v i)
       (cl:aref v i)))
 
+  (inline)
   (declare set! (LispArray :t -> UFix -> :t -> Unit))
   (define (set! v i x)
     "Set the `i`th value of the `LispArray` `v` to `x`."
@@ -88,15 +92,17 @@ WARNING: The consequences are undefined if an uninitialized element is read befo
                  (set (cl:intern (cl:format cl:nil "set!/~a" coalton-type))))
           `(progn
              (specialize aref ,ref (LispArray ,coalton-type -> UFix -> ,coalton-type))
+             (inline)
              (declare ,ref (LispArray ,coalton-type -> UFix -> ,coalton-type))
              (define (,ref v i)
                (lisp ,coalton-type (v i)
-                 (cl:aref (cl:the (cl:simple-array ,lisp-type) v) i)))
+                 (cl:aref (cl:the (cl:simple-array ,lisp-type (cl:*)) v) i)))
              (specialize set! ,set (LispArray ,coalton-type -> UFix -> ,coalton-type -> Unit))
+             (inline)
              (declare ,set (LispArray ,coalton-type -> UFix -> ,coalton-type -> Unit))
              (define (,set v i x)
                (lisp Unit (v i x)
-                 (cl:setf (cl:aref (cl:the (cl:simple-array ,lisp-type) v) i) x)
+                 (cl:setf (cl:aref (cl:the (cl:simple-array ,lisp-type (cl:*)) v) i) x)
                  Unit))))))
     )
 
@@ -111,8 +117,7 @@ WARNING: The consequences are undefined if an uninitialized element is read befo
   (define-lisparray-specialization I32 (cl:signed-byte 32))
   (define-lisparray-specialization U32 (cl:unsigned-byte 32))
   (define-lisparray-specialization I64 (cl:signed-byte 64))
-  (define-lisparray-specialization U64 (cl:unsigned-byte 64))
-)
+  (define-lisparray-specialization U64 (cl:unsigned-byte 64)))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/LISPARRAY")
