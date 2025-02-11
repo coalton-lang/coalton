@@ -26,7 +26,6 @@
      (cl:error ,datum ,@arguments)))
 
 (coalton-toplevel
-  (inline)
   (define (undefined _)
     "A function which can be used in place of any value, throwing an error at runtime."
     (error "Undefined"))
@@ -47,25 +46,22 @@
   (declare boolean-not (Boolean -> Boolean))
   (define (boolean-not x)
     "The logical negation of `x`. Is `x` false?"
-    (match x
-      ((True) False)
-      ((False) True)))
+    (lisp Boolean (x)
+      (cl:not x)))
 
   (inline)
   (declare boolean-or (Boolean -> Boolean -> Boolean))
   (define (boolean-or x y)
     "Is either `x` or `y` true? Note that this is a *function* which means both `x` and `y` will be evaluated. Use the `or` macro for short-circuiting behavior."
-    (match x
-      ((True) True)
-      ((False) y)))
+    (lisp Boolean (x y)
+      (cl:or x y)))
 
   (inline)
   (declare boolean-and (Boolean -> Boolean -> Boolean))
   (define (boolean-and x y)
     "Are both `x` and `y` true? Note that this is a *function* which means both `x` and `y` will be evaluated. Use the `and` macro for short-circuiting behavior."
-    (match x
-      ((True) y)
-      ((False) False)))
+    (lisp Boolean (x y)
+      (cl:and x y)))
 
   (inline)
   (declare boolean-xor (Boolean -> Boolean -> Boolean))
