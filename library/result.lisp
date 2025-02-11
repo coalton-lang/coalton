@@ -26,7 +26,6 @@
   ;; Result
   ;;
 
-  (inline)
   (declare ok? (Result :a :b -> Boolean))
   (define (ok? x)
     "Returns TRUE if X is OK"
@@ -34,7 +33,6 @@
       ((Ok _) True)
       ((Err _) False)))
 
-  (inline)
   (declare err? (Result :a :b -> Boolean))
   (define (err? x)
     "Returns TRUE if X is ERR"
@@ -42,7 +40,6 @@
       ((Err _) True)
       ((Ok _) False)))
 
-  (inline)
   (declare map-err ((:a -> :b) -> Result :a :c -> Result :b :c))
   (define (map-err f x)
     "Map over the ERR case"
@@ -50,14 +47,12 @@
       ((Err x) (Err (f x)))
       ((Ok x) (Ok x))))
 
-  (inline)
   (declare flatten (Result :a :a -> :a))
   (define (flatten x)
     (match x
       ((Ok x) x)
       ((Err x) x)))
 
-  (inline)
   (declare ok-or-error ((Signalable :err) => (Result :err :a) -> :a))
   (define (ok-or-error res)
     (match res
@@ -95,7 +90,6 @@
     (define mempty (Ok mempty)))
 
   (define-instance (Functor (Result :a))
-    (inline)
     (define (map f x)
       (match x
         ((Ok x) (Ok (f x)))
@@ -111,7 +105,6 @@
         ((Tuple _ (Err e)) (Err e)))))
 
   (define-instance (Monad (Result :a))
-    (inline)
     (define (>>= m f)
       (match m
         ((Ok x) (f x))
@@ -124,14 +117,12 @@
         ((Err e) (Err (f e))))))
 
   (define-instance (Into (Result :a :b) (Optional :b))
-    (inline)
     (define (into res)
       (match res
         ((Ok x) (Some x))
         ((Err _) None))))
 
   (define-instance (Into (Optional :b) (Result Unit :b))
-    (inline)
     (define (into opt)
       (match opt
         ((Some x) (Ok x))
@@ -140,7 +131,6 @@
   (define-instance (Iso (Result Unit :a) (Optional :a)))
 
   (define-instance (Unwrappable (Result :a))
-    (inline)
     (define (unwrap-or-else succeed fail res)
       (match res
         ((Ok elt) (succeed elt))

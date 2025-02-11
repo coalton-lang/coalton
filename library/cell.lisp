@@ -70,6 +70,7 @@
     (lisp :a (data cel)
       (cl:setf (cell-internal-inner cel) data)))
 
+  (inline)
   (declare update! ((:a -> :a) -> Cell :a -> :a))
   (define (update! f cel)
     "Apply F to the contents of CEL, storing and returning the result"
@@ -120,16 +121,12 @@
       (<=> (read c1) (read c2))))
 
   (define-instance (Num :a => Num (Cell :a))
-    (inline)
     (define (+ c1 c2)
       (new (+ (read c1) (read c2))))
-    (inline)
     (define (- c1 c2)
       (new (- (read c1) (read c2))))
-    (inline)
     (define (* c1 c2)
       (new (* (read c1) (read c2))))
-    (inline)
     (define (fromInt i)
       (new (fromInt i))))
 

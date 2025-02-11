@@ -24,13 +24,11 @@
   ;; Tuple
   ;;
 
-  (inline)
   (declare fst ((Tuple :a :b) -> :a))
   (define (fst (Tuple a _))
     "Get the first element of a tuple."
     a)
 
-  (inline)
   (declare snd ((Tuple :a :b) -> :b))
   (define (snd (Tuple _ b))
     "Get the second element of a tuple."
@@ -59,7 +57,6 @@
   ;;
 
   (define-instance ((Eq :a) (Eq :b) => Eq (Tuple :a :b))
-    (inline)
     (define (== (Tuple a1 b1) (Tuple a2 b2))
       (and (== a1 a2)
            (== b1 b2))))
@@ -74,21 +71,18 @@
         ((EQ) (<=> a2 b2)))))
 
   (define-instance (Into (Tuple :a :b) (Tuple :b :a))
-    (inline)
     (define (into (Tuple a b))
       (Tuple b a)))
 
   (define-instance (Iso (Tuple :a :b) (Tuple :b :a)))
 
   (define-instance ((Hash :a) (Hash :b) => Hash (Tuple :a :b))
-    (inline)
     (define (hash item)
       (combine-hashes
        (hash (.first item))
        (hash (.second item)))))
 
   (define-instance (Bifunctor Tuple)
-    (inline)
     (define (bimap f g (Tuple a b))
       (Tuple (f a) (g b))))
 
@@ -97,7 +91,6 @@
   ;;
 
   (define-instance ((Eq :a) (Eq :b) (Eq :c) => Eq (Tuple3 :a :b :c))
-    (inline)
     (define (== a b)
       (and (== (.first a)
                (.first b))
@@ -107,7 +100,6 @@
                (.third b)))))
 
   (define-instance ((Hash :a) (Hash :b) (Hash :c) => Hash (Tuple3 :a :b :c))
-    (inline)
     (define (hash item)
       (combine-hashes
        (hash (.first item))
@@ -171,22 +163,18 @@
   ;;
 
   (define-instance ((Default :a) (Default :b) => (Default (Tuple :a :b)))
-    (inline)
     (define (default) (Tuple (default) (default))))
 
   (define-instance ((Default :a) (Default :b) (Default :c) =>
                     (Default (Tuple3 :a :b :c)))
-    (inline)
     (define (default) (Tuple3 (default) (default) (default))))
 
   (define-instance ((Default :a) (Default :b) (Default :c) (Default :d) =>
                     (Default (Tuple4 :a :b :c :d)))
-    (inline)
     (define (default) (Tuple4 (default) (default) (default) (default))))
 
   (define-instance ((Default :a) (Default :b) (Default :c) (Default :d) (Default :e) =>
                     (Default (Tuple5 :a :b :c :d :e)))
-    (inline)
     (define (default) (Tuple5 (default) (default) (default) (default) (default)))))
 
 #+sb-package-locks
