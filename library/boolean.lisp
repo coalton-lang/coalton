@@ -25,7 +25,6 @@
         (cl:eq x y))))
 
   (define-instance (Ord Boolean)
-    (inline)
     (define (<=> x y)
       (match x
         ((True)
