@@ -107,14 +107,11 @@ below.")
       (complex-divide a b)))
 
   (define-instance (Complex :a => Complex (Complex :a))
-    (inline)
     (define (complex a b)
       (%Complex a b))
-    (inline)
     (define (real-part a)
       (match a
         ((%Complex a _) a)))
-    (inline)
     (define (imag-part a)
       (match a
         ((%Complex _ b) b))))
@@ -122,21 +119,21 @@ below.")
   ;; Below are specializable functions, as class methods cannot be specialized
   ;; This allows us to call out to faster lisp functions for doing arithmetic.
   ;; These will only be called from monomorphized forms.
-  (inline)
+  (declare complex-equal (Complex :a => Complex :a -> Complex :a -> Boolean))
   (define (complex-equal a b)
     (and (== (real-part a) (real-part b))
          (== (imag-part a) (imag-part b))))
-  (inline)
+
   (declare complex-plus ((Complex :a) => Complex :a -> Complex :a -> Complex :a))
   (define (complex-plus a b)
     (complex (+ (real-part a) (real-part b))
              (+ (imag-part a) (imag-part b))))
-  (inline)
+
   (declare complex-minus ((Complex :a) => Complex :a -> Complex :a -> Complex :a))
   (define (complex-minus a b)
     (complex (- (real-part a) (real-part b))
              (- (imag-part a) (imag-part b))))
-  (inline)
+
   (declare complex-times ((Complex :a) => Complex :a -> Complex :a -> Complex :a))
   (define (complex-times a b)
     (let ra = (real-part a))
@@ -145,7 +142,7 @@ below.")
     (let ib = (imag-part b))
     (complex (- (* ra rb) (* ia ib))
              (+ (* ra ib) (* ia rb))))
-  (inline)
+
   (declare complex-reciprocal ((Complex :a) (Reciprocable :a) => Complex :a -> Complex :a))
   (define (complex-reciprocal x)
     (let a = (real-part x))
@@ -153,7 +150,7 @@ below.")
     (let divisor = (reciprocal (square-magnitude x)))
     ;; z^-1 = z*/|z|^2
     (complex (* a divisor) (negate (* b divisor))))
-  (inline)
+
   (declare complex-divide ((Complex :a) (Complex :b) (Dividable :a :b)
                            => Complex :a -> Complex :a -> Complex :b))
   (define (complex-divide a b)
