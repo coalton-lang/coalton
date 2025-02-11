@@ -299,11 +299,13 @@
     "Appends two lists together and returns a new list."
     (%reverse! (append-rev ys (append-rev xs Nil))))
 
+  (specialize mconcat concat (List (List :a) -> List :a))
   (declare concat (List (List :a) -> List :a))
   (define (concat xs)
     "Appends a list of lists together into a single new list."
     (concatMap (fn (x) x) xs))
 
+  (specialize mconcatMap concatMap ((:a -> (List :b)) -> List :a -> List :b))
   (declare concatMap ((:a -> (List :b)) -> List :a -> List :b))
   (define (concatMap f xs)
     "Apply F to each element in XS and concatenate the results."
