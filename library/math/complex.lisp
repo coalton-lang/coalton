@@ -38,7 +38,6 @@ below.")
     (%Complex :a :a))
 
   (define-instance (types:RuntimeRepr :t => types:RuntimeRepr (Complex :t))
-    (inline)
     (define (types:runtime-repr a)
       (let ((inner-type (types:runtime-repr (types:proxy-inner a))))
         (lisp types:LispType (inner-type)

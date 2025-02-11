@@ -96,7 +96,6 @@ The function `general/` is partial, and will error produce a run-time error if t
     (nan :a)
     (nan? (:a -> Boolean)))
 
-  (inline)
   (declare finite? ((Transfinite :a) => :a -> Boolean))
   (define (finite? x)
     "Neither infinite or NaN."
