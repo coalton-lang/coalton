@@ -229,14 +229,6 @@
   (lisp-toplevel ()
 
     (cl:eval-when (:compile-toplevel :load-toplevel)
-      (cl:defun %optional-coerce (z cl-type)
-        "Attempts to coerce Z to an Optional CL-TYPE, returns NONE if failed."
-        (cl:let ((x (cl:ignore-errors
-                     (cl:coerce z cl-type))))
-          (cl:if (cl:null x)
-                 None
-                 (Some x))))
-
       (cl:defmacro define-num-float (type lisp-type)
         "Define `Num' for TYPE"
 
@@ -270,12 +262,11 @@
                   (cl:* a b))))
 
            (define (fromInt x)
-             (match (lisp (Optional ,type) (x)
-                      (%optional-coerce x ',lisp-type))
-               ((Some x) x)
-               ((None) (if (< 0 x)
-                           negative-infinity
-                           infinity))))))))
+             (lisp ,type (x)
+               (cl:or (cl:ignore-errors (cl:coerce x ',lisp-type))
+                      (cl:if (cl:< x 0)
+                             (coalton (the ,type negative-infinity))
+                             (coalton (the ,type infinity))))))))))
 
   (define-num-float Single-Float cl:single-float)
   (define-num-float Double-Float cl:double-float)
@@ -349,12 +340,11 @@
            (define (general/ x y)
              (if (== y 0)
                  (/ (fromInt x) (fromInt y))
-                 (match (lisp (Optional ,type) (x y)
-                          (%optional-coerce (cl:/ x y) ',lisp-type))
-                   ((Some x) x)
-                   ((None) (if (and (> x 0) (> y 0))
-                               infinity
-                               negative-infinity)))))))))
+                 (lisp ,type (x y)
+                   (cl:or (cl:ignore-errors (cl:coerce (cl:/ x y) ',lisp-type))
+                          (cl:if (cl:eq (cl:< x 0) (cl:< y 0))
+                                 (coalton (the ,type infinity))
+                                 (coalton (the ,type negative-infinity)))))))))))
 
   (define-reciprocable-float Single-Float)
   (define-reciprocable-float Double-Float)
