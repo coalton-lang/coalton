@@ -298,7 +298,6 @@
     (cl:eval-when (:compile-toplevel :load-toplevel)
       (cl:defmacro define-float-fraction-conversion (type)
         `(define-instance (TryInto ,type Fraction String)
-           (inline)
            (define (tryInto x)
              (if (finite? x)
                  (Ok (lisp Fraction (x) (cl:rational x)))
