@@ -5,7 +5,8 @@
 (coalton-library/utils:defstdlib-package #:coalton-library/lisparray
   (:use #:coalton)
   (:local-nicknames
-   (#:types #:coalton-library/types))
+   (#:types #:coalton-library/types)
+   (#:complex #:coalton-library/math/complex))
   (:export
    #:LispArray
    #:make
@@ -106,6 +107,8 @@ WARNING: The consequences are undefined if an uninitialized element is read befo
 
   (define-lisparray-specialization Single-Float cl:single-float)
   (define-lisparray-specialization Double-Float cl:double-float)
+  (define-lisparray-specialization (complex:Complex Single-Float) (cl:complex cl:single-float))
+  (define-lisparray-specialization (complex:Complex Double-Float) (cl:complex cl:double-float))
   (define-lisparray-specialization IFix cl:fixnum)
   (define-lisparray-specialization UFix (cl:and cl:fixnum cl:unsigned-byte))
   (define-lisparray-specialization I8 (cl:signed-byte 8))
