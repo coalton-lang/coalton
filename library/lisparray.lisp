@@ -88,9 +88,23 @@ WARNING: The consequences are undefined if an uninitialized element is read befo
     (cl:eval-when (:compile-toplevel :load-toplevel)
       (cl:defmacro define-lisparray-specialization (coalton-type lisp-type)
         "Specialize lisparray access to known primitive types.  This allows the lisp compiler to inline array access."
-        (cl:let ((ref (cl:intern (cl:format cl:nil "aref/~a" coalton-type)))
+        (cl:let ((mak (cl:intern (cl:format cl:nil "make/~a" coalton-type)))
+                 (mun (cl:intern (cl:format cl:nil "make-uninitialized/~a" coalton-type)))
+                 (ref (cl:intern (cl:format cl:nil "aref/~a" coalton-type)))
                  (set (cl:intern (cl:format cl:nil "set!/~a" coalton-type))))
           `(progn
+             (specialize make ,mak (UFix -> ,coalton-type -> LispArray ,coalton-type))
+             (inline)
+             (declare ,mak (UFix -> ,coalton-type -> LispArray ,coalton-type))
+             (define (,mak n x)
+               (lisp (LispArray ,coalton-type) (n x)
+                 (cl:make-array n :element-type ',lisp-type :initial-element x)))
+             (specialize make-uninitialized ,mun (UFix -> LispArray ,coalton-type))
+             (inline)
+             (declare ,mun (UFix -> LispArray ,coalton-type))
+             (define (,mun n)
+               (lisp (LispArray ,coalton-type) (n)
+                 (cl:make-array n :element-type ',lisp-type)))
              (specialize aref ,ref (LispArray ,coalton-type -> UFix -> ,coalton-type))
              (inline)
              (declare ,ref (LispArray ,coalton-type -> UFix -> ,coalton-type))
@@ -122,3 +136,4 @@ WARNING: The consequences are undefined if an uninitialized element is read befo
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/LISPARRAY")
+
