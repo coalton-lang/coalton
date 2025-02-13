@@ -112,6 +112,8 @@ WARNING: The consequences are undefined if an uninitialized element is read befo
                                (%into (Cons (aref v i) xs) (- i 1))))))
               (%into Nil (- len 1)))))))
 
+  (define-instance (types:RuntimeRepr :t => Iso (LispArray :t) (List :t)))
+
   (define-instance (Foldable LispArray)
     (define (fold f init v)
       (let ((len (length v))
