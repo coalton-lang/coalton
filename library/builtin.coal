@@ -1,0 +1,60 @@
+(package coalton-library/builtin
+  (import
+   coalton-library/classes)
+  (export
+   unreachable
+   undefined
+   error ; re-export from classes
+   not
+   xor
+   boolean-not
+   boolean-or
+   boolean-and
+   boolean-xor))
+
+(lisp-toplevel ()
+  (cl:eval-when (:compile-toplevel)
+    (cl:defmacro unreachable (cl:&optional (datum "Unreachable") cl:&rest arguments)
+      "Signal an error with CL format string DATUM and optional format arguments ARGUMENTS."
+      `(lisp :a ()
+         (cl:error ,datum ,@arguments)))))
+
+(define (undefined _)
+    "A function which can be used in place of any value, throwing an error at runtime."
+  (error "Undefined"))
+
+(define not
+    "Synonym for `boolean-not`."
+    boolean-not)
+
+(define xor
+    "Synonym for `boolean-xor`."
+    boolean-xor)
+
+(declare boolean-not (Boolean -> Boolean))
+(define (boolean-not x)
+    "The logical negation of `x`. Is `x` false?"
+  (match x
+    ((True) False)
+    ((False) True)))
+
+(declare boolean-or (Boolean -> Boolean -> Boolean))
+(define (boolean-or x y)
+    "Is either `x` or `y` true? Note that this is a *function* which means both `x` and `y` will be evaluated. Use the `or` macro for short-circuiting behavior."
+  (match x
+    ((True) True)
+    ((False) y)))
+
+(declare boolean-and (Boolean -> Boolean -> Boolean))
+(define (boolean-and x y)
+    "Are both `x` and `y` true? Note that this is a *function* which means both `x` and `y` will be evaluated. Use the `and` macro for short-circuiting behavior."
+  (match x
+    ((True) y)
+    ((False) False)))
+
+(declare boolean-xor (Boolean -> Boolean -> Boolean))
+(define (boolean-xor x y)
+    "Are `x` or `y` true, but not both?"
+  (match x
+    ((True) (boolean-not y))
+    ((False) y)))
