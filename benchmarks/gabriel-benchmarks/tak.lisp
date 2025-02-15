@@ -2,13 +2,13 @@
 ;;;;
 ;;;;
 
-(cl:in-package #:coalton-benchmarks)
+(cl:in-package #:coalton-benchmark-gabriel)
 
 (define-benchmark tak ()
   (declare (optimize speed))
   (loop :repeat 1000
         :do (with-benchmark-sampling
-              (coalton-benchmarks/native:tak 18 12 6)))
+              (native:tak 18 12 6)))
   (report trivial-benchmark::*current-timer*))
 
 (define-benchmark tak-lisp ()
@@ -26,7 +26,7 @@
                 (lisp-tak (1- y) z x)
                 (lisp-tak (1- z) x y))))
 
-(cl:in-package #:coalton-benchmarks/native)
+(cl:in-package #:coalton-benchmark-gabriel/native)
 
 (cl:declaim (cl:optimize (cl:speed 3) (cl:safety 0)))
 
