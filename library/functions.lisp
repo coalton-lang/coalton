@@ -52,6 +52,7 @@
     "Print the String representation of `item` to `cl:*standard-output*`."
     (trace (into item)))
 
+  (inline)
   (declare unsafe-pointer-eq? (:a -> :a -> Boolean))
   (define (unsafe-pointer-eq? a b)
     (lisp Boolean (a b)
@@ -73,16 +74,19 @@
             (* n (f (- n 1)))))))"
     (f (fix f) n))
 
+  (inline)
   (declare id (:a -> :a))
   (define (id x)
     "A function that always returns its argument."
     x)
 
+  (inline)
   (declare const (:a -> :b -> :a))
   (define (const a _b)
     "A function that always returns its first argument."
     a)
 
+  (inline)
   (declare flip ((:a -> :b -> :c) -> :b -> :a -> :c))
   (define (flip f x y)
     "Returns a function that takes its arguments in reverse order."
@@ -97,6 +101,7 @@
   ;; We don't write (COMPOSE F G X) even though it's OK so that the
   ;; most common case of using compose---as a binary function---is
   ;; considered to be "saturated".
+  (inline)
   (declare compose ((:b -> :c) -> (:a -> :b) -> (:a -> :c)))
   (define (compose f g)
     "Produces a function equivalent to applying `g` followed by `f`."
@@ -114,6 +119,7 @@
     "Compute the disjunction of two unary Boolean functions."
     (or (f x) (g x)))
 
+  (inline)
   (declare complement ((:a -> Boolean) -> :a -> Boolean))
   (define (complement f x)
     "Compute the complement of a unary Boolean function."
@@ -150,6 +156,7 @@
     "Fold over a list using `alt`."
     (foldr alt empty xs))
 
+  (inline)
   (declare /= (Eq :a => :a -> :a -> Boolean))
   (define (/= a b)
     "Is `a` not equal to `b`?"
