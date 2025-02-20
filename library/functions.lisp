@@ -97,17 +97,11 @@
     "The same as `fold` but with the argument order swapped to match `cl:reduce`"
     (fold (flip f) y xs))
 
-
-  ;; We don't write (COMPOSE F G X) even though it's OK so that the
-  ;; most common case of using compose---as a binary function---is
-  ;; considered to be "saturated".
   (inline)
-  (declare compose ((:b -> :c) -> (:a -> :b) -> (:a -> :c)))
-  (define (compose f g)
-    "Produces a function equivalent to applying `g` followed by `f`."
-    ;; Note: ((compose f g) x) behaves like (f (g x))
-    (fn (x)
-      (f (g x))))
+  (declare compose ((:b -> :c) -> (:a -> :b) -> :a -> :c))
+  (define (compose f g x)
+    "Equivalent to `(f (g x))`."
+    (f (g x)))
 
   (declare conjoin ((:a -> Boolean) -> (:a -> Boolean) -> :a -> Boolean))
   (define (conjoin f g x)
