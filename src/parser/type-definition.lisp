@@ -22,6 +22,7 @@
    #:type-definition-vars               ; FUNCTION
    #:type-definition-repr               ; FUNCTION
    #:type-definition-aliased-type       ; FUNCTION
+   #:type-definition-accessors          ; FUNCTION
    #:type-definition-ctors              ; FUNCTION
    #:type-definition-ctor-name          ; FUNCTION
    #:type-definition-ctor-field-types   ; FUNCTION
@@ -108,6 +109,14 @@
 
   (:method ((def toplevel-define-faux-struct))
     (declare (values (or null ty)))
+    nil))
+
+(defgeneric type-definition-accessors (def)
+  (:method ((def toplevel-define-faux-struct))
+    (declare (values faux-struct-accessor-list))
+    (toplevel-define-faux-struct-accessors def))
+
+  (:method ((def t))
     nil))
 
 (defgeneric type-definition-ctors (def)

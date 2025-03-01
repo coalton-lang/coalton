@@ -32,6 +32,7 @@
    #:type-definition-explicit-repr      ; ACCESSOR
    #:type-definition-enum-repr          ; ACCESSOR
    #:type-definition-newtype            ; ACCESSOR
+   #:type-definition-accessors          ; ACCESSOR
    #:type-definition-constructors       ; ACCESSOR
    #:type-definition-constructor-types  ; ACCESSOR
    #:type-definition-docstring          ; ACCESSOR
@@ -50,6 +51,8 @@
   (explicit-repr     (util:required 'explicit-repr)     :type tc:explicit-repr          :read-only t)
   (enum-repr         (util:required 'enum-repr)         :type boolean                   :read-only t)
   (newtype           (util:required 'newtype)           :type boolean                   :read-only t)
+
+  (accessors         (util:required 'accessors)         :type parser:faux-struct-accessor-list :read-only t)
 
   (constructors      (util:required 'constructors)      :type tc:constructor-entry-list :read-only t)
   (constructor-types (util:required 'constructor-types) :type tc:scheme-list            :read-only t)
@@ -478,6 +481,8 @@
                                                    repr-type)
                                 :enum-repr (eq repr-type :enum)
                                 :newtype (eq repr-type :transparent)
+
+                                :accessors (parser:type-definition-accessors type)
 
                                 :constructors ctors
 

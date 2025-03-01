@@ -42,6 +42,10 @@
           (setf ,(tc:constructor-entry-name constructor)
                 ,(rt:construct-function-entry `#',(tc:constructor-entry-name constructor) 1)))))
 
+     ;; ((tc:type-definition-accessors def)
+     ;;  (print "gothere")
+     ;;  '())
+
      (t
       `(,(if (settings:coalton-release-p)
              `(defstruct (,(tc:type-definition-name def)
