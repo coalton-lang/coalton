@@ -520,6 +520,7 @@
       :types (rename-type-variables (program-types program))
       :type-aliases (rename-type-variables (program-type-aliases program))
       :structs (rename-type-variables (program-structs program))
+      :faux-structs (rename-type-variables (program-faux-structs program))
       :declares (program-declares program)
       :defines (rename-variables-generic% (program-defines program) ctx)
       :classes (program-classes program) ; Class type variables are renamed during kind inference
@@ -676,6 +677,35 @@
        :location (source:location toplevel)
        :repr (toplevel-define-struct-repr toplevel)
        :head-location (toplevel-define-struct-head-location toplevel))))
+
+  (:method ((field faux-struct-accessor) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values faux-struct-accessor))
+
+    (make-faux-struct-accessor
+     :name (faux-struct-accessor-name field)
+     :type (rename-type-variables-generic% (faux-struct-accessor-type field) ctx)
+     :docstring (source:docstring field)
+     :location (source:location field)))
+
+  (:method ((toplevel toplevel-define-faux-struct) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values toplevel-define-faux-struct))
+
+    (let* ((tvars (mapcar #'keyword-src-name (toplevel-define-faux-struct-vars toplevel)))
+
+           (new-bindings (make-local-vars tvars :package util:+keyword-package+))
+
+           (new-ctx (algo:immutable-map-set-multiple ctx new-bindings)))
+
+      (make-toplevel-define-faux-struct
+       :name (toplevel-define-faux-struct-name toplevel)
+       :vars (rename-type-variables-generic% (toplevel-define-faux-struct-vars toplevel) new-ctx)
+       :docstring (source:docstring toplevel)
+       :accessors (rename-type-variables-generic% (toplevel-define-faux-struct-accessors toplevel) new-ctx)
+       :location (source:location toplevel)
+       :repr (toplevel-define-faux-struct-repr toplevel)
+       :head-location (toplevel-define-faux-struct-head-location toplevel))))
 
   (:method ((fundep fundep) ctx)
     (declare (type algo:immutable-map ctx)

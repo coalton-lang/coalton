@@ -30,7 +30,7 @@
 (in-package #:coalton-impl/parser/type-definition)
 
 (deftype type-definition ()
-  '(or toplevel-define-type toplevel-define-struct toplevel-define-type-alias))
+  '(or toplevel-define-type toplevel-define-struct toplevel-define-type-alias toplevel-define-faux-struct))
 
 (defun type-definition-p (x)
   (typep x 'type-definition))
@@ -53,7 +53,11 @@
 
   (:method ((def toplevel-define-type-alias))
     (declare (values identifier-src))
-    (toplevel-define-type-alias-name def)))
+    (toplevel-define-type-alias-name def))
+
+  (:method ((def toplevel-define-faux-struct))
+    (declare (values identifier-src))
+    (toplevel-define-faux-struct-name def)))
 
 (defgeneric type-definition-vars (def)
   (:method ((def toplevel-define-type))
@@ -66,7 +70,11 @@
 
   (:method ((def toplevel-define-type-alias))
     (declare (values keyword-src-list))
-    (toplevel-define-type-alias-vars def)))
+    (toplevel-define-type-alias-vars def))
+
+  (:method ((def toplevel-define-faux-struct))
+    (declare (values keyword-src-list))
+    (toplevel-define-faux-struct-vars def)))
 
 (defgeneric type-definition-repr (def)
   (:method ((def toplevel-define-type))
@@ -79,7 +87,11 @@
 
   (:method ((def toplevel-define-type-alias))
     (declare (values (or null attribute-repr)))
-    nil))
+    nil) 
+
+  (:method ((def toplevel-define-faux-struct))
+    (declare (values (or null attribute-repr)))
+    (toplevel-define-faux-struct-repr def)))
 
 (defgeneric type-definition-aliased-type (def)
   (:method ((def toplevel-define-type))
@@ -92,7 +104,11 @@
 
   (:method ((def toplevel-define-type-alias))
     (declare (values (or null ty)))
-    (toplevel-define-type-alias-type def)))
+    (toplevel-define-type-alias-type def))
+
+  (:method ((def toplevel-define-faux-struct))
+    (declare (values (or null ty)))
+    nil))
 
 (defgeneric type-definition-ctors (def)
   (:method ((def toplevel-define-type))
@@ -105,6 +121,10 @@
 
   (:method ((def toplevel-define-type-alias))
     (declare (values null))
+    nil)
+
+  (:method ((def toplevel-define-faux-struct))
+    (declare (values toplevel-define-faux-struct-list))
     nil))
 
 (defgeneric type-definition-ctor-name (ctor)

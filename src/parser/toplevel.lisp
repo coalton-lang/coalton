@@ -48,6 +48,11 @@
    #:struct-field-name                           ; ACCESSOR
    #:struct-field-type                           ; ACCESSOR
    #:struct-field-list                           ; TYPE
+   #:faux-struct-accessor                        ; STRUCT
+   #:make-faux-struct-accessor                   ; CONSTRUCTOR
+   #:faux-struct-accessor-name                   ; ACCESSOR
+   #:faux-struct-accessor-type                   ; ACCESSOR
+   #:faux-struct-accessor-list                   ; TYPE
    #:toplevel-define-struct                      ; STRUCT
    #:make-toplevel-define-struct                 ; CONSTRUCTOR
    #:toplevel-define-struct-name                 ; ACCESSOR
@@ -56,6 +61,14 @@
    #:toplevel-define-struct-repr                 ; ACCESSOR
    #:toplevel-define-struct-head-location        ; ACCESSOR
    #:toplevel-define-struct-list                 ; TYPE
+   #:toplevel-define-faux-struct                 ; STRUCT
+   #:make-toplevel-define-faux-struct            ; CONSTRUCTOR
+   #:toplevel-define-faux-struct-name            ; ACCESSOR
+   #:toplevel-define-faux-struct-vars            ; ACCESSOR
+   #:toplevel-define-faux-struct-accessors       ; ACCESSOR
+   #:toplevel-define-faux-struct-repr            ; ACCESSOR
+   #:toplevel-define-faux-struct-head-location   ; ACCESSOR
+   #:toplevel-define-faux-struct-list            ; TYPE
    #:toplevel-declare                            ; STRUCT
    #:make-toplevel-declare                       ; CONSTRUCTOR
    #:toplevel-declare-name                       ; ACCESSOR
@@ -124,6 +137,7 @@
    #:program-types                               ; ACCESSOR
    #:program-type-aliases                        ; ACCESSOR
    #:program-structs                             ; ACCESSOR
+   #:program-faux-structs                        ; ACCESSOR
    #:program-declares                            ; ACCESSOR
    #:program-defines                             ; ACCESSOR
    #:program-classes                             ; ACCESSOR
@@ -315,6 +329,20 @@
 (deftype struct-field-list ()
   '(satisfies struct-field-list-p))
 
+(defstruct (faux-struct-accessor
+            (:include toplevel-definition)
+            (:copier nil))
+  (name (util:required 'name) :type string :read-only t)
+  (type (util:required 'type) :type ty     :read-only t))
+
+(eval-when (:load-toplevel :compile-toplevel :execute)
+  (defun faux-struct-accessor-list-p (x)
+    (and (alexandria:proper-list-p x)
+         (every #'faux-struct-accessor-p x))))
+
+(deftype faux-struct-accessor-list ()
+  '(satisfies faux-struct-accessor-list-p))
+
 (defstruct (toplevel-define-struct
             (:include toplevel-definition)
             (:copier nil))
@@ -331,6 +359,23 @@
 
 (deftype toplevel-define-struct-list ()
   '(satisfies toplevel-define-struct-list-p))
+
+(defstruct (toplevel-define-faux-struct
+            (:include toplevel-definition)
+            (:copier nil))
+  (name          (util:required 'name)          :type identifier-src            :read-only t)
+  (vars          (util:required 'vars)          :type keyword-src-list          :read-only t)
+  (accessors     (util:required 'accessors)     :type faux-struct-accessor-list :read-only t)
+  (repr          (util:required 'repr)          :type (or null attribute-repr)  :read-only nil)
+  (head-location (util:required 'head-location) :type source:location           :read-only t))
+
+(eval-when (:load-toplevel :compile-toplevel :execute)
+  (defun toplevel-define-faux-struct-list-p (x)
+    (and (alexandria:proper-list-p x)
+         (every #'toplevel-define-faux-struct-p x))))
+
+(deftype toplevel-define-faux-struct-list ()
+  '(satisfies toplevel-define-faux-struct-list-p))
 
 (defstruct (toplevel-declare
             (:copier nil))
@@ -503,16 +548,17 @@
   (export      nil                       :type list))
 
 (defstruct program
-  (package         nil :type (or null toplevel-package)      :read-only t)
-  (types           nil :type toplevel-define-type-list       :read-only nil)
-  (type-aliases    nil :type toplevel-define-type-alias-list :read-only nil)
-  (structs         nil :type toplevel-define-struct-list     :read-only nil)
-  (declares        nil :type toplevel-declare-list           :read-only nil)
-  (defines         nil :type toplevel-define-list            :read-only nil)
-  (classes         nil :type toplevel-define-class-list      :read-only nil)
-  (instances       nil :type toplevel-define-instance-list   :read-only nil)
-  (lisp-forms      nil :type toplevel-lisp-form-list         :read-only nil)
-  (specializations nil :type toplevel-specialize-list        :read-only nil))
+  (package         nil :type (or null toplevel-package)       :read-only t)
+  (types           nil :type toplevel-define-type-list        :read-only nil)
+  (type-aliases    nil :type toplevel-define-type-alias-list  :read-only nil)
+  (structs         nil :type toplevel-define-struct-list      :read-only nil)
+  (faux-structs    nil :type toplevel-define-faux-struct-list :read-only nil)
+  (declares        nil :type toplevel-declare-list            :read-only nil)
+  (defines         nil :type toplevel-define-list             :read-only nil)
+  (classes         nil :type toplevel-define-class-list       :read-only nil)
+  (instances       nil :type toplevel-define-instance-list    :read-only nil)
+  (lisp-forms      nil :type toplevel-lisp-form-list          :read-only nil)
+  (specializations nil :type toplevel-specialize-list         :read-only nil))
 
 (defun read-program (stream source &optional mode)
   "Read a PROGRAM from SOURCE (an instance of source-error:source).
@@ -562,6 +608,7 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
     (setf (program-types program) (nreverse (program-types program)))
     (setf (program-type-aliases program) (nreverse (program-type-aliases program)))
     (setf (program-structs program) (nreverse (program-structs program)))
+    (setf (program-faux-structs program) (nreverse (program-faux-structs program)))
     (setf (program-declares program) (nreverse (program-declares program)))
     (setf (program-defines program) (nreverse (program-defines program)))
     (setf (program-classes program) (nreverse (program-classes program)))
@@ -969,6 +1016,13 @@ If the parsed form is an attribute (e.g., repr or monomorphize), add it to to AT
        (push struct (program-structs program))
        t))
 
+    ((coalton:define-faux-struct)
+     (let* ((struct (parse-define-faux-struct form source))
+            (repr (consume-repr attributes struct "when parsing define-faux-struct")))
+       (setf (toplevel-define-faux-struct-repr struct) repr)
+       (push struct (program-faux-structs program))
+       t))
+
     ((coalton:define-class)
      (forbid-attributes attributes form source)
      (let ((class (parse-define-class form source)))
@@ -1337,6 +1391,48 @@ consume all attributes")))
               #'parse-struct-field
               (cst:nthrest (if docstring 3 2) form)
               source)
+     :location (form-location source form)
+     :repr nil
+     :head-location (form-location source (cst:second form)))))
+
+(defun parse-define-faux-struct (form source)
+  (declare (type cst:cst form))
+
+  (assert (cst:consp form))
+
+  (let (unparsed-name
+        unparsed-variables
+        docstring)
+
+    ;; (define-struct)
+    (unless (cst:consp (cst:rest form))
+      (parse-error "Malformed struct definition"
+                   (note source form "expected body")))
+
+    (if (cst:atom (cst:second form))
+        ;; (define-struct S ...)
+        (setf unparsed-name (cst:second form))
+
+        ;; (define-struct (S ...) ...)
+        (progn
+          (setf unparsed-name (cst:first (cst:second form)))
+          (setf unparsed-variables (cst:rest (cst:second form)))))
+
+    ;; (define-struct S "docstring" ...)
+    (when (and (cst:consp (cst:rest (cst:rest form)))
+               (cst:atom (cst:third form))
+               (stringp (cst:raw (cst:third form))))
+      (setf docstring (cst:raw (cst:third form))))
+
+    (make-toplevel-define-faux-struct
+     :name (parse-identifier unparsed-name source)
+     :vars (when unparsed-variables
+             (parse-list #'parse-type-variable unparsed-variables source))
+     :docstring docstring
+     :accessors (parse-list
+                 #'parse-faux-struct-accessor
+                 (cst:nthrest (if docstring 3 2) form)
+                 source)
      :location (form-location source form)
      :repr nil
      :head-location (form-location source (cst:second form)))))
@@ -2015,3 +2111,27 @@ consume all attributes")))
                            :type (parse-type type source)
                            :docstring docstring
                            :location (form-location source form))))))
+
+(defun parse-faux-struct-accessor (form source)
+  (declare (type cst:cst form)
+           (values faux-struct-accessor))
+
+  (let ((cursor (cursor:make-cursor form source "Malformed struct accessor")))
+    (when (cursor:atom-p cursor)
+      (cursor:error cursor ':form "unexpected form"))
+    (let ((name (cursor:next-symbol cursor
+                                    "missing accessor name"
+                                    "invalid accessor name (must be a symbol)"))
+          (docstring nil))
+      (when (stringp (cursor:peek cursor))
+        (setf docstring (cursor:next cursor)))
+      (unless (cursor:peek cursor)
+        (cursor:error cursor ':after-last "expected accessor type"))
+      (let ((type (cursor:next cursor :unwrap nil)))
+        (when (cursor:peek cursor :unwrap nil)
+          (cursor:error cursor ':next "unexpected trailing form"))
+
+        (make-faux-struct-accessor :name (symbol-name name)
+                                   :type (parse-type type source)
+                                   :docstring docstring
+                                   :location (form-location source form))))))

@@ -38,6 +38,7 @@
         (tc:toplevel-define-type (parser:program-types program)
                                  (parser:program-structs program)
                                  (parser:program-type-aliases program)
+                                 (parser:program-faux-structs program)
                                  env)
 
       (let ((all-instances (append instances (parser:program-instances program))))

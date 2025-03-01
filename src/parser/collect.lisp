@@ -70,7 +70,15 @@
 
   (:method ((type toplevel-define-struct))
     (declare (values tycon-list))
-    (mapcan #'collect-referenced-types-generic% (toplevel-define-struct-fields type))))
+    (mapcan #'collect-referenced-types-generic% (toplevel-define-struct-fields type)))
+
+  (:method ((accessor faux-struct-accessor))
+    (declare (values tycon-list &optional))
+    (collect-referenced-types-generic% (faux-struct-accessor-type accessor)))
+
+  (:method ((type toplevel-define-faux-struct))
+    (declare (values tycon-list))
+    (mapcan #'collect-referenced-types-generic% (toplevel-define-faux-struct-accessors type))))
 
 (defun collect-type-variables (type)
   "Returns a deduplicated list of all `TYVAR's in TYPE."

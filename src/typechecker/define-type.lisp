@@ -78,15 +78,16 @@
 (deftype type-definition-list ()
   '(satisfies type-definition-list-p))
 
-(defun toplevel-define-type (types structs type-aliases env)
+(defun toplevel-define-type (types structs type-aliases faux-structs env)
   (declare (type parser:toplevel-define-type-list types)
            (type parser:toplevel-define-struct-list structs)
            (type parser:toplevel-define-type-alias-list type-aliases)
+           (type parser:toplevel-define-faux-struct-list faux-structs)
            (type tc:environment env)
            (values type-definition-list parser:toplevel-define-instance-list tc:environment))
 
   ;; Ensure that all types are defined in the current package
-  (check-package (append types structs type-aliases)
+  (check-package (append types structs type-aliases faux-structs)
                  (alexandria:compose #'parser:identifier-src-name
                                      #'parser:type-definition-name)
                  (alexandria:compose #'source:location
@@ -102,7 +103,7 @@
 
   ;; Ensure that there are no duplicate type definitions
   (check-duplicates
-   (append types structs type-aliases)
+   (append types structs type-aliases faux-structs)
    (alexandria:compose #'parser:identifier-src-name #'parser:type-definition-name)
    (lambda (first second)
      (tc:tc-error "Duplicate type definitions"
@@ -113,7 +114,7 @@
   ;; NOTE: structs define a constructor with the same name
   (check-duplicates
    (mapcan (alexandria:compose #'copy-list #'parser:type-definition-ctors)
-           (append types structs))
+           (append types structs faux-structs))
    (alexandria:compose #'parser:identifier-src-name #'parser:type-definition-ctor-name)
    (lambda (first second)
      (tc:tc-error "Duplicate constructor definitions"
@@ -121,7 +122,7 @@
                   (tc:tc-note second "second definition here"))))
 
   ;; Ensure that no type has duplicate type variables
-  (loop :for type :in (append types structs type-aliases)
+  (loop :for type :in (append types structs type-aliases faux-structs)
         :do (check-duplicates
              (parser:type-definition-vars type)
              #'parser:keyword-src-name
@@ -142,10 +143,10 @@
 
   (let* ((type-names (mapcar (alexandria:compose #'parser:identifier-src-name
                                                  #'parser:type-definition-name)
-                             (append types structs type-aliases)))
+                             (append types structs type-aliases faux-structs)))
 
          (type-dependencies
-           (loop :for type :in (append types structs type-aliases)
+           (loop :for type :in (append types structs type-aliases faux-structs)
                  :for referenced-types := (parser:collect-referenced-types type)
                  :collect (list*
                            (parser:identifier-src-name (parser:type-definition-name type))
@@ -155,7 +156,7 @@
 
          (type-table
            (loop :with table := (make-hash-table :test #'eq)
-                 :for type :in (append types structs type-aliases)
+                 :for type :in (append types structs type-aliases faux-structs)
                  :for type-name := (parser:identifier-src-name (parser:type-definition-name type))
                  :do (setf (gethash type-name table) type)
                  :finally (return table)))

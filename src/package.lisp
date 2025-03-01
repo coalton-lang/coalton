@@ -25,6 +25,7 @@
    #:define-type
    #:define-type-alias
    #:define-struct
+   #:define-faux-struct
    #:define-class
    #:define-instance
    #:repr
