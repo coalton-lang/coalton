@@ -52,6 +52,7 @@
    #:make-faux-struct-accessor                   ; CONSTRUCTOR
    #:faux-struct-accessor-name                   ; ACCESSOR
    #:faux-struct-accessor-type                   ; ACCESSOR
+   #:faux-struct-accessor-func                   ; ACCESSOR
    #:faux-struct-accessor-list                   ; TYPE
    #:toplevel-define-struct                      ; STRUCT
    #:make-toplevel-define-struct                 ; CONSTRUCTOR
@@ -332,8 +333,9 @@
 (defstruct (faux-struct-accessor
             (:include toplevel-definition)
             (:copier nil))
-  (name (util:required 'name) :type string :read-only t)
-  (type (util:required 'type) :type ty     :read-only t))
+  (name (util:required 'name) :type string   :read-only t)
+  (type (util:required 'type) :type ty       :read-only t)
+  (func (util:required 'func) :type cst:cst  :read-only t))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun faux-struct-accessor-list-p (x)
@@ -1355,7 +1357,6 @@ consume all attributes")))
 
 (defun parse-define-struct (form source)
   (declare (type cst:cst form))
-
   (assert (cst:consp form))
 
   (let (unparsed-name
@@ -2127,11 +2128,13 @@ consume all attributes")))
         (setf docstring (cursor:next cursor)))
       (unless (cursor:peek cursor)
         (cursor:error cursor ':after-last "expected accessor type"))
-      (let ((type (cursor:next cursor :unwrap nil)))
+      (let ((type (cursor:next cursor :unwrap nil))
+            (func (cursor:next cursor :unwrap nil)))
         (when (cursor:peek cursor :unwrap nil)
           (cursor:error cursor ':next "unexpected trailing form"))
 
         (make-faux-struct-accessor :name (symbol-name name)
                                    :type (parse-type type source)
+                                   :func func
                                    :docstring docstring
                                    :location (form-location source form))))))

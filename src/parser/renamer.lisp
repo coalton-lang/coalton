@@ -678,15 +678,16 @@
        :repr (toplevel-define-struct-repr toplevel)
        :head-location (toplevel-define-struct-head-location toplevel))))
 
-  (:method ((field faux-struct-accessor) ctx)
+  (:method ((accessor faux-struct-accessor) ctx)
     (declare (type algo:immutable-map ctx)
              (values faux-struct-accessor))
 
     (make-faux-struct-accessor
-     :name (faux-struct-accessor-name field)
-     :type (rename-type-variables-generic% (faux-struct-accessor-type field) ctx)
-     :docstring (source:docstring field)
-     :location (source:location field)))
+     :name (faux-struct-accessor-name accessor)
+     :type (rename-type-variables-generic% (faux-struct-accessor-type accessor) ctx)
+     :func (faux-struct-accessor-func accessor)
+     :docstring (source:docstring accessor)
+     :location (source:location accessor)))
 
   (:method ((toplevel toplevel-define-faux-struct) ctx)
     (declare (type algo:immutable-map ctx)
