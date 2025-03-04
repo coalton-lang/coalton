@@ -22,6 +22,7 @@
   (:local-nicknames
    (#:types #:coalton-library/types)
    (#:math #:coalton-library/math)
+   (#:hyperdual #:coalton-library/math/hyperdual)
    (#:big-float #:coalton-library/big-float)
    (#:char #:coalton-library/char)
    (#:string #:coalton-library/string)
