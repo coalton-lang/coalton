@@ -12,6 +12,7 @@
    #:coalton-library/math/arith
    #:coalton-library/math/elementary
    #:coalton-library/math/integral
+   #:coalton-library/math/complex
    #:coalton-library/hash)
   (:local-nicknames
    (#:complex #:coalton-library/math/complex))
@@ -152,6 +153,13 @@ Note: See identity (1) in the description of this package (`coalton-library/math
     (let (Hyperdual _ b c d) = x)
     (Hyperdual f0 (* b f1) (* c f1) (+ (* d f1) (* (* b c) f2))))
 
+  (inline)
+  (declare square (Num :t => :t -> :t))
+  (define (square x) (* x x))
+  (inline)
+  (declare cube (Num :t => :t -> :t))
+  (define (cube x) (* (* x x) x))
+
   ;; type class instances
 
   (define-instance (Eq :t => Eq (Hyperdual :t))
@@ -200,9 +208,9 @@ Note: See identity (1) in the description of this package (`coalton-library/math
             ;; f(a) = a⁻¹
             (f0 (reciprocal ax))
             ;; f'(a) = -a⁻² = -(f(a))²
-            (f1 (negate (^ f0 2)))
+            (f1 (negate (square f0)))
             ;; f''(a) = 2a⁻3 = 2(f(a))³
-            (f2 (* 2 (^ f0 3))))
+            (f2 (* 2 (cube f0))))
         (h x f0 f1 f2))))
 
   (define-instance ((Trigonometric :t) (Reciprocable :t) (Radical :t) => Trigonometric (Hyperdual :t))
@@ -229,7 +237,7 @@ Note: See identity (1) in the description of this package (`coalton-library/math
             ;; f(a) = tan(a)
             (f0 (tan ax))
             ;; f'(a) = sec²(a) = ((cos(a))⁻¹)²
-            (f1 (^ (reciprocal (cos ax)) 2))
+            (f1 (square (reciprocal (cos ax))))
             ;; f''(a) = 2sec²(a)tan(a) = 2f(a)f'(a)
             (f2 (* 2 (* f0 f1))))
         (h x f0 f1 f2)))
@@ -238,27 +246,27 @@ Note: See identity (1) in the description of this package (`coalton-library/math
             ;; f(a) = arcsin(a)
             (f0 (asin ax))
             ;; f'(a) = (√(1 - a²))⁻¹
-            (f1 (reciprocal (sqrt (1- (^ ax 2)))))
+            (f1 (reciprocal (sqrt (- 1 (square ax)))))
             ;; f''(a) = x/(√(1 - a²))³
-            (f2 (/ ax (sqrt (^ (1- (^ ax 2)) 3)))))
+            (f2 (/ ax (sqrt (cube (- 1 (square ax)))))))
         (h x f0 f1 f2)))
     (define (acos x)
       (let ((ax (.a x))
             ;; f(a) = arccos(a)
             (f0 (acos ax))
             ;; f'(a) = -(√(1 - a²))⁻¹
-            (f1 (negate (reciprocal (sqrt (1- (^ ax 2))))))
+            (f1 (negate (reciprocal (sqrt (- 1 (square ax))))))
             ;; f''(a) = -x/(√(1 - a²))³
-            (f2 (negate (/ ax (sqrt (^ (1- (^ ax 2)) 3))))))
+            (f2 (negate (/ ax (sqrt (cube (- 1 (square ax))))))))
         (h x f0 f1 f2)))
     (define (atan x)
       (let ((ax (.a x))
             ;; f(a) = arctan(a)
             (f0 (atan ax))
             ;; f'(a) = (1 + a²)⁻¹
-            (f1 (reciprocal (1+ (^ ax 2))))
+            (f1 (reciprocal (1+ (square ax))))
             ;; f''(a) = -2a / (1 + a²)²
-            (f2 (* -2 (/ ax (^ (1+ (^ ax 2)) 2)))))
+            (f2 (* -2 (/ ax (square (1+ (square ax)))))))
         (h x f0 f1 f2)))
     (define pi (Hyperdual pi 0 0 0)))
 
@@ -279,7 +287,7 @@ Note: See identity (1) in the description of this package (`coalton-library/math
             ;; f'(a) = a⁻¹
             (f1 (reciprocal ax))
             ;; f''(a) = -a⁻² = -(f'(a))²
-            (f2 (negate (^ f1 2))))
+            (f2 (negate (square f1))))
         (h x f0 f1 f2)))
     (define (pow x y)
       ;; xʸ = exp(ln(x)y)
