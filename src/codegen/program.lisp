@@ -13,8 +13,7 @@
    #:codegen-class-definitions)
   (:import-from
    #:coalton-impl/codegen/codegen-expression
-   #:codegen-expression
-   #:function-declarations)
+   #:codegen-expression)
   (:import-from
    #:coalton-impl/codegen/codegen-type-definition
    #:codegen-type-definition)
@@ -199,7 +198,7 @@ Example:
            (type node-abstraction node)
            (type tc:environment env))
   `(defun ,name ,(node-abstraction-vars node)
-     ,(function-declarations node env)
+     (declare (ignorable ,@(node-abstraction-vars node)))
      ,(codegen-expression (node-abstraction-subexpr node) env)))
 
 (defun compile-scc (bindings env)
@@ -209,7 +208,19 @@ Example:
   (append
    ;; Predeclare symbol macros
    (loop :for (name . node) :in bindings
-         :collect `(global-lexical:define-global-lexical ,name ,(tc:lisp-type (node-type node) env)))
+         :append
+         `((global-lexical:define-global-lexical ,name ,(tc:lisp-type (node-type node) env))
+           ,@(when (and (node-abstraction-p node)
+                        settings:*emit-type-annotations*)
+               `((declaim
+                  (ftype
+                   (function
+                    (,@(loop :for nil :in (node-abstraction-vars node)
+                             :for ty :in (tc:function-type-arguments (node-type node))
+                             :collect (tc:lisp-type ty env)))
+                    (values ,(tc:lisp-type (node-type (node-abstraction-subexpr node)) env)
+                            &optional))
+                   ,name))))))
 
    ;; Compile functions
    (loop :for (name . node) :in bindings
