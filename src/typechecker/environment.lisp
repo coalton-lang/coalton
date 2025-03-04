@@ -68,6 +68,20 @@
    #:struct-entry-list                      ; TYPE
    #:struct-environment                     ; STRUCT
    #:get-field                              ; FUNCTION
+   #:faux-struct-accessor                   ; STRUCT
+   #:make-faux-struct-accessor              ; CONSTRUCTOR
+   #:faux-struct-accessor-name              ; ACCESSOR
+   #:faux-struct-accessor-type              ; ACCESSOR
+   #:faux-struct-accessor-func              ; ACCESSOR
+   #:faux-struct-accessor-index             ; ACCESSOR
+   #:faux-struct-accessor-list              ; TYPE
+   #:faux-struct-entry                      ; STRUCT
+   #:make-faux-struct-entry                 ; CONSTRUCTOR
+   #:faux-struct-entry-name                 ; ACCESSOR
+   #:faux-struct-entry-accessors            ; ACCESSOR
+   #:faux-struct-entry-list                 ; TYPE
+   #:faux-struct-environment                ; STRUCT
+   #:get-accessor                           ; FUNCTION
    #:ty-class-method                        ; STRUCT
    #:make-ty-class-method                   ; CONSTRUCTOR
    #:ty-class-method-name                   ; ACCESSOR
@@ -143,6 +157,8 @@
    #:lookup-struct                          ; FUNCTION
    #:set-struct                             ; FUNCTION
    #:unset-struct                           ; FUNCTION
+   #:set-faux-struct                        ; FUNCTION
+   #:unset-faux-struct                      ; FUNCTION
    #:set-constructor                        ; FUNCTION
    #:unset-constructor                      ; FUNCTION
    #:lookup-class                           ; FUNCTION
@@ -588,6 +604,58 @@
 (defstruct (struct-environment (:include immutable-map)))
 
 ;;;
+;;; Faux-Struct environment
+;;;
+
+(defstruct faux-struct-accessor
+  (name      (util:required 'name)      :type string            :read-only t)
+  (type      (util:required 'type)      :type ty                :read-only t)
+  (func      (util:required 'func)      :type cst:cst           :read-only t)
+  (index     (util:required 'index)     :type fixnum            :read-only t)
+  (docstring (util:required 'docstring) :type (or null string)  :read-only t))
+
+(defmethod source:docstring ((self faux-struct-accessor))
+  (faux-struct-accessor-docstring self))
+
+(defmethod make-load-form ((self faux-struct-accessor) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
+(defun faux-struct-accessor-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'faux-struct-accessor-p x)))
+
+(deftype faux-struct-accessor-list ()
+  '(satisfies faux-struct-accessor-list-p))
+
+(defstruct faux-struct-entry
+  (name      (util:required 'name)      :type symbol                    :read-only t)
+  (accessors (util:required 'accessors) :type faux-struct-accessor-list :read-only t)
+  (docstring (util:required 'docstring) :type (or null string)          :read-only t))
+
+(defmethod source:docstring ((self faux-struct-entry))
+  (faux-struct-entry-docstring self))
+
+(defmethod make-load-form ((self faux-struct-entry) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
+(defun faux-struct-entry-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'faux-struct-entry-p x)))
+
+(deftype faux-struct-entry-list ()
+  '(satisfies faux-struct-entry-list-p))
+
+(defun get-accessor (faux-struct-entry name &key no-error)
+  (or (some (lambda (accessor)
+              (when (string-equal (faux-struct-accessor-name accessor) name)
+                accessor))
+            (faux-struct-entry-accessors faux-struct-entry))
+      (unless no-error
+        (util:coalton-bug "Unknown field ~S" name))))
+
+(defstruct (faux-struct-environment (:include immutable-map)))
+
+;;;
 ;;; Class environment
 ;;;
 
@@ -841,6 +909,7 @@
   (constructor-environment    (util:required 'constructor-environment)    :type constructor-environment    :read-only t)
   (type-alias-environment     (util:required 'type-alias-environment)     :type type-alias-environment     :read-only t)
   (struct-environment         (util:required 'struct-environment)         :type struct-environment         :read-only t)
+  (faux-struct-environment    (util:required 'faux-struct-environment)    :type faux-struct-environment    :read-only t)
   (class-environment          (util:required 'class-environment)          :type class-environment          :read-only t)
   (fundep-environment         (util:required 'fundep-environment)         :type fundep-environment         :read-only t)
   (instance-environment       (util:required 'instance-environment)       :type instance-environment       :read-only t)
@@ -870,6 +939,7 @@
    :type-environment (make-default-type-environment)
    :type-alias-environment (make-type-alias-environment)
    :struct-environment (make-struct-environment)
+   :faux-struct-environment (make-faux-struct-environment)
    :constructor-environment (make-default-constructor-environment)
    :class-environment (make-class-environment)
    :fundep-environment (make-fundep-environment)
@@ -888,6 +958,7 @@
                              (type-alias-environment (environment-type-alias-environment env))
                              (constructor-environment (environment-constructor-environment env))
                              (struct-environment (environment-struct-environment env))
+                             (faux-struct-environment (environment-faux-struct-environment env))
                              (class-environment (environment-class-environment env))
                              (fundep-environment (environment-fundep-environment env))
                              (instance-environment (environment-instance-environment env))
@@ -903,6 +974,7 @@
            (type constructor-environment constructor-environment)
            (type type-alias-environment type-alias-environment)
            (type struct-environment struct-environment)
+           (type faux-struct-environment faux-struct-environment)
            (type class-environment class-environment)
            (type fundep-environment fundep-environment)
            (type instance-environment instance-environment)
@@ -919,6 +991,7 @@
    :constructor-environment constructor-environment
    :type-alias-environment type-alias-environment
    :struct-environment struct-environment
+   :faux-struct-environment faux-struct-environment
    :class-environment class-environment
    :fundep-environment fundep-environment
    :instance-environment instance-environment
@@ -1090,6 +1163,28 @@
                         (environment-struct-environment env)
                         symbol
                         #'make-struct-environment)))
+
+(define-env-updater set-faux-struct (env symbol value)
+  (declare (type environment env)
+           (type symbol symbol)
+           (type faux-struct-entry value))
+  (update-environment
+   env
+   :faux-struct-environment (immutable-map-set
+                             (environment-faux-struct-environment env)
+                             symbol
+                             value
+                             #'make-faux-struct-environment)))
+
+(define-env-updater unset-faux-struct (env symbol)
+  (declare (type environment env)
+           (type symbol symbol))
+  (update-environment
+   env
+   :faux-struct-environment (immutable-map-remove
+                        (environment-faux-struct-environment env)
+                        symbol
+                        #'make-faux-struct-environment)))
 
 (defun lookup-class (env symbol &key no-error)
   (declare (type environment env)

@@ -267,6 +267,24 @@
                        :name (type-definition-name type)
                        :fields fields
                        :docstring nil)))))
+        ((typep parsed-type 'parser:toplevel-define-faux-struct)
+         (let ((accessors (loop :for accessor
+                                  :in (parser:toplevel-define-faux-struct-accessors parsed-type)
+                                :for ty
+                                  := (parser:faux-struct-accessor-type accessor)
+                                :for index :from 0
+                                :collect (tc:make-faux-struct-accessor :name (parser:faux-struct-accessor-name accessor)
+                                                                       :type ty
+                                                                       :func (parser:faux-struct-accessor-func accessor)
+                                                                       :index index
+                                                                       :docstring (source:docstring accessor)))))
+           (setf env (tc:set-faux-struct
+                      env
+                      (type-definition-name type)
+                      (tc:make-faux-struct-entry
+                       :name (type-definition-name type)
+                       :accessors accessors
+                       :docstring nil)))))
         ((tc:lookup-struct env (type-definition-name type) :no-error t)
          (setf env (tc:unset-struct env (type-definition-name type)))))
 
