@@ -9,10 +9,10 @@
    #:named-let
    #:repeat
    #:dotimes
-   #:alltimes
+   #:everytimes
    #:sometimes
    #:sumtimes
-   #:multiplytimes
+   #:prodtimes
    #:dolist
    #:dolist-enumerated
    #:dorange)
@@ -28,12 +28,10 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (cl:defmacro named-let (name bindings cl:&body body)
-  (cl:let ((variables
-             (cl:mapcar #'cl:first bindings))
-           (initial-values
-             (cl:mapcar #'cl:second bindings)))
-    `(let ((,name (fn (,@variables) ,@body)))
-       (,name ,@initial-values))))
+  (cl:let ((variables (cl:mapcar #'cl:first bindings)))
+    `(let (,@bindings
+           (,name (fn (,@variables) ,@body)))
+       (,name ,@variables))))
 
 (coalton-toplevel
 
@@ -53,8 +51,8 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
         (func i)
         (rec (1+ i)))))
 
-  (declare %alltimes (UFix -> (UFix -> Boolean) -> Boolean))
-  (define (%alltimes n pred)
+  (declare %everytimes (UFix -> (UFix -> Boolean) -> Boolean))
+  (define (%everytimes n pred)
     "Is `pred` `True` for all `UFix`s in `[0, n)`? Returns `True` for `n = 0`."
     (named-let rec ((i 0))
       (if (== i n)
@@ -81,8 +79,8 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
           acc
           (rec (1+ i) (+ acc (func i))))))
 
-  (declare %multiplytimes (Num :t => UFix -> (UFix -> :t) -> :t))
-  (define (%multiplytimes n func)
+  (declare %prodtimes (Num :t => UFix -> (UFix -> :t) -> :t))
+  (define (%prodtimes n func)
     "Multiply the evaluations of `func` applied to every `UFix` in [0, n)`. Returns 1 for `n = 0`."
     (named-let rec ((i 0) (acc 1))
       (if (== i n)
@@ -129,12 +127,12 @@ COALTON::UNIT/UNIT
 -4
 COALTON::UNIT/UNIT"
     (cond
-      ((and (< from to) (positive? step))
+      ((positive? step)
        (named-let rec ((i from))
          (when (< i to)
            (func i)
            (rec (+ step i)))))
-      ((and (> from to) (negative? step))
+      ((negative? step)
        (named-let rec ((i from))
          (when (> i to)
            (func i)
@@ -144,7 +142,7 @@ COALTON::UNIT/UNIT"
 
   (declare %dorange-increasing. ((Ord :t1) (Num :t1) => :t1 -> :t1 -> :t1 -> (:t1 -> :t2) -> Unit))
   (define (%dorange-increasing. from to step func)
-    "Unsafe. Apply `func` to every number in `[from, to)` in incremements of `step`."
+    "Unsafe. Apply `func` to every number in `[from, to)` in increments of `step`."
     (named-let rec ((i from))
       (when (< i to)
         (func i)
@@ -152,7 +150,7 @@ COALTON::UNIT/UNIT"
 
   (declare %dorange-increasing ((Ord :t1) (Num :t1) => :t1 -> :t1 -> :t1 -> (:t1 -> :t2) -> Unit))
   (define (%dorange-increasing from to step func)
-    "Apply `func` to every number in `[from, to)` in incremements of `step`."
+    "Apply `func` to every number in `[from, to)` in increments of `step`."
     (when (positive? step) (%dorange-increasing. from to step func)))
 
   (declare %dorange-decreasing. ((Ord :t1) (Num :t1) => :t1 -> :t1 -> :t1 -> (:t1 -> :t2) -> Unit))
@@ -174,8 +172,8 @@ COALTON::UNIT/UNIT"
 (cl:defmacro dotimes ((variable count) cl:&body body)
   `(%dotimes ,count (fn (,variable) ,@body)))
 
-(cl:defmacro alltimes ((variable count) cl:&body body)
-  `(%alltimes ,count (fn (,variable) ,@body)))
+(cl:defmacro everytimes ((variable count) cl:&body body)
+  `(%everytimes ,count (fn (,variable) ,@body)))
 
 (cl:defmacro sometimes ((variable count) cl:&body body)
   `(%sometimes ,count (fn (,variable) ,@body)))
@@ -183,8 +181,8 @@ COALTON::UNIT/UNIT"
 (cl:defmacro sumtimes ((variable count) cl:&body body)
   `(%sumtimes ,count (fn (,variable) ,@body)))
 
-(cl:defmacro multiplytimes ((variable count) cl:&body body)
-  `(%multiplytimes ,count (fn (,variable) ,@body)))
+(cl:defmacro prodtimes ((variable count) cl:&body body)
+  `(%prodtimes ,count (fn (,variable) ,@body)))
 
 (cl:defmacro dolist ((variable lis) cl:&body body)
   `(%dolist ,lis (fn (,variable) ,@body)))
