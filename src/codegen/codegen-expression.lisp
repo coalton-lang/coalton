@@ -173,11 +173,16 @@
              ,(codegen-expression (match-branch-body (second (node-match-branches expr))) env))))
 
     ;; If we can use case, do that because a jump table is faster than cond
-    (when (or (subtypep (tc:lisp-type (node-type (node-match-expr expr)) env) 'number)
-              (subtypep (tc:lisp-type (node-type (node-match-expr expr)) env) 'character))
+    (when (or
+           ;; Matching a number
+           (find (node-type (node-match-expr expr)) (tc:number-types) :test #'equalp)
+           ;; Matching a Char
+           (equalp (node-type (node-match-expr expr)) tc:*char-type*)
+           ;; Matching an Enum
+           (tc:type-entry-enum-repr (tc:lookup-type env (tc:tycon-name (node-type (node-match-expr expr))))))
       (return-from codegen-expression
         (let ((subexpr (codegen-expression (node-match-expr expr) env))
-              (match-var (gensym "MATCH") ))
+              (match-var (gensym "MATCH")))
           `(let ((,match-var
                    ,(if settings:*emit-type-annotations*
                         `(the ,(tc:lisp-type (node-type (node-match-expr expr)) env) ,subexpr)
@@ -191,10 +196,14 @@
                        (multiple-value-bind (pred bindings)
                            (codegen-pattern pattern match-var env)
                          (declare (ignore pred))
-                         (if (pattern-literal-p pattern)
-                             `(,(pattern-literal-value pattern)
-                               ,expr)
-                             `(otherwise (let ,bindings ,expr)))))
+                         (cond ((pattern-literal-p pattern)
+                                 `(,(pattern-literal-value pattern)
+                                   ,expr))
+                               ((pattern-constructor-p pattern)
+                                `(,(pattern-constructor-name pattern)
+                                  ,expr))
+                               (t
+                                `(otherwise (let ,bindings ,expr))))))
 
                ;; Only emit a fallback if there is not a catch-all clause.
                ,@(unless (member-if (lambda (pat)

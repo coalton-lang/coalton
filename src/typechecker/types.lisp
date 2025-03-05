@@ -48,6 +48,8 @@
    #:*fraction-type*                    ; VARIABLE
    #:*arrow-type*                       ; VARIABLE
    #:*list-type*                        ; VARIABLE
+   #:*number-types*                     ; VARIABLE
+   #:number-types                       ; FUNCTION
    #:push-type-alias                    ; FUNCTION
    #:flatten-type                       ; FUNCTION
    #:apply-type-argument                ; FUNCTION
@@ -265,6 +267,16 @@
 (defvar *fraction-type*     (make-tycon :name 'coalton:Fraction     :kind +kstar+))
 (defvar *arrow-type*        (make-tycon :name 'coalton:Arrow        :kind (make-kfun :from +kstar+ :to (make-kfun :from +kstar+ :to +kstar+))))
 (defvar *list-type*         (make-tycon :name 'coalton:List         :kind (make-kfun :from +kstar+ :to +kstar+)))
+
+;;;
+;;; Number Type Registry
+;;;
+
+(defvar *number-types*
+  '(coalton:Integer coalton:IFix coalton:UFix coalton:Single-Float coalton:Double-Float coalton:Fraction))
+
+(defun number-types ()
+  (mapcar (lambda (name) (make-tycon :name name :kind +kstar+)) *number-types*))
 
 ;;;
 ;;; Operations on Types
