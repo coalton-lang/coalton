@@ -66,6 +66,10 @@
                              (:file "dual")
                              (:file "hyperdual")
                              (:file "package")))
+               (:module "experimental"
+                :serial t
+                :components ((:file "loops")
+                             (:file "package")))
                (:file "randomaccess")
                (:file "cell")
                (:file "tuple")
