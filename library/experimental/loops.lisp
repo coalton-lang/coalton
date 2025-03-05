@@ -82,7 +82,7 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
 
   (declare %prodtimes (Num :t => UFix -> (UFix -> :t) -> :t))
   (define (%prodtimes n func)
-    "Multiply the evaluations of `func` applied to every `UFix` in [0, n)`. Returns 1 for `n = 0`."
+    "Multiply the evaluations of `func` applied to every `UFix` in `[0, n)`. Returns 1 for `n = 0`."
     (named-let rec ((i 0) (acc 1))
       (if (== i n)
           acc
