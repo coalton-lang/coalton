@@ -15,6 +15,7 @@
    #:prodtimes
    #:collectimes
    #:dolist
+   #:dolists
    #:dolist-enumerated
    #:dorange)
   (:documentation "A Coalton package of loop macros.
@@ -211,6 +212,42 @@ COALTON::UNIT/UNIT"
 
 (cl:defmacro dolist ((variable lis) cl:&body body)
   `(%dolist ,lis (fn (,variable) ,@body)))
+
+(cl:defmacro dolists (variables-and-lists cl:&body body)
+  "Bind a set of variables to the respective elements of a set of lists with those bindings.
+
+Example:
+
+> (coalton (dolists ((x (make-list 1 2 3))
+                     (y (make-list 10 20 30))
+                     (z (make-list 100 200 300 400)))
+             (print (+ x (+ y z))))
+111
+222
+333
+COALTON::UNIT/UNIT"
+  (cl:declare (cl:type cl:list variables-and-lists))
+  (cl:let ((rec (cl:gensym "REC"))
+           (variables (cl:mapcar #'cl:first variables-and-lists))
+           (lists (cl:mapcar #'cl:second variables-and-lists))
+           (xss (cl:loop
+                   :repeat (cl:length variables-and-lists)
+                   :collect (cl:gensym "XS"))))
+    (cl:labels ((populate-body (remaining-variables remaining-xss)
+                  (cl:cond
+                    ((cl:null remaining-variables)
+                     `(progn ,@body (,rec ,@xss)))
+                    (cl:t
+                     (cl:let ((x (cl:first remaining-variables))
+                              (xs (cl:first remaining-xss)))
+                       `(match ,xs
+                          ((Nil)
+                           Unit)
+                          ((Cons ,x ,xs)
+                           ,(populate-body (cl:rest remaining-variables)
+                                           (cl:rest remaining-xss)))))))))
+      `(named-let ,rec (,@(cl:mapcar (cl:lambda (xs lis) (cl:list xs lis)) xss lists))
+         ,(populate-body variables xss)))))
 
 (cl:defmacro dolist-enumerated ((index-variable element-variable lis) cl:&body body)
   `(%dolist-enumerated ,lis (fn (,index-variable ,element-variable) ,@body)))
