@@ -206,7 +206,8 @@ Example:
   (declare (type binding-list bindings)
            (type tc:environment env))
   (append
-   ;; Predeclare symbol macros
+   ;; Predeclare symbol macros and function types
+   ;; All function declarations must appear before function definitions to optimize mutual tail-calls.
    (loop :for (name . node) :in bindings
          :append
          `((global-lexical:define-global-lexical ,name ,(tc:lisp-type (node-type node) env))
