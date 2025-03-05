@@ -173,13 +173,16 @@
              ,(codegen-expression (match-branch-body (second (node-match-branches expr))) env))))
 
     ;; If we can use case, do that because a jump table is faster than cond
-    (when (or
-           ;; Matching a number
-           (find (node-type (node-match-expr expr)) (tc:number-types) :test #'equalp)
-           ;; Matching a Char
-           (equalp (node-type (node-match-expr expr)) tc:*char-type*)
-           ;; Matching an Enum
-           (tc:type-entry-enum-repr (tc:lookup-type env (tc:tycon-name (node-type (node-match-expr expr))))))
+    (when (and
+           ;; When we have a resolved match type
+           (not (tc:tyvar-p (node-type (node-match-expr expr))))
+           (or
+            ;; Matching a number
+            (find (node-type (node-match-expr expr)) (tc:number-types) :test #'equalp)
+            ;; Matching a Char
+            (equalp (node-type (node-match-expr expr)) tc:*char-type*)
+            ;; Matching an Enum
+            (tc:type-entry-enum-repr (tc:lookup-type env (tc:tycon-name (node-type (node-match-expr expr)))))))
       (return-from codegen-expression
         (let ((subexpr (codegen-expression (node-match-expr expr) env))
               (match-var (gensym "MATCH")))
@@ -196,11 +199,15 @@
                        (multiple-value-bind (pred bindings)
                            (codegen-pattern pattern match-var env)
                          (declare (ignore pred))
+                         (print pattern)
                          (cond ((pattern-literal-p pattern)
                                  `(,(pattern-literal-value pattern)
                                    ,expr))
                                ((pattern-constructor-p pattern)
-                                `(,(pattern-constructor-name pattern)
+                                ;; format and intern the proper enum symbol, this is a bad hack
+                                `(,(cl:intern (cl:format cl:nil "~:@(~a/~a~)"
+                                                         (pattern-type pattern)
+                                                         (pattern-constructor-name pattern)))
                                   ,expr))
                                (t
                                 `(otherwise (let ,bindings ,expr))))))
