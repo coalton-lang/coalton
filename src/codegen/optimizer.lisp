@@ -193,6 +193,12 @@
       (action (:before node-let) #'add-local-funs)
       (action (:before node-bind) #'add-bind-fun)))))
 
+(defun propagate-let-type (node)
+  (when (node-let-p node)
+    (setf (coalton-impl/codegen/ast::%node-type (node-let-subexpr node))
+          (node-type node)))
+  node)
+
 (defun optimize-bindings-initial (bindings package env)
   (declare (type binding-list bindings)
            (type package package)
@@ -201,7 +207,7 @@
   (let ((hoister (make-hoister)))
     (append
      (loop :for (name . node) :in bindings
-           :collect (cons name (static-dict-lift (optimize-node node env) name hoister package env)))
+           :collect (cons name (propagate-let-type (static-dict-lift (optimize-node node env) name hoister package env))))
      (pop-final-hoist-point hoister))))
 
 (defun optimize-node (node env)
@@ -715,12 +721,7 @@ NODE in the environment ENV."
 
                         (specialization (tc:lookup-specialization-by-type env rator-name rator-type :no-error t)))
                    (unless specialization
-                     (print "NO SPECIALIZATION FOUND")
-                     (force-output)
                      (return-from apply-specialization))
-
-                   (print "APPLYING SPECIALIZATION")
-                   (force-output)
 
                    (unless (>= (length (node-rands node)) num-preds)
                      (util:coalton-bug "Expected function ~A to have at least ~A args when applying specialization." rator-name (length preds)))
