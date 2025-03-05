@@ -1395,7 +1395,7 @@
            (type symbol from)
            (type ty ty)
            (values (or null specialization-entry) &optional))
-  (fset:do-seq (elem (cl:print (immutable-listmap-lookup (environment-specialization-environment env) from :no-error no-error)))
+  (fset:do-seq (elem (immutable-listmap-lookup (environment-specialization-environment env) from :no-error no-error))
     (handler-case
         (progn
           (match (specialization-entry-to-ty elem) ty)
