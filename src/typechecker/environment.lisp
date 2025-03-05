@@ -1395,9 +1395,10 @@
            (type symbol from)
            (type ty ty)
            (values (or null specialization-entry) &optional))
-  (fset:do-seq (elem (immutable-listmap-lookup (environment-specialization-environment env) from :no-error no-error))
+  (fset:do-seq (elem (cl:print (immutable-listmap-lookup (environment-specialization-environment env) from :no-error no-error)))
     (handler-case
         (progn
+          (format t "~%TRYING TO SPECIALIZE TY: ~a" ty)
           (match (specialization-entry-to-ty elem) ty)
           (return-from lookup-specialization-by-type elem))
       (coalton-internal-type-error (e)

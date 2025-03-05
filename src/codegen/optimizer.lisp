@@ -715,7 +715,12 @@ NODE in the environment ENV."
 
                         (specialization (tc:lookup-specialization-by-type env rator-name rator-type :no-error t)))
                    (unless specialization
+                     (print "NO SPECIALIZATION FOUND")
+                     (force-output)
                      (return-from apply-specialization))
+
+                   (print "APPLYING SPECIALIZATION")
+                   (force-output)
 
                    (unless (>= (length (node-rands node)) num-preds)
                      (util:coalton-bug "Expected function ~A to have at least ~A args when applying specialization." rator-name (length preds)))
