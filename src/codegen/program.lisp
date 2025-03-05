@@ -206,22 +206,25 @@ Example:
   (declare (type binding-list bindings)
            (type tc:environment env))
   (append
-   ;; Predeclare symbol macros and function types
-   ;; All function declarations must appear before function definitions to optimize mutual tail-calls.
+   ;; Predeclare symbol macros
    (loop :for (name . node) :in bindings
-         :append
-         `((global-lexical:define-global-lexical ,name ,(tc:lisp-type (node-type node) env))
-           ,@(when (and (node-abstraction-p node)
-                        settings:*emit-type-annotations*)
-               `((declaim
-                  (ftype
-                   (function
-                    (,@(loop :for nil :in (node-abstraction-vars node)
-                             :for ty :in (tc:function-type-arguments (node-type node))
-                             :collect (tc:lisp-type ty env)))
-                    (values ,(tc:lisp-type (node-type (node-abstraction-subexpr node)) env)
-                            &optional))
-                   ,name))))))
+         :collect `(global-lexical:define-global-lexical ,name ,(tc:lisp-type (node-type node) env)))
+
+   ;; Function declarations
+   ;; They must appear before function definitions to optimize mutual tail-calls.
+   (loop :for (name . node) :in bindings
+         :if (and (node-abstraction-p node)
+                  settings:*emit-type-annotations*)
+         :collect
+         `(declaim
+           (ftype
+            (function
+             (,@(loop :for nil :in (node-abstraction-vars node)
+                      :for ty :in (tc:function-type-arguments (node-type node))
+                      :collect (tc:lisp-type ty env)))
+             (values ,(tc:lisp-type (node-type (node-abstraction-subexpr node)) env)
+                     &optional))
+            ,name)))
 
    ;; Compile functions
    (loop :for (name . node) :in bindings
