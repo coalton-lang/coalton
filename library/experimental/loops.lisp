@@ -13,6 +13,7 @@
    #:sometimes
    #:sumtimes
    #:prodtimes
+   #:collectimes
    #:dolist
    #:dolist-enumerated
    #:dorange)
@@ -86,6 +87,27 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
       (if (== i n)
           acc
           (rec (1+ i) (* acc (func i))))))
+
+  (inline)
+  (declare %set-cdr (List :t -> List :t -> List :t))
+  (define (%set-cdr xs ys)
+    "Set the cdr of `xs` to `ys` and return `ys`.
+Unsafe: `xs` must be a `Cons` cell."
+    (lisp (List :t) (xs ys)
+      (cl:setf (cl:cdr xs) ys)))
+
+  (declare %collecttimes (UFix -> (UFix -> :t) -> List :t))
+  (define (%collecttimes n func)
+    "Collect the applications of `func` to every `UFix` in `[0, n)` as a `List`."
+    (cond
+      ((zero? n)
+       Nil)
+      (True
+       (let ((res (Cons (func 0) Nil)))
+         (named-let rec ((i 1) (last res))
+           (unless (== i n)
+             (rec (1+ i) (%set-cdr last (Cons (func i) Nil)))))
+         res))))
 
   (declare %dolist (List :t1 -> (:t1 -> :t2) -> Unit))
   (define (%dolist lis func)
@@ -183,6 +205,9 @@ COALTON::UNIT/UNIT"
 
 (cl:defmacro prodtimes ((variable count) cl:&body body)
   `(%prodtimes ,count (fn (,variable) ,@body)))
+
+(cl:defmacro collecttimes ((variable count) cl:&body body)
+  `(%collecttimes ,count (fn (,variable) ,@body)))
 
 (cl:defmacro dolist ((variable lis) cl:&body body)
   `(%dolist ,lis (fn (,variable) ,@body)))
