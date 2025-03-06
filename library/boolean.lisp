@@ -19,9 +19,10 @@
   ;;
 
   (define-instance (Eq Boolean)
+    (inline)
     (define (== x y)
-        (lisp Boolean (x y)
-              (cl:eq x y))))
+      (lisp Boolean (x y)
+        (cl:eq x y))))
 
   (define-instance (Ord Boolean)
     (define (<=> x y)
@@ -36,6 +37,7 @@
            ((False) EQ))))))
 
   (define-instance (Default Boolean)
+    (inline)
     (define (default) False)))
 
 (define-sxhash-hasher Boolean)

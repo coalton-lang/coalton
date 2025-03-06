@@ -175,6 +175,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
   "Defines the elmentary instances for a lisp floating-point type"
   `(coalton-toplevel
      (define-instance (Trigonometric ,coalton-type)
+       (inline)
        (define (sin x)
          (cond
            ;; CCL signals errors when applying trigonometric functions to NaN and infinity
@@ -188,6 +189,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
                  #+ccl ff:with-float-traps-masked #+ccl cl:t
                  (cl:sin x))))))
 
+       (inline)
        (define (cos x)
          (cond
            ;; CCL signals errors when applying trigonometric functions to NaN and infinity
@@ -201,6 +203,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
                  #+ccl ff:with-float-traps-masked #+ccl cl:t
                  (cl:cos x))))))
 
+       (inline)
        (define (tan x)
          (cond
            ;; CCL signals errors when applying trigonometric functions to NaN and infinity
@@ -214,6 +217,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
                  #+ccl ff:with-float-traps-masked #+ccl cl:t
                  (cl:tan x))))))
 
+       (inline)
        (define (asin x)
          (cond
            ;; CCL signals errors when applying trigonometric functions to NaN and infinity
@@ -229,6 +233,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
                      #+ccl ff:with-float-traps-masked #+ccl cl:t
                      (cl:asin x)))))))
 
+       (inline)
        (define (acos x)
          (if (or (nan? x) (> x 1) (< x -1))
              nan
@@ -237,6 +242,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
                   #+ccl ff:with-float-traps-masked #+ccl cl:t
                   (cl:acos x)))))
 
+       (inline)
        (define (atan x)
          (cond
            ;; CCL signals errors when applying trigonometric functions to NaN and infinity
@@ -254,6 +260,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
            (cl:coerce cl:pi ',underlying-type))))
 
      (define-instance (Polar ,coalton-type)
+       (inline)
        (define (phase x)
          (lisp ,coalton-type (x)
            (#+(not ccl) cl:progn
@@ -263,6 +270,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
          (Tuple (magnitude x) (phase x))))
 
      (define-instance (Exponentiable ,coalton-type)
+       (inline)
        (define (pow x y)
          (cond
            ((or (nan? x) (nan? y)) nan)
@@ -285,6 +293,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
                  #+ccl ff:with-float-traps-masked #+ccl cl:t
                  (cl:expt x y))))))
 
+       (inline)
        (define (exp x)
          (cond
            ;; Allegro signals overflow and underflow errors when using infinity in exponents
@@ -304,6 +313,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
                           (cl:realpart res)
                           res)))))))
 
+       (inline)
        (define (log b x)
          (cond
            ((or (nan? b) (nan? x)) nan)
@@ -319,6 +329,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
                  (cl:log x b))))
            (True nan)))
 
+       (inline)
        (define (ln x)
          (cond
            ((nan? x) nan)
@@ -332,6 +343,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
            (cl:exp (cl:coerce 1 ',underlying-type)))))
 
      (define-instance (Radical ,coalton-type)
+       (inline)
        (define (sqrt x)
          (if (or (nan? x) (< x 0))
              nan
@@ -339,6 +351,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
                (#+(not ccl) cl:progn
                   #+ccl ff:with-float-traps-masked #+ccl cl:t
                   (cl:sqrt x)))))
+       (inline)
        (define (nth-root n x)
          (canonical-nth-root n x)))
 
