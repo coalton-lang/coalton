@@ -227,7 +227,7 @@
                                       (node-match-branches expr)
                                       :key #'match-branch-pattern)
                      `((otherwise
-                        (error "Pattern match not exhaustive error"))))))))))
+                        (error "Fell through a non-exhaustive match."))))))))))
 
     ;; Otherwise do the thing
     (let ((subexpr (codegen-expression (node-match-expr expr) env))
@@ -263,7 +263,7 @@
                                     (node-match-branches expr)
                                     :key #'match-branch-pattern)
                    `((t
-                      (error "Pattern match not exhaustive error")))))))))
+                      (error "Fell through a non-exhaustive match.")))))))))
 
   (:method ((expr node-seq) env)
     (declare (type tc:environment env))
