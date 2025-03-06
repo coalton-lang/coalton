@@ -32,9 +32,9 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
 (cl:eval-when (:compile-toplevel :load-toplevel :execute)
   (cl:defmacro named-let (name bindings cl:&body body)
     (cl:let ((variables (cl:mapcar #'cl:first bindings)))
-      `(let (,@bindings
-             (,name (fn (,@variables) ,@body)))
-         (,name ,@variables)))))
+      `(let ,bindings
+         (let ((,name (fn (,@variables) ,@body)))
+           (,name ,@variables))))))
 
 (coalton-toplevel
 
@@ -175,7 +175,8 @@ COALTON::UNIT/UNIT"
   (declare %dorange-increasing ((Ord :t1) (Num :t1) => :t1 -> :t1 -> :t1 -> (:t1 -> :t2) -> Unit))
   (define (%dorange-increasing from to step func)
     "Apply `func` to every number in `[from, to)` in increments of `step`."
-    (when (positive? step) (%dorange-increasing. from to step func)))
+    (when (positive? step)
+      (%dorange-increasing. from to step func)))
 
   (declare %dorange-decreasing. ((Ord :t1) (Num :t1) => :t1 -> :t1 -> :t1 -> (:t1 -> :t2) -> Unit))
   (define (%dorange-decreasing. from to step func)
@@ -188,7 +189,8 @@ COALTON::UNIT/UNIT"
   (declare %dorange-decreasing ((Ord :t1) (Num :t1) => :t1 -> :t1 -> :t1 -> (:t1 -> :t2) -> Unit))
   (define (%dorange-decreasing from to step func)
     "Apply `func` to every number in `(to, from]`, starting with `from`, in decrements of `step`."
-    (when (negative? step) (%dorange-decreasing. from to step func))))
+    (when (negative? step)
+      (%dorange-decreasing. from to step func))))
 
 (cl:defmacro repeat ((count) cl:&body body)
   `(%repeat ,count (fn () ,@body)))
