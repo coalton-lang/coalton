@@ -5,6 +5,9 @@
    #:coalton
    #:coalton-library/classes
    #:coalton-library/math/arith)
+  (:shadow
+   #:continue
+   #:break)
   (:export
    #:named-let
    #:repeat
@@ -14,6 +17,8 @@
    #:sumtimes
    #:prodtimes
    #:collectimes
+   #:besttimes
+   #:argbesttimes
    #:dolist
    #:dolists
    #:dolist-enumerated
@@ -36,23 +41,26 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
          (let ((,name (fn (,@variables) ,@body)))
            (,name ,@variables))))))
 
+(cl:defmacro continue () `(return True))
+(cl:defmacro break () `(return False))
+
 (coalton-toplevel
 
-  (declare %repeat (UFix -> (Unit -> :t) -> Unit))
+  (declare %repeat (UFix -> (Unit -> Boolean) -> Unit))
   (define (%repeat n func)
     "Do `func` `n` times."
     (named-let rec ((i 0))
       (unless (== i n)
-        (func)
-        (rec (1+ i)))))
+        (when (func)
+          (rec (1+ i))))))
 
-  (declare %dotimes (UFix -> (UFix -> :t) -> Unit))
+  (declare %dotimes (UFix -> (UFix -> Boolean) -> Unit))
   (define (%dotimes n func)
     "Apply `func` to every `UFix` in `[0, n)`."
     (named-let rec ((i 0))
       (unless (== i n)
-        (func i)
-        (rec (1+ i)))))
+        (when (func i)
+          (rec (1+ i))))))
 
   (declare %everytimes (UFix -> (UFix -> Boolean) -> Boolean))
   (define (%everytimes n pred)
@@ -111,29 +119,57 @@ Unsafe: `xs` must be a `Cons` cell."
              (rec (1+ i) (%set-cdr last (Cons (func i) Nil)))))
          res))))
 
-  (declare %dolist (List :t1 -> (:t1 -> :t2) -> Unit))
+  (declare %besttimes (UFix -> (:t -> :t -> Boolean) -> (UFix -> :t) -> :t))
+  (define (%besttimes n better? func)
+    "Of the applications of `func` to every `UFix` in `[0, n)`, find the one that is `better?` than the rest."
+    (assert (< 0 n) "`n` must be > 0.")
+    (named-let rec ((i 1) (best (func 0)))
+      (cond
+        ((== i n)
+         best)
+        (True
+         (let ((candidate (func i)))
+           (if (better? candidate best)
+               (rec (1+ i) candidate)
+               (rec (1+ i) best)))))))
+
+  (declare %argbesttimes (UFix -> (:t -> :t -> Boolean) -> (UFix -> :t) -> UFix))
+  (define (%argbesttimes n better? func)
+    "Find the `UFix` in `[0, n)` whose application of `func` is `better?` than the rest."
+    (assert (< 0 n) "`n` must be > 0.")
+    (named-let rec ((i 1) (argbest 0) (best (func 0)))
+      (cond
+        ((== i n)
+         argbest)
+        (True
+         (let ((candidate (func i)))
+           (if (better? candidate best)
+               (rec (1+ i) i candidate)
+               (rec (1+ i) argbest best)))))))
+
+  (declare %dolist (List :t1 -> (:t1 -> Boolean) -> Unit))
   (define (%dolist lis func)
     "Apply `func` to every element of `lis`."
     (named-let rec ((xs lis))
       (match xs
         ((Cons x xs)
-         (func x)
-         (rec xs))
+         (when (func x)
+           (rec xs)))
         ((Nil)
          Unit))))
 
-  (declare %dolist-enumerated (List :t1 -> (UFix -> :t1 -> :t2) -> Unit))
+  (declare %dolist-enumerated (List :t -> (UFix -> :t -> Boolean) -> Unit))
   (define (%dolist-enumerated lis func)
     "Apply `func` to every element of `lis` and its index, as `(func index element)`."
     (named-let rec ((i 0) (xs lis))
       (match xs
         ((Cons x xs)
-         (func i x)
-         (rec (1+ i) xs))
+         (when (func i x)
+           (rec (1+ i) xs)))
         ((Nil)
          Unit))))
 
-  (declare %dorange ((Ord :t1) (Num :t1) => :t1 -> :t1 -> :t1 -> (:t1 -> :t2) -> Unit))
+  (declare %dorange ((Ord :t) (Num :t) => :t -> :t -> :t -> (:t -> Boolean) -> Unit))
   (define (%dorange from to step func)
     "Apply `func` to every number in `[from, to)` in increments/decrements of `step`.
 
@@ -154,49 +190,49 @@ COALTON::UNIT/UNIT"
       ((positive? step)
        (named-let rec ((i from))
          (when (< i to)
-           (func i)
-           (rec (+ step i)))))
+           (when (func i)
+             (rec (+ step i))))))
       ((negative? step)
        (named-let rec ((i from))
          (when (> i to)
-           (func i)
-           (rec (+ step i)))))
+           (when (func i)
+             (rec (+ step i))))))
       (True
        Unit)))
 
-  (declare %dorange-increasing. ((Ord :t1) (Num :t1) => :t1 -> :t1 -> :t1 -> (:t1 -> :t2) -> Unit))
+  (declare %dorange-increasing. ((Ord :t) (Num :t) => :t -> :t -> :t -> (:t -> Boolean) -> Unit))
   (define (%dorange-increasing. from to step func)
     "Unsafe. Apply `func` to every number in `[from, to)` in increments of `step`."
     (named-let rec ((i from))
       (when (< i to)
-        (func i)
-        (rec (+ step i)))))
+        (when (func i)
+          (rec (+ step i))))))
 
-  (declare %dorange-increasing ((Ord :t1) (Num :t1) => :t1 -> :t1 -> :t1 -> (:t1 -> :t2) -> Unit))
+  (declare %dorange-increasing ((Ord :t) (Num :t) => :t -> :t -> :t -> (:t -> Boolean) -> Unit))
   (define (%dorange-increasing from to step func)
     "Apply `func` to every number in `[from, to)` in increments of `step`."
     (when (positive? step)
       (%dorange-increasing. from to step func)))
 
-  (declare %dorange-decreasing. ((Ord :t1) (Num :t1) => :t1 -> :t1 -> :t1 -> (:t1 -> :t2) -> Unit))
+  (declare %dorange-decreasing. ((Ord :t) (Num :t) => :t -> :t -> :t -> (:t -> Boolean) -> Unit))
   (define (%dorange-decreasing. from to step func)
     "Apply `func` to every number in `(to, from]`, starting with `from`, in decrements of `step`."
     (named-let rec ((i from))
       (when (> i to)
-        (func i)
-        (rec (+ step i)))))
+        (when (func i)
+          (rec (+ step i))))))
 
-  (declare %dorange-decreasing ((Ord :t1) (Num :t1) => :t1 -> :t1 -> :t1 -> (:t1 -> :t2) -> Unit))
+  (declare %dorange-decreasing ((Ord :t) (Num :t) => :t -> :t -> :t -> (:t -> Boolean) -> Unit))
   (define (%dorange-decreasing from to step func)
     "Apply `func` to every number in `(to, from]`, starting with `from`, in decrements of `step`."
     (when (negative? step)
       (%dorange-decreasing. from to step func))))
 
 (cl:defmacro repeat ((count) cl:&body body)
-  `(%repeat ,count (fn () ,@body)))
+  `(%repeat ,count (fn () ,@body True)))
 
 (cl:defmacro dotimes ((variable count) cl:&body body)
-  `(%dotimes ,count (fn (,variable) ,@body)))
+  `(%dotimes ,count (fn (,variable) ,@body True)))
 
 (cl:defmacro everytimes ((variable count) cl:&body body)
   `(%everytimes ,count (fn (,variable) ,@body)))
@@ -213,8 +249,14 @@ COALTON::UNIT/UNIT"
 (cl:defmacro collecttimes ((variable count) cl:&body body)
   `(%collecttimes ,count (fn (,variable) ,@body)))
 
+(cl:defmacro besttimes ((variable count better?) cl:&body body)
+  `(%besttimes ,count ,better? (fn (,variable) ,@body)))
+
+(cl:defmacro argbesttimes ((variable count better?) cl:&body body)
+  `(%argbesttimes ,count ,better? (fn (,variable) ,@body)))
+
 (cl:defmacro dolist ((variable lis) cl:&body body)
-  `(%dolist ,lis (fn (,variable) ,@body)))
+  `(%dolist ,lis (fn (,variable) ,@body True)))
 
 (cl:defmacro dolists (variables-and-lists cl:&body body)
   "Bind a set of variables to the respective elements of a set of lists with those bindings.
@@ -231,6 +273,7 @@ Example:
 COALTON::UNIT/UNIT"
   (cl:declare (cl:type cl:list variables-and-lists))
   (cl:let ((rec (cl:gensym "REC"))
+           (func (cl:gensym "FUNC"))
            (variables (cl:mapcar #'cl:first variables-and-lists))
            (lists (cl:mapcar #'cl:second variables-and-lists))
            (xss (cl:loop
@@ -239,7 +282,8 @@ COALTON::UNIT/UNIT"
     (cl:labels ((populate-body (remaining-variables remaining-xss)
                   (cl:cond
                     ((cl:null remaining-variables)
-                     `(progn ,@body (,rec ,@xss)))
+                     `(when (,func ,@variables)
+                        (,rec ,@xss)))
                     (cl:t
                      (cl:let ((x (cl:first remaining-variables))
                               (xs (cl:first remaining-xss)))
@@ -249,14 +293,15 @@ COALTON::UNIT/UNIT"
                           ((Cons ,x ,xs)
                            ,(populate-body (cl:rest remaining-variables)
                                            (cl:rest remaining-xss)))))))))
-      `(named-let ,rec (,@(cl:mapcar (cl:lambda (xs lis) (cl:list xs lis)) xss lists))
-         ,(populate-body variables xss)))))
+      `(let ((,func (fn (,@variables) ,@body True)))
+         (named-let ,rec (,@(cl:mapcar (cl:lambda (xs lis) (cl:list xs lis)) xss lists))
+           ,(populate-body variables xss))))))
 
 (cl:defmacro dolist-enumerated ((index-variable element-variable lis) cl:&body body)
-  `(%dolist-enumerated ,lis (fn (,index-variable ,element-variable) ,@body)))
+  `(%dolist-enumerated ,lis (fn (,index-variable ,element-variable) ,@body True)))
 
 (cl:defmacro dorange ((variable start-or-stop cl:&optional stop step) cl:&body body)
-  (cl:let ((func `(fn (,variable) ,@body)))
+  (cl:let ((func `(fn (,variable) ,@body True)))
     (cl:cond
       ((cl:null stop)
        `(%dotimes ,start-or-stop ,func))
