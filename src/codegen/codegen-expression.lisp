@@ -172,54 +172,62 @@
              ,(codegen-expression (match-branch-body (first (node-match-branches expr))) env)
              ,(codegen-expression (match-branch-body (second (node-match-branches expr))) env))))
 
-    ;; If we can use case, do that because a jump table is faster than cond
-    (when (and
-           ;; When we have a resolved match type
-           (not (tc:tyvar-p (node-type (node-match-expr expr))))
-           (or
-            ;; Matching a number
-            (find (node-type (node-match-expr expr)) (tc:number-types) :test #'equalp)
-            ;; Matching a Char
-            (equalp (node-type (node-match-expr expr)) tc:*char-type*)
-            ;; Matching an Enum
-            (tc:type-entry-enum-repr (tc:lookup-type env (tc:tycon-name (node-type (node-match-expr expr)))))))
+    ;; Do cl:if when the order is reversed as well (this method is getting fat)
+    (when (and (equalp (node-type (node-match-expr expr)) tc:*boolean-type*)
+               (= 2 (length (node-match-branches expr)))
+               (equalp (match-branch-pattern (first (node-match-branches expr)))
+                       (make-pattern-constructor :type tc:*boolean-type* :name 'coalton:False :patterns nil))
+               (equalp (match-branch-pattern (second (node-match-branches expr)))
+                       (make-pattern-constructor :type tc:*boolean-type* :name 'coalton:True :patterns nil)))
       (return-from codegen-expression
-        (let ((subexpr (codegen-expression (node-match-expr expr) env))
-              (match-var (gensym "MATCH")))
-          `(let ((,match-var
-                   ,(if settings:*emit-type-annotations*
-                        `(the ,(tc:lisp-type (node-type (node-match-expr expr)) env) ,subexpr)
-                        subexpr)))
-             (declare (ignorable ,match-var))
-             (case ,(codegen-expression (node-match-expr expr) env)
-               ,@(loop :for branch :in (node-match-branches expr)
-                       :for pattern := (match-branch-pattern branch)
-                       :for expr := (codegen-expression (match-branch-body branch) env)
-                       :collect
-                       (multiple-value-bind (pred bindings)
-                           (codegen-pattern pattern match-var env)
-                         (declare (ignore pred))
-                         (print pattern)
-                         (cond ((pattern-literal-p pattern)
-                                 `(,(pattern-literal-value pattern)
-                                   ,expr))
-                               ((pattern-constructor-p pattern)
-                                ;; format and intern the proper enum symbol, this is a bad hack
-                                `(,(cl:intern (cl:format cl:nil "~:@(~a/~a~)"
-                                                         (pattern-type pattern)
-                                                         (pattern-constructor-name pattern)))
-                                  ,expr))
-                               (t
-                                `(otherwise (let ,bindings ,expr))))))
+        `(if ,(codegen-expression (node-match-expr expr) env)
+             ,(codegen-expression (match-branch-body (second (node-match-branches expr))) env)
+             ,(codegen-expression (match-branch-body (first (node-match-branches expr))) env))))
 
-               ;; Only emit a fallback if there is not a catch-all clause.
-               ,@(unless (member-if (lambda (pat)
-                                      (or (pattern-wildcard-p pat)
-                                          (pattern-var-p pat)))
-                                    (node-match-branches expr)
-                                    :key #'match-branch-pattern)
-                   `((otherwise
-                      (error "Pattern match not exhaustive error")))))))))
+    ;; If we can use case, do that because a jump table is faster than cond
+    (let ((ty (node-type (node-match-expr expr))))
+      (when (or
+             ;; Matching a number
+             (find ty (tc:number-types) :test #'equalp)
+             ;; Matching a Char
+             (equalp ty tc:*char-type*)
+             ;; Matching an Enum
+             (and (tc:tycon-p ty) (tc:type-entry-enum-repr (tc:lookup-type env (tc:tycon-name ty)))))
+        (return-from codegen-expression
+          (let ((subexpr (codegen-expression (node-match-expr expr) env))
+                (match-var (gensym "MATCH")))
+            `(let ((,match-var
+                     ,(if settings:*emit-type-annotations*
+                          `(the ,(tc:lisp-type (node-type (node-match-expr expr)) env) ,subexpr)
+                          subexpr)))
+               (declare (ignorable ,match-var))
+               (case ,(codegen-expression (node-match-expr expr) env)
+                 ,@(loop :for branch :in (node-match-branches expr)
+                         :for pattern := (match-branch-pattern branch)
+                         :for expr := (codegen-expression (match-branch-body branch) env)
+                         :collect
+                         (multiple-value-bind (pred bindings)
+                             (codegen-pattern pattern match-var env)
+                           (declare (ignore pred))
+                           (cond ((pattern-literal-p pattern)
+                                  `(,(pattern-literal-value pattern)
+                                    ,expr))
+                                 ((pattern-constructor-p pattern)
+                                  (let* ((name (pattern-constructor-name pattern))
+                                         (entry (tc:lookup-constructor env name)))
+                                    `(,(tc:constructor-entry-compressed-repr entry)
+                                      ,expr)))
+                                 (t
+                                  `(otherwise (let ,bindings ,expr))))))
+
+                 ;; Only emit a fallback if there is not a catch-all clause.
+                 ,@(unless (member-if (lambda (pat)
+                                        (or (pattern-wildcard-p pat)
+                                            (pattern-var-p pat)))
+                                      (node-match-branches expr)
+                                      :key #'match-branch-pattern)
+                     `((otherwise
+                        (error "Pattern match not exhaustive error"))))))))))
 
     ;; Otherwise do the thing
     (let ((subexpr (codegen-expression (node-match-expr expr) env))

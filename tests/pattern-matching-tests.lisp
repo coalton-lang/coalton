@@ -1,5 +1,22 @@
 (in-package #:coalton-native-tests)
 
+(coalton-toplevel 
+  (repr :enum)
+  (define-type MyEnum
+    Jalapeno
+    Onion
+    Lime))
+
+(define-test test-match-on-enum ()
+  (let ((declare f (MyEnum -> String))
+        (f (fn (x)
+             (match x
+               ((Jalapeno) "jalapeno")
+               ((Onion) "onion")
+               (_ "lime?")))))
+    (is (== (f Jalapeno) "jalapeno"))
+    (is (== (f Lime) "lime?"))))
+
 (define-test test-match-on-ints ()
   (let ((f (fn (x)
              (match x
