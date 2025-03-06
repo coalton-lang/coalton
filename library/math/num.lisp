@@ -45,12 +45,15 @@
 
     (cl:eval-when (:compile-toplevel :load-toplevel)
       (cl:defmacro define-eq (type)
-        `(define-instance (Eq ,type)
-           (inline)
-           (define (== a b)
-             (lisp Boolean (a b)
-               ;; Use cl:= so that (== 0.0 -0.0) => True
-               (cl:= a b)))))))
+        `(progn
+           (lisp-toplevel ()
+             (cl:pushnew ',type coalton-impl/typechecker/types:*number-types*))
+           (define-instance (Eq ,type)
+             (inline)
+             (define (== a b)
+               (lisp Boolean (a b)
+                 ;; Use cl:= so that (== 0.0 -0.0) => True
+                 (cl:= a b))))))))
 
   (define-eq Integer)
   (define-eq IFix)
