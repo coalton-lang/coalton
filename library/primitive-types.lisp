@@ -10,8 +10,10 @@
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (cl:defmacro define-number-type (name cl:&rest rest)
-  (cl:pushnew name coalton-impl/typechecker/types:*number-types*)
-  `(define-type ,name ,@rest))
+  `(progn
+     (lisp-toplevel ()
+       (cl:pushnew name coalton-impl/typechecker/types:*number-types*))
+     (define-type ,name ,@rest)))
 
 (coalton-toplevel
   (repr :native cl:t)
