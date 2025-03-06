@@ -29,11 +29,12 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
 #+coalton-release
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
-(cl:defmacro named-let (name bindings cl:&body body)
-  (cl:let ((variables (cl:mapcar #'cl:first bindings)))
-    `(let (,@bindings
-           (,name (fn (,@variables) ,@body)))
-       (,name ,@variables))))
+(cl:eval-when (:compile-toplevel :load-toplevel :execute)
+  (cl:defmacro named-let (name bindings cl:&body body)
+    (cl:let ((variables (cl:mapcar #'cl:first bindings)))
+      `(let (,@bindings
+             (,name (fn (,@variables) ,@body)))
+         (,name ,@variables)))))
 
 (coalton-toplevel
 
