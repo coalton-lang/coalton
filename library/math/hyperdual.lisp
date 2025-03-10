@@ -3,7 +3,7 @@
 ;;;; An implementation of Hyperdual numbers for computing second-order
 ;;;; derivatives of compositions of built-in Coalton functions.
 
-(defpackage #:coalton-library/math/hyperdual
+(coalton-library/utils::defstdlib-package #:coalton-library/math/hyperdual
   (:use
    #:coalton
    #:coalton-library/builtin
