@@ -310,6 +310,12 @@ Typical `fail` continuations are:
                      -> (:container :elt)
                      -> :result)))
 
+  (define-instance (Unwrappable (Result :a))
+  (define (unwrap-or-else succeed fail res)
+    (match res
+      ((Ok elt) (succeed elt))
+      ((Err _) (fail)))))
+
   (declare expect ((Unwrappable :container) =>
                    String
                    -> (:container :element)
@@ -331,7 +337,7 @@ Typical `fail` continuations are:
                                                container))))
                     container))
 
-  (declare unwrap-into ((Unwrappable (Result :c)) (TryInto :a :b :c) => :a -> :b))
+  (declare unwrap-into (TryInto :a :b :c => :a -> :b))
   (define (unwrap-into x)
     "Same as `tryInto` followed by `unwrap`."
     (unwrap (tryinto x)))
