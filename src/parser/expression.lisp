@@ -680,6 +680,7 @@ Rebound to NIL parsing an anonymous FN.")
 
          (make-node-let
           :bindings (if name
+                        ;; named-let: Add a lexical function to the binding.
                         (cons
                          (make-node-let-binding
                           :name (parse-variable name source)
@@ -696,6 +697,7 @@ Rebound to NIL parsing an anonymous FN.")
           :declares declares
           :body
           (if name
+              ;; named-let: Call a lexical function with initial values in the body.
               (make-node-body
                :nodes nil
                :last-node
