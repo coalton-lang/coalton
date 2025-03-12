@@ -679,31 +679,34 @@ Rebound to NIL parsing an anonymous FN.")
                     (return (values declares binding-list vars)))
 
          (make-node-let
-          :bindings (if name
-                        ;; named-let: Add a lexical function to the binding.
-                        (cons
-                         (make-node-let-binding
-                          :name (parse-variable name source)
-                          :value
-                          (make-node-abstraction
-                           :params (mapcar (lambda (var)
-                                             (parse-pattern var source))
-                                           vars)
-                           :body (parse-body body form source)
-                           :location (form-location source form))
-                          :location (form-location source form))
-                         bindings)
-                        bindings)
+          :bindings bindings
           :declares declares
           :body
           (if name
-              ;; named-let: Call a lexical function with initial values in the body.
               (make-node-body
                :nodes nil
                :last-node
-               (make-node-application
-                :rator (parse-expression name source)
-                :rands (mapcar #'node-let-binding-name bindings)
+               (make-node-let
+                :bindings (list (make-node-let-binding
+                                 :name (parse-variable name source)
+                                 :value
+                                 (make-node-abstraction
+                                  :params (mapcar (lambda (var)
+                                                    (parse-pattern var source))
+                                                  vars)
+                                  :body (parse-body body form source)
+                                  :location (form-location source form))
+                                 :location (form-location source form)))
+                :declares nil
+                ;; named-let: Call a lexical function with initial values in the body.
+                :body
+                (make-node-body
+                 :nodes nil
+                 :last-node
+                 (make-node-application
+                  :rator (parse-expression name source)
+                  :rands (mapcar #'node-let-binding-name bindings)
+                  :location (form-location source form)))
                 :location (form-location source form)))
               (parse-body body form source))
           :location (form-location source form)))))
