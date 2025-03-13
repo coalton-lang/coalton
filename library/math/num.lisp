@@ -24,20 +24,57 @@
 #+coalton-release
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
-(coalton-toplevel
+;; The "Constants" should, ideally, be placed at the start of the
+;; first `lisp-toplevel` below. See issue no. 1402.
 
 ;;;
 ;;; Constants
 ;;;
 
-  (lisp-toplevel ()
+(cl:eval-when (:compile-toplevel :load-toplevel)
+  (cl:defconstant +fixnum-bits+
+    #+sbcl sb-vm:n-fixnum-bits
+    #-sbcl (cl:1+ (cl:floor (cl:log cl:most-positive-fixnum 2))))
+  (cl:defconstant +unsigned-fixnum-bits+
+    (cl:1- +fixnum-bits+)))
 
-    (cl:eval-when (:compile-toplevel :load-toplevel)
-      (cl:defconstant +fixnum-bits+
-        #+sbcl sb-vm:n-fixnum-bits
-        #-sbcl (cl:1+ (cl:floor (cl:log cl:most-positive-fixnum 2))))
-      (cl:defconstant +unsigned-fixnum-bits+
-        (cl:1- +fixnum-bits+)))
+;; The "Overflow checks for signal values" should, ideally, be placed
+;; at the start of the third `lisp-toplevel` below. See issue
+;; no. 1402.
+
+;;;
+;;; Overflow checks for signed values
+;;;
+
+(cl:declaim (cl:inline %unsigned->signed))
+(cl:defun %unsigned->signed (bits x)
+  ;; This is the two's complement conversion of X (interpreted as BITS
+  ;; bits) to a signed integer (as a Lisp object).
+  (cl:-
+   (cl:ldb (cl:byte (cl:1- bits) 0) x)
+   (cl:dpb 0 (cl:byte (cl:1- bits) 0) x)))
+
+(cl:defmacro %define-overflow-handler (name bits)
+  `(cl:progn
+     (cl:declaim (cl:inline ,name))
+     (cl:defun ,name (value)
+       (cl:typecase value
+         ((cl:signed-byte ,bits) value)
+         (cl:otherwise
+          (cl:cerror "Continue, wrapping around."
+                     ,(cl:format cl:nil "Signed value overflowed ~D bits." bits))
+          (%unsigned->signed ,bits (cl:mod value ,(cl:expt 2 bits))))))))
+
+
+(%define-overflow-handler %handle-8bit-overflow 8)
+(%define-overflow-handler %handle-16bit-overflow 16)
+(%define-overflow-handler %handle-32bit-overflow 32)
+(%define-overflow-handler %handle-64bit-overflow 64)
+(%define-overflow-handler %handle-fixnum-overflow #.+fixnum-bits+)
+
+(coalton-toplevel
+
+  (lisp-toplevel ()
 
 ;;;
 ;;; Eq Instances
@@ -137,37 +174,7 @@
   (define-ord Single-Float)
   (define-ord Double-Float)
 
-;;;
-;;; Overflow checks for signed values
-;;;
-
   (lisp-toplevel ()
-
-    (cl:declaim (cl:inline %unsigned->signed))
-    (cl:defun %unsigned->signed (bits x)
-      ;; This is the two's complement conversion of X (interpreted as BITS
-      ;; bits) to a signed integer (as a Lisp object).
-      (cl:-
-       (cl:ldb (cl:byte (cl:1- bits) 0) x)
-       (cl:dpb 0 (cl:byte (cl:1- bits) 0) x)))
-
-    (cl:defmacro %define-overflow-handler (name bits)
-      `(cl:progn
-         (cl:declaim (cl:inline ,name))
-         (cl:defun ,name (value)
-           (cl:typecase value
-             ((cl:signed-byte ,bits) value)
-             (cl:otherwise
-              (cl:cerror "Continue, wrapping around."
-                         ,(cl:format cl:nil "Signed value overflowed ~D bits." bits))
-              (%unsigned->signed ,bits (cl:mod value ,(cl:expt 2 bits))))))))
-
-
-    (%define-overflow-handler %handle-8bit-overflow 8)
-    (%define-overflow-handler %handle-16bit-overflow 16)
-    (%define-overflow-handler %handle-32bit-overflow 32)
-    (%define-overflow-handler %handle-64bit-overflow 64)
-    (%define-overflow-handler %handle-fixnum-overflow #.+fixnum-bits+)
 
 ;;;
 ;;; Num instances for integers
