@@ -225,8 +225,6 @@ Rebound to NIL parsing an anonymous FN.")
 ;;;;
 ;;;; node-let := "(" "let" "(" (node-let-binding | node-let-declare)+ ")" body ")"
 ;;;;
-;;;; node-named-let := "(" "let" identifier "(" (node-let-binding | node-let-declare)+ ")" body ")"
-;;;;
 ;;;; node-rec := "(" "rec" [qualified-ty] identifier "(" (node-let-binding | node-let-declare)+ ")" body ")"
 ;;;;
 ;;;; node-lisp := "(" "lisp" type "(" variable* ")" lisp-form+ ")"
@@ -642,77 +640,35 @@ Rebound to NIL parsing an anonymous FN.")
        (parse-error "Malformed let"
                     (note-end source (cst:first form) "expected let binding list")))
 
-     (multiple-value-bind (name let-bindings body)
-         (cond
-           ;; named let: (let id (...) ...)
-           ((and (cst:atom (cst:second form))
-                 (symbolp (cst:raw (cst:second form)))
-                 (not (cst:null (cst:second form)))
-                 (cst:consp (cst:rest (cst:rest form)))
-                 (cst:proper-list-p (cst:first (cst:rest (cst:rest form)))))
-            (values (cst:second form)
-                    (cst:first (cst:rest (cst:rest form)))
-                    (cst:rest (cst:rest (cst:rest form)))))
-           ;; (let (...))
-           ((not (cst:consp (cst:rest (cst:rest form))))
-            (parse-error "Malformed let"
-                         (note-end source (cst:second form) "expected let body")))
-           ((not (cst:proper-list-p (cst:first (cst:rest form))))
-            (parse-error "Malformed let"
-                         (note source (cst:second form) "expected binding list")))
-           (t
-            (values nil
-                    (cst:first (cst:rest form))
-                    (cst:rest (cst:rest form)))))
+     ;; (let (...))
+     (unless (cst:consp (cst:rest (cst:rest form)))
+       (parse-error "Malformed let"
+                    (note-end source (cst:second form) "expected let body")))
 
-       (multiple-value-bind (declares bindings vars)
-           (loop :for bindings := let-bindings :then (cst:rest bindings)
-                 :while (cst:consp bindings)
-                 :for binding := (cst:first bindings)
-                 ;; if binding is in the form (declare x y+)
-                 :if (and (cst:consp binding)
-                          (cst:atom (cst:first binding))
-                          (eq (cst:raw (cst:first binding)) 'coalton:declare))
-                   :collect (parse-let-declare binding source)
-                     :into declares
-                 :else
-                   :collect (parse-let-binding binding source) :into binding-list
-                   :and :collect (cst:first binding) :into vars
-                 :finally
-                    (return (values declares binding-list vars)))
+     (unless (cst:proper-list-p (cst:second form))
+       (parse-error "Malformed let"
+                    (note source (cst:second form) "expected binding list")))
 
-         (make-node-let
-          :bindings bindings
-          :declares declares
-          :body
-          (if name
-              (make-node-body
-               :nodes nil
-               :last-node
-               (make-node-let
-                :bindings (list (make-node-let-binding
-                                 :name (parse-variable name source)
-                                 :value
-                                 (make-node-abstraction
-                                  :params (mapcar (lambda (var)
-                                                    (parse-pattern var source))
-                                                  vars)
-                                  :body (parse-body body form source)
-                                  :location (form-location source form))
-                                 :location (form-location source form)))
-                :declares nil
-                ;; named-let: Call a lexical function with initial values in the body.
-                :body
-                (make-node-body
-                 :nodes nil
-                 :last-node
-                 (make-node-application
-                  :rator (parse-expression name source)
-                  :rands (mapcar #'node-let-binding-name bindings)
-                  :location (form-location source form)))
-                :location (form-location source form)))
-              (parse-body body form source))
-          :location (form-location source form)))))
+     (let* (declares
+            
+            (bindings (loop :for bindings := (cst:second form) :then (cst:rest bindings)
+                            :while (cst:consp bindings)
+                            :for binding := (cst:first bindings)
+                            ;; if binding is in the form (declare x y+)
+                            :if (and (cst:consp binding)
+                                     (cst:consp (cst:rest form))
+                                     (cst:consp (cst:rest (cst:rest form)))
+                                     (cst:atom (cst:first binding))
+                                     (eq (cst:raw (cst:first binding)) 'coalton:declare))
+                              :do (push (parse-let-declare binding source) declares)
+                            :else
+                              :collect (parse-let-binding binding source))))
+
+       (make-node-let
+        :bindings bindings
+        :declares (nreverse declares)
+        :body (parse-body (cst:nthrest 2 form) form source)
+        :location (form-location source form))))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:rec (cst:raw (cst:first form))))
