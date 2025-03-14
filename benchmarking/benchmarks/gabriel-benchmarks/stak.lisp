@@ -2,58 +2,50 @@
 ;;;;
 ;;;;
 
-(in-package #:coalton-benchmarks)
+(defpackage #:coalton-benchmarks/gabriel/stak
+  (:use
+   #:coalton
+   #:coalton-prelude
+   #:coalton-benchmarking)
+  (:export
+   #:lisp-stak
+   #:stak))
 
-(define-benchmark stak ()
-  (declare (optimize speed))
-  (loop :repeat 1000
-        :do (with-benchmark-sampling
-              (coalton-benchmarks/native:stak 18 12 6)))
-  (report trivial-benchmark::*current-timer*))
-
-(define-benchmark stak-lisp ()
-  (declare (optimize speed))
-  (loop :repeat 1000
-        :do (with-benchmark-sampling
-              (lisp-stak 18 12 6)))
-  (report trivial-benchmark::*current-timer*))
+(in-package #:coalton-benchmarks/gabriel/stak)
 
 ;;;
 ;;;
 ;;;
 
 
-(defvar x)
-(defvar y)
-(defvar z)
+(cl:defvar x)
+(cl:defvar y)
+(cl:defvar z)
 
-(declaim (ftype (function () fixnum) stak-aux))
-(defun stak-aux ()
-  (if (not (< y x))
+(cl:declaim (cl:ftype (cl:function () cl:fixnum) stak-aux))
+(cl:defun stak-aux ()
+  (cl:if (cl:not (cl:< y x))
       z
-      (let ((x (let ((x (1- x))
+      (cl:let ((x (cl:let ((x (cl:1- x))
                      (y y)
                      (z z))
                  (stak-aux)))
-            (y (let ((x (1- y))
+            (y (cl:let ((x (cl:1- y))
                      (y z)
                      (z x))
                  (stak-aux)))
-            (z (let ((x (1- z))
+            (z (cl:let ((x (cl:1- z))
                      (y x)(z y))
                  (stak-aux))))
         (stak-aux))))
 
-(declaim (ftype (function (fixnum fixnum fixnum) fixnum) lisp-stak))
-(defun lisp-stak (x y z)
+(cl:declaim (cl:ftype (cl:function (cl:fixnum cl:fixnum cl:fixnum) cl:fixnum) lisp-stak))
+(cl:defun lisp-stak (x y z)
   (stak-aux))
 
 ;;;
 ;;;
 ;;;
-
-
-(cl:in-package #:coalton-benchmarks/native)
 
 (cl:declaim (cl:optimize (cl:speed 3) (cl:safety 0)))
 
@@ -76,3 +68,16 @@
                          (z2 y))
                      (stak x2 y2 z2))))
            (stak x1 y1 z1)))))
+
+;; Defining the Coalton benchmark
+(define-benchmark stak 1000
+  (fn ()
+    (stak 18 12 6)
+    Unit))
+
+;; Defining the Lisp Benchmark
+(define-benchmark lisp-stak 1000
+  (fn ()
+    (lisp Unit ()
+      (lisp-stak 18 12 6)
+      Unit)))
