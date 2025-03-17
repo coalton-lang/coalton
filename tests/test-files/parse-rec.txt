@@ -1,0 +1,158 @@
+================================================================================
+1 Parse rec
+================================================================================
+
+(package coalton-unit-tests)
+
+(define x
+  (rec f ((n 5))
+    (if (coalton-prelude:== n 1)
+        1
+        (coalton-prelude:* n (f (coalton-prelude:1- n))))))
+
+================================================================================
+2 Parse rec
+================================================================================
+
+(package coalton-unit-tests)
+
+(define x
+  (rec list-length ((lst (make-list 1 2 3 4 5))
+                    (len 0))
+    (match lst
+      ((Cons _ xs) (list-length xs (coalton-prelude:1+ len)))
+      ((Nil) len))))
+
+================================================================================
+3 Parse nested rec
+================================================================================
+
+(package coalton-unit-tests)
+
+(define x
+  (rec even? ((n 5))
+    (if (coalton-prelude:== n 0)
+        True
+        (rec odd? ((m (coalton-prelude:1- n)))
+          (if (coalton-prelude:== m 0)
+              False
+              (even? (coalton-prelude:1- m)))))))
+
+================================================================================
+4 Parse rec with type declaration
+================================================================================
+
+(package coalton-unit-tests)
+
+(define x
+  (rec (UFix -> UFix) f ((n 5))
+    (if (coalton-prelude:== n 1)
+        1
+        (coalton-prelude:* n (f (coalton-prelude:1- n))))))
+
+================================================================================
+5 Parse rec with type declaration
+================================================================================
+
+(package coalton-unit-tests)
+
+(define x
+  (rec f ((declare n UFix)
+          (n 5))
+    (if (coalton-prelude:== n 1)
+        1
+        (coalton-prelude:* n (f (coalton-prelude:1- n))))))
+
+================================================================================
+6 Parse rec reusing a symbol
+================================================================================
+
+(package coalton-unit-tests)
+
+(define x
+  (let ((f 3)) (rec f ((n f)) n)))
+
+================================================================================
+7 Parse rec with a bad name
+================================================================================
+
+(package coalton-unit-tests)
+
+(define x
+  (rec 1 ((x 0)) x))
+
+--------------------------------------------------------------------------------
+
+error: Invalid variable
+  --> test:4:7
+   |
+ 4 |    (rec 1 ((x 0)) x))
+   |         ^ expected identifier
+
+================================================================================
+8 Parse rec with a bad binding name
+================================================================================
+
+(package coalton-unit-tests)
+
+(define x
+  (rec f ((1 0)) 0))
+
+--------------------------------------------------------------------------------
+
+error: Invalid variable
+  --> test:4:11
+   |
+ 4 |    (rec f ((1 0)) 0))
+   |             ^ expected identifier
+
+================================================================================
+9 Parse rec with a bad binding form
+================================================================================
+
+(package coalton-unit-tests)
+
+(define x
+  (rec f (hi) 0))
+
+--------------------------------------------------------------------------------
+
+error: Malformed let binding
+  --> test:4:10
+   |
+ 4 |    (rec f (hi) 0))
+   |            ^^ expected list
+
+================================================================================
+10 Parse rec with a bad binding form
+================================================================================
+
+(package coalton-unit-tests)
+
+(define x
+  (rec f ((hi)) 0))
+
+--------------------------------------------------------------------------------
+
+error: Malformed let binding
+  --> test:4:13
+   |
+ 4 |    (rec f ((hi)) 0))
+   |               ^ let bindings must have a value
+
+================================================================================
+11 Parse rec with a bad binding form
+================================================================================
+
+(package coalton-unit-tests)
+
+(define x
+  (rec f ((x y z)) 0))
+
+--------------------------------------------------------------------------------
+
+error: Malformed let binding
+  --> test:4:15
+   |
+ 4 |    (rec f ((x y z)) 0))
+   |                 ^ unexpected trailing form
