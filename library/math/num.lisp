@@ -151,51 +151,43 @@
        (cl:ldb (cl:byte (cl:1- bits) 0) x)
        (cl:dpb 0 (cl:byte (cl:1- bits) 0) x)))
 
-    (cl:defmacro %define-overflow-handler (name bits)
-      `(cl:progn
-         (cl:declaim (cl:inline ,name))
-         (cl:defun ,name (value)
-           (cl:typecase value
-             ((cl:signed-byte ,bits) value)
-             (cl:otherwise
-              (cl:cerror "Continue, wrapping around."
-                         ,(cl:format cl:nil "Signed value overflowed ~D bits." bits))
-              (%unsigned->signed ,bits (cl:mod value ,(cl:expt 2 bits))))))))
-
-
-    (%define-overflow-handler %handle-8bit-overflow 8)
-    (%define-overflow-handler %handle-16bit-overflow 16)
-    (%define-overflow-handler %handle-32bit-overflow 32)
-    (%define-overflow-handler %handle-64bit-overflow 64)
-    (%define-overflow-handler %handle-fixnum-overflow #.+fixnum-bits+)
+    (cl:eval-when (:compile-toplevel :load-toplevel)
+      (cl:defmacro %handle-overflow (bits value)
+        `(cl:typecase ,value
+           ((cl:signed-byte ,bits)
+            ,value)
+           (cl:otherwise
+            (cl:cerror "Continue, wrapping around."
+                       ,(cl:format cl:nil "Signed value overflowed ~D bits." bits))
+            (%unsigned->signed ,bits (cl:mod ,value ,(cl:expt 2 bits)))))))
 
 ;;;
 ;;; Num instances for integers
 ;;;
 
     (cl:eval-when (:compile-toplevel :load-toplevel)
-      (cl:defmacro define-num-checked (type overflow-handler)
+      (cl:defmacro define-num-checked (type bits)
         "Define a `Num' instance for TYPE which signals on overflow."
         `(define-instance (Num ,type)
            (inline)
            (define (+ a b)
              (lisp ,type (a b)
-               (,overflow-handler (cl:+ a b))))
+               (%handle-overflow ,bits (cl:+ a b))))
 
            (inline)
            (define (- a b)
              (lisp ,type (a b)
-               (,overflow-handler (cl:- a b))))
+               (%handle-overflow ,bits (cl:- a b))))
 
            (inline)
            (define (* a b)
              (lisp ,type (a b)
-               (,overflow-handler (cl:* a b))))
+               (%handle-overflow ,bits (cl:* a b))))
 
            (inline)
            (define (fromInt x)
              (lisp ,type (x)
-               (,overflow-handler x))))))
+               (%handle-overflow ,bits x))))))
 
     (cl:eval-when (:compile-toplevel :load-toplevel)
       (cl:defmacro define-num-wrapping (type bits)
@@ -222,13 +214,28 @@
                (cl:values (cl:mod x ,(cl:expt 2 bits)))))))))
 
 
-  (define-num-checked Integer cl:identity)
+  (define-instance (Num Integer)
+    (inline)
+    (define (+ a b)
+      (lisp Integer (a b)
+        (cl:+ a b)))
+    (inline)
+    (define (- a b)
+      (lisp Integer (a b)
+        (cl:- a b)))
+    (inline)
+    (define (* a b)
+      (lisp Integer (a b)
+        (cl:* a b)))
+    (inline)
+    (define (fromInt x)
+      x))
 
-  (define-num-checked I8 %handle-8bit-overflow)
-  (define-num-checked I16 %handle-16bit-overflow)
-  (define-num-checked I32 %handle-32bit-overflow)
-  (define-num-checked I64 %handle-64bit-overflow)
-  (define-num-checked IFix %handle-fixnum-overflow)
+  (define-num-checked I8 8)
+  (define-num-checked I16 16)
+  (define-num-checked I32 32)
+  (define-num-checked I64 64)
+  (define-num-checked IFix #.+fixnum-bits+)
 
   (define-num-wrapping U8 8)
   (define-num-wrapping U16 16)
@@ -380,7 +387,7 @@
   (lisp-toplevel ()
 
     (cl:eval-when (:compile-toplevel :load-toplevel)
-      (cl:defmacro define-bits-checked (type handle-overflow)
+      (cl:defmacro define-bits-checked (type bits)
         `(define-instance (bits:Bits ,type)
            (inline)
            (define (bits:and a b)
@@ -405,7 +412,11 @@
            (inline)
            (define (bits:shift amount bits)
              (lisp ,type (amount bits)
-               (,handle-overflow (cl:ash bits amount)))))))
+               ,(cl:cond
+                  ((cl:zerop bits)
+                   `(cl:ash bits amount))
+                  (cl:t
+                   `(%handle-overflow ,bits (cl:ash bits amount)))))))))
 
     (cl:declaim (cl:inline unsigned-lognot))
     (cl:defun unsigned-lognot (int n-bits)
@@ -444,13 +455,13 @@
                (cl:logand (cl:ash bits amount)
                           ,(cl:1- (cl:ash 1 width)))))))))
 
-  (define-bits-checked Integer cl:identity)
+  (define-bits-checked Integer 0)
 
-  (define-bits-checked I8 %handle-8bit-overflow)
-  (define-bits-checked I16 %handle-16bit-overflow)
-  (define-bits-checked I32 %handle-32bit-overflow)
-  (define-bits-checked I64 %handle-64bit-overflow)
-  (define-bits-checked IFix %handle-fixnum-overflow)
+  (define-bits-checked I8 8)
+  (define-bits-checked I16 16)
+  (define-bits-checked I32 32)
+  (define-bits-checked I64 64)
+  (define-bits-checked IFix #.+fixnum-bits+)
 
   (define-bits-wrapping U8 8)
   (define-bits-wrapping U16 16)
