@@ -700,7 +700,8 @@ Rebound to NIL parsing an anonymous FN.")
 
        ;; (rec name)
        (unless (and (cst:consp rest)
-                    (cst:consp (cst:first rest)))
+                    (or (cst:consp (cst:first rest))
+                        (cst:null (cst:first rest))))
          (parse-error "Malformed rec"
                       (note-end source name
                                 "expected binding list")))
@@ -731,42 +732,47 @@ Rebound to NIL parsing an anonymous FN.")
                    (return (values declares binding-list vars)))
 
            (make-node-let
-            :declares (if type
-                          (cons
-                           (make-node-let-declare
-                            :name (parse-variable name source)
-                            :type (parse-qualified-type type source)
-                            :location (form-location source type))
-                           declares)
-                          declares)
-            :bindings (nconc
-                       ;; Remove recursive bindings
-                       (remove-if
-                        (lambda (binding)
-                          (and (typep (node-let-binding-value binding)
-                                      'node-variable)
+            :declares declares
+            :bindings
+            ;; Remove recursive bindings
+            (remove-if
+             (lambda (binding)
+               (and (typep (node-let-binding-value binding)
+                           'node-variable)
 
-                               (eq (node-variable-name (node-let-binding-name binding))
-                                   (node-variable-name (node-let-binding-value binding)))))
-                        bindings)
-                       (list
-                        (make-node-let-binding
-                         :name (parse-variable name source)
-                         :value
-                         (make-node-abstraction
-                          :params (mapcar (lambda (var)
-                                            (parse-pattern var source))
-                                          vars)
-                          :body (parse-body body form source)
-                          :location (form-location source form))
-                         :location (form-location source form))))
+                    (eq (node-variable-name (node-let-binding-name binding))
+                        (node-variable-name (node-let-binding-value binding)))))
+             bindings)
             :body
             (make-node-body
              :nodes nil
              :last-node
-             (make-node-application
-              :rator (parse-expression name source)
-              :rands (mapcar #'node-let-binding-name bindings)
+             (make-node-let
+              :declares (if type
+                            (list
+                             (make-node-let-declare
+                              :name (parse-variable name source)
+                              :type (parse-qualified-type type source)
+                              :location (form-location source type)))
+                            nil)
+              :bindings (list (make-node-let-binding
+                               :name (parse-variable name source)
+                               :value
+                               (make-node-abstraction
+                                :params (mapcar (lambda (var)
+                                                  (parse-pattern var source))
+                                                vars)
+                                :body (parse-body body form source)
+                                :location (form-location source form))
+                               :location (form-location source form)))
+              :body
+              (make-node-body
+               :nodes nil
+               :last-node
+               (make-node-application
+                :rator (parse-expression name source)
+                :rands (mapcar #'node-let-binding-name bindings)
+                :location (form-location source form)))
               :location (form-location source form)))
             :location (form-location source form))))))
 
