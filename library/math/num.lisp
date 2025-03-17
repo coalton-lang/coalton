@@ -143,15 +143,17 @@
 
   (lisp-toplevel ()
 
-    (cl:declaim (cl:inline %unsigned->signed))
-    (cl:defun %unsigned->signed (bits x)
-      ;; This is the two's complement conversion of X (interpreted as BITS
-      ;; bits) to a signed integer (as a Lisp object).
-      (cl:-
-       (cl:ldb (cl:byte (cl:1- bits) 0) x)
-       (cl:dpb 0 (cl:byte (cl:1- bits) 0) x)))
-
     (cl:eval-when (:compile-toplevel :load-toplevel)
+      (cl:defmacro %unsigned->signed (bits expr)
+        ;; This is the two's complement conversion of X (interpreted as BITS
+        ;; bits) to a signed integer (as a Lisp object).
+        (cl:let ((x (cl:gensym "X"))
+                 (bytespec (cl:byte (cl:1- bits) 0)))
+          `(cl:let ((,x ,expr))
+             (cl:-
+              (cl:ldb ',bytespec ,x)
+              (cl:dpb 0 ',bytespec ,x)))))
+
       (cl:defmacro %handle-overflow (bits value)
         `(cl:typecase ,value
            ((cl:signed-byte ,bits)
@@ -159,7 +161,8 @@
            (cl:otherwise
             (cl:cerror "Continue, wrapping around."
                        ,(cl:format cl:nil "Signed value overflowed ~D bits." bits))
-            (%unsigned->signed ,bits (cl:mod ,value ,(cl:expt 2 bits)))))))
+            ,(cl:macroexpand
+              `(%unsigned->signed ,bits (cl:mod ,value ,(cl:expt 2 bits))))))))
 
 ;;;
 ;;; Num instances for integers
