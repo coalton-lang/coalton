@@ -685,20 +685,23 @@ Rebound to NIL parsing an anonymous FN.")
             (parse-error "Malformed rec"
                          (note-end source (cst:second form)
                                    "expected binding list")))
-           ;; (rec name (...))
            ((not (cst:consp (cst:nthrest 3 form)))
             (if (cst:atom (cst:third form))
+                ;; (rec type name)
                 (parse-error "Malformed rec"
                              (note-end source (cst:third form)
                                        "expected binding list"))
+                ;; (rec name (...))
                 (parse-error "Malformed rec"
                              (note-end source (cst:third form)
                                        "expected rec body"))))
+           ;; (rec type name bindings ...)
            ((cst:atom (cst:third form))
             (values (cst:second form)
                     (cst:third form)
                     (cst:fourth form)
                     (cst:nthrest 4 form)))
+           ;; (rec name bindings ...)
            (t
             (values nil
                     (cst:second form)
