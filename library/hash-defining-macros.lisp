@@ -22,6 +22,7 @@
 (cl:defmacro define-sxhash-hasher (type)
   "Define an instance of Hash for the Coalton type TYPE using CL:SXHASH."
   `(define-instance (Hash ,type)
+     (inline)
      (define (hash item)
        (lisp Hash (item)
          (cl:sxhash item)))))
