@@ -673,7 +673,7 @@ Rebound to NIL parsing an anonymous FN.")
     ((and (cst:atom (cst:first form))
           (eq 'coalton:rec (cst:raw (cst:first form))))
 
-     (multiple-value-bind (type name rest)
+     (multiple-value-bind (type name rec-bindings body)
          (cond
            ;; (rec)
            ((not (cst:consp (cst:rest form)))
@@ -695,79 +695,86 @@ Rebound to NIL parsing an anonymous FN.")
                              (note-end source (cst:third form)
                                        "expected rec body"))))
            ((cst:atom (cst:third form))
-            (unless (cst:consp (cst:nthrest 4 form))
-              (parse-error "Malformed rec"
-                             (note-end source (cst:fourth form)
-                                       "expected rec body")))
             (values (cst:second form)
                     (cst:third form)
-                    (cst:nthrest 3 form)))
+                    (cst:fourth form)
+                    (cst:nthrest 4 form)))
            (t
-            (values nil (cst:second form) (cst:nthrest 2 form))))
+            (values nil
+                    (cst:second form)
+                    (cst:third form)
+                    (cst:nthrest 3 form))))
 
-       (let ((rec-bindings (cst:first rest))
-             (body (cst:rest rest)))
+       (unless (cst:proper-list-p rec-bindings)
+         (parse-error "Malformed rec"
+                      (note-end source name
+                                "expected binding list")))
 
-         (multiple-value-bind (declares bindings vars)
-             (loop :for bindings := rec-bindings :then (cst:rest bindings)
-                   :while (cst:consp bindings)
-                   :for binding := (cst:first bindings)
-                   ;; if binding is in the form (declare x y+)
-                   :if (and (cst:consp binding)
-                            (cst:atom (cst:first binding))
-                            (eq (cst:raw (cst:first binding)) 'coalton:declare))
+       (unless (cst:consp body)
+         (parse-error "Malformed rec"
+                      (note-end source rec-bindings
+                                "expected rec body")))
+
+       (multiple-value-bind (declares bindings vars)
+           (loop :for bindings := rec-bindings :then (cst:rest bindings)
+                 :while (cst:consp bindings)
+                 :for binding := (cst:first bindings)
+                 ;; if binding is in the form (declare x y+)
+                 :if (and (cst:consp binding)
+                          (cst:atom (cst:first binding))
+                          (eq (cst:raw (cst:first binding)) 'coalton:declare))
                    :collect (parse-let-declare binding source)
-                   :into declares
-                   :else
+                     :into declares
+                 :else
                    :collect (parse-rec-binding binding source) :into binding-list
                    :and :collect (cst:first binding) :into vars
-                   :finally
-                   (return (values declares binding-list vars)))
+                 :finally
+                    (return (values declares binding-list vars)))
 
+         (make-node-let
+          :declares declares
+          :bindings
+          ;; Remove recursive bindings
+          (remove-if
+           (lambda (binding)
+             (and (typep (node-let-binding-value binding)
+                         'node-variable)
+
+                  (eq (node-variable-name (node-let-binding-name binding))
+                      (node-variable-name (node-let-binding-value binding)))))
+           bindings)
+          :body
+          (make-node-body
+           :nodes nil
+           :last-node
            (make-node-let
-            :declares declares
-            :bindings
-            ;; Remove recursive bindings
-            (remove-if
-             (lambda (binding)
-               (and (typep (node-let-binding-value binding)
-                           'node-variable)
-
-                    (eq (node-variable-name (node-let-binding-name binding))
-                        (node-variable-name (node-let-binding-value binding)))))
-             bindings)
+            :declares (if type
+                          (list
+                           (make-node-let-declare
+                            :name (parse-variable name source)
+                            :type (parse-qualified-type type source)
+                            :location (form-location source type)))
+                          nil)
+            :bindings (list (make-node-let-binding
+                             :name (parse-variable name source)
+                             :value
+                             (make-node-abstraction
+                              :params (mapcar (lambda (var)
+                                                (parse-pattern var source))
+                                              vars)
+                              :body (parse-body body form source)
+                              :location (form-location source form))
+                             :location (form-location source form)))
             :body
             (make-node-body
              :nodes nil
              :last-node
-             (make-node-let
-              :declares (if type
-                            (list
-                             (make-node-let-declare
-                              :name (parse-variable name source)
-                              :type (parse-qualified-type type source)
-                              :location (form-location source type)))
-                            nil)
-              :bindings (list (make-node-let-binding
-                               :name (parse-variable name source)
-                               :value
-                               (make-node-abstraction
-                                :params (mapcar (lambda (var)
-                                                  (parse-pattern var source))
-                                                vars)
-                                :body (parse-body body form source)
-                                :location (form-location source form))
-                               :location (form-location source form)))
-              :body
-              (make-node-body
-               :nodes nil
-               :last-node
-               (make-node-application
-                :rator (parse-expression name source)
-                :rands (mapcar #'node-let-binding-name bindings)
-                :location (form-location source form)))
+             (make-node-application
+              :rator (parse-expression name source)
+              :rands (mapcar #'node-let-binding-name bindings)
               :location (form-location source form)))
-            :location (form-location source form))))))
+            :location (form-location source form)))
+          :location (form-location source form)))))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:lisp (cst:raw (cst:first form))))
