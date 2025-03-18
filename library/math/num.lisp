@@ -32,7 +32,7 @@
 
   (lisp-toplevel ()
 
-    (cl:eval-when (:compile-toplevel :load-toplevel)
+    (cl:eval-when (:compile-toplevel :load-toplevel :execute)
       (cl:defconstant +fixnum-bits+
         #+sbcl sb-vm:n-fixnum-bits
         #-sbcl (cl:1+ (cl:floor (cl:log cl:most-positive-fixnum 2))))
@@ -43,7 +43,7 @@
 ;;; Eq Instances
 ;;;
 
-    (cl:eval-when (:compile-toplevel :load-toplevel)
+    (cl:eval-when (:compile-toplevel :load-toplevel :execute)
       (cl:defmacro define-eq (type)
         `(define-instance (Eq ,type)
            (inline)
@@ -72,7 +72,7 @@
 
   (lisp-toplevel ()
 
-    (cl:eval-when (:compile-toplevel :load-toplevel)
+    (cl:eval-when (:compile-toplevel :load-toplevel :execute)
       (cl:defmacro define-ord (type)
         (cl:let ((>-spec (alexandria:format-symbol cl:*package* "~A->" type))
                  (>=-spec (alexandria:format-symbol cl:*package* "~A->=" type))
@@ -173,7 +173,7 @@
 ;;; Num instances for integers
 ;;;
 
-    (cl:eval-when (:compile-toplevel :load-toplevel)
+    (cl:eval-when (:compile-toplevel :load-toplevel :execute)
       (cl:defmacro define-num-checked (type overflow-handler)
         "Define a `Num' instance for TYPE which signals on overflow."
         `(define-instance (Num ,type)
@@ -197,7 +197,7 @@
              (lisp ,type (x)
                (,overflow-handler x))))))
 
-    (cl:eval-when (:compile-toplevel :load-toplevel)
+    (cl:eval-when (:compile-toplevel :load-toplevel :execute)
       (cl:defmacro define-num-wrapping (type bits)
         "Define a `Num' instance for TYPE which wraps on overflow."
         `(define-instance (Num ,type)
@@ -242,7 +242,7 @@
 
   (lisp-toplevel ()
 
-    (cl:eval-when (:compile-toplevel :load-toplevel)
+    (cl:eval-when (:compile-toplevel :load-toplevel :execute)
       (cl:defmacro define-num-float (type lisp-type)
         "Define `Num' for TYPE"
 
@@ -295,7 +295,7 @@
 
   (lisp-toplevel ()
 
-    (cl:eval-when (:compile-toplevel :load-toplevel)
+    (cl:eval-when (:compile-toplevel :load-toplevel :execute)
       (cl:defmacro define-float-fraction-conversion (type)
         `(define-instance (TryInto ,type Fraction String)
            (define (tryInto x)
@@ -312,7 +312,7 @@
 
   (lisp-toplevel ()
 
-    (cl:eval-when (:compile-toplevel :load-toplevel)
+    (cl:eval-when (:compile-toplevel :load-toplevel :execute)
       (cl:defmacro define-reciprocable-float (type)
         `(define-instance (Reciprocable ,type)
            (inline)
@@ -354,7 +354,7 @@
                      #+ccl ff:with-float-traps-masked #+ccl cl:t
                      (cl:/ x)))))))))
 
-    (cl:eval-when (:compile-toplevel :load-toplevel)
+    (cl:eval-when (:compile-toplevel :load-toplevel :execute)
       (cl:defmacro define-dividable-float (type lisp-type)
         `(define-instance (Dividable Integer ,type)
            (inline)
@@ -379,7 +379,7 @@
 
   (lisp-toplevel ()
 
-    (cl:eval-when (:compile-toplevel :load-toplevel)
+    (cl:eval-when (:compile-toplevel :load-toplevel :execute)
       (cl:defmacro define-bits-checked (type handle-overflow)
         `(define-instance (bits:Bits ,type)
            (inline)
@@ -415,7 +415,7 @@
 
       (cl:- (cl:ash 1 n-bits) int 1))
 
-    (cl:eval-when (:compile-toplevel :load-toplevel)
+    (cl:eval-when (:compile-toplevel :load-toplevel :execute)
       (cl:defmacro define-bits-wrapping (type width)
         `(define-instance (bits:Bits ,type)
            (inline)
@@ -481,7 +481,7 @@
 ;;; Default instances
 ;;;
 
-    (cl:eval-when (:compile-toplevel :load-toplevel)
+    (cl:eval-when (:compile-toplevel :load-toplevel :execute)
       (cl:defmacro define-default-num (type)
         `(define-instance (Default ,type)
            (inline)
