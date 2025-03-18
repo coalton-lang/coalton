@@ -673,7 +673,7 @@ Rebound to NIL parsing an anonymous FN.")
     ((and (cst:atom (cst:first form))
           (eq 'coalton:rec (cst:raw (cst:first form))))
 
-     (multiple-value-bind (type name rec-bindings body)
+     (multiple-value-bind (name type rec-bindings body)
          (cond
            ;; (rec)
            ((not (cst:consp (cst:rest form)))
@@ -685,38 +685,43 @@ Rebound to NIL parsing an anonymous FN.")
             (parse-error "Malformed rec"
                          (note-end source (cst:second form)
                                    "expected binding list")))
-           ((not (cst:consp (cst:nthrest 3 form)))
-            (if (cst:atom (cst:third form))
-                ;; (rec type name)
-                (parse-error "Malformed rec"
-                             (note-end source (cst:third form)
-                                       "expected binding list"))
-                ;; (rec name (...))
-                (parse-error "Malformed rec"
-                             (note-end source (cst:third form)
-                                       "expected rec body"))))
-           ;; (rec type name bindings ...)
-           ((cst:atom (cst:third form))
-            (values (cst:second form)
-                    (cst:third form)
-                    (cst:fourth form)
-                    (cst:nthrest 4 form)))
+           ;; (rec name bindings)
+           ((cst:null (cst:nthrest 3 form))
+            (parse-error "Malformed rec"
+                         (note-end source (cst:third form)
+                                   "expected rec body")))
            ;; (rec name bindings ...)
-           (t
-            (values nil
-                    (cst:second form)
+           ((cst:atom (cst:second form))
+            (values (cst:second form)
+                    nil
                     (cst:third form)
-                    (cst:nthrest 3 form))))
+                    (cst:nthrest 3 form)))
+           ;; (rec (name qual-ty) bindings ...)
+           (t
+            (unless (cst:proper-list-p (cst:second form))
+              (parse-error "Malformed rec"
+                           (note source (cst:second form)
+                                 "expected list")))
+            (cond
+              ((cst:null (cst:rest (cst:second form)))
+               (values (cst:first (cst:second form))
+                       nil
+                       (cst:third form)
+                       (cst:nthrest 3 form)))
+              (t
+               (unless (cst:null (cst:nthrest 2 (cst:second form)))
+                 (parse-error "Malformed rec"
+                              (note-end source (cst:second (cst:second form))
+                                        "extra arguments after type declaration")))
+               (values (cst:first (cst:second form))
+                       (cst:second (cst:second form))
+                       (cst:third form)
+                       (cst:nthrest 3 form))))))
 
        (unless (cst:proper-list-p rec-bindings)
          (parse-error "Malformed rec"
-                      (note-end source name
-                                "expected binding list")))
-
-       (unless (cst:consp body)
-         (parse-error "Malformed rec"
-                      (note-end source rec-bindings
-                                "expected rec body")))
+                      (note source rec-bindings
+                            "expected binding list")))
 
        (multiple-value-bind (declares bindings vars)
            (loop :for bindings := rec-bindings :then (cst:rest bindings)
