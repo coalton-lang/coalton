@@ -719,7 +719,7 @@ Rebound to NIL parsing an anonymous FN.")
                    :collect (parse-let-declare binding source)
                    :into declares
                    :else
-                   :collect (parse-let-binding binding source) :into binding-list
+                   :collect (parse-rec-binding binding source) :into binding-list
                    :and :collect (cst:first binding) :into vars
                    :finally
                    (return (values declares binding-list vars)))
@@ -1329,6 +1329,35 @@ Rebound to NIL parsing an anonymous FN.")
   ;; (a b c ...)
   (when (cst:consp (cst:rest (cst:rest form)))
     (parse-error "Malformed let binding"
+                 (note source (cst:first (cst:rest (cst:rest form)))
+                       "unexpected trailing form")))
+
+  (make-node-let-binding
+   :name (parse-variable (cst:first form) source)
+   :value (parse-expression (cst:second form) source)
+   :location (form-location source form)))
+
+(defun parse-rec-binding (form source)
+  (declare (type cst:cst form)
+           (values node-let-binding &optional))
+
+  (when (cst:atom form)
+    (parse-error "Malformed rec binding"
+                 (note source form "expected list")))
+
+  (unless (cst:proper-list-p form)
+    (parse-error "Malformed rec binding"
+                 (note source form "unexpected dotted list")))
+
+  ;; (x)
+  (unless (cst:consp (cst:rest form))
+    (parse-error "Malformed rec binding"
+                 (note-end source (cst:first form)
+                           "rec bindings must have a value")))
+
+  ;; (a b c ...)
+  (when (cst:consp (cst:rest (cst:rest form)))
+    (parse-error "Malformed rec binding"
                  (note source (cst:first (cst:rest (cst:rest form)))
                        "unexpected trailing form")))
 
