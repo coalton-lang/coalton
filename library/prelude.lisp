@@ -9,12 +9,6 @@
    #:coalton-library/functions)
 
   (:import-from
-   #:coalton-library/hash
-   #:hash)
-  (:export
-   #:hash)
-
-  (:import-from
    #:coalton-library/math/arith
    #:Reciprocable #:/
    #:Fraction
