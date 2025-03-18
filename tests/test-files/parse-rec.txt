@@ -51,7 +51,21 @@
         (coalton-prelude:* n (f (coalton-prelude:1- n))))))
 
 ================================================================================
-5 Parse rec with type declaration
+5 Parse rec with type alias declaration
+================================================================================
+
+(package coalton-unit-tests)
+
+(define-type-alias UnaryUfixFunction (UFix -> UFix))
+
+(define x
+  (rec UnaryUfixfunction f ((n 5))
+    (if (coalton-prelude:== n 1)
+        1
+        (coalton-prelude:* n (f (coalton-prelude:1- n))))))
+
+================================================================================
+6 Parse rec with type declaration
 ================================================================================
 
 (package coalton-unit-tests)
@@ -64,7 +78,77 @@
         (coalton-prelude:* n (f (coalton-prelude:1- n))))))
 
 ================================================================================
-6 Parse rec reusing a symbol
+7 Parse rec wrong number of arguments
+================================================================================
+
+(package coalton-unit-tests)
+
+(define x
+  (rec))
+
+--------------------------------------------------------------------------------
+
+error: Malformed rec
+  --> test:4:6
+   |
+ 4 |    (rec))
+   |        ^ expected function name
+
+================================================================================
+8 Parse rec wrong number of arguments
+================================================================================
+
+(package coalton-unit-tests)
+
+(define x
+  (rec f))
+
+--------------------------------------------------------------------------------
+
+error: Malformed rec
+  --> test:4:8
+   |
+ 4 |    (rec f))
+   |          ^ expected binding list
+
+================================================================================
+9 Parse rec wrong number of arguments
+================================================================================
+
+(package coalton-unit-tests)
+
+(define x
+  (rec f ((x 0))))
+
+--------------------------------------------------------------------------------
+
+error: Malformed rec
+  --> test:4:16
+   |
+ 4 |    (rec f ((x 0))))
+   |                  ^ expected rec body
+
+================================================================================
+10 Parse rec wrong number of arguments
+================================================================================
+
+(package coalton-unit-tests)
+
+(define-type-alias UnaryUfixFunction (UFix -> UFix))
+
+(define x
+  (rec UnaryUfixFunction f ((x 0))))
+
+--------------------------------------------------------------------------------
+
+error: Malformed rec
+  --> test:6:34
+   |
+ 6 |    (rec UnaryUfixFunction f ((x 0))))
+   |                                    ^ expected rec body
+
+================================================================================
+11 Parse rec reusing a symbol
 ================================================================================
 
 (package coalton-unit-tests)
@@ -73,7 +157,7 @@
   (let ((f 3)) (rec f ((n f)) n)))
 
 ================================================================================
-7 Parse rec with a bad name
+12 Parse rec with a bad name
 ================================================================================
 
 (package coalton-unit-tests)
@@ -90,7 +174,7 @@ error: Invalid variable
    |         ^ expected identifier
 
 ================================================================================
-8 Parse rec with a bad binding name
+13 Parse rec with a bad binding name
 ================================================================================
 
 (package coalton-unit-tests)
@@ -107,7 +191,7 @@ error: Invalid variable
    |             ^ expected identifier
 
 ================================================================================
-9 Parse rec with a bad binding form
+14 Parse rec with a bad binding form
 ================================================================================
 
 (package coalton-unit-tests)
@@ -117,14 +201,14 @@ error: Invalid variable
 
 --------------------------------------------------------------------------------
 
-error: Malformed let binding
+error: Malformed rec binding
   --> test:4:10
    |
  4 |    (rec f (hi) 0))
    |            ^^ expected list
 
 ================================================================================
-10 Parse rec with a bad binding form
+15 Parse rec with a bad binding form
 ================================================================================
 
 (package coalton-unit-tests)
@@ -134,14 +218,14 @@ error: Malformed let binding
 
 --------------------------------------------------------------------------------
 
-error: Malformed let binding
+error: Malformed rec binding
   --> test:4:13
    |
  4 |    (rec f ((hi)) 0))
-   |               ^ let bindings must have a value
+   |               ^ rec bindings must have a value
 
 ================================================================================
-11 Parse rec with a bad binding form
+16 Parse rec with a bad binding form
 ================================================================================
 
 (package coalton-unit-tests)
@@ -151,7 +235,7 @@ error: Malformed let binding
 
 --------------------------------------------------------------------------------
 
-error: Malformed let binding
+error: Malformed rec binding
   --> test:4:15
    |
  4 |    (rec f ((x y z)) 0))
