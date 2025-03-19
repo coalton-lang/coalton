@@ -3,7 +3,9 @@
 ;;;; An interface to Common Lisp rank-1 SIMPLE-ARRAYs.
 
 (coalton-library/utils:defstdlib-package #:coalton-library/lisparray
-  (:use #:coalton)
+  (:use
+   #:coalton
+   #:coalton-library/classes)
   (:local-nicknames
    (#:types #:coalton-library/types)
    (#:complex #:coalton-library/math/complex))
@@ -115,21 +117,22 @@ WARNING: The consequences are undefined if an uninitialized element is read befo
 
   (define-instance (Foldable LispArray)
     (define (fold f init v)
-      (let ((len (length v))
-            (%fold (fn (i acc)
-                     (if (== i len)
-                         acc
-                         (%fold ( 1 i) (f acc (aref v i)))))))
-        (%fold 0 init)))
+      (let len = (length v))
+      (rec % ((i 0) (acc init))
+        (if (== i len)
+            acc
+            (% (+ 1 i) (f acc (aref v i))))))
 
     (define (foldr f init v)
       (let len = (length v))
-      (when (== 0 len) (return init))
-      (let ((%foldr (fn (i acc)
-                      (if (== i 0)
-                          (f (aref v 0) acc)
-                          (%foldr (- i 1) (f (aref v i) acc))))))
-        (%foldr (- len 1) init))))
+      (cond
+        ((== 0 len)
+         init)
+        (True
+         (rec % ((i (- len 1)) (acc init))
+           (if (== i 0)
+               (f (aref v 0) acc)
+               (% (- i 1) (f (aref v i) acc))))))))
 
   (lisp-toplevel ()
     (cl:eval-when (:compile-toplevel :load-toplevel)
