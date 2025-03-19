@@ -66,6 +66,7 @@
    #:fn #:λ
    #:match
    #:let
+   #:rec
    #:=                                  ; Syntax
    #:lisp
    #:<-                                 ; Syntax

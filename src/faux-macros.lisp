@@ -84,6 +84,9 @@
 (define-coalton-editor-macro coalton:let (bindings &body form)
   "A lexical LET binding.")
 
+(define-coalton-editor-macro coalton:rec (name bindings &body body)
+  "A lexical recursive function call.")
+
 (define-coalton-editor-macro coalton:lisp (type vars &body lisp-expr)
   "An escape from Coalton into the Lisp world.")
 

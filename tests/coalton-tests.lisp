@@ -35,6 +35,7 @@
   (%run-tests "parse-for.txt")
   (%run-tests "parse-if.txt")
   (%run-tests "parse-let.txt")
+  (%run-tests "parse-rec.txt")
   (%run-tests "parse-lisp.txt")
   (%run-tests "parse-loop.txt")
   (%run-tests "parse-match.txt")
