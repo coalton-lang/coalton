@@ -68,6 +68,10 @@
                              (:file "dual")
                              (:file "hyperdual")
                              (:file "package")))
+               (:module "experimental"
+                :serial t
+                :components ((:file "loops")
+                             (:file "package")))
                (:file "randomaccess")
                (:file "cell")
                (:file "tuple")
@@ -269,4 +273,5 @@
                (:file "looping-native-tests")
                (:file "monomorphizer-tests")
                (:file "inliner-tests")
-               (:file "file-tests")))
+               (:file "file-tests")
+               (:file "experimental-tests")))

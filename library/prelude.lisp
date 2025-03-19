@@ -243,4 +243,6 @@
    (#:st #:coalton-library/monad/state)
    (#:iter #:coalton-library/iterator)
    (#:sys #:coalton-library/system)
-   (#:file #:coalton-library/file)))
+   (#:file #:coalton-library/file)
+   (#:experimental #:coalton-library/experimental)
+   (#:loops #:coalton-library/experimental/loops)))
