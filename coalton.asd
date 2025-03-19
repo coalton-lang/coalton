@@ -46,6 +46,7 @@
                (:file "types")
                (:file "primitive-types")
                (:file "classes")
+               (:file "hash-defining-macros")
                (:file "hash")
                (:file "builtin")
                (:file "functions")
@@ -54,6 +55,7 @@
                (:module "math"
                 :serial t
                 :components ((:file "arith")
+                             (:file "num-defining-macros")
                              (:file "num")
                              (:file "bounded")
                              (:file "conversions")
