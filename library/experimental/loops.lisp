@@ -28,7 +28,7 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
 
 (named-readtables:in-readtable coalton:coalton)
 
-#+coalton-release
+;; #+coalton-release
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (coalton-toplevel
@@ -103,8 +103,9 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
     "Set the cdr of `xs` to `ys` and return `ys`.
 Unsafe: `xs` must be a `Cons` cell."
     (lisp (List :t) (xs)
-      (cl:declare (cl:type cl:list xs))
-      (cl:nreverse xs)))
+      (cl:locally
+	  (cl:declare (cl:type cl:list xs))
+	(cl:nreverse xs))))
 
   (inline) (monomorphize)
   (declare %collecttimes (UFix -> (UFix -> :t) -> List :t))
@@ -114,6 +115,27 @@ Unsafe: `xs` must be a `Cons` cell."
       (if (== i n)
 	  (%reverse! acc)
 	  (% (1+ i) (Cons (func i) acc)))))
+
+  (inline)
+  (declare %set-cdr! (List :t -> List :t -> List :t))
+  (define (%set-cdr! xs ys)
+    (lisp (List :t) (xs ys)
+      (cl:declare (cl:type cl:cons xs ys)
+		  (cl:optimize (cl:safety 0)))
+      (cl:setf (cl:cdr xs) ys)))
+
+  (inline) (monomorphize)
+  (declare %collecttimes2 (UFix -> (UFix -> :t) -> List :t))
+  (define (%collecttimes2 n func)
+    (cond
+      ((zero? n)
+       Nil)
+      (True
+       (let ((res (Cons (func 0) Nil)))
+	 (rec % ((i 1) (last res))
+	   (if (== i n)
+	       res
+	       (% (1+ i) (%set-cdr! last (Cons (func i) Nil)))))))))
 
   (inline) (monomorphize)
   (declare %besttimes (UFix -> (:t -> :t -> Boolean) -> (UFix -> :t) -> :t))
