@@ -3,7 +3,9 @@
 ;;;; An interface to Common Lisp rank-1 SIMPLE-ARRAYs.
 
 (coalton-library/utils:defstdlib-package #:coalton-library/lisparray
-  (:use #:coalton)
+  (:use
+   #:coalton
+   #:coalton-library/classes)
   (:local-nicknames
    (#:types #:coalton-library/types)
    (#:complex #:coalton-library/math/complex))
@@ -13,7 +15,8 @@
    #:make-uninitialized
    #:length
    #:aref
-   #:set!))
+   #:set!
+   #:copy))
 
 (in-package #:coalton-library/lisparray)
 
@@ -83,6 +86,53 @@ WARNING: The consequences are undefined if an uninitialized element is read befo
     (lisp Unit (v i x)
       (cl:setf (cl:aref v i) x)
       Unit))
+
+  (inline)
+  (declare copy (LispArray :t -> LispArray :t))
+  (define (copy v)
+    "Make a deep copy of the `LispArray` `v`."
+    (lisp (LispArray :t) (v)
+      (cl:copy-seq v)))
+
+  (define-instance (types:RuntimeRepr :t => Into (List :t) (LispArray :t))
+    (inline)
+    (define (into xs)
+      (let ((type (types:runtime-repr (types:proxy-inner (types:proxy-of xs)))))
+        (lisp (LispArray :t) (xs type)
+          (cl:make-array (cl:length xs) :element-type type :initial-contents xs)))))
+
+  (define-instance (Into (LispArray :t) (List :t))
+    (inline)
+    (define (into v)
+      (let ((len (length v)))
+        (if (== 0 len)
+            Nil
+            (let ((%into (fn (xs i)
+                           (if (== 0 i)
+                               (Cons (aref v 0) xs)
+                               (%into (Cons (aref v i) xs) (- i 1))))))
+              (%into Nil (- len 1)))))))
+
+  (define-instance (types:RuntimeRepr :t => Iso (LispArray :t) (List :t)))
+
+  (define-instance (Foldable LispArray)
+    (define (fold f init v)
+      (let len = (length v))
+      (rec % ((i 0) (acc init))
+        (if (== i len)
+            acc
+            (% (+ 1 i) (f acc (aref v i))))))
+
+    (define (foldr f init v)
+      (let len = (length v))
+      (cond
+        ((== 0 len)
+         init)
+        (True
+         (rec % ((i (- len 1)) (acc init))
+           (if (== i 0)
+               (f (aref v 0) acc)
+               (% (- i 1) (f (aref v i) acc))))))))
 
   (lisp-toplevel ()
     (cl:eval-when (:compile-toplevel :load-toplevel)
