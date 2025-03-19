@@ -1,4 +1,4 @@
-;;;; loop.lisp
+;;;; loops.lisp
 
 (defpackage #:coalton-library/experimental/loops
   (:use
@@ -28,7 +28,7 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
 
 (named-readtables:in-readtable coalton:coalton)
 
-;; #+coalton-release
+#+coalton-release
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (coalton-toplevel
@@ -100,12 +100,9 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
   (inline)
   (declare %reverse! (List :t -> List :t))
   (define (%reverse! xs)
-    "Set the cdr of `xs` to `ys` and return `ys`.
-Unsafe: `xs` must be a `Cons` cell."
+    "Reverse `xs` by mutation."
     (lisp (List :t) (xs)
-      (cl:locally
-	  (cl:declare (cl:type cl:list xs))
-	(cl:nreverse xs))))
+      (cl:nreverse xs)))
 
   (inline) (monomorphize)
   (declare %collecttimes (UFix -> (UFix -> :t) -> List :t))
@@ -115,27 +112,6 @@ Unsafe: `xs` must be a `Cons` cell."
       (if (== i n)
 	  (%reverse! acc)
 	  (% (1+ i) (Cons (func i) acc)))))
-
-  (inline)
-  (declare %set-cdr! (List :t -> List :t -> List :t))
-  (define (%set-cdr! xs ys)
-    (lisp (List :t) (xs ys)
-      (cl:declare (cl:type cl:cons xs ys)
-		  (cl:optimize (cl:safety 0)))
-      (cl:setf (cl:cdr xs) ys)))
-
-  (inline) (monomorphize)
-  (declare %collecttimes2 (UFix -> (UFix -> :t) -> List :t))
-  (define (%collecttimes2 n func)
-    (cond
-      ((zero? n)
-       Nil)
-      (True
-       (let ((res (Cons (func 0) Nil)))
-	 (rec % ((i 1) (last res))
-	   (if (== i n)
-	       res
-	       (% (1+ i) (%set-cdr! last (Cons (func i) Nil)))))))))
 
   (inline) (monomorphize)
   (declare %besttimes (UFix -> (:t -> :t -> Boolean) -> (UFix -> :t) -> :t))
@@ -274,37 +250,47 @@ COALTON::UNIT/UNIT"
        Unit))))
 
 (cl:defmacro repeat ((count) cl:&body body)
+  "Perform `body` `count` times."
   `(%repeat ,count (fn () ,@body)))
 
 (cl:defmacro dotimes ((variable count) cl:&body body)
+  "Perform `body` with `variable` bound to every `UFix` in [0, `count`) sequentially."
   `(%dotimes ,count (fn (,variable) ,@body)))
 
 (cl:defmacro everytimes ((variable count) cl:&body body)
+  "Does `body` evaluate to `True` for `variable` bound to every `UFix` in [0, `count`). Returns `True` if `(zero? count)`."
   `(%everytimes ,count (fn (,variable) ,@body)))
 
 (cl:defmacro sometimes ((variable count) cl:&body body)
+  "Does `body` evaluate to `True` for `variable` bound to some `UFix` in [0, `count`). Returns `False` if `(zero? count)`."
   `(%sometimes ,count (fn (,variable) ,@body)))
 
 (cl:defmacro sumtimes ((variable count) cl:&body body)
+  "The sum of `body` for `variable` bount to every `UFix` in [0, `count`)."
   `(%sumtimes ,count (fn (,variable) ,@body)))
 
 (cl:defmacro prodtimes ((variable count) cl:&body body)
+  "The product of `body` for `variable` bount to every `UFix` in [0, `count`)."
   `(%prodtimes ,count (fn (,variable) ,@body)))
 
 (cl:defmacro collecttimes ((variable count) cl:&body body)
+  "Collect the results of evaluating `body` for `variable` bound to every `UFix` in [0, `count`) as a `List`."
   `(%collecttimes ,count (fn (,variable) ,@body)))
 
 (cl:defmacro besttimes ((variable count better?) cl:&body body)
+  "The result of evaluating `body` with `variable` bound to a `UFix` in [0, `count`) that is `better?` than the result of evaluating `body` with `variable` bound to the rest of the `UFix`s in [0, `count`).."
   `(%besttimes ,count ,better? (fn (,variable) ,@body)))
 
 (cl:defmacro argbesttimes ((variable count better?) cl:&body body)
+  "The `UFix` in [0, `count`) which, when `variable` is bound to it, results in the evaluation of `body` which is better than the same for the rest of the `UFix`s in [0, `count`)."
   `(%argbesttimes ,count ,better? (fn (,variable) ,@body)))
 
 (cl:defmacro dolist ((variable lis) cl:&body body)
+  "Perform `body` with `variable` bound to every element of `lis`."
   `(%dolist ,lis (fn (,variable) ,@body)))
 
 (cl:defmacro dolists (variables-and-lists cl:&body body)
-  "Bind a set of variables to the respective elements of a set of lists with those bindings.
+  "Perform `body` with the variables bound to the elements of the lists. See the example below.
 
 Example:
 
@@ -343,14 +329,52 @@ COALTON::UNIT/UNIT"
            ,(populate-body variables xss))))))
 
 (cl:defmacro dolist-enumerated ((index-variable element-variable lis) cl:&body body)
+  "Perform `body` with `element-variable` bound to the elements of `lis` and `index-variable` bound to their indices."
   `(%dolist-enumerated ,lis (fn (,index-variable ,element-variable) ,@body)))
 
 (cl:defmacro dorange ((variable start-or-stop cl:&optional stop step) cl:&body body)
+  "Perform `body` with `variable` bound to elements of a discrete range.
+
+If only `start-or-stop` is supplied, then the range is from 0 (inclusive) to `start-or-stop` (exclusive) by increments or decrements of 1.
+
+> (coalton (dorange (x 3) (print x)))
+0
+1
+2
+COALTON::UNIT/UNIT
+> (coalton (dorange (x -3) (print x)))
+0
+-1
+-2
+COALTON::UNIT/UNIT
+
+If only `start-or-stop` and `stop` are supplied, then the range is from `start-or-stop` (inclusive) to `stop` (exclusive) by increments or decrements of 1.
+
+> (coalton (dorange (x -2 2) (print x)))
+-2 
+-1
+0
+1
+COALTON::UNIT/UNIT
+> (coalton (dorange (x 0.5 -2) (print x)))
+0.5
+-0.5
+-1.5
+COALTON::UNIT/UNIT
+
+Otherwise, the range is from `start-or-stop` (inclusive) to `stop` (exclusive) by `step`. `step` must be the correct sign, or `dorange` does nothing.
+
+> (coalton (dorange -2 2 2) (print x))
+-2 
+0
+COALTON::UNIT/UNIT
+> (coalton (dorange -2 2 -1) (print x))
+COALTON::UNIT/UNIT"
   (cl:let ((func `(fn (,variable) ,@body)))
     (cl:cond
       ((cl:null stop)
        (cl:cond
-	 ((cl:typep start-or-stop 'cl:number)
+	 ((cl:typep start-or-stop 'cl:fixnum)
 	  (cl:if (cl:plusp start-or-stop)
 		 `(%dorange-increasing. 0 ,start-or-stop 1 ,func)
 		 `(%dorange-decreasing. 0 ,start-or-stop -1 ,func)))
@@ -358,8 +382,8 @@ COALTON::UNIT/UNIT"
 	  `(%dorange 0 ,start-or-stop (sign ,start-or-stop) ,func))))
       ((cl:null step)
        (cl:cond
-         ((cl:and (cl:typep start-or-stop 'cl:number)
-                  (cl:typep stop 'cl:number))
+         ((cl:and (cl:typep start-or-stop 'cl:fixnum)
+                  (cl:typep stop 'cl:fixnum))
           (cl:if (cl:< start-or-stop stop)
                  `(%dorange-increasing. ,start-or-stop ,stop 1 ,func)
                  `(%dorange-decreasing. ,start-or-stop ,stop -1 ,func)))
@@ -367,9 +391,9 @@ COALTON::UNIT/UNIT"
           `(%dorange ,start-or-stop ,stop (sign (- ,stop ,start-or-stop)) ,func))))
       (cl:t
        (cl:cond
-         ((cl:and (cl:typep start-or-stop 'cl:number)
-                  (cl:typep stop 'cl:number)
-                  (cl:typep step 'cl:number))
+         ((cl:and (cl:typep start-or-stop 'cl:fixnum)
+                  (cl:typep stop 'cl:fixnum)
+                  (cl:typep step 'cl:fixnum))
           (cl:cond
             ((cl:and (cl:plusp step) (cl:< start-or-stop stop))
              `(%dorange-increasing. ,start-or-stop ,stop ,step ,func))
@@ -377,12 +401,12 @@ COALTON::UNIT/UNIT"
              `(%dorange-decreasing. ,start-or-stop ,stop ,step ,func))
             (cl:t
              'Unit)))
-         ((cl:and (cl:typep start-or-stop 'cl:number)
-                  (cl:typep stop 'cl:number))
+         ((cl:and (cl:typep start-or-stop 'cl:fixnum)
+                  (cl:typep stop 'cl:fixnum))
           (cl:if (cl:< start-or-stop stop)
                  `(%dorange-increasing ,start-or-stop ,stop ,step ,func)
                  `(%dorange-decreasing ,start-or-stop ,stop ,step ,func)))
-         ((cl:typep step 'cl:number)
+         ((cl:typep step 'cl:fixnum)
           (cl:if (cl:plusp step)
                  `(%dorange-increasing. ,start-or-stop ,stop ,step ,func)
                  `(%dorange-decreasing. ,start-or-stop ,stop ,step ,func)))
