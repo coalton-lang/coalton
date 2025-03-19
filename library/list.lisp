@@ -19,6 +19,7 @@
    #:last
    #:init
    #:null?
+   #:cons?
    #:singleton
    #:singleton?
    #:repeat
@@ -137,6 +138,13 @@
     (match xs
       ((Nil) True)
       (_ False)))
+
+  (declare cons? (List :a -> Boolean))
+  (define (cons? xs)
+    "Returns TRUE if XS is a non-empty list."
+    (match xs
+      ((Nil) False)
+      (_ True)))
 
   (declare singleton (:a -> List :a))
   (define (singleton x)
