@@ -690,6 +690,10 @@ Rebound to NIL parsing an anonymous FN.")
             (parse-error "Malformed rec"
                          (note-end source (cst:third form)
                                    "expected rec body")))
+           ((cst:null (cst:second form))
+            (parse-error "Malformed rec"
+                         (note source (cst:second form)
+                               "unexpected empty list")))
            ;; (rec name bindings ...)
            ((cst:atom (cst:second form))
             (values (cst:second form)
@@ -698,25 +702,25 @@ Rebound to NIL parsing an anonymous FN.")
                     (cst:nthrest 3 form)))
            ;; (rec (name qual-ty) bindings ...)
            (t
-            (unless (cst:proper-list-p (cst:second form))
-              (parse-error "Malformed rec"
-                           (note source (cst:second form)
-                                 "expected list")))
             (cond
               ((cst:null (cst:rest (cst:second form)))
                (values (cst:first (cst:second form))
                        nil
                        (cst:third form)
                        (cst:nthrest 3 form)))
-              (t
-               (unless (cst:null (cst:nthrest 2 (cst:second form)))
+              ((cst:consp (cst:rest (cst:second form)))
+               (when (cst:consp (cst:nthrest 2 (cst:second form)))
                  (parse-error "Malformed rec"
                               (note-end source (cst:second (cst:second form))
-                                        "extra arguments after type declaration")))
+                                        "unexpected trailing form(s)")))
                (values (cst:first (cst:second form))
                        (cst:second (cst:second form))
                        (cst:third form)
-                       (cst:nthrest 3 form))))))
+                       (cst:nthrest 3 form)))
+              (t
+               (parse-error "Malformed rec"
+                            (note source (cst:rest (cst:second form))
+                                  "unexpected dotted list"))))))
 
        (unless (cst:proper-list-p rec-bindings)
          (parse-error "Malformed rec"

@@ -77,7 +77,43 @@
         (coalton-prelude:* n (f (coalton-prelude:1- n))))))
 
 ================================================================================
-7 Parse rec with extra arguments after type declaration
+7 Parse rec with unexpected empty list
+================================================================================
+
+(package coalton-unit-tests)
+
+(define x
+  (rec () ((n 5)) n))
+
+--------------------------------------------------------------------------------
+
+error: Malformed rec
+  --> test:4:7
+   |
+ 4 |    (rec () ((n 5)) n))
+   |         ^^ unexpected empty list
+
+================================================================================
+8 Parse rec with dotted list
+================================================================================
+
+(package coalton-unit-tests)
+
+(define-type-alias UnaryUfixFunction (UFix -> UFix))
+
+(define x
+  (rec (f . UnaryUfixFunction) ((n 5)) n))
+
+--------------------------------------------------------------------------------
+
+error: Malformed rec
+  --> test:6:12
+   |
+ 6 |    (rec (f . UnaryUfixFunction) ((n 5)) n))
+   |              ^^^^^^^^^^^^^^^^^ unexpected dotted list
+
+================================================================================
+9 Parse rec with extra arguments after type declaration
 ================================================================================
 
 (package coalton-unit-tests)
@@ -96,10 +132,10 @@ error: Malformed rec
   --> test:6:24
    |
  6 |    (rec (f (UFix -> UFix) g) ((n 5))
-   |                          ^ extra arguments after type declaration
+   |                          ^ unexpected trailing form(s)
 
 ================================================================================
-8 Parse rec with type declaration
+10 Parse rec with type declaration
 ================================================================================
 
 (package coalton-unit-tests)
@@ -112,7 +148,7 @@ error: Malformed rec
         (coalton-prelude:* n (f (coalton-prelude:1- n))))))
 
 ================================================================================
-9 Parse rec wrong number of arguments
+11 Parse rec wrong number of arguments
 ================================================================================
 
 (package coalton-unit-tests)
@@ -129,7 +165,7 @@ error: Malformed rec
    |        ^ expected function name
 
 ================================================================================
-10 Parse rec wrong number of arguments
+12 Parse rec wrong number of arguments
 ================================================================================
 
 (package coalton-unit-tests)
@@ -146,7 +182,7 @@ error: Malformed rec
    |          ^ expected binding list
 
 ================================================================================
-11 Parse rec with a bad binding form
+13 Parse rec with a bad binding form
 ================================================================================
 
 (package coalton-unit-tests)
@@ -165,7 +201,7 @@ error: Malformed rec
    |                               ^^ expected binding list
 
 ================================================================================
-12 Parse rec wrong number of arguments
+14 Parse rec wrong number of arguments
 ================================================================================
 
 (package coalton-unit-tests)
@@ -182,7 +218,7 @@ error: Malformed rec
    |                  ^ expected rec body
 
 ================================================================================
-13 Parse rec wrong number of arguments
+15 Parse rec wrong number of arguments
 ================================================================================
 
 (package coalton-unit-tests)
@@ -201,7 +237,7 @@ error: Malformed rec
    |                                      ^ expected rec body
 
 ================================================================================
-14 Parse rec reusing a symbol
+16 Parse rec reusing a symbol
 ================================================================================
 
 (package coalton-unit-tests)
@@ -210,7 +246,7 @@ error: Malformed rec
   (let ((f 3)) (rec f ((n f)) n)))
 
 ================================================================================
-15 Parse rec with a bad name
+17 Parse rec with a bad name
 ================================================================================
 
 (package coalton-unit-tests)
@@ -227,7 +263,7 @@ error: Invalid variable
    |         ^ expected identifier
 
 ================================================================================
-16 Parse rec with a bad binding name
+18 Parse rec with a bad binding name
 ================================================================================
 
 (package coalton-unit-tests)
@@ -244,7 +280,7 @@ error: Invalid variable
    |             ^ expected identifier
 
 ================================================================================
-17 Parse rec with a bad binding form
+19 Parse rec with a bad binding form
 ================================================================================
 
 (package coalton-unit-tests)
@@ -261,7 +297,7 @@ error: Malformed rec binding
    |            ^^ expected list
 
 ================================================================================
-18 Parse rec with a bad binding form
+20 Parse rec with a bad binding form
 ================================================================================
 
 (package coalton-unit-tests)
@@ -278,7 +314,7 @@ error: Malformed rec binding
    |               ^ rec bindings must have a value
 
 ================================================================================
-19 Parse rec with a bad binding form
+21 Parse rec with a bad binding form
 ================================================================================
 
 (package coalton-unit-tests)
