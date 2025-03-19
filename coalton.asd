@@ -273,4 +273,5 @@
                (:file "looping-native-tests")
                (:file "monomorphizer-tests")
                (:file "inliner-tests")
-               (:file "file-tests")))
+               (:file "file-tests")
+               (:file "experimental-tests")))

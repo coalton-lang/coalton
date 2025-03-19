@@ -13,7 +13,7 @@
    #:sometimes
    #:sumtimes
    #:prodtimes
-   #:collectimes
+   #:collecttimes
    #:besttimes
    #:argbesttimes
    #:dolist
@@ -108,10 +108,41 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
   (declare %collecttimes (UFix -> (UFix -> :t) -> List :t))
   (define (%collecttimes n func)
     "Collect the applications of `func` to every `UFix` in `[0, n)` as a `List`."
-    (rec % ((i 1) (acc Nil))
+    (rec % ((i 0) (acc Nil))
       (if (== i n)
 	  (%reverse! acc)
 	  (% (1+ i) (Cons (func i) acc)))))
+
+  ;; The following functions are not used because it seems, for now
+  ;; method which uses %reverse!  seems to be more performant. However,
+  ;; ideally, we would like to avoid traversing the list a second time.
+
+  ;; (inline)
+  ;; (declare %rplacd! (List :t -> List :t -> List :t))
+  ;; (define (%rplacd! xs ys)
+  ;;   (lisp (List :t) (xs ys)
+  ;;     (cl:locally (cl:declare (cl:optimize (cl:safety 0)))
+  ;;       (cl:rplacd xs ys))))
+
+  ;; (inline)
+  ;; (declare %cdr (List :t -> List :t))
+  ;; (define (%cdr xs)
+  ;;   (lisp (List :t) (xs)
+  ;;     (cl:locally (cl:declare (cl:optimize (cl:safety 0)))
+  ;;       (cl:cdr xs))))
+
+  ;; (inline) (monomorphize)
+  ;; (declare %collecttimes (UFix -> (UFix -> :t) -> List :t))
+  ;; (define (%collecttimes n func)
+  ;;   (let ((res (lisp (List :t) () (cl:cons cl:nil cl:nil))))
+  ;;     (rec % ((i 0) (last res))
+  ;;       (cond
+  ;;         ((== i n)
+  ;;          (%cdr res))
+  ;;         (True
+  ;;          (let ((new-last (Cons (func i) Nil)))
+  ;;            (%rplacd! last new-last)
+  ;;            (% (1+ i) new-last)))))))
 
   (inline) (monomorphize)
   (declare %besttimes (UFix -> (:t -> :t -> Boolean) -> (UFix -> :t) -> :t))
@@ -190,18 +221,18 @@ COALTON::UNIT/UNIT"
        (rec % ((i from))
          (cond
 	   ((< i to)
-	    Unit)
+	    (func i)
+            (% (+ step i)))
 	   (True
-            (func i)
-            (% (+ step i))))))
+            Unit))))
       ((negative? step)
        (rec % ((i from))
          (cond
 	   ((> i to)
-	    Unit)
-	   (True
 	    (func i)
-            (% (+ step i))))))
+            (% (+ step i)))
+	   (True
+	    Unit))))
       (True
        Unit)))
 
