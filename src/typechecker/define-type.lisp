@@ -563,7 +563,9 @@
                                    :var-names nil
                                    :body (list (util:runtime-quote (type-definition-runtime-type type)))))
                 :location location
-                :inline nil))
+                ;; Always inline RUNTIME-REPR so that other
+                ;; optimizations can kick off.
+                :inline (parser:make-attribute-inline :location location)))
      :location location
      :head-location location
      :compiler-generated t)))
