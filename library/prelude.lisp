@@ -243,4 +243,5 @@
    (#:st #:coalton-library/monad/state)
    (#:iter #:coalton-library/iterator)
    (#:sys #:coalton-library/system)
-   (#:file #:coalton-library/file)))
+   (#:file #:coalton-library/file)
+   (#:threads #:coalton-library/threads)))
