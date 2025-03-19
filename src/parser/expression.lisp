@@ -225,7 +225,7 @@ Rebound to NIL parsing an anonymous FN.")
 ;;;;
 ;;;; node-let := "(" "let" "(" (node-let-binding | node-let-declare)+ ")" body ")"
 ;;;;
-;;;; node-rec := "(" "rec" [qualified-ty] identifier "(" (node-let-binding | node-let-declare)+ ")" body ")"
+;;;; node-rec := "(" "rec" (identifier | "(" identifier [qualified-ty] ")" ) "(" (node-let-binding | node-let-declare)+ ")" body ")"
 ;;;;
 ;;;; node-lisp := "(" "lisp" type "(" variable* ")" lisp-form+ ")"
 ;;;;
