@@ -15,7 +15,8 @@
    #:make-uninitialized
    #:length
    #:aref
-   #:set!))
+   #:set!
+   #:copyq))
 
 (in-package #:coalton-library/lisparray)
 
