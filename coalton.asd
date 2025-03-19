@@ -38,7 +38,8 @@
   :depends-on (#:coalton-compiler
                #:coalton/hashtable-shim
                #:trivial-garbage
-               #:alexandria)
+               #:alexandria
+               #:float-features)
   :pathname "library/"
   :serial t
   :components ((:file "set-float-traps")
