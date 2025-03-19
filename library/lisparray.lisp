@@ -13,7 +13,8 @@
    #:make-uninitialized
    #:length
    #:aref
-   #:set!))
+   #:set!
+   #:copy))
 
 (in-package #:coalton-library/lisparray)
 
@@ -83,6 +84,52 @@ WARNING: The consequences are undefined if an uninitialized element is read befo
     (lisp Unit (v i x)
       (cl:setf (cl:aref v i) x)
       Unit))
+
+  (inline)
+  (declare copy (LispArray :t -> LispArray :t))
+  (define (copy v)
+    "Make a deep copy of the `LispArray` `v`."
+    (lisp (LispArray :t) (v)
+      (cl:copy-seq v)))
+
+  (define-instance (types:RuntimeRepr :t => Into (List :t) (LispArray :t))
+    (inline)
+    (define (into xs)
+      (let ((type (types:runtime-repr (types:proxy-inner (types:proxy-of xs)))))
+        (lisp (LispArray :t) (xs type)
+          (cl:make-array (cl:length xs) :element-type type :initial-contents xs)))))
+
+  (define-instance (Into (LispArray :t) (List :t))
+    (inline)
+    (define (into v)
+      (let ((len (length v)))
+        (if (== 0 len)
+            Nil
+            (let ((%into (fn (xs i)
+                           (if (== 0 i)
+                               (Cons (aref v 0) xs)
+                               (%into (Cons (aref v i) xs) (- i 1))))))
+              (%into Nil (- len 1)))))))
+
+  (define-instance (types:RuntimeRepr :t => Iso (LispArray :t) (List :t)))
+
+  (define-instance (Foldable LispArray)
+    (define (fold f init v)
+      (let ((len (length v))
+            (%fold (fn (i acc)
+                     (if (== i len)
+                         acc
+                         (%fold ( 1 i) (f acc (aref v i)))))))
+        (%fold 0 init)))
+
+    (define (foldr f init v)
+      (let len = (length v))
+      (when (== 0 len) (return init))
+      (let ((%foldr (fn (i acc)
+                      (if (== i 0)
+                          (f (aref v 0) acc)
+                          (%foldr (- i 1) (f (aref v i) acc))))))
+        (%foldr (- len 1) init))))
 
   (lisp-toplevel ()
     (cl:eval-when (:compile-toplevel :load-toplevel)
