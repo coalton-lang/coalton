@@ -39,11 +39,11 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
     "Do `func` `n` times."
     (rec % ((i 0))
       (cond
-	((== i n)
-	 Unit)
-	(True
-	 (func)
-	 (% (1+ i))))))
+        ((== i n)
+         Unit)
+        (True
+         (func)
+         (% (1+ i))))))
 
   (inline) (monomorphize)
   (declare %dotimes (UFix -> (UFix -> :t) -> Unit))
@@ -51,10 +51,10 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
     "Apply `func` to every `UFix` in `[0, n)`."
     (rec % ((i 0))
       (cond
-	((== i n)
-	 Unit) 
-	(True
-	 (func i)
+        ((== i n)
+         Unit)
+        (True
+         (func i)
          (% (1+ i))))))
 
   (inline) (monomorphize)
@@ -110,8 +110,8 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
     "Collect the applications of `func` to every `UFix` in `[0, n)` as a `List`."
     (rec % ((i 0) (acc Nil))
       (if (== i n)
-	  (%reverse! acc)
-	  (% (1+ i) (Cons (func i) acc)))))
+          (%reverse! acc)
+          (% (1+ i) (Cons (func i) acc)))))
 
   ;; The following functions are not used because it seems, for now
   ;; method which uses %reverse!  seems to be more performant. However,
@@ -148,31 +148,37 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
   (declare %besttimes (UFix -> (:t -> :t -> Boolean) -> (UFix -> :t) -> :t))
   (define (%besttimes n better? func)
     "Of the applications of `func` to every `UFix` in `[0, n)`, find the one that is `better?` than the rest."
-    (assert (< 0 n) "`n` must be strictly greater than zero.")
-    (rec % ((i 1) (best (func 0)))
-      (cond
-        ((== i n)
-         best)
-        (True
-         (let ((candidate (func i)))
-           (if (better? candidate best)
-               (% (1+ i) candidate)
-               (% (1+ i) best)))))))
+    (cond
+      ((zero? n)
+       (error "`n` must be strictly greater than zero."))
+      (True
+       (rec % ((i 1) (best (func 0)))
+         (cond
+           ((== i n)
+            best)
+           (True
+            (let ((candidate (func i)))
+              (if (better? candidate best)
+                  (% (1+ i) candidate)
+                  (% (1+ i) best)))))))))
 
   (inline) (monomorphize)
   (declare %argbesttimes (UFix -> (:t -> :t -> Boolean) -> (UFix -> :t) -> UFix))
   (define (%argbesttimes n better? func)
     "Find the `UFix` in `[0, n)` whose application of `func` is `better?` than the rest."
-    (assert (< 0 n) "`n` must be strictly greater than zero.")
-    (rec % ((i 1) (argbest 0) (best (func 0)))
-      (cond
-        ((== i n)
-         argbest)
-        (True
-         (let ((candidate (func i)))
-           (if (better? candidate best)
-               (% (1+ i) i candidate)
-               (% (1+ i) argbest best)))))))
+    (cond
+      ((zero? n)
+       (error "`n` must be strictly greater than zero."))
+      (True
+       (rec % ((i 1) (argbest 0) (best (func 0)))
+         (cond
+           ((== i n)
+            argbest)
+           (True
+            (let ((candidate (func i)))
+              (if (better? candidate best)
+                  (% (1+ i) i candidate)
+                  (% (1+ i) argbest best)))))))))
 
   (inline)
   (declare %dolist (List :t1 -> (:t1 -> :t2) -> Unit))
@@ -182,7 +188,7 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
       (match xs
         ((Nil)
          Unit)
-	((Cons x xs)
+        ((Cons x xs)
          (func x)
          (% xs)))))
 
@@ -194,7 +200,7 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
       (match xs
         ((Nil)
          Unit)
-	((Cons x xs)
+        ((Cons x xs)
          (func i x)
          (% (1+ i) xs)))))
 
@@ -220,19 +226,19 @@ COALTON::UNIT/UNIT"
       ((positive? step)
        (rec % ((i from))
          (cond
-	   ((< i to)
-	    (func i)
+           ((< i to)
+            (func i)
             (% (+ step i)))
-	   (True
+           (True
             Unit))))
       ((negative? step)
        (rec % ((i from))
          (cond
-	   ((> i to)
-	    (func i)
+           ((> i to)
+            (func i)
             (% (+ step i)))
-	   (True
-	    Unit))))
+           (True
+            Unit))))
       (True
        Unit)))
 
@@ -242,10 +248,10 @@ COALTON::UNIT/UNIT"
     "Unsafe. Apply `func` to every number in `[from, to)` in increments of `step`."
     (rec % ((i from))
       (cond
-	((< i to)
-	 (func i)
+        ((< i to)
+         (func i)
          (% (+ step i)))
-	(True
+        (True
          Unit))))
 
   (inline)
@@ -264,10 +270,10 @@ COALTON::UNIT/UNIT"
     "Apply `func` to every number in `(to, from]`, starting with `from`, in decrements of `step`."
     (rec % ((i from))
       (cond
-	((> i to)
-	 (func i)
+        ((> i to)
+         (func i)
          (% (+ step i)))
-	(True
+        (True
          Unit))))
 
   (inline)
@@ -405,12 +411,12 @@ COALTON::UNIT/UNIT"
     (cl:cond
       ((cl:null stop)
        (cl:cond
-	 ((cl:typep start-or-stop 'cl:fixnum)
-	  (cl:if (cl:plusp start-or-stop)
-		 `(%dorange-increasing. 0 ,start-or-stop 1 ,func)
-		 `(%dorange-decreasing. 0 ,start-or-stop -1 ,func)))
-	 (cl:t
-	  `(%dorange 0 ,start-or-stop (sign ,start-or-stop) ,func))))
+         ((cl:typep start-or-stop 'cl:fixnum)
+          (cl:if (cl:plusp start-or-stop)
+                 `(%dorange-increasing. 0 ,start-or-stop 1 ,func)
+                 `(%dorange-decreasing. 0 ,start-or-stop -1 ,func)))
+         (cl:t
+          `(%dorange 0 ,start-or-stop (sign ,start-or-stop) ,func))))
       ((cl:null step)
        (cl:cond
          ((cl:and (cl:typep start-or-stop 'cl:fixnum)
