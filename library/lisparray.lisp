@@ -16,7 +16,7 @@
    #:length
    #:aref
    #:set!
-   #:copyq))
+   #:copy))
 
 (in-package #:coalton-library/lisparray)
 
