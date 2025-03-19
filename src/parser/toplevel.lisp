@@ -21,6 +21,7 @@
    #:make-attribute-monomorphize                 ; CONSTRUCTOR
    #:attribute-repr                              ; STRUCT
    #:make-attribute-repr                         ; CONSTRUCTOR
+   #:make-attribute-inline                       ; CONSTRUCTOR
    #:attribute-repr-type                         ; ACCESSOR
    #:attribute-repr-arg                          ; ACCESSOR
    #:constructor                                 ; STRUCT
