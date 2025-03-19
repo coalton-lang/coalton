@@ -46,6 +46,7 @@
                (:file "types")
                (:file "primitive-types")
                (:file "classes")
+               (:file "hash-defining-macros")
                (:file "hash")
                (:file "builtin")
                (:file "functions")
@@ -54,6 +55,7 @@
                (:module "math"
                 :serial t
                 :components ((:file "arith")
+                             (:file "num-defining-macros")
                              (:file "num")
                              (:file "bounded")
                              (:file "conversions")
@@ -64,6 +66,7 @@
                              (:file "elementary")
                              (:file "dyadic")
                              (:file "dual")
+                             (:file "hyperdual")
                              (:file "package")))
                (:file "randomaccess")
                (:file "cell")
@@ -247,6 +250,7 @@
                (:file "slice-tests")
                (:file "float-tests")
                (:file "dual-tests")
+               (:file "hyperdual-tests")
                (:file "quantize-tests")
                (:file "hashtable-tests")
                (:file "iterator-tests")

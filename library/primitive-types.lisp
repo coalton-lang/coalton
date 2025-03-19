@@ -9,6 +9,10 @@
 #+coalton-release
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
+;;; XXX: The "constants" True, False, Unit, and Nil are currently
+;;; treated specially by codegen as being constant; their values are
+;;; looked up at compile-time and emitted directly.
+
 (coalton-toplevel
   (repr :native cl:t)
   (define-type Void)
@@ -25,6 +29,7 @@
   (define Unit (lisp Unit () 'coalton::Unit/Unit))
 
   ;; List is an early type
+  (inline)
   (declare Cons (:a -> (List :a) -> (List :a)))
   (define (Cons x xs)
     (lisp (List :a) (x xs)

@@ -46,7 +46,14 @@
   (:method ((node node-variable) env)
     (declare (type tc:environment env)
              (ignore env))
-    (node-variable-value node))
+    (let ((value (node-variable-value node)))
+      (case value
+        ;; HACK: generate efficient code for known constants.
+        ((coalton:True coalton:False coalton:Nil coalton:Unit)
+         `(quote ,(eval value)))
+        ;; General case: Emit the symbol itself.
+        (otherwise
+         value))))
 
   (:method ((node node-application) env)
     (declare (type tc:environment env))

@@ -528,15 +528,15 @@
 
   (declare simplify (ClassEnv -> (List Pred) -> (List Pred)))
   (define (simplify ce xs)
-    (let ((rec (fn (rs xs)
-                 (match xs
-                   ((Nil)
-                    rs)
-                   ((Cons p ps)
-                    (if (entail ce (append rs ps) p)
-                        (rec rs ps)
-                        (rec (Cons p rs) ps)))))))
-      (rec Nil xs)))
+    (rec f ((rs Nil)
+            (xs xs))
+      (match xs
+        ((Nil)
+         rs)
+        ((Cons p ps)
+         (if (entail ce (append rs ps) p)
+             (f rs ps)
+             (f (Cons p rs) ps))))))
 
   (declare reduce (MonadFail :m => (ClassEnv -> (List Pred) -> (:m (List Pred)))))
   (define (reduce ce ps)

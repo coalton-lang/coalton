@@ -156,8 +156,15 @@ Furthermore, `best-approx` returns the simplest fraction, and both functions may
        (define (to-fraction x) (fromint (tointeger x)))
        (define (best-approx x) (fromint (tointeger x))))))
 
-(cl:dolist (ty '(U8 U32 U64 UFix I8 I32 I64 IFix Integer))
-  (cl:eval `(%define-integer-roundings ,ty)))
+(%define-integer-roundings U8)
+(%define-integer-roundings U32)
+(%define-integer-roundings U64)
+(%define-integer-roundings UFix)
+(%define-integer-roundings I8)
+(%define-integer-roundings I32)
+(%define-integer-roundings I64)
+(%define-integer-roundings IFix)
+(%define-integer-roundings Integer)
 
 (cl:defmacro %define-native-rationals (type)
   (cl:let
