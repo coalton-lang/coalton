@@ -211,6 +211,7 @@ are floored and truncated division, respectively."
            (odd? (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-ODD?")))
            (gcd (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-GCD")))
            (^ (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-^")))
+           (^^ (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-^^")))
            (lcm (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-LCM")))
            (isqrt (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-ISQRT"))))
     `(cl:progn 
@@ -219,7 +220,7 @@ are floored and truncated division, respectively."
        (coalton-toplevel
          (define-instance (Integral ,type)
            (inline)
-           (define toInteger into))
+           (define (toInteger x) (into x)))
 
          (specialize even? ,even? (,type -> Boolean))
          (inline)
@@ -234,14 +235,24 @@ are floored and truncated division, respectively."
            (lisp Boolean (n) (to-boolean (cl:oddp n))))
 
          (specialize ^ ,^ (,type -> ,type -> ,type))
-         (inline)
          (declare ,^ (,type -> ,type -> ,type))
-         (define (,^ base power)
-           ,(cl:if signed
-                   `(if (< power 0)
-                        (error "Can't exponentiate with a negative exponent.")
-                        (lisp ,type (base power) (cl:expt base power)))
-                   `(lisp ,type (base power) (cl:expt base power))))
+         ,(cl:cond
+            (signed
+             `(define (,^ base power)
+                (if (< power 0)
+                    (error "Can't exponentiate with a negative exponent.")
+                    (lisp ,type (base power) (cl:expt base power)))))
+            (cl:t
+             `(progn
+                (inline)
+                (define (,^ base power)
+                  (lisp ,type (base power) (cl:expt base power))))))
+
+         (specialize ^^ ,^^ (,type -> ,type -> ,type))
+         (inline)
+         (declare ,^^ (,type -> ,type -> ,type))
+         (define (,^^ base power)
+           (lisp ,type (base power) (cl:expt base power)))
 
          (specialize gcd ,gcd (,type -> ,type -> ,type))
          (inline)
@@ -257,14 +268,18 @@ are floored and truncated division, respectively."
            (fromInt (lisp Integer (a b) (cl:lcm a b))))
 
          (specialize isqrt ,isqrt (,type -> ,type))
-         (inline)
          (declare ,isqrt (,type -> ,type))
-         (define (,isqrt a)
-           ,(cl:if signed
-                   `(if (< a 0)
-                        (error "Can't take ISQRT of a negative number.")
-                        (lisp ,type (a) (cl:isqrt a)))
-                   `(lisp ,type (a) (cl:isqrt a))))))))
+         ,(cl:cond
+            (signed
+             `(define (,isqrt a)
+                (if (< a 0)
+                    (error "Can't take ISQRT of a negative number.")
+                    (lisp ,type (a) (cl:isqrt a)))))
+            (cl:t
+             `(progn
+                (inline)
+                (define (,isqrt a)
+                  (lisp ,type (a) (cl:isqrt a))))))))))
 
 (%define-integral-native Integer cl:t)
 (%define-integral-native I8 cl:t)
@@ -285,7 +300,6 @@ are floored and truncated division, respectively."
 
     `(coalton-toplevel
        (specialize ^ ,^ (,type -> Integer -> ,type))
-       (inline)
        (declare ,^ (,type -> Integer -> ,type))
        (define (,^ base power)
          (if (< power 0)
