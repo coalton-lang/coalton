@@ -33,7 +33,7 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
 
 (coalton-toplevel
 
-  (inline) (monomorphize)
+  (inline)
   (declare %repeat (UFix -> (Unit -> :t) -> Unit))
   (define (%repeat n func)
     "Do `func` `n` times."
@@ -45,7 +45,7 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
          (func)
          (% (1+ i))))))
 
-  (inline) (monomorphize)
+  (inline)
   (declare %dotimes (UFix -> (UFix -> :t) -> Unit))
   (define (%dotimes n func)
     "Apply `func` to every `UFix` in `[0, n)`."
@@ -57,7 +57,7 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
          (func i)
          (% (1+ i))))))
 
-  (inline) (monomorphize)
+  (inline)
   (declare %everytimes (UFix -> (UFix -> Boolean) -> Boolean))
   (define (%everytimes n pred)
     "Is `pred` `True` for all `UFix`s in `[0, n)`? Returns `True` for `n = 0`."
@@ -68,7 +68,7 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
               (% (1+ i))
               False))))
 
-  (inline) (monomorphize)
+  (inline)
   (declare %sometimes (UFix -> (UFix -> Boolean) -> Boolean))
   (define (%sometimes n pred)
     "Is `pred` `True` for some `UFix` in `[0, n)`? Returns `False` for `n = 0`."
@@ -79,7 +79,7 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
               True
               (% (1+ i))))))
 
-  (inline) (monomorphize)
+  (inline)
   (declare %sumtimes (Num :t => UFix -> (UFix -> :t) -> :t))
   (define (%sumtimes n func)
     "Sum the evaluations of `func` applied to every `UFix` in `[0, n)`. Returns 0 for `n = 0`."
@@ -88,7 +88,7 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
           acc
           (% (1+ i) (+ acc (func i))))))
 
-  (inline) (monomorphize)
+  (inline)
   (declare %prodtimes (Num :t => UFix -> (UFix -> :t) -> :t))
   (define (%prodtimes n func)
     "Multiply the evaluations of `func` applied to every `UFix` in `[0, n)`. Returns 1 for `n = 0`."
@@ -104,7 +104,7 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
     (lisp (List :t) (xs)
       (cl:nreverse xs)))
 
-  (inline) (monomorphize)
+  (inline)
   (declare %collecttimes (UFix -> (UFix -> :t) -> List :t))
   (define (%collecttimes n func)
     "Collect the applications of `func` to every `UFix` in `[0, n)` as a `List`."
@@ -131,7 +131,7 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
   ;;     (cl:locally (cl:declare (cl:optimize (cl:safety 0)))
   ;;       (cl:cdr xs))))
 
-  ;; (inline) (monomorphize)
+  ;; (inline)
   ;; (declare %collecttimes (UFix -> (UFix -> :t) -> List :t))
   ;; (define (%collecttimes n func)
   ;;   (let ((res (lisp (List :t) () (cl:cons cl:nil cl:nil))))
@@ -144,7 +144,7 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
   ;;            (%rplacd! last new-last)
   ;;            (% (1+ i) new-last)))))))
 
-  (inline) (monomorphize)
+  (inline)
   (declare %besttimes (UFix -> (:t -> :t -> Boolean) -> (UFix -> :t) -> :t))
   (define (%besttimes n better? func)
     "Of the applications of `func` to every `UFix` in `[0, n)`, find the one that is `better?` than the rest."
@@ -162,7 +162,7 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
                   (% (1+ i) candidate)
                   (% (1+ i) best)))))))))
 
-  (inline) (monomorphize)
+  (inline)
   (declare %argbesttimes (UFix -> (:t -> :t -> Boolean) -> (UFix -> :t) -> UFix))
   (define (%argbesttimes n better? func)
     "Find the `UFix` in `[0, n)` whose application of `func` is `better?` than the rest."
@@ -192,7 +192,7 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
          (func x)
          (% xs)))))
 
-  (inline) (monomorphize)
+  (inline)
   (declare %dolist-enumerated (List :t1 -> (UFix -> :t1 -> :t2) -> Unit))
   (define (%dolist-enumerated lis func)
     "Apply `func` to every element of `lis` and its index, as `(func index element)`."
