@@ -284,7 +284,9 @@ a new `Seq` instance."
                   (if (< idx cumulative)
                       (pure (Tuple gs last-cumulative))
                       (search-forward (+ 1 gs) cumulative)))))) 
-      (>>= (alt (vector:index (- guess 1) cst) ; Note, 0 <= guess <= 31
+      (>>= (alt (if (math:zero? guess)  ; avoid UFix underflow
+                    None
+                    (vector:index (- guess 1) cst)) ; Note, 0 < guess <= 31
                 (pure 0))
            (search-forward guess))))  
 

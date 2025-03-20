@@ -191,6 +191,17 @@ iterator is empty."
     "An iterator which begins at zero and counts up through and including LIMIT."
     (up-to (+ 1 limit)))
 
+
+  ;; All the haranguing below is so that we don't overflow a bounded
+  ;; type in a range-decreasing call. We generally assume a lower
+  ;; bound (e.g., 0 for unsigned types) is more common than an upper
+  ;; bound.
+  (repr :enum)
+  (define-type RangeStatus
+    RangeContinue
+    RangeLast
+    RangeDone)
+
   (declare range-decreasing ((Num :num) (Ord :num) =>
                              :num ->
                              :num ->
@@ -201,16 +212,36 @@ iterator is empty."
 
 Equivalent to reversing `range-increasing`"
     (assert (<= end start)
-        "END ~a should be less than or equal to START ~a in RANGE-INCREASING"
+        "END ~a should be less than or equal to START ~a in RANGE-DECREASING"
         end start)
     (assert (> step 0)
-        "STEP ~a should be positive and non-zero in RANGE-INCREASING"
+        "STEP ~a should be positive and non-zero in RANGE-DECREASING"
         step)
-    ;; FIXME: avoid underflow in the DONE? test
-    (recursive-iter ((flip -) step)
-                    (fn (n) (>= end (+ n step))) ; like (>= (- end step)), but without potential underflow
-                    (- start step)               ; begin after START
-                    ))
+    (let ((end+step (+ end step)))
+      (if (< start end+step)
+          empty
+          (let ((start-step (- start step))
+                (next (cell:new start-step))
+                (status (cell:new (if (< start-step end+step)
+                                      RangeLast
+                                      RangeContinue))))
+            (%Iterator
+             (fn ()
+               (match (cell:read status)
+                 ((RangeDone)
+                  None)
+                 ((RangeLast)
+                  (cell:write! status RangeDone)
+                  (Some (cell:read next)))
+                 ((RangeContinue)
+                  (let ((this (cell:read next))
+                        (next-next (- this step)))
+                    (cell:write! status (if (< next-next end+step)
+                                            RangeLast
+                                            RangeContinue))
+                    (cell:write! next next-next)
+                    (Some this)))))
+             None)))))
 
   (declare down-from ((Num :num) (Ord :num) => :num -> Iterator :num))
   (define (down-from limit)
