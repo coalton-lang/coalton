@@ -57,7 +57,7 @@ jobs:
           ; TODO: Remove this or add tests for these programs.
           (asdf:load-system :small-coalton-programs)
           EOF
-          sbcl --noinform --non-interactive --load run-tests.lisp
+          sbcl --non-interactive --load run-tests.lisp
       - name: Run Allegro CL tests
         if: matrix.LISP_IMPL == 'allegro'
         env:
