@@ -370,6 +370,7 @@
                  :append (mapcar #'parser:tycon-name (parser:collect-referenced-types type))))))
 
     (unless (find *package* instance-syms :key #'symbol-package)
-      (tc-error "Invalid orphan instance"
-                (tc-location (parser:toplevel-define-instance-head-location instance)
-                             "instances must be defined in the same package as their class or reference one or more types in their defining package")))))
+      (tc-cerror "Invalid orphan instance"
+                 (tc-location (parser:toplevel-define-instance-head-location instance)
+                              "instances must be defined in the same package as their class or reference one or more types in their defining package"))
+      (return-from check-for-orphan-instance))))
