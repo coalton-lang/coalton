@@ -341,7 +341,7 @@
           ((Nil) acc)
           ((Cons x xs)
            (if (or (member x ys)
-                   (member x ys))
+                   (member x acc))
                (f xs acc)
                (f xs (Cons x acc)))))))))
 
