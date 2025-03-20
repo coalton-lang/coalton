@@ -6,6 +6,8 @@
   (:use
    #:coalton
    #:coalton-library/math/num-defining-macros)
+  (:local-nicknames
+   (#:cls #:coalton-library/classes))
   (:import-from
    #:coalton-library/hash
    #:define-sxhash-hasher))
@@ -73,7 +75,31 @@
   (define-num-wrapping U16 16)
   (define-num-wrapping U32 32)
   (define-num-wrapping U64 64)
-  (define-num-wrapping UFix #.+unsigned-fixnum-bits+)
+
+  ;; UFixes are unsafe and depend on implementation.
+  (define-instance (cls:Num UFix)
+    (inline)
+    (define (cls:+ a b)
+      (lisp UFix (a b)
+        (cl:locally (cl:declare (cl:optimize cl:speed (cl:safety 0)))
+          (cl:+ a b))))
+
+    (inline)
+    (define (cls:- a b)
+      (lisp UFix (a b)
+        (cl:locally (cl:declare (cl:optimize cl:speed (cl:safety 0)))
+          (cl:- a b))))
+
+    (inline)
+    (define (cls:* a b)
+      (lisp UFix (a b)
+        (cl:locally (cl:declare (cl:optimize cl:speed (cl:safety 0)))
+          (cl:* a b))))
+
+    (inline)
+    (define (cls:fromInt x)
+      (lisp UFix (x)
+        (cl:mod x #.(cl:expt 2 +fixnum-bits+)))))
 
 
 ;;;
