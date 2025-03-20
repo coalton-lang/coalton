@@ -767,29 +767,49 @@ Returns a `node'.")
 
       (assert (null (tc:qualified-ty-predicates qual-ty)))
 
-      (loop :with out-node := (make-node-lisp
-                               :type (tc:qualified-ty-type qual-ty)
-                               :vars nil
-                               :form '((cl:error "Non-exhaustive COND.")))
-            :for clause :in (reverse (tc:node-cond-clauses expr)) :do
-              (setf out-node
-                    (make-node-match
-                     :type (tc:qualified-ty-type qual-ty)
-                     :expr (translate-expression (tc:node-cond-clause-expr clause) ctx env)
-                     :branches (list
-                                (make-match-branch
-                                 :pattern (make-pattern-constructor
-                                           :type tc:*boolean-type*
-                                           :name true-value
-                                           :patterns nil)
-                                 :body (translate-expression (tc:node-cond-clause-body clause) ctx env))
-                                (make-match-branch
-                                 :pattern (make-pattern-constructor
-                                           :type tc:*boolean-type*
-                                           :name false-value
-                                           :patterns nil)
-                                 :body out-node))))
-            :finally (return out-node))))
+      (flet ((catchall-clause-p (clause)
+               "Is `clause` the catchall clause, 'coalton:True?"
+               (let ((expr (tc:node-cond-clause-expr clause)))
+                 (and (typep expr 'tc:node-variable)
+                      (and (tc:ty= tc:*boolean-type*  (tc:qualified-ty-type (tc:node-type expr)))
+                           (eq 'coalton:True (tc:node-variable-name expr)))))))
+        (let* ((reverse-clauses (reverse (tc:node-cond-clauses expr)))
+               (has-catchall-clause-p (some #'catchall-clause-p reverse-clauses)))
+          (when has-catchall-clause-p
+            ;; remove all the clauses after the catchall clause.
+            (loop :while (or (not (catchall-clause-p (first reverse-clauses)))
+                             ;; make sure to find the very first catchall clause
+                             (some #'catchall-clause-p (rest reverse-clauses)))
+                  :do (pop reverse-clauses)))
+
+          (loop :with out-node
+                  := (cond
+                       (has-catchall-clause-p
+                        (translate-expression (tc:node-cond-clause-body (first reverse-clauses)) ctx env))
+                       (t
+                        (make-node-lisp
+                         :type (tc:qualified-ty-type qual-ty)
+                         :vars nil
+                         :form '((cl:error "Non-exhaustive COND.")))))
+                :for clause :in (if has-catchall-clause-p (rest reverse-clauses) reverse-clauses) :do
+                  (setf out-node
+                        (make-node-match
+                         :type (tc:qualified-ty-type qual-ty)
+                         :expr (translate-expression (tc:node-cond-clause-expr clause) ctx env)
+                         :branches (list
+                                    (make-match-branch
+                                     :pattern (make-pattern-constructor
+                                               :type tc:*boolean-type*
+                                               :name true-value
+                                               :patterns nil)
+                                     :body (translate-expression (tc:node-cond-clause-body clause) ctx env))
+                                    (make-match-branch
+                                     :pattern (make-pattern-constructor
+                                               :type tc:*boolean-type*
+                                               :name false-value
+                                               :patterns nil)
+                                     :body out-node))))
+                :finally (return out-node))))))
 
   (:method ((node tc:node-do) ctx env)
     (declare (type pred-context ctx)
