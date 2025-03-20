@@ -589,17 +589,17 @@ Returns a `node'.")
                   (make-match-branch
                    :pattern (make-pattern-constructor
                              :type tc:*boolean-type*
-                             :name false-value
-                             :patterns nil)
-                   :body (translate-expression (tc:node-unless-body expr) ctx env))
-                  (make-match-branch
-                   :pattern (make-pattern-constructor
-                             :type tc:*boolean-type*
                              :name true-value
                              :patterns nil)
                    :body (make-node-variable
                           :type tc:*unit-type*
-                          :value unit-value))))))
+                          :value unit-value))
+                  (make-match-branch
+                   :pattern (make-pattern-constructor
+                             :type tc:*boolean-type*
+                             :name false-value
+                             :patterns nil)
+                   :body (translate-expression (tc:node-unless-body expr) ctx env))))))
 
   (:method ((expr tc:node-while) ctx env)
     (declare (type pred-context ctx)
