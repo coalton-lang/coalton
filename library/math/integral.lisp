@@ -69,29 +69,25 @@ are floored and truncated division, respectively."
     "Converts any Integral N into any Num."
     (fromInt (toInteger n)))
 
-  (inline)
   (declare rsh ((Integral :n) (Bits :b) => :b -> :n -> :b))
   (define (rsh x n)
     "Right shift X by N"
     (bits:shift (negate (toInteger n)) x))
 
-  (inline)
   (declare lsh ((Integral :n) (Bits :b) => :b -> :n -> :b))
   (define (lsh x n)
     "Left shift X by N"
     (bits:shift (toInteger n) x))
 
-  (inline)
   (declare even? (Integral :a => :a -> Boolean))
   (define (even? n)
     "Is N even?"
-    (== 0 (rem n 2)))
+    (== 0 (mod n 2)))
 
-  (inline)
   (declare odd? (Integral :a => :a -> Boolean))
   (define (odd? n)
     "Is N odd?"
-    (not (even? n)))
+    (== 1 (mod n 2)))
 
   (declare ^ ((Num :a) (Integral :int) => (:a -> :int -> :a)))
   (define (^ base power)
