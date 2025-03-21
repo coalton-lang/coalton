@@ -204,7 +204,7 @@
 
 
 ;;; Float Num instances.
-(cl:defmacro define-num-float (type lisp-type)
+(cl:defmacro define-num-float (type lisp-type negative-inf positive-inf)
   "Define `Num' for the float type TYPE."
 
   ;;
@@ -241,11 +241,14 @@
 
      (inline)
      (define (fromInt x)
+       ;; XXX: Originally we used (COALTON (THE ,type INFINITY)), but
+       ;; the recursive invocation of Coalton with heuristic inlining
+       ;; caused all sorts of trouble.
        (lisp ,type (x)
          (cl:or (cl:ignore-errors (cl:coerce x ',lisp-type))
-                (cl:if (cl:< x 0)
-                       (coalton (the ,type negative-infinity))
-                       (coalton (the ,type infinity))))))))
+                (cl:if (cl:minusp x)
+                       ,negative-inf
+                       ,positive-inf))))))
 
 
 ;;; Utility to define type -> Fraction conversions.

@@ -208,16 +208,21 @@
   (declare (type node node)
            (type tc:environment env)
            (values node &optional))
-  (alexandria-2:line-up-first
-   node
-   canonicalize
-   (match-dynamic-extent-lift env)
-   ;; FIXME: Is this the right place to propagate-constants?
-   (propagate-constants env)
-   (apply-specializations env)
-   (resolve-static-superclass env)
-   (inline-methods env)
-   (inline-applications env)))
+  (setf node (canonicalize node)
+        node (match-dynamic-extent-lift node env))
+  ;; FIXME: Is this the right place to propagate-constants?
+  (setf node (propagate-constants node env)
+        node (apply-specializations node env)
+        node (resolve-static-superclass node env)
+        ;; Propagate prior to more inlining.
+        node (propagate-constants node env))
+  ;; Do a few rounds of constant propagation and inlining.
+  (loop :repeat 3 :do
+    (setf node (inline-methods node env)
+          node (inline-applications node env)
+          node (propagate-constants node env)))
+  ;; Return the node.
+  node)
 
 (defun pointfree (node table env)
   (declare (type node node)
@@ -330,19 +335,37 @@
      (list
       (action (:after node-application) #'rewrite-application)))))
 
-(defun aggressive-heuristic (node)
+;; Gentle defaults
+(defun gentle-inlining-heuristic (node)
+  "This will probably inline more than is optimal."
+  (and (<= (count-applications node)
+           3)
+       (<= (count-nodes node)
+           8)))
+
+(defvar *default-inlining-max-depth* 4)
+(defvar *default-inlining-max-unroll* 2)
+(defvar *default-inlining-heuristic* 'gentle-inlining-heuristic)
+
+;; Aggressive defaults
+(defun aggressive-inlining-heuristic (node)
   "This will probably inline more than is optimal."
   (and (<= (count-applications node)
            8)
        (<= (count-nodes node)
            32)))
 
+;;(defvar *default-inlining-max-depth* 16)
+;;(defvar *default-inlining-max-unroll* 4)
+;;(defvar *default-inlining-heuristic* 'aggressive-inlining-heuristic)
+
+
 (defun heuristic-inline-applications (node
                                       env
                                       &key
-                                        (max-depth  16)
-                                        (max-unroll 4)
-                                        (heuristic  #'aggressive-heuristic))
+                                        (max-depth  *default-inlining-max-depth*)
+                                        (max-unroll *default-inlining-max-unroll*)
+                                        (heuristic  *default-inlining-heuristic*))
   "Recursively inline function calls in `node`, using the environment
 `env` to look up the function bodies to substitute. The traversal
 keeps a call stack and will not continue past the specified
@@ -354,11 +377,11 @@ stack. Otherwise, if a function's code can be found in `env` and the
 Special logic prevents inlining `coalton:Cons` in let bindings to
 avoid breaking recursive data let expressions, since the codegen
 requires direct constructor calls."
-  (declare (type node           node)
-           (type tc:environment env)
-           (type (integer 0)    max-depth)
-           (type (integer 0)    max-unroll)
-           (type function       heuristic)
+  (declare (type node                 node)
+           (type tc:environment       env)
+           (type (integer 0)          max-depth)
+           (type (integer 0)          max-unroll)
+           (type (or symbol function) heuristic)
            (values node &optional))
   (labels ((inline-abstraction-from-application (node abstraction process-body)
              "If NODE is an abstraction (f e1 e2 ... en) and ABSTRACTION is a

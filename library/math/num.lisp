@@ -6,6 +6,8 @@
   (:use
    #:coalton
    #:coalton-library/math/num-defining-macros)
+  (:local-nicknames
+   (#:cls #:coalton-library/classes))
   (:import-from
    #:coalton-library/hash
    #:define-sxhash-hasher))
@@ -73,15 +75,43 @@
   (define-num-wrapping U16 16)
   (define-num-wrapping U32 32)
   (define-num-wrapping U64 64)
-  (define-num-wrapping UFix #.+unsigned-fixnum-bits+)
+
+  ;; UFixes are unsafe and depend on implementation.
+  (define-instance (cls:Num UFix)
+    (inline)
+    (define (cls:+ a b)
+      (lisp UFix (a b)
+        (cl:locally (cl:declare (cl:optimize cl:speed (cl:safety 0)))
+          (cl:+ a b))))
+
+    (inline)
+    (define (cls:- a b)
+      (lisp UFix (a b)
+        (cl:locally (cl:declare (cl:optimize cl:speed (cl:safety 0)))
+          (cl:- a b))))
+
+    (inline)
+    (define (cls:* a b)
+      (lisp UFix (a b)
+        (cl:locally (cl:declare (cl:optimize cl:speed (cl:safety 0)))
+          (cl:* a b))))
+
+    (inline)
+    (define (cls:fromInt x)
+      (lisp UFix (x)
+        (cl:mod x #.(cl:expt 2 +fixnum-bits+)))))
 
 
 ;;;
 ;;; Float Num instances
 ;;;
 
-  (define-num-float Single-Float cl:single-float)
-  (define-num-float Double-Float cl:double-float)
+  (define-num-float Single-Float cl:single-float
+    float-features:single-float-negative-infinity
+    float-features:single-float-positive-infinity)
+  (define-num-float Double-Float cl:double-float
+    float-features:double-float-negative-infinity
+    float-features:double-float-positive-infinity)
 
 
 ;;;
