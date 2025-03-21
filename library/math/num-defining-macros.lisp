@@ -65,8 +65,10 @@
 (cl:defmacro define-ord (type)
   (cl:let ((>-spec (alexandria:format-symbol cl:*package* "~A->" type))
            (>=-spec (alexandria:format-symbol cl:*package* "~A->=" type))
-           (<-spec (alexandria:format-symbol cl:*package* "~A-< type" type))
-           (<=-spec (alexandria:format-symbol cl:*package* "~A-<=" type)))
+           (<-spec (alexandria:format-symbol cl:*package* "~A-<" type))
+           (<=-spec (alexandria:format-symbol cl:*package* "~A-<=" type))
+           (min-spec (alexandria:format-symbol cl:*package* "~A-MIN" type))
+           (max-spec (alexandria:format-symbol cl:*package* "~A-MAX" type)))
 
     ;; Generates the instance and specializations to use more direct
     ;; comparison functions when possible.
@@ -110,7 +112,21 @@
        (declare ,<=-spec (,type -> ,type -> Boolean))
        (define (,<=-spec a b)
          (lisp Boolean (a b)
-           (to-boolean (cl:<= a b)))))))
+           (to-boolean (cl:<= a b))))
+
+       (specialize min ,min-spec (,type -> ,type -> ,type))
+       (inline)
+       (declare ,min-spec (,type -> ,type -> ,type))
+       (define (,min-spec a b)
+         (lisp ,type (a b)
+           (cl:min a b)))
+
+       (specialize max ,max-spec (,type -> ,type -> ,type))
+       (inline)
+       (declare ,max-spec (,type -> ,type -> ,type))
+       (define (,max-spec a b)
+         (lisp ,type (a b)
+           (cl:max a b))))))
 
 
 ;;; Utilities to define integer overflow and wrapping Num instances.
