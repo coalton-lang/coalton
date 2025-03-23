@@ -25,7 +25,7 @@
    #:MonadFail #:fail
    #:Alternative #:alt #:empty
    #:Foldable #:fold #:foldr #:mconcat #:mconcatmap
-   #:mcommute?
+   #:mempty? #:mcommute?
    #:Traversable #:traverse
    #:Bifunctor #:bimap #:map-fst #:map-snd
    #:sequence
@@ -259,6 +259,11 @@ The hash function must satisfy the invariant that `(== left right)` implies `(==
     "Types which can be folded into a single element."
     (fold  "A left tail-recursive fold."       ((:accum -> :elt -> :accum) -> :accum -> :container :elt -> :accum))
     (foldr "A right non-tail-recursive fold."  ((:elt -> :accum -> :accum) -> :accum -> :container :elt -> :accum)))
+
+  (declare mempty? ((Eq :a) (Monoid :a) => :a -> Boolean))
+  (define (mempty? a)
+    "Does `a` equal `(the Type mempty)`?"
+    (== mempty a))
 
   (declare mconcat ((Foldable :f) (Monoid :a) => :f :a -> :a))
   (define (mconcat a)
