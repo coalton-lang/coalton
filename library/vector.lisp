@@ -285,6 +285,10 @@
           False
           (iter:every! id (iter:zip-with! == (iter:into-iter v1) (iter:into-iter v2))))))
 
+  (define-instance (Monoid (Vector :a))
+    (inline)
+    (define mempty (new)))
+
   (define-instance (Semigroup (Vector :a))
     (inline)
     (define <> append))
