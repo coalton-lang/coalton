@@ -76,6 +76,6 @@
   (define-type IFix
     "Non-allocating tagged integer; range is platform-dependent. Does not error on overflow. Uses `fixnum`.")
 
-  (repr :native (cl:and cl:fixnum cl:unsigned-byte))
-  (define-type UFix 
+  (repr :native coalton-impl/util:UFix)
+  (define-type UFix
     "Non-allocating tagged non-negative integer; range is platform-dependent. Uses `(and fixnum unsigned-byte)`."))

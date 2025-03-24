@@ -32,6 +32,7 @@
    #:project-indices                    ; FUNCTION
    #:project-elements                   ; FUNCTION
    #:maybe-read-form                    ; FUNCTION
+   #:UFix                               ; TYPE
    ))
 
 (in-package #:coalton-impl/util)
@@ -216,3 +217,6 @@ Examples:
   (mapcar (lambda (idx)
             (nth (position idx list) data))
           elements))
+
+(deftype UFix ()
+  '(and fixnum unsigned-byte))
