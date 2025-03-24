@@ -19,6 +19,9 @@
    #:coalton-codegen
    #:coalton-codegen-ast
    #:coalton-codegen-types
+   #:pprint-coalton-codegen
+   #:pprint-coalton-codegen-ast
+   #:pprint-coalton-codegen-types
    #:coalton
    #:declare
    #:define
