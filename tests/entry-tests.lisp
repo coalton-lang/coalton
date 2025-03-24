@@ -14,7 +14,7 @@
   (let* ((file (source:make-source-file (compile-test-file)))
          (source-form-types (mapcar #'first
                                     (source-forms (entry:codegen file)))))
-    (dolist (expect-type '(defpackage in-package defun eval-when let setf))
+    (dolist (expect-type '(defpackage in-package eval-when locally))
       (is (position expect-type source-form-types)
           "Missing expected ~A form in generated code" expect-type))))
 
