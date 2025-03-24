@@ -107,10 +107,11 @@
                     (values ,(car (last (node-lisp-form expr)))))
                  inner)))
 
-      (if settings:*emit-type-annotations*
-          `(the (values ,(tc:lisp-type (node-type expr) env) &optional)
-                ,inner)
-          inner)))
+      `(locally (declare #+sbcl (optimize (sb-c::type-check 1)))
+                ,(if settings:*emit-type-annotations*
+                     `(the (values ,(tc:lisp-type (node-type expr) env) &optional)
+                           ,inner)
+                     inner))))
 
   (:method ((expr node-while) env)
     (declare (type tc:environment env))

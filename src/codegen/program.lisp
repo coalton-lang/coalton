@@ -106,7 +106,8 @@ Example:
                                        (compile-scc bindings env))))
         (lisp-forms (mapcar (lambda (lisp-form)
                               (cons (car (source:location-span (source:location lisp-form)))
-                                    (parser:toplevel-lisp-form-body lisp-form)))
+                                    `((locally (declare #+sbcl (optimize (sb-c::type-check 1)))
+                                        ,@(parser:toplevel-lisp-form-body lisp-form)))))
                             lisp-forms)))
     (mapcan #'cdr (merge-forms bindings lisp-forms))))
 
@@ -180,7 +181,8 @@ Example:
                 (list
                  `(declaim (sb-ext:start-block ,@definition-names))))
 
-            ,@(compile-definitions sccs definitions lisp-forms offsets env)
+            (locally (declare #+sbcl (optimize (sb-c::type-check 0)))
+              ,@(compile-definitions sccs definitions lisp-forms offsets env))
 
             #+sbcl
             ,@(when (eq sb-ext:*block-compile-default* :specified)
