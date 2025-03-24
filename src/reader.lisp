@@ -199,7 +199,7 @@ It ensures the presence of source metadata for STREAM and then calls MAYBE-READ-
                                                  (find-symbol (symbol-name symb) ,package))
                                 (import symb ,package)))
                             (let ((*package* ,package))
-                              (print (,',codegen ,@forms))
+                              (pprint (,',codegen ,@forms))
                               (values)))
             (delete-package ,package))))))
 
