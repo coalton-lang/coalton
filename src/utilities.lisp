@@ -32,7 +32,7 @@
    #:project-indices                    ; FUNCTION
    #:project-elements                   ; FUNCTION
    #:maybe-read-form                    ; FUNCTION
-   #:UFix                               ; TYPE
+   #:ufixnum                            ; TYPE
    ))
 
 (in-package #:coalton-impl/util)
@@ -218,5 +218,5 @@ Examples:
             (nth (position idx list) data))
           elements))
 
-(deftype UFix ()
+(deftype ufixnum ()
   '(and fixnum unsigned-byte))
