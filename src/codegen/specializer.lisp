@@ -51,6 +51,11 @@
                    (unless (>= (length (node-rands node)) num-preds)
                      (util:coalton-bug "Expected function ~A to have at least ~A args when applying specialization." rator-name (length preds)))
 
+                   (when settings:*print-specialization-occurrences*
+                     (format t
+                             "~&;; Specialized `~A` to `~A`~%"
+                             (tc:specialization-entry-from specialization)
+                             (tc:specialization-entry-to specialization)))
                    (cond
                      ((= num-preds (length (node-rands node)))
                       (make-node-variable
