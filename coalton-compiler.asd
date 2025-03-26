@@ -110,6 +110,7 @@
                              (:file "monomorphize")
                              (:file "constant-propagation")
                              (:file "inliner")
+                             (:file "specializer")
                              (:file "optimizer")
                              (:file "program")
                              (:file "package")))
