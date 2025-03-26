@@ -109,6 +109,7 @@
                              (:file "codegen-class")
                              (:file "monomorphize")
                              (:file "constant-propagation")
+                             (:file "inliner")
                              (:file "optimizer")
                              (:file "program")
                              (:file "package")))
