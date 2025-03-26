@@ -28,9 +28,6 @@
   (:import-from
    #:coalton-impl/codegen/traverse
    #:action
-   #:count-applications
-   #:count-nodes
-   #:make-traverse-let-action-skipping-cons-bindings
    #:*traverse*
    #:traverse
    #:traverse-with-binding-list)
@@ -68,7 +65,7 @@
 (defun update-function-env (bindings inline-p-table env)
   (declare (type binding-list bindings)
            (type tc:environment env)
-           (values tc:environment))
+           (values tc:environment &optional))
   (multiple-value-bind (toplevel-functions toplevel-values)
       (loop :for (name . node) :in bindings
             :if (node-abstraction-p node)
@@ -92,10 +89,13 @@
   env)
 
 (defun make-function-table (env)
+  "Create a function table from ENV. A \"function table\" is a hash table
+mapping known function names to their arity."
   (declare (type tc:environment env)
-           (values hash-table))
-  (let ((table (make-hash-table)))
-    (fset:do-map (name entry (immutable-map-data (tc:environment-function-environment env)))
+           (values hash-table &optional))
+  (let ((table (make-hash-table))
+        (fun-env (tc:environment-function-environment env)))
+    (fset:do-map (name entry (immutable-map-data fun-env))
       (setf (gethash name table) (tc:function-env-entry-arity entry)))
     table))
 
@@ -167,15 +167,22 @@
         (values bindings env)))))
 
 (defun direct-application (node table)
+  "Rewrite NODE to use DIRECT-APPLICATIONs when possible. A rewrite is
+possible when the name of the operator of an application is known and
+when the number of operands equals the arity of the known function
+name.
+
+The TABLE argument is a hash table mapping function names to their
+arity. TABLE will be mutated with additional entries."
   (declare (type node node)
-           (type hash-table table)
+           (type hash-table table)      ; Name -> Integer
            (values node &optional))
   (labels ((rewrite-direct-application (node)
              (when (node-variable-p (node-application-rator node))
                (let ((name (node-variable-value (node-application-rator node))))
                  (when (and (gethash name table)
-                            (equalp (gethash name table)
-                                    (length (node-application-rands node))))
+                            (= (gethash name table)
+                               (length (node-application-rands node))))
                    (return-from rewrite-direct-application
                      (make-node-direct-application
                       :type (node-type node)
@@ -214,7 +221,7 @@
   (declare (type binding-list bindings)
            (type package package)
            (type tc:environment env)
-           (values binding-list))
+           (values binding-list &optional))
   (let ((hoister (make-hoister)))
     (append
      (loop :for (name . node) :in bindings
@@ -225,6 +232,8 @@
      (pop-final-hoist-point hoister))))
 
 (defun optimize-node (node env)
+  "Perform a series of optimizations on NODE in the environment
+ENV. Return a new node which is optimized."
   (declare (type node node)
            (type tc:environment env)
            (values node &optional))
@@ -239,10 +248,17 @@
   node)
 
 (defun pointfree (node table env)
+  "Given a node NODE, a function table TABLE, and an environment ENV,
+when applicable, produce a new node which is not point-free. Roughly
+speaking, the following kinds of transformations happen:
+
+    (+ 1) ==> (fn (x) (+ 1 x))
+    +     ==> (fn (x y) (+ x y))
+ "
   (declare (type node node)
            (type hash-table table)
            (type tc:environment env)
-           (values node))
+           (values node &optional))
 
   (let (function args num-params)
     (cond
@@ -332,6 +348,15 @@
                  :rands new-args)))))
 
 (defun canonicalize (node)
+  "Canonicalize the applications of NODE. \"Canonicalize\" means to
+supply as many arguments as possible to nested, partially applied
+functions. For example, the canonicalization of
+
+    ((FOO BAR) BAZ)
+
+would be:
+
+    (FOO BAR BAZ)"
   (declare (type node node)
            (values node &optional))
   (labels ((rewrite-application (node)
@@ -488,7 +513,8 @@
       (action (:after node-field) #'handle-static-superclass)))))
 
 (defun match-dynamic-extent-lift (node env)
-  "Stack allocates uncaptured ADTs constructed in the head of a match expression"
+  "Transform NODE within ENV so that MATCH arguments are stack allocated
+when possible."
   (declare (type node node)
            (type tc:environment env)
            (values node &optional))
