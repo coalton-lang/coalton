@@ -17,6 +17,7 @@
    #:*compile-print-types*              ; VARIABLE
    #:*print-specialization-occurrences* ; VARIABLE
    #:*print-inlining-occurrences*       ; VARIABLE
+   #:*print-optimization-passes*        ; VARIABLE
    ))
 
 (in-package #:coalton-impl/settings)
@@ -136,6 +137,11 @@ or by pushing `:coalton-release' into `*features*'. Any of these must be done be
 (declaim (type boolean *print-inlining-occurrences*))
 (defvar *print-inlining-occurrences* (config ':print-rewrites :default nil)
   "Print out information when an inline occurs.")
+
+(declaim (type boolean *print-optimization-passes*))
+(defvar *print-optimization-passes* (config ':print-rewrites :default nil)
+  "Indicate when a node optimization pass is being performed.")
+
 
 (defvar *coalton-optimize* '(optimize (speed 3) (safety 0)))
 

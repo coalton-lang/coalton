@@ -168,6 +168,7 @@ Return two values: the processed node and whether inlining happened."
                                    max-unroll)
                                (= (length (node-abstraction-vars code))
                                   (length (node-rands node))))))
+                 (setf inline-happened? t)
                  (when settings:*print-inlining-occurrences*
                    (format t "~&;; Inlining ~S~%" name))
                  (return-from try-inline
@@ -182,6 +183,7 @@ Return two values: the processed node and whether inlining happened."
                               (funcall heuristic code)
                               (= (length (node-abstraction-vars code))
                                  (length (node-rands node))))
+                     (setf inline-happened? t)
                      (when settings:*print-inlining-occurrences*
                        (format t "~&;; Inlining (fn ...)~%"))
                      (return-from try-inline
