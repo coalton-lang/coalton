@@ -122,18 +122,28 @@ Return two values: the processed node and whether inlining happened."
                    :into subs
 
                  ;; Return the inlined abstraction as a LET.
-                 :finally (return
-                            (make-node-let
-                             :type     (node-type node)
-                             :bindings bindings
-                             :subexpr  (funcall
-                                        process-body
-                                        ;; Rename the type variables
-                                        ;; so they aren't
-                                        ;; inadvertently unified
-                                        ;; across substitutions.
-                                        (rename-type-variables
-                                         (apply-ast-substitution subs body t)))))))
+                 ;;
+                 ;; The code being inlined might have a more general
+                 ;; type than the thing it replaces, we do unification
+                 ;; to get a more specific type.
+                 :finally (let* ((new-body
+                                   (funcall
+                                    process-body
+                                    ;; Rename the type variables
+                                    ;; so they aren't
+                                    ;; inadvertently unified
+                                    ;; across substitutions.
+                                    (rename-type-variables
+                                     (apply-ast-substitution subs body t))))
+                                 (new-subs
+                                   (coalton-impl/typechecker/unify::mgu
+                                    (node-type node)
+                                    (node-type new-body))))
+                            (return
+                              (make-node-let
+                               :type     (node-type node)
+                               :bindings bindings
+                               :subexpr  (tc:apply-substitution new-subs new-body))))))
 
              (try-inline (node call-stack)
                "Attempt to perform an inlining of the application node NODE. The
