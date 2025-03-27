@@ -24,6 +24,7 @@
    (#:tc #:coalton-impl/typechecker))
   (:export
    #:null-heuristic                     ; FUNCTION
+   #:gentle-inline-heuristic            ; FUNCTION
    #:aggressive-inline-heuristic        ; FUNCTION
    #:*inliner-max-depth*                ; VARIABLE
    #:*inliner-max-unroll*               ; VARIABLE
@@ -36,6 +37,13 @@
   "An inlining heuristic that doesn't inline."
   (declare (ignore node))
   nil)
+
+(defun gentle-heuristic (node)
+  "This will probably inline more than is optimal."
+  (and (<= (count-applications node)
+           4)
+       (<= (count-nodes node)
+           8)))
 
 (defun aggressive-heuristic (node)
   "This will probably inline more than is optimal."
@@ -55,7 +63,7 @@ inlined.")
 the call stack that is being inlined.")
 
 (declaim (type (or symbol function) *inliner-heuristic*))
-(defvar *inliner-heuristic* 'aggressive-heuristic
+(defvar *inliner-heuristic* 'gentle-heuristic
   "A function that takes a NODE and decides if it should inline it.")
 
 (defun heuristic-inline-applications (node
