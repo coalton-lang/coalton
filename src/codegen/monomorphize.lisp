@@ -65,6 +65,7 @@
    (#:tc #:coalton-impl/typechecker))
   (:export
    #:make-candidate-manager
+   #:dictionary-node-p
    #:monomorphize))
 
 (in-package #:coalton-impl/codegen/monomorphize)
@@ -99,10 +100,8 @@ ARGUMENTS some of which are statically known dictionaries."
 (defun propagatable-p (x)
   (not (eq x '@@unpropagated)))
 
-(defun node-can-be-propagated (node env)
-  "Returns true if a given node should be const propagated to a callee.
-Currently only typeclass dictionaries will be propagated, although
-constant values could be."
+(defun dictionary-node-p (node env)
+  "Does NODE represent an instance dictionary?"
   (cond
     ((and
       (node-variable-p node)
@@ -122,6 +121,12 @@ constant values could be."
 
     (t
      nil)))
+
+(defun node-can-be-propagated (node env)
+  "Returns true if a given node should be const propagated to a callee.
+Currently only typeclass dictionaries will be propagated, although
+constant values could be."
+  (dictionary-node-p node env))
 
 (defstruct candidate-manager
   "A CANDIDATE-MANAGER is used to deduplicate COMPILE-CANDIDATE
