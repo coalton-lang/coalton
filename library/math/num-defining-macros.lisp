@@ -204,7 +204,7 @@
 
 
 ;;; Float Num instances.
-(cl:defmacro define-num-float (type lisp-type)
+(cl:defmacro define-num-float (type lisp-type plus-inf minus-inf)
   "Define `Num' for the float type TYPE."
 
   ;;
@@ -244,8 +244,8 @@
        (lisp ,type (x)
          (cl:or (cl:ignore-errors (cl:coerce x ',lisp-type))
                 (cl:if (cl:< x 0)
-                       (coalton (the ,type negative-infinity))
-                       (coalton (the ,type infinity))))))))
+                       ,minus-inf
+                       ,plus-inf))))))
 
 
 ;;; Utility to define type -> Fraction conversions.
