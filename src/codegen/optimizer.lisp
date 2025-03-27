@@ -210,16 +210,6 @@ arity. TABLE will be mutated with additional entries."
       (action (:before node-let) #'add-local-funs)
       (action (:before node-bind) #'add-bind-fun)))))
 
-;;; XXX HACK: This is a temporary hack (famous last words) to solve
-;;; #1390. This issue should be handled earlier.
-(defun %reset-let-node-type-by-subexpression! (node)
-  ;; This function overwrites a LET-NODE's type with its SUBEXPR's
-  ;; type.
-  (when (node-let-p node)
-    (setf (coalton-impl/codegen/ast::%node-type (node-let-subexpr node))
-          (node-type node)))
-  node)
-
 (defun optimize-bindings-initial (bindings package env)
   (declare (type binding-list bindings)
            (type package package)
@@ -228,10 +218,9 @@ arity. TABLE will be mutated with additional entries."
   (let ((hoister (make-hoister)))
     (append
      (loop :for (name . node) :in bindings
-           :collect (cons name (%reset-let-node-type-by-subexpression!
-                                (static-dict-lift
-                                 (optimize-node node env)
-                                 name hoister package env))))
+           :collect (cons name (static-dict-lift
+                                (optimize-node node env)
+                                name hoister package env)))
      (pop-final-hoist-point hoister))))
 
 (defun optimize-node (node env)
