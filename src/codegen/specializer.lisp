@@ -53,7 +53,7 @@
 
                    (when settings:*print-specialization-occurrences*
                      (format t
-                             "~&;; Specialized `~A` to `~A`~%"
+                             "~&;; Specializing ~S to ~S~%"
                              (tc:specialization-entry-from specialization)
                              (tc:specialization-entry-to specialization)))
                    (cond
