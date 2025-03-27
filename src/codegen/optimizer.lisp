@@ -223,6 +223,10 @@ arity. TABLE will be mutated with additional entries."
                                 name hoister package env)))
      (pop-final-hoist-point hoister))))
 
+(declaim (type (integer 0) *maximum-optimization-passes*))
+(defvar *maximum-optimization-passes* 4
+  "The maximum number of times the optimizer may re-optimize.")
+
 (defun optimize-node (node env)
   "Perform a series of optimizations on NODE in the environment
 ENV. Return a new node which is optimized."
@@ -249,7 +253,7 @@ ENV. Return a new node which is optimized."
          (inline-applications node env)
        (setf redo? (or redo? inlined?))
        (setf node new-node))
-     (when redo?
+     (when (and redo? (<= runs *maximum-optimization-passes*))
        (go :REDO)))
   ;; Return the node.
   node)
