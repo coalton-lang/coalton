@@ -51,6 +51,7 @@
       :perform-inlining                 ; [boolean] automatic inlining?
       :emit-type-annotations            ; [boolean] emit type annotations?
       :print-types                      ; [boolean] print types when compiling?
+      :print-rewrites                   ; [boolean] print rewriting that occurs (specialization/inlining)?
       )
     "Valid configuration keys that can be (SETF GET) on the user configuration variable :COALTON-CONFIG.")
 
@@ -129,11 +130,11 @@ or by pushing `:coalton-release' into `*features*'. Any of these must be done be
   "Print types of definitions to standard output on compile.")
 
 (declaim (type boolean *print-specialization-occurrences*))
-(defvar *print-specialization-occurrences* t
+(defvar *print-specialization-occurrences* (config ':print-rewrites :default nil)
   "Print out information when a specialization occurs.")
 
 (declaim (type boolean *print-inlining-occurrences*))
-(defvar *print-inlining-occurrences* t
+(defvar *print-inlining-occurrences* (config ':print-rewrites :default nil)
   "Print out information when an inline occurs.")
 
 (defvar *coalton-optimize* '(optimize (speed 3) (safety 0)))

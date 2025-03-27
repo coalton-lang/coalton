@@ -169,7 +169,7 @@ Return two values: the processed node and whether inlining happened."
                                (= (length (node-abstraction-vars code))
                                   (length (node-rands node))))))
                  (when settings:*print-inlining-occurrences*
-                   (format t "~&;; Inlining `~A`~%" name))
+                   (format t "~&;; Inlining ~S~%" name))
                  (return-from try-inline
                    (inline-abstraction-from-application
                     node code (lambda (body)
@@ -242,7 +242,7 @@ Return two values: the processed node, and whether inlining happened."
                        (when inline-method-name
                          (setf inline-happened? t)
                          (when settings:*print-inlining-occurrences*
-                           (format t "~&;; Inlining method `~A` -> `~A`~%" method-name inline-method-name))
+                           (format t "~&;; Inlining method ~S -> ~S~%" method-name inline-method-name))
                          (if (null rands_)
                              (make-node-variable
                               :type (node-type node)
@@ -278,7 +278,7 @@ Return two values: the processed node, and whether inlining happened."
                      (when inline-method-name
                        (setf inline-happened? t)
                        (when settings:*print-inlining-occurrences*
-                         (format t "~&;; Inlining method `~A` -> `~A`~%" method-name inline-method-name))
+                         (format t "~&;; Inlining method ~S -> ~S~%" method-name inline-method-name))
                        (if (null rands_)
                            (make-node-variable
                             :type (node-type node)
