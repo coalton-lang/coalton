@@ -106,8 +106,8 @@
 ;;; Float Num instances
 ;;;
 
-  (define-num-float Single-Float cl:single-float)
-  (define-num-float Double-Float cl:double-float)
+  (define-num-float Single-Float cl:single-float float-features:single-float-positive-infinity float-features:single-float-negative-infinity)
+  (define-num-float Double-Float cl:double-float float-features:double-float-positive-infinity float-features:double-float-negative-infinity)
 
 
 ;;;
