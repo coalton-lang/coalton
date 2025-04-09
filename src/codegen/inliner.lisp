@@ -105,7 +105,7 @@ Return two values: the processed node and whether inlining happened."
                (declare (type (or node-application node-direct-application) node)
                         (type node-abstraction                              abstraction)
                         (type function                                      process-body)
-                        (values node-let &optional))
+                        (values node-locally &optional))
                (loop
                  ;; (x1 ... xn)
                  :with vars := (node-abstraction-vars abstraction)
@@ -148,10 +148,13 @@ Return two values: the processed node and whether inlining happened."
                                     (node-type node)
                                     (node-type new-body))))
                             (return
-                              (make-node-let
+                              (make-node-locally
                                :type     (node-type node)
-                               :bindings bindings
-                               :subexpr  (tc:apply-substitution new-subs new-body))))))
+                               :inlinedp t
+                               :subexpr  (make-node-let
+                                          :type     (node-type node)
+                                          :bindings bindings
+                                          :subexpr  (tc:apply-substitution new-subs new-body)))))))
 
              (try-inline (node call-stack)
                "Attempt to perform an inlining of the application node NODE. The
@@ -159,7 +162,7 @@ Return two values: the processed node and whether inlining happened."
             far recursively by the inliner."
                (declare (type (or node-application node-direct-application) node)
                         (type parser:identifier-list                        call-stack)
-                        (values (or node-let node-application node-direct-application) &optional))
+                        (values (or node-locally node-let node-application node-direct-application) &optional))
                ;; There are multiple cases that can be inlined.
                ;;
                ;; Case #1: (f e1 ... en) where f is global, known, and arity n.
@@ -205,6 +208,11 @@ Return two values: the processed node and whether inlining happened."
        (traverse
         node
         (list
+         (action (:after node-locally)
+           (lambda (loc call-stack)
+             (declare (ignore loc call-stack))
+             (return-from heuristic-inline-applications
+               (values node nil))))
          (action (:after node-application) #'try-inline)
          (action (:after node-direct-application) #'try-inline)
          (make-traverse-let-action-skipping-cons-bindings))
