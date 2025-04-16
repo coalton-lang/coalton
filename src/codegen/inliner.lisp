@@ -91,7 +91,8 @@ Return two values: the processed node and whether inlining happened."
            (type (integer 0)          max-unroll)
            (type (or symbol function) heuristic)
            (values node boolean &optional))
-  (let ((inline-happened? nil))
+  (let ((inline-happened? nil)
+        (keep-inlining-p t))
     (labels ((inline-abstraction-from-application (node abstraction process-body)
                "If NODE is an abstraction (f e1 e2 ... en) and ABSTRACTION is a
               function (fn (x1 x2 ... xn) body), then produce a node which is
@@ -163,6 +164,9 @@ Return two values: the processed node and whether inlining happened."
                (declare (type (or node-application node-direct-application) node)
                         (type parser:identifier-list                        call-stack)
                         (values (or node-locally node-let node-application node-direct-application) &optional))
+               (unless keep-inlining-p
+                 (format t "~&;; Already inlined: ~S~%" (node-rator-name node))
+                 (return-from try-inline node))
                ;; There are multiple cases that can be inlined.
                ;;
                ;; Case #1: (f e1 ... en) where f is global, known, and arity n.
@@ -209,10 +213,10 @@ Return two values: the processed node and whether inlining happened."
         node
         (list
          (action (:after node-locally)
-           (lambda (loc call-stack)
-             (declare (ignore loc call-stack))
-             (return-from heuristic-inline-applications
-               (values node nil))))
+           (lambda (node call-stack)
+             (declare (ignore call-stack))
+             (setf keep-inlining-p nil)
+             node))
          (action (:after node-application) #'try-inline)
          (action (:after node-direct-application) #'try-inline)
          (make-traverse-let-action-skipping-cons-bindings))
@@ -227,9 +231,13 @@ If heuristic inlining is enabled, then a default inlining heuristic
 inlined.
 
 Return two values: the processed node, and whether inlining happened."
-  (if settings:*coalton-heuristic-inlining*
-      (heuristic-inline-applications node env :heuristic *inliner-heuristic*)
-      (heuristic-inline-applications node env :heuristic 'null-heuristic)))
+  (let ((result 
+          (if settings:*coalton-heuristic-inlining*
+              (heuristic-inline-applications node env :heuristic *inliner-heuristic*)
+              (heuristic-inline-applications node env :heuristic 'null-heuristic))))
+    ;; (coalton-dev:graph-nodes (list (cons :before node) (cons :after result)))
+    ;; (break)
+    (print result)))
 
 (defun inline-methods (node env)
   (declare (type node node)
