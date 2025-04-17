@@ -252,14 +252,9 @@ If heuristic inlining is enabled, then a default inlining heuristic
 inlined.
 
 Return two values: the processed node, and whether inlining happened."
-  (let ((result 
-          (if settings:*coalton-heuristic-inlining*
-              (heuristic-inline-applications node env :heuristic *inliner-heuristic*)
-              (heuristic-inline-applications node env :heuristic 'null-heuristic))))
-    ;; (coalton-dev:graph-nodes (list (cons :before node) (cons :after result)))
-    ;; (break)
-    ;; (print result)
-    result))
+  (if settings:*coalton-heuristic-inlining*
+      (heuristic-inline-applications node env :heuristic *inliner-heuristic*)
+      (heuristic-inline-applications node env :heuristic 'null-heuristic)))
 
 (defun inline-methods (node env)
   (declare (type node node)
