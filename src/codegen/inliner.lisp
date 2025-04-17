@@ -95,7 +95,12 @@ Return two values: the processed node and whether inlining happened."
            (values node boolean &optional))
   (let ((inline-happened? nil)
         (stop-inlining? nil))
-    (labels ((inline-abstraction-from-application (node abstraction process-body)
+    (labels ((make-locally-noinline (node)
+               (make-node-locally
+                :type (node-type node)
+                :inlinedp t
+                :subexpr node))
+             (inline-abstraction-from-application (node abstraction process-body)
                "If NODE is an abstraction (f e1 e2 ... en) and ABSTRACTION is a
               function (fn (x1 x2 ... xn) body), then produce a node which is
               something like
@@ -162,9 +167,9 @@ Return two values: the processed node and whether inlining happened."
             far recursively by the inliner."
                (declare (type (or node-application node-direct-application) node)
                         (type parser:identifier-list                        call-stack)
-                        (values (or node-let node-application node-direct-application) &optional))
+                        (values (or node-locally node-let node-application node-direct-application) &optional))
                (when stop-inlining?
-                 (format t "Skipping inline: ~a~%" node)
+                 (format t "Skipping inline: ~a~%" (node-rator-name node))
                  (return-from try-inline node))
                ;; There are multiple cases that can be inlined.
                ;;
@@ -175,12 +180,13 @@ Return two values: the processed node and whether inlining happened."
                  (format t "~&;; Attempting to inline ~S~%" name)
                  (unless not-unrolled?
                    (format t "~&;; Fully unrolled while inlining ~S~%" name)
-                   (setf stop-inlining? t))
+                   (setf stop-inlining? t)
+                   (return-from try-inline (make-locally-noinline node)))
                  (when (and code
-                            (print (or (node-locally-p code) (node-abstraction-p code)))
-                            (print (or (alexandria:when-let (fun-env-entry (tc:lookup-function env name :no-error t))
-                                        (tc:function-env-entry-inline-p fun-env-entry))
-                                      (funcall heuristic code)))
+                            (node-abstraction-p code)
+                            (or (alexandria:when-let (fun-env-entry (tc:lookup-function env name :no-error t))
+                                  (tc:function-env-entry-inline-p fun-env-entry))
+                                (funcall heuristic code))
                             (<= (length call-stack)
                                 max-depth)
                             (= (length (node-abstraction-vars code))
@@ -222,20 +228,16 @@ Return two values: the processed node and whether inlining happened."
              ;;     (setf stop-inlining? t))
              ;;   node)
              )
-      (let ((result (traverse
-                     node
-                     (list
-                      ;;(action (:after node-locally) #'break-if-not-allowed)
-                      (action (:after node-application) #'try-inline)
-                      (action (:after node-direct-application) #'try-inline)
-                      (make-traverse-let-action-skipping-cons-bindings))
-                     nil)))
-        (values
-         (make-node-locally
-          :type (node-type result)
-          :inlinedp t
-          :subexpr result)
-         inline-happened?)))))
+      (values
+       (traverse
+        node
+        (list
+         ;;(action (:after node-locally) #'break-if-not-allowed)
+         (action (:after node-application) #'try-inline)
+         (action (:after node-direct-application) #'try-inline)
+         (make-traverse-let-action-skipping-cons-bindings))
+        nil)
+       inline-happened?))))
 
 (defun inline-applications (node env)
   "Perform inlining on NODE in the environment ENV.
