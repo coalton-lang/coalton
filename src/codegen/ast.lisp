@@ -49,6 +49,7 @@
    #:node-lisp-form                     ; READER
    #:node-locally                       ; STRUCT
    #:make-node-locally                  ; CONSTRUCTOR
+   #:node-locally-p                     ; FUNCTION
    #:node-locally-inlinedp              ; READER
    #:node-locally-subexpr               ; READER
    #:match-branch                       ; STRUCT
