@@ -168,7 +168,9 @@ Return two values: the processed node and whether inlining happened."
                         (type parser:identifier-list                        call-stack)
                         (values (or node-locally node-let node-application node-direct-application) &optional))
                (when stop-inlining?
-                 (format t "~&;; Skipping inline: ~a~%" (node-rator-name node))
+                 ;; TODO: Remove?
+                 (when settings:*print-inlining-occurrences*  
+                   (format t "~&;; Skipping inline: ~a~%" (node-rator-name node)))
                  (return-from try-inline node))
                ;; There are multiple cases that can be inlined.
                ;;
@@ -176,9 +178,13 @@ Return two values: the processed node and whether inlining happened."
                (let* ((name (node-rator-name node))
                       (code (tc:lookup-code env name :no-error t))
                       (not-unrolled? (<= (count name call-stack) max-unroll)))
-                 (format t "~&;; Attempting to inline ~S~%" name)
+                 ;; TODO: Remove?
+                 (when settings:*print-inlining-occurrences* 
+                   (format t "~&;; Attempting to inline ~S~%" name))
                  (unless not-unrolled?
-                   (format t "~&;; Fully unrolled while inlining ~S~%" name)
+                   ;; TODO: Remove?
+                   (when settings:*print-inlining-occurrences* 
+                     (format t "~&;; Fully unrolled while inlining ~S~%" name))
                    (setf stop-inlining? t)
                    (return-from try-inline (make-locally-noinline node)))
                  (when (and code
@@ -215,17 +221,18 @@ Return two values: the processed node and whether inlining happened."
                                     (funcall *traverse* body call-stack)))))))
 
                ;; Inlining did not satisfy heuristics or was inapplicable.
-               (format t "~&;; Could not inline ~S~%" (node-rator-name node))
+               ;; TODO: Remove?
+               (when settings:*print-inlining-occurrences* 
+                 (format t "~&;; Could not inline ~S~%" (node-rator-name node)))
                (return-from try-inline node))
              (break-if-not-allowed (node call-stack)
                (declare (ignore call-stack))
-               ;; (format t "NODE: ~a" node)
-               ;; (force-output t)
                (when (node-locally-noinline-applications-p node)
-                 (format t "~&;; Previously fully unrolled while inlining~%")
+                 ;; TODO: Remove?
+                 (when settings:*print-inlining-occurrences* 
+                   (format t "~&;; Previously fully unrolled while inlining~%"))
                  (setf stop-inlining? t))
-               node)
-             )
+               node))
       (values
        (traverse
         node
