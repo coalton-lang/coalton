@@ -253,6 +253,10 @@ ENV. Return a new node which is optimized."
          (inline-applications node env)
        (setf redo? (or redo? inlined?))
        (setf node new-node))
+     (multiple-value-bind (new-node inlined?)
+         (inline-applications node env)
+       (setf redo? (or redo? inlined?))
+       (setf node new-node))
      (when (and redo? (<= runs *maximum-optimization-passes*))
        (go :REDO)))
   ;; Return the node.

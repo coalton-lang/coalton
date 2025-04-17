@@ -40,12 +40,10 @@
 
 (defun gentle-heuristic (node)
   "This will probably inline more than is optimal."
-  (if (node-locally-p node)
-      (gentle-heuristic (node-locally-subexpr node))
-      (and (<= (count-applications node)
-               4)
-           (<= (count-nodes node)
-               8))))
+  (and (<= (count-applications node)
+           4)
+       (<= (count-nodes node)
+           8)))
 
 (defun aggressive-heuristic (node)
   "This will probably inline more than is optimal."
@@ -98,7 +96,8 @@ Return two values: the processed node and whether inlining happened."
     (labels ((make-locally-noinline (node)
                (make-node-locally
                 :type (node-type node)
-                :inlinedp t
+                :noinline-applications-p t
+                :noinline-methods-p nil
                 :subexpr node))
              (inline-abstraction-from-application (node abstraction process-body)
                "If NODE is an abstraction (f e1 e2 ... en) and ABSTRACTION is a
@@ -169,7 +168,7 @@ Return two values: the processed node and whether inlining happened."
                         (type parser:identifier-list                        call-stack)
                         (values (or node-locally node-let node-application node-direct-application) &optional))
                (when stop-inlining?
-                 (format t "Skipping inline: ~a~%" (node-rator-name node))
+                 (format t "~&;; Skipping inline: ~a~%" (node-rator-name node))
                  (return-from try-inline node))
                ;; There are multiple cases that can be inlined.
                ;;
@@ -218,21 +217,20 @@ Return two values: the processed node and whether inlining happened."
                ;; Inlining did not satisfy heuristics or was inapplicable.
                (format t "~&;; Could not inline ~S~%" (node-rator-name node))
                (return-from try-inline node))
-             ;; (break-if-not-allowed (node call-stack)
-             ;;   (declare (ignore call-stack))
-             ;;   (format t "NODE: ~a" node)
-             ;;   (force-output t)
-             ;;   (when (node-locally-inlinedp node)
-             ;;     (format t "~&;; Previously fully unrolled while inlining ~S~%"
-             ;;             (node-rator-name node))
-             ;;     (setf stop-inlining? t))
-             ;;   node)
+             (break-if-not-allowed (node call-stack)
+               (declare (ignore call-stack))
+               ;; (format t "NODE: ~a" node)
+               ;; (force-output t)
+               (when (node-locally-noinline-applications-p node)
+                 (format t "~&;; Previously fully unrolled while inlining~%")
+                 (setf stop-inlining? t))
+               node)
              )
       (values
        (traverse
         node
         (list
-         ;;(action (:after node-locally) #'break-if-not-allowed)
+         (action (:after node-locally) #'break-if-not-allowed)
          (action (:after node-application) #'try-inline)
          (action (:after node-direct-application) #'try-inline)
          (make-traverse-let-action-skipping-cons-bindings))
