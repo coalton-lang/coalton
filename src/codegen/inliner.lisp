@@ -112,48 +112,49 @@
      :subexpr  (tc:apply-substitution new-substitutions new-code))))
 
 (defun inline-application (node env stack noinline-functions)
-  (declare (type (or ast:node-application ast:node-direct-application) node))
-  (let ((name (ast:node-rator-name node)))
-    (debug! "TIA:  ~a ~a" stack name)
-    (debug! "Can't inline: ~a" noinline-functions)
-    (cond
-      ((find name noinline-functions)
-       (debug! ";; Locally noinline reached ~a" name)
-       node)
-      ((unrolledp node stack)
-       (debug! ";; Fully unrolled ~a" name)
-       (ast:make-node-locally
-        :type (ast:node-type node)
-        :noinline-functions (list name)
-        :subexpr node))
-      ((max-depth-p stack)
-       (debug! ";; Max depth reached ~a" name)
-       node)
-      ((and (fully-applied-p node (lookup-code-global node env))
-            (or (heuristic-inline-p (lookup-code-global node env))
-                (inlinable-function-p name env)))
-       ;; Case #1: (f e1 ... en) where f is global, known, and arity n.
-       (debug! ";; Inlining globally known function ~a" name)
-       (push name *functions-inlined*)
-       (inline-applications*
-        (inline-code-from-application node (lookup-code-global node env))
-        env
-        stack
-        noinline-functions))
-      ((and (ast:node-application-p node)
-            (heuristic-inline-p (lookup-code-anonymous node))
-            (fully-applied-p node (lookup-code-anonymous node)))
-       ;; Case #2: ((fn (x1 ... xn) ...) e1 ... en)
-       (debug! ";; Inlining anonymous function ~a" name)
-       (push name *functions-inlined*)
-       (inline-applications*
-        (inline-code-from-application node (lookup-code-anonymous node))
-        env
-        stack
-        noinline-functions))
-      (t
-       (debug! ";; Failed to inline ~a" name)
-       node))))
+  (declare (type (or ast:node-variable ast:node-application ast:node-direct-application) node))
+  (unless (typep node 'ast:node-variable) 
+    (let ((name (ast:node-rator-name node)))
+      (debug! "TIA:  ~a ~a" stack name)
+      (debug! "Can't inline: ~a" noinline-functions)
+      (cond
+        ((find name noinline-functions)
+         (debug! ";; Locally noinline reached ~a" name)
+         node)
+        ((unrolledp node stack)
+         (debug! ";; Fully unrolled ~a" name)
+         (ast:make-node-locally
+          :type (ast:node-type node)
+          :noinline-functions (list name)
+          :subexpr node))
+        ((max-depth-p stack)
+         (debug! ";; Max depth reached ~a" name)
+         node)
+        ((and (fully-applied-p node (lookup-code-global node env))
+              (or (heuristic-inline-p (lookup-code-global node env))
+                  (inlinable-function-p name env)))
+         ;; Case #1: (f e1 ... en) where f is global, known, and arity n.
+         (debug! ";; Inlining globally known function ~a" name)
+         (push name *functions-inlined*)
+         (inline-applications*
+          (inline-code-from-application node (lookup-code-global node env))
+          env
+          stack
+          noinline-functions))
+        ((and (ast:node-application-p node)
+              (heuristic-inline-p (lookup-code-anonymous node))
+              (fully-applied-p node (lookup-code-anonymous node)))
+         ;; Case #2: ((fn (x1 ... xn) ...) e1 ... en)
+         (debug! ";; Inlining anonymous function ~a" name)
+         (push name *functions-inlined*)
+         (inline-applications*
+          (inline-code-from-application node (lookup-code-anonymous node))
+          env
+          stack
+          noinline-functions))
+        (t
+         (debug! ";; Failed to inline ~a" name)
+         node)))))
 
 (defun extract-dict (rands)
   (cond
@@ -241,7 +242,6 @@
                 (pop noinline-functions)))
       node)
     (traverse:action (:after ast:node-application node)
-
       (debug! "Leaving: ~a" (ast:node-rator-name node))
       (let ((node (inline-method node env)))
         (prog1 (inline-application node env stack noinline-functions)
