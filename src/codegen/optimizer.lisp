@@ -48,8 +48,7 @@
    #:canonicalize)
   (:import-from
    #:coalton-impl/codegen/inliner
-   #:inline-applications
-   #:inline-methods)
+   #:inline-applications)
   (:import-from
    #:coalton-impl/codegen/specializer
    #:apply-specializations)
@@ -245,18 +244,10 @@ ENV. Return a new node which is optimized."
      (setf node (propagate-constants node env))
      (setf node (apply-specializations node env))
      (setf node (resolve-static-superclass node env))
-     (multiple-value-bind (new-node inlined?)
-         (inline-applications node env)
+     (multiple-value-bind (new-node inlined?) (inline-applications node env)
        (setf redo? (or redo? inlined?))
        (setf node new-node))
-     (multiple-value-bind (new-node inlined?)
-         (inline-methods node env)
-       (setf redo? (or redo? inlined?))
-       (setf node new-node))
-     (multiple-value-bind (new-node inlined?)
-         (inline-applications node env)
-       (setf redo? (or redo? inlined?))
-       (setf node new-node))
+
      (when (and redo? (<= runs *maximum-optimization-passes*))
        (go :REDO)))
   ;; Return the node.
