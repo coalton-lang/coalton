@@ -105,6 +105,7 @@ USE-FUNCTION-ENTRIES specifies whether to emit FUNCTION-ENTRY for functions, emi
                 (typep to 'tyvar)
                 ;; (LispArray (Complex :t))
                 (and (typep to 'tapp)
+                     (typep (tapp-from to) 'tycon)
                      (complex-tycon-p (tycon-name (tapp-from to)))
                      (typep (tapp-to to) 'tyvar)))
                `(cl:simple-array cl:* (cl:*)))
