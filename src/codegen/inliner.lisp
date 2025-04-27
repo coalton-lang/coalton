@@ -25,6 +25,8 @@
 (defparameter *inliner-max-depth*  16)
 (defparameter *inliner-heuristic*  'gentle-heuristic)
 
+(defparameter *skip-method-inlining* nil)
+
 (defvar *functions-inlined*)
 
 (defun null-heuristic (node)
@@ -219,55 +221,71 @@ and user-supplied declarations to determine if it is appropriate."
      (values nil nil))))
 
 (defun inline-method (node env)
-  (let ((rator (ast:node-application-rator node))
-        (rands (ast:node-application-rands node)))
-    (multiple-value-bind (dict inner-rands) (extract-dict rands)
-      (when (and dict (ast:node-variable-p rator))
-        (let ((method-name (tc:lookup-method-inline env (ast:node-variable-value rator) dict :no-error t)))
-          (cond
-            ((null method-name)
-             nil)
-            ((null inner-rands)
-             (debug! "Inlining method to variable ~a" method-name)
-             (ast:make-node-variable
-              :type (ast:node-type node)
-              :value method-name))
-            (t
-             (debug! "Inlining method to application ~a" method-name)
-             (ast:make-node-application
-              :type (ast:node-type node)
-              :rator (ast:make-node-variable
-                      :type (tc:make-function-type*
-                             (mapcar #'ast:node-type inner-rands)
-                             (ast:node-type node))
-                      :value method-name)
-              :rands inner-rands))))))))
+  (declare (type (or ast:node-application ast:node-direct-application) node)
+    (type tc:environment env)
+    (values (or null ast:node-variable ast:node-application)))
+
+  (unless *skip-method-inlining*
+    (let ((rator (ast:node-application-rator node))
+          (rands (ast:node-application-rands node)))
+      (multiple-value-bind (dict inner-rands) (extract-dict rands)
+        (when (and dict (ast:node-variable-p rator))
+          (let ((method-name (tc:lookup-method-inline env (ast:node-variable-value rator) dict :no-error t)))
+            (cond
+              ((null method-name)
+               nil)
+              ((null inner-rands)
+               (debug! "Inlining method to variable ~a" method-name)
+               (ast:make-node-variable
+                :type (ast:node-type node)
+                :value method-name))
+              (t
+               (debug! "Inlining method to application ~a" method-name)
+               (ast:make-node-application
+                :type (ast:node-type node)
+                :rator (ast:make-node-variable
+                        :type (tc:make-function-type*
+                               (mapcar #'ast:node-type inner-rands)
+                               (ast:node-type node))
+                        :value method-name)
+                :rands inner-rands)))))))))
 
 (defun inline-direct-method (node env)
-  (let ((rands (ast:node-direct-application-rands node)))
-    (multiple-value-bind (dict inner-rands) (extract-dict rands)
-      (when dict
-        (let ((method-name (tc:lookup-method-inline env (ast:node-direct-application-rator node) dict :no-error t)))
-          (cond
-            ((null method-name)
-             nil)
-            ((null inner-rands)
-             (debug! "Inlining direct method to variable ~a" method-name)
-             (ast:make-node-variable
-              :type (ast:node-type node)
-              :value method-name))
-            (t
-             (debug! "Inlining direct method to application ~a" method-name)
-             (ast:make-node-application
-              :type (ast:node-type node)
-              :rator (ast:make-node-variable
-                      :type (tc:make-function-type*
-                             (mapcar #'ast:node-type inner-rands)
-                             (ast:node-type node))
-                      :value method-name)
-              :rands inner-rands))))))))
+  (declare (type (or ast:node-application ast:node-direct-application) node)
+    (type tc:environment env)
+    (values (or null ast:node-variable ast:node-application)))
+
+  (unless *skip-method-inlining*
+    (let ((rands (ast:node-direct-application-rands node)))
+      (multiple-value-bind (dict inner-rands) (extract-dict rands)
+        (when dict
+          (let ((method-name (tc:lookup-method-inline env (ast:node-direct-application-rator node) dict :no-error t)))
+            (cond
+              ((null method-name)
+               nil)
+              ((null inner-rands)
+               (debug! "Inlining direct method to variable ~a" method-name)
+               (ast:make-node-variable
+                :type (ast:node-type node)
+                :value method-name))
+              (t
+               (debug! "Inlining direct method to application ~a" method-name)
+               (ast:make-node-application
+                :type (ast:node-type node)
+                :rator (ast:make-node-variable
+                        :type (tc:make-function-type*
+                               (mapcar #'ast:node-type inner-rands)
+                               (ast:node-type node))
+                        :value method-name)
+                :rands inner-rands)))))))))
 
 (defun inline-applications* (node env stack noinline-functions)
+  (declare (type ast:node node)
+    (type tc:environment env)
+    (type list stack)
+    (type list noinline-functions)
+    (values ast:node))
+
   (traverse:traverse
    node
    (list
@@ -296,8 +314,12 @@ and user-supplied declarations to determine if it is appropriate."
         (pop stack))))))
 
 (defun inline-applications (node env)
-  ;; (debug! "INLINING: ~a" node)
+  "Traverse node, inlining methods, functions, and lambdas where possible."
+  (declare (type ast:node node)
+    (type tc:environment env))
+
+  (debug! "INLINING: ~a" node)
   (let ((*functions-inlined* ()))
     (values
-     (inline-applications* node env () ())
+     (inline-applications* node env () '(coalton:cons))
      *functions-inlined*)))
