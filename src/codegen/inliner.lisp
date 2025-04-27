@@ -21,13 +21,23 @@
 
 (in-package #:coalton-impl/codegen/inliner)
 
-(defparameter *inliner-max-unroll* 2)
+(defparameter *inliner-max-unroll* 4)
 (defparameter *inliner-max-depth*  16)
 (defparameter *inliner-heuristic*  'gentle-heuristic)
 
-(defparameter *skip-method-inlining* nil)
+(defparameter *inline-methods-p* t)
+(defparameter *inline-globals-p* t)
+(defparameter *inline-lambdas-p* t)
 
 (defvar *functions-inlined*)
+
+(defun debug! (fmt &rest args)
+  "Convenience function to print debug when `settigns:*print-inlining-occurences*' is enabled."
+  (when settings:*print-inlining-occurrences*
+    (apply #'format t (uiop:strcat "~&" fmt) args)
+    (force-output t)))
+
+;;; Heuristics
 
 (defun null-heuristic (node)
   "An inlining heuristic that doesn't inline."
@@ -56,11 +66,7 @@
   (when node
     (funcall *inliner-heuristic* node)))
 
-(defun debug! (fmt &rest args)
-  "Convenience function to print debug when `settigns:*print-inlining-occurences*' is enabled."
-  (when settings:*print-inlining-occurrences*
-    (apply #'format t (uiop:strcat "~&" fmt) args)
-    (force-output t)))
+;; Utilities
 
 (defun unrolledp (node stack)
   "Determine if the inliner has fully unrolled a recursive call."
@@ -115,6 +121,8 @@
     (= (length (ast:node-abstraction-vars code))
        (length (ast:node-rands node)))))
 
+;;; Inlining
+
 (defun inline-code-from-application (node code)
   "Swap an application node with a let node where the body is the inlined function."
   (declare (type (or ast:node-application ast:node-direct-application) node)
@@ -153,7 +161,8 @@
 (defun inline-application (node env stack noinline-functions)
   "Try to inline an application, checking traversal stack, heuristics,
 and user-supplied declarations to determine if it is appropriate."
-  (declare (type (or ast:node-application ast:node-direct-application) node))
+  (declare (type (or ast:node-application ast:node-direct-application) node)
+    (values ast:node))
 
   (let ((name (ast:node-rator-name node)))
     (debug! "TIA:  ~a ~a" stack name)
@@ -175,7 +184,8 @@ and user-supplied declarations to determine if it is appropriate."
        node)
 
       ;; Case #1: (f e1 ... en) where f is global, known, and arity n.
-      ((and (fully-applied-p node (lookup-code-global node env))
+      ((and *inline-globals-p*
+            (fully-applied-p node (lookup-code-global node env))
             (or (heuristic-inline-p (lookup-code-global node env))
                 (inlinable-function-p name env)))
        (debug! ";; Inlining globally known function ~a" name)
@@ -187,7 +197,8 @@ and user-supplied declarations to determine if it is appropriate."
         noinline-functions))
 
       ;; Case #2: ((fn (x1 ... xn) ...) e1 ... en)
-      ((and (ast:node-application-p node)
+      ((and *inline-lambdas-p*
+            (ast:node-application-p node)
             (heuristic-inline-p (lookup-code-anonymous node))
             (fully-applied-p node (lookup-code-anonymous node)))
        (debug! ";; Inlining anonymous function ~a" name)
@@ -225,7 +236,7 @@ and user-supplied declarations to determine if it is appropriate."
     (type tc:environment env)
     (values (or null ast:node-variable ast:node-application)))
 
-  (unless *skip-method-inlining*
+  (when *inline-methods-p*
     (let ((rator (ast:node-application-rator node))
           (rands (ast:node-application-rands node)))
       (multiple-value-bind (dict inner-rands) (extract-dict rands)
@@ -234,11 +245,13 @@ and user-supplied declarations to determine if it is appropriate."
             (cond
               ((null method-name)
                nil)
+
               ((null inner-rands)
                (debug! "Inlining method to variable ~a" method-name)
                (ast:make-node-variable
                 :type (ast:node-type node)
                 :value method-name))
+
               (t
                (debug! "Inlining method to application ~a" method-name)
                (ast:make-node-application
@@ -255,7 +268,7 @@ and user-supplied declarations to determine if it is appropriate."
     (type tc:environment env)
     (values (or null ast:node-variable ast:node-application)))
 
-  (unless *skip-method-inlining*
+  (when *inline-methods-p*
     (let ((rands (ast:node-direct-application-rands node)))
       (multiple-value-bind (dict inner-rands) (extract-dict rands)
         (when dict
@@ -263,11 +276,13 @@ and user-supplied declarations to determine if it is appropriate."
             (cond
               ((null method-name)
                nil)
+
               ((null inner-rands)
                (debug! "Inlining direct method to variable ~a" method-name)
                (ast:make-node-variable
                 :type (ast:node-type node)
                 :value method-name))
+
               (t
                (debug! "Inlining direct method to application ~a" method-name)
                (ast:make-node-application
@@ -305,12 +320,18 @@ and user-supplied declarations to determine if it is appropriate."
         (pop noinline-functions))
       node)
     (traverse:action (:after ast:node-application node)
-      (prog1 (or (inline-method node env)
-                 (inline-application node env stack noinline-functions))
+      (prog1
+          (inline-application node env stack noinline-functions)
+        node
+        (or (inline-method node env)
+            (inline-application node env stack noinline-functions))
         (pop stack)))
     (traverse:action (:after ast:node-direct-application node)
-      (prog1 (or (inline-direct-method node env)
-                 (inline-application node env stack noinline-functions))
+      (prog1
+          (inline-application node env stack noinline-functions)
+        node
+        (or (inline-direct-method node env)
+            (inline-application node env stack noinline-functions))
         (pop stack))))))
 
 (defun inline-applications (node env)
@@ -318,7 +339,7 @@ and user-supplied declarations to determine if it is appropriate."
   (declare (type ast:node node)
     (type tc:environment env))
 
-  (debug! "INLINING: ~a" node)
+  ;; (debug! "INLINING: ~a" node)
   (let ((*functions-inlined* ()))
     (values
      (inline-applications* node env () '(coalton:cons))
