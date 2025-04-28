@@ -33,16 +33,22 @@ even if the user didn't explicity declare it to be.")
 
 ;; Private Settings for Debugging
 
-(defparameter *inline-methods-p* t)
-(defparameter *inline-globals-p* t)
-(defparameter *inline-lambdas-p* t)
+(defvar *inline-methods-p* t)
+(defvar *inline-globals-p* t)
+(defvar *inline-lambdas-p* t)
 
-(defvar *functions-inlined*)
+;; Dynamic Variable
+
+(defvar *functions-inlined*
+  "Any functions or methods that are inlined have their names pushed to this.
+Then it is returned from `inline-applications' to tell the optimizer if it needs
+to rerun optimizations.")
 
 (defun debug! (fmt &rest args)
   "Convenience function to print debug when `settigns:*print-inlining-occurences*' is enabled."
   (when settings:*print-inlining-occurrences*
-    (apply #'format t (uiop:strcat "~&" fmt) args)))
+    (fresh-line)
+    (apply #'format t fmt args)))
 
 ;;; Heuristics
 
@@ -68,7 +74,7 @@ even if the user didn't explicity declare it to be.")
 (defun heuristic-inline-p (node)
   "Determine if the node should be inlined based on heuristics."
   (declare (type (or null ast:node-abstraction) node)
-    (values boolean))
+           (values boolean &optional))
 
   (and node (funcall *inliner-heuristic* node)))
 
@@ -77,8 +83,8 @@ even if the user didn't explicity declare it to be.")
 (defun unrolledp (node stack)
   "Determine if the inliner has fully unrolled a recursive call."
   (declare (type (or ast:node-application ast:node-direct-application) node)
-    (type list stack)
-    (values boolean))
+           (type list stack)
+           (values boolean &optional))
 
   (a:when-let ((name (ast:node-rator-name node)))
     (<= *inliner-max-unroll* (count name stack))))
@@ -86,14 +92,14 @@ even if the user didn't explicity declare it to be.")
 (defun max-depth-p (stack)
   "Determine if the inliner is at its maximum depth, by default this is 16."
   (declare (type list stack)
-    (values boolean))
+           (values boolean &optional))
 
   (<= *inliner-max-depth* (length stack)))
 
 (defun lookup-code-global (node env)
-  "Try to lookup the code of an globally known function, returns null or abstraction."
+  "Try to lookup the code of a globally known function, returns null or abstraction."
   (declare (type ast:node node)
-    (values (or null ast:node-abstraction)))
+           (values (or null ast:node-abstraction) &optional))
 
   (let ((code (tc:lookup-code env (ast:node-rator-name node) :no-error t)))
     (and (ast:node-abstraction-p code) code)))
@@ -101,7 +107,7 @@ even if the user didn't explicity declare it to be.")
 (defun lookup-code-anonymous (node)
   "Try to lookup the code of an anonymous application, returns null or abstraction."
   (declare (type ast:node node)
-    (values (or null ast:node-abstraction)))
+           (values (or null ast:node-abstraction) &optional))
 
   (let ((code (ast:node-application-rator node)))
     (and (ast:node-abstraction-p code) code)))
@@ -109,8 +115,8 @@ even if the user didn't explicity declare it to be.")
 (defun inlinable-function-p (name env)
   "Check if a function is declared inlinable at its definition."
   (declare (type symbol name)
-    (type tc:environment env)
-    (values boolean))
+           (type tc:environment env)
+           (values boolean &optional))
 
   (a:when-let ((entry (tc:lookup-function env name :no-error t)))
     (tc:function-env-entry-inline-p entry)))
@@ -118,8 +124,8 @@ even if the user didn't explicity declare it to be.")
 (defun fully-applied-p (node code)
   "Check if an an application node constitutes a fully applied abstraction."
   (declare (type (or ast:node-application ast:node-direct-application) node)
-    (type (or null ast:node-abstraction) code)
-    (values boolean))
+           (type (or null ast:node-abstraction) code)
+           (values boolean &optional))
 
   (and code
        (= (length (ast:node-abstraction-vars code))
@@ -130,8 +136,8 @@ even if the user didn't explicity declare it to be.")
 (defun inline-code-from-application (node code)
   "Swap an application node with a let node where the body is the inlined function."
   (declare (type (or ast:node-application ast:node-direct-application) node)
-    (type ast:node-abstraction code)
-    (values ast:node-let))
+           (type ast:node-abstraction code)
+           (values ast:node-let &optional))
 
   (let* ((bindings
            (mapcar (lambda (var val)
@@ -166,7 +172,7 @@ even if the user didn't explicity declare it to be.")
   "Try to inline an application, checking traversal stack, heuristics,
 and user-supplied declarations to determine if it is appropriate."
   (declare (type (or ast:node-application ast:node-direct-application) node)
-    (values ast:node))
+           (values ast:node &optional))
 
   (let ((name (ast:node-rator-name node)))
     (cond
@@ -217,7 +223,7 @@ and user-supplied declarations to determine if it is appropriate."
 
 (defun extract-dict (rands)
   (declare (type ast:node-list rands)
-    (values (or null parser:identifier) ast:node-list))
+           (values (or null parser:identifier) ast:node-list))
 
   (cond
     ((ast:node-variable-p (first rands))
@@ -235,8 +241,8 @@ and user-supplied declarations to determine if it is appropriate."
 
 (defun inline-method (node env)
   (declare (type (or ast:node-application ast:node-direct-application) node)
-    (type tc:environment env)
-    (values ast:node))
+           (type tc:environment env)
+           (values ast:node &optional))
 
   (unless *inline-methods-p*
     (return-from inline-method
@@ -273,8 +279,8 @@ and user-supplied declarations to determine if it is appropriate."
 
 (defun inline-direct-method (node env)
   (declare (type (or ast:node-application ast:node-direct-application) node)
-    (type tc:environment env)
-    (values ast:node))
+           (type tc:environment env)
+           (values ast:node &optional))
 
   (unless *inline-methods-p*
     (return-from inline-direct-method
@@ -310,10 +316,10 @@ and user-supplied declarations to determine if it is appropriate."
 
 (defun inline-applications* (node env stack noinline-functions)
   (declare (type ast:node node)
-    (type tc:environment env)
-    (type list stack)
-    (type list noinline-functions)
-    (values ast:node))
+           (type tc:environment env)
+           (type list stack)
+           (type list noinline-functions)
+           (values ast:node &optional))
 
   (traverse:traverse
    node
@@ -353,7 +359,7 @@ and user-supplied declarations to determine if it is appropriate."
 (defun inline-applications (node env)
   "Traverse node, inlining methods, functions, and lambdas where possible."
   (declare (type ast:node node)
-    (type tc:environment env))
+           (type tc:environment env))
 
   (let ((*functions-inlined* ()))
     (values
