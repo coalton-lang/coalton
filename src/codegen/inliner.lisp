@@ -33,9 +33,12 @@ even if the user didn't explicity declare it to be.")
 
 ;; Private Settings for Debugging
 
-(defvar *inline-methods-p* t)
-(defvar *inline-globals-p* t)
-(defvar *inline-lambdas-p* t)
+(defvar *inline-methods-p* t
+  "Allow inlining of methods.")
+(defvar *inline-globals-p* t
+  "Allow inlining of known global functions.")
+(defvar *inline-lambdas-p* t
+  "Allow inlining of lambdas.")
 
 ;; Dynamic Variable
 
