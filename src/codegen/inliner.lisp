@@ -261,14 +261,14 @@ and user-supplied declarations to determine if it is appropriate."
                node)
 
               ((null inner-rands)
-               (debug! "Inlining method to variable ~a" method-name)
+               (debug! ";; Inlining method to variable ~a" method-name)
                (push method-name *functions-inlined*)
                (ast:make-node-variable
                 :type (ast:node-type node)
                 :value method-name))
 
               (t
-               (debug! "Inlining method to application ~a" method-name)
+               (debug! ";; Inlining method to application ~a" method-name)
                (push method-name *functions-inlined*)
                (ast:make-node-application
                 :type (ast:node-type node)
@@ -298,14 +298,14 @@ and user-supplied declarations to determine if it is appropriate."
                node)
 
               ((null inner-rands)
-               (debug! "Inlining direct method to variable ~a" method-name)
+               (debug! ";; Inlining direct method to variable ~a" method-name)
                (push method-name *functions-inlined*)
                (ast:make-node-variable
                 :type (ast:node-type node)
                 :value method-name))
 
               (t
-               (debug! "Inlining direct method to application ~a" method-name)
+               (debug! ";; Inlining direct method to application ~a" method-name)
                (push method-name *functions-inlined*)
                (ast:make-node-application
                 :type (ast:node-type node)
