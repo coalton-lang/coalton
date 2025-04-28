@@ -165,8 +165,6 @@ and user-supplied declarations to determine if it is appropriate."
     (values ast:node))
 
   (let ((name (ast:node-rator-name node)))
-    (debug! "TIA:  ~a ~a" stack name)
-    (debug! "Can't inline: ~a" noinline-functions)
     (cond
       ((find name noinline-functions)
        (debug! ";; Locally noinline reached ~a" name)
@@ -234,26 +232,31 @@ and user-supplied declarations to determine if it is appropriate."
 (defun inline-method (node env)
   (declare (type (or ast:node-application ast:node-direct-application) node)
     (type tc:environment env)
-    (values (or null ast:node-variable ast:node-application)))
+    (values (or null ast:node)))
 
-  (when *inline-methods-p*
-    (let ((rator (ast:node-application-rator node))
-          (rands (ast:node-application-rands node)))
-      (multiple-value-bind (dict inner-rands) (extract-dict rands)
-        (when (and dict (ast:node-variable-p rator))
+  (unless *inline-methods-p*
+    (return-from inline-method
+      node))
+
+  (let ((rator (ast:node-application-rator node))
+        (rands (ast:node-application-rands node)))
+    (multiple-value-bind (dict inner-rands) (extract-dict rands)
+      (if (and dict (ast:node-variable-p rator))
           (let ((method-name (tc:lookup-method-inline env (ast:node-variable-value rator) dict :no-error t)))
             (cond
               ((null method-name)
-               nil)
+               node)
 
               ((null inner-rands)
                (debug! "Inlining method to variable ~a" method-name)
+               (push method-name *functions-inlined*)
                (ast:make-node-variable
                 :type (ast:node-type node)
                 :value method-name))
 
               (t
                (debug! "Inlining method to application ~a" method-name)
+               (push method-name *functions-inlined*)
                (ast:make-node-application
                 :type (ast:node-type node)
                 :rator (ast:make-node-variable
@@ -261,30 +264,36 @@ and user-supplied declarations to determine if it is appropriate."
                                (mapcar #'ast:node-type inner-rands)
                                (ast:node-type node))
                         :value method-name)
-                :rands inner-rands)))))))))
+                :rands inner-rands))))
+          node))))
 
 (defun inline-direct-method (node env)
   (declare (type (or ast:node-application ast:node-direct-application) node)
     (type tc:environment env)
-    (values (or null ast:node-variable ast:node-application)))
+    (values (or null ast:node)))
 
-  (when *inline-methods-p*
-    (let ((rands (ast:node-direct-application-rands node)))
-      (multiple-value-bind (dict inner-rands) (extract-dict rands)
-        (when dict
+  (unless *inline-methods-p*
+    (return-from inline-direct-method
+      node))
+
+  (let ((rands (ast:node-direct-application-rands node)))
+    (multiple-value-bind (dict inner-rands) (extract-dict rands)
+      (if dict
           (let ((method-name (tc:lookup-method-inline env (ast:node-direct-application-rator node) dict :no-error t)))
             (cond
               ((null method-name)
-               nil)
+               node)
 
               ((null inner-rands)
                (debug! "Inlining direct method to variable ~a" method-name)
+               (push method-name *functions-inlined*)
                (ast:make-node-variable
                 :type (ast:node-type node)
                 :value method-name))
 
               (t
                (debug! "Inlining direct method to application ~a" method-name)
+               (push method-name *functions-inlined*)
                (ast:make-node-application
                 :type (ast:node-type node)
                 :rator (ast:make-node-variable
@@ -292,7 +301,8 @@ and user-supplied declarations to determine if it is appropriate."
                                (mapcar #'ast:node-type inner-rands)
                                (ast:node-type node))
                         :value method-name)
-                :rands inner-rands)))))))))
+                :rands inner-rands))))
+          node))))
 
 (defun inline-applications* (node env stack noinline-functions)
   (declare (type ast:node node)
@@ -320,18 +330,20 @@ and user-supplied declarations to determine if it is appropriate."
         (pop noinline-functions))
       node)
     (traverse:action (:after ast:node-application node)
-      (prog1
-          (inline-application node env stack noinline-functions)
-        node
-        (or (inline-method node env)
-            (inline-application node env stack noinline-functions))
+      (prog1 (let ((methods-inlined (inline-method node env)))
+               (etypecase methods-inlined
+                 ((or ast:node-application ast:node-direct-application)
+                  (inline-application methods-inlined env stack noinline-functions))
+                 (ast:node
+                  methods-inlined)))
         (pop stack)))
     (traverse:action (:after ast:node-direct-application node)
-      (prog1
-          (inline-application node env stack noinline-functions)
-        node
-        (or (inline-direct-method node env)
-            (inline-application node env stack noinline-functions))
+      (prog1 (let ((methods-inlined (inline-direct-method node env)))
+               (etypecase methods-inlined
+                 ((or ast:node-application ast:node-direct-application)
+                  (inline-application methods-inlined env stack noinline-functions))
+                 (ast:node
+                  methods-inlined)))
         (pop stack))))))
 
 (defun inline-applications (node env)
@@ -339,7 +351,6 @@ and user-supplied declarations to determine if it is appropriate."
   (declare (type ast:node node)
     (type tc:environment env))
 
-  ;; (debug! "INLINING: ~a" node)
   (let ((*functions-inlined* ()))
     (values
      (inline-applications* node env () '(coalton:cons))
