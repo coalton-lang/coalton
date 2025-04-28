@@ -73,10 +73,10 @@ to rerun optimizations.")
 
 (defun heuristic-inline-p (node)
   "Determine if the node should be inlined based on heuristics."
-  (declare (type (or null ast:node-abstraction) node)
+  (declare (type ast:node-abstraction node)
            (values boolean &optional))
 
-  (and node (funcall *inliner-heuristic* node)))
+  (funcall *inliner-heuristic* node))
 
 ;; Utilities
 
@@ -99,7 +99,7 @@ to rerun optimizations.")
 
 (defun lookup-code-global (node env)
   "Try to lookup the code of a globally known function, returns null or abstraction."
-  (declare (type ast:node node)
+  (declare (type (or ast:node-application ast:node-direct-application) node)
            (values (or null ast:node-abstraction) &optional))
 
   (let ((code (tc:lookup-code env (ast:node-rator-name node) :no-error t)))
@@ -107,7 +107,7 @@ to rerun optimizations.")
 
 (defun lookup-code-anonymous (node)
   "Try to lookup the code of an anonymous application, returns null or abstraction."
-  (declare (type ast:node node)
+  (declare (type ast:node-application node)
            (values (or null ast:node-abstraction) &optional))
 
   (let ((code (ast:node-application-rator node)))
@@ -126,13 +126,11 @@ to rerun optimizations.")
 (defun fully-applied-p (node code)
   "Check if an an application node constitutes a fully applied abstraction."
   (declare (type (or ast:node-application ast:node-direct-application) node)
-           (type (or null ast:node-abstraction) code)
+           (type ast:node-abstraction code)
            (values boolean &optional))
 
-  (if (null code)
-      nil
-      (= (length (ast:node-abstraction-vars code))
-         (length (ast:node-rands node)))))
+  (= (length (ast:node-abstraction-vars code))
+     (length (ast:node-rands node))))
 
 ;;; Inlining
 
@@ -195,10 +193,12 @@ and user-supplied declarations to determine if it is appropriate."
        node)
 
       ;; Case #1: (f e1 ... en) where f is global, known, and arity n.
-      ((and *inline-globals-p*
-            (fully-applied-p node (lookup-code-global node env))
-            (or (heuristic-inline-p (lookup-code-global node env))
-                (inlinable-function-p name env)))
+      ((let ((code (lookup-code-global node env)))
+         (and *inline-globals-p*
+              code
+              (fully-applied-p node code)
+              (or (heuristic-inline-p code)
+                  (inlinable-function-p name env))))
        (debug! ";; Inlining globally known function ~a" name)
        (push name *functions-inlined*)
        (inline-applications*
@@ -210,8 +210,10 @@ and user-supplied declarations to determine if it is appropriate."
       ;; Case #2: ((fn (x1 ... xn) ...) e1 ... en)
       ((and *inline-lambdas-p*
             (ast:node-application-p node)
-            (heuristic-inline-p (lookup-code-anonymous node))
-            (fully-applied-p node (lookup-code-anonymous node)))
+            (let ((code (lookup-code-anonymous node)))
+              (and code
+                   (heuristic-inline-p code)
+                   (fully-applied-p node code))))
        (debug! ";; Inlining anonymous function ~a" name)
        (push name *functions-inlined*)
        (inline-applications*
@@ -243,7 +245,7 @@ and user-supplied declarations to determine if it is appropriate."
      (values nil nil))))
 
 (defun inline-method (node env)
-  (declare (type (or ast:node-application ast:node-direct-application) node)
+  (declare (type ast:node-application node)
            (type tc:environment env)
            (values ast:node &optional))
 
@@ -281,7 +283,7 @@ and user-supplied declarations to determine if it is appropriate."
           node))))
 
 (defun inline-direct-method (node env)
-  (declare (type (or ast:node-application ast:node-direct-application) node)
+  (declare (type ast:node-direct-application node)
            (type tc:environment env)
            (values ast:node &optional))
 
