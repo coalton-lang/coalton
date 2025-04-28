@@ -21,9 +21,17 @@
 
 (in-package #:coalton-impl/codegen/inliner)
 
-(defparameter *inliner-max-unroll* 4)
-(defparameter *inliner-max-depth*  16)
-(defparameter *inliner-heuristic*  'gentle-heuristic)
+;; Public Settings for Optimization
+
+(defparameter *inliner-max-unroll* 4
+  "Limit depth to unroll recursive functions to.")
+(defparameter *inliner-max-depth*  16
+  "Limit total inliner stack depth.")
+(defparameter *inliner-heuristic*  'gentle-heuristic
+  "Heuristic to determine if a function should be inlined
+even if the user didn't explicity declare it to be.")
+
+;; Private Settings for Debugging
 
 (defparameter *inline-methods-p* t)
 (defparameter *inline-globals-p* t)
@@ -34,8 +42,7 @@
 (defun debug! (fmt &rest args)
   "Convenience function to print debug when `settigns:*print-inlining-occurences*' is enabled."
   (when settings:*print-inlining-occurrences*
-    (apply #'format t (uiop:strcat "~&" fmt) args)
-    (force-output t)))
+    (apply #'format t (uiop:strcat "~&" fmt) args)))
 
 ;;; Heuristics
 
@@ -63,8 +70,7 @@
   (declare (type (or null ast:node-abstraction) node)
     (values boolean))
 
-  (when node
-    (funcall *inliner-heuristic* node)))
+  (and node (funcall *inliner-heuristic* node)))
 
 ;; Utilities
 
@@ -90,8 +96,7 @@
     (values (or null ast:node-abstraction)))
 
   (let ((code (tc:lookup-code env (ast:node-rator-name node) :no-error t)))
-    (when (ast:node-abstraction-p code)
-      code)))
+    (and (ast:node-abstraction-p code) code)))
 
 (defun lookup-code-anonymous (node)
   "Try to lookup the code of an anonymous application, returns null or abstraction."
@@ -99,8 +104,7 @@
     (values (or null ast:node-abstraction)))
 
   (let ((code (ast:node-application-rator node)))
-    (when (ast:node-abstraction-p code)
-      code)))
+    (and (ast:node-abstraction-p code) code)))
 
 (defun inlinable-function-p (name env)
   "Check if a function is declared inlinable at its definition."
@@ -117,9 +121,9 @@
     (type (or null ast:node-abstraction) code)
     (values boolean))
 
-  (when code
-    (= (length (ast:node-abstraction-vars code))
-       (length (ast:node-rands node)))))
+  (and code
+       (= (length (ast:node-abstraction-vars code))
+          (length (ast:node-rands node)))))
 
 ;;; Inlining
 
@@ -232,7 +236,7 @@ and user-supplied declarations to determine if it is appropriate."
 (defun inline-method (node env)
   (declare (type (or ast:node-application ast:node-direct-application) node)
     (type tc:environment env)
-    (values (or null ast:node)))
+    (values ast:node))
 
   (unless *inline-methods-p*
     (return-from inline-method
@@ -270,7 +274,7 @@ and user-supplied declarations to determine if it is appropriate."
 (defun inline-direct-method (node env)
   (declare (type (or ast:node-application ast:node-direct-application) node)
     (type tc:environment env)
-    (values (or null ast:node)))
+    (values ast:node))
 
   (unless *inline-methods-p*
     (return-from inline-direct-method
