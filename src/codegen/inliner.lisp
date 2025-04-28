@@ -23,7 +23,7 @@
 
 ;; Public Settings for Optimization
 
-(defparameter *inliner-max-unroll* 4
+(defparameter *inliner-max-unroll* 3
   "Limit depth to unroll recursive functions to.")
 (defparameter *inliner-max-depth*  16
   "Limit total inliner stack depth.")
