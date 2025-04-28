@@ -86,8 +86,9 @@ to rerun optimizations.")
            (type list stack)
            (values boolean &optional))
 
-  (a:when-let ((name (ast:node-rator-name node)))
-    (<= *inliner-max-unroll* (count name stack))))
+  (a:if-let ((name (ast:node-rator-name node)))
+    (<= *inliner-max-unroll* (count name stack))
+    nil))
 
 (defun max-depth-p (stack)
   "Determine if the inliner is at its maximum depth, by default this is 16."
@@ -102,7 +103,7 @@ to rerun optimizations.")
            (values (or null ast:node-abstraction) &optional))
 
   (let ((code (tc:lookup-code env (ast:node-rator-name node) :no-error t)))
-    (and (ast:node-abstraction-p code) code)))
+    (if (ast:node-abstraction-p code) code nil)))
 
 (defun lookup-code-anonymous (node)
   "Try to lookup the code of an anonymous application, returns null or abstraction."
@@ -110,7 +111,7 @@ to rerun optimizations.")
            (values (or null ast:node-abstraction) &optional))
 
   (let ((code (ast:node-application-rator node)))
-    (and (ast:node-abstraction-p code) code)))
+    (if (ast:node-abstraction-p code) code nil)))
 
 (defun inlinable-function-p (name env)
   "Check if a function is declared inlinable at its definition."
@@ -118,8 +119,9 @@ to rerun optimizations.")
            (type tc:environment env)
            (values boolean &optional))
 
-  (a:when-let ((entry (tc:lookup-function env name :no-error t)))
-    (tc:function-env-entry-inline-p entry)))
+  (a:if-let ((entry (tc:lookup-function env name :no-error t)))
+    (tc:function-env-entry-inline-p entry)
+    nil))
 
 (defun fully-applied-p (node code)
   "Check if an an application node constitutes a fully applied abstraction."
@@ -127,9 +129,10 @@ to rerun optimizations.")
            (type (or null ast:node-abstraction) code)
            (values boolean &optional))
 
-  (and code
-       (= (length (ast:node-abstraction-vars code))
-          (length (ast:node-rands node)))))
+  (if (null code)
+      nil
+      (= (length (ast:node-abstraction-vars code))
+         (length (ast:node-rands node)))))
 
 ;;; Inlining
 
