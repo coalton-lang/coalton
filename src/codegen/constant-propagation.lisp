@@ -87,6 +87,14 @@ If not, returns NIL"
                            (t
                             (push (cons var propagated-value-node)
                                   nonconstant-bindings))))
+
+               ;; propagate new constant bindings into the values of
+               ;; the remaining nonconstant bindings.
+               (loop :for binding :in nonconstant-bindings
+                     :for value := (cdr binding)
+                     :for new-value := (funcall *traverse* value new-constant-bindings)
+                     :do (setf (cdr binding) new-value))
+
                (let ((inner-constant-bindings (append new-constant-bindings constant-bindings)))
                  (if nonconstant-bindings
                      (make-node-let
