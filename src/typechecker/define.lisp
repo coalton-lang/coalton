@@ -690,7 +690,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                   :branches branch-nodes)
                  subs)))
           (tc:coalton-internal-type-error ()
-            (standard-expression-type-mismatch-error node subs expr-node ret-ty))))))
+            (standard-expression-type-mismatch-error node subs expected-type ret-ty))))))
 
   (:method ((node parser:node-progn) expected-type subs env)
     (declare (type tc:ty expected-type)
