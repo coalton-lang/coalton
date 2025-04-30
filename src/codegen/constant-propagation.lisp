@@ -67,11 +67,9 @@ If not, returns NIL"
   (labels ((propagate-constants-node-variable (node constant-bindings)
              (declare (type node-variable node))
              (let ((x (constant-node-p env node constant-bindings)))
-               (cond
-                 ((null x)
-                  nil)
-                 (t
-                  x))))
+               (if (not (null x))
+                   x
+                   node)))
 
            (propagate-constants-node-let (node constant-bindings)
              (declare (type node-let node))
@@ -88,12 +86,27 @@ If not, returns NIL"
                             (push (cons var propagated-value-node)
                                   nonconstant-bindings))))
 
-               ;; propagate new constant bindings into the values of
+               ;; Propagate new constant bindings into the values of
                ;; the remaining nonconstant bindings.
-               (loop :for binding :in nonconstant-bindings
-                     :for value := (cdr binding)
-                     :for new-value := (funcall *traverse* value new-constant-bindings)
-                     :do (setf (cdr binding) new-value))
+               ;;
+               ;; Warning : This loop attempts to compute a fixed
+               ;; point among the let bindings with respect to
+               ;; constant propagation. The loop will still be correct
+               ;; if `continue` is initialized to `t`. However, when
+               ;; `new-constant-bindings` is empty, the loop has no
+               ;; effect on the result, but creates an exponential
+               ;; compile-time cost in some cases (such as a
+               ;; `make-list` with many elements).
+               (loop :with continue := (not (endp new-constant-bindings))
+                     :while continue
+                     :do (setf continue nil)
+                         (loop :for binding :in nonconstant-bindings
+                               :for (var . value) := binding
+                               :for new-value := (funcall *traverse* value new-constant-bindings)
+                               :when (constant-node-p env new-value (append new-constant-bindings constant-bindings))
+                                 :do (push (cons var new-value) new-constant-bindings)
+                                     (setf nonconstant-bindings (delete var nonconstant-bindings :test #'eq :key #'car))
+                                     (setf continue t)))
 
                (let ((inner-constant-bindings (append new-constant-bindings constant-bindings)))
                  (if nonconstant-bindings
