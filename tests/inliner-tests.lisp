@@ -59,6 +59,18 @@
   (define (monomorph-for-inline y)
     (num-generic-for-inline y)))
 
+(coalton-toplevel
+  (inline)
+  (define (test-fact n)
+    (if (== 0 n)
+        1
+        (test-fact (1- n)))))
+
+(coalton-toplevel
+  (define (test-fact-caller)
+    (test-fact 10)))
+
+
 (define-test monomorphize-inline ()
   (is (== 5 (monomorph-for-inline 3))))
 
@@ -121,3 +133,28 @@
       (if (== n 0)
           1
           (* n (factorial-1 (- n 1)))))"))
+
+(deftest limit-unroll-test ()
+  "Ensure that we get to a locally node,
+deem the AST fully unrolled, and stop inlining."
+  (flet ((abstraction-second-branch (node)
+           (second 
+            (coalton-impl/codegen/ast:node-match-branches 
+             (coalton-impl/codegen/ast:node-let-subexpr 
+              (coalton-impl/codegen/ast:node-abstraction-subexpr 
+               node)))))
+         (branch-second-branch (node)
+           (second
+            (coalton-impl/codegen/ast:node-match-branches
+             (coalton-impl/codegen/ast:node-let-subexpr
+              (coalton-impl/codegen/ast:match-branch-body
+               node)))))) 
+    (let ((locally-node
+            (coalton-impl/codegen/ast:match-branch-body 
+             (branch-second-branch 
+              (abstraction-second-branch 
+               (coalton:lookup-code 'coalton-native-tests::test-fact-caller))))))
+      (is (typep locally-node 'coalton-impl/codegen/ast:node-locally))
+      (is (member 'coalton-native-tests::test-fact
+                  (coalton-impl/codegen/ast:node-locally-noinline-functions
+                   locally-node))))))

@@ -144,8 +144,7 @@ to rerun optimizations.")
            (values ast:node-let &optional))
 
   (let* ((bindings
-           (mapcar (lambda (var val)
-                     (cons (gensym (symbol-name var)) val))
+           (mapcar (lambda (var val) (cons (gensym (symbol-name var)) val))
                    (ast:node-abstraction-vars code)
                    (ast:node-rands node)))
          (substitutions
@@ -162,7 +161,8 @@ to rerun optimizations.")
            (transformations:rename-type-variables
             (substitutions:apply-ast-substitution
              substitutions
-             (ast:node-abstraction-subexpr code) t)))
+             (ast:node-abstraction-subexpr code)
+             t)))
          (new-substitutions
            (coalton-impl/typechecker/unify::mgu
             (ast:node-type node)
