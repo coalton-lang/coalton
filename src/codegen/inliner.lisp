@@ -42,7 +42,8 @@ even if the user didn't explicity declare it to be.")
 
 ;; Dynamic Variable
 
-(defvar *functions-inlined*
+(declaim (type list *functions-inlined*))
+(defvar *functions-inlined* nil
   "Any functions or methods that are inlined have their names pushed to this.
 Then it is returned from `inline-applications' to tell the optimizer if it needs
 to rerun optimizations.")
@@ -176,6 +177,9 @@ to rerun optimizations.")
   "Try to inline an application, checking traversal stack, heuristics,
 and user-supplied declarations to determine if it is appropriate."
   (declare (type (or ast:node-application ast:node-direct-application) node)
+           (type tc:environment env)
+           (type list stack)
+           (type parser:identifier-list noinline-functions)
            (values ast:node &optional))
 
   (let ((name (ast:node-rator-name node)))
@@ -325,7 +329,7 @@ and user-supplied declarations to determine if it is appropriate."
   (declare (type ast:node node)
            (type tc:environment env)
            (type list stack)
-           (type list noinline-functions)
+           (type parser:identifier-list noinline-functions)
            (values ast:node &optional))
 
   (traverse:traverse

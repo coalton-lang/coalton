@@ -210,8 +210,8 @@ coalton symbols (`parser:identifier`)"
 
 (defstruct (node-locally (:include node))
   "Node for the optimizer to use, similar to `cl:locally'."
-  (noinline-functions (util:required 'noinline-functions) :type list :read-only t)
-  (subexpr            (util:required 'subexpr)            :type node :read-only t))
+  (noinline-functions (util:required 'noinline-functions) :type parser:identifier-list :read-only t)
+  (subexpr            (util:required 'subexpr)            :type node                   :read-only t))
 
 (defstruct match-branch
   "A branch of a match statement"
