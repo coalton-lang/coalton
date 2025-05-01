@@ -84,7 +84,7 @@
 (coalton-toplevel
   (monomorphize)
   (define (test-fact-method-caller)
-    (test-fact-method 10)))
+    (test-fact-method (the Integer 10))))
 
 
 (define-test monomorphize-inline ()
