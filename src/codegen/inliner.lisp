@@ -231,7 +231,7 @@ and user-supplied declarations to determine if it is appropriate."
 
 (defun extract-dict (rands)
   (declare (type ast:node-list rands)
-           (values (or null parser:identifier) ast:node-list))
+           (values (or null parser:identifier) ast:node-list &optional))
 
   (cond
     ((ast:node-variable-p (first rands))
@@ -240,7 +240,6 @@ and user-supplied declarations to determine if it is appropriate."
 
     ((and (ast:node-application-p (first rands))
           (ast:node-variable-p (ast:node-application-rator (first rands))))
-
      (values (ast:node-variable-value (ast:node-application-rator (first rands)))
              (append (ast:node-application-rands (first rands)) (cdr rands))))
 
@@ -367,7 +366,8 @@ and user-supplied declarations to determine if it is appropriate."
 (defun inline-applications (node env)
   "Traverse node, inlining methods, functions, and lambdas where possible."
   (declare (type ast:node node)
-           (type tc:environment env))
+           (type tc:environment env)
+           (values ast:node list &optional))
 
   (let ((*functions-inlined* ()))
     (values
