@@ -107,17 +107,17 @@
 
 (deftest function-inline-code ()
   (is (equal '((cl:+ coalton-native-tests::x coalton-native-tests::y))
-             (coalton-impl/codegen/ast:node-lisp-form
-              (coalton-impl/codegen/ast:node-let-subexpr
-               (coalton-impl/codegen/ast:node-abstraction-subexpr
+             (ast:node-lisp-form
+              (ast:node-let-subexpr
+               (ast:node-abstraction-subexpr
                 (coalton:lookup-code
                  'coalton-native-tests::two-arg-double-float-add-caller)))))))
 
 (deftest method-inline-code ()
   (is (equal '((cl:+ coalton-native-tests::x coalton-native-tests::y))
-             (coalton-impl/codegen/ast:node-lisp-form
-              (coalton-impl/codegen/ast:node-let-subexpr
-               (coalton-impl/codegen/ast:node-abstraction-subexpr
+             (ast:node-lisp-form
+              (ast:node-let-subexpr
+               (ast:node-abstraction-subexpr
                 (coalton:lookup-code
                  'coalton-native-tests::method-for-inline-test-caller)))))))
 
@@ -136,25 +136,52 @@
 
 (deftest limit-unroll-test ()
   "Ensure that we get to a locally node,
-deem the AST fully unrolled, and stop inlining."
-  (flet ((abstraction-second-branch (node)
-           (second 
-            (coalton-impl/codegen/ast:node-match-branches 
-             (coalton-impl/codegen/ast:node-let-subexpr 
-              (coalton-impl/codegen/ast:node-abstraction-subexpr 
-               node)))))
-         (branch-second-branch (node)
-           (second
-            (coalton-impl/codegen/ast:node-match-branches
-             (coalton-impl/codegen/ast:node-let-subexpr
-              (coalton-impl/codegen/ast:match-branch-body
-               node)))))) 
-    (let ((locally-node
-            (coalton-impl/codegen/ast:match-branch-body 
-             (branch-second-branch 
-              (abstraction-second-branch 
-               (coalton:lookup-code 'coalton-native-tests::test-fact-caller))))))
-      (is (typep locally-node 'coalton-impl/codegen/ast:node-locally))
+deem the AST fully unrolled, and stop inlining.
+
+Also ensure that running the inliner again does not further
+unroll the node."
+  (labels ((abstraction-second-branch (node)
+             (second 
+              (ast:node-match-branches 
+               (ast:node-let-subexpr 
+                (ast:node-abstraction-subexpr 
+                 node)))))
+           (branch-second-branch (node)
+             (second
+              (ast:node-match-branches
+               (ast:node-let-subexpr
+                (ast:match-branch-body
+                 node)))))
+           (fact-to-locally (node)
+             (ast:match-branch-body 
+              (branch-second-branch 
+               (abstraction-second-branch 
+                node))))) 
+    (let ((locally-node-1
+            (fact-to-locally
+             (coalton:lookup-code
+              'coalton-native-tests::test-fact-caller)))
+          ;; Same node, but inlined again
+          (locally-node-2
+            (coalton-impl/codegen/inliner:inline-applications 
+             (fact-to-locally
+              (coalton:lookup-code
+               'coalton-native-tests::test-fact-caller))
+             entry:*global-environment*)))
+      ;; Make sure a node-locally was emitted.
+      (is (typep locally-node-1 'ast:node-locally))
+      ;; Check that it stops the recursion.
       (is (member 'coalton-native-tests::test-fact
-                  (coalton-impl/codegen/ast:node-locally-noinline-functions
-                   locally-node))))))
+                  (ast:node-locally-noinline-functions
+                   locally-node-1)))
+
+      ;; Make sure a node-locally was emitted.
+      (is (typep locally-node-2 'ast:node-locally))
+      ;; Check that it stops the recursion.
+      (is (member 'coalton-native-tests::test-fact
+                  (ast:node-locally-noinline-functions
+                   locally-node-2)))
+
+      ;; Inlining again doesn't add any more nodes to the AST.
+      (is (= (traverse:count-nodes locally-node-1)
+             (traverse:count-nodes locally-node-2))))))
