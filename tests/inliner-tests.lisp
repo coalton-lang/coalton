@@ -70,6 +70,22 @@
   (define (test-fact-caller)
     (test-fact 10)))
 
+(coalton-toplevel
+  (define-class (RecursiveInlineTestClass :a)
+    (test-fact-method (:a -> :a)))
+
+  (define-instance (RecursiveInlineTestClass Integer)
+    (inline)
+    (define (test-fact-method n)
+      (if (== 0 n)
+          1
+          (test-fact-method (1- n))))))
+
+(coalton-toplevel
+  (monomorphize)
+  (define (test-fact-method-caller)
+    (test-fact-method 10)))
+
 
 (define-test monomorphize-inline ()
   (is (== 5 (monomorph-for-inline 3))))
@@ -185,3 +201,21 @@ unroll the node."
       ;; Inlining again doesn't add any more nodes to the AST.
       (is (= (traverse:count-nodes locally-node-1)
              (traverse:count-nodes locally-node-2))))))
+
+;; TODO: scrutinize this more
+(deftest limit-unroll-method-test ()
+  "Ensure that methods don't keep recursively inlining."
+  (let* ((caller-1
+           (coalton:lookup-code
+            'coalton-native-tests::test-fact-method-caller))
+         (caller-2
+           (coalton-impl/codegen/inliner:inline-applications
+            caller-1
+            entry:*global-environment*))
+         (caller-3
+           (coalton-impl/codegen/inliner:inline-applications
+            caller-2
+            entry:*global-environment*))) 
+    (is (= (traverse:count-nodes caller-1)
+           (traverse:count-nodes caller-2)
+           (traverse:count-nodes caller-3)))))
