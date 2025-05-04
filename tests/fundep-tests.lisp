@@ -147,3 +147,55 @@
       (let ((filled?
               (fn (i) (coalton-library/optional:some? (moo-find moo i)))))
         (coalton-library/iterator:filter! filled? (coalton-library/iterator:up-to (moo-size moo)))))"))
+
+(deftest fundep-superclass-resolution ()
+  ;; See https://github.com/coalton-lang/coalton/issues/1050
+
+  (check-coalton-types
+   "(define-class (C1 :a :b (:a -> :b))
+      (m1 (:a -> :b -> UFix )))
+
+    (define-class (C1 :a :b => C2 :a :b (:a -> :b))
+      (m2 (:a -> :b -> UFix)))
+
+    (define (f a b)
+      (+ (m1 a b) (m2 a b)))"
+   '("f" . "((FUNDEP-SUPERCLASS-RESOLUTION::C2 :A :B) => (:A -> :B -> COALTON:UFIX))"))
+
+  (check-coalton-types
+   "(define-class (C1 :a :b (:a -> :b))
+      (m1 (:a -> :b -> UFix )))
+
+    (define-class (C1 :a :b => C2 :a :b (:a -> :b))
+      (m2 (:a -> :b -> UFix)))
+
+    (declare f (C2 :a :b => :a -> :b -> UFix))
+    (define (f a b)
+      (+ (m1 a b) (m2 a b)))"
+   '("f" . "((FUNDEP-SUPERCLASS-RESOLUTION::C2 :A :B) => (:A -> :B -> COALTON:UFIX))"))
+
+  (check-coalton-types
+   "(define-class (C1 :col :elt (:col -> :elt))
+      (make (UFix -> :elt -> :col))
+      (size (:col -> UFix)))
+
+    (define-class (C1 :col :elt => C2 :col :elt (:col -> :elt))
+      (get (:col -> UFix -> :elt)))
+
+    (define (last col)
+      (get col (1- (size col))))"
+   '("last" . "((FUNDEP-SUPERCLASS-RESOLUTION::C2 :A :B) => (:A -> :B))"))
+
+  (check-coalton-types
+   "(define-class (C1 :col :elt (:col -> :elt))
+      (make (UFix -> :elt -> :col))
+      (size (:col -> UFix)))
+
+    (define-class (C1 :col :elt => C2 :col :elt (:col -> :elt))
+      (get (:col -> UFix -> :elt)))
+
+    (declare last (C2 :col :elt => :col -> :elt))
+    (define (last col)
+      (get col (1- (size col))))"
+   '("last" . "((FUNDEP-SUPERCLASS-RESOLUTION::C2 :A :B) => (:A -> :B))")))
+
