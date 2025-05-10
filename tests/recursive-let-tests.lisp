@@ -53,3 +53,31 @@
                                  (loop-times (- n 1)))))))
         (loop-times 100)))"
    '("foo" . "Unit")))
+
+(deftest recursive-let-constant-propagation ()
+  "Test that constant let bindings are propagated to the other bindings. See GitHub issue #1442."
+  (check-coalton-types
+   "(define x
+      (let ((p (the UFix 3))
+            (q (1+ p)))
+        q))"
+   '("x" . "UFix"))
+
+  (check-coalton-types
+   "(define x
+      (let ((q (1+ p))
+            (p (the UFix 3)))
+        q))"
+   '("x" . "UFix"))
+
+  (is (= 3 (coalton:coalton (coalton:let ((a b) (b c) (c d) (d 3)) a))))
+
+  (is (= 3 (coalton:coalton (coalton:let ((a (coalton:let ((b c) (c d)) d)) (d 3)) a))))
+
+  (let* ((start (/ (get-internal-real-time) internal-time-units-per-second))
+         (value (eval (read-from-string "(coalton:coalton (coalton:make-list 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0))")))
+         (end (/ (get-internal-real-time) internal-time-units-per-second)))
+
+    (is (< (- end start) 1))
+    (is (equalp value '(1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0)))))
+
