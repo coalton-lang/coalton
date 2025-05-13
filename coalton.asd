@@ -85,6 +85,7 @@
                (:file "string")
                (:file "slice")
                (:file "hashtable")
+               (:file "hamt")
                (:file "queue")
                (:file "monad/state")
                (:file "ord-tree")
@@ -162,6 +163,7 @@
                (:file "pi")
                (:file "seq")
                (:file "matrix")
+               (:file "mapping")
                (:module "gabriel-benchmarks"
                 :serial t
                 :components ((:file "tak")
@@ -261,6 +263,7 @@
                (:file "hyperdual-tests")
                (:file "quantize-tests")
                (:file "hashtable-tests")
+               (:file "hamt-tests")
                (:file "iterator-tests")
                (:file "call-coalton-from-lisp")
                (:file "vector-tests")
