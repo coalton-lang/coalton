@@ -251,6 +251,7 @@
                 :components ((:file "lisp-type-tests")))
                (:file "environment-persist-tests")
                (:file "coalton-tests")
+               (:file "shortcut-tailcall-tests")
                (:file "slice-tests")
                (:file "float-tests")
                (:file "dual-tests")
