@@ -262,7 +262,8 @@ and user-supplied declarations to determine if it is appropriate."
   (let ((rator (ast:node-application-rator node))
         (rands (ast:node-application-rands node)))
     (multiple-value-bind (dict inner-rands) (extract-dict rands)
-      (if (and dict (ast:node-variable-p rator))
+      (if (or (null dict) (not (ast:node-variable-p rator)))
+          node
           (let ((method-name (tc:lookup-method-inline env (ast:node-variable-value rator) dict :no-error t)))
             (cond
               ((null method-name)
@@ -285,8 +286,7 @@ and user-supplied declarations to determine if it is appropriate."
                                (mapcar #'ast:node-type inner-rands)
                                (ast:node-type node))
                         :value method-name)
-                :rands inner-rands))))
-          node))))
+                :rands inner-rands))))))))
 
 (defun inline-direct-method (node env)
   (declare (type ast:node-direct-application node)
@@ -299,7 +299,8 @@ and user-supplied declarations to determine if it is appropriate."
 
   (let ((rands (ast:node-direct-application-rands node)))
     (multiple-value-bind (dict inner-rands) (extract-dict rands)
-      (if dict
+      (if (null dict)
+          node
           (let ((method-name (tc:lookup-method-inline env (ast:node-direct-application-rator node) dict :no-error t)))
             (cond
               ((null method-name)
@@ -322,8 +323,7 @@ and user-supplied declarations to determine if it is appropriate."
                                (mapcar #'ast:node-type inner-rands)
                                (ast:node-type node))
                         :value method-name)
-                :rands inner-rands))))
-          node))))
+                :rands inner-rands))))))))
 
 (defun inline-applications* (node env stack noinline-functions)
   (declare (type ast:node node)
@@ -377,7 +377,7 @@ and user-supplied declarations to determine if it is appropriate."
            (type tc:environment env)
            (values ast:node list &optional))
 
-  (let ((*functions-inlined* ()))
+  (let ((*functions-inlined* '()))
     (values
      (inline-applications* node env '() '(coalton:cons))
      *functions-inlined*)))
