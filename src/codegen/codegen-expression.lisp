@@ -95,9 +95,7 @@
 
   (:method ((expr node-locally) env)
     (declare (type tc:environment env))
-    ;; TODO: Remove debug string 
-    `(progn ,(format nil "LOCALLY noinline: ~a" (node-locally-noinline-functions expr)) 
-            ,(codegen-expression (node-locally-subexpr expr) env)))
+    (codegen-expression (node-locally-subexpr expr) env))
 
   (:method ((expr node-lisp) env)
     (declare (type tc:environment env))
