@@ -240,12 +240,12 @@ and user-supplied declarations to determine if it is appropriate."
   (cond
     ((ast:node-variable-p (first rands))
      (values (ast:node-variable-value (first rands))
-             (cdr rands)))
+             (rest rands)))
 
     ((and (ast:node-application-p (first rands))
           (ast:node-variable-p (ast:node-application-rator (first rands))))
      (values (ast:node-variable-value (ast:node-application-rator (first rands)))
-             (append (ast:node-application-rands (first rands)) (cdr rands))))
+             (append (ast:node-application-rands (first rands)) (rest rands))))
 
     (t
      (values nil nil))))
@@ -339,9 +339,11 @@ and user-supplied declarations to determine if it is appropriate."
       (dolist (sym (ast:node-locally-noinline-functions node))
         (push sym noinline-functions))
       node)
+
     (traverse:action (:before ast:node-application node)
       (push (ast:node-rator-name node) stack)
       node)
+
     (traverse:action (:before ast:node-direct-application node)
       (push (ast:node-rator-name node) stack)
       node)
@@ -350,6 +352,7 @@ and user-supplied declarations to determine if it is appropriate."
       (dolist (sym (ast:node-locally-noinline-functions node))
         (pop noinline-functions))
       node)
+
     (traverse:action (:after ast:node-application node)
       (prog1 (let ((methods-inlined (inline-method node env)))
                (etypecase methods-inlined
@@ -358,6 +361,7 @@ and user-supplied declarations to determine if it is appropriate."
                  (ast:node
                   methods-inlined)))
         (pop stack)))
+
     (traverse:action (:after ast:node-direct-application node)
       (prog1 (let ((methods-inlined (inline-direct-method node env)))
                (etypecase methods-inlined
@@ -375,5 +379,5 @@ and user-supplied declarations to determine if it is appropriate."
 
   (let ((*functions-inlined* ()))
     (values
-     (inline-applications* node env () '(coalton:cons))
+     (inline-applications* node env '() '(coalton:cons))
      *functions-inlined*)))
