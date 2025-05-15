@@ -47,6 +47,11 @@
    #:node-lisp-p                        ; FUNCTION
    #:node-lisp-vars                     ; READER
    #:node-lisp-form                     ; READER
+   #:node-locally                       ; STRUCT
+   #:make-node-locally                  ; CONSTRUCTOR
+   #:node-locally-p                     ; FUNCTION
+   #:node-locally-noinline-functions    ; READER
+   #:node-locally-subexpr               ; READER
    #:match-branch                       ; STRUCT
    #:make-match-branch                  ; CONSTRUCTOR
    #:match-branch-pattern               ; READER
@@ -202,6 +207,11 @@ coalton symbols (`parser:identifier`)"
   "An embedded lisp form"
   (vars (util:required 'vars) :type lisp-coalton-var-alist :read-only t)
   (form (util:required 'form) :type t                      :read-only t))
+
+(defstruct (node-locally (:include node))
+  "Node for the optimizer to use, similar to `cl:locally'."
+  (noinline-functions (util:required 'noinline-functions) :type parser:identifier-list :read-only t)
+  (subexpr            (util:required 'subexpr)            :type node                   :read-only t))
 
 (defstruct match-branch
   "A branch of a match statement"
