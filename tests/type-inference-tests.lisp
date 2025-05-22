@@ -236,7 +236,25 @@
       (define test-addl id))
 
     (declare test-bare-testtype (TestType -> TestType))
-    (define test-bare-testtype test-bare)"))
+    (define test-bare-testtype test-bare)")
+
+  ;; Check that it works with functional dependencies
+  (check-coalton-types
+   "(define-type (Box :a)
+      (Box :a))
+
+    (define-class (ClassA :m :a (:m -> :a))
+      (get-a (:m -> :a)))
+
+    (define-class (ClassB :m :a (:m -> :a))
+      (convert (ClassA :n :a => :n -> :m)))
+
+    (define-instance (ClassA (Box :a) :a)
+      (define (get-a (Box a)) a))
+
+    (define-instance (ClassB (Box :a) :a)
+      (define (convert bx)
+        (Box (get-a bx))))"))
 
 (deftest test-typeclass-flexible-instances ()
   (check-coalton-types
