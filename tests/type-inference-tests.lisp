@@ -192,6 +192,69 @@
    "(define-class (Test :a)
       (test (Eq :b => :a -> :b)))"))
 
+(deftest test-typeclass-additional-constraints ()
+
+  ;; Check that typeclass methods can provide additional constraints
+  (check-coalton-types
+   "(define-class (Test :a)
+      (test-bare (:a -> :a))
+      (test-addl (Eq :a => :a -> :a)))
+
+    ;; Can define on types without Eq
+    (define-type TestType A B)
+
+    (define-instance (Test TestType)
+      (define test-bare id)
+      (define test-addl id))
+
+    ;; Can define generic function that uses Eq if constrained
+    (declare test-generic ((Eq :a) (Test :a) => :a -> :a))
+    (define test-generic test-addl)
+
+    ;; Can use test-addl on TestType if Eq defined
+    (define-instance (Eq TestType)
+      (define (== x y)
+        (match (Tuple x y)
+          ((Tuple (A) (A)) True)
+          ((Tuple (B) (B)) True)
+          (_ False))))
+
+    (declare test-addl-testtype (TestType -> TestType))
+    (define test-addl-testtype test-addl)")
+
+  ;; Check that methods not requiring additional constraints can be used
+  (check-coalton-types
+   "(define-class (Test :a)
+      (test-bare (:a -> :a))
+      (test-addl (Eq :a => :a -> :a)))
+
+    ;; Can define on types without Eq
+    (define-type TestType A B)
+
+    (define-instance (Test TestType)
+      (define test-bare id)
+      (define test-addl id))
+
+    (declare test-bare-testtype (TestType -> TestType))
+    (define test-bare-testtype test-bare)")
+
+  ;; Check that it works with functional dependencies
+  (check-coalton-types
+   "(define-type (Box :a)
+      (Box :a))
+
+    (define-class (ClassA :m :a (:m -> :a))
+      (get-a (:m -> :a)))
+
+    (define-class (ClassB :m :a (:m -> :a))
+      (convert (ClassA :n :a => :n -> :m)))
+
+    (define-instance (ClassA (Box :a) :a)
+      (define (get-a (Box a)) a))
+
+    (define-instance (ClassB (Box :a) :a)
+      (define (convert bx)
+        (Box (get-a bx))))"))
 
 (deftest test-typeclass-flexible-instances ()
   (check-coalton-types

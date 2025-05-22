@@ -287,7 +287,7 @@
                                                           (node-type
                                                            (instance-method-definition-name method)))
                                       :do (setf subs (tc:compose-substitution-lists
-                                                      (tc:predicate-match node-pred context-pred)
+                                                      (tc:predicate-match node-pred context-pred instance-subs)
                                                       subs)))
 
                                 (setf (gethash name table) (tc:apply-substitution subs method)))
