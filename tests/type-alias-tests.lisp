@@ -3,7 +3,7 @@
 (in-package #:coalton-tests)
 
 (deftest test-type-alias-definition ()
-
+  
   (check-coalton-types
    "(define-type-alias UnaryIntegerOperator (Integer -> Integer))")
 
@@ -12,7 +12,7 @@
       \"An alias for functions mapping integers to integers.\")"))
 
 (deftest test-type-alias-the ()
-
+  
   (check-coalton-types
    "(define-type-alias Index UFix)
 
@@ -29,7 +29,7 @@
    '("indices" . "(List UFix)")))
 
 (deftest test-type-alias-declare ()
-
+  
   (check-coalton-types
    "(define-type-alias Index UFix)
 
@@ -48,7 +48,7 @@
    '("indices" . "(List UFix)")))
 
 (deftest test-type-alias-constructors ()
-
+  
   (check-coalton-types
    "(define-type-alias Coordinate IFix)
 
@@ -100,7 +100,7 @@
     (define (f (Tuple a (Tuple b c))) (+ a (+ b c)))"))
 
 (deftest test-parametric-type-alias-the ()
-
+  
   (check-coalton-types
    "(define-type-alias Index UFix)
     (define-type-alias (Collection :a) (List :a))
@@ -118,7 +118,7 @@
    '("l" . "(List UFix)")))
 
 (deftest test-parametric-type-alias-declare ()
-
+  
   (check-coalton-types
    "(define-type-alias (UnaryOperator :a) (:a -> :a))
 
@@ -127,7 +127,7 @@
 
    '("f" . "(Integer -> Integer)"))
 
-
+  
   (check-coalton-types
    "(define-type-alias (FoldFunc :a :b) (:a -> :b -> :a))
 
@@ -143,7 +143,7 @@
     (define f 1+)"))
 
 (deftest test-parametric-type-alias-constructors ()
-
+  
   (check-coalton-types
    "(define-type-alias (Pair :a) (Tuple :a :a))
 

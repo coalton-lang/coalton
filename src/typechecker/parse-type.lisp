@@ -196,7 +196,7 @@
            (type tc:environment env))
 
   (let* ((old-unambiguous-vars (tc:type-variables type))
-         (unambiguous-vars old-unambiguous-vars))
+         (unambiguous-vars old-unambiguous-vars)) 
 
     (block fundep-fixpoint
       (loop :for i :below tc:+fundep-max-depth+

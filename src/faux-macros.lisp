@@ -45,11 +45,8 @@
 (define-coalton-toplevel-editor-macro coalton:define-type (name &body definition)
   "Create a new algebraic data type named NAME. (Coalton top-level operator.)")
 
-(define-coalton-editor-macro coalton:define-type-alias (name &body definition)
-  "Create a new type alias named NAME. (Coalton top-level operator.)")
-
-(define-coalton-editor-macro coalton:define-struct (name &body definition)
-  "Create a new sruct named NAME. (Coalton top-level operator.)")
+(define-coalton-toplevel-editor-macro coalton:define-struct (name &body definition)
+  "Create a new struct named NAME. (Coalton top-level operator.)")
 
 (define-coalton-toplevel-editor-macro coalton:define-type-alias (name &body definition)
   "Create a new type alias named NAME. (Coalton top-level operator.)")
