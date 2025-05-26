@@ -7,4 +7,5 @@
                (:file "primes")
                (:file "freecalc")
                (:file "microbench1")
-	       (:file "brainfold")))
+               (:file "brainfold")
+               (:file "monads-bank")))

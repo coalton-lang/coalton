@@ -11,7 +11,7 @@
    #:map-resultT
    #:map-errT
    #:err-ifT
-   ))
+   #:do-resultT))
 
 (in-package #:coalton-library/monad/resultt)
 
@@ -87,6 +87,20 @@
   (define-instance (MonadState :s :m => MonadState :s (ResultT :err :m))
     (define put (compose lift put))
     (define get (lift get))))
+
+;;
+;; Macros
+;;
+
+(cl:defmacro do-resultT (cl:&body body)
+  "Perform a series of ResultT's, returning the value of the last one
+if all of them succeed."
+  `(run-resultT
+    (do
+     ,@(cl:mapcar
+        (cl:lambda (form)
+          `(ResultT ,form))
+        body))))
 
 ;; #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/MONAD/RESULTT")
