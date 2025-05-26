@@ -5,12 +5,27 @@
              (match x
                (0 "zero")
                (1 "one")
-               (2 "two")))))
+               (2 "two")
+               (_ "error")))))
     (is (== (f 0)
             "zero"))
     (is (== (f 1)
             "one"))
     (is (== (f 2)
+            "two"))))
+
+(define-test test-match-on-nums ()
+
+  (let ((f (fn (x)
+             (match x
+               (0 "zero")
+               (1 "one")
+               (2 "two")))))
+    (is (== (f (the IFix 0))
+            "zero"))
+    (is (== (f (the U8 1))
+            "one"))
+    (is (== (f (the I16 2))
             "two"))))
 
 (define-test test-match-lists ()
@@ -34,7 +49,27 @@
     (is (== (f (MFoo 9)) 9))
     (is (== (f (MBar (Tuple 7 8))) 7))))
 
+(define-test test-match-on-fractions ()
+  (is (match 1/4
+        (1/4 True)
+        (_ False))))
+
+(define-test test-match-on-single-floats ()
+  (is (match 0.15f0
+        (0.15f0 True)
+        (_ False))))
+
+(define-test test-match-on-double-floats ()
+  (is (match 0.15d0
+        (0.15d0 True)
+        (_ False))))
+
 (define-test test-match-on-strings ()
   (is (match "red"
         ("red" True)
+        (_ False))))
+
+(define-test test-match-on-chars ()
+  (is (match #\c
+        (#\c True)
         (_ False))))

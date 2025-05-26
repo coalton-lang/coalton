@@ -9,6 +9,10 @@
 #+coalton-release
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
+;;; XXX: The "constants" True, False, Unit, and Nil are currently
+;;; treated specially by codegen as being constant; their values are
+;;; looked up at compile-time and emitted directly.
+
 (coalton-toplevel
   (repr :native cl:t)
   (define-type Void)
@@ -25,6 +29,7 @@
   (define Unit (lisp Unit () 'coalton::Unit/Unit))
 
   ;; List is an early type
+  (inline)
   (declare Cons (:a -> (List :a) -> (List :a)))
   (define (Cons x xs)
     (lisp (List :a) (x xs)
@@ -71,6 +76,6 @@
   (define-type IFix
     "Non-allocating tagged integer; range is platform-dependent. Does not error on overflow. Uses `fixnum`.")
 
-  (repr :native (cl:and cl:fixnum cl:unsigned-byte))
-  (define-type UFix 
+  (repr :native coalton-impl/util:ufixnum)
+  (define-type UFix
     "Non-allocating tagged non-negative integer; range is platform-dependent. Uses `(and fixnum unsigned-byte)`."))

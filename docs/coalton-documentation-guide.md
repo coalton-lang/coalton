@@ -41,6 +41,7 @@ that contains a filling of various sweet or savoury ingredients."
 (coalton-toplevel
   (define-type-alias Index Integer
     "This is a type alias for a discrete numeric type: INTEGER"))
+```
 
 ### `define-class`
 

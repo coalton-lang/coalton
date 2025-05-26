@@ -9,12 +9,6 @@
    #:coalton-library/functions)
 
   (:import-from
-   #:coalton-library/hash
-   #:hash)
-  (:export
-   #:hash)
-
-  (:import-from
    #:coalton-library/math/arith
    #:Reciprocable #:/
    #:Fraction
@@ -253,4 +247,6 @@
    (#:optionalt #:coalton-library/monad/optionalt)
    (#:iter #:coalton-library/iterator)
    (#:sys #:coalton-library/system)
-   (#:file #:coalton-library/file)))
+   (#:file #:coalton-library/file)
+   (#:experimental #:coalton-library/experimental)
+   (#:loops #:coalton-library/experimental/loops)))

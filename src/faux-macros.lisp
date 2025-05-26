@@ -12,8 +12,20 @@
 
 (in-package #:coalton-impl/faux-macros)
 
+(defun error-coalton-toplevel-only (name)
+  (error "The operator ~S is only valid in a Coalton toplevel." name))
+
 (defun error-coalton-only (name)
   (error "The operator ~S is only valid in a Coalton expression." name))
+
+(defmacro define-coalton-toplevel-editor-macro (name lambda-list &optional (docstring ""))
+  "Define a macro so that Emacs and SLIME see it nicely, and so the forms indent properly. Not intended for actual use in Lisp code."
+  (check-type docstring string)
+  `(defmacro ,name ,lambda-list
+     ,docstring
+     (declare (ignore ,@(remove-if (lambda (sym) (char= #\& (char (symbol-name sym) 0)))
+                                   lambda-list)))
+     (error-coalton-toplevel-only ',name)))
 
 (defmacro define-coalton-editor-macro (name lambda-list &optional (docstring ""))
   "Define a macro so that Emacs and SLIME see it nicely, and so the forms indent properly. Not intended for actual use in Lisp code."
@@ -27,10 +39,10 @@
 
 ;;; Top-Level Forms
 
-(define-coalton-editor-macro coalton:define (var-or-fun &body body)
+(define-coalton-toplevel-editor-macro coalton:define (var-or-fun &body body)
   "Define a variable or function. (Coalton top-level operator.)")
 
-(define-coalton-editor-macro coalton:define-type (name &body definition)
+(define-coalton-toplevel-editor-macro coalton:define-type (name &body definition)
   "Create a new algebraic data type named NAME. (Coalton top-level operator.)")
 
 (define-coalton-editor-macro coalton:define-type-alias (name &body definition)
@@ -39,19 +51,23 @@
 (define-coalton-editor-macro coalton:define-struct (name &body definition)
   "Create a new sruct named NAME. (Coalton top-level operator.)")
 
-(define-coalton-editor-macro coalton:declare (var type)
+(define-coalton-toplevel-editor-macro coalton:define-type-alias (name &body definition)
+  "Create a new type alias named NAME. (Coalton top-level operator.)")
+
+;; the `&body` below is purely for the purpose editor indentation display.
+(define-coalton-toplevel-editor-macro coalton:declare (var &body type)
   "Declare the type of a variable. (Coalton top-level operator.)")
 
-(define-coalton-editor-macro coalton:define-class (class &body method-signatures)
+(define-coalton-toplevel-editor-macro coalton:define-class (class &body method-signatures)
   "Define a new type class. (Coalton top-level operator.")
 
-(define-coalton-editor-macro coalton:define-instance (instance &body method-definitions)
+(define-coalton-toplevel-editor-macro coalton:define-instance (instance &body method-definitions)
   "Define an instance of a type class. (Coalton top-level operator.)")
 
-(define-coalton-editor-macro coalton:lisp-toplevel (options &body lisp-toplevel-forms)
+(define-coalton-toplevel-editor-macro coalton:lisp-toplevel (options &body lisp-toplevel-forms)
   "Include lisp forms. (Coalton top-level operator.)")
 
-(define-coalton-editor-macro coalton:specialize (name from-ty to-ty)
+(define-coalton-toplevel-editor-macro coalton:specialize (name from-ty to-ty)
   "Declare a specialization for a function. (Coalton top-level operator.)")
 
 ;;; Attributes
@@ -71,6 +87,9 @@
 
 (define-coalton-editor-macro coalton:let (bindings &body form)
   "A lexical LET binding.")
+
+(define-coalton-editor-macro coalton:rec (name bindings &body body)
+  "A lexical recursive function call.")
 
 (define-coalton-editor-macro coalton:lisp (type vars &body lisp-expr)
   "An escape from Coalton into the Lisp world.")

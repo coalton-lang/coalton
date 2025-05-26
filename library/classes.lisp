@@ -10,6 +10,7 @@
    #:Optional #:Some #:None
    #:Result #:Ok #:Err
    #:Eq #:==
+   #:Hash
    #:Ord #:LT #:EQ #:GT
    #:<=> #:> #:< #:>= #:<=
    #:max
@@ -21,17 +22,18 @@
    #:Applicative #:pure #:liftA2
    #:Monad #:>>=
    #:MonadTransformer #:lift
-   #:>>
+   #:>> #:join
    #:MonadFail #:fail
    #:Alternative #:alt #:empty
-   #:Foldable #:fold #:foldr #:mconcat
+   #:Foldable #:fold #:foldr #:mconcat #:mconcatmap
+   #:mempty? #:mcommute?
    #:Traversable #:traverse
    #:Bifunctor #:bimap #:map-fst #:map-snd
    #:sequence
    #:Into
    #:TryInto
    #:Iso
-   #:Unwrappable #:unwrap-or-else #:with-default #:unwrap #:expect #:as-optional
+   #:Unwrappable #:unwrap-or-else #:with-default #:unwrap #:unwrap-into #:expect #:as-optional
    #:default #:defaulting-unwrap #:default?))
 
 (in-package #:coalton-library/classes)
@@ -46,7 +48,7 @@
 ;;;
 
 (coalton-toplevel
- 
+
  ;;
  ;; Signalling errors on supported types
  ;;
@@ -103,9 +105,35 @@
     (- (:a -> :a -> :a))
     (* (:a -> :a -> :a))
     (fromInt (Integer -> :a)))
- 
+
   (define-instance (Eq Unit)
     (define (== _ _) True))
+
+  ;;
+  ;; Hash
+  ;;
+
+  #+sbcl
+  (repr :native (cl:unsigned-byte 62))
+
+  #+allegro
+  (repr :native (cl:unsigned-byte 0 32))
+
+  ;; https://github.com/Clozure/ccl/blob/ff51228259d9dbc8a9cc7bbb08858ef4aa9fe8d0/level-0/l0-hash.lisp#L1885
+  #+ccl
+  (repr :native (cl:and cl:fixnum cl:unsigned-byte))
+
+  #-(or sbcl allegro ccl)
+  #.(cl:error "hashing is not supported on ~A" (cl:lisp-implementation-type))
+
+  (define-type Hash
+    "Implementation dependent hash code.")
+
+  (define-class (Eq :a => Hash :a)
+    "Types which can be hashed for storage in hash tables.
+
+The hash function must satisfy the invariant that `(== left right)` implies `(== (hash left) (hash right))`."
+    (hash (:a -> Hash)))
 
   ;;
   ;; Ord
@@ -217,7 +245,13 @@ together."
 
   (declare >> (Monad :m => (:m :a) -> (:m :b) -> (:m :b)))
   (define (>> a b)
+    "Equivalent to `(>>= a (fn (_) b))`."
     (>>= a (fn (_) b)))
+
+  (declare join (Monad :m => :m (:m :a) -> :m :a))
+  (define (join m)
+    "Equivalent to `(>>= m id)`."
+    (>>= m (fn (x) x)))
 
   (define-class (Monad :m => MonadFail :m)
     (fail (String -> :m :a)))
@@ -232,10 +266,25 @@ together."
     (fold  "A left tail-recursive fold."       ((:accum -> :elt -> :accum) -> :accum -> :container :elt -> :accum))
     (foldr "A right non-tail-recursive fold."  ((:elt -> :accum -> :accum) -> :accum -> :container :elt -> :accum)))
 
+  (declare mempty? ((Eq :a) (Monoid :a) => :a -> Boolean))
+  (define (mempty? a)
+    "Does `a` equal `(the Type mempty)`?"
+    (== mempty a))
+
   (declare mconcat ((Foldable :f) (Monoid :a) => :f :a -> :a))
-  (define mconcat
+  (define (mconcat a)
     "Fold a container of monoids into a single element."
-    (fold <> mempty))
+    (fold <> mempty a))
+
+  (declare mconcatmap ((Foldable :f) (Monoid :a) => (:b -> :a) -> :f :b -> :a))
+  (define (mconcatmap f a)
+    "Map a container to a container of monoids, and then fold that container into a single element."
+    (fold (fn (a b) (<> a (f b))) mempty a))
+
+  (declare mcommute? ((Eq :a) (Semigroup :a) => :a -> :a -> Boolean))
+  (define (mcommute? a b)
+    "Does `a <> b` equal `b <> a`?"
+    (== (<> a b) (<> b a)))
 
   (define-class (Traversable :t)
     (traverse (Applicative :f => (:a -> :f :b) -> :t :a -> :f (:t :b))))
@@ -299,6 +348,12 @@ Typical `fail` continuations are:
                      -> (:container :elt)
                      -> :result)))
 
+  (define-instance (Unwrappable (Result :a))
+  (define (unwrap-or-else succeed fail res)
+    (match res
+      ((Ok elt) (succeed elt))
+      ((Err _) (fail)))))
+
   (declare expect ((Unwrappable :container) =>
                    String
                    -> (:container :element)
@@ -319,6 +374,11 @@ Typical `fail` continuations are:
                                     (cl:format cl:nil "Unexpected ~a in UNWRAP"
                                                container))))
                     container))
+
+  (declare unwrap-into (TryInto :a :b :c => :a -> :b))
+  (define (unwrap-into x)
+    "Same as `tryInto` followed by `unwrap`."
+    (unwrap (tryinto x)))
 
   (declare with-default ((Unwrappable :container) =>
                          :element

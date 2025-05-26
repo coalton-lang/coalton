@@ -19,6 +19,9 @@
    #:coalton-codegen
    #:coalton-codegen-ast
    #:coalton-codegen-types
+   #:pprint-coalton-codegen
+   #:pprint-coalton-codegen-ast
+   #:pprint-coalton-codegen-types
    #:coalton
    #:declare
    #:define
@@ -30,9 +33,10 @@
    #:repr
    #:lisp-toplevel
    #:monomorphize
+   #:inline
    #:specialize
    #:unable-to-codegen)
-  
+
   ;; Early Types
   (:export
    #:-> #:→
@@ -65,6 +69,7 @@
    #:fn #:λ
    #:match
    #:let
+   #:rec
    #:=                                  ; Syntax
    #:lisp
    #:<-                                 ; Syntax
@@ -89,6 +94,8 @@
    #:or
    #:cond
    #:as
+   #:try-as
+   #:unwrap-as
    #:nest
    #:pipe
    #:.<

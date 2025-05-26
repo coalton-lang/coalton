@@ -156,39 +156,61 @@ Furthermore, `best-approx` returns the simplest fraction, and both functions may
        (define (to-fraction x) (fromint (tointeger x)))
        (define (best-approx x) (fromint (tointeger x))))))
 
-(cl:dolist (ty '(U8 U32 U64 UFix I8 I32 I64 IFix Integer))
-  (cl:eval `(%define-integer-roundings ,ty)))
+(%define-integer-roundings U8)
+(%define-integer-roundings U32)
+(%define-integer-roundings U64)
+(%define-integer-roundings UFix)
+(%define-integer-roundings I8)
+(%define-integer-roundings I32)
+(%define-integer-roundings I64)
+(%define-integer-roundings IFix)
+(%define-integer-roundings Integer)
 
 (cl:defmacro %define-native-rationals (type)
   (cl:let
-      ((round (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-ROUND"))))
+      ((round (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-ROUND")))
+       (trunc (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-TRUNCATE"))))
     `(coalton-toplevel
        (define-instance (Quantizable ,type)
+         (inline)
          (define (floor q)
            (lisp Integer (q)
              (cl:nth-value 0 (cl:floor q))))
+         (inline)
          (define (ceiling q)
            (lisp Integer (q)
              (cl:nth-value 0 (cl:ceiling q))))
+         (inline)
          (define (proper q)
            (lisp (Tuple Integer ,type) (q)
              (cl:multiple-value-bind (n r)
                  (cl:truncate q)
                (Tuple n r)))))
 
+       (specialize truncate ,trunc (,type -> Integer))
+       (inline)
+       (declare ,trunc (,type -> Integer))
+       (define (,trunc x)
+         (lisp Integer (x)
+           (cl:nth-value 0 (cl:truncate x))))
+
        (define-instance (Real ,type)
+         (inline)
          (define (real-approx prec x)
            (rational-approx prec x)))
 
        (define-instance (Rational ,type)
+         (inline)
          (define (to-fraction x)
            (lisp Fraction (x)
              (cl:rational x)))
+         (inline)
          (define (best-approx x)
            (lisp Fraction (x)
              (cl:rationalize x))))
 
        (specialize round ,round (,type -> Integer))
+       (inline)
        (declare ,round (,type -> Integer))
        (define (,round x)
          (lisp Integer (x)
@@ -240,11 +262,13 @@ remainders expressed as values of type of X."
         None
         (Some (general/ x y))))
 
+  (inline)
   (declare exact/ (Integer -> Integer -> Fraction))
   (define (exact/ a b)
     "Exactly divide two integers and produce a fraction."
     (general/ a b))
 
+  (inline)
   (declare inexact/ (Integer -> Integer -> Double-Float))
   (define (inexact/ a b)
     "Compute the quotient of integers as a double-precision float.

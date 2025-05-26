@@ -14,6 +14,7 @@
    #:*pprint-variable-symbol-code*
    #:*pprint-variable-symbol-suffix*
    #:tc-error                           ; CONDITION, FUNCTION
+   #:tc-cerror                          ; FUNCTION
    #:tc-location
    #:tc-secondary-location
    #:tc-note
@@ -91,6 +92,11 @@ This requires a valid PPRINT-VARIABLE-CONTEXT")
   "Signal a typechecker error with MESSAGE, and optional NOTES that label source locations."
   (declare (type string message))
   (error 'tc-error :message message :notes notes))
+
+(defun tc-cerror (message &rest notes)
+  "Signal a continuable typechecker error with MESSAGE, and optional NOTES that label source locations."
+  (declare (type string message))
+  (cerror "Ignore and continue anyway." 'tc-error :message message :notes notes))
 
 (define-condition coalton-internal-type-error (error)
   ()

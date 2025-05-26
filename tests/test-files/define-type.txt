@@ -266,7 +266,26 @@ error: Invalid target for monomorphize attribute
    |  --------------- when parsing define-type
 
 ================================================================================
-111 define-type, multiple constructor docstrings
+111 Invalid target for inline attribute
+================================================================================
+
+(package test-package)
+
+(inline)
+(define-type T)
+
+--------------------------------------------------------------------------------
+
+error: Invalid target for inline attribute
+  --> test:3:0
+   |
+ 3 |  (inline)
+   |  ^^^^^^^^ inline must be attached to a define or declare form
+ 4 |  (define-type T)
+   |  --------------- when parsing define-type
+
+================================================================================
+112 define-type, multiple constructor docstrings
 ================================================================================
 
 (package test-package)
@@ -283,7 +302,7 @@ error: Malformed type definition
    |                       ^^^^^^^^^^^^^^^^^^^ only one docstring allowed per constructor
 
 ================================================================================
-112 define-type, multiple type docstrings
+113 define-type, multiple type docstrings
 ================================================================================
 
 (package test-package)

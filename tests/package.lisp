@@ -22,6 +22,7 @@
   (:local-nicknames
    (#:types #:coalton-library/types)
    (#:math #:coalton-library/math)
+   (#:hyperdual #:coalton-library/math/hyperdual)
    (#:big-float #:coalton-library/big-float)
    (#:char #:coalton-library/char)
    (#:string #:coalton-library/string)
@@ -36,7 +37,8 @@
    (#:red-black/map #:coalton-library/ord-map)
    (#:result #:coalton-library/result)
    (#:seq #:coalton-library/seq)
-   (#:file #:coalton-library/file)))
+   (#:file #:coalton-library/file)
+   (#:experimental #:coalton-library/experimental)))
 
 (in-package #:coalton-native-tests)
 

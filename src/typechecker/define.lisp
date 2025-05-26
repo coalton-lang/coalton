@@ -269,7 +269,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc:substitution-list subs)
              (type tc-env env)
              (values tc:ty tc:ty-predicate-list accessor-list node-integer-literal tc:substitution-list &optional))
-    
+
     (let* ((num
              (util:find-symbol "NUM" "COALTON-LIBRARY/CLASSES"))
            (tvar
@@ -383,7 +383,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                  (setf fun-ty (tc:apply-substitution subs fun-ty))
                                  (tc-error "Argument error"
                                            (if (null (tc:function-type-arguments fun-ty))
-                                               (tc-note node "Unable to call '~S': it is not a function"
+                                               (tc-note node "Unable to call value of type '~S': it is not a function"
                                                         fun-ty)
                                                (tc-note node "Function call has ~D arguments but inferred type '~S' only takes ~D"
                                                         (length rands)
@@ -690,7 +690,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                   :branches branch-nodes)
                  subs)))
           (tc:coalton-internal-type-error ()
-            (standard-expression-type-mismatch-error node subs expr-node ret-ty))))))
+            (standard-expression-type-mismatch-error node subs expected-type ret-ty))))))
 
   (:method ((node parser:node-progn) expected-type subs env)
     (declare (type tc:ty expected-type)
@@ -843,7 +843,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                     (tc-note node "Expected type '~S' but 'or' evaluates to '~S'"
                              (tc:apply-substitution subs expected-type)
                              tc:*boolean-type*))))))
-  
+
   (:method ((node parser:node-and) expected-type subs env)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
@@ -1029,7 +1029,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
 
         (handler-case
             (progn
-              (setf subs (tc:unify subs tc:*unit-type* expected-type))              
+              (setf subs (tc:unify subs tc:*unit-type* expected-type))
               (values
                tc:*unit-type*
                preds
@@ -1052,14 +1052,14 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
 
     (multiple-value-bind (expr-ty preds accessors expr-node subs)
         (infer-expression-type (parser:node-while-let-expr node)
-                               (tc:make-variable) 
+                               (tc:make-variable)
                                subs
                                env)
 
       (multiple-value-bind (pat-ty pat-node subs)
           (infer-pattern-type (parser:node-while-let-pattern node) expr-ty subs env)
         (declare (ignore pat-ty))
-        
+
         (multiple-value-bind (body-ty preds_ accessors_ body-node subs)
             (infer-expression-type (parser:node-while-let-body node)
                                    (tc:make-variable)
@@ -1068,7 +1068,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
           (declare (ignore body-ty))
           (setf preds (append preds preds_))
           (setf accessors (append accessors accessors_))
-          
+
           (handler-case
               (progn
                 (setf subs (tc:unify subs tc:*unit-type* expected-type))
@@ -1147,7 +1147,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                env)
       (declare (ignore body-ty))
       (handler-case
-          (progn 
+          (progn
             (setf subs (tc:unify subs tc:*unit-type* expected-type))
             (values
              tc:*unit-type*
@@ -1169,7 +1169,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (values tc:ty tc:ty-predicate-list accessor-list node-break tc:substitution-list &optional))
     (handler-case
         (progn
-          (setf subs (tc:unify subs tc:*unit-type* expected-type)) 
+          (setf subs (tc:unify subs tc:*unit-type* expected-type))
           (values
            tc:*unit-type*
            nil
@@ -1330,7 +1330,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
 
            (nodes
              (loop :for elem :in (parser:node-do-nodes node)
-                   :collect (etypecase elem 
+                   :collect (etypecase elem
                               ;; Expressions are typechecked normally
                               ;; and then unified against "m a" where
                               ;; "a" is a fresh tyvar each time
@@ -1402,7 +1402,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                 :type (tc:qualify nil ty)
                 :location (source:location node)
                 :nodes nodes
-                :last-node last-node) 
+                :last-node last-node)
                subs))
           (tc:coalton-internal-type-error ()
             (tc-error "Type mismatch"
@@ -1446,7 +1446,14 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
              (values tc:ty pattern-literal tc:substitution-list))
 
     (let ((ty (etypecase (parser:pattern-literal-value pat)
-                (integer tc:*integer-type*)
+                (integer (let* ((num
+                                  (util:find-symbol "NUM" "COALTON-LIBRARY/CLASSES"))
+                                (tvar
+                                  (tc:make-variable))
+                                (pred
+                                  (tc:make-ty-predicate :class num :types (list tvar) :location (source:location pat))))
+                           (setf subs (tc:compose-substitution-lists (tc:default-subs (tc-env-env env) (list tvar) (list pred)) subs))
+                           tvar))
                 (ratio tc:*fraction-type*)
                 (single-float tc:*single-float-type*)
                 (double-float tc:*double-float-type*)
@@ -1706,7 +1713,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
            (type tc:substitution-list subs)
            (type tc-env env)
            (values tc:ty-predicate-list (or toplevel-define node-let-binding instance-method-definition) tc:substitution-list &optional))
-  
+
   ;; HACK: recursive scc checking on instances is too strict
   (unless (typep binding 'parser:instance-method-definition)
     (check-for-invalid-recursive-scc (list binding) (tc-env-env env)))
@@ -2078,7 +2085,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
                        (output-schemes
                          (loop :for ty :in output-qual-tys
-                               :collect (tc:quantify (tc:apply-substitution subs local-tvars) ty)))
+                               :collect (tc:quantify (tc:type-variables (tc:apply-substitution subs local-tvars)) ty)))
 
                        (rewrite-table
                          (loop :with table := (make-hash-table :test #'eq)
@@ -2391,9 +2398,9 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
                      (new-vars (set-difference closure-vars fundep-vars :test #'eq))
 
-                     (new-tys (util:project-map
+                     (new-tys (util:project-elements
                                new-vars
-                               (tc:get-table (tc:ty-class-class-variable-map class))
+                               (tc:ty-class-class-variables class)
                                (tc:ty-predicate-types pred))))
 
                 (loop :for var :in (set-difference

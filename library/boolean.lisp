@@ -19,9 +19,10 @@
   ;;
 
   (define-instance (Eq Boolean)
+    (inline)
     (define (== x y)
-        (lisp Boolean (x y)
-              (cl:eq x y))))
+      (lisp Boolean (x y)
+        (cl:eq x y))))
 
   (define-instance (Ord Boolean)
     (define (<=> x y)
@@ -36,9 +37,10 @@
            ((False) EQ))))))
 
   (define-instance (Default Boolean)
-    (define (default) False)))
+    (inline)
+    (define (default) False))
 
-(define-sxhash-hasher Boolean)
+  (define-sxhash-hasher Boolean))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/BOOLEAN")

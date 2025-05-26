@@ -152,12 +152,6 @@
 
   (define-instance (Iso (Result Unit :a) (Optional :a)))
 
-  (define-instance (Unwrappable (Result :a))
-    (define (unwrap-or-else succeed fail res)
-      (match res
-        ((Ok elt) (succeed elt))
-        ((Err _) (fail)))))
-
   (define-instance (iter:IntoIterator (Result :err :elt) :elt)
     (define (iter:into-iter result)
       (match result

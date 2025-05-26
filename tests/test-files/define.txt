@@ -38,13 +38,42 @@
 (define x 5)
 
 ================================================================================
-5 Define with inline constructor
+5 Define with inline attribute
+================================================================================
+
+(package coalton-unit-tests)
+
+(inline)
+(define x 5)
+
+================================================================================
+6 Define with inline constructor
 ================================================================================
 
 (package coalton-unit-tests/prelude
   (import coalton-prelude))
 
 (define (f (Tuple x _y)) x)
+
+================================================================================
+7 Declare with inline attribute and define
+================================================================================
+
+(package coalton-unit-tests)
+
+(declare y Integer)
+(inline)
+(define y 3)
+
+================================================================================
+8 Declare after inline attribute and define
+================================================================================
+
+(package coalton-unit-tests)
+
+(inline)
+(declare z Integer)
+(define z 4)
 
 ================================================================================
 100 Unknown type
@@ -138,6 +167,28 @@ error: Duplicate monomorphize attribute
    |  -------------- previous attribute here
  4 |  (monomorphize)
    |  ^^^^^^^^^^^^^^ monomorphize attribute here
+ 5 |  (define f x)
+   |  ------------ when parsing define
+
+================================================================================
+Duplicate inline attribute
+================================================================================
+
+(package test-package)
+
+(inline)
+(inline)
+(define f x)
+
+--------------------------------------------------------------------------------
+
+error: Duplicate inline attribute
+  --> test:4:0
+   |
+ 3 |  (inline)
+   |  -------- previous attribute here
+ 4 |  (inline)
+   |  ^^^^^^^^ inline attribute here
  5 |  (define f x)
    |  ------------ when parsing define
 

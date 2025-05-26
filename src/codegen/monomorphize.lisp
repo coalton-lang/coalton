@@ -65,6 +65,7 @@
    (#:tc #:coalton-impl/typechecker))
   (:export
    #:make-candidate-manager
+   #:dictionary-node-p
    #:monomorphize))
 
 (in-package #:coalton-impl/codegen/monomorphize)
@@ -99,10 +100,8 @@ ARGUMENTS some of which are statically known dictionaries."
 (defun propagatable-p (x)
   (not (eq x '@@unpropagated)))
 
-(defun node-can-be-propagated (node env)
-  "Returns true if a given node should be const propagated to a callee.
-Currently only typeclass dictionaries will be propagated, although
-constant values could be."
+(defun dictionary-node-p (node env)
+  "Does NODE represent an instance dictionary?"
   (cond
     ((and
       (node-variable-p node)
@@ -122,6 +121,12 @@ constant values could be."
 
     (t
      nil)))
+
+(defun node-can-be-propagated (node env)
+  "Returns true if a given node should be const propagated to a callee.
+Currently only typeclass dictionaries will be propagated, although
+constant values could be."
+  (dictionary-node-p node env))
 
 (defstruct candidate-manager
   "A CANDIDATE-MANAGER is used to deduplicate COMPILE-CANDIDATE
@@ -414,11 +419,12 @@ propagate dictionaries that have been moved by the hoister."
       (action (:after node-application) #'apply-candidate)
       (action (:after node-direct-application) #'apply-candidate)))))
 
-(defun monomorphize (name manager package resolve-table optimize-node env)
+(defun monomorphize (name manager package resolve-table inline-p-table optimize-node env)
   (declare (type symbol name)
            (type candidate-manager manager)
            (type package package)
            (type hash-table resolve-table)
+           (type hash-table inline-p-table)
            (type function optimize-node)
            (type tc:environment env)
            (values binding-list &optional))
@@ -435,6 +441,10 @@ propagate dictionaries that have been moved by the hoister."
 
           :for name := (compile-candidate-name candidate)
           :for code := (tc:lookup-code env name)
+          :for function-env-entry := (tc:lookup-function env name :no-error t)
+          :for inline-p := (and (node-abstraction-p code)
+                                function-env-entry
+                                (tc:function-env-entry-inline-p function-env-entry))
           :for new-code := (funcall optimize-node (compile-candidate candidate code env) env)
 
           :for new-code_ := (progn
@@ -442,9 +452,12 @@ propagate dictionaries that have been moved by the hoister."
                               (rewrite-callsites new-code manager resolve-table env))
 
           :for new-code__ := (funcall optimize-node new-code_ env)
+          :for candidate-name := (candidate-manager-get manager candidate)
 
           :do (candidate-selection new-code__ manager resolve-table package env)
-          :do (push (cons (candidate-manager-get manager candidate) (rewrite-callsites new-code__ manager resolve-table env))
-                    binding-group))
+          :do (push (cons candidate-name (rewrite-callsites new-code__ manager resolve-table env))
+                    binding-group)
+          :do (when inline-p
+                (setf (gethash candidate-name inline-p-table) t)))
 
     binding-group))

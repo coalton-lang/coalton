@@ -36,6 +36,9 @@
   (define array/single-float (array:make 10 0.0))
   (declare array/double-float (array:LispArray Double-Float))
   (define array/double-float (array:make 10 0.0d0))
+
+  (declare array/array/complex-single-float (array:LispArray (array:LispArray (math:Complex Single-Float))))
+  (define array/array/complex-single-float (array:make 10 (array:make 10 0)))
   )
 
 (define-test array-length ()
@@ -79,3 +82,48 @@
   (is (== (array:set! array/double-float 0 2.71828d0) Unit))
   (is (== (array:aref array/double-float 0) 2.71828d0))
   )
+
+(define-test nested-complex-array-test ()
+  (let ((ty (types:runtime-repr-of array/array/complex-single-float)))
+    (is (lisp Boolean (ty)
+          (cl:equal ty '(cl:simple-array
+                            (cl:simple-array
+                             (cl:complex cl:single-float)
+                             (cl:*))
+                            (cl:*)))))))
+
+(define-test array-copy ()
+  (let ((v (array:copy array/generic)))
+    (is (== (array:length v) (array:length array/generic)))
+    (is (experimental:everytimes (i (array:length array/generic))
+          (== (array:aref v i) (array:Aref array/generic i))))
+    (array:set! v 2 (Some 5))
+    (is (== (array:aref v 2) (Some 5)))
+    (is (== (array:aref array/generic 2) None)))
+
+  (let ((v (array:copy array/single-float)))
+    (is (== (array:length v) (array:length array/single-float)))
+    (is (experimental:everytimes (i (array:length array/single-float))
+          (== (array:aref v i) (array:aref array/single-float i))))
+    (array:set! v 2 0.2)
+    (is (== (array:aref v 2) 0.2))
+    (is (== (array:aref array/single-float 2) 0.0))))
+
+(define-test array-iso-list ()
+  (let ((xs (as (List Single-Float) array/single-float))
+        (v (as (array:LispArray Single-Float) xs)))
+    (experimental:dolist-enumerated (i x xs)
+      (is (== x (array:aref array/single-float i)))
+      (is (== x (array:aref v i))))
+    (is (experimental:everytimes (i (array:length array/single-float))
+          (== (array:aref v i) (array:aref array/single-float i))))))
+
+(define-test array-foldable ()
+  (let ((v (as (array:LispArray Integer) (make-list 0 1 2 3 4)))
+        (fl (fn (str x) (msum (make-list "(" str (into x) ")"))))
+        (fr (fn (x str) (msum (make-list "(" (into x) str ")"))))
+        (sl (fold fl "" v))
+        (sr (foldr fr "" v)))
+    (is (== "(((((0)1)2)3)4)" sl))
+    (is (== "(0(1(2(3(4)))))" sr))))
+

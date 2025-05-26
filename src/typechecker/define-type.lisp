@@ -314,7 +314,8 @@
                         ctor-name
                         (tc:make-function-env-entry
                          :name ctor-name
-                         :arity (tc:constructor-entry-arity ctor)))))
+                         :arity (tc:constructor-entry-arity ctor)
+                         :inline-p nil))))
                 ((tc:lookup-function env ctor-name :no-error t)
                  ;; If the constructor does not take
                  ;; parameters then remove it from the
@@ -496,6 +497,13 @@
 (defun maybe-runtime-repr-instance (type)
   (declare (type type-definition type))
   (unless (or (equalp *package* (find-package "COALTON-LIBRARY/TYPES"))
+              ;; LispArray and Complex instance of RuntimeRepr are
+              ;; defined in the standard library as specialized
+              ;; native types.
+              (and (equalp *package* (find-package "COALTON-LIBRARY/LISPARRAY"))
+                   (eq (type-definition-name type) (find-symbol "LISPARRAY" *package*)))
+              (and (equalp *package* (find-package "COALTON-LIBRARY/MATH/COMPLEX"))
+                   (eq (type-definition-name type) (find-symbol "COMPLEX" *package*)))
               (type-definition-aliased-type type))
     (make-runtime-repr-instance type)))
 
@@ -554,7 +562,10 @@
                                    :vars nil
                                    :var-names nil
                                    :body (list (util:runtime-quote (type-definition-runtime-type type)))))
-                :location location))
+                :location location
+                ;; Always inline RUNTIME-REPR so that other
+                ;; optimizations can kick off.
+                :inline (parser:make-attribute-inline :location location)))
      :location location
      :head-location location
      :compiler-generated t)))

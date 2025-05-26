@@ -46,6 +46,7 @@
                (:file "types")
                (:file "primitive-types")
                (:file "classes")
+               (:file "hash-defining-macros")
                (:file "hash")
                (:file "builtin")
                (:file "functions")
@@ -54,6 +55,7 @@
                (:module "math"
                 :serial t
                 :components ((:file "arith")
+                             (:file "num-defining-macros")
                              (:file "num")
                              (:file "bounded")
                              (:file "conversions")
@@ -64,6 +66,11 @@
                              (:file "elementary")
                              (:file "dyadic")
                              (:file "dual")
+                             (:file "hyperdual")
+                             (:file "package")))
+               (:module "experimental"
+                :serial t
+                :components ((:file "loops")
                              (:file "package")))
                (:file "randomaccess")
                (:file "cell")
@@ -156,6 +163,9 @@
   :components ((:file "package")
                (:file "fibonacci")
                (:file "big-float")
+               (:file "pi")
+               (:file "seq")
+               (:file "matrix")
                (:module "gabriel-benchmarks"
                 :serial t
                 :components ((:file "tak")
@@ -245,13 +255,14 @@
                (:file "runtime-tests")
                (:module "typechecker"
                 :serial t
-                :components ((:file "map-tests")
-                             (:file "lisp-type-tests")))
+                :components ((:file "lisp-type-tests")))
                (:file "environment-persist-tests")
                (:file "coalton-tests")
+               (:file "shortcut-tailcall-tests")
                (:file "slice-tests")
                (:file "float-tests")
                (:file "dual-tests")
+               (:file "hyperdual-tests")
                (:file "quantize-tests")
                (:file "hashtable-tests")
                (:file "iterator-tests")
@@ -270,4 +281,5 @@
                (:file "looping-native-tests")
                (:file "monomorphizer-tests")
                (:file "inliner-tests")
-               (:file "file-tests")))
+               (:file "file-tests")
+               (:file "experimental-tests")))

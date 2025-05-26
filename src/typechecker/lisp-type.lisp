@@ -99,9 +99,18 @@ USE-FUNCTION-ENTRIES specifies whether to emit FUNCTION-ENTRY for functions, emi
             ;; LISP-TYPE on a TYVAR, because that will resolve to
             ;; `cl:t`, which isn't the correct type of
             ;; arbitrarily-typed arrays.
-            (if (typep to 'tyvar)
-                `(cl:simple-array cl:* (cl:*))
-                `(cl:simple-array ,(lisp-type to env) (cl:*))))
+            (cond
+              ((or
+                ;; (LispArray :t)
+                (typep to 'tyvar)
+                ;; (LispArray (Complex :t))
+                (and (typep to 'tapp)
+                     (typep (tapp-from to) 'tycon)
+                     (complex-tycon-p (tycon-name (tapp-from to)))
+                     (typep (tapp-to to) 'tyvar)))
+               `(cl:simple-array cl:* (cl:*)))
+              (t
+               `(cl:simple-array ,(lisp-type to env) (cl:*)))))
 
            ;; When FROM is a transparent type, and we got a specialized type,
            ;; we propagate parameterization to the inner type.

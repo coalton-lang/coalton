@@ -103,6 +103,34 @@
   (define (== _ _) True))
 
 ================================================================================
+10 Define instance
+================================================================================
+
+(package coalton-unit-tests)
+
+;; see issue #1340
+
+(define-type (T :a))
+(define-class (P :a))
+(define-class (C :a :b))
+(define-class ((P :a) (C :b :a) => PC :b :a))
+(define-instance (C (T :a) :a))
+(define-instance (P :a => PC (T :a) :a))
+
+================================================================================
+11 Define instance with inline
+================================================================================
+
+(package coalton-unit-tests/prelude
+  (import coalton-prelude))
+
+(define-type D X Y Z)
+
+(define-instance (Eq D)
+  (inline)
+  (define (== _ _) True))
+
+================================================================================
 100 Malformed method definition
 ================================================================================
 
@@ -298,3 +326,41 @@ error: Malformed instance definition
    |
  3 |  (define-instance (C :a => (C (List :a)) :b))
    |                                          ^^ unexpected form
+
+================================================================================
+111 Malformed instance inline
+================================================================================
+
+(package test-package)
+
+(define-instance (C :a)
+  (inline))
+
+--------------------------------------------------------------------------------
+
+error: Inline attribute must be attached to a method definition
+  --> test:4:2
+   |
+ 4 |    (inline))
+   |    ^^^^^^^^ inline attribute here
+
+
+================================================================================
+112 Duplicate instance inline
+================================================================================
+
+(package test-package)
+
+(define-instance (C :a)
+  (inline)
+  (inline))
+
+--------------------------------------------------------------------------------
+
+error: Duplicate inline attribute
+  --> test:5:2
+   |
+ 4 |    (inline)
+   |    -------- previous attribute here
+ 5 |    (inline))
+   |    ^^^^^^^^ inline attribute here

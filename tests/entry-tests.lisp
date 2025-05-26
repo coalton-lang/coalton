@@ -14,7 +14,7 @@
   (let* ((file (source:make-source-file (compile-test-file)))
          (source-form-types (mapcar #'first
                                     (source-forms (entry:codegen file)))))
-    (dolist (expect-type '(defpackage in-package defun eval-when let setf))
+    (dolist (expect-type '(defpackage in-package eval-when locally))
       (is (position expect-type source-form-types)
           "Missing expected ~A form in generated code" expect-type))))
 
@@ -34,6 +34,6 @@
             "Test function was bound as side effect of loading fasl")
         (is (= 120 (funcall fact 5))
             "Test function is callable")
-        (is (equalp (tc:make-function-env-entry :name fact :arity 1)
+        (is (equalp (tc:make-function-env-entry :name fact :arity 1 :inline-p nil)
                     (tc:lookup-function entry:*global-environment* fact :no-error t))
             "Environment was restored")))))

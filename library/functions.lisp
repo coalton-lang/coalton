@@ -52,6 +52,7 @@
     "Print the String representation of `item` to `cl:*standard-output*`."
     (trace (into item)))
 
+  (inline)
   (declare unsafe-pointer-eq? (:a -> :a -> Boolean))
   (define (unsafe-pointer-eq? a b)
     (lisp Boolean (a b)
@@ -73,16 +74,19 @@
             (* n (f (- n 1)))))))"
     (f (fix f) n))
 
+  (inline)
   (declare id (:a -> :a))
   (define (id x)
     "A function that always returns its argument."
     x)
 
+  (inline)
   (declare const (:a -> :b -> :a))
   (define (const a _b)
     "A function that always returns its first argument."
     a)
 
+  (inline)
   (declare flip ((:a -> :b -> :c) -> :b -> :a -> :c))
   (define (flip f x y)
     "Returns a function that takes its arguments in reverse order."
@@ -93,16 +97,11 @@
     "The same as `fold` but with the argument order swapped to match `cl:reduce`"
     (fold (flip f) y xs))
 
-
-  ;; We don't write (COMPOSE F G X) even though it's OK so that the
-  ;; most common case of using compose---as a binary function---is
-  ;; considered to be "saturated".
-  (declare compose ((:b -> :c) -> (:a -> :b) -> (:a -> :c)))
-  (define (compose f g)
-    "Produces a function equivalent to applying `g` followed by `f`."
-    ;; Note: ((compose f g) x) behaves like (f (g x))
-    (fn (x)
-      (f (g x))))
+  (inline)
+  (declare compose ((:b -> :c) -> (:a -> :b) -> :a -> :c))
+  (define (compose f g x)
+    "Equivalent to `(f (g x))`."
+    (f (g x)))
 
   (declare conjoin ((:a -> Boolean) -> (:a -> Boolean) -> :a -> Boolean))
   (define (conjoin f g x)
@@ -114,6 +113,7 @@
     "Compute the disjunction of two unary Boolean functions."
     (or (f x) (g x)))
 
+  (inline)
   (declare complement ((:a -> Boolean) -> :a -> Boolean))
   (define (complement f x)
     "Compute the complement of a unary Boolean function."
@@ -150,6 +150,7 @@
     "Fold over a list using `alt`."
     (foldr alt empty xs))
 
+  (inline)
   (declare /= (Eq :a => :a -> :a -> Boolean))
   (define (/= a b)
     "Is `a` not equal to `b`?"
@@ -160,7 +161,14 @@
   ;;
 
   (define-instance (Functor (Arrow :a))
-    (define map compose)))
+    (define map compose))
+
+  (define-instance (Applicative (Arrow :a))
+    (define (pure x) (fn (_) x))
+    (define (liftA2 f g h) (fn (x) (f (g x) (h x)))))
+
+  (define-instance (Monad (Arrow :a))
+    (define (>>= f g) (fn (x) (g (f x) x)))))
 
 ;;;
 ;;; Bracket pattern

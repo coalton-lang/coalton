@@ -63,6 +63,7 @@ a = (+ (* b (div a b)) (mod a b))
 are floored and truncated division, respectively."
     (toInteger (:int -> Integer)))
 
+  (inline)
   (declare integral->num ((Integral :a) (Num :b) => :a -> :b))
   (define (integral->num n)
     "Converts any Integral N into any Num."
@@ -81,12 +82,12 @@ are floored and truncated division, respectively."
   (declare even? (Integral :a => :a -> Boolean))
   (define (even? n)
     "Is N even?"
-    (== 0 (rem n 2)))
+    (== 0 (mod n 2)))
 
   (declare odd? (Integral :a => :a -> Boolean))
   (define (odd? n)
     "Is N odd?"
-    (not (even? n)))
+    (== 1 (mod n 2)))
 
   (declare ^ ((Num :a) (Integral :int) => (:a -> :int -> :a)))
   (define (^ base power)
@@ -137,14 +138,14 @@ are floored and truncated division, respectively."
   (declare factorial ((Integral :int) => :int -> :int))
   (define (factorial n)
     "The factorial of N."
-    (let ((factorial-rec 
-            (fn (a)
-              (if (> a 0)
-                  (* a (factorial-rec (- a 1)))
-                  1))))
-      (if (< n 0)
-          (error "Cannot FACTORIAL a negative number.")
-          (factorial-rec n))))
+    (cond
+      ((< n 0)
+       (error "Cannot FACTORIAL a negative number."))
+      (True
+       (rec % ((a n) (acc 1))
+         (if (== 0 n)
+             acc
+             (% (- a 1) (* a acc)))))))
 
   (declare ilog ((Integral :int) => :int -> :int -> :int))
   (define (ilog b x)
@@ -182,75 +183,105 @@ are floored and truncated division, respectively."
 (cl:defmacro %define-remainder-native (type)
   `(coalton-toplevel
      (define-instance (Remainder ,type)
+       (inline)
        (define (quot a n)
-         (lisp ,type (a n)
-           (cl:nth-value 0 (cl:truncate a n))))
+         (fromInt (lisp Integer (a n) (cl:truncate a n))))
+       (inline)
        (define (rem a n)
          (lisp ,type (a n) (cl:rem a n)))
+       (inline)
        (define (quotRem a n)
-         (lisp (Tuple ,type ,type) (a n)
-           (cl:multiple-value-call 'Tuple (cl:truncate a n))))
+         (match (lisp (Tuple Integer ,type) (a n)
+                  (cl:multiple-value-call 'Tuple (cl:truncate a n)))
+           ((Tuple q r)
+            (Tuple (fromInt q) r))))
+       (inline)
+       (define (div a n)
+         (fromInt (lisp Integer (a n) (cl:floor a n))))
+       (inline)
        (define (mod a n)
          (lisp ,type (a n) (cl:mod a n)))
-       (define (div a n)
-         (lisp ,type (a n)
-           (cl:nth-value 0 (cl:floor a n))))
+       (inline)
        (define (divMod a n)
-         (lisp (Tuple ,type ,type) (a n)
-           (cl:multiple-value-call 'Tuple (cl:floor a n)))))))
+         (match (lisp (Tuple Integer ,type) (a n)
+                  (cl:multiple-value-call 'Tuple (cl:floor a n)))
+           ((Tuple d m)
+            (Tuple (fromInt d) m)))))))
 
 (cl:defmacro %define-integral-native (type signed)
   (cl:let ((even? (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-EVEN?")))
            (odd? (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-ODD?")))
            (gcd (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-GCD")))
            (^ (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-^")))
+           (^^ (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-^^")))
            (lcm (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-LCM")))
            (isqrt (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-ISQRT"))))
     `(cl:progn 
        (%define-remainder-native ,type)
        
        (coalton-toplevel
-        (define-instance (Integral ,type)
-          (define toInteger into))
+         (define-instance (Integral ,type)
+           (inline)
+           (define (toInteger x) (into x)))
 
-        (specialize even? ,even? (,type -> Boolean))
-        (declare ,even? (,type -> Boolean))
-        (define (,even? n)
-          (lisp Boolean (n) (to-boolean (cl:evenp n))))
+         (specialize even? ,even? (,type -> Boolean))
+         (inline)
+         (declare ,even? (,type -> Boolean))
+         (define (,even? n)
+           (lisp Boolean (n) (to-boolean (cl:evenp n))))
 
-        (specialize odd? ,odd? (,type -> Boolean))
-        (declare ,odd? (,type -> Boolean))
-        (define (,odd? n)
-          (lisp Boolean (n) (to-boolean (cl:oddp n))))
+         (specialize odd? ,odd? (,type -> Boolean))
+         (inline)
+         (declare ,odd? (,type -> Boolean))
+         (define (,odd? n)
+           (lisp Boolean (n) (to-boolean (cl:oddp n))))
 
-        (specialize ^ ,^ (,type -> ,type -> ,type))
-        (declare ,^ (,type -> ,type -> ,type))
-        (define (,^ base power)
-          ,(cl:if signed
-                  `(if (< power 0)
-                        (error "Can't exponentiate with a negative exponent.")
-                        (lisp ,type (base power) (cl:expt base power)))
-                  `(lisp ,type (base power) (cl:expt base power))))
+         (specialize ^ ,^ (,type -> ,type -> ,type))
+         (declare ,^ (,type -> ,type -> ,type))
+         ,(cl:cond
+            (signed
+             `(define (,^ base power)
+                (if (< power 0)
+                    (error "Can't exponentiate with a negative exponent.")
+                    (lisp ,type (base power) (cl:expt base power)))))
+            (cl:t
+             `(progn
+                (inline)
+                (define (,^ base power)
+                  (lisp ,type (base power) (cl:expt base power))))))
 
-        (specialize gcd ,gcd (,type -> ,type -> ,type))
-        (declare ,gcd (,type -> ,type -> ,type))
-        (define (,gcd a b)
-          (lisp ,type (a b) (cl:gcd a b)))
+         (specialize ^^ ,^^ (,type -> ,type -> ,type))
+         (inline)
+         (declare ,^^ (,type -> ,type -> ,type))
+         (define (,^^ base power)
+           (lisp ,type (base power) (cl:expt base power)))
 
-        (specialize lcm ,lcm (,type -> ,type -> ,type))
-        (declare ,lcm (,type -> ,type -> ,type))
-        (define (,lcm a b)
-          ;; Allow Coalton to handle fixnum overflow
-          (fromInt (lisp Integer (a b) (cl:lcm a b))))
+         (specialize gcd ,gcd (,type -> ,type -> ,type))
+         (inline)
+         (declare ,gcd (,type -> ,type -> ,type))
+         (define (,gcd a b)
+           (lisp ,type (a b) (cl:gcd a b)))
 
-        (specialize isqrt ,isqrt (,type -> ,type))
-        (declare ,isqrt (,type -> ,type))
-        (define (,isqrt a)
-          ,(cl:if signed
-                  `(if (< a 0)
-                        (error "Can't take ISQRT of a negative number.")
-                        (lisp ,type (a) (cl:isqrt a)))
-                  `(lisp ,type (a) (cl:isqrt a))))))))
+         (specialize lcm ,lcm (,type -> ,type -> ,type))
+         (inline)
+         (declare ,lcm (,type -> ,type -> ,type))
+         (define (,lcm a b)
+           ;; Allow Coalton to handle fixnum overflow
+           (fromInt (lisp Integer (a b) (cl:lcm a b))))
+
+         (specialize isqrt ,isqrt (,type -> ,type))
+         (declare ,isqrt (,type -> ,type))
+         ,(cl:cond
+            (signed
+             `(define (,isqrt a)
+                (if (< a 0)
+                    (error "Can't take ISQRT of a negative number.")
+                    (lisp ,type (a) (cl:isqrt a)))))
+            (cl:t
+             `(progn
+                (inline)
+                (define (,isqrt a)
+                  (lisp ,type (a) (cl:isqrt a))))))))))
 
 (%define-integral-native Integer cl:t)
 (%define-integral-native I8 cl:t)
@@ -264,6 +295,8 @@ are floored and truncated division, respectively."
 (%define-integral-native U64 cl:nil)
 (%define-integral-native UFix cl:nil)
 (%define-remainder-native Fraction)
+(%define-remainder-native Single-Float)
+(%define-remainder-native Double-Float)
 
 (cl:defmacro %define-native-expt (type)
   (cl:let ((^ (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-^")))
@@ -278,6 +311,7 @@ are floored and truncated division, respectively."
              (lisp ,type (base power) (cl:expt base power))))
 
        (specialize ^^ ,^^ (,type -> Integer -> ,type))
+       (inline)
        (declare ,^^ (,type -> Integer -> ,type))
        (define (,^^ base power)
          (lisp ,type (base power) (cl:expt base power))))))

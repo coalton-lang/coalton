@@ -57,21 +57,23 @@ BODY within a `coalton' expression."
                :collect `(let ,name = ,value))
           (if ,names
               (%register-success)
-              (lisp :a ,names
-                (fiasco::record-failure
-                 'coalton-failure
-                 :format-control "IS assertion ~A~%Evaluates to application ~A~%Evaluates to False~%~A"
-                 :format-arguments (cl:list ',check ,(cons 'cl:list names) ,message)))))))
+              (lisp Unit ,names
+                (cl:prog1 Unit
+                  (fiasco::record-failure
+                   'coalton-failure
+                   :format-control "IS assertion ~A~%Evaluates to application ~A~%Evaluates to False~%~A"
+                   :format-arguments (cl:list ',check ,(cons 'cl:list names) ,message))))))))
     (cl:t
      `(progn
         (%register-assertion)
         (if ,check
             (%register-success)
-            (lisp :a ()
-              (fiasco::record-failure
-               'coalton-failure
-               :format-control "IS assertion ~A~%Evaluates to False~%~A"
-               :format-arguments (cl:list ',check ,message))))))))
+            (lisp Unit ()
+              (cl:prog1 Unit
+                (fiasco::record-failure
+                 'coalton-failure
+                 :format-control "IS assertion ~A~%Evaluates to False~%~A"
+                 :format-arguments (cl:list ',check ,message)))))))))
 
 (cl:defmacro matches (pattern expr cl:&optional (message ""))
   (cl:check-type message cl:string)

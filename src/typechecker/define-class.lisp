@@ -221,20 +221,15 @@
              := (loop :for super :in (partial-class-superclasses partial)
                       :for i :from 0
                       :collect (cons super
-                                     (alexandria:format-symbol
-                                      *package*
-                                      (format nil "SUPER-~D" i))))
+                                     (alexandria:format-symbol *package* "SUPER-~D"
+                                                               i)))
 
            :for superclass-map
-             := (loop :with table := (tc:make-map :test 'eq)
-                      :for (pred . super-name) :in superclass-dict
-                      :for prefixed-name := (alexandria:format-symbol
-                                             *package*
-                                             "~A-~A"
-                                             codegen-sym
-                                             super-name)
-                      :do (setf (tc:get-value table prefixed-name) super-name)
-                      :finally (return table))
+             := (loop :for (pred . super-name) :in superclass-dict
+                      :for prefixed-name := (alexandria:format-symbol *package* "~A-~A"
+                                                                      codegen-sym
+                                                                      super-name)
+                      :collect (cons prefixed-name super-name))
 
            :for fundeps
              := (loop :for fundep :in (parser:toplevel-define-class-fundeps class)
@@ -248,15 +243,7 @@
                   :predicate pred
                   :superclasses (partial-class-superclasses partial)
                   :class-variables class-vars
-
-                  :class-variable-map (loop :with table := (tc:make-map :test 'eq)
-                                            :for var :in class-vars
-                                            :for i :from 0
-                                            :do (setf (tc:get-value table var) i)
-                                            :finally (return table))
-
                   :fundeps fundeps
-
                   :unqualified-methods (loop :for method-ty :in (partial-class-method-tys partial)
                                              :for method :in (parser:toplevel-define-class-methods class)
 
@@ -300,7 +287,8 @@
            :if (not (zerop class-arity))
              :do (setf env (tc:set-function env codegen-sym (tc:make-function-env-entry
                                                              :name codegen-sym
-                                                             :arity class-arity)))
+                                                             :arity class-arity
+                                                             :inline-p nil)))
            :else
              :when (tc:lookup-function env codegen-sym :no-error t)
                :do (setf env (tc:unset-function env codegen-sym))
@@ -326,7 +314,8 @@
                      :if (not (zerop method-arity))
                        :do (setf env (tc:set-function env method-name (tc:make-function-env-entry
                                                                        :name method-name
-                                                                       :arity method-arity)))
+                                                                       :arity method-arity
+                                                                       :inline-p nil)))
                      :else
                        :do (setf env (tc:unset-function env method-name))) 
 
@@ -418,10 +407,10 @@
                    :do (loop :for tyvar :in new-tyvars
                              :do (partial-type-env-add-var env tyvar))
 
-                   :collect (multiple-value-bind (ty ksubs_)
+                   :collect (multiple-value-bind (ty_ ksubs_)
                                 (infer-type-kinds ty tc:+kstar+ ksubs env)
                               (setf ksubs ksubs_)
-                              ty))))
+                              (apply-type-alias-substitutions ty_ ty env)))))
 
       (values (make-partial-class :superclasses preds
                                   :method-tys method-tys)

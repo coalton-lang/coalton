@@ -15,6 +15,9 @@
    #:*coalton-optimize*                 ; VARIABLE
    #:*coalton-optimize-library*         ; VARIABLE
    #:*compile-print-types*              ; VARIABLE
+   #:*print-specialization-occurrences* ; VARIABLE
+   #:*print-inlining-occurrences*       ; VARIABLE
+   #:*print-optimization-passes*        ; VARIABLE
    ))
 
 (in-package #:coalton-impl/settings)
@@ -49,6 +52,7 @@
       :perform-inlining                 ; [boolean] automatic inlining?
       :emit-type-annotations            ; [boolean] emit type annotations?
       :print-types                      ; [boolean] print types when compiling?
+      :print-rewrites                   ; [boolean] print rewriting that occurs (specialization/inlining)?
       )
     "Valid configuration keys that can be (SETF GET) on the user configuration variable :COALTON-CONFIG.")
 
@@ -125,6 +129,19 @@ or by pushing `:coalton-release' into `*features*'. Any of these must be done be
 (declaim (type boolean *compile-print-types*))
 (defvar *compile-print-types* (config ':print-types :default nil)
   "Print types of definitions to standard output on compile.")
+
+(declaim (type boolean *print-specialization-occurrences*))
+(defvar *print-specialization-occurrences* (config ':print-rewrites :default nil)
+  "Print out information when a specialization occurs.")
+
+(declaim (type boolean *print-inlining-occurrences*))
+(defvar *print-inlining-occurrences* (config ':print-rewrites :default nil)
+  "Print out information when an inline occurs.")
+
+(declaim (type boolean *print-optimization-passes*))
+(defvar *print-optimization-passes* (config ':print-rewrites :default nil)
+  "Indicate when a node optimization pass is being performed.")
+
 
 (defvar *coalton-optimize* '(optimize (speed 3) (safety 0)))
 

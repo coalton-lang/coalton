@@ -2,13 +2,13 @@
 ;;;;
 ;;;;
 
-(cl:in-package #:coalton-benchmarks)
+(cl:in-package #:benchmark-gabriel)
 
 (define-benchmark takr ()
   (declare (optimize speed))
   (loop :repeat 1000
         :do (with-benchmark-sampling
-              (coalton-benchmarks/native:takr 18 12 6)))
+              (benchmark-gabriel/native:takr 18 12 6)))
   (report trivial-benchmark::*current-timer*))
 
 (define-benchmark takr-lisp ()
@@ -727,7 +727,7 @@
 ;;;
 
 
-(cl:in-package #:coalton-benchmarks/native)
+(cl:in-package #:benchmark-gabriel/native)
 
 (cl:declaim (cl:optimize (cl:speed 3) (cl:safety 0)))
 
@@ -739,7 +739,7 @@
           (True (tak1 (tak37 (- x 1) y z)
                       (tak11 (- y 1) z x)
                       (tak17 (- z 1) x y)))))
-  
+
   (declare tak1 (UFix -> UFix -> UFix -> UFix))
   (define (tak1 x y z)
     (cond ((>= y x) z)
@@ -816,7 +816,7 @@
           (True (tak12 (tak44 (- x 1) y z)
                        (tak32 (- y 1) z x)
                        (tak4 (- z 1) x y)))))
-  
+
   (declare tak12 (UFix -> UFix -> UFix -> UFix))
   (define (tak12 x y z)
     (cond ((>= y x) z)
@@ -830,602 +830,602 @@
           (True (tak14 (tak18 (- x 1) y z)
                        (tak54 (- y 1) z x)
                        (tak38 (- z 1) x y)))))
-  
+
   (declare tak14 (UFix -> UFix -> UFix -> UFix))
   (define (tak14 x y z)
     (cond ((>= y x) z)
           (True (tak15 (tak55 (- x 1) y z)
                        (tak65 (- y 1) z x)
                        (tak55 (- z 1) x y)))))
-    
+
   (declare tak15 (UFix -> UFix -> UFix -> UFix))
   (define (tak15 x y z)
     (cond ((>= y x) z)
           (True (tak16 (tak92 (- x 1) y z)
                        (tak76 (- y 1) z x)
                        (tak72 (- z 1) x y)))))
-  
+
   (declare tak16 (UFix -> UFix -> UFix -> UFix))
   (define (tak16 x y z)
     (cond ((>= y x) z)
           (True (tak17 (tak29 (- x 1) y z)
                        (tak87 (- y 1) z x)
                        (tak89 (- z 1) x y)))))
-    
+
   (declare tak17 (UFix -> UFix -> UFix -> UFix))
   (define (tak17 x y z)
     (cond ((>= y x) z)
           (True (tak18 (tak66 (- x 1) y z)
                        (tak98 (- y 1) z x)
                        (tak6 (- z 1) x y)))))
-    
+
   (declare tak18 (UFix -> UFix -> UFix -> UFix))
   (define (tak18 x y z)
     (cond ((>= y x) z)
           (True (tak19 (tak3 (- x 1) y z)
                        (tak9 (- y 1) z x)
                        (tak23 (- z 1) x y)))))
-    
+
   (declare tak19 (UFix -> UFix -> UFix -> UFix))
   (define (tak19 x y z)
     (cond ((>= y x) z)
           (True (tak20 (tak40 (- x 1) y z)
                        (tak20 (- y 1) z x)
                        (tak40 (- z 1) x y)))))
-  
+
   (declare tak20 (UFix -> UFix -> UFix -> UFix))
   (define (tak20 x y z)
     (cond ((>= y x) z)
           (True (tak21 (tak77 (- x 1) y z)
                        (tak31 (- y 1) z x)
                        (tak57 (- z 1) x y)))))
-  
+
   (declare tak21 (UFix -> UFix -> UFix -> UFix))
   (define (tak21 x y z)
     (cond ((>= y x) z)
           (True (tak22 (tak14 (- x 1) y z)
                        (tak42 (- y 1) z x)
                        (tak74 (- z 1) x y)))))
-    
+
   (declare tak22 (UFix -> UFix -> UFix -> UFix))
   (define (tak22 x y z)
     (cond ((>= y x) z)
           (True (tak23 (tak51 (- x 1) y z)
                        (tak53 (- y 1) z x)
                        (tak91 (- z 1) x y)))))
-    
+
   (declare tak23 (UFix -> UFix -> UFix -> UFix))
   (define (tak23 x y z)
     (cond ((>= y x) z)
           (True (tak24 (tak88 (- x 1) y z)
                        (tak64 (- y 1) z x)
                        (tak8 (- z 1) x y)))))
-    
+
   (declare tak24 (UFix -> UFix -> UFix -> UFix))
   (define (tak24 x y z)
     (cond ((>= y x) z)
           (True (tak25 (tak25 (- x 1) y z)
                        (tak75 (- y 1) z x)
                        (tak25 (- z 1) x y)))))
-    
+
   (declare tak25 (UFix -> UFix -> UFix -> UFix))
   (define (tak25 x y z)
     (cond ((>= y x) z)
           (True (tak26 (tak62 (- x 1) y z)
                        (tak86 (- y 1) z x)
                        (tak42 (- z 1) x y)))))
-    
+
   (declare tak26 (UFix -> UFix -> UFix -> UFix))
   (define (tak26 x y z)
     (cond ((>= y x) z)
           (True (tak27 (tak99 (- x 1) y z)
                        (tak97 (- y 1) z x)
                        (tak59 (- z 1) x y)))))
-    
+
   (declare tak27 (UFix -> UFix -> UFix -> UFix))
   (define (tak27 x y z)
     (cond ((>= y x) z)
           (True (tak28 (tak36 (- x 1) y z)
                        (tak8 (- y 1) z x)
                        (tak76 (- z 1) x y)))))
-    
+
   (declare tak28 (UFix -> UFix -> UFix -> UFix))
   (define (tak28 x y z)
     (cond ((>= y x) z)
           (True (tak29 (tak73 (- x 1) y z)
                        (tak19 (- y 1) z x)
                        (tak93 (- z 1) x y)))))
-    
+
   (declare tak29 (UFix -> UFix -> UFix -> UFix))
   (define (tak29 x y z)
     (cond ((>= y x) z)
           (True (tak30 (tak10 (- x 1) y z)
                        (tak30 (- y 1) z x)
                        (tak10 (- z 1) x y)))))
-    
+
   (declare tak30 (UFix -> UFix -> UFix -> UFix))
   (define (tak30 x y z)
     (cond ((>= y x) z)
           (True (tak31 (tak47 (- x 1) y z)
                        (tak41 (- y 1) z x)
                        (tak27 (- z 1) x y)))))
-    
+
   (declare tak31 (UFix -> UFix -> UFix -> UFix))
   (define (tak31 x y z)
     (cond ((>= y x) z)
           (True (tak32 (tak84 (- x 1) y z)
                        (tak52 (- y 1) z x)
                        (tak44 (- z 1) x y)))))
-    
+
   (declare tak32 (UFix -> UFix -> UFix -> UFix))
   (define (tak32 x y z)
     (cond ((>= y x) z)
           (True (tak33 (tak21 (- x 1) y z)
                        (tak63 (- y 1) z x)
                        (tak61 (- z 1) x y)))))
-      
+
   (declare tak33 (UFix -> UFix -> UFix -> UFix))
   (define (tak33 x y z)
     (cond ((>= y x) z)
           (True (tak34 (tak58 (- x 1) y z)
                        (tak74 (- y 1) z x)
                        (tak78 (- z 1) x y)))))
-      
+
   (declare tak34 (UFix -> UFix -> UFix -> UFix))
   (define (tak34 x y z)
     (cond ((>= y x) z)
           (True (tak35 (tak95 (- x 1) y z)
                        (tak85 (- y 1) z x)
                        (tak95 (- z 1) x y)))))
-      
+
   (declare tak35 (UFix -> UFix -> UFix -> UFix))
   (define (tak35 x y z)
     (cond ((>= y x) z)
           (True (tak36 (tak32 (- x 1) y z)
                        (tak96 (- y 1) z x)
                        (tak12 (- z 1) x y)))))
-      
+
   (declare tak36 (UFix -> UFix -> UFix -> UFix))
   (define (tak36 x y z)
     (cond ((>= y x) z)
           (True (tak37 (tak69 (- x 1) y z)
                        (tak7 (- y 1) z x)
                        (tak29 (- z 1) x y)))))
-      
+
   (declare tak37 (UFix -> UFix -> UFix -> UFix))
   (define (tak37 x y z)
     (cond ((>= y x) z)
           (True (tak38 (tak6 (- x 1) y z)
                        (tak18 (- y 1) z x)
                        (tak46 (- z 1) x y)))))
-      
+
   (declare tak38 (UFix -> UFix -> UFix -> UFix))
   (define (tak38 x y z)
     (cond ((>= y x) z)
           (True (tak39 (tak43 (- x 1) y z)
                        (tak29 (- y 1) z x)
                        (tak63 (- z 1) x y)))))
-      
+
   (declare tak39 (UFix -> UFix -> UFix -> UFix))
   (define (tak39 x y z)
     (cond ((>= y x) z)
           (True (tak40 (tak80 (- x 1) y z)
                        (tak40 (- y 1) z x)
                        (tak80 (- z 1) x y)))))
-      
+
   (declare tak40 (UFix -> UFix -> UFix -> UFix))
   (define (tak40 x y z)
     (cond ((>= y x) z)
           (True (tak41 (tak17 (- x 1) y z)
                        (tak51 (- y 1) z x)
                        (tak97 (- z 1) x y)))))
-      
+
   (declare tak41 (UFix -> UFix -> UFix -> UFix))
   (define (tak41 x y z)
     (cond ((>= y x) z)
           (True (tak42 (tak54 (- x 1) y z)
                        (tak62 (- y 1) z x)
                        (tak14 (- z 1) x y)))))
-        
+
   (declare tak42 (UFix -> UFix -> UFix -> UFix))
   (define (tak42 x y z)
     (cond ((>= y x) z)
           (True (tak43 (tak91 (- x 1) y z)
                        (tak73 (- y 1) z x)
                        (tak31 (- z 1) x y)))))
-        
+
   (declare tak43 (UFix -> UFix -> UFix -> UFix))
   (define (tak43 x y z)
     (cond ((>= y x) z)
           (True (tak44 (tak28 (- x 1) y z)
                        (tak84 (- y 1) z x)
                        (tak48 (- z 1) x y)))))
-        
+
   (declare tak44 (UFix -> UFix -> UFix -> UFix))
   (define (tak44 x y z)
     (cond ((>= y x) z)
           (True (tak45 (tak65 (- x 1) y z)
                        (tak95 (- y 1) z x)
                        (tak65 (- z 1) x y)))))
-        
+
   (declare tak45 (UFix -> UFix -> UFix -> UFix))
   (define (tak45 x y z)
     (cond ((>= y x) z)
           (True (tak46 (tak2 (- x 1) y z)
                        (tak6 (- y 1) z x)
                        (tak82 (- z 1) x y)))))
-        
+
   (declare tak46 (UFix -> UFix -> UFix -> UFix))
   (define (tak46 x y z)
     (cond ((>= y x) z)
           (True (tak47 (tak39 (- x 1) y z)
                        (tak17 (- y 1) z x)
                        (tak99 (- z 1) x y)))))
-        
+
   (declare tak47 (UFix -> UFix -> UFix -> UFix))
   (define (tak47 x y z)
     (cond ((>= y x) z)
           (True (tak48 (tak76 (- x 1) y z)
                        (tak28 (- y 1) z x)
                        (tak16 (- z 1) x y)))))
-        
+
   (declare tak48 (UFix -> UFix -> UFix -> UFix))
   (define (tak48 x y z)
     (cond ((>= y x) z)
           (True (tak49 (tak13 (- x 1) y z)
                        (tak39 (- y 1) z x)
                        (tak33 (- z 1) x y)))))
-        
+
   (declare tak49 (UFix -> UFix -> UFix -> UFix))
   (define (tak49 x y z)
     (cond ((>= y x) z)
           (True (tak50 (tak50 (- x 1) y z)
                        (tak50 (- y 1) z x)
                        (tak50 (- z 1) x y)))))
-        
+
   (declare tak50 (UFix -> UFix -> UFix -> UFix))
   (define (tak50 x y z)
     (cond ((>= y x) z)
           (True (tak51 (tak87 (- x 1) y z)
                        (tak61 (- y 1) z x)
                        (tak67 (- z 1) x y)))))
-          
+
   (declare tak51 (UFix -> UFix -> UFix -> UFix))
   (define (tak51 x y z)
     (cond ((>= y x) z)
           (True (tak52 (tak24 (- x 1) y z)
                        (tak72 (- y 1) z x)
                        (tak84 (- z 1) x y)))))
-          
+
   (declare tak52 (UFix -> UFix -> UFix -> UFix))
   (define (tak52 x y z)
     (cond ((>= y x) z)
           (True (tak53 (tak61 (- x 1) y z)
                        (tak83 (- y 1) z x)
                        (tak1 (- z 1) x y)))))
-          
+
   (declare tak53 (UFix -> UFix -> UFix -> UFix))
   (define (tak53 x y z)
     (cond ((>= y x) z)
           (True (tak54 (tak98 (- x 1) y z)
                        (tak94 (- y 1) z x)
                        (tak18 (- z 1) x y)))))
-          
+
   (declare tak54 (UFix -> UFix -> UFix -> UFix))
   (define (tak54 x y z)
     (cond ((>= y x) z)
           (True (tak55 (tak35 (- x 1) y z)
                        (tak5 (- y 1) z x)
                        (tak35 (- z 1) x y)))))
-          
+
   (declare tak55 (UFix -> UFix -> UFix -> UFix))
   (define (tak55 x y z)
     (cond ((>= y x) z)
           (True (tak56 (tak72 (- x 1) y z)
                        (tak16 (- y 1) z x)
                        (tak52 (- z 1) x y)))))
-          
+
   (declare tak56 (UFix -> UFix -> UFix -> UFix))
   (define (tak56 x y z)
     (cond ((>= y x) z)
           (True (tak57 (tak9 (- x 1) y z)
                        (tak27 (- y 1) z x)
                        (tak69 (- z 1) x y)))))
-          
+
   (declare tak57 (UFix -> UFix -> UFix -> UFix))
   (define (tak57 x y z)
     (cond ((>= y x) z)
           (True (tak58 (tak46 (- x 1) y z)
                        (tak38 (- y 1) z x)
                        (tak86 (- z 1) x y)))))
-          
+
   (declare tak58 (UFix -> UFix -> UFix -> UFix))
   (define (tak58 x y z)
     (cond ((>= y x) z)
           (True (tak59 (tak83 (- x 1) y z)
                        (tak49 (- y 1) z x)
                        (tak3 (- z 1) x y)))))
-          
+
   (declare tak59 (UFix -> UFix -> UFix -> UFix))
   (define (tak59 x y z)
     (cond ((>= y x) z)
           (True (tak60 (tak20 (- x 1) y z)
                        (tak60 (- y 1) z x)
                        (tak20 (- z 1) x y)))))
-          
+
   (declare tak60 (UFix -> UFix -> UFix -> UFix))
   (define (tak60 x y z)
     (cond ((>= y x) z)
           (True (tak61 (tak57 (- x 1) y z)
                        (tak71 (- y 1) z x)
                        (tak37 (- z 1) x y)))))
-            
+
   (declare tak61 (UFix -> UFix -> UFix -> UFix))
   (define (tak61 x y z)
     (cond ((>= y x) z)
           (True (tak62 (tak94 (- x 1) y z)
                        (tak82 (- y 1) z x)
                        (tak54 (- z 1) x y)))))
-            
+
   (declare tak62 (UFix -> UFix -> UFix -> UFix))
   (define (tak62 x y z)
     (cond ((>= y x) z)
           (True (tak63 (tak31 (- x 1) y z)
                        (tak93 (- y 1) z x)
                        (tak71 (- z 1) x y)))))
-            
+
   (declare tak63 (UFix -> UFix -> UFix -> UFix))
   (define (tak63 x y z)
     (cond ((>= y x) z)
           (True (tak64 (tak68 (- x 1) y z)
                        (tak4 (- y 1) z x)
                        (tak88 (- z 1) x y)))))
-            
+
   (declare tak64 (UFix -> UFix -> UFix -> UFix))
   (define (tak64 x y z)
     (cond ((>= y x) z)
           (True (tak65 (tak5 (- x 1) y z)
                        (tak15 (- y 1) z x)
                        (tak5 (- z 1) x y)))))
-            
+
   (declare tak65 (UFix -> UFix -> UFix -> UFix))
   (define (tak65 x y z)
     (cond ((>= y x) z)
           (True (tak66 (tak42 (- x 1) y z)
                        (tak26 (- y 1) z x)
                        (tak22 (- z 1) x y)))))
-            
+
   (declare tak66 (UFix -> UFix -> UFix -> UFix))
   (define (tak66 x y z)
     (cond ((>= y x) z)
           (True (tak67 (tak79 (- x 1) y z)
                        (tak37 (- y 1) z x)
                        (tak39 (- z 1) x y)))))
-            
+
   (declare tak67 (UFix -> UFix -> UFix -> UFix))
   (define (tak67 x y z)
     (cond ((>= y x) z)
           (True (tak68 (tak16 (- x 1) y z)
                        (tak48 (- y 1) z x)
                        (tak56 (- z 1) x y)))))
-            
+
   (declare tak68 (UFix -> UFix -> UFix -> UFix))
   (define (tak68 x y z)
     (cond ((>= y x) z)
           (True (tak69 (tak53 (- x 1) y z)
                        (tak59 (- y 1) z x)
                        (tak73 (- z 1) x y)))))
-            
+
   (declare tak69 (UFix -> UFix -> UFix -> UFix))
   (define (tak69 x y z)
     (cond ((>= y x) z)
           (True (tak70 (tak90 (- x 1) y z)
                        (tak70 (- y 1) z x)
                        (tak90 (- z 1) x y)))))
-            
+
   (declare tak70 (UFix -> UFix -> UFix -> UFix))
   (define (tak70 x y z)
     (cond ((>= y x) z)
           (True (tak71 (tak27 (- x 1) y z)
                        (tak81 (- y 1) z x)
                        (tak7 (- z 1) x y)))))
-            
+
   (declare tak71 (UFix -> UFix -> UFix -> UFix))
   (define (tak71 x y z)
     (cond ((>= y x) z)
           (True (tak72 (tak64 (- x 1) y z)
                        (tak92 (- y 1) z x)
                        (tak24 (- z 1) x y)))))
-              
+
   (declare tak72 (UFix -> UFix -> UFix -> UFix))
   (define (tak72 x y z)
     (cond ((>= y x) z)
           (True (tak73 (tak1 (- x 1) y z)
                        (tak3 (- y 1) z x)
                        (tak41 (- z 1) x y)))))
-              
+
   (declare tak73 (UFix -> UFix -> UFix -> UFix))
   (define (tak73 x y z)
     (cond ((>= y x) z)
           (True (tak74 (tak38 (- x 1) y z)
                        (tak14 (- y 1) z x)
                        (tak58 (- z 1) x y)))))
-              
+
   (declare tak74 (UFix -> UFix -> UFix -> UFix))
   (define (tak74 x y z)
     (cond ((>= y x) z)
           (True (tak75 (tak75 (- x 1) y z)
                        (tak25 (- y 1) z x)
                        (tak75 (- z 1) x y)))))
-              
+
   (declare tak75 (UFix -> UFix -> UFix -> UFix))
   (define (tak75 x y z)
     (cond ((>= y x) z)
           (True (tak76 (tak12 (- x 1) y z)
                        (tak36 (- y 1) z x)
                        (tak92 (- z 1) x y)))))
-              
+
   (declare tak76 (UFix -> UFix -> UFix -> UFix))
   (define (tak76 x y z)
     (cond ((>= y x) z)
           (True (tak77 (tak49 (- x 1) y z)
                        (tak47 (- y 1) z x)
                        (tak9 (- z 1) x y)))))
-             
+
   (declare tak77 (UFix -> UFix -> UFix -> UFix))
   (define (tak77 x y z)
     (cond ((>= y x) z)
           (True (tak78 (tak86 (- x 1) y z)
                        (tak58 (- y 1) z x)
                        (tak26 (- z 1) x y)))))
-              
+
   (declare tak78 (UFix -> UFix -> UFix -> UFix))
   (define (tak78 x y z)
     (cond ((>= y x) z)
           (True (tak79 (tak23 (- x 1) y z)
                        (tak69 (- y 1) z x)
                        (tak43 (- z 1) x y)))))
-              
+
   (declare tak79 (UFix -> UFix -> UFix -> UFix))
   (define (tak79 x y z)
     (cond ((>= y x) z)
           (True (tak80 (tak60 (- x 1) y z)
                        (tak80 (- y 1) z x)
                        (tak60 (- z 1) x y)))))
-              
+
   (declare tak80 (UFix -> UFix -> UFix -> UFix))
   (define (tak80 x y z)
     (cond ((>= y x) z)
           (True (tak81 (tak97 (- x 1) y z)
                        (tak91 (- y 1) z x)
                        (tak77 (- z 1) x y)))))
-                
+
   (declare tak81 (UFix -> UFix -> UFix -> UFix))
   (define (tak81 x y z)
     (cond ((>= y x) z)
           (True (tak82 (tak34 (- x 1) y z)
                        (tak2 (- y 1) z x)
                        (tak94 (- z 1) x y)))))
-                
+
   (declare tak82 (UFix -> UFix -> UFix -> UFix))
   (define (tak82 x y z)
     (cond ((>= y x) z)
           (True (tak83 (tak71 (- x 1) y z)
                        (tak13 (- y 1) z x)
                        (tak11 (- z 1) x y)))))
-                
+
   (declare tak83 (UFix -> UFix -> UFix -> UFix))
   (define (tak83 x y z)
     (cond ((>= y x) z)
           (True (tak84 (tak8 (- x 1) y z)
                        (tak24 (- y 1) z x)
                        (tak28 (- z 1) x y)))))
-                
+
   (declare tak84 (UFix -> UFix -> UFix -> UFix))
   (define (tak84 x y z)
     (cond ((>= y x) z)
           (True (tak85 (tak45 (- x 1) y z)
                        (tak35 (- y 1) z x)
                        (tak45 (- z 1) x y)))))
-                
+
   (declare tak85 (UFix -> UFix -> UFix -> UFix))
   (define (tak85 x y z)
     (cond ((>= y x) z)
           (True (tak86 (tak82 (- x 1) y z)
                        (tak46 (- y 1) z x)
                        (tak62 (- z 1) x y)))))
-                
+
   (declare tak86 (UFix -> UFix -> UFix -> UFix))
   (define (tak86 x y z)
     (cond ((>= y x) z)
           (True (tak87 (tak19 (- x 1) y z)
                        (tak57 (- y 1) z x)
                        (tak79 (- z 1) x y)))))
-                
+
   (declare tak87 (UFix -> UFix -> UFix -> UFix))
   (define (tak87 x y z)
     (cond ((>= y x) z)
           (True (tak88 (tak56 (- x 1) y z)
                        (tak68 (- y 1) z x)
                        (tak96 (- z 1) x y)))))
-                
+
   (declare tak88 (UFix -> UFix -> UFix -> UFix))
   (define (tak88 x y z)
     (cond ((>= y x) z)
           (True (tak89 (tak93 (- x 1) y z)
                        (tak79 (- y 1) z x)
                        (tak13 (- z 1) x y)))))
-                
+
   (declare tak89 (UFix -> UFix -> UFix -> UFix))
   (define (tak89 x y z)
     (cond ((>= y x) z)
           (True (tak90 (tak30 (- x 1) y z)
                        (tak90 (- y 1) z x)
                        (tak30 (- z 1) x y)))))
-                
+
   (declare tak90 (UFix -> UFix -> UFix -> UFix))
   (define (tak90 x y z)
     (cond ((>= y x) z)
           (True (tak91 (tak67 (- x 1) y z)
                        (tak1 (- y 1) z x)
                        (tak47 (- z 1) x y)))))
-                  
+
   (declare tak91 (UFix -> UFix -> UFix -> UFix))
   (define (tak91 x y z)
     (cond ((>= y x) z)
           (True (tak92 (tak4 (- x 1) y z)
                        (tak12 (- y 1) z x)
                        (tak64 (- z 1) x y)))))
-                  
+
   (declare tak92 (UFix -> UFix -> UFix -> UFix))
     (define (tak92 x y z)
     (cond ((>= y x) z)
           (True (tak93 (tak41 (- x 1) y z)
                        (tak23 (- y 1) z x)
                        (tak81 (- z 1) x y)))))
-                    
+
   (declare tak93 (UFix -> UFix -> UFix -> UFix))
   (define (tak93 x y z)
     (cond ((>= y x) z)
           (True (tak94 (tak78 (- x 1) y z)
                        (tak34 (- y 1) z x)
                        (tak98 (- z 1) x y)))))
-                    
+
   (declare tak94 (UFix -> UFix -> UFix -> UFix))
   (define (tak94 x y z)
     (cond ((>= y x) z)
           (True (tak95 (tak15 (- x 1) y z)
                        (tak45 (- y 1) z x)
                        (tak15 (- z 1) x y)))))
-                    
+
   (declare tak95 (UFix -> UFix -> UFix -> UFix))
   (define (tak95 x y z)
     (cond ((>= y x) z)
           (True (tak96 (tak52 (- x 1) y z)
                        (tak56 (- y 1) z x)
                        (tak32 (- z 1) x y)))))
-                    
+
   (declare tak96 (UFix -> UFix -> UFix -> UFix))
   (define (tak96 x y z)
     (cond ((>= y x) z)
           (True (tak97 (tak89 (- x 1) y z)
                        (tak67 (- y 1) z x)
                        (tak49 (- z 1) x y)))))
-                    
+
   (declare tak97 (UFix -> UFix -> UFix -> UFix))
   (define (tak97 x y z)
     (cond ((>= y x) z)
           (True (tak98 (tak26 (- x 1) y z)
                        (tak78 (- y 1) z x)
                        (tak66 (- z 1) x y)))))
-                    
+
   (declare tak98 (UFix -> UFix -> UFix -> UFix))
   (define (tak98 x y z)
     (cond ((>= y x) z)
           (True (tak99 (tak63 (- x 1) y z)
                        (tak89 (- y 1) z x)
                        (tak83 (- z 1) x y)))))
-                    
+
   (declare tak99 (UFix -> UFix -> UFix -> UFix))
   (define (tak99 x y z)
     (cond ((>= y x) z)
