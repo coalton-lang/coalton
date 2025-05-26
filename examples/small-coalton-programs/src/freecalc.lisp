@@ -72,7 +72,6 @@ we map over."
   ;; into a State monad. We use a vector of numbers for our inputs.
   ;;
 
-  (declare compute-from-vector-inputs ((Num :a) (Default :a) => free:Free (ArithExprF :a) :a -> st:ST (Vector :a) :a))
   (define compute-from-vector-inputs
     (free:foldfree
      (fn (arg) (match arg
@@ -80,7 +79,7 @@ we map over."
                  ((SubE x y next) (pure (next (- x y))))
                  ((InputE next)
                   (map (compose next (fn (vec) (defaulting-unwrap (vector:pop! vec))))
-                       st:get))))))
+                       st:get-st))))))
 
 
   ;;

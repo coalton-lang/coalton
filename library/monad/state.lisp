@@ -5,6 +5,8 @@
    #:coalton-library/classes)
   (:export
    #:ST
+   #:put-st
+   #:get-st
    #:MonadState
    #:put
    #:get
