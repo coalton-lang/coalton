@@ -71,7 +71,8 @@ we map over."
   ;; transformation from the free monad over our expression functor
   ;; into a State monad. We use a vector of numbers for our inputs.
   ;;
-  
+
+  (declare compute-from-vector-inputs ((Num :a) (Default :a) => free:Free (ArithExprF :a) :a -> st:ST (Vector :a) :a))
   (define compute-from-vector-inputs
     (free:foldfree
      (fn (arg) (match arg
