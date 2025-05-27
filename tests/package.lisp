@@ -38,7 +38,9 @@
    (#:result #:coalton-library/result)
    (#:seq #:coalton-library/seq)
    (#:file #:coalton-library/file)
-   (#:experimental #:coalton-library/experimental)))
+   (#:experimental #:coalton-library/experimental)
+   (#:st #:coalton-library/monad/state)
+   (#:m-opt #:coalton-library/monad/optionalt)))
 
 (in-package #:coalton-native-tests)
 

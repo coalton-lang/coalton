@@ -282,4 +282,7 @@
                (:file "monomorphizer-tests")
                (:file "inliner-tests")
                (:file "file-tests")
-               (:file "experimental-tests")))
+               (:file "experimental-tests")
+               (:module "monad"
+                :serial t
+                :components ((:file "optionalt")))))

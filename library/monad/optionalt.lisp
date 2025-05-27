@@ -69,7 +69,17 @@
             ((None) (pure None))
             ((Some a)
              (run-optionalT (fa->optb a))))))))
-  
+
+  (define-instance ((Functor :m) (Monad :m) => Alternative (OptionalT :m))
+    (define empty (OptionalT (pure None)))
+    (define (alt (OptionalT mx) (OptionalT my))
+      (OptionalT
+       (do
+        (optx <- mx)
+        (match optx
+          ((Some _) (pure optx))
+          ((None) my))))))
+
   (define-instance (MonadTransformer OptionalT)
     (define lift (compose OptionalT (map Some)))))
 
