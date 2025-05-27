@@ -285,4 +285,5 @@
                (:file "experimental-tests")
                (:module "monad"
                 :serial t
-                :components ((:file "optionalt")))))
+                :components ((:file "optionalt")
+                             (:file "resultt")))))

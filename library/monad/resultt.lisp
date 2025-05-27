@@ -88,7 +88,7 @@
 ;;
 
 (cl:defmacro do-resultT (cl:&body body)
-  "Perform a series of ResultT's, returning the value of the last one
+  "Wrap and perform a series of ResultT's, returning the value of the last one
 if all of them succeed."
   `(run-resultT
     (do

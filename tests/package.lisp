@@ -40,7 +40,8 @@
    (#:file #:coalton-library/file)
    (#:experimental #:coalton-library/experimental)
    (#:st #:coalton-library/monad/state)
-   (#:m-opt #:coalton-library/monad/optionalt)))
+   (#:m-opt #:coalton-library/monad/optionalt)
+   (#:m-res #:coalton-library/monad/resultt)))
 
 (in-package #:coalton-native-tests)
 
