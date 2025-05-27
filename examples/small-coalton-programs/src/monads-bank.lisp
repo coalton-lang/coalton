@@ -19,6 +19,28 @@
 ;;;; be helpful to already have a basic grasp of how the State, Environment,
 ;;;; and Result monads work.
 ;;;;
+;;;; Example usage:
+;;;;
+;;;; CL-USER> (in-package :small-coalton-programs/bank)
+;;;; #<COMMON-LISP:PACKAGE "SMALL-COALTON-PROGRAMS/BANK">
+;;;; SMALL-COALTON-PROGRAMS/BANK> (test-bank-simulation)
+;;;; Name:     Checking
+;;;; Balance:  85
+;;;;
+;;;; Name:     Savings
+;;;; Balance:  70
+;;;;
+;;;; --------
+;;;; Name:     Reserves
+;;;; Balance:  25
+;;;;
+;;;; Name:     Savings
+;;;; Balance:  155
+;;;;
+;;;; --------
+;;;; Result: #.(ERR "Account not found: Checking")
+;;;; COALTON::UNIT/UNIT
+;;;;
 
 (cl:defpackage :small-coalton-programs/bank
   (:use
@@ -170,7 +192,7 @@ the computation."
 
   (declare get-accountM (AccountName -> BankM (BankResult Account)))
   (define (get-accountM account-name)
-    (map (get-account account-name) get))
+    (lift (map (get-account account-name) get)))
 
   (declare account-valid? (Account -> BankM (BankResult Account)))
   (define (account-valid? account)
@@ -184,8 +206,8 @@ the computation."
   (define (set-account acc)
     "Update/insert an account and return it for convenience."
     (do
-     (modify (fn (mp)
-               (m:insert-or-replace mp (.name acc) acc)))
+     (lift (modify (fn (mp)
+               (m:insert-or-replace mp (.name acc) acc))))
      (pure (Ok acc)))))
 
 ;;; Finally, we'll create all of the functions that our "user" can use to
@@ -208,7 +230,7 @@ the computation."
     "Adds an account to the BankState and return the created account."
     (run-resultT
      (do
-      (accounts <- get)
+      (accounts <- (lift (lift get)))
       (ResultT
        (match (get-account name accounts)
          ((Err _) (pure (Ok Unit)))
@@ -229,7 +251,7 @@ the computation."
   (declare print-reportM (BankM (BankResult Unit)))
   (define print-reportM
     (do
-     (accounts <- get)
+     (accounts <- (lift get))
      (pure (Ok (print-report accounts)))))
 
   (declare withdraw (AccountName -> Amount -> BankM (BankResult Account)))
@@ -285,10 +307,10 @@ the computation."
       (ResultT (local-envT
                 without-overdraft-protection
                 (transfer acc-to-close-name deposit-acc-name (.balance acc-to-close))))
-      (modify (fn (mp)
-                (with-default
-                  mp
-                  (m:remove mp acc-to-close-name))))
+      (lift (lift (modify (fn (mp)
+                            (with-default
+                              mp
+                              (m:remove mp acc-to-close-name))))))
       (pure Unit)))))
 
 ;;; Finally, we run our bank simulation! We use the `do-resultT` macro, which
@@ -302,21 +324,22 @@ the computation."
                (Configuration 10 True)
                m:empty)))
 
-(coalton
-  (progn
-    (let (Tuple accounts res) =
-      (run-bank-simulation
-       (do-resultT
-         (create-account "Checking" 100)
-         (create-account "Savings" 50)
-         (deposit "Savings" 20)
-         (withdraw "Checking" 15)
-         print-reportM
-         (close-account "Checking" "Savings")
-         (create-account "Reserves" 10)
-         (deposit "Reserves" 15)
-         print-reportM
-         ;; This transfer will fail because the "Checking" account was already closed!
-         (transfer "Checking" "Reserves" 40)
-         )))
-    (traceobject "Result" (map-err to-string res))))
+(cl:defun test-bank-simulation ()
+  (coalton
+   (progn
+     (let (Tuple accounts res) =
+       (run-bank-simulation
+        (do-resultT
+          (create-account "Checking" 100)
+          (create-account "Savings" 50)
+          (deposit "Savings" 20)
+          (withdraw "Checking" 15)
+          print-reportM
+          (close-account "Checking" "Savings")
+          (create-account "Reserves" 10)
+          (deposit "Reserves" 15)
+          print-reportM
+          ;; This transfer will fail because the "Checking" account was already closed!
+          (transfer "Checking" "Reserves" 40)
+          )))
+     (traceobject "Result" (map-err to-string res)))))

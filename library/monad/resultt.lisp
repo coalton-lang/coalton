@@ -3,8 +3,7 @@
    #:coalton
    #:coalton-library/functions
    #:coalton-library/classes
-   #:coalton-library/result
-   #:coalton-library/monad/state)
+   #:coalton-library/result)
   (:export
    #:ResultT
    #:run-resultT
@@ -82,11 +81,7 @@
            (run-resultT (fa->resmb a))))))))
 
   (define-instance (MonadTransformer (ResultT :err))
-    (define lift (compose ResultT (map Ok))))
-
-  (define-instance (MonadState :s :m => MonadState :s (ResultT :err :m))
-    (define put (compose lift put))
-    (define get (lift get))))
+    (define lift (compose ResultT (map Ok)))))
 
 ;;
 ;; Macros
@@ -102,5 +97,5 @@ if all of them succeed."
           `(ResultT ,form))
         body))))
 
-;; #+sb-package-locks
+#+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/MONAD/RESULTT")

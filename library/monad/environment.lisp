@@ -4,9 +4,6 @@
    #:coalton-library/functions
    #:coalton-library/classes
    #:coalton-library/monad/identity)
-  (:import-from
-   #:coalton-library/monad/state
-   #:MonadState put get)
   (:export
    #:EnvT
    #:local-envT
@@ -117,11 +114,6 @@ Equivalent to Haskell's ReaderT monad https://hackage.haskell.org/package/transf
 
   (define-instance (MonadTransformer (EnvT :env))
     (define lift lift-envT)))
-
-(coalton-toplevel
-  (define-instance (MonadState :s :m => MonadState :s (EnvT :env :m))
-    (define put (compose lift put))
-    (define get (lift get))))
 
 (coalton-toplevel
   (define-instance (Monad :m => MonadEnvironment :env (EnvT :env :m))

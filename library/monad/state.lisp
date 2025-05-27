@@ -5,9 +5,6 @@
    #:coalton-library/classes)
   (:export
    #:ST
-   #:put-st
-   #:get-st
-   #:MonadState
    #:put
    #:get
    #:modify
@@ -31,12 +28,14 @@
 Represented as a closure from initial state to updated state and value."
     (ST (:state -> (Tuple :state :value))))
 
-  (declare put-st (:state -> ST :state Unit))
-  (define (put-st state)
+  (declare put (:state -> ST :state Unit))
+  (define (put state)
+    "A StatefulComputation with state set to be given state. The returned value is Unit."
     (ST (fn (_) (Tuple state Unit))))
 
-  (declare get-st (ST :state :state))
-  (define get-st
+  (declare get (ST :state :state))
+  (define get
+    "A StatefulComputation which returns the current state as the value."
     (ST (fn (state) (Tuple state state))))
 
   (declare run (ST :state :a -> :state -> Tuple :state :a))
@@ -45,27 +44,14 @@ Represented as a closure from initial state to updated state and value."
     (match sc
       ((ST fstate)
        fstate)))
-
-  ;;
-  ;; MonadState Typeclass
-  ;;
-
-  (define-class (Monad :m => MonadState :state :m (:m -> :state))
-    "A monad capable of representing stateful computations."
-    (put
-     "A StatefulComputation with state set to be given state. The returned value is Unit."
-     (:state -> :m Unit))
-    (get
-     "A StatefulComputation which returns the current state as the value."
-     (:m :state)))
-
-  (declare modify (MonadState :state :m => (:state -> :state) -> :m Unit))
+  (declare modify ((:state -> :state) -> ST :state Unit))
   (define (modify statef)
     "Modify the state in a StatefulComputation, discarding the old state."
     (do
      (state <- get)
      (put (statef state))))
 
+  
   ;;
   ;; State Monad instances
   ;;
@@ -100,11 +86,7 @@ Represented as a closure from initial state to updated state and value."
            ((Tuple state2 a)
             ;; Use the a to compute the mb,
             ;; and apply the state from ma to the mb
-            (run (fa->scb a) state2)))))))
-
-  (define-instance (MonadState :state (ST :state))
-    (define put put-st)
-    (define get get-st)))
+            (run (fa->scb a) state2))))))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/MONAD/STATE")
