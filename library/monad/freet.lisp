@@ -3,7 +3,11 @@
    #:coalton
    #:coalton-library/builtin
    #:coalton-library/classes
-   #:coalton-library/functions))
+   #:coalton-library/functions)
+  (:import-from
+   #:coalton-library/monad/free
+   #:MonadFree
+   #:wrap))
 
 (in-package #:coalton-library/monad/freet)
 
@@ -17,11 +21,6 @@
 ;; https://hackage.haskell.org/package/free
 ;; https://www.haskellforall.com/2012/07/free-monad-transformers.html
 ;;
-
-;; Note: The best design here would be to wrap FreeT and Free in an mtl-style typeclass.
-;; When I tried this with the ST monad, it broke some type inference in a way that makes
-;; me nervous to do this here. Instead, I'll give it the same API as Free, so it should be
-;; easy to swap out the concrete API with a typeclass one at a future date.
 
 (coalton-toplevel
   ;;
@@ -37,10 +36,31 @@
     (define (map b->c f)
       (match f
         ((Val a) (Val a))
-        ((FreeF funct) (FreeF (map b->c funct)))))))
+        ((FreeF funct) (FreeF (map b->c funct))))))
+
+  (define-instance (Traversable :f => Traversable (FreeF :f :a))
+    (define (traverse b->tc free-f)
+      (match free-f
+        ((Val a) (pure (Val a)))
+        ((FreeF funct) (map FreeF (traverse b->tc funct))))))
+
+  (define-instance (Functor :f => Bifunctor (FreeF :f))
+    (define (bimap a->c b->d free-f)
+      (match free-f
+        ((Val a) (Val (a->c a)))
+        ((FreeF fb) (FreeF (map b->d fb))))))
+
+  ;; Note: Constitutes an instance of Bitraverse, which Coalton doesn't have (yet)
+  (declare bitraverse ((Traversable :f) (Applicative :g) =>
+                       (:a -> :g :c) -> (:b -> :g :d) -> FreeF :f :a :b -> :g (FreeF :f :c :d)))
+  (define (bitraverse a->fc b->fd free-f)
+    (match free-f
+      ((Val a) (map Val (a->fc a)))
+      ((FreeF funct-b) (map FreeF (traverse b->fd funct-b)))))
+
+  )
 
 (coalton-toplevel
-
   ;;
   ;; FreeT Type
   ;;
@@ -50,11 +70,14 @@
     (FreeT (:m (FreeF :f :a (FreeT :f :m :a)))))
 
   (declare run-freeT (FreeT :f :m :a -> :m (FreeF :f :a (FreeT :f :m :a))))
-  (define (run-freeT (FreeT m)) m))
+  (define (run-freeT (FreeT m)) m)
 
-(coalton-toplevel
+  (define-instance ((Functor :f) (Monad :m) => MonadFree :f (FreeT :f :m))
+    (define (wrap fm)
+      (FreeT (pure (FreeF fm)))))
+
   ;;
-  ;; Instances
+  ;; Core Functor/Applicative/Monad Instances
   ;;
 
   (define-instance ((Functor :f) (Functor :m) => Functor (FreeT :f :m))
@@ -65,8 +88,8 @@
                       ((FreeF funct) (FreeF (map (map a->b) funct)))))
                   m))))
 
-  (declare rtrn (Monad :m => :a -> FreeT :f :m :a))
-  (define (rtrn a)
+  (declare pure-freeT (Monad :m => :a -> FreeT :f :m :a))
+  (define (pure-freeT a)
     (FreeT (pure (Val a))))
 
   (declare bind ((Monad :m) (Functor :f) => FreeT :f :m :a -> (:a -> FreeT :f :m :b) -> FreeT :f :m :b))
@@ -79,24 +102,48 @@
                  ((FreeF funct-a)
                   (pure (FreeF (map ((flip bind) a->freet-mb) funct-a)))))))))
 
-  (declare freet-apply ((Functor :f) (Monad :m) => FreeT :f :m (:a -> :b) -> FreeT :f :m :a -> FreeT :f :m :b))
-  (define (freet-apply m n)
+  (declare apply-freeT ((Functor :f) (Monad :m) => FreeT :f :m (:a -> :b) -> FreeT :f :m :a -> FreeT :f :m :b))
+  (define (apply-freeT m n)
     (bind
      m
      (fn (f)
        (bind
         n
         (fn (x)
-          (rtrn (f x)))))))
+          (pure-freeT (f x)))))))
 
-  (declare freet-lifta2 ((Functor :f) (Monad :m) => (:a -> :b -> :c) -> FreeT :f :m :a
+  (declare lifta2-freeT ((Functor :f) (Monad :m) => (:a -> :b -> :c) -> FreeT :f :m :a
                                                     -> FreeT :f :m :b -> FreeT :f :m :c))
-  (define (freet-lifta2 a->b->c fa fb)
-    (freet-apply (map a->b->c fa) fb))
+  (define (lifta2-freeT a->b->c fa fb)
+    (apply-freeT (map a->b->c fa) fb))
 
   (define-instance ((Functor :f) (Monad :m) => Applicative (FreeT :f :m))
-    (define pure rtrn)
-    (define lifta2 freet-lifta2))
+    (define pure pure-freeT)
+    (define lifta2 lifta2-freeT))
 
   (define-instance ((Functor :f) (Monad :m) => Monad (FreeT :f :m))
-    (define >>= bind)))
+    (define >>= bind))
+
+  ;;
+  ;; "Other" Instances
+  ;;
+
+  (define-instance ((Monad :m) (Traversable :m) (Traversable :f) => Traversable (FreeT :f :m))
+    (define (traverse a->gb (FreeT ma))
+      (map FreeT (traverse (bitraverse a->gb (traverse a->gb)) ma))))
+
+  ;;
+  ;; FreeT functions
+  ;;
+
+  (declare fold-freeT ((MonadTransformer :t) (Monad (:t :m)) (Monad :m) =>
+                       (:f (FreeT :f :m :a) -> :t :m (FreeT :f :m :a)) -> FreeT :f :m :a -> :t :m :a))
+  (define (fold-freeT f (FreeT m))
+    (>>=
+     (lift m)
+     (fn (free-t)
+       (match free-t
+         ((Val a) (pure a))
+         ((FreeF funct-a)
+          (>>= (f funct-a)
+               (fold-freeT f))))))))
