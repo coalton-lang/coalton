@@ -47,12 +47,6 @@ References: [here](https://serokell.io/blog/introduction-to-free-monads) and [he
     (Free (:f (Free :f :a)))
     (Val :a))
 
-  (declare liftF (Functor :f => :f :a -> Free :f :a))
-  (define (liftF f)
-    "Lift a Functor into the Free Monad."
-    (Free (map Val f)))
-
-  
   (declare foldFree (Monad :c =>
                            (:a (Free :a :b) -> :c (Free :a :b)) ->
                            (Free :a :b) ->

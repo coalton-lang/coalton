@@ -7,7 +7,13 @@
   (:import-from
    #:coalton-library/monad/free
    #:MonadFree
-   #:wrap))
+   #:wrap)
+  (:export
+   #:FreeF
+   #:Val
+   #:FreeT
+   #:run-freeT
+   #:fold-freeT))
 
 (in-package #:coalton-library/monad/freet)
 
@@ -123,6 +129,10 @@
 
   (define-instance ((Functor :f) (Monad :m) => Monad (FreeT :f :m))
     (define >>= bind))
+
+  (define-instance (Functor :f => MonadTransformer (FreeT :f))
+    (define (lift m)
+      (FreeT (map Val m))))
 
   ;;
   ;; "Other" Instances
