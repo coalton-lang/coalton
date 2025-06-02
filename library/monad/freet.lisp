@@ -19,8 +19,11 @@
 
 (named-readtables:in-readtable coalton:coalton)
 
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
 ;;
-;; Port of the monad transformer (not the church-encoded monad transformer)
+;; Port of the free monad transformer (not the church-encoded monad transformer)
 ;; from the Haskell `free` library.
 ;;
 ;; See:
@@ -157,3 +160,4 @@
          ((FreeF funct-a)
           (>>= (f funct-a)
                (fold-freeT f))))))))
+
