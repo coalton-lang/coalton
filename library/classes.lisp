@@ -20,6 +20,8 @@
    #:Monoid #:mempty
    #:Functor #:map
    #:Applicative #:pure #:liftA2
+   #:Contravariant #:contramap
+   #:Divisible #:startpoint #:contrasplit
    #:Monad #:>>=
    #:MonadTransformer #:lift
    #:>> #:join
@@ -237,6 +239,15 @@ The hash function must satisfy the invariant that `(== left right)` implies `(==
   (define-class (Applicative :m => Monad :m)
     "Types which are monads as defined in Haskell. See https://wiki.haskell.org/Monad for more information."
     (>>= (:m :a -> (:a -> :m :b) -> :m :b)))
+
+  (define-class (Contravariant :f)
+    "A contravariant represents a type that can accept more general inputs by precomposing a function into the expected input type."
+    (contramap ((:b -> :a) -> :f :a -> :f :b)))
+
+  (define-class (Contravariant :f => Divisible :f)
+    "The Contravariant analogue of an Applicative, which can be composed 'beside' another Contravariant."
+    (startpoint (:f :a))
+    (contrasplit ((:a -> (Tuple :b :c)) -> :f :b -> :f :c -> :f :a)))
 
   (define-class (MonadTransformer :t)
     "Types which are monads that wrap another monad, allowing you to use - for example - State and Result
