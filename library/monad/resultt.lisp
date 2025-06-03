@@ -99,7 +99,20 @@ if all of them succeed."
     (do
      ,@(cl:mapcar
         (cl:lambda (form)
-          `(ResultT ,form))
+          (cl:cond
+            ;; (doresultT my-op) => (do (ResultT my-op))
+            ((cl:symbolp form)
+             `(ResultT ,form))
+            ;; Don't modify: (let x = (foo ...))
+            ((cl:equalp (cl:first form) 'let)
+             form)
+            ;; (x <- operation) =>   (x <- (ResultT operation))
+            ;; (x <- (operation)) => (x <- (ResultT (operation)))
+            ((cl:equalp (cl:second form) '<-)
+             `(,(cl:first form) ,(cl:second form) (ResultT ,(cl:third form))))
+            ;; (operation) => (ResultT operation)
+            (cl:t
+             `(ResultT ,form))))
         body))))
 
 ;; #+sb-package-locks
