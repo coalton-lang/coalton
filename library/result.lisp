@@ -12,6 +12,8 @@
    #:err?
    #:map-err
    #:flatten
+   #:opt->result
+   #:err-if
    #:ok-or-error))
 
 (in-package #:coalton-library/result)
@@ -25,6 +27,20 @@
   ;;
   ;; Result
   ;;
+
+  (declare err-if (Boolean -> :err -> Result :err Unit))
+  (define (err-if failed? failure)
+    "Fail with FAILURE value if FAILED? is True."
+    (if failed?
+        (Err failure)
+        (Ok Unit)))
+
+  (declare opt->result (:err -> Optional :a -> Result :err :a))
+  (define (opt->result failure opt)
+    "Convert OPT to a Result, using FAILURE value if None."
+    (match opt
+      ((None) (Err failure))
+      ((Some a) (Ok a))))
 
   (declare ok? (Result :a :b -> Boolean))
   (define (ok? x)
@@ -109,6 +125,12 @@
       (match m
         ((Ok x) (f x))
         ((Err e) (Err e)))))
+
+  (define-instance (Traversable (Result :a))
+    (define (traverse f m)
+      (match m
+        ((Err x) (pure (Err x)))
+        ((Ok y)  (map Ok (f y))))))
 
   (define-instance (Bifunctor Result)
     (define (bimap f g res)
