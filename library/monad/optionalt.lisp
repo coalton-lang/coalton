@@ -23,11 +23,13 @@
   (define-type (OptionalT :m :a)
     "A monadic computation that returns an Optional."
     (OptionalT (:m (Optional :a))))
-  
+
+  (inline)
   (declare run-optionalT (OptionalT :m :a -> :m (Optional :a)))
   (define (run-optionalT (OptionalT m))
     m)
-  
+
+  (inline)
   (declare map-optionalT ((:m (Optional :a) -> :n (Optional :b))
                           -> OptionalT :m :a
                           -> OptionalT :n :b))
@@ -40,10 +42,12 @@
 
 (coalton-toplevel
   (define-instance (Functor :m => Functor (OptionalT :m))
+    (inline)
     (define (map fa->b (OptionalT m))
       (OptionalT (map (map fa->b) m))))
   
   (define-instance (Monad :m => Applicative (OptionalT :m))
+    (inline)
     (define (pure a)
       (OptionalT (pure (Some a))))
     (define (liftA2 fa->b->c (OptionalT ma) (OptionalT mb))
@@ -74,6 +78,7 @@
              (run-optionalT (fa->optb a))))))))
 
   (define-instance ((Monad :m) => Alternative (OptionalT :m))
+    (inline)
     (define empty (OptionalT (pure None)))
     (define (alt (OptionalT mx) (OptionalT my))
       (OptionalT
@@ -84,7 +89,9 @@
           ((None) my))))))
 
   (define-instance (MonadTransformer OptionalT)
-    (define lift (compose OptionalT (map Some)))))
+    (inline)
+    (define (lift m)
+      (OptionalT (map Some m)))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/MONAD/OPTIONALT")

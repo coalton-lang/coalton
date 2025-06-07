@@ -28,19 +28,23 @@
     "A monadic computation that returns a Result."
     (ResultT (:m (Result :err :ok))))
 
+  (inline)
   (declare run-resultT (ResultT :err :m :ok -> :m (Result :err :ok)))
   (define (run-resultT (ResultT m))
     m)
 
+  (inline)
   (declare map-resultT ((:m (Result :e1 :a) -> :n (Result :e2 :b))
                         -> ResultT :e1 :m :a
                         -> ResultT :e2 :n :b))
   (define (map-resultT f (ResultT m))
     (ResultT (f m)))
 
+  (inline)
   (declare map-errT (Functor :m => (:a -> :b) -> ResultT :a :m :c -> ResultT :b :m :c))
   (define (map-errT ferr) (map-resultT (map (map-err ferr))))
 
+  (inline)
   (declare err-ifT (Monad :m => Boolean -> :err -> ResultT :err :m Unit))
   (define (err-ifT passed failure)
     (ResultT (pure (err-if passed failure)))))
@@ -51,10 +55,12 @@
 
 (coalton-toplevel
   (define-instance (Functor :m => Functor (ResultT :err :m))
+    (inline)
     (define (map fa->b (ResultT m))
       (ResultT (map (map fa->b) m))))
 
   (define-instance (Monad :m => Applicative (ResultT :err :m))
+    (inline)
     (define (pure a)
       (ResultT (pure (Ok a))))
     (define (liftA2 fa->b->c (ResultT ma) (ResultT mb))
@@ -75,6 +81,7 @@
                (pure (Ok (fa->b->c a b))))))))))))
 
   (define-instance (Monad :m => Monad (ResultT :err :m))
+    (inline)
     (define (>>= (ResultT ma) fa->resmb)
       (ResultT
        (do
@@ -85,7 +92,9 @@
            (run-resultT (fa->resmb a))))))))
 
   (define-instance (MonadTransformer (ResultT :err))
-    (define lift (compose ResultT (map Ok)))))
+    (inline)
+    (define (lift m)
+      (ResultT (map Ok m)))))
 
 ;;
 ;; Macros

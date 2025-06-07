@@ -28,16 +28,19 @@
 Represented as a closure from initial state to updated state and value."
     (ST (:state -> (Tuple :state :value))))
 
+  (inline)
   (declare put (:state -> ST :state Unit))
   (define (put state)
     "A StatefulComputation with state set to be given state. The returned value is Unit."
     (ST (fn (_) (Tuple state Unit))))
 
+  (inline)
   (declare get (ST :state :state))
   (define get
     "A StatefulComputation which returns the current state as the value."
     (ST (fn (state) (Tuple state state))))
 
+  (inline)
   (declare run (ST :state :a -> :state -> Tuple :state :a))
   (define (run sc)
     "Runs a StatefulComputation to produce a final updated state and value given an initial state"
@@ -45,6 +48,7 @@ Represented as a closure from initial state to updated state and value."
       ((ST fstate)
        fstate)))
 
+  (inline)
   (declare modify ((:state -> :state) -> ST :state Unit))
   (define (modify statef)
     "Modify the state in a StatefulComputation, discarding the old state."
@@ -57,6 +61,7 @@ Represented as a closure from initial state to updated state and value."
   ;;
 
   (define-instance (Functor (ST :state))
+    (inline)
     (define (map fa->b sca)
       (ST
        (fn (state)
@@ -65,6 +70,7 @@ Represented as a closure from initial state to updated state and value."
             (Tuple state2 (fa->b a))))))))
 
   (define-instance (Applicative (ST :state))
+    (inline)
     (define (pure x)
       (ST (fn (state) (Tuple state x))))
     ;; liftA2 uses the resulting state from a to compute the state from b
@@ -80,6 +86,7 @@ Represented as a closure from initial state to updated state and value."
                (Tuple state3 (fab a b))))))))))
 
   (define-instance (Monad (ST :state))
+    (inline)
     (define (>>= sca fa->scb)
       (ST
        (fn (state1)
