@@ -100,7 +100,7 @@ Equivalent to Haskell's ReaderT monad https://hackage.haskell.org/package/transf
     (define pure (compose lift-envT pure))
     (define (liftA2 fc->d->e (EnvT fenv->mc) (EnvT fenv->md))
       (EnvT (fn (env)
-                (liftA2 fc->d->e (fenv->mc env) (fenv->md env))))))
+              (liftA2 fc->d->e (fenv->mc env) (fenv->md env))))))
 
   (define-instance (Monad :m => Monad (EnvT :env :m))
     (define (>>= (EnvT fenv->ma) fa->envmb)

@@ -169,7 +169,7 @@
 ;;; functions. By using `ST BankState`, we're telling it which type to use for the State functions.
 ;;; Combined, our `BankM` will be able to function as both a ST and an EnvT monad.
 ;;;
-;;; Finall, the type alias leaves off the value parameter. So a `BankM :val` represents a
+;;; Finally, the type alias leaves off the value parameter. So a `BankM :val` represents a
 ;;; computation in our overall bank context (state + configuration) that returns a type of :val.
 
 (coalton-toplevel
@@ -194,8 +194,8 @@ the computation."
   (define (get-accountM account-name)
     (lift (map (get-account account-name) get)))
 
-  (declare account-valid? (Account -> BankM (BankResult Account)))
-  (define (account-valid? account)
+  (declare check-account-is-valid (Account -> BankM (BankResult Account)))
+  (define (check-account-is-valid account)
     (do
      (minimum-balance <- (asks-envT .minimum-balance))
      (if (>= (.balance account) minimum-balance)
@@ -206,6 +206,10 @@ the computation."
   (define (set-account acc)
     "Update/insert an account and return it for convenience."
     (do
+     ;; NOTE: Even though modify isn't returning a value in the do block, it's
+     ;; still performing a "side effect" by modifying the state in our BankM monad.
+     ;; Here, it's changing the BankState (which is a Map from String -> Account)
+     ;; by inserting an account with its name as the key.
      (lift (modify (fn (mp)
                (m:insert-or-replace mp (.name acc) acc))))
      (pure (Ok acc)))))
@@ -236,7 +240,7 @@ the computation."
          ((Err _) (pure (Ok Unit)))
          ((Ok _) (pure (Err (AccountAlreadyExists name))))))
       (let unvalidated-account = (Account name initial-balance))
-      (account <- (ResultT (account-valid? unvalidated-account)))
+      (account <- (ResultT (check-account-is-valid unvalidated-account)))
       (ResultT (set-account account)))))
 
   (declare deposit (AccountName -> Amount -> BankM (BankResult Account)))
@@ -265,7 +269,7 @@ the computation."
                   (Unknown
                    (s:concat "Cannot withdraw from an invalid account: "
                              (into er))))
-                (ResultT (account-valid? acc)))
+                (ResultT (check-account-is-valid acc)))
       (let new-account = (subtract-balance amount acc))
       (protection? <- (lift (asks-envT .overdraft-protection)))
       (minimum <- (lift (asks-envT .minimum-balance)))
@@ -315,6 +319,9 @@ the computation."
 
 ;;; Finally, we run our bank simulation! We use the `do-resultT` macro, which
 ;;; wraps a sequence of `ResultT` computations in a single do block and runs them.
+;;;
+;;; Try changing the commands in the test simulation or the default configuration in
+;;; `run-bank-simulation`, and seeing how that affects the outcome.
 
 (coalton-toplevel
   (declare run-bank-simulation (BankM (BankResult :val) -> Tuple BankState (BankResult :val)))
@@ -330,16 +337,35 @@ the computation."
      (let (Tuple accounts res) =
        (run-bank-simulation
         (do-resultT
-          (create-account "Checking" 100)
-          (create-account "Savings" 50)
-          (deposit "Savings" 20)
-          (withdraw "Checking" 15)
+          ;; Bob and Alice each open a new account
+          (create-account "Alice" 100)
+          (create-account "Bob" 100)
+          ;; Bob loses a bet to Alice
+          (transfer "Bob" "Alice" 10)
+          print-reportM ;; Report: Alice->110, Bob->90
+          ;; Bob's friend Steve opens an account
+          (create-account "Steve" 200)
+          ;; Alice uses the money she won from Bob
+          (withdraw "Alice" 10)
+          ;; Bob closes his account and gives his money to Steve
+          (close-account "Bob" "Steve")
+          print-reportM ;; Report: Alice->100, Steve->290
+
+          ;; Alice attempts to withdraw 200, but this fails!
+          ;; Because we're in a resultT, this will immediately
+          ;; end the computation with an error.
+          ;;
+          ;; If this was not a resultT, if it was just a normal
+          ;; do block over the BankM, then this command wouldn't
+          ;; execute, but it would return an Err result. If we
+          ;; didn't manually handel it, then the remaining commands
+          ;; would continue to run.
+          (withdraw "Alice" 200)
+
+          ;; None of these commands will execute:
+          (create-account "Natasha" 50)
+          (transfer "Steve" "Natasha" 10)
           print-reportM
-          (close-account "Checking" "Savings")
-          (create-account "Reserves" 10)
-          (deposit "Reserves" 15)
-          print-reportM
-          ;; This transfer will fail because the "Checking" account was already closed!
-          (transfer "Checking" "Reserves" 40)
           )))
      (traceobject "Result" (map-err to-string res)))))
+

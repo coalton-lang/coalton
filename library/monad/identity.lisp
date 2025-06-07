@@ -30,8 +30,8 @@
 
   (define-instance (Applicative Identity)
     (define pure Identity)
-    (define (liftA2 fc->d->e (Identity d) (Identity e))
-      (Identity (fc->d->e d e))))
+    (define (liftA2 fc->d->e (Identity c) (Identity d))
+      (Identity (fc->d->e c d))))
 
   (define-instance (Monad Identity)
     (define (>>= (Identity a) fa->idb)

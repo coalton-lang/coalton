@@ -44,6 +44,7 @@ Represented as a closure from initial state to updated state and value."
     (match sc
       ((ST fstate)
        fstate)))
+
   (declare modify ((:state -> :state) -> ST :state Unit))
   (define (modify statef)
     "Modify the state in a StatefulComputation, discarding the old state."
@@ -51,10 +52,10 @@ Represented as a closure from initial state to updated state and value."
      (state <- get)
      (put (statef state))))
 
-  
   ;;
   ;; State Monad instances
   ;;
+
   (define-instance (Functor (ST :state))
     (define (map fa->b sca)
       (ST

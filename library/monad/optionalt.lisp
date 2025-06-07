@@ -47,6 +47,9 @@
     (define (pure a)
       (OptionalT (pure (Some a))))
     (define (liftA2 fa->b->c (OptionalT ma) (OptionalT mb))
+      ;; NOTE: This could be written more cleanly in pure do notation. This method
+      ;; short circuits immediately if `ma` contains a `None`, which avoids doing
+      ;; some function calls and allocations.
       (OptionalT
         (do
           (opta <- ma)

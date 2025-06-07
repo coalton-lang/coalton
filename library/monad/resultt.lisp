@@ -22,6 +22,7 @@
 ;;;
 ;;;  ResultT
 ;;;
+
 (coalton-toplevel
   (define-type (ResultT :err :m :ok)
     "A monadic computation that returns a Result."
@@ -57,6 +58,9 @@
     (define (pure a)
       (ResultT (pure (Ok a))))
     (define (liftA2 fa->b->c (ResultT ma) (ResultT mb))
+      ;; NOTE: This could be written more cleanly in pure do notation. This method
+      ;; short circuits immediately if `ma` contains a `None`, which avoids doing
+      ;; some function calls and allocations.
       (ResultT
        (do
         (resa <- ma)
@@ -88,13 +92,77 @@
 ;;
 
 (cl:defmacro do-resultT (cl:&body body)
-  "Wrap and perform a series of ResultT's, returning the value of the last one
-if all of them succeed."
+  "Perform a series of ResultT's, returning the value of the last one
+if all of them succeed. Each step of the `do-resultT` block must return
+a monad that contains a Result value.
+
+Example:
+
+(coalton
+ (run
+  (do-resultT
+    reset ;; state = 0
+    (a <- (add-and-return 1)) ;; a = 1, state = 1
+    (add-and-return -3) ;; state = -2
+    (let threshold = (* a 2))
+    (err-if-less threshold) ;; this will Err and cancel, with state = -2, because state < 1 * 2
+    (pure (Ok a))) ;; attempts to return (Ok 1) (will fail)
+  0))
+===>
+(coalton
+ (run
+  (run-resultT
+   (do
+     (resultT reset)
+     (a <- (resultT (add-and-return 1)))
+     (resultT (add-and-return -3))
+     (let threshold = (* a 2))
+     (resultT (err-if-less threshold))
+     (resultT (pure (ok a)))))
+  0))
+
+with these function definitions:
+
+(coalton-toplevel
+  (declare reset (ST Integer (Result String Unit)))
+  (define reset
+    (do
+     (put 0)
+     (pure (Ok Unit))))
+
+  (declare add-and-return (Integer -> ST Integer (Result String Integer)))
+  (define (add-and-return x)
+    (do
+     (current <- get)
+     (put (+ x current))
+     (pure (Ok (+ x current)))))
+
+  (declare err-if-less (Integer -> St Integer (Result String Unit)))
+  (define (err-if-less minimum)
+    (do
+     (current <- get)
+     (pure (if (< current minimum)
+               (Err (<> \"Current state must be less than \" (into minimum)))
+               (Ok Unit))))))
+"
   `(run-resultT
     (do
      ,@(cl:mapcar
         (cl:lambda (form)
-          `(ResultT ,form))
+          (cl:cond
+            ;; (doresultT my-op) => (do (ResultT my-op))
+            ((cl:symbolp form)
+             `(ResultT ,form))
+            ;; Don't modify: (let x = (foo ...))
+            ((cl:equalp (cl:first form) 'let)
+             form)
+            ;; (x <- operation) =>   (x <- (ResultT operation))
+            ;; (x <- (operation)) => (x <- (ResultT (operation)))
+            ((cl:equalp (cl:second form) '<-)
+             `(,(cl:first form) ,(cl:second form) (ResultT ,(cl:third form))))
+            ;; (operation) => (ResultT operation)
+            (cl:t
+             `(ResultT ,form))))
         body))))
 
 #+sb-package-locks
