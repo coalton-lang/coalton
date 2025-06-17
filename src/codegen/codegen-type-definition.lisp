@@ -43,18 +43,23 @@
                 ,(rt:construct-function-entry `#',(tc:constructor-entry-name constructor) 1)))))
 
      (t
-      `(,(if (settings:coalton-release-p)
-             `(defstruct (,(tc:type-definition-name def)
-                          (:constructor nil)
-                          (:predicate nil)
-                          (:copier nil))
-                ,@(when (source:docstring def)
-                    (list (source:docstring def))))
-
-             `(defclass ,(tc:type-definition-name def) ()
-                ()
-                ,@(when (source:docstring def)
-                    `((:documentation ,(source:docstring def))))))
+      `(,(cond
+           ((tc:type-definition-exception-p def)
+            `(define-condition ,(tc:type-definition-name def) (error)
+               ()
+               ,@(when (source:docstring def)
+                   `((:documentation ,(source:docstring def))))))
+           ((settings:coalton-release-p)
+            `(defstruct (,(tc:type-definition-name def)
+                         (:constructor nil)
+                         (:predicate nil))
+               ,@(when (source:docstring def)
+                   (list (source:docstring def)))))
+             (t
+              `(defclass ,(tc:type-definition-name def) ()
+                 ()
+                 ,@(when (source:docstring def)
+                     `((:documentation ,(source:docstring def)))))))
 
         (defmethod make-load-form ((,(intern "OBJ") ,(tc:type-definition-name def)) &optional ,(intern "ENV"))
           (make-load-form-saving-slots ,(intern "OBJ") :environment ,(intern "ENV")))
@@ -85,9 +90,10 @@
                      :constructor constructor-name
                      :superclass superclass
                      :fields fields
-                     :mode (if (settings:coalton-release-p)
-                               :struct
-                               :class))
+                     :mode (cond
+                             ((tc:type-definition-exception-p def) ':condition)
+                             ((settings:coalton-release-p)         ':struct)
+                             (t                                    ':class)))
 
             :collect (cond
                        ((zerop (tc:constructor-entry-arity constructor))
