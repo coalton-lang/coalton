@@ -122,6 +122,44 @@
                 (setf subs (tc:unify subs subexpr-ty type))))
       type))
 
+  (:method ((expr catch-branch) env)
+    (declare (type tc:environment env)
+             (values tc:ty &optional))
+    (typecheck-node (catch-branch-body expr) env))
+
+  (:method ((expr node-catch) env)
+    (declare (type tc:environment env)
+             (values tc:ty))
+    (let ((type (node-type expr))
+
+          (subs nil))
+
+      (loop :for branch :in (node-catch-branches expr)
+            :for subexpr-ty := (typecheck-node branch env) :do
+              (progn
+                (setf subs (tc:unify subs type subexpr-ty))
+                (setf subs (tc:unify subs subexpr-ty type))))
+      type))
+
+  (:method ((expr node-resumable) env)
+    (declare (type tc:environment env)
+             (values tc:ty))
+    (let ((type (node-type expr))
+
+          (subs nil))
+
+      (loop :for branch :in (node-resumable-branches expr)
+            :for subexpr-ty := (typecheck-node branch env) :do
+              (progn
+                (setf subs (tc:unify subs type subexpr-ty))
+                (setf subs (tc:unify subs subexpr-ty type))))
+      type))
+
+  (:method ((expr resumable-branch) env)
+    (declare (type tc:environment env)
+             (values tc:ty &optional))
+    (typecheck-node (resumable-branch-body expr) env))
+
   (:method ((expr node-while) env)
     (declare (type tc:environment env)
              (values tc:ty))
@@ -171,6 +209,18 @@
              (values tc:ty))
     (typecheck-node (node-return-from-expr expr) env)
     (node-type expr))
+
+  (:method ((node node-throw) env)
+    (declare (type tc:environment env)
+             (values tc:ty))
+    (typecheck-node (node-throw-expr node) env)
+    (node-type node))
+
+  (:method ((node node-resume-to) env)
+    (declare (type tc:environment env)
+             (values tc:ty))
+    (typecheck-node (node-resume-to-expr node) env)
+    (node-type node))
 
   (:method ((expr node-block) env)
     (declare (type tc:environment env)

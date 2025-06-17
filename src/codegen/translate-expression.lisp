@@ -414,6 +414,42 @@ Returns a `node'.")
                      :body (translate-expression (tc:node-match-branch-body branch) ctx env)))
                   (tc:node-match-branches expr)))))
 
+  (:method ((expr tc:node-catch) ctx env)
+    (declare (type pred-context ctx)
+             (type tc:environment env)
+             (values node))
+
+    (let ((qual-ty (tc:node-type expr)))
+      (assert (null (tc:qualified-ty-predicates qual-ty)))
+
+      (make-node-catch
+       :type (tc:qualified-ty-type qual-ty)
+       :expr (translate-expression (tc:node-catch-expr expr) ctx env)
+       :branches (mapcar
+                  (lambda (branch)
+                    (make-catch-branch
+                     :pattern (translate-pattern (tc:node-catch-branch-pattern branch))
+                     :body (translate-expression (tc:node-catch-branch-body branch) ctx env)))
+                  (tc:node-catch-branches expr)))))
+
+  (:method ((expr tc:node-resumable) ctx env)
+    (declare (type pred-context ctx)
+             (type tc:environment env)
+             (values node))
+
+    (let ((qual-ty (tc:node-type expr)))
+      (assert (null (tc:qualified-ty-predicates qual-ty)))
+
+      (make-node-resumable
+       :type (tc:qualified-ty-type qual-ty)
+       :expr (translate-expression (tc:node-resumable-expr expr) ctx env)
+       :branches (mapcar
+                  (lambda (branch)
+                    (make-resumable-branch
+                     :pattern (translate-pattern (tc:node-resumable-branch-pattern branch))
+                     :body (translate-expression (tc:node-resumable-branch-body branch) ctx env)))
+                  (tc:node-resumable-branches expr)))))
+
   (:method ((expr tc:node-progn) ctx env)
     (declare (type pred-context ctx)
              (type tc:environment env)
@@ -444,6 +480,31 @@ Returns a `node'.")
                    (make-node-variable
                     :type tc:*unit-type*
                     :value unit-value))))))
+
+  (:method ((expr tc:node-throw) ctx env)
+    (declare (type pred-context ctx)
+             (type tc:environment env)
+             (values node))
+
+    (let ((qual-ty (tc:node-type expr)))
+      (assert (null (tc:qualified-ty-predicates qual-ty)))
+
+      (make-node-throw
+       :type (tc:qualified-ty-type qual-ty)
+       :expr (translate-expression (tc:node-throw-expr expr) ctx env))))
+
+  (:method ((expr tc:node-resume-to) ctx env)
+    (declare (type pred-context ctx)
+             (type tc:environment env)
+             (values node))
+
+    (let ((qual-ty (tc:node-type expr)))
+      (assert (null (tc:qualified-ty-predicates qual-ty)))
+
+      (make-node-resume-to
+       :type (tc:qualified-ty-type qual-ty)
+       :expr (translate-expression (tc:node-resume-to-expr expr) ctx env))))
+
 
   (:method ((expr tc:node-or) ctx env)
     (declare (type pred-context ctx)

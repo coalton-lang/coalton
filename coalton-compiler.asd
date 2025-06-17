@@ -105,6 +105,7 @@
                              (:file "translate-expression")
                              (:file "translate-instance")
                              (:file "struct-or-class")
+                             (:file "codegen-exception")
                              (:file "codegen-pattern")
                              (:file "codegen-type-definition")
                              (:file "codegen-expression")

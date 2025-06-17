@@ -1,0 +1,35 @@
+================================================================================
+100 Malformed resume-to expression
+================================================================================
+
+(package test-package)
+
+(define f
+  (resume-to)
+  Unit)
+
+--------------------------------------------------------------------------------
+
+error: Malformed resume-to expression
+  --> test:4:12
+   |
+ 4 |    (resume-to)
+   |              ^ expression expected
+
+================================================================================
+101 Malformed resume-to expression
+================================================================================
+
+(package test-package)
+
+(define f
+  (resume-to a b)
+  Unit)
+
+--------------------------------------------------------------------------------
+
+error: Malformed resume-to expression
+  --> test:4:15
+   |
+ 4 |    (resume-to a b)
+   |                 ^ unexpected trailing form

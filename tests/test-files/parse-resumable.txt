@@ -1,0 +1,74 @@
+================================================================================
+100 Malformed resumable expression
+================================================================================
+
+(package test-package)
+
+(define (f)
+  (resumable)
+  Unit)
+
+--------------------------------------------------------------------------------
+
+error: Malformed resumable expression
+  --> test:4:12
+   |
+ 4 |    (resumable)
+   |              ^ expected expression
+
+================================================================================
+101 Malformed resumable expression
+================================================================================
+
+(package test-package)
+
+(define (f)
+  (resumable (a))
+  Unit)
+
+--------------------------------------------------------------------------------
+
+error: Malformed resumable expression
+  --> test:4:16
+   |
+ 4 |    (resumable (a))
+   |                  ^ expected resumeable cases
+
+
+================================================================================
+102 Malformed resumable branch
+================================================================================
+
+(package test-package)
+
+(define (f)
+  (resumable (make-breakfast-for 10)
+    (X Unit))
+  Unit)
+
+--------------------------------------------------------------------------------
+
+error: Malformed resumable branch
+  --> test:5:5
+   |
+ 5 |      (X Unit))
+   |       ^ pattern must match a resumption constructor.
+
+================================================================================
+103 Malformed resumable branch
+================================================================================
+
+(package test-package)
+
+(define (f)
+  (resumable (make-breakfast-for 10)
+    (_ Unit))
+  Unit)
+
+--------------------------------------------------------------------------------
+
+error: Malformed resumable branch
+  --> test:5:5
+   |
+ 5 |      (_ Unit))
+   |       ^ pattern must match a resumption constructor.

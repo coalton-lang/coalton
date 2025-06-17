@@ -40,6 +40,8 @@
    #:toplevel-define-type-repr                   ; ACCESSOR
    #:toplevel-define-type-derive                 ; ACCESSOR
    #:toplevel-define-type-head-location          ; ACCESSOR
+   #:toplevel-define-type-exception-p            ; ACCESSOR
+   #:toplevel-define-type-resumption-p           ; ACCESSOR
    #:toplevel-define-type-list                   ; TYPE
    #:toplevel-define-type-alias                  ; STRUCT
    #:make-toplevel-define-type-alias             ; CONSTRUCTOR
@@ -286,7 +288,9 @@
   (ctors         (util:required 'ctors)         :type constructor-list           :read-only t)
   (repr          (util:required 'repr)          :type (or null attribute-repr)   :read-only nil)
   (derive        (util:required 'derive)        :type (or null attribute-derive) :read-only nil)
-  (head-location (util:required 'head-location) :type source:location            :read-only t))
+  (head-location (util:required 'head-location) :type source:location            :read-only t)
+  (exception-p   (util:required 'exception-p)   :type boolean                    :read-only t)
+  (resumption-p  (util:required 'resumption-p)  :type boolean                    :read-only t))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-define-type-list-p (x)
@@ -985,6 +989,22 @@ If the parsed form is an attribute (e.g., repr or monomorphize), add it to to AT
        (push type (program-types program))
        t))
 
+    ((coalton:define-exception)
+     (let* ((type (parse-define-type form source :definition-category "exception" :exception-p t)))
+
+       (unless (endp (toplevel-define-type-vars type))
+         (parse-error "Invalid define-exception"
+                      (note source form "Exception types do not accept type variables.")))
+
+       (push type (program-types program))
+       t))
+
+    ((coalton:define-resumption)
+     (let* ((type (parse-define-resumption form source)))
+
+       (push type (program-types program))
+       t))
+
     ((coalton:define-type-alias)
      (forbid-attributes attributes form source)
      (let ((alias (parse-define-type-alias form source)))
@@ -1130,7 +1150,7 @@ consume all attributes")))
    :location (form-location source form)
    :inline nil))
 
-(defun parse-define-type (form source)
+(defun parse-define-type (form source &key (definition-category "type") (exception-p nil))
   (declare (type cst:cst form)
            (values toplevel-define-type))
 
@@ -1144,13 +1164,13 @@ consume all attributes")))
 
     ;; (define-type)
     (unless (cst:consp (cst:rest form))
-      (parse-error "Malformed type definition"
+      (parse-error (format nil "Malformed ~a definition" definition-category)
                    (note source form "expected body")))
 
     (cond
       ((cst:atom (cst:second form))
        (unless (identifierp (cst:raw (cst:second form)))
-         (parse-error "Malformed type definition"
+         (parse-error (format nil "Malformed ~a definition" definition-category)
                       (note source (cst:second form) "expected symbol")))
 
        (setf name (make-identifier-src :name (cst:raw (cst:second form))
@@ -1159,7 +1179,7 @@ consume all attributes")))
       (t                                ; (define-type (T ...) ...)
        ;; (define-type ((T) ...) ...)
        (unless (cst:atom (cst:first (cst:second form)))
-         (parse-error "Malformed type definition"
+         (parse-error (format nil "Malformed ~a definition" definition-category)
                       (note source (cst:first (cst:second form))
                             "expected symbol")
                       (help source (cst:second form)
@@ -1169,7 +1189,7 @@ consume all attributes")))
 
        ;; (define-type (1 ...) ...)
        (unless (identifierp (cst:raw (cst:first (cst:second form))))
-         (parse-error "Malformed type definition"
+         (parse-error (format nil "Malformed ~a definition" definition-category)
                       (note source (cst:first (cst:second form))
                             "expected symbol")))
 
@@ -1179,9 +1199,9 @@ consume all attributes")))
 
        ;; (define-type (T) ...)
        (when (cst:atom (cst:rest (cst:second form)))
-         (parse-error "Malformed type definition"
+         (parse-error (format nil "Malformed ~a definition" definition-category)
                       (note source (cst:second form)
-                            "nullary types should not have parentheses")
+                            "nullary constructors should not have parentheses")
                       (help source (cst:second form)
                             (lambda (existing)
                               (subseq existing 1 (1- (length existing))))
@@ -1199,7 +1219,7 @@ consume all attributes")))
     (when (and docstring
                (cst:consp (cst:nthrest 3 form))
                (stringp (cst:raw (cst:fourth form))))
-      (parse-error "Malformed type definition"
+      (parse-error (format nil "Malformed ~a definition" definition-category)
                    (note source
                          (cst:source (cst:fourth form))
                          "only one docstring allowed.")
@@ -1213,38 +1233,42 @@ consume all attributes")))
      :name name
      :vars (reverse variables)
      :docstring docstring
-     :ctors (loop :for constructors_
-                    := (cst:nthrest (if docstring 3 2) form)
-                      :then (cst:rest constructors_)
-                  :with ctors := nil
-                  :while (cst:consp constructors_)
+     :ctors
+     (loop
+       :for constructors_
+         := (cst:nthrest (if docstring 3 2) form)
+           :then (cst:rest constructors_)
+       :with ctors := nil
+       :while (cst:consp constructors_)
 
-                  ;; check for duplicate docstrings
-                  :when (and (cst:atom (cst:first constructors_))
-                             (stringp (cst:raw (cst:first constructors_)))
-                             (not (cst:null (cst:rest constructors_)))
-                             (cst:atom (cst:second constructors_))
-                             (stringp (cst:raw (cst:second constructors_))))
-                    :do (parse-error "Malformed type definition"
-                                     (note source
-                                           (cst:second constructors_)
-                                           "only one docstring allowed per constructor"))
+       ;; check for duplicate docstrings
+       :when (and (cst:atom (cst:first constructors_))
+                  (stringp (cst:raw (cst:first constructors_)))
+                  (not (cst:null (cst:rest constructors_)))
+                  (cst:atom (cst:second constructors_))
+                  (stringp (cst:raw (cst:second constructors_))))
+         :do (parse-error (format nil "Malformed ~a definition" definition-category)
+                          (note source
+                                (cst:second constructors_)
+                                "only one docstring allowed per constructor"))
 
-                        ;; collect constructors with docstrings if they follow
-                  :do (let ((ctor-docstring (if (and (not (cst:null (cst:rest constructors_)))
-                                                     (cst:atom (cst:second constructors_))
-                                                     (stringp (cst:raw (cst:second constructors_))))
-                                                (cst:raw (cst:second constructors_))
-                                                nil)))
-
-
-                        (unless (stringp (cst:raw (cst:first constructors_)))
-                            (push (parse-constructor (cst:first constructors_) form ctor-docstring source) ctors)))
-                  :finally (return ctors))
+             ;; collect constructors with docstrings if they follow
+       :do (let ((ctor-docstring (if (and (not (cst:null (cst:rest constructors_)))
+                                          (cst:atom (cst:second constructors_))
+                                          (stringp (cst:raw (cst:second constructors_))))
+                                     (cst:raw (cst:second constructors_))
+                                     nil)))
+             (unless (stringp (cst:raw (cst:first constructors_)))
+               (push
+                (parse-constructor (cst:first constructors_) form ctor-docstring source)
+                ctors)))
+       :finally (return ctors))
      :repr nil
      :derive nil
      :location (form-location source form)
-     :head-location (form-location source (cst:second form)))))
+     :head-location (form-location source (cst:second form))
+     :exception-p exception-p
+     :resumption-p nil)))
 
 (defun parse-define-type-alias (form source)
   (declare (type cst:cst form)
@@ -1336,6 +1360,60 @@ consume all attributes")))
      :docstring docstring
      :location (form-location source form)
      :head-location (form-location source (cst:second form)))))
+
+(defun parse-define-resumption (form source)
+  (declare (type cst:cst form))
+
+  (assert (cst:consp form))
+  (let (docstring
+        name
+        ctor)
+
+    ;; (define-resumption)
+    (unless (cst:consp (cst:rest form))
+      (parse-error "Malformed resumption definition"
+                   (note source form "expected body")))
+    (cond
+      ;; (define-resumption R ...)
+      ((cst:atom (cst:second form))
+       (setf name (parse-identifier (cst:second form) source)))
+
+      ;; (define-resumption (R ..) ...)
+      ((and (cst:consp (cst:second form))
+            (cst:atom (cst:first (cst:second form))))
+       (setf name (parse-identifier (cst:first (cst:second form)) source)))
+
+      (t
+       (parse-error "Malformed resumption definition"
+                    (note source form "constructor expected"))))
+
+    (setf ctor (parse-constructor (cst:second form) form nil source))
+
+    ;; Optional docstring 
+    (when (cst:consp (cst:rest (cst:rest form)))
+      (unless (and (cst:atom (cst:third form))
+                   (stringp (cst:raw (cst:third form))))
+        (parse-error "Malformed resumption definition"
+                     (note source form "string expected.")))
+      
+      (setf docstring (cst:raw (cst:third form)))
+
+      (when (cst:consp (cst:rest (cst:rest (cst:rest form))))
+        (parse-error "Malformed resumption definition"
+                     (note source (cst:fourth form) "unexpected form"))))
+
+    (make-toplevel-define-type
+     :name name
+     :vars nil
+     :docstring docstring
+     :ctors (list ctor)
+     :repr nil
+     :location (form-location source form)
+     :head-location (form-location source (cst:second form))
+     :derive nil
+     :exception-p nil
+     :resumption-p t)))
+
 
 (defun parse-define-struct (form source)
   (declare (type cst:cst form))
