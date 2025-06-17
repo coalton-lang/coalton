@@ -628,7 +628,8 @@
        :ctors (rename-type-variables-generic% (toplevel-define-type-ctors toplevel) new-ctx)
        :location (source:location toplevel)
        :repr (toplevel-define-type-repr toplevel)
-       :head-location (toplevel-define-type-head-location toplevel))))
+       :head-location (toplevel-define-type-head-location toplevel)
+       :exception-p (toplevel-define-type-exception-p toplevel))))
 
   (:method ((toplevel toplevel-define-type-alias) ctx)
     (declare (type algo:immutable-map ctx)
