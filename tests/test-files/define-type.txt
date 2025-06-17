@@ -114,7 +114,7 @@ error: Malformed type definition
   --> test:3:13
    |
  3 |  (define-type (T))
-   |               ^^^ nullary types should not have parentheses
+   |               ^^^ nullary constructors should not have parentheses
 help: remove unnecessary parentheses
  3 | (define-type T)
    |              -

@@ -193,6 +193,60 @@
       :location (source:location node))
      ctx))
 
+  (:method ((node node-resumable-branch) ctx)
+    (declare (type algo:immutable-map ctx))
+
+    (let* ((new-bindings (make-local-vars (mapcar #'pattern-var-name
+                                                  (pattern-variables (node-resumable-branch-pattern node)))))
+
+           (new-ctx (algo:immutable-map-set-multiple ctx new-bindings)))
+
+      (values
+       (make-node-resumable-branch
+        :pattern (rename-variables-generic% (node-resumable-branch-pattern node) new-ctx)
+        :body (rename-variables-generic% (node-resumable-branch-body node) new-ctx)
+        :location (source:location node))
+       ctx)))
+
+  (:method ((node node-resumable) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values node algo:immutable-map))
+
+    (values
+     (make-node-resumable
+      :expr (rename-variables-generic% (node-resumable-expr node) ctx)
+      :branches (rename-variables-generic% (node-resumable-branches node) ctx)
+      :location (source:location node))
+     ctx))
+
+
+
+  (:method ((node node-catch-branch) ctx)
+    (declare (type algo:immutable-map ctx))
+
+    (let* ((new-bindings (make-local-vars (mapcar #'pattern-var-name
+                                                  (pattern-variables (node-catch-branch-pattern node)))))
+
+           (new-ctx (algo:immutable-map-set-multiple ctx new-bindings)))
+
+      (values
+       (make-node-catch-branch
+        :pattern (rename-variables-generic% (node-catch-branch-pattern node) new-ctx)
+        :body (rename-variables-generic% (node-catch-branch-body node) new-ctx)
+        :location (source:location node))
+       ctx)))
+
+  (:method ((node node-catch) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values node algo:immutable-map))
+
+    (values
+     (make-node-catch
+      :expr (rename-variables-generic% (node-catch-expr node) ctx)
+      :branches (rename-variables-generic% (node-catch-branches node) ctx)
+      :location (source:location node))
+     ctx))
+
   (:method ((node node-progn) ctx)
     (declare (type algo:immutable-map ctx)
              (values node algo:immutable-map))
@@ -222,6 +276,30 @@
      (make-node-return
       :expr (if (node-return-expr node)
                 (rename-variables-generic% (node-return-expr node) ctx)
+                nil)
+      :location (source:location node))
+     ctx))
+
+  (:method ((node node-throw) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values node algo:immutable-map))
+
+    (values
+     (make-node-throw
+      :expr (if (node-throw-expr node)
+                (rename-variables-generic% (node-throw-expr node) ctx)
+                nil)
+      :location (source:location node))
+     ctx))
+
+  (:method ((node node-resume-to) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values node algo:immutable-map))
+
+    (values
+     (make-node-resume-to
+      :expr (if (node-resume-to-expr node)
+                (rename-variables-generic% (node-resume-to-expr node) ctx)
                 nil)
       :location (source:location node))
      ctx))
@@ -300,8 +378,8 @@
             (mapcar #'pattern-var-name
                     (pattern-variables (node-while-let-pattern node)))))
 
-           (new-ctx
-             (algo:immutable-map-set-multiple ctx new-bindings)))
+         (new-ctx
+           (algo:immutable-map-set-multiple ctx new-bindings)))
 
 
       (values
@@ -322,8 +400,8 @@
             (mapcar #'pattern-var-name
                     (pattern-variables (node-for-pattern node)))))
 
-           (new-ctx
-             (algo:immutable-map-set-multiple ctx new-bindings)))
+         (new-ctx
+           (algo:immutable-map-set-multiple ctx new-bindings)))
 
       (values
        (make-node-for
@@ -652,7 +730,9 @@
        :location (source:location toplevel)
        :repr (toplevel-define-type-repr toplevel)
        :derive (toplevel-define-type-derive toplevel)
-       :head-location (toplevel-define-type-head-location toplevel))))
+       :head-location (toplevel-define-type-head-location toplevel)
+       :exception-p (toplevel-define-type-exception-p toplevel)
+       :resumption-p (toplevel-define-type-resumption-p toplevel))))
 
   (:method ((toplevel toplevel-define-type-alias) ctx)
     (declare (type algo:immutable-map ctx)

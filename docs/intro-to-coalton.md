@@ -506,6 +506,7 @@ accumulator and the counter exceeds 500.  Without the `:outer` label,
     (cell:read acc)))
 ```
 
+
 ## Numbers
 
 Coalton supports a few numeric types. The main ones are `Integer`, `Single-Float`, and `Double-Float`.
@@ -1166,3 +1167,174 @@ Specialization can be listed in the repl with `print-specializations`.
 * To denote anonymous functions, Coalton uses `fn` (*not* `lambda`).
 * Numerical operators like `+` only take 2 arguments.
 * Negation is done with `negate`.  The form `(- x)` is a curried function equivalent to `(fn (z) (- x z))`.
+
+# Incomplete Features
+
+Coalton presently supports these features, but more work remains to be
+done to improve upon them.
+
+## Exception Handling
+
+Coalton includes syntax for defining, signalling, handling and
+resuming from exceptional conditions.  
+
+Briefly, the relevant syntactic forms are:
+
+- `define-exception`: Defines an exception type. Other than its name, the syntax is identical to `define-type`
+- `define-resumption`: Defines a named resumption type. 
+- `catch`: An expression for catching and handling exceptions. Handlers pattern match on exception constructors.
+- `throw`: Signals an exception.
+- `resumable`: An expression that intercepts and handles a possible resumption. Again, resumption cases are executed by pattern matching on intercepted resumption constructors.
+- `resume-to`: An expression that takes a resumption instance.  Transfers control to a `resumable` block that includes a handler for the indicated resumption.
+
+Coalton's exception handling system is incomplete and evolving. The design has been chosen to allow for experimentation and forward-compatibility as its features mature. See the Caveats section below. 
+
+### Defining, Throwing, and Catching Exceptions
+
+If you want to catch any exception, includig Common Lips error conditions, you can use a wildcard pattern:
+
+```lisp
+
+(declare divide-by-random (Integer -> Integer -> Integer))
+(define (divide-by-random r m)
+    "Divide `r` by a random integer between `0` and `m`. 
+     If the divisor is `0`, then print the divide by zero error
+     and then return `0.0`"
+    (catch (lisp Integer (r m) (cl:/ r (cl:random m)))
+        (_ (trace "An error was received")
+           0)))
+```
+
+More generally
+
+```lisp 
+
+  (define-type Egg
+    ;;     cracked? cooked?
+    (Goose Boolean Boolean)
+    (Xenomorph))
+
+  ;; We define an exception type BadEgg with a few variants 
+  (define-exception BadEgg
+    (UnCracked Egg)
+    (DeadlyEgg Egg))
+
+  ;; If we try to crack open a Xenomorph egg, throw a DeadlyEgg error
+  (declare crack (Egg -> Egg))
+  (define (crack egg)
+    (match egg
+      ((Goose _ cooked?)
+       (Goose True cooked?))
+      ((Xenomorph)
+       (throw (DeadlyEgg egg)))))
+
+  ;; crack an egg open safely. 
+  (declare crack-safely (Egg -> (Result BadEgg Egg)))
+  (define (crack-safely egg)
+    (catch (Ok (crack egg))
+      ((DeadlyEgg _) (Err (DeadlyEgg egg)))
+      ((UnCracked _) (Err (UnCracked egg)))))
+
+```
+
+### Defining, Invoking, and Handling Resumptions 
+
+Resumptions allow the coalton programmer to recover from an error
+without unwinding the call stack.
+
+The `define-resumption` form accepts a single "Constructor". The name
+of the constructor is also the name of the type of the resumption.
+
+The following example, building on the above, should elucidate
+
+```lisp
+
+  (define-resumption SkipEgg)
+  (define-resumption (ServeRaw Egg) 
+    "Suggest the egg be served raw.")
+
+  (declare cook (Egg -> Egg))
+  (define (cook egg)
+    (let ((badegg (Uncracked egg)))     ; exceptions can be constructed outside throw
+      (match egg
+        ((Goose (True) _)  (Goose True True))
+        ((Goose (False) _) (throw badegg))
+        ((Xenomorph)       (throw (DeadlyEgg egg))))))
+
+
+  ;; Return None if a SkipEgg resumption is received.
+  (declare make-breakfast-with (Egg -> (Optional Egg)))
+  (define (make-breakfast-with egg)
+    (resumable (Some (cook (crack egg)))
+      ((SkipEgg) None)))
+
+```
+
+Now define a function that makes breakfast for `n` people.  It tries to cook each egg, but if it errors by encountering a deadly egg, it resumes `make-breakfast` by skipping that egg. 
+
+```lisp 
+
+  (declare make-breakfast-for (UFix -> (Vector Egg)))
+  (define (make-breakfast-for n)
+    (let ((eggs (vector:make))
+          (skip  SkipEgg))              ; can construct outside of resume-to
+      (for i in (iter:up-to n)
+        (let egg = (if (== 0 (mod i 5)) Xenomorph (Goose False False)))
+        (do
+         (cooked <- (catch (make-breakfast-with egg)
+                      ((DeadlyEgg _)    (resume-to skip))))
+         (pure (vector:push! cooked eggs))))
+      eggs))
+
+```
+
+Every 5th egg is deadly, so making brekfast for 10 people will result in 8 cooked eggs.
+
+The Call stack looks like
+
+```
+
+make-breakfast-for 
+      │
+      └─ make-breakfast-with 
+                │
+                └─ cook  
+
+```
+
+But `cook` signals a `DeadlyEgg` error on `Xenomorph`
+eggs. `make-breakfast-for` catches that error and resumes to
+`SkipEgg`, where `make-breakfast-with` receives that resumption and
+handles it.
+
+
+### Caveats 
+
+For the time being, the following caveats apply;
+
+1. No support for polymorphism for `throw` or `resume-to`
+   expressions. E.g. the following will not compile without type
+   annotation:
+   - `(define (th a) (throw a))` 
+   - `(define (res a) (resume-to a))`
+
+2. No way to `catch` a Lisp condition and bind it to a variable in a
+   `catch` handler case. However Lisp conditions can be caught using a
+   wildcard pattern. In particular, this means that you cannot rethrow
+   a Lisp exception.  Furthermore, you may only rethrow an exception by
+   re-constructing one.  E.g.
+   - `(catch (bad-thing) (_ Unit))` 
+   - `(catch (bad-thing) ((MyBad x) (trace "my bad") (throw (MyBad x))))`
+   
+3. `resumable` branches are even more restrictive. You cannot match
+   against anything _other_ than a resumption constructor pattern.
+
+4. No typeclass is associated with exception-signalling forms. We are
+   pursuing different approaches to static checking of forms that
+   might hop the call stack. In the end, a typeclass approach may win
+   out. Whatever we do, we will endeavor to make it compatible with
+   the existing syntax and semantics.
+
+
+   
+

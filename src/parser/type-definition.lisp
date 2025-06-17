@@ -18,6 +18,8 @@
   (:export
    #:type-definition                    ; TYPE
    #:type-definition-list               ; TYPE
+   #:type-definition-exception-p        ; FUNCTION
+   #:type-definition-resumption-p       ; FUNCTION
    #:type-definition-name               ; FUNCTION
    #:type-definition-vars               ; FUNCTION
    #:type-definition-repr               ; FUNCTION
@@ -121,6 +123,33 @@
     (declare (values null))
     nil))
 
+(defgeneric type-definition-exception-p (def)
+  (:method ((def toplevel-define-type))
+    (declare (values boolean))
+    (toplevel-define-type-exception-p def))
+
+  (:method ((def toplevel-define-struct))
+    (declare (values boolean))
+    nil)
+
+  (:method ((def toplevel-define-type-alias))
+    (declare (values boolean))
+    nil))
+
+(defgeneric type-definition-resumption-p (def)
+  (:method ((def toplevel-define-type))
+    (declare (values boolean))
+    (toplevel-define-type-resumption-p def))
+
+  (:method ((def toplevel-define-struct))
+    (declare (values boolean))
+    nil)
+
+  (:method ((def toplevel-define-type-alias))
+    (declare (values boolean))
+    nil))
+
+
 (defgeneric type-definition-ctor-name (ctor)
   (:method ((ctor constructor))
     (declare (values identifier-src))
@@ -138,3 +167,5 @@
   (:method ((ctor toplevel-define-struct))
     (declare (values ty-list))
     (mapcar #'struct-field-type (toplevel-define-struct-fields ctor))))
+
+

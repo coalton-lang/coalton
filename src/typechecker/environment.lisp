@@ -38,6 +38,8 @@
    #:type-entry-explicit-repr               ; ACCESSOR
    #:type-entry-enum-repr                   ; ACCESSOR
    #:type-entry-newtype                     ; ACCESSOR
+   #:type-entry-exception-p                 ; ACCESSOR
+   #:type-entry-resumption-p                ; ACCESSOR
    #:type-environment                       ; STRUCT
    #:constructor-entry                      ; STRUCT
    #:make-constructor-entry                 ; ACCESSOR
@@ -247,32 +249,33 @@
     (cons (eql :native) (cons t null))))
 
 (defstruct type-entry
-  (name         (util:required 'name)         :type symbol           :read-only t)
-  (runtime-type (util:required 'runtime-type) :type t                :read-only t)
-  (type         (util:required 'type)         :type ty               :read-only t)
-  (tyvars       (util:required 'tyvars)       :type tyvar-list       :read-only t)
-  (constructors (util:required 'constructors) :type util:symbol-list :read-only t)
-
-  ;; An explicit repr defined in the source, or nil if none was supplied. Computed repr will be reflected in
-  ;; ENUM-REPR, NEWTYPE, and/or RUNTIME-TYPE.
-  (explicit-repr (util:required 'explicit-repr) :type explicit-repr  :read-only t)
+  (name          (util:required 'name)          :type symbol                    :read-only t)
+  (runtime-type  (util:required 'runtime-type)  :type t                         :read-only t)
+  (type          (util:required 'type)          :type ty                        :read-only t)
+  (tyvars        (util:required 'tyvars)        :type tyvar-list                :read-only t)
+  (constructors  (util:required 'constructors)  :type util:symbol-list          :read-only t)
+  ;; An explicit repr defined in the source, or nil if none was
+  ;; supplied. Computed repr will be reflected in ENUM-REPR, NEWTYPE,
+  ;; and/or RUNTIME-TYPE.
+  (explicit-repr (util:required 'explicit-repr) :type explicit-repr              :read-only t)
 
   ;; If this is true then the type is compiled to a more effecient
   ;; enum representation at runtime
-  (enum-repr (util:required 'enum-repr)       :type boolean :read-only t)
+  (enum-repr     (util:required 'enum-repr)     :type boolean                    :read-only t)
 
-  ;; If this is true then the type does not exist at runtime
-  ;; See https://wiki.haskell.org/Newtype
+  ;; If this is true then the type does not exist at runtime See
+  ;; https://wiki.haskell.org/Newtype
   ;;
   ;; A type cannot be both enum repr and a newtype
   ;;
   ;; A type that is a newtype has another Coalton type as its
   ;; runtime-type instead of a lisp type. This is to avoid issues with
   ;; recursive newtypes.
-  (newtype (util:required 'newtype)     :type boolean :read-only t)
-
-  (docstring (util:required 'docstring) :type (or null string)   :read-only t)
-  (location  nil                        :type (or null source:location) :read-only t))
+  (newtype    (util:required 'newtype)           :type boolean                   :read-only t)
+  (docstring  (util:required 'docstring)         :type (or null string)          :read-only t)
+  (location   nil                                :type (or null source:location) :read-only t)
+  (exception-p nil                               :type boolean                   :read-only nil)
+  (resumption-p nil                              :type boolean                   :read-only nil))
 
 (defmethod source:location ((self type-entry))
   (type-entry-location self))

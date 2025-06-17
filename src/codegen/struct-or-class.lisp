@@ -20,6 +20,7 @@
   (name (util:required 'name) :type symbol :read-only t)
   (type (util:required 'type) :type t      :read-only t))
 
+
 (defun list-if-release (&rest xs)
   (if (not (coalton-impl/settings:coalton-release-p))
       nil
@@ -31,11 +32,18 @@
                           (superclass nil)
                           (fields nil)
                           mode)
-  (declare (type symbol classname)
-    (type symbol constructor)
-    (type symbol superclass)
-    (type list fields)
-    (type (member :class :struct) mode))
+  "Generate either a DEFSTRUCT or DEFCLASS for a type depending on the MODE argument.
+
+The intention is that MODE, which is one of ':CLASS or ':STRUCT, is
+itself reflective of the Coalton release mode, where development mode
+strongly correlates to ':CLASS and release mode to
+':STRUCT. 
+
+Ultimately, the caller may decide to force either ':CLASS or ':STRUCT
+regardless of Coalton's release mode."
+  (declare (type symbol classname constructor superclass)
+           (type list fields)
+           (type (member :class :struct) mode))
 
   (let ((field-names (mapcar #'struct-or-class-field-name fields))
         (accessor-names (loop :for field :in fields
@@ -112,6 +120,6 @@
                 :collect `(setf ,reader ,(rt:construct-function-entry `#',reader 1))))
 
          (list
-           `(global-lexical:define-global-lexical ,constructor ,classname)
-           `(setf ,constructor (,constructor)))))))
+          `(global-lexical:define-global-lexical ,constructor ,classname)
+          `(setf ,constructor (,constructor)))))))
 
