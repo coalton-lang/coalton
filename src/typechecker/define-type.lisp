@@ -391,6 +391,9 @@
              :for repr-type := (and repr (parser:keyword-src-name (parser:attribute-repr-type repr)))
              :for repr-arg := (and repr (eq repr-type :native) (cst:raw (parser:attribute-repr-arg repr)))
 
+             :for derive := (parser:type-definition-derive type)
+             :for derive-classes := (and derive (parser:attribute-derive-classes derive))
+
              ;; Apply ksubs to find the type of each constructor
              :for constructor-types
                := (loop :for ctor :in (parser:type-definition-ctors type)
@@ -429,6 +432,11 @@
                      (tc-error "Invalid repr :transparent attribute"
                                (tc-note (first (parser:type-definition-ctors type))
                                         "constructors of repr :transparent types must have a single field")))
+
+             :do (loop :for class :in (cst:raw derive-classes)
+                       :for instance := (maybe-derive-class-instance type class)
+                       :when instance
+                         :do (push instance instances))
 
              :collect (let* ((ctors
                                (loop :for ctor :in (parser:type-definition-ctors type)
@@ -493,6 +501,9 @@
                         type-definition))
        instances
        ksubs))))
+
+(defun maybe-derive-class-instance (type class)
+  (format t "Maybe deriving ~a instance for type ~a" class type))
 
 (defun maybe-runtime-repr-instance (type)
   (declare (type type-definition type))

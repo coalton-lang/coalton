@@ -23,6 +23,7 @@
    #:make-attribute-repr                         ; CONSTRUCTOR
    #:attribute-derive                            ; STRUCT
    #:make-attribute-derive                       ; CONSTRUCTOR
+   #:attribute-derive-classes                    ; ACCESSOR
    #:make-attribute-inline                       ; CONSTRUCTOR
    #:attribute-repr-type                         ; ACCESSOR
    #:attribute-repr-arg                          ; ACCESSOR
@@ -999,8 +1000,8 @@ If the parsed form is an attribute (e.g., repr or monomorphize), add it to to AT
          (parse-error "Invalid repr attribute"
                       (source:note repr "structs can only be repr transparent")
                       (source:secondary-note struct "when parsing define-struct")))
-       (setf (toplevel-define-struct-repr struct) repr)
-       (setf (toplevel-define-struct-derive struct) derive)
+       (setf (toplevel-define-struct-repr struct) repr
+             (toplevel-define-struct-derive struct) derive)
        (setf (fill-pointer attributes) 0)
        (push struct (program-structs program))
        t))

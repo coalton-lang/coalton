@@ -21,6 +21,7 @@
    #:type-definition-name               ; FUNCTION
    #:type-definition-vars               ; FUNCTION
    #:type-definition-repr               ; FUNCTION
+   #:type-definition-derive             ; FUNCTION
    #:type-definition-aliased-type       ; FUNCTION
    #:type-definition-ctors              ; FUNCTION
    #:type-definition-ctor-name          ; FUNCTION
@@ -80,6 +81,20 @@
   (:method ((def toplevel-define-type-alias))
     (declare (values (or null attribute-repr)))
     nil))
+
+(defgeneric type-definition-derive (def)
+  (:method ((def toplevel-define-type))
+    (declare (values (or null attribute-derive)))
+    (toplevel-define-type-derive def))
+
+  (:method ((def toplevel-define-struct))
+    (declare (values (or null attribute-derive)))
+    (toplevel-define-struct-derive def))
+
+  (:method ((def toplevel-define-type-alias))
+    (declare (values (or null attribute-derive)))
+    nil)
+  )
 
 (defgeneric type-definition-aliased-type (def)
   (:method ((def toplevel-define-type))
