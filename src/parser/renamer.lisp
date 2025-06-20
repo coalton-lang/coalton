@@ -628,6 +628,7 @@
        :ctors (rename-type-variables-generic% (toplevel-define-type-ctors toplevel) new-ctx)
        :location (source:location toplevel)
        :repr (toplevel-define-type-repr toplevel)
+       :derive (toplevel-define-type-derive toplevel)
        :head-location (toplevel-define-type-head-location toplevel))))
 
   (:method ((toplevel toplevel-define-type-alias) ctx)
@@ -675,6 +676,7 @@
        :fields (rename-type-variables-generic% (toplevel-define-struct-fields toplevel) new-ctx)
        :location (source:location toplevel)
        :repr (toplevel-define-struct-repr toplevel)
+       :derive (toplevel-define-struct-derive toplevel)
        :head-location (toplevel-define-struct-head-location toplevel))))
 
   (:method ((fundep fundep) ctx)

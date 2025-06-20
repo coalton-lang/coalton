@@ -31,6 +31,7 @@
    #:define-class
    #:define-instance
    #:repr
+   #:derive
    #:lisp-toplevel
    #:monomorphize
    #:inline
