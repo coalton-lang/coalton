@@ -29,7 +29,7 @@
    (#:vector #:coalton-library/vector)
    (#:slice #:coalton-library/slice)
    (#:hashtable #:coalton-library/hashtable)
-   (#:hamt #:coalton-library/hamt)
+   (#:hashmap #:coalton-library/hashmap)
    (#:cell #:coalton-library/cell)
    (#:iter #:coalton-library/iterator)
    (#:list #:coalton-library/list)

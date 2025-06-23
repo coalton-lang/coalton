@@ -5,7 +5,7 @@
 (coalton-toplevel
   (define data-size 1000000)
 
-  ;; NB: See tests/hamt-tests.lisp.  Will be replaced with data generator
+  ;; NB: See tests/hashmap-tests.lisp.  Will be replaced with data generator
   ;; library.
   (define mapping-bench/rand64
     (let ((s (cell:new 42))
@@ -31,8 +31,8 @@
                               r)))))
 
   ;; Building
-  (define (build-hamt)
-    (the (hamt:Hamt Integer Integer)
+  (define (build-hashmap)
+    (the (hashmap:HashMap Integer Integer)
          (iter:collect! (iter:into-iter mapping-data))))
 
   (define (build-map)
@@ -44,9 +44,9 @@
          (iter:collect! (iter:into-iter mapping-data))))
 
   ;; Looking up
-  (define (lookup-hamt ht)
+  (define (lookup-hashmap ht)
     (l:dolist ((Tuple k _) mapping-data)
-      (hamt:get ht k)))
+      (hashmap:get ht k)))
 
   (define (lookup-map m)
     (l:dolist ((Tuple k _) mapping-data)
@@ -57,9 +57,9 @@
       (hashtable:get tab k)))
 
   ;; Deletion
-  (define (remove-hamt ht)
+  (define (remove-hashmap ht)
     (l:dolist ((Tuple k _) mapping-data)
-      (hamt:remove ht k)))
+      (hashmap:remove ht k)))
 
   (define (remove-map m)
     (l:dolist ((Tuple k _) mapping-data)
@@ -91,12 +91,12 @@
          (report delete-timer)
          ))))
 
-(define-benchmark build-hamt ()
+(define-benchmark build-hashmap ()
   (declare (optimize speed))
-  (mapping-benchmark (hamt:Hamt coalton:Integer coalton:Integer)
-                     benchmark-mapping/native::build-hamt
-                     benchmark-mapping/native::lookup-hamt
-                     benchmark-mapping/native::remove-hamt))
+  (mapping-benchmark (hashmap:HashMap coalton:Integer coalton:Integer)
+                     benchmark-mapping/native::build-hashmap
+                     benchmark-mapping/native::lookup-hashmap
+                     benchmark-mapping/native::remove-hashmap))
 
 (define-benchmark build-map ()
   (declare (optimize speed))

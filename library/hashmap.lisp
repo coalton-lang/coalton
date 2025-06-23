@@ -1,4 +1,4 @@
-(coalton-library/utils:defstdlib-package #:coalton-library/hamt
+(coalton-library/utils:defstdlib-package #:coalton-library/hashmap
   (:use
    #:coalton
    #:coalton-library/builtin
@@ -17,7 +17,7 @@
    )
   (:shadow #:count)
   (:export
-   #:Hamt
+   #:Hashmap
    #:new
    #:empty?
    #:count
@@ -25,7 +25,7 @@
    #:insert
    #:remove))
 
-(in-package #:coalton-library/hamt)
+(in-package #:coalton-library/hashmap)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -34,27 +34,27 @@
 
 (coalton-toplevel
 
-  (define-type (HamtEntry :key :value)
-    (HamtEntry :key :value))
+  (define-type (HmEntry :key :value)
+    (HmEntry :key :value))
 
-  (define-type (HamtNode :key :value)
-    "Node of Hamt can be a Leaf (single entry), Bud (two entries),
+  (define-type (HmNode :key :value)
+    "Node of Hashmap can be a Leaf (single entry), Bud (two entries),
 Chain (mutiple entries), or Tree.  Chain is only used at the root
-of empty hamt, or nodes at the maximum depth."
-    (Leaf (HamtEntry :key :value))
-    (Bud (HamtEntry :key :value) (HamtEntry :key :value))
-    (Chain (List (HamtEntry :key :value)))
-    (Tree U32 (arr:LispArray (HamtNode :key :value))))
+of empty hashmap, or nodes at the maximum depth."
+    (Leaf (HmEntry :key :value))
+    (Bud (HmEntry :key :value) (HmEntry :key :value))
+    (Chain (List (HmEntry :key :value)))
+    (Tree U32 (arr:LispArray (HmNode :key :value))))
 
-  (define-struct (Hamt :key :value)
-    "Hash array mapped trie"
-    (root (HamtNode :key :value)))
+  (define-struct (HashMap :key :value)
+    "Immutable mapping using hash.  Implemented as hash array mapped trie."
+    (root (HmNode :key :value)))
 
   )
 
 ;; Mask, index, and position
 ;;
-;;  HAMT's intermediate node (Tree) consists of a bitmask and a packed
+;;  HashMap's intermediate node (Tree) consists of a bitmask and a packed
 ;;  LispArray.
 ;;
 ;;  Bitmask shows exsting entry; if N-th bit is on, the node has #N child.
@@ -65,21 +65,32 @@ of empty hamt, or nodes at the maximum depth."
 ;;  child.  In the above example, the index and position has the following
 ;;  relations.
 ;;
-;;     index    pos
-;;   +-------+------+
-;;       0       -
-;;       1       0
-;;       2       1
-;;       3       -
-;;       4       2
-;;       5       -
-;;       6       -
-;;       7       3
+;;     index   mask     pos
+;;   +-------+-------+-------+
+;;       0       0       -
+;;       1       1       0
+;;       2       1       1
+;;       3       0       -
+;;       4       1       2
+;;       5       0       -
+;;       6       0       -
+;;       7       1       3
 ;;
 ;;  index->pos convers index to pos.  tree-has-entry? checks if the given
 ;;  index has a child.
 ;;
 ;;  We use 32bit mask so the maximum number of children per node is 32.
+
+;; Leaf, Bud, Tree
+;;
+;;  If a tree's position has only one child, it is Leaf.  Another entry
+;;  comes to the same position, we turn it to Bud.  More than two entry
+;;  come to the same position, we create a Tree.  We use Bud since
+;;  creating and searching Bud is slightly faster than full Tree.
+;;
+;;  If we use up all bits of the hash value, we chain the entries of the
+;;  same hash value into Chain and we do linear search.  It only happens
+;;  when the tree reaches max-depth.
 
 ;; Ideas to be explored:
 ;;  - Linear updater.  Especially useful when building from the iterator,
@@ -89,19 +100,19 @@ of empty hamt, or nodes at the maximum depth."
 
   ;; Instances
 
-  (define-instance (iter:IntoIterator (Hamt :k :v) (Tuple :k :v))
+  (define-instance (iter:IntoIterator (HashMap :k :v) (Tuple :k :v))
     (define (iter:into-iter ht)
       (iter:new (->generator ht))))
 
-  (define-instance ((Eq :k) (Eq :v) => Eq (Hamt :k :v))
+  (define-instance ((Eq :k) (Eq :v) => Eq (HashMap :k :v))
     (define (== a b)
       (iter:elementwise==! (iter:into-iter a) (iter:into-iter b))))
 
-  (define-instance ((Hash :k) (Hash :v) => Hash (Hamt :k :v))
+  (define-instance ((Hash :k) (Hash :v) => Hash (HashMap :k :v))
     (define (hash ht)
       (iter:elementwise-hash! (iter:into-iter ht))))
 
-  (define-instance ((Hash :k) => iter:FromIterator (Hamt :k :v) (Tuple :k :v))
+  (define-instance ((Hash :k) => iter:FromIterator (HashMap :k :v) (Tuple :k :v))
     (define iter:collect! collect!))
 
   ;; Internal parameters
@@ -121,11 +132,11 @@ of empty hamt, or nodes at the maximum depth."
 
   (define (entry-key entry)
     (match entry
-      ((HamtEntry key _) key)))
+      ((HmEntry key _) key)))
 
   (define (entry-value entry)
     (match entry
-      ((HamtEntry _ value) value)))
+      ((HmEntry _ value) value)))
 
   (declare tree-has-entry? (U32 -> UFix -> Boolean))
   (define (tree-has-entry? mask index)
@@ -166,23 +177,23 @@ of empty hamt, or nodes at the maximum depth."
       (cl:logand trie-bit-mask
                  (cl:ash hbits (cl:- (cl:* trie-bits depth))))))
 
-  (declare replace (Eq :k => :k -> :v -> List (HamtEntry :k :v)
-                       -> List (HamtEntry :k :v)))
+  (declare replace (Eq :k => :k -> :v -> List (HmEntry :k :v)
+                       -> List (HmEntry :k :v)))
   (define (replace key val entries)
     (match entries
-      ((Nil) (Cons (HamtEntry key val) Nil))
+      ((Nil) (Cons (HmEntry key val) Nil))
       ((Cons e es)
        (match e
-         ((HamtEntry k1 _)
+         ((HmEntry k1 _)
           (if (== key k1)
-              (Cons (HamtEntry key val) es)
+              (Cons (HmEntry key val) es)
               (let ((es2 (replace key val es)))
                 (if (unchanged? es es2)
                     es
                     (Cons e es2)))))))))
 
-  (declare tree-insert (U32 -> (arr:LispArray (HamtNode :k :v)) -> UFix -> (HamtNode :k :v)
-                            -> (HamtNode :k :v)))
+  (declare tree-insert (U32 -> (arr:LispArray (HmNode :k :v)) -> UFix -> (HmNode :k :v)
+                            -> (HmNode :k :v)))
   (define (tree-insert mask array index elt)
     "Returns a new tree node out of MASK and ARRAY, plus ELT
 being inserted at INDEX. If the array already has the
@@ -202,8 +213,8 @@ entry with INDEX, the entry is replaced."
               (arr:set! newarray newpos (arr:aref array oldpos))))))
     (Tree newmask newarray))
 
-  (declare tree-delete (U32 -> (arr:LispArray (HamtNode :k :v)) -> UFix
-                            -> Optional (HamtNode :k :v)))
+  (declare tree-delete (U32 -> (arr:LispArray (HmNode :k :v)) -> UFix
+                            -> Optional (HmNode :k :v)))
   (define (tree-delete mask array index)
     "Removes the entry of INDEX-th entry from the array.  The caller must
 ensure the entry exists.  Returns an updated node."
@@ -232,12 +243,14 @@ ensure the entry exists.  Returns an updated node."
       (True (Some (newtree)))))
 
   (define (new-tree-1 depth entry)
-    "Create a new tree with ENTRY as a sole branch."
+    "Create a new tree with ENTRY as a sole branch.  The caller will add a
+new entry to the returned node."
     (let ((ind1 (trie-index (hbits (entry-key entry)) depth)))
       (Tree (index->mask ind1) (arr:make 1 (Leaf entry)))))
 
   (define (new-tree-2 depth entry1 entry2)
-    "Create a new tree with ENTRY as a sole branch."
+    "Create a new tree with ENTRY1 and ENTRY2 as branches.  The caller will add
+a new entry."
     (let ((ind1 (trie-index (hbits (entry-key entry1)) depth))
           (ind2 (trie-index (hbits (entry-key entry2)) depth)))
       (if (== ind1 ind2)
@@ -253,21 +266,21 @@ ensure the entry exists.  Returns an updated node."
             (Tree mask arr)))))
 
   ;; API
-  (declare new (Unit -> Hamt :k :v))
+  (declare new (Unit -> HashMap :k :v))
   (define (new)
-    "Returns an empty Hamt"
-    (Hamt (Chain Nil)))
+    "Returns an empty HashMap"
+    (HashMap (Chain Nil)))
 
   ;; API
-  (declare empty? (Hamt :k :v -> Boolean))
+  (declare empty? (HashMap :k :v -> Boolean))
   (define (empty? ht)
-    "Returns True if a hamt HT is empty, False if not."
+    "Returns True if a hashmap HT is empty, False if not."
     (match (.root ht)
       ((Chain (Nil)) True)
       (_ False)))
 
   ;; API
-  (declare count (Hamt :k :v -> Integer))
+  (declare count (HashMap :k :v -> Integer))
   (define (count ht)
     "Returns the number of entries in HT."
     (into
@@ -280,18 +293,18 @@ ensure the entry exists.  Returns an updated node."
           (fold (fn (sum elt) (+ sum (walk elt))) 0 array))))))
 
   ;; API
-  (declare get (Hash :k => Hamt :k :v -> :k -> Optional :v))
+  (declare get (Hash :k => HashMap :k :v -> :k -> Optional :v))
   (define (get ht key)
-    "Returns a value associated with KEY in the hamt HT."
+    "Returns a value associated with KEY in the hashmap HT."
     (let hb = (hbits key))
     (rec search ((depth 0)
                  (node (.root ht)))
       (match node
-        ((Leaf (HamtEntry k v))
+        ((Leaf (HmEntry k v))
          (if (== key k)
              (Some v)
              None))
-        ((Bud (HamtEntry k1 v1) (HamtEntry k2 v2))
+        ((Bud (HmEntry k1 v1) (HmEntry k2 v2))
          (cond ((== key k1) (Some v1))
                ((== key k2) (Some v2))
                (True None)))
@@ -307,42 +320,48 @@ ensure the entry exists.  Returns an updated node."
              None)))))
 
   ;; API
-  (declare insert (Hash :k => Hamt :k :v -> :k -> :v
-                        -> Hamt :k :v))
+  (declare insert (Hash :k => HashMap :k :v -> :k -> :v
+                        -> HashMap :k :v))
   (define (insert ht key val)
-    "Returns a hamt that has a new entry of (KEY, VAL) added to HT.  If HT
-containes an entry with KEY, the new hamt replaces it for the new entry."
+    "Returns a hashmap that has a new entry of (KEY, VAL) added to HT.  If HT
+containes an entry with KEY, the new hashmap replaces it for the new entry."
     (let ((hb (hbits key))
           (walk (fn (depth node)
+                  (assert (<= depth max-depth))
                   (match node
-                    ((Chain (Nil))  ; only happens on previously empty hamt
-                     (Leaf (HamtEntry key val)))
+                    ((Chain (Nil))  ; only happens on previously empty hashmap
+                     (Leaf (HmEntry key val)))
                     ((Chain entries); only happens on depth == max-depth
                      (Chain (replace key val entries)))
                     ((Leaf entry)
                      (cond ((== key (entry-key entry))
-                            (Leaf (HamtEntry key val))) ;replace
+                            (Leaf (HmEntry key val))) ;replace
                            ((== depth max-depth)
-                            (Chain (make-list (HamtEntry key val) entry)))
+                            (Chain (make-list (HmEntry key val) entry)))
                            (True
-                            (Bud entry (HamtEntry key val)))))
+                            (Bud entry (HmEntry key val)))))
                     ((Bud entry1 entry2)
                      (cond ((== key (entry-key entry1))
-                            (Bud (HamtEntry key val) entry2))
+                            (Bud (HmEntry key val) entry2))
                            ((== key (entry-key entry2))
-                            (Bud (HamtEntry key val) entry1))
+                            (Bud (HmEntry key val) entry1))
+                           ((== depth max-depth)
+                            (Chain (make-list (HmEntry key val)
+                                              entry1 entry2)))
                            (True
-                            (walk depth (new-tree-2 depth entry1 entry2)))))
+                            ;; delegate to the Tree branch
+                            (walk depth
+                                  (new-tree-2 depth entry1 entry2)))))
                     ((Tree mask arr)
                      (let ind = (trie-index hb depth))
                      (let newelt =
                        (if (tree-has-entry? mask ind)
                            (walk (+ depth 1)
                                  (arr:aref arr (index->pos mask ind)))
-                           (Leaf (HamtEntry key val))))
+                           (Leaf (HmEntry key val))))
                      (tree-insert mask arr ind newelt)))))
           )
-      (Hamt (walk 0 (.root ht)))))
+      (HashMap (walk 0 (.root ht)))))
 
   (declare unchanged? (:a -> :a -> Boolean))
   (define (unchanged? a b)
@@ -359,10 +378,10 @@ containes an entry with KEY, the new hamt replaces it for the new entry."
 
 
   ;; API
-  (declare remove (Hash :k => Hamt :k :v -> :k
-                        -> Hamt :k :v))
+  (declare remove (Hash :k => HashMap :k :v -> :k
+                        -> HashMap :k :v))
   (define (remove ht key)
-    "Returns a hamt that is identical to HT except the entry with KEY is
+    "Returns a hashmap that is identical to HT except the entry with KEY is
 removed.  If HT does not contain an entry with KEY, HT is returned as is."
     (let ((hb (hbits key))
           (walk (fn (depth node)
@@ -372,14 +391,16 @@ removed.  If HT does not contain an entry with KEY, HT is returned as is."
                      (let ((es (remove-keyed-entry entries key)))
                        (if (unchanged? es entries)
                            (Some node)
-                           (Some (Chain es)))))
-                    ((Leaf (HamtEntry k _))
+                           (match es
+                             ((Nil) None)
+                             ((Cons _ _)  (Some (Chain es)))))))
+                    ((Leaf (HmEntry k _))
                      (if (== key k)
                          None
                          (Some node)))
                     ((Bud entry1 entry2)
                      (cond ((== key (entry-key entry1)) (Some (Leaf entry2)))
-                           ((== key (entry-key entry2)) (Some (Leaf entry2)))
+                           ((== key (entry-key entry2)) (Some (Leaf entry1)))
                            (True None)))
                     ((Tree mask arr)
                      (let ind = (trie-index hb depth))
@@ -399,14 +420,14 @@ removed.  If HT does not contain an entry with KEY, HT is returned as is."
             ((Some newroot)
              (if (unchanged? (.root ht) newroot)
                  ht
-                 (Hamt newroot)))))))
+                 (HashMap newroot)))))))
 
   ;; Iterator
-  (declare ->generator (Hamt :k :v -> (Unit -> Optional (Tuple :k :v))))
+  (declare ->generator (HashMap :k :v -> (Unit -> Optional (Tuple :k :v))))
   (define (->generator ht)
     (let current = (cell:new (.root ht)))
     (let current-ind = (cell:new (the UFix 0)))
-    (let path = (cell:new (the (List (Tuple UFix (HamtNode :k :v))) Nil)))
+    (let path = (cell:new (the (List (Tuple UFix (HmNode :k :v))) Nil)))
     (let next!? = (fn ()
                     (match (cell:pop! path)
                       ((None) False)
@@ -420,13 +441,13 @@ removed.  If HT does not contain an entry with KEY, HT is returned as is."
           (match (cell:read current)
             ((Chain (Nil))
              (if (next!?) (%loop) None))
-            ((Chain (Cons (HamtEntry k v) es))
+            ((Chain (Cons (HmEntry k v) es))
              (cell:write! current (Chain es))
              (Some (Tuple k v)))
-            ((Leaf (HamtEntry k v))
+            ((Leaf (HmEntry k v))
              (cell:write! current (Chain Nil))
              (Some (Tuple k v)))
-            ((Bud (HamtEntry k v) entry2)
+            ((Bud (HmEntry k v) entry2)
              (cell:write! current (Leaf entry2))
              (Some (Tuple k v)))
             ((Tree _ array)
@@ -439,14 +460,14 @@ removed.  If HT does not contain an entry with KEY, HT is returned as is."
                    (%loop))))))))
     gen)
 
-  (declare collect! ((Hash :k) => (iter:Iterator (Tuple :k :v) -> Hamt :k :v)))
+  (declare collect! ((Hash :k) => (iter:Iterator (Tuple :k :v) -> HashMap :k :v)))
   (define (collect! iter)
     (iter:fold! (fn (ht (Tuple k v))
                   (insert ht k v))
                 (new) iter))
 
   ;; Debug tools
-  (declare dump (Hamt :k :v -> Unit))
+  (declare dump (HashMap :k :v -> Unit))
   (define (dump ht)
     "For debugging"
     (rec dump-node ((node (.root ht))
