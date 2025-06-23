@@ -88,6 +88,15 @@
       (setf subs (tc:unify subs (node-type expr) subexpr-ty))
       subexpr-ty))
 
+  (:method ((expr node-locally) env)
+    (declare (type tc:environment env)
+             (values tc:ty))
+    (let ((subexpr-ty (typecheck-node (node-locally-subexpr expr) env))
+          (subs nil))
+      (setf subs (tc:unify subs subexpr-ty (node-type expr)))
+      (setf subs (tc:unify subs (node-type expr) subexpr-ty))
+      subexpr-ty))
+
   (:method ((expr node-lisp) env)
     (declare (type tc:environment env)
              (ignore env)

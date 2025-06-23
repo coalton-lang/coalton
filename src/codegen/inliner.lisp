@@ -1,37 +1,60 @@
 (defpackage #:coalton-impl/codegen/inliner
-  (:use
-   #:cl
-   #:coalton-impl/codegen/ast)
-  (:import-from
-   #:coalton-impl/codegen/traverse
-   #:action
-   #:count-applications
-   #:count-nodes
-   #:make-traverse-let-action-skipping-cons-bindings
-   #:*traverse*
-   #:traverse
-   #:traverse-with-binding-list)
-  (:import-from
-   #:coalton-impl/codegen/transformations
-   #:rename-type-variables)
-  (:import-from
-   #:coalton-impl/codegen/ast-substitutions
-   #:apply-ast-substitution
-   #:make-ast-substitution)
+  (:use #:cl)
   (:local-nicknames
+   (#:a #:alexandria)
+   (#:ast #:coalton-impl/codegen/ast)
+   (#:traverse #:coalton-impl/codegen/traverse)
+   (#:transformations #:coalton-impl/codegen/transformations)
+   (#:substitutions #:coalton-impl/codegen/ast-substitutions)
    (#:settings #:coalton-impl/settings)
    (#:parser #:coalton-impl/parser)
    (#:tc #:coalton-impl/typechecker))
   (:export
-   #:null-heuristic                     ; FUNCTION
-   #:gentle-inline-heuristic            ; FUNCTION
-   #:aggressive-inline-heuristic        ; FUNCTION
    #:*inliner-max-depth*                ; VARIABLE
    #:*inliner-max-unroll*               ; VARIABLE
+   #:*inliner-heuristic*                ; VARIABLE
+   #:null-heuristic                     ; FUNCTION
+   #:gentle-heuristic                   ; FUNCTION
+   #:aggresive-heuristic                ; FUNCTION
    #:inline-applications                ; FUNCTION
-   #:inline-methods))                   ; FUNCTION
+   ))
 
 (in-package #:coalton-impl/codegen/inliner)
+
+;; Public Settings for Optimization
+
+(defparameter *inliner-max-unroll* 3
+  "Limit depth to unroll recursive functions to.")
+(defparameter *inliner-max-depth*  16
+  "Limit total inliner stack depth.")
+(defparameter *inliner-heuristic*  'gentle-heuristic
+  "Heuristic to determine if a function should be inlined
+even if the user didn't explicity declare it to be.")
+
+;; Private Settings for Debugging
+
+(defvar *inline-methods-p* t
+  "Allow inlining of methods.")
+(defvar *inline-globals-p* t
+  "Allow inlining of known global functions.")
+(defvar *inline-lambdas-p* t
+  "Allow inlining of lambdas.")
+
+;; Dynamic Variable
+
+(declaim (type list *functions-inlined*))
+(defvar *functions-inlined* nil
+  "Any functions or methods that are inlined have their names pushed to this.
+Then it is returned from `inline-applications' to tell the optimizer if it needs
+to rerun optimizations.")
+
+(defun debug! (fmt &rest args)
+  "Convenience function to print debug when `settigns:*print-inlining-occurences*' is enabled."
+  (when settings:*print-inlining-occurrences*
+    (fresh-line)
+    (apply #'format t fmt args)))
+
+;;; Heuristics
 
 (defun null-heuristic (node)
   "An inlining heuristic that doesn't inline."
@@ -40,274 +63,321 @@
 
 (defun gentle-heuristic (node)
   "This will probably inline more than is optimal."
-  (and (<= (count-applications node)
+  (and (<= (traverse:count-applications node)
            4)
-       (<= (count-nodes node)
+       (<= (traverse:count-nodes node)
            8)))
 
 (defun aggressive-heuristic (node)
   "This will probably inline more than is optimal."
-  (and (<= (count-applications node)
+  (and (<= (traverse:count-applications node)
            8)
-       (<= (count-nodes node)
+       (<= (traverse:count-nodes node)
            32)))
 
-(declaim (type (integer 0) *inliner-max-depth*))
-(defvar *inliner-max-depth* 16
-  "This is the maximum depth of the function call stack that will get
-inlined.")
+(defun heuristic-inline-p (node)
+  "Determine if the node should be inlined based on heuristics."
+  (declare (type ast:node-abstraction node)
+           (values boolean &optional))
 
-(declaim (type (integer 0) *inliner-max-unroll*))
-(defvar *inliner-max-unroll* 4
-  "This is the maximum number of times a specific function can appear in
-the call stack that is being inlined.")
+  (funcall *inliner-heuristic* node))
 
-(declaim (type (or symbol function) *inliner-heuristic*))
-(defvar *inliner-heuristic* 'gentle-heuristic
-  "A function that takes a NODE and decides if it should inline it.")
+;; Utilities
 
-(defun heuristic-inline-applications (node
-                                      env
-                                      &key
-                                        (max-depth  *inliner-max-depth*)
-                                        (max-unroll *inliner-max-unroll*)
-                                        (heuristic  *inliner-heuristic*))
-  "Recursively inline function calls in `node`, using the environment
-`env` to look up the function bodies to substitute. The traversal
-keeps a call stack and will not continue past the specified
-`max-depth`. For recursive functions, traversal will not continue if
-the function already appears more than `max-unroll` times in the call
-stack. Otherwise, if a function's code can be found in `env` and the
-`heuristic` returns true, then the body will be inlined.
+(defun unrolledp (node stack)
+  "Determine if the inliner has fully unrolled a recursive call."
+  (declare (type (or ast:node-application ast:node-direct-application) node)
+           (type list stack)
+           (values boolean &optional))
 
-Special logic prevents inlining `coalton:Cons` in let bindings to
-avoid breaking recursive data let expressions, since the codegen
-requires direct constructor calls.
+  (a:if-let ((name (ast:node-rator-name node)))
+    (<= *inliner-max-unroll* (count name stack))
+    nil))
 
-Return two values: the processed node and whether inlining happened."
-  (declare (type node                 node)
-           (type tc:environment       env)
-           (type (integer 0)          max-depth)
-           (type (integer 0)          max-unroll)
-           (type (or symbol function) heuristic)
-           (values node boolean &optional))
-  (let ((inline-happened? nil))
-    (labels ((inline-abstraction-from-application (node abstraction process-body)
-               "If NODE is an abstraction (f e1 e2 ... en) and ABSTRACTION is a
-              function (fn (x1 x2 ... xn) body), then produce a node which is
-              something like
+(defun max-depth-p (stack)
+  "Determine if the inliner is at its maximum depth, by default this is 16."
+  (declare (type list stack)
+           (values boolean &optional))
 
-                  `(let ((x1 e1) (x2 e2) ... (xn en))
-                     ,(funcall process-body body))
+  (<= *inliner-max-depth* (length stack)))
 
-              where body has been processed by PROCESS-BODY. (The
-              body may be processed by this function in other ways.)"
-               (declare (type (or node-application node-direct-application) node)
-                        (type node-abstraction                              abstraction)
-                        (type function                                      process-body)
-                        (values node-let &optional))
-               (loop
-                 ;; (x1 ... xn)
-                 :with vars := (node-abstraction-vars abstraction)
-                 ;; (e1 ... en)
-                 :with vals := (node-rands node)
-                 ;; body, as described above
-                 :with body := (node-abstraction-subexpr abstraction)
+(defun lookup-code-global (node env)
+  "Try to lookup the code of a globally known function, returns null or abstraction."
+  (declare (type (or ast:node-application ast:node-direct-application) node)
+           (values (or null ast:node-abstraction) &optional))
 
-                 ;; Collect the LET-node bindings. We also generate new
-                 ;; generated variable names (i.e., each xi is renamed to
-                 ;; a unique xi').
-                 :for var :in vars
-                 :for val :in vals
-                 :for new-var := (gensym (symbol-name var))
-                 :collect (cons new-var val)
-                   :into bindings
-                 :collect (make-ast-substitution
-                           :from var
-                           :to (make-node-variable
-                                :type (node-type val)
-                                :value new-var))
-                   :into subs
+  (let ((code (tc:lookup-code env (ast:node-rator-name node) :no-error t)))
+    (if (ast:node-abstraction-p code) code nil)))
 
-                 ;; Return the inlined abstraction as a LET.
-                 ;;
-                 ;; The code being inlined might have a more general
-                 ;; type than the thing it replaces, we do unification
-                 ;; to get a more specific type.
-                 :finally (let* ((new-body
-                                   (funcall
-                                    process-body
-                                    ;; Rename the type variables
-                                    ;; so they aren't
-                                    ;; inadvertently unified
-                                    ;; across substitutions.
-                                    (rename-type-variables
-                                     (apply-ast-substitution subs body t))))
-                                 (new-subs
-                                   (coalton-impl/typechecker/unify::mgu
-                                    (node-type node)
-                                    (node-type new-body))))
-                            (return
-                              (make-node-let
-                               :type     (node-type node)
-                               :bindings bindings
-                               :subexpr  (tc:apply-substitution new-subs new-body))))))
+(defun lookup-code-anonymous (node)
+  "Try to lookup the code of an anonymous application, returns null or abstraction."
+  (declare (type ast:node-application node)
+           (values (or null ast:node-abstraction) &optional))
 
-             (try-inline (node call-stack)
-               "Attempt to perform an inlining of the application node NODE. The
-            CALL-STACK is a stack (represented as a list) of node names seen so
-            far recursively by the inliner."
-               (declare (type (or node-application node-direct-application) node)
-                        (type parser:identifier-list                        call-stack)
-                        (values (or node-let node-application node-direct-application) &optional))
-               ;; There are multiple cases that can be inlined.
-               ;;
-               ;; Case #1: (f e1 ... en) where f is global, known, and arity n.
-               (alexandria:when-let*
-                   ((name (node-rator-name node))
-                    (code (tc:lookup-code env name :no-error t))
-                    (_    (and (node-abstraction-p code)
-                               (or (alexandria:when-let (fun-env-entry (tc:lookup-function env name :no-error t))
-                                     (tc:function-env-entry-inline-p fun-env-entry))
-                                   (funcall heuristic code))
-                               (<= (length call-stack)
-                                   max-depth)
-                               (<= (count name call-stack)
-                                   max-unroll)
-                               (= (length (node-abstraction-vars code))
-                                  (length (node-rands node))))))
-                 (setf inline-happened? t)
-                 (when settings:*print-inlining-occurrences*
-                   (format t "~&;; Inlining ~S~%" name))
-                 (return-from try-inline
-                   (inline-abstraction-from-application
-                    node code (lambda (body)
-                                (funcall *traverse* body (cons name call-stack))))))
+  (let ((code (ast:node-application-rator node)))
+    (if (ast:node-abstraction-p code) code nil)))
 
-               ;; Case #2: ((fn (x1 ... xn) ...) e1 ... en)
-               (when (node-application-p node)
-                 (let ((code (node-application-rator node)))
-                   (when (and (node-abstraction-p code)
-                              (funcall heuristic code)
-                              (= (length (node-abstraction-vars code))
-                                 (length (node-rands node))))
-                     (setf inline-happened? t)
-                     (when settings:*print-inlining-occurrences*
-                       (format t "~&;; Inlining (fn ...)~%"))
-                     (return-from try-inline
-                       (inline-abstraction-from-application
-                        node code (lambda (body)
-                                    (funcall *traverse* body call-stack)))))))
+(defun inlinable-function-p (name env)
+  "Check if a function is declared inlinable at its definition."
+  (declare (type symbol name)
+           (type tc:environment env)
+           (values boolean &optional))
 
-               ;; Inlining did not satisfy heuristics or was inapplicable.
-               (return-from try-inline node)))
-      (values
-       (traverse
-        node
-        (list
-         (action (:after node-application) #'try-inline)
-         (action (:after node-direct-application) #'try-inline)
-         (make-traverse-let-action-skipping-cons-bindings))
-        nil)
-       inline-happened?))))
+  (a:if-let ((entry (tc:lookup-function env name :no-error t)))
+    (tc:function-env-entry-inline-p entry)
+    nil))
+
+(defun fully-applied-p (node code)
+  "Check if an an application node constitutes a fully applied abstraction."
+  (declare (type (or ast:node-application ast:node-direct-application) node)
+           (type ast:node-abstraction code)
+           (values boolean &optional))
+
+  (= (length (ast:node-abstraction-vars code))
+     (length (ast:node-rands node))))
+
+;;; Inlining
+
+(defun inline-code-from-application (node code)
+  "Swap an application node with a let node where the body is the inlined function."
+  (declare (type (or ast:node-application ast:node-direct-application) node)
+           (type ast:node-abstraction code)
+           (values ast:node-let &optional))
+
+  (let* ((bindings
+           (mapcar (lambda (var val) (cons (gensym (symbol-name var)) val))
+                   (ast:node-abstraction-vars code)
+                   (ast:node-rands node)))
+         (substitutions
+           (mapcar (lambda (var binding)
+                     (destructuring-bind (new-var . val) binding
+                       (substitutions:make-ast-substitution
+                        :from var
+                        :to (ast:make-node-variable
+                             :type (ast:node-type val)
+                             :value new-var))))
+                   (ast:node-abstraction-vars code)
+                   bindings))
+         (new-code
+           (transformations:rename-type-variables
+            (substitutions:apply-ast-substitution
+             substitutions
+             (ast:node-abstraction-subexpr code)
+             t)))
+         (new-substitutions
+           (coalton-impl/typechecker/unify::mgu
+            (ast:node-type node)
+            (ast:node-type new-code))))
+    (ast:make-node-let
+     :type     (ast:node-type node)
+     :bindings bindings
+     :subexpr  (tc:apply-substitution new-substitutions new-code))))
+
+(defun inline-application (node env stack noinline-functions)
+  "Try to inline an application, checking traversal stack, heuristics,
+and user-supplied declarations to determine if it is appropriate."
+  (declare (type (or ast:node-application ast:node-direct-application) node)
+           (type tc:environment env)
+           (type list stack)
+           (type parser:identifier-list noinline-functions)
+           (values ast:node &optional))
+
+  (let ((name (ast:node-rator-name node)))
+    (cond
+      ((find name noinline-functions)
+       (debug! ";; Locally noinline reached ~a" name)
+       node)
+
+      ((unrolledp node stack)
+       (debug! ";; Fully unrolled ~a" name)
+       (ast:make-node-locally
+        :type (ast:node-type node)
+        :noinline-functions (list name)
+        :subexpr node))
+
+      ((max-depth-p stack)
+       (debug! ";; Max depth reached ~a" name)
+       node)
+
+      ;; Case #1: (f e1 ... en) where f is global, known, and arity n.
+      ((let ((code (lookup-code-global node env)))
+         (and *inline-globals-p*
+              code
+              (fully-applied-p node code)
+              (or (heuristic-inline-p code)
+                  (inlinable-function-p name env))))
+       (debug! ";; Inlining globally known function ~a" name)
+       (push name *functions-inlined*)
+       (inline-applications*
+        (inline-code-from-application node (lookup-code-global node env))
+        env
+        stack
+        noinline-functions))
+
+      ;; Case #2: ((fn (x1 ... xn) ...) e1 ... en)
+      ((and *inline-lambdas-p*
+            (ast:node-application-p node)
+            (let ((code (lookup-code-anonymous node)))
+              (and code
+                   (heuristic-inline-p code)
+                   (fully-applied-p node code))))
+       (debug! ";; Inlining anonymous function ~a" name)
+       (push name *functions-inlined*)
+       (inline-applications*
+        (inline-code-from-application node (lookup-code-anonymous node))
+        env
+        stack
+        noinline-functions))
+
+      (t
+       (debug! ";; Failed to inline ~a" name)
+       node))))
+
+(defun extract-dict (rands)
+  (declare (type ast:node-list rands)
+           (values (or null parser:identifier) ast:node-list &optional))
+
+  (cond
+    ((ast:node-variable-p (first rands))
+     (values (ast:node-variable-value (first rands))
+             (rest rands)))
+
+    ((and (ast:node-application-p (first rands))
+          (ast:node-variable-p (ast:node-application-rator (first rands))))
+     (values (ast:node-variable-value (ast:node-application-rator (first rands)))
+             (append (ast:node-application-rands (first rands)) (rest rands))))
+
+    (t
+     (values nil nil))))
+
+(defun inline-method (node env)
+  (declare (type ast:node-application node)
+           (type tc:environment env)
+           (values ast:node &optional))
+
+  (unless *inline-methods-p*
+    (return-from inline-method
+      node))
+
+  (let ((rator (ast:node-application-rator node))
+        (rands (ast:node-application-rands node)))
+    (multiple-value-bind (dict inner-rands) (extract-dict rands)
+      (if (or (null dict) (not (ast:node-variable-p rator)))
+          node
+          (let ((method-name (tc:lookup-method-inline env (ast:node-variable-value rator) dict :no-error t)))
+            (cond
+              ((null method-name)
+               node)
+
+              ((null inner-rands)
+               (debug! ";; Inlining method to variable ~a" method-name)
+               (push method-name *functions-inlined*)
+               (ast:make-node-variable
+                :type (ast:node-type node)
+                :value method-name))
+
+              (t
+               (debug! ";; Inlining method to application ~a" method-name)
+               (push method-name *functions-inlined*)
+               (ast:make-node-application
+                :type (ast:node-type node)
+                :rator (ast:make-node-variable
+                        :type (tc:make-function-type*
+                               (mapcar #'ast:node-type inner-rands)
+                               (ast:node-type node))
+                        :value method-name)
+                :rands inner-rands))))))))
+
+(defun inline-direct-method (node env)
+  (declare (type ast:node-direct-application node)
+           (type tc:environment env)
+           (values ast:node &optional))
+
+  (unless *inline-methods-p*
+    (return-from inline-direct-method
+      node))
+
+  (let ((rands (ast:node-direct-application-rands node)))
+    (multiple-value-bind (dict inner-rands) (extract-dict rands)
+      (if (null dict)
+          node
+          (let ((method-name (tc:lookup-method-inline env (ast:node-direct-application-rator node) dict :no-error t)))
+            (cond
+              ((null method-name)
+               node)
+
+              ((null inner-rands)
+               (debug! ";; Inlining direct method to variable ~a" method-name)
+               (push method-name *functions-inlined*)
+               (ast:make-node-variable
+                :type (ast:node-type node)
+                :value method-name))
+
+              (t
+               (debug! ";; Inlining direct method to application ~a" method-name)
+               (push method-name *functions-inlined*)
+               (ast:make-node-application
+                :type (ast:node-type node)
+                :rator (ast:make-node-variable
+                        :type (tc:make-function-type*
+                               (mapcar #'ast:node-type inner-rands)
+                               (ast:node-type node))
+                        :value method-name)
+                :rands inner-rands))))))))
+
+(defun inline-applications* (node env stack noinline-functions)
+  (declare (type ast:node node)
+           (type tc:environment env)
+           (type list stack)
+           (type parser:identifier-list noinline-functions)
+           (values ast:node &optional))
+
+  (traverse:traverse
+   node
+   (list
+    (traverse:action (:before ast:node-locally node)
+      (dolist (sym (ast:node-locally-noinline-functions node))
+        (push sym noinline-functions))
+      node)
+
+    (traverse:action (:before ast:node-application node)
+      (push (ast:node-rator-name node) stack)
+      node)
+
+    (traverse:action (:before ast:node-direct-application node)
+      (push (ast:node-rator-name node) stack)
+      node)
+
+    (traverse:action (:after ast:node-locally node)
+      (dolist (sym (ast:node-locally-noinline-functions node))
+        (pop noinline-functions))
+      node)
+
+    (traverse:action (:after ast:node-application node)
+      (prog1 (let ((methods-inlined (inline-method node env)))
+               (etypecase methods-inlined
+                 ((or ast:node-application ast:node-direct-application)
+                  (inline-application methods-inlined env stack noinline-functions))
+                 (ast:node
+                  methods-inlined)))
+        (pop stack)))
+
+    (traverse:action (:after ast:node-direct-application node)
+      (prog1 (let ((methods-inlined (inline-direct-method node env)))
+               (etypecase methods-inlined
+                 ((or ast:node-application ast:node-direct-application)
+                  (inline-application methods-inlined env stack noinline-functions))
+                 (ast:node
+                  methods-inlined)))
+        (pop stack))))))
 
 (defun inline-applications (node env)
-  "Perform inlining on NODE in the environment ENV.
-
-If heuristic inlining is enabled, then a default inlining heuristic
-*INLINER-HEURISTIC* will be used to decide if a node should be
-inlined.
-
-Return two values: the processed node, and whether inlining happened."
-  (if settings:*coalton-heuristic-inlining*
-      (heuristic-inline-applications node env :heuristic *inliner-heuristic*)
-      (heuristic-inline-applications node env :heuristic 'null-heuristic)))
-
-(defun inline-methods (node env)
-  (declare (type node node)
+  "Traverse node, inlining methods, functions, and lambdas where possible."
+  (declare (type ast:node node)
            (type tc:environment env)
-           (values node boolean &optional))
-  (let ((inline-happened? nil))
-    (labels ((inline-method (node)
-               (let ((rator (node-application-rator node))
-                     (rands (node-application-rands node)))
-                 (when (node-variable-p rator)
-                   (let (dict rands_)
-                     (cond
-                       ((node-variable-p (first rands))
-                        (setf dict (node-variable-value (first rands)))
-                        (setf rands_ (cdr rands)))
+           (values ast:node list &optional))
 
-                       ((and (node-application-p (first rands))
-                             (node-variable-p (node-application-rator (first rands))))
-                        (setf dict (node-variable-value (node-application-rator (first rands))))
-                        (setf rands_ (append (node-application-rands (first rands)) (cdr rands))))
-
-                       (t
-                        (return-from inline-method nil)))
-
-                     (let* ((method-name (node-variable-value rator))
-                            (inline-method-name (tc:lookup-method-inline env method-name dict :no-error t)))
-
-                       (when inline-method-name
-                         (setf inline-happened? t)
-                         (when settings:*print-inlining-occurrences*
-                           (format t "~&;; Inlining method ~S -> ~S~%" method-name inline-method-name))
-                         (if (null rands_)
-                             (make-node-variable
-                              :type (node-type node)
-                              :value inline-method-name)
-
-                             (make-node-application
-                              :type (node-type node)
-                              :rator (make-node-variable
-                                      :type (tc:make-function-type*
-                                             (mapcar #'node-type rands_)
-                                             (node-type node))
-                                      :value inline-method-name)
-                              :rands rands_))))))))
-
-             (inline-direct-method (node)
-               (let ((rands (node-direct-application-rands node)))
-                 (let (dict rands_)
-                   (cond
-                     ((node-variable-p (first rands))
-                      (setf dict (node-variable-value (first rands)))
-                      (setf rands_ (cdr rands)))
-
-                     ((and (node-application-p (first rands))
-                           (node-variable-p (node-application-rator (first rands))))
-                      (setf dict (node-variable-value (node-application-rator (first rands))))
-                      (setf rands_ (append (node-application-rands (first rands)) (cdr rands))))
-
-                     (t
-                      (return-from inline-direct-method nil)))
-
-                   (let* ((method-name (node-direct-application-rator node))
-                          (inline-method-name (tc:lookup-method-inline env method-name dict :no-error t)))
-                     (when inline-method-name
-                       (setf inline-happened? t)
-                       (when settings:*print-inlining-occurrences*
-                         (format t "~&;; Inlining method ~S -> ~S~%" method-name inline-method-name))
-                       (if (null rands_)
-                           (make-node-variable
-                            :type (node-type node)
-                            :value inline-method-name)
-
-                           (make-node-application
-                            :type (node-type node)
-                            :rator (make-node-variable
-                                    :type (tc:make-function-type*
-                                           (mapcar #'node-type rands_)
-                                           (node-type node))
-                                    :value inline-method-name)
-                            :rands rands_))))))))
-
-      (values
-       (traverse
-        node
-        (list
-         (action (:after node-application) #'inline-method)
-         (action (:after node-direct-application) #'inline-direct-method)))
-       inline-happened?))))
-
+  (let ((*functions-inlined* '()))
+    (values
+     (inline-applications* node env '() '(coalton:cons))
+     *functions-inlined*)))
