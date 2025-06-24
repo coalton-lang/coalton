@@ -85,6 +85,9 @@
    #:make-node-return-from              ; CONSTRUCTOR
    #:node-return-from-name              ; READER
    #:node-return-from-expr              ; READER
+   #:node-throw                         ; STRUCT
+   #:make-node-throw                    ; CONSTRUCTOR
+   #:node-throw-expr                    ; READER
    #:node-block                         ; STRUCT
    #:make-node-block                    ; CONSTRUCTOR
    #:node-block-name                    ; READER
@@ -258,6 +261,10 @@ call to (break)."
   "A return statement, used for explicit returns in functions"
   (name (util:required 'name) :type symbol :read-only t)
   (expr (util:required 'expr) :type node   :read-only t))
+
+(defstruct (node-throw (:include node))
+  "A node that throws an exception, its argument."
+  (expr (util:required 'expr) :type node :read-only t))
 
 (defstruct (node-block (:include node))
   "A return target, used for explicit returns in functions"

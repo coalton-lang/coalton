@@ -199,15 +199,22 @@
 ;;; Expression Type Inference
 ;;;
 
+(defun exception-type-p (inferred-ty env)
+  (alexandria:when-let* ((ty-name (if (types:tycon-p inferred-ty)
+                                      (types:tycon-name inferred-ty)
+                                      nil))
+                         (entry   (tc:lookup-type (tc-env-env env) ty-name)))
+    (tc:type-entry-exceptionp entry)))
+
 (defgeneric infer-expression-type (node expected-type subs env)
   (:documentation "Infer the type of NODE and then unify against EXPECTED-TYPE
 
 Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
   (:method ((node parser:node-literal) expected-type subs env)
     (declare (type tc:ty expected-type)
-             (type tc:substitution-list subs)
-             (type tc-env env)
-             (values tc:ty tc:ty-predicate-list accessor-list node-literal tc:substitution-list &optional))
+      (type tc:substitution-list subs)
+      (type tc-env env)
+      (values tc:ty tc:ty-predicate-list accessor-list node-literal tc:substitution-list &optional))
 
     (let ((ty (etypecase (parser:node-literal-value node)
                 (ratio tc:*fraction-type*)
@@ -424,7 +431,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                               env)
         (declare (ignore pat-ty))
 
-        (values nil                ; return nil as this is always thrown away
+        (values nil         ; return nil as this is always thrown away
                 preds
                 accessors
                 (make-node-bind
@@ -521,11 +528,11 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                     (tc:coalton-internal-type-error ()
                       (tc-error "Return type mismatch"
                                 (tc-note s1
-                                                 "First return is of type '~S'"
-                                                 (tc:apply-substitution subs ty1))
+                                         "First return is of type '~S'"
+                                         (tc:apply-substitution subs ty1))
                                 (tc-note s2
-                                                 "Second return is of type '~S'"
-                                                 (tc:apply-substitution subs ty2))))))
+                                         "Second return is of type '~S'"
+                                         (tc:apply-substitution subs ty2))))))
 
         ;; Unify the function's inferred type with one of the early returns.
         (when *returns*
@@ -534,11 +541,11 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
             (tc:coalton-internal-type-error ()
               (tc-error "Return type mismatch"
                         (tc-note (car (first *returns*))
-                                         "First return is of type '~S'"
-                                         (tc:apply-substitution subs (cdr (first *returns*))))
+                                 "First return is of type '~S'"
+                                 (tc:apply-substitution subs (cdr (first *returns*))))
                         (tc-note (parser:node-body-last-node (parser:node-abstraction-body node))
-                                         "Second return is of type '~S'"
-                                         (tc:apply-substitution subs body-ty))))))
+                                 "Second return is of type '~S'"
+                                 (tc:apply-substitution subs body-ty))))))
 
         (let ((ty (tc:make-function-type* arg-tys body-ty)))
           (handler-case
@@ -804,11 +811,38 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
         :expr expr-node)
        subs)))
 
+  (:method ((node parser:node-throw) expected-type subs env)
+    (declare (type tc:ty expected-type)
+      (type tc:substitution-list subs)
+      (type tc-env env)
+      (values tc:ty tc:ty-predicate-list accessor-list node-throw tc:substitution-list))
+
+    (multiple-value-bind (exception-ty preds accessors expr-node subs)
+        (infer-expression-type (parser:node-throw-expr node)
+                               (tc:make-variable)
+                               subs
+                               env)
+
+      (unless (exception-type-p exception-ty env)
+        (tc-error "Invalid throw"
+                  (tc-note node "Argument to `throw` be an exception.")))
+      
+      (values
+       expected-type
+       preds
+       accessors
+       (make-node-throw
+        :type (tc:qualify nil expected-type)
+        :location (source:location node)
+        :expr expr-node)
+       subs)))
+
+
   (:method ((node parser:node-or) expected-type subs env)
     (declare (type tc:ty expected-type)
-             (type tc:substitution-list subs)
-             (type tc-env env)
-             (values tc:ty tc:ty-predicate-list accessor-list node-or tc:substitution-list))
+      (type tc:substitution-list subs)
+      (type tc-env env)
+      (values tc:ty tc:ty-predicate-list accessor-list node-or tc:substitution-list))
 
     (let* ((preds nil)
            (accessors nil)

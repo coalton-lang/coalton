@@ -28,6 +28,7 @@
   (match           #'identity :type function :read-only t)
   (progn           #'identity :type function :read-only t)
   (return          #'identity :type function :read-only t)
+  (throw           #'identity :type function :read-only t)
   (application     #'identity :type function :read-only t)
   (or              #'identity :type function :read-only t)
   (and             #'identity :type function :read-only t)
@@ -185,9 +186,19 @@
       :expr (traverse (node-return-expr node) block) ; the nil case is handled by the list instance
       )))
 
-  (:method ((node node-application) block)
+  (:method ((node node-throw) block)
     (declare (type traverse-block block)
              (values node &optional))
+    (funcall 
+     (traverse-throw block)
+     (make-node-throw
+      :type (node-type node)
+      :location (source:location node)
+      :expr (traverse (node-throw-expr node) block))))
+
+  (:method ((node node-application) block)
+    (declare (type traverse-block block)
+      (values node &optional))
 
     (funcall
      (traverse-application block)

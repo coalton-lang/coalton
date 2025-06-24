@@ -84,6 +84,9 @@
    #:node-return                        ; STRUCT
    #:make-node-return                   ; CONSTRUCTOR
    #:node-return-expr                   ; ACCESSOR
+   #:node-throw                        ; STRUCT
+   #:make-node-throw                   ; CONSTRUCTOR
+   #:node-throw-expr                   ; ACCESSOR
    #:node-application                   ; STRUCT
    #:make-node-application              ; CONSTRUCTOR
    #:node-application-rator             ; ACCESSOR
@@ -556,6 +559,11 @@ Rebound to NIL parsing an anonymous FN.")
   (expr    (util:required 'expr)    :type node      :read-only t)
   (body    (util:required 'body)    :type node-body :read-only t))
 
+(defstruct (node-throw
+            (:include node)
+            (:copier nul))
+  (expr (util:required 'expr) :type node :read-only t))
+
 
 (defun parse-expression (form source)
   (declare (type cst:cst form)
@@ -631,6 +639,24 @@ Rebound to NIL parsing an anonymous FN.")
           :params params
           :body body
           :location (form-location source form)))))
+
+    ((and (cst:atom (cst:first form))
+          (eq 'coalton:throw (cst:raw (cst:first form))))
+     (let (expr)
+
+       ;; (return ...)
+       (when (cst:consp (cst:rest form))
+         ;; (throw a b ...)
+         (when (cst:consp (cst:rest (cst:rest form)))
+           (parse-error "Malformed throw expression"
+                        (note source (cst:first (cst:rest (cst:rest form)))
+                              "unexpected trailing form")))
+
+         (setf expr (parse-expression (cst:second form) source)))
+
+       (make-node-throw
+        :expr expr
+        :location (form-location source form))))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:let (cst:raw (cst:first form))))

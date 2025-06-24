@@ -163,9 +163,15 @@
     (typecheck-node (node-return-from-expr expr) env)
     (node-type expr))
 
-  (:method ((expr node-block) env)
+  (:method ((node node-throw) env)
     (declare (type tc:environment env)
              (values tc:ty))
+    (typecheck-node (node-throw-expr node) env)
+    (node-type node))
+
+  (:method ((expr node-block) env)
+    (declare (type tc:environment env)
+      (values tc:ty))
     (tc:unify
      nil
      (node-type expr)

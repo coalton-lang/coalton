@@ -84,6 +84,9 @@
    #:node-return                        ; STRUCT
    #:make-node-return                   ; CONSTRUCTOR
    #:node-return-expr                   ; ACCESSOR
+   #:node-throw                        ; STRUCT
+   #:make-node-throw                   ; CONSTRUCTOR
+   #:node-throw-expr                   ; ACCESSOR
    #:node-application                   ; STRUCT
    #:make-node-application              ; CONSTRUCTOR
    #:node-application-rator             ; ACCESSOR
@@ -298,6 +301,12 @@
             (:include node)
             (:copier nil))
   ;; Either the returned expression or null in the case of "(return)"
+  (expr (util:required 'expr) :type (or null node) :read-only t))
+
+(defstruct (node-throw
+            (:include node)
+            (:copier nil))
+  ;; The thrown expression
   (expr (util:required 'expr) :type (or null node) :read-only t))
 
 (defstruct (node-application
@@ -551,6 +560,14 @@
    :location (source:location node)
    :rator (tc:apply-substitution subs (node-application-rator node))
    :rands (tc:apply-substitution subs (node-application-rands node))))
+
+(defmethod tc:apply-substitution (subs (node node-throw))
+  (declare (type tc:substitution-list subs)
+           (values node-throw))
+  (make-node-throw
+   :type (tc:apply-substitution subs (node-type node))
+   :location (source:location node)
+   :expr (tc:apply-substitution subs (node-throw-expr node))))
 
 (defmethod tc:apply-substitution (subs (node node-or))
   (declare (type tc:substitution-list subs)

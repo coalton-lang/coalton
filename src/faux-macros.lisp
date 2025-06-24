@@ -82,6 +82,9 @@
   "A lambda abstraction callable within coalton."
   (rt:construct-function-entry `(lambda ,vars ,@form) (length vars)))
 
+(define-coalton-editor-macro coalton:throw (exception)
+    "Throw an exception.")
+
 (define-coalton-editor-macro coalton:let (bindings &body form)
   "A lexical LET binding.")
 

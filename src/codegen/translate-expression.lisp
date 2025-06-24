@@ -445,6 +445,18 @@ Returns a `node'.")
                     :type tc:*unit-type*
                     :value unit-value))))))
 
+  (:method ((expr tc:node-throw) ctx env)
+    (declare (type pred-context ctx)
+             (type tc:environment env)
+             (values node))
+
+    (let ((qual-ty (tc:node-type expr)))
+      (assert (null (tc:qualified-ty-predicates qual-ty)))
+
+      (make-node-throw
+       :type (tc:qualified-ty-type qual-ty)
+       :expr (translate-expression (tc:node-throw-expr expr) ctx env))))
+
   (:method ((expr tc:node-or) ctx env)
     (declare (type pred-context ctx)
              (type tc:environment env)
