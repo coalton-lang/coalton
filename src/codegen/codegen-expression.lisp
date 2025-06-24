@@ -255,6 +255,9 @@
     `(return-from ,(block-label (node-return-from-name expr))
        ,(codegen-expression (node-return-from-expr expr) env)))
 
+  (:method ((node node-throw) env)
+    `(error ,(codegen-expression (node-throw-expr node) env)))
+
   (:method ((expr node-block) env)
     `(block ,(block-label (node-block-name expr))
        ,(codegen-expression (node-block-body expr) env)))

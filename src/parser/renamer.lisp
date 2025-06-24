@@ -226,9 +226,21 @@
       :location (source:location node))
      ctx))
 
-  (:method ((node node-application) ctx)
+  (:method ((node node-throw) ctx)
     (declare (type algo:immutable-map ctx)
              (values node algo:immutable-map))
+
+    (values
+     (make-node-throw
+      :expr (if (node-throw-expr node)
+                (rename-variables-generic% (node-throw-expr node) ctx)
+                nil)
+      :location (source:location node))
+     ctx))
+
+  (:method ((node node-application) ctx)
+    (declare (type algo:immutable-map ctx)
+      (values node algo:immutable-map))
 
     (values
      (make-node-application

@@ -70,6 +70,7 @@
   (:export
    #:fn #:λ
    #:match
+   #:throw
    #:let
    #:rec
    #:=                                  ; Syntax

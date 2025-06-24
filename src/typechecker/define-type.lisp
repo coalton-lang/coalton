@@ -283,7 +283,8 @@
           :enum-repr (type-definition-enum-repr type)
           :newtype (type-definition-newtype type)
           :docstring (source:docstring type)
-          :location (source:location parsed-type))))
+          :location (source:location parsed-type)
+          :exceptionp (type-definition-exception-p type))))
 
   ;; Define the type's constructors in the environment
   (loop :for ctor :in (type-definition-constructors type)
