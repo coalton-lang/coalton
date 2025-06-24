@@ -433,11 +433,6 @@
                                (tc-note (first (parser:type-definition-ctors type))
                                         "constructors of repr :transparent types must have a single field")))
 
-             :do (loop :for class :in (cst:raw derive-classes)
-                       :for instance := (maybe-derive-class-instance type class)
-                       :when instance
-                         :do (push instance instances))
-
              :collect (let* ((ctors
                                (loop :for ctor :in (parser:type-definition-ctors type)
 
@@ -495,6 +490,12 @@
 
                              (runtime-repr-instance (maybe-runtime-repr-instance type-definition)))
 
+                        (when derive-classes 
+                          (loop :for class :in (cst:raw derive-classes)
+                                :for instance := (derive-class-instance type class env)
+                                :when instance
+                                  :do (push instance instances)))
+
                         (when runtime-repr-instance
                           (push runtime-repr-instance instances))
 
@@ -502,8 +503,10 @@
        instances
        ksubs))))
 
-(defun maybe-derive-class-instance (type class)
-  (format t "Maybe deriving ~a instance for type ~a" class type))
+(defgeneric derive-class-instance (type class env)
+  (:method (type class env)
+    (error "Cannot derive ~A for type ~A" class type)))
+
 
 (defun maybe-runtime-repr-instance (type)
   (declare (type type-definition type))
