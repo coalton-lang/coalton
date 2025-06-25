@@ -74,6 +74,15 @@
    #:make-node-match                    ; CONSTRUCTOR
    #:node-match-expr                    ; ACCESSOR
    #:node-match-branches                ; ACCESSOR
+   #:node-catch-branch                  ; STRUCT
+   #:make-node-catch-branch             ; CONSTRUCTOR
+   #:node-catch-branch-pattern          ; ACCESSOR
+   #:node-catch-branch-body             ; ACCESSOR
+   #:node-catch-branch-list             ; TYPE
+   #:node-catch                         ; STRUCT
+   #:make-node-catch                    ; CONSTRUCTOR
+   #:node-catch-expr                    ; ACCESSOR
+   #:node-catch-branches                ; ACCESSOR
    #:node-progn                         ; STRUCT
    #:make-node-progn                    ; CONSTRUCTOR
    #:node-progn-body                    ; ACCESSOR
@@ -561,9 +570,30 @@ Rebound to NIL parsing an anonymous FN.")
 
 (defstruct (node-throw
             (:include node)
-            (:copier nul))
+            (:copier nil))
   (expr (util:required 'expr) :type node :read-only t))
 
+(defstruct (node-catch-branch
+            (:copier nil))
+  (pattern  (util:required 'pattern)  :type pattern         :read-only t)
+  (body     (util:required 'body)     :type node-body       :read-only t)
+  (location (util:required 'location) :type source:location :read-only t))
+
+(defmethod source:location ((self node-catch-branch))
+  (node-catch-branch-location self))
+
+(defun node-catch-branch-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'node-catch-branch-p x)))
+
+(deftype node-catch-branch-list ()
+  '(satisfies node-catch-branch-list-p))
+
+(defstruct (node-catch
+            (:include node)
+            (:copier nil))
+  (expr     (util:required 'expr)     :type node                   :read-only t)
+  (branches (util:required 'branches) :type node-catch-branch-list :read-only t))
 
 (defun parse-expression (form source)
   (declare (type cst:cst form)
@@ -657,6 +687,21 @@ Rebound to NIL parsing an anonymous FN.")
        (make-node-throw
         :expr expr
         :location (form-location source form))))
+
+    ((and (cst:atom (cst:first form))
+          (eq 'coalton:catch (cst:raw (cst:first form))))
+
+     ;; (catch)
+     (unless (cst:consp (cst:rest form))
+       (parse-error "Malformed catch expression"
+                    (note-end source (cst:first form) "expected expression")))
+
+     (make-node-catch
+      :expr (parse-expression (cst:second form) source)
+      :branches (loop :for branches := (cst:nthrest 2 form) :then (cst:rest branches)
+                      :while (cst:consp branches)
+                      :collect (parse-catch-branch (cst:first branches) source))
+      :location (form-location source form)))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:let (cst:raw (cst:first form))))
@@ -1429,6 +1474,28 @@ Rebound to NIL parsing an anonymous FN.")
                  (note-end source (cst:first form) "expected body")))
 
   (make-node-match-branch
+   :pattern (parse-pattern (cst:first form) source)
+   :body (parse-body (cst:rest form) form source)
+   :location (form-location source form)))
+
+(defun parse-catch-branch (form source)
+  (declare (type cst:cst form)
+           (values node-catch-branch &optional))
+
+  (when (cst:atom form)
+    (parse-error "Malformed catch branch"
+                 (note source form "expected list")))
+
+  (unless (cst:proper-list-p form)
+    (parse-error "Malformed catch branch"
+                 (note source form "unexpected dotted list")))
+
+  ;; (P)
+  (unless (cst:consp (cst:rest form))
+    (parse-error "Malformed catch branch"
+                 (note-end source (cst:first form) "expected body")))
+
+  (make-node-catch-branch
    :pattern (parse-pattern (cst:first form) source)
    :body (parse-body (cst:rest form) form source)
    :location (form-location source form)))

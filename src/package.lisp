@@ -71,6 +71,7 @@
    #:fn #:λ
    #:match
    #:throw
+   #:catch
    #:let
    #:rec
    #:=                                  ; Syntax

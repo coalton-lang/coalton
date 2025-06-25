@@ -37,6 +37,11 @@
   (declare (type symbol label))
   (alexandria:format-symbol :keyword "~a-BLOCK" label))
 
+(defun invokes-restart-p (node)
+  (declare (type node node)
+           (values boolean))
+  nil)
+
 (defgeneric codegen-expression (node env)
   (:method ((node node-literal) env)
     (declare (type tc:environment env)
@@ -112,10 +117,10 @@
                  inner)))
 
       `(locally (declare #+sbcl (optimize (sb-c::type-check 1)))
-                ,(if settings:*emit-type-annotations*
-                     `(the (values ,(tc:lisp-type (node-type expr) env) &optional)
-                           ,inner)
-                     inner))))
+         ,(if settings:*emit-type-annotations*
+              `(the (values ,(tc:lisp-type (node-type expr) env) &optional)
+                    ,inner)
+              inner))))
 
   (:method ((expr node-while) env)
     (declare (type tc:environment env))
@@ -179,9 +184,37 @@
     (declare (type tc:environment env))
     `(return-from ,(continue-label (node-continue-label expr))))
 
+  (:method ((node node-catch) env)
+    (declare (type tc:environment env))
+    (let* ((block-label   (gensym "CATCH-BLOCK"))
+           (handler-cases
+             (loop
+               :for branch :in (node-catch-branches node)
+               :for pattern
+                 := (catch-branch-pattern branch)
+               ;; NOTE: a prior check ensures that these are pattern constructors
+               :for exception-name
+                 := (let* ((ctor-name              (pattern-constructor-name pattern))
+                           (ctor                   (tc::lookup-constructor env ctor-name)))
+                      (tc:constructor-entry-classname ctor))
+               :for case-body
+                 := (codegen-expression (catch-branch-body branch) env)
+               :for lambda-var
+                 := (gensym (symbol-name exception-name))
+               :for (_ bindings)
+                 := (multiple-value-list (codegen-pattern pattern lambda-var env))
+               :for inner-body
+                 := (if (invokes-restart-p (catch-branch-body branch))
+                        case-body
+                        `(return-from ,block-label ,case-body))
+               :collect `(,exception-name (lambda (,lambda-var) (let ,bindings ,inner-body))))))
+      `(block ,block-label
+         (handler-bind ,handler-cases
+           ,(codegen-expression (node-catch-expr node) env)))))
+
   (:method ((expr node-match) env)
     (declare (type tc:environment env))
-    ;; If possible codegen a cl:if instead of a trivia:match
+    ;; If possible codegen a cl:if instead of a cl:cond
     (when (and (equalp (node-type (node-match-expr expr)) tc:*boolean-type*)
                (= 2 (length (node-match-branches expr)))
                (equalp (match-branch-pattern (first (node-match-branches expr)))

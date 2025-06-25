@@ -26,6 +26,8 @@
   (lisp            #'identity :type function :read-only t)
   (match-branch    #'identity :type function :read-only t)
   (match           #'identity :type function :read-only t)
+  (catch-branch    #'identity :type function :read-only t)
+  (catch           #'identity :type function :read-only t)
   (progn           #'identity :type function :read-only t)
   (return          #'identity :type function :read-only t)
   (throw           #'identity :type function :read-only t)
@@ -163,6 +165,29 @@
       :expr (traverse (node-match-expr node) block)
       :branches (traverse (node-match-branches node) block))))
 
+  (:method ((node node-catch-branch) block)
+    (declare (type traverse-block block)
+             (values node-catch-branch &optional))
+
+    (funcall
+     (traverse-catch-branch block)
+     (make-node-catch-branch
+      :pattern (node-catch-branch-pattern node)
+      :body (traverse (node-catch-branch-body node) block)
+      :location (source:location node))))
+
+  (:method ((node node-catch) block)
+    (declare (type traverse-block block)
+             (values node &optional))
+
+    (funcall
+     (traverse-catch block)
+     (make-node-catch
+      :type (node-type node)
+      :location (source:location node)
+      :expr (traverse (node-catch-expr node) block)
+      :branches (traverse (node-catch-branches node) block))))
+
   (:method ((node node-progn) block)
     (declare (type traverse-block block)
              (values node &optional))
@@ -198,7 +223,7 @@
 
   (:method ((node node-application) block)
     (declare (type traverse-block block)
-      (values node &optional))
+             (values node &optional))
 
     (funcall
      (traverse-application block)
