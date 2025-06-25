@@ -23,7 +23,9 @@
    #:count
    #:get
    #:insert
-   #:remove))
+   #:remove
+   #:keys
+   #:values))
 
 (in-package #:coalton-library/hashmap)
 
@@ -86,7 +88,7 @@ of empty hashmap, or nodes at the maximum depth."
 ;;  If a tree's position has only one child, it is Leaf.  Another entry
 ;;  comes to the same position, we turn it to Bud.  More than two entry
 ;;  come to the same position, we create a Tree.  We use Bud since
-;;  creating and searching Bud is slightly faster than full Tree.
+;;  creating and searching a Bud is slightly faster than a full Tree.
 ;;
 ;;  If we use up all bits of the hash value, we chain the entries of the
 ;;  same hash value into Chain and we do linear search.  It only happens
@@ -101,16 +103,16 @@ of empty hashmap, or nodes at the maximum depth."
   ;; Instances
 
   (define-instance (iter:IntoIterator (HashMap :k :v) (Tuple :k :v))
-    (define (iter:into-iter ht)
-      (iter:new (->generator ht))))
+    (define (iter:into-iter hm)
+      (iter:new (->generator hm Tuple))))
 
   (define-instance ((Eq :k) (Eq :v) => Eq (HashMap :k :v))
     (define (== a b)
       (iter:elementwise==! (iter:into-iter a) (iter:into-iter b))))
 
   (define-instance ((Hash :k) (Hash :v) => Hash (HashMap :k :v))
-    (define (hash ht)
-      (iter:elementwise-hash! (iter:into-iter ht))))
+    (define (hash hm)
+      (iter:elementwise-hash! (iter:into-iter hm))))
 
   (define-instance ((Hash :k) => iter:FromIterator (HashMap :k :v) (Tuple :k :v))
     (define iter:collect! collect!))
@@ -273,18 +275,18 @@ a new entry."
 
   ;; API
   (declare empty? (HashMap :k :v -> Boolean))
-  (define (empty? ht)
-    "Returns True if a hashmap HT is empty, False if not."
-    (match (.root ht)
+  (define (empty? hm)
+    "Returns True if a hashmap HM is empty, False if not."
+    (match (.root hm)
       ((Chain (Nil)) True)
       (_ False)))
 
   ;; API
   (declare count (HashMap :k :v -> Integer))
-  (define (count ht)
-    "Returns the number of entries in HT."
+  (define (count hm)
+    "Returns the number of entries in HM."
     (into
-     (rec walk ((node (.root ht)))
+     (rec walk ((node (.root hm)))
        (match node
          ((Leaf _) 1)
          ((Bud _ _) 2)
@@ -294,11 +296,11 @@ a new entry."
 
   ;; API
   (declare get (Hash :k => HashMap :k :v -> :k -> Optional :v))
-  (define (get ht key)
-    "Returns a value associated with KEY in the hashmap HT."
+  (define (get hm key)
+    "Returns a value associated with KEY in the hashmap HM."
     (let hb = (hbits key))
     (rec search ((depth 0)
-                 (node (.root ht)))
+                 (node (.root hm)))
       (match node
         ((Leaf (HmEntry k v))
          (if (== key k)
@@ -322,8 +324,8 @@ a new entry."
   ;; API
   (declare insert (Hash :k => HashMap :k :v -> :k -> :v
                         -> HashMap :k :v))
-  (define (insert ht key val)
-    "Returns a hashmap that has a new entry of (KEY, VAL) added to HT.  If HT
+  (define (insert hm key val)
+    "Returns a hashmap that has a new entry of (KEY, VAL) added to HM.  If HM
 containes an entry with KEY, the new hashmap replaces it for the new entry."
     (let ((hb (hbits key))
           (walk (fn (depth node)
@@ -361,7 +363,7 @@ containes an entry with KEY, the new hashmap replaces it for the new entry."
                            (Leaf (HmEntry key val))))
                      (tree-insert mask arr ind newelt)))))
           )
-      (HashMap (walk 0 (.root ht)))))
+      (HashMap (walk 0 (.root hm)))))
 
   (declare unchanged? (:a -> :a -> Boolean))
   (define (unchanged? a b)
@@ -380,9 +382,9 @@ containes an entry with KEY, the new hashmap replaces it for the new entry."
   ;; API
   (declare remove (Hash :k => HashMap :k :v -> :k
                         -> HashMap :k :v))
-  (define (remove ht key)
-    "Returns a hashmap that is identical to HT except the entry with KEY is
-removed.  If HT does not contain an entry with KEY, HT is returned as is."
+  (define (remove hm key)
+    "Returns a hashmap that is identical to HM except the entry with KEY is
+removed.  If HM does not contain an entry with KEY, HM is returned as is."
     (let ((hb (hbits key))
           (walk (fn (depth node)
                   (match node
@@ -413,19 +415,20 @@ removed.  If HT does not contain an entry with KEY, HT is returned as is."
                                   (Some node)
                                   (Some (tree-insert mask arr ind newsub))))))
                          (Some node)))))))
-      (if (empty? ht)
-          ht
-          (match (walk 0 (.root ht))
+      (if (empty? hm)
+          hm
+          (match (walk 0 (.root hm))
             ((None) empty)
             ((Some newroot)
-             (if (unchanged? (.root ht) newroot)
-                 ht
+             (if (unchanged? (.root hm) newroot)
+                 hm
                  (HashMap newroot)))))))
 
   ;; Iterator
-  (declare ->generator (HashMap :k :v -> (Unit -> Optional (Tuple :k :v))))
-  (define (->generator ht)
-    (let current = (cell:new (.root ht)))
+  (declare ->generator (HashMap :k :v -> (:k -> :v -> :a)
+                                -> (Unit -> Optional :a)))
+  (define (->generator hm f)
+    (let current = (cell:new (.root hm)))
     (let current-ind = (cell:new (the UFix 0)))
     (let path = (cell:new (the (List (Tuple UFix (HmNode :k :v))) Nil)))
     (let next!? = (fn ()
@@ -443,13 +446,13 @@ removed.  If HT does not contain an entry with KEY, HT is returned as is."
              (if (next!?) (%loop) None))
             ((Chain (Cons (HmEntry k v) es))
              (cell:write! current (Chain es))
-             (Some (Tuple k v)))
+             (Some (f k v)))
             ((Leaf (HmEntry k v))
              (cell:write! current (Chain Nil))
-             (Some (Tuple k v)))
+             (Some (f k v)))
             ((Bud (HmEntry k v) entry2)
              (cell:write! current (Leaf entry2))
-             (Some (Tuple k v)))
+             (Some (f k v)))
             ((Tree _ array)
              (if (== (cell:read current-ind) (arr:length array))
                  (if (next!?) (%loop) None)
@@ -462,15 +465,27 @@ removed.  If HT does not contain an entry with KEY, HT is returned as is."
 
   (declare collect! ((Hash :k) => (iter:Iterator (Tuple :k :v) -> HashMap :k :v)))
   (define (collect! iter)
-    (iter:fold! (fn (ht (Tuple k v))
-                  (insert ht k v))
+    (iter:fold! (fn (hm (Tuple k v))
+                  (insert hm k v))
                 empty iter))
+
+  ;; API
+  (declare keys (Hash :k => HashMap :k :v -> (iter:Iterator :k)))
+  (define (keys hm)
+    "Returns an interator to iterate over all the keys in a hashmap hm."
+    (iter:new (->generator hm (fn (k _) k))))
+
+  ;; API
+  (declare values (Hash :k => HashMap :k :v -> (iter:Iterator :v)))
+  (define (values hm)
+    "Returns an interator to iterate over all the values in a hashmap hm."
+    (iter:new (->generator hm (fn (_ v) v))))
 
   ;; Debug tools
   (declare dump (HashMap :k :v -> Unit))
-  (define (dump ht)
+  (define (dump hm)
     "For debugging"
-    (rec dump-node ((node (.root ht))
+    (rec dump-node ((node (.root hm))
                     (indent 0))
       (match node
         ((Leaf entry)
