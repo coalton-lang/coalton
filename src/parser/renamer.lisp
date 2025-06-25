@@ -193,6 +193,32 @@
       :location (source:location node))
      ctx))
 
+  (:method ((node node-catch-branch) ctx)
+    (declare (type algo:immutable-map ctx))
+
+    (let* ((new-bindings (make-local-vars (mapcar #'pattern-var-name
+                                                  (pattern-variables (node-catch-branch-pattern node)))))
+
+           (new-ctx (algo:immutable-map-set-multiple ctx new-bindings)))
+
+      (values
+       (make-node-catch-branch
+        :pattern (rename-variables-generic% (node-catch-branch-pattern node) new-ctx)
+        :body (rename-variables-generic% (node-catch-branch-body node) new-ctx)
+        :location (source:location node))
+       ctx)))
+
+  (:method ((node node-catch) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values node algo:immutable-map))
+
+    (values
+     (make-node-catch
+      :expr (rename-variables-generic% (node-catch-expr node) ctx)
+      :branches (rename-variables-generic% (node-catch-branches node) ctx)
+      :location (source:location node))
+     ctx))
+
   (:method ((node node-progn) ctx)
     (declare (type algo:immutable-map ctx)
              (values node algo:immutable-map))
@@ -240,7 +266,7 @@
 
   (:method ((node node-application) ctx)
     (declare (type algo:immutable-map ctx)
-      (values node algo:immutable-map))
+             (values node algo:immutable-map))
 
     (values
      (make-node-application
@@ -312,8 +338,8 @@
             (mapcar #'pattern-var-name
                     (pattern-variables (node-while-let-pattern node)))))
 
-           (new-ctx
-             (algo:immutable-map-set-multiple ctx new-bindings)))
+         (new-ctx
+           (algo:immutable-map-set-multiple ctx new-bindings)))
 
 
       (values
@@ -334,8 +360,8 @@
             (mapcar #'pattern-var-name
                     (pattern-variables (node-for-pattern node)))))
 
-           (new-ctx
-             (algo:immutable-map-set-multiple ctx new-bindings)))
+         (new-ctx
+           (algo:immutable-map-set-multiple ctx new-bindings)))
 
       (values
        (make-node-for

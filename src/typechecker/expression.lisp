@@ -74,6 +74,15 @@
    #:make-node-match                    ; CONSTRUCTOR
    #:node-match-expr                    ; ACCESSOR
    #:node-match-branches                ; ACCESSOR
+   #:node-catch-branch                  ; STRUCT
+   #:make-node-catch-branch             ; CONSTRUCTOR
+   #:node-catch-branch-pattern          ; ACCESSOR
+   #:node-catch-branch-body             ; ACCESSOR
+   #:node-catch-branch-list             ; TYPE
+   #:node-catch                         ; STRUCT
+   #:make-node-catch                    ; CONSTRUCTOR
+   #:node-catch-expr                    ; ACCESSOR
+   #:node-catch-branches                ; ACCESSOR
    #:node-progn                         ; STRUCT
    #:make-node-progn                    ; CONSTRUCTOR
    #:node-progn-body                    ; ACCESSOR
@@ -84,9 +93,9 @@
    #:node-return                        ; STRUCT
    #:make-node-return                   ; CONSTRUCTOR
    #:node-return-expr                   ; ACCESSOR
-   #:node-throw                        ; STRUCT
-   #:make-node-throw                   ; CONSTRUCTOR
-   #:node-throw-expr                   ; ACCESSOR
+   #:node-throw                         ; STRUCT
+   #:make-node-throw                    ; CONSTRUCTOR
+   #:node-throw-expr                    ; ACCESSOR
    #:node-application                   ; STRUCT
    #:make-node-application              ; CONSTRUCTOR
    #:node-application-rator             ; ACCESSOR
@@ -308,6 +317,28 @@
             (:copier nil))
   ;; The thrown expression
   (expr (util:required 'expr) :type (or null node) :read-only t))
+
+(defstruct (node-catch-branch
+            (:copier nil))
+  (pattern  (util:required 'pattern)  :type pattern         :read-only t)
+  (body     (util:required 'body)     :type node-body       :read-only t)
+  (location (util:required 'location) :type source:location :read-only t))
+
+(defmethod source:location ((self node-catch-branch))
+  (node-catch-branch-location self))
+
+(defun node-catch-branch-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'node-catch-branch-p x)))
+
+(deftype node-catch-branch-list ()
+  '(satisfies node-catch-branch-list-p))
+
+(defstruct (node-catch
+            (:include node)
+            (:copier nil))
+  (expr     (util:required 'expr)         :type node                   :read-only t)
+  (branches (util:required 'branches)     :type node-catch-branch-list :read-only t))
 
 (defstruct (node-application
             (:include node)
@@ -535,6 +566,23 @@
    :location (source:location node)
    :expr (tc:apply-substitution subs (node-match-expr node))
    :branches (tc:apply-substitution subs (node-match-branches node))))
+
+(defmethod tc:apply-substitution (subs (node node-catch-branch))
+  (declare (type tc:substitution-list subs)
+           (values node-catch-branch))
+  (make-node-catch-branch
+   :pattern (tc:apply-substitution subs (node-catch-branch-pattern node))
+   :body (tc:apply-substitution subs (node-catch-branch-body node))
+   :location (source:location node)))
+
+(defmethod tc:apply-substitution (subs (node node-catch))
+  (declare (type tc:substitution-list subs)
+           (values node-catch))
+  (make-node-catch
+   :type (tc:apply-substitution subs (node-type node))
+   :location (source:location node)
+   :expr (tc:apply-substitution subs (node-catch-expr node))
+   :branches (tc:apply-substitution subs (node-catch-branches node))))
 
 (defmethod tc:apply-substitution (subs (node node-progn))
   (declare (type tc:substitution-list subs)
