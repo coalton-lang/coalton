@@ -290,8 +290,10 @@
                (:file "inliner-tests-1") ; must come after inliner-tests
                (:file "file-tests")
                (:file "experimental-tests")
+               (:file "exceptions")
                (:module "monad"
                 :serial t
                 :components ((:file "optionalt")
                              (:file "resultt")
                              (:file "environment")))))
+
