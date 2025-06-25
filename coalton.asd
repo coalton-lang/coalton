@@ -278,4 +278,5 @@
                (:file "monomorphizer-tests")
                (:file "inliner-tests")
                (:file "file-tests")
-               (:file "experimental-tests")))
+               (:file "experimental-tests")
+               (:file "exceptions")))
