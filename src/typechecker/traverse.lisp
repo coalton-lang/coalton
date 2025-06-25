@@ -31,6 +31,7 @@
   (progn           #'identity :type function :read-only t)
   (return          #'identity :type function :read-only t)
   (throw           #'identity :type function :read-only t)
+  (resume          #'identity :type function :read-only t)
   (application     #'identity :type function :read-only t)
   (or              #'identity :type function :read-only t)
   (and             #'identity :type function :read-only t)
@@ -220,6 +221,16 @@
       :type (node-type node)
       :location (source:location node)
       :expr (traverse (node-throw-expr node) block))))
+
+  (:method ((node node-resume) block)
+    (declare (type traverse-block block)
+             (values node &optional))
+    (funcall 
+     (traverse-resume block)
+     (make-node-resume
+      :type (node-type node)
+      :location (source:location node)
+      :expr (traverse (node-resume-expr node) block))))
 
   (:method ((node node-application) block)
     (declare (type traverse-block block)

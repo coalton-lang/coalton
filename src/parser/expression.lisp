@@ -96,6 +96,9 @@
    #:node-throw                        ; STRUCT
    #:make-node-throw                   ; CONSTRUCTOR
    #:node-throw-expr                   ; ACCESSOR
+   #:node-resume                        ; STRUCT
+   #:make-node-resume                   ; CONSTRUCTOR
+   #:node-resume-expr                   ; ACCESSOR
    #:node-application                   ; STRUCT
    #:make-node-application              ; CONSTRUCTOR
    #:node-application-rator             ; ACCESSOR
@@ -573,6 +576,11 @@ Rebound to NIL parsing an anonymous FN.")
             (:copier nil))
   (expr (util:required 'expr) :type node :read-only t))
 
+(defstruct (node-resume
+            (:include node)
+            (:copier nil))
+  (expr (util:required 'expr) :type node :read-only t))
+
 (defstruct (node-catch-branch
             (:copier nil))
   (pattern  (util:required 'pattern)  :type pattern         :read-only t)
@@ -674,7 +682,7 @@ Rebound to NIL parsing an anonymous FN.")
           (eq 'coalton:throw (cst:raw (cst:first form))))
      (let (expr)
 
-       ;; (return ...)
+       ;; (throw ...)
        (when (cst:consp (cst:rest form))
          ;; (throw a b ...)
          (when (cst:consp (cst:rest (cst:rest form)))
@@ -685,6 +693,24 @@ Rebound to NIL parsing an anonymous FN.")
          (setf expr (parse-expression (cst:second form) source)))
 
        (make-node-throw
+        :expr expr
+        :location (form-location source form))))
+
+    ((and (cst:atom (cst:first form))
+          (eq 'coalton:resume (cst:raw (cst:first form))))
+     (let (expr)
+
+       ;; (resume ...)
+       (when (cst:consp (cst:rest form))
+         ;; (resume a b ...)
+         (when (cst:consp (cst:rest (cst:rest form)))
+           (parse-error "Malformed resume expression"
+                        (note source (cst:first (cst:rest (cst:rest form)))
+                              "unexpected trailing form")))
+
+         (setf expr (parse-expression (cst:second form) source)))
+
+       (make-node-resume
         :expr expr
         :location (form-location source form))))
 

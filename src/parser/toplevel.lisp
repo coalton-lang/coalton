@@ -967,6 +967,11 @@ If the parsed form is an attribute (e.g., repr or monomorphize), add it to to AT
     ((coalton:define-resumption)
      (let* ((type (parse-define-type form source))
             (repr (consume-repr attributes type "when parsing define-type")))
+
+       (unless (= 1 (length (toplevel-define-type-ctors type)))
+         (parse-error "Invalid define-resumption"
+                      (note source form "Resumption must have exactly one constructor")))
+
        (setf (toplevel-define-type-repr type) repr
              (toplevel-define-type-resumption-p type) t)
        (push type (program-types program))

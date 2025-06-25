@@ -96,6 +96,9 @@
    #:node-throw                         ; STRUCT
    #:make-node-throw                    ; CONSTRUCTOR
    #:node-throw-expr                    ; ACCESSOR
+   #:node-resume                        ; STRUCT
+   #:make-node-resume                   ; CONSTRUCTOR
+   #:node-resume-expr                   ; ACCESSOR
    #:node-application                   ; STRUCT
    #:make-node-application              ; CONSTRUCTOR
    #:node-application-rator             ; ACCESSOR
@@ -316,6 +319,12 @@
             (:include node)
             (:copier nil))
   ;; The thrown expression
+  (expr (util:required 'expr) :type (or null node) :read-only t))
+
+(defstruct (node-resume
+            (:include node)
+            (:copier nil))
+  ;; The resumption instance
   (expr (util:required 'expr) :type (or null node) :read-only t))
 
 (defstruct (node-catch-branch
@@ -616,6 +625,14 @@
    :type (tc:apply-substitution subs (node-type node))
    :location (source:location node)
    :expr (tc:apply-substitution subs (node-throw-expr node))))
+
+(defmethod tc:apply-substitution (subs (node node-resume))
+  (declare (type tc:substitution-list subs)
+           (values node-resume))
+  (make-node-resume
+   :type (tc:apply-substitution subs (node-type node))
+   :location (source:location node)
+   :expr (tc:apply-substitution subs (node-resume-expr node))))
 
 (defmethod tc:apply-substitution (subs (node node-or))
   (declare (type tc:substitution-list subs)

@@ -38,7 +38,8 @@
    #:type-entry-explicit-repr               ; ACCESSOR
    #:type-entry-enum-repr                   ; ACCESSOR
    #:type-entry-newtype                     ; ACCESSOR
-   #:type-entry-exceptionp                  ; ACCESSOR
+   #:type-entry-exception-p                 ; ACCESSOR
+   #:type-entry-resumption-p                ; ACCESSOR
    #:type-environment                       ; STRUCT
    #:constructor-entry                      ; STRUCT
    #:make-constructor-entry                 ; ACCESSOR
@@ -273,7 +274,8 @@
   (newtype    (util:required 'newtype)           :type boolean                   :read-only t)
   (docstring  (util:required 'docstring)         :type (or null string)          :read-only t)
   (location   nil                                :type (or null source:location) :read-only t)
-  (exceptionp nil                                :type boolean                   :read-only nil))
+  (exception-p nil                               :type boolean                  :read-only nil)
+  (resumption-p nil                              :type boolean                   :read-only nil))
 
 (defmethod source:location ((self type-entry))
   (type-entry-location self))

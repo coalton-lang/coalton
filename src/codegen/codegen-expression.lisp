@@ -37,11 +37,6 @@
   (declare (type symbol label))
   (alexandria:format-symbol :keyword "~a-BLOCK" label))
 
-(defun invokes-restart-p (node)
-  (declare (type node node)
-           (values boolean))
-  nil)
-
 (defgeneric codegen-expression (node env)
   (:method ((node node-literal) env)
     (declare (type tc:environment env)
@@ -190,11 +185,12 @@
                  := (gensym (symbol-name exception-name))
                :for (_ bindings)
                  := (multiple-value-list (codegen-pattern pattern lambda-var env))
+               ;; NB: if CASE-BODY invokes a restart then control will
+               ;; be transferred before the transfer due to
+               ;; return-from.
                :for inner-body
-                 := (if (invokes-restart-p (catch-branch-body branch))
-                        case-body
-                        `(return-from ,block-label ,case-body))
-               :collect `(,exception-name (lambda (,lambda-var) (let ,bindings ,inner-body))))))
+                 := `(cl:return-from ,block-label ,case-body)
+               :collect `(,exception-name (cl:lambda (,lambda-var) (cl:declare (cl:ignorable ,lambda-var)) (cl:let ,bindings ,inner-body))))))
       `(block ,block-label
          (handler-bind ,handler-cases
            ,(codegen-expression (node-catch-expr node) env)))))
@@ -263,6 +259,10 @@
 
   (:method ((node node-throw) env)
     `(error ,(codegen-expression (node-throw-expr node) env)))
+
+  (:method ((node node-resume) env)
+    (let ((restart-name (tc:lisp-type (node-type (node-resume-expr node)) env)))
+     `(invoke-restart ',restart-name ,(codegen-expression (node-resume-expr node) env))))
 
   (:method ((expr node-block) env)
     `(block ,(block-label (node-block-name expr))

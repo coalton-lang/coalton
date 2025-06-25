@@ -32,6 +32,7 @@
    #:type-definition-explicit-repr      ; ACCESSOR
    #:type-definition-enum-repr          ; ACCESSOR
    #:type-definition-exception-p        ; ACCESSOR
+   #:type-definition-resumption-p       ; ACCESSOR
    #:type-definition-newtype            ; ACCESSOR
    #:type-definition-constructors       ; ACCESSOR
    #:type-definition-constructor-types  ; ACCESSOR
@@ -57,7 +58,8 @@
   (constructor-args  (util:required 'constructor-args)  :type list                      :read-only t)
   (docstring         (util:required 'docstring)         :type (or null string)          :read-only t)
   (location          (util:required 'location)          :type source:location           :read-only t)
-  (exception-p       (util:required 'exception-p)       :type boolean                   :read-only t))
+  (exception-p       (util:required 'exception-p)       :type boolean                   :read-only t)
+  (resumption-p      (util:required 'resumption-p)      :type boolean                   :read-only t))
 
 (defmethod source:location ((self type-definition))
   (type-definition-location self))
@@ -284,7 +286,8 @@
           :newtype (type-definition-newtype type)
           :docstring (source:docstring type)
           :location (source:location parsed-type)
-          :exceptionp (type-definition-exception-p type))))
+          :exception-p (type-definition-exception-p type)
+          :resumption-p (type-definition-resumption-p type))))
 
   ;; Define the type's constructors in the environment
   (loop :for ctor :in (type-definition-constructors type)
@@ -500,7 +503,8 @@
                  :constructor-args constructor-args
                  :docstring (source:docstring type)
                  :location (source:location type)
-                 :exception-p (parser:type-definition-exception-p type)))
+                 :exception-p (parser:type-definition-exception-p type)
+                 :resumption-p (parser:type-definition-resumption-p type)))
 
               (runtime-repr-instance (maybe-runtime-repr-instance type-definition)))
 
