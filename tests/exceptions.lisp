@@ -49,8 +49,8 @@
         (let moocow = (if (== 0 (mod i 5)) Xenomorph (Goose False False)))
         (do
          (cooked <- (catch (make-breakfast-with moocow)
-                      ((DeadlyEgg _)    (resume skip))
-                      ((UnCracked egg)  (resume (ServeRaw egg)))))
+                      ((DeadlyEgg _)    (resume-to skip))
+                      ((UnCracked egg)  (resume-to (ServeRaw egg)))))
          (pure (vector:push! cooked eggs))))
       eggs))
 
