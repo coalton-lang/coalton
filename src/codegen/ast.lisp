@@ -101,6 +101,9 @@
    #:node-throw                         ; STRUCT
    #:make-node-throw                    ; CONSTRUCTOR
    #:node-throw-expr                    ; READER
+   #:node-resume                        ; STRUCT
+   #:make-node-resume                   ; CONSTRUCTOR
+   #:node-resume-expr                   ; READER
    #:node-block                         ; STRUCT
    #:make-node-block                    ; CONSTRUCTOR
    #:node-block-name                    ; READER
@@ -302,6 +305,10 @@ call to (break)."
 
 (defstruct (node-throw (:include node))
   "A node that throws an exception, its argument."
+  (expr (util:required 'expr) :type node :read-only t))
+
+(defstruct (node-resume (:include node))
+  "A node that invokes a resumption, if any exists."
   (expr (util:required 'expr) :type node :read-only t))
 
 (defstruct (node-block (:include node))

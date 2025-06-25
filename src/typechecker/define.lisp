@@ -204,7 +204,14 @@
                                       (types:tycon-name inferred-ty)
                                       nil))
                          (entry   (tc:lookup-type (tc-env-env env) ty-name)))
-    (tc:type-entry-exceptionp entry)))
+    (tc:type-entry-exception-p entry)))
+
+(defun resumption-type-p (inferred-ty env)
+  (alexandria:when-let* ((ty-name (if (types:tycon-p inferred-ty)
+                                      (types:tycon-name inferred-ty)
+                                      nil))
+                         (entry   (tc:lookup-type (tc-env-env env) ty-name)))
+    (tc:type-entry-resumption-p entry)))
 
 (defgeneric infer-expression-type (node expected-type subs env)
   (:documentation "Infer the type of NODE and then unify against EXPECTED-TYPE
@@ -902,6 +909,31 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
         :expr expr-node)
        subs)))
 
+  (:method ((node parser:node-resume) expected-type subs env)
+    (declare (type tc:ty expected-type)
+             (type tc:substitution-list subs)
+             (type tc-env env)
+             (values tc:ty tc:ty-predicate-list accessor-list node-resume tc:substitution-list))
+
+    (multiple-value-bind (resumption-ty preds accessors expr-node subs)
+        (infer-expression-type (parser:node-resume-expr node)
+                               (tc:make-variable)
+                               subs
+                               env)
+
+      (unless (resumption-type-p resumption-ty env)
+        (tc-error "Invalid resume"
+                  (tc-note node "Argument to `resume` be a resumption.")))
+      
+      (values
+       expected-type
+       preds
+       accessors
+       (make-node-resume
+        :type (tc:qualify nil expected-type)
+        :location (source:location node)
+        :expr expr-node)
+       subs)))
 
   (:method ((node parser:node-or) expected-type subs env)
     (declare (type tc:ty expected-type)

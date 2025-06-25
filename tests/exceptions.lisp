@@ -11,9 +11,8 @@
     (UnCracked Egg)
     (DeadlyEgg Egg))
 
-  (define-resumption ContinueCooking
-    (SkipEgg)
-    (ServeRaw))
+  (define-resumption SkipEgg (SkipEgg))
+  (define-resumption ServeRaw (ServeRaw Egg))
   
   (declare crack (Egg -> Egg))
   (define (crack egg)
@@ -23,29 +22,47 @@
       ((Xenomorph)
        (throw (DeadlyEgg egg)))))
 
-  (declare safe-crack (Egg -> (Result BadEgg Egg)))
-  (define (safe-crack egg)
+  (declare crack-safely (Egg -> (Result BadEgg Egg)))
+  (define (crack-safely egg)
     (catch (Ok (crack egg))
       ((DeadlyEgg e) (Err (DeadlyEgg e)))
       ((UnCracked e) (Err (UnCracked e)))))
 
   (declare cook (Egg -> Egg))
   (define (cook egg)
-    (match egg
-      ((Goose (True) _)  (Goose True True))
-      ((Goose (False) _) (throw (UnCracked egg)))
-      ((Xenomorph)       (throw (DeadlyEgg egg)))))
+    (let ((badegg (Uncracked egg)))     ; exceptions can be constructed outside throw
+      (match egg
+        ((Goose (True) _)  (Goose True True))
+        ((Goose (False) _) (throw badegg))
+        ((Xenomorph)       (throw (DeadlyEgg egg))))))
 
+
+  (declare make-breakfast-with (Egg -> (Optional Egg)))
+  (define (make-breakfast-with egg)
+    (Some (cook (crack egg))))
+
+  (declare make-breakfast-for (UFix -> (Vector Egg)))
+  (define (make-breakfast-for n)
+    (let ((eggs (vector:make))
+          (skip  SkipEgg))              ; can construct outside of resume
+      (for i in (iter:up-to n)
+        (let moocow = (if (== 0 (mod i 5)) Xenomorph (Goose False False)))
+        (do
+         (cooked <- (catch (make-breakfast-with moocow)
+                      ((DeadlyEgg _)    (resume skip))
+                      ((UnCracked egg)  (resume (ServeRaw egg)))))
+         (pure (vector:push! cooked eggs))))
+      eggs))
 
   ;; toplevel end
   )
 
 (define-test test-throw-catch ()
-  (match (safe-crack Xenomorph)
+  (match (crack-safely Xenomorph)
     ((Err (DeadlyEgg e)) (is True))
     ((Ok e) (is False)))
 
-  (match (safe-crack (Goose False False))
+  (match (crack-safely (Goose False False))
     ((Ok e) (is True))
     ((Err exc) (is False))))
 

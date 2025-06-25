@@ -264,6 +264,18 @@
       :location (source:location node))
      ctx))
 
+  (:method ((node node-resume) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values node algo:immutable-map))
+
+    (values
+     (make-node-resume
+      :expr (if (node-resume-expr node)
+                (rename-variables-generic% (node-resume-expr node) ctx)
+                nil)
+      :location (source:location node))
+     ctx))
+
   (:method ((node node-application) ctx)
     (declare (type algo:immutable-map ctx)
              (values node algo:immutable-map))

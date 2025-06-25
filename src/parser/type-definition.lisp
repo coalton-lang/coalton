@@ -19,6 +19,7 @@
    #:type-definition                    ; TYPE
    #:type-definition-list               ; TYPE
    #:type-definition-exception-p        ; FUNCTION
+   #:type-definition-resumption-p       ; FUNCTION
    #:type-definition-name               ; FUNCTION
    #:type-definition-vars               ; FUNCTION
    #:type-definition-repr               ; FUNCTION
@@ -112,6 +113,19 @@
   (:method ((def toplevel-define-type))
     (declare (values boolean))
     (toplevel-define-type-exception-p def))
+
+  (:method ((def toplevel-define-struct))
+    (declare (values boolean))
+    nil)
+
+  (:method ((def toplevel-define-type-alias))
+    (declare (values boolean))
+    nil))
+
+(defgeneric type-definition-resumption-p (def)
+  (:method ((def toplevel-define-type))
+    (declare (values boolean))
+    (toplevel-define-type-resumption-p def))
 
   (:method ((def toplevel-define-struct))
     (declare (values boolean))

@@ -72,6 +72,7 @@
    #:fn #:λ
    #:match
    #:throw
+   #:resume
    #:catch
    #:let
    #:rec
