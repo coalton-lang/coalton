@@ -1,7 +1,7 @@
 (in-package #:coalton-native-tests)
 
 (define-test simple-hashmap ()
-  (let a = (the (hashmap:HashMap String Integer) (hashmap:new)))
+  (let a = (the (hashmap:HashMap String Integer) hashmap:empty))
   (is (hashmap:empty? a))
   (is (== (hashmap:count a) 0))
 
@@ -77,7 +77,7 @@
 (define-test heavy-hashmap ()
   (let data-size = 500000)
   (let tab = (hashtable:new))
-  (let ht = (rec gen ((ht (hashmap:new))
+  (let ht = (rec gen ((ht hashmap:empty)
                       (i data-size))
               (if (== i 0)
                   ht

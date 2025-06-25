@@ -15,10 +15,10 @@
    (#:list #:coalton-library/list)
    (#:math #:coalton-library/math)
    )
-  (:shadow #:count)
+  (:shadow #:count #:empty)
   (:export
    #:Hashmap
-   #:new
+   #:empty
    #:empty?
    #:count
    #:get
@@ -266,9 +266,9 @@ a new entry."
             (Tree mask arr)))))
 
   ;; API
-  (declare new (Unit -> HashMap :k :v))
-  (define (new)
-    "Returns an empty HashMap"
+  (declare empty (HashMap :k :v))
+  (define empty
+    "An empty HashMap"
     (HashMap (Chain Nil)))
 
   ;; API
@@ -416,7 +416,7 @@ removed.  If HT does not contain an entry with KEY, HT is returned as is."
       (if (empty? ht)
           ht
           (match (walk 0 (.root ht))
-            ((None) (new))
+            ((None) empty)
             ((Some newroot)
              (if (unchanged? (.root ht) newroot)
                  ht
@@ -464,7 +464,7 @@ removed.  If HT does not contain an entry with KEY, HT is returned as is."
   (define (collect! iter)
     (iter:fold! (fn (ht (Tuple k v))
                   (insert ht k v))
-                (new) iter))
+                empty iter))
 
   ;; Debug tools
   (declare dump (HashMap :k :v -> Unit))
