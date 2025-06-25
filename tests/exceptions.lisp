@@ -11,6 +11,10 @@
     (UnCracked Egg)
     (DeadlyEgg Egg))
 
+  (define-resumption ContinueCooking
+    (SkipEgg)
+    (ServeRaw))
+  
   (declare crack (Egg -> Egg))
   (define (crack egg)
     (match egg

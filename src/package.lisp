@@ -28,6 +28,7 @@
    #:define-type
    #:define-type-alias
    #:define-exception
+   #:define-resumption
    #:define-struct
    #:define-class
    #:define-instance
