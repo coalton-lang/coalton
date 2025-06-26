@@ -75,16 +75,20 @@
 
 (define-test test-catch-all ()
   (let v = (vector:make))
+
   (for _ in (iter:up-to 1000) 
     (let n = 
       (catch (lisp integer () (cl:/ 10 (cl:random 2)))
-        (DivByZero (traceobject "Error: ~a" DivByZero)
-                   0)))
+        (DivByZero 0)))
     (vector:push! n v))
+  (is (== 1000 (vector:length v)))
+  
   (for _ in (iter:up-to 1000) 
     (let n = 
       (catch (lisp integer () (cl:/ 10 (cl:random 2)))
         (_ 0)))
-    (vector:push! n v)))
+    (vector:push! n v))
+
+  (is (== 2000 (vector:length v))))
 
 
