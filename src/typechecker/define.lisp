@@ -725,9 +725,9 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                  :for pattern := (parser:node-catch-branch-pattern branch)
                  :for (pat-ty pat-node subs_)
                    := (multiple-value-list (infer-pattern-type pattern (tc:make-variable) subs env))
-                 :unless (exception-type-p pat-ty env)
-                   :do (print (list :pattern pattern :type-of-pattern (type-of pattern)))
-                       (tc-error "Invalid catch case"
+                 :unless (or (exception-type-p pat-ty env)
+                             (typep pattern '(or parser:pattern-wildcard parser:pattern-var)))
+                   :do (tc-error "Invalid catch case"
                                  (tc-note pat-node "Catch pattern is not an exception case."))
                  :else 
                    :do (setf subs subs_)
