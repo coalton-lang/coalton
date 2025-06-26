@@ -39,12 +39,14 @@
 
   (declare make-breakfast-with (Egg -> (Optional Egg)))
   (define (make-breakfast-with egg)
-    (Some (cook (crack egg))))
+    (resume-from (Some (cook (crack egg)))
+      ((SkipEgg) None)
+      ((ServeRaw rawegg) (Some rawegg))))
 
   (declare make-breakfast-for (UFix -> (Vector Egg)))
   (define (make-breakfast-for n)
     (let ((eggs (vector:make))
-          (skip  SkipEgg))              ; can construct outside of resume
+          (skip  SkipEgg))              ; can construct outside of resume-to
       (for i in (iter:up-to n)
         (let moocow = (if (== 0 (mod i 5)) Xenomorph (Goose False False)))
         (do
@@ -65,4 +67,11 @@
   (match (crack-safely (Goose False False))
     ((Ok e) (is True))
     ((Err exc) (is False))))
+
+
+(define-test test-resume ()
+  ;; every 5th egg will be deadly and therefore skipped
+  (is (== 8 (vector:length (make-breakfast-for 10)))))
+
+
 

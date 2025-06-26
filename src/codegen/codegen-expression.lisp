@@ -183,17 +183,37 @@
                  := (codegen-expression (catch-branch-body branch) env)
                :for lambda-var
                  := (gensym (symbol-name exception-name))
-               :for (_ bindings)
-                 := (multiple-value-list (codegen-pattern pattern lambda-var env))
+               :for bindings
+                 := (nth-value 1 (codegen-pattern pattern lambda-var env))
                ;; NB: if CASE-BODY invokes a restart then control will
                ;; be transferred before the transfer due to
                ;; return-from.
                :for inner-body
                  := `(cl:return-from ,block-label ,case-body)
-               :collect `(,exception-name (cl:lambda (,lambda-var) (cl:declare (cl:ignorable ,lambda-var)) (cl:let ,bindings ,inner-body))))))
+               :collect `(,exception-name
+                          (cl:lambda (,lambda-var)
+                            (cl:declare (cl:ignorable ,lambda-var))
+                            (cl:let ,bindings ,inner-body))))))
       `(block ,block-label
          (handler-bind ,handler-cases
            ,(codegen-expression (node-catch-expr node) env)))))
+
+  (:method ((node node-resume-from) env)
+    (declare (type tc:environment env))
+    (let* ((clauses
+             (loop
+               :for branch :in (node-resume-from-branches node)
+               :for pattern
+                 := (resume-from-branch-pattern branch)
+               :for restart-name := (tc:lisp-type (pattern-type pattern) env)
+               :for restart-var := (gensym (symbol-name restart-name))
+               :for bindings := (nth-value 1 (codegen-pattern pattern restart-var env))
+               :for inner-body := (codegen-expression (resume-from-branch-body branch) env)
+               :collect `(,restart-name (,restart-var)
+                                        (declare (ignorable ,restart-var))
+                                        (let ,bindings ,inner-body)))))
+     `(restart-case ,(codegen-expression (node-resume-from-expr node) env)
+        ,@clauses)))
 
   (:method ((expr node-match) env)
     (declare (type tc:environment env))

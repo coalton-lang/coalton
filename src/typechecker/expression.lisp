@@ -83,6 +83,15 @@
    #:make-node-catch                    ; CONSTRUCTOR
    #:node-catch-expr                    ; ACCESSOR
    #:node-catch-branches                ; ACCESSOR
+   #:node-resume-from-branch            ; STRUCT
+   #:make-node-resume-from-branch       ; CONSTRUCTOR
+   #:node-resume-from-branch-pattern    ; ACCESSOR
+   #:node-resume-from-branch-body       ; ACCESSOR
+   #:node-resume-from-branch-list       ; TYPE
+   #:node-resume-from                   ; STRUCT
+   #:make-node-resume-from              ; CONSTRUCTOR
+   #:node-resume-from-expr              ; ACCESSOR
+   #:node-resume-from-branches          ; ACCESSOR
    #:node-progn                         ; STRUCT
    #:make-node-progn                    ; CONSTRUCTOR
    #:node-progn-body                    ; ACCESSOR
@@ -326,6 +335,28 @@
             (:copier nil))
   ;; The resumption instance
   (expr (util:required 'expr) :type (or null node) :read-only t))
+
+(defstruct (node-resume-from-branch
+            (:copier nil))
+  (pattern  (util:required 'pattern)  :type pattern         :read-only t)
+  (body     (util:required 'body)     :type node-body       :read-only t)
+  (location (util:required 'location) :type source:location :read-only t))
+
+(defmethod source:location ((self node-resume-from-branch))
+  (node-resume-from-branch-location self))
+
+(defun node-resume-from-branch-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'node-resume-from-branch-p x)))
+
+(deftype node-resume-from-branch-list ()
+  '(satisfies node-resume-from-branch-list-p))
+
+(defstruct (node-resume-from
+            (:include node)
+            (:copier nil))
+  (expr     (util:required 'expr)         :type node                   :read-only t)
+  (branches (util:required 'branches)     :type node-resume-from-branch-list :read-only t))
 
 (defstruct (node-catch-branch
             (:copier nil))
@@ -592,6 +623,23 @@
    :location (source:location node)
    :expr (tc:apply-substitution subs (node-catch-expr node))
    :branches (tc:apply-substitution subs (node-catch-branches node))))
+
+(defmethod tc:apply-substitution (subs (node node-resume-from-branch))
+  (declare (type tc:substitution-list subs)
+           (values node-resume-from-branch))
+  (make-node-resume-from-branch
+   :pattern (tc:apply-substitution subs (node-resume-from-branch-pattern node))
+   :body (tc:apply-substitution subs (node-resume-from-branch-body node))
+   :location (source:location node)))
+
+(defmethod tc:apply-substitution (subs (node node-resume-from))
+  (declare (type tc:substitution-list subs)
+           (values node-resume-from))
+  (make-node-resume-from
+   :type (tc:apply-substitution subs (node-type node))
+   :location (source:location node)
+   :expr (tc:apply-substitution subs (node-resume-from-expr node))
+   :branches (tc:apply-substitution subs (node-resume-from-branches node))))
 
 (defmethod tc:apply-substitution (subs (node node-progn))
   (declare (type tc:substitution-list subs)

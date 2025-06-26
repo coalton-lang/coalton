@@ -132,6 +132,25 @@
                 (setf subs (tc:unify subs subexpr-ty type))))
       type))
 
+  (:method ((expr node-resume-from) env)
+    (declare (type tc:environment env)
+             (values tc:ty))
+    (let ((type (node-type expr))
+
+          (subs nil))
+
+      (loop :for branch :in (node-resume-from-branches expr)
+            :for subexpr-ty := (typecheck-node branch env) :do
+              (progn
+                (setf subs (tc:unify subs type subexpr-ty))
+                (setf subs (tc:unify subs subexpr-ty type))))
+      type))
+
+  (:method ((expr resume-from-branch) env)
+    (declare (type tc:environment env)
+             (values tc:ty &optional))
+    (typecheck-node (resume-from-branch-body expr) env))
+
   (:method ((expr node-while) env)
     (declare (type tc:environment env)
              (values tc:ty))
