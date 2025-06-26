@@ -174,11 +174,15 @@
                :for branch :in (node-catch-branches node)
                :for pattern
                  := (catch-branch-pattern branch)
-               ;; NOTE: a prior check ensures that these are pattern constructors
+               ;; wildcard and variable patterns catch all 'cl:error cases
                :for exception-name
-                 := (let* ((ctor-name              (pattern-constructor-name pattern))
-                           (ctor                   (tc::lookup-constructor env ctor-name)))
-                      (tc:constructor-entry-classname ctor))
+                 := (etypecase pattern
+                      (pattern-constructor 
+                       (let* ((ctor-name              (pattern-constructor-name pattern))
+                              (ctor                   (tc::lookup-constructor env ctor-name)))
+                         (tc:constructor-entry-classname ctor)))
+                      ((or pattern-wildcard pattern-var)
+                        'cl:error))
                :for case-body
                  := (codegen-expression (catch-branch-body branch) env)
                :for lambda-var

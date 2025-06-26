@@ -73,5 +73,18 @@
   ;; every 5th egg will be deadly and therefore skipped
   (is (== 8 (vector:length (make-breakfast-for 10)))))
 
+(define-test test-catch-all ()
+  (let v = (vector:make))
+  (for _ in (iter:up-to 1000) 
+    (let n = 
+      (catch (lisp integer () (cl:/ 10 (cl:random 2)))
+        (DivByZero (traceobject "Error: ~a" DivByZero)
+                   0)))
+    (vector:push! n v))
+  (for _ in (iter:up-to 1000) 
+    (let n = 
+      (catch (lisp integer () (cl:/ 10 (cl:random 2)))
+        (_ 0)))
+    (vector:push! n v)))
 
 
