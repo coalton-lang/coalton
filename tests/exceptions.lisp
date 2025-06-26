@@ -15,31 +15,31 @@
   (define-resumption ServeRaw (ServeRaw Egg))
   
   (declare crack (Egg -> Egg))
-  (define (crack egg)
-    (match egg
+  (define (crack egg-o)
+    (match egg-o
       ((Goose _cracked? cooked?)
        (Goose True cooked?))
       ((Xenomorph)
-       (throw (DeadlyEgg egg)))))
+       (throw (DeadlyEgg egg-o)))))
 
   (declare crack-safely (Egg -> (Result BadEgg Egg)))
-  (define (crack-safely egg)
-    (catch (Ok (crack egg))
-      ((DeadlyEgg e) (Err (DeadlyEgg e)))
-      ((UnCracked e) (Err (UnCracked e)))))
+  (define (crack-safely egg-i)
+    (catch (Ok (crack egg-i))
+      ((DeadlyEgg _) (Err (DeadlyEgg egg-i)))
+      ((UnCracked _) (Err (UnCracked egg-i)))))
 
   (declare cook (Egg -> Egg))
-  (define (cook egg)
-    (let ((badegg (Uncracked egg)))     ; exceptions can be constructed outside throw
-      (match egg
+  (define (cook egg-k)
+    (let ((badegg (Uncracked egg-k)))     ; exceptions can be constructed outside throw
+      (match egg-k
         ((Goose (True) _)  (Goose True True))
         ((Goose (False) _) (throw badegg))
-        ((Xenomorph)       (throw (DeadlyEgg egg))))))
+        ((Xenomorph)       (throw (DeadlyEgg egg-k))))))
 
 
   (declare make-breakfast-with (Egg -> (Optional Egg)))
-  (define (make-breakfast-with egg)
-    (resume-from (Some (cook (crack egg)))
+  (define (make-breakfast-with egg-x)
+    (resume-from (Some (cook (crack egg-x)))
       ((SkipEgg) None)
       ((ServeRaw rawegg) (Some rawegg))))
 
@@ -52,7 +52,7 @@
         (do
          (cooked <- (catch (make-breakfast-with moocow)
                       ((DeadlyEgg _)    (resume-to skip))
-                      ((UnCracked egg)  (resume-to (ServeRaw egg)))))
+                      ((UnCracked egg-y)  (resume-to (ServeRaw egg-y)))))
          (pure (vector:push! cooked eggs))))
       eggs))
 
