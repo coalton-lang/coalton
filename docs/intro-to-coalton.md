@@ -598,7 +598,7 @@ The following example, building on the above, should elucidate
 
 ```
 
-Now define a function that makes breakfast for `n` people.  It tries to cook each egg, but if if errors, it encounters a deadly egg, so it skips that egg. 
+Now define a function that makes breakfast for `n` people.  It tries to cook each egg, but if it errors by encountering a deadly egg, it resumes `make-breakfast` by skipping that egg. 
 
 ```lisp 
 
