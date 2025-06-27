@@ -277,6 +277,8 @@ a new entry."
       (_ False)))
 
   ;; API
+  ;; TODO: We can cache the # of entries in Tree node to avoid scanning
+  ;; the entire tree every time.
   (declare count (HashMap :k :v -> Integer))
   (define (count hm)
     "Returns the number of entries in HM."
