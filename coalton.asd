@@ -86,10 +86,16 @@
                (:file "slice")
                (:file "hashtable")
                (:file "queue")
-               (:file "monad/state")
+               (:module "monad"
+                :serial t
+                :components ((:file "identity")
+                             (:file "state")
+                             (:file "environment")
+                             (:file "resultt")
+                             (:file "optionalt")
+                             (:file "free")))
                (:file "ord-tree")
                (:file "ord-map")
-               (:file "monad/free")
                (:file "seq")
                (:file "system")
                (:file "file")
@@ -278,4 +284,9 @@
                (:file "monomorphizer-tests")
                (:file "inliner-tests")
                (:file "file-tests")
-               (:file "experimental-tests")))
+               (:file "experimental-tests")
+               (:module "monad"
+                :serial t
+                :components ((:file "optionalt")
+                             (:file "resultt")
+                             (:file "environment")))))
