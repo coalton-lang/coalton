@@ -78,7 +78,7 @@ of empty hashmap, or nodes at the maximum depth."
 ;;       6       0       -
 ;;       7       1       3
 ;;
-;;  index->pos convers index to pos.  tree-has-entry? checks if the given
+;;  index->pos converts index to pos.  tree-has-entry? checks if the given
 ;;  index has a child.
 ;;
 ;;  We use 32bit mask so the maximum number of children per node is 32.
@@ -132,13 +132,8 @@ of empty hashmap, or nodes at the maximum depth."
 
   ;; Utilities
 
-  (define (entry-key entry)
-    (match entry
-      ((HmEntry key _) key)))
-
-  (define (entry-value entry)
-    (match entry
-      ((HmEntry _ value) value)))
+  (define (entry-key (HmEntry key _)) key)
+  (define (entry-value (HmEntry _ value)) value)
 
   (declare tree-has-entry? (U32 -> UFix -> Boolean))
   (define (tree-has-entry? mask index)
@@ -311,10 +306,8 @@ a new entry."
                ((== key k2) (Some v2))
                (True None)))
         ((Chain entries)
-         (match (iter:find! (fn (e) (== key (entry-key e)))
-                            (iter:into-iter entries))
-           ((None) None)
-           ((Some e) (Some (entry-value e)))))
+         (map entry-value (iter:find! (fn (e) (== key (entry-key e)))
+                                      (iter:into-iter entries))))
         ((Tree mask arr)
          (let ind = (trie-index hb depth))
          (if (tree-has-entry? mask ind)
@@ -370,7 +363,7 @@ containes an entry with KEY, the new hashmap replaces it for the new entry."
     (lisp Boolean (a b) (cl:eq a b)))
 
   ;; We avoid using list:remove-if, for we need to keep identity of input
-  ;; when lis is unmodified.  It is also assumed that KEY is unique in XS.
+  ;; when list is unmodified.  It also assumes that KEY is unique in XS.
   (define (remove-keyed-entry xs key)
     (match xs
       ((Nil) Nil)
