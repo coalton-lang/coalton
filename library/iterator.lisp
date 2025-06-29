@@ -609,7 +609,7 @@ Return `None' if ITER is empty."
 Returns `True` if ITER is empty."
     (match (next! iter)
       ((None) True)
-      ((Some item) (and (good? item) (every! good? iter)))))
+      ((Some item) (if (good? item) (every! good? iter) False))))
 
   (declare any! ((:elt -> Boolean) -> Iterator :elt -> Boolean))
   (define (any! good? iter)
