@@ -133,6 +133,33 @@ nodes."
                                   (match-branch-body branch)
                                   args)))
                   (node-match-branches node))))
+    (action (:traverse node-catch node &rest args)
+      (make-node-catch
+       :type (node-type node)
+       :expr (apply *traverse* (node-catch-expr node) args)
+       :branches (mapcar
+                  (lambda (branch)
+                    (make-catch-branch
+                     :pattern (catch-branch-pattern branch)
+                     :body (apply *traverse*
+                                  (catch-branch-body branch)
+                                  args)))
+                  (node-catch-branches node))))
+
+    (action (:traverse node-resume-from node &rest args)
+      (make-node-resume-from
+       :type (node-type node)
+       :expr (apply *traverse* (node-resume-from-expr node) args)
+       :branches (mapcar
+                  (lambda (branch)
+                    (make-resume-from-branch
+                     :pattern (resume-from-branch-pattern branch)
+                     :body (apply *traverse*
+                                  (resume-from-branch-body branch)
+                                  args)))
+                  (node-resume-from-branches node))))
+
+    
     (action (:traverse node-while node &rest args)
       (make-node-while
        :type (node-type node)
@@ -163,6 +190,14 @@ nodes."
        :type (node-type node)
        :name (node-return-from-name node)
        :expr (apply *traverse* (node-return-from-expr node) args)))
+    (action (:traverse node-throw node &rest args)
+      (make-node-throw
+       :type (node-type node)
+       :expr (apply *traverse* (node-throw-expr node) args)))
+    (action (:traverse node-resume node &rest args)
+      (make-node-resume
+       :type (node-type node)
+       :expr (apply *traverse* (node-resume-expr node) args)))
     (action (:traverse node-block node &rest args)
       (make-node-block
        :type (node-type node)

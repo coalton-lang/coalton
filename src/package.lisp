@@ -27,6 +27,8 @@
    #:define
    #:define-type
    #:define-type-alias
+   #:define-exception
+   #:define-resumption
    #:define-struct
    #:define-class
    #:define-instance
@@ -68,6 +70,10 @@
   (:export
    #:fn #:λ
    #:match
+   #:throw
+   #:resume-to
+   #:resume-from
+   #:catch
    #:let
    #:rec
    #:=                                  ; Syntax

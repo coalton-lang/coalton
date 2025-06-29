@@ -108,10 +108,10 @@
                  inner)))
 
       `(locally (declare #+sbcl (optimize (sb-c::type-check 1)))
-                ,(if settings:*emit-type-annotations*
-                     `(the (values ,(tc:lisp-type (node-type expr) env) &optional)
-                           ,inner)
-                     inner))))
+         ,(if settings:*emit-type-annotations*
+              `(the (values ,(tc:lisp-type (node-type expr) env) &optional)
+                    ,inner)
+              inner))))
 
   (:method ((expr node-while) env)
     (declare (type tc:environment env))
@@ -166,9 +166,62 @@
     (declare (type tc:environment env))
     `(return-from ,(continue-label (node-continue-label expr))))
 
+  (:method ((node node-catch) env)
+    (declare (type tc:environment env))
+    (let* ((block-label   (gensym "CATCH-BLOCK"))
+           (handler-cases
+             (loop
+               :for branch :in (node-catch-branches node)
+               :for pattern
+                 := (catch-branch-pattern branch)
+               ;; wildcard and variable patterns catch all 'cl:error cases
+               :for exception-name
+                 := (etypecase pattern
+                      (pattern-constructor 
+                       (let* ((ctor-name              (pattern-constructor-name pattern))
+                              (ctor                   (tc::lookup-constructor env ctor-name)))
+                         (tc:constructor-entry-classname ctor)))
+                      ((or pattern-wildcard pattern-var)
+                        'cl:error))
+               :for case-body
+                 := (codegen-expression (catch-branch-body branch) env)
+               :for lambda-var
+                 := (gensym (symbol-name exception-name))
+               :for bindings
+                 := (nth-value 1 (codegen-pattern pattern lambda-var env))
+               ;; NB: if CASE-BODY invokes a restart then control will
+               ;; be transferred before the transfer due to
+               ;; return-from.
+               :for inner-body
+                 := `(cl:return-from ,block-label ,case-body)
+               :collect `(,exception-name
+                          (cl:lambda (,lambda-var)
+                            (cl:declare (cl:ignorable ,lambda-var))
+                            (cl:let ,bindings ,inner-body))))))
+      `(block ,block-label
+         (handler-bind ,handler-cases
+           ,(codegen-expression (node-catch-expr node) env)))))
+
+  (:method ((node node-resume-from) env)
+    (declare (type tc:environment env))
+    (let* ((clauses
+             (loop
+               :for branch :in (node-resume-from-branches node)
+               :for pattern
+                 := (resume-from-branch-pattern branch)
+               :for restart-name := (tc:lisp-type (pattern-type pattern) env)
+               :for restart-var := (gensym (symbol-name restart-name))
+               :for bindings := (nth-value 1 (codegen-pattern pattern restart-var env))
+               :for inner-body := (codegen-expression (resume-from-branch-body branch) env)
+               :collect `(,restart-name (,restart-var)
+                                        (declare (ignorable ,restart-var))
+                                        (let ,bindings ,inner-body)))))
+     `(restart-case ,(codegen-expression (node-resume-from-expr node) env)
+        ,@clauses)))
+
   (:method ((expr node-match) env)
     (declare (type tc:environment env))
-    ;; If possible codegen a cl:if instead of a trivia:match
+    ;; If possible codegen a cl:if instead of a cl:cond
     (when (and (equalp (node-type (node-match-expr expr)) tc:*boolean-type*)
                (= 2 (length (node-match-branches expr)))
                (equalp (match-branch-pattern (first (node-match-branches expr)))
@@ -227,6 +280,13 @@
   (:method ((expr node-return-from) env)
     `(return-from ,(block-label (node-return-from-name expr))
        ,(codegen-expression (node-return-from-expr expr) env)))
+
+  (:method ((node node-throw) env)
+    `(error ,(codegen-expression (node-throw-expr node) env)))
+
+  (:method ((node node-resume) env)
+    (let ((restart-name (tc:lisp-type (node-type (node-resume-expr node)) env)))
+     `(invoke-restart ',restart-name ,(codegen-expression (node-resume-expr node) env))))
 
   (:method ((expr node-block) env)
     `(block ,(block-label (node-block-name expr))

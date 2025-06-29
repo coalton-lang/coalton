@@ -506,6 +506,135 @@ accumulator and the counter exceeds 500.  Without the `:outer` label,
     (cell:read acc)))
 ```
 
+## Error Handling
+
+Coalton includes syntax for defining, signalling, handling and
+resuming from exceptional conditions.  
+
+Breifly, the relevant syntactic forms are:
+
+- `define-exception`: Defines an exception type. Other than its name, the syntax is identical to `define-type`
+- `define-resumption`: Defines a named resumption type. It is like `define-type` except that resumptions must have *exactly* one constructor.
+- `catch`: An expression for catching and handling exceptions that may be singalled by a guarded expression.  
+- `throw`: Signals an exception.
+- `resume-from`: An expression that handles a possible resumption.
+- `resume-to`: An expression that takes a resumption instance;  Transfers control to a `resume-from` block that includes a handler for the indicated resumption.  
+
+
+### Defining, Throwing, and Catching Exceptions
+
+If you want to catch any error, you can use a wildcard pattern or
+pattern variable:
+
+```lisp
+
+(declare divide-by-random (Single-Float -> Integer -> Single-Float))
+(define (divide-by-random r m)
+    "Divide `r` by a random integer between `0` and `m`. 
+     If the divisor is `0`, then pring the divide by zero error
+     and then return `0.0`"
+    (catch (lisp single-float (n m) (cl:/ n (cl:random m)))
+        (AnyError 
+          (traceobject "An Error: ~a" AnyError)
+          0.0)))
+```
+
+More generally
+
+```lisp 
+
+  (define-type Egg
+    ;;     cracked? cooked?
+    (Goose Boolean Boolean)
+    (Xenomorph))
+
+  ;; We define an exception type BadEgg with a few variants 
+  (define-exception BadEgg
+    (UnCracked Egg)
+    (DeadlyEgg Egg))
+
+  ;; If we try to crack open a Xenomorph egg, throw a DeadlyEgg error
+  (declare crack (Egg -> Egg))
+  (define (crack egg)
+    (match egg
+      ((Goose _ cooked?)
+       (Goose True cooked?))
+      ((Xenomorph)
+       (throw (DeadlyEgg egg)))))
+
+  ;; crack an egg open safely. 
+  (declare crack-safely (Egg -> (Result BadEgg Egg)))
+  (define (crack-safely egg)
+    (catch (Ok (crack egg))
+      ((DeadlyEgg _) (Err (DeadlyEgg egg)))
+      ((UnCracked _) (Err (UnCracked egg)))))
+
+```
+
+### Defining, Invoking, and Handling Resumptions 
+
+Resumptions allow the coalton programmer to recover from an error without unwinding the call stack. 
+
+The following example, building on the above, should elucidate
+
+```lisp
+
+  (define-resumption SkipEgg (SkipEgg))
+
+  (declare cook (Egg -> Egg))
+  (define (cook egg)
+    (let ((badegg (Uncracked egg)))     ; exceptions can be constructed outside throw
+      (match egg
+        ((Goose (True) _)  (Goose True True))
+        ((Goose (False) _) (throw badegg))
+        ((Xenomorph)       (throw (DeadlyEgg egg))))))
+
+
+  ;; Return None if a SkipEgg resumption is received.
+  (declare make-breakfast-with (Egg -> (Optional Egg)))
+  (define (make-breakfast-with egg)
+    (resume-from (Some (cook (crack egg)))
+      ((SkipEgg) None)))
+
+```
+
+Now define a function that makes breakfast for `n` people.  It tries to cook each egg, but if it errors by encountering a deadly egg, it resumes `make-breakfast` by skipping that egg. 
+
+```lisp 
+
+  (declare make-breakfast-for (UFix -> (Vector Egg)))
+  (define (make-breakfast-for n)
+    (let ((eggs (vector:make))
+          (skip  SkipEgg))              ; can construct outside of resume-to
+      (for i in (iter:up-to n)
+        (let egg = (if (== 0 (mod i 5)) Xenomorph (Goose False False)))
+        (do
+         (cooked <- (catch (make-breakfast-with egg)
+                      ((DeadlyEgg _)    (resume-to skip)))
+         (pure (vector:push! cooked eggs))))
+      eggs))
+
+```
+
+Every 5th egg is deadly, so making brekfast for 10 people will result in 8 cooked eggs.
+
+The Call stack looks like
+
+```
+
+make-breakfast-for 
+      │
+      └─ make-breakfast-with 
+                │
+                └─ cook  
+
+```
+
+But `cook` signals a `DeadlyEgg` error on `Xenomorph`
+eggs. `make-breakfast-for` catches that error and resumes to
+`SkipEgg`, where `make-breakfast-with` receives that resumption and
+handles it.
+
 ## Numbers
 
 Coalton supports a few numeric types. The main ones are `Integer`, `Single-Float`, and `Double-Float`.

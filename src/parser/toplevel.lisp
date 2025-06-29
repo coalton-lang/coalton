@@ -36,6 +36,8 @@
    #:toplevel-define-type-ctors                  ; ACCESSOR
    #:toplevel-define-type-repr                   ; ACCESSOR
    #:toplevel-define-type-head-location          ; ACCESSOR
+   #:toplevel-define-type-exception-p            ; ACCESSOR
+   #:toplevel-define-type-resumption-p           ; ACCESSOR
    #:toplevel-define-type-list                   ; TYPE
    #:toplevel-define-type-alias                  ; STRUCT
    #:make-toplevel-define-type-alias             ; CONSTRUCTOR
@@ -276,7 +278,9 @@
   (vars          (util:required 'vars)          :type keyword-src-list         :read-only t)
   (ctors         (util:required 'ctors)         :type constructor-list         :read-only t)
   (repr          (util:required 'repr)          :type (or null attribute-repr) :read-only nil)
-  (head-location (util:required 'head-location) :type source:location          :read-only t))
+  (head-location (util:required 'head-location) :type source:location          :read-only t)
+  (exception-p   (util:required 'exception-p)   :type boolean                  :read-only nil)
+  (resumption-p  (util:required 'resumption-p)  :type boolean                  :read-only nil))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-define-type-list-p (x)
@@ -952,6 +956,27 @@ If the parsed form is an attribute (e.g., repr or monomorphize), add it to to AT
        (push type (program-types program))
        t))
 
+    ((coalton:define-exception)
+     (let* ((type (parse-define-type form source))
+            (repr (consume-repr attributes type "when parsing define-type")))
+       (setf (toplevel-define-type-repr type) repr
+             (toplevel-define-type-exception-p type) t)
+       (push type (program-types program))
+       t))
+
+    ((coalton:define-resumption)
+     (let* ((type (parse-define-type form source))
+            (repr (consume-repr attributes type "when parsing define-type")))
+
+       (unless (= 1 (length (toplevel-define-type-ctors type)))
+         (parse-error "Invalid define-resumption"
+                      (note source form "Resumption must have exactly one constructor")))
+
+       (setf (toplevel-define-type-repr type) repr
+             (toplevel-define-type-resumption-p type) t)
+       (push type (program-types program))
+       t))
+
     ((coalton:define-type-alias)
      (forbid-attributes attributes form source)
      (let ((alias (parse-define-type-alias form source)))
@@ -1207,7 +1232,9 @@ consume all attributes")))
                   :finally (return ctors))
      :repr nil
      :location (form-location source form)
-     :head-location (form-location source (cst:second form)))))
+     :head-location (form-location source (cst:second form))
+     :exception-p nil
+     :resumption-p nil)))
 
 (defun parse-define-type-alias (form source)
   (declare (type cst:cst form)

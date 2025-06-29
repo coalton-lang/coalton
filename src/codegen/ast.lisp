@@ -50,13 +50,30 @@
    #:match-branch                       ; STRUCT
    #:make-match-branch                  ; CONSTRUCTOR
    #:match-branch-pattern               ; READER
-   #:match-branch-bindings              ; READER
    #:match-branch-body                  ; READER
    #:branch-list                        ; TYPE
    #:node-match                         ; STRUCT
    #:make-node-match                    ; CONSTRUCTOR
    #:node-match-expr                    ; READER
    #:node-match-branches                ; READER
+   #:catch-branch                       ; STRUCT
+   #:make-catch-branch                  ; CONSTRUCTOR
+   #:catch-branch-pattern               ; READER
+   #:catch-branch-body                  ; READER
+   #:catch-branch-list                  ; TYPE
+   #:node-catch                         ; STRUCT
+   #:make-node-catch                    ; CONSTRUCTOR
+   #:node-catch-expr                    ; READER
+   #:node-catch-branches                ; READER
+   #:resume-from-branch                 ; STRUCT
+   #:make-resume-from-branch            ; CONSTRUCTOR
+   #:resume-from-branch-pattern         ; READER
+   #:resume-from-branch-body            ; READER
+   #:resume-from-branch-list            ; TYPE
+   #:node-resume-from                   ; STRUCT
+   #:make-node-resume-from              ; CONSTRUCTOR
+   #:node-resume-from-expr              ; READER
+   #:node-resume-from-branches          ; READER
    #:node-while                         ; STRUCT
    #:make-node-while                    ; CONSTRUCTOR
    #:node-while-label                   ; READER
@@ -85,6 +102,12 @@
    #:make-node-return-from              ; CONSTRUCTOR
    #:node-return-from-name              ; READER
    #:node-return-from-expr              ; READER
+   #:node-throw                         ; STRUCT
+   #:make-node-throw                    ; CONSTRUCTOR
+   #:node-throw-expr                    ; READER
+   #:node-resume                        ; STRUCT
+   #:make-node-resume                   ; CONSTRUCTOR
+   #:node-resume-expr                   ; READER
    #:node-block                         ; STRUCT
    #:make-node-block                    ; CONSTRUCTOR
    #:node-block-name                    ; READER
@@ -204,7 +227,7 @@ coalton symbols (`parser:identifier`)"
   (form (util:required 'form) :type t                      :read-only t))
 
 (defstruct match-branch
-  "A branch of a match statement"
+  "A branch of a match expression"
   (pattern (util:required 'pattern) :type pattern :read-only t)
   (body    (util:required 'body)    :type node    :read-only t))
 
@@ -222,6 +245,48 @@ coalton symbols (`parser:identifier`)"
   "A pattern matching construct. Uses MATCH-BRANCH to represent branches"
   (expr     (util:required 'expr)     :type node        :read-only t)
   (branches (util:required 'branches) :type branch-list :read-only t))
+
+(defstruct catch-branch
+  "A branch of a catch expression."
+  (pattern (util:required 'pattern) :type pattern :read-only t)
+  (body    (util:required 'body)    :type node    :read-only t))
+
+(defmethod make-load-form ((self catch-branch) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
+(defun catch-branch-list-p (xs)
+  (and (alexandria:proper-list-p xs)
+       (every #'catch-branch-p xs)))
+
+(deftype catch-branch-list ()
+  '(satisfies catch-branch-list-p))
+
+(defstruct (node-catch (:include node))
+  "An exception-catching construct. Uses CATCH-BRANCH to represent branches"
+  (expr     (util:required 'expr)     :type node              :read-only t)
+  (branches (util:required 'branches) :type catch-branch-list :read-only t))
+
+(defstruct resume-from-branch
+  "A branch of a resume-from expression."
+  (pattern (util:required 'pattern) :type pattern :read-only t)
+  (body    (util:required 'body)    :type node    :read-only t))
+
+(defmethod make-load-form ((self resume-from-branch) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
+(defun resume-from-branch-list-p (xs)
+  (and (alexandria:proper-list-p xs)
+       (every #'resume-from-branch-p xs)))
+
+(deftype resume-from-branch-list ()
+  '(satisfies resume-from-branch-list-p))
+
+(defstruct (node-resume-from (:include node))
+  "A construct for continuing from a non-stack-unwinding transfer of control. 
+   Uses RESUME-FROM-BRANCH to represent branches"
+  (expr     (util:required 'expr)     :type node                    :read-only t)
+  (branches (util:required 'branches) :type resume-from-branch-list :read-only t))
+
 
 (defstruct (node-while (:include node))
   "A looping construct. Executes a body until an expression is false."
@@ -258,6 +323,14 @@ call to (break)."
   "A return statement, used for explicit returns in functions"
   (name (util:required 'name) :type symbol :read-only t)
   (expr (util:required 'expr) :type node   :read-only t))
+
+(defstruct (node-throw (:include node))
+  "A node that throws an exception, its argument."
+  (expr (util:required 'expr) :type node :read-only t))
+
+(defstruct (node-resume (:include node))
+  "A node that invokes a resumption, if any exists."
+  (expr (util:required 'expr) :type node :read-only t))
 
 (defstruct (node-block (:include node))
   "A return target, used for explicit returns in functions"

@@ -14,36 +14,42 @@
 
 (defstruct (traverse-block
             (:conc-name traverse-))
-  (variable        #'identity :type function :read-only t)
-  (accessor        #'identity :type function :read-only t)
-  (literal         #'identity :type function :read-only t)
-  (integer-literal #'identity :type function :read-only t)
-  (bind            #'identity :type function :read-only t)
-  (body            #'identity :type function :read-only t)
-  (abstraction     #'identity :type function :read-only t)
-  (let-binding     #'identity :type function :read-only t)
-  (let             #'identity :type function :read-only t)
-  (lisp            #'identity :type function :read-only t)
-  (match-branch    #'identity :type function :read-only t)
-  (match           #'identity :type function :read-only t)
-  (progn           #'identity :type function :read-only t)
-  (return          #'identity :type function :read-only t)
-  (application     #'identity :type function :read-only t)
-  (or              #'identity :type function :read-only t)
-  (and             #'identity :type function :read-only t)
-  (if              #'identity :type function :read-only t)
-  (when            #'identity :type function :read-only t)
-  (unless          #'identity :type function :read-only t)
-  (cond-clause     #'identity :type function :read-only t)
-  (cond            #'identity :type function :read-only t)
-  (while           #'identity :type function :read-only t)
-  (while-let       #'identity :type function :read-only t)
-  (for             #'identity :type function :read-only t)
-  (loop            #'identity :type function :read-only t)
-  (break           #'identity :type function :read-only t)
-  (continue        #'identity :type function :read-only t)
-  (do-bind         #'identity :type function :read-only t)
-  (do              #'identity :type function :read-only t))
+  (variable           #'identity :type function :read-only t)
+  (accessor           #'identity :type function :read-only t)
+  (literal            #'identity :type function :read-only t)
+  (integer-literal    #'identity :type function :read-only t)
+  (bind               #'identity :type function :read-only t)
+  (body               #'identity :type function :read-only t)
+  (abstraction        #'identity :type function :read-only t)
+  (let-binding        #'identity :type function :read-only t)
+  (let                #'identity :type function :read-only t)
+  (lisp               #'identity :type function :read-only t)
+  (match-branch       #'identity :type function :read-only t)
+  (match              #'identity :type function :read-only t)
+  (catch-branch       #'identity :type function :read-only t)
+  (catch              #'identity :type function :read-only t)
+  (progn              #'identity :type function :read-only t)
+  (return             #'identity :type function :read-only t)
+  (throw              #'identity :type function :read-only t)
+  (resume             #'identity :type function :read-only t)
+  (resume-from-branch #'identity :type function :read-only t)
+  (resume-from        #'identity :type function :read-only t)
+  (application        #'identity :type function :read-only t)
+  (or                 #'identity :type function :read-only t)
+  (and                #'identity :type function :read-only t)
+  (if                 #'identity :type function :read-only t)
+  (when               #'identity :type function :read-only t)
+  (unless             #'identity :type function :read-only t)
+  (cond-clause        #'identity :type function :read-only t)
+  (cond               #'identity :type function :read-only t)
+  (while              #'identity :type function :read-only t)
+  (while-let          #'identity :type function :read-only t)
+  (for                #'identity :type function :read-only t)
+  (loop               #'identity :type function :read-only t)
+  (break              #'identity :type function :read-only t)
+  (continue           #'identity :type function :read-only t)
+  (do-bind            #'identity :type function :read-only t)
+  (do                 #'identity :type function :read-only t))
 
 (defgeneric traverse (node block)
   (:method ((node node-variable) block)
@@ -162,6 +168,53 @@
       :expr (traverse (node-match-expr node) block)
       :branches (traverse (node-match-branches node) block))))
 
+  (:method ((node node-catch-branch) block)
+    (declare (type traverse-block block)
+             (values node-catch-branch &optional))
+
+    (funcall
+     (traverse-catch-branch block)
+     (make-node-catch-branch
+      :pattern (node-catch-branch-pattern node)
+      :body (traverse (node-catch-branch-body node) block)
+      :location (source:location node))))
+
+  (:method ((node node-catch) block)
+    (declare (type traverse-block block)
+             (values node &optional))
+
+    (funcall
+     (traverse-catch block)
+     (make-node-catch
+      :type (node-type node)
+      :location (source:location node)
+      :expr (traverse (node-catch-expr node) block)
+      :branches (traverse (node-catch-branches node) block))))
+
+  (:method ((node node-resume-from-branch) block)
+    (declare (type traverse-block block)
+             (values node-resume-from-branch &optional))
+
+    (funcall
+     (traverse-resume-from-branch block)
+     (make-node-resume-from-branch
+      :pattern (node-resume-from-branch-pattern node)
+      :body (traverse (node-resume-from-branch-body node) block)
+      :location (source:location node))))
+
+  (:method ((node node-resume-from) block)
+    (declare (type traverse-block block)
+             (values node &optional))
+
+    (funcall
+     (traverse-resume-from block)
+     (make-node-resume-from
+      :type (node-type node)
+      :location (source:location node)
+      :expr (traverse (node-resume-from-expr node) block)
+      :branches (traverse (node-resume-from-branches node) block))))
+
+
   (:method ((node node-progn) block)
     (declare (type traverse-block block)
              (values node &optional))
@@ -184,6 +237,26 @@
       :location (source:location node)
       :expr (traverse (node-return-expr node) block) ; the nil case is handled by the list instance
       )))
+
+  (:method ((node node-throw) block)
+    (declare (type traverse-block block)
+             (values node &optional))
+    (funcall 
+     (traverse-throw block)
+     (make-node-throw
+      :type (node-type node)
+      :location (source:location node)
+      :expr (traverse (node-throw-expr node) block))))
+
+  (:method ((node node-resume) block)
+    (declare (type traverse-block block)
+             (values node &optional))
+    (funcall 
+     (traverse-resume block)
+     (make-node-resume
+      :type (node-type node)
+      :location (source:location node)
+      :expr (traverse (node-resume-expr node) block))))
 
   (:method ((node node-application) block)
     (declare (type traverse-block block)
