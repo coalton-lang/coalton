@@ -26,6 +26,8 @@
    #:MonadFail #:fail
    #:Alternative #:alt #:empty
    #:Foldable #:fold #:foldr #:mconcat #:mconcatmap
+   #:Unfoldable #:unfold #:unfoldr
+   #:Tabulatable #:tabulate
    #:mempty? #:mcommute?
    #:Traversable #:traverse
    #:Bifunctor #:bimap #:map-fst #:map-snd
@@ -260,6 +262,16 @@ together."
     "Types which can be folded into a single element."
     (fold  "A left tail-recursive fold."       ((:accum -> :elt -> :accum) -> :accum -> :container :elt -> :accum))
     (foldr "A right non-tail-recursive fold."  ((:elt -> :accum -> :accum) -> :accum -> :container :elt -> :accum)))
+
+  (define-class (Unfoldable :container)
+    "Types of containers that can be constructed from a seed value and a generator function."
+    (unfold  "A left non-tail-recursive unfold."      ((:seed -> Optional (Tuple :seed :elt)) -> :seed -> :container :elt))
+    (unfoldr "A right tail-recursive unfold." ((:seed -> Optional (Tuple :elt :seed)) -> :seed -> :container :elt)))
+
+  (define-class (Tabulatable :container)
+    "Types of containers that can be constructed from index of each element."
+    (tabulate "Construct a container whose i-th element is computed from i"
+              ((UFix -> :elt) -> UFix -> :container :elt)))
 
   (declare mempty? ((Eq :a) (Monoid :a) => :a -> Boolean))
   (define (mempty? a)
