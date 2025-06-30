@@ -85,6 +85,7 @@
                (:file "string")
                (:file "slice")
                (:file "hashtable")
+               (:file "hashmap")
                (:file "queue")
                (:module "monad"
                 :serial t
@@ -168,6 +169,7 @@
                (:file "pi")
                (:file "seq")
                (:file "matrix")
+               (:file "mapping")
                (:module "gabriel-benchmarks"
                 :serial t
                 :components ((:file "tak")
@@ -267,6 +269,7 @@
                (:file "hyperdual-tests")
                (:file "quantize-tests")
                (:file "hashtable-tests")
+               (:file "hashmap-tests")
                (:file "iterator-tests")
                (:file "call-coalton-from-lisp")
                (:file "vector-tests")
