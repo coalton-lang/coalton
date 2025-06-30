@@ -492,9 +492,8 @@
 
                         (when derive-classes 
                           (loop :for class :in (cst:raw derive-classes)
-                                :for instance := (derive-class-instance type class env)
-                                :when instance
-                                  :do (push instance instances)))
+                                :for instance := (derive-class-instance type-definition class env)
+                                :when instance :do (push instance instances)))
 
                         (when runtime-repr-instance
                           (push runtime-repr-instance instances))
@@ -505,7 +504,8 @@
 
 (defgeneric derive-class-instance (type class env)
   (:method (type class env)
-    (error "Cannot derive ~A for type ~A" class type)))
+    (error "Cannot derive ~A for type ~A" class type))
+  )
 
 
 (defun maybe-runtime-repr-instance (type)
