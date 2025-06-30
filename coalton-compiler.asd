@@ -75,6 +75,7 @@
                              (:file "accessor")
                              (:file "partial-type-env")
                              (:file "parse-type")
+                             (:file "derive")
                              (:file "define-type")
                              (:file "define-class")
                              (:file "tc-env")

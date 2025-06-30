@@ -19,8 +19,8 @@
    (#:util #:coalton-impl/util)
    (#:algo #:coalton-impl/algorithm)
    (#:parser #:coalton-impl/parser)
-   (#:source #:coalton-impl/source)
-   (#:tc #:coalton-impl/typechecker/stage-1))
+   (#:tc #:coalton-impl/typechecker/stage-1)
+   (#:derive #:coalton-impl/typechecker/derive))
   (:export
    #:toplevel-define-type               ; FUNCTION
    #:type-definition                    ; STRUCT
@@ -492,7 +492,7 @@
 
                         (when derive-classes 
                           (loop :for class :in (cst:raw derive-classes)
-                                :for instance := (derive-class-instance type-definition class env)
+                                :for instance := (derive:derive-class-instance class type env)
                                 :when instance :do (push instance instances)))
 
                         (when runtime-repr-instance
@@ -501,12 +501,6 @@
                         type-definition))
        instances
        ksubs))))
-
-(defgeneric derive-class-instance (type class env)
-  (:method (type class env)
-    (error "Cannot derive ~A for type ~A" class type))
-  )
-
 
 (defun maybe-runtime-repr-instance (type)
   (declare (type type-definition type))

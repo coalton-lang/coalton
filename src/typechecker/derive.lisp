@@ -1,404 +1,298 @@
-(in-package #:coalton-impl/typechecker/define-type)
+(defpackage #:coalton-impl/typechecker/derive
+  (:use #:cl)
+  (:local-nicknames
+   (#:source #:coalton-impl/source)
+   (#:util #:coalton-impl/util)
+   (#:algo #:coalton-impl/algorithm)
+   (#:parser #:coalton-impl/parser)
+   (#:tc #:coalton-impl/typechecker/stage-1)
+   (#:env #:coalton-impl/typechecker/environment)
+   (#:penv #:coalton-impl/typechecker/partial-type-env)
+   )
+  (:export
+   #:derive-class-instance ))
+(in-package #:coalton-impl/typechecker/derive)
+
+(defstruct constructor
+  "Abstract representation of a type constructor."
+  (name   (util:required 'name)   :type parser:identifier-src :read-only t)
+  (fields (util:required 'fields) :type parser:ty-list        :read-only t))
+
+(defun constructor-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'constructor-p x)))
+
+(deftype constructor-list ()
+  '(satisfies constructor-list-p))
+
+(defstruct abstract-type-definition
+  "Abstract representation of a type definition to apply the same method
+to `define-type' and `define-struct' nodes."
+  (name     (util:required 'name)     :type symbol           :read-only t)
+  (type     (util:required 'type)     :type parser:ty        :read-only t)
+  (ctors    (util:required 'ctors)    :type constructor-list :read-only t)
+  (location (util:required 'location) :type source:location  :read-only t))
 
 (defun class-instances (class env)
   (algo:immutable-listmap-lookup
    (tc:instance-environment-instances
     (tc:environment-instance-environment
-     (partial-type-env-env env)))
+     (penv:partial-type-env-env env)))
    class))
 
-(defgeneric tcty->parserty (tcty location)
-  (:method ((tcty tc:tycon) location)
-    (loop :with ty := (parser:make-tycon :location location :name (tc:tycon-name tcty))
-          :for i :below (tc:kind-arity (tc:tycon-kind tcty))
-          :for tyvar := (parser:make-tyvar :location location :name (alexandria:format-symbol util:+keyword-package+ "~d" i))
-          :do (setf ty (parser:make-tapp :location location :from ty :to tyvar))
-          :finally (return ty)))
-  (:method ((tcty tc:tyvar) location)
-    (parser:make-tyvar
-     :location location
-     :name (alexandria:format-symbol util:+keyword-package+ "~d" (tc:tyvar-id tcty))))
-  (:method ((tcty tc:tapp) location)
-    (parser:make-tapp
-     :location location
-     :from (tcty->parserty (tc:tapp-from tcty) location)
-     :to (tcty->parserty (tc:tapp-to tcty) location))))
-
-(defgeneric lookup-type-constraint (type class env location)
-  (:method ((type tc:tycon) class env location)
+(defgeneric lookup-type-constraint (type class env)
+  (:method ((type parser:tycon) class env)
     (fset:do-seq (inst (class-instances class env))
-      (let* ((pred (coalton-impl/typechecker/environment:ty-class-instance-predicate inst))
+      (let* ((pred (env:ty-class-instance-predicate inst))
              (tys (coalton-impl/typechecker/predicate:ty-predicate-types pred))
              (ty (first tys)))
         (if (and (= 1 (length tys))
                  (tc:tycon-p ty)
-                 (tc:ty= type ty))
+                 (eq (parser:tycon-name type)
+                     (tc:tycon-name ty)))
             (return-from lookup-type-constraint
               (parser:make-ty-predicate
-               :location location
+               :location (source:location type)
                :class (parser:make-identifier-src
-                       :location location
+                       :location (source:location type)
                        :name class)
-               :types (list (tcty->parserty type location))))
+               :types (list type)))
             nil))))
-  (:method ((type tc:tyvar) class env location)
+  (:method ((type parser:tyvar) class env)
     (parser:make-ty-predicate
-     :location location
+     :location (source:location type)
      :class (parser:make-identifier-src
-             :location location
+             :location (source:location type)
              :name class)
-     :types (list (tcty->parserty type location))))
-  (:method ((type tc:tapp) class env location)
+     :types (list type)))
+  (:method ((type parser:tapp) class env)
     (parser:make-ty-predicate
-     :location location
+     :location (source:location type)
      :class (parser:make-identifier-src
-             :location location
+             :location (source:location type)
              :name class)
-     :types (list (tcty->parserty type location)))))
+     :types (list type))))
 
-(defun collect-type-constraints (type-definition class env)
-  (loop :for ctor-args :in (type-definition-constructor-args type-definition)
-        :nconc (loop :for type :in ctor-args
-                     :for typred := (lookup-type-constraint type class env (source:location type-definition))
-                     :unless typred
-                       :do (error "Type ~A does not implement ~A, cannot derive." (parser:tycon-name type) class)
-                     :end
-                     ;; :when (parser:tycon-p type)
-                     :collect typred)))
-
-(defparameter dci-type nil)
-(defparameter dci-env nil)
-
-(defmethod derive-class-instance ((type type-definition) (class (eql 'coalton-library/classes:eq)) env)
-  (setq dci-type type)
-  (setq dci-env env)
-
-  (let* ((location (source:location type))
-         (classes-package (util:find-package "COALTON-LIBRARY/CLASSES"))
-         (eq-class (parser:make-identifier-src :location location :name (util:find-symbol "EQ" classes-package)))
-         (eq-method (parser:make-node-variable :location location :name (util:find-symbol "==" classes-package)))
-         (tuple-cons (parser:make-node-variable :location location :name (util:find-symbol "TUPLE" classes-package)))
-         (struct-ty (loop :with ty := (parser:make-tycon :location location :name (type-definition-name type))
-                          :for i :below (tc:kind-arity (tc:tycon-kind (type-definition-type type)))
-                          :for tyvar := (parser:make-tyvar :location location :name (alexandria:format-symbol util:+keyword-package+ "~d" i))
-                          :do (setf ty (parser:make-tapp :location location :from ty :to tyvar))
-                          :finally (return ty))))
-
-    (parser:make-toplevel-define-instance
-     :context (collect-type-constraints type class env)
-     :pred (parser:make-ty-predicate
-            :class eq-class
-            :types (list struct-ty)
-            :location location)
-     :docstring nil
-     :methods (list
-               (parser:make-instance-method-definition
-                :name eq-method
-                :params (list
-                         (parser:make-pattern-var
-                          :location location
-                          :name 'a
-                          :orig-name 'a)
-                         (parser:make-pattern-var
-                          :location location
-                          :name 'b
-                          :orig-name 'b))
-                :body (parser:make-node-body
-                       :nodes nil
-                       :last-node (parser:make-node-match
-                                   :location location
-                                   :expr (parser:make-node-application
-                                          :location location
-                                          :rator tuple-cons
-                                          :rands (list
-                                                  (parser:make-node-variable
-                                                   :location location
-                                                   :name 'a)
-                                                  (parser:make-node-variable
-                                                   :location location
-                                                   :name 'b)))
-                                   :branches (append
-                                              (mapcar
-                                               (lambda (ctor)
-                                                 (let ((cfields-a
-                                                         (loop :for i :below (tc:constructor-entry-arity ctor)
-                                                               :collect (gensym "ctor-field")))
-                                                       (cfields-b
-                                                         (loop :for i :below (tc:constructor-entry-arity ctor)
-                                                               :collect (gensym "ctor-field"))))
-                                                   (parser:make-node-match-branch
-                                                    :location location
-                                                    :pattern (parser:make-pattern-constructor
-                                                              :location location
-                                                              :name (util:find-symbol "TUPLE" classes-package)
-                                                              :patterns (list
-                                                                         (parser:make-pattern-constructor
-                                                                          :location location
-                                                                          :name (tc:constructor-entry-name ctor)
-                                                                          :patterns (mapcar
-                                                                                     (lambda (cfield)
-                                                                                       (parser:make-pattern-var
-                                                                                        :location location
-                                                                                        :name cfield
-                                                                                        :orig-name cfield))
-                                                                                     cfields-a))
-                                                                         (parser:make-pattern-constructor
-                                                                          :location location
-                                                                          :name (tc:constructor-entry-name ctor)
-                                                                          :patterns (mapcar
-                                                                                     (lambda (cfield)
-                                                                                       (parser:make-pattern-var
-                                                                                        :location location
-                                                                                        :name cfield
-                                                                                        :orig-name cfield))
-                                                                                     cfields-b))))
-                                                    :body (parser:make-node-body
-                                                           ;; :location location
-                                                           :nodes nil
-                                                           :last-node (parser:make-node-and
-                                                                       :location location
-                                                                       :nodes (append
-                                                                               (mapcar
-                                                                                (lambda (cfield-a cfield-b)
-                                                                                  (parser:make-node-application
-                                                                                   :location location
-                                                                                   :rator eq-method
-                                                                                   :rands (list
-                                                                                           (parser:make-node-variable
-                                                                                            :location location
-                                                                                            :name cfield-a)
-                                                                                           (parser:make-node-variable
-                                                                                            :location location
-                                                                                            :name cfield-b))))
-                                                                                cfields-a
-                                                                                cfields-b)
-                                                                               (list
-                                                                                (parser:make-node-variable
-                                                                                 :location location
-                                                                                 :name 'coalton:True))))))))
-                                               (type-definition-constructors type))
-                                              (list
-                                               (parser:make-node-match-branch
-                                                :location location
-                                                :pattern (parser:make-pattern-wildcard
-                                                          :location location)
-                                                :body (parser:make-node-body
-                                                       :nodes nil
-                                                       :last-node (parser:make-node-variable
-                                                                   :location location
-                                                                   :name 'coalton:False)))))))
-                :location location
-                :inline nil))
-     :location location
-     :head-location location
-     :compiler-generated t)))
-
-(defmethod derive-class-instance ((type parser:toplevel-define-type) (class (eql 'coalton-library/classes:eq)) env)
-  (setq dci-type type)
-  (setq dci-env env)
-  (let ((ty-constraints (collect-type-constraints type class env)))
-    ;; Collect context constraints, and try to signal errors if we can't derive
-    ;; TODO: improve error reporting for tapps, it only works well for simple tycons
-
-
-    (let* ((location (source:location type))
-           (classes-package (util:find-package "COALTON-LIBRARY/CLASSES"))
-           (eq-class (parser:make-identifier-src :location location :name (util:find-symbol "EQ" classes-package)))
-           (eq-method (parser:make-node-variable :location location :name (util:find-symbol "==" classes-package)))
-           (tuple-cons (parser:make-node-variable :location location :name (util:find-symbol "TUPLE" classes-package)))
-           (struct-ty (loop :with ty := (parser:make-tycon :location location :name (parser:identifier-src-name (parser:toplevel-define-type-name type)))
-                            :for var :in (parser:toplevel-define-type-vars type)
-                            :for tyvar := (parser:make-tyvar :location location :name (parser:keyword-src-name var))
-                            :do (setf ty (parser:make-tapp :location location :from ty :to tyvar))
-                            :finally (return ty))))
-
-      (print ty-constraints)
-
-      (parser:make-toplevel-define-instance
-       :context ty-constraints
-       :pred (parser:make-ty-predicate
-              :class eq-class
-              :types (list struct-ty)
-              :location location)
-       :docstring nil
-       :methods (list
-                 (parser:make-instance-method-definition
-                  :name eq-method
-                  :params (list
-                           (parser:make-pattern-var
-                            :location location
-                            :name 'a
-                            :orig-name 'a)
-                           (parser:make-pattern-var
-                            :location location
-                            :name 'b
-                            :orig-name 'b))
-                  :body (parser:make-node-body
-                         :nodes nil
-                         :last-node (parser:make-node-match
-                                     :location location
-                                     :expr (parser:make-node-application
-                                            :location location
-                                            :rator tuple-cons
-                                            :rands (list
-                                                    (parser:make-node-variable
-                                                     :location location
-                                                     :name 'a)
-                                                    (parser:make-node-variable
-                                                     :location location
-                                                     :name 'b)))
-                                     :branches (append
-                                                (mapcar
-                                                 (lambda (ctor)
-                                                   (let ((cfields-a
-                                                           (mapcar (lambda (_)
-                                                                     (declare (ignore _))
-                                                                     (gensym "ctor-field"))
-                                                                   (parser:constructor-fields ctor)))
-                                                         (cfields-b
-                                                           (mapcar (lambda (_)
-                                                                     (declare (ignore _))
-                                                                     (gensym "ctor-field"))
-                                                                   (parser:constructor-fields ctor))))
-                                                     (parser:make-node-match-branch
-                                                      :location location
-                                                      :pattern (parser:make-pattern-constructor
-                                                                :location location
-                                                                :name (util:find-symbol "TUPLE" classes-package)
-                                                                :patterns (list
-                                                                           (parser:make-pattern-constructor
-                                                                            :location location
-                                                                            :name (parser:identifier-src-name (parser:constructor-name ctor))
-                                                                            :patterns (mapcar
-                                                                                       (lambda (cfield)
-                                                                                         (parser:make-pattern-var
-                                                                                          :location location
-                                                                                          :name cfield
-                                                                                          :orig-name cfield))
-                                                                                       cfields-a))
-                                                                           (parser:make-pattern-constructor
-                                                                            :location location
-                                                                            :name (parser:identifier-src-name (parser:constructor-name ctor))
-                                                                            :patterns (mapcar
-                                                                                       (lambda (cfield)
-                                                                                         (parser:make-pattern-var
-                                                                                          :location location
-                                                                                          :name cfield
-                                                                                          :orig-name cfield))
-                                                                                       cfields-b))))
-                                                      :body (parser:make-node-body
-                                                             ;; :location location
-                                                             :nodes nil
-                                                             :last-node (parser:make-node-and
-                                                                         :location location
-                                                                         :nodes (append
-                                                                                 (mapcar
-                                                                                  (lambda (cfield-a cfield-b)
-                                                                                    (parser:make-node-application
-                                                                                     :location location
-                                                                                     :rator eq-method
-                                                                                     :rands (list
-                                                                                             (parser:make-node-variable
-                                                                                              :location location
-                                                                                              :name cfield-a)
-                                                                                             (parser:make-node-variable
-                                                                                              :location location
-                                                                                              :name cfield-b))))
-                                                                                  cfields-a
-                                                                                  cfields-b)
-                                                                                 (list
-                                                                                  (parser:make-node-variable
-                                                                                   :location location
-                                                                                   :name 'coalton:True))))))))
-                                                 (parser:toplevel-define-type-ctors type))
-                                                (list
-                                                 (parser:make-node-match-branch
-                                                  :location location
-                                                  :pattern (parser:make-pattern-wildcard
-                                                            :location location)
-                                                  :body (parser:make-node-body
-                                                         :nodes nil
-                                                         :last-node (parser:make-node-variable
-                                                                     :location location
-                                                                     :name 'coalton:False)))))))
-                  :location location
-                  :inline nil))
-       :location location
-       :head-location location
-       :compiler-generated t))))
-
-(defmethod derive-class-instance ((type parser:toplevel-define-struct) (class (eql 'coalton-library/classes:eq)) env)
-  (let ((ty-constraints))
-    ;; Collect context constraints, and try to signal errors if we can't derive
-    ;; TODO: improve error reporting for tapps, it only works well for simple tycons
+;; Collect context constraints, and try to signal errors if we can't derive
+;; TODO: improve error reporting for tapps, it only works well for simple tycons
+(defgeneric collect-type-constraints (type class env)
+  (:method ((type parser:toplevel-define-type) class env)
+    (loop :for ctor :in (parser:toplevel-define-type-ctors type)
+          :nconc (loop :for type :in (parser:constructor-fields ctor)
+                       :for typred := (lookup-type-constraint type class env)
+                       :unless typred
+                         :do (error "Type ~A does not implement ~A, cannot derive."
+                                    (parser:tycon-name type)
+                                    class)
+                       :end
+                       :unless (parser:tycon-p type)
+                         :collect typred)))
+  (:method ((type parser:toplevel-define-struct) class env)
     (loop :for field :in (parser:toplevel-define-struct-fields type)
           :for type := (parser:struct-field-type field)
           :for typred := (lookup-type-constraint type class env)
-          :do (if typred
-                  (push typred ty-constraints)
-                  (error "Type ~A does not implement ~A, cannot derive." (parser:tycon-name type) class)))
+          :unless typred
+            :do (error "Type ~A does not implement ~A, cannot derive."
+                       (parser:tycon-name type)
+                       class)
+          :end
+          :unless (parser:tycon-p type)
+            :collect typred)))
 
-    (let* ((location (source:location type))
-           (classes-package (util:find-package "COALTON-LIBRARY/CLASSES"))
-           (eq-class (parser:make-identifier-src :location location :name (util:find-symbol "EQ" classes-package)))
-           (eq-method (parser:make-node-variable :location location :name (util:find-symbol "==" classes-package)))
-           (struct-ty (loop :with ty := (parser:make-tycon :location location :name (parser:identifier-src-name (parser:toplevel-define-struct-name type)))
-                            :for var :in (parser:toplevel-define-struct-vars type)
-                            :for tyvar := (parser:make-tyvar :location location :name (parser:keyword-src-name var))
-                            :do (setf ty (parser:make-tapp :location location :from ty :to tyvar))
-                            :finally (return ty))))
+(defgeneric parser-definition-type (def)
+  (:method ((def parser:toplevel-define-struct))
+    (loop :with ty := (parser:make-tycon
+                       :location (source:location def)
+                       :name (parser:identifier-src-name
+                              (parser:toplevel-define-struct-name def)))
+          :for var :in (parser:toplevel-define-struct-vars def)
+          :for tyvar := (parser:make-tyvar
+                         :location (source:location def)
+                         :name (parser:keyword-src-name var))
+          :do (setf ty (parser:make-tapp
+                        :location (source:location def)
+                        :from ty
+                        :to tyvar))
+          :finally (return ty)))
+  (:method ((def parser:toplevel-define-type))
+    (loop :with ty := (parser:make-tycon
+                       :location (source:location def)
+                       :name (parser:identifier-src-name
+                              (parser:toplevel-define-type-name def)))
+          :for var :in (parser:toplevel-define-type-vars def)
+          :for tyvar := (parser:make-tyvar
+                         :location (source:location def)
+                         :name (parser:keyword-src-name var))
+          :do (setf ty (parser:make-tapp
+                        :location (source:location def)
+                        :from ty
+                        :to tyvar))
+          :finally (return ty))))
 
-      (parser:make-toplevel-define-instance
-       :context ty-constraints
-       :pred (parser:make-ty-predicate
-              :class eq-class
-              :types (list struct-ty)
-              :location location)
-       :docstring nil
-       :methods (list
-                 (parser:make-instance-method-definition
-                  :name eq-method
-                  :params (list
-                           (parser:make-pattern-var
-                            :location location
-                            :name 'a
-                            :orig-name 'a)
-                           (parser:make-pattern-var
-                            :location location
-                            :name 'b
-                            :orig-name 'b))
-                  :body (parser:make-node-body
-                         :nodes nil
-                         :last-node (parser:make-node-and
-                                     :location location
-                                     :nodes (mapcar
-                                             (lambda (field)
-                                               (parser:make-node-application
-                                                :location location
-                                                :rator eq-method
-                                                :rands (list
-                                                        (parser:make-node-application
-                                                         :location location
-                                                         :rator (parser:make-node-accessor
-                                                                 :location location
-                                                                 :name (parser:struct-field-name field))
-                                                         :rands (list
-                                                                 (parser:make-node-variable
-                                                                  :location location
-                                                                  :name 'a)))
+(defgeneric parser-definition-abstract-type-definition (def)
+  (:method ((def parser:toplevel-define-struct))
+    (make-abstract-type-definition
+     :location (source:location def)
+     :name (parser:identifier-src-name (parser:toplevel-define-struct-name def))
+     :type (parser-definition-type def)
+     :ctors
+     (list
+      (make-constructor
+       :name (parser:toplevel-define-struct-name def)
+       :fields (mapcar
+                #'parser:struct-field-type
+                (parser:toplevel-define-struct-fields def))))))
+  (:method ((def parser:toplevel-define-type))
+    (make-abstract-type-definition
+     :location (source:location def)
+     :name (parser:identifier-src-name (parser:toplevel-define-type-name def))
+     :type (parser-definition-type def)
+     :ctors
+     (mapcar
+      (lambda (ctor)
+        (make-constructor
+         :name (parser:constructor-name ctor)
+         :fields (parser:constructor-fields ctor)))
+      (parser:toplevel-define-type-ctors def)))))
 
-                                                        (parser:make-node-application
-                                                         :location location
-                                                         :rator (parser:make-node-accessor
-                                                                 :location location
-                                                                 :name (parser:struct-field-name field))
-                                                         :rands (list
-                                                                 (parser:make-node-variable
-                                                                  :location location
-                                                                  :name 'b))))))
-                                             (parser:toplevel-define-struct-fields type))))
-                  :location location
-                  :inline nil))
-       :location location
-       :head-location location
-       :compiler-generated t))))
+(defgeneric derive-methods (class type-definition env))
+
+(defun derive-class-instance (class type env)
+  (declare (type symbol class)
+    (type (or parser:toplevel-define-type parser:toplevel-define-struct))
+    (type penv:partial-type-env env)
+    (values parser:toplevel-define-instance &optional))
+
+  (let ((type-definition (parser-definition-abstract-type-definition type)))
+    (handler-case
+        (parser:make-toplevel-define-instance
+         :location (source:location type)
+         :head-location (source:location type)
+         :context (collect-type-constraints type class env)
+         :pred (parser:make-ty-predicate
+                :location (source:location type)
+                :class (parser:make-identifier-src
+                        :location (source:location type)
+                        :name class)
+                :types (list (abstract-type-definition-type type-definition)))
+         :docstring nil
+         :compiler-generated t
+         :methods (derive-methods class type-definition env))
+      (error (c)
+        (error "Cannot derive ~A for type ~A~%~A"
+               class
+               (abstract-type-definition-name type-definition)
+               c)))))
+
+#+#:eq-deriver
+(defmethod derive-methods ((class (eql 'coalton-library/classes:eq)) type-definition env)
+  (let ((location (abstract-type-definition-location type-definition)))
+    (list
+     (parser:make-instance-method-definition
+      :name (parser:make-node-variable
+             :location location
+             :name 'coalton-library/classes:==)
+      :params (list
+               (parser:make-pattern-var
+                :location location
+                :name 'a
+                :orig-name 'a)
+               (parser:make-pattern-var
+                :location location
+                :name 'b
+                :orig-name 'b))
+      :body (parser:make-node-body
+             :nodes nil
+             :last-node (parser:make-node-match
+                         :location location
+                         :expr (parser:make-node-application
+                                :location location
+                                :rator (parser:make-node-variable
+                                        :location location
+                                        :name 'coalton-library/classes:Tuple)
+                                :rands (list
+                                        (parser:make-node-variable
+                                         :location location
+                                         :name 'a)
+                                        (parser:make-node-variable
+                                         :location location
+                                         :name 'b)))
+                         :branches (append
+                                    (mapcar
+                                     (lambda (ctor)
+                                       (let ((cfields-a
+                                               (mapcar (lambda (_)
+                                                         (declare (ignore _))
+                                                         (gensym "ctor-field"))
+                                                       (constructor-fields ctor)))
+                                             (cfields-b
+                                               (mapcar (lambda (_)
+                                                         (declare (ignore _))
+                                                         (gensym "ctor-field"))
+                                                       (constructor-fields ctor))))
+                                         (parser:make-node-match-branch
+                                          :location location
+                                          :pattern (parser:make-pattern-constructor
+                                                    :location location
+                                                    :name 'coalton-library/classes:Tuple
+                                                    :patterns (list
+                                                               (parser:make-pattern-constructor
+                                                                :location location
+                                                                :name (parser:identifier-src-name (constructor-name ctor))
+                                                                :patterns (mapcar
+                                                                           (lambda (cfield)
+                                                                             (parser:make-pattern-var
+                                                                              :location location
+                                                                              :name cfield
+                                                                              :orig-name cfield))
+                                                                           cfields-a))
+                                                               (parser:make-pattern-constructor
+                                                                :location location
+                                                                :name (parser:identifier-src-name (constructor-name ctor))
+                                                                :patterns (mapcar
+                                                                           (lambda (cfield)
+                                                                             (parser:make-pattern-var
+                                                                              :location location
+                                                                              :name cfield
+                                                                              :orig-name cfield))
+                                                                           cfields-b))))
+                                          :body (parser:make-node-body
+                                                 :nodes nil
+                                                 :last-node (parser:make-node-and
+                                                             :location location
+                                                             :nodes (append
+                                                                     (mapcar
+                                                                      (lambda (cfield-a cfield-b)
+                                                                        (parser:make-node-application
+                                                                         :location location
+                                                                         :rator (parser:make-node-variable
+                                                                                 :location location
+                                                                                 :name 'coalton-library/classes:==)
+                                                                         :rands (list
+                                                                                 (parser:make-node-variable
+                                                                                  :location location
+                                                                                  :name cfield-a)
+                                                                                 (parser:make-node-variable
+                                                                                  :location location
+                                                                                  :name cfield-b))))
+                                                                      cfields-a
+                                                                      cfields-b)
+                                                                     (list
+                                                                      (parser:make-node-variable
+                                                                       :location location
+                                                                       :name 'coalton:True))))))))
+                                     (abstract-type-definition-ctors type-definition))
+                                    (if (= 1 (length (abstract-type-definition-ctors type-definition)))
+                                        nil
+                                        (list
+                                         (parser:make-node-match-branch
+                                          :location location
+                                          :pattern (parser:make-pattern-wildcard
+                                                    :location location)
+                                          :body (parser:make-node-body
+                                                 :nodes nil
+                                                 :last-node (parser:make-node-variable
+                                                             :location location
+                                                             :name 'coalton:False))))))))
+      :location location
+      :inline nil))))
