@@ -110,12 +110,17 @@ mapping known function names to their arity."
            (type tc:environment env)
            (values binding-list tc:environment))
 
+  ;; Make code and environment data available to the inliner
+  (loop :for (name . node) :in bindings
+        :do (setf env (tc:set-code env name node)))
+  (setf env (update-function-env bindings inline-p-table env))
 
   (let ((bindings (optimize-bindings-initial bindings package env)))
 
     ;; Make code and environment data available to the monomorphizer
     (loop :for (name . node) :in bindings
           :do (setf env (tc:set-code env name node)))
+    (setf env (update-function-env bindings inline-p-table env))
 
     (let* ((manager (make-candidate-manager))
 
@@ -153,21 +158,19 @@ mapping known function names to their arity."
       ;; Update function env
       (setf env (update-function-env bindings inline-p-table env))
 
+      (setf bindings
+            (loop :with function-table := (make-function-table env)
+                  :for (name . node) :in bindings
+                  :collect (cons name (direct-application node function-table))))
 
-      (let ((function-table (make-function-table env)))
+      ;; Update code db
+      (loop :for (name . node) :in bindings
+            :do (setf env (tc:set-code env name node)))
 
-        (setf bindings
-              (loop :for (name . node) :in bindings
-                    :collect (cons name (direct-application node function-table))))
+      (loop :for (name . node) :in bindings
+            :do (typecheck-node node env))
 
-        ;; Update code db
-        (loop :for (name . node) :in bindings
-              :do (setf env (tc:set-code env name node)))
-
-        (loop :for (name . node) :in bindings
-              :do (typecheck-node node env))
-
-        (values bindings env)))))
+      (values bindings env))))
 
 (defun direct-application (node table)
   "Rewrite NODE to use DIRECT-APPLICATIONs when possible. A rewrite is
