@@ -6,6 +6,8 @@ Coalton is a language embedded in Lisp, and indeed, Coalton compiles to Lisp cod
 
 ## Interaction Mode
 
+*See [Configuring Coalton](./configuring-coalton.md) for a more in-depth discussion about ways to configure Coalton.*
+
 First and foremost, there are two ways to globally compile Coalton. This is determined by
 an environment variable `COALTON_ENV` which in turn sets a Lisp feature `:coalton-release`
 and controls a Lisp function `(coalton-release-p)`.
