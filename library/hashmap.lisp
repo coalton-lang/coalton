@@ -48,11 +48,19 @@ of empty hashmap, or nodes at the maximum depth."
     (Chain (List (HmEntry :key :value)))
     (Tree U32 (arr:LispArray (HmNode :key :value))))
 
-  (define-struct (HashMap :key :value)
-    "Immutable mapping using hash.  Implemented as hash array mapped trie."
-    (root (HmNode :key :value)))
+  ;; We don't use a struct so that the accessor to the internal data
+  ;; element (in this case, ROOT) doesn't appear exported in the docs.
+  ;;
+  ;; We also make this type (repr :lisp) so that it's an opaque type
+  ;; which may be depended upon by other non-Coalton code.
+  (repr :lisp)
+  (define-type (HashMap :key :value)
+    "Immutable map (also known as a dictionary or dict) using hashes. Implemented as a hash array mapped trie data structure."
+    (HashMap (HmNode :key :value)))
 
-  )
+  (inline)
+  (define (root (HashMap node))
+    node))
 
 ;; Mask, index, and position
 ;;
@@ -272,7 +280,7 @@ a new entry."
   (declare empty? (HashMap :k :v -> Boolean))
   (define (empty? hm)
     "Returns True if a hashmap HM is empty, False if not."
-    (match (.root hm)
+    (match (root hm)
       ((Chain (Nil)) True)
       (_ False)))
 
@@ -283,7 +291,7 @@ a new entry."
   (define (count hm)
     "Returns the number of entries in HM."
     (into
-     (rec walk ((node (.root hm)))
+     (rec walk ((node (root hm)))
        (match node
          ((Leaf _) 1)
          ((Bud _ _) 2)
@@ -297,7 +305,7 @@ a new entry."
     "Returns a value associated with KEY in the hashmap HM."
     (let hb = (hbits key))
     (rec search ((depth 0)
-                 (node (.root hm)))
+                 (node (root hm)))
       (match node
         ((Leaf (HmEntry k v))
          (if (== key k)
@@ -358,7 +366,7 @@ containes an entry with KEY, the new hashmap replaces it for the new entry."
                            (Leaf (HmEntry key val))))
                      (tree-insert mask arr ind newelt)))))
           )
-      (HashMap (walk 0 (.root hm)))))
+      (HashMap (walk 0 (root hm)))))
 
   (declare unchanged? (:a -> :a -> Boolean))
   (define (unchanged? a b)
@@ -412,10 +420,10 @@ removed.  If HM does not contain an entry with KEY, HM is returned as is."
                          (Some node)))))))
       (if (empty? hm)
           hm
-          (match (walk 0 (.root hm))
+          (match (walk 0 (root hm))
             ((None) empty)
             ((Some newroot)
-             (if (unchanged? (.root hm) newroot)
+             (if (unchanged? (root hm) newroot)
                  hm
                  (HashMap newroot)))))))
 
@@ -423,7 +431,7 @@ removed.  If HM does not contain an entry with KEY, HM is returned as is."
   (declare ->generator (HashMap :k :v -> (:k -> :v -> :a)
                                 -> (Unit -> Optional :a)))
   (define (->generator hm f)
-    (let current = (cell:new (.root hm)))
+    (let current = (cell:new (root hm)))
     (let current-ind = (cell:new (the UFix 0)))
     (let path = (cell:new (the (List (Tuple UFix (HmNode :k :v))) Nil)))
     (let next!? = (fn ()
@@ -480,7 +488,7 @@ removed.  If HM does not contain an entry with KEY, HM is returned as is."
   (declare dump (HashMap :k :v -> Unit))
   (define (dump hm)
     "For debugging"
-    (rec dump-node ((node (.root hm))
+    (rec dump-node ((node (root hm))
                     (indent 0))
       (match node
         ((Leaf entry)
