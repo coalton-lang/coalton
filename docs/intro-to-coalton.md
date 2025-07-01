@@ -528,12 +528,12 @@ pattern variable:
 
 ```lisp
 
-(declare divide-by-random (Single-Float -> Integer -> Single-Float))
+(declare divide-by-random (Integer -> Integer -> Single-Float))
 (define (divide-by-random r m)
     "Divide `r` by a random integer between `0` and `m`. 
      If the divisor is `0`, then pring the divide by zero error
      and then return `0.0`"
-    (catch (lisp single-float (n m) (cl:/ n (cl:random m)))
+    (catch (lisp integer (r m) (cl:/ r (cl:random m)))
         (AnyError 
           (traceobject "An Error: ~a" AnyError)
           0.0)))
