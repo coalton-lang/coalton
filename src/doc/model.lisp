@@ -36,6 +36,8 @@
    #:object-name
    #:object-type
 
+   #:type-entry
+
    #:coalton-struct
    #:struct-fields
 
