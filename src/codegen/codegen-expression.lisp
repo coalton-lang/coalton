@@ -226,11 +226,16 @@
                                   ,expr))))))
 
                ;; Only emit a fallback if there is not a catch-all clause.
-               ,@(unless (member-if (lambda (pat)
-                                      (or (pattern-wildcard-p pat)
-                                          (pattern-var-p pat)))
-                                    (node-match-branches expr)
-                                    :key #'match-branch-pattern)
+               ,@(unless (or (member-if (lambda (pat)
+                                          (or (pattern-wildcard-p pat)
+                                              (pattern-var-p pat)))
+                                        (node-match-branches expr)
+                                        :key #'match-branch-pattern)
+                             (and (settings:coalton-release-p)
+                                  (patterns-exhaustive-p
+                                   (mapcar #'match-branch-pattern (node-match-branches expr))
+                                   (node-type (node-match-expr expr))
+                                   env)))
                    `((t
                       (error "Pattern match not exhaustive error")))))))))
 
