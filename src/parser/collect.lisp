@@ -185,6 +185,28 @@ in expressions. May not include all bound variables."
      (collect-variables-generic% (node-match-expr node))
      (mapcan #'collect-variables-generic% (node-match-branches node))))
 
+  (:method ((node node-catch-branch))
+    (declare (values node-variable-list &optional))
+    (collect-variables-generic% (node-catch-branch-body node)))
+
+  (:method ((node node-catch))
+    (declare (values node-variable-list))
+    (nconc
+     (collect-variables-generic% (node-catch-expr node))
+     (mapcan #'collect-variables-generic% (node-catch-branches node))))
+
+  (:method ((node node-resume-from-branch))
+    (declare (values node-variable-list &optional))
+    (collect-variables-generic% (node-resume-from-branch-body node)))
+
+  (:method ((node node-resume-from))
+    (declare (values node-variable-list))
+    (nconc
+     (collect-variables-generic% (node-resume-from-expr node))
+     (mapcan #'collect-variables-generic% (node-resume-from-branches node))))
+
+
+
   (:method ((node node-progn))
     (declare (values node-variable-list &optional))
     (collect-variables-generic% (node-progn-body node)))
@@ -198,6 +220,14 @@ in expressions. May not include all bound variables."
     ;; node-return's return expression may be null (and default to Unit)
     (when (node-return-expr node)
       (collect-variables-generic% (node-return-expr node))))
+
+  (:method ((node node-throw))
+    (declare (values node-variable-list &optional))
+    (collect-variables-generic% (node-throw-expr node)))
+
+  (:method ((node node-resume))
+    (declare (values node-variable-list &optional))
+    (collect-variables-generic% (node-resume-expr node)))
 
   (:method ((node node-application))
     (declare (values node-variable-list &optional))

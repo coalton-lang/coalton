@@ -187,7 +187,7 @@
                :for branch :in (node-catch-branches node)
                :for pattern
                  := (catch-branch-pattern branch)
-               ;; wildcard and variable patterns catch all 'cl:error cases
+               ;; wildcard and variable patterns catch all 'error cases
                :for exception-name
                  := (etypecase pattern
                       (pattern-constructor 
@@ -195,7 +195,7 @@
                               (ctor                   (tc::lookup-constructor env ctor-name)))
                          (tc:constructor-entry-classname ctor)))
                       ((or pattern-wildcard pattern-var)
-                        'cl:error))
+                        'error))
                :for case-body
                  := (codegen-expression (catch-branch-body branch) env)
                :for lambda-var
@@ -206,11 +206,13 @@
                ;; be transferred before the transfer due to
                ;; return-from.
                :for inner-body
-                 := `(cl:return-from ,block-label ,case-body)
+                 := `(return-from ,block-label ,case-body)
                :collect `(,exception-name
-                          (cl:lambda (,lambda-var)
-                            (cl:declare (cl:ignorable ,lambda-var))
-                            (cl:let ,bindings ,inner-body))))))
+                          (lambda (,lambda-var)
+                            (declare (ignorable ,lambda-var))
+                            (let ,bindings
+                              (declare (ignorable ,@(mapcar #'car bindings)))
+                              ,inner-body))))))
       `(block ,block-label
          (handler-bind ,handler-cases
            ,(codegen-expression (node-catch-expr node) env)))))
