@@ -1233,7 +1233,6 @@
   (declare (type symbol name)
            (type environment env)
            (values ty-list &optional))
-  (lookup-constructor env name)
   (function-type-arguments (lookup-value-type env name)))
 
 (define-env-updater add-instance (env class value)
