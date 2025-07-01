@@ -5,6 +5,7 @@
 * [Intro to Coalton](./intro-to-coalton.md)
 * [Intro to Coalton Testing](./intro-to-coalton-testing.md)
 * [Coalton-Lisp Interop](./coalton-lisp-interop.md)
+* [Configuring Coalton](./configuring-coalton.md)
 * [How Typeclasses are compiled](.how-typeclasses-are-compiled.md)
 
 ## Style
