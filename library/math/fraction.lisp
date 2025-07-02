@@ -84,5 +84,26 @@
     (define (general/ x y)
       (mkFraction x y))))
 
+;;; All integer types representationally are already fractions.
+(cl:eval-when (:compile-toplevel :load-toplevel)
+  (cl:defmacro define-into-integer-fraction (integer-type)
+    `(coalton-toplevel
+       (define-instance (Into ,integer-type Fraction)
+         (define (into i)
+           (lisp Fraction (i)
+             i))))))
+
+(define-into-integer-fraction Integer)
+(define-into-integer-fraction I8)
+(define-into-integer-fraction I16)
+(define-into-integer-fraction I32)
+(define-into-integer-fraction I64)
+(define-into-integer-fraction IFix)
+(define-into-integer-fraction U8)
+(define-into-integer-fraction U16)
+(define-into-integer-fraction U32)
+(define-into-integer-fraction U64)
+(define-into-integer-fraction UFix)
+
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/MATH/FRACTION")
