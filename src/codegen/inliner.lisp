@@ -21,7 +21,7 @@
 
 (in-package #:coalton-impl/codegen/inliner)
 
-;; Public Settings for Optimization
+;;; Public Settings for Optimization
 
 (defparameter *inliner-max-unroll* 3
   "Limit depth to unroll recursive functions to.")
@@ -31,7 +31,7 @@
   "Heuristic to determine if a function should be inlined
 even if the user didn't explicity declare it to be.")
 
-;; Private Settings for Debugging
+;;; Private Settings for Debugging
 
 (defvar *inline-methods-p* t
   "Allow inlining of methods.")
@@ -40,7 +40,7 @@ even if the user didn't explicity declare it to be.")
 (defvar *inline-lambdas-p* t
   "Allow inlining of lambdas.")
 
-;; Dynamic Variable
+;;; Dynamic Variable
 
 (declaim (type list *functions-inlined*))
 (defvar *functions-inlined* nil
@@ -84,7 +84,7 @@ to rerun optimizations.")
 
 ;; Utilities
 
-(defun unrolledp (node stack)
+(defun unrolling-forbidden-p (node stack)
   "Determine if the inliner has fully unrolled a recursive call."
   (declare (type (or ast:node-application ast:node-direct-application) node)
            (type list stack)
@@ -94,14 +94,14 @@ to rerun optimizations.")
     (<= *inliner-max-unroll* (count name stack))
     nil))
 
-(defun max-depth-p (stack)
+(defun stack-reached-max-depth-p (stack)
   "Determine if the inliner is at its maximum depth, by default this is 16."
   (declare (type list stack)
            (values boolean &optional))
 
   (<= *inliner-max-depth* (length stack)))
 
-(defun lookup-code-global (node env)
+(defun lookup-global-application-body (node env)
   "Try to lookup the code of a globally known function, returns null or abstraction."
   (declare (type (or ast:node-application ast:node-direct-application) node)
            (values (or null ast:node-abstraction) &optional))
@@ -109,7 +109,7 @@ to rerun optimizations.")
   (let ((code (tc:lookup-code env (ast:node-rator-name node) :no-error t)))
     (if (ast:node-abstraction-p code) code nil)))
 
-(defun lookup-code-anonymous (node)
+(defun lookup-anonymous-application-body (node)
   "Try to lookup the code of an anonymous application, returns null or abstraction."
   (declare (type ast:node-application node)
            (values (or null ast:node-abstraction) &optional))
@@ -117,7 +117,7 @@ to rerun optimizations.")
   (let ((code (ast:node-application-rator node)))
     (if (ast:node-abstraction-p code) code nil)))
 
-(defun inlinable-function-p (name env)
+(defun function-declared-inline-p (name env)
   "Check if a function is declared inlinable at its definition."
   (declare (type symbol name)
            (type tc:environment env)
@@ -127,27 +127,27 @@ to rerun optimizations.")
     (tc:function-env-entry-inline-p entry)
     nil))
 
-(defun fully-applied-p (node code)
+(defun application-saturates-abstraction-p (application abstraction)
   "Check if an an application node constitutes a fully applied abstraction."
-  (declare (type (or ast:node-application ast:node-direct-application) node)
-           (type ast:node-abstraction code)
+  (declare (type (or ast:node-application ast:node-direct-application) application)
+           (type ast:node-abstraction abstraction)
            (values boolean &optional))
 
-  (= (length (ast:node-abstraction-vars code))
-     (length (ast:node-rands node))))
+  (= (length (ast:node-abstraction-vars abstraction))
+     (length (ast:node-rands application))))
 
 ;;; Inlining
 
-(defun inline-code-from-application (node code)
+(defun inline-code-from-application (application abstraction)
   "Swap an application node with a let node where the body is the inlined function."
-  (declare (type (or ast:node-application ast:node-direct-application) node)
-           (type ast:node-abstraction code)
+  (declare (type (or ast:node-application ast:node-direct-application) application)
+           (type ast:node-abstraction abstraction)
            (values ast:node-let &optional))
 
   (let* ((bindings
            (mapcar (lambda (var val) (cons (gensym (symbol-name var)) val))
-                   (ast:node-abstraction-vars code)
-                   (ast:node-rands node)))
+                   (ast:node-abstraction-vars abstraction)
+                   (ast:node-rands application)))
          (substitutions
            (mapcar (lambda (var binding)
                      (destructuring-bind (new-var . val) binding
@@ -156,26 +156,27 @@ to rerun optimizations.")
                         :to (ast:make-node-variable
                              :type (ast:node-type val)
                              :value new-var))))
-                   (ast:node-abstraction-vars code)
+                   (ast:node-abstraction-vars abstraction)
                    bindings))
-         (new-code
+         (new-abstraction
            (transformations:rename-type-variables
             (substitutions:apply-ast-substitution
              substitutions
-             (ast:node-abstraction-subexpr code)
+             (ast:node-abstraction-subexpr abstraction)
              t)))
          (new-substitutions
            (coalton-impl/typechecker/unify::mgu
-            (ast:node-type node)
-            (ast:node-type new-code))))
+            (ast:node-type application)
+            (ast:node-type new-abstraction))))
     (ast:make-node-let
-     :type     (ast:node-type node)
+     :type     (ast:node-type application)
      :bindings bindings
-     :subexpr  (tc:apply-substitution new-substitutions new-code))))
+     :subexpr  (tc:apply-substitution new-substitutions new-abstraction))))
 
-(defun inline-application (node env stack noinline-functions)
-  "Try to inline an application, checking traversal stack, heuristics,
-and user-supplied declarations to determine if it is appropriate."
+(defun try-inline-application (node env stack noinline-functions)
+  "Try to inline an application node, checking internal traversal stack,
+heuristics, and user-supplied inline declarations to determine if it
+is appropriate."
   (declare (type (or ast:node-application ast:node-direct-application) node)
            (type tc:environment env)
            (type list stack)
@@ -188,28 +189,30 @@ and user-supplied declarations to determine if it is appropriate."
        (debug! ";; Locally noinline reached ~a" name)
        node)
 
-      ((unrolledp node stack)
+      ((unrolling-forbidden-p node stack)
        (debug! ";; Fully unrolled ~a" name)
        (ast:make-node-locally
         :type (ast:node-type node)
         :noinline-functions (list name)
         :subexpr node))
 
-      ((max-depth-p stack)
+      ((stack-reached-max-depth-p stack)
        (debug! ";; Max depth reached ~a" name)
        node)
 
       ;; Case #1: (f e1 ... en) where f is global, known, and arity n.
-      ((let ((code (lookup-code-global node env)))
+      ((let ((code (lookup-global-application-body node env)))
          (and *inline-globals-p*
               code
-              (fully-applied-p node code)
+              (application-saturates-abstraction-p node code)
               (or (heuristic-inline-p code)
-                  (inlinable-function-p name env))))
+                  (function-declared-inline-p name env))))
        (debug! ";; Inlining globally known function ~a" name)
        (push name *functions-inlined*)
        (inline-applications*
-        (inline-code-from-application node (lookup-code-global node env))
+        (inline-code-from-application
+         node
+         (lookup-global-application-body node env))
         env
         stack
         noinline-functions))
@@ -217,14 +220,16 @@ and user-supplied declarations to determine if it is appropriate."
       ;; Case #2: ((fn (x1 ... xn) ...) e1 ... en)
       ((and *inline-lambdas-p*
             (ast:node-application-p node)
-            (let ((code (lookup-code-anonymous node)))
+            (let ((code (lookup-anonymous-application-body node)))
               (and code
                    (heuristic-inline-p code)
-                   (fully-applied-p node code))))
+                   (application-saturates-abstraction-p node code))))
        (debug! ";; Inlining anonymous function ~a" name)
        (push name *functions-inlined*)
        (inline-applications*
-        (inline-code-from-application node (lookup-code-anonymous node))
+        (inline-code-from-application
+         node
+         (lookup-anonymous-application-body node))
         env
         stack
         noinline-functions))
@@ -357,7 +362,7 @@ and user-supplied declarations to determine if it is appropriate."
       (prog1 (let ((methods-inlined (inline-method node env)))
                (etypecase methods-inlined
                  ((or ast:node-application ast:node-direct-application)
-                  (inline-application methods-inlined env stack noinline-functions))
+                  (try-inline-application methods-inlined env stack noinline-functions))
                  (ast:node
                   methods-inlined)))
         (pop stack)))
@@ -366,7 +371,7 @@ and user-supplied declarations to determine if it is appropriate."
       (prog1 (let ((methods-inlined (inline-direct-method node env)))
                (etypecase methods-inlined
                  ((or ast:node-application ast:node-direct-application)
-                  (inline-application methods-inlined env stack noinline-functions))
+                  (try-inline-application methods-inlined env stack noinline-functions))
                  (ast:node
                   methods-inlined)))
         (pop stack))))))

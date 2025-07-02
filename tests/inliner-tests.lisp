@@ -202,7 +202,6 @@ unroll the node."
       (is (= (traverse:count-nodes locally-node-1)
              (traverse:count-nodes locally-node-2))))))
 
-;; TODO: scrutinize this more
 (deftest limit-unroll-method-test ()
   "Ensure that methods don't keep recursively inlining."
   (let* ((caller-1
