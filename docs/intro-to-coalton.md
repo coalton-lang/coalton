@@ -517,8 +517,8 @@ Breifly, the relevant syntactic forms are:
 - `define-resumption`: Defines a named resumption type. It is like `define-type` except that resumptions must have *exactly* one constructor.
 - `catch`: An expression for catching and handling exceptions that may be singalled by a guarded expression.  
 - `throw`: Signals an exception.
-- `resume-from`: An expression that handles a possible resumption.
-- `resume-to`: An expression that takes a resumption instance;  Transfers control to a `resume-from` block that includes a handler for the indicated resumption.  
+- `resumable`: An expression that handles a possible resumption.
+- `resume-to`: An expression that takes a resumption instance;  Transfers control to a `resumable` block that includes a handler for the indicated resumption.  
 
 
 ### Defining, Throwing, and Catching Exceptions
@@ -593,7 +593,7 @@ The following example, building on the above, should elucidate
   ;; Return None if a SkipEgg resumption is received.
   (declare make-breakfast-with (Egg -> (Optional Egg)))
   (define (make-breakfast-with egg)
-    (resume-from (Some (cook (crack egg)))
+    (resumable (Some (cook (crack egg)))
       ((SkipEgg) None)))
 
 ```
