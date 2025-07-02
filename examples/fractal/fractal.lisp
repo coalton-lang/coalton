@@ -38,7 +38,7 @@
       (match (mandel max-iter x-bf y-bf)
         ((Tuple3 iter x-out y-out)
          (if (== iter max-iter)
-             (lisp Single-Float (iter) (cl:coerce iter 'cl:single-float))
+             (unwrap (tryinto iter))
              (let ((r (math:to-fraction (+ (into (the Integer (into iter))) (smooth x-out y-out)))))
                (lisp Single-Float (r)
                  (cl:coerce (cl:/ r max-iter) 'cl:single-float)))))))))
