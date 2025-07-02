@@ -82,7 +82,7 @@ to rerun optimizations.")
 
   (funcall *inliner-heuristic* node))
 
-;; Utilities
+;;; Utilities
 
 (defun unrolling-forbidden-p (node stack)
   "Determine if the inliner has fully unrolled a recursive call."
