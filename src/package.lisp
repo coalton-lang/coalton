@@ -73,7 +73,7 @@
    #:match
    #:throw
    #:resume-to
-   #:resume-from
+   #:resumable
    #:catch
    #:let
    #:rec

@@ -39,7 +39,7 @@
 
   (declare make-breakfast-with (Egg -> (Optional Egg)))
   (define (make-breakfast-with egg-x)
-    (resume-from (Some (cook (crack egg-x)))
+    (resumable (Some (cook (crack egg-x)))
       ((SkipEgg) None)
       ((ServeRaw rawegg) (Some rawegg))))
 

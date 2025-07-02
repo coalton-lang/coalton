@@ -94,7 +94,7 @@
 (define-coalton-editor-macro coalton:catch (expr &body handler-patterns)
     "Exception handling expression.")
 
-(define-coalton-editor-macro coalton:resume-from (expr &body handler-patterns)
+(define-coalton-editor-macro coalton:resumable (expr &body handler-patterns)
     "Resumption handling expression.")
 
 (define-coalton-editor-macro coalton:resume-to (resumption)

@@ -746,7 +746,7 @@ Rebound to NIL parsing an anonymous FN.")
         :location (form-location source form))))
 
     ((and (cst:atom (cst:first form))
-          (eq 'coalton:resume-from (cst:raw (cst:first form))))
+          (eq 'coalton:resumable (cst:raw (cst:first form))))
 
      ;; (resume-from)
      (unless (cst:consp (cst:rest form))
