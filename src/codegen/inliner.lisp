@@ -101,21 +101,21 @@ to rerun optimizations.")
 
   (<= *inliner-max-depth* (length stack)))
 
-(defun lookup-code-global (node env)
+(defun lookup-global-application-body (application env)
   "Try to lookup the code of a globally known function, returns null or abstraction."
-  (declare (type (or ast:node-application ast:node-direct-application) node)
+  (declare (type (or ast:node-application ast:node-direct-application) application)
            (values (or null ast:node-abstraction) &optional))
 
-  (let ((code (tc:lookup-code env (ast:node-rator-name node) :no-error t)))
-    (if (ast:node-abstraction-p code) code nil)))
+  (let ((abstraction (tc:lookup-code env (ast:node-rator-name application) :no-error t)))
+    (if (ast:node-abstraction-p abstraction) abstraction nil)))
 
-(defun lookup-code-anonymous (node)
+(defun lookup-anonymous-application-body (application)
   "Try to lookup the code of an anonymous application, returns null or abstraction."
-  (declare (type ast:node-application node)
+  (declare (type ast:node-application application)
            (values (or null ast:node-abstraction) &optional))
 
-  (let ((code (ast:node-application-rator node)))
-    (if (ast:node-abstraction-p code) code nil)))
+  (let ((abstraction (ast:node-application-rator application)))
+    (if (ast:node-abstraction-p abstraction) abstraction nil)))
 
 (defun inlinable-function-p (name env)
   "Check if a function is declared inlinable at its definition."
@@ -200,7 +200,7 @@ and user-supplied declarations to determine if it is appropriate."
        node)
 
       ;; Case #1: (f e1 ... en) where f is global, known, and arity n.
-      ((let ((code (lookup-code-global node env)))
+      ((let ((code (lookup-global-application-body node env)))
          (and *inline-globals-p*
               code
               (fully-applied-p node code)
@@ -209,7 +209,9 @@ and user-supplied declarations to determine if it is appropriate."
        (debug! ";; Inlining globally known function ~a" name)
        (push name *functions-inlined*)
        (inline-applications*
-        (inline-code-from-application node (lookup-code-global node env))
+        (inline-code-from-application
+         node
+         (lookup-global-application-body node env))
         env
         stack
         noinline-functions))
@@ -217,14 +219,16 @@ and user-supplied declarations to determine if it is appropriate."
       ;; Case #2: ((fn (x1 ... xn) ...) e1 ... en)
       ((and *inline-lambdas-p*
             (ast:node-application-p node)
-            (let ((code (lookup-code-anonymous node)))
+            (let ((code (lookup-anonymous-application-body node)))
               (and code
                    (heuristic-inline-p code)
                    (fully-applied-p node code))))
        (debug! ";; Inlining anonymous function ~a" name)
        (push name *functions-inlined*)
        (inline-applications*
-        (inline-code-from-application node (lookup-code-anonymous node))
+        (inline-code-from-application
+         node
+         (lookup-anonymous-application-body node))
         env
         stack
         noinline-functions))
