@@ -117,7 +117,7 @@ to rerun optimizations.")
   (let ((abstraction (ast:node-application-rator application)))
     (if (ast:node-abstraction-p abstraction) abstraction nil)))
 
-(defun inlinable-function-p (name env)
+(defun function-declared-inline-p (name env)
   "Check if a function is declared inlinable at its definition."
   (declare (type symbol name)
            (type tc:environment env)
@@ -205,7 +205,7 @@ and user-supplied declarations to determine if it is appropriate."
               code
               (fully-applied-p node code)
               (or (heuristic-inline-p code)
-                  (inlinable-function-p name env))))
+                  (function-declared-inline-p name env))))
        (debug! ";; Inlining globally known function ~a" name)
        (push name *functions-inlined*)
        (inline-applications*
