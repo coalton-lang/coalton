@@ -56,41 +56,41 @@ to rerun optimizations.")
 
 ;;; Heuristics
 
-(defun null-heuristic (node)
+(defun null-heuristic (abstraction)
   "An inlining heuristic that doesn't inline."
-  (declare (ignore node))
+  (declare (ignore abstraction))
   nil)
 
-(defun gentle-heuristic (node)
+(defun gentle-heuristic (abstraction)
   "This will probably inline more than is optimal."
-  (and (<= (traverse:count-applications node)
+  (and (<= (traverse:count-applications abstraction)
            4)
-       (<= (traverse:count-nodes node)
+       (<= (traverse:count-nodes abstraction)
            8)))
 
-(defun aggressive-heuristic (node)
+(defun aggressive-heuristic (abstraction)
   "This will probably inline more than is optimal."
-  (and (<= (traverse:count-applications node)
+  (and (<= (traverse:count-applications abstraction)
            8)
-       (<= (traverse:count-nodes node)
+       (<= (traverse:count-nodes abstraction)
            32)))
 
-(defun heuristic-inline-p (node)
+(defun heuristic-inline-p (abstraction)
   "Determine if the node should be inlined based on heuristics."
-  (declare (type ast:node-abstraction node)
+  (declare (type ast:node-abstraction abstraction)
            (values boolean &optional))
 
-  (funcall *inliner-heuristic* node))
+  (funcall *inliner-heuristic* abstraction))
 
 ;;; Utilities
 
-(defun unrolling-forbidden-p (node stack)
+(defun unrolling-forbidden-p (application stack)
   "Determine if the inliner has fully unrolled a recursive call."
-  (declare (type (or ast:node-application ast:node-direct-application) node)
+  (declare (type (or ast:node-application ast:node-direct-application) application)
            (type list stack)
            (values boolean &optional))
 
-  (a:if-let ((name (ast:node-rator-name node)))
+  (a:if-let ((name (ast:node-rator-name application)))
     (<= *inliner-max-unroll* (count name stack))
     nil))
 
@@ -101,21 +101,21 @@ to rerun optimizations.")
 
   (<= *inliner-max-depth* (length stack)))
 
-(defun lookup-global-application-body (node env)
+(defun lookup-global-application-body (application env)
   "Try to lookup the code of a globally known function, returns null or abstraction."
-  (declare (type (or ast:node-application ast:node-direct-application) node)
+  (declare (type (or ast:node-application ast:node-direct-application) application)
            (values (or null ast:node-abstraction) &optional))
 
-  (let ((code (tc:lookup-code env (ast:node-rator-name node) :no-error t)))
-    (if (ast:node-abstraction-p code) code nil)))
+  (let ((abstraction (tc:lookup-code env (ast:node-rator-name application) :no-error t)))
+    (if (ast:node-abstraction-p abstraction) abstraction nil)))
 
-(defun lookup-anonymous-application-body (node)
+(defun lookup-anonymous-application-body (application)
   "Try to lookup the code of an anonymous application, returns null or abstraction."
-  (declare (type ast:node-application node)
+  (declare (type ast:node-application application)
            (values (or null ast:node-abstraction) &optional))
 
-  (let ((code (ast:node-application-rator node)))
-    (if (ast:node-abstraction-p code) code nil)))
+  (let ((abstraction (ast:node-application-rator application)))
+    (if (ast:node-abstraction-p abstraction) abstraction nil)))
 
 (defun function-declared-inline-p (name env)
   "Check if a function is declared inlinable at its definition."
@@ -173,70 +173,70 @@ to rerun optimizations.")
      :bindings bindings
      :subexpr  (tc:apply-substitution new-substitutions new-abstraction))))
 
-(defun try-inline-application (node env stack noinline-functions)
+(defun try-inline-application (application env stack noinline-functions)
   "Try to inline an application node, checking internal traversal stack,
 heuristics, and user-supplied inline declarations to determine if it
 is appropriate."
-  (declare (type (or ast:node-application ast:node-direct-application) node)
+  (declare (type (or ast:node-application ast:node-direct-application) application)
            (type tc:environment env)
            (type list stack)
            (type parser:identifier-list noinline-functions)
            (values ast:node &optional))
 
-  (let ((name (ast:node-rator-name node)))
+  (let ((name (ast:node-rator-name application)))
     (cond
       ((find name noinline-functions)
        (debug! ";; Locally noinline reached ~a" name)
-       node)
+       application)
 
-      ((unrolling-forbidden-p node stack)
+      ((unrolling-forbidden-p application stack)
        (debug! ";; Fully unrolled ~a" name)
        (ast:make-node-locally
-        :type (ast:node-type node)
+        :type (ast:node-type application)
         :noinline-functions (list name)
-        :subexpr node))
+        :subexpr application))
 
       ((stack-reached-max-depth-p stack)
        (debug! ";; Max depth reached ~a" name)
-       node)
+       application)
 
       ;; Case #1: (f e1 ... en) where f is global, known, and arity n.
-      ((let ((code (lookup-global-application-body node env)))
+      ((let ((abstraction (lookup-global-application-body application env)))
          (and *inline-globals-p*
-              code
-              (application-saturates-abstraction-p node code)
-              (or (heuristic-inline-p code)
+              abstraction
+              (application-saturates-abstraction-p application abstraction)
+              (or (heuristic-inline-p abstraction)
                   (function-declared-inline-p name env))))
        (debug! ";; Inlining globally known function ~a" name)
        (push name *functions-inlined*)
        (inline-applications*
         (inline-code-from-application
-         node
-         (lookup-global-application-body node env))
+         application
+         (lookup-global-application-body application env))
         env
         stack
         noinline-functions))
 
       ;; Case #2: ((fn (x1 ... xn) ...) e1 ... en)
       ((and *inline-lambdas-p*
-            (ast:node-application-p node)
-            (let ((code (lookup-anonymous-application-body node)))
-              (and code
-                   (heuristic-inline-p code)
-                   (application-saturates-abstraction-p node code))))
+            (ast:node-application-p application)
+            (let ((abstraction (lookup-anonymous-application-body application)))
+              (and abstraction
+                   (heuristic-inline-p abstraction)
+                   (application-saturates-abstraction-p application abstraction))))
        (debug! ";; Inlining anonymous function ~a" name)
        (push name *functions-inlined*)
        (inline-applications*
         (inline-code-from-application
-         node
-         (lookup-anonymous-application-body node))
+         application
+         (lookup-anonymous-application-body application))
         env
         stack
         noinline-functions))
 
       (t
        (debug! ";; Failed to inline ~a" name)
-       node))))
+       application))))
 
 (defun extract-dict (rands)
   (declare (type ast:node-list rands)
