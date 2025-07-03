@@ -100,11 +100,11 @@ value (Some^N None)."
 (define-symbol-macro cl-none %none0)
 
 (defmethod print-object ((opt cl-optional) stream)
-  (let ((depth (depth opt)))
-    (format stream "#.")
-    (loop :repeat depth :do (format stream "(~S " 'coalton:Some))
-    (format stream "~S" 'coalton:None)
-    (loop :repeat depth :do (format stream ")"))))
+  (format stream "#.")
+  (loop :with start := 'coalton:None
+        :repeat (1+ (depth opt))
+        :for obj := start :then `(coalton:Some ,obj)
+        :finally (print-object obj stream)))
 
 (declaim (inline cl-none-p))
 (defun cl-none-p (x)
