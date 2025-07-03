@@ -46,7 +46,8 @@
       `(,(if (settings:coalton-release-p)
              `(defstruct (,(tc:type-definition-name def)
                           (:constructor nil)
-                          (:predicate nil))
+                          (:predicate nil)
+                          (:copier nil))
                 ,@(when (source:docstring def)
                     (list (source:docstring def))))
 
