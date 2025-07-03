@@ -2,7 +2,7 @@
 100 Malformed method definition
 ================================================================================
 
-(package test)
+(package test/method-def)
 
 (define-class (Greetable :a)
   (Greet :a Unit))
@@ -21,7 +21,7 @@ error: Malformed method definition
 101 Malformed method definition
 ================================================================================
 
-(package test)
+(package test/method-def)
 
 (define-class (Oops :a)
   (Ouch "This method stubbed its toe" :a Unit))

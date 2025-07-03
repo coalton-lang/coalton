@@ -36,7 +36,7 @@
    #:inline
    #:specialize
    #:unable-to-codegen)
-  
+
   ;; Early Types
   (:export
    #:-> #:→
@@ -62,7 +62,8 @@
    #:String
    #:Fraction
    #:Arrow
-   #:List #:Cons #:Nil)
+   #:List #:Cons #:Nil
+   #:Optional #:Some #:None)
 
   ;; Primitive Syntax
   (:export

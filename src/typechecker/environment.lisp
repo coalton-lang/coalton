@@ -417,7 +417,19 @@
             :explicit-repr '(:native cl:list)
             :enum-repr nil
             :newtype nil
-            :docstring "Homogeneous list of objects represented as a Common Lisp `list`.")))))
+            :docstring "Homogeneous list of objects represented as a Common Lisp `list`."))
+
+          ('coalton:Optional
+           (make-type-entry
+            :name 'coalton:Optional
+            :runtime-type 'cl:t
+            :type *optional-type*
+            :tyvars (list (make-variable))
+            :constructors '(coalton:Some coalton:None)
+            :explicit-repr '(:native cl:t)
+            :enum-repr nil
+            :newtype nil
+            :docstring "Represents something that may not have a value.")))))
 
 ;;;
 ;;; Constructor environment
@@ -500,6 +512,24 @@
             :constructs 'coalton:List
             :classname nil
             :docstring "`Nil` represents an empty `List`."
+            :compressed-repr 'nil))
+
+          ('coalton:Some
+           (make-constructor-entry
+            :name 'coalton:Some
+            :arity 1
+            :constructs 'coalton:Optional
+            :classname nil
+            :docstring "`Some` expresses the presence of a meaningful value."
+            :compressed-repr 'nil))
+
+          ('coalton:None
+           (make-constructor-entry
+            :name 'coalton:None
+            :arity 0
+            :constructs 'coalton:Optional
+            :classname nil
+            :docstring "`None` expresses the absence of a meaningful value."
             :compressed-repr 'nil)))))
 
 #+(and sbcl coalton-release)
@@ -1233,7 +1263,6 @@
   (declare (type symbol name)
            (type environment env)
            (values ty-list &optional))
-  (lookup-constructor env name)
   (function-type-arguments (lookup-value-type env name)))
 
 (define-env-updater add-instance (env class value)

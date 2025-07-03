@@ -8,8 +8,13 @@
    #:fst
    #:snd
    #:Tuple3
+   #:.first
+   #:.second
+   #:.third
    #:Tuple4
-   #:Tuple5))
+   #:.fourth
+   #:Tuple5
+   #:.fifth))
 
 (in-package #:coalton-library/tuple)
 

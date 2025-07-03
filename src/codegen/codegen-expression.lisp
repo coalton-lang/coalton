@@ -132,24 +132,33 @@
   (:method ((expr node-while-let) env)
     (declare (type tc:environment env))
 
-    (let ((match-expr (codegen-expression (node-while-let-expr expr) env))
+    (let ((match-expr-type (node-type (node-while-let-expr expr)))
+          (match-expr (codegen-expression (node-while-let-expr expr) env))
           (body-expr (codegen-expression (node-while-let-body expr) env))
           (label (node-while-let-label expr))
           (match-var (gensym "MATCH")))
 
-      (multiple-value-bind (pred bindings)
-          (codegen-pattern (node-while-let-pattern expr) match-var env)
+      (multiple-value-bind (pred bindings types)
+          (codegen-pattern (node-while-let-pattern expr) match-var match-expr-type env)
         `(loop
            :named ,(break-label label)
-           :for ,match-var
-             := ,(if settings:*emit-type-annotations*
-                     `(the ,(tc:lisp-type (node-type (node-while-let-expr expr)) env) ,match-expr)
-                     match-expr)
+           :for ,match-var ,@(if settings:*emit-type-annotations*
+                                 `(:of-type ,(tc:lisp-type match-expr-type env))
+                                 nil)
+             := ,match-expr
            :while ,pred
            :do (block ,(continue-label label)
                  ,(cond ((null bindings) body-expr)
                         (t `(let ,bindings
-                              (declare (ignorable ,@(mapcar #'car bindings)))
+                              (declare (ignorable ,@(mapcar #'car bindings))
+                                       ,@(cond
+                                           (settings:*emit-type-annotations*
+                                            (loop :for binding :in bindings
+                                                  :for var := (car binding)
+                                                  :for type :in types
+                                                  :collect `(type ,type ,var)))
+                                           (t
+                                            nil)))
                               ,body-expr))))
            :finally (return-from ,(break-label label) coalton:Unit)))))
 
@@ -186,13 +195,14 @@
 
     ;; Otherwise do the thing
     (let ((subexpr (codegen-expression (node-match-expr expr) env))
+          (match-expr-type (node-type (node-match-expr expr)))
           (match-var (gensym "MATCH")))
-      `(let ((,match-var
-               ,(if settings:*emit-type-annotations*
-                    `(the ,(tc:lisp-type (node-type (node-match-expr expr)) env) ,subexpr)
-                    subexpr)))
-
-         (declare (ignorable ,match-var))
+      `(let ((,match-var ,subexpr))
+         (declare ,@(list*
+                     `(ignorable ,match-var)
+                     (if settings:*emit-type-annotations*
+                         (list `(type ,(tc:lisp-type match-expr-type env) ,match-var))
+                         nil)))
          (locally
              #+sbcl (declare (sb-ext:muffle-conditions sb-ext:code-deletion-note))
              (cond
@@ -200,23 +210,36 @@
                        :for pattern := (match-branch-pattern branch)
                        :for expr := (codegen-expression (match-branch-body branch) env)
                        :collect
-                       (multiple-value-bind (pred bindings)
-                           (codegen-pattern pattern match-var env)
+                       (multiple-value-bind (pred bindings types)
+                           (codegen-pattern pattern match-var match-expr-type env)
                          `(,pred
                            ,(cond
                               ((null bindings)
                                expr)
                               (t
                                `(let ,bindings
-                                  (declare (ignorable ,@(mapcar #'car bindings)))
+                                  (declare (ignorable ,@(mapcar #'car bindings))
+                                           ,@(cond
+                                               (settings:*emit-type-annotations*
+                                                (loop :for binding :in bindings
+                                                      :for var := (car binding)
+                                                      :for type :in types
+                                                      :collect `(type ,type ,var)))
+                                               (t
+                                                nil)))
                                   ,expr))))))
 
                ;; Only emit a fallback if there is not a catch-all clause.
-               ,@(unless (member-if (lambda (pat)
-                                      (or (pattern-wildcard-p pat)
-                                          (pattern-var-p pat)))
-                                    (node-match-branches expr)
-                                    :key #'match-branch-pattern)
+               ,@(unless (or (member-if (lambda (pat)
+                                          (or (pattern-wildcard-p pat)
+                                              (pattern-var-p pat)))
+                                        (node-match-branches expr)
+                                        :key #'match-branch-pattern)
+                             (and (settings:coalton-release-p)
+                                  (patterns-exhaustive-p
+                                   (mapcar #'match-branch-pattern (node-match-branches expr))
+                                   (node-type (node-match-expr expr))
+                                   env)))
                    `((t
                       (error "Pattern match not exhaustive error")))))))))
 
@@ -294,11 +317,16 @@
                           (values list &optional))
                 setf-accessor))
 (defun setf-accessor (ctor-ent nth-slot instance)
-  (if (eq (tc:constructor-entry-name ctor-ent) 'coalton:Cons)
-      (ecase nth-slot
-        (0 `(car ,instance))
-        (1 `(cdr ,instance)))
-      `(slot-value ,instance ',(constructor-slot-name ctor-ent nth-slot))))
+  (case (tc:constructor-entry-name ctor-ent)
+    ((coalton:Cons)
+     (ecase nth-slot
+       (0 `(car ,instance))
+       (1 `(cdr ,instance))))
+    ((coalton:Some)
+     (ecase nth-slot
+       (0 `(rt:unwrap-cl-some ,instance))))
+    (otherwise
+     `(slot-value ,instance ',(constructor-slot-name ctor-ent nth-slot)))))
 
 (defun codegen-let (node sccs local-vars env)
   (declare (type node-let node)
