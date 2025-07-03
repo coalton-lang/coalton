@@ -6,10 +6,10 @@
 
 (progn
   (repr :transparent)
-  (define-type T
-    (T Integer))
+  (define-type TPrognTest
+    (TPrognTest Integer))
 
-  (define (f x) x))
+  (define (f-progn-test x) x))
 
 ================================================================================
 100 Invalid attribute for progn

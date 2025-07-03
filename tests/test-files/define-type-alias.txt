@@ -4,7 +4,7 @@
 
 (package coalton-unit-tests)
 
-(define-type-alias Index Integer)
+(define-type-alias Index-dta1 Integer)
 
 ================================================================================
 2 Define type alias
@@ -36,13 +36,13 @@
 
 (package coalton-unit-tests)
 
-(define-type-alias Index Integer)
+(define-type-alias Index-dta5 Integer)
 
-(define-type-alias MyIndex Index)
+(define-type-alias MyIndex-dta5 Index-dta5)
 
-(define-type-alias (Collection :a) (List :a))
+(define-type-alias (Collection-dta5 :a) (List :a))
 
-(define-type-alias MyIndices (Collection MyIndex))
+(define-type-alias MyIndices-dta5 (Collection-dta5 MyIndex-dta5))
 
 ================================================================================
 6 Define type alias
