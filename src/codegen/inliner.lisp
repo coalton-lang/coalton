@@ -21,7 +21,7 @@
 
 (in-package #:coalton-impl/codegen/inliner)
 
-;; Public Settings for Optimization
+;;; Public Settings for Optimization
 
 (defparameter *inliner-max-unroll* 3
   "Limit depth to unroll recursive functions to.")
@@ -31,7 +31,7 @@
   "Heuristic to determine if a function should be inlined
 even if the user didn't explicity declare it to be.")
 
-;; Private Settings for Debugging
+;;; Private Settings for Debugging
 
 (defvar *inline-methods-p* t
   "Allow inlining of methods.")
@@ -40,7 +40,7 @@ even if the user didn't explicity declare it to be.")
 (defvar *inline-lambdas-p* t
   "Allow inlining of lambdas.")
 
-;; Dynamic Variable
+;;; Dynamic Variable
 
 (declaim (type list *functions-inlined*))
 (defvar *functions-inlined* nil
@@ -56,33 +56,33 @@ to rerun optimizations.")
 
 ;;; Heuristics
 
-(defun null-heuristic (node)
+(defun null-heuristic (abstraction)
   "An inlining heuristic that doesn't inline."
-  (declare (ignore node))
+  (declare (ignore abstraction))
   nil)
 
-(defun gentle-heuristic (node)
+(defun gentle-heuristic (abstraction)
   "This will probably inline more than is optimal."
-  (and (<= (traverse:count-applications node)
+  (and (<= (traverse:count-applications abstraction)
            4)
-       (<= (traverse:count-nodes node)
+       (<= (traverse:count-nodes abstraction)
            8)))
 
-(defun aggressive-heuristic (node)
+(defun aggressive-heuristic (abstraction)
   "This will probably inline more than is optimal."
-  (and (<= (traverse:count-applications node)
+  (and (<= (traverse:count-applications abstraction)
            8)
-       (<= (traverse:count-nodes node)
+       (<= (traverse:count-nodes abstraction)
            32)))
 
-(defun heuristic-inline-p (node)
+(defun heuristic-inline-p (abstraction)
   "Determine if the node should be inlined based on heuristics."
-  (declare (type ast:node-abstraction node)
+  (declare (type ast:node-abstraction abstraction)
            (values boolean &optional))
 
-  (funcall *inliner-heuristic* node))
+  (funcall *inliner-heuristic* abstraction))
 
-;; Utilities
+;;; Utilities
 
 (defun unrolledp (node stack)
   "Determine if the inliner has fully unrolled a recursive call."
