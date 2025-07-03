@@ -173,69 +173,69 @@ to rerun optimizations.")
      :bindings bindings
      :subexpr  (tc:apply-substitution new-substitutions new-abstraction))))
 
-(defun inline-application (node env stack noinline-functions)
+(defun try-inline-application (application env stack noinline-functions)
   "Try to inline an application, checking traversal stack, heuristics,
 and user-supplied declarations to determine if it is appropriate."
-  (declare (type (or ast:node-application ast:node-direct-application) node)
+  (declare (type (or ast:node-application ast:node-direct-application) application)
            (type tc:environment env)
            (type list stack)
            (type parser:identifier-list noinline-functions)
            (values ast:node &optional))
 
-  (let ((name (ast:node-rator-name node)))
+  (let ((name (ast:node-rator-name application)))
     (cond
       ((find name noinline-functions)
        (debug! ";; Locally noinline reached ~a" name)
-       node)
+       application)
 
-      ((unrolling-forbidden-p node stack)
+      ((unrolling-forbidden-p application stack)
        (debug! ";; Fully unrolled ~a" name)
        (ast:make-node-locally
-        :type (ast:node-type node)
+        :type (ast:node-type application)
         :noinline-functions (list name)
-        :subexpr node))
+        :subexpr application))
 
       ((stack-reached-max-depth-p stack)
        (debug! ";; Max depth reached ~a" name)
-       node)
+       application)
 
       ;; Case #1: (f e1 ... en) where f is global, known, and arity n.
-      ((let ((code (lookup-global-application-body node env)))
+      ((let ((abstraction (lookup-global-application-body application env)))
          (and *inline-globals-p*
-              code
-              (application-saturates-abstraction-p node code)
-              (or (heuristic-inline-p code)
+              abstraction
+              (application-saturates-abstraction-p application abstraction)
+              (or (heuristic-inline-p abstraction)
                   (function-declared-inline-p name env))))
        (debug! ";; Inlining globally known function ~a" name)
        (push name *functions-inlined*)
        (inline-applications*
         (inline-code-from-application
-         node
-         (lookup-global-application-body node env))
+         application
+         (lookup-global-application-body application env))
         env
         stack
         noinline-functions))
 
       ;; Case #2: ((fn (x1 ... xn) ...) e1 ... en)
       ((and *inline-lambdas-p*
-            (ast:node-application-p node)
-            (let ((code (lookup-anonymous-application-body node)))
-              (and code
-                   (heuristic-inline-p code)
-                   (application-saturates-abstraction-p node code))))
+            (ast:node-application-p application)
+            (let ((abstraction (lookup-anonymous-application-body application)))
+              (and abstraction
+                   (heuristic-inline-p abstraction)
+                   (application-saturates-abstraction-p application abstraction))))
        (debug! ";; Inlining anonymous function ~a" name)
        (push name *functions-inlined*)
        (inline-applications*
         (inline-code-from-application
-         node
-         (lookup-anonymous-application-body node))
+         application
+         (lookup-anonymous-application-body application))
         env
         stack
         noinline-functions))
 
       (t
        (debug! ";; Failed to inline ~a" name)
-       node))))
+       application))))
 
 (defun extract-dict (rands)
   (declare (type ast:node-list rands)
@@ -361,7 +361,7 @@ and user-supplied declarations to determine if it is appropriate."
       (prog1 (let ((methods-inlined (inline-method node env)))
                (etypecase methods-inlined
                  ((or ast:node-application ast:node-direct-application)
-                  (inline-application methods-inlined env stack noinline-functions))
+                  (try-inline-application methods-inlined env stack noinline-functions))
                  (ast:node
                   methods-inlined)))
         (pop stack)))
@@ -370,7 +370,7 @@ and user-supplied declarations to determine if it is appropriate."
       (prog1 (let ((methods-inlined (inline-direct-method node env)))
                (etypecase methods-inlined
                  ((or ast:node-application ast:node-direct-application)
-                  (inline-application methods-inlined env stack noinline-functions))
+                  (try-inline-application methods-inlined env stack noinline-functions))
                  (ast:node
                   methods-inlined)))
         (pop stack))))))
