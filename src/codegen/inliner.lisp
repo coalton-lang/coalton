@@ -94,7 +94,7 @@ to rerun optimizations.")
     (<= *inliner-max-unroll* (count name stack))
     nil))
 
-(defun max-depth-p (stack)
+(defun stack-reached-max-depth-p (stack)
   "Determine if the inliner is at its maximum depth, by default this is 16."
   (declare (type list stack)
            (values boolean &optional))
@@ -195,7 +195,7 @@ and user-supplied declarations to determine if it is appropriate."
         :noinline-functions (list name)
         :subexpr node))
 
-      ((max-depth-p stack)
+      ((stack-reached-max-depth-p stack)
        (debug! ";; Max depth reached ~a" name)
        node)
 
