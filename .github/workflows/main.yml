@@ -51,6 +51,7 @@ jobs:
           COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
         run: |
           cat <<EOF > run-tests.lisp
+          (uiop:delete-directory-tree asdf:*user-cache* :if-does-not-exist :ignore :validate t)
           (sb-ext:restrict-compiler-policy 'safety ${{ matrix.SAFETY }})
           (ql:quickload :coalton/tests)
           (asdf:test-system :coalton/tests)
@@ -66,6 +67,7 @@ jobs:
           COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
         run: |
           cat <<EOF > run-tests.lisp
+          (uiop:delete-directory-tree asdf:*user-cache* :if-does-not-exist :ignore :validate t)
           (ql:quickload :coalton/tests)
           (asdf:test-system :coalton/tests)
           ; TODO: Remove this or add tests for these programs.
@@ -80,6 +82,7 @@ jobs:
           COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
         run: |
           cat <<EOF > run-tests.lisp
+          (uiop:delete-directory-tree asdf:*user-cache* :if-does-not-exist :ignore :validate t)
           (ql:quickload :coalton/tests)
           (asdf:test-system :coalton/tests)
           ; TODO: Remove this or add tests for these programs.
