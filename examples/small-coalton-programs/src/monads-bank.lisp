@@ -52,7 +52,7 @@
    #:coalton-library/monad/resultt)
   (:local-nicknames
    (#:s #:coalton-library/string)
-   (#:m #:coalton-library/ord-map))
+   (#:m #:coalton-library/ordmap))
   (:export
    :create-account
    :deposit
@@ -368,4 +368,3 @@ the computation."
           print-reportM
           )))
      (traceobject "Result" (map-err to-string res)))))
-

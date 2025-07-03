@@ -1,4 +1,4 @@
-(coalton-library/utils:defstdlib-package :coalton-library/ord-map
+(coalton-library/utils:defstdlib-package :coalton-library/ordmap
   (:use
    :coalton
    :coalton-library/classes
@@ -6,7 +6,7 @@
    :coalton-library/tuple
    :coalton-library/functions)
   (:local-nicknames
-   (#:tree :coalton-library/ord-tree)
+   (#:tree :coalton-library/ordtree)
    (#:iter :coalton-library/iterator))
   (:shadow #:Map #:empty)
   (:export
@@ -25,7 +25,7 @@
    #:update
    #:merge))
 
-(in-package :coalton-library/ord-map)
+(in-package :coalton-library/ordmap)
 
 (named-readtables:in-readtable coalton:coalton)
 
