@@ -84,13 +84,13 @@ to rerun optimizations.")
 
 ;;; Utilities
 
-(defun unrolledp (node stack)
+(defun unrolling-forbidden-p (application stack)
   "Determine if the inliner has fully unrolled a recursive call."
-  (declare (type (or ast:node-application ast:node-direct-application) node)
+  (declare (type (or ast:node-application ast:node-direct-application) application)
            (type list stack)
            (values boolean &optional))
 
-  (a:if-let ((name (ast:node-rator-name node)))
+  (a:if-let ((name (ast:node-rator-name application)))
     (<= *inliner-max-unroll* (count name stack))
     nil))
 
@@ -188,7 +188,7 @@ and user-supplied declarations to determine if it is appropriate."
        (debug! ";; Locally noinline reached ~a" name)
        node)
 
-      ((unrolledp node stack)
+      ((unrolling-forbidden-p node stack)
        (debug! ";; Fully unrolled ~a" name)
        (ast:make-node-locally
         :type (ast:node-type node)
