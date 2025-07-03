@@ -138,16 +138,16 @@ to rerun optimizations.")
 
 ;;; Inlining
 
-(defun inline-code-from-application (node code)
+(defun inline-code-from-application (application abstraction)
   "Swap an application node with a let node where the body is the inlined function."
-  (declare (type (or ast:node-application ast:node-direct-application) node)
-           (type ast:node-abstraction code)
+  (declare (type (or ast:node-application ast:node-direct-application) application)
+           (type ast:node-abstraction abstraction)
            (values ast:node-let &optional))
 
   (let* ((bindings
            (mapcar (lambda (var val) (cons (gensym (symbol-name var)) val))
-                   (ast:node-abstraction-vars code)
-                   (ast:node-rands node)))
+                   (ast:node-abstraction-vars abstraction)
+                   (ast:node-rands application)))
          (substitutions
            (mapcar (lambda (var binding)
                      (destructuring-bind (new-var . val) binding
@@ -156,22 +156,22 @@ to rerun optimizations.")
                         :to (ast:make-node-variable
                              :type (ast:node-type val)
                              :value new-var))))
-                   (ast:node-abstraction-vars code)
+                   (ast:node-abstraction-vars abstraction)
                    bindings))
-         (new-code
+         (new-abstraction
            (transformations:rename-type-variables
             (substitutions:apply-ast-substitution
              substitutions
-             (ast:node-abstraction-subexpr code)
+             (ast:node-abstraction-subexpr abstraction)
              t)))
          (new-substitutions
            (coalton-impl/typechecker/unify::mgu
-            (ast:node-type node)
-            (ast:node-type new-code))))
+            (ast:node-type application)
+            (ast:node-type new-abstraction))))
     (ast:make-node-let
-     :type     (ast:node-type node)
+     :type     (ast:node-type application)
      :bindings bindings
-     :subexpr  (tc:apply-substitution new-substitutions new-code))))
+     :subexpr  (tc:apply-substitution new-substitutions new-abstraction))))
 
 (defun inline-application (node env stack noinline-functions)
   "Try to inline an application, checking traversal stack, heuristics,
