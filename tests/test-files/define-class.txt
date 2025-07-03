@@ -6,7 +6,7 @@ Define a class with a single type variable and no methods.
 
 (package coalton-unit-tests)
 
-(define-class (C :a))
+(define-class (C-dc1 :a))
 
 ================================================================================
 2 Define class, two vars
@@ -16,7 +16,7 @@ Define a class with two type variables and no methods.
 
 (package coalton-unit-tests)
 
-(define-class (C1 :a :b))
+(define-class (C1-dc2 :a :b))
 
 ================================================================================
 3 Define class, context
@@ -26,9 +26,9 @@ Define a class with a context.
 
 (package coalton-unit-tests)
 
-(define-class (C1 :a :b))
+(define-class (C1-dc3 :a :b))
 
-(define-class (C1 :a :b => C2 :a :b))
+(define-class (C1-dc3 :a :b => C2-dc3 :a :b))
 
 ================================================================================
 4 Define class, nested contexts
@@ -36,11 +36,11 @@ Define a class with a context.
 
 (package coalton-unit-tests)
 
-(define-class (C1 :a :b))
+(define-class (C1-dc4 :a :b))
 
-(define-class (C1 :a :b => C2 :a :b))
+(define-class (C1-dc4 :a :b => C2-dc4 :a :b))
 
-(define-class ((C1 :a :b) (C2 :a :b) => C3 :a :b))
+(define-class ((C1-dc4 :a :b) (C2-dc4 :a :b) => C3-dc4 :a :b))
 
 ================================================================================
 5 Define class, methods
@@ -48,9 +48,9 @@ Define a class with a context.
 
 (package coalton-unit-tests)
 
-(define-class (C4 :a)
-  (m1 :a)
-  (m2 (:a -> :a)))
+(define-class (C4-dc5 :a)
+  (m1-dc5 :a)
+  (m2-dc5 (:a -> :a)))
 
 ================================================================================
 6 Define class, with methods, docstrings
@@ -58,9 +58,9 @@ Define a class with a context.
 
 (package coalton-unit-tests)
 
-(define-class (C5 :a)
-  (m3 "Method m3" :a)
-  (m4 (:a -> :a)))
+(define-class (C5-dc6 :a)
+  (m3-dc6 "Method m3" :a)
+  (m4-dc6 (:a -> :a)))
 
 ================================================================================
 7 Define class, with methods, docstrings
@@ -68,9 +68,9 @@ Define a class with a context.
 
 (package coalton-unit-tests)
 
-(define-class (C6 :a)
-  (m5 :a)
-  (m6 "Method m6" (:a -> :a)))
+(define-class (C6-dc7 :a)
+  (m5-dc7 :a)
+  (m6-dc7 "Method m6" (:a -> :a)))
 
 ================================================================================
 8 Define class, with methods, docstrings
@@ -78,9 +78,9 @@ Define a class with a context.
 
 (package coalton-unit-tests)
 
-(define-class (C7 :a)
-  (m7 "Method m7" :a)
-  (m8 "Method m8" (:a -> :a)))
+(define-class (C7-dc8 :a)
+  (m7-dc8 "Method m7" :a)
+  (m8-dc8 "Method m8" (:a -> :a)))
 
 ================================================================================
 9 Define class
@@ -88,7 +88,7 @@ Define a class with a context.
 
 (package coalton-unit-tests)
 
-(define-class (C :a :b (:a -> :a)))
+(define-class (C-dc9 :a :b (:a -> :a)))
 
 ================================================================================
 10 Define class
@@ -96,7 +96,7 @@ Define a class with a context.
 
 (package coalton-unit-tests)
 
-(define-class (C :a :b :c :d (:a :b -> :c :d)))
+(define-class (C-dc10 :a :b :c :d (:a :b -> :c :d)))
 
 ================================================================================
 11 Define class
@@ -104,7 +104,7 @@ Define a class with a context.
 
 (package coalton-unit-tests)
 
-(define-class (C :a :b (:a -> :b) (:b -> :a)))
+(define-class (C-dc11 :a :b (:a -> :b) (:b -> :a)))
 
 ================================================================================
 12 Define class
@@ -113,7 +113,7 @@ Define a class with a context.
 (package coalton-unit-tests/prelude
   (import coalton-prelude))
 
-(define-class (Eq :a => (C :a)))
+(define-class (Eq :a => (C-dc12 :a)))
 
 ================================================================================
 13 Define class
@@ -122,7 +122,7 @@ Define a class with a context.
 (package coalton-unit-tests/prelude
   (import coalton-prelude))
 
-(define-class ((Eq :a) => (C :a)))
+(define-class ((Eq :a) => (C-dc13 :a)))
 
 ================================================================================
 100 Class name must be a symbol

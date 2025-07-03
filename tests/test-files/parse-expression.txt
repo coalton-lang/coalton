@@ -4,7 +4,7 @@
 
 (package coalton-unit-tests)
 
-(define f 5)
+(define f-parse1 5)
 
 ================================================================================
 2 Parse expression
@@ -12,7 +12,7 @@
 
 (package coalton-unit-tests)
 
-(define (f _x) 5)
+(define (f-parse2 _x) 5)
 
 ================================================================================
 3 Parse expression
@@ -20,7 +20,7 @@
 
 (package coalton-unit-tests)
 
-(define (f _x _y) 5)
+(define (f-parse3 _x _y) 5)
 
 ================================================================================
 4 Parse expression
@@ -29,7 +29,7 @@
 (package coalton-unit-tests/prelude
   (import coalton-prelude))
 
-(define f
+(define f-parse4
   (fn (x)
     (+ x x)))
 
@@ -40,7 +40,7 @@
 (package coalton-unit-tests/prelude
   (import coalton-prelude))
 
-(define f
+(define f-parse5
   (fn ()
     (+ 1 2)))
 
@@ -51,7 +51,7 @@
 (package coalton-unit-tests/prelude
   (import coalton-prelude))
 
-(define (f)
+(define (f-parse6)
   (let ((x (the UFix 1))
         (declare y (Unit -> UFix))
         (y (fn () (+ 1 2))))
@@ -64,7 +64,7 @@
 (package coalton-unit-tests/prelude
   (import coalton-prelude))
 
-(define (f a b c)
+(define (f-parse7 a b c)
   (lisp Integer (a b c)
     (cl:+ a b c)))
 
@@ -75,11 +75,11 @@
 (package coalton-unit-tests/prelude
   (import coalton-prelude))
 
-(declare f ((Default :a) => (Optional :a) -> :a))
-  (define (f x)
-    (match x
-      ((Some y) y)
-      (_ (default))))
+(declare f-parse8 ((Default :a) => (Optional :a) -> :a))
+(define (f-parse8 x)
+  (match x
+    ((Some y) y)
+    (_ (default))))
 
 ================================================================================
 9 Parse expression
@@ -88,10 +88,10 @@
 (package coalton-unit-tests/prelude
   (import coalton-prelude))
 
-(define (f)
-    (let x = 1)
-    (let ((y (from-some "invalid y" (Some 2))))
-      (+ x y)))
+(define (f-parse9)
+  (let x = 1)
+  (let ((y (from-some "invalid y" (Some 2))))
+    (+ x y)))
 
 ================================================================================
 10 Parse expression
@@ -100,7 +100,7 @@
 (package coalton-unit-tests/prelude
   (import coalton-prelude))
 
-(define f
+(define f-parse10
   (the String "value"))
 
 ================================================================================
@@ -109,7 +109,7 @@
 
 (package coalton-unit-tests)
 
-(define (x) (return))
+(define (x--parse11) (return))
 
 ================================================================================
 12 Parse expression
@@ -117,7 +117,7 @@
 
 (package coalton-unit-tests)
 
-(define (y) (return 5))
+(define (y--parse12) (return 5))
 
 ================================================================================
 13 Parse expression
@@ -126,7 +126,7 @@
 (package coalton-unit-tests/prelude
   (import coalton-prelude))
 
-(define z (+ 1 (+ 2 (* 3 5))))
+(define z-parse13 (+ 1 (+ 2 (* 3 5))))
 
 ================================================================================
 14 Parse expression
@@ -135,10 +135,10 @@
 (package coalton-unit-tests/prelude
   (import coalton-prelude))
 
-(define (f)
+(define (f-parse14)
   (progn
     (let x = 1)
-    (f x)
+    (f-parse14 x)
     (let y = 2)
     (+ x y)))
 
@@ -149,7 +149,7 @@
 (package coalton-unit-tests/prelude
   (import coalton-prelude))
 
-(define (f x y)
+(define (f--parse15 x y)
   (if (== x y)
     1
     2))
@@ -161,7 +161,7 @@
 (package coalton-unit-tests/prelude
   (import coalton-prelude))
 
-(define (f x y)
+(define (f--parse16 x y)
   (when (== x y)
     (let _z = 3)
     (print "hello"))
@@ -176,7 +176,7 @@
 (package coalton-unit-tests/prelude
   (import coalton-prelude))
 
-(define (f ax bx)
+(define (f-parse17 ax bx)
   (do
    (a <- ax)
    (b <- bx)
@@ -190,7 +190,7 @@
 (package coalton-unit-tests/prelude
   (import coalton-prelude))
 
-(define x
+(define x--parse18
   (cond 
     (True 1)
     ((> 2 3) 2)))
@@ -202,7 +202,7 @@
 (package coalton-unit-tests/prelude
   (import coalton-prelude))
 
-(define x
+(define x-parse19
   (fn ((Tuple x _y)) x))
 
 ================================================================================
