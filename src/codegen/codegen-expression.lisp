@@ -313,11 +313,16 @@
                           (values list &optional))
                 setf-accessor))
 (defun setf-accessor (ctor-ent nth-slot instance)
-  (if (eq (tc:constructor-entry-name ctor-ent) 'coalton:Cons)
-      (ecase nth-slot
-        (0 `(car ,instance))
-        (1 `(cdr ,instance)))
-      `(slot-value ,instance ',(constructor-slot-name ctor-ent nth-slot))))
+  (case (tc:constructor-entry-name ctor-ent)
+    ((coalton:Cons)
+     (ecase nth-slot
+       (0 `(car ,instance))
+       (1 `(cdr ,instance))))
+    ((coalton:Some)
+     (ecase nth-slot
+       (0 `(rt:unwrap-cl-some ,instance))))
+    (otherwise
+     `(slot-value ,instance ',(constructor-slot-name ctor-ent nth-slot)))))
 
 (defun codegen-let (node sccs local-vars env)
   (declare (type node-let node)

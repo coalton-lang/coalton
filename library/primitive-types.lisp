@@ -40,6 +40,44 @@
     (lisp (List :a) ()
       cl:nil))
 
+  ;; Optional is an early type
+  ;;
+  ;; Defining the following is functionally
+  ;; equivalent to having defined an ADT as
+  ;; (define-type (Optional :a)
+  ;;   (Some :a)
+  ;;   None)
+  (inline)
+  (declare Some (:a -> Optional :a))
+  (define (Some x)
+    "A constructor for the type, `Optional`. This constructor can be used
+like any other algebraic data type constructor, including for pattern
+matching, as in the following example.
+
+```lisp
+(match x
+  ((Some value)
+    value)
+  (_ (error \"Oh, no!\")))
+```"
+    (lisp (Optional :a) (x)
+      (coalton-impl/runtime:cl-some x)))
+
+  (declare None (Optional :a))
+  (define None
+    "A constructor for the type, `Optional`. This constructor can be used
+like any other algebraic data type constructor, including for pattern
+matching, as in the following example.
+
+```lisp
+(match x
+  ((None)
+   \"Fantastic!\")
+  (_ (error \"Oh, no!\")))
+```"
+    (lisp (Optional :a) ()
+      coalton-impl/runtime:cl-none))
+
   (repr :native (cl:unsigned-byte 8))
   (define-type U8
     "Unsigned 8-bit integer capable of storing values in `[0, 255]`. Uses `(unsigned-byte 8)`.")

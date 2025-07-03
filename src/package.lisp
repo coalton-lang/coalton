@@ -62,7 +62,8 @@
    #:String
    #:Fraction
    #:Arrow
-   #:List #:Cons #:Nil)
+   #:List #:Cons #:Nil
+   #:Optional #:Some #:None)
 
   ;; Primitive Syntax
   (:export
