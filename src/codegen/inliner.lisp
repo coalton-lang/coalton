@@ -174,8 +174,9 @@ to rerun optimizations.")
      :subexpr  (tc:apply-substitution new-substitutions new-abstraction))))
 
 (defun try-inline-application (application env stack noinline-functions)
-  "Try to inline an application, checking traversal stack, heuristics,
-and user-supplied declarations to determine if it is appropriate."
+  "Try to inline an application node, checking internal traversal stack,
+heuristics, and user-supplied inline declarations to determine if it
+is appropriate."
   (declare (type (or ast:node-application ast:node-direct-application) application)
            (type tc:environment env)
            (type list stack)
