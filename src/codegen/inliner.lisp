@@ -127,14 +127,14 @@ to rerun optimizations.")
     (tc:function-env-entry-inline-p entry)
     nil))
 
-(defun fully-applied-p (node code)
+(defun application-saturates-abstraction-p (application abstraction)
   "Check if an an application node constitutes a fully applied abstraction."
-  (declare (type (or ast:node-application ast:node-direct-application) node)
-           (type ast:node-abstraction code)
+  (declare (type (or ast:node-application ast:node-direct-application) application)
+           (type ast:node-abstraction abstraction)
            (values boolean &optional))
 
-  (= (length (ast:node-abstraction-vars code))
-     (length (ast:node-rands node))))
+  (= (length (ast:node-abstraction-vars abstraction))
+     (length (ast:node-rands application))))
 
 ;;; Inlining
 
@@ -203,7 +203,7 @@ and user-supplied declarations to determine if it is appropriate."
       ((let ((code (lookup-global-application-body node env)))
          (and *inline-globals-p*
               code
-              (fully-applied-p node code)
+              (application-saturates-abstraction-p node code)
               (or (heuristic-inline-p code)
                   (function-declared-inline-p name env))))
        (debug! ";; Inlining globally known function ~a" name)
@@ -222,7 +222,7 @@ and user-supplied declarations to determine if it is appropriate."
             (let ((code (lookup-anonymous-application-body node)))
               (and code
                    (heuristic-inline-p code)
-                   (fully-applied-p node code))))
+                   (application-saturates-abstraction-p node code))))
        (debug! ";; Inlining anonymous function ~a" name)
        (push name *functions-inlined*)
        (inline-applications*
