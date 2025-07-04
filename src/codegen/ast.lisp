@@ -50,6 +50,7 @@
    #:node-locally                       ; STRUCT
    #:make-node-locally                  ; CONSTRUCTOR
    #:node-locally-p                     ; FUNCTION
+   #:node-locally-inhibit-inlining      ; READER
    #:node-locally-noinline-functions    ; READER
    #:node-locally-subexpr               ; READER
    #:match-branch                       ; STRUCT
@@ -210,6 +211,7 @@ coalton symbols (`parser:identifier`)"
 
 (defstruct (node-locally (:include node))
   "Node for the optimizer to use, similar to `cl:locally'."
+  (inhibit-inlining   (util:required 'inhibit-inlining)   :type boolean                :read-only t)
   (noinline-functions (util:required 'noinline-functions) :type parser:identifier-list :read-only t)
   (subexpr            (util:required 'subexpr)            :type node                   :read-only t))
 
