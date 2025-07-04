@@ -184,7 +184,13 @@ nodes."
        :type (node-type node)
        :name (node-bind-name node)
        :expr (apply *traverse* (node-bind-expr node) args)
-       :body (apply *traverse* (node-bind-body node) args))))
+       :body (apply *traverse* (node-bind-body node) args)))
+    (action (:traverse node-locally node &rest args)
+      (make-node-locally
+       :type (node-type node)
+       :inhibit-inlining (node-locally-inhibit-inlining node)
+       :noinline-functions (node-locally-noinline-functions node)
+       :subexpr (apply *traverse* (node-locally-subexpr node) args))))
    t))
 
 (defun fire-action (when-key type-key actions args node)

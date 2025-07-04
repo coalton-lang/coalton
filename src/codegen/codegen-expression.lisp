@@ -93,6 +93,10 @@
        (node-variables expr :variable-namespace-only t)
        env)))
 
+  (:method ((expr node-locally) env)
+    (declare (type tc:environment env))
+    (codegen-expression (node-locally-subexpr expr) env))
+
   (:method ((expr node-lisp) env)
     (declare (type tc:environment env))
     (let* ((inner `(progn ,@(butlast (node-lisp-form expr))
