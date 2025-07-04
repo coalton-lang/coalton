@@ -217,7 +217,7 @@ is appropriate."
               (application-saturates-abstraction-p application abstraction)
               (or (heuristic-inline-p abstraction)
                   (function-declared-inline-p name env))))
-       (print-inline-success! ";; Inlining globally known function ~a" name)
+       (print-inline-success! ";; Inlining global function ~a" name)
        (push name *functions-inlined*)
        (inline-applications*
         (inline-code-from-application
@@ -234,7 +234,7 @@ is appropriate."
               (and abstraction
                    (heuristic-inline-p abstraction)
                    (application-saturates-abstraction-p application abstraction))))
-       (print-inline-success! ";; Inlining anonymous function ~a" name)
+       (print-inline-success! ";; Inlining anonymous function")
        (push name *functions-inlined*)
        (inline-applications*
         (inline-code-from-application

@@ -223,7 +223,7 @@ arity. TABLE will be mutated with additional entries."
      (pop-final-hoist-point hoister))))
 
 (declaim (type (integer 0) *maximum-optimization-passes*))
-(defvar *maximum-optimization-passes* 4
+(defvar *maximum-optimization-passes* 8
   "The maximum number of times the optimizer may re-optimize.")
 
 (defun optimize-node (node env)
@@ -237,8 +237,9 @@ ENV. Return a new node which is optimized."
    :REDO
      (incf runs)
      (setf redo? nil)
-     (when settings:*print-optimization-passes*
-       (format t "~&;; Optimization run #~D~%" runs))
+     (when (and settings:*print-optimization-passes*
+                (> runs 1))
+       (format t "~&;; Optimizing again, attempt #~D~%" runs))
      (setf node (canonicalize node))
      (setf node (match-dynamic-extent-lift node env))
      (setf node (propagate-constants node env))
@@ -248,7 +249,7 @@ ENV. Return a new node which is optimized."
        (setf redo? (or redo? inlined?))
        (setf node new-node))
 
-     (when (and redo? (<= runs *maximum-optimization-passes*))
+     (when (and redo? (< runs *maximum-optimization-passes*))
        (go :REDO)))
   ;; Return the node.
   node)
