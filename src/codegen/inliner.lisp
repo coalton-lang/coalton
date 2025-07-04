@@ -33,6 +33,8 @@ even if the user didn't explicity declare it to be.")
 
 ;;; Private Settings for Debugging
 
+(defvar *print-extra-debugging-info* nil
+  "Print additional information to help debug the inliner.")
 (defvar *inline-methods-p* t
   "Allow inlining of methods.")
 (defvar *inline-globals-p* t
@@ -49,8 +51,16 @@ Then it is returned from `inline-applications' to tell the optimizer if it needs
 to rerun optimizations.")
 
 (defun debug! (fmt &rest args)
-  "Convenience function to print debug when `settigns:*print-inlining-occurences*' is enabled."
-  (when settings:*print-inlining-occurrences*
+  "Convenience function to print debug info."
+  (when *print-extra-debugging-info*
+    (fresh-line)
+    (apply #'format t fmt args)))
+
+(defun print-inline-success! (fmt &rest args)
+  "Convenience function to print when there's an inlining success,
+controlled by `settings:*print-inlining-occurences*' is enabled."
+  (when (or settings:*print-inlining-occurrences*
+            *print-extra-debugging-info*)
     (fresh-line)
     (apply #'format t fmt args)))
 
@@ -207,7 +217,7 @@ is appropriate."
               (application-saturates-abstraction-p application abstraction)
               (or (heuristic-inline-p abstraction)
                   (function-declared-inline-p name env))))
-       (debug! ";; Inlining globally known function ~a" name)
+       (print-inline-success! ";; Inlining globally known function ~a" name)
        (push name *functions-inlined*)
        (inline-applications*
         (inline-code-from-application
@@ -224,7 +234,7 @@ is appropriate."
               (and abstraction
                    (heuristic-inline-p abstraction)
                    (application-saturates-abstraction-p application abstraction))))
-       (debug! ";; Inlining anonymous function ~a" name)
+       (print-inline-success! ";; Inlining anonymous function ~a" name)
        (push name *functions-inlined*)
        (inline-applications*
         (inline-code-from-application
@@ -235,7 +245,11 @@ is appropriate."
         noinline-functions))
 
       (t
-       (debug! ";; Failed to inline ~a" name)
+       (cond
+         ((null name)
+          (debug! ";; Failed to inline anonymous application"))
+         (t
+          (debug! ";; Failed to inline ~A" name)))
        application))))
 
 (defun extract-dict (rands)
@@ -275,14 +289,14 @@ is appropriate."
                node)
 
               ((null inner-rands)
-               (debug! ";; Inlining method to variable ~a" method-name)
+               (print-inline-success! ";; Inlining method to variable ~a" method-name)
                (push method-name *functions-inlined*)
                (ast:make-node-variable
                 :type (ast:node-type node)
                 :value method-name))
 
               (t
-               (debug! ";; Inlining method to application ~a" method-name)
+               (print-inline-success! ";; Inlining method to application ~a" method-name)
                (push method-name *functions-inlined*)
                (ast:make-node-application
                 :type (ast:node-type node)
@@ -312,14 +326,14 @@ is appropriate."
                node)
 
               ((null inner-rands)
-               (debug! ";; Inlining direct method to variable ~a" method-name)
+               (print-inline-success! ";; Inlining direct method to variable ~a" method-name)
                (push method-name *functions-inlined*)
                (ast:make-node-variable
                 :type (ast:node-type node)
                 :value method-name))
 
               (t
-               (debug! ";; Inlining direct method to application ~a" method-name)
+               (print-inline-success! ";; Inlining direct method to application ~a" method-name)
                (push method-name *functions-inlined*)
                (ast:make-node-application
                 :type (ast:node-type node)
