@@ -180,7 +180,7 @@
 
 (define-test test-gh-973 ()
     (is (== (Many (vector:make (Single "hello")))
-                     (Many (vector:make (Single "hello"))))))
+            (Many (vector:make (Single "hello"))))))
 
 ;; Test accessors on transparent structs
 (coalton-toplevel

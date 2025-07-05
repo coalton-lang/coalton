@@ -9,6 +9,8 @@
    (#:parser #:coalton-impl/parser)
    (#:source #:coalton-impl/source)
    (#:tc #:coalton-impl/typechecker)
+   (#:ast #:coalton-impl/codegen/ast)
+   (#:traverse #:coalton-impl/codegen/traverse)
    (#:analysis #:coalton-impl/analysis)
    (#:entry #:coalton-impl/entry))
   (:export
