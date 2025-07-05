@@ -188,7 +188,6 @@ nodes."
     (action (:traverse node-locally node &rest args)
       (make-node-locally
        :type (node-type node)
-       :inhibit-inlining (node-locally-inhibit-inlining node)
        :noinline-functions (node-locally-noinline-functions node)
        :subexpr (apply *traverse* (node-locally-subexpr node) args))))
    t))

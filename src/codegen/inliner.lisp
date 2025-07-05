@@ -203,7 +203,6 @@ is appropriate."
        (debug! ";; Fully unrolled ~a" name)
        (ast:make-node-locally
         :type (ast:node-type application)
-        :inhibit-inlining nil
         :noinline-functions (list name)
         :subexpr application))
 
@@ -355,26 +354,6 @@ is appropriate."
   (traverse:traverse
    node
    (list
-    (traverse:action (:traverse ast:node-locally node)
-      (cond
-        ((ast:node-locally-inhibit-inlining node)
-         node)
-        (t
-         ;; XXX: We can use a special variable for the NOINLINE
-         ;; functions if we want to avoid the PUSH/POP logic.
-         (let ((fns (ast:node-locally-noinline-functions node)))
-           (prog2
-               (dolist (sym fns)
-                 (push sym noinline-functions))
-               (ast:make-node-locally
-                :type (ast:node-type node)
-                :inhibit-inlining nil
-                :noinline-functions fns
-                :subexpr (funcall traverse:*traverse* (ast:node-locally-subexpr node)))
-             (dolist (sym fns)
-               (declare (ignore sym))
-               (pop noinline-functions)))))))
-    #+ignore
     (traverse:action (:before ast:node-locally node)
       (dolist (sym (ast:node-locally-noinline-functions node))
         (push sym noinline-functions))
@@ -388,7 +367,6 @@ is appropriate."
       (push (ast:node-rator-name node) stack)
       node)
 
-    #+ignore
     (traverse:action (:after ast:node-locally node)
       (dolist (sym (ast:node-locally-noinline-functions node))
         (pop noinline-functions))
