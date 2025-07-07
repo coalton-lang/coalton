@@ -7,9 +7,11 @@
    (#:parser #:coalton-impl/parser)
    (#:tc #:coalton-impl/typechecker/stage-1)
    (#:env #:coalton-impl/typechecker/environment)
-   (#:penv #:coalton-impl/typechecker/partial-type-env))
+   (#:penv #:coalton-impl/typechecker/partial-type-env)
+   (#:pred #:coalton-impl/typechecker/predicate))
   (:export
-   #:derive-class-instance
+   #:derive-class-instance             ;; FUNCTION
+   #:derive-methods                    ;; GENERIC FUNCTION
    #:constructor                       ;; STRUCT
    #:constructor-name                  ;; ACCESSOR
    #:constructor-fields                ;; ACCESSOR
@@ -48,38 +50,41 @@ to `define-type' and `define-struct' nodes."
      (penv:partial-type-env-env env)))
    class))
 
-(defgeneric lookup-type-constraint (type class env)
+(defun instance-main-pred-ty (inst)
+  (first 
+   (pred:ty-predicate-types 
+    (env:ty-class-instance-predicate inst))))
+
+(defgeneric resolve-type-constraint (type class env)
   (:method ((type parser:tycon) class env)
     (fset:do-seq (inst (class-instances class env))
-      (let* ((pred (env:ty-class-instance-predicate inst))
-             (tys (coalton-impl/typechecker/predicate:ty-predicate-types pred))
-             (ty (first tys)))
-        (if (and (= 1 (length tys))
-                 (tc:tycon-p ty)
-                 (eq (parser:tycon-name type)
-                     (tc:tycon-name ty)))
-            (return-from lookup-type-constraint
-              (parser:make-ty-predicate
-               :location (source:location type)
-               :class (parser:make-identifier-src
-                       :location (source:location type)
-                       :name class)
-               :types (list type)))
-            nil))))
+      (let ((ty (instance-main-pred-ty inst)))
+        (typecase ty
+          (tc:tycon
+           (when (eq (parser:tycon-name type) (tc:tycon-name ty))
+             (return-from resolve-type-constraint '())))
+          (tc:tapp
+           (when (and (tc:tycon-p (tc:tapp-from ty))
+                      (eq (parser:tycon-name type) (tc:tycon-name (tc:tapp-from ty))))
+             (return-from resolve-type-constraint '()))))
+        (when (and (tc:tycon-p ty)
+                   (eq (parser:tycon-name type)
+                       (tc:tycon-name ty))))))
+    (error "Type ~a does not implement ~a, cannot derive." (parser:tycon-name type) class))
   (:method ((type parser:tyvar) class env)
-    (parser:make-ty-predicate
-     :location (source:location type)
-     :class (parser:make-identifier-src
-             :location (source:location type)
-             :name class)
-     :types (list type)))
+    (list 
+     (parser:make-ty-predicate
+      :location (source:location type)
+      :class (parser:make-identifier-src
+              :location (source:location type)
+              :name class)
+      :types (list type))))
   (:method ((type parser:tapp) class env)
-    (parser:make-ty-predicate
-     :location (source:location type)
-     :class (parser:make-identifier-src
-             :location (source:location type)
-             :name class)
-     :types (list type))))
+    (append
+     (resolve-type-constraint (parser:tapp-from type) class env)
+     (resolve-type-constraint (parser:tapp-to type) class env)
+     )
+    ))
 
 ;; Collect context constraints, and try to signal errors if we can't derive
 ;; TODO: improve error reporting for tapps, it only works well for simple tycons
@@ -87,25 +92,11 @@ to `define-type' and `define-struct' nodes."
   (:method ((type parser:toplevel-define-type) class env)
     (loop :for ctor :in (parser:toplevel-define-type-ctors type)
           :nconc (loop :for type :in (parser:constructor-fields ctor)
-                       :for typred := (lookup-type-constraint type class env)
-                       :unless typred
-                         :do (error "Type ~A does not implement ~A, cannot derive."
-                                    (parser:tycon-name type)
-                                    class)
-                       :end
-                       :unless (parser:tycon-p type)
-                         :collect typred)))
+                       :nconc (resolve-type-constraint type class env))))
   (:method ((type parser:toplevel-define-struct) class env)
     (loop :for field :in (parser:toplevel-define-struct-fields type)
           :for type := (parser:struct-field-type field)
-          :for typred := (lookup-type-constraint type class env)
-          :unless typred
-            :do (error "Type ~A does not implement ~A, cannot derive."
-                       (parser:tycon-name type)
-                       class)
-          :end
-          :unless (parser:tycon-p type)
-            :collect typred)))
+          :nconc (resolve-type-constraint type class env))))
 
 (defgeneric parser-definition-type (def)
   (:method ((def parser:toplevel-define-struct))
@@ -165,11 +156,15 @@ to `define-type' and `define-struct' nodes."
 
 (defgeneric derive-methods (class type-definition env))
 
+(defparameter *env* nil)
+
 (defun derive-class-instance (class type env)
   (declare (type symbol class)
     (type (or parser:toplevel-define-type parser:toplevel-define-struct))
     (type penv:partial-type-env env)
     (values parser:toplevel-define-instance &optional))
+
+  (setf *env* env)
 
   (let ((type-definition (parser-definition-abstract-type-definition type)))
     (handler-case

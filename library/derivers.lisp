@@ -6,7 +6,7 @@
    (#:derive #:coalton-impl/typechecker/derive)))
 (in-package #:coalton-library/derivers)
 
-(defmethod derive-methods ((class (eql 'classes:eq)) type-definition env)
+(defmethod derive:derive-methods ((class (eql 'classes:eq)) type-definition env)
   (let ((location (derive:abstract-type-definition-location type-definition)))
     (list
      (parser:make-instance-method-definition
