@@ -8,11 +8,14 @@
     (Xenomorph))
 
   (define-exception BadEgg
+    "Uncracked Eggception" 
     (UnCracked Egg)
+    "Deadly Eggception"
     (DeadlyEgg Egg))
 
-  (define-resumption SkipEgg (SkipEgg))
-  (define-resumption ServeRaw (ServeRaw Egg))
+  (define-resumption SkipEgg)
+  (define-resumption (ServeRaw Egg)
+    "Suggest that the egg be served raw.")
   
   (declare crack (Egg -> Egg))
   (define (crack egg-o)
@@ -35,7 +38,6 @@
         ((Goose (True) _)  (Goose True True))
         ((Goose (False) _) (throw badegg))
         ((Xenomorph)       (throw (DeadlyEgg egg-k))))))
-
 
   (declare make-breakfast-with (Egg -> (Optional Egg)))
   (define (make-breakfast-with egg-x)
