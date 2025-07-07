@@ -140,7 +140,7 @@ A garbage collection will be forced prior to invoking `f`."
     (let start = (monotonic-bytes-consed))
     (let value = (f))
     (let end   = (monotonic-bytes-consed))
-    (Tuple value (- end start)))
+    (Tuple value (liftA2 - end start)))
 
   (define-struct (MeteredResult :a)
     "Function output with space and timing metedata."
@@ -168,7 +168,7 @@ Garbage collection will be performed before profiling is performed."
     (MeteredResult
      value
      (- end-real-time start-real-time)
-     (- end-bytes-consed start-bytes-consed))))
+     (liftA2 - end-bytes-consed start-bytes-consed))))
 
 
 ;;;
