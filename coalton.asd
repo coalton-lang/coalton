@@ -85,11 +85,18 @@
                (:file "string")
                (:file "slice")
                (:file "hashtable")
+               (:file "hashmap")
                (:file "queue")
-               (:file "monad/state")
+               (:module "monad"
+                :serial t
+                :components ((:file "identity")
+                             (:file "state")
+                             (:file "environment")
+                             (:file "resultt")
+                             (:file "optionalt")
+                             (:file "free")))
                (:file "ord-tree")
                (:file "ord-map")
-               (:file "monad/free")
                (:file "seq")
                (:file "system")
                (:file "file")
@@ -162,6 +169,7 @@
                (:file "pi")
                (:file "seq")
                (:file "matrix")
+               (:file "mapping")
                (:module "gabriel-benchmarks"
                 :serial t
                 :components ((:file "tak")
@@ -261,10 +269,12 @@
                (:file "hyperdual-tests")
                (:file "quantize-tests")
                (:file "hashtable-tests")
+               (:file "hashmap-tests")
                (:file "iterator-tests")
                (:file "call-coalton-from-lisp")
                (:file "vector-tests")
                (:file "string-tests")
+               (:file "optional-tests")
                (:file "recursive-let-tests")
                (:file "class-tests")
                (:file "struct-tests")
@@ -278,4 +288,9 @@
                (:file "monomorphizer-tests")
                (:file "inliner-tests")
                (:file "file-tests")
-               (:file "experimental-tests")))
+               (:file "experimental-tests")
+               (:module "monad"
+                :serial t
+                :components ((:file "optionalt")
+                             (:file "resultt")
+                             (:file "environment")))))

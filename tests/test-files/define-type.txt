@@ -4,7 +4,7 @@
 
 (package coalton-unit-tests)
 
-(define-type T)
+(define-type T-dt1)
 
 ================================================================================
 2 Define type
@@ -12,7 +12,7 @@
 
 (package coalton-unit-tests)
 
-(define-type (T :a))
+(define-type (T-dt2 :a))
 
 ================================================================================
 3 Define type
@@ -20,7 +20,7 @@
 
 (package coalton-unit-tests)
 
-(define-type T T1)
+(define-type T-dt3 T1-dt3)
 
 ================================================================================
 4 Define type
@@ -28,9 +28,9 @@
 
 (package coalton-unit-tests/define-type-4)
 
-(define-type (T :a :b :c)
-  (T1 :a)
-  (T2 :b :c))
+(define-type (T-dt4 :a :b :c)
+  (T1-dt4 :a)
+  (T2-dt4 :b :c))
 
 ================================================================================
 5 Define type
@@ -39,7 +39,7 @@
 (package coalton-unit-tests)
 
 (repr :native cl:t)
-(define-type T)
+(define-type T-dt5)
 
 ================================================================================
 6 Define type
@@ -48,10 +48,10 @@
 (package coalton-unit-tests)
 
 (repr :enum)
-(define-type T
-  First
-  Second
-  Third)
+(define-type T-dt6
+  First-dt6
+  Second-dt6
+  Third-dt6)
 
 
 ================================================================================
@@ -60,10 +60,10 @@
 
 (package coalton-unit-tests)
 
-(define-type (T :a)
-  T1         "This is an empty constructor"
-  (T2 :a)    "This is a constructor"
-  (T3 :a :a) "This is a well-nourished constructor"))
+(define-type (T-dt7 :a)
+  T1-dt7         "This is an empty constructor"
+  (T2-dt7 :a)    "This is a constructor"
+  (T3-dt7 :a :a) "This is a well-nourished constructor"))
 
 ================================================================================
 100 Malformed type definition

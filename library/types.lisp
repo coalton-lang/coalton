@@ -105,6 +105,13 @@ The compiler will auto-generate instances of `RuntimeRepr` for all defined types
     (define (runtime-repr _)
       (lisp LispType () 'cl:list)))
 
+  (define-instance (RuntimeRepr (Optional :a))
+    (inline)
+    (define (runtime-repr _)
+      ;; If using `cl:t` proves to be inefficient we could try to
+      ;; improve this, perhaps using proxy-inner.
+      (lisp LispType () 'cl:t)))
+
   ;; The compiler will not auto-generate RuntimeRepr instances for
   ;; types defined in this file to avoid circular dependencies.
   

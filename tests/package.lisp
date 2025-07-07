@@ -9,6 +9,8 @@
    (#:parser #:coalton-impl/parser)
    (#:source #:coalton-impl/source)
    (#:tc #:coalton-impl/typechecker)
+   (#:ast #:coalton-impl/codegen/ast)
+   (#:traverse #:coalton-impl/codegen/traverse)
    (#:analysis #:coalton-impl/analysis)
    (#:entry #:coalton-impl/entry))
   (:export
@@ -29,6 +31,7 @@
    (#:vector #:coalton-library/vector)
    (#:slice #:coalton-library/slice)
    (#:hashtable #:coalton-library/hashtable)
+   (#:hashmap #:coalton-library/hashmap)
    (#:cell #:coalton-library/cell)
    (#:iter #:coalton-library/iterator)
    (#:list #:coalton-library/list)
@@ -38,7 +41,11 @@
    (#:result #:coalton-library/result)
    (#:seq #:coalton-library/seq)
    (#:file #:coalton-library/file)
-   (#:experimental #:coalton-library/experimental)))
+   (#:experimental #:coalton-library/experimental)
+   (#:st #:coalton-library/monad/state)
+   (#:m-opt #:coalton-library/monad/optionalt)
+   (#:m-res #:coalton-library/monad/resultt)
+   (#:m-env #:coalton-library/monad/environment)))
 
 (in-package #:coalton-native-tests)
 

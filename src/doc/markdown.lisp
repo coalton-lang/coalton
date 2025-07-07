@@ -194,13 +194,17 @@
 (defmethod write-object-body ((backend markdown-backend) (object coalton-struct))
   (let ((stream (output-stream backend)))
     (tc:with-pprint-variable-context ()
-      (loop :for (name type docstring) :in (struct-fields object)
-            :do (format stream "- <code>~A :: ~S</code>~A~%"
-                        name
-                        type
-                        (if docstring
-                            (format nil "<br/>~a" docstring)
-                            ""))))
+      (loop :with entry := (type-entry object)
+            :with package := (symbol-package (tc:type-entry-name entry))
+            :for (name type docstring) :in (struct-fields object)
+            :for symbol := (concatenate 'string "." name)
+            :when (eq ':external (nth-value 1 (find-symbol symbol package)))
+              :do (format stream "- <code>~A :: ~S</code>~A~%"
+                          name
+                          type
+                          (if docstring
+                              (format nil "<br/>~a" docstring)
+                              ""))))
     (write-doc backend object)
     (write-instances backend object)))
 

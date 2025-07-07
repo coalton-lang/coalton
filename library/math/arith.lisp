@@ -219,5 +219,31 @@ The function `general/` is partial, and will error produce a run-time error if t
     "Is `x` not zero?"
     (/= x 0)))
 
+(cl:defmacro %define-abs-native (type)
+  (cl:let ((abs (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-ABS"))))
+    `(cl:progn
+       (coalton-toplevel
+         (specialize abs ,abs (,type -> ,type))
+         (inline)
+         (declare ,abs (,type -> ,type))
+         (define (,abs n)
+           (lisp ,type (n)
+             (cl:abs n)))))))
+
+(%define-abs-native Integer)
+(%define-abs-native I8)
+(%define-abs-native I16)
+(%define-abs-native I32)
+(%define-abs-native I64)
+(%define-abs-native IFix)
+(%define-abs-native U8)
+(%define-abs-native U16)
+(%define-abs-native U32)
+(%define-abs-native U64)
+(%define-abs-native UFix)
+(%define-abs-native Fraction)
+(%define-abs-native Single-Float)
+(%define-abs-native Double-Float)
+
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/MATH/ARITH")
