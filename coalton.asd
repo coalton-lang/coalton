@@ -46,6 +46,7 @@
                (:file "types")
                (:file "primitive-types")
                (:file "classes")
+               (:file "derivers")
                (:file "hash-defining-macros")
                (:file "hash")
                (:file "builtin")
