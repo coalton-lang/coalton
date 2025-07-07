@@ -573,13 +573,19 @@ More generally
 
 ### Defining, Invoking, and Handling Resumptions 
 
-Resumptions allow the coalton programmer to recover from an error without unwinding the call stack. 
+Resumptions allow the coalton programmer to recover from an error
+without unwinding the call stack.
+
+The `define-resumption` form accepts a single "Constructor". The name
+of the constructor is also the name of the type of the resumption.
 
 The following example, building on the above, should elucidate
 
 ```lisp
 
-  (define-resumption SkipEgg (SkipEgg))
+  (define-resumption SkipEgg)
+  (define-resumption (ServeRaw Egg) 
+    "Suggest the egg be served raw.")
 
   (declare cook (Egg -> Egg))
   (define (cook egg)
