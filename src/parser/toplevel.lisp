@@ -975,7 +975,7 @@ If the parsed form is an attribute (e.g., repr or monomorphize), add it to to AT
 
        (unless (endp (toplevel-define-type-vars type))
          (parse-error "Invalid define-resumption"
-                      (note source form "Resumptiony types do not accept type variables.")))
+                      (note source form "Resumption types do not accept type variables.")))
 
        (unless (= 1 (length (toplevel-define-type-ctors type)))
          (parse-error "Invalid define-resumption"
