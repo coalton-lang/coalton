@@ -55,6 +55,28 @@ to `define-type' and `define-struct' nodes."
    (pred:ty-predicate-types 
     (env:ty-class-instance-predicate inst))))
 
+(defun ty-name (ty)
+  (etypecase ty
+    (tc:tycon (tc:tycon-name ty))
+    (tc:tyvar (tc:tyvar-id ty))
+    (tc:tapp (let ((from (tc:tapp-from tapp)))
+               (if (tc:tapp-p from)
+                   (tapp-rator-name from)
+                   (ty-name from))))
+    (parser:tycon (parser:tycon-name ty))
+    (parser:tyvar (parser:tyvar-name ty))
+    (parser:tapp (let ((from (parser:tapp-from tapp)))
+                   (if (parser:tapp-p from)
+                       (tapp-rator-name from)
+                       (ty-name from))))))
+
+(defun tapp-rator-name (tapp)
+  (etypecase tapp
+    (parser:tapp
+     )
+    (tc:tapp 
+     )))
+
 (defgeneric resolve-type-constraint (type class env)
   (:method ((type parser:tycon) class env)
     (fset:do-seq (inst (class-instances class env))
