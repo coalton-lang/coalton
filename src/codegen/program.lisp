@@ -138,12 +138,10 @@ Example:
         :append instance-bindings))
 
 (defun clean-environment-for-redefinition (env definitions)
-  "If we're redefinining a function that has been declared inlinable, we should remove it from ENV to avoid the code from expanded using old definition."
+  "If we're redefinining functions that can be inlinable, we should remove it from ENV to avoid the code from expanded using old definition."
   (loop :for (name . _) :in definitions
         :for fun := (tc:lookup-function env name :no-error t)
-        :when (and fun
-                   (tc:function-env-entry-inline-p fun))
-          :do (setf env (tc:unset-function env name))
+        :do (setf env (tc:unset-function env name))
         :finally (return env)))
 
 (defun compile-translation-unit (translation-unit monomorphize-table inline-p-table env)
