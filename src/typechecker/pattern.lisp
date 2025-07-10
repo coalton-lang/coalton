@@ -13,6 +13,7 @@
   (:export
    #:pattern                            ; STRUCT
    #:pattern-type                       ; ACCESSOR
+   #:pattern-location                   ; ACCESSOR
    #:pattern-list-p                     ; FUNCTION
    #:pattern-list                       ; TYPE
    #:pattern-var                        ; STRUCT
@@ -20,6 +21,11 @@
    #:pattern-var-name                   ; ACCESSOR
    #:pattern-var-orig-name              ; ACCESSOR
    #:pattern-var-p                      ; FUNCTION
+   #:pattern-binding                    ; STRUCT
+   #:pattern-binding-var                ; ACCESSOR
+   #:pattern-binding-pattern            ; ACCESSOR
+   #:make-pattern-binding               ; CONSTRUCTOR
+   #:pattern-binding-p                  ; FUNCTION
    #:pattern-literal                    ; STRUCT
    #:make-pattern-literal               ; CONSTRUCTOR
    #:pattern-literal-value              ; ACCESSOR
@@ -58,6 +64,12 @@
             (:copier nil))
   (name      (util:required 'name)      :type parser:identifier :read-only t)
   (orig-name (util:required 'orig-name) :type parser:identifier :read-only t))
+
+(defstruct (pattern-binding
+            (:include pattern)
+            (:copier nil))
+  (var     (util:required 'var)     :type pattern-var :read-only t)
+  (pattern (util:required 'pattern) :type pattern     :read-only t))
 
 (defun pattern-var-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -108,6 +120,11 @@
     (declare (values pattern-var-list &optional))
     (pattern-variables-generic% (pattern-constructor-patterns pattern)))
 
+  (:method ((pattern pattern-binding))
+    (declare (values pattern-var-list &optional))
+    (cons (pattern-binding-var pattern)
+          (pattern-variables-generic% (pattern-binding-pattern pattern))))
+
   (:method ((list list))
     (declare (values pattern-var-list))
     (mapcan #'pattern-variables-generic% list)))
@@ -135,6 +152,15 @@
   (make-pattern-wildcard
    :type (tc:apply-substitution subs (pattern-type node))
    :location (pattern-location node)))
+
+(defmethod tc:apply-substitution (subs (node pattern-binding))
+  (declare (type tc:substitution-list subs)
+           (values pattern-binding &optional))
+  (make-pattern-binding
+   :type (tc:apply-substitution subs (pattern-type node))
+   :location (pattern-location node)
+   :var (tc:apply-substitution subs (pattern-binding-var node))
+   :pattern (tc:apply-substitution subs (pattern-binding-pattern node))))
 
 (defmethod tc:apply-substitution (subs (node pattern-constructor))
   (declare (type tc:substitution-list subs)

@@ -12,6 +12,11 @@
    #:make-pattern-var                   ; ACCESSOR
    #:pattern-var-name                   ; ACCESSOR
    #:pattern-var-p                      ; FUNCTION
+   #:pattern-binding                    ; STRUCT
+   #:pattern-binding-var                ; ACCESSOR
+   #:pattern-binding-pattern            ; ACCESSOR
+   #:make-pattern-binding               ; CONSTRUCTOR
+   #:pattern-binding-p                  ; FUNCTION
    #:pattern-literal                    ; STRUCT
    #:make-pattern-literal               ; CONSTRUCTOR
    #:pattern-literal-value              ; ACCESSOR
@@ -50,6 +55,12 @@
             (:copier nil))
   (name (util:required 'name) :type symbol :read-only t))
 
+(defstruct (pattern-binding
+            (:include pattern)
+            (:copier nil))
+  (var     (util:required 'var)     :type pattern-var :read-only t)
+  (pattern (util:required 'pattern) :type pattern     :read-only t))
+
 (defstruct (pattern-literal
             (:include pattern)
             (:copier nil))
@@ -84,6 +95,12 @@
 
     nil)
 
+  (:method ((pattern pattern-binding))
+    (declare (values util:symbol-list))
+    
+    (append (pattern-variables-generic% (pattern-binding-var pattern))
+            (pattern-variables-generic% (pattern-binding-pattern pattern))))
+
   (:method ((pattern pattern-constructor))
     (declare (values util:symbol-list))
 
@@ -112,6 +129,14 @@
            (values pattern-wildcard &optional))
   (make-pattern-wildcard
    :type (tc:apply-substitution subs (pattern-type pattern))))
+
+(defmethod tc:apply-substitution (subs (pattern pattern-binding))
+  (declare (type tc:substitution-list subs)
+           (values pattern-binding &optional))
+  (make-pattern-binding
+   :type (tc:apply-substitution subs (pattern-type pattern))
+   :var (tc:apply-substitution subs (pattern-binding-var pattern))
+   :pattern (tc:apply-substitution subs (pattern-binding-pattern pattern))))
 
 (defmethod tc:apply-substitution (subs (pattern pattern-constructor))
   (declare (type tc:substitution-list subs)

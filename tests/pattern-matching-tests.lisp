@@ -73,3 +73,22 @@
   (is (match #\c
         (#\c True)
         (_ False))))
+
+(define-test test-match-bindings ()
+  (let mb = (MBar (Tuple 10 20)))
+  (let tpl = (match mb
+               ((MFoo n)                   (Tuple n n))
+               ((MBar (@ tpl (Tuple _ _))) tpl)))
+  (is (== tpl (Tuple 10 20)))
+
+  (is (match mb
+        ((Mbar (@ tpl (Tuple (@ a _) (@ b _))))
+         (== tpl (Tuple a b)))
+        (_ False)))
+
+  (is (match (make-list 1 2 3 4 5)
+        ;; match cons with 2 in second position
+        ;; but bind whole list and tail to vars
+        ((@ lst (Cons a (@ tl (Cons 2 _))))
+         (== lst (Cons a tl)))
+        (_ False))))

@@ -934,6 +934,15 @@ Returns a `node'.")
        :type (tc:qualified-ty-type qual-ty)
        :name (tc:pattern-var-name pat))))
 
+  (:method ((pat tc:pattern-binding))
+    (let ((qual-ty (tc:pattern-type pat)))
+      (assert (null (tc:qualified-ty-predicates qual-ty)))
+
+      (make-pattern-binding
+       :type (tc:qualified-ty-type qual-ty)
+       :var (translate-pattern (tc:pattern-binding-var pat))
+       :pattern (translate-pattern (tc:pattern-binding-pattern pat)))))
+
   (:method ((pat tc:pattern-literal))
     (let ((qual-ty (tc:pattern-type pat)))
       (assert (null (tc:qualified-ty-predicates qual-ty)))

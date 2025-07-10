@@ -1418,6 +1418,25 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
   (:documentation "Infer the type of pattern PAT and then unify against EXPECTED-TYPE.
 
 Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
+  (:method ((pat parser:pattern-binding) expected-type subs env)
+    (declare (type tc:ty expected-type)
+             (type tc:substitution-list subs)
+             (type tc-env env)
+             (values tc:ty pattern-binding tc:substitution-list))
+
+    (multiple-value-bind (pat-ty bound subs)
+        (infer-pattern-type (parser:pattern-binding-pattern pat) expected-type subs env)
+      (multiple-value-bind (pat-ty var subs)
+          (infer-pattern-type (parser:pattern-binding-var pat) pat-ty subs env)
+
+        (values
+         pat-ty
+         (make-pattern-binding
+          :type (tc:qualify nil pat-ty)
+          :var var
+          :pattern bound)
+         subs))))
+
   (:method ((pat parser:pattern-var) expected-type subs env)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
