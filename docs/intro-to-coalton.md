@@ -774,6 +774,15 @@ The into method is used only when a conversion can always be performed from one 
       ((Some (Some x_)) (Some x_))
       (_ None)))
 
+  ;; Submatches can be captured in a variable
+  (declare dedup-head (List :a -> List :a))
+  (define (dedup-head xs)
+    "If the first and second member of list are equal, drop the first"
+    (match xs
+      ((Cons a (@ tl1 (Cons b _))) 
+       (if (== a b) tl1 xs))
+      (_ xs)))
+
   ;; Integers or Strings can also be matched on
   (define (is-5-or-7 x)
     (match x
@@ -797,7 +806,12 @@ Functions can pattern match on their arguments, but the patterns must be exhaust
   (define (first (Tuple a _)) a)
 
   (declare second (Tuple :a :b -> :b))
-  (define second (fn ((Tuple _ b)) b)))
+  (define second (fn ((Tuple _ b)) b))
+
+  ;; pattern capture works here too
+  (declare prod-proj-1 (Tuple :a :b -> (Tuple :a (Tuple :a :b))))
+  (define (prod-proj-1 (@ tpl (Tuple a _))) (Tuple a tpl)))
+
 ```
 
 The operator `coalton-library:if` can be used as a shorthand when matching on Booleans:

@@ -20,12 +20,11 @@
 ;;; Maranget 2007, http://moscova.inria.fr/~maranget/papers/warn/index.html
 ;;;
 
-;;; Fundamental concepts so you can, you know, actually understand
-;;; this otherwise inscrutable module:
+;;; Fundamental concepts for the reader: 
 ;;;
 ;;; Patterns
 ;;; ---------
-
+;;;
 ;;;    The subtypes of COALTON-IMPL/TYPECHECKER:PATTERN
 ;;;
 ;;; Pattern Matrices & Row Matching
@@ -75,7 +74,7 @@
 ;;;   P but does match q (where v and q and P's rows all have the same
 ;;;   type).
 ;;;
-
+;;;
 
 (defun exhaustive-patterns-p (patterns env)
   "Are PATTERNS exhaustive?"
