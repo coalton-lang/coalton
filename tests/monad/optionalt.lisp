@@ -30,7 +30,7 @@
   (declare split-positive-state (st:ST (Optional Integer) :a
                                  -> Result (Optional Integer) (Optional Integer)))
   (define (split-positive-state stateful-calculation)
-    (let (Tuple state _) = (st:run stateful-calculation 0))
+    (let (Tuple state _) = (st:run stateful-calculation (Some 0)))
     (match state
       ((None) (Err None))
       ((Some x)

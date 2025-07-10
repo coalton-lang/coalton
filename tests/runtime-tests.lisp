@@ -106,7 +106,7 @@
 
 ;; Test defaulting and context reduction
 (define-test test-defaulting ()
-  (is (== (+ (Some (Some (the Integer 1))) (Some (Some 2))) (Some (Some 3)))))
+  (is (== (liftA2 (liftA2 +) (Some (Some (the Integer 1))) (Some (Some 2))) (Some (Some 3)))))
 
 
 ;; Test that explicit type declarations in let bindings work
