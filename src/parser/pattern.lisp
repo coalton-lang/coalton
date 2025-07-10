@@ -90,6 +90,11 @@
 (defstruct (pattern-binding
             (:include pattern)
             (:copier nil))
+  "A pattern that captures the runtime value it matches and binds it to a
+variable.
+
+This is distinct from a a PATTERN-VAR pattern, which matches any
+runtime value and binds it to a variable."
   (var     (util:required 'var)     :type pattern-var :read-only t)
   (pattern (util:required 'pattern) :type pattern     :read-only t))
 

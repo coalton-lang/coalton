@@ -40,14 +40,14 @@
                    ;; for exhaustiveness checking, we can collapse
                    ;; binding patterns, (@ VAR PAT) is part of an
                    ;; exhaustive match expression iff PAT is. 
-                 (loop :for branch :in (tc:node-match-branches node)
+                   (loop :for branch :in (tc:node-match-branches node)
                          :for pat := (tc:node-match-branch-pattern branch)
                          :collect (collapse-binding-patterns pat))))
              (loop :for pattern :in patterns
                    :do (check-for-var-matching-constructor pattern env))
 
              (let ((exhaustive-or-missing
-                      (find-non-matching-value (mapcar #'list patterns) 1 env)))
+                     (find-non-matching-value (mapcar #'list patterns) 1 env)))
                (unless (eq t exhaustive-or-missing)
                  (apply #'source:warn "non-exhaustive match"
                         (cons (source:note node "non-exhaustive match")
