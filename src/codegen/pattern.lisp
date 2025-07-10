@@ -149,6 +149,10 @@
 (defmethod tc:type-variables ((pattern pattern-var))
   (tc:type-variables (pattern-type pattern)))
 
+(defmethod tc:type-variables ((pattern pattern-binding))
+  (remove-duplicates (append (tc:type-variables (pattern-binding-var pattern))
+                             (tc:type-variables (pattern-binding-pattern pattern)))))
+
 (defmethod tc:type-variables ((pattern pattern-literal))
   (tc:type-variables (pattern-type pattern)))
 

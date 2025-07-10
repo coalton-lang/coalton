@@ -269,6 +269,7 @@ CLAUSE is a list representing a row-vector of patterns."
         (@ VAR PAT) 
 
    can be collapsed to PAT."
+  (declare (type tc:pattern pat) (values tc:pattern))
   (etypecase pat
     ((or tc:pattern-var tc:pattern-wildcard tc:pattern-literal)
      pat)

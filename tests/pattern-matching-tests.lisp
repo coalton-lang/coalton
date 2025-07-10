@@ -74,6 +74,10 @@
         (#\c True)
         (_ False))))
 
+(coalton-toplevel
+ (declare prod-proj-1 (Tuple :a :b -> (Tuple :a (Tuple :a :b))))
+ (define (prod-proj-1 (@ tpl (Tuple a _))) (Tuple a tpl)))
+
 (define-test test-match-bindings ()
   (let mb = (MBar (Tuple 10 20)))
   (let tpl = (match mb
@@ -91,4 +95,10 @@
         ;; but bind whole list and tail to vars
         ((@ lst (Cons a (@ tl (Cons 2 _))))
          (== lst (Cons a tl)))
-        (_ False))))
+        (_ False)))
+
+  (let ((declare x (Tuple Integer Integer))
+        (x (Tuple 1 2)))
+    (is (== (Tuple 1 x) (prod-proj-1 x)))
+    (let (Tuple 1 (@ tpl (Tuple _ _))) = (prod-proj-1 x))
+    (is (== x tpl))))

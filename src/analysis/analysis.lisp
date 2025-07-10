@@ -21,8 +21,11 @@
 (defun check-pattern-exhaustiveness (pattern env)
   (declare (type tc:pattern pattern)
            (type tc:environment env))
-
-  (let ((missing (find-non-matching-value (list (list pattern)) 1 env)))
+  (let ((missing
+          (find-non-matching-value
+           ;; binding patterns can be collapsed in exhaustiveness check
+           (list (list (collapse-binding-patterns pattern))) 1
+           env)))
     (unless (eq t missing)
       (tc-error "Non-exhaustive match"
                 (source:secondary-note pattern "missing case ~w"
