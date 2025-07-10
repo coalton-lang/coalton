@@ -158,8 +158,7 @@ Example:
             (definition-bindings (tc:translation-unit-definitions translation-unit) env offsets)
             (instance-bindings (tc:translation-unit-instances translation-unit) env offsets)))
          (definition-names (mapcar #'car definitions))
-         (env (clean-environment-for-redefinition env definitions))
-         )
+         (env (clean-environment-for-redefinition env definitions)))
 
     (multiple-value-bind (definitions env)
         (optimize-bindings definitions monomorphize-table inline-p-table *package* env)

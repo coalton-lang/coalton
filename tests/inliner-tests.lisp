@@ -92,7 +92,7 @@
 
 ;; Issue on redefining inlinable functions
 ;; https://github.com/coalton-lang/coalton/issues/1499
-;; These functinos are used by inliner-tests-1.lisp, which is
+;; These functions are used by inliner-tests-1.lisp, which is
 ;; loaded after this file.
 
 (coalton-toplevel

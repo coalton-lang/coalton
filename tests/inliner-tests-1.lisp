@@ -23,8 +23,7 @@
     (define (test-fact-method n)
       (if (== 0 n)
           2
-          (test-fact-method (1- n)))))
-  )
+          (test-fact-method (1- n))))))
 
 (define-test inlinable-function-redefinition-test ()
   "Ensure redefining inliable functions isn't affected by previous definition"
