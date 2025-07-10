@@ -25,6 +25,12 @@ layout: two-pane
 <aside class=\"sidebar\">
 
 ### Reference
+
+<div class=\"symbol-search\">
+  <input type=\"text\" id=\"symbol-search-input\" placeholder=\"Search symbols...\" autocomplete=\"off\">
+  <div class=\"search-results\" id=\"search-results\"></div>
+</div>
+
 " stream)
 
     ;; package menu
