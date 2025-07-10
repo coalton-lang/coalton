@@ -90,6 +90,23 @@
 (define-test monomorphize-inline ()
   (is (== 5 (monomorph-for-inline 3))))
 
+;; Issue on redefining inlinable functions
+;; https://github.com/coalton-lang/coalton/issues/1499
+;; These functinos are used by inliner-tests-1.lisp, which is
+;; loaded after this file.
+
+(coalton-toplevel
+  (inline)
+  (define (test-inlinable-rec-1 n)
+    (if (== n 0)
+        111
+        (test-inlinable-rec-2 (1- n))))
+  (inline)
+  (define (test-inlinable-rec-2 n)
+    (if (== n 0)
+        222
+        (test-inlinable-rec-1 (1- n)))))
+
 
 (in-package #:coalton-tests)
 
@@ -157,10 +174,10 @@ deem the AST fully unrolled, and stop inlining.
 Also ensure that running the inliner again does not further
 unroll the node."
   (labels ((abstraction-second-branch (node)
-             (second 
-              (ast:node-match-branches 
-               (ast:node-let-subexpr 
-                (ast:node-abstraction-subexpr 
+             (second
+              (ast:node-match-branches
+               (ast:node-let-subexpr
+                (ast:node-abstraction-subexpr
                  node)))))
            (branch-second-branch (node)
              (second
@@ -169,17 +186,17 @@ unroll the node."
                 (ast:match-branch-body
                  node)))))
            (fact-to-locally (node)
-             (ast:match-branch-body 
-              (branch-second-branch 
-               (abstraction-second-branch 
-                node))))) 
+             (ast:match-branch-body
+              (branch-second-branch
+               (abstraction-second-branch
+                node)))))
     (let ((locally-node-1
             (fact-to-locally
              (coalton:lookup-code
               'coalton-native-tests::test-fact-caller)))
           ;; Same node, but inlined again
           (locally-node-2
-            (coalton-impl/codegen/inliner:inline-applications 
+            (coalton-impl/codegen/inliner:inline-applications
              (fact-to-locally
               (coalton:lookup-code
                'coalton-native-tests::test-fact-caller))
@@ -214,7 +231,7 @@ unroll the node."
          (caller-3
            (coalton-impl/codegen/inliner:inline-applications
             caller-2
-            entry:*global-environment*))) 
+            entry:*global-environment*)))
     (is (= (traverse:count-nodes caller-1)
            (traverse:count-nodes caller-2)
            (traverse:count-nodes caller-3)))))
