@@ -45,22 +45,18 @@ Used for implementing derivers."
   (location (util:required 'location) :type source:location  :read-only t))
 
 (defun parser-definition-type-constraints (def class)
-  (flet ((make-ty-predicate (type class)
-           (parser:make-ty-predicate
-            :location (source:location type)
-            :class (parser:make-identifier-src
-                    :location (source:location type)
-                    :name class)
-            :types (list type))))
-    (etypecase def
-      (parser:toplevel-define-type
-       (loop :for ctor :in (parser:toplevel-define-type-ctors def)
-             :nconc (loop :for type :in (parser:constructor-fields ctor)
-                          :collect (make-ty-predicate type class))))
-      (parser:toplevel-define-struct
-       (loop :for field :in (parser:toplevel-define-struct-fields def)
-             :for type := (parser:struct-field-type field)
-             :collect (make-ty-predicate type class))))))
+  (declare (type (or parser:toplevel-define-struct parser:toplevel-define-type) def)
+           (type symbol class))
+
+  (mapcar (lambda (type)
+            (parser:make-ty-predicate
+             :location (source:location type)
+             :class (parser:make-identifier-src
+                     :location (source:location type)
+                     :name class)
+             :types (list type)))
+          (alexandria:mappend #'parser:type-definition-ctor-field-types
+                              (parser:type-definition-ctors def))))
 
 (defun parser-definition-type (def)
   (etypecase def
@@ -103,9 +99,7 @@ Used for implementing derivers."
       :ctors (list
               (make-constructor
                :name (parser:toplevel-define-struct-name def)
-               :fields (mapcar
-                        #'parser:struct-field-type
-                        (parser:toplevel-define-struct-fields def))))))
+               :fields (parser:type-definition-ctor-field-types def)))))
     (parser:toplevel-define-type
      (make-abstract-type-definition
       :location (source:location def)
@@ -115,7 +109,7 @@ Used for implementing derivers."
               (lambda (ctor)
                 (make-constructor
                  :name (parser:constructor-name ctor)
-                 :fields (parser:constructor-fields ctor)))
+                 :fields (parser:type-definition-ctor-field-types ctor)))
               (parser:toplevel-define-type-ctors def))))))
 
 (defgeneric derive-methods (class type-definition env)
