@@ -90,6 +90,23 @@
 (define-test monomorphize-inline ()
   (is (== 5 (monomorph-for-inline 3))))
 
+;; Issue on redefining inlinable functions
+;; https://github.com/coalton-lang/coalton/issues/1499
+;; These functions are used by inliner-tests-1.lisp, which is
+;; loaded after this file.
+
+(coalton-toplevel
+  (inline)
+  (define (test-inlinable-rec-1 n)
+    (if (== n 0)
+        111
+        (test-inlinable-rec-2 (1- n))))
+  (inline)
+  (define (test-inlinable-rec-2 n)
+    (if (== n 0)
+        222
+        (test-inlinable-rec-1 (1- n)))))
+
 
 (in-package #:coalton-tests)
 
@@ -150,17 +167,14 @@
           1
           (* n (factorial-1 (- n 1)))))"))
 
-(deftest limit-unroll-test ()
-  "Ensure that we get to a locally node,
-deem the AST fully unrolled, and stop inlining.
-
-Also ensure that running the inliner again does not further
-unroll the node."
+(defun unroll-limit-test-proc (caller)
+  "The body of limit-unroll-test.  We want to run it twice, before and after
+redefinition."
   (labels ((abstraction-second-branch (node)
-             (second 
-              (ast:node-match-branches 
-               (ast:node-let-subexpr 
-                (ast:node-abstraction-subexpr 
+             (second
+              (ast:node-match-branches
+               (ast:node-let-subexpr
+                (ast:node-abstraction-subexpr
                  node)))))
            (branch-second-branch (node)
              (second
@@ -169,20 +183,18 @@ unroll the node."
                 (ast:match-branch-body
                  node)))))
            (fact-to-locally (node)
-             (ast:match-branch-body 
-              (branch-second-branch 
-               (abstraction-second-branch 
-                node))))) 
+             (ast:match-branch-body
+              (branch-second-branch
+               (abstraction-second-branch
+                node)))))
     (let ((locally-node-1
             (fact-to-locally
-             (coalton:lookup-code
-              'coalton-native-tests::test-fact-caller)))
+             (coalton:lookup-code caller)))
           ;; Same node, but inlined again
           (locally-node-2
-            (coalton-impl/codegen/inliner:inline-applications 
+            (coalton-impl/codegen/inliner:inline-applications
              (fact-to-locally
-              (coalton:lookup-code
-               'coalton-native-tests::test-fact-caller))
+              (coalton:lookup-code caller))
              entry:*global-environment*)))
       ;; Make sure a node-locally was emitted.
       (is (typep locally-node-1 'ast:node-locally))
@@ -200,7 +212,15 @@ unroll the node."
 
       ;; Inlining again doesn't add any more nodes to the AST.
       (is (= (traverse:count-nodes locally-node-1)
-             (traverse:count-nodes locally-node-2))))))
+             (traverse:count-nodes locally-node-2)))))
+
+(deftest limit-unroll-test ()
+  "Ensure that we get to a locally node,
+deem the AST fully unrolled, and stop inlining.
+
+Also ensure that running the inliner again does not further
+unroll the node."
+  (unroll-limit-test-proc 'coalton-native-tests::test-fact-caller))
 
 (deftest limit-unroll-method-test ()
   "Ensure that methods don't keep recursively inlining."
@@ -214,7 +234,7 @@ unroll the node."
          (caller-3
            (coalton-impl/codegen/inliner:inline-applications
             caller-2
-            entry:*global-environment*))) 
+            entry:*global-environment*)))
     (is (= (traverse:count-nodes caller-1)
            (traverse:count-nodes caller-2)
            (traverse:count-nodes caller-3)))))

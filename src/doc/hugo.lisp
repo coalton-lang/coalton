@@ -19,29 +19,27 @@
   (let ((stream (output-stream backend)))
     (write-string "---
 identifier: Reference
+layout: two-pane
 ---
 
-<style>
-@media only screen and (max-width: 1250px) {
-  .sidebar {
-    display: none;
-  }
-}
-</style>
-
-<div class=\"sidebar\" style=\"height: 0; position: sticky; top: 10px\">
-<div style=\"position: relative; right: 50%; width: 50%;\">
+<aside class=\"sidebar\">
 
 ### Reference
+
+<div class=\"symbol-search\">
+  <input type=\"text\" id=\"symbol-search-input\" placeholder=\"Search symbols...\" autocomplete=\"off\">
+  <div class=\"search-results\" id=\"search-results\"></div>
+</div>
+
 " stream)
 
     ;; package menu
     (dolist (package packages)
       (format stream "- ~A~%" (object-link package)))
-    (format stream "</div></div><div>~%~%")
+    (format stream "</aside>~%<div class=\"main-content\">~%~%")
 
     ;; markdown content
     (let ((backend (make-backend ':markdown stream)))
       (dolist (package packages)
         (write-object backend package)))
-    (format stream "</div></div></div>")))
+    (format stream "</div>")))

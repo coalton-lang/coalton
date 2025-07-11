@@ -288,6 +288,7 @@
                (:file "looping-native-tests")
                (:file "monomorphizer-tests")
                (:file "inliner-tests")
+               (:file "inliner-tests-1") ; must come after inliner-tests
                (:file "deriver-tests")
                (:file "file-tests")
                (:file "experimental-tests")
