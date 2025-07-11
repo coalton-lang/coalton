@@ -201,7 +201,7 @@
                :for lambda-var
                  := (gensym (symbol-name exception-name))
                :for bindings
-                 := (nth-value 1 (codegen-pattern pattern lambda-var env))
+                 := (nth-value 1 (codegen-pattern pattern lambda-var (pattern-type pattern) env))
                ;; NB: if CASE-BODY invokes a restart then control will
                ;; be transferred before the transfer due to
                ;; return-from.
@@ -226,7 +226,7 @@
                  := (resumable-branch-pattern branch)
                :for restart-name := (tc:lisp-type (pattern-type pattern) env)
                :for restart-var := (gensym (symbol-name restart-name))
-               :for bindings := (nth-value 1 (codegen-pattern pattern restart-var env))
+               :for bindings := (nth-value 1 (codegen-pattern pattern restart-var (pattern-type pattern) env))
                :for inner-body := (codegen-expression (resumable-branch-body branch) env)
                :collect `(,restart-name (,restart-var)
                                         (declare (ignorable ,restart-var))
