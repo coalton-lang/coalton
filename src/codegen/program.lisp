@@ -137,6 +137,13 @@ Example:
               (setf (gethash (car binding) offsets) offset))
         :append instance-bindings))
 
+(defun clean-environment-for-redefinition (env definitions)
+  "If we're redefinining functions that can be inlinable, we should remove it from ENV to avoid the code from expanded using old definition."
+  (loop :for (name . _) :in definitions
+        :for fun := (tc:lookup-function env name :no-error t)
+        :do (setf env (tc:unset-function env name))
+        :finally (return env)))
+
 (defun compile-translation-unit (translation-unit monomorphize-table inline-p-table env)
   (declare (type tc:translation-unit translation-unit)
            (type hash-table monomorphize-table)
@@ -148,7 +155,8 @@ Example:
            (append
             (definition-bindings (tc:translation-unit-definitions translation-unit) env offsets)
             (instance-bindings (tc:translation-unit-instances translation-unit) env offsets)))
-         (definition-names (mapcar #'car definitions)))
+         (definition-names (mapcar #'car definitions))
+         (env (clean-environment-for-redefinition env definitions)))
 
     (multiple-value-bind (definitions env)
         (optimize-bindings definitions monomorphize-table inline-p-table *package* env)
