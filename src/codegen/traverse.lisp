@@ -194,10 +194,10 @@ nodes."
       (make-node-throw
        :type (node-type node)
        :expr (apply *traverse* (node-throw-expr node) args)))
-    (action (:traverse node-resume node &rest args)
-      (make-node-resume
+    (action (:traverse node-resume-to node &rest args)
+      (make-node-resume-to
        :type (node-type node)
-       :expr (apply *traverse* (node-resume-expr node) args)))
+       :expr (apply *traverse* (node-resume-to-expr node) args)))
     (action (:traverse node-block node &rest args)
       (make-node-block
        :type (node-type node)

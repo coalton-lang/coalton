@@ -225,9 +225,9 @@ in expressions. May not include all bound variables."
     (declare (values node-variable-list &optional))
     (collect-variables-generic% (node-throw-expr node)))
 
-  (:method ((node node-resume))
+  (:method ((node node-resume-to))
     (declare (values node-variable-list &optional))
-    (collect-variables-generic% (node-resume-expr node)))
+    (collect-variables-generic% (node-resume-to-expr node)))
 
   (:method ((node node-application))
     (declare (values node-variable-list &optional))

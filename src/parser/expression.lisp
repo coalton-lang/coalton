@@ -105,9 +105,9 @@
    #:node-throw                         ; STRUCT
    #:make-node-throw                    ; CONSTRUCTOR
    #:node-throw-expr                    ; ACCESSOR
-   #:node-resume                        ; STRUCT
-   #:make-node-resume                   ; CONSTRUCTOR
-   #:node-resume-expr                   ; ACCESSOR
+   #:node-resume-to                     ; STRUCT
+   #:make-node-resume-to                ; CONSTRUCTOR
+   #:node-resume-to-expr                ; ACCESSOR
    #:node-application                   ; STRUCT
    #:make-node-application              ; CONSTRUCTOR
    #:node-application-rator             ; ACCESSOR
@@ -585,7 +585,7 @@ Rebound to NIL parsing an anonymous FN.")
             (:copier nil))
   (expr (util:required 'expr) :type node :read-only t))
 
-(defstruct (node-resume
+(defstruct (node-resume-to
             (:include node)
             (:copier nil))
   (expr (util:required 'expr) :type node :read-only t))
@@ -731,9 +731,9 @@ Rebound to NIL parsing an anonymous FN.")
           (eq 'coalton:resume-to (cst:raw (cst:first form))))
      (let (expr)
 
-       ;; (resume ...)
+       ;; (resume-to ...)
        (when (cst:consp (cst:rest form))
-         ;; (resume a b ...)
+         ;; (resume-to a b ...)
          (when (cst:consp (cst:rest (cst:rest form)))
            (parse-error "Malformed resume-to expression"
                         (note source (cst:first (cst:rest (cst:rest form)))
@@ -741,7 +741,7 @@ Rebound to NIL parsing an anonymous FN.")
 
          (setf expr (parse-expression (cst:second form) source)))
 
-       (make-node-resume
+       (make-node-resume-to
         :expr expr
         :location (form-location source form))))
 

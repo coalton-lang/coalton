@@ -313,9 +313,9 @@
   (:method ((node node-throw) env)
     `(error ,(codegen-expression (node-throw-expr node) env)))
 
-  (:method ((node node-resume) env)
-    (let ((restart-name (tc:lisp-type (node-type (node-resume-expr node)) env)))
-     `(invoke-restart ',restart-name ,(codegen-expression (node-resume-expr node) env))))
+  (:method ((node node-resume-to) env)
+    (let ((restart-name (tc:lisp-type (node-type (node-resume-to-expr node)) env)))
+     `(invoke-restart ',restart-name ,(codegen-expression (node-resume-to-expr node) env))))
 
   (:method ((expr node-block) env)
     `(block ,(block-label (node-block-name expr))

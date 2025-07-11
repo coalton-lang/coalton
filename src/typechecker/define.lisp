@@ -980,28 +980,28 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
         :expr expr-node)
        subs)))
 
-  (:method ((node parser:node-resume) expected-type subs env)
+  (:method ((node parser:node-resume-to) expected-type subs env)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (values tc:ty tc:ty-predicate-list accessor-list node-resume tc:substitution-list))
+             (values tc:ty tc:ty-predicate-list accessor-list node-resume-to tc:substitution-list))
 
     (multiple-value-bind (resumption-ty preds accessors expr-node subs)
-        (infer-expression-type (parser:node-resume-expr node)
+        (infer-expression-type (parser:node-resume-to-expr node)
                                (tc:make-variable)
                                subs
                                env)
 
       (unless (resumption-type-p resumption-ty env)
         (tc-error "Invalid resume-to"
-                  (tc-note node "Argument to `resume` be a known resumption.")
+                  (tc-note node "Argument to `resume-to` be a known resumption.")
                   (tc-note node "Not Yet Supported: resume-to polymorphism.")))
       
       (values
        expected-type
        preds
        accessors
-       (make-node-resume
+       (make-node-resume-to
         :type (tc:qualify nil expected-type)
         :location (source:location node)
         :expr expr-node)

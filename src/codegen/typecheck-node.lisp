@@ -216,10 +216,10 @@
     (typecheck-node (node-throw-expr node) env)
     (node-type node))
 
-  (:method ((node node-resume) env)
+  (:method ((node node-resume-to) env)
     (declare (type tc:environment env)
              (values tc:ty))
-    (typecheck-node (node-resume-expr node) env)
+    (typecheck-node (node-resume-to-expr node) env)
     (node-type node))
 
   (:method ((expr node-block) env)

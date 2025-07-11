@@ -493,7 +493,7 @@ Returns a `node'.")
        :type (tc:qualified-ty-type qual-ty)
        :expr (translate-expression (tc:node-throw-expr expr) ctx env))))
 
-  (:method ((expr tc:node-resume) ctx env)
+  (:method ((expr tc:node-resume-to) ctx env)
     (declare (type pred-context ctx)
              (type tc:environment env)
              (values node))
@@ -501,9 +501,9 @@ Returns a `node'.")
     (let ((qual-ty (tc:node-type expr)))
       (assert (null (tc:qualified-ty-predicates qual-ty)))
 
-      (make-node-resume
+      (make-node-resume-to
        :type (tc:qualified-ty-type qual-ty)
-       :expr (translate-expression (tc:node-resume-expr expr) ctx env))))
+       :expr (translate-expression (tc:node-resume-to-expr expr) ctx env))))
 
 
   (:method ((expr tc:node-or) ctx env)
