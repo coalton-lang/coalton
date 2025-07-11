@@ -321,3 +321,60 @@ error: Malformed type definition
 help: remove additional docstring
  5 |   This is also a docstring)
    |   ------------------------
+
+================================================================================
+114 Derive struct, class does not exist
+================================================================================
+
+(package test-package)
+
+(derive Quux)
+(define-struct Point
+  (x UFix)
+  (y UFix))
+
+--------------------------------------------------------------------------------
+
+ error: Cannot derive class QUUX for type POINT.
+  --> test:4:0
+   |
+ 4 |   (define-struct Point
+   |  _^
+ 5 | |   (x UFix)
+ 6 | |   (y UFix))
+   | |___________^ Class QUUX does not exist.
+
+================================================================================
+115 Derive struct, deriver is not implemented
+================================================================================
+
+(package test-package)
+
+(define-class (Quuxableness :a))
+
+(derive Quuxableness)
+(define-struct Point
+  (x UFix)
+  (y UFix))
+
+--------------------------------------------------------------------------------
+
+ error: Cannot derive class QUUXABLENESS for type POINT.
+  --> test:6:0
+   |
+ 6 |   (define-struct Point
+   |  _^
+ 7 | |   (x UFix)
+ 8 | |   (y UFix))
+   | |___________^ Class QUUXABLENESS does not exist.
+
+================================================================================
+116 Derive struct, no errors
+================================================================================
+
+(package test-package)
+
+(derive coalton-library/classes:Eq)
+(define-struct Point
+  (x UFix)
+  (y UFix))
