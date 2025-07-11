@@ -29,6 +29,9 @@
 
 (in-package #:coalton-tests)
 
+(uiop:define-package #:coalton-tests/deriver-tests
+  (:use #:coalton #:coalton-library/classes))
+
 (deftest derive-eq-for-invalid-type-test ()
   "Ensure we can't compile unsound code using derived methods."
   (check-coalton-types
@@ -50,6 +53,26 @@
       (derive Eq)
       (define-type NotEqAble (NotEqAbleThing UnEqAble))
       (define (definitely-not-eqable-2)
-        (== (NotEqAbleThing UnEqAbleThing) (NotEqAbleThing UnEqAbleThing)))"))) 
+        (== (NotEqAbleThing UnEqAbleThing) (NotEqAbleThing UnEqAbleThing)))")))
+
+(deftest derive-unknown-class () 
+  (signals cl:error 
+    (with-coalton-compilation (:package #:coalton-tests/deriver-tests)
+      (coalton-toplevel
+        (derive Quux)
+        (define-struct Point
+          (x UFix)
+          (y UFix)))))) 
+
+(deftest derive-unimplemented-deriver ()
+  (signals cl:error 
+    (with-coalton-compilation (:package #:coalton-tests/deriver-tests)
+      (coalton-toplevel
+        (define-class (Quuxable :a)))
+      (coalton-toplevel
+        (derive Quuxable)
+        (define-struct Point
+          (x UFix)
+          (y UFix))))))
   
 

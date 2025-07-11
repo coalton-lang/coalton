@@ -79,12 +79,12 @@ the actual methods."
 
   (let ((type-name (parser:identifier-src-name (parser:type-definition-name def)))) 
     (when (null (tc:lookup-class (penv:partial-type-env-env env) class :no-error t))
-      (source:error (format nil "Cannot derive class ~A for type ~A." class type-name)
-                    (source:note def "Class ~A does not exist." class)))
+      (tc:tc-error (format nil "Cannot derive class ~A for type ~A." class type-name)
+                   (source:note def "Class ~A does not exist." class)))
 
     (when (null (compute-applicable-methods #'derive-methods (list class def env)))
-      (source:error (format nil "Cannot derive class ~A for type ~A." class type-name)
-                    (source:note def "Deriver for ~A is not implemented." class))))
+      (tc:tc-error (format nil "Cannot derive class ~A for type ~A." class type-name)
+                   (source:note def "Deriver for ~A is not implemented." class))))
 
   (parser:make-toplevel-define-instance
    :location (source:location def)
