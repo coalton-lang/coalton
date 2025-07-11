@@ -714,14 +714,17 @@ Rebound to NIL parsing an anonymous FN.")
      (let (expr)
 
        ;; (throw ...)
-       (when (cst:consp (cst:rest form))
-         ;; (throw a b ...)
-         (when (cst:consp (cst:rest (cst:rest form)))
-           (parse-error "Malformed throw expression"
-                        (note source (cst:first (cst:rest (cst:rest form)))
-                              "unexpected trailing form")))
+       (unless (cst:consp (cst:rest form))
+         (parse-error "Malformed throw expression"
+                      (note source (cst:first form) "expression expected")))
 
-         (setf expr (parse-expression (cst:second form) source)))
+       (setf expr (parse-expression (cst:second form) source))
+
+       ;; (throw a b ...)
+       (when (cst:consp (cst:rest (cst:rest form)))
+         (parse-error "Malformed throw expression"
+                      (note source (cst:first (cst:rest (cst:rest form)))
+                            "unexpected trailing form")))
 
        (make-node-throw
         :expr expr
@@ -732,14 +735,17 @@ Rebound to NIL parsing an anonymous FN.")
      (let (expr)
 
        ;; (resume-to ...)
-       (when (cst:consp (cst:rest form))
+       (unless (cst:consp (cst:rest form))
          ;; (resume-to a b ...)
-         (when (cst:consp (cst:rest (cst:rest form)))
-           (parse-error "Malformed resume-to expression"
-                        (note source (cst:first (cst:rest (cst:rest form)))
-                              "unexpected trailing form")))
+         (parse-error "Malformed resume-to expression"
+                      (note source (cst:first form) "expression expected")))
 
-         (setf expr (parse-expression (cst:second form) source)))
+       (setf expr (parse-expression (cst:second form) source))
+
+       (when (cst:consp (cst:rest (cst:rest form)))
+         (parse-error "Malformed resume-to expression"
+                      (note source (cst:first (cst:rest (cst:rest form)))
+                            "unexpected trailing form")))
 
        (make-node-resume-to
         :expr expr
@@ -752,6 +758,11 @@ Rebound to NIL parsing an anonymous FN.")
      (unless (cst:consp (cst:rest form))
        (parse-error "Malformed resumable expression"
                     (note-end source (cst:first form) "expected expression")))
+
+     ;; (resumable expr ...)
+     (unless (cst:consp (cst:rest (cst:rest form)))
+       (parse-error "Malformed resumable expression"
+                    (note-end source (cst:second form) "expected resumeable cases")))
 
      (make-node-resumable
       :expr (parse-expression (cst:second form) source)
@@ -767,6 +778,12 @@ Rebound to NIL parsing an anonymous FN.")
      (unless (cst:consp (cst:rest form))
        (parse-error "Malformed catch expression"
                     (note-end source (cst:first form) "expected expression")))
+     
+     ;; (catch (expr) ...)
+     (unless (cst:consp (cst:rest (cst:rest form)))
+       (parse-error "Malformed catch expression"
+                    (note-end source (cst:second form) "expected catch cases")))
+     
 
      (make-node-catch
       :expr (parse-expression (cst:second form) source)
