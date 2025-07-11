@@ -217,21 +217,21 @@
          (handler-bind ,handler-cases
            ,(codegen-expression (node-catch-expr node) env)))))
 
-  (:method ((node node-resume-from) env)
+  (:method ((node node-resumable) env)
     (declare (type tc:environment env))
     (let* ((clauses
              (loop
-               :for branch :in (node-resume-from-branches node)
+               :for branch :in (node-resumable-branches node)
                :for pattern
-                 := (resume-from-branch-pattern branch)
+                 := (resumable-branch-pattern branch)
                :for restart-name := (tc:lisp-type (pattern-type pattern) env)
                :for restart-var := (gensym (symbol-name restart-name))
                :for bindings := (nth-value 1 (codegen-pattern pattern restart-var env))
-               :for inner-body := (codegen-expression (resume-from-branch-body branch) env)
+               :for inner-body := (codegen-expression (resumable-branch-body branch) env)
                :collect `(,restart-name (,restart-var)
                                         (declare (ignorable ,restart-var))
                                         (let ,bindings ,inner-body)))))
-     `(restart-case ,(codegen-expression (node-resume-from-expr node) env)
+     `(restart-case ,(codegen-expression (node-resumable-expr node) env)
         ,@clauses)))
 
   (:method ((expr node-match) env)

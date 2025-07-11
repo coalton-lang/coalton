@@ -32,8 +32,8 @@
   (return             #'identity :type function :read-only t)
   (throw              #'identity :type function :read-only t)
   (resume             #'identity :type function :read-only t)
-  (resume-from-branch #'identity :type function :read-only t)
-  (resume-from        #'identity :type function :read-only t)
+  (resumable-branch   #'identity :type function :read-only t)
+  (resumable          #'identity :type function :read-only t)
   (application        #'identity :type function :read-only t)
   (or                 #'identity :type function :read-only t)
   (and                #'identity :type function :read-only t)
@@ -191,28 +191,28 @@
       :expr (traverse (node-catch-expr node) block)
       :branches (traverse (node-catch-branches node) block))))
 
-  (:method ((node node-resume-from-branch) block)
+  (:method ((node node-resumable-branch) block)
     (declare (type traverse-block block)
-             (values node-resume-from-branch &optional))
+             (values node-resumable-branch &optional))
 
     (funcall
-     (traverse-resume-from-branch block)
-     (make-node-resume-from-branch
-      :pattern (node-resume-from-branch-pattern node)
-      :body (traverse (node-resume-from-branch-body node) block)
+     (traverse-resumable-branch block)
+     (make-node-resumable-branch
+      :pattern (node-resumable-branch-pattern node)
+      :body (traverse (node-resumable-branch-body node) block)
       :location (source:location node))))
 
-  (:method ((node node-resume-from) block)
+  (:method ((node node-resumable) block)
     (declare (type traverse-block block)
              (values node &optional))
 
     (funcall
-     (traverse-resume-from block)
-     (make-node-resume-from
+     (traverse-resumable block)
+     (make-node-resumable
       :type (node-type node)
       :location (source:location node)
-      :expr (traverse (node-resume-from-expr node) block)
-      :branches (traverse (node-resume-from-branches node) block))))
+      :expr (traverse (node-resumable-expr node) block)
+      :branches (traverse (node-resumable-branches node) block))))
 
 
   (:method ((node node-progn) block)

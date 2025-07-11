@@ -146,18 +146,18 @@ nodes."
                                   args)))
                   (node-catch-branches node))))
 
-    (action (:traverse node-resume-from node &rest args)
-      (make-node-resume-from
+    (action (:traverse node-resumable node &rest args)
+      (make-node-resumable
        :type (node-type node)
-       :expr (apply *traverse* (node-resume-from-expr node) args)
+       :expr (apply *traverse* (node-resumable-expr node) args)
        :branches (mapcar
                   (lambda (branch)
-                    (make-resume-from-branch
-                     :pattern (resume-from-branch-pattern branch)
+                    (make-resumable-branch
+                     :pattern (resumable-branch-pattern branch)
                      :body (apply *traverse*
-                                  (resume-from-branch-body branch)
+                                  (resumable-branch-body branch)
                                   args)))
-                  (node-resume-from-branches node))))
+                  (node-resumable-branches node))))
 
     
     (action (:traverse node-while node &rest args)

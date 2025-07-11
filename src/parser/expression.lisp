@@ -83,15 +83,15 @@
    #:make-node-catch                    ; CONSTRUCTOR
    #:node-catch-expr                    ; ACCESSOR
    #:node-catch-branches                ; ACCESSOR
-   #:node-resume-from-branch            ; STRUCT
-   #:make-node-resume-from-branch       ; CONSTRUCTOR
-   #:node-resume-from-branch-pattern    ; ACCESSOR
-   #:node-resume-from-branch-body       ; ACCESSOR
-   #:node-resume-from-branch-list       ; TYPE
-   #:node-resume-from                   ; STRUCT
-   #:make-node-resume-from              ; CONSTRUCTOR
-   #:node-resume-from-expr              ; ACCESSOR
-   #:node-resume-from-branches          ; ACCESSOR
+   #:node-resumable-branch              ; STRUCT
+   #:make-node-resumable-branch         ; CONSTRUCTOR
+   #:node-resumable-branch-pattern      ; ACCESSOR
+   #:node-resumable-branch-body         ; ACCESSOR
+   #:node-resumable-branch-list         ; TYPE
+   #:node-resumable                     ; STRUCT
+   #:make-node-resumable                ; CONSTRUCTOR
+   #:node-resumable-expr                ; ACCESSOR
+   #:node-resumable-branches            ; ACCESSOR
    #:node-progn                         ; STRUCT
    #:make-node-progn                    ; CONSTRUCTOR
    #:node-progn-body                    ; ACCESSOR
@@ -102,9 +102,9 @@
    #:node-return                        ; STRUCT
    #:make-node-return                   ; CONSTRUCTOR
    #:node-return-expr                   ; ACCESSOR
-   #:node-throw                        ; STRUCT
-   #:make-node-throw                   ; CONSTRUCTOR
-   #:node-throw-expr                   ; ACCESSOR
+   #:node-throw                         ; STRUCT
+   #:make-node-throw                    ; CONSTRUCTOR
+   #:node-throw-expr                    ; ACCESSOR
    #:node-resume                        ; STRUCT
    #:make-node-resume                   ; CONSTRUCTOR
    #:node-resume-expr                   ; ACCESSOR
@@ -590,27 +590,27 @@ Rebound to NIL parsing an anonymous FN.")
             (:copier nil))
   (expr (util:required 'expr) :type node :read-only t))
 
-(defstruct (node-resume-from-branch
+(defstruct (node-resumable-branch
             (:copier nil))
   (pattern  (util:required 'pattern)  :type pattern         :read-only t)
   (body     (util:required 'body)     :type node-body       :read-only t)
   (location (util:required 'location) :type source:location :read-only t))
 
-(defmethod source:location ((self node-resume-from-branch))
-  (node-resume-from-branch-location self))
+(defmethod source:location ((self node-resumable-branch))
+  (node-resumable-branch-location self))
 
-(defun node-resume-from-branch-list-p (x)
+(defun node-resumable-branch-list-p (x)
   (and (alexandria:proper-list-p x)
-       (every #'node-resume-from-branch-p x)))
+       (every #'node-resumable-branch-p x)))
 
-(deftype node-resume-from-branch-list ()
-  '(satisfies node-resume-from-branch-list-p))
+(deftype node-resumable-branch-list ()
+  '(satisfies node-resumable-branch-list-p))
 
-(defstruct (node-resume-from
+(defstruct (node-resumable
             (:include node)
             (:copier nil))
   (expr     (util:required 'expr)     :type node                         :read-only t)
-  (branches (util:required 'branches) :type node-resume-from-branch-list :read-only t))
+  (branches (util:required 'branches) :type node-resumable-branch-list :read-only t))
 
 (defstruct (node-catch-branch
             (:copier nil))
@@ -748,16 +748,16 @@ Rebound to NIL parsing an anonymous FN.")
     ((and (cst:atom (cst:first form))
           (eq 'coalton:resumable (cst:raw (cst:first form))))
 
-     ;; (resume-from)
+     ;; (resumable)
      (unless (cst:consp (cst:rest form))
-       (parse-error "Malformed resume-from expression"
+       (parse-error "Malformed resumable expression"
                     (note-end source (cst:first form) "expected expression")))
 
-     (make-node-resume-from
+     (make-node-resumable
       :expr (parse-expression (cst:second form) source)
       :branches (loop :for branches := (cst:nthrest 2 form) :then (cst:rest branches)
                       :while (cst:consp branches)
-                      :collect (parse-resume-from-branch (cst:first branches) source))
+                      :collect (parse-resumable-branch (cst:first branches) source))
       :location (form-location source form)))
 
     ((and (cst:atom (cst:first form))
@@ -1586,21 +1586,21 @@ Rebound to NIL parsing an anonymous FN.")
      :body (parse-body (cst:rest form) form source)
      :location (form-location source form))))
 
-(defun parse-resume-from-branch (form source)
+(defun parse-resumable-branch (form source)
   (declare (type cst:cst form)
-           (values node-resume-from-branch &optional))
+           (values node-resumable-branch &optional))
 
   (when (cst:atom form)
-    (parse-error "Malformed resume-from branch"
+    (parse-error "Malformed resumable branch"
                  (note source form "expected list")))
 
   (unless (cst:proper-list-p form)
-    (parse-error "Malformed resume-from branch"
+    (parse-error "Malformed resumable branch"
                  (note source form "unexpected dotted list")))
 
   ;; (P)
   (unless (cst:consp (cst:rest form))
-    (parse-error "Malformed resume-from branch"
+    (parse-error "Malformed resumable branch"
                  (note-end source (cst:first form) "expected body")))
 
   (let ((pattern (parse-pattern (cst:first form) source)))
@@ -1610,7 +1610,7 @@ Rebound to NIL parsing an anonymous FN.")
                     source
                     (cst:first form)
                     "pattern must match a resumption constructor.")))
-    (make-node-resume-from-branch
+    (make-node-resumable-branch
      :pattern  pattern
      :body (parse-body (cst:rest form) form source)
      :location (form-location source form))))

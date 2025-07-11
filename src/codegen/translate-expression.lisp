@@ -432,7 +432,7 @@ Returns a `node'.")
                      :body (translate-expression (tc:node-catch-branch-body branch) ctx env)))
                   (tc:node-catch-branches expr)))))
 
-  (:method ((expr tc:node-resume-from) ctx env)
+  (:method ((expr tc:node-resumable) ctx env)
     (declare (type pred-context ctx)
              (type tc:environment env)
              (values node))
@@ -440,15 +440,15 @@ Returns a `node'.")
     (let ((qual-ty (tc:node-type expr)))
       (assert (null (tc:qualified-ty-predicates qual-ty)))
 
-      (make-node-resume-from
+      (make-node-resumable
        :type (tc:qualified-ty-type qual-ty)
-       :expr (translate-expression (tc:node-resume-from-expr expr) ctx env)
+       :expr (translate-expression (tc:node-resumable-expr expr) ctx env)
        :branches (mapcar
                   (lambda (branch)
-                    (make-resume-from-branch
-                     :pattern (translate-pattern (tc:node-resume-from-branch-pattern branch))
-                     :body (translate-expression (tc:node-resume-from-branch-body branch) ctx env)))
-                  (tc:node-resume-from-branches expr)))))
+                    (make-resumable-branch
+                     :pattern (translate-pattern (tc:node-resumable-branch-pattern branch))
+                     :body (translate-expression (tc:node-resumable-branch-body branch) ctx env)))
+                  (tc:node-resumable-branches expr)))))
 
   (:method ((expr tc:node-progn) ctx env)
     (declare (type pred-context ctx)

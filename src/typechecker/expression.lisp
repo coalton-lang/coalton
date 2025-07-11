@@ -83,15 +83,15 @@
    #:make-node-catch                    ; CONSTRUCTOR
    #:node-catch-expr                    ; ACCESSOR
    #:node-catch-branches                ; ACCESSOR
-   #:node-resume-from-branch            ; STRUCT
-   #:make-node-resume-from-branch       ; CONSTRUCTOR
-   #:node-resume-from-branch-pattern    ; ACCESSOR
-   #:node-resume-from-branch-body       ; ACCESSOR
-   #:node-resume-from-branch-list       ; TYPE
-   #:node-resume-from                   ; STRUCT
-   #:make-node-resume-from              ; CONSTRUCTOR
-   #:node-resume-from-expr              ; ACCESSOR
-   #:node-resume-from-branches          ; ACCESSOR
+   #:node-resumable-branch              ; STRUCT
+   #:make-node-resumable-branch         ; CONSTRUCTOR
+   #:node-resumable-branch-pattern      ; ACCESSOR
+   #:node-resumable-branch-body         ; ACCESSOR
+   #:node-resumable-branch-list         ; TYPE
+   #:node-resumable                     ; STRUCT
+   #:make-node-resumable                ; CONSTRUCTOR
+   #:node-resumable-expr                ; ACCESSOR
+   #:node-resumable-branches            ; ACCESSOR
    #:node-progn                         ; STRUCT
    #:make-node-progn                    ; CONSTRUCTOR
    #:node-progn-body                    ; ACCESSOR
@@ -336,27 +336,27 @@
   ;; The resumption instance
   (expr (util:required 'expr) :type (or null node) :read-only t))
 
-(defstruct (node-resume-from-branch
+(defstruct (node-resumable-branch
             (:copier nil))
   (pattern  (util:required 'pattern)  :type pattern         :read-only t)
   (body     (util:required 'body)     :type node-body       :read-only t)
   (location (util:required 'location) :type source:location :read-only t))
 
-(defmethod source:location ((self node-resume-from-branch))
-  (node-resume-from-branch-location self))
+(defmethod source:location ((self node-resumable-branch))
+  (node-resumable-branch-location self))
 
-(defun node-resume-from-branch-list-p (x)
+(defun node-resumable-branch-list-p (x)
   (and (alexandria:proper-list-p x)
-       (every #'node-resume-from-branch-p x)))
+       (every #'node-resumable-branch-p x)))
 
-(deftype node-resume-from-branch-list ()
-  '(satisfies node-resume-from-branch-list-p))
+(deftype node-resumable-branch-list ()
+  '(satisfies node-resumable-branch-list-p))
 
-(defstruct (node-resume-from
+(defstruct (node-resumable
             (:include node)
             (:copier nil))
   (expr     (util:required 'expr)         :type node                   :read-only t)
-  (branches (util:required 'branches)     :type node-resume-from-branch-list :read-only t))
+  (branches (util:required 'branches)     :type node-resumable-branch-list :read-only t))
 
 (defstruct (node-catch-branch
             (:copier nil))
@@ -624,22 +624,22 @@
    :expr (tc:apply-substitution subs (node-catch-expr node))
    :branches (tc:apply-substitution subs (node-catch-branches node))))
 
-(defmethod tc:apply-substitution (subs (node node-resume-from-branch))
+(defmethod tc:apply-substitution (subs (node node-resumable-branch))
   (declare (type tc:substitution-list subs)
-           (values node-resume-from-branch))
-  (make-node-resume-from-branch
-   :pattern (tc:apply-substitution subs (node-resume-from-branch-pattern node))
-   :body (tc:apply-substitution subs (node-resume-from-branch-body node))
+           (values node-resumable-branch))
+  (make-node-resumable-branch
+   :pattern (tc:apply-substitution subs (node-resumable-branch-pattern node))
+   :body (tc:apply-substitution subs (node-resumable-branch-body node))
    :location (source:location node)))
 
-(defmethod tc:apply-substitution (subs (node node-resume-from))
+(defmethod tc:apply-substitution (subs (node node-resumable))
   (declare (type tc:substitution-list subs)
-           (values node-resume-from))
-  (make-node-resume-from
+           (values node-resumable))
+  (make-node-resumable
    :type (tc:apply-substitution subs (node-type node))
    :location (source:location node)
-   :expr (tc:apply-substitution subs (node-resume-from-expr node))
-   :branches (tc:apply-substitution subs (node-resume-from-branches node))))
+   :expr (tc:apply-substitution subs (node-resumable-expr node))
+   :branches (tc:apply-substitution subs (node-resumable-branches node))))
 
 (defmethod tc:apply-substitution (subs (node node-progn))
   (declare (type tc:substitution-list subs)

@@ -193,29 +193,29 @@
       :location (source:location node))
      ctx))
 
-  (:method ((node node-resume-from-branch) ctx)
+  (:method ((node node-resumable-branch) ctx)
     (declare (type algo:immutable-map ctx))
 
     (let* ((new-bindings (make-local-vars (mapcar #'pattern-var-name
-                                                  (pattern-variables (node-resume-from-branch-pattern node)))))
+                                                  (pattern-variables (node-resumable-branch-pattern node)))))
 
            (new-ctx (algo:immutable-map-set-multiple ctx new-bindings)))
 
       (values
-       (make-node-resume-from-branch
-        :pattern (rename-variables-generic% (node-resume-from-branch-pattern node) new-ctx)
-        :body (rename-variables-generic% (node-resume-from-branch-body node) new-ctx)
+       (make-node-resumable-branch
+        :pattern (rename-variables-generic% (node-resumable-branch-pattern node) new-ctx)
+        :body (rename-variables-generic% (node-resumable-branch-body node) new-ctx)
         :location (source:location node))
        ctx)))
 
-  (:method ((node node-resume-from) ctx)
+  (:method ((node node-resumable) ctx)
     (declare (type algo:immutable-map ctx)
              (values node algo:immutable-map))
 
     (values
-     (make-node-resume-from
-      :expr (rename-variables-generic% (node-resume-from-expr node) ctx)
-      :branches (rename-variables-generic% (node-resume-from-branches node) ctx)
+     (make-node-resumable
+      :expr (rename-variables-generic% (node-resumable-expr node) ctx)
+      :branches (rename-variables-generic% (node-resumable-branches node) ctx)
       :location (source:location node))
      ctx))
 

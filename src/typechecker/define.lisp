@@ -774,26 +774,26 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
           (tc:coalton-internal-type-error ()
             (standard-expression-type-mismatch-error node subs expected-type expr-ty))))))
 
-  (:method ((node parser:node-resume-from) expected-type subs env)
+  (:method ((node parser:node-resumable) expected-type subs env)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (values tc:ty tc:ty-predicate-list accessor-list node-resume-from tc:substitution-list &optional))
+             (values tc:ty tc:ty-predicate-list accessor-list node-resumable tc:substitution-list &optional))
     
     (multiple-value-bind (expr-ty preds accessors expr-node subs)
-        (infer-expression-type (parser:node-resume-from-expr node)
+        (infer-expression-type (parser:node-resumable-expr node)
                                (tc:make-variable)
                                subs
                                env)
       (let* (;; infer type of each pattern, ensuring it is a resumption type
              (branch-pat-nodes
                (loop
-                 :for branch :in (parser:node-resume-from-branches node)
-                 :for pattern := (parser:node-resume-from-branch-pattern branch)
+                 :for branch :in (parser:node-resumable-branches node)
+                 :for pattern := (parser:node-resumable-branch-pattern branch)
                  :for (pat-ty pat-node subs_)
                    := (multiple-value-list (infer-pattern-type pattern (tc:make-variable) subs env))
                  :unless (resumption-type-p pat-ty env)
-                   :do (tc-error "Invalid resume-from case"
+                   :do (tc-error "Invalid resumable case"
                                  (tc-note pat-node "case pattern must construct a resumption type."))
                  :else 
                    :do (setf subs subs_)
@@ -801,8 +801,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              ;; Infer type of each branch body, it should unify with the expr/expected type
              (branch-body-nodes
                (loop
-                 :for branch :in (parser:node-resume-from-branches node)
-                 :for body := (parser:node-resume-from-branch-body branch)
+                 :for branch :in (parser:node-resumable-branches node)
+                 :for body := (parser:node-resumable-branch-body branch)
                  :collect (multiple-value-bind (body-ty preds_ accessors_ body-node subs_)
                               (infer-expression-type body expr-ty subs env)
                             (declare (ignore body-ty))
@@ -812,10 +812,10 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                             body-node)))
              (branch-nodes
                (loop
-                 :for branch :in (parser:node-resume-from-branches node)
+                 :for branch :in (parser:node-resumable-branches node)
                  :for pat-node :in branch-pat-nodes
                  :for branch-body-node :in branch-body-nodes
-                 :collect (make-node-resume-from-branch
+                 :collect (make-node-resumable-branch
                            :pattern pat-node
                            :body branch-body-node
                            :location (source:location branch)))))
@@ -827,7 +827,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                  type
                  preds
                  accessors
-                 (make-node-resume-from
+                 (make-node-resumable
                   :type (tc:qualify nil type)
                   :location (source:location node)
                   :expr expr-node

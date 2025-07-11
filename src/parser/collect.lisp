@@ -195,15 +195,15 @@ in expressions. May not include all bound variables."
      (collect-variables-generic% (node-catch-expr node))
      (mapcan #'collect-variables-generic% (node-catch-branches node))))
 
-  (:method ((node node-resume-from-branch))
+  (:method ((node node-resumable-branch))
     (declare (values node-variable-list &optional))
-    (collect-variables-generic% (node-resume-from-branch-body node)))
+    (collect-variables-generic% (node-resumable-branch-body node)))
 
-  (:method ((node node-resume-from))
+  (:method ((node node-resumable))
     (declare (values node-variable-list))
     (nconc
-     (collect-variables-generic% (node-resume-from-expr node))
-     (mapcan #'collect-variables-generic% (node-resume-from-branches node))))
+     (collect-variables-generic% (node-resumable-expr node))
+     (mapcan #'collect-variables-generic% (node-resumable-branches node))))
 
 
 

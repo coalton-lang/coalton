@@ -70,15 +70,15 @@
    #:make-node-catch                    ; CONSTRUCTOR
    #:node-catch-expr                    ; READER
    #:node-catch-branches                ; READER
-   #:resume-from-branch                 ; STRUCT
-   #:make-resume-from-branch            ; CONSTRUCTOR
-   #:resume-from-branch-pattern         ; READER
-   #:resume-from-branch-body            ; READER
-   #:resume-from-branch-list            ; TYPE
-   #:node-resume-from                   ; STRUCT
-   #:make-node-resume-from              ; CONSTRUCTOR
-   #:node-resume-from-expr              ; READER
-   #:node-resume-from-branches          ; READER
+   #:resumable-branch                   ; STRUCT
+   #:make-resumable-branch              ; CONSTRUCTOR
+   #:resumable-branch-pattern           ; READER
+   #:resumable-branch-body              ; READER
+   #:resumable-branch-list              ; TYPE
+   #:node-resumable                     ; STRUCT
+   #:make-node-resumable                ; CONSTRUCTOR
+   #:node-resumable-expr                ; READER
+   #:node-resumable-branches            ; READER
    #:node-while                         ; STRUCT
    #:make-node-while                    ; CONSTRUCTOR
    #:node-while-label                   ; READER
@@ -276,26 +276,26 @@ coalton symbols (`parser:identifier`)"
   (expr     (util:required 'expr)     :type node              :read-only t)
   (branches (util:required 'branches) :type catch-branch-list :read-only t))
 
-(defstruct resume-from-branch
-  "A branch of a resume-from expression."
+(defstruct resumable-branch
+  "A branch of a resumable expression."
   (pattern (util:required 'pattern) :type pattern :read-only t)
   (body    (util:required 'body)    :type node    :read-only t))
 
-(defmethod make-load-form ((self resume-from-branch) &optional env)
+(defmethod make-load-form ((self resumable-branch) &optional env)
   (make-load-form-saving-slots self :environment env))
 
-(defun resume-from-branch-list-p (xs)
+(defun resumable-branch-list-p (xs)
   (and (alexandria:proper-list-p xs)
-       (every #'resume-from-branch-p xs)))
+       (every #'resumable-branch-p xs)))
 
-(deftype resume-from-branch-list ()
-  '(satisfies resume-from-branch-list-p))
+(deftype resumable-branch-list ()
+  '(satisfies resumable-branch-list-p))
 
-(defstruct (node-resume-from (:include node))
+(defstruct (node-resumable (:include node))
   "A construct for continuing from a non-stack-unwinding transfer of control. 
-   Uses RESUME-FROM-BRANCH to represent branches"
+   Uses RESUMABLE-BRANCH to represent branches"
   (expr     (util:required 'expr)     :type node                    :read-only t)
-  (branches (util:required 'branches) :type resume-from-branch-list :read-only t))
+  (branches (util:required 'branches) :type resumable-branch-list :read-only t))
 
 
 (defstruct (node-while (:include node))
