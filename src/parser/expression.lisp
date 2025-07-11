@@ -735,7 +735,7 @@ Rebound to NIL parsing an anonymous FN.")
        (when (cst:consp (cst:rest form))
          ;; (resume a b ...)
          (when (cst:consp (cst:rest (cst:rest form)))
-           (parse-error "Malformed resume expression"
+           (parse-error "Malformed resume-to expression"
                         (note source (cst:first (cst:rest (cst:rest form)))
                               "unexpected trailing form")))
 
@@ -1568,10 +1568,23 @@ Rebound to NIL parsing an anonymous FN.")
     (parse-error "Malformed catch branch"
                  (note-end source (cst:first form) "expected body")))
 
-  (make-node-catch-branch
-   :pattern (parse-pattern (cst:first form) source)
-   :body (parse-body (cst:rest form) form source)
-   :location (form-location source form)))
+  (let ((pattern (parse-pattern (cst:first form) source)))
+    (when (pattern-var-p pattern)
+      (parse-error
+       "Malformed catch branch"
+       (note source (cst:first form)
+             "Not Yet Allowed: Catching an exception with a pattern variable")))
+
+    (unless (typep pattern '(or pattern-constructor pattern-wildcard))
+      (parse-error
+       "Malformed catch branch"
+       (note source (cst:first form)
+             "branch must be either an exception type constructor or a wildcard.")))
+
+    (make-node-catch-branch
+     :pattern pattern
+     :body (parse-body (cst:rest form) form source)
+     :location (form-location source form))))
 
 (defun parse-resume-from-branch (form source)
   (declare (type cst:cst form)
@@ -1590,10 +1603,17 @@ Rebound to NIL parsing an anonymous FN.")
     (parse-error "Malformed resume-from branch"
                  (note-end source (cst:first form) "expected body")))
 
-  (make-node-resume-from-branch
-   :pattern (parse-pattern (cst:first form) source)
-   :body (parse-body (cst:rest form) form source)
-   :location (form-location source form)))
+  (let ((pattern (parse-pattern (cst:first form) source)))
+    (unless (typep pattern 'pattern-constructor)
+      (parse-error "Malformed resumeable branch"
+                   (note
+                    source
+                    (cst:first form)
+                    "pattern must match a resumption constructor.")))
+    (make-node-resume-from-branch
+     :pattern  pattern
+     :body (parse-body (cst:rest form) form source)
+     :location (form-location source form))))
 
 (defun parse-cond-clause (form source)
   (declare (type cst:cst form)

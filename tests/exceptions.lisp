@@ -81,7 +81,7 @@
   (for _ in (iter:up-to 1000) 
     (let n = 
       (catch (lisp integer () (cl:/ 10 (cl:random 2)))
-        (DivByZero 0)))
+        (_ 0)))
     (vector:push! n v))
   (is (== 1000 (vector:length v)))
   

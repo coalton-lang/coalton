@@ -726,9 +726,12 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                  :for (pat-ty pat-node subs_)
                    := (multiple-value-list (infer-pattern-type pattern (tc:make-variable) subs env))
                  :unless (or (exception-type-p pat-ty env)
-                             (typep pattern '(or parser:pattern-wildcard parser:pattern-var)))
-                   :do (tc-error "Invalid catch case"
-                                 (tc-note pat-node "Catch pattern is not an exception case."))
+                             (typep pattern 'parser:pattern-wildcard))
+                   :do (tc-error
+                        "Invalid catch case"
+                        (tc-note
+                         pat-node
+                         "Catch branch pattern must be an exception constructor pattern or a wildcard."))
                  :else 
                    :do (setf subs subs_)
                    :and :collect pat-node))
@@ -791,7 +794,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                    := (multiple-value-list (infer-pattern-type pattern (tc:make-variable) subs env))
                  :unless (resumption-type-p pat-ty env)
                    :do (tc-error "Invalid resume-from case"
-                                 (tc-note pat-node "resume-from pattern is not a resumption case."))
+                                 (tc-note pat-node "case pattern must construct a resumption type."))
                  :else 
                    :do (setf subs subs_)
                    :and :collect pat-node))
@@ -958,8 +961,14 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                env)
 
       (unless (exception-type-p exception-ty env)
-        (tc-error "Invalid throw"
-                  (tc-note node "Argument to `throw` be an exception.")))
+        (tc-error
+         "Invalid throw"
+         (tc-note
+          expr-node
+          "Argument to `throw` must be a known exception.")
+         (tc-note
+          expr-node
+          "Not Yet Supported: throw polymorphism.")))
       
       (values
        expected-type
@@ -984,8 +993,9 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                env)
 
       (unless (resumption-type-p resumption-ty env)
-        (tc-error "Invalid resume"
-                  (tc-note node "Argument to `resume` be a resumption.")))
+        (tc-error "Invalid resume-to"
+                  (tc-note node "Argument to `resume` be a known resumption.")
+                  (tc-note node "Not Yet Supported: resume-to polymorphism.")))
       
       (values
        expected-type
