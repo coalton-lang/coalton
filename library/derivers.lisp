@@ -7,6 +7,7 @@
 (in-package #:coalton-library/derivers)
 
 (defmethod derive:derive-methods ((class (eql 'classes:eq)) type-definition env)
+  "Deriver implementation for class `Eq'."
   (let ((location (derive:abstract-type-definition-location type-definition)))
     (list
      (parser:make-instance-method-definition
