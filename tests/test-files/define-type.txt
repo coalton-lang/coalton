@@ -336,13 +336,15 @@ help: remove additional docstring
 --------------------------------------------------------------------------------
 
  error: Cannot derive class QUUX for type POINT.
-  --> test:4:0
+  --> test:3:0
    |
+ 3 |   (derive Quux)
+   |   ^^^^^^^^^^^^^ Class QUUX does not exist
  4 |   (define-struct Point
    |  _^
  5 | |   (x UFix)
  6 | |   (y UFix))
-   | |___________^ Class QUUX does not exist.
+   | |___________^ when deriving class QUUX for type POINT.
 
 ================================================================================
 115 Derive struct, deriver is not implemented
@@ -360,14 +362,16 @@ help: remove additional docstring
 --------------------------------------------------------------------------------
 
  error: Cannot derive class QUUXABLENESS for type POINT.
-  --> test:6:0
+  --> test:5:0
    |
+ 5 |   (derive Quuxableness)
+   |   ^^^^^^^^^^^^^^^^^^^^^ Class QUUXABLENESS does not exist
  6 |   (define-struct Point
    |  _^
  7 | |   (x UFix)
  8 | |   (y UFix))
-   | |___________^ Class QUUXABLENESS does not exist.
-
+   | |___________^ when deriving class QUUXABLENESS for type POINT.
+ 
 ================================================================================
 116 Derive struct, no errors
 ================================================================================
