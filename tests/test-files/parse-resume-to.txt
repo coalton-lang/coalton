@@ -1,5 +1,5 @@
 ================================================================================
-100 Invalid pattern
+100 Malformed resume-to expression
 ================================================================================
 
 (package test-package)
@@ -17,7 +17,7 @@ error: Malformed resume-to expression
    |     ^^^^^^^^^ expression expected
 
 ================================================================================
-101 Invalid pattern
+101 Malformed resume-to expression
 ================================================================================
 
 (package test-package)
