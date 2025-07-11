@@ -58,6 +58,15 @@
          (pure (vector:push! cooked eggs))))
       eggs))
 
+  (declare th (BadEgg -> :a))
+  (define (th a) (throw a))
+
+  (declare rs (ServeRaw -> :a))
+  (define (rs a) (resume-to a))
+
+  (define (serve-raw egg)
+    (resume-to (ServeRaw egg)))
+
   ;; toplevel end
   )
 
