@@ -77,22 +77,25 @@ the actual methods."
            (type penv:partial-type-env env)
            (values parser:toplevel-define-instance &optional))
 
-  (handler-case
-      (parser:make-toplevel-define-instance
-       :location (source:location def)
-       :head-location (source:location def)
-       :context (parser-definition-type-constraints def class)
-       :pred (parser:make-ty-predicate
-              :location (source:location def)
-              :class (parser:make-identifier-src
-                      :location (source:location def)
-                      :name class)
-              :types (list (parser-definition-type-signature def)))
-       :docstring nil
-       :compiler-generated t
-       :methods (derive-methods class def env))
-    (error (c)
-      (error "Failed to derive ~A for type ~A:~%~A"
-             class
-             (parser:type-definition-name def)
-             c))))
+  (let ((type-name (parser:identifier-src-name (parser:type-definition-name def)))) 
+    (when (null (tc:lookup-class (penv:partial-type-env-env env) class :no-error t))
+      (source:error (format nil "Cannot derive class ~A for type ~A." class type-name)
+                    (source:note def "Class ~A does not exist." class)))
+
+    (when (null (compute-applicable-methods #'derive-methods (list class def env)))
+      (source:error (format nil "Cannot derive class ~A for type ~A." class type-name)
+                    (source:note def "Deriver for ~A is not implemented." class))))
+
+  (parser:make-toplevel-define-instance
+   :location (source:location def)
+   :head-location (source:location def)
+   :context (parser-definition-type-constraints def class)
+   :pred (parser:make-ty-predicate
+          :location (source:location def)
+          :class (parser:make-identifier-src
+                  :location (source:location def)
+                  :name class)
+          :types (list (parser-definition-type-signature def)))
+   :docstring nil
+   :compiler-generated t
+   :methods (derive-methods class def env)))
