@@ -49,13 +49,14 @@
              (let ((exhaustive-or-missing
                      (find-non-matching-value (mapcar #'list patterns) 1 env)))
                (unless (eq t exhaustive-or-missing)
-                 (apply #'source:warn "non-exhaustive match"
-                        (cons (source:note node "non-exhaustive match")
-                              (when (first exhaustive-or-missing)
-                                (list
-                                 (source:secondary-note node "missing case ~w"
-                                                        (print-pattern
-                                                         (first exhaustive-or-missing))))))))
+                 (let ((head-note (source:note node "non-exhaustive match"))
+                       (tail-notes (if (first exhaustive-or-missing)
+                                       (list (source:secondary-note
+                                              node
+                                              "missing case ~w"
+                                              (print-pattern (first exhaustive-or-missing))))
+                                       nil)))
+                   (apply #'source:warn "non-exhaustive match" (list* head-note tail-notes))))
                (loop :for pattern :in patterns
                      :unless (useful-pattern-p patterns pattern env) :do
                        (source:warn "Useless match case"
