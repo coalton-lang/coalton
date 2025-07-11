@@ -858,7 +858,7 @@ If the attribute is not unique, or a monomorphize attribute is present, signal a
                  (when derive
                    (parse-error "Duplicate derive attribute"
                                 (source:note attribute "derive attribute here")
-                                (source:secondary-note repr "previous attribute here")
+                                (source:secondary-note derive "previous attribute here")
                                 (source:secondary-note toplevel-form message)))
                  (setf derive attribute))
                 (attribute-monomorphize
