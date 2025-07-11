@@ -50,6 +50,6 @@
       (derive Eq)
       (define-type NotEqAble (NotEqAbleThing UnEqAble))
       (define (definitely-not-eqable-2)
-        (== (NotEqAbleThing UnEqAbleThing) (NotEqAbleThing UnEqAbleThing)))"))))
+        (== (NotEqAbleThing UnEqAbleThing) (NotEqAbleThing UnEqAbleThing)))"))) 
   
 
