@@ -1424,6 +1424,13 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
              (type tc-env env)
              (values tc:ty pattern-binding tc:substitution-list))
 
+    (check-duplicates (parser:pattern-variables pat)
+                      #'parser:pattern-var-name
+                      (lambda (first second)
+                        (tc-error "Duplicate pattern variable"
+                                  (tc-note first "first definition here")
+                                  (tc-note second "second definition here"))))
+
     (multiple-value-bind (pat-ty bound subs)
         (infer-pattern-type (parser:pattern-binding-pattern pat) expected-type subs env)
       (multiple-value-bind (pat-ty var subs)
