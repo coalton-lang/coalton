@@ -93,8 +93,7 @@
 
   (:method ((def toplevel-define-type-alias))
     (declare (values (or null attribute-derive)))
-    nil)
-  )
+    nil))
 
 (defgeneric type-definition-aliased-type (def)
   (:method ((def toplevel-define-type))

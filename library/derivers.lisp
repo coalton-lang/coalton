@@ -3,12 +3,14 @@
   (:local-nicknames
    (#:classes #:coalton-library/classes)
    (#:parser #:coalton-impl/parser)
+   (#:source #:coalton-impl/source)
    (#:derive #:coalton-impl/typechecker/derive)))
+
 (in-package #:coalton-library/derivers)
 
-(defmethod derive:derive-methods ((class (eql 'classes:eq)) type-definition env)
+(defmethod derive:derive-methods ((class (eql 'classes:eq)) def env)
   "Deriver implementation for class `Eq'."
-  (let ((location (derive:abstract-type-definition-location type-definition)))
+  (let ((location (source:location def)))
     (list
      (parser:make-instance-method-definition
       :name (parser:make-node-variable
@@ -46,12 +48,12 @@
                                                (mapcar (lambda (_)
                                                          (declare (ignore _))
                                                          (gensym "ctor-field"))
-                                                       (derive:constructor-fields ctor)))
+                                                       (parser:type-definition-ctor-field-types ctor)))
                                              (cfields-b
                                                (mapcar (lambda (_)
                                                          (declare (ignore _))
                                                          (gensym "ctor-field"))
-                                                       (derive:constructor-fields ctor))))
+                                                       (parser:type-definition-ctor-field-types ctor))))
                                          (parser:make-node-match-branch
                                           :location location
                                           :pattern (parser:make-pattern-constructor
@@ -60,7 +62,7 @@
                                                     :patterns (list
                                                                (parser:make-pattern-constructor
                                                                 :location location
-                                                                :name (parser:identifier-src-name (derive:constructor-name ctor))
+                                                                :name (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
                                                                 :patterns (mapcar
                                                                            (lambda (cfield)
                                                                              (parser:make-pattern-var
@@ -70,7 +72,7 @@
                                                                            cfields-a))
                                                                (parser:make-pattern-constructor
                                                                 :location location
-                                                                :name (parser:identifier-src-name (derive:constructor-name ctor))
+                                                                :name (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
                                                                 :patterns (mapcar
                                                                            (lambda (cfield)
                                                                              (parser:make-pattern-var
@@ -103,8 +105,8 @@
                                                                       (parser:make-node-variable
                                                                        :location location
                                                                        :name 'coalton:True))))))))
-                                     (derive:abstract-type-definition-ctors type-definition))
-                                    (if (= 1 (length (derive:abstract-type-definition-ctors type-definition)))
+                                     (parser:type-definition-ctors def))
+                                    (if (= 1 (length (parser:type-definition-ctors def)))
                                         nil
                                         (list
                                          (parser:make-node-match-branch
