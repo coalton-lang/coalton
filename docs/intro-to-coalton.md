@@ -809,8 +809,8 @@ Functions can pattern match on their arguments, but the patterns must be exhaust
   (define second (fn ((Tuple _ b)) b))
 
   ;; pattern capture works here too
-  (declare prod-proj-1 (Tuple :a :b -> (Tuple :a (Tuple :a :b))))
-  (define (prod-proj-1 (@ tpl (Tuple a _))) (Tuple a tpl)))
+  (declare nest-right (Tuple :a :b -> (Tuple :a (Tuple :a :b))))
+  (define (nest-right (@ tpl (Tuple a _))) (Tuple a tpl)))
 
 ```
 
