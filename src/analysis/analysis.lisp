@@ -24,7 +24,8 @@
   (let ((missing
           (find-non-matching-value
            ;; binding patterns can be collapsed in exhaustiveness check
-           (list (list (collapse-binding-patterns pattern))) 1
+           (list (list (collapse-binding-patterns pattern)))
+           1
            env)))
     (unless (eq t missing)
       (tc-error "Non-exhaustive match"
