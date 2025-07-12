@@ -113,6 +113,7 @@ runtime value and binds it to a variable."
           (eq 'coalton:@ (cst:raw (cst:first form))))
      (let (var pattern) 
 
+       ;; (@)
        (unless (cst:consp (cst:rest form))
          (parse-error "Invalid pattern"
                       (note source form "body expected")))
