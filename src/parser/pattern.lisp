@@ -131,6 +131,7 @@ runtime value and binds it to a variable."
 
        (setf pattern (parse-pattern (cst:third form) source))
 
+       ;; (@ pvar pat ...)
        (when (cst:consp (cst:rest (cst:rest (cst:rest form))))
          (parse-error "Invalid pattern"
                       (note source (cst:third form) "unexpected expression after bound pattern")))
