@@ -124,6 +124,7 @@ runtime value and binds it to a variable."
          (parse-error "Invalid pattern"
                       (note source (cst:second form) "pattern variable expected")))
        
+       ;; (@ pvar)
        (unless (cst:consp (cst:rest (cst:rest form)))
          (parse-error "Invalid pattern"
                       (note source form "bound pattern expected")))
