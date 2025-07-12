@@ -27,6 +27,17 @@ EXPR-TYPE, returning (VALUES PREDICATE BINDINGS BINDING-TYPES).")
     (declare (ignore pattern expr expr-type env))
     (values `t nil nil))
 
+  (:method ((pattern pattern-binding) expr expr-type env)
+    (multiple-value-bind (pred bindings binding-types)
+        (codegen-pattern (pattern-binding-pattern pattern) expr expr-type env)
+      (values 
+       pred
+       (cons (list (pattern-var-name (pattern-binding-var pattern))
+                   expr)
+             bindings)
+       (cons (tc:lisp-type expr-type env)
+             binding-types))))
+
   (:method ((pattern pattern-literal) expr expr-type env)
     (declare (ignore expr-type env))
     (values

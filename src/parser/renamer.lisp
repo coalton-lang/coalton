@@ -394,9 +394,12 @@
     (declare (type algo:immutable-map ctx)
              (values node-do-bind algo:immutable-map))
 
-    (let* ((new-bindings (make-local-vars (mapcar #'pattern-var-name (pattern-variables (node-do-bind-pattern node)))))
-
-           (new-ctx (algo:immutable-map-set-multiple ctx new-bindings)))
+    (let* ((new-bindings
+             (make-local-vars
+              (mapcar #'pattern-var-name
+                      (pattern-variables (node-do-bind-pattern node)))))
+           (new-ctx
+             (algo:immutable-map-set-multiple ctx new-bindings)))
 
       (values
        (make-node-do-bind
@@ -420,6 +423,20 @@
         :last-node (rename-variables-generic% (node-do-last-node node) new-ctx)
         :location (source:location node))
        ctx)))
+
+  (:method ((pattern pattern-binding) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values pattern algo:immutable-map))
+    (multiple-value-bind (newvar ctx)
+        (rename-variables-generic% (pattern-binding-var pattern) ctx)
+      (multiple-value-bind (new-pattern ctx)
+          (rename-variables-generic% (pattern-binding-pattern pattern) ctx)
+        (values
+         (make-pattern-binding
+          :location (source:location pattern)
+          :var newvar
+          :pattern new-pattern)
+         ctx))))
 
   (:method ((pattern pattern-var) ctx)
     (declare (type algo:immutable-map ctx)
@@ -462,9 +479,12 @@
     (declare (type algo:immutable-map ctx)
              (values toplevel-define algo:immutable-map))
 
-    (let* ((new-bindings (make-local-vars (mapcar #'pattern-var-name (pattern-variables (toplevel-define-params toplevel)))))
-
-           (new-ctx (algo:immutable-map-set-multiple ctx new-bindings)))
+    (let* ((new-bindings
+             (make-local-vars
+              (mapcar #'pattern-var-name
+                      (pattern-variables (toplevel-define-params toplevel)))))
+           (new-ctx
+             (algo:immutable-map-set-multiple ctx new-bindings)))
 
       (values
        (make-toplevel-define
@@ -482,7 +502,10 @@
     (declare (type algo:immutable-map ctx)
              (values instance-method-definition algo:immutable-map))
 
-    (let* ((new-bindings (make-local-vars (mapcar #'pattern-var-name (pattern-variables (instance-method-definition-params method)))))
+    (let* ((new-bindings
+             (make-local-vars
+              (mapcar #'pattern-var-name
+                      (pattern-variables (instance-method-definition-params method)))))
 
            (new-ctx (algo:immutable-map-set-multiple ctx new-bindings)))
 
