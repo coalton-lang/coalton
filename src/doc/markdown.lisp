@@ -179,13 +179,14 @@
             :for ctor-docstring := (source:docstring ctor)
             :do (let ((args (type-constructor-args object ctor-type)))
                   (cond (args
-                         (format stream "- <code>(~A~{ ~A~} ~A)</code>~%"
+                         (format stream "- <code>(~A~{ ~A~})</code>~A~%"
                                  (html-entities:encode-entities (symbol-name ctor-name))
                                  (mapcar #'to-markdown args)
-                                 (or ctor-docstring "")))
+                                 (if (null ctor-docstring) "" (format nil "~%  - ~A" ctor-docstring))))
                         (t
-                         (format stream "- <code>~A</code>~%"
-                                 (html-entities:encode-entities (symbol-name ctor-name))))))))
+                         (format stream "- <code>~A</code> ~A~%"
+                                 (html-entities:encode-entities (symbol-name ctor-name))
+                                 (if (null ctor-docstring) "" (format nil "~%  - ~A" ctor-docstring))))))))
     (write-doc backend object)
     (write-instances backend object)))
 
