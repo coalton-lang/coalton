@@ -72,6 +72,9 @@
 (define-coalton-editor-macro coalton:repr (type &optional arg)
   "Annote a type definition with a runtime representation.")
 
+(define-coalton-editor-macro coalton:derive (&rest classes)
+  "Derive class instances for structs or types.")
+
 (define-coalton-editor-macro coalton:monomorphize ()
   "Mark a definition for monomorphization.")
 

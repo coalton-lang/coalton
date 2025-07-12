@@ -19,6 +19,7 @@
    #:coalton-codegen
    #:coalton-codegen-ast
    #:coalton-codegen-types
+   #:coalton-read-program
    #:pprint-coalton-codegen
    #:pprint-coalton-codegen-ast
    #:pprint-coalton-codegen-types
@@ -31,6 +32,7 @@
    #:define-class
    #:define-instance
    #:repr
+   #:derive
    #:lisp-toplevel
    #:monomorphize
    #:inline
