@@ -1,0 +1,54 @@
+================================================================================
+100 Malformed catch expression
+================================================================================
+
+(package test-package)
+
+(define (f)
+  (catch)
+  Unit)
+
+--------------------------------------------------------------------------------
+
+error: Malformed catch expression
+  --> test:4:8
+   |
+ 4 |    (catch)
+   |          ^ expected expression
+
+================================================================================
+101 Malformed catch expression
+================================================================================
+
+(package test-package)
+
+(define (f)
+  (catch (a))
+  Unit)
+
+--------------------------------------------------------------------------------
+
+error: Malformed catch expression
+  --> test:4:12
+   |
+ 4 |    (catch (a))
+   |              ^ expected catch cases
+
+================================================================================
+102 Malformed catch branch
+================================================================================
+
+(package test-package)
+
+(define (f)
+  (catch (make-breakfast-for 10)
+    (X Unit))
+  Unit)
+
+--------------------------------------------------------------------------------
+
+error: Malformed catch branch
+  --> test:5:5
+   |
+ 5 |      (X Unit))
+   |       ^ Not Yet Allowed: Catching an exception with a pattern variable

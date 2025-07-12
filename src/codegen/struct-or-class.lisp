@@ -20,6 +20,7 @@
   (name (util:required 'name) :type symbol :read-only t)
   (type (util:required 'type) :type t      :read-only t))
 
+
 (defun list-if-release (&rest xs)
   (if (not (coalton-impl/settings:coalton-release-p))
       nil
@@ -35,7 +36,7 @@
     (type symbol constructor)
     (type symbol superclass)
     (type list fields)
-    (type (member :class :struct) mode))
+    (type (member :class :struct :condition) mode))
 
   (let ((field-names (mapcar #'struct-or-class-field-name fields))
         (accessor-names (loop :for field :in fields
@@ -93,6 +94,39 @@
           ;; NOTE: We are omitting the inline call because this causes
           ;; SBCL IR1 bugs for instance definitions.
           ;;
+          ;; `(declaim (inline ,constructor))
+          `(defun ,constructor ,field-names
+             ,@(when settings:*emit-type-annotations*
+                 `((declare ,@(loop :for field :in fields
+                                    :collect `(type ,(struct-or-class-field-type field) ,(struct-or-class-field-name field))))))
+             (make-instance ',classname ,@(mapcan
+                                           (lambda (field)
+                                             `(',field ,field))
+                                           field-names))))))
+       (:condition
+        (append 
+         (list
+          `(define-condition ,classname
+               ,(if superclass
+                    (list superclass)
+                    (list 'cl:error))
+             ,(loop :for field :in fields
+                    :for name := (struct-or-class-field-name field)
+                    :for lisp-type := (struct-or-class-field-type field)
+                    :for package := (symbol-package classname)
+                    :for accessor
+                      := (alexandria:format-symbol package "~A-~A" classname name)
+                    :collect `(,name
+                               :type ,lisp-type
+                               :initarg ,name
+                               :accessor ,accessor))
+             (:default-initargs
+              ,@(loop :for field :in fields
+                      :for name := (struct-or-class-field-name field)
+                      :append `(,name (error ""))))))
+
+         (list
+          ;; NOTE: We are omitting the inline call because this causes SBCL IR1 bugs for instance definitions.
           ;; `(declaim (inline ,constructor))
           `(defun ,constructor ,field-names
              ,@(when settings:*emit-type-annotations*
