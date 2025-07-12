@@ -371,9 +371,30 @@ help: remove additional docstring
  7 | |   (x UFix)
  8 | |   (y UFix))
    | |___________^ when deriving class QUUXABLENESS for type POINT.
- 
+
 ================================================================================
 116 Derive struct, no errors
+================================================================================
+
+(package test-package)
+
+(derive coalton-library/classes:Eq)
+(repr :native cl:integer)
+(define-type MyInt)
+
+--------------------------------------------------------------------------------
+
+error: Cannot derive class EQ for type MYINT.
+  --> test:3:0
+   |
+ 3 |  (derive coalton-library/classes:Eq)
+   |  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Type MYINT has no constructors
+ 4 |  (repr :native cl:integer)
+ 5 |  (define-type MyInt)
+   |  ^^^^^^^^^^^^^^^^^^^ when deriving class EQ for type MYINT.
+ 
+================================================================================
+117 Derive struct, no errors
 ================================================================================
 
 (package test-package)

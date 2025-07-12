@@ -12,14 +12,6 @@
   (:export
    #:derive-class-instance             ;; FUNCTION
    #:derive-methods                    ;; GENERIC FUNCTION
-   #:constructor                       ;; STRUCT
-   #:constructor-name                  ;; ACCESSOR
-   #:constructor-fields                ;; ACCESSOR
-   #:abstract-type-definition          ;; STRUCT
-   #:abstract-type-definition-name     ;; ACCESSOR
-   #:abstract-type-definition-type     ;; ACCESSOR
-   #:abstract-type-definition-ctors    ;; ACCESSOR
-   #:abstract-type-definition-location ;; ACCESSOR
    ))
 
 (in-package #:coalton-impl/typechecker/derive)
@@ -69,7 +61,7 @@ Specialize on `class'."))
 (defun derive-class-instance (class def env)
   "Entrypoint for deriver implementations.
 This function creates an abstraction over `parser:toplevel-define-type' and
-`parser:toplevel-define-struct', Creates a `parser:toplevel-define-instance'
+`parser:toplevel-define-struct', creates a `parser:toplevel-define-instance'
 node with context constraints, and then calls `derive-methods' to generate
 the actual methods."
   (declare (type symbol class)
@@ -78,6 +70,16 @@ the actual methods."
            (values parser:toplevel-define-instance &optional))
 
   (let ((type-name (parser:identifier-src-name (parser:type-definition-name def)))) 
+    (when (endp (parser:type-definition-ctors def))
+      (tc:tc-error (format nil "Cannot derive class ~A for type ~A." class type-name)
+                   (source:note (parser:type-definition-derive def)
+                                "Type ~A has no constructors"
+                                type-name)
+                   (source:note def
+                                "when deriving class ~A for type ~A."
+                                class
+                                type-name)))
+
     (when (null (tc:lookup-class (penv:partial-type-env-env env) class :no-error t))
       (tc:tc-error (format nil "Cannot derive class ~A for type ~A." class type-name)
                    (source:note (parser:type-definition-derive def)
@@ -88,7 +90,7 @@ the actual methods."
                                 class
                                 type-name)))
 
-    (when (null (compute-applicable-methods #'derive-methods (list class def env)))
+    (when (endp (compute-applicable-methods #'derive-methods (list class def env)))
       (tc:tc-error (format nil "Cannot derive class ~A for type ~A." class type-name)
                    (source:note (parser:type-definition-derive def)
                                 "Deriver for class ~A is not implemented"
