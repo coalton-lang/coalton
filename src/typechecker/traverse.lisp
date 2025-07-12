@@ -29,6 +29,7 @@
   (progn           #'identity :type function :read-only t)
   (return          #'identity :type function :read-only t)
   (application     #'identity :type function :read-only t)
+  (inline-call     #'identity :type function :read-only t)
   (or              #'identity :type function :read-only t)
   (and             #'identity :type function :read-only t)
   (if              #'identity :type function :read-only t)
@@ -196,6 +197,18 @@
       :location (source:location node)
       :rator (traverse (node-application-rator node) block)
       :rands (traverse (node-application-rands node) block))))
+
+  (:method ((node node-inline-call) block)
+    (declare (type traverse-block block)
+             (values node &optional))
+
+    (funcall
+     (traverse-inline-call block)
+     (make-node-inline-call
+      :type (node-type node)
+      :location (source:location node)
+      :rator (traverse (node-inline-call-rator node) block)
+      :rands (traverse (node-inline-call-rands node) block))))
 
   (:method ((node node-or) block)
     (declare (type traverse-block block)

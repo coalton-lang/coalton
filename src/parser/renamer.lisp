@@ -538,7 +538,19 @@
       (lambda (node)
         (rename-variables-generic% node ctx))
       list)
+     ctx))
+
+  (:method ((node node-inline-call) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values node algo:immutable-map))
+
+    (values
+     (make-node-inline-call
+      :rator (rename-variables-generic% (node-inline-call-rator node) ctx)
+      :rands (rename-variables-generic% (node-inline-call-rands node) ctx)
+      :location (source:location node))
      ctx)))
+
 
 (defun rename-type-variables (ty)
   (declare (type t ty))

@@ -88,6 +88,10 @@
    #:make-node-application              ; CONSTRUCTOR
    #:node-application-rator             ; ACCESSOR
    #:node-application-rands             ; ACCESSOR
+   #:node-inline-call                   ; STRUCT
+   #:make-node-inline-call              ; CONSTRUCTOR
+   #:node-inline-call-rator             ; ACCESSOR
+   #:node-inline-call-rands             ; ACCESSOR
    #:node-or                            ; STRUCT
    #:make-node-or                       ; CONSTRUCTOR
    #:node-or-nodes                      ; ACCESSOR
@@ -301,6 +305,12 @@
   (expr (util:required 'expr) :type (or null node) :read-only t))
 
 (defstruct (node-application
+            (:include node)
+            (:copier nil))
+  (rator (util:required 'rator) :type node      :read-only t)
+  (rands (util:required 'rands) :type node-list :read-only t))
+
+(defstruct (node-inline-call
             (:include node)
             (:copier nil))
   (rator (util:required 'rator) :type node      :read-only t)
@@ -551,6 +561,15 @@
    :location (source:location node)
    :rator (tc:apply-substitution subs (node-application-rator node))
    :rands (tc:apply-substitution subs (node-application-rands node))))
+
+(defmethod tc:apply-substitution (subs (node node-inline-call))
+  (declare (type tc:substitution-list subs)
+           (values node-inline-call))
+  (make-node-inline-call
+   :type (tc:apply-substitution subs (node-type node))
+   :location (source:location node)
+   :rator (tc:apply-substitution subs (node-inline-call-rator node))
+   :rands (tc:apply-substitution subs (node-inline-call-rands node))))
 
 (defmethod tc:apply-substitution (subs (node node-or))
   (declare (type tc:substitution-list subs)

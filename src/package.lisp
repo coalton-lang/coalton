@@ -84,6 +84,7 @@
    #:continue
    #:for
    #:in                                 ; Syntax
+   #:inline-call
    )
 
   ;; Macros

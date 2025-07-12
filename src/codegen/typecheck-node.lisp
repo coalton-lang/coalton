@@ -58,6 +58,16 @@
                 (setf type (tc:function-type-to type))))
       (node-type expr)))
 
+  (:method ((expr node-inline-call) env)
+    (declare (type tc:environment env)
+             (values tc:ty))
+
+    (typecheck-node (make-node-application
+                     :type (node-type expr)
+                     :rator (node-inline-call-rator expr)
+                     :rands (node-inline-call-rands expr))
+                    env))
+
   (:method ((expr node-abstraction) env)
     (declare (type tc:environment env)
              (values tc:ty))

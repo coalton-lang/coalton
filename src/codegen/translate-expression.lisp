@@ -265,6 +265,22 @@ Returns a `node'.")
                  (apply-dicts expr ctx env))
                (tc:node-application-rands expr)))))
 
+  (:method ((expr tc:node-inline-call) ctx env)
+    (declare (type pred-context ctx)
+             (type tc:environment env)
+             (values node))
+
+    (let ((qual-ty (tc:node-type expr)))
+      (assert (null (tc:qualified-ty-predicates qual-ty)))
+
+      (make-node-inline-call
+       :type (tc:qualified-ty-type qual-ty)
+       :rator (translate-expression (tc:node-inline-call-rator expr) ctx env)
+       :rands (mapcar
+               (lambda (expr)
+                 (apply-dicts expr ctx env))
+               (tc:node-inline-call-rands expr)))))
+
   (:method ((expr tc:node-body) ctx env)
     (declare (type pred-context ctx)
              (type tc:environment env)

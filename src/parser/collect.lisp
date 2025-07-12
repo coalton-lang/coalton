@@ -205,6 +205,12 @@ in expressions. May not include all bound variables."
      (collect-variables-generic% (node-application-rator node))
      (mapcan #'collect-variables-generic% (node-application-rands node))))
 
+  (:method ((node node-inline-call))
+    (declare (values node-variable-list &optional))
+    (nconc
+     (collect-variables-generic% (node-inline-call-rator node))
+     (mapcan #'collect-variables-generic% (node-inline-call-rands node))))
+
   (:method ((node node-or))
     (declare (values node-variable-list))
     (mapcan #'collect-variables-generic% (node-or-nodes node)))

@@ -84,6 +84,15 @@
           ,(codegen-expression (node-abstraction-subexpr expr) env))
        arity)))
 
+  (:method ((node node-inline-call) env)
+    (declare (type tc:environment env))
+    `(rt:call-coalton-function 
+      ,(codegen-expression (node-inline-call-rator node) env)
+      ,@(mapcar
+         (lambda (node)
+           (codegen-expression node env))
+         (node-inline-call-rands node))))
+
   (:method ((expr node-let) env)
     (declare (type tc:environment env))
     (let ((sccs (node-binding-sccs (node-let-bindings expr))))

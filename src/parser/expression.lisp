@@ -149,6 +149,10 @@
    #:node-for-pattern                   ; ACCESSOR
    #:node-for-expr                      ; ACCESSOR
    #:node-for-body                      ; ACCESSOR
+   #:node-inline-call                   ; STRUCT
+   #:make-node-inline-call              ; CONSTRUCTOR
+   #:node-inline-call-rator             ; ACCESSOR
+   #:node-inline-call-rands             ; ACCESSOR
    #:make-node-do                       ; CONSTRUCTOR
    #:node-do-nodes                      ; ACCESSOR
    #:node-do-last-node                  ; ACCESSOR
@@ -555,6 +559,12 @@ Rebound to NIL parsing an anonymous FN.")
   (pattern (util:required 'pattern) :type pattern   :read-only t)
   (expr    (util:required 'expr)    :type node      :read-only t)
   (body    (util:required 'body)    :type node-body :read-only t))
+
+(defstruct (node-inline-call
+            (:include node)
+            (:copier nil))
+  (rator (util:required 'rator) :type node      :read-only t)
+  (rands (util:required 'rands) :type node-list :read-only t))
 
 
 (defun parse-expression (form source)
@@ -1130,6 +1140,25 @@ Rebound to NIL parsing an anonymous FN.")
           :pattern (parse-pattern (cst:first labelled-body) source)
           :expr (parse-expression (cst:third labelled-body) source)
           :body (parse-body (cst:nthrest 3 labelled-body) form  source)))))
+
+
+    ((and (cst:atom (cst:first form))
+          (eq 'coalton:inline-call (cst:raw (cst:first form))))
+
+     (let ((rator (cst:second form))
+           (rands (cst:nthrest 2 form)))
+
+       (when (or (null rator) (null rands))
+         (parse-error "Malformed inline-call expression"
+                      (note source (cst:first form) "here")))
+
+       (make-node-inline-call
+        :location (form-location source form)
+        :rator (parse-expression rator source)
+        :rands (loop :for rands* := rands :then (cst:rest rands*)
+                     :while (cst:consp rands*)
+                     :for rand := (cst:first rands*)
+                     :collect (parse-expression rand source)))))
 
     ;;
     ;; Macros

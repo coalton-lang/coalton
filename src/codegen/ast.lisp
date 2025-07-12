@@ -37,6 +37,12 @@
    #:node-abstraction-vars              ; READER
    #:node-abstraction-subexpr           ; READER
    #:node-abstraction-p                 ; FUNCTION
+   #:node-inline-call                   ; STRUCT
+   #:make-node-inline-call              ; CONSTRUCTOR
+   #:node-inline-call-p                 ; FUNCTION
+   #:node-inline-call-rator-type        ; READER
+   #:node-inline-call-rator             ; READER
+   #:node-inline-call-rands             ; READER
    #:node-let                           ; STRUCT
    #:make-node-let                      ; CONSTRUCTOR
    #:node-let-p                         ; FUNCTION
@@ -198,6 +204,11 @@ coalton symbols (`parser:identifier`)"
   (vars    (util:required 'vars)    :type parser:identifier-list :read-only t)
   (subexpr (util:required 'subexpr) :type node                   :read-only t))
 
+(defstruct (node-inline-call (:include node))
+  "Application that forces inlining"
+  (rator (util:required 'rator) :type node      :read-only t)
+  (rands (util:required 'rands) :type node-list :read-only t))
+
 (defstruct (node-let (:include node))
   "Introduction of local mutually-recursive bindings (let ((x 2)) (+ x x))"
   (bindings (util:required 'bindings) :type binding-list :read-only t)
@@ -312,7 +323,10 @@ call to (break)."
      (node-direct-application-rands node))
 
     (node-application
-     (node-application-rands node))))
+     (node-application-rands node))
+
+    (node-inline-call
+     (node-inline-call-rands node))))
 
 (defun node-rator-name (node)
   "Returns the name of the function being called if it is known"
@@ -324,7 +338,10 @@ call to (break)."
 
     (node-application
      (when (node-variable-p (node-application-rator node))
-       (node-variable-value (node-application-rator node))))))
+       (node-variable-value (node-application-rator node))))
+
+    (node-inline-call
+     (node-variable-value (node-inline-call-rator node)))))
 
 (defun node-rator-type (node)
   (declare (type (or node-application node-direct-application))
@@ -334,4 +351,7 @@ call to (break)."
      (node-direct-application-rator-type node))
 
     (node-application
-     (node-type (node-application-rator node)))))
+     (node-type (node-application-rator node)))
+
+    (node-inline-call
+     (node-type (node-inline-call-rator node)))))

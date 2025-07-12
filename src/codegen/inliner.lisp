@@ -96,7 +96,7 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
 
 (defun unrolling-forbidden-p (application stack)
   "Determine if the inliner has fully unrolled a recursive call."
-  (declare (type (or ast:node-application ast:node-direct-application) application)
+  (declare (type (or ast:node-application ast:node-direct-application ast:node-inline-call) application)
            (type list stack)
            (values boolean &optional))
 
@@ -113,7 +113,7 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
 
 (defun lookup-global-application-body (application env)
   "Try to lookup the code of a globally known function, returns null or abstraction."
-  (declare (type (or ast:node-application ast:node-direct-application) application)
+  (declare (type (or ast:node-application ast:node-direct-application ast:node-inline-call) application)
            (values (or null ast:node-abstraction) &optional))
 
   (let ((abstraction (tc:lookup-code env (ast:node-rator-name application) :no-error t)))
@@ -139,7 +139,7 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
 
 (defun application-saturates-abstraction-p (application abstraction)
   "Check if an an application node constitutes a fully applied abstraction."
-  (declare (type (or ast:node-application ast:node-direct-application) application)
+  (declare (type (or ast:node-application ast:node-direct-application ast:node-inline-call) application)
            (type ast:node-abstraction abstraction)
            (values boolean &optional))
 
@@ -150,7 +150,7 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
 
 (defun inline-code-from-application (application abstraction)
   "Swap an application node with a let node where the body is the inlined function."
-  (declare (type (or ast:node-application ast:node-direct-application) application)
+  (declare (type (or ast:node-application ast:node-direct-application ast:node-inline-call) application)
            (type ast:node-abstraction abstraction)
            (values ast:node-let &optional))
 
@@ -186,8 +186,7 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
 (defun try-inline-application (application env stack noinline-functions)
   "Try to inline an application node, checking internal traversal stack,
 heuristics, and user-supplied inline declarations to determine if it
-is appropriate."
-  (declare (type (or ast:node-application ast:node-direct-application) application)
+is appropriate." (declare (type (or ast:node-application ast:node-direct-application ast:node-inline-call) application)
            (type tc:environment env)
            (type list stack)
            (type parser:identifier-list noinline-functions)
@@ -215,7 +214,8 @@ is appropriate."
          (and *inline-globals-p*
               abstraction
               (application-saturates-abstraction-p application abstraction)
-              (or (heuristic-inline-p abstraction)
+              (or (ast:node-inline-call-p application)
+                  (heuristic-inline-p abstraction)
                   (function-declared-inline-p name env))))
        (print-inline-success! ";; Inlining global function ~a" name)
        (push name *functions-inlined*)
@@ -388,6 +388,10 @@ is appropriate."
                   (try-inline-application methods-inlined env stack noinline-functions))
                  (ast:node
                   methods-inlined)))
+        (pop stack)))
+
+    (traverse:action (:after ast:node-inline-call node)
+      (prog1 (try-inline-application node env stack noinline-functions)
         (pop stack))))))
 
 (defun inline-applications (node env)
