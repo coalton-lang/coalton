@@ -59,7 +59,7 @@ error: Invalid pattern
 (package test-package)
 
 (define f
-    (let (@) = (Tuple 1 2))
+    (let (=) = (Tuple 1 2))
     Unit)
 
 --------------------------------------------------------------------------------
@@ -67,7 +67,7 @@ error: Invalid pattern
 error: Invalid pattern
   --> test:4:9
    |
- 4 |      (let (@) = (Tuple 1 2))
+ 4 |      (let (=) = (Tuple 1 2))
    |           ^^^ body expected
 
 ================================================================================
@@ -77,7 +77,7 @@ error: Invalid pattern
 (package test-package)
 
 (define f
-    (let (@ a) = (Tuple 1 2))
+    (let (= a) = (Tuple 1 2))
     Unit)
 
 --------------------------------------------------------------------------------
@@ -85,7 +85,7 @@ error: Invalid pattern
 error: Invalid pattern
   --> test:4:9
    |
- 4 |      (let (@ a) = (Tuple 1 2))
+ 4 |      (let (= a) = (Tuple 1 2))
    |           ^^^^^ bound pattern expected
 
 ================================================================================
@@ -95,7 +95,7 @@ error: Invalid pattern
 (package test-package)
 
 (define f
-  (let (@ a (Tuple _ _) z) = (Tuple 1 2))
+  (let (= a (Tuple _ _) z) = (Tuple 1 2))
   a)
 
 --------------------------------------------------------------------------------
@@ -103,5 +103,5 @@ error: Invalid pattern
 error: Invalid pattern
   --> test:4:12
    |
- 4 |    (let (@ a (Tuple _ _) z) = (Tuple 1 2))
+ 4 |    (let (= a (Tuple _ _) z) = (Tuple 1 2))
    |              ^^^^^^^^^^^ unexpected expression after bound pattern
