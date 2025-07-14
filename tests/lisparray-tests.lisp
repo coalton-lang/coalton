@@ -131,18 +131,18 @@
   (let ((a (make-list 2 4 6 8 10 12 14 16 18))
         (fwd (as (array:LispArray Integer) a))
         (rev (as (array:LispArray Integer) (reverse a))))
-    (is (== fwd (the (array:LispArray Integer)
+    (is (== rev (the (array:LispArray Integer)
                      (unfold (fn (n)
                                (if (== n 10)
                                    None
                                    (Some (Tuple (1+ n) (* n 2)))))
-                             1))))
-    (is (== rev (the (array:LispArray Integer)
+                              1))))
+    (is (== fwd (the (array:LispArray Integer)
                      (unfoldr (fn (n)
-                                (if (== n 10)
-                                    None
-                                    (Some (Tuple (* n 2) (1+ n)))))
-                              1)))))
+                               (if (== n 10)
+                                   None
+                                   (Some (Tuple (* n 2) (1+ n)))))
+                             1)))))
 
   (is (== (as (array:LispArray Integer) (make-list 0 1 4 9 16 25 36 49 64 81))
           (tabulate (fn (n)

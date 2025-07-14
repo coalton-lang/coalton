@@ -274,13 +274,13 @@
   (is (== (unfold (fn (n) (if (>= n 8)
                               None
                               (Some (Tuple (1+ n) (* n 2)))))
-                  0)
-          (make-list 0 2 4 6 8 10 12 14)))
+                   0)
+          (make-list 14 12 10 8 6 4 2 0)))
   (is (== (unfoldr (fn (n) (if (>= n 8)
                                None
                                (Some (Tuple (* n 2) (1+ n)))))
                    0)
-          (make-list 14 12 10 8 6 4 2 0)))
+          (make-list 0 2 4 6 8 10 12 14)))
 
   (is (== (tabulate (fn (n) (* n n)) 10)
           (make-list 0 1 4 9 16 25 36 49 64 81)))
