@@ -758,7 +758,7 @@ This function is equivalent to all size-N elements of `(COMBS L)`."
         ((Cons x xs) (liftA2 Cons (f x) (traverse f xs)))
         ((Nil) (pure Nil)))))
 
-  (define-instance (Unfoldable List)
+  (define-instance (Unfoldable List :t)
     (define (unfold f seed)
       (rec next ((seed seed)
                  (xs Nil))
@@ -770,7 +770,7 @@ This function is equivalent to all size-N elements of `(COMBS L)`."
         ((None) Nil)
         ((Some (Tuple x seed)) (Cons x (unfoldr f seed))))))
 
-  (define-instance (Tabulatable List)
+  (define-instance (Tabulatable List :t)
     (define (tabulate f len)
       (rec next ((k len)
                  (r Nil))

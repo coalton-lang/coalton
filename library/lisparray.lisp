@@ -143,7 +143,7 @@ WARNING: The consequences are undefined if an uninitialized element is read befo
                (f (aref v 0) acc)
                (% (- i 1) (f (aref v i) acc))))))))
 
-  (define-instance (Unfoldable LispArray)
+  (define-instance (types:RuntimeRepr :t => Unfoldable LispArray :t)
     (define (unfold proc seed)
       (let ((buf (lisp :a ()
                    (cl:make-array 0 :fill-pointer 0 :adjustable 0))))
@@ -174,17 +174,14 @@ WARNING: The consequences are undefined if an uninitialized element is read befo
                Unit)
              (next seed)))))))
 
-  (define-instance (Tabulatable LispArray)
+  (define-instance (types:RuntimeRepr :t => Tabulatable LispArray :t)
     (define (tabulate f len)
-      (let ((arr (lisp (LispArray :t) (len)
-                   (cl:make-array len))))
+      (let ((arr (make-uninitialized len)))
         (rec next ((i 0))
           (if (== i len)
               arr
               (let ((elt (f i)))
-                (lisp Unit (arr i elt)
-                  (cl:setf (cl:aref arr i) elt)
-                  Unit)
+                (set! arr i elt)
                 (next (+ i 1))))))))
 
   (lisp-toplevel ()

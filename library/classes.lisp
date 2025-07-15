@@ -263,12 +263,12 @@ together."
     (fold  "A left tail-recursive fold."       ((:accum -> :elt -> :accum) -> :accum -> :container :elt -> :accum))
     (foldr "A right non-tail-recursive fold."  ((:elt -> :accum -> :accum) -> :accum -> :container :elt -> :accum)))
 
-  (define-class (Unfoldable :container)
+  (define-class (Unfoldable :container :elt)
     "Types of containers that can be constructed from a seed value and a generator function."
     (unfold  "A left non-tail-recursive unfold."      ((:seed -> Optional (Tuple :seed :elt)) -> :seed -> :container :elt))
     (unfoldr "A right tail-recursive unfold." ((:seed -> Optional (Tuple :elt :seed)) -> :seed -> :container :elt)))
 
-  (define-class (Tabulatable :container)
+  (define-class (Tabulatable :container :elt)
     "Types of containers that can be constructed from index of each element."
     (tabulate "Construct a container whose i-th element is computed from i"
               ((UFix -> :elt) -> UFix -> :container :elt)))
