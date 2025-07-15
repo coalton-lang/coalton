@@ -462,7 +462,7 @@ on its next iteration. The following prints out `c`, `o`, `a`, `t`,
 
 Each of the above looping forms takes an optional loop label
 keyword. These labels can be used in conjunction with `break` and
-`continue` to acheive complex control flow.
+`continue` to achieve complex control flow.
 
 For each of the looping forms, a label may immediately follow the
 opening term of the loop:
@@ -483,7 +483,7 @@ opening term of the loop:
 ```
 
 In the following entirely artificial example, the outermost loop is
-labelled `:outer`. This label is passed to `break` from inside the
+labeled `:outer`. This label is passed to `break` from inside the
 inner `while` loop to terminate iteration whenever the sum of the
 accumulator and the counter exceeds 500.  Without the `:outer` label,
 `break` would have only broken out of the inner `while` loop.
@@ -1140,7 +1140,7 @@ int specialized call
 2
 ```
 
-Specialization can only apply when the argument types at a callsite are known. Because specialization is not guaranteed, specialized functions must have the same behavior as their unspecialized variants. Specialization should only be used for performance. See the following example:
+Specialization can only apply when the argument types at a call site are known. Because specialization is not guaranteed, specialized functions must have the same behavior as their unspecialized variants. Specialization should only be used for performance. See the following example:
 
 ```
 (coalton-toplevel
@@ -1175,7 +1175,7 @@ done to improve upon them.
 
 ## Exception Handling
 
-Coalton includes syntax for defining, signalling, handling and
+Coalton includes syntax for defining, signaling, handling and
 resuming from exceptional conditions.  
 
 Briefly, the relevant syntactic forms are:
@@ -1191,7 +1191,7 @@ Coalton's exception handling system is incomplete and evolving. The design has b
 
 ### Defining, Throwing, and Catching Exceptions
 
-If you want to catch any exception, includig Common Lips error conditions, you can use a wildcard pattern:
+If you want to catch any exception, including Common Lisp error conditions, you can use a wildcard pattern:
 
 ```lisp
 
@@ -1288,7 +1288,7 @@ Now define a function that makes breakfast for `n` people.  It tries to cook eac
 
 ```
 
-Every 5th egg is deadly, so making brekfast for 10 people will result in 8 cooked eggs.
+Every 5th egg is deadly, so making breakfast for 10 people will result in 8 cooked eggs.
 
 The Call stack looks like
 
@@ -1329,7 +1329,7 @@ For the time being, the following caveats apply;
 3. `resumable` branches are even more restrictive. You cannot match
    against anything _other_ than a resumption constructor pattern.
 
-4. No typeclass is associated with exception-signalling forms. We are
+4. No typeclass is associated with exception-signaling forms. We are
    pursuing different approaches to static checking of forms that
    might hop the call stack. In the end, a typeclass approach may win
    out. Whatever we do, we will endeavor to make it compatible with
