@@ -46,6 +46,7 @@
                (:file "types")
                (:file "primitive-types")
                (:file "classes")
+               (:file "derivers")
                (:file "hash-defining-macros")
                (:file "hash")
                (:file "builtin")
@@ -288,6 +289,7 @@
                (:file "monomorphizer-tests")
                (:file "inliner-tests")
                (:file "inliner-tests-1") ; must come after inliner-tests
+               (:file "deriver-tests")
                (:file "file-tests")
                (:file "experimental-tests")
                (:module "monad"

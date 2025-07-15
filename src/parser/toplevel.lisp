@@ -21,6 +21,9 @@
    #:make-attribute-monomorphize                 ; CONSTRUCTOR
    #:attribute-repr                              ; STRUCT
    #:make-attribute-repr                         ; CONSTRUCTOR
+   #:attribute-derive                            ; STRUCT
+   #:make-attribute-derive                       ; CONSTRUCTOR
+   #:attribute-derive-classes                    ; ACCESSOR
    #:make-attribute-inline                       ; CONSTRUCTOR
    #:attribute-repr-type                         ; ACCESSOR
    #:attribute-repr-arg                          ; ACCESSOR
@@ -35,6 +38,7 @@
    #:toplevel-define-type-vars                   ; ACCESSOR
    #:toplevel-define-type-ctors                  ; ACCESSOR
    #:toplevel-define-type-repr                   ; ACCESSOR
+   #:toplevel-define-type-derive                 ; ACCESSOR
    #:toplevel-define-type-head-location          ; ACCESSOR
    #:toplevel-define-type-list                   ; TYPE
    #:toplevel-define-type-alias                  ; STRUCT
@@ -55,6 +59,7 @@
    #:toplevel-define-struct-vars                 ; ACCESSOR
    #:toplevel-define-struct-fields               ; ACCESSOR
    #:toplevel-define-struct-repr                 ; ACCESSOR
+   #:toplevel-define-struct-derive               ; ACCESSOR
    #:toplevel-define-struct-head-location        ; ACCESSOR
    #:toplevel-define-struct-list                 ; TYPE
    #:toplevel-declare                            ; STRUCT
@@ -234,6 +239,10 @@
 (defstruct (attribute-inline
             (:include attribute)))
 
+(defstruct (attribute-derive
+            (:include attribute))
+  (classes (util:required 'classes) :type cst:cons-cst :read-only t))
+
 ;;
 ;; Toplevel Structures
 ;;
@@ -272,11 +281,12 @@
 (defstruct (toplevel-define-type
             (:include toplevel-definition)
             (:copier nil))
-  (name          (util:required 'name)          :type identifier-src           :read-only t)
-  (vars          (util:required 'vars)          :type keyword-src-list         :read-only t)
-  (ctors         (util:required 'ctors)         :type constructor-list         :read-only t)
-  (repr          (util:required 'repr)          :type (or null attribute-repr) :read-only nil)
-  (head-location (util:required 'head-location) :type source:location          :read-only t))
+  (name          (util:required 'name)          :type identifier-src             :read-only t)
+  (vars          (util:required 'vars)          :type keyword-src-list           :read-only t)
+  (ctors         (util:required 'ctors)         :type constructor-list           :read-only t)
+  (repr          (util:required 'repr)          :type (or null attribute-repr)   :read-only nil)
+  (derive        (util:required 'derive)        :type (or null attribute-derive) :read-only nil)
+  (head-location (util:required 'head-location) :type source:location            :read-only t))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-define-type-list-p (x)
@@ -319,11 +329,12 @@
 (defstruct (toplevel-define-struct
             (:include toplevel-definition)
             (:copier nil))
-  (name          (util:required 'name)          :type identifier-src           :read-only t)
-  (vars          (util:required 'vars)          :type keyword-src-list         :read-only t)
-  (fields        (util:required 'fields)        :type struct-field-list        :read-only t)
-  (repr          (util:required 'repr)          :type (or null attribute-repr) :read-only nil)
-  (head-location (util:required 'head-location) :type source:location          :read-only t))
+  (name          (util:required 'name)          :type identifier-src             :read-only t)
+  (vars          (util:required 'vars)          :type keyword-src-list           :read-only t)
+  (fields        (util:required 'fields)        :type struct-field-list          :read-only t)
+  (repr          (util:required 'repr)          :type (or null attribute-repr)   :read-only nil)
+  (derive        (util:required 'derive)        :type (or null attribute-derive) :read-only nil)
+  (head-location (util:required 'head-location) :type source:location            :read-only t))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-define-struct-list-p (x)
@@ -828,10 +839,12 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
 
 ;;; Functions for working with attributes (repr, monomorphize)
 
-(defun consume-repr (attributes toplevel-form message)
+(defun consume-type-attribute (attribute attributes toplevel-form message)
   "Return the unique repr attribute in ATTRIBUTES, or NIL.
 If the attribute is not unique, or a monomorphize attribute is present, signal a parse error."
-  (let (repr)
+  (declare (type (member :repr :derive) attribute))
+
+  (let (repr derive)
     (loop :for attribute :across attributes
           :do (etypecase attribute
                 (attribute-repr
@@ -841,6 +854,13 @@ If the attribute is not unique, or a monomorphize attribute is present, signal a
                                 (source:secondary-note repr "previous attribute here")
                                 (source:secondary-note toplevel-form message)))
                  (setf repr attribute))
+                (attribute-derive
+                 (when derive
+                   (parse-error "Duplicate derive attribute"
+                                (source:note attribute "derive attribute here")
+                                (source:secondary-note derive "previous attribute here")
+                                (source:secondary-note toplevel-form message)))
+                 (setf derive attribute))
                 (attribute-monomorphize
                  (parse-error "Invalid target for monomorphize attribute"
                               (source:note attribute "monomorphize must be attached to a define or declare form")
@@ -849,19 +869,25 @@ If the attribute is not unique, or a monomorphize attribute is present, signal a
                  (parse-error "Invalid target for inline attribute"
                               (source:note attribute "inline must be attached to a define or declare form")
                               (source:secondary-note toplevel-form message)))))
-    (setf (fill-pointer attributes) 0)
-    repr))
+    (ecase attribute
+      ((:repr) repr)
+      ((:derive) derive))))
 
 (defun consume-optimize-attribute (attribute attributes toplevel-form message)
   "Return the unique monomorphize attribute in ATTRIBUTES, or NIL.
 If the attribute is not unique, or a repr attribute is present, signal a parse error."
   (declare (type (member :monomorphize :inline) attribute))
+
   (let (monomorphize inline)
     (loop :for attribute :across attributes
           :do (etypecase attribute
                 (attribute-repr
                  (parse-error "Invalid target for repr attribute"
                               (source:note attribute "repr must be attached to a define-type")
+                              (source:secondary-note toplevel-form message)))
+                (attribute-derive
+                 (parse-error "Invalid target for derive attribute"
+                              (source:note attribute "derive must be attached to a define-type or define-struct")
                               (source:secondary-note toplevel-form message)))
                 (attribute-monomorphize
                  (when monomorphize
@@ -878,8 +904,8 @@ If the attribute is not unique, or a repr attribute is present, signal a parse e
                                 (source:secondary-note toplevel-form message)))
                  (setf inline attribute))))
     (ecase attribute
-      (:monomorphize monomorphize)
-      (:inline inline))))
+      ((:monomorphize) monomorphize)
+      ((:inline) inline))))
 
 (defun forbid-attributes (attributes form source)
   "If ATTRIBUTES is non-zero length, signal a parse error using FORM and SOURCE for location context."
@@ -925,6 +951,10 @@ If the parsed form is an attribute (e.g., repr or monomorphize), add it to to AT
      (vector-push-extend (parse-repr form source) attributes)
      nil)
 
+    ((coalton:derive)
+     (vector-push-extend (parse-derive form source) attributes)
+     nil)
+
     ((coalton:define)
      (let* ((define (parse-define form source))
             (monomorphize (consume-optimize-attribute :monomorphize attributes define "when parsing define"))
@@ -947,8 +977,11 @@ If the parsed form is an attribute (e.g., repr or monomorphize), add it to to AT
 
     ((coalton:define-type)
      (let* ((type (parse-define-type form source))
-            (repr (consume-repr attributes type "when parsing define-type")))
-       (setf (toplevel-define-type-repr type) repr)
+            (repr (consume-type-attribute :repr attributes type "when parsing define-type"))
+            (derive (consume-type-attribute :derive attributes type "when parsing define-type")))
+       (setf (toplevel-define-type-repr type) repr
+             (toplevel-define-type-derive type) derive)
+       (setf (fill-pointer attributes) 0)
        (push type (program-types program))
        t))
 
@@ -960,13 +993,16 @@ If the parsed form is an attribute (e.g., repr or monomorphize), add it to to AT
 
     ((coalton:define-struct)
      (let* ((struct (parse-define-struct form source))
-            (repr (consume-repr attributes struct "when parsing define-struct")))
+            (repr (consume-type-attribute :repr attributes struct "when parsing define-struct"))
+            (derive (consume-type-attribute :derive attributes struct "when parsing define-struct")))
        (when (and repr
                   (not (eq :transparent (keyword-src-name (attribute-repr-type repr)))))
          (parse-error "Invalid repr attribute"
                       (source:note repr "structs can only be repr transparent")
                       (source:secondary-note struct "when parsing define-struct")))
-       (setf (toplevel-define-struct-repr struct) repr)
+       (setf (toplevel-define-struct-repr struct) repr
+             (toplevel-define-struct-derive struct) derive)
+       (setf (fill-pointer attributes) 0)
        (push struct (program-structs program))
        t))
 
@@ -1206,6 +1242,7 @@ consume all attributes")))
                             (push (parse-constructor (cst:first constructors_) form ctor-docstring source) ctors)))
                   :finally (return ctors))
      :repr nil
+     :derive nil
      :location (form-location source form)
      :head-location (form-location source (cst:second form)))))
 
@@ -1340,6 +1377,7 @@ consume all attributes")))
               source)
      :location (form-location source form)
      :repr nil
+     :derive nil
      :head-location (form-location source (cst:second form)))))
 
 (defun parse-define-class (form source)
@@ -1944,6 +1982,22 @@ consume all attributes")))
 
   (make-attribute-inline
    :location (form-location source form)))
+
+(defun parse-derive (form source)
+  (declare (type cst:cst form)
+           (values attribute-derive))
+
+  (assert (cst:consp form))
+
+  (unless (and (cst:consp (cst:rest form))
+               (every #'symbolp (cst:raw (cst:rest form))))
+    (parse-error "Malformed derive attribute"
+                 (note source form "expected class arguments")))
+
+  (let ((classes (cst:rest form)))
+    (make-attribute-derive
+     :classes classes
+     :location (form-location source form))))
 
 (defun parse-repr (form source)
   (declare (type cst:cst form)
