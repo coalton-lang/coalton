@@ -17,6 +17,7 @@
 (defun codegen-exception (&key
                             (classname (error "Exception Name required"))
                             (constructor (error "Constructor required"))
+                            (superclass nil)
                             (fields nil))
   "Generate DEFINE-CONDITION for an exception type."
   (declare (type symbol classname constructor)
@@ -24,7 +25,7 @@
   (let ((field-names (mapcar #'soc:struct-or-class-field-name fields)))
     (append 
      (list
-      `(define-condition ,classname (cl:error)
+      `(define-condition ,classname ,(if superclass (list superclass) '(cl:error))
          ,(loop :for field :in fields
                 :for name := (soc:struct-or-class-field-name field)
                 :for lisp-type := (soc:struct-or-class-field-type field)
