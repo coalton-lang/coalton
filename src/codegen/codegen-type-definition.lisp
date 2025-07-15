@@ -101,6 +101,7 @@
             :else
               :append (codegen-exception
                        :classname classname
+                       :superclass superclass
                        :constructor constructor-name
                        :fields fields)
 
