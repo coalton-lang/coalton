@@ -5,7 +5,8 @@
 (coalton-library/utils:defstdlib-package #:coalton-library/lisparray
   (:use
    #:coalton
-   #:coalton-library/classes)
+   #:coalton-library/classes
+   #:coalton-library/experimental/loops)
   (:local-nicknames
    (#:types #:coalton-library/types)
    (#:complex #:coalton-library/math/complex))
@@ -174,15 +175,21 @@ WARNING: The consequences are undefined if an uninitialized element is read befo
                Unit)
              (next seed)))))))
 
+  (define-instance (Tabulatable LispArray :t)
+    ;; A generic version, where element type can't be runtime-repr.
+    (define (tabulate f len)
+      (let ((arr (lisp (LispArray :t) (len)
+                   (cl:make-array len :element-type cl:t))))
+        (dotimes (i len)
+          (set! arr i (f i)))
+        arr)))
+
   (define-instance (types:RuntimeRepr :t => Tabulatable LispArray :t)
     (define (tabulate f len)
       (let ((arr (make-uninitialized len)))
-        (rec next ((i 0))
-          (if (== i len)
-              arr
-              (let ((elt (f i)))
-                (set! arr i elt)
-                (next (+ i 1))))))))
+        (dotimes (i len)
+          (set! arr i (f i)))
+        arr)))
 
   (lisp-toplevel ()
     (cl:eval-when (:compile-toplevel :load-toplevel)
