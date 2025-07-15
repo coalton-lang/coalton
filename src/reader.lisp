@@ -90,10 +90,6 @@ SOURCE provides metadata for the stream argument, for error messages."
           (let ((settings:*emit-type-annotations* nil))
             `',(entry:entry-point (parser:read-program stream source ':macro))))
 
-        (coalton:coalton-read-program
-          (let ((settings:*emit-type-annotations* nil))
-            (parser:read-program stream source ':macro)))
-
         (coalton:coalton-codegen-types
           (let ((settings:*emit-type-annotations* t))
             `',(entry:entry-point (parser:read-program stream source ':macro))))
@@ -179,10 +175,6 @@ It ensures the presence of source metadata for STREAM and then calls MAYBE-READ-
 (defmacro coalton:coalton-codegen (&body forms)
   "Generate code for FORMS, excluding Lisp type declarations."
   (compile-forms 'coalton:coalton-codegen forms))
-
-(defmacro coalton:coalton-read-program (&body forms)
-  "Generate code for FORMS, excluding Lisp type declarations."
-  (compile-forms 'coalton:coalton-read-program forms))
 
 (defmacro coalton:coalton-codegen-types (&body forms)
   "Generate code for FORMS, including Lisp type declarations."

@@ -870,8 +870,8 @@ If the attribute is not unique, or a monomorphize attribute is present, signal a
                               (source:note attribute "inline must be attached to a define or declare form")
                               (source:secondary-note toplevel-form message)))))
     (ecase attribute
-      (:repr repr)
-      (:derive derive))))
+      ((:repr) repr)
+      ((:derive) derive))))
 
 (defun consume-optimize-attribute (attribute attributes toplevel-form message)
   "Return the unique monomorphize attribute in ATTRIBUTES, or NIL.
@@ -904,8 +904,8 @@ If the attribute is not unique, or a repr attribute is present, signal a parse e
                                 (source:secondary-note toplevel-form message)))
                  (setf inline attribute))))
     (ecase attribute
-      (:monomorphize monomorphize)
-      (:inline inline))))
+      ((:monomorphize) monomorphize)
+      ((:inline) inline))))
 
 (defun forbid-attributes (attributes form source)
   "If ATTRIBUTES is non-zero length, signal a parse error using FORM and SOURCE for location context."
@@ -1989,7 +1989,8 @@ consume all attributes")))
 
   (assert (cst:consp form))
 
-  (unless (cst:consp (cst:rest form))
+  (unless (and (cst:consp (cst:rest form))
+               (every #'symbolp (cst:raw (cst:rest form))))
     (parse-error "Malformed derive attribute"
                  (note source form "expected class arguments")))
 

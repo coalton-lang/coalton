@@ -403,3 +403,22 @@ error: Cannot derive class EQ for type MYINT.
 (define-struct Point
   (x UFix)
   (y UFix))
+
+================================================================================
+118 Derive type, without symbols
+================================================================================
+
+(package test-package)
+
+(derive coalton-library/classes:Eq 1)
+(define-struct Point
+  (x UFix)
+  (y UFix))
+
+--------------------------------------------------------------------------------
+
+error: Malformed derive attribute
+  --> test:3:0
+   |
+ 3 |  (derive coalton-library/classes:Eq 1)
+   |  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected class arguments

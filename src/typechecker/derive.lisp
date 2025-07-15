@@ -56,14 +56,11 @@
 
 (defgeneric derive-methods (class def env)
   (:documentation "User-defined methods for implementing derivers.
-Specialize on `class'."))
+EQL-specialize on symbol `class'."))
 
 (defun derive-class-instance (class def env)
-  "Entrypoint for deriver implementations.
-This function creates an abstraction over `parser:toplevel-define-type' and
-`parser:toplevel-define-struct', creates a `parser:toplevel-define-instance'
-node with context constraints, and then calls `derive-methods' to generate
-the actual methods."
+  "Entrypoint for deriver implementations.  Given symbol `class' and
+parser type definition `def', produce a derived instance definition."
   (declare (type symbol class)
            (type (or parser:toplevel-define-type parser:toplevel-define-struct) def)
            (type penv:partial-type-env env)
