@@ -85,7 +85,6 @@
    #:continue
    #:for
    #:in                                 ; Syntax
-   #:@
    )
 
   ;; Macros

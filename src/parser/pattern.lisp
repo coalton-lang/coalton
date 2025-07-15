@@ -110,10 +110,10 @@ runtime value and binds it to a variable."
   (cond
     ((and (cst:consp form)
           (cst:atom (cst:first form))
-          (eq 'coalton:@ (cst:raw (cst:first form))))
+          (eq 'coalton:= (cst:raw (cst:first form))))
      (let (var pattern) 
 
-       ;; (@)
+       ;; (=)
        (unless (cst:consp (cst:rest form))
          (parse-error "Invalid pattern"
                       (note source form "body expected")))
@@ -124,14 +124,14 @@ runtime value and binds it to a variable."
          (parse-error "Invalid pattern"
                       (note source (cst:second form) "pattern variable expected")))
        
-       ;; (@ pvar)
+       ;; (= pvar)
        (unless (cst:consp (cst:rest (cst:rest form)))
          (parse-error "Invalid pattern"
                       (note source form "bound pattern expected")))
 
        (setf pattern (parse-pattern (cst:third form) source))
 
-       ;; (@ pvar pat ...)
+       ;; (= pvar pat ...)
        (when (cst:consp (cst:rest (cst:rest (cst:rest form))))
          (parse-error "Invalid pattern"
                       (note source (cst:third form) "unexpected expression after bound pattern")))

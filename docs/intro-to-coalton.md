@@ -779,7 +779,7 @@ The into method is used only when a conversion can always be performed from one 
   (define (dedup-head xs)
     "If the first and second member of list are equal, drop the first"
     (match xs
-      ((Cons a (@ tl1 (Cons b _))) 
+      ((Cons a (= tl1 (Cons b _))) 
        (if (== a b) tl1 xs))
       (_ xs)))
 
@@ -810,7 +810,7 @@ Functions can pattern match on their arguments, but the patterns must be exhaust
 
   ;; pattern capture works here too
   (declare nest-right (Tuple :a :b -> (Tuple :a (Tuple :a :b))))
-  (define (nest-right (@ tpl (Tuple a _))) (Tuple a tpl)))
+  (define (nest-right (= tpl (Tuple a _))) (Tuple a tpl)))
 
 ```
 
