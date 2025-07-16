@@ -224,11 +224,11 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (values tc:ty tc:ty-predicate-list accessor-list node-literal tc:substitution-list &optional))
 
     (let ((ty (etypecase (parser:node-literal-value node)
-                (ratio tc:*fraction-type*)
+                (ratio        tc:*fraction-type*)
                 (single-float tc:*single-float-type*)
                 (double-float tc:*double-float-type*)
-                (string tc:*string-type*)
-                (character tc:*char-type*))))
+                (string       tc:*string-type*)
+                (character    tc:*char-type*))))
 
       (handler-case
           (progn

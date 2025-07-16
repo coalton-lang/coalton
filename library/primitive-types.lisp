@@ -116,4 +116,10 @@ matching, as in the following example.
 
   (repr :native coalton-impl/util:ufixnum)
   (define-type UFix
-    "Non-allocating tagged non-negative integer; range is platform-dependent. Uses `(and fixnum unsigned-byte)`."))
+    "Non-allocating tagged non-negative integer; range is platform-dependent. Uses `(and fixnum unsigned-byte)`.")
+
+  (define-type-alias Single-Float F32
+    "Deprecated name for F32. This is provided for backward compatibility.")
+
+  (define-type-alias Double-Float F64
+    "Deprecated name for F64. This is provided for backward compatibility."))

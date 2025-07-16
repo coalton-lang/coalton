@@ -2,7 +2,7 @@
 
 Coalton is a statically typed language that is embedded in, and compiles to, Common Lisp.
 
-This document is aimed toward people who are already familiar with functional programming languages.
+This document is aimed toward people who are already familiar with functional programming languages. If you are already familiar with Common Lisp, the [glossary](./glossary.md) may be useful.
 
 ## Systems and Packages
 
@@ -509,7 +509,7 @@ accumulator and the counter exceeds 500.  Without the `:outer` label,
 
 ## Numbers
 
-Coalton supports a few numeric types. The main ones are `Integer`, `Single-Float`, and `Double-Float`.
+Coalton supports a few numeric types. The main ones are `Integer`, `F32`, and `F64`.
 
 ```lisp
 (coalton-toplevel
@@ -570,17 +570,17 @@ COALTON-USER> (type-of '/)
 ∀ :A :B. DIVIDABLE :A :B ⇒ (:A → :A → :B)
 ```
 
-Because of [Instance Defaulting](#instance-defaulting), division of `Integer` constants without any additional context defaults to `Double-Float` division:
+Because of [Instance Defaulting](#instance-defaulting), division of `Integer` constants without any additional context defaults to `F64` division:
 
 ```
 COALTON-USER> (coalton (/ 1 2))
 0.5d0
 ```
 
-We can inform Coalton that our constants are of another type by constraining them with `the` or relying on type inference. For example, in order to get a non-Double-Float result from `Integer` inputs, you have to constrain the result type to your desired type (as long as the type has a defined instance of the `Dividable` type class):
+We can inform Coalton that our constants are of another type by constraining them with `the` or relying on type inference. For example, in order to get a non-F64 result from `Integer` inputs, you have to constrain the result type to your desired type (as long as the type has a defined instance of the `Dividable` type class):
 
 ```
-COALTON-USER> (coalton (the Single-Float (/ 4 2)))
+COALTON-USER> (coalton (the F32 (/ 4 2)))
 2.0
 COALTON-USER> (coalton (the Fraction (/ 4 2)))
 #.(COALTON-LIBRARY::%FRACTION 2 1)
@@ -630,9 +630,9 @@ All of these cases are sufficiently common that we provide a few shorthands:
 Fractions can be converted to other dividable types using `fromfrac` (Note: This may result in precision loss):
 
 ```
-COALTON-LIBRARY/MATH/REAL> (coalton (the Double-Float (fromfrac 1/2)))
+COALTON-LIBRARY/MATH/REAL> (coalton (the F64 (fromfrac 1/2)))
 0.5d0
-COALTON-LIBRARY/MATH/REAL> (coalton (the Single-Float (fromfrac 999/1000)))
+COALTON-LIBRARY/MATH/REAL> (coalton (the F32 (fromfrac 999/1000)))
 0.999
 ```
 
@@ -1091,7 +1091,7 @@ The following functions all take an optional package parameter.
 
 ## Instance Defaulting
 
-Coalton has a similar [type defaulting system](https://www.haskell.org/onlinereport/decls.html#sect4.3.4) as Haskell. Type defaulting is invoked on implicitly typed definitions and code compiled with the `coalton` macro. Defaulting is applied to a set of ambiguous predicates, with the goal to resolve an ambiguous type variable to a valid type. Coalton will only default if one or more of the predicates is a numeric type class (Num, Quantizable, Reciprocable, Complex, Remainder, Integral). Coalton will default an ambiguous variable to either Integer, Double-Float, or Single-Float; taking the first type that is valid for all predicates referencing that type variable. Coalton will not default when one or more of the predicates containing an ambiguous variable is a multi-parameter type class.
+Coalton has a similar [type defaulting system](https://www.haskell.org/onlinereport/decls.html#sect4.3.4) as Haskell. Type defaulting is invoked on implicitly typed definitions and code compiled with the `coalton` macro. Defaulting is applied to a set of ambiguous predicates, with the goal to resolve an ambiguous type variable to a valid type. Coalton will only default if one or more of the predicates is a numeric type class (Num, Quantizable, Reciprocable, Complex, Remainder, Integral). Coalton will default an ambiguous variable to either `Integer`, `F32`, or `F64`; taking the first type that is valid for all predicates referencing that type variable. Coalton will not default when one or more of the predicates containing an ambiguous variable is a multi-parameter type class.
 
 
 Differences from Haskell 98. Haskell would consider `Num (List :a)` to be ambiguous, Coalton would default it to `Num Integer`. Haskell would consider (`Num :a` `CustomTypeClass :a`) to be ambiguous, Coalton would default to (`Num Integer` `CustomTypeClass Integer`) assuming `CustomTypeClass Integer` was a valid instance.

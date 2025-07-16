@@ -295,8 +295,8 @@ are floored and truncated division, respectively."
 (%define-integral-native U64 cl:nil)
 (%define-integral-native UFix cl:nil)
 (%define-remainder-native Fraction)
-(%define-remainder-native Single-Float)
-(%define-remainder-native Double-Float)
+(%define-remainder-native F32)
+(%define-remainder-native F64)
 
 (cl:defmacro %define-native-expt (type)
   (cl:let ((^ (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-^")))
@@ -317,8 +317,8 @@ are floored and truncated division, respectively."
          (lisp ,type (base power) (cl:expt base power))))))
 
 (%define-native-expt Fraction)
-(%define-native-expt Single-Float)
-(%define-native-expt Double-Float)
+(%define-native-expt F32)
+(%define-native-expt F64)
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/MATH/INTEGRAL")
