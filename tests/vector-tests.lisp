@@ -69,5 +69,20 @@
 
   (is (== False (vector:singleton? vec2)))
   (is (== False (vector:singleton? (vector:new))))
-  (is (== True (vector:singleton? (vector:make 1))))
-  )
+  (is (== True (vector:singleton? (vector:make 1)))))
+
+(define-test test-vector-unfold-and-tabulate ()
+  (is (== (vector:make 18 16 14 12 10 8 6 4 2)
+          (unfold (fn (n)
+                    (if (== n 10)
+                        None
+                        (Some (Tuple (1+ n) (* n 2)))))
+                  1)))
+  (is (== (vector:make 2 4 6 8 10 12 14 16 18)
+          (unfoldr (fn (n)
+                     (if (== n 10)
+                         None
+                         (Some (Tuple (* n 2) (1+ n)))))
+                   1)))
+  (is (== (vector:make 0 2 4 6 8 10 12 14 16 18)
+          (tabulate (* 2) 10))))

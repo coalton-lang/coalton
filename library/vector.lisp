@@ -340,6 +340,27 @@
          :initial-value init
          :from-end cl:t))))
 
+  (define-instance (Unfoldable Vector :t)
+    (define (unfold f seed)
+      (let ((vec (new)))
+        (rec next ((seed seed))
+          (match (f seed)
+            ((None) (reverse! vec))
+            ((Some (Tuple seed x)) (push! x vec) (next seed))))))
+    (define (unfoldr f seed)
+      (let ((vec (new)))
+        (rec next ((seed seed))
+          (match (f seed)
+            ((None) vec)
+            ((Some (Tuple x seed)) (push! x vec) (next seed)))))))
+
+  (define-instance (Tabulatable Vector :t)
+    (define (tabulate f len)
+      (let ((vec (with-capacity len)))
+        (dotimes (i len)
+          (push! (f i) vec))
+        vec)))
+
   (define-instance (ram:RandomAccess (Vector :t) :t)
     (inline)
     (define (ram:make n x)

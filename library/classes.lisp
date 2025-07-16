@@ -265,8 +265,8 @@ together."
 
   (define-class (Unfoldable :container :elt)
     "Types of containers that can be constructed from a seed value and a generator function."
-    (unfold  "A left non-tail-recursive unfold."      ((:seed -> Optional (Tuple :seed :elt)) -> :seed -> :container :elt))
-    (unfoldr "A right tail-recursive unfold." ((:seed -> Optional (Tuple :elt :seed)) -> :seed -> :container :elt)))
+    (unfold  "A left unfold.  Elements are generated toward left."      ((:seed -> Optional (Tuple :seed :elt)) -> :seed -> :container :elt))
+    (unfoldr "A right unfold.  Elements are generated toward right." ((:seed -> Optional (Tuple :elt :seed)) -> :seed -> :container :elt)))
 
   (define-class (Tabulatable :container :elt)
     "Types of containers that can be constructed from index of each element."
