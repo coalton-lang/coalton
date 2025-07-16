@@ -2,7 +2,7 @@
 
 Coalton is a statically typed language that is embedded in, and compiles to, Common Lisp.
 
-This document is aimed toward people who are already familiar with functional programming languages. If you are already familiar with Common Lisp, the [glossary](./glossary.md) may be useful
+This document is aimed toward people who are already familiar with functional programming languages. If you are already familiar with Common Lisp, the [glossary](./glossary.md) may be useful.
 
 ## Systems and Packages
 
