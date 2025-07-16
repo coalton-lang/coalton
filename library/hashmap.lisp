@@ -17,7 +17,7 @@
    )
   (:shadow #:count #:empty)
   (:export
-   #:Hashmap
+   #:HashMap
    #:empty
    #:empty?
    #:count
