@@ -70,7 +70,12 @@ Returns (PREDS FOUNDP)"
       (predicate-unification-error () nil)))
   (values nil nil))
 
-(defun entail (env preds pred)
+(defun remove-recursive-preds (preds pred-stack)
+  (reduce (lambda (acc it) (remove it acc :test #'equalp))
+          pred-stack
+          :initial-value (remove-duplicates preds :test #'equalp)))
+
+(defun entail (env preds pred &optional pred-stack)
   "Does PRED hold if and only if all of PREDS hold?"
   (declare (type environment env)
            (type ty-predicate-list preds)
@@ -82,7 +87,8 @@ Returns (PREDS FOUNDP)"
               (true (multiple-value-bind (inst-preds found)
                         (by-inst env pred)
                       (and found
-                           (every (lambda (p) (entail env preds p)) inst-preds)))))))
+                           (every (lambda (p) (entail env preds p (cons pred pred-stack)))
+                                  (remove-recursive-preds inst-preds pred-stack))))))))
     value))
 
 (defun super-entail (env preds pred)

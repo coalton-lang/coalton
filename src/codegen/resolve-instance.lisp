@@ -37,7 +37,12 @@
       :kind pred-kind)
      (tc:ty-predicate-types pred))))
 
-(defun resolve-static-dict (pred context env)
+(defun remove-recursive-preds (preds pred-stack)
+  (reduce (lambda (acc it) (remove it acc :test #'equalp))
+          pred-stack
+          :initial-value (remove-duplicates preds :test #'equalp)))
+
+(defun resolve-static-dict (pred context env &optional pred-stack)
   "Attempt to resolve PRED from static instances"
   (declare (type tc:ty-predicate pred)
            (type pred-context context)
@@ -49,20 +54,29 @@
 
     (let*
         ;; Apply substitutions to find the superclass constraints
-        ((instance-constraints
-           (tc:apply-substitution
-            subs
-            (tc:ty-class-instance-constraints instance)))
+        ((%instance-constraints
+           (remove-recursive-preds
+            (tc:ty-class-instance-constraints instance)
+            pred-stack))
+
+         (instance-constraints
+           (remove-recursive-preds 
+            (tc:apply-substitution subs %instance-constraints)
+            pred-stack))
 
          ;; Apply any fundep substitutions
          (fundep-subs (nth-value 1 (tc:solve-fundeps env instance-constraints subs)))
-         (instance-constraints (tc:apply-substitution fundep-subs (tc:ty-class-instance-constraints instance)))
+         (instance-constraints
+           (remove-recursive-preds 
+            (tc:apply-substitution fundep-subs %instance-constraints)
+            pred-stack)
+           )
 
          ;; Generate dicts from those constraints
          (subdicts
            (mapcar
             (lambda (pred)
-              (resolve-dict pred context env))
+              (resolve-dict pred context env (cons pred pred-stack)))
             instance-constraints))
 
          ;; Find the types of those dicts
@@ -171,7 +185,7 @@
       (when super
         (return-from resolve-context-super (build-call (reverse super)))))))
 
-(defun resolve-dict (pred context env)
+(defun resolve-dict (pred context env &optional pred-stack)
   "Resolve PRED to a node"
   (declare (type tc:ty-predicate pred)
            (type pred-context context)
@@ -179,4 +193,4 @@
            (values t &optional))
   (or
    (resolve-context-super pred context env)
-   (resolve-static-dict pred context env)))
+   (resolve-static-dict pred context env pred-stack)))
