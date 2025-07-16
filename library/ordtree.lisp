@@ -1,4 +1,4 @@
-(coalton-library/utils:defstdlib-package :coalton-library/ord-tree
+(coalton-library/utils:defstdlib-package :coalton-library/ordtree
   (:use
    #:coalton
    #:coalton-library/classes
@@ -23,7 +23,7 @@
    #:merge
    #:make))
 
-(in-package :coalton-library/ord-tree)
+(in-package :coalton-library/ordtree)
 
 (named-readtables:in-readtable coalton:coalton)
 

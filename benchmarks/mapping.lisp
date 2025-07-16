@@ -46,7 +46,7 @@
   ;; Looking up
   (define (lookup-hashmap ht)
     (l:dolist ((Tuple k _) mapping-data)
-      (hashmap:get ht k)))
+      (hashmap:lookup ht k)))
 
   (define (lookup-map m)
     (l:dolist ((Tuple k _) mapping-data)

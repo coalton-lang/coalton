@@ -52,7 +52,7 @@
    #:coalton-library/monad/resultt)
   (:local-nicknames
    (#:s #:coalton-library/string)
-   (#:m #:coalton-library/ord-map))
+   (#:m #:coalton-library/ordmap))
   (:export
    :create-account
    :deposit
@@ -114,7 +114,7 @@
 ;;; management later.
 
 (coalton-toplevel
-  (define-type-alias BankState (m:Map AccountName Account))
+  (define-type-alias BankState (m:OrdMap AccountName Account))
 
   (declare print-report (BankState -> Unit))
   (define (print-report accounts)
@@ -368,4 +368,3 @@ the computation."
           print-reportM
           )))
      (traceobject "Result" (map-err to-string res)))))
-

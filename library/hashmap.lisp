@@ -17,11 +17,11 @@
    )
   (:shadow #:count #:empty)
   (:export
-   #:Hashmap
+   #:HashMap
    #:empty
    #:empty?
    #:count
-   #:get
+   #:lookup
    #:insert
    #:remove
    #:keys
@@ -300,8 +300,8 @@ a new entry."
           (fold (fn (sum elt) (+ sum (walk elt))) 0 array))))))
 
   ;; API
-  (declare get (Hash :k => HashMap :k :v -> :k -> Optional :v))
-  (define (get hm key)
+  (declare lookup (Hash :k => HashMap :k :v -> :k -> Optional :v))
+  (define (lookup hm key)
     "Returns a value associated with KEY in the hashmap HM."
     (let hb = (hbits key))
     (rec search ((depth 0)
