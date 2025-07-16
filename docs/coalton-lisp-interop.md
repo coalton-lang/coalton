@@ -53,11 +53,11 @@ restart your Lisp process and reload Coalton.
 
 ## Promises of Data and Basic Data Types
 
-**PROMISE**: Every Coalton value exists as a Lisp value. The structure of said value may not always be defined, however, and must be considered an element of type `T` in general circumstances.
+**PROMISE**: Every Coalton value exists as a Lisp value. The structure of said value may not always be defined, however, and must be considered an element of type `cl:t` in general circumstances.
 
-**PROMISE**: Coalton `Integer`, `IFix`, `UFix`, `Character`, `String`, `F32`, and `F64` values correspond to their Lisp counterparts.
+**PROMISE**: Coalton's `Integer`, `IFix`, `UFix`, `Char`, `String`, `F32`, and `F64` values correspond to their Lisp counterparts.
 
-**PROMISE**: `coalton:Boolean` is a Lisp `BOOLEAN`; `coalton:True` is Lisp `T`, and `coalton:False` is Lisp `NIL`.
+**PROMISE**: `coalton:Boolean` is a Lisp `cl:boolean`; `coalton:True` is Lisp `cl:t`, and `coalton:False` is Lisp `cl:nil`.
 
 **PROMISE**: Every Coalton `List` is a non-circular, homogeneous Common Lisp list.
 
