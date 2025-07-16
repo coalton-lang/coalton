@@ -75,12 +75,12 @@ The compiler will auto-generate instances of `RuntimeRepr` for all defined types
     (define (runtime-repr _)
       (lisp LispType () 'cl:integer)))
 
-  (define-instance (RuntimeRepr Single-Float)
+  (define-instance (RuntimeRepr F32)
     (inline)
     (define (runtime-repr _)
       (lisp LispType () 'cl:single-float)))
 
-  (define-instance (RuntimeRepr Double-Float)
+  (define-instance (RuntimeRepr F64)
     (inline)
     (define (runtime-repr _)
       (lisp LispType () 'cl:double-float)))

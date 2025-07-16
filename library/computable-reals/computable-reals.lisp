@@ -11,7 +11,7 @@
                     (#:math #:coalton-library/math)
                     (#:cell #:coalton-library/cell))
   (:export
-   #:Creal
+   #:CReal
    #:set-comparison-threshold!
    #:comparison-threshold
    #:approx
@@ -27,17 +27,17 @@
 (cl:defvar *creal-comparison-threshold* 106)
 
 ;;;
-;;; Defining the Creal type as a wrapper around computable-reals
+;;; Defining the CReal type as a wrapper around computable-reals
 ;;;
 
 
 (coalton-toplevel
   
  (repr :native (cl:or cr:creal cl:rational))
- (define-type Creal)
+ (define-type CReal)
 
  (define (set-comparison-threshold! k)
-   "Sets the global `Creal` comparison threshold to k bits after the 'decimal' point.
+   "Sets the global `CReal` comparison threshold to k bits after the 'decimal' point.
 
 See `comparison-threshold` for more details."
    (lisp UFix (k)
@@ -45,9 +45,9 @@ See `comparison-threshold` for more details."
    Unit)
 
  (define (comparison-threshold)
-   "Returns the current `Creal` comparison threshold measured as a number of bits after the 'decimal' point.
+   "Returns the current `CReal` comparison threshold measured as a number of bits after the 'decimal' point.
 
-This threshold is used to ensure `Eq` and `Ord` instances terminate. (In general computable real arithmetic is undecidable.) Note that if the production of a `Creal` depends on comparison, *there is no guarantee that the `Creal` will be accurate to any precision*."
+This threshold is used to ensure `Eq` and `Ord` instances terminate. (In general computable real arithmetic is undecidable.) Note that if the production of a `CReal` depends on comparison, *there is no guarantee that the `CReal` will be accurate to any precision*."
    (lisp UFix ()
          *creal-comparison-threshold*)))
 
@@ -57,7 +57,7 @@ This threshold is used to ensure `Eq` and `Ord` instances terminate. (In general
 
 (coalton-toplevel
   
-  (define-instance (Eq Creal)
+  (define-instance (Eq CReal)
     (define (== a b)
       (lisp Boolean (a b)
         (cl:zerop (cr:approx-r (cr:-r a b)
@@ -65,23 +65,23 @@ This threshold is used to ensure `Eq` and `Ord` instances terminate. (In general
 
 (coalton-toplevel
   
-  (define-instance (Num Creal)
+  (define-instance (Num CReal)
     (define (+ a b)
-      (lisp Creal (a b)
+      (lisp CReal (a b)
         (cr:+r a b)))
     (define (- a b)
-      (lisp Creal (a b)
+      (lisp CReal (a b)
         (cr:-r a b)))
     (define (* a b)
-      (lisp Creal (a b)
+      (lisp CReal (a b)
         (cr:*r a b)))
     (define (fromint x)
-      (lisp Creal (x)
+      (lisp CReal (x)
         x))))
 
 (coalton-toplevel
   
-  (define-instance (Ord Creal)
+  (define-instance (Ord CReal)
     (define (<=> a b)
       (let diff-approxd = (lisp Integer (a b)
                             (cr:approx-r (cr:-r a b)
@@ -96,12 +96,12 @@ This threshold is used to ensure `Eq` and `Ord` instances terminate. (In general
 
 (coalton-toplevel
   
-  (define-instance (Reciprocable Creal)
+  (define-instance (Reciprocable CReal)
     (define (/ a b)
-      (lisp Creal (a b)
+      (lisp CReal (a b)
         (cr:/r a b)))
     (define (math:reciprocal n)
-      (lisp Creal (n)
+      (lisp CReal (n)
         (cr:/r n)))))
 
 (coalton-toplevel
@@ -112,52 +112,52 @@ This threshold is used to ensure `Eq` and `Ord` instances terminate. (In general
 
 (coalton-toplevel
   
-  (define-instance (math:Exponentiable Creal)
+  (define-instance (math:Exponentiable CReal)
 
     (define (math:exp x)
-      (lisp Creal (x)
+      (lisp CReal (x)
         (cr:exp-r x)))
 
     (define (math:pow x y)
-      (lisp Creal (x y)
+      (lisp CReal (x y)
         (cr:expt-r x y)))
 
     (define (math:ln x)
-      (lisp Creal (x)
+      (lisp CReal (x)
         (cr:log-r x)))
 
     (define (math:log b x)
-      (lisp Creal (x b)
+      (lisp CReal (x b)
         (cr:log-r x b)))
 
     (define ee (exp 1))))
 
 (coalton-toplevel
   
-  (define-instance (math:Radical Creal)
+  (define-instance (math:Radical CReal)
 
     (define (math:nth-root n x)
-      (lisp Creal (n x)
+      (lisp CReal (n x)
         (cr:expt-r x (cl:/ n))))
 
     (define (math:sqrt x)
-      (lisp Creal (x)
+      (lisp CReal (x)
         (cr:sqrt-r x)))))
 
 (coalton-toplevel
   
-  (define-instance (math:Trigonometric Creal)
+  (define-instance (math:Trigonometric CReal)
 
     (define (math:sin x)
-      (lisp Creal (x)
+      (lisp CReal (x)
         (cr:sin-r x)))
 
     (define (math:cos x)
-      (lisp Creal (x)
+      (lisp CReal (x)
         (cr:cos-r x)))
 
     (define (math:tan x)
-      (lisp Creal (x)
+      (lisp CReal (x)
         (cr:tan-r x)))
 
     (define (math:asin x)
@@ -167,17 +167,17 @@ This threshold is used to ensure `Eq` and `Ord` instances terminate. (In general
       (math:atan (/ (sqrt (- 1 (* x x))) x)))
 
     (define (math:atan x)
-      (lisp Creal (x)
+      (lisp CReal (x)
         (cr:atan-r x)))
 
     (define pi
-      (lisp Creal ()
+      (lisp CReal ()
         cr:+pi-r+))))
 
 
 (coalton-toplevel
 
-  (define-instance (Complex Creal)
+  (define-instance (Complex CReal)
     (define (complex a b)
       (complex::%Complex a b))
 
@@ -189,14 +189,14 @@ This threshold is used to ensure `Eq` and `Ord` instances terminate. (In general
       (match z
         ((complex::%Complex _ b) b))))
 
-  (define-instance ((Complex :a) (Into :a Creal) => (Into (Complex :a) (Complex Creal)))
+  (define-instance ((Complex :a) (Into :a CReal) => (Into (Complex :a) (Complex CReal)))
     (define (Into x)
       (Complex (Into (real-part x))
                (Into (imag-part x))))))
 
 (coalton-toplevel
 
-  (define-instance (math:Polar Creal)
+  (define-instance (math:Polar CReal)
     (define (phase z)
       (math:atan2 (imag-part z) (real-part z)))
     (define (polar z)
@@ -204,7 +204,7 @@ This threshold is used to ensure `Eq` and `Ord` instances terminate. (In general
 
 (coalton-toplevel
 
-  (define-instance (Elementary Creal)))
+  (define-instance (Elementary CReal)))
 
 ;;;
 ;;; Into's
@@ -212,12 +212,12 @@ This threshold is used to ensure `Eq` and `Ord` instances terminate. (In general
 
 (coalton-toplevel
 
-  (define-instance (Into Single-Float Creal)
+  (define-instance (Into F32 CReal)
     (define (Into x)
       (Lisp CReal (x)
         (cl:rational x))))
   
-  (define-instance (Into Double-Float Creal)
+  (define-instance (Into F64 CReal)
     (define (Into x)
       (Lisp CReal (x)
         (cl:rational x))))
@@ -290,11 +290,14 @@ This threshold is used to ensure `Eq` and `Ord` instances terminate. (In general
 
   (declare approx (CReal -> UFix -> Integer))
   (define (approx x k)
-    "Computes an approximation of the bits of a given `Creal`. Specifically, given an object of type `Creal` `X` and a non-negative integer `K`, return an integer `A` with
+    "Computes an approximation of the bits of a given
+`CReal`. Specifically, given an object of type `CReal` `X` and a
+non-negative integer `K`, return an integer `A` with
 
-    `|A*2^(-k) - X| <= 2^(-K)`.
+    |A*2^(-k) - X| <= 2^(-K).
 
-See `rational` or `rationalize` to produce a rational approximation of `Creal`."
+See `rational` or `rationalize` to produce a rational approximation of
+`CReal`."
     (lisp Integer (x k)
       (cr:approx-r x k)))
 
@@ -302,7 +305,7 @@ See `rational` or `rationalize` to produce a rational approximation of `Creal`."
   (define (rational-approx x k)
     "Produce a rational approximation of `X` called `R` such that
 
-    `|R - X| < 2^(-K)`."
+    |R - X| < 2^(-K)."
     (lisp Fraction (x k)
       (cr:rational-approx-r x k)))
 
@@ -310,16 +313,16 @@ See `rational` or `rationalize` to produce a rational approximation of `Creal`."
   (define (rationalize x k)
     "Produce a rational approximation of `X` called `R` such that
 
-    `|R - X| < 2^(-K)`,
+    |R - X| < 2^(-K),
 
-   taking into account the maximum precision specified by `K` to return
-   the simplest possible such approximation."
+taking into account the maximum precision specified by `K` to return
+the simplest possible such approximation."
     (lisp Fraction (x k)
       (cr:rationalize-r x k)))
 
   ;; this is just for testing purposes. Intentionally not exported.
   (define (raw-approx x)
-    "Returns an approximation for `Creal`s."
+    "Returns an approximation for `CReal`s."
     (lisp Integer (x)
       (cr:raw-approx-r x)))
 

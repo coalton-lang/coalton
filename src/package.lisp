@@ -60,8 +60,10 @@
    #:Integer
    #:IFix
    #:UFix
-   #:Single-Float
-   #:Double-Float
+   #:F32
+   #:F64
+   #:Single-Float                       ; deprecated
+   #:Double-Float                       ; deprecated
    #:String
    #:Fraction
    #:Arrow

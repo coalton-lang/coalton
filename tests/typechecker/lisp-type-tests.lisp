@@ -49,8 +49,8 @@
                (coalton-impl/typechecker/lisp-type:lisp-type coalton-type env)))
 
       ;; Concrete type mappings
-      (is (equal 'single-float (lisp-type (coalton-type 'coalton:single-float))))
-      (is (equal 'double-float (lisp-type (coalton-type 'coalton:double-float))))
+      (is (equal 'single-float (lisp-type (coalton-type 'coalton:F32))))
+      (is (equal 'double-float (lisp-type (coalton-type 'coalton:F64))))
 
       ;; A few special cases
       (is (equal '(or number coalton-library/math/complex:complex)

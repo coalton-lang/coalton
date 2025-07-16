@@ -205,12 +205,12 @@
       (lisp Big-Float (a)
         (sb-mpfr:coerce a 'sb-mpfr:mpfr-float))))
 
-  (define-instance (Into Single-Float Big-Float)
+  (define-instance (Into F32 Big-Float)
     (define (into a)
       (lisp Big-Float (a)
         (sb-mpfr:coerce a 'sb-mpfr:mpfr-float))))
 
-  (define-instance (Into Double-Float Big-Float)
+  (define-instance (Into F64 Big-Float)
     (define (into a)
       (lisp Big-Float (a)
         (sb-mpfr:coerce a 'sb-mpfr:mpfr-float))))
