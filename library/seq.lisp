@@ -3,7 +3,8 @@
    #:coalton
    #:coalton-library/builtin
    #:coalton-library/functions
-   #:coalton-library/classes)
+   #:coalton-library/classes
+   #:coalton-library/experimental/loops)
   (:local-nicknames
    (#:types #:coalton-library/types)
    (#:math #:coalton-library/math)
@@ -14,6 +15,7 @@
   (:export
    #:Seq
    #:new
+   #:singleton
    #:push
    #:pop
    #:size
@@ -67,6 +69,13 @@
   (define (new)
     "Create a new empty `Seq`."
     (LeafArray (vector:new)))
+
+  ;; Can be written as (make x), but for consistency with vec:singleton
+  ;; (And we can't use make before defining it)
+  (declare singleton (types:RuntimeRepr :a => :a -> Seq :a))
+  (define (singleton x)
+    "Create a seq with a signle element."
+    (LeafArray (vector:singleton x)))
 
   (declare size (Seq :a -> UFix))
   (define (size seq)
@@ -241,6 +250,29 @@ a new `Seq` instance."
   (define-instance ((Foldable :f) (types:RuntimeRepr :a) => Into (:f :a) (Seq :a))
     (define (into fld)
       (fold push (new) fld)))
+
+  (define-instance (types:RuntimeRepr :t => Unfoldable Seq :t)
+    (define (unfold f seed)
+      (rec next ((s (new))
+                 (seed seed))
+        (match (f seed)
+          ((None) s)
+          ((Some (Tuple seed x)) (next (conc (singleton x) s) seed)))))
+    (define (unfoldr f seed)
+      (rec next ((s (new))
+                 (seed seed))
+        (match (f seed)
+          ((None) s)
+          ((Some (Tuple x seed)) (next (push s x) seed))))))
+
+  (define-instance (types:RuntimeRepr :t => Tabulatable Seq :t)
+    ;; Could be more efficient by taking advantage of internal structure of seq
+    (define (tabulate f len)
+      (rec next ((s (new))
+                 (i 0))
+        (if (== i len)
+            s
+            (next (push s (f i)) (+ 1 i))))))
 
   (define-instance (Eq :a => Eq (Seq :a))
     (define (== a b)
