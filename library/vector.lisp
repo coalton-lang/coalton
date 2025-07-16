@@ -3,7 +3,8 @@
    #:coalton
    #:coalton-library/builtin
    #:coalton-library/functions
-   #:coalton-library/classes)
+   #:coalton-library/classes
+   #:coalton-library/experimental/loops)
   (:local-nicknames
    (#:types #:coalton-library/types)
    (#:list #:coalton-library/list)
@@ -36,6 +37,8 @@
    #:extend!
    #:find-elem
    #:append
+   #:reverse
+   #:reverse!
    #:swap-remove!
    #:swap-remove-unsafe!
    #:sort!
@@ -193,7 +196,9 @@
   (declare last (Vector :a -> Optional :a))
   (define (last v)
     "Return the last element of `v`."
-    (index (- (length v) 1) v))
+    (if (empty? v)
+        None
+        (Some (index-unsafe (- (length v) 1) v))))
 
   (declare last-unsafe (Vector :a -> :a))
   (define (last-unsafe v)
@@ -222,6 +227,21 @@
     (extend! out v1)
     (extend! out v2)
     out)
+
+  (declare reverse! (Vector :a -> Vector :a))
+  (define (reverse! v)
+    "Returns a vector with the elements of vector `v` in reverse order.  The original vector may be destroyed to produce the result."
+    (lisp (Vector :a) (v)
+      (cl:nreverse v)))
+
+  (declare reverse (Vector :a -> Vector :a))
+  (define (reverse v)
+    "Returns a fresh vector with the elements of vector `v` in reverse order.  The original vector isn't modified."
+    (let ((len (length v))
+          (newv (with-capacity len)))
+      (dotimes (i len)
+        (push! (index-unsafe (- (- len i) 1) v) newv))
+      newv))
 
   (declare swap-remove! (UFix -> Vector :a -> Optional :a))
   (define (swap-remove! idx vec)
@@ -266,7 +286,7 @@
     (let size = (with-default 0 (iter:size-hint iter)))
     (let remaining-capacity = (- (capacity vec) (length vec)))
     (when (> size remaining-capacity)
-      (set-capacity! (- size remaining-capacity) vec))
+      (set-capacity! (+ (length vec) (- size remaining-capacity)) vec))
 
     (iter:for-each!
      (fn (x)
@@ -300,7 +320,7 @@
        (fn (x)
          (push! (f x) out)
          Unit)
-       (iter:into-iter v)) 
+       (iter:into-iter v))
       out))
 
   (define-instance (Foldable Vector)
