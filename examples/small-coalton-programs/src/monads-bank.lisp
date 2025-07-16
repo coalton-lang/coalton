@@ -114,7 +114,7 @@
 ;;; management later.
 
 (coalton-toplevel
-  (define-type-alias BankState (m:Map AccountName Account))
+  (define-type-alias BankState (m:OrdMap AccountName Account))
 
   (declare print-report (BankState -> Unit))
   (define (print-report accounts)
