@@ -227,12 +227,12 @@ does not have that suffix."
       (lisp String (frc)
         (cl:format cl:nil "~A" frc))))
 
-  (define-instance (Into Single-Float String)
+  (define-instance (Into F32 String)
     (define (into z)
       (lisp String (z)
         (cl:prin1-to-string z))))
 
-  (define-instance (Into Double-Float String)
+  (define-instance (Into F64 String)
     (define (into z)
       (lisp String (z)
         (cl:prin1-to-string z))))

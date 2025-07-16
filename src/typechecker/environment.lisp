@@ -324,7 +324,7 @@
             :explicit-repr :enum
             :enum-repr t
             :newtype nil
-            :docstring ""))
+            :docstring "The \"unit\" type whose only member is the value `Unit`."))
 
           ('coalton:Char
            (make-type-entry
@@ -336,7 +336,7 @@
             :explicit-repr '(:native cl:character)
             :enum-repr nil
             :newtype nil
-            :docstring "A single character represented as a `character` type."))
+            :docstring "A character represented by a Common Lisp `character`."))
 
           ('coalton:Integer
            (make-type-entry
@@ -348,11 +348,11 @@
             :explicit-repr '(:native cl:integer)
             :enum-repr nil
             :newtype nil
-            :docstring "Unbound integer. Uses `integer`."))
+            :docstring "Unbound integer. Represented by a Common Lisp `integer`."))
 
-          ('coalton:Single-Float
+          ('coalton:F32
            (make-type-entry
-            :name 'coalton:Single-Float
+            :name 'coalton:F32
             :runtime-type 'cl:single-float
             :type *single-float-type*
             :tyvars nil
@@ -360,11 +360,11 @@
             :explicit-repr '(:native cl:single-float)
             :enum-repr nil
             :newtype nil
-            :docstring "Single precision floating point number. Uses `single-float`."))
+            :docstring "Single-precision floating point number (32-bits in size). Represented by a Common Lisp `single-float`."))
 
-          ('coalton:Double-Float
+          ('coalton:F64
            (make-type-entry
-            :name 'coalton:Double-Float
+            :name 'coalton:F64
             :runtime-type 'cl:double-float
             :type *double-float-type*
             :tyvars nil
@@ -372,7 +372,7 @@
             :explicit-repr '(:native cl:double-float)
             :enum-repr nil
             :newtype nil
-            :docstring "Double precision floating point number. Uses `double-float`."))
+            :docstring "Double-precision floating point number (64 bits in size). Represented by a Common Lisp `double-float`."))
 
           ('coalton:String
            (make-type-entry
@@ -384,7 +384,7 @@
             :explicit-repr '(:native cl:string)
             :enum-repr nil
             :newtype nil
-            :docstring "String of characters represented by Common Lisp `string`."))
+            :docstring "String of characters. Represented by Common Lisp `string`."))
 
           ('coalton:Fraction
            (make-type-entry
@@ -396,7 +396,7 @@
             :explicit-repr '(:native cl:rational)
             :enum-repr nil
             :newtype nil
-            :docstring "A ratio of integers always in reduced form."))
+            :docstring "A ratio of integers always in reduced form. Represented by a Common Lisp `rational`."))
 
           ('coalton:Arrow
            (make-type-entry
@@ -420,7 +420,7 @@
             :explicit-repr '(:native cl:list)
             :enum-repr nil
             :newtype nil
-            :docstring "Homogeneous list of objects represented as a Common Lisp `list`."))
+            :docstring "Homogeneous list of objects. Represented as a typical Common Lisp chain of conses (or `nil`)."))
 
           ('coalton:Optional
            (make-type-entry
@@ -432,7 +432,7 @@
             :explicit-repr '(:native cl:t)
             :enum-repr nil
             :newtype nil
-            :docstring "Represents something that may not have a value.")))))
+            :docstring "A type that allows indicating the presence or absence of a value. The underlying representation does not allocate when a value is present (i.e., with `Some`).")))))
 
 ;;;
 ;;; Constructor environment

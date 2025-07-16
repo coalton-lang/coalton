@@ -55,9 +55,9 @@ restart your Lisp process and reload Coalton.
 
 **PROMISE**: Every Coalton value exists as a Lisp value. The structure of said value may not always be defined, however, and must be considered an element of type `T` in general circumstances.
 
-**PROMISE**: Coalton `Integer`, `Character`, `String`,  `Single-Float`, and `Double-Float` values correspond to their Lisp counterparts.
+**PROMISE**: Coalton `Integer`, `IFix`, `UFix`, `Character`, `String`, `F32`, and `F64` values correspond to their Lisp counterparts.
 
-**PROMISE**: `COALTON:Boolean` is a Lisp `BOOLEAN`; `COALTON:True` is Lisp `T`, and `COALTON:False` is Lisp `NIL`.
+**PROMISE**: `coalton:Boolean` is a Lisp `BOOLEAN`; `coalton:True` is Lisp `T`, and `coalton:False` is Lisp `NIL`.
 
 **PROMISE**: Every Coalton `List` is a non-circular, homogeneous Common Lisp list.
 

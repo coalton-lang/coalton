@@ -217,8 +217,8 @@ Furthermore, `best-approx` returns the simplest fraction, and both functions may
            (cl:nth-value 0 (cl:round x)))))))
 
 (%define-native-rationals Fraction)
-(%define-native-rationals Single-Float)
-(%define-native-rationals Double-Float)
+(%define-native-rationals F32)
+(%define-native-rationals F64)
 
 (coalton-toplevel
   (define-struct (Quantization :a)

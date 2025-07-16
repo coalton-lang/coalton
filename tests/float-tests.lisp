@@ -7,13 +7,13 @@
     "Loosely compares floats"
     (~ (:a -> :a -> Boolean)))
 
-  (define-instance (LooseCompare Single-Float)
+  (define-instance (LooseCompare F32)
     (define (~ a b)
       (if (and (math:nan? a) (math:nan? b))
           True
           (or (== a b) (< (abs (- a b)) 0.0001f0)))))
 
-  (define-instance (LooseCompare Double-Float)
+  (define-instance (LooseCompare F64)
     (define (~ a b)
       (if (and (math:nan? a) (math:nan? b))
           True
@@ -36,21 +36,21 @@
     "Check the identity (F x) = (G x) for all x in L"
     (fold (fn (x y) (and x y)) True (zipWith ~ (map f l) (map g l))))
 
-  (declare test-list-single (List Single-Float))
+  (declare test-list-single (List F32))
   (define test-list-single
     (make-list math:infinity 0f0 1 math:pi math:ee (negate math:pi)
                (math:sqrt 2) (/ math:pi (math:sqrt 3)) (math:general/ 1 2) 10))
 
-  (declare test-list-double (List Double-Float))
+  (declare test-list-double (List F64))
   (define test-list-double
     (make-list math:infinity 0d0 1 math:pi math:ee (negate math:pi)
                (math:sqrt 2) (/ math:pi (math:sqrt 3)) (math:general/ 1 2) 10 100))
 
-  (declare test-list-complex-single (List (Complex Single-Float)))
+  (declare test-list-complex-single (List (Complex F32)))
   (define test-list-complex-single
     (zipWith complex test-list-single (reverse test-list-single)))
 
-  (declare test-list-complex-double (List (Complex Double-Float)))
+  (declare test-list-complex-double (List (Complex F64)))
   (define test-list-complex-double
     (zipWith complex test-list-double (reverse test-list-double)))
 
@@ -104,7 +104,7 @@
 (coalton-toplevel
   (define (check-against-double x y)
     "Checks to see if a double-float within a tolerable error of a big-float thunk."
-    (is (<= (abs (- (math:to-fraction (the Double-Float x))
+    (is (<= (abs (- (math:to-fraction (the F64 x))
                     (big-float:with-precision-rounding 53 big-float:rndn
                       (fn () (math:to-fraction (the big-float:Big-Float (y)))))))
             ;; 2^-48 is the worst a double-float will compare to a coerced fraction.
