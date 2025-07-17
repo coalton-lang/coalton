@@ -36,7 +36,7 @@
          (iter:collect! (iter:into-iter mapping-data))))
 
   (define (build-map)
-    (the (map:Map Integer Integer)
+    (the (ordmap:OrdMap Integer Integer)
          (iter:collect! (iter:into-iter mapping-data))))
 
   (define (build-hashtable)
@@ -50,7 +50,7 @@
 
   (define (lookup-map m)
     (l:dolist ((Tuple k _) mapping-data)
-      (map:lookup m k)))
+      (ordmap:lookup m k)))
 
   (define (lookup-hashtable tab)
     (l:dolist ((Tuple k _) mapping-data)
@@ -63,7 +63,7 @@
 
   (define (remove-map m)
     (l:dolist ((Tuple k _) mapping-data)
-      (map:remove m k)))
+      (ordmap:remove m k)))
 
   (define (remove-hashtable tab)
     (l:dolist ((Tuple k _) mapping-data)
@@ -100,7 +100,7 @@
 
 (define-benchmark build-map ()
   (declare (optimize speed))
-  (mapping-benchmark (map:Map coalton:Integer coalton:Integer)
+  (mapping-benchmark (ordmap:OrdMap coalton:Integer coalton:Integer)
                      benchmark-mapping/native::build-map
                      benchmark-mapping/native::lookup-map
                      benchmark-mapping/native::remove-map))
