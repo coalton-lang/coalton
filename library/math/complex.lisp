@@ -257,8 +257,8 @@ below.")
              (cl:declare (cl:type (cl:complex ,repr) a))
              (cl:/ a)))))))
 
-(%define-native-complex-instances Single-Float cl:single-float)
-(%define-native-complex-instances Double-Float cl:double-float)
+(%define-native-complex-instances F32 cl:single-float)
+(%define-native-complex-instances F64 cl:double-float)
 
 (cl:defmacro %define-standard-complex-instances (type)
   `(coalton-toplevel

@@ -299,7 +299,7 @@
           (* (fromInt a) (reciprocal (fromInt b)))
           (normalize (BFValue (Dyadic (div (lsh a p) b) (negate p)))))))
 
-  (define-instance (Into Single-Float Big-Float)
+  (define-instance (Into F32 Big-Float)
     (define (into a)
       (cond
         ((== a infinity) BFInf)
@@ -314,7 +314,7 @@
                      BFNegZero
                      (BFValue (Dyadic (cl:* s n) k))))))))))
 
-  (define-instance (Into Double-Float Big-Float)
+  (define-instance (Into F64 Big-Float)
     (define (into a)
       (cond
         ((== a infinity) BFInf)

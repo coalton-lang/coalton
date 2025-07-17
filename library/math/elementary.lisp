@@ -357,8 +357,8 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
 
      (define-instance (Elementary ,coalton-type))))
 
-(%define-real-float-elementary Single-Float cl:single-float)
-(%define-real-float-elementary Double-Float cl:double-float)
+(%define-real-float-elementary F32 cl:single-float)
+(%define-real-float-elementary F64 cl:double-float)
 
 (cl:defmacro %define-standard-complex-instances (type)
   `(coalton-toplevel

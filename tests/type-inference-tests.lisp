@@ -346,7 +346,7 @@
       (let ((y 1))
         (+ 0.5 y)))"
 
-   '("f" . "(:a -> Single-Float)"))
+   '("f" . "(:a -> F32)"))
 
   ;; Check that superclasses of Num are defaulted
   (check-coalton-types

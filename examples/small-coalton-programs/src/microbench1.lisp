@@ -46,7 +46,7 @@
 (cl:declaim (cl:optimize cl:speed (cl:safety 0) (cl:debug 0)))
 
 (coalton-toplevel
-  (declare f (Single-Float -> Single-Float))
+  (declare f (F32 -> F32))
   (define (f x)
     (- (* x x) (* 2.0f0 x))))
 

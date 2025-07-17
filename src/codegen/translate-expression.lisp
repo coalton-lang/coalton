@@ -186,16 +186,16 @@ Returns a `node'.")
                 (coalton:Integer
                  (make-node-literal :type tc:*integer-type*
                                     :value val))
-                (coalton:Ifix
+                (coalton:IFix
                  (make-node-literal :type tc:*ifix-type*
                                     :value val))
-                (coalton:Ufix
+                (coalton:UFix
                  (make-node-literal :type tc:*ufix-type*
                                     :value val))
-                (coalton:Single-Float
+                (coalton:F32
                  (make-node-literal :type tc:*single-float-type*
                                     :value (coerce val 'single-float)))
-                (coalton:Double-Float
+                (coalton:F64
                  (make-node-literal :type tc:*double-float-type*
                                     :value (coerce val 'double-float)))
                 (otherwise

@@ -32,12 +32,12 @@
   (declare array/ufix (array:LispArray UFix))
   (define array/ufix (array:make 10 0))
 
-  (declare array/single-float (array:LispArray Single-Float))
+  (declare array/single-float (array:LispArray F32))
   (define array/single-float (array:make 10 0.0))
-  (declare array/double-float (array:LispArray Double-Float))
+  (declare array/double-float (array:LispArray F64))
   (define array/double-float (array:make 10 0.0d0))
 
-  (declare array/array/complex-single-float (array:LispArray (array:LispArray (math:Complex Single-Float))))
+  (declare array/array/complex-single-float (array:LispArray (array:LispArray (math:Complex F32))))
   (define array/array/complex-single-float (array:make 10 (array:make 10 0)))
   )
 
@@ -110,8 +110,8 @@
     (is (== (array:aref array/single-float 2) 0.0))))
 
 (define-test array-iso-list ()
-  (let ((xs (as (List Single-Float) array/single-float))
-        (v (as (array:LispArray Single-Float) xs)))
+  (let ((xs (as (List F32) array/single-float))
+        (v (as (array:LispArray F32) xs)))
     (experimental:dolist-enumerated (i x xs)
       (is (== x (array:aref array/single-float i)))
       (is (== x (array:aref v i))))

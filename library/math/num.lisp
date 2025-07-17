@@ -36,8 +36,8 @@
   (define-eq U32)
   (define-eq I64)
   (define-eq U64)
-  (define-eq Single-Float)
-  (define-eq Double-Float)
+  (define-eq F32)
+  (define-eq F64)
 
 
 ;;;
@@ -55,8 +55,8 @@
   (define-ord U32)
   (define-ord I64)
   (define-ord U64)
-  (define-ord Single-Float)
-  (define-ord Double-Float)
+  (define-ord F32)
+  (define-ord F64)
 
 
 ;;;
@@ -106,27 +106,27 @@
 ;;; Float Num instances
 ;;;
 
-  (define-num-float Single-Float cl:single-float float-features:single-float-positive-infinity float-features:single-float-negative-infinity)
-  (define-num-float Double-Float cl:double-float float-features:double-float-positive-infinity float-features:double-float-negative-infinity)
+  (define-num-float F32 cl:single-float float-features:single-float-positive-infinity float-features:single-float-negative-infinity)
+  (define-num-float F64 cl:double-float float-features:double-float-positive-infinity float-features:double-float-negative-infinity)
 
 
 ;;;
 ;;; Float to Fraction conversions
 ;;;
 
-  (define-float-fraction-conversion Single-Float)
-  (define-float-fraction-conversion Double-Float)
+  (define-float-fraction-conversion F32)
+  (define-float-fraction-conversion F64)
 
 
 ;;;
 ;;; Dividable and Reciprocable instances for floats
 ;;;
 
-  (define-reciprocable-float Single-Float)
-  (define-reciprocable-float Double-Float)
+  (define-reciprocable-float F32)
+  (define-reciprocable-float F64)
 
-  (define-dividable-float Single-Float cl:single-float)
-  (define-dividable-float Double-Float cl:double-float)
+  (define-dividable-float F32 cl:single-float)
+  (define-dividable-float F64 cl:double-float)
 
 
 ;;;
@@ -163,8 +163,8 @@
   (define-sxhash-hasher U64)
   (define-sxhash-hasher IFix)
   (define-sxhash-hasher UFix)
-  (define-sxhash-hasher Single-Float)
-  (define-sxhash-hasher Double-Float)
+  (define-sxhash-hasher F32)
+  (define-sxhash-hasher F64)
 
 
 ;;;
@@ -182,5 +182,5 @@
   (define-default-num IFix)
   (define-default-num UFix)
   (define-default-num Integer)
-  (define-default-num Double-Float)
-  (define-default-num Single-Float))
+  (define-default-num F32)
+  (define-default-num F64))
