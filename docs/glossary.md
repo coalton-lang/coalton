@@ -144,7 +144,7 @@ by `defclass`. Classes in Lisp contain data and have a symbolic name.
 In Coalton, a "class" usually refers to a "type class", defined by
 `define-class`. A type class is sort of like an interface: types *are
 an instance of*, *are members of*, *participate in*, *adhere to*,
-etc. a type class. (A type class cam also represent a constraint on a
+etc. a type class. (A type class can also represent a constraint on a
 type variable. The type `Eq :t => List :t` represents homogeneous
 lists whose elements are of a type constrained by the `Eq` type class,
 that is, they can be compared for equality with `==`.)
