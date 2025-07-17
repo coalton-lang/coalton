@@ -8,7 +8,8 @@
    #:coalton-library/classes)
   (:local-nicknames
    (#:types #:coalton-library/types)
-   (#:complex #:coalton-library/math/complex))
+   (#:complex #:coalton-library/math/complex)
+   (#:ram #:coalton-library/randomaccess))
   (:export
    #:LispArray
    #:make
@@ -133,6 +134,31 @@ WARNING: The consequences are undefined if an uninitialized element is read befo
            (if (== i 0)
                (f (aref v 0) acc)
                (% (- i 1) (f (aref v i) acc))))))))
+
+  (define-instance (types:RuntimeRepr :t => ram:RandomAccess (LispArray :t) :t)
+    (inline)
+    (define (ram:make n x)
+      (make n x))
+
+    (inline)
+    (define (ram:length v)
+      (length v))
+
+    (inline)
+    (define (ram:readable? _)
+      True)
+
+    (inline)
+    (define (ram:writable? _)
+      True)
+
+    (inline)
+    (define (ram:unsafe-aref v i)
+      (aref v i))
+
+    (inline)
+    (define (ram:unsafe-set! v i x)
+      (set! v i x)))
 
   (lisp-toplevel ()
     (cl:eval-when (:compile-toplevel :load-toplevel)
