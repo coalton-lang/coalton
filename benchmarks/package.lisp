@@ -123,7 +123,7 @@
     ((:local-nicknames
       (#:hashtable #:coalton-library/hashtable)
       (#:hashmap   #:coalton-library/hashmap)
-      (#:map       #:coalton-library/ordmap)))
+      (#:ordmap    #:coalton-library/ordmap)))
   (:use
    #:coalton
    #:coalton-prelude
@@ -133,7 +133,7 @@
                     (#:hashmap   #:coalton-library/hashmap)
                     (#:iter      #:coalton-library/iterator)
                     (#:l         #:coalton-library/experimental/loops)
-                    (#:map       #:coalton-library/ordmap))
+                    (#:ordmap    #:coalton-library/ordmap))
 
   )
 
