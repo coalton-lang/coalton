@@ -257,12 +257,12 @@
   (define (nth-cdr n l)
     "Returns the nth-cdr of a list."
     (cond ((null? l)
-	   Nil)
-	  ((math:zero? n)
-	   l)
-	  (True
-	   (nth-cdr (math:1- n) (cdr l)))))
-  
+           Nil)
+          ((math:zero? n)
+           l)
+          (True
+           (nth-cdr (math:1- n) (cdr l)))))
+
   (declare elemIndex (Eq :a => :a -> List :a -> Optional UFix))
   (define (elemIndex x xs)
     (findIndex (== x) xs))
@@ -757,6 +757,26 @@ This function is equivalent to all size-N elements of `(COMBS L)`."
       (match xs
         ((Cons x xs) (liftA2 Cons (f x) (traverse f xs)))
         ((Nil) (pure Nil)))))
+
+  (define-instance (Unfoldable List :t)
+    (define (unfold f seed)
+      (rec next ((seed seed)
+                 (xs Nil))
+        (match (f seed)
+          ((None) xs)
+          ((Some (Tuple seed x)) (next seed (Cons x xs))))))
+    (define (unfoldr f seed)
+      (match (f seed)
+        ((None) Nil)
+        ((Some (Tuple x seed)) (Cons x (unfoldr f seed))))))
+
+  (define-instance (Tabulatable List :t)
+    (define (tabulate f len)
+      (rec next ((k len)
+                 (r Nil))
+        (if (== k 0)
+            r
+            (next (- k 1) (Cons (f (- k 1)) r))))))
 
   (define-instance (iter:IntoIterator (List :elt) :elt)
     (define (iter:into-iter list)

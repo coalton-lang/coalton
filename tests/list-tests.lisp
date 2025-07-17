@@ -109,7 +109,7 @@
   (is (== (list:difference x x) Nil))
   (is (== (list:difference x Nil) x)))
 
-(define-test test-zips ()  
+(define-test test-zips ()
   (is (== (list:zipWith + x x) (make-list 2 4 6)))
 
   (is (== (list:zipWith3 Tuple3 x x x)
@@ -123,7 +123,7 @@
 
   (is (== (list:zip x x) (make-list (Tuple 1 1) (Tuple 2 2) (Tuple 3 3)))))
 
-(define-test test-sorting ()  
+(define-test test-sorting ()
   (is (== (list:countBy even? x) 1))
 
   (is (== (list:insert 2 (make-list 1 3)) x))
@@ -268,7 +268,24 @@
                  (Some x)
                  None))
            x)
-          (Some x))))
+          (Some x)))
+
+  ;; Constructing instances
+  (is (== (unfold (fn (n) (if (>= n 8)
+                              None
+                              (Some (Tuple (1+ n) (* n 2)))))
+                   0)
+          (make-list 14 12 10 8 6 4 2 0)))
+  (is (== (unfoldr (fn (n) (if (>= n 8)
+                               None
+                               (Some (Tuple (* n 2) (1+ n)))))
+                   0)
+          (make-list 0 2 4 6 8 10 12 14)))
+
+  (is (== (tabulate (fn (n) (* n n)) 10)
+          (make-list 0 1 4 9 16 25 36 49 64 81)))
+  (is (== (tabulate (fn (n) (* n n)) 0) Nil))
+  )
 
 (define-test list-lexicographic-order ()
   (let is-lt = (fn (smaller larger)

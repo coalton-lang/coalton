@@ -5,7 +5,8 @@
 (coalton-library/utils:defstdlib-package #:coalton-library/lisparray
   (:use
    #:coalton
-   #:coalton-library/classes)
+   #:coalton-library/classes
+   #:coalton-library/experimental/loops)
   (:local-nicknames
    (#:types #:coalton-library/types)
    (#:complex #:coalton-library/math/complex))
@@ -94,6 +95,15 @@ WARNING: The consequences are undefined if an uninitialized element is read befo
     (lisp (LispArray :t) (v)
       (cl:copy-seq v)))
 
+  (define-instance (Eq :a => Eq (LispArray :a))
+    (define (== a b)
+      (let ((len (length a)))
+        (and (== len (length b))
+             (rec % ((i 0))
+               (cond ((== i len) True)
+                     ((== (aref a i) (aref b i)) (% (+ i 1)))
+                     (True False)))))))
+
   (define-instance (types:RuntimeRepr :t => Into (List :t) (LispArray :t))
     (inline)
     (define (into xs)
@@ -133,6 +143,29 @@ WARNING: The consequences are undefined if an uninitialized element is read befo
            (if (== i 0)
                (f (aref v 0) acc)
                (% (- i 1) (f (aref v i) acc))))))))
+
+  ;; Unfolding is an inefficient way to build LispArray, but it comes handy
+  ;; to synthesize data with various aggregate types in a generic code.
+  (define-instance (types:RuntimeRepr :t => Unfoldable LispArray :t)
+    (define (unfold proc seed)
+      (rec next ((seed seed)
+                 (elts Nil))
+          (match (proc seed)
+            ((None) (as (LispArray :t) elts))
+            ((Some (Tuple seed x)) (next seed (Cons x elts))))))
+    (define (unfoldr proc seed)
+      (as (LispArray :t)
+          (rec next ((seed seed))
+            (match (proc seed)
+              ((None) Nil)
+              ((Some (Tuple x seed)) (Cons x (next seed))))))))
+
+  (define-instance (types:RuntimeRepr :t => Tabulatable LispArray :t)
+    (define (tabulate f len)
+      (let ((arr (make-uninitialized len)))
+        (dotimes (i len)
+          (set! arr i (f i)))
+        arr)))
 
   (lisp-toplevel ()
     (cl:eval-when (:compile-toplevel :load-toplevel)
@@ -186,4 +219,3 @@ WARNING: The consequences are undefined if an uninitialized element is read befo
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/LISPARRAY")
-

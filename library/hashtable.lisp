@@ -153,7 +153,7 @@
               (cl:if presentp
                      (Some value)
                      None))))
-      (with-default 0 (the (Result String UFix) (tryinto (count table)))))) 
+      (with-default 0 (the (Result String UFix) (tryinto (count table))))))
 
   (declare extend! ((Hash :key) (iter:IntoIterator :container (Tuple :key :value))
                    => Hashtable :key :value -> :container -> Unit))
@@ -174,7 +174,7 @@
     (define (== ht1 ht2)
       (unless (== (count ht1) (count ht2))
         (return False))
-      
+
       (iter:every!
        (fn (key)
          (== (get ht1 key) (get ht2 key)))

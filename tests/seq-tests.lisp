@@ -53,7 +53,7 @@
           (legible-seq 1000))
         (seqseq
           (seq:conc seq seq)))
-    
+
     (is (== 2000 (seq:size seqseq)))
     (is (== 1000 (seq:size (seq:conc (seq:new) seq))))
     (is (== 1000 (seq:size (seq:conc seq (seq:new)))))
@@ -74,7 +74,7 @@
     (is (== (Some 0) (seq:get seq2 11234)))))
 
 
-(coalton-toplevel 
+(coalton-toplevel
   (define (branching-valid? seq)
     "Returns T if the branching invariants are respected.  Namely, that
 every non-leaf node in the tree other than nodes on the right-most
@@ -159,3 +159,20 @@ edge all have between MIN-BRANCHING and MAX-BRANCHING subnodes."
   (let my-seq = (seq:make "Hello, world!" (into 3)))
   (is (== (Some "Hello, world!") (seq:get my-seq 0)))
   (is (== (Some "3") (seq:get my-seq 1))))
+
+(define-test seq-unfold-tabulate ()
+  (is (== (the (seq:Seq Integer) (seq:make 18 16 14 12 10 8 6 4 2))
+          (unfold (fn (n) (if (== n 10)
+                              None
+                              (Some (Tuple (1+ n) (* n 2)))))
+                  1)))
+
+  (is (== (the (seq:Seq Integer) (seq:make 2 4 6 8 10 12 14 16 18))
+          (unfoldr (fn (n)
+                     (if (== n 10)
+                         None
+                         (Some (Tuple (* n 2) (1+ n)))))
+                   1)))
+
+  (is (== (the (seq:Seq UFix) (seq:make 0 2 4 6 8 10 12 14 16 18))
+          (tabulate (fn (n) (* n 2)) 10))))
