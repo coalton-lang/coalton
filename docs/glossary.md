@@ -16,6 +16,11 @@ Predicates (and sometimes boolean variables) in Common Lisp are
 denoted with a trailing `p` or `-p`, while in Coalton they're
 indicated by a trailing `?`.
 
+Functions that mutate in Common Lisp are *sometimes* prefixed by
+the letter `n` (e.g., `union` vs. `nunion`, but compare to the
+mutating `sort`). In Coalton, such functions are indicated by a
+trailing `!`, as in Scheme.
+
 Broadly speaking, Coalton borrows a lot of naming conventions from
 Haskell, since Coalton's type system is most similar to Haskell's.
 
