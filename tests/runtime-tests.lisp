@@ -106,7 +106,7 @@
 
 ;; Test defaulting and context reduction
 (define-test test-defaulting ()
-  (is (== (+ (Some (Some (the Integer 1))) (Some (Some 2))) (Some (Some 3)))))
+  (is (== (liftA2 (liftA2 +) (Some (Some (the Integer 1))) (Some (Some 2))) (Some (Some 3)))))
 
 
 ;; Test that explicit type declarations in let bindings work
@@ -180,7 +180,7 @@
 
 (define-test test-gh-973 ()
     (is (== (Many (vector:make (Single "hello")))
-                     (Many (vector:make (Single "hello"))))))
+            (Many (vector:make (Single "hello"))))))
 
 ;; Test accessors on transparent structs
 (coalton-toplevel

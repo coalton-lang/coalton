@@ -133,6 +133,33 @@ nodes."
                                   (match-branch-body branch)
                                   args)))
                   (node-match-branches node))))
+    (action (:traverse node-catch node &rest args)
+      (make-node-catch
+       :type (node-type node)
+       :expr (apply *traverse* (node-catch-expr node) args)
+       :branches (mapcar
+                  (lambda (branch)
+                    (make-catch-branch
+                     :pattern (catch-branch-pattern branch)
+                     :body (apply *traverse*
+                                  (catch-branch-body branch)
+                                  args)))
+                  (node-catch-branches node))))
+
+    (action (:traverse node-resumable node &rest args)
+      (make-node-resumable
+       :type (node-type node)
+       :expr (apply *traverse* (node-resumable-expr node) args)
+       :branches (mapcar
+                  (lambda (branch)
+                    (make-resumable-branch
+                     :pattern (resumable-branch-pattern branch)
+                     :body (apply *traverse*
+                                  (resumable-branch-body branch)
+                                  args)))
+                  (node-resumable-branches node))))
+
+    
     (action (:traverse node-while node &rest args)
       (make-node-while
        :type (node-type node)
@@ -163,6 +190,14 @@ nodes."
        :type (node-type node)
        :name (node-return-from-name node)
        :expr (apply *traverse* (node-return-from-expr node) args)))
+    (action (:traverse node-throw node &rest args)
+      (make-node-throw
+       :type (node-type node)
+       :expr (apply *traverse* (node-throw-expr node) args)))
+    (action (:traverse node-resume-to node &rest args)
+      (make-node-resume-to
+       :type (node-type node)
+       :expr (apply *traverse* (node-resume-to-expr node) args)))
     (action (:traverse node-block node &rest args)
       (make-node-block
        :type (node-type node)
@@ -184,7 +219,12 @@ nodes."
        :type (node-type node)
        :name (node-bind-name node)
        :expr (apply *traverse* (node-bind-expr node) args)
-       :body (apply *traverse* (node-bind-body node) args))))
+       :body (apply *traverse* (node-bind-body node) args)))
+    (action (:traverse node-locally node &rest args)
+      (make-node-locally
+       :type (node-type node)
+       :noinline-functions (node-locally-noinline-functions node)
+       :subexpr (apply *traverse* (node-locally-subexpr node) args))))
    t))
 
 (defun fire-action (when-key type-key actions args node)

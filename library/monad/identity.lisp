@@ -20,20 +20,25 @@
     "A bare computation. Not useful on its own, but is useful for running Monad transformers in a bare context."
     (Identity :a))
 
+  (inline)
   (declare run-identity (Identity :a -> :a))
   (define (run-identity (Identity a))
     a)
 
   (define-instance (Functor Identity)
+    (inline)
     (define (map fa->b (Identity a))
       (Identity (fa->b a))))
 
   (define-instance (Applicative Identity)
+    (inline)
     (define pure Identity)
-    (define (liftA2 fc->d->e (Identity d) (Identity e))
-      (Identity (fc->d->e d e))))
+    (inline)
+    (define (liftA2 fc->d->e (Identity c) (Identity d))
+      (Identity (fc->d->e c d))))
 
   (define-instance (Monad Identity)
+    (inline)
     (define (>>= (Identity a) fa->idb)
       (fa->idb a))))
 

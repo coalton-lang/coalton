@@ -51,6 +51,7 @@
                (:module "runtime"
                 :serial t
                 :components ((:file "function-entry")
+                             (:file "optional")
                              (:file "package")))
                (:module "typechecker"
                 :serial t
@@ -75,6 +76,7 @@
                              (:file "accessor")
                              (:file "partial-type-env")
                              (:file "parse-type")
+                             (:file "derive")
                              (:file "define-type")
                              (:file "define-class")
                              (:file "tc-env")
@@ -103,6 +105,7 @@
                              (:file "translate-expression")
                              (:file "translate-instance")
                              (:file "struct-or-class")
+                             (:file "codegen-exception")
                              (:file "codegen-pattern")
                              (:file "codegen-type-definition")
                              (:file "codegen-expression")

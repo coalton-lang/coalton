@@ -6,6 +6,8 @@ Coalton is a language embedded in Lisp, and indeed, Coalton compiles to Lisp cod
 
 ## Interaction Mode
 
+*See [Configuring Coalton](./configuring-coalton.md) for a more in-depth discussion about ways to configure Coalton.*
+
 First and foremost, there are two ways to globally compile Coalton. This is determined by
 an environment variable `COALTON_ENV` which in turn sets a Lisp feature `:coalton-release`
 and controls a Lisp function `(coalton-release-p)`.
@@ -51,11 +53,11 @@ restart your Lisp process and reload Coalton.
 
 ## Promises of Data and Basic Data Types
 
-**PROMISE**: Every Coalton value exists as a Lisp value. The structure of said value may not always be defined, however, and must be considered an element of type `T` in general circumstances.
+**PROMISE**: Every Coalton value exists as a Lisp value. The structure of said value may not always be defined, however, and must be considered an element of type `cl:t` in general circumstances.
 
-**PROMISE**: Coalton `Integer`, `Character`, `String`,  `Single-Float`, and `Double-Float` values correspond to their Lisp counterparts.
+**PROMISE**: Coalton's `Integer`, `IFix`, `UFix`, `Char`, `String`, `F32`, and `F64` values correspond to their Lisp counterparts.
 
-**PROMISE**: `COALTON:Boolean` is a Lisp `BOOLEAN`; `COALTON:True` is Lisp `T`, and `COALTON:False` is Lisp `NIL`.
+**PROMISE**: `coalton:Boolean` is a Lisp `cl:boolean`; `coalton:True` is Lisp `cl:t`, and `coalton:False` is Lisp `cl:nil`.
 
 **PROMISE**: Every Coalton `List` is a non-circular, homogeneous Common Lisp list.
 

@@ -75,11 +75,6 @@
     (first :a)
     (second :b))
 
-  (define-type (Optional :a)
-    "Represents something that may not have a value."
-    (Some :a)
-    None)
-
   (define-type (Result :bad :good)
     "Represents something that may have failed."
     ;; We write (Result :bad :good) instead of (Result :good :bad)

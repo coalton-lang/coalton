@@ -48,6 +48,7 @@
    #:*fraction-type*                    ; VARIABLE
    #:*arrow-type*                       ; VARIABLE
    #:*list-type*                        ; VARIABLE
+   #:*optional-type*                    ; VARIABLE
    #:push-type-alias                    ; FUNCTION
    #:flatten-type                       ; FUNCTION
    #:apply-type-argument                ; FUNCTION
@@ -259,12 +260,13 @@
 (defvar *integer-type*      (make-tycon :name 'coalton:Integer      :kind +kstar+))
 (defvar *ifix-type*         (make-tycon :name 'coalton:IFix         :kind +kstar+))
 (defvar *ufix-type*         (make-tycon :name 'coalton:UFix         :kind +kstar+))
-(defvar *single-float-type* (make-tycon :name 'coalton:Single-Float :kind +kstar+))
-(defvar *double-float-type* (make-tycon :name 'coalton:Double-Float :kind +kstar+))
+(defvar *single-float-type* (make-tycon :name 'coalton:F32          :kind +kstar+))
+(defvar *double-float-type* (make-tycon :name 'coalton:F64          :kind +kstar+))
 (defvar *string-type*       (make-tycon :name 'coalton:String       :kind +kstar+))
 (defvar *fraction-type*     (make-tycon :name 'coalton:Fraction     :kind +kstar+))
 (defvar *arrow-type*        (make-tycon :name 'coalton:Arrow        :kind (make-kfun :from +kstar+ :to (make-kfun :from +kstar+ :to +kstar+))))
 (defvar *list-type*         (make-tycon :name 'coalton:List         :kind (make-kfun :from +kstar+ :to +kstar+)))
+(defvar *optional-type*     (make-tycon :name 'coalton:Optional     :kind (make-kfun :from +kstar+ :to +kstar+)))
 
 ;;;
 ;;; Operations on Types

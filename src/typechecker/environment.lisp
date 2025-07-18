@@ -38,6 +38,8 @@
    #:type-entry-explicit-repr               ; ACCESSOR
    #:type-entry-enum-repr                   ; ACCESSOR
    #:type-entry-newtype                     ; ACCESSOR
+   #:type-entry-exception-p                 ; ACCESSOR
+   #:type-entry-resumption-p                ; ACCESSOR
    #:type-environment                       ; STRUCT
    #:constructor-entry                      ; STRUCT
    #:make-constructor-entry                 ; ACCESSOR
@@ -247,32 +249,33 @@
     (cons (eql :native) (cons t null))))
 
 (defstruct type-entry
-  (name         (util:required 'name)         :type symbol           :read-only t)
-  (runtime-type (util:required 'runtime-type) :type t                :read-only t)
-  (type         (util:required 'type)         :type ty               :read-only t)
-  (tyvars       (util:required 'tyvars)       :type tyvar-list       :read-only t)
-  (constructors (util:required 'constructors) :type util:symbol-list :read-only t)
-
-  ;; An explicit repr defined in the source, or nil if none was supplied. Computed repr will be reflected in
-  ;; ENUM-REPR, NEWTYPE, and/or RUNTIME-TYPE.
-  (explicit-repr (util:required 'explicit-repr) :type explicit-repr  :read-only t)
+  (name          (util:required 'name)          :type symbol                    :read-only t)
+  (runtime-type  (util:required 'runtime-type)  :type t                         :read-only t)
+  (type          (util:required 'type)          :type ty                        :read-only t)
+  (tyvars        (util:required 'tyvars)        :type tyvar-list                :read-only t)
+  (constructors  (util:required 'constructors)  :type util:symbol-list          :read-only t)
+  ;; An explicit repr defined in the source, or nil if none was
+  ;; supplied. Computed repr will be reflected in ENUM-REPR, NEWTYPE,
+  ;; and/or RUNTIME-TYPE.
+  (explicit-repr (util:required 'explicit-repr) :type explicit-repr              :read-only t)
 
   ;; If this is true then the type is compiled to a more effecient
   ;; enum representation at runtime
-  (enum-repr (util:required 'enum-repr)       :type boolean :read-only t)
+  (enum-repr     (util:required 'enum-repr)     :type boolean                    :read-only t)
 
-  ;; If this is true then the type does not exist at runtime
-  ;; See https://wiki.haskell.org/Newtype
+  ;; If this is true then the type does not exist at runtime See
+  ;; https://wiki.haskell.org/Newtype
   ;;
   ;; A type cannot be both enum repr and a newtype
   ;;
   ;; A type that is a newtype has another Coalton type as its
   ;; runtime-type instead of a lisp type. This is to avoid issues with
   ;; recursive newtypes.
-  (newtype (util:required 'newtype)     :type boolean :read-only t)
-
-  (docstring (util:required 'docstring) :type (or null string)   :read-only t)
-  (location  nil                        :type (or null source:location) :read-only t))
+  (newtype    (util:required 'newtype)           :type boolean                   :read-only t)
+  (docstring  (util:required 'docstring)         :type (or null string)          :read-only t)
+  (location   nil                                :type (or null source:location) :read-only t)
+  (exception-p nil                               :type boolean                   :read-only nil)
+  (resumption-p nil                              :type boolean                   :read-only nil))
 
 (defmethod source:location ((self type-entry))
   (type-entry-location self))
@@ -321,7 +324,7 @@
             :explicit-repr :enum
             :enum-repr t
             :newtype nil
-            :docstring ""))
+            :docstring "The \"unit\" type whose only member is the value `Unit`."))
 
           ('coalton:Char
            (make-type-entry
@@ -333,7 +336,7 @@
             :explicit-repr '(:native cl:character)
             :enum-repr nil
             :newtype nil
-            :docstring "A single character represented as a `character` type."))
+            :docstring "A character represented by a Common Lisp `character`."))
 
           ('coalton:Integer
            (make-type-entry
@@ -345,11 +348,11 @@
             :explicit-repr '(:native cl:integer)
             :enum-repr nil
             :newtype nil
-            :docstring "Unbound integer. Uses `integer`."))
+            :docstring "Unbound integer. Represented by a Common Lisp `integer`."))
 
-          ('coalton:Single-Float
+          ('coalton:F32
            (make-type-entry
-            :name 'coalton:Single-Float
+            :name 'coalton:F32
             :runtime-type 'cl:single-float
             :type *single-float-type*
             :tyvars nil
@@ -357,11 +360,11 @@
             :explicit-repr '(:native cl:single-float)
             :enum-repr nil
             :newtype nil
-            :docstring "Single precision floating point number. Uses `single-float`."))
+            :docstring "Single-precision floating point number (32-bits in size). Represented by a Common Lisp `single-float`."))
 
-          ('coalton:Double-Float
+          ('coalton:F64
            (make-type-entry
-            :name 'coalton:Double-Float
+            :name 'coalton:F64
             :runtime-type 'cl:double-float
             :type *double-float-type*
             :tyvars nil
@@ -369,7 +372,7 @@
             :explicit-repr '(:native cl:double-float)
             :enum-repr nil
             :newtype nil
-            :docstring "Double precision floating point number. Uses `double-float`."))
+            :docstring "Double-precision floating point number (64 bits in size). Represented by a Common Lisp `double-float`."))
 
           ('coalton:String
            (make-type-entry
@@ -381,7 +384,7 @@
             :explicit-repr '(:native cl:string)
             :enum-repr nil
             :newtype nil
-            :docstring "String of characters represented by Common Lisp `string`."))
+            :docstring "String of characters. Represented by Common Lisp `string`."))
 
           ('coalton:Fraction
            (make-type-entry
@@ -393,7 +396,7 @@
             :explicit-repr '(:native cl:rational)
             :enum-repr nil
             :newtype nil
-            :docstring "A ratio of integers always in reduced form."))
+            :docstring "A ratio of integers always in reduced form. Represented by a Common Lisp `rational`."))
 
           ('coalton:Arrow
            (make-type-entry
@@ -417,7 +420,19 @@
             :explicit-repr '(:native cl:list)
             :enum-repr nil
             :newtype nil
-            :docstring "Homogeneous list of objects represented as a Common Lisp `list`.")))))
+            :docstring "Homogeneous list of objects. Represented as a typical Common Lisp chain of conses (or `nil`)."))
+
+          ('coalton:Optional
+           (make-type-entry
+            :name 'coalton:Optional
+            :runtime-type 'cl:t
+            :type *optional-type*
+            :tyvars (list (make-variable))
+            :constructors '(coalton:Some coalton:None)
+            :explicit-repr '(:native cl:t)
+            :enum-repr nil
+            :newtype nil
+            :docstring "A type that allows indicating the presence or absence of a value. The underlying representation does not allocate when a value is present (i.e., with `Some`).")))))
 
 ;;;
 ;;; Constructor environment
@@ -500,6 +515,24 @@
             :constructs 'coalton:List
             :classname nil
             :docstring "`Nil` represents an empty `List`."
+            :compressed-repr 'nil))
+
+          ('coalton:Some
+           (make-constructor-entry
+            :name 'coalton:Some
+            :arity 1
+            :constructs 'coalton:Optional
+            :classname nil
+            :docstring "`Some` expresses the presence of a meaningful value."
+            :compressed-repr 'nil))
+
+          ('coalton:None
+           (make-constructor-entry
+            :name 'coalton:None
+            :arity 0
+            :constructs 'coalton:Optional
+            :classname nil
+            :docstring "`None` expresses the absence of a meaningful value."
             :compressed-repr 'nil)))))
 
 #+(and sbcl coalton-release)
@@ -1233,7 +1266,6 @@
   (declare (type symbol name)
            (type environment env)
            (values ty-list &optional))
-  (lookup-constructor env name)
   (function-type-arguments (lookup-value-type env name)))
 
 (define-env-updater add-instance (env class value)

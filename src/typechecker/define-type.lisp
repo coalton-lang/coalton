@@ -19,8 +19,8 @@
    (#:util #:coalton-impl/util)
    (#:algo #:coalton-impl/algorithm)
    (#:parser #:coalton-impl/parser)
-   (#:source #:coalton-impl/source)
-   (#:tc #:coalton-impl/typechecker/stage-1))
+   (#:tc #:coalton-impl/typechecker/stage-1)
+   (#:derive #:coalton-impl/typechecker/derive))
   (:export
    #:toplevel-define-type               ; FUNCTION
    #:type-definition                    ; STRUCT
@@ -31,6 +31,8 @@
    #:type-definition-aliased-type       ; ACCESSOR
    #:type-definition-explicit-repr      ; ACCESSOR
    #:type-definition-enum-repr          ; ACCESSOR
+   #:type-definition-exception-p        ; ACCESSOR
+   #:type-definition-resumption-p       ; ACCESSOR
    #:type-definition-newtype            ; ACCESSOR
    #:type-definition-constructors       ; ACCESSOR
    #:type-definition-constructor-types  ; ACCESSOR
@@ -55,7 +57,9 @@
   (constructor-types (util:required 'constructor-types) :type tc:scheme-list            :read-only t)
   (constructor-args  (util:required 'constructor-args)  :type list                      :read-only t)
   (docstring         (util:required 'docstring)         :type (or null string)          :read-only t)
-  (location          (util:required 'location)          :type source:location           :read-only t))
+  (location          (util:required 'location)          :type source:location           :read-only t)
+  (exception-p       (util:required 'exception-p)       :type boolean                   :read-only t)
+  (resumption-p      (util:required 'resumption-p)      :type boolean                   :read-only t))
 
 (defmethod source:location ((self type-definition))
   (type-definition-location self))
@@ -281,7 +285,9 @@
           :enum-repr (type-definition-enum-repr type)
           :newtype (type-definition-newtype type)
           :docstring (source:docstring type)
-          :location (source:location parsed-type))))
+          :location (source:location parsed-type)
+          :exception-p (type-definition-exception-p type)
+          :resumption-p (type-definition-resumption-p type))))
 
   ;; Define the type's constructors in the environment
   (loop :for ctor :in (type-definition-constructors type)
@@ -338,14 +344,18 @@
     ;; Infer the kinds of each type
     (loop :for type :in types
           :for name := (parser:identifier-src-name (parser:type-definition-name type))
-          :do (loop :for ctor :in (parser:type-definition-ctors type)
-                    :for ctor-name := (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
-                    :for fields := (loop :for field :in (parser:type-definition-ctor-field-types ctor)
-                                         :collect (multiple-value-bind (type ksubs_)
-                                                      (parse-type field env ksubs)
-                                                    (setf ksubs ksubs_)
-                                                    type))
-                    :do (setf (gethash ctor-name ctor-table) fields)))
+          :do (loop
+                :for ctor :in (parser:type-definition-ctors type)
+                :for ctor-name
+                  := (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
+                :for fields
+                  := (loop
+                       :for field :in (parser:type-definition-ctor-field-types ctor)
+                       :collect (multiple-value-bind (type ksubs_)
+                                    (parse-type field env ksubs)
+                                  (setf ksubs ksubs_)
+                                  type))
+                :do (setf (gethash ctor-name ctor-table) fields)))
 
     ;; Infer the kinds of each type alias.
     (loop :for type :in types
@@ -353,13 +363,14 @@
           :for parser-aliased-type := (parser:type-definition-aliased-type type)
           :when parser-aliased-type
             :do (multiple-value-bind (aliased-type ksubs_)
-                    (parse-type parser-aliased-type
-                                env
-                                ksubs
-                                (let ((kind (tc:kind-of (gethash name (partial-type-env-ty-table env)))))
-                                  (loop :while (typep kind 'tc:kfun)
-                                        :do (setf kind (tc:kfun-to kind)))
-                                  kind))
+                    (parse-type
+                     parser-aliased-type
+                     env
+                     ksubs
+                     (let ((kind (tc:kind-of (gethash name (partial-type-env-ty-table env)))))
+                       (loop :while (typep kind 'tc:kfun)
+                             :do (setf kind (tc:kfun-to kind)))
+                       kind))
                   (setf ksubs ksubs_)
                   (setf (gethash name alias-table) aliased-type)))
 
@@ -376,121 +387,142 @@
     ;; Build type-definitions for each type in the scc
     (let ((instances nil))
       (values
-       (loop :for type :in types
-             :for name := (parser:identifier-src-name (parser:type-definition-name type))
-             :for tvars := (tc:apply-ksubstitution
-                            ksubs
-                            (mapcar (lambda (var)
-                                      (partial-type-env-lookup-var
-                                       env
-                                       (parser:keyword-src-name var)
-                                       var))
-                                    (parser:type-definition-vars type)))
+       (loop
+         :for type :in types
+         :for name := (parser:identifier-src-name (parser:type-definition-name type))
+         :for tvars := (tc:apply-ksubstitution
+                        ksubs
+                        (mapcar (lambda (var)
+                                  (partial-type-env-lookup-var
+                                   env
+                                   (parser:keyword-src-name var)
+                                   var))
+                                (parser:type-definition-vars type)))
 
-             :for repr := (parser:type-definition-repr type)
-             :for repr-type := (and repr (parser:keyword-src-name (parser:attribute-repr-type repr)))
-             :for repr-arg := (and repr (eq repr-type :native) (cst:raw (parser:attribute-repr-arg repr)))
+         :for repr
+           := (parser:type-definition-repr type)
+         :for repr-type
+           := (and repr (parser:keyword-src-name (parser:attribute-repr-type repr)))
+         :for repr-arg
+           := (and repr (eq repr-type :native) (cst:raw (parser:attribute-repr-arg repr)))
 
-             ;; Apply ksubs to find the type of each constructor
-             :for constructor-types
-               := (loop :for ctor :in (parser:type-definition-ctors type)
-                        :for ctor-name := (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
-                        :for ty
-                          := (tc:make-function-type*
-                              (tc:apply-ksubstitution ksubs (gethash ctor-name ctor-table))
-                              (tc:apply-type-argument-list
-                               (tc:apply-ksubstitution ksubs (gethash name (partial-type-env-ty-table env)))
-                               tvars))
-                        :collect (tc:quantify-using-tvar-order tvars (tc:qualify nil ty)))
+         :for derive := (parser:type-definition-derive type)
+         :for derive-classes := (and derive (parser:attribute-derive-classes derive))
 
-             :for constructor-args
-               := (loop :for ctor :in (parser:type-definition-ctors type)
-                        :for ctor-name := (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
-                        :collect (tc:apply-ksubstitution ksubs (gethash ctor-name ctor-table)))
 
-             ;; Check that repr :enum types do not have any constructors with fields
-             :when (eq repr-type :enum)
-               :do (loop :for ctor :in (parser:toplevel-define-type-ctors type)
-                         :unless (endp (parser:constructor-fields ctor))
-                           :do (tc-error "Invalid repr :enum attribute"
-                                         (tc-note (first (parser:constructor-fields ctor))
-                                                  "constructors of repr :enum types cannot have fields")))
+         ;; Apply ksubs to find the type of each constructor
+         :for constructor-types
+           := (loop
+                :for ctor
+                  :in (parser:type-definition-ctors type)
+                :for ctor-name
+                  := (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
+                :for ty
+                  := (tc:make-function-type*
+                      (tc:apply-ksubstitution ksubs (gethash ctor-name ctor-table))
+                      (tc:apply-type-argument-list
+                       (tc:apply-ksubstitution ksubs (gethash name (partial-type-env-ty-table env)))
+                       tvars))
+                :collect (tc:quantify-using-tvar-order tvars (tc:qualify nil ty)))
 
-                   ;; Check that repr :transparent types have a single constructor
-             :when (eq repr-type :transparent)
-               :do (unless (= 1 (length (parser:type-definition-ctors type)))
-                     (tc-error "Invalid repr :transparent attribute"
-                               (tc-note type
-                                        "repr :transparent types must have a single constructor")))
 
-                   ;; Check that the single constructor of a repr :transparent type has a single field
-             :when (eq repr-type :transparent)
-               :do (unless (= 1 (length (parser:type-definition-ctor-field-types (first (parser:type-definition-ctors type)))))
-                     (tc-error "Invalid repr :transparent attribute"
-                               (tc-note (first (parser:type-definition-ctors type))
-                                        "constructors of repr :transparent types must have a single field")))
+         :for constructor-args
+           := (loop
+                :for ctor
+                  :in (parser:type-definition-ctors type)
+                :for ctor-name
+                  := (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
+                :collect (tc:apply-ksubstitution ksubs (gethash ctor-name ctor-table)))
 
-             :collect (let* ((ctors
-                               (loop :for ctor :in (parser:type-definition-ctors type)
+         ;; Check that repr :enum types do not have any constructors with fields
+         :when (eq repr-type :enum)
+           :do (loop
+                 :for ctor :in (parser:toplevel-define-type-ctors type)
+                 :unless (endp (parser:constructor-fields ctor))
+                   :do (tc-error "Invalid repr :enum attribute"
+                                 (tc-note (first (parser:constructor-fields ctor))
+                                          "constructors of repr :enum types cannot have fields")))
 
-                                     :for ctor-name := (parser:identifier-src-name
-                                                        (parser:type-definition-ctor-name ctor))
+         ;; Check that repr :transparent types have a single constructor
+         :when (eq repr-type :transparent)
+           :do (unless (= 1 (length (parser:type-definition-ctors type)))
+                 (tc-error "Invalid repr :transparent attribute"
+                           (tc-note type
+                                    "repr :transparent types must have a single constructor")))
 
-                                     :for classname := (alexandria:format-symbol
-                                                        *package*
-                                                        "~A/~A"
-                                                        name
-                                                        ctor-name)
+         ;; Check that the single constructor of a repr :transparent type has a single field
+         :when (eq repr-type :transparent)
+           :do (unless (= 1 (length (parser:type-definition-ctor-field-types (first (parser:type-definition-ctors type)))))
+                 (tc-error "Invalid repr :transparent attribute"
+                           (tc-note (first (parser:type-definition-ctors type))
+                                    "constructors of repr :transparent types must have a single field")))
+         :collect
+         (let*
+             ((ctors
+                (loop
+                  :for ctor :in (parser:type-definition-ctors type)
+                  :for ctor-name
+                    := (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
+                  :for classname
+                    := (alexandria:format-symbol *package* "~A/~A" name ctor-name)
+                  :for ctor-docstring
+                    := (source:docstring ctor)
+                  :collect (tc:make-constructor-entry
+                            :name ctor-name
+                            :arity (length (parser:type-definition-ctor-field-types ctor))
+                            :constructs name
+                            :classname classname
+                            :docstring ctor-docstring
+                            :compressed-repr (if (eq repr-type :enum)
+                                                 classname
+                                                 nil))))
 
-                                     :for ctor-docstring := (source:docstring ctor)
+              (type-definition
+                (make-type-definition
+                 :name name
+                 :type (gethash name (partial-type-env-ty-table env))
+                 :runtime-type (cond
+                                 ((eq repr-type :transparent)
+                                  (tc:lisp-type
+                                   (tc:function-type-from
+                                    (tc:qualified-ty-type
+                                     (tc:fresh-inst (first constructor-types))))
+                                   (partial-type-env-env env)))
+                                 ((eq repr-type :native)
+                                  repr-arg)
+                                 ((eq repr-type :enum)
+                                  `(member ,@(mapcar #'tc:constructor-entry-compressed-repr ctors)))
+                                 (t
+                                  name))
+                 :aliased-type (gethash name alias-table)
+                 :explicit-repr (if (eq repr-type :native)
+                                    (list repr-type repr-arg)
+                                    repr-type)
+                 :enum-repr (eq repr-type :enum)
+                 :newtype (eq repr-type :transparent)
 
-                                     :collect (tc:make-constructor-entry
-                                               :name ctor-name
-                                               :arity (length (parser:type-definition-ctor-field-types ctor))
-                                               :constructs name
-                                               :classname classname
-                                               :docstring ctor-docstring
-                                               :compressed-repr (if (eq repr-type :enum)
-                                                                    classname
-                                                                    nil))))
+                 :constructors ctors
 
-                             (type-definition
-                               (make-type-definition
-                                :name name
-                                :type (gethash name (partial-type-env-ty-table env))
-                                :runtime-type (cond
-                                                ((eq repr-type :transparent)
-                                                 (tc:lisp-type
-                                                  (tc:function-type-from
-                                                   (tc:qualified-ty-type
-                                                    (tc:fresh-inst (first constructor-types))))
-                                                  (partial-type-env-env env)))
-                                                ((eq repr-type :native)
-                                                 repr-arg)
-                                                ((eq repr-type :enum)
-                                                 `(member ,@(mapcar #'tc:constructor-entry-compressed-repr ctors)))
-                                                (t
-                                                 name))
-                                :aliased-type (gethash name alias-table)
-                                :explicit-repr (if (eq repr-type :native)
-                                                   (list repr-type repr-arg)
-                                                   repr-type)
-                                :enum-repr (eq repr-type :enum)
-                                :newtype (eq repr-type :transparent)
+                 :constructor-types constructor-types
+                 :constructor-args constructor-args
+                 :docstring (source:docstring type)
+                 :location (source:location type)
+                 :exception-p (parser:type-definition-exception-p type)
+                 :resumption-p (parser:type-definition-resumption-p type)))
 
-                                :constructors ctors
+              (runtime-repr-instance (maybe-runtime-repr-instance type-definition)))
+           
+           (when derive-classes 
+             (loop :for class :in (cst:raw derive-classes)
+                   :for instance := (derive:derive-class-instance class type env)
+                   :when instance :do (push instance instances)))
+           
+           
+           (when runtime-repr-instance
+             (push runtime-repr-instance instances))
+           
+           type-definition))
 
-                                :constructor-types constructor-types
-                                :constructor-args constructor-args
-                                :docstring (source:docstring type)
-                                :location (source:location type)))
-
-                             (runtime-repr-instance (maybe-runtime-repr-instance type-definition)))
-
-                        (when runtime-repr-instance
-                          (push runtime-repr-instance instances))
-
-                        type-definition))
        instances
        ksubs))))
 

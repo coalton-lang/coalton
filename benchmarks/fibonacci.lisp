@@ -98,13 +98,4 @@
   (monomorphize)
   (declare fib-monomorphized (Integer -> Integer))
   (define (fib-monomorphized x)
-    (fib-generic x))
-
-  (declare fib-generic-optional (Integer -> Optional Integer))
-  (define (fib-generic-optional x)
-    (fib-generic (Some x)))
-
-  (monomorphize)
-  (declare fib-monomorphized-optional (Integer -> Optional Integer))
-  (define (fib-monomorphized-optional x)
-    (fib-generic (Some x))))
+    (fib-generic x)))

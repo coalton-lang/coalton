@@ -199,6 +199,20 @@
 ;;; Expression Type Inference
 ;;;
 
+(defun exception-type-p (inferred-ty env)
+  (alexandria:when-let* ((ty-name (if (types:tycon-p inferred-ty)
+                                      (types:tycon-name inferred-ty)
+                                      nil))
+                         (entry   (tc:lookup-type (tc-env-env env) ty-name)))
+    (tc:type-entry-exception-p entry)))
+
+(defun resumption-type-p (inferred-ty env)
+  (alexandria:when-let* ((ty-name (if (types:tycon-p inferred-ty)
+                                      (types:tycon-name inferred-ty)
+                                      nil))
+                         (entry   (tc:lookup-type (tc-env-env env) ty-name)))
+    (tc:type-entry-resumption-p entry)))
+
 (defgeneric infer-expression-type (node expected-type subs env)
   (:documentation "Infer the type of NODE and then unify against EXPECTED-TYPE
 
@@ -210,11 +224,11 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (values tc:ty tc:ty-predicate-list accessor-list node-literal tc:substitution-list &optional))
 
     (let ((ty (etypecase (parser:node-literal-value node)
-                (ratio tc:*fraction-type*)
+                (ratio        tc:*fraction-type*)
                 (single-float tc:*single-float-type*)
                 (double-float tc:*double-float-type*)
-                (string tc:*string-type*)
-                (character tc:*char-type*))))
+                (string       tc:*string-type*)
+                (character    tc:*char-type*))))
 
       (handler-case
           (progn
@@ -424,7 +438,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                               env)
         (declare (ignore pat-ty))
 
-        (values nil                ; return nil as this is always thrown away
+        (values nil         ; return nil as this is always thrown away
                 preds
                 accessors
                 (make-node-bind
@@ -521,11 +535,11 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                     (tc:coalton-internal-type-error ()
                       (tc-error "Return type mismatch"
                                 (tc-note s1
-                                                 "First return is of type '~S'"
-                                                 (tc:apply-substitution subs ty1))
+                                         "First return is of type '~S'"
+                                         (tc:apply-substitution subs ty1))
                                 (tc-note s2
-                                                 "Second return is of type '~S'"
-                                                 (tc:apply-substitution subs ty2))))))
+                                         "Second return is of type '~S'"
+                                         (tc:apply-substitution subs ty2))))))
 
         ;; Unify the function's inferred type with one of the early returns.
         (when *returns*
@@ -534,11 +548,11 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
             (tc:coalton-internal-type-error ()
               (tc-error "Return type mismatch"
                         (tc-note (car (first *returns*))
-                                         "First return is of type '~S'"
-                                         (tc:apply-substitution subs (cdr (first *returns*))))
+                                 "First return is of type '~S'"
+                                 (tc:apply-substitution subs (cdr (first *returns*))))
                         (tc-note (parser:node-body-last-node (parser:node-abstraction-body node))
-                                         "Second return is of type '~S'"
-                                         (tc:apply-substitution subs body-ty))))))
+                                 "Second return is of type '~S'"
+                                 (tc:apply-substitution subs body-ty))))))
 
         (let ((ty (tc:make-function-type* arg-tys body-ty)))
           (handler-case
@@ -692,6 +706,136 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
           (tc:coalton-internal-type-error ()
             (standard-expression-type-mismatch-error node subs expected-type ret-ty))))))
 
+  (:method ((node parser:node-catch) expected-type subs env)
+    (declare (type tc:ty expected-type)
+             (type tc:substitution-list subs)
+             (type tc-env env)
+             (values tc:ty tc:ty-predicate-list accessor-list node-catch tc:substitution-list &optional))
+    ;; Infer type of the expression that may throw an exception
+    (multiple-value-bind (expr-ty preds accessors expr-node subs)
+        (infer-expression-type (parser:node-catch-expr node)
+                               (tc:make-variable)
+                               subs
+                               env)
+
+      (let* (;; Infer type of each pattern, ensuring it is an exception type
+             (branch-pat-nodes
+               (loop
+                 :for branch :in (parser:node-catch-branches node)
+                 :for pattern := (parser:node-catch-branch-pattern branch)
+                 :for (pat-ty pat-node subs_)
+                   := (multiple-value-list (infer-pattern-type pattern (tc:make-variable) subs env))
+                 :unless (or (exception-type-p pat-ty env)
+                             (typep pattern 'parser:pattern-wildcard))
+                   :do (tc-error
+                        "Invalid catch case"
+                        (tc-note
+                         pat-node
+                         "Catch branch pattern must be an exception constructor pattern or a wildcard."))
+                 :else 
+                   :do (setf subs subs_)
+                   :and :collect pat-node))
+             ;; Infer type of each branch body, unifying against expr-ty
+             (branch-body-nodes
+               (loop
+                 :for branch :in (parser:node-catch-branches node)
+                 :for body := (parser:node-catch-branch-body branch)
+                 :collect (multiple-value-bind (body-ty preds_ accessors_ body-node subs_)
+                              (infer-expression-type body expr-ty subs env)
+                            (declare (ignore body-ty))
+                            (setf subs subs_)
+                            (setf preds preds_)
+                            (setf accessors (append accessors accessors_))
+                            body-node)))
+
+             (branch-nodes
+               (loop
+                 :for branch :in (parser:node-catch-branches node)
+                 :for pat-node :in branch-pat-nodes
+                 :for branch-body-node :in branch-body-nodes
+                 :collect (make-node-catch-branch
+                           :pattern pat-node
+                           :body branch-body-node
+                           :location (source:location branch)))))
+        (handler-case
+            (progn
+              (setf subs (tc:unify subs expr-ty expected-type))
+              (let ((type (tc:apply-substitution subs expr-ty)))
+                (values
+                 type
+                 preds
+                 accessors
+                 (make-node-catch
+                  :type (tc:qualify nil type)
+                  :location (source:location node)
+                  :expr expr-node
+                  :branches branch-nodes)
+                 subs)))
+          (tc:coalton-internal-type-error ()
+            (standard-expression-type-mismatch-error node subs expected-type expr-ty))))))
+
+  (:method ((node parser:node-resumable) expected-type subs env)
+    (declare (type tc:ty expected-type)
+             (type tc:substitution-list subs)
+             (type tc-env env)
+             (values tc:ty tc:ty-predicate-list accessor-list node-resumable tc:substitution-list &optional))
+    
+    (multiple-value-bind (expr-ty preds accessors expr-node subs)
+        (infer-expression-type (parser:node-resumable-expr node)
+                               (tc:make-variable)
+                               subs
+                               env)
+      (let* (;; infer type of each pattern, ensuring it is a resumption type
+             (branch-pat-nodes
+               (loop
+                 :for branch :in (parser:node-resumable-branches node)
+                 :for pattern := (parser:node-resumable-branch-pattern branch)
+                 :for (pat-ty pat-node subs_)
+                   := (multiple-value-list (infer-pattern-type pattern (tc:make-variable) subs env))
+                 :unless (resumption-type-p pat-ty env)
+                   :do (tc-error "Invalid resumable case"
+                                 (tc-note pat-node "case pattern must construct a resumption type."))
+                 :else 
+                   :do (setf subs subs_)
+                   :and :collect pat-node))
+             ;; Infer type of each branch body, it should unify with the expr/expected type
+             (branch-body-nodes
+               (loop
+                 :for branch :in (parser:node-resumable-branches node)
+                 :for body := (parser:node-resumable-branch-body branch)
+                 :collect (multiple-value-bind (body-ty preds_ accessors_ body-node subs_)
+                              (infer-expression-type body expr-ty subs env)
+                            (declare (ignore body-ty))
+                            (setf subs subs_)
+                            (setf preds preds_)
+                            (setf accessors (append accessors accessors_))
+                            body-node)))
+             (branch-nodes
+               (loop
+                 :for branch :in (parser:node-resumable-branches node)
+                 :for pat-node :in branch-pat-nodes
+                 :for branch-body-node :in branch-body-nodes
+                 :collect (make-node-resumable-branch
+                           :pattern pat-node
+                           :body branch-body-node
+                           :location (source:location branch)))))
+        (handler-case
+            (progn
+              (setf subs (tc:unify subs expr-ty expected-type))
+              (let ((type (tc:apply-substitution subs expr-ty)))
+                (values
+                 type
+                 preds
+                 accessors
+                 (make-node-resumable
+                  :type (tc:qualify nil type)
+                  :location (source:location node)
+                  :expr expr-node
+                  :branches branch-nodes)
+                 subs)))
+          (tc:coalton-internal-type-error ()
+            (standard-expression-type-mismatch-error node subs expected-type expr-ty))))))
+
   (:method ((node parser:node-progn) expected-type subs env)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
@@ -799,6 +943,65 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
        preds
        accessors
        (make-node-return
+        :type (tc:qualify nil expected-type)
+        :location (source:location node)
+        :expr expr-node)
+       subs)))
+
+  (:method ((node parser:node-throw) expected-type subs env)
+    (declare (type tc:ty expected-type)
+             (type tc:substitution-list subs)
+             (type tc-env env)
+             (values tc:ty tc:ty-predicate-list accessor-list node-throw tc:substitution-list))
+
+    (multiple-value-bind (exception-ty preds accessors expr-node subs)
+        (infer-expression-type (parser:node-throw-expr node)
+                               (tc:make-variable)
+                               subs
+                               env)
+
+      (unless (exception-type-p exception-ty env)
+        (tc-error
+         "Invalid throw"
+         (tc-note
+          expr-node
+          "Argument to `throw` must be a known exception.")
+         (tc-note
+          expr-node
+          "Not Yet Supported: throw polymorphism.")))
+      
+      (values
+       expected-type
+       preds
+       accessors
+       (make-node-throw
+        :type (tc:qualify nil expected-type)
+        :location (source:location node)
+        :expr expr-node)
+       subs)))
+
+  (:method ((node parser:node-resume-to) expected-type subs env)
+    (declare (type tc:ty expected-type)
+             (type tc:substitution-list subs)
+             (type tc-env env)
+             (values tc:ty tc:ty-predicate-list accessor-list node-resume-to tc:substitution-list))
+
+    (multiple-value-bind (resumption-ty preds accessors expr-node subs)
+        (infer-expression-type (parser:node-resume-to-expr node)
+                               (tc:make-variable)
+                               subs
+                               env)
+
+      (unless (resumption-type-p resumption-ty env)
+        (tc-error "Invalid resume-to"
+                  (tc-note node "Argument to `resume-to` be a known resumption.")
+                  (tc-note node "Not Yet Supported: resume-to polymorphism.")))
+      
+      (values
+       expected-type
+       preds
+       accessors
+       (make-node-resume-to
         :type (tc:qualify nil expected-type)
         :location (source:location node)
         :expr expr-node)
@@ -1418,6 +1621,32 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
   (:documentation "Infer the type of pattern PAT and then unify against EXPECTED-TYPE.
 
 Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
+  (:method ((pat parser:pattern-binding) expected-type subs env)
+    (declare (type tc:ty expected-type)
+             (type tc:substitution-list subs)
+             (type tc-env env)
+             (values tc:ty pattern-binding tc:substitution-list))
+
+    (check-duplicates (parser:pattern-variables pat)
+                      #'parser:pattern-var-name
+                      (lambda (first second)
+                        (tc-error "Duplicate pattern variable"
+                                  (tc-note first "first definition here")
+                                  (tc-note second "second definition here"))))
+
+    (multiple-value-bind (pat-ty bound subs)
+        (infer-pattern-type (parser:pattern-binding-pattern pat) expected-type subs env)
+      (multiple-value-bind (pat-ty var subs)
+          (infer-pattern-type (parser:pattern-binding-var pat) pat-ty subs env)
+
+        (values
+         pat-ty
+         (make-pattern-binding
+          :type (tc:qualify nil pat-ty)
+          :var var
+          :pattern bound)
+         subs))))
+
   (:method ((pat parser:pattern-var) expected-type subs env)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)

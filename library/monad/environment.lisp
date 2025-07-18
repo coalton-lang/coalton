@@ -4,9 +4,6 @@
    #:coalton-library/functions
    #:coalton-library/classes
    #:coalton-library/monad/identity)
-  (:import-from
-   #:coalton-library/monad/state
-   #:MonadState put get)
   (:export
    #:EnvT
    #:local-envT
@@ -42,26 +39,33 @@ Equivalent to Haskell's ReaderT monad https://hackage.haskell.org/package/transf
 
   (define-type-alias (Env :env :value) (EnvT :env Identity :value))
 
+  (inline)
   (declare local-envT ((:env -> :env) -> EnvT :env :m :value -> EnvT :env :m :value))
   (define (local-envT fenv (EnvT fenv->a))
     "Run a computation in a modified environment."
-    (EnvT (compose fenv->a fenv)))
+    (EnvT (fn (env)
+            (fenv->a (fenv env)))))
 
+  (inline)
   (declare ask-envT (Monad :m => EnvT :env :m :env))
   (define ask-envT
     "Retrieve the computation environment."
-    (EnvT (compose pure id)))
+    (EnvT pure))
 
+  (inline)
   (declare asks-envT (Applicative :m => (:env -> :a) -> EnvT :env :m :a))
   (define (asks-envT fenv->a)
     "Retrieve an aspect of the computation environment."
-    (EnvT (compose pure fenv->a)))
+    (EnvT (fn (env)
+            (pure (fenv->a env)))))
 
+  (inline)
   (declare run-envT (EnvT :env :m :value -> :env -> :m :value))
   (define (run-envT (EnvT fenv->val) env)
     "Run a EnvT inside an environment."
     (fenv->val env))
 
+  (inline)
   (declare run-env (Env :env :value -> :env -> :value))
   (define (run-env env-computation env)
     "Run a Env inside an environment."
@@ -88,22 +92,31 @@ Equivalent to Haskell's ReaderT monad https://hackage.haskell.org/package/transf
 ;;
 
 (coalton-toplevel
+  (inline)
   (declare map-envT ((:m :a -> :n :b) -> EnvT :env :m :a -> EnvT :env :n :b))
   (define (map-envT fma->nb (EnvT fenv->ma))
-    (EnvT (compose fma->nb fenv->ma)))
+    (EnvT (fn (env)
+            (fma->nb (fenv->ma env)))))
 
+  (inline)
   (declare lift-envT (:m :a -> EnvT :env :m :a))
-  (define lift-envT (compose EnvT const)))
+  (define (lift-envT m)
+    (EnvT (const m))))
 
 (coalton-toplevel
   (define-instance (Functor :m => Functor (EnvT :env :m))
-    (define map (compose map-envT map)))
+    (inline)
+    (define (map fa->b env-a)
+      (map-envT (map fa->b) env-a)))
 
   (define-instance (Applicative :m => Applicative (EnvT :env :m))
-    (define pure (compose lift-envT pure))
+    (inline)
+    (define (pure a)
+      (lift-envT (pure a)))
+    (inline)
     (define (liftA2 fc->d->e (EnvT fenv->mc) (EnvT fenv->md))
       (EnvT (fn (env)
-                (liftA2 fc->d->e (fenv->mc env) (fenv->md env))))))
+              (liftA2 fc->d->e (fenv->mc env) (fenv->md env))))))
 
   (define-instance (Monad :m => Monad (EnvT :env :m))
     (define (>>= (EnvT fenv->ma) fa->envmb)
@@ -116,12 +129,8 @@ Equivalent to Haskell's ReaderT monad https://hackage.haskell.org/package/transf
                     (fenv->mb env)))))))))
 
   (define-instance (MonadTransformer (EnvT :env))
+    (inline)
     (define lift lift-envT)))
-
-(coalton-toplevel
-  (define-instance (MonadState :s :m => MonadState :s (EnvT :env :m))
-    (define put (compose lift put))
-    (define get (lift get))))
 
 (coalton-toplevel
   (define-instance (Monad :m => MonadEnvironment :env (EnvT :env :m))

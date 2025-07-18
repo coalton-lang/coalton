@@ -4,7 +4,7 @@
 
 (package coalton-unit-tests)
 
-(define (f)
+(define (f-return-test)
   (return))
 
 ================================================================================

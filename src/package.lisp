@@ -27,10 +27,13 @@
    #:define
    #:define-type
    #:define-type-alias
+   #:define-exception
+   #:define-resumption
    #:define-struct
    #:define-class
    #:define-instance
    #:repr
+   #:derive
    #:lisp-toplevel
    #:monomorphize
    #:inline
@@ -57,17 +60,24 @@
    #:Integer
    #:IFix
    #:UFix
-   #:Single-Float
-   #:Double-Float
+   #:F32
+   #:F64
+   #:Single-Float                       ; deprecated
+   #:Double-Float                       ; deprecated
    #:String
    #:Fraction
    #:Arrow
-   #:List #:Cons #:Nil)
+   #:List #:Cons #:Nil
+   #:Optional #:Some #:None)
 
   ;; Primitive Syntax
   (:export
    #:fn #:λ
    #:match
+   #:throw
+   #:resume-to
+   #:resumable
+   #:catch
    #:let
    #:rec
    #:=                                  ; Syntax

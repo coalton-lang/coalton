@@ -119,6 +119,24 @@
                     (#:arr  #:coalton-library/lisparray))
   )
 
+(define-coalton-benchmark mapping
+    ((:local-nicknames
+      (#:hashtable #:coalton-library/hashtable)
+      (#:hashmap   #:coalton-library/hashmap)
+      (#:ordmap    #:coalton-library/ordmap)))
+  (:use
+   #:coalton
+   #:coalton-prelude
+   #:coalton-library/hash)
+  (:local-nicknames (#:cell      #:coalton-library/cell)
+                    (#:hashtable #:coalton-library/hashtable)
+                    (#:hashmap   #:coalton-library/hashmap)
+                    (#:iter      #:coalton-library/iterator)
+                    (#:l         #:coalton-library/experimental/loops)
+                    (#:ordmap    #:coalton-library/ordmap))
+
+  )
+
 ;;;
 ;;; Running benchmarks
 ;;;

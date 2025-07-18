@@ -51,9 +51,15 @@
 (define-coalton-toplevel-editor-macro coalton:define-type-alias (name &body definition)
   "Create a new type alias named NAME. (Coalton top-level operator.)")
 
+(define-coalton-toplevel-editor-macro coalton:define-exception (name &body definition)
+    "Create a new exception algebraic data type. (Coalton top-level operator.)")
+
+(define-coalton-toplevel-editor-macro coalton:define-resumption (name constructor)
+    "Create a new resumption with its single constructor. (Coalton top-level operator.)")
+
 ;; the `&body` below is purely for the purpose editor indentation display.
 (define-coalton-toplevel-editor-macro coalton:declare (var &body type)
-  "Declare the type of a variable. (Coalton top-level operator.)")
+    "Declare the type of a variable. (Coalton top-level operator.)")
 
 (define-coalton-toplevel-editor-macro coalton:define-class (class &body method-signatures)
   "Define a new type class. (Coalton top-level operator.")
@@ -72,6 +78,9 @@
 (define-coalton-editor-macro coalton:repr (type &optional arg)
   "Annote a type definition with a runtime representation.")
 
+(define-coalton-editor-macro coalton:derive (&rest classes)
+  "Derive class instances for structs or types.")
+
 (define-coalton-editor-macro coalton:monomorphize ()
   "Mark a definition for monomorphization.")
 
@@ -82,8 +91,20 @@
   "A lambda abstraction callable within coalton."
   (rt:construct-function-entry `(lambda ,vars ,@form) (length vars)))
 
+(define-coalton-editor-macro coalton:throw (exception)
+    "Throw an exception.")
+
+(define-coalton-editor-macro coalton:catch (expr &body handler-patterns)
+    "Exception handling expression.")
+
+(define-coalton-editor-macro coalton:resumable (expr &body handler-patterns)
+    "Resumption handling expression.")
+
+(define-coalton-editor-macro coalton:resume-to (resumption)
+    "Transfer control to a resumption.")
+
 (define-coalton-editor-macro coalton:let (bindings &body form)
-  "A lexical LET binding.")
+    "A lexical LET binding.")
 
 (define-coalton-editor-macro coalton:rec (name bindings &body body)
   "A lexical recursive function call.")

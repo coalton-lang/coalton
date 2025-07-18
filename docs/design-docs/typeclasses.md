@@ -5,11 +5,11 @@
 ```lisp
 ;; Defining a class
 (define-class (Eq :a)
-  (= (fn :a -> :a -> Boolean)))
+  (== (:a -> :a -> Boolean)))
 
 ;; Defining a class with a context
-(define-class ((Eq :a) => (Ord :a))
-  (< (fn :a -> :a -> Boolean))
+(define-class (Eq :a => Ord :a)
+  (< (:a -> :a -> Boolean))
   ...)
 
 ;; Defining an instance of a class
@@ -18,20 +18,20 @@
     (not (xor a b))))
 
 ;; Defining an instance with a context
-(define-instance ((Eq :a) => (Eq (Optional :a)))
+(define-instance (Eq :a => Eq (Optional :a))
   (define (== a b)
     (match a
       ((Some x)
         (match b
           ((Some y) (== x y))
-          ((None) False)))
-        ((None)
-          (match b
-            ((Some _) False)
-            ((None) True))))))
+          ((None)   False)))
+      ((None)
+        (match b
+          ((Some _) False)
+          ((None)   True))))))
 
 ;; Declaring a function with type constraints
-(declare (fn (Eq :a) => :a -> :a -> Boolean))
+(declare f (Eq :a => :a -> :a -> Boolean))
 (define (f a b)
   (== a b))
 ```
@@ -43,6 +43,8 @@
 Higher kinded types are outside of scope of the initial typeclass implementation.
 
 ### Constraints in Class Declarations
+
+_This section is no longer accurate._
 
 Referred to as Decision 9 in Jones 1997.
 

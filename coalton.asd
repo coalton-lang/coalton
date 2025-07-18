@@ -46,6 +46,7 @@
                (:file "types")
                (:file "primitive-types")
                (:file "classes")
+               (:file "derivers")
                (:file "hash-defining-macros")
                (:file "hash")
                (:file "builtin")
@@ -85,6 +86,7 @@
                (:file "string")
                (:file "slice")
                (:file "hashtable")
+               (:file "hashmap")
                (:file "queue")
                (:module "monad"
                 :serial t
@@ -95,8 +97,8 @@
                              (:file "optionalt")
                              (:file "free")
                              (:file "freet")))
-               (:file "ord-tree")
-               (:file "ord-map")
+               (:file "ordtree")
+               (:file "ordmap")
                (:file "seq")
                (:file "system")
                (:file "file")
@@ -169,6 +171,7 @@
                (:file "pi")
                (:file "seq")
                (:file "matrix")
+               (:file "mapping")
                (:module "gabriel-benchmarks"
                 :serial t
                 :components ((:file "tak")
@@ -268,10 +271,12 @@
                (:file "hyperdual-tests")
                (:file "quantize-tests")
                (:file "hashtable-tests")
+               (:file "hashmap-tests")
                (:file "iterator-tests")
                (:file "call-coalton-from-lisp")
                (:file "vector-tests")
                (:file "string-tests")
+               (:file "optional-tests")
                (:file "recursive-let-tests")
                (:file "class-tests")
                (:file "struct-tests")
@@ -284,5 +289,14 @@
                (:file "looping-native-tests")
                (:file "monomorphizer-tests")
                (:file "inliner-tests")
+               (:file "inliner-tests-1") ; must come after inliner-tests
+               (:file "deriver-tests")
                (:file "file-tests")
-               (:file "experimental-tests")))
+               (:file "experimental-tests")
+               (:file "exceptions")
+               (:module "monad"
+                :serial t
+                :components ((:file "optionalt")
+                             (:file "resultt")
+                             (:file "environment")))))
+

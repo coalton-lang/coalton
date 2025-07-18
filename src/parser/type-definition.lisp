@@ -18,9 +18,12 @@
   (:export
    #:type-definition                    ; TYPE
    #:type-definition-list               ; TYPE
+   #:type-definition-exception-p        ; FUNCTION
+   #:type-definition-resumption-p       ; FUNCTION
    #:type-definition-name               ; FUNCTION
    #:type-definition-vars               ; FUNCTION
    #:type-definition-repr               ; FUNCTION
+   #:type-definition-derive             ; FUNCTION
    #:type-definition-aliased-type       ; FUNCTION
    #:type-definition-ctors              ; FUNCTION
    #:type-definition-ctor-name          ; FUNCTION
@@ -81,6 +84,19 @@
     (declare (values (or null attribute-repr)))
     nil))
 
+(defgeneric type-definition-derive (def)
+  (:method ((def toplevel-define-type))
+    (declare (values (or null attribute-derive)))
+    (toplevel-define-type-derive def))
+
+  (:method ((def toplevel-define-struct))
+    (declare (values (or null attribute-derive)))
+    (toplevel-define-struct-derive def))
+
+  (:method ((def toplevel-define-type-alias))
+    (declare (values (or null attribute-derive)))
+    nil))
+
 (defgeneric type-definition-aliased-type (def)
   (:method ((def toplevel-define-type))
     (declare (values (or null ty)))
@@ -107,6 +123,33 @@
     (declare (values null))
     nil))
 
+(defgeneric type-definition-exception-p (def)
+  (:method ((def toplevel-define-type))
+    (declare (values boolean))
+    (toplevel-define-type-exception-p def))
+
+  (:method ((def toplevel-define-struct))
+    (declare (values boolean))
+    nil)
+
+  (:method ((def toplevel-define-type-alias))
+    (declare (values boolean))
+    nil))
+
+(defgeneric type-definition-resumption-p (def)
+  (:method ((def toplevel-define-type))
+    (declare (values boolean))
+    (toplevel-define-type-resumption-p def))
+
+  (:method ((def toplevel-define-struct))
+    (declare (values boolean))
+    nil)
+
+  (:method ((def toplevel-define-type-alias))
+    (declare (values boolean))
+    nil))
+
+
 (defgeneric type-definition-ctor-name (ctor)
   (:method ((ctor constructor))
     (declare (values identifier-src))
@@ -124,3 +167,5 @@
   (:method ((ctor toplevel-define-struct))
     (declare (values ty-list))
     (mapcar #'struct-field-type (toplevel-define-struct-fields ctor))))
+
+

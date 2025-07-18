@@ -20,34 +20,63 @@
   (name (util:required 'name) :type symbol :read-only t)
   (type (util:required 'type) :type t      :read-only t))
 
+
+(defun list-if-release (&rest xs)
+  (if (not (coalton-impl/settings:coalton-release-p))
+      nil
+      xs))
+
 (defun struct-or-class (&key
-                              (classname (error "Class Name required"))
-                              (constructor (error "Constructor required"))
-                              (superclass nil)
-                              (fields nil)
-                              mode)
-  (declare (type symbol classname)
-           (type symbol constructor)
-           (type symbol superclass)
+                          (classname (error "Class Name required"))
+                          (constructor (error "Constructor required"))
+                          (superclass nil)
+                          (fields nil)
+                          mode)
+  "Generate either a DEFSTRUCT or DEFCLASS for a type depending on the MODE argument.
+
+The intention is that MODE, which is one of ':CLASS or ':STRUCT, is
+itself reflective of the Coalton release mode, where development mode
+strongly correlates to ':CLASS and release mode to
+':STRUCT. 
+
+Ultimately, the caller may decide to force either ':CLASS or ':STRUCT
+regardless of Coalton's release mode."
+  (declare (type symbol classname constructor superclass)
            (type list fields)
            (type (member :class :struct) mode))
 
-  (let ((field-names (mapcar #'struct-or-class-field-name fields)))
+  (let ((field-names (mapcar #'struct-or-class-field-name fields))
+        (accessor-names (loop :for field :in fields
+                              :for package := (symbol-package classname)
+                              :collect (alexandria:format-symbol
+                                        package
+                                        "~A-~A"
+                                        classname
+                                        (struct-or-class-field-name field)))))
 
     (append
      (ecase mode
        (:struct
-        (list
-         `(defstruct (,classname
-                      (:copier nil)
-                      (:predicate nil)
-                      ,@(when superclass
-                          (list `(:include ,superclass)))
-                      (:constructor ,constructor ,field-names)) 
-            ,@(loop :for field :in fields
-                    :for name := (struct-or-class-field-name field)
-                    :for lisp-type := (struct-or-class-field-type field)
-                    :collect `(,name (error "") :type ,lisp-type)))))
+        (append
+         ;; Inline constructor and readers (release-only).
+         (list-if-release
+          `(declaim (inline ,constructor ,@accessor-names)))
+         ;; Define the struct.
+         (list
+          `(defstruct (,classname
+                       (:copier nil)
+                       (:predicate nil)
+                       ,@(when superclass
+                           (list `(:include ,superclass)))
+                       (:constructor ,constructor ,field-names)) 
+             ,@(loop :for field :in fields
+                     :for name := (struct-or-class-field-name field)
+                     :for lisp-type := (struct-or-class-field-type field)
+                     :collect `(,name (error "") :type ,lisp-type))))
+         ;; Freeze the type (release-only).
+         (list-if-release
+          #+sbcl
+          `(declaim (sb-ext:freeze-type ,classname)))))
 
        (:class
         (append 
@@ -57,22 +86,21 @@
                     (list superclass)
                     (list))
              ,(loop :for field :in fields
-                    :for name := (struct-or-class-field-name field)
+                    :for field-name :in field-names
+                    :for accessor-name :in accessor-names
                     :for lisp-type := (struct-or-class-field-type field)
-                    :for package := (symbol-package classname)
-                    :for accessor
-                      := (alexandria:format-symbol package "~A-~A" classname name)
-                    :collect `(,name
+                    :collect `(,field-name
                                :type ,lisp-type
-                               :initarg ,name
-                               :accessor ,accessor))
+                               :initarg ,field-name
+                               :accessor ,accessor-name))
              (:default-initargs
-              ,@(loop :for field :in fields
-                      :for name := (struct-or-class-field-name field)
-                      :append `(,name (error ""))))))
+              ,@(loop :for field-name :in field-names
+                      :append `(,field-name (error ""))))))
 
          (list
-          ;; NOTE: We are omitting the inline call because this causes SBCL IR1 bugs for instance definitions.
+          ;; NOTE: We are omitting the inline call because this causes
+          ;; SBCL IR1 bugs for instance definitions.
+          ;;
           ;; `(declaim (inline ,constructor))
           `(defun ,constructor ,field-names
              ,@(when settings:*emit-type-annotations*
@@ -84,15 +112,14 @@
                                            field-names)))))))
      (if (not (null fields))
          (append
-          `((global-lexical:define-global-lexical ,constructor rt:function-entry)
-            (setf ,constructor ,(rt:construct-function-entry `#',constructor (length fields))))
-          (loop :for field :in fields
-                :for package := (symbol-package classname)
-                :for field-name := (alexandria:format-symbol package "~A-~A" classname (struct-or-class-field-name field))
-                :collect `(global-lexical:define-global-lexical ,field-name rt:function-entry)
-                :collect `(setf ,field-name ,(rt:construct-function-entry `#',field-name 1))))
+          (list
+           `(global-lexical:define-global-lexical ,constructor rt:function-entry)
+           `(setf ,constructor ,(rt:construct-function-entry `#',constructor (length fields))))
+          (loop :for reader :in accessor-names
+                :collect `(global-lexical:define-global-lexical ,reader rt:function-entry)
+                :collect `(setf ,reader ,(rt:construct-function-entry `#',reader 1))))
 
-         (progn
-           `((global-lexical:define-global-lexical ,constructor ,classname)
-             (setf ,constructor (,constructor))))))))
+         (list
+          `(global-lexical:define-global-lexical ,constructor ,classname)
+          `(setf ,constructor (,constructor)))))))
 
