@@ -16,6 +16,7 @@
    #:make-tc-env
    #:infer-expl-binding-type)
   (:local-nicknames
+   (#:a #:alexandria)
    (#:settings #:coalton-impl/settings)
    (#:source #:coalton-impl/source)
    (#:util #:coalton-impl/util)
@@ -36,9 +37,9 @@
   (labels ((f (constraint env)
              (multiple-value-bind (inst subs) (tc:lookup-class-instance env constraint :no-error t)
                (if inst
-                   (mapcan (alexandria:rcurry #'f env)
-                           (mapcar (alexandria:curry #'tc:apply-substitution subs)
-                                   (remove-if (alexandria:curry #'tc:type-predicate= base-constraint)
+                   (mapcan (a:rcurry #'f env)
+                           (mapcar (a:curry #'tc:apply-substitution subs)
+                                   (remove-if (a:curry #'tc:type-predicate= base-constraint)
                                               (tc:ty-class-instance-constraints inst))))
                    (list constraint)))))
     (f base-constraint env)))
@@ -49,7 +50,7 @@
            (values tc:ty-predicate-list &optional))
 
   (remove-duplicates
-   (mapcan (alexandria:rcurry #'expand-constraint env) context)
+   (a:mappend (a:rcurry #'expand-constraint env) context)
    :test #'tc:type-predicate=))
 
 (defun toplevel-define-instance (instances env)
@@ -118,7 +119,7 @@
            (context (tc:apply-ksubstitution ksubs context)))
 
       (let* ((instance-codegen-sym
-               (alexandria:format-symbol
+               (a:format-symbol
                 *package*
                 "INSTANCE/~A"
                 (with-output-to-string (s)
@@ -130,9 +131,9 @@
                                    (tc:ty-class-unqualified-methods class)))
 
              (method-codegen-syms (mapcar (lambda (method-name)
-                                            (alexandria:format-symbol *package* "~A-~S"
-                                                                      instance-codegen-sym
-                                                                      method-name))
+                                            (a:format-symbol *package* "~A-~S"
+                                                             instance-codegen-sym
+                                                             method-name))
                                           method-names))
 
              (method-codegen-inline-p
@@ -250,7 +251,7 @@
 
     (check-duplicates
      (parser:toplevel-define-instance-methods unparsed-instance)
-     (alexandria:compose #'parser:node-variable-name #'parser:instance-method-definition-name)
+     (a:compose #'parser:node-variable-name #'parser:instance-method-definition-name)
      (lambda (first second)
        (tc-error "Duplicate method definition"
                  (tc-note first "first definition here")
@@ -271,8 +272,8 @@
     ;; Ensure each method is defined
     (loop :for name :being :the :hash-keys :of method-table
           :for method := (find name (parser:toplevel-define-instance-methods unparsed-instance)
-                               :key (alexandria:compose #'parser:node-variable-name
-                                                        #'parser:instance-method-definition-name))
+                               :key (a:compose #'parser:node-variable-name
+                                               #'parser:instance-method-definition-name))
           :unless method
             :do (tc-error "Missing method"
                           (tc-note unparsed-instance "The method ~S is not defined" name)))
