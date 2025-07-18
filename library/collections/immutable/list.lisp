@@ -104,12 +104,10 @@
   (declare repeat (UFix -> :a -> List :a))
   (define (repeat n x)
     "Returns a list with the same value repeated multiple times."
-    (let ((rec
-            (fn (k acc)
-              (if (== k 0)
-                  acc
-                  (rec (- k 1) (Cons x acc))))))
-      (rec n Nil)))
+    (rec f ((k n) (acc Nil))
+      (if (== k 0)
+          acc
+          (f (- k 1) (Cons x acc)))))
 
   (declare filter ((:a -> Boolean) -> List :a -> List :a))
   (define (filter f xs)
@@ -200,14 +198,14 @@
   (declare take (UFix -> List :a -> List :a))
   (define (take n xs)
     "Returns the first N elements of a list."
-    (let ((rec
+    (let ((f-rec
             (fn (n in out)
               (if (== n 0)
                   out
                   (match in
-                    ((Cons x xs) (rec (- n 1) xs (Cons x out)))
+                    ((Cons x xs) (f-rec (- n 1) xs (Cons x out)))
                     ((Nil) out))))))
-      (%reverse! (rec n xs Nil))))
+      (%reverse! (f-rec n xs Nil))))
 
   (declare drop (UFix -> List :a -> List :a))
   (define (drop n xs)
@@ -309,13 +307,13 @@
   (declare zip-with-itr (iter:IntoIterator :m :b => (:a -> :b -> :c) -> List :a -> :m -> List :c))
   (define (zip-with-itr f lst col)
     (let ((it (iter:into-iter col))
-          (rec
+          (f-rec
            (fn (rem acc)
              (match (Tuple rem (iter:next! it))
                ((Tuple (Cons a xs) (Some b))
-                (rec xs (Cons (f a b) acc)))
+                (f-rec xs (Cons (f a b) acc)))
                (_ acc)))))
-      (%reverse! (rec lst Nil))))             
+      (%reverse! (f-rec lst Nil))))
 
   ;; TODO: Make this more effecient. Walk the original front to back in Common Lisp,
   ;; mutating the CDR of new Cons cells as we go until we get to the end, then mutate
@@ -443,16 +441,16 @@
   (declare union (Eq :a => ((List :a) -> (List :a) -> (List :a))))
   (define (union xs ys)
     "Returns a new list with the elements from both XS and YS and without duplicates."
-    (let ((rec
+    (let ((f-rec
             (fn (xs acc)
               (match xs
                 ((Nil) acc)
                 ((Cons x xs)
                  (if (or (member x ys)
                          (member x ys))
-                     (rec xs acc)
-                     (rec xs (Cons x acc))))))))
-      (%reverse! (remove-duplicates-rev ys (rec xs Nil)))))
+                     (f-rec xs acc)
+                     (f-rec xs (Cons x acc))))))))
+      (%reverse! (remove-duplicates-rev ys (f-rec xs Nil)))))
 
   (declare intersection (Eq :a => ((List :a) -> (List :a) -> (List :a))))
   (define (intersection xs ys)
@@ -514,35 +512,35 @@
   (declare zipWith3 ((:a -> :b -> :c -> :d) -> (List :a) -> (List :b) -> (List :c) -> (List :d)))
   (define (zipWith3 f xs ys zs)
     "Build a new list by calling F with elements of XS, YS and ZS"
-    (let ((rec
+    (let ((f-rec
             (fn (xs ys zs acc)
               (match (Tuple3 xs ys zs)
                 ((Tuple3 (Cons x xs) (Cons y ys) (Cons z zs))
-                 (rec xs ys zs (Cons (f x y z) acc)))
+                 (f-rec xs ys zs (Cons (f x y z) acc)))
                 (_ acc)))))
-      (%reverse! (rec xs ys zs nil))))
+      (%reverse! (f-rec xs ys zs nil))))
 
   (declare zipWith4 ((:a -> :b -> :c -> :d -> :e) -> (List :a) -> (List :b) -> (List :c) -> (List :d) -> (List :e)))
   (define (zipWith4 f as bs cs ds)
     "Build a new list by calling F with elements of AS, BS, CS and DS"
-    (let ((rec
+    (let ((f-rec
             (fn (as bs cs ds acc)
               (match (Tuple4 as bs cs ds)
                 ((Tuple4 (Cons a as) (Cons b bs) (Cons c cs) (Cons d ds))
-                 (rec as bs cs ds (Cons (f a b c d) acc)))
+                 (f-rec as bs cs ds (Cons (f a b c d) acc)))
                 (_ acc)))))
-      (%reverse! (rec as bs cs ds nil))))
+      (%reverse! (f-rec as bs cs ds nil))))
 
   (declare zipWith5 ((:a -> :b -> :c -> :d -> :e -> :f) -> (List :a) -> (List :b) -> (List :c) -> (List :d) -> (List :e) -> (List :f)))
   (define (zipWith5 f as bs cs ds es)
     "Build a new list by calling F with elements of AS, BS, CS, DS and ES"
-    (let ((rec
+    (let ((f-rec
             (fn (as bs cs ds es acc)
               (match (Tuple5 as bs cs ds es)
                 ((Tuple5 (Cons a as) (Cons b bs) (Cons c cs) (Cons d ds) (Cons e es))
-                 (rec as bs cs ds es (Cons (f a b c d e) acc)))
+                 (f-rec as bs cs ds es (Cons (f a b c d e) acc)))
                 (_ acc)))))
-      (%reverse! (rec as bs cs ds es nil))))
+      (%reverse! (f-rec as bs cs ds es nil))))
 
   (declare insert (Ord :a => (:a -> (List :a) -> (List :a))))
   (define (insert e ls)
@@ -552,15 +550,15 @@
   (declare insertBy ((:a -> :a -> Ord) -> :a -> (List :a) -> (List :a)))
   (define (insertBy cmp x ys)
     "Generic version of insert"
-    (let ((rec
+    (let ((f-rec
             (fn (ys acc)
               (match ys
                 ((Nil) (Cons x acc))
                 ((Cons y yss)
                  (match (cmp x y)
-                   ((GT) (rec yss (Cons y acc)))
+                   ((GT) (f-rec yss (Cons y acc)))
                    (_    (append-rev ys (Cons x acc)))))))))
-      (%reverse! (rec ys Nil))))
+      (%reverse! (f-rec ys Nil))))
 
   (declare intersperse (:a -> (List :a) -> (List :a)))
   (define (intersperse e xs)
@@ -622,14 +620,14 @@
   (declare equivalence-classes-by ((:a -> :a -> Boolean) -> (List :a) -> (List (List :a))))
   (define (equivalence-classes-by f l)
     "Break a list into a list of equivalence classes according to an equivalence relation."
-    (let ((rec (fn (remaining partitions)
+    (let ((f-rec (fn (remaining partitions)
                  (match remaining
                    ((Nil) partitions)
                    ((Cons x rst)
                     (match (partition (f x) rst)
                       ((Tuple yes no)
-                       (rec no (Cons (Cons x yes) partitions)))))))))
-      (rec l Nil)))
+                       (f-rec no (Cons (Cons x yes) partitions)))))))))
+      (f-rec l Nil)))
 
   (declare equivalence-classes (Eq :a => ((List :a) -> (List (List :a)))))
   (define equivalence-classes (equivalence-classes-by ==))

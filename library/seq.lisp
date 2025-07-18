@@ -545,7 +545,7 @@ It attempts to rebalance with a minimum of array copying."
        `(LeafArray (vector:make ,@(cl:car leaf-arrays))))
       ((cl:<= la-count 32)
        `(rebuild-size-table
-         (RelaxedNode 2 32 (vector:new) (vector:make ,@(cl:loop :for a :in leaf-arrays
+         (RelaxedNode 2 32 (cln:new-collection) (vector:make ,@(cl:loop :for a :in leaf-arrays
                                                                 :collect `(LeafArray (vector:make ,@a)))))))
       (cl:t
        (cl:reduce (cl:lambda (acc la) `(conc ,acc (LeafArray (vector:make ,@la))))
