@@ -5,9 +5,6 @@
    #:coalton-library/classes)
   (:export
    #:ST
-   #:put-st
-   #:get-st
-   #:MonadState
    #:put
    #:get
    #:modify
@@ -97,11 +94,7 @@ Represented as a closure from initial state to updated state and value."
            ((Tuple state2 a)
             ;; Use the a to compute the mb,
             ;; and apply the state from ma to the mb
-            (run (fa->scb a) state2)))))))
-
-  (define-instance (MonadState :state (ST :state))
-    (define put put-st)
-    (define get get-st)))
+            (run (fa->scb a) state2))))))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/MONAD/STATE")

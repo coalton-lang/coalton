@@ -71,7 +71,7 @@ we map over."
   ;; transformation from the free monad over our expression functor
   ;; into a State monad. We use a vector of numbers for our inputs.
   ;;
-
+  
   (define compute-from-vector-inputs
     (free:foldfree
      (fn (arg) (match arg
@@ -79,7 +79,7 @@ we map over."
                  ((SubE x y next) (pure (next (- x y))))
                  ((InputE next)
                   (map (compose next (fn (vec) (defaulting-unwrap (vector:pop! vec))))
-                       st:get-st))))))
+                       st:get))))))
 
 
   ;;

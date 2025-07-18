@@ -45,7 +45,7 @@
     (inline)
     (define (map fa->b (OptionalT m))
       (OptionalT (map (map fa->b) m))))
-
+  
   (define-instance (Monad :m => Applicative (OptionalT :m))
     (inline)
     (define (pure a)
@@ -66,7 +66,7 @@
                  ((None) (pure None))
                  ((Some b)
                   (pure (Some (fa->b->c a b))))))))))))
-
+  
   (define-instance (Monad :m => Monad (OptionalT :m))
     (define (>>= (OptionalT ma) fa->optb)
       (OptionalT
