@@ -716,7 +716,7 @@
 ;;;
 
 (defstruct ty-class-instance
-  (constraints             (util:required 'constraints)             :type ty-predicate-list :read-only t)
+  (constraints             (util:required 'constraints)             :type ty-predicate-list :read-only nil)
   (predicate               (util:required 'predicate)               :type ty-predicate      :read-only t)
   (codegen-sym             (util:required 'codegen-sym)             :type symbol            :read-only t)
   (method-codegen-syms     (util:required 'method-codegen-syms)     :type util:symbol-list  :read-only t)

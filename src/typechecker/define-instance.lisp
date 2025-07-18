@@ -28,6 +28,26 @@
 
 (in-package #:coalton-impl/typechecker/define-instance)
 
+(defun expand-constraint (constraint env)
+  (declare (type tc:ty-predicate constraint)
+           (values list &optional))
+
+  (labels ((f (constraint env base) 
+             (multiple-value-bind (inst subs) (tc:lookup-class-instance env constraint :no-error t)
+               ;; (format t "~&~%Constraint: ~A~%Constraint Instance: ~A~%Subs: ~A" constraint inst subs)
+               (if inst
+                   (alexandria:mappend (alexandria:rcurry #'f env base)
+                                       (mapcar (alexandria:curry #'tc:apply-substitution subs)
+                                               (remove-if (alexandria:curry #'tc:type-predicate= base) 
+                                                          (tc:ty-class-instance-constraints inst))))
+                   (list constraint)))))
+    (f constraint env constraint)))
+
+(defun expand-context (context env)
+  (remove-duplicates 
+   (alexandria:mappend (alexandria:rcurry #'expand-constraint env) context)  
+   :test #'tc:type-predicate=))
+
 (defun toplevel-define-instance (instances env)
   (declare (type parser:toplevel-define-instance-list instances)
            (type tc:environment env)
@@ -161,6 +181,9 @@
         (loop :for method-name :in method-names
               :for method-codegen-sym :in method-codegen-syms :do
                 (setf env (tc:set-method-inline env method-name instance-codegen-sym method-codegen-sym)))
+
+        (setf (tc:ty-class-instance-constraints instance-entry)
+              (expand-context context env))
 
         (values instance-entry env)))))
 

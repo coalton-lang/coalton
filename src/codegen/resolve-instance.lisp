@@ -54,22 +54,15 @@
 
     (let*
         ;; Apply substitutions to find the superclass constraints
-        ((%instance-constraints
-           (remove-recursive-preds
-            (tc:ty-class-instance-constraints instance)
-            pred-stack))
-
-         (instance-constraints
-           (remove-recursive-preds 
-            (tc:apply-substitution subs %instance-constraints)
-            pred-stack))
+        ((instance-constraints
+           (tc:apply-substitution subs (tc:ty-class-instance-constraints instance)))
 
          ;; Apply any fundep substitutions
          (fundep-subs (nth-value 1 (tc:solve-fundeps env instance-constraints subs)))
          (instance-constraints
-           (remove-recursive-preds 
-            (tc:apply-substitution fundep-subs %instance-constraints)
-            pred-stack)
+           ;; (remove-recursive-preds) 
+           (tc:apply-substitution fundep-subs (tc:ty-class-instance-constraints instance))
+           ;; pred-stack
            )
 
          ;; Generate dicts from those constraints
