@@ -49,11 +49,11 @@
               (make-list 1 2 3 4 5 6 7 8)))))
 
         (out (the (Vector (List Integer))
-                  (vector:new))))
+                  (cln:new-collection))))
 
     (iter:for-each!
      (fn (s)
-       (vector:push!
+       (cln:push!
         (make-list
          (slice:index-unsafe 0 s)
          (slice:index-unsafe 1 s)
@@ -79,11 +79,11 @@
               (List Integer)
               (make-list 1 2 3 4 5 6 7 8))))))
 
-    (let out = (the (Vector (List Integer)) (vector:new)))
+    (let out = (the (Vector (List Integer)) (cln:new-collection)))
 
     (iter:for-each!
      (fn (s)
-       (vector:push!
+       (cln:push!
         (iter:collect! (iter:into-iter s))
         out)
        Unit)
@@ -104,11 +104,11 @@
               (make-list 1 2 3 4 5 6 7 8)))))
 
         (out (the (Vector (List Integer))
-                  (vector:new))))
+                  (cln:new-collection))))
 
     (iter:for-each!
      (fn (s)
-       (vector:push!
+       (cln:push!
         (make-list
          (slice:index-unsafe 0 s)
          (slice:index-unsafe 1 s)

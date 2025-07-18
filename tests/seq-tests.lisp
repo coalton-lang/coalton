@@ -87,15 +87,15 @@ edge all have between MIN-BRANCHING and MAX-BRANCHING subnodes."
             (fn (right-most-edge? node)
               (match node
                 ((seq::LeafArray leaves)
-                 (or right-most-edge? (satisfied? (vector:length leaves))))
+                 (or right-most-edge? (satisfied? (cln:length leaves))))
 
                 ((seq::RelaxedNode _ _ _ subs)
-                 (and (or right-most-edge? (satisfied? (vector:length subs)))
+                 (and (or right-most-edge? (satisfied? (cln:length subs)))
                       (iter:every!
                        (valid? False)
                        (map (flip vector:index-unsafe subs)
-                            (iter:range-increasing 1 0 (- (vector:length subs) 1))))
-                      (valid? True (vector:last-unsafe subs))))))))
+                            (iter:range-increasing 1 0 (- (cln:length subs) 1))))
+                      (valid? True (cln:last# subs))))))))
       (valid? True seq))))
 
 (define-test seq-branch-invariants ()
