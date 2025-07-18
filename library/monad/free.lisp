@@ -127,3 +127,6 @@ free monad to a target monad."
                   ((Val a) (f r a))
                   ((Free fa) (fold g r fa))))))
         g))))  
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON-LIBRARY/MONAD/FREE")

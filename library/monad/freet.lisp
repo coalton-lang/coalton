@@ -161,3 +161,5 @@
           (>>= (f funct-a)
                (fold-freeT f))))))))
 
+#+sb-package-locks
+(sb-ext:lock-package "COALTON-LIBRARY/MONAD/FREET")
