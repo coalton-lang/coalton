@@ -65,9 +65,7 @@
   (define (bitraverse a->fc b->fd free-f)
     (match free-f
       ((Val a) (map Val (a->fc a)))
-      ((FreeF funct-b) (map FreeF (traverse b->fd funct-b)))))
-
-  )
+      ((FreeF funct-b) (map FreeF (traverse b->fd funct-b))))))
 
 (coalton-toplevel
   ;;
