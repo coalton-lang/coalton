@@ -30,22 +30,27 @@
 
 (defun expand-constraint (constraint env)
   (declare (type tc:ty-predicate constraint)
-           (values list &optional))
+           (type tc:environment env)
+           (values tc:ty-predicate-list &optional))
 
   (labels ((f (constraint env base) 
              (multiple-value-bind (inst subs) (tc:lookup-class-instance env constraint :no-error t)
                ;; (format t "~&~%Constraint: ~A~%Constraint Instance: ~A~%Subs: ~A" constraint inst subs)
                (if inst
-                   (alexandria:mappend (alexandria:rcurry #'f env base)
-                                       (mapcar (alexandria:curry #'tc:apply-substitution subs)
-                                               (remove-if (alexandria:curry #'tc:type-predicate= base) 
-                                                          (tc:ty-class-instance-constraints inst))))
+                   (mapcan (alexandria:rcurry #'f env base)
+                           (mapcar (alexandria:curry #'tc:apply-substitution subs)
+                                   (remove-if (alexandria:curry #'tc:type-predicate= base) 
+                                              (tc:ty-class-instance-constraints inst))))
                    (list constraint)))))
     (f constraint env constraint)))
 
 (defun expand-context (context env)
+  (declare (type tc:ty-predicate-list context)
+           (type tc:environment env)
+           (values tc:ty-predicate-list &optional))
+     
   (remove-duplicates 
-   (alexandria:mappend (alexandria:rcurry #'expand-constraint env) context)  
+   (mapcan (alexandria:rcurry #'expand-constraint env) context)  
    :test #'tc:type-predicate=))
 
 (defun toplevel-define-instance (instances env)
