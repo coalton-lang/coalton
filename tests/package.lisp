@@ -21,6 +21,7 @@
 (defpackage #:coalton-native-tests
   (:documentation "Tests for the COALTON system, written in Coalton.")
   (:use #:coalton-testing)
+  (:shadow #:add)
   (:local-nicknames
    (#:types #:coalton-library/types)
    (#:math #:coalton-library/math)

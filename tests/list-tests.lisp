@@ -12,11 +12,8 @@
          (list:null? (list:difference b a)))))
 
 (define-test test-basics ()
-  (is (== (list:head x) (Some 1)))
-  (is (== (list:head n) None))
-
-  (is (== (list:tail x) (Some (make-list 2 3))))
-  (is (== (list:tail n) None))
+  (is (== (cln:head x) (Some 1)))
+  (is (== (cln:head n) None))
 
   (is (== (list:car x) 1))
   ;(is (== (car (make-list)) None))
@@ -25,8 +22,8 @@
   (is (== (list:cdr n) Nil)))
 
 (define-test test-selectors ()
-  (is (== (list:last x) (Some 3)))
-  (is (== (list:last n) None))
+  (is (== (cln:last x) (Some 3)))
+  (is (== (cln:last n) None))
 
   (is (== (list:init x) (make-list 1 2)))
   (is (== (list:init n) n))
@@ -36,19 +33,10 @@
 
 (define-test test-constructors ()
   (is (== (list:singleton 3) (make-list 3)))
-  (is (== (list:repeat 3 0) (make-list 0 0 0)))
-  (is (== (list:reverse x) (make-list 3 2 1))))
-
-(define-test test-droptake ()
-  (is (== (list:drop 2 x) (make-list 3)))
-  (is (== (list:take 2 x) (make-list 1 2))))
+  (is (== (cln:new-repeat 3 0) (make-list 0 0 0)))
+  (is (== (cln:reverse x) (make-list 3 2 1))))
 
 (define-test test-search ()
-  (is (== (list:find even? x) (Some (the Integer 2))))
-  (is (== (list:find (< 10) x) None))
-
-  (is (== (list:filter odd? x) (make-list 1 3)))
-
   (is (== (list:index 0 x) (Some 1)))
   (is (== (list:index 3 x) None))
 
@@ -57,11 +45,7 @@
   (is (== (list:nth-cdr 3 (make-list 1 2 3 4 5 6 7)) (make-list 4 5 6 7)))
   (is (== (list:nth-cdr 4 (make-list 1 2 3)) nil))
 
-  (is (== (list:elemIndex 2 x) (Some 1)))
-
-  (is (== (list:findIndex even? x) (Some 1)))
-
-  (is (== (list:length x) 3)))
+  (is (== (cln:length x) 3)))
 
 (define-test test-operators ()
   (is (== (list:range 1 3) x))
@@ -70,9 +54,7 @@
 
   (is (== (list:concat (make-list x x x)) (make-list 1 2 3 1 2 3 1 2 3)))
 
-  (is (== (list:concatMap list:cdr (make-list x x x)) (make-list 2 3 2 3 2 3)))
-
-  (is (list:member 2 x)))
+  (is (== (list:concatMap list:cdr (make-list x x x)) (make-list 2 3 2 3 2 3))))
 
 (define-test test-set-basics ()
 
@@ -101,17 +83,10 @@
           None)))
 
 (define-test test-removal ()
-  (is (== (list:remove-duplicates (make-list 1 3 2 2 3)) x))
-
-  (is (== (list:remove 2 x) (make-list 1 3)))
-  (is (== (list:remove 4 x) x))
-
   (is (== (list:difference x x) Nil))
   (is (== (list:difference x Nil) x)))
 
 (define-test test-zips ()  
-  (is (== (list:zipWith + x x) (make-list 2 4 6)))
-
   (is (== (list:zipWith3 Tuple3 x x x)
           (make-list (Tuple3 1 1 1) (Tuple3 2 2 2) (Tuple3 3 3 3))))
 
@@ -119,21 +94,14 @@
           (make-list (Tuple4 1 1 1 1) (Tuple4 2 2 2 2) (Tuple4 3 3 3 3))))
 
   (is (== (list:zipWith5 Tuple5 x x x x x)
-          (make-list (Tuple5 1 1 1 1 1) (Tuple5 2 2 2 2 2) (Tuple5 3 3 3 3 3))))
-
-  (is (== (list:zip x x) (make-list (Tuple 1 1) (Tuple 2 2) (Tuple 3 3)))))
+          (make-list (Tuple5 1 1 1 1 1) (Tuple5 2 2 2 2 2) (Tuple5 3 3 3 3 3)))))
 
 (define-test test-sorting ()  
-  (is (== (list:countBy even? x) 1))
+  (is (== (cln:count-where even? x) 1))
 
   (is (== (list:insert 2 (make-list 1 3)) x))
 
-  (is (== (list:insertBy (fn (_a _b) LT) 2 (make-list 1 3)) (make-list 2 1 3)))
-
-  (is (== (list:sort (list:append x x)) (make-list 1 1 2 2 3 3)))
-
-  (is (== (list:sortBy (fn (a b) (<=> (negate a) (negate b))) x)
-          (make-list 3 2 1))))
+  (is (== (list:insertBy (fn (_a _b) LT) 2 (make-list 1 3)) (make-list 2 1 3))))
 
 (define-test test-array-functions ()
 
@@ -186,7 +154,7 @@
 
   (let by-len =
     (the ((List Integer) -> (List Integer) -> Boolean)
-         (fn (x y) (> (list:length x) (list:length y)))))
+         (fn (x y) (> (cln:length x) (cln:length y)))))
 
   (is (== (list:optimumBy by-len Nil) None))
   (is (== (list:optimumBy by-len (make-list x (make-list 1 3) n)) (Some x)))

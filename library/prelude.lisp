@@ -266,6 +266,18 @@
    #:Cell)
 
   (:import-from
+   #:coalton-library/collections/immutable/list
+   #:range
+   #:all
+   #:append
+   #:singleton)
+  (:export
+   #:range
+   #:all
+   #:append
+   #:singleton)
+
+  (:import-from
    #:coalton-library/collections/mutable/vector
    #:Vector)
   (:export
