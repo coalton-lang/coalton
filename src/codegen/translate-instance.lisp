@@ -46,18 +46,22 @@
            (loop :for pred :in (tc:toplevel-define-instance-context instance)
                  :collect (pred-type pred env)))
 
+         (subs (tc:predicate-match (tc:ty-class-predicate class) pred))
+
+         (superclass-preds (tc:apply-substitution subs (mapcar #'car (tc:ty-class-superclass-dict class))))
+
          (method-definitions
            (loop :for method :in (tc:ty-class-unqualified-methods class)
                  :for method-name := (tc:ty-class-method-name method)
                  :for binding := (gethash method-name (tc:toplevel-define-instance-methods instance))
-                 :for codegen-sym := (tc:get-value method-codegen-syms method-name)
+                 :for codegen-sym :in method-codegen-syms
 
                  :collect (cons codegen-sym (translate-toplevel binding env method-name))))
 
          (unqualified-method-definitions
            (loop :for method :in (tc:ty-class-unqualified-methods class)
                  :for method-name := (tc:ty-class-method-name method)
-                 :for method-type := (tc:ty-class-method-type method)
+                 :for method-type := (tc:apply-substitution subs (tc:ty-class-method-type method))
                  :for binding := (gethash method-name (tc:toplevel-define-instance-methods instance))
                  :collect (translate-toplevel (tc:attach-explicit-binding-type binding (tc:fresh-inst method-type))
                                               env
@@ -65,10 +69,6 @@
                                               :extra-context ctx)))
 
          (method-ty (mapcar #'node-type unqualified-method-definitions))
-
-         (subs (tc:predicate-match (tc:ty-class-predicate class) pred))
-
-         (superclass-preds (tc:apply-substitution subs (mapcar #'car (tc:ty-class-superclass-dict class))))
 
          (superclass-ty
            (loop :for pred :in superclass-preds

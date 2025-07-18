@@ -77,10 +77,10 @@ If non-nil, restrict to types defined in PACKAGE."
 
 By default the global environment is queried.
 If non-nil, restrict to constructors defined in PACKAGE."
-  (remove-if-not (lambda (constructor-entry)
-                   (and package
-                        (not (exported-symbol-p (tc:constructor-entry-name constructor-entry) package t))))
-                 (%values (tc:environment-constructor-environment environment))))
+  (remove-if (lambda (constructor-entry)
+               (and package
+                    (not (exported-symbol-p (tc:constructor-entry-name constructor-entry) package t))))
+             (%values (tc:environment-constructor-environment environment))))
 
 (defun find-names (&key (environment entry:*global-environment*)
                         (type nil)

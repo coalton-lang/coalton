@@ -9,6 +9,10 @@
 #+coalton-release
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
+;;; XXX: The "constants" True, False, Unit, and Nil are currently
+;;; treated specially by codegen as being constant; their values are
+;;; looked up at compile-time and emitted directly.
+
 (coalton-toplevel
   (repr :native cl:t)
   (define-type Void)
@@ -25,6 +29,7 @@
   (define Unit (lisp Unit () 'coalton::Unit/Unit))
 
   ;; List is an early type
+  (inline)
   (declare Cons (:a -> (List :a) -> (List :a)))
   (define (Cons x xs)
     (lisp (List :a) (x xs)
@@ -34,6 +39,44 @@
   (define Nil
     (lisp (List :a) ()
       cl:nil))
+
+  ;; Optional is an early type
+  ;;
+  ;; Defining the following is functionally
+  ;; equivalent to having defined an ADT as
+  ;; (define-type (Optional :a)
+  ;;   (Some :a)
+  ;;   None)
+  (inline)
+  (declare Some (:a -> Optional :a))
+  (define (Some x)
+    "A constructor for the type, `Optional`. This constructor can be used
+like any other algebraic data type constructor, including for pattern
+matching, as in the following example.
+
+```lisp
+(match x
+  ((Some value)
+    value)
+  (_ (error \"Oh, no!\")))
+```"
+    (lisp (Optional :a) (x)
+      (coalton-impl/runtime:cl-some x)))
+
+  (declare None (Optional :a))
+  (define None
+    "A constructor for the type, `Optional`. This constructor can be used
+like any other algebraic data type constructor, including for pattern
+matching, as in the following example.
+
+```lisp
+(match x
+  ((None)
+   \"Fantastic!\")
+  (_ (error \"Oh, no!\")))
+```"
+    (lisp (Optional :a) ()
+      coalton-impl/runtime:cl-none))
 
   (repr :native (cl:unsigned-byte 8))
   (define-type U8
@@ -71,6 +114,12 @@
   (define-type IFix
     "Non-allocating tagged integer; range is platform-dependent. Does not error on overflow. Uses `fixnum`.")
 
-  (repr :native (cl:and cl:fixnum cl:unsigned-byte))
-  (define-type UFix 
-    "Non-allocating tagged non-negative integer; range is platform-dependent. Uses `(and fixnum unsigned-byte)`."))
+  (repr :native coalton-impl/util:ufixnum)
+  (define-type UFix
+    "Non-allocating tagged non-negative integer; range is platform-dependent. Uses `(and fixnum unsigned-byte)`.")
+
+  (define-type-alias Single-Float F32
+    "Deprecated name for F32. This is provided for backward compatibility.")
+
+  (define-type-alias Double-Float F64
+    "Deprecated name for F64. This is provided for backward compatibility."))

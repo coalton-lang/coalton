@@ -3,7 +3,6 @@
    #:cl
    #:coalton-impl/algorithm
    #:coalton-impl/typechecker/base
-   #:coalton-impl/typechecker/map
    #:coalton-impl/typechecker/type-errors
    #:coalton-impl/typechecker/types
    #:coalton-impl/typechecker/predicate
@@ -39,6 +38,8 @@
    #:type-entry-explicit-repr               ; ACCESSOR
    #:type-entry-enum-repr                   ; ACCESSOR
    #:type-entry-newtype                     ; ACCESSOR
+   #:type-entry-exception-p                 ; ACCESSOR
+   #:type-entry-resumption-p                ; ACCESSOR
    #:type-environment                       ; STRUCT
    #:constructor-entry                      ; STRUCT
    #:make-constructor-entry                 ; ACCESSOR
@@ -49,6 +50,13 @@
    #:constructor-entry-compressed-repr      ; ACCESSOR
    #:constructor-entry-list                 ; TYPE
    #:constructor-environment                ; STRUCT
+   #:type-alias-entry                       ; STRUCT
+   #:make-type-alias-entry                  ; CONSTRUCTOR
+   #:type-alias-entry-name                  ; ACCESSOR
+   #:type-alias-entry-tyvars                ; ACCESSOR
+   #:type-alias-entry-type                  ; ACCESSOR
+   #:type-alias-entry-list                  ; ACCESSOR
+   #:type-alias-environment                 ; STRUCT
    #:struct-field                           ; STRUCT
    #:make-struct-field                      ; CONSTRUCTOR
    #:struct-field-name                      ; ACCESSOR
@@ -72,7 +80,6 @@
    #:ty-class-predicate                     ; ACCESSOR
    #:ty-class-superclasses                  ; ACCESSOR
    #:ty-class-class-variables               ; ACCESSOR
-   #:ty-class-class-variable-map            ; ACCESSOR
    #:ty-class-fundeps                       ; ACCESSOR
    #:ty-class-unqualified-methods           ; ACCESSOR
    #:ty-class-codegen-sym                   ; ACCESSOR
@@ -86,6 +93,7 @@
    #:ty-class-instance-predicate            ; ACCESSOR
    #:ty-class-instance-codegen-sym          ; ACCESSOR
    #:ty-class-instance-method-codegen-syms  ; ACCESSOR
+   #:ty-class-instance-method-codegen-inline-p ; ACCESSOR
    #:ty-class-instance-list                 ; TYPE
    #:instance-environment                   ; STRUCT
    #:instance-environment-instances         ; ACCESSOR
@@ -93,6 +101,7 @@
    #:make-function-env-entry                ; CONSTRUCTOR
    #:function-env-entry-name                ; ACCESSOR
    #:function-env-entry-arity               ; ACCESSOR
+   #:function-env-entry-inline-p            ; ACCESSOR
    #:function-environment                   ; STRUCT
    #:name-entry                             ; STRUCT
    #:make-name-entry                        ; CONSTRUCTOR
@@ -112,6 +121,7 @@
    #:make-default-environment               ; FUNCTION
    #:environment-value-environment          ; ACCESSOR
    #:environment-type-environment           ; ACCESSOR
+   #:environment-type-alias-environment     ; ACCESSOR
    #:environment-constructor-environment    ; ACCESSOR
    #:environment-class-environment          ; ACCESSOR
    #:environment-fundep-environment         ; ACCESSOR
@@ -129,6 +139,9 @@
    #:lookup-constructor                     ; FUNCTION
    #:set-constructor                        ; FUNCTION
    #:unset-constructor                      ; FUNCTION
+   #:lookup-type-alias                      ; FUNCTION
+   #:set-type-alias                         ; FUNCTION
+   #:unset-type-alias                       ; FUNCTION
    #:lookup-struct                          ; FUNCTION
    #:set-struct                             ; FUNCTION
    #:unset-struct                           ; FUNCTION
@@ -161,10 +174,6 @@
    #:initialize-fundep-environment          ; FUNCTION
    #:update-instance-fundeps                ; FUNCTION
    #:solve-fundeps                          ; FUNCTION
-   #:environment-map                        ; STRUCT
-   #:make-map                               ; FUNCTION
-   #:get-value                              ; FUNCTION
-   #:get-table                              ; FUNCTION
    ))
 
 ;;; Coalton environment management
@@ -240,32 +249,33 @@
     (cons (eql :native) (cons t null))))
 
 (defstruct type-entry
-  (name         (util:required 'name)         :type symbol           :read-only t)
-  (runtime-type (util:required 'runtime-type) :type t                :read-only t)
-  (type         (util:required 'type)         :type ty               :read-only t)
-  (tyvars       (util:required 'tyvars)       :type tyvar-list       :read-only t)
-  (constructors (util:required 'constructors) :type util:symbol-list :read-only t)
-
-  ;; An explicit repr defined in the source, or nil if none was supplied. Computed repr will be reflected in
-  ;; ENUM-REPR, NEWTYPE, and/or RUNTIME-TYPE.
-  (explicit-repr (util:required 'explicit-repr) :type explicit-repr  :read-only t)
+  (name          (util:required 'name)          :type symbol                    :read-only t)
+  (runtime-type  (util:required 'runtime-type)  :type t                         :read-only t)
+  (type          (util:required 'type)          :type ty                        :read-only t)
+  (tyvars        (util:required 'tyvars)        :type tyvar-list                :read-only t)
+  (constructors  (util:required 'constructors)  :type util:symbol-list          :read-only t)
+  ;; An explicit repr defined in the source, or nil if none was
+  ;; supplied. Computed repr will be reflected in ENUM-REPR, NEWTYPE,
+  ;; and/or RUNTIME-TYPE.
+  (explicit-repr (util:required 'explicit-repr) :type explicit-repr              :read-only t)
 
   ;; If this is true then the type is compiled to a more effecient
   ;; enum representation at runtime
-  (enum-repr (util:required 'enum-repr)       :type boolean :read-only t)
+  (enum-repr     (util:required 'enum-repr)     :type boolean                    :read-only t)
 
-  ;; If this is true then the type does not exist at runtime
-  ;; See https://wiki.haskell.org/Newtype
+  ;; If this is true then the type does not exist at runtime See
+  ;; https://wiki.haskell.org/Newtype
   ;;
   ;; A type cannot be both enum repr and a newtype
   ;;
   ;; A type that is a newtype has another Coalton type as its
   ;; runtime-type instead of a lisp type. This is to avoid issues with
   ;; recursive newtypes.
-  (newtype (util:required 'newtype)     :type boolean :read-only t)
-
-  (docstring (util:required 'docstring) :type (or null string)   :read-only t)
-  (location  nil                        :type (or null source:location) :read-only t))
+  (newtype    (util:required 'newtype)           :type boolean                   :read-only t)
+  (docstring  (util:required 'docstring)         :type (or null string)          :read-only t)
+  (location   nil                                :type (or null source:location) :read-only t)
+  (exception-p nil                               :type boolean                   :read-only nil)
+  (resumption-p nil                              :type boolean                   :read-only nil))
 
 (defmethod source:location ((self type-entry))
   (type-entry-location self))
@@ -314,7 +324,7 @@
             :explicit-repr :enum
             :enum-repr t
             :newtype nil
-            :docstring ""))
+            :docstring "The \"unit\" type whose only member is the value `Unit`."))
 
           ('coalton:Char
            (make-type-entry
@@ -326,7 +336,7 @@
             :explicit-repr '(:native cl:character)
             :enum-repr nil
             :newtype nil
-            :docstring "A single character represented as a `character` type."))
+            :docstring "A character represented by a Common Lisp `character`."))
 
           ('coalton:Integer
            (make-type-entry
@@ -338,11 +348,11 @@
             :explicit-repr '(:native cl:integer)
             :enum-repr nil
             :newtype nil
-            :docstring "Unbound integer. Uses `integer`."))
+            :docstring "Unbound integer. Represented by a Common Lisp `integer`."))
 
-          ('coalton:Single-Float
+          ('coalton:F32
            (make-type-entry
-            :name 'coalton:Single-Float
+            :name 'coalton:F32
             :runtime-type 'cl:single-float
             :type *single-float-type*
             :tyvars nil
@@ -350,11 +360,11 @@
             :explicit-repr '(:native cl:single-float)
             :enum-repr nil
             :newtype nil
-            :docstring "Single precision floating point number. Uses `single-float`."))
+            :docstring "Single-precision floating point number (32-bits in size). Represented by a Common Lisp `single-float`."))
 
-          ('coalton:Double-Float
+          ('coalton:F64
            (make-type-entry
-            :name 'coalton:Double-Float
+            :name 'coalton:F64
             :runtime-type 'cl:double-float
             :type *double-float-type*
             :tyvars nil
@@ -362,7 +372,7 @@
             :explicit-repr '(:native cl:double-float)
             :enum-repr nil
             :newtype nil
-            :docstring "Double precision floating point number. Uses `double-float`."))
+            :docstring "Double-precision floating point number (64 bits in size). Represented by a Common Lisp `double-float`."))
 
           ('coalton:String
            (make-type-entry
@@ -374,7 +384,7 @@
             :explicit-repr '(:native cl:string)
             :enum-repr nil
             :newtype nil
-            :docstring "String of characters represented by Common Lisp `string`."))
+            :docstring "String of characters. Represented by Common Lisp `string`."))
 
           ('coalton:Fraction
            (make-type-entry
@@ -386,7 +396,7 @@
             :explicit-repr '(:native cl:rational)
             :enum-repr nil
             :newtype nil
-            :docstring "A ratio of integers always in reduced form."))
+            :docstring "A ratio of integers always in reduced form. Represented by a Common Lisp `rational`."))
 
           ('coalton:Arrow
            (make-type-entry
@@ -410,7 +420,19 @@
             :explicit-repr '(:native cl:list)
             :enum-repr nil
             :newtype nil
-            :docstring "Homogeneous list of objects represented as a Common Lisp `list`.")))))
+            :docstring "Homogeneous list of objects. Represented as a typical Common Lisp chain of conses (or `nil`)."))
+
+          ('coalton:Optional
+           (make-type-entry
+            :name 'coalton:Optional
+            :runtime-type 'cl:t
+            :type *optional-type*
+            :tyvars (list (make-variable))
+            :constructors '(coalton:Some coalton:None)
+            :explicit-repr '(:native cl:t)
+            :enum-repr nil
+            :newtype nil
+            :docstring "A type that allows indicating the presence or absence of a value. The underlying representation does not allocate when a value is present (i.e., with `Some`).")))))
 
 ;;;
 ;;; Constructor environment
@@ -493,10 +515,59 @@
             :constructs 'coalton:List
             :classname nil
             :docstring "`Nil` represents an empty `List`."
+            :compressed-repr 'nil))
+
+          ('coalton:Some
+           (make-constructor-entry
+            :name 'coalton:Some
+            :arity 1
+            :constructs 'coalton:Optional
+            :classname nil
+            :docstring "`Some` expresses the presence of a meaningful value."
+            :compressed-repr 'nil))
+
+          ('coalton:None
+           (make-constructor-entry
+            :name 'coalton:None
+            :arity 0
+            :constructs 'coalton:Optional
+            :classname nil
+            :docstring "`None` expresses the absence of a meaningful value."
             :compressed-repr 'nil)))))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type constructor-environment))
+
+;;;
+;;; Type alias environment
+;;;
+
+(defstruct type-alias-entry
+  (name      (util:required 'name)      :type symbol           :read-only t)
+  (tyvars    (util:required 'tyvars)    :type tyvar-list       :read-only t)
+  (type      (util:required 'type)      :type ty               :read-only t)
+  (docstring (util:required 'docstring) :type (or null string) :read-only t))
+
+(defmethod source:docstring ((self type-alias-entry))
+  (type-alias-entry-docstring self))
+
+(defmethod make-load-form ((self type-alias-entry) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
+#+(and sbcl coalton-release)
+(declaim (sb-ext:freeze-type type-alias-entry))
+
+(defun type-alias-entry-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'type-alias-entry-p x)))
+
+(deftype type-alias-entry-list ()
+  '(satisfies type-alias-entry-list-p))
+
+(defstruct (type-alias-environment (:include immutable-map)))
+
+#+(and sbcl coalton-release)
+(declaim (sb-ext:freeze-type type-alias-environment))
 
 ;;;
 ;;; Struct environment
@@ -576,9 +647,6 @@
   (predicate           (util:required 'predicate)           :type ty-predicate        :read-only t)
   (superclasses        (util:required 'superclasses)        :type ty-predicate-list   :read-only t)
   (class-variables     (util:required 'class-variables)     :type util:symbol-list    :read-only t)
-
-  ;; Hash table mapping variable symbols to their index in the predicate
-  (class-variable-map  (util:required 'class-variable-map)  :type environment-map     :read-only t)
   (fundeps             (util:required 'fundeps)             :type fundep-list         :read-only t)
 
   ;; Methods of the class containing the same tyvars in PREDICATE for
@@ -586,9 +654,9 @@
   (unqualified-methods (util:required 'unqualified-methods) :type ty-class-method-list :read-only t)
   (codegen-sym         (util:required 'codegen-sym)         :type symbol               :read-only t)
   (superclass-dict     (util:required 'superclass-dict)     :type list                 :read-only t)
-  (superclass-map      (util:required 'superclass-map)      :type environment-map      :read-only t)
+  (superclass-map      (util:required 'superclass-map)      :type list                 :read-only t)
   (docstring           (util:required 'docstring)           :type (or null string)     :read-only t)
-  (location            (util:required 'location)            :type source:location             :read-only t))
+  (location            (util:required 'location)            :type source:location      :read-only t))
 
 (defmethod source:location ((self ty-class))
   (ty-class-location self))
@@ -617,7 +685,6 @@
    :predicate (apply-substitution subst-list (ty-class-predicate class))
    :superclasses (apply-substitution subst-list (ty-class-superclasses class))
    :class-variables (ty-class-class-variables class)
-   :class-variable-map (ty-class-class-variable-map class)
    :fundeps (ty-class-fundeps class)
    :unqualified-methods (mapcar (lambda (method)
                                   (make-ty-class-method :name (ty-class-method-name method)
@@ -652,11 +719,12 @@
 ;;;
 
 (defstruct ty-class-instance
-  (constraints         (util:required 'constraints)         :type ty-predicate-list :read-only t)
-  (predicate           (util:required 'predicate)           :type ty-predicate      :read-only t)
-  (codegen-sym         (util:required 'codegen-sym)         :type symbol            :read-only t)
-  (method-codegen-syms (util:required 'method-codegen-syms) :type environment-map   :read-only t)
-  (docstring           (util:required 'docstring)           :type (or null string)  :read-only t))
+  (constraints             (util:required 'constraints)             :type ty-predicate-list :read-only t)
+  (predicate               (util:required 'predicate)               :type ty-predicate      :read-only t)
+  (codegen-sym             (util:required 'codegen-sym)             :type symbol            :read-only t)
+  (method-codegen-syms     (util:required 'method-codegen-syms)     :type util:symbol-list  :read-only t)
+  (method-codegen-inline-p (util:required 'method-codegen-inline-p) :type list              :read-only t)
+  (docstring               (util:required 'docstring)               :type (or null string)  :read-only t))
 
 (defmethod source:docstring ((self ty-class-instance))
   (ty-class-instance-docstring self))
@@ -685,6 +753,7 @@
    :predicate (apply-substitution subst-list (ty-class-instance-predicate instance))
    :codegen-sym (ty-class-instance-codegen-sym instance)
    :method-codegen-syms (ty-class-instance-method-codegen-syms instance)
+   :method-codegen-inline-p (ty-class-instance-method-codegen-inline-p instance)
    :docstring (ty-class-instance-docstring instance)))
 
 (defstruct instance-environment
@@ -699,8 +768,9 @@
 ;;;
 
 (defstruct function-env-entry
-  (name  (util:required 'name)  :type symbol :read-only t)
-  (arity (util:required 'arity) :type fixnum :read-only t))
+  (name     (util:required 'name)     :type symbol  :read-only t)
+  (arity    (util:required 'arity)    :type fixnum  :read-only t)
+  (inline-p (util:required 'inline-p) :type boolean :read-only t))
 
 (defmethod make-load-form ((self function-env-entry) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -802,6 +872,7 @@
   (value-environment          (util:required 'value-environment)          :type value-environment          :read-only t)
   (type-environment           (util:required 'type-environment)           :type type-environment           :read-only t)
   (constructor-environment    (util:required 'constructor-environment)    :type constructor-environment    :read-only t)
+  (type-alias-environment     (util:required 'type-alias-environment)     :type type-alias-environment     :read-only t)
   (struct-environment         (util:required 'struct-environment)         :type struct-environment         :read-only t)
   (class-environment          (util:required 'class-environment)          :type class-environment          :read-only t)
   (fundep-environment         (util:required 'fundep-environment)         :type fundep-environment         :read-only t)
@@ -830,6 +901,7 @@
   (make-environment
    :value-environment (make-value-environment)
    :type-environment (make-default-type-environment)
+   :type-alias-environment (make-type-alias-environment)
    :struct-environment (make-struct-environment)
    :constructor-environment (make-default-constructor-environment)
    :class-environment (make-class-environment)
@@ -846,6 +918,7 @@
                            &key
                              (value-environment (environment-value-environment env))
                              (type-environment (environment-type-environment env))
+                             (type-alias-environment (environment-type-alias-environment env))
                              (constructor-environment (environment-constructor-environment env))
                              (struct-environment (environment-struct-environment env))
                              (class-environment (environment-class-environment env))
@@ -861,6 +934,7 @@
            (type value-environment value-environment)
            (type type-environment type-environment)
            (type constructor-environment constructor-environment)
+           (type type-alias-environment type-alias-environment)
            (type struct-environment struct-environment)
            (type class-environment class-environment)
            (type fundep-environment fundep-environment)
@@ -876,6 +950,7 @@
    :value-environment value-environment
    :type-environment type-environment
    :constructor-environment constructor-environment
+   :type-alias-environment type-alias-environment
    :struct-environment struct-environment
    :class-environment class-environment
    :fundep-environment fundep-environment
@@ -990,6 +1065,35 @@
                              (environment-constructor-environment env)
                              symbol
                              #'make-constructor-environment)))
+
+(defun lookup-type-alias (env symbol &key no-error)
+  (declare (type environment env)
+           (type symbol symbol))
+  (or (immutable-map-lookup (environment-type-alias-environment env) symbol)
+      (unless no-error
+        (util:coalton-bug "Unknown type-alias ~S" symbol))))
+
+(define-env-updater set-type-alias (env symbol value)
+  (declare (type environment env)
+           (type symbol symbol)
+           (type type-alias-entry value))
+  (update-environment
+   env
+   :type-alias-environment (immutable-map-set
+                            (environment-type-alias-environment env)
+                            symbol
+                            value
+                            #'make-type-alias-environment)))
+
+(define-env-updater unset-type-alias (env symbol)
+  (declare (type environment env)
+           (type symbol symbol))
+  (update-environment
+   env
+   :type-alias-environment (immutable-map-remove
+                            (environment-type-alias-environment env)
+                            symbol
+                            #'make-type-alias-environment)))
 
 (defun lookup-struct (env symbol &key no-error)
   (declare (type environment env)
@@ -1162,7 +1266,6 @@
   (declare (type symbol name)
            (type environment env)
            (values ty-list &optional))
-  (lookup-constructor env name)
   (function-type-arguments (lookup-value-type env name)))
 
 (define-env-updater add-instance (env class value)
@@ -1382,14 +1485,13 @@
        entry)
       #'make-fundep-environment))))
 
-
 (define-env-updater update-instance-fundeps (env pred)
   (declare (type environment env)
            (type ty-predicate pred))
 
   (let* ((class (lookup-class env (ty-predicate-class pred)))
          (fundep-env (lookup-fundep-environment env (ty-predicate-class pred)))
-         (class-variable-map (ty-class-class-variable-map class)))
+         (class-variables (ty-class-class-variables class)))
 
     (loop :for fundep :in (ty-class-fundeps class)
           :for i :from 0
@@ -1399,13 +1501,13 @@
           :for from-tys
             := (mapcar
                 (lambda (var)
-                  (nth (get-value class-variable-map var) (ty-predicate-types pred)))
+                  (nth (position var class-variables) (ty-predicate-types pred)))
                 (fundep-from fundep))
 
           :for to-tys
             := (mapcar
                 (lambda (var)
-                  (nth (get-value class-variable-map var) (ty-predicate-types pred)))
+                  (nth (position var class-variables) (ty-predicate-types pred)))
                 (fundep-to fundep))
 
           :do (block update-block
@@ -1570,7 +1672,7 @@
 
          (class (lookup-class env class-name))
 
-         (class-variable-map (ty-class-class-variable-map class))
+         (class-variables (ty-class-class-variables class))
 
          (fundep-env (lookup-fundep-environment env class-name)))
 
@@ -1580,14 +1682,14 @@
           :for state := (immutable-listmap-lookup fundep-env i :no-error t)
 
           :when state
-            :do (setf subs (generate-fundep-subs-for-pred% pred state class-variable-map fundep subs)))
+            :do (setf subs (generate-fundep-subs-for-pred% pred state class-variables fundep subs)))
 
     subs))
 
-(defun generate-fundep-subs-for-pred% (pred state class-variable-map fundep subs)
+(defun generate-fundep-subs-for-pred% (pred state class-variables fundep subs)
   (declare (type ty-predicate pred)
            (type fset:seq state)
-           (type environment-map class-variable-map)
+           (type util:symbol-list class-variables)
            (type fundep fundep)
            (type substitution-list subs)
            (values substitution-list &optional))
@@ -1595,13 +1697,13 @@
   (let* ((from-tys
            (mapcar
             (lambda (var)
-              (nth (get-value class-variable-map var) (ty-predicate-types pred)))
+              (nth (position var class-variables) (ty-predicate-types pred)))
             (fundep-from fundep)))
 
          (to-tys
            (mapcar
             (lambda (var)
-              (nth (get-value class-variable-map var) (ty-predicate-types pred)))
+              (nth (position var class-variables) (ty-predicate-types pred)))
             (fundep-to fundep))))
 
     (fset:do-seq (entry state)

@@ -78,7 +78,7 @@
   (define (value-at-pointer bfs)
     "Returns the value at the current pointer."
     (vec:index-unsafe (cell:read (.pointer bfs))
-		                (.memory bfs))))
+		      (.memory bfs))))
 
 ;;;
 ;;; Commands (Functions called by Brainfold Cmds)
@@ -98,12 +98,18 @@
      (pure (cell:increment! (.pointer bfs)))
       (state:put bfs)))
 
+  (define (dec! cell)
+    (let ((value (cell:read cell)))
+      (if (arith:zero? value)
+          0
+          (cell:write! cell (1- value)))))
+
   (declare move-left (Unit -> (state:ST BF-State Unit)))
   (define (move-left)
     "Moves the pointer one bf-cell to the left."
     (do
      (bfs <- state:get)
-     (pure (cell:decrement! (.pointer bfs)))
+     (pure (dec! (.pointer bfs)))
       (state:put bfs)))
 
   ;;

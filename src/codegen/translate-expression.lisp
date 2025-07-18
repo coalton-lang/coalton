@@ -186,16 +186,16 @@ Returns a `node'.")
                 (coalton:Integer
                  (make-node-literal :type tc:*integer-type*
                                     :value val))
-                (coalton:Ifix
+                (coalton:IFix
                  (make-node-literal :type tc:*ifix-type*
                                     :value val))
-                (coalton:Ufix
+                (coalton:UFix
                  (make-node-literal :type tc:*ufix-type*
                                     :value val))
-                (coalton:Single-Float
+                (coalton:F32
                  (make-node-literal :type tc:*single-float-type*
                                     :value (coerce val 'single-float)))
-                (coalton:Double-Float
+                (coalton:F64
                  (make-node-literal :type tc:*double-float-type*
                                     :value (coerce val 'double-float)))
                 (otherwise
@@ -414,6 +414,42 @@ Returns a `node'.")
                      :body (translate-expression (tc:node-match-branch-body branch) ctx env)))
                   (tc:node-match-branches expr)))))
 
+  (:method ((expr tc:node-catch) ctx env)
+    (declare (type pred-context ctx)
+             (type tc:environment env)
+             (values node))
+
+    (let ((qual-ty (tc:node-type expr)))
+      (assert (null (tc:qualified-ty-predicates qual-ty)))
+
+      (make-node-catch
+       :type (tc:qualified-ty-type qual-ty)
+       :expr (translate-expression (tc:node-catch-expr expr) ctx env)
+       :branches (mapcar
+                  (lambda (branch)
+                    (make-catch-branch
+                     :pattern (translate-pattern (tc:node-catch-branch-pattern branch))
+                     :body (translate-expression (tc:node-catch-branch-body branch) ctx env)))
+                  (tc:node-catch-branches expr)))))
+
+  (:method ((expr tc:node-resumable) ctx env)
+    (declare (type pred-context ctx)
+             (type tc:environment env)
+             (values node))
+
+    (let ((qual-ty (tc:node-type expr)))
+      (assert (null (tc:qualified-ty-predicates qual-ty)))
+
+      (make-node-resumable
+       :type (tc:qualified-ty-type qual-ty)
+       :expr (translate-expression (tc:node-resumable-expr expr) ctx env)
+       :branches (mapcar
+                  (lambda (branch)
+                    (make-resumable-branch
+                     :pattern (translate-pattern (tc:node-resumable-branch-pattern branch))
+                     :body (translate-expression (tc:node-resumable-branch-body branch) ctx env)))
+                  (tc:node-resumable-branches expr)))))
+
   (:method ((expr tc:node-progn) ctx env)
     (declare (type pred-context ctx)
              (type tc:environment env)
@@ -445,6 +481,31 @@ Returns a `node'.")
                     :type tc:*unit-type*
                     :value unit-value))))))
 
+  (:method ((expr tc:node-throw) ctx env)
+    (declare (type pred-context ctx)
+             (type tc:environment env)
+             (values node))
+
+    (let ((qual-ty (tc:node-type expr)))
+      (assert (null (tc:qualified-ty-predicates qual-ty)))
+
+      (make-node-throw
+       :type (tc:qualified-ty-type qual-ty)
+       :expr (translate-expression (tc:node-throw-expr expr) ctx env))))
+
+  (:method ((expr tc:node-resume-to) ctx env)
+    (declare (type pred-context ctx)
+             (type tc:environment env)
+             (values node))
+
+    (let ((qual-ty (tc:node-type expr)))
+      (assert (null (tc:qualified-ty-predicates qual-ty)))
+
+      (make-node-resume-to
+       :type (tc:qualified-ty-type qual-ty)
+       :expr (translate-expression (tc:node-resume-to-expr expr) ctx env))))
+
+
   (:method ((expr tc:node-or) ctx env)
     (declare (type pred-context ctx)
              (type tc:environment env)
@@ -452,32 +513,36 @@ Returns a `node'.")
 
     (let* ((coalton-package (util:find-package "COALTON"))
            (true-value (util:find-symbol "TRUE" coalton-package))
-           (false-value (util:find-symbol "FALSE" coalton-package)))
+           (false-value (util:find-symbol "FALSE" coalton-package))
+           (rev-children (reverse (tc:node-or-nodes expr))))
 
-      (loop :with out-node := (make-node-variable
-                               :type tc:*boolean-type*
-                               :value false-value)
-            :for body-node :in (reverse (tc:node-or-nodes expr)) :do
-              (setf out-node
-                    (make-node-match
-                     :type tc:*boolean-type*
-                     :expr (translate-expression body-node ctx env)
-                     :branches (list
-                                (make-match-branch
-                                 :pattern (make-pattern-constructor
-                                           :type tc:*boolean-type*
-                                           :name true-value
-                                           :patterns nil)
-                                 :body (make-node-variable
-                                        :type tc:*boolean-type*
-                                        :value true-value))
-                                (make-match-branch
-                                 :pattern (make-pattern-constructor
-                                           :type tc:*boolean-type*
-                                           :name false-value
-                                           :patterns nil)
-                                 :body out-node))))
-            :finally (return out-node))))
+      (if (null rev-children)
+          (make-node-variable
+           :type tc:*boolean-type*
+           :value false-value)
+          (loop :with out-node := (translate-expression (car rev-children)
+                                                        ctx env)
+                :for body-node :in (cdr rev-children) :do
+                  (setf out-node
+                        (make-node-match
+                         :type tc:*boolean-type*
+                         :expr (translate-expression body-node ctx env)
+                         :branches (list
+                                    (make-match-branch
+                                     :pattern (make-pattern-constructor
+                                               :type tc:*boolean-type*
+                                               :name true-value
+                                               :patterns nil)
+                                     :body (make-node-variable
+                                            :type tc:*boolean-type*
+                                            :value true-value))
+                                    (make-match-branch
+                                     :pattern (make-pattern-constructor
+                                               :type tc:*boolean-type*
+                                               :name false-value
+                                               :patterns nil)
+                                     :body out-node))))
+                :finally (return out-node)))))
 
   (:method ((expr tc:node-and) ctx env)
     (declare (type pred-context ctx)
@@ -486,32 +551,36 @@ Returns a `node'.")
 
     (let* ((coalton-package (util:find-package "COALTON"))
            (true-value (util:find-symbol "TRUE" coalton-package))
-           (false-value (util:find-symbol "FALSE" coalton-package)))
+           (false-value (util:find-symbol "FALSE" coalton-package))
+           (rev-children (reverse (tc:node-and-nodes expr))))
 
-      (loop :with out-node := (make-node-variable
-                               :type tc:*boolean-type*
-                               :value true-value)
-            :for body-node :in (reverse (tc:node-and-nodes expr)) :do
-              (setf out-node
-                    (make-node-match
-                     :type tc:*boolean-type*
-                     :expr (translate-expression body-node ctx env)
-                     :branches (list
-                                (make-match-branch
-                                 :pattern (make-pattern-constructor
-                                           :type tc:*boolean-type*
-                                           :name false-value
-                                           :patterns nil)
-                                 :body (make-node-variable
-                                        :type tc:*boolean-type*
-                                        :value false-value))
-                                (make-match-branch
-                                 :pattern (make-pattern-constructor
-                                           :type tc:*boolean-type*
-                                           :name true-value
-                                           :patterns nil)
-                                 :body out-node))))
-            :finally (return out-node))))
+      (if (null rev-children)
+          (make-node-variable
+           :type tc:*boolean-type*
+           :value true-value)
+          (loop :with out-node := (translate-expression (car rev-children)
+                                                        ctx env)
+                :for body-node :in (cdr rev-children) :do
+                  (setf out-node
+                        (make-node-match
+                         :type tc:*boolean-type*
+                         :expr (translate-expression body-node ctx env)
+                         :branches (list
+                                    (make-match-branch
+                                     :pattern (make-pattern-constructor
+                                               :type tc:*boolean-type*
+                                               :name false-value
+                                               :patterns nil)
+                                     :body (make-node-variable
+                                            :type tc:*boolean-type*
+                                            :value false-value))
+                                    (make-match-branch
+                                     :pattern (make-pattern-constructor
+                                               :type tc:*boolean-type*
+                                               :name true-value
+                                               :patterns nil)
+                                     :body out-node))))
+                :finally (return out-node)))))
 
   (:method ((expr tc:node-if) ctx env)
     (declare (type pred-context ctx)
@@ -589,17 +658,17 @@ Returns a `node'.")
                   (make-match-branch
                    :pattern (make-pattern-constructor
                              :type tc:*boolean-type*
-                             :name false-value
-                             :patterns nil)
-                   :body (translate-expression (tc:node-unless-body expr) ctx env))
-                  (make-match-branch
-                   :pattern (make-pattern-constructor
-                             :type tc:*boolean-type*
                              :name true-value
                              :patterns nil)
                    :body (make-node-variable
                           :type tc:*unit-type*
-                          :value unit-value))))))
+                          :value unit-value))
+                  (make-match-branch
+                   :pattern (make-pattern-constructor
+                             :type tc:*boolean-type*
+                             :name false-value
+                             :patterns nil)
+                   :body (translate-expression (tc:node-unless-body expr) ctx env))))))
 
   (:method ((expr tc:node-while) ctx env)
     (declare (type pred-context ctx)
@@ -767,29 +836,49 @@ Returns a `node'.")
 
       (assert (null (tc:qualified-ty-predicates qual-ty)))
 
-      (loop :with out-node := (make-node-lisp
-                               :type (tc:qualified-ty-type qual-ty)
-                               :vars nil
-                               :form '((cl:error "Non-exhaustive COND.")))
-            :for clause :in (reverse (tc:node-cond-clauses expr)) :do
-              (setf out-node
-                    (make-node-match
-                     :type (tc:qualified-ty-type qual-ty)
-                     :expr (translate-expression (tc:node-cond-clause-expr clause) ctx env)
-                     :branches (list
-                                (make-match-branch
-                                 :pattern (make-pattern-constructor
-                                           :type tc:*boolean-type*
-                                           :name true-value
-                                           :patterns nil)
-                                 :body (translate-expression (tc:node-cond-clause-body clause) ctx env))
-                                (make-match-branch
-                                 :pattern (make-pattern-constructor
-                                           :type tc:*boolean-type*
-                                           :name false-value
-                                           :patterns nil)
-                                 :body out-node))))
-            :finally (return out-node))))
+      (flet ((catchall-clause-p (clause)
+               "Is `clause` the catchall clause, 'coalton:True?"
+               (let ((expr (tc:node-cond-clause-expr clause)))
+                 (and (typep expr 'tc:node-variable)
+                      (and (tc:ty= tc:*boolean-type*  (tc:qualified-ty-type (tc:node-type expr)))
+                           (eq 'coalton:True (tc:node-variable-name expr)))))))
+        (let* ((reverse-clauses (reverse (tc:node-cond-clauses expr)))
+               (has-catchall-clause-p (some #'catchall-clause-p reverse-clauses)))
+          (when has-catchall-clause-p
+            ;; remove all the clauses after the catchall clause.
+            (loop :while (or (not (catchall-clause-p (first reverse-clauses)))
+                             ;; make sure to find the very first catchall clause
+                             (some #'catchall-clause-p (rest reverse-clauses)))
+                  :do (pop reverse-clauses)))
+
+          (loop :with out-node
+                  := (cond
+                       (has-catchall-clause-p
+                        (translate-expression (tc:node-cond-clause-body (first reverse-clauses)) ctx env))
+                       (t
+                        (make-node-lisp
+                         :type (tc:qualified-ty-type qual-ty)
+                         :vars nil
+                         :form '((cl:error "Non-exhaustive COND.")))))
+                :for clause :in (if has-catchall-clause-p (rest reverse-clauses) reverse-clauses) :do
+                  (setf out-node
+                        (make-node-match
+                         :type (tc:qualified-ty-type qual-ty)
+                         :expr (translate-expression (tc:node-cond-clause-expr clause) ctx env)
+                         :branches (list
+                                    (make-match-branch
+                                     :pattern (make-pattern-constructor
+                                               :type tc:*boolean-type*
+                                               :name true-value
+                                               :patterns nil)
+                                     :body (translate-expression (tc:node-cond-clause-body clause) ctx env))
+                                    (make-match-branch
+                                     :pattern (make-pattern-constructor
+                                               :type tc:*boolean-type*
+                                               :name false-value
+                                               :patterns nil)
+                                     :body out-node))))
+                :finally (return out-node))))))
 
   (:method ((node tc:node-do) ctx env)
     (declare (type pred-context ctx)
@@ -905,6 +994,15 @@ Returns a `node'.")
       (make-pattern-var
        :type (tc:qualified-ty-type qual-ty)
        :name (tc:pattern-var-name pat))))
+
+  (:method ((pat tc:pattern-binding))
+    (let ((qual-ty (tc:pattern-type pat)))
+      (assert (null (tc:qualified-ty-predicates qual-ty)))
+
+      (make-pattern-binding
+       :type (tc:qualified-ty-type qual-ty)
+       :var (translate-pattern (tc:pattern-binding-var pat))
+       :pattern (translate-pattern (tc:pattern-binding-pattern pat)))))
 
   (:method ((pat tc:pattern-literal))
     (let ((qual-ty (tc:pattern-type pat)))

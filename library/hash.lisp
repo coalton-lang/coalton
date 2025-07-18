@@ -2,8 +2,9 @@
   (:use
    #:coalton
    #:coalton-library/classes)
+  (:import-from #:coalton-library/math/hash-defining-macros
+                #:define-sxhash-hasher)
   (:export
-   #:Hash
    #:combine-hashes
    #:combine-hashes-order-independent
    #:define-sxhash-hasher))
@@ -15,29 +16,9 @@
 #+coalton-release
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
+;; NOTE: Both the Hash class and Hash type are defined in classes.lisp.
+
 (coalton-toplevel
-  #+sbcl
-  (repr :native (cl:unsigned-byte 62))
-
-  #+allegro
-  (repr :native (cl:unsigned-byte 0 32))
-
-  ;; https://github.com/Clozure/ccl/blob/ff51228259d9dbc8a9cc7bbb08858ef4aa9fe8d0/level-0/l0-hash.lisp#L1885
-  #+ccl
-  (repr :native (cl:and cl:fixnum cl:unsigned-byte)) 
-
-  #+(not (or sbcl allegro ccl))
-  #.(cl:error "hashing is not supported on ~A" (cl:lisp-implementation-type))
-
-  (define-type Hash
-    "Implementation dependent hash code")
-
-  (define-class (Eq :a => Hash :a)
-    "Types which can be hashed for storage in hash tables.
-
-The hash function must satisfy the invariant that `(== left right)` implies `(== (hash left) (hash right))`."
-    (hash (:a -> Hash)))
-
   (declare combine-hashes (Hash -> Hash -> Hash))
   (define (combine-hashes lhs rhs)
     (lisp Hash (lhs rhs)
@@ -86,16 +67,9 @@ The hash function must satisfy the invariant that `(== left right)` implies `(==
   (define-instance (Default Hash)
     (define (default)
       (lisp Hash ()
-        0))))
+        0)))
 
-(cl:defmacro define-sxhash-hasher (type)
-  `(coalton-toplevel
-     (define-instance (Hash ,type)
-       (define (hash item)
-         (lisp Hash (item)
-           (cl:sxhash item))))))
-
-(define-sxhash-hasher Hash)
+  (define-sxhash-hasher Hash))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/HASH")

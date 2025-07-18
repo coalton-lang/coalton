@@ -21,6 +21,10 @@
    #:make-attribute-monomorphize                 ; CONSTRUCTOR
    #:attribute-repr                              ; STRUCT
    #:make-attribute-repr                         ; CONSTRUCTOR
+   #:attribute-derive                            ; STRUCT
+   #:make-attribute-derive                       ; CONSTRUCTOR
+   #:attribute-derive-classes                    ; ACCESSOR
+   #:make-attribute-inline                       ; CONSTRUCTOR
    #:attribute-repr-type                         ; ACCESSOR
    #:attribute-repr-arg                          ; ACCESSOR
    #:constructor                                 ; STRUCT
@@ -34,8 +38,18 @@
    #:toplevel-define-type-vars                   ; ACCESSOR
    #:toplevel-define-type-ctors                  ; ACCESSOR
    #:toplevel-define-type-repr                   ; ACCESSOR
+   #:toplevel-define-type-derive                 ; ACCESSOR
    #:toplevel-define-type-head-location          ; ACCESSOR
+   #:toplevel-define-type-exception-p            ; ACCESSOR
+   #:toplevel-define-type-resumption-p           ; ACCESSOR
    #:toplevel-define-type-list                   ; TYPE
+   #:toplevel-define-type-alias                  ; STRUCT
+   #:make-toplevel-define-type-alias             ; CONSTRUCTOR
+   #:toplevel-define-type-alias-name             ; ACCESSOR
+   #:toplevel-define-type-alias-vars             ; ACCESSOR
+   #:toplevel-define-type-alias-type             ; ACCESSOR
+   #:toplevel-define-type-alias-head-location    ; ACCESSOR
+   #:toplevel-define-type-alias-list             ; TYPE
    #:struct-field                                ; STRUCT
    #:make-struct-field                           ; CONSTRUCTOR
    #:struct-field-name                           ; ACCESSOR
@@ -47,6 +61,7 @@
    #:toplevel-define-struct-vars                 ; ACCESSOR
    #:toplevel-define-struct-fields               ; ACCESSOR
    #:toplevel-define-struct-repr                 ; ACCESSOR
+   #:toplevel-define-struct-derive               ; ACCESSOR
    #:toplevel-define-struct-head-location        ; ACCESSOR
    #:toplevel-define-struct-list                 ; TYPE
    #:toplevel-declare                            ; STRUCT
@@ -55,6 +70,7 @@
    #:toplevel-declare-type                       ; ACCESSOR
    #:toplevel-declare-list                       ; TYPE
    #:toplevel-declare-monomorphize               ; ACCESSOR
+   #:toplevel-declare-inline                     ; ACCESSOR
    #:toplevel-define                             ; STRUCT
    #:make-toplevel-define                        ; CONSTRUCTOR
    #:toplevel-define-name                        ; ACCESSOR
@@ -63,6 +79,7 @@
    #:toplevel-define-body                        ; ACCESSOR
    #:toplevel-define-monomorphize                ; ACCESSOR
    #:toplevel-define-list                        ; TYPE
+   #:toplevel-define-inline                      ; ACCESSOR
    #:fundep                                      ; STRUCT
    #:make-fundep                                 ; CONSTRUCTOR
    #:fundep-left                                 ; ACCESSOR
@@ -87,6 +104,7 @@
    #:instance-method-definition-name             ; ACCESSOR
    #:instance-method-definition-params           ; ACCESSOR
    #:instance-method-definition-body             ; ACCESSOR
+   #:instance-method-definition-inline           ; ACCESSOR
    #:instance-method-definition-list             ; TYPE
    #:toplevel-define-instance                    ; STRUCT
    #:make-toplevel-define-instance               ; CONSTRUCTOR
@@ -112,6 +130,7 @@
    #:program-package                             ; ACCESSOR
    #:program-lisp-forms                          ; ACCESSOR
    #:program-types                               ; ACCESSOR
+   #:program-type-aliases                        ; ACCESSOR
    #:program-structs                             ; ACCESSOR
    #:program-declares                            ; ACCESSOR
    #:program-defines                             ; ACCESSOR
@@ -123,6 +142,7 @@
    #:parse-toplevel-form                         ; FUNCTION
    #:read-program                                ; FUNCTION
    #:read-expression                             ; FUNCTION
+   #:read-expressions                            ; FUNCTION
    ))
 
 (in-package #:coalton-impl/parser/toplevel)
@@ -147,6 +167,8 @@
 ;;;;
 ;;;; attribute-monomorphize := "(" "monomorphize" ")"
 ;;;;
+;;;; attribute-inline := "(" "inline" ")"
+;;;;
 ;;;; attribute-repr := "(" "repr" ( ":enum" | ":lisp" | ":transparent" ) ")"
 ;;;;                 | "(" "repr" ":native" lisp-form ")"
 ;;;;
@@ -168,6 +190,9 @@
 ;;;;
 ;;;; toplevel-define-type := "(" "define-type" identifier docstring? constructor* ")"
 ;;;;                       | "(" "define-type" "(" identifier keyword+ ")" docstring? constructor* ")"
+;;;;
+;;;; toplevel-define-type-alias := "(" "define-type-alias" identifier ty docstring? ")"
+;;;;                             | "(" "define-type-alias" "(" identifier keyword+ ")" ty docstring? ")"
 ;;;;
 ;;;; struct-field := "(" identifier docstring? type ")"
 ;;;;
@@ -213,6 +238,13 @@
   (type (util:required 'type) :type keyword-src       :read-only t)
   (arg  (util:required 'arg)  :type (or null cst:cst) :read-only t))
 
+(defstruct (attribute-inline
+            (:include attribute)))
+
+(defstruct (attribute-derive
+            (:include attribute))
+  (classes (util:required 'classes) :type cst:cons-cst :read-only t))
+
 ;;
 ;; Toplevel Structures
 ;;
@@ -251,11 +283,14 @@
 (defstruct (toplevel-define-type
             (:include toplevel-definition)
             (:copier nil))
-  (name          (util:required 'name)          :type identifier-src           :read-only t)
-  (vars          (util:required 'vars)          :type keyword-src-list         :read-only t)
-  (ctors         (util:required 'ctors)         :type constructor-list         :read-only t)
-  (repr          (util:required 'repr)          :type (or null attribute-repr) :read-only nil)
-  (head-location (util:required 'head-location) :type source:location          :read-only t))
+  (name          (util:required 'name)          :type identifier-src             :read-only t)
+  (vars          (util:required 'vars)          :type keyword-src-list           :read-only t)
+  (ctors         (util:required 'ctors)         :type constructor-list           :read-only t)
+  (repr          (util:required 'repr)          :type (or null attribute-repr)   :read-only nil)
+  (derive        (util:required 'derive)        :type (or null attribute-derive) :read-only nil)
+  (head-location (util:required 'head-location) :type source:location            :read-only t)
+  (exception-p   (util:required 'exception-p)   :type boolean                    :read-only t)
+  (resumption-p  (util:required 'resumption-p)  :type boolean                    :read-only t))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-define-type-list-p (x)
@@ -264,6 +299,22 @@
 
 (deftype toplevel-define-type-list ()
   '(satisfies toplevel-define-type-list-p))
+
+(defstruct (toplevel-define-type-alias
+            (:include toplevel-definition)
+            (:copier nil))
+  (name          (util:required 'name)          :type identifier-src           :read-only t)
+  (vars          (util:required 'vars)          :type keyword-src-list         :read-only t)
+  (type          (util:required 'type)          :type ty                       :read-only t)
+  (head-location (util:required 'head-location) :type source:location          :read-only t))
+
+(eval-when (:load-toplevel :compile-toplevel :execute)
+  (defun toplevel-define-type-alias-list-p (x)
+    (and (alexandria:proper-list-p x)
+         (every #'toplevel-define-type-alias-p x))))
+
+(deftype toplevel-define-type-alias-list ()
+  '(satisfies toplevel-define-type-alias-list-p))
 
 (defstruct (struct-field
             (:include toplevel-definition)
@@ -282,11 +333,12 @@
 (defstruct (toplevel-define-struct
             (:include toplevel-definition)
             (:copier nil))
-  (name          (util:required 'name)          :type identifier-src           :read-only t)
-  (vars          (util:required 'vars)          :type keyword-src-list         :read-only t)
-  (fields        (util:required 'fields)        :type struct-field-list        :read-only t)
-  (repr          (util:required 'repr)          :type (or null attribute-repr) :read-only nil)
-  (head-location (util:required 'head-location) :type source:location          :read-only t))
+  (name          (util:required 'name)          :type identifier-src             :read-only t)
+  (vars          (util:required 'vars)          :type keyword-src-list           :read-only t)
+  (fields        (util:required 'fields)        :type struct-field-list          :read-only t)
+  (repr          (util:required 'repr)          :type (or null attribute-repr)   :read-only nil)
+  (derive        (util:required 'derive)        :type (or null attribute-derive) :read-only nil)
+  (head-location (util:required 'head-location) :type source:location            :read-only t))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-define-struct-list-p (x)
@@ -301,7 +353,8 @@
   (name         (util:required 'name)         :type identifier-src                   :read-only t)
   (type         (util:required 'type)         :type qualified-ty                     :read-only t)
   (location     (util:required 'location)     :type source:location                  :read-only t)
-  (monomorphize (util:required 'monomorphize) :type (or null attribute-monomorphize) :read-only nil))
+  (monomorphize (util:required 'monomorphize) :type (or null attribute-monomorphize) :read-only nil)
+  (inline       (util:required 'inline)       :type (or null attribute-inline)       :read-only nil))
 
 (defmethod source:location ((self toplevel-declare))
   (toplevel-declare-location self))
@@ -321,7 +374,8 @@
   (params       (util:required 'params)       :type pattern-list                     :read-only t)
   (orig-params  (util:required 'orig-params)  :type pattern-list                     :read-only t)
   (body         (util:required 'body)         :type node-body                        :read-only t)
-  (monomorphize (util:required 'monomorphize) :type (or null attribute-monomorphize) :read-only nil))
+  (monomorphize (util:required 'monomorphize) :type (or null attribute-monomorphize) :read-only nil)
+  (inline       (util:required 'inline)       :type (or null attribute-inline)       :read-only nil))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-define-list-p (x)
@@ -387,7 +441,8 @@
   (name     (util:required 'name)     :type node-variable   :read-only t)
   (params   (util:required 'params)   :type pattern-list    :read-only t)
   (body     (util:required 'body)     :type node-body       :read-only t)
-  (location (util:required 'location) :type source:location :read-only t))
+  (location (util:required 'location) :type source:location :read-only t)
+  (inline   (util:required 'inline)   :type (or null attribute-inline) :read-only nil))
 
 (defmethod source:location ((self instance-method-definition))
   (instance-method-definition-location self))
@@ -464,15 +519,16 @@
   (export      nil                       :type list))
 
 (defstruct program
-  (package         nil :type (or null toplevel-package)    :read-only t)
-  (types           nil :type toplevel-define-type-list     :read-only nil)
-  (structs         nil :type toplevel-define-struct-list   :read-only nil)
-  (declares        nil :type toplevel-declare-list         :read-only nil)
-  (defines         nil :type toplevel-define-list          :read-only nil)
-  (classes         nil :type toplevel-define-class-list    :read-only nil)
-  (instances       nil :type toplevel-define-instance-list :read-only nil)
-  (lisp-forms      nil :type toplevel-lisp-form-list       :read-only nil)
-  (specializations nil :type toplevel-specialize-list      :read-only nil))
+  (package         nil :type (or null toplevel-package)      :read-only t)
+  (types           nil :type toplevel-define-type-list       :read-only nil)
+  (type-aliases    nil :type toplevel-define-type-alias-list :read-only nil)
+  (structs         nil :type toplevel-define-struct-list     :read-only nil)
+  (declares        nil :type toplevel-declare-list           :read-only nil)
+  (defines         nil :type toplevel-define-list            :read-only nil)
+  (classes         nil :type toplevel-define-class-list      :read-only nil)
+  (instances       nil :type toplevel-define-instance-list   :read-only nil)
+  (lisp-forms      nil :type toplevel-lisp-form-list         :read-only nil)
+  (specializations nil :type toplevel-specialize-list        :read-only nil))
 
 (defun read-program (stream source &optional mode)
   "Read a PROGRAM from SOURCE (an instance of source-error:source).
@@ -520,6 +576,7 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
                                 "attribute must be attached to another form")))
 
     (setf (program-types program) (nreverse (program-types program)))
+    (setf (program-type-aliases program) (nreverse (program-type-aliases program)))
     (setf (program-structs program) (nreverse (program-structs program)))
     (setf (program-declares program) (nreverse (program-declares program)))
     (setf (program-defines program) (nreverse (program-defines program)))
@@ -554,6 +611,35 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
                        (note source form "unexpected form"))))
 
       (parse-expression form source))))
+
+(defun read-expressions (stream source)
+  (let* (;; Setup eclector readtable
+         (eclector.readtable:*readtable*
+           (eclector.readtable:copy-readtable eclector.readtable:*readtable*)))
+
+    ;; Read the coalton form
+    (multiple-value-bind (form presentp)
+        (maybe-read-form stream source *coalton-eclector-client*)
+
+      (unless presentp
+        (parse-error "Malformed coalton expression"
+                     (note source (cons (- (file-position stream) 2)
+                                        (- (file-position stream) 1))
+                           "missing expression")))
+
+      (let ((additional-forms nil))
+        ;; Read multiple forms if present.
+        (block collect-additional-forms
+          (loop (multiple-value-bind (next-form presentp)
+                    (maybe-read-form stream source *coalton-eclector-client*)
+                  (if presentp
+                      (push next-form additional-forms)
+                      (return-from collect-additional-forms)))))
+        (cond
+          ((consp additional-forms)
+           (parse-expressions (cons form (nreverse additional-forms)) source))
+          (t
+           (parse-expression form source)))))))
 
 ;;; Packages
 
@@ -757,10 +843,12 @@ If the outermost form matches (eval-when (compile-toplevel) ..), evaluate the en
 
 ;;; Functions for working with attributes (repr, monomorphize)
 
-(defun consume-repr (attributes toplevel-form message)
+(defun consume-type-attribute (attribute attributes toplevel-form message)
   "Return the unique repr attribute in ATTRIBUTES, or NIL.
 If the attribute is not unique, or a monomorphize attribute is present, signal a parse error."
-  (let (repr)
+  (declare (type (member :repr :derive) attribute))
+
+  (let (repr derive)
     (loop :for attribute :across attributes
           :do (etypecase attribute
                 (attribute-repr
@@ -770,22 +858,40 @@ If the attribute is not unique, or a monomorphize attribute is present, signal a
                                 (source:secondary-note repr "previous attribute here")
                                 (source:secondary-note toplevel-form message)))
                  (setf repr attribute))
+                (attribute-derive
+                 (when derive
+                   (parse-error "Duplicate derive attribute"
+                                (source:note attribute "derive attribute here")
+                                (source:secondary-note derive "previous attribute here")
+                                (source:secondary-note toplevel-form message)))
+                 (setf derive attribute))
                 (attribute-monomorphize
                  (parse-error "Invalid target for monomorphize attribute"
                               (source:note attribute "monomorphize must be attached to a define or declare form")
+                              (source:secondary-note toplevel-form message)))
+                (attribute-inline
+                 (parse-error "Invalid target for inline attribute"
+                              (source:note attribute "inline must be attached to a define or declare form")
                               (source:secondary-note toplevel-form message)))))
-    (setf (fill-pointer attributes) 0)
-    repr))
+    (ecase attribute
+      ((:repr) repr)
+      ((:derive) derive))))
 
-(defun consume-monomorphize (attributes toplevel-form message)
+(defun consume-optimize-attribute (attribute attributes toplevel-form message)
   "Return the unique monomorphize attribute in ATTRIBUTES, or NIL.
 If the attribute is not unique, or a repr attribute is present, signal a parse error."
-  (let (monomorphize)
+  (declare (type (member :monomorphize :inline) attribute))
+
+  (let (monomorphize inline)
     (loop :for attribute :across attributes
           :do (etypecase attribute
                 (attribute-repr
                  (parse-error "Invalid target for repr attribute"
                               (source:note attribute "repr must be attached to a define-type")
+                              (source:secondary-note toplevel-form message)))
+                (attribute-derive
+                 (parse-error "Invalid target for derive attribute"
+                              (source:note attribute "derive must be attached to a define-type or define-struct")
                               (source:secondary-note toplevel-form message)))
                 (attribute-monomorphize
                  (when monomorphize
@@ -793,9 +899,17 @@ If the attribute is not unique, or a repr attribute is present, signal a parse e
                                 (source:note attribute "monomorphize attribute here")
                                 (source:secondary-note monomorphize "previous attribute here")
                                 (source:secondary-note toplevel-form message)))
-                 (setf monomorphize attribute))))
-    (setf (fill-pointer attributes) 0)
-    monomorphize))
+                 (setf monomorphize attribute))
+                (attribute-inline
+                 (when inline
+                   (parse-error "Duplicate inline attribute"
+                                (source:note attribute "inline attribute here")
+                                (source:secondary-note inline "previous attribute here")
+                                (source:secondary-note toplevel-form message)))
+                 (setf inline attribute))))
+    (ecase attribute
+      ((:monomorphize) monomorphize)
+      ((:inline) inline))))
 
 (defun forbid-attributes (attributes form source)
   "If ATTRIBUTES is non-zero length, signal a parse error using FORM and SOURCE for location context."
@@ -833,40 +947,82 @@ If the parsed form is an attribute (e.g., repr or monomorphize), add it to to AT
      (vector-push-extend (parse-monomorphize form source) attributes)
      nil)
 
+    ((coalton:inline)
+     (vector-push-extend (parse-inline form source) attributes)
+     nil)
+
     ((coalton:repr)
      (vector-push-extend (parse-repr form source) attributes)
      nil)
 
+    ((coalton:derive)
+     (vector-push-extend (parse-derive form source) attributes)
+     nil)
+
     ((coalton:define)
      (let* ((define (parse-define form source))
-            (monomorphize (consume-monomorphize attributes define "when parsing define")))
+            (monomorphize (consume-optimize-attribute :monomorphize attributes define "when parsing define"))
+            (inline (consume-optimize-attribute :inline attributes define "when parsing define")))
        (setf (toplevel-define-monomorphize define) monomorphize)
+       (setf (toplevel-define-inline define) inline)
+       (setf (fill-pointer attributes) 0)
        (push define (program-defines program))
        t))
 
     ((coalton:declare)
      (let* ((declare (parse-declare form source))
-            (monomorphize (consume-monomorphize attributes declare "when parsing declare")))
+            (monomorphize (consume-optimize-attribute :monomorphize attributes declare "when parsing declare"))
+            (inline (consume-optimize-attribute :inline attributes declare "when parsing declare")))
        (setf (toplevel-declare-monomorphize declare) monomorphize)
+       (setf (toplevel-declare-inline declare) inline)
+       (setf (fill-pointer attributes) 0)
        (push declare (program-declares program))
        t))
 
     ((coalton:define-type)
      (let* ((type (parse-define-type form source))
-            (repr (consume-repr attributes type "when parsing define-type")))
-       (setf (toplevel-define-type-repr type) repr)
+            (repr (consume-type-attribute :repr attributes type "when parsing define-type"))
+            (derive (consume-type-attribute :derive attributes type "when parsing define-type")))
+       (setf (toplevel-define-type-repr type) repr
+             (toplevel-define-type-derive type) derive)
+       (setf (fill-pointer attributes) 0)
        (push type (program-types program))
+       t))
+
+    ((coalton:define-exception)
+     (let* ((type (parse-define-type form source :definition-category "exception" :exception-p t)))
+
+       (unless (endp (toplevel-define-type-vars type))
+         (parse-error "Invalid define-exception"
+                      (note source form "Exception types do not accept type variables.")))
+
+       (push type (program-types program))
+       t))
+
+    ((coalton:define-resumption)
+     (let* ((type (parse-define-resumption form source)))
+
+       (push type (program-types program))
+       t))
+
+    ((coalton:define-type-alias)
+     (forbid-attributes attributes form source)
+     (let ((alias (parse-define-type-alias form source)))
+       (push alias (program-type-aliases program))
        t))
 
     ((coalton:define-struct)
      (let* ((struct (parse-define-struct form source))
-            (repr (consume-repr attributes struct "when parsing define-struct")))
+            (repr (consume-type-attribute :repr attributes struct "when parsing define-struct"))
+            (derive (consume-type-attribute :derive attributes struct "when parsing define-struct")))
        (when (and repr
                   (not (eq :transparent (keyword-src-name (attribute-repr-type repr)))))
          (parse-error "Invalid repr attribute"
                       (source:note repr "structs can only be repr transparent")
                       (source:secondary-note struct "when parsing define-struct")))
-       (setf (toplevel-define-struct-repr struct) repr)
+       (setf (toplevel-define-struct-repr struct) repr
+             (toplevel-define-struct-derive struct) derive)
+       (setf (fill-pointer attributes) 0)
        (push struct (program-structs program))
        t))
 
@@ -954,7 +1110,8 @@ consume all attributes")))
        :docstring docstring
        :body body
        :monomorphize nil
-       :location (form-location source form)))))
+       :location (form-location source form)
+       :inline nil))))
 
 (defun parse-declare (form source)
   (declare (type cst:cst form)
@@ -990,9 +1147,10 @@ consume all attributes")))
           :location (form-location source (cst:second form)))
    :type (parse-qualified-type (cst:third form) source)
    :monomorphize nil
-   :location (form-location source form)))
+   :location (form-location source form)
+   :inline nil))
 
-(defun parse-define-type (form source)
+(defun parse-define-type (form source &key (definition-category "type") (exception-p nil))
   (declare (type cst:cst form)
            (values toplevel-define-type))
 
@@ -1006,13 +1164,13 @@ consume all attributes")))
 
     ;; (define-type)
     (unless (cst:consp (cst:rest form))
-      (parse-error "Malformed type definition"
+      (parse-error (format nil "Malformed ~a definition" definition-category)
                    (note source form "expected body")))
 
     (cond
       ((cst:atom (cst:second form))
        (unless (identifierp (cst:raw (cst:second form)))
-         (parse-error "Malformed type definition"
+         (parse-error (format nil "Malformed ~a definition" definition-category)
                       (note source (cst:second form) "expected symbol")))
 
        (setf name (make-identifier-src :name (cst:raw (cst:second form))
@@ -1021,7 +1179,7 @@ consume all attributes")))
       (t                                ; (define-type (T ...) ...)
        ;; (define-type ((T) ...) ...)
        (unless (cst:atom (cst:first (cst:second form)))
-         (parse-error "Malformed type definition"
+         (parse-error (format nil "Malformed ~a definition" definition-category)
                       (note source (cst:first (cst:second form))
                             "expected symbol")
                       (help source (cst:second form)
@@ -1031,7 +1189,7 @@ consume all attributes")))
 
        ;; (define-type (1 ...) ...)
        (unless (identifierp (cst:raw (cst:first (cst:second form))))
-         (parse-error "Malformed type definition"
+         (parse-error (format nil "Malformed ~a definition" definition-category)
                       (note source (cst:first (cst:second form))
                             "expected symbol")))
 
@@ -1041,9 +1199,9 @@ consume all attributes")))
 
        ;; (define-type (T) ...)
        (when (cst:atom (cst:rest (cst:second form)))
-         (parse-error "Malformed type definition"
+         (parse-error (format nil "Malformed ~a definition" definition-category)
                       (note source (cst:second form)
-                            "nullary types should not have parentheses")
+                            "nullary constructors should not have parentheses")
                       (help source (cst:second form)
                             (lambda (existing)
                               (subseq existing 1 (1- (length existing))))
@@ -1061,7 +1219,7 @@ consume all attributes")))
     (when (and docstring
                (cst:consp (cst:nthrest 3 form))
                (stringp (cst:raw (cst:fourth form))))
-      (parse-error "Malformed type definition"
+      (parse-error (format nil "Malformed ~a definition" definition-category)
                    (note source
                          (cst:source (cst:fourth form))
                          "only one docstring allowed.")
@@ -1075,37 +1233,187 @@ consume all attributes")))
      :name name
      :vars (reverse variables)
      :docstring docstring
-     :ctors (loop :for constructors_
-                    := (cst:nthrest (if docstring 3 2) form)
-                      :then (cst:rest constructors_)
-                  :with ctors := nil
-                  :while (cst:consp constructors_)
+     :ctors
+     (loop
+       :for constructors_
+         := (cst:nthrest (if docstring 3 2) form)
+           :then (cst:rest constructors_)
+       :with ctors := nil
+       :while (cst:consp constructors_)
 
-                  ;; check for duplicate docstrings
-                  :when (and (cst:atom (cst:first constructors_))
-                             (stringp (cst:raw (cst:first constructors_)))
-                             (not (cst:null (cst:rest constructors_)))
-                             (cst:atom (cst:second constructors_))
-                             (stringp (cst:raw (cst:second constructors_))))
-                    :do (parse-error "Malformed type definition"
-                                     (note source
-                                           (cst:second constructors_)
-                                           "only one docstring allowed per constructor"))
+       ;; check for duplicate docstrings
+       :when (and (cst:atom (cst:first constructors_))
+                  (stringp (cst:raw (cst:first constructors_)))
+                  (not (cst:null (cst:rest constructors_)))
+                  (cst:atom (cst:second constructors_))
+                  (stringp (cst:raw (cst:second constructors_))))
+         :do (parse-error (format nil "Malformed ~a definition" definition-category)
+                          (note source
+                                (cst:second constructors_)
+                                "only one docstring allowed per constructor"))
 
-                        ;; collect constructors with docstrings if they follow
-                  :do (let ((ctor-docstring (if (and (not (cst:null (cst:rest constructors_)))
-                                                     (cst:atom (cst:second constructors_))
-                                                     (stringp (cst:raw (cst:second constructors_))))
-                                                (cst:raw (cst:second constructors_))
-                                                nil)))
-
-
-                        (unless (stringp (cst:raw (cst:first constructors_)))
-                            (push (parse-constructor (cst:first constructors_) form ctor-docstring source) ctors)))
-                  :finally (return ctors))
+             ;; collect constructors with docstrings if they follow
+       :do (let ((ctor-docstring (if (and (not (cst:null (cst:rest constructors_)))
+                                          (cst:atom (cst:second constructors_))
+                                          (stringp (cst:raw (cst:second constructors_))))
+                                     (cst:raw (cst:second constructors_))
+                                     nil)))
+             (unless (stringp (cst:raw (cst:first constructors_)))
+               (push
+                (parse-constructor (cst:first constructors_) form ctor-docstring source)
+                ctors)))
+       :finally (return ctors))
      :repr nil
+     :derive nil
+     :location (form-location source form)
+     :head-location (form-location source (cst:second form))
+     :exception-p exception-p
+     :resumption-p nil)))
+
+(defun parse-define-type-alias (form source)
+  (declare (type cst:cst form)
+           (values toplevel-define-type-alias))
+
+  (assert (cst:consp form))
+
+  (let (docstring
+        name
+        variables)
+
+    ;; (define-type-alias)
+    (unless (cst:consp (cst:rest form))
+      (parse-error "Malformed type alias definition"
+                   (note source form "expected body")))
+
+    (cond
+      ;; (define-type-alias _ ...)
+      ((cst:atom (cst:second form))
+       ;; (define-type-alias 0.5 ...)
+       (unless (identifierp (cst:raw (cst:second form)))
+         (parse-error "Malformed type alias definition"
+                      (note source (cst:second form) "expected symbol")))
+
+       ;; (define-type-alias name ...)
+       (setf name (make-identifier-src :name (cst:raw (cst:second form))
+                                       :location (form-location source form))))
+
+      ;; (define-type-alias (_ ...) ...)
+      (t
+       ;; (define-type-alias((name) ...) ...)
+       (unless (cst:atom (cst:first (cst:second form)))
+         (parse-error "Malformed type alias definition"
+                      (note source (cst:first (cst:second form))
+                            "expected symbol")
+                      (help source (cst:second form)
+                            (lambda (existing)
+                              (subseq existing 1 (1- (length existing))))
+                            "remove parentheses")))
+
+       ;; (define-type-alias (0.5 ...) ...)
+       (unless (identifierp (cst:raw (cst:first (cst:second form))))
+         (parse-error "Malformed type alias definition"
+                      (note source (cst:first (cst:second form))
+                            "expected symbol")))
+
+       ;; (define-type-alias (name ...) ...)
+       (setf name (make-identifier-src :name (cst:raw (cst:first (cst:second form)))
+                                       :location (form-location source
+                                                                (cst:first (cst:second form)))))
+
+       ;; (define-type-alias (name) ...)
+       (when (cst:atom (cst:rest (cst:second form)))
+         (parse-error "Malformed type alias definition"
+                      (note source (cst:second form)
+                            "nullary type aliases should not have parentheses")
+                      (help source (cst:second form)
+                            (lambda (existing)
+                              (subseq existing 1 (1- (length existing))))
+                            "remove unnecessary parentheses")))
+
+       ;; (define-type-alias (name type-variables+) ...)
+       (loop :for vars := (cst:rest (cst:second form)) :then (cst:rest vars)
+             :while (cst:consp vars)
+             :do (push (parse-type-variable (cst:first vars) source) variables))))
+
+    ;; (define-type-alias name)
+    (unless (cst:consp (cst:rest (cst:rest form)))
+      (parse-error "Malformed type alias definition"
+                   (note source form "expected type")))
+
+    ;; (define-type-alias name type docstring)
+    (when (and (cst:consp (cst:nthrest 3 form))
+               (cst:atom (cst:fourth form))
+               (stringp (cst:raw (cst:fourth form))))
+      (setf docstring (cst:raw (cst:fourth form))))
+
+    ;; (define-type-alias name type docstring ...)
+    (when (and docstring
+               (cst:consp (cst:nthrest 4 form)))
+      (parse-error "Malformed type alias definition"
+                   (note source (cst:fifth form)
+                         "unexpected trailing form")))
+
+    (make-toplevel-define-type-alias
+     :name name
+     :vars (reverse variables)
+     :type (parse-type (cst:third form) source)
+     :docstring docstring
      :location (form-location source form)
      :head-location (form-location source (cst:second form)))))
+
+(defun parse-define-resumption (form source)
+  (declare (type cst:cst form))
+
+  (assert (cst:consp form))
+  (let (docstring
+        name
+        ctor)
+
+    ;; (define-resumption)
+    (unless (cst:consp (cst:rest form))
+      (parse-error "Malformed resumption definition"
+                   (note source form "expected body")))
+    (cond
+      ;; (define-resumption R ...)
+      ((cst:atom (cst:second form))
+       (setf name (parse-identifier (cst:second form) source)))
+
+      ;; (define-resumption (R ..) ...)
+      ((and (cst:consp (cst:second form))
+            (cst:atom (cst:first (cst:second form))))
+       (setf name (parse-identifier (cst:first (cst:second form)) source)))
+
+      (t
+       (parse-error "Malformed resumption definition"
+                    (note source form "constructor expected"))))
+
+    (setf ctor (parse-constructor (cst:second form) form nil source))
+
+    ;; Optional docstring 
+    (when (cst:consp (cst:rest (cst:rest form)))
+      (unless (and (cst:atom (cst:third form))
+                   (stringp (cst:raw (cst:third form))))
+        (parse-error "Malformed resumption definition"
+                     (note source form "string expected.")))
+      
+      (setf docstring (cst:raw (cst:third form)))
+
+      (when (cst:consp (cst:rest (cst:rest (cst:rest form))))
+        (parse-error "Malformed resumption definition"
+                     (note source (cst:fourth form) "unexpected form"))))
+
+    (make-toplevel-define-type
+     :name name
+     :vars nil
+     :docstring docstring
+     :ctors (list ctor)
+     :repr nil
+     :location (form-location source form)
+     :head-location (form-location source (cst:second form))
+     :derive nil
+     :exception-p nil
+     :resumption-p t)))
+
 
 (defun parse-define-struct (form source)
   (declare (type cst:cst form))
@@ -1147,6 +1455,7 @@ consume all attributes")))
               source)
      :location (form-location source form)
      :repr nil
+     :derive nil
      :head-location (form-location source (cst:second form)))))
 
 (defun parse-define-class (form source)
@@ -1412,22 +1721,36 @@ consume all attributes")))
                  (stringp (cst:raw (cst:third form))))
         (setf docstring (cst:raw (cst:third form))))
 
-      (make-toplevel-define-instance
-       :context context
-       :pred (parse-predicate unparsed-predicate
-                              (source:make-location source
-                                                    (util:cst-source-range unparsed-predicate)))
-       :docstring docstring
-       :methods (loop :for methods
-                        := (cst:nthrest (if docstring 3 2) form)
-                          :then (cst:rest methods)
-                      :while (cst:consp methods)
-                      :for method := (cst:first methods)
-                      :collect (parse-instance-method-definition method
-                                                                 (cst:second form) source))
-       :location (form-location source form)
-       :head-location (form-location source (cst:second form))
-       :compiler-generated nil))))
+      (let ((methods (loop :with inline := nil
+                           :for forms := (cst:nthrest (if docstring 3 2) form) :then (cst:rest forms)
+                           :while (cst:consp forms)
+                           :for method-or-attribute := (cst:first forms)
+                           :if (and (cst:consp method-or-attribute)
+                                    (eq 'coalton:inline (cst:raw (cst:first method-or-attribute))))
+                             :do (if inline
+                                     (parse-error "Duplicate inline attribute"
+                                                  (note source method-or-attribute "inline attribute here")
+                                                  (source:secondary-note (attribute-inline-location inline) "previous attribute here"))
+                                     (setf inline (parse-inline method-or-attribute source)))
+                           :else
+                             :collect (let ((method (parse-instance-method-definition method-or-attribute (cst:second form) source)))
+                                        (setf (instance-method-definition-inline method) inline
+                                              inline nil)
+                                        method)
+                           :finally (when inline
+                                      (parse-error "Inline attribute must be attached to a method definition"
+                                                   (note source method-or-attribute "inline attribute here"))))))
+
+        (make-toplevel-define-instance
+         :context context
+         :pred (parse-predicate unparsed-predicate
+                                (source:make-location source
+                                                      (util:cst-source-range unparsed-predicate)))
+         :docstring docstring
+         :methods methods
+         :location (form-location source form)
+         :head-location (form-location source (cst:second form))
+         :compiler-generated nil)))))
 
 (defun parse-specialize (form source)
   (declare (type cst:cst form)
@@ -1687,7 +2010,8 @@ consume all attributes")))
        :name name
        :params params
        :body (parse-body (cst:rest (cst:rest form)) form source)
-       :location (form-location source form)))))
+       :location (form-location source form)
+       :inline nil))))
 
 (defun parse-fundep (form source)
   "Parse a functional dependency in FORM, consisting of two lists of one or more type variables separated by `->`:
@@ -1723,6 +2047,35 @@ consume all attributes")))
 
   (make-attribute-monomorphize
    :location (form-location source form)))
+
+(defun parse-inline (form source)
+  (declare (type cst:cst form)
+           (values attribute-inline))
+
+  (assert (cst:consp form))
+
+  (when (cst:consp (cst:rest form))
+    (parse-error "Malformed inline attribute"
+                 (note source form "unexpected form")))
+
+  (make-attribute-inline
+   :location (form-location source form)))
+
+(defun parse-derive (form source)
+  (declare (type cst:cst form)
+           (values attribute-derive))
+
+  (assert (cst:consp form))
+
+  (unless (and (cst:consp (cst:rest form))
+               (every #'symbolp (cst:raw (cst:rest form))))
+    (parse-error "Malformed derive attribute"
+                 (note source form "expected class arguments")))
+
+  (let ((classes (cst:rest form)))
+    (make-attribute-derive
+     :classes classes
+     :location (form-location source form))))
 
 (defun parse-repr (form source)
   (declare (type cst:cst form)

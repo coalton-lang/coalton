@@ -2,7 +2,7 @@
 
 Coalton is a statically typed language that is embedded in, and compiles to, Common Lisp.
 
-This document is aimed toward people who are already familiar with functional programming languages.
+This document is aimed toward people who are already familiar with functional programming languages. If you are already familiar with Common Lisp, the [glossary](./glossary.md) may be useful.
 
 ## Systems and Packages
 
@@ -237,7 +237,6 @@ As suggested, one can replace `y` with `_y`, which tells the Coalton compiler th
 
 One should treat underscore prefixed variables as ignored whenever possible, and use a name not prefixed with `_` if it may be used. Reading from underscore-prefixed variables is permitted so that generated code (e.g., using macros or read-conditionals) may avoid unused variable warnings for variables which will be used in some compilation contexts but not others.
 
-
 ## Data Types
 
 Coalton allows the definition of parametric algebraic data types.
@@ -272,6 +271,85 @@ Type definitions introduce type constructors. For example, we may construct a so
 
 We'll see how to unpack these types using `match` later in this document.
 
+## Type Aliases
+
+Coalton allows the definition of parametric type aliases. Type aliases can be defined on primitive types and types created with `define-type` or `define-type-alias`.
+
+```lisp
+(coalton-toplevel
+  ;; New type aliases are created with the DEFINE-TYPE-ALIAS operator
+  (define-type-alias Coordinate Integer)
+  (define-type-alias (Pair :a) (Tuple :a :a))
+  (define-type-alias Translation (Pair Coordinate -> Pair Coordinate))
+  
+  (declare shift-right Translation)
+  (define (shift-right (Tuple x y))
+    (Tuple (1+ x) y))
+    
+  (define shifted-coordinate (shift-right (Tuple 0 0))))
+
+  ;; Type aliases can have multiple parameters
+  (define-type-alias (MyTuple3 :a :b :c) (Tuple :a (Tuple :b :c)))
+
+  ;; Type aliases can have parameters that do not have a kind of *
+  (define-type-alias (IntegerCollection :col) (:col Integer))
+
+  ;; Type aliases can alias types that do not have a kind of *
+  (define-type-alias MyCollection List)
+```
+
+Parametric type aliases must be fully applied.
+```lisp
+(coalton-toplevel
+
+  (define-type (T :a) (ConstrT (:a Integer)))
+  
+  (define-type-alias (MyCollection1 :a) (List :a))
+  (define-type-alias MyCollection2 List)
+
+  ;; This line will not compile, because MyCollection1 has a
+  ;; parameter :A which is not applied
+  (define-type-alias A (T MyCollection1))
+
+  ;; However, this line will compile
+  (define-type-alias A (T MyCollection2)))
+```
+
+There are several debugging tools which are useful when working with type aliases. Outside of a Coalton expression, `describe-type-of` can be used to display the type of a symbol, including its aliases, and to return the type. `describe-type-alias` displays the alias along with the aliased type and returns the aliased type. Additionally, Coalton can be configured to display only aliases, only types, or both, when displaying the type associated with a symbol. The preference can be set before compiling Coalton using `(setf (get ':coalton-config ':type-printing-mode) mode)` where `mode` is one of `:types`, `:aliases`, and `:types-and-aliases`. Thereafter, the mode can be changed among those three options using the function `set-type-printing-mode`. The default mode is `:types`.
+
+```lisp
+COALTON-USER> (coalton-toplevel
+                (define-type-alias A Integer)
+                (define x (the A 5)))
+; No value
+
+COALTON-USER> (set-type-printing-mode :aliases)
+:ALIASES
+
+COALTON-USER> (type-of 'x)
+A
+
+COALTON-USER> (set-type-printing-mode :types-and-aliases)
+:TYPES-AND-ALIASES
+
+COALTON-USER> (type-of 'x)
+[A := INTEGER]
+
+COALTON-USER> (set-type-printing-mode :types)
+:TYPES
+
+COALTON-USER> shifted-coordinate ;; from the example above
+#.(TUPLE 1 0)
+
+COALTON-USER> (type-of 'shifted-coordinate)
+(TUPLE INTEGER INTEGER)
+
+COALTON-USER> (describe-type-of 'shifted-coordinate)
+[(PAIR COORDINATE) := (TUPLE [COORDINATE := INTEGER] [COORDINATE := INTEGER])]
+
+COALTON-USER> (describe-type-alias 'Pair)
+[(PAIR :A) := (TUPLE :A :A)]
+```
 
 ### Structs
 
@@ -384,7 +462,7 @@ on its next iteration. The following prints out `c`, `o`, `a`, `t`,
 
 Each of the above looping forms takes an optional loop label
 keyword. These labels can be used in conjunction with `break` and
-`continue` to acheive complex control flow.
+`continue` to achieve complex control flow.
 
 For each of the looping forms, a label may immediately follow the
 opening term of the loop:
@@ -405,7 +483,7 @@ opening term of the loop:
 ```
 
 In the following entirely artificial example, the outermost loop is
-labelled `:outer`. This label is passed to `break` from inside the
+labeled `:outer`. This label is passed to `break` from inside the
 inner `while` loop to terminate iteration whenever the sum of the
 accumulator and the counter exceeds 500.  Without the `:outer` label,
 `break` would have only broken out of the inner `while` loop.
@@ -428,9 +506,10 @@ accumulator and the counter exceeds 500.  Without the `:outer` label,
     (cell:read acc)))
 ```
 
+
 ## Numbers
 
-Coalton supports a few numeric types. The main ones are `Integer`, `Single-Float`, and `Double-Float`.
+Coalton supports a few numeric types. The main ones are `Integer`, `F32`, and `F64`.
 
 ```lisp
 (coalton-toplevel
@@ -491,17 +570,17 @@ COALTON-USER> (type-of '/)
 ∀ :A :B. DIVIDABLE :A :B ⇒ (:A → :A → :B)
 ```
 
-Because of [Instance Defaulting](#instance-defaulting), division of `Integer` constants without any additional context defaults to `Double-Float` division:
+Because of [Instance Defaulting](#instance-defaulting), division of `Integer` constants without any additional context defaults to `F64` division:
 
 ```
 COALTON-USER> (coalton (/ 1 2))
 0.5d0
 ```
 
-We can inform Coalton that our constants are of another type by constraining them with `the` or relying on type inference. For example, in order to get a non-Double-Float result from `Integer` inputs, you have to constrain the result type to your desired type (as long as the type has a defined instance of the `Dividable` type class):
+We can inform Coalton that our constants are of another type by constraining them with `the` or relying on type inference. For example, in order to get a non-F64 result from `Integer` inputs, you have to constrain the result type to your desired type (as long as the type has a defined instance of the `Dividable` type class):
 
 ```
-COALTON-USER> (coalton (the Single-Float (/ 4 2)))
+COALTON-USER> (coalton (the F32 (/ 4 2)))
 2.0
 COALTON-USER> (coalton (the Fraction (/ 4 2)))
 #.(COALTON-LIBRARY::%FRACTION 2 1)
@@ -551,9 +630,9 @@ All of these cases are sufficiently common that we provide a few shorthands:
 Fractions can be converted to other dividable types using `fromfrac` (Note: This may result in precision loss):
 
 ```
-COALTON-LIBRARY/MATH/REAL> (coalton (the Double-Float (fromfrac 1/2)))
+COALTON-LIBRARY/MATH/REAL> (coalton (the F64 (fromfrac 1/2)))
 0.5d0
-COALTON-LIBRARY/MATH/REAL> (coalton (the Single-Float (fromfrac 999/1000)))
+COALTON-LIBRARY/MATH/REAL> (coalton (the F32 (fromfrac 999/1000)))
 0.999
 ```
 
@@ -696,6 +775,15 @@ The into method is used only when a conversion can always be performed from one 
       ((Some (Some x_)) (Some x_))
       (_ None)))
 
+  ;; Submatches can be captured in a variable
+  (declare dedup-head (List :a -> List :a))
+  (define (dedup-head xs)
+    "If the first and second member of list are equal, drop the first"
+    (match xs
+      ((Cons a (= tl1 (Cons b _))) 
+       (if (== a b) tl1 xs))
+      (_ xs)))
+
   ;; Integers or Strings can also be matched on
   (define (is-5-or-7 x)
     (match x
@@ -719,7 +807,12 @@ Functions can pattern match on their arguments, but the patterns must be exhaust
   (define (first (Tuple a _)) a)
 
   (declare second (Tuple :a :b -> :b))
-  (define second (fn ((Tuple _ b)) b)))
+  (define second (fn ((Tuple _ b)) b))
+
+  ;; pattern capture works here too
+  (declare nest-right (Tuple :a :b -> (Tuple :a (Tuple :a :b))))
+  (define (nest-right (= tpl (Tuple a _))) (Tuple a tpl)))
+
 ```
 
 The operator `coalton-library:if` can be used as a shorthand when matching on Booleans:
@@ -998,7 +1091,7 @@ The following functions all take an optional package parameter.
 
 ## Instance Defaulting
 
-Coalton has a similar [type defaulting system](https://www.haskell.org/onlinereport/decls.html#sect4.3.4) as Haskell. Type defaulting is invoked on implicitly typed definitions and code compiled with the `coalton` macro. Defaulting is applied to a set of ambiguous predicates, with the goal to resolve an ambiguous type variable to a valid type. Coalton will only default if one or more of the predicates is a numeric type class (Num, Quantizable, Reciprocable, Complex, Remainder, Integral). Coalton will default an ambiguous variable to either Integer, Double-Float, or Single-Float; taking the first type that is valid for all predicates referencing that type variable. Coalton will not default when one or more of the predicates containing an ambiguous variable is a multi-parameter type class.
+Coalton has a similar [type defaulting system](https://www.haskell.org/onlinereport/decls.html#sect4.3.4) as Haskell. Type defaulting is invoked on implicitly typed definitions and code compiled with the `coalton` macro. Defaulting is applied to a set of ambiguous predicates, with the goal to resolve an ambiguous type variable to a valid type. Coalton will only default if one or more of the predicates is a numeric type class (Num, Quantizable, Reciprocable, Complex, Remainder, Integral). Coalton will default an ambiguous variable to either `Integer`, `F32`, or `F64`; taking the first type that is valid for all predicates referencing that type variable. Coalton will not default when one or more of the predicates containing an ambiguous variable is a multi-parameter type class.
 
 
 Differences from Haskell 98. Haskell would consider `Num (List :a)` to be ambiguous, Coalton would default it to `Num Integer`. Haskell would consider (`Num :a` `CustomTypeClass :a`) to be ambiguous, Coalton would default to (`Num Integer` `CustomTypeClass Integer`) assuming `CustomTypeClass Integer` was a valid instance.
@@ -1047,7 +1140,7 @@ int specialized call
 2
 ```
 
-Specialization can only apply when the argument types at a callsite are known. Because specialization is not guaranteed, specialized functions must have the same behavior as their unspecialized variants. Specialization should only be used for performance. See the following example:
+Specialization can only apply when the argument types at a call site are known. Because specialization is not guaranteed, specialized functions must have the same behavior as their unspecialized variants. Specialization should only be used for performance. See the following example:
 
 ```
 (coalton-toplevel
@@ -1074,3 +1167,174 @@ Specialization can be listed in the repl with `print-specializations`.
 * To denote anonymous functions, Coalton uses `fn` (*not* `lambda`).
 * Numerical operators like `+` only take 2 arguments.
 * Negation is done with `negate`.  The form `(- x)` is a curried function equivalent to `(fn (z) (- x z))`.
+
+# Incomplete Features
+
+Coalton presently supports these features, but more work remains to be
+done to improve upon them.
+
+## Exception Handling
+
+Coalton includes syntax for defining, signaling, handling and
+resuming from exceptional conditions.  
+
+Briefly, the relevant syntactic forms are:
+
+- `define-exception`: Defines an exception type. Other than its name, the syntax is identical to `define-type`
+- `define-resumption`: Defines a named resumption type. 
+- `catch`: An expression for catching and handling exceptions. Handlers pattern match on exception constructors.
+- `throw`: Signals an exception.
+- `resumable`: An expression that intercepts and handles a possible resumption. Again, resumption cases are executed by pattern matching on intercepted resumption constructors.
+- `resume-to`: An expression that takes a resumption instance.  Transfers control to a `resumable` block that includes a handler for the indicated resumption.
+
+Coalton's exception handling system is incomplete and evolving. The design has been chosen to allow for experimentation and forward-compatibility as its features mature. See the Caveats section below. 
+
+### Defining, Throwing, and Catching Exceptions
+
+If you want to catch any exception, including Common Lisp error conditions, you can use a wildcard pattern:
+
+```lisp
+
+(declare divide-by-random (Integer -> Integer -> Integer))
+(define (divide-by-random r m)
+    "Divide `r` by a random integer between `0` and `m`. 
+     If the divisor is `0`, then print the divide by zero error
+     and then return `0.0`"
+    (catch (lisp Integer (r m) (cl:/ r (cl:random m)))
+        (_ (trace "An error was received")
+           0)))
+```
+
+More generally
+
+```lisp 
+
+  (define-type Egg
+    ;;     cracked? cooked?
+    (Goose Boolean Boolean)
+    (Xenomorph))
+
+  ;; We define an exception type BadEgg with a few variants 
+  (define-exception BadEgg
+    (UnCracked Egg)
+    (DeadlyEgg Egg))
+
+  ;; If we try to crack open a Xenomorph egg, throw a DeadlyEgg error
+  (declare crack (Egg -> Egg))
+  (define (crack egg)
+    (match egg
+      ((Goose _ cooked?)
+       (Goose True cooked?))
+      ((Xenomorph)
+       (throw (DeadlyEgg egg)))))
+
+  ;; crack an egg open safely. 
+  (declare crack-safely (Egg -> (Result BadEgg Egg)))
+  (define (crack-safely egg)
+    (catch (Ok (crack egg))
+      ((DeadlyEgg _) (Err (DeadlyEgg egg)))
+      ((UnCracked _) (Err (UnCracked egg)))))
+
+```
+
+### Defining, Invoking, and Handling Resumptions 
+
+Resumptions allow the coalton programmer to recover from an error
+without unwinding the call stack.
+
+The `define-resumption` form accepts a single "Constructor". The name
+of the constructor is also the name of the type of the resumption.
+
+The following example, building on the above, should elucidate
+
+```lisp
+
+  (define-resumption SkipEgg)
+  (define-resumption (ServeRaw Egg) 
+    "Suggest the egg be served raw.")
+
+  (declare cook (Egg -> Egg))
+  (define (cook egg)
+    (let ((badegg (Uncracked egg)))     ; exceptions can be constructed outside throw
+      (match egg
+        ((Goose (True) _)  (Goose True True))
+        ((Goose (False) _) (throw badegg))
+        ((Xenomorph)       (throw (DeadlyEgg egg))))))
+
+
+  ;; Return None if a SkipEgg resumption is received.
+  (declare make-breakfast-with (Egg -> (Optional Egg)))
+  (define (make-breakfast-with egg)
+    (resumable (Some (cook (crack egg)))
+      ((SkipEgg) None)))
+
+```
+
+Now define a function that makes breakfast for `n` people.  It tries to cook each egg, but if it errors by encountering a deadly egg, it resumes `make-breakfast` by skipping that egg. 
+
+```lisp 
+
+  (declare make-breakfast-for (UFix -> (Vector Egg)))
+  (define (make-breakfast-for n)
+    (let ((eggs (vector:make))
+          (skip  SkipEgg))              ; can construct outside of resume-to
+      (for i in (iter:up-to n)
+        (let egg = (if (== 0 (mod i 5)) Xenomorph (Goose False False)))
+        (do
+         (cooked <- (catch (make-breakfast-with egg)
+                      ((DeadlyEgg _)    (resume-to skip))))
+         (pure (vector:push! cooked eggs))))
+      eggs))
+
+```
+
+Every 5th egg is deadly, so making breakfast for 10 people will result in 8 cooked eggs.
+
+The Call stack looks like
+
+```
+
+make-breakfast-for 
+      │
+      └─ make-breakfast-with 
+                │
+                └─ cook  
+
+```
+
+But `cook` signals a `DeadlyEgg` error on `Xenomorph`
+eggs. `make-breakfast-for` catches that error and resumes to
+`SkipEgg`, where `make-breakfast-with` receives that resumption and
+handles it.
+
+
+### Caveats 
+
+For the time being, the following caveats apply;
+
+1. No support for polymorphism for `throw` or `resume-to`
+   expressions. E.g. the following will not compile without type
+   annotation:
+   - `(define (th a) (throw a))` 
+   - `(define (res a) (resume-to a))`
+
+2. No way to `catch` a Lisp condition and bind it to a variable in a
+   `catch` handler case. However Lisp conditions can be caught using a
+   wildcard pattern. In particular, this means that you cannot rethrow
+   a Lisp exception.  Furthermore, you may only rethrow an exception by
+   re-constructing one.  E.g.
+   - `(catch (bad-thing) (_ Unit))` 
+   - `(catch (bad-thing) ((MyBad x) (trace "my bad") (throw (MyBad x))))`
+   
+3. `resumable` branches are even more restrictive. You cannot match
+   against anything _other_ than a resumption constructor pattern.
+
+4. No typeclass is associated with exception-signaling forms. We are
+   pursuing different approaches to static checking of forms that
+   might hop the call stack. In the end, a typeclass approach may win
+   out. Whatever we do, we will endeavor to make it compatible with
+   the existing syntax and semantics.
+
+
+   
+

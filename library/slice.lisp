@@ -45,9 +45,11 @@
     (%length (:a -> UFix)))
 
   (define-instance (Sliceable (Vector :a))
+    (inline)
     (define %length cln:length))
 
   (define-instance (Sliceable (Slice :a))
+    (inline)
     (define %length length))
 
   (declare new ((Sliceable (:b :a)) => UFix -> UFix -> :b :a -> Slice :a))
@@ -70,12 +72,14 @@
        :displaced-to v
        :displaced-index-offset start)))
 
+  (inline)
   (declare length (Slice :a -> UFix))
   (define (length s)
     "Returns the length of `s`."
     (lisp UFix (s)
       (cl:array-dimension s 0)))
 
+  (inline)
   (declare set! (UFix -> :a -> (Slice :a) -> Unit))
   (define (set! idx item s)
     "Set the element at index `idx` in `s` to `item`."
@@ -90,6 +94,7 @@
         None
         (Some (index-unsafe idx s))))
 
+  (inline)
   (declare index-unsafe (UFix -> (Slice :a) -> :a))
   (define (index-unsafe idx s)
     "Lookup the element at `index` in `s` without bounds checking."
@@ -101,7 +106,7 @@
     "Returns an iterator that yeilds a series of overlapping slices of length `size`."
     (let length = (%length s))
     (let offset_ = (cell:new 0))
-    (iter:with-size 
+    (iter:with-size
         (fn ()
           (let offset = (cell:read offset_))
           (when (> (+ offset size) length)
@@ -202,12 +207,14 @@
          :from-end cl:t))))
 
   (define-instance (Into (Slice :a) (Vector :a))
+    (inline)
     (define (into s)
       (let v = (vector:with-capacity (length s)))
       (vector:extend! v (iter:into-iter s))
       v))
 
   (define-instance (Into (Vector :a) (Slice :a))
+    (inline)
     (define (into v)
       (new 0 (cln:length v) v)))
 

@@ -26,6 +26,11 @@
   (declare transparent-type-fn-1 ((TransparentTypeTest IFix) -> IFix))
   (define (transparent-type-fn-1 (TransparentTypeTest x))
     (coalton-library/lisparray:aref x 0))
+
+  (define-type (LispArrayMultiTyvar :a :b))
+  (declare lisp-array-multi-tyvar-fn ((coalton-library/lisparray:LispArray (LispArrayMultiTyvar :a :b)) -> (LispArrayMultiTyvar :a :b)))
+  (define (lisp-array-multi-tyvar-fn x)
+    (coalton-library/lisparray:aref x 0))
   )
 
 (in-package #:coalton-tests)
@@ -44,8 +49,8 @@
                (coalton-impl/typechecker/lisp-type:lisp-type coalton-type env)))
 
       ;; Concrete type mappings
-      (is (equal 'single-float (lisp-type (coalton-type 'coalton:single-float))))
-      (is (equal 'double-float (lisp-type (coalton-type 'coalton:double-float))))
+      (is (equal 'single-float (lisp-type (coalton-type 'coalton:F32))))
+      (is (equal 'double-float (lisp-type (coalton-type 'coalton:F64))))
 
       ;; A few special cases
       (is (equal '(or number coalton-library/math/complex:complex)
@@ -64,4 +69,8 @@
                  (lisp-type (coalton-type-of-arg1 'coalton-native-tests::transparent-type-fn))))
       (is (equal '(simple-array fixnum (*))
                  (lisp-type (coalton-type-of-arg1 'coalton-native-tests::transparent-type-fn-1))))
+
+      ;; LispArray with multi-tyvar element type
+      (is (equal '(simple-array coalton-native-tests::LispArrayMultiTyvar (*))
+                 (lisp-type (coalton-type-of-arg1 'coalton-native-tests::lisp-array-multi-tyvar-fn))))
       )))

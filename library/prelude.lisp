@@ -9,12 +9,6 @@
    #:coalton-library/functions)
 
   (:import-from
-   #:coalton-library/hash
-   #:hash)
-  (:export
-   #:hash)
-
-  (:import-from
    #:coalton-library/math/arith
    #:Reciprocable #:/
    #:Fraction
@@ -321,7 +315,13 @@
    (#:vector #:coalton-library/collections/mutable/vector)
    (#:slice #:coalton-library/slice)
    (#:hashtable #:coalton-library/hashtable)
+   (#:id #:coalton-library/monad/identity)
    (#:st #:coalton-library/monad/state)
+   (#:env #:coalton-library/monad/environment)
+   (#:resultt #:coalton-library/monad/resultt)
+   (#:optionalt #:coalton-library/monad/optionalt)
    (#:iter #:coalton-library/iterator)
    (#:sys #:coalton-library/system)
-   (#:file #:coalton-library/file)))
+   (#:file #:coalton-library/file)
+   (#:experimental #:coalton-library/experimental)
+   (#:loops #:coalton-library/experimental/loops)))

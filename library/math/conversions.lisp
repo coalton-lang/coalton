@@ -45,11 +45,13 @@ supported 64-bit implementation."))))
     "An alist which pairs the names of Coalton's native integer types with equivalent Common Lisp type specifiers."))
 
 (coalton-toplevel
+  (inline)
   (declare unsafe-cast (:any -> :other))
   (define (unsafe-cast x)
     "Both :ANY and :OTHER must be natively represented by a subtype of `cl:integer', and X must be a valid member of :OTHER."
     (lisp :other (x) x))
 
+  (inline)
   (declare unify (:ty -> :ty -> :ty))
   (define (unify _ use)
     "Declare a constraint that two values are of the same type.
@@ -84,6 +86,7 @@ Used in `cast-if-inbounds' to force the type inference engine to read minBound a
 
 Emitted by `define-integer-conversions' only if every element of FROM-TYPE can be represented in TO-TYPE."
     `(define-instance (Into ,from-type ,to-type)
+       (inline)
        (define into unsafe-cast)))
 
   (cl:defun define-integer-try-into-instance (from-type to-type)
@@ -92,6 +95,7 @@ Emitted by `define-integer-conversions' only if every element of FROM-TYPE can b
 Emitted by `define-integer-conversions' when some elements of FROM-TYPE cannot be represented in TO-TYPE,
 either because FROM-TYPE is signed and TO-TYPE is unsigned, or because FROM-TYPE is wider than TO-TYPE."
     `(define-instance (TryInto ,from-type ,to-type String)
+       (inline)
        (define tryInto cast-if-inbounds)))
 
   (cl:defun definitely-subtype? (sub super)
@@ -146,40 +150,41 @@ cannot be represented in :TO. These fall into a few categories:
 (cl:defmacro integer-into-float (integer coalton-float lisp-float)
   `(coalton-toplevel
      (define-instance (Into ,integer ,coalton-float)
+       (inline)
        (define (into x)
          (lisp ,coalton-float (x)
            (cl:coerce x ',lisp-float))))))
 
 ;; Only exact conversions
-;; Single-Float: 24 bit mantissa (not including sign)
-(integer-into-float U8 Single-Float cl:single-float)
-(integer-into-float I8 Single-Float cl:single-float)
-(integer-into-float U16 Single-Float cl:single-float)
-(integer-into-float I16 Single-Float cl:single-float)
-;; Double-Float: 53 bit mantissa (not including sign)
-(integer-into-float U8 Double-Float cl:double-float)
-(integer-into-float I8 Double-Float cl:double-float)
-(integer-into-float U16 Double-Float cl:double-float)
-(integer-into-float I16 Double-Float cl:double-float)
-(integer-into-float U32 Double-Float cl:double-float)
-(integer-into-float I32 Double-Float cl:double-float)
+;; F32: 24 bit mantissa (not including sign)
+(integer-into-float U8 F32 cl:single-float)
+(integer-into-float I8 F32 cl:single-float)
+(integer-into-float U16 F32 cl:single-float)
+(integer-into-float I16 F32 cl:single-float)
+;; F64: 53 bit mantissa (not including sign)
+(integer-into-float U8 F64 cl:double-float)
+(integer-into-float I8 F64 cl:double-float)
+(integer-into-float U16 F64 cl:double-float)
+(integer-into-float I16 F64 cl:double-float)
+(integer-into-float U32 F64 cl:double-float)
+(integer-into-float I32 F64 cl:double-float)
 
 ;; Allow Integer -> {Single,Double}-Float conversions
 (coalton-toplevel
-  (define-instance (TryInto Integer Single-Float String)
+  (define-instance (TryInto Integer F32 String)
     (define (tryInto x)
-      (lisp (Result String Single-Float) (x)
+      (lisp (Result String F32) (x)
         (cl:let ((y (cl:ignore-errors (cl:coerce x 'cl:single-float))))
           (cl:if (cl:null y)
-                 (Err "Integer to Single-Float conversion out-of-range")
+                 (Err "Integer to F32 conversion out-of-range")
                  (Ok y))))))
 
-  (define-instance (TryInto Integer Double-Float String)
+  (define-instance (TryInto Integer F64 String)
     (define (tryInto x)
-      (lisp (Result String Double-Float) (x)
+      (lisp (Result String F64) (x)
         (cl:let ((y (cl:ignore-errors (cl:coerce x 'cl:double-float))))
           (cl:if (cl:null y)
-                 (Err "Integer to Double-Float conversion out-of-range")
+                 (Err "Integer to F64 conversion out-of-range")
                  (Ok y)))))))
 
 (cl:eval-when (:compile-toplevel :load-toplevel)
@@ -196,26 +201,26 @@ cannot be represented in :TO. These fall into a few categories:
 
 (coalton-toplevel
   ;; Single Float
-  (integer-tryinto-float I64 cl:single-float Single-Float 24)
+  (integer-tryinto-float I64 cl:single-float F32 24)
 
-  (integer-tryinto-float U64 cl:single-float Single-Float 24)
+  (integer-tryinto-float U64 cl:single-float F32 24)
 
-  (integer-tryinto-float IFix cl:single-float Single-Float 24)
+  (integer-tryinto-float IFix cl:single-float F32 24)
 
-  (integer-tryinto-float UFix cl:single-float Single-Float 24)
+  (integer-tryinto-float UFix cl:single-float F32 24)
 
-  (integer-tryinto-float U32 cl:single-float Single-Float 24)
+  (integer-tryinto-float U32 cl:single-float F32 24)
 
-  (integer-tryinto-float I32 cl:single-float Single-Float 24)
+  (integer-tryinto-float I32 cl:single-float F32 24)
 
   ;; Double Float
-  (integer-tryinto-float I64 cl:double-float Double-Float 53)
+  (integer-tryinto-float I64 cl:double-float F64 53)
 
-  (integer-tryinto-float U64 cl:double-float Double-Float 53)
+  (integer-tryinto-float U64 cl:double-float F64 53)
 
-  (integer-tryinto-float IFix cl:double-float Double-Float 53)
+  (integer-tryinto-float IFix cl:double-float F64 53)
 
-  (integer-tryinto-float UFix cl:double-float Double-Float 53))
+  (integer-tryinto-float UFix cl:double-float F64 53))
 
 
 #+sb-package-locks

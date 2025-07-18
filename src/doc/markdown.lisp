@@ -179,13 +179,14 @@
             :for ctor-docstring := (source:docstring ctor)
             :do (let ((args (type-constructor-args object ctor-type)))
                   (cond (args
-                         (format stream "- <code>(~A~{ ~A~} ~A)</code>~%"
+                         (format stream "- <code>(~A~{ ~A~})</code>~A~%"
                                  (html-entities:encode-entities (symbol-name ctor-name))
                                  (mapcar #'to-markdown args)
-                                 (or ctor-docstring "")))
+                                 (if (null ctor-docstring) "" (format nil "~%  - ~A" ctor-docstring))))
                         (t
-                         (format stream "- <code>~A</code>~%"
-                                 (html-entities:encode-entities (symbol-name ctor-name))))))))
+                         (format stream "- <code>~A</code> ~A~%"
+                                 (html-entities:encode-entities (symbol-name ctor-name))
+                                 (if (null ctor-docstring) "" (format nil "~%  - ~A" ctor-docstring))))))))
     (write-doc backend object)
     (write-instances backend object)))
 
@@ -194,13 +195,17 @@
 (defmethod write-object-body ((backend markdown-backend) (object coalton-struct))
   (let ((stream (output-stream backend)))
     (tc:with-pprint-variable-context ()
-      (loop :for (name type docstring) :in (struct-fields object)
-            :do (format stream "- <code>~A :: ~S</code>~A~%"
-                        name
-                        type
-                        (if docstring
-                            (format nil "<br/>~a" docstring)
-                            ""))))
+      (loop :with entry := (type-entry object)
+            :with package := (symbol-package (tc:type-entry-name entry))
+            :for (name type docstring) :in (struct-fields object)
+            :for symbol := (concatenate 'string "." name)
+            :when (eq ':external (nth-value 1 (find-symbol symbol package)))
+              :do (format stream "- <code>~A :: ~S</code>~A~%"
+                          name
+                          type
+                          (if docstring
+                              (format nil "<br/>~a" docstring)
+                              ""))))
     (write-doc backend object)
     (write-instances backend object)))
 

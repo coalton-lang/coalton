@@ -105,7 +105,7 @@
 
       (unless struct-entry
         (tc-error "Invalid accessor"
-                  (tc-note accessor "type '~S' is not a struct" ty-name)))
+                  (tc-note accessor "struct accessor cannot be applied to a value of type '~S'" (accessor-from accessor))))
 
       (let ((subs (tc:match struct-ty (accessor-from accessor)))
             (field (tc:get-field struct-entry (accessor-field accessor) :no-error t)))

@@ -10,6 +10,8 @@ docs/reference.md
 
 coverage-report/
 
+benchmarks/benchmarks-game/pidigits
+
 bench.json
 
 # Editor specific files

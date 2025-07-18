@@ -44,7 +44,7 @@
   (is (== (list:take 2 x) (make-list 1 2))))
 
 (define-test test-search ()
-  (is (== (list:find even? x)  (Some 2)))
+  (is (== (list:find even? x) (Some (the Integer 2))))
   (is (== (list:find (< 10) x) None))
 
   (is (== (list:filter odd? x) (make-list 1 3)))
@@ -57,9 +57,9 @@
   (is (== (list:nth-cdr 3 (make-list 1 2 3 4 5 6 7)) (make-list 4 5 6 7)))
   (is (== (list:nth-cdr 4 (make-list 1 2 3)) nil))
 
-  (is (== (list:elemIndex 2 x) 1))
+  (is (== (list:elemIndex 2 x) (Some 1)))
 
-  (is (== (list:findIndex even? x) 1))
+  (is (== (list:findIndex even? x) (Some 1)))
 
   (is (== (list:length x) 3)))
 
@@ -78,6 +78,9 @@
 
   (is (== (list:union (list:append x x) x) x))
   (is (== (list:union Nil (list:append (Cons 4 x) x)) (Cons 4 x)))
+
+  (is (set== (list:union x (make-list 4 4)) (make-list 1 2 3 4)))
+  (is (set== (list:union (make-list 4 4) x) (make-list 1 2 3 4)))
 
   (is (set== (list:intersection x x) x))
   (is (set== (list:intersection (list:append x (make-list 0 9 8 7)) (Cons 4 x)) x)))

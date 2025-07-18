@@ -19,19 +19,27 @@
    #:coalton-codegen
    #:coalton-codegen-ast
    #:coalton-codegen-types
+   #:pprint-coalton-codegen
+   #:pprint-coalton-codegen-ast
+   #:pprint-coalton-codegen-types
    #:coalton
    #:declare
    #:define
    #:define-type
+   #:define-type-alias
+   #:define-exception
+   #:define-resumption
    #:define-struct
    #:define-class
    #:define-instance
    #:repr
+   #:derive
    #:lisp-toplevel
    #:monomorphize
+   #:inline
    #:specialize
    #:unable-to-codegen)
-  
+
   ;; Early Types
   (:export
    #:-> #:→
@@ -52,18 +60,26 @@
    #:Integer
    #:IFix
    #:UFix
-   #:Single-Float
-   #:Double-Float
+   #:F32
+   #:F64
+   #:Single-Float                       ; deprecated
+   #:Double-Float                       ; deprecated
    #:String
    #:Fraction
    #:Arrow
-   #:List #:Cons #:Nil)
+   #:List #:Cons #:Nil
+   #:Optional #:Some #:None)
 
   ;; Primitive Syntax
   (:export
    #:fn #:λ
    #:match
+   #:throw
+   #:resume-to
+   #:resumable
+   #:catch
    #:let
+   #:rec
    #:=                                  ; Syntax
    #:lisp
    #:<-                                 ; Syntax
@@ -88,6 +104,8 @@
    #:or
    #:cond
    #:as
+   #:try-as
+   #:unwrap-as
    #:nest
    #:pipe
    #:.<
@@ -108,6 +126,9 @@
    #:lookup-class
    #:lookup-fundeps
    #:type-of
+   #:describe-type-of
+   #:describe-type-alias
+   #:set-type-printing-mode
    #:kind-of)
 
   (:intern

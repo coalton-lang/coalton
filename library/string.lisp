@@ -78,7 +78,7 @@
     "Splits a string into a head and tail at the nth index."
     (Tuple (substring str 0 n)
            (substring str n (length str))))
-  
+
   (declare strip-prefix (String -> String -> (Optional String)))
   (define (strip-prefix prefix str)
     "Returns a string without a give prefix, or `None` if the string
@@ -108,7 +108,7 @@ does not have that suffix."
         (cl:if x
                (Some x)
                None))))
-  
+
   (declare ref-unchecked (String -> UFix -> Char))
   (define (ref-unchecked str idx)
     "Return the `idx`th character of `str`. This function is partial."
@@ -185,6 +185,13 @@ does not have that suffix."
       (lisp (List Char) (str)
         (cl:coerce str 'cl:list))))
 
+  (define-instance (Into String (Vector Char))
+    (define (into str)
+      (lisp (Vector Char) (str)
+        (cl:make-array (length str)
+                       :adjustable cl:t
+                       :initial-contents str))))
+
   (define-instance (Into Char String)
     (define (into chr)
       (lisp String (chr)
@@ -194,6 +201,11 @@ does not have that suffix."
     (define (into lst)
       (lisp String (lst)
         (cl:coerce lst 'cl:string))))
+
+  (define-instance (Into (Vector Char) String)
+    (define (into vec)
+      (lisp String (vec)
+        (cl:coerce vec 'cl:string))))
 
   (define-instance (Iso (List Char) String)))
 
@@ -215,12 +227,12 @@ does not have that suffix."
       (lisp String (frc)
         (cl:format cl:nil "~A" frc))))
 
-  (define-instance (Into Single-Float String)
+  (define-instance (Into F32 String)
     (define (into z)
       (lisp String (z)
         (cl:prin1-to-string z))))
 
-  (define-instance (Into Double-Float String)
+  (define-instance (Into F64 String)
     (define (into z)
       (lisp String (z)
         (cl:prin1-to-string z))))
@@ -234,9 +246,10 @@ does not have that suffix."
                  (Ok z))))))
 
   (define-instance (Default String)
-    (define (default) "")))
+    (define (default) ""))
 
-(define-sxhash-hasher String)
+  (define-sxhash-hasher String))
+
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/STRING")

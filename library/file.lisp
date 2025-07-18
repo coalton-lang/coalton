@@ -166,11 +166,11 @@ Common Lisp makes a distinction between file and directory paths. Directory path
 ;;; Macro for handling lisp errors in file functions
 ;;;
 
-(cl:defmacro %handle-file-function ((func cl:&rest args))
-  "A macro for handling potentially erroring lisp file operations.
+(cl:defmacro %handle-file-function (form)
+  "A macro for handling potentially erroring Lisp file operations.
 Automatically returns the lisp condition if one is thrown."
   (cl:let ((c (cl:gensym "C")))
-    `(cl:handler-case (Ok (,func ,@args))
+    `(cl:handler-case (Ok ,form)
        (cl:error (,c) (Err (LispError ,c))))))
 
 ;;;
@@ -375,38 +375,41 @@ Automatically returns the lisp condition if one is thrown."
   (define (%open-input path etype)
     "Opens an input stream for the given filepath, and for a given type."
     (lisp (Result FileError (FileStream :a)) (path etype)
-      (%handle-file-function (cl:open path
-                                      :direction ':input
-                                      :element-type etype
-                                      :if-does-not-exist ':error))))
+      (%handle-file-function
+       (cl:open path
+                :direction ':input
+                :element-type etype
+                :if-does-not-exist ':error))))
 
   (declare %open-output (Pathname -> IfExists -> types:lisptype -> (Result FileError (FileStream :a))))
   (define (%open-output path if-exists etype)
     "Opens an output stream for the given filepath, and for a given type."
     (lisp (Result FileError (FileStream :a)) (path if-exists etype)
-      (%handle-file-function (cl:open path
-                                      :direction ':output
-                                      :element-type etype
-                                      :if-exists (cl:case if-exists
-                                                   (IfExists/EError ':error)
-                                                   (IfExists/Overwrite ':overwrite)
-                                                   (IfExists/Append ':append)
-                                                   (IfExists/Supersede ':supersede))
-                                      :if-does-not-exist ':create))))
+      (%handle-file-function
+       (cl:open path
+                :direction ':output
+                :element-type etype
+                :if-exists (cl:case if-exists
+                             (IfExists/EError ':error)
+                             (IfExists/Overwrite ':overwrite)
+                             (IfExists/Append ':append)
+                             (IfExists/Supersede ':supersede))
+                :if-does-not-exist ':create))))
 
   (declare %open-bidirectional (Pathname -> IFExists -> types:lisptype -> (Result FileError (FileStream :a))))
   (define (%open-bidirectional path if-exists etype)
     "Opens a two way stream for the given filepath and for a given type."
     (lisp (Result FileError (FileStream :a)) (path if-exists etype)
-      (%handle-file-function (cl:open path
-                                      :direction ':io
-                                      :element-type etype
-                                      :if-exists (cl:case if-exists
-                                                   (IfExists/EError ':error)
-                                                   (IfExists/Overwrite ':overwrite)
-                                                   (IfExists/Append ':append)
-                                                   (IfExists/Supersede ':supersede))
-                                      :if-does-not-exist ':create))))
+      (%handle-file-function
+       (cl:open path
+                :direction ':io
+                :element-type etype
+                :if-exists (cl:case if-exists
+                             (IfExists/EError ':error)
+                             (IfExists/Overwrite ':overwrite)
+                             (IfExists/Append ':append)
+                             (IfExists/Supersede ':supersede))
+                :if-does-not-exist ':create))))
 
   (declare %open (StreamOptions -> types:lisptype -> (Result FileError (FileStream :a))))
   (define (%open stream-options etype)
@@ -488,6 +491,14 @@ Automatically returns the lisp condition if one is thrown."
 ;;; File Class
 ;;;
 
+(cl:defun %read-sequence-completely (v s n)
+  "Read N elements of the stream S into the sequence V."
+  (cl:loop
+    :with begin := 0
+    :while (cl:< begin n)
+    :do (cl:incf begin (cl:read-sequence v s :start begin))
+    :finally (cl:return v)))
+
 (coalton-toplevel
 
   (define-class (File :a)
@@ -540,7 +551,8 @@ Automatically returns the lisp condition if one is thrown."
 (coalton-toplevel
 
   (declare with-open-file ((File :a)
-                           => StreamOptions
+                           =>
+                           StreamOptions
                            -> ((FileStream :a) -> (Result FileError :b))
                            -> (Result FileError :b)))
   (define (with-open-file stream-options thunk)
@@ -549,36 +561,35 @@ Automatically returns the lisp condition if one is thrown."
              close
              thunk))
 
-   (declare read-vector ((File :a)
-                        => (FileStream :a)
+  (declare read-vector ((File :a)
+                        =>
+                        (FileStream :a)
                         -> UFix
                         -> (Result FileError (vec:Vector :a))))
   (define (read-vector stream chunk-size)
     "Reads a chunk of a file into a vector of type `:a`."
-    (let p = types:Proxy)
-    (let p_ = (types:proxy-inner p))
-    (let type = (types:runtime-repr p_))
-    (types:as-proxy-of
-     (lisp (Result FileError (vec:Vector :a)) (stream type chunk-size)
-       (%handle-file-function (cl:let ((v (cl:make-array chunk-size :adjustable cl:t :element-type type)))
-                                (cl:read-sequence v stream)
-                                v)))
-     p))
+    (lisp (Result FileError (vec:Vector :a)) (stream chunk-size)
+      (%handle-file-function
+       (cl:let ((v (cl:make-array chunk-size
+                                  :adjustable cl:t
+                                  :element-type cl:t)))
+         (%read-sequence-completely v stream chunk-size)
+         v))))
 
-  (declare read-file-to-vector ((types:RuntimeRepr :a) (File :a)
-                                => (FileStream :a)
+  (declare read-file-to-vector ((File :a)
+                                =>
+                                (FileStream :a)
                                 -> (Result FileError (vec:Vector :a))))
   (define (read-file-to-vector stream)
     "Reads a file into a vector of type `:a`."
-    (let p = types:Proxy)
-    (let p_ = (types:proxy-inner p))
-    (let type = (types:runtime-repr p_))
-    (types:as-proxy-of
-     (lisp (Result FileError (vec:Vector :a)) (stream type)
-       (%handle-file-function (cl:let ((v (cl:make-array (cl:file-length stream) :adjustable cl:t :element-type type)))
-                                (cl:read-sequence v stream)
-                                v)))
-     p))
+    (lisp (Result FileError (vec:Vector :a)) (stream)
+      (%handle-file-function
+       (cl:let* ((size (cl:file-length stream))
+                 (v (cl:make-array size
+                                   :adjustable cl:t
+                                   :element-type cl:t)))
+         (%read-sequence-completely v stream size)
+         v))))
 
   (declare write-vector ((types:RuntimeRepr :a) (File :a)
                          => (FileStream :a)

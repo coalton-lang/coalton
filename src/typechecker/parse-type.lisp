@@ -17,6 +17,7 @@
    (#:source #:coalton-impl/source)
    (#:tc #:coalton-impl/typechecker/stage-1))
   (:export
+   #:apply-type-alias-substitutions          ; FUNCTION
    #:parse-type                         ; FUNCTION
    #:parse-qualified-type               ; FUNCTION
    #:parse-ty-scheme                    ; FUNCTION
@@ -30,28 +31,122 @@
 ;;; Entrypoints
 ;;;
 
-(defun parse-type (ty env)
-  (declare (type parser:ty ty)
-           (type tc:environment env)
-           (values tc:ty &optional))
+(defgeneric apply-type-alias-substitutions (type parser-type env)
+  (:documentation "Replace all type aliases in TYPE with the true types represented by them.")
+  (:method ((type tc:tycon) parser-type env)
+    (declare (type parser:ty parser-type)
+             (type partial-type-env env)
+             (values tc:ty))
+    (let ((alias (tc:lookup-type-alias (partial-type-env-env env) (tc:tycon-name type) :no-error t)))
+      (if alias
+          ;; Kind information is tracked with type aliases.
+          ;; So, kind mismatch is caught earlier and we do not check for it here.
+          (if (zerop (length (tc:type-alias-entry-tyvars alias)))
+              (setf type (tc:type-alias-entry-type alias))
+              (tc-error "Incomplete type alias application"
+                        (tc-note parser-type
+                                 "Type alias ~S is applied to 0 arguments, but ~D argument~:P ~:*~[are~;is~:;are~] required."
+                                 (tc:type-alias-entry-name alias)
+                                 (length (tc:type-alias-entry-tyvars alias))))))
+      type))
 
-  (let ((tvars (parser:collect-type-variables ty))
+  (:method ((type tc:tapp) parser-type env)
+    (declare (type parser:ty parser-type)
+             (type partial-type-env env)
+             (values tc:tapp))
+    ;; Flatten the type-checker and parser types.
+    (let ((flattened-tapp (tc:flatten-type type))
+          (flattened-parser-tapp (parser:flatten-type parser-type)))
+      ;; Apply substitutions to the type arguments.
+      (setf flattened-tapp (cons (first flattened-tapp)
+                                 (loop :for tc-ty :in (rest flattened-tapp)
+                                       :for parser-ty :in (rest flattened-parser-tapp)
+                                       :collect (apply-type-alias-substitutions tc-ty parser-ty env))))
+      ;; Check if the foremost tapp-from is an alias.
+      (if (typep (first flattened-tapp) 'tc:tycon)
+          (let ((alias (tc:lookup-type-alias (partial-type-env-env env) (tc:tycon-name (first flattened-tapp)) :no-error t)))
+            (if alias
+                (let ((var-count (length (tc:type-alias-entry-tyvars alias)))
+                      (arg-count (length (rest flattened-tapp))))
+                  ;; Kind mismatches are caught earlier.
+                  ;; Ensure sufficient parameters are supplied.
+                  (if (> var-count arg-count)
+                      (tc-error "Incomplete type alias application"
+                                (tc-note parser-type
+                                         "Type alias ~S is applied to ~D argument~:P, but ~D argument~:P ~:*~[are~;is~:;are~] required."
+                                         (tc:type-alias-entry-name alias)
+                                         arg-count
+                                         var-count))
+                      ;; Apply the type parameters to the parametric type alias.
+                      (let ((substs nil))
+                        (loop :for var :in (tc:type-alias-entry-tyvars alias)
+                              :for arg :in (subseq flattened-tapp 1 (1+ var-count))
+                              :do (setf substs (tc:merge-substitution-lists substs (tc:match var arg))))
+                        ;; Replace the alias and its parameters with the corresponding type
+                        ;; in the flattened type.
+                        (setf flattened-tapp (cons (tc:apply-substitution substs (tc:type-alias-entry-type alias))
+                                                   (nthcdr var-count (rest flattened-tapp)))))))))
+          ;; If the first type in the flattened type is not a tycon,
+          ;; then apply alias substitutions directly to it.
+          (setf flattened-tapp (cons (apply-type-alias-substitutions (first flattened-tapp) (first flattened-parser-tapp) env)
+                                     (rest flattened-tapp))))
+      (setf type (first flattened-tapp))
+      ;; Reconstruct the flattened type with any remaining types to be applied.
+      (loop :for arg :in (rest flattened-tapp)
+            :do (setf type (tc:make-tapp :from type :to arg)))
+      type))
 
-        (partial-env (make-partial-type-env :env env)))
+  (:method ((type tc:qualified-ty) parser-type env)
+    (declare (type parser:qualified-ty parser-type)
+             (type partial-type-env env)
+             (values tc:qualified-ty))
+    (tc:make-qualified-ty
+     :predicates (loop :for pred :in (tc:qualified-ty-predicates type)
+                       :for parser-pred :in (parser:qualified-ty-predicates parser-type)
+                       :collect (tc:make-ty-predicate
+                                 :class (tc:ty-predicate-class pred)
+                                 :types (loop :for _ty :in (tc:ty-predicate-types pred)
+                                              :for _parser-ty :in (parser:ty-predicate-types parser-pred)
+                                              :collect (apply-type-alias-substitutions _ty _parser-ty env))
+                                 :location (source:location pred)))
+     :type (apply-type-alias-substitutions (tc:qualified-ty-type type)
+                                           (parser:qualified-ty-type parser-type)
+                                           env)))
 
-    (loop :for tvar :in tvars
-          :for tvar-name := (parser:tyvar-name tvar)
-          :do (partial-type-env-add-var partial-env tvar-name))
+  (:method ((type tc:ty) parser-type env)
+    (declare (type parser:ty parser-type)
+             (type partial-type-env env)
+             (ignore env)
+             (values tc:ty))
+    type))
+
+(defun parse-type (parser-ty env &optional ksubs (kind tc:+kstar+))
+  (declare (type parser:ty parser-ty)
+           (type (or tc:environment partial-type-env) env)
+           (type tc:ksubstitution-list ksubs)
+           (type tc:kind kind)
+           (values tc:ty  tc:ksubstitution-list &optional))
+
+  (let ((partial-env (if (typep env 'tc:environment)
+                         (make-partial-type-env :env env)
+                         env)))
+
+    (if (typep env 'tc:environment)
+      (loop :for tvar :in (parser:collect-type-variables parser-ty)
+            :for tvar-name := (parser:tyvar-name tvar)
+            :do (partial-type-env-add-var partial-env tvar-name)))
 
     (multiple-value-bind (ty ksubs)
-        (infer-type-kinds ty
-                          tc:+kstar+
-                          nil
+        (infer-type-kinds parser-ty
+                          kind
+                          ksubs
                           partial-env)
 
       (setf ty (tc:apply-ksubstitution ksubs ty))
       (setf ksubs (tc:kind-monomorphize-subs (tc:kind-variables ty) ksubs))
-      (tc:apply-ksubstitution ksubs ty))))
+      (setf ty (tc:apply-ksubstitution ksubs ty))
+      (setf ty (apply-type-alias-substitutions ty parser-ty partial-env))
+      (values ty ksubs))))
 
 (defun parse-qualified-type (unparsed-ty env)
   (declare (type parser:qualified-ty unparsed-ty)
@@ -59,7 +154,6 @@
            (values tc:qualified-ty &optional))
 
   (let ((tvars (parser:collect-type-variables unparsed-ty))
-
         (partial-env (make-partial-type-env :env env)))
 
     (loop :for tvar :in tvars
@@ -70,6 +164,9 @@
         (infer-type-kinds unparsed-ty tc:+kstar+ nil partial-env)
 
       (setf qual-ty (tc:apply-ksubstitution ksubs qual-ty))
+      (setf qual-ty (tc:make-qualified-ty
+                     :predicates (tc:qualified-ty-predicates qual-ty)
+                     :type (tc:qualified-ty-type qual-ty)))
       (setf ksubs (tc:kind-monomorphize-subs (tc:kind-variables qual-ty) ksubs))
 
       (let* ((qual-ty (tc:apply-ksubstitution ksubs qual-ty))
@@ -81,7 +178,7 @@
         (check-for-ambiguous-variables preds ty unparsed-ty env)
         (check-for-reducible-context preds unparsed-ty env)
 
-        qual-ty))))
+        (apply-type-alias-substitutions qual-ty unparsed-ty partial-env)))))
 
 (defun parse-ty-scheme (ty env)
   (declare (type parser:qualified-ty ty)
@@ -108,12 +205,12 @@
                       :for pred-tys := (tc:ty-predicate-types pred)
                       :for class-name := (tc:ty-predicate-class pred)
                       :for class := (tc:lookup-class env class-name)
-                      :for map := (tc:get-table (tc:ty-class-class-variable-map class))
+                      :for vars := (tc:ty-class-class-variables class)
                       :when (tc:ty-class-fundeps class) :do
                         (loop :for fundep :in (tc:ty-class-fundeps class)
-                              :for from-vars := (util:project-map (tc:fundep-from fundep) map pred-tys)
+                              :for from-vars := (util:project-elements (tc:fundep-from fundep) vars pred-tys)
                               :do (when (subsetp from-vars unambiguous-vars :test #'equalp)
-                                    (let ((to-vars (util:project-map (tc:fundep-to fundep) map pred-tys)))
+                                    (let ((to-vars (util:project-elements (tc:fundep-to fundep) vars pred-tys)))
                                       (setf unambiguous-vars
                                             (remove-duplicates (append to-vars unambiguous-vars) :test #'equalp))))))
 
@@ -154,7 +251,9 @@
 (defgeneric infer-type-kinds (type expected-kind ksubs env)
   (:method ((type parser:tyvar) expected-kind ksubs env)
     (declare (type tc:kind expected-kind)
-             (type tc:ksubstitution-list ksubs))
+             (type tc:ksubstitution-list ksubs)
+             (type partial-type-env env)
+             (values tc:ty tc:ksubstitution-list &optional))
     (let* ((tvar (partial-type-env-lookup-var
                   env
                   (parser:tyvar-name type)
@@ -177,7 +276,7 @@
     (declare (type tc:kind expected-kind)
              (type tc:ksubstitution-list ksubs)
              (type partial-type-env env)
-             (values tc:ty tc:ksubstitution-list))
+             (values tc:ty tc:ksubstitution-list &optional))
 
     (let ((type_ (partial-type-env-lookup-type env type)))
       (handler-case
@@ -232,7 +331,7 @@
     (declare (type tc:kind expected-kind)
              (type tc:ksubstitution-list ksubs)
              (type partial-type-env env)
-             (values tc:qualified-ty tc:ksubstitution-list))
+             (values tc:qualified-ty tc:ksubstitution-list &optional))
 
     ;; CCL >:(
     (assert (equalp expected-kind tc:+kstar+))
@@ -273,9 +372,7 @@
     (let ((types (loop :for ty :in (parser:ty-predicate-types pred)
                        :for class-ty :in (tc:ty-predicate-types class-pred)
                        :collect (multiple-value-bind (ty ksubs_)
-                                    (infer-type-kinds ty (tc:kind-of class-ty)
-                                                      ksubs
-                                                      env)
+                                    (parse-type ty env ksubs (tc:kind-of class-ty))
                                   (setf ksubs ksubs_)
                                   ty))))
       (values (tc:make-ty-predicate :class class-name

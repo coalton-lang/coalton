@@ -12,6 +12,7 @@
    #:make-traverse-let-action-skipping-cons-bindings
    #:*traverse*
    #:traverse
+   #:traverse-with-path
    #:traverse-with-binding-list))
 
 (in-package #:coalton-impl/codegen/traverse)
@@ -132,6 +133,33 @@ nodes."
                                   (match-branch-body branch)
                                   args)))
                   (node-match-branches node))))
+    (action (:traverse node-catch node &rest args)
+      (make-node-catch
+       :type (node-type node)
+       :expr (apply *traverse* (node-catch-expr node) args)
+       :branches (mapcar
+                  (lambda (branch)
+                    (make-catch-branch
+                     :pattern (catch-branch-pattern branch)
+                     :body (apply *traverse*
+                                  (catch-branch-body branch)
+                                  args)))
+                  (node-catch-branches node))))
+
+    (action (:traverse node-resumable node &rest args)
+      (make-node-resumable
+       :type (node-type node)
+       :expr (apply *traverse* (node-resumable-expr node) args)
+       :branches (mapcar
+                  (lambda (branch)
+                    (make-resumable-branch
+                     :pattern (resumable-branch-pattern branch)
+                     :body (apply *traverse*
+                                  (resumable-branch-body branch)
+                                  args)))
+                  (node-resumable-branches node))))
+
+    
     (action (:traverse node-while node &rest args)
       (make-node-while
        :type (node-type node)
@@ -162,6 +190,14 @@ nodes."
        :type (node-type node)
        :name (node-return-from-name node)
        :expr (apply *traverse* (node-return-from-expr node) args)))
+    (action (:traverse node-throw node &rest args)
+      (make-node-throw
+       :type (node-type node)
+       :expr (apply *traverse* (node-throw-expr node) args)))
+    (action (:traverse node-resume-to node &rest args)
+      (make-node-resume-to
+       :type (node-type node)
+       :expr (apply *traverse* (node-resume-to-expr node) args)))
     (action (:traverse node-block node &rest args)
       (make-node-block
        :type (node-type node)
@@ -183,7 +219,12 @@ nodes."
        :type (node-type node)
        :name (node-bind-name node)
        :expr (apply *traverse* (node-bind-expr node) args)
-       :body (apply *traverse* (node-bind-body node) args))))
+       :body (apply *traverse* (node-bind-body node) args)))
+    (action (:traverse node-locally node &rest args)
+      (make-node-locally
+       :type (node-type node)
+       :noinline-functions (node-locally-noinline-functions node)
+       :subexpr (apply *traverse* (node-locally-subexpr node) args))))
    t))
 
 (defun fire-action (when-key type-key actions args node)
@@ -252,6 +293,66 @@ other nodes, then it would be inappropriate to also define an action
               (fire-action ':after    'node                                actions args))))
       (let ((*traverse* #'current-traverse))
         (apply *traverse* initial-node initial-args)))))
+
+(defun traverse-with-path (node action-list &rest args)
+  "Like 'traverse', but actions receive a thunk that returns a reverse
+list of the current node's ascendants.
+That is, `car` of the ascendants is the node's immediate parent,
+and the last element of ascendants is the root of the AST on which
+`traverse-with-path` is called.  If visiting node is the root, the
+ascendant list is empty."
+  (declare (type node node)
+           (values node &optional))
+  (let ((traversal-path nil))
+    (labels ((wrap-action (when action)
+               (if action
+                   (ecase when
+                     (:before
+                      (make-action when 'node
+                                   (lambda (node path-thunk &rest args)
+                                     (push node traversal-path)
+                                     (apply (action-function action) node path-thunk args))))
+                     (:after
+                      (make-action when 'node
+                                   (lambda (node path-thunk &rest args)
+                                     (prog1 (apply (action-function action)
+                                                   node
+                                                   path-thunk
+                                                   args)
+                                       (pop traversal-path))))))
+                   (ecase when
+                     (:before
+                      (make-action when 'node
+                                   (lambda (node &rest _rest)
+                                     (declare (ignore _rest))
+                                     (push node traversal-path))))
+                     (:after
+                      (make-action when 'node
+                                   (lambda (&rest _rest)
+                                     (declare (ignore _rest))
+                                     (pop traversal-path))))))))
+      (let* ((before-node-action (find-if (lambda (action)
+                                            (declare (type action action)
+                                                     (values boolean &optional))
+                                            (and (eq :before (action-when action))
+                                                 (eq 'node (action-type action))))
+                                          action-list))
+             (after-node-action  (find-if (lambda (action)
+                                            (declare (type action action)
+                                                     (values boolean &optional))
+                                            (and (eq :after (action-when action))
+                                                 (eq 'node (action-type action))))
+                                          action-list))
+             (remaining-actions (remove-if (lambda (action)
+                                             (member action (list before-node-action
+                                                                  after-node-action)))
+                                           action-list)))
+        (apply #'traverse node
+               (list* (wrap-action :before before-node-action)
+                      (wrap-action :after after-node-action)
+                      remaining-actions)
+               (lambda () (cdr traversal-path))
+               args)))))
 
 ;;;
 ;;; Traversals with bound variables
@@ -389,6 +490,26 @@ without any slot information."
         (decf counter)
         (format t "POST: ~v@{|   ~}~A~%" counter (class-name (class-of node)))
         (values))))))
+
+(defun print-node-parent (node)
+  "Print visiting node and its parent, using `traverse-with-path`."
+  (declare (type node node)
+           (values node &optional))
+  (traverse-with-path
+   node
+   (list
+    (action (:before node node path-thunk)
+      (let ((path (funcall path-thunk)))
+        (format t "PRE:  ~v@{|   ~}~A ~A~%" (length path)
+                (class-name (class-of node))
+                (class-name (class-of (car path)))))
+      (values))
+    (action (:after node node path-thunk)
+      (let ((path (funcall path-thunk)))
+        (format t "POST: ~v@{|   ~}~A ~A~%" (length path)
+                (class-name (class-of node))
+                (class-name (class-of (car path)))))
+      (values)))))
 
 (defun make-traverse-let-action-skipping-cons-bindings ()
   "This is an action to ensure that let-bindings to fully saturated

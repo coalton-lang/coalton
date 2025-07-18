@@ -8,3 +8,4 @@ This folder contains example Coalton projects to show off the features as well a
 - `small-coalton-programs`: A collection of small, example programs in Coalton for educational or illustrative purposes.
 - `quil-coalton`: A monadic parser for Quil written in Coalton.
 - `thih`: An implementation of *Typing Haskell in Haskell* in Coalton.
+- `fractal`: A crude infinite-zoom Mandelbrot viewer using Coalton, Common Lisp, and SDL2.

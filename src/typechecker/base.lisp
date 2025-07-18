@@ -4,12 +4,17 @@
   (:local-nicknames
    (#:source #:coalton-impl/source)
    (#:util #:coalton-impl/util))
+  (:import-from
+   #:coalton-impl/settings
+   #:*coalton-type-printing-mode*)
   (:export
+   #:*coalton-type-printing-mode*
    #:*coalton-pretty-print-tyvars*
    #:*pprint-tyvar-dict*
    #:*pprint-variable-symbol-code*
    #:*pprint-variable-symbol-suffix*
    #:tc-error                           ; CONDITION, FUNCTION
+   #:tc-cerror                          ; FUNCTION
    #:tc-location
    #:tc-secondary-location
    #:tc-note
@@ -74,7 +79,7 @@ This requires a valid PPRINT-VARIABLE-CONTEXT")
                        (with-pprint-variable-context ()
                          (apply #'format nil format-string format-args))))
 
-(defun tc-note (located format-string &rest format-args)
+(defun tc-note (located format-string &rest format-args) 
   (apply #'tc-location (source:location located) format-string format-args))
 
 (defun tc-secondary-note (located format-string &rest format-args)
@@ -87,6 +92,11 @@ This requires a valid PPRINT-VARIABLE-CONTEXT")
   "Signal a typechecker error with MESSAGE, and optional NOTES that label source locations."
   (declare (type string message))
   (error 'tc-error :message message :notes notes))
+
+(defun tc-cerror (message &rest notes)
+  "Signal a continuable typechecker error with MESSAGE, and optional NOTES that label source locations."
+  (declare (type string message))
+  (cerror "Ignore and continue anyway." 'tc-error :message message :notes notes))
 
 (define-condition coalton-internal-type-error (error)
   ()

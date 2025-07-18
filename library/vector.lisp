@@ -3,7 +3,8 @@
    #:coalton
    #:coalton-library/builtin
    #:coalton-library/functions
-   #:coalton-library/classes)
+   #:coalton-library/classes
+   #:coalton-library/experimental/loops)
   (:import-from
    #:coalton-library/collections/mutable/vector
    #:Vector)
@@ -39,6 +40,8 @@
    #:extend!
    #:find-elem
    #:append
+   #:reverse
+   #:reverse!
    #:swap-remove!
    #:swap-remove-unsafe!
    #:sort!
@@ -65,11 +68,13 @@
   ; (repr :native (cl:and (cl:vector cl:t) (cl:not cl:simple-vector)))
   ; (define-type (Vector :a))
 
+  (inline)
   (declare new (Unit -> Vector :a))
   (define (new _)
     "Create a new empty vector"
     (with-capacity 0))
 
+  (inline)
   (declare with-capacity (UFix -> Vector :a))
   (define (with-capacity n)
     "Create a new vector with `n` elements preallocated."
@@ -83,33 +88,39 @@
     (extend! v (iter:repeat-for x n))
     v)
 
+  (inline)
   (declare singleton (:a -> Vector :a))
   (define (singleton x)
     "Create a new vector with a single element equal to `x`"
     (with-initial-element 1 x))
 
+  (inline)
   (declare length (Vector :a -> UFix))
   (define (length v)
     "Returns the length of `v`."
     (lisp UFix (v)
       (cl:length v)))
 
+  (inline)
   (declare capacity (Vector :a -> UFix))
   (define (capacity v)
     "Returns the number of elements that `v` can store without resizing."
     (lisp UFix (v)
       (cl:array-dimension v 0)))
 
+  (inline)
   (declare empty? (Vector :a -> Boolean))
   (define (empty? v)
     "Is `v` empty?"
     (== 0 (length v)))
 
+  (inline)
   (declare singleton? (Vector :a -> Boolean))
   (define (singleton? v)
     "Is `v` a singleton?"
     (== 1 (length v)))
 
+  (inline)
   (declare copy (Vector :a -> Vector :a))
   (define (copy v)
     "Return a new vector containing the same elements as `v`."
@@ -128,11 +139,13 @@
       (cl:adjust-array v new-capacity :fill-pointer shrinking)
       Unit))
 
+  (inline)
   (declare clear! (Vector :a -> Unit))
   (define (clear! v)
     "Set the capacity of `v` to `0`."
     (set-capacity! 0 v))
 
+  (inline)
   (declare push! (:a -> Vector :a -> UFix))
   (define (push! item v)
     "Append `item` to `v` and resize `v` if necessary, returning the index of the new item."
@@ -146,6 +159,7 @@
         None
         (Some (pop-unsafe! v))))
 
+  (inline)
   (declare pop-unsafe! (Vector :a -> :a))
   (define (pop-unsafe! v)
     "Remove and return the last item of `v` without checking if the vector is empty."
@@ -159,12 +173,14 @@
         None
         (Some (index-unsafe index v))))
 
+  (inline)
   (declare index-unsafe (UFix -> Vector :a -> :a))
   (define (index-unsafe idx v)
     "Return the `idx`th element of `v` without checking if the element exists."
     (lisp :a (idx v)
       (cl:aref v idx)))
 
+  (inline)
   (declare set! (UFix -> :a -> Vector :a -> Unit))
   (define (set! idx item v)
     "Set the `idx`th element of `v` to `item`. This function left intentionally unsafe because it does not have a return value to check."
@@ -172,11 +188,13 @@
       (cl:setf (cl:aref v idx) item))
     Unit)
 
+  (inline)
   (declare head (Vector :a -> Optional :a))
   (define (head v)
     "Return the first item of `v`."
     (index 0 v))
 
+  (inline)
   (declare head-unsafe (Vector :a -> :a))
   (define (head-unsafe v)
     "Return the first item of `v` without first checking if `v` is empty."
@@ -185,7 +203,9 @@
   (declare last (Vector :a -> Optional :a))
   (define (last v)
     "Return the last element of `v`."
-    (index (- (length v) 1) v))
+    (if (empty? v)
+        None
+        (Some (index-unsafe (- (length v) 1) v))))
 
   (declare last-unsafe (Vector :a -> :a))
   (define (last-unsafe v)
@@ -215,6 +235,21 @@
     (extend! out v2)
     out)
 
+  (declare reverse! (Vector :a -> Vector :a))
+  (define (reverse! v)
+    "Returns a vector with the elements of vector `v` in reverse order.  The original vector may be destroyed to produce the result."
+    (lisp (Vector :a) (v)
+      (cl:nreverse v)))
+
+  (declare reverse (Vector :a -> Vector :a))
+  (define (reverse v)
+    "Returns a fresh vector with the elements of vector `v` in reverse order.  The original vector isn't modified."
+    (let ((len (length v))
+          (newv (with-capacity len)))
+      (dotimes (i len)
+        (push! (index-unsafe (- (- len i) 1) v) newv))
+      newv))
+
   (declare swap-remove! (UFix -> Vector :a -> Optional :a))
   (define (swap-remove! idx vec)
     "Remove the element `idx` from `vec` and replace it with the last element in `vec`. Then return the removed element."
@@ -242,6 +277,7 @@
          (call-coalton-function f a b))))
     Unit)
 
+  (inline)
   (declare sort! (Ord :a => Vector :a -> Unit))
   (define (sort! v)
     "Sort a vector in-place in ascending order."
@@ -257,7 +293,7 @@
     (let size = (with-default 0 (iter:size-hint iter)))
     (let remaining-capacity = (- (capacity vec) (length vec)))
     (when (> size remaining-capacity)
-      (set-capacity! (- size remaining-capacity) vec))
+      (set-capacity! (+ (length vec) (- size remaining-capacity)) vec))
 
     (iter:for-each!
      (fn (x)

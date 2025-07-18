@@ -51,6 +51,7 @@
                (:module "runtime"
                 :serial t
                 :components ((:file "function-entry")
+                             (:file "optional")
                              (:file "package")))
                (:module "typechecker"
                 :serial t
@@ -63,7 +64,6 @@
                              (:file "type-errors")
                              (:file "unify")
                              (:file "fundeps")
-                             (:file "map")
                              (:file "environment")
                              (:file "lisp-type")
                              (:file "context-reduction")
@@ -76,6 +76,7 @@
                              (:file "accessor")
                              (:file "partial-type-env")
                              (:file "parse-type")
+                             (:file "derive")
                              (:file "define-type")
                              (:file "define-class")
                              (:file "tc-env")
@@ -104,13 +105,21 @@
                              (:file "translate-expression")
                              (:file "translate-instance")
                              (:file "struct-or-class")
+                             (:file "codegen-exception")
                              (:file "codegen-pattern")
                              (:file "codegen-type-definition")
                              (:file "codegen-expression")
                              (:file "codegen-class")
+
+                             ;; Optimizations
                              (:file "monomorphize")
                              (:file "constant-propagation")
+                             (:file "canonicalizer")
+                             (:file "inliner")
+                             (:file "specializer")
                              (:file "optimizer")
+
+                             ;; Entry points
                              (:file "program")
                              (:file "package")))
                (:file "unlock-package" :if-feature :sb-package-locks)

@@ -28,9 +28,6 @@
   (:import-from
    #:coalton-impl/codegen/traverse
    #:action
-   #:count-applications
-   #:count-nodes
-   #:make-traverse-let-action-skipping-cons-bindings
    #:*traverse*
    #:traverse
    #:traverse-with-binding-list)
@@ -46,6 +43,15 @@
   (:import-from
    #:coalton-impl/codegen/constant-propagation
    #:propagate-constants)
+  (:import-from
+   #:coalton-impl/codegen/canonicalizer
+   #:canonicalize)
+  (:import-from
+   #:coalton-impl/codegen/inliner
+   #:inline-applications)
+  (:import-from
+   #:coalton-impl/codegen/specializer
+   #:apply-specializations)
   (:local-nicknames
    (#:settings #:coalton-impl/settings)
    (#:util #:coalton-impl/util)
@@ -58,10 +64,10 @@
 
 (in-package #:coalton-impl/codegen/optimizer)
 
-(defun update-function-env (bindings env)
+(defun update-function-env (bindings inline-p-table env)
   (declare (type binding-list bindings)
            (type tc:environment env)
-           (values tc:environment))
+           (values tc:environment &optional))
   (multiple-value-bind (toplevel-functions toplevel-values)
       (loop :for (name . node) :in bindings
             :if (node-abstraction-p node)
@@ -77,23 +83,28 @@
                     name
                     (tc:make-function-env-entry
                      :name name
-                     :arity arity))))
+                     :arity arity
+                     :inline-p (gethash name inline-p-table)))))
     (dolist (name toplevel-values)
       (when (tc:lookup-function env name :no-error t)
         (setf env (tc:unset-function env name)))))
   env)
 
 (defun make-function-table (env)
+  "Create a function table from ENV. A \"function table\" is a hash table
+mapping known function names to their arity."
   (declare (type tc:environment env)
-           (values hash-table))
-  (let ((table (make-hash-table)))
-    (fset:do-map (name entry (immutable-map-data (tc:environment-function-environment env)))
+           (values hash-table &optional))
+  (let ((table (make-hash-table))
+        (fun-env (tc:environment-function-environment env)))
+    (fset:do-map (name entry (immutable-map-data fun-env))
       (setf (gethash name table) (tc:function-env-entry-arity entry)))
     table))
 
-(defun optimize-bindings (bindings monomorphize-table package env)
+(defun optimize-bindings (bindings monomorphize-table inline-p-table package env)
   (declare (type binding-list bindings)
            (type hash-table monomorphize-table)
+           (type hash-table inline-p-table)
            (type package package)
            (type tc:environment env)
            (values binding-list tc:environment))
@@ -129,6 +140,7 @@
                               manager
                               package
                               resolve-table
+                              inline-p-table
                               (lambda (node env)
                                 (optimize-node node env))
                               env)
@@ -138,7 +150,7 @@
 
 
       ;; Update function env
-      (setf env (update-function-env bindings env))
+      (setf env (update-function-env bindings inline-p-table env))
 
 
       (let ((function-table (make-function-table env)))
@@ -157,15 +169,22 @@
         (values bindings env)))))
 
 (defun direct-application (node table)
+  "Rewrite NODE to use DIRECT-APPLICATIONs when possible. A rewrite is
+possible when the name of the operator of an application is known and
+when the number of operands equals the arity of the known function
+name.
+
+The TABLE argument is a hash table mapping function names to their
+arity. TABLE will be mutated with additional entries."
   (declare (type node node)
-           (type hash-table table)
+           (type hash-table table)      ; Name -> Integer
            (values node &optional))
   (labels ((rewrite-direct-application (node)
              (when (node-variable-p (node-application-rator node))
                (let ((name (node-variable-value (node-application-rator node))))
                  (when (and (gethash name table)
-                            (equalp (gethash name table)
-                                    (length (node-application-rands node))))
+                            (= (gethash name table)
+                               (length (node-application-rands node))))
                    (return-from rewrite-direct-application
                      (make-node-direct-application
                       :type (node-type node)
@@ -194,33 +213,59 @@
   (declare (type binding-list bindings)
            (type package package)
            (type tc:environment env)
-           (values binding-list))
+           (values binding-list &optional))
   (let ((hoister (make-hoister)))
     (append
      (loop :for (name . node) :in bindings
-           :collect (cons name (static-dict-lift (optimize-node node env) name hoister package env)))
+           :collect (cons name (static-dict-lift
+                                (optimize-node node env)
+                                name hoister package env)))
      (pop-final-hoist-point hoister))))
 
+(declaim (type (integer 0) *maximum-optimization-passes*))
+(defvar *maximum-optimization-passes* 8
+  "The maximum number of times the optimizer may re-optimize.")
+
 (defun optimize-node (node env)
+  "Perform a series of optimizations on NODE in the environment
+ENV. Return a new node which is optimized."
   (declare (type node node)
            (type tc:environment env)
            (values node &optional))
-  (alexandria-2:line-up-first
-   node
-   canonicalize
-   (match-dynamic-extent-lift env)
-   ;; FIXME: Is this the right place to propagate-constants?
-   (propagate-constants env)
-   (apply-specializations env)
-   (resolve-static-superclass env)
-   (inline-methods env)
-   (inline-applications env)))
+  (prog ((runs 0)
+         (redo? nil))
+   :REDO
+     (incf runs)
+     (setf redo? nil)
+     (when (and settings:*print-optimization-passes*
+                (> runs 1))
+       (format t "~&;; Optimizing again, attempt #~D~%" runs))
+     (setf node (canonicalize node))
+     (setf node (match-dynamic-extent-lift node env))
+     (setf node (propagate-constants node env))
+     (setf node (apply-specializations node env))
+     (setf node (resolve-static-superclass node env))
+     (multiple-value-bind (new-node inlined?) (inline-applications node env)
+       (setf redo? (or redo? inlined?))
+       (setf node new-node))
+
+     (when (and redo? (< runs *maximum-optimization-passes*))
+       (go :REDO)))
+  ;; Return the node.
+  node)
 
 (defun pointfree (node table env)
+  "Given a node NODE, a function table TABLE, and an environment ENV,
+when applicable, produce a new node which is not point-free. Roughly
+speaking, the following kinds of transformations happen:
+
+    (+ 1) ==> (fn (x) (+ 1 x))
+    +     ==> (fn (x y) (+ x y))
+ "
   (declare (type node node)
            (type hash-table table)
            (type tc:environment env)
-           (values node))
+           (values node &optional))
 
   (let (function args num-params)
     (cond
@@ -308,239 +353,6 @@
                         (tc:function-return-type (node-type node)))
                  :rator function
                  :rands new-args)))))
-
-(defun canonicalize (node)
-  (declare (type node node)
-           (values node &optional))
-  (labels ((rewrite-application (node)
-             (let ((rator (node-application-rator node))
-                   (rands (node-application-rands node)))
-               (when (node-application-p rator)
-                 (make-node-application
-                  :type (node-type node)
-                  :rator (node-application-rator rator)
-                  :rands (append
-                          (node-application-rands rator)
-                          rands))))))
-    (traverse
-     node
-     (list
-      (action (:after node-application) #'rewrite-application)))))
-
-(defun aggressive-heuristic (node)
-  "This will probably inline more than is optimal."
-  (and (<= (count-applications node)
-           8)
-       (<= (count-nodes node)
-           32)))
-
-(defun heuristic-inline-applications (node
-                                      env
-                                      &key
-                                        (max-depth  16)
-                                        (max-unroll 4)
-                                        (heuristic  #'aggressive-heuristic))
-  "Recursively inline function calls in `node`, using the environment
-`env` to look up the function bodies to substitute. The traversal
-keeps a call stack and will not continue past the specified
-`max-depth`. For recursive functions, traversal will not continue if
-the function already appears more than `max-unroll` times in the call
-stack. Otherwise, if a function's code can be found in `env` and the
-`heuristic` returns true, then the body will be inlined.
-
-Special logic prevents inlining `coalton:Cons` in let bindings to
-avoid breaking recursive data let expressions, since the codegen
-requires direct constructor calls."
-  (declare (type node           node)
-           (type tc:environment env)
-           (type (integer 0)    max-depth)
-           (type (integer 0)    max-unroll)
-           (type function       heuristic)
-           (values node &optional))
-  (labels ((inline-abstraction-from-application (node abstraction process-body)
-             "If NODE is an abstraction (f e1 e2 ... en) and ABSTRACTION is a
-              function (fn (x1 x2 ... xn) body), then produce a node which is
-              something like
-
-                  `(let ((x1 e1) (x2 e2) ... (xn en))
-                     ,(funcall process-body body))
-
-              where body has been processed by PROCESS-BODY. (The
-              body may be processed by this function in other ways.)"
-             (declare (type (or node-application node-direct-application) node)
-                      (type node-abstraction                              abstraction)
-                      (type function                                      process-body)
-                      (values node-let &optional))
-             (loop
-               ;; (x1 ... xn)
-               :with vars := (node-abstraction-vars abstraction)
-               ;; (e1 ... en)
-               :with vals := (node-rands node)
-               ;; body, as described above
-               :with body := (node-abstraction-subexpr abstraction)
-
-               ;; Collect the LET-node bindings. We also generate new
-               ;; generated variable names (i.e., each xi is renamed to
-               ;; a unique xi').
-               :for var :in vars
-               :for val :in vals
-               :for new-var := (gensym (symbol-name var))
-               :collect (cons new-var val)
-                 :into bindings
-               :collect (make-ast-substitution
-                         :from var
-                         :to (make-node-variable
-                              :type (node-type val)
-                              :value new-var))
-                 :into subs
-
-               ;; Return the inlined abstraction as a LET.
-               :finally (return
-                          (make-node-let
-                           :type     (node-type node)
-                           :bindings bindings
-                           :subexpr  (funcall
-                                      process-body
-                                      ;; Rename the type variables
-                                      ;; so they aren't
-                                      ;; inadvertently unified
-                                      ;; across substitutions.
-                                      (rename-type-variables
-                                       (apply-ast-substitution subs body)))))))
-
-           (try-inline (node call-stack)
-             "Attempt to perform an inlining of the application node NODE. The
-            CALL-STACK is a stack (represented as a list) of node names seen so
-            far recursively by the inliner."
-             (declare (type (or node-application node-direct-application) node)
-                      (type parser:identifier-list                        call-stack)
-                      (values (or node-let node-application node-direct-application) &optional))
-             ;; There are multiple cases that can be inlined.
-             ;;
-             ;; Case #1: (f e1 ... en) where f is global, known, and arity n.
-             (alexandria:when-let*
-                 ((name (node-rator-name node))
-                  (code (tc:lookup-code env name :no-error t))
-                  (_    (and (node-abstraction-p code)
-                             (funcall heuristic code)
-                             (<= (length call-stack)
-                                 max-depth)
-                             (<= (count name call-stack)
-                                 max-unroll)
-                             (= (length (node-abstraction-vars code))
-                                (length (node-rands node))))))
-               (return-from try-inline
-                 (inline-abstraction-from-application
-                  node code (lambda (body)
-                              (funcall *traverse* body (cons name call-stack))))))
-
-             ;; Case #2: ((fn (x1 ... xn) ...) e1 ... en)
-             (when (node-application-p node)
-               (let ((code (node-application-rator node)))
-                 (when (and (node-abstraction-p code)
-                            (funcall heuristic code)
-                            (= (length (node-abstraction-vars code))
-                               (length (node-rands node))))
-                   (return-from try-inline
-                     (inline-abstraction-from-application
-                      node code (lambda (body)
-                                  (funcall *traverse* body call-stack)))))))
-
-             ;; Inlining did not satisfy heuristics or was inapplicable.
-             (return-from try-inline node)))
-    (traverse
-     node
-     (list
-      (action (:after node-application) #'try-inline)
-      (action (:after node-direct-application) #'try-inline)
-      (make-traverse-let-action-skipping-cons-bindings))
-     nil)))
-
-(defun inline-applications (node env)
-  "If inlining is globally enabled, perform function inlining on the node
-NODE in the environment ENV."
-  (if settings:*coalton-heuristic-inlining*
-      (heuristic-inline-applications node env)
-      node))
-
-(defun inline-methods (node env)
-  (declare (type node node)
-           (type tc:environment env)
-           (values node &optional))
-  (labels ((inline-method (node)
-             (let ((rator (node-application-rator node))
-                   (rands (node-application-rands node)))
-               (when (node-variable-p rator)
-                 (let (dict rands_)
-                   (cond
-                     ((node-variable-p (first rands))
-                      (setf dict (node-variable-value (first rands)))
-                      (setf rands_ (cdr rands)))
-
-                     ((and (node-application-p (first rands))
-                           (node-variable-p (node-application-rator (first rands))))
-                      (setf dict (node-variable-value (node-application-rator (first rands))))
-                      (setf rands_ (append (node-application-rands (first rands)) (cdr rands))))
-
-                     (t
-                      (return-from inline-method nil)))
-
-                   (let* ((method-name (node-variable-value rator))
-                          (inline-method-name (tc:lookup-method-inline env method-name dict :no-error t)))
-
-                     (when inline-method-name
-                       (if (null rands_)
-                           (make-node-variable
-                            :type (node-type node)
-                            :value inline-method-name)
-
-                           (make-node-application
-                            :type (node-type node)
-                            :rator (make-node-variable
-                                    :type (tc:make-function-type*
-                                           (mapcar #'node-type rands_)
-                                           (node-type node))
-                                    :value inline-method-name)
-                            :rands rands_))))))))
-
-           (inline-direct-method (node)
-             (let ((rands (node-direct-application-rands node)))
-               (let (dict rands_)
-                 (cond
-                   ((node-variable-p (first rands))
-                    (setf dict (node-variable-value (first rands)))
-                    (setf rands_ (cdr rands)))
-
-                   ((and (node-application-p (first rands))
-                         (node-variable-p (node-application-rator (first rands))))
-                    (setf dict (node-variable-value (node-application-rator (first rands))))
-                    (setf rands_ (append (node-application-rands (first rands)) (cdr rands))))
-
-                   (t
-                    (return-from inline-direct-method nil)))
-
-                 (let* ((method-name (node-direct-application-rator node))
-                        (inline-method-name (tc:lookup-method-inline env method-name dict :no-error t)))
-                   (when inline-method-name
-                     (if (null rands_)
-                         (make-node-variable
-                          :type (node-type node)
-                          :value inline-method-name)
-
-                         (make-node-application
-                          :type (node-type node)
-                          :rator (make-node-variable
-                                  :type (tc:make-function-type*
-                                         (mapcar #'node-type rands_)
-                                         (node-type node))
-                                  :value inline-method-name)
-                          :rands rands_))))))))
-
-    (traverse
-     node
-     (list
-      (action (:after node-application) #'inline-method)
-      (action (:after node-direct-application) #'inline-direct-method)))))
 
 (defun static-dict-lift (node name hoister package env)
   (declare (type node node)
@@ -638,7 +450,10 @@ NODE in the environment ENV."
   (declare (type node node)
            (type tc:environment env)
            (values node &optional))
-  (labels ((handle-static-superclass (node bound-variables)
+  (labels ((get-named-superclass (class name)
+             (cdr (assoc name (tc:ty-class-superclass-map class) :test #'equal)))
+
+           (handle-static-superclass (node bound-variables)
              (declare (type util:symbol-list bound-variables))
 
              (unless (or (node-variable-p (node-field-dict node))
@@ -659,7 +474,7 @@ NODE in the environment ENV."
                     (superclass-dict (tc:ty-class-superclass-dict class))
 
                     ;; Map the accessor to a named superclass
-                    (superclass-name (tc:get-value (tc:ty-class-superclass-map class) (node-field-name node)))
+                    (superclass-name (get-named-superclass class (node-field-name node)))
 
                     ;; Find the predicate of the accessed superclass
                     (superclass-pred (car (find superclass-name superclass-dict :key #'cdr)))
@@ -677,65 +492,9 @@ NODE in the environment ENV."
      (list
       (action (:after node-field) #'handle-static-superclass)))))
 
-(defun apply-specializations (node env)
-  (declare (type node node)
-           (type tc:environment env)
-           (values node &optional))
-
-  (when settings:*coalton-disable-specialization*
-    (return-from apply-specializations node))
-
-  (labels ((apply-specialization (node)
-             (let ((rator-name (node-rator-name node)))
-               (unless rator-name
-                 (return-from apply-specialization))
-
-               (let ((from-ty (tc:lookup-value-type env rator-name :no-error t)))
-                 (unless from-ty
-                   (return-from apply-specialization))
-
-                 (let* ((from-ty (tc:fresh-inst from-ty))
-
-                        (preds (tc:qualified-ty-predicates from-ty))
-
-                        (num-preds (length preds))
-
-                        (rator-type
-                          (tc:make-function-type*
-                           (subseq (tc:function-type-arguments (node-rator-type node)) num-preds)
-                           (tc:function-return-type (node-rator-type node))))
-
-                        (specialization (tc:lookup-specialization-by-type env rator-name rator-type :no-error t)))
-                   (unless specialization
-                     (return-from apply-specialization))
-
-                   (unless (>= (length (node-rands node)) num-preds)
-                     (util:coalton-bug "Expected function ~A to have at least ~A args when applying specialization." rator-name (length preds)))
-
-                   (cond
-                     ((= num-preds (length (node-rands node)))
-                      (make-node-variable
-                       :type rator-type
-                       :value (tc:specialization-entry-to specialization)))
-
-                     ((< num-preds (length (node-rands node)))
-                      (make-node-application
-                       :type (node-type node)
-                       :rator (make-node-variable
-                               :type rator-type
-                               :value (tc:specialization-entry-to specialization))
-                       :rands (subseq (node-rands node) num-preds)))
-
-                     (t
-                      (util:coalton-bug "Invalid specialization ~A~%" specialization))))))))
-    (traverse
-     node
-     (list
-      (action (:after node-application) #'apply-specialization)
-      (action (:after node-direct-application) #'apply-specialization)))))
-
 (defun match-dynamic-extent-lift (node env)
-  "Stack allocates uncaptured ADTs constructed in the head of a match expression"
+  "Transform NODE within ENV so that MATCH arguments are stack allocated
+when possible."
   (declare (type node node)
            (type tc:environment env)
            (values node &optional))

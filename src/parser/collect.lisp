@@ -60,6 +60,10 @@
     (declare (values tycon-list))
     (mapcan #'collect-referenced-types-generic% (toplevel-define-type-ctors type)))
 
+  (:method ((alias toplevel-define-type-alias))
+    (declare (values (tycon-list)))
+    (collect-referenced-types-generic% (toplevel-define-type-alias-type alias)))
+
   (:method ((field struct-field))
     (declare (values tycon-list &optional))
     (collect-referenced-types-generic% (struct-field-type field)))
@@ -105,6 +109,10 @@
   (:method ((type toplevel-define-type))
     (declare (values tyvar-list))
     (mapcan #'collect-type-variables-generic% (toplevel-define-type-ctors type)))
+
+  (:method ((alias toplevel-define-type-alias))
+    (declare (values tyvar-list))
+    (collect-type-variables-generic% (toplevel-define-type-alias-type alias)))
 
   (:method ((method method-definition))
     (declare (values tyvar-list &optional))
@@ -177,6 +185,28 @@ in expressions. May not include all bound variables."
      (collect-variables-generic% (node-match-expr node))
      (mapcan #'collect-variables-generic% (node-match-branches node))))
 
+  (:method ((node node-catch-branch))
+    (declare (values node-variable-list &optional))
+    (collect-variables-generic% (node-catch-branch-body node)))
+
+  (:method ((node node-catch))
+    (declare (values node-variable-list))
+    (nconc
+     (collect-variables-generic% (node-catch-expr node))
+     (mapcan #'collect-variables-generic% (node-catch-branches node))))
+
+  (:method ((node node-resumable-branch))
+    (declare (values node-variable-list &optional))
+    (collect-variables-generic% (node-resumable-branch-body node)))
+
+  (:method ((node node-resumable))
+    (declare (values node-variable-list))
+    (nconc
+     (collect-variables-generic% (node-resumable-expr node))
+     (mapcan #'collect-variables-generic% (node-resumable-branches node))))
+
+
+
   (:method ((node node-progn))
     (declare (values node-variable-list &optional))
     (collect-variables-generic% (node-progn-body node)))
@@ -190,6 +220,14 @@ in expressions. May not include all bound variables."
     ;; node-return's return expression may be null (and default to Unit)
     (when (node-return-expr node)
       (collect-variables-generic% (node-return-expr node))))
+
+  (:method ((node node-throw))
+    (declare (values node-variable-list &optional))
+    (collect-variables-generic% (node-throw-expr node)))
+
+  (:method ((node node-resume-to))
+    (declare (values node-variable-list &optional))
+    (collect-variables-generic% (node-resume-to-expr node)))
 
   (:method ((node node-application))
     (declare (values node-variable-list &optional))

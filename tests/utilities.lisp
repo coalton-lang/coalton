@@ -54,7 +54,7 @@
                                                    (eclector.concrete-syntax-tree:read stream)
                                                    source))
                                         (parsed-type (tc:parse-ty-scheme ast-type env)))
-                                   (is (equalp
+                                   (is (tc:ty-scheme=
                                         (tc:lookup-value-type env symbol)
                                         parsed-type))))))))))
            (values))
@@ -119,6 +119,7 @@ Returns (values SOURCE-PATHNAME COMPILED-PATHNAME)."
 
 (defun run-test-file (pathname)
   "Run the test file at PATHNAME."
+  (format t "~&;; --- Running test file: ~A~%" pathname)
   (let ((file (test-file pathname))
         (coalton-impl/settings:*coalton-print-unicode* nil))
     (loop :for (line number flags description program expected-error)

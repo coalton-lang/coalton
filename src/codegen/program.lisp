@@ -13,8 +13,7 @@
    #:codegen-class-definitions)
   (:import-from
    #:coalton-impl/codegen/codegen-expression
-   #:codegen-expression
-   #:function-declarations)
+   #:codegen-expression)
   (:import-from
    #:coalton-impl/codegen/codegen-type-definition
    #:codegen-type-definition)
@@ -107,7 +106,8 @@ Example:
                                        (compile-scc bindings env))))
         (lisp-forms (mapcar (lambda (lisp-form)
                               (cons (car (source:location-span (source:location lisp-form)))
-                                    (parser:toplevel-lisp-form-body lisp-form)))
+                                    `((locally (declare #+sbcl (optimize (sb-c::type-check 1)))
+                                        ,@(parser:toplevel-lisp-form-body lisp-form)))))
                             lisp-forms)))
     (mapcan #'cdr (merge-forms bindings lisp-forms))))
 
@@ -137,9 +137,17 @@ Example:
               (setf (gethash (car binding) offsets) offset))
         :append instance-bindings))
 
-(defun compile-translation-unit (translation-unit monomorphize-table env)
+(defun clean-environment-for-redefinition (env definitions)
+  "If we're redefinining functions that can be inlinable, we should remove it from ENV to avoid the code from expanded using old definition."
+  (loop :for (name . _) :in definitions
+        :for fun := (tc:lookup-function env name :no-error t)
+        :do (setf env (tc:unset-function env name))
+        :finally (return env)))
+
+(defun compile-translation-unit (translation-unit monomorphize-table inline-p-table env)
   (declare (type tc:translation-unit translation-unit)
            (type hash-table monomorphize-table)
+           (type hash-table inline-p-table)
            (type tc:environment env))
 
   (let* ((offsets (make-hash-table))
@@ -147,10 +155,11 @@ Example:
            (append
             (definition-bindings (tc:translation-unit-definitions translation-unit) env offsets)
             (instance-bindings (tc:translation-unit-instances translation-unit) env offsets)))
-         (definition-names (mapcar #'car definitions)))
+         (definition-names (mapcar #'car definitions))
+         (env (clean-environment-for-redefinition env definitions)))
 
     (multiple-value-bind (definitions env)
-        (optimize-bindings definitions monomorphize-table *package* env)
+        (optimize-bindings definitions monomorphize-table inline-p-table *package* env)
 
       (let ((sccs (node-binding-sccs definitions))
             (lisp-forms (tc:translation-unit-lisp-forms translation-unit)))
@@ -180,7 +189,8 @@ Example:
                 (list
                  `(declaim (sb-ext:start-block ,@definition-names))))
 
-            ,@(compile-definitions sccs definitions lisp-forms offsets env)
+            (locally (declare #+sbcl (optimize (sb-c::type-check 0)))
+              ,@(compile-definitions sccs definitions lisp-forms offsets env))
 
             #+sbcl
             ,@(when (eq sb-ext:*block-compile-default* :specified)
@@ -198,7 +208,7 @@ Example:
            (type node-abstraction node)
            (type tc:environment env))
   `(defun ,name ,(node-abstraction-vars node)
-     ,(function-declarations node env)
+     (declare (ignorable ,@(node-abstraction-vars node)))
      ,(codegen-expression (node-abstraction-subexpr node) env)))
 
 (defun compile-scc (bindings env)
@@ -209,6 +219,22 @@ Example:
    ;; Predeclare symbol macros
    (loop :for (name . node) :in bindings
          :collect `(global-lexical:define-global-lexical ,name ,(tc:lisp-type (node-type node) env)))
+
+   ;; Function declarations
+   ;; They must appear before function definitions to optimize mutual tail-calls.
+   (loop :for (name . node) :in bindings
+         :if (and (node-abstraction-p node)
+                  settings:*emit-type-annotations*)
+         :collect
+         `(declaim
+           (ftype
+            (function
+             (,@(loop :for nil :in (node-abstraction-vars node)
+                      :for ty :in (tc:function-type-arguments (node-type node))
+                      :collect (tc:lisp-type ty env)))
+             (values ,(tc:lisp-type (node-type (node-abstraction-subexpr node)) env)
+                     &optional))
+            ,name)))
 
    ;; Compile functions
    (loop :for (name . node) :in bindings

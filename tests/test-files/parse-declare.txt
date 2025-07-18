@@ -102,3 +102,25 @@ error: Duplicate monomorphize attribute
    |  ^^^^^^^^^^^^^^ monomorphize attribute here
  5 |  (declare f T)
    |  ------------- when parsing declare
+
+================================================================================
+Duplicate inline attribute
+================================================================================
+
+(package test-package)
+
+(inline)
+(inline)
+(declare f T)
+
+--------------------------------------------------------------------------------
+
+error: Duplicate inline attribute
+  --> test:4:0
+   |
+ 3 |  (inline)
+   |  -------- previous attribute here
+ 4 |  (inline)
+   |  ^^^^^^^^ inline attribute here
+ 5 |  (declare f T)
+   |  ------------- when parsing declare

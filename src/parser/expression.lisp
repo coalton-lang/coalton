@@ -74,6 +74,24 @@
    #:make-node-match                    ; CONSTRUCTOR
    #:node-match-expr                    ; ACCESSOR
    #:node-match-branches                ; ACCESSOR
+   #:node-catch-branch                  ; STRUCT
+   #:make-node-catch-branch             ; CONSTRUCTOR
+   #:node-catch-branch-pattern          ; ACCESSOR
+   #:node-catch-branch-body             ; ACCESSOR
+   #:node-catch-branch-list             ; TYPE
+   #:node-catch                         ; STRUCT
+   #:make-node-catch                    ; CONSTRUCTOR
+   #:node-catch-expr                    ; ACCESSOR
+   #:node-catch-branches                ; ACCESSOR
+   #:node-resumable-branch              ; STRUCT
+   #:make-node-resumable-branch         ; CONSTRUCTOR
+   #:node-resumable-branch-pattern      ; ACCESSOR
+   #:node-resumable-branch-body         ; ACCESSOR
+   #:node-resumable-branch-list         ; TYPE
+   #:node-resumable                     ; STRUCT
+   #:make-node-resumable                ; CONSTRUCTOR
+   #:node-resumable-expr                ; ACCESSOR
+   #:node-resumable-branches            ; ACCESSOR
    #:node-progn                         ; STRUCT
    #:make-node-progn                    ; CONSTRUCTOR
    #:node-progn-body                    ; ACCESSOR
@@ -84,6 +102,12 @@
    #:node-return                        ; STRUCT
    #:make-node-return                   ; CONSTRUCTOR
    #:node-return-expr                   ; ACCESSOR
+   #:node-throw                         ; STRUCT
+   #:make-node-throw                    ; CONSTRUCTOR
+   #:node-throw-expr                    ; ACCESSOR
+   #:node-resume-to                     ; STRUCT
+   #:make-node-resume-to                ; CONSTRUCTOR
+   #:node-resume-to-expr                ; ACCESSOR
    #:node-application                   ; STRUCT
    #:make-node-application              ; CONSTRUCTOR
    #:node-application-rator             ; ACCESSOR
@@ -153,6 +177,7 @@
    #:node-do-nodes                      ; ACCESSOR
    #:node-do-last-node                  ; ACCESSOR
    #:parse-expression                   ; FUNCTION
+   #:parse-expressions                  ; FUNCTION
    #:parse-body                         ; FUNCTION
    #:parse-variable                     ; FUNCTION
    ))
@@ -195,6 +220,7 @@ Rebound to NIL parsing an anonymous FN.")
 ;;;;             | node-literal
 ;;;;             | node-abstraction
 ;;;;             | node-let
+;;;;             | node-rec
 ;;;;             | node-lisp 
 ;;;;             | node-match
 ;;;;             | node-progn
@@ -222,6 +248,8 @@ Rebound to NIL parsing an anonymous FN.")
 ;;;; node-let-declare := "(" "declare" identifier qualified-ty ")"
 ;;;;
 ;;;; node-let := "(" "let" "(" (node-let-binding | node-let-declare)+ ")" body ")"
+;;;;
+;;;; node-rec := "(" "rec" (identifier | "(" identifier [qualified-ty] ")" ) "(" (node-let-binding | node-let-declare)+ ")" body ")"
 ;;;;
 ;;;; node-lisp := "(" "lisp" type "(" variable* ")" lisp-form+ ")"
 ;;;;
@@ -552,6 +580,59 @@ Rebound to NIL parsing an anonymous FN.")
   (expr    (util:required 'expr)    :type node      :read-only t)
   (body    (util:required 'body)    :type node-body :read-only t))
 
+(defstruct (node-throw
+            (:include node)
+            (:copier nil))
+  (expr (util:required 'expr) :type node :read-only t))
+
+(defstruct (node-resume-to
+            (:include node)
+            (:copier nil))
+  (expr (util:required 'expr) :type node :read-only t))
+
+(defstruct (node-resumable-branch
+            (:copier nil))
+  (pattern  (util:required 'pattern)  :type pattern         :read-only t)
+  (body     (util:required 'body)     :type node-body       :read-only t)
+  (location (util:required 'location) :type source:location :read-only t))
+
+(defmethod source:location ((self node-resumable-branch))
+  (node-resumable-branch-location self))
+
+(defun node-resumable-branch-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'node-resumable-branch-p x)))
+
+(deftype node-resumable-branch-list ()
+  '(satisfies node-resumable-branch-list-p))
+
+(defstruct (node-resumable
+            (:include node)
+            (:copier nil))
+  (expr     (util:required 'expr)     :type node                         :read-only t)
+  (branches (util:required 'branches) :type node-resumable-branch-list :read-only t))
+
+(defstruct (node-catch-branch
+            (:copier nil))
+  (pattern  (util:required 'pattern)  :type pattern         :read-only t)
+  (body     (util:required 'body)     :type node-body       :read-only t)
+  (location (util:required 'location) :type source:location :read-only t))
+
+(defmethod source:location ((self node-catch-branch))
+  (node-catch-branch-location self))
+
+(defun node-catch-branch-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'node-catch-branch-p x)))
+
+(deftype node-catch-branch-list ()
+  '(satisfies node-catch-branch-list-p))
+
+(defstruct (node-catch
+            (:include node)
+            (:copier nil))
+  (expr     (util:required 'expr)     :type node                   :read-only t)
+  (branches (util:required 'branches) :type node-catch-branch-list :read-only t))
 
 (defun parse-expression (form source)
   (declare (type cst:cst form)
@@ -629,6 +710,91 @@ Rebound to NIL parsing an anonymous FN.")
           :location (form-location source form)))))
 
     ((and (cst:atom (cst:first form))
+          (eq 'coalton:throw (cst:raw (cst:first form))))
+     (let (expr)
+
+       ;; (throw)
+       (unless (cst:consp (cst:rest form))
+         (parse-error "Malformed throw expression"
+                      (note source (cst:first form) "expression expected")))
+
+       (setf expr (parse-expression (cst:second form) source))
+
+       ;; (throw a b ...)
+       (when (cst:consp (cst:rest (cst:rest form)))
+         (parse-error "Malformed throw expression"
+                      (note source (cst:first (cst:rest (cst:rest form)))
+                            "unexpected trailing form")))
+
+       (make-node-throw
+        :expr expr
+        :location (form-location source form))))
+
+    ((and (cst:atom (cst:first form))
+          (eq 'coalton:resume-to (cst:raw (cst:first form))))
+     (let (expr)
+
+       ;; (resume-to)
+       (unless (cst:consp (cst:rest form))
+
+         (parse-error "Malformed resume-to expression"
+                      (note-end source (cst:first form) "expression expected")))
+
+       (setf expr (parse-expression (cst:second form) source))
+       
+       ;; (resume-to a b ...)
+       (when (cst:consp (cst:rest (cst:rest form)))
+         (parse-error "Malformed resume-to expression"
+                      (note source (cst:first (cst:rest (cst:rest form)))
+                            "unexpected trailing form")))
+
+       (make-node-resume-to
+        :expr expr
+        :location (form-location source form))))
+
+    ((and (cst:atom (cst:first form))
+          (eq 'coalton:resumable (cst:raw (cst:first form))))
+
+     ;; (resumable)
+     (unless (cst:consp (cst:rest form))
+       (parse-error "Malformed resumable expression"
+                    (note-end source (cst:first form) "expected expression")))
+
+     ;; (resumable expr)
+     (unless (cst:consp (cst:rest (cst:rest form)))
+       (parse-error "Malformed resumable expression"
+                    (note-end source (cst:second form) "expected resumeable cases")))
+
+     (make-node-resumable
+      :expr (parse-expression (cst:second form) source)
+      :branches (loop :for branches := (cst:nthrest 2 form) :then (cst:rest branches)
+                      :while (cst:consp branches)
+                      :collect (parse-resumable-branch (cst:first branches) source))
+      :location (form-location source form)))
+
+    ((and (cst:atom (cst:first form))
+          (eq 'coalton:catch (cst:raw (cst:first form))))
+
+     ;; (catch)
+     (unless (cst:consp (cst:rest form))
+       (parse-error "Malformed catch expression"
+                    (note-end source (cst:first form) "expected expression")))
+     
+     ;; (catch expr)
+     (unless (cst:consp (cst:rest (cst:rest form)))
+       (parse-error "Malformed catch expression"
+                    (note-end source (cst:second form) "expected catch cases")))
+     
+
+     (make-node-catch
+      :expr (parse-expression (cst:second form) source)
+      :branches (loop :for branches := (cst:nthrest 2 form) :then (cst:rest branches)
+                      :while (cst:consp branches)
+                      :collect (parse-catch-branch (cst:first branches) source))
+      :location (form-location source form)))
+
+
+    ((and (cst:atom (cst:first form))
           (eq 'coalton:let (cst:raw (cst:first form))))
 
      ;; (let)
@@ -665,6 +831,124 @@ Rebound to NIL parsing an anonymous FN.")
         :declares (nreverse declares)
         :body (parse-body (cst:nthrest 2 form) form source)
         :location (form-location source form))))
+
+    ((and (cst:atom (cst:first form))
+          (eq 'coalton:rec (cst:raw (cst:first form))))
+
+     (multiple-value-bind (name type rec-bindings body)
+         (cond
+           ;; (rec)
+           ((not (cst:consp (cst:rest form)))
+            (parse-error "Malformed rec"
+                         (note-end source (cst:first form)
+                                   "expected function name")))
+           ;; (rec name)
+           ((not (cst:consp (cst:nthrest 2 form)))
+            (parse-error "Malformed rec"
+                         (note-end source (cst:second form)
+                                   "expected binding list")))
+           ;; (rec name bindings)
+           ((cst:null (cst:nthrest 3 form))
+            (parse-error "Malformed rec"
+                         (note-end source (cst:third form)
+                                   "expected rec body")))
+           ((cst:null (cst:second form))
+            (parse-error "Malformed rec"
+                         (note source (cst:second form)
+                               "unexpected empty list")))
+           ;; (rec name bindings ...)
+           ((cst:atom (cst:second form))
+            (values (cst:second form)
+                    nil
+                    (cst:third form)
+                    (cst:nthrest 3 form)))
+           ;; (rec (name qual-ty) bindings ...)
+           (t
+            (cond
+              ((cst:null (cst:rest (cst:second form)))
+               (values (cst:first (cst:second form))
+                       nil
+                       (cst:third form)
+                       (cst:nthrest 3 form)))
+              ((cst:consp (cst:rest (cst:second form)))
+               (when (cst:consp (cst:nthrest 2 (cst:second form)))
+                 (parse-error "Malformed rec"
+                              (note-end source (cst:second (cst:second form))
+                                        "unexpected trailing form(s)")))
+               (values (cst:first (cst:second form))
+                       (cst:second (cst:second form))
+                       (cst:third form)
+                       (cst:nthrest 3 form)))
+              (t
+               (parse-error "Malformed rec"
+                            (note source (cst:rest (cst:second form))
+                                  "unexpected dotted list"))))))
+
+       (unless (cst:proper-list-p rec-bindings)
+         (parse-error "Malformed rec"
+                      (note source rec-bindings
+                            "expected binding list")))
+
+       (multiple-value-bind (declares bindings vars)
+           (loop :for bindings := rec-bindings :then (cst:rest bindings)
+                 :while (cst:consp bindings)
+                 :for binding := (cst:first bindings)
+                 ;; if binding is in the form (declare x y+)
+                 :if (and (cst:consp binding)
+                          (cst:atom (cst:first binding))
+                          (eq (cst:raw (cst:first binding)) 'coalton:declare))
+                   :collect (parse-let-declare binding source)
+                     :into declares
+                 :else
+                   :collect (parse-rec-binding binding source) :into binding-list
+                   :and :collect (cst:first binding) :into vars
+                 :finally
+                    (return (values declares binding-list vars)))
+
+         (make-node-let
+          :declares declares
+          :bindings
+          ;; Remove recursive bindings
+          (remove-if
+           (lambda (binding)
+             (and (typep (node-let-binding-value binding)
+                         'node-variable)
+
+                  (eq (node-variable-name (node-let-binding-name binding))
+                      (node-variable-name (node-let-binding-value binding)))))
+           bindings)
+          :body
+          (make-node-body
+           :nodes nil
+           :last-node
+           (make-node-let
+            :declares (if type
+                          (list
+                           (make-node-let-declare
+                            :name (parse-variable name source)
+                            :type (parse-qualified-type type source)
+                            :location (form-location source type)))
+                          nil)
+            :bindings (list (make-node-let-binding
+                             :name (parse-variable name source)
+                             :value
+                             (make-node-abstraction
+                              :params (mapcar (lambda (var)
+                                                (parse-pattern var source))
+                                              vars)
+                              :body (parse-body body form source)
+                              :location (form-location source form))
+                             :location (form-location source form)))
+            :body
+            (make-node-body
+             :nodes nil
+             :last-node
+             (make-node-application
+              :rator (parse-expression name source)
+              :rands (mapcar #'node-let-binding-name bindings)
+              :location (form-location source form)))
+            :location (form-location source form)))
+          :location (form-location source form)))))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:lisp (cst:raw (cst:first form))))
@@ -1040,6 +1324,19 @@ Rebound to NIL parsing an anonymous FN.")
                    :collect (parse-expression rand source))
       :location (form-location source form)))))
 
+(defun parse-expressions (forms source)
+  (declare (type list forms)
+           (values node &optional))
+  (let ((nodes (mapcar (lambda (form) (parse-expression form source)) forms)))
+    (make-node-progn
+     :body (make-node-body
+            :nodes (butlast nodes)
+            :last-node (first (last nodes)))
+     :location (source:make-location
+                source
+                (cons (source:span-start (cst:source (first forms)))
+                      (source:span-end (cst:source (first (last forms)))))))))
+
 (defun parse-variable (form source)
   (declare (type cst:cst form)
            (values node-variable &optional))
@@ -1221,6 +1518,35 @@ Rebound to NIL parsing an anonymous FN.")
    :value (parse-expression (cst:second form) source)
    :location (form-location source form)))
 
+(defun parse-rec-binding (form source)
+  (declare (type cst:cst form)
+           (values node-let-binding &optional))
+
+  (when (cst:atom form)
+    (parse-error "Malformed rec binding"
+                 (note source form "expected list")))
+
+  (unless (cst:proper-list-p form)
+    (parse-error "Malformed rec binding"
+                 (note source form "unexpected dotted list")))
+
+  ;; (x)
+  (unless (cst:consp (cst:rest form))
+    (parse-error "Malformed rec binding"
+                 (note-end source (cst:first form)
+                           "rec bindings must have a value")))
+
+  ;; (a b c ...)
+  (when (cst:consp (cst:rest (cst:rest form)))
+    (parse-error "Malformed rec binding"
+                 (note source (cst:first (cst:rest (cst:rest form)))
+                       "unexpected trailing form")))
+
+  (make-node-let-binding
+   :name (parse-variable (cst:first form) source)
+   :value (parse-expression (cst:second form) source)
+   :location (form-location source form)))
+
 (defun parse-match-branch (form source)
   (declare (type cst:cst form)
            (values node-match-branch &optional))
@@ -1242,6 +1568,70 @@ Rebound to NIL parsing an anonymous FN.")
    :pattern (parse-pattern (cst:first form) source)
    :body (parse-body (cst:rest form) form source)
    :location (form-location source form)))
+
+(defun parse-catch-branch (form source)
+  (declare (type cst:cst form)
+           (values node-catch-branch &optional))
+
+  (when (cst:atom form)
+    (parse-error "Malformed catch branch"
+                 (note source form "expected list")))
+
+  (unless (cst:proper-list-p form)
+    (parse-error "Malformed catch branch"
+                 (note source form "unexpected dotted list")))
+
+  ;; (P)
+  (unless (cst:consp (cst:rest form))
+    (parse-error "Malformed catch branch"
+                 (note-end source (cst:first form) "expected body")))
+
+  (let ((pattern (parse-pattern (cst:first form) source)))
+    (when (pattern-var-p pattern)
+      (parse-error
+       "Malformed catch branch"
+       (note source (cst:first form)
+             "Not Yet Allowed: Catching an exception with a pattern variable")))
+
+    (unless (typep pattern '(or pattern-constructor pattern-wildcard))
+      (parse-error
+       "Malformed catch branch"
+       (note source (cst:first form)
+             "branch must be either an exception type constructor or a wildcard.")))
+
+    (make-node-catch-branch
+     :pattern pattern
+     :body (parse-body (cst:rest form) form source)
+     :location (form-location source form))))
+
+(defun parse-resumable-branch (form source)
+  (declare (type cst:cst form)
+           (values node-resumable-branch &optional))
+
+  (when (cst:atom form)
+    (parse-error "Malformed resumable branch"
+                 (note source form "expected list")))
+
+  (unless (cst:proper-list-p form)
+    (parse-error "Malformed resumable branch"
+                 (note source form "unexpected dotted list")))
+
+  ;; (P)
+  (unless (cst:consp (cst:rest form))
+    (parse-error "Malformed resumable branch"
+                 (note-end source (cst:first form) "expected body")))
+
+  (let ((pattern (parse-pattern (cst:first form) source)))
+    (unless (typep pattern 'pattern-constructor)
+      (parse-error "Malformed resumable branch"
+                   (note
+                    source
+                    (cst:first form)
+                    "pattern must match a resumption constructor.")))
+    (make-node-resumable-branch
+     :pattern  pattern
+     :body (parse-body (cst:rest form) form source)
+     :location (form-location source form))))
 
 (defun parse-cond-clause (form source)
   (declare (type cst:cst form)

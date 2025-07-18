@@ -47,16 +47,38 @@
    #:node-lisp-p                        ; FUNCTION
    #:node-lisp-vars                     ; READER
    #:node-lisp-form                     ; READER
+   #:node-locally                       ; STRUCT
+   #:make-node-locally                  ; CONSTRUCTOR
+   #:node-locally-p                     ; FUNCTION
+   #:node-locally-noinline-functions    ; READER
+   #:node-locally-subexpr               ; READER
    #:match-branch                       ; STRUCT
    #:make-match-branch                  ; CONSTRUCTOR
    #:match-branch-pattern               ; READER
-   #:match-branch-bindings              ; READER
    #:match-branch-body                  ; READER
    #:branch-list                        ; TYPE
    #:node-match                         ; STRUCT
    #:make-node-match                    ; CONSTRUCTOR
    #:node-match-expr                    ; READER
    #:node-match-branches                ; READER
+   #:catch-branch                       ; STRUCT
+   #:make-catch-branch                  ; CONSTRUCTOR
+   #:catch-branch-pattern               ; READER
+   #:catch-branch-body                  ; READER
+   #:catch-branch-list                  ; TYPE
+   #:node-catch                         ; STRUCT
+   #:make-node-catch                    ; CONSTRUCTOR
+   #:node-catch-expr                    ; READER
+   #:node-catch-branches                ; READER
+   #:resumable-branch                   ; STRUCT
+   #:make-resumable-branch              ; CONSTRUCTOR
+   #:resumable-branch-pattern           ; READER
+   #:resumable-branch-body              ; READER
+   #:resumable-branch-list              ; TYPE
+   #:node-resumable                     ; STRUCT
+   #:make-node-resumable                ; CONSTRUCTOR
+   #:node-resumable-expr                ; READER
+   #:node-resumable-branches            ; READER
    #:node-while                         ; STRUCT
    #:make-node-while                    ; CONSTRUCTOR
    #:node-while-label                   ; READER
@@ -85,6 +107,12 @@
    #:make-node-return-from              ; CONSTRUCTOR
    #:node-return-from-name              ; READER
    #:node-return-from-expr              ; READER
+   #:node-throw                         ; STRUCT
+   #:make-node-throw                    ; CONSTRUCTOR
+   #:node-throw-expr                    ; READER
+   #:node-resume-to                     ; STRUCT
+   #:make-node-resume-to                ; CONSTRUCTOR
+   #:node-resume-to-expr                ; READER
    #:node-block                         ; STRUCT
    #:make-node-block                    ; CONSTRUCTOR
    #:node-block-name                    ; READER
@@ -203,8 +231,13 @@ coalton symbols (`parser:identifier`)"
   (vars (util:required 'vars) :type lisp-coalton-var-alist :read-only t)
   (form (util:required 'form) :type t                      :read-only t))
 
+(defstruct (node-locally (:include node))
+  "Node for the optimizer to use, similar to `cl:locally'."
+  (noinline-functions (util:required 'noinline-functions) :type parser:identifier-list :read-only t)
+  (subexpr            (util:required 'subexpr)            :type node                   :read-only t))
+
 (defstruct match-branch
-  "A branch of a match statement"
+  "A branch of a match expression"
   (pattern (util:required 'pattern) :type pattern :read-only t)
   (body    (util:required 'body)    :type node    :read-only t))
 
@@ -222,6 +255,48 @@ coalton symbols (`parser:identifier`)"
   "A pattern matching construct. Uses MATCH-BRANCH to represent branches"
   (expr     (util:required 'expr)     :type node        :read-only t)
   (branches (util:required 'branches) :type branch-list :read-only t))
+
+(defstruct catch-branch
+  "A branch of a catch expression."
+  (pattern (util:required 'pattern) :type pattern :read-only t)
+  (body    (util:required 'body)    :type node    :read-only t))
+
+(defmethod make-load-form ((self catch-branch) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
+(defun catch-branch-list-p (xs)
+  (and (alexandria:proper-list-p xs)
+       (every #'catch-branch-p xs)))
+
+(deftype catch-branch-list ()
+  '(satisfies catch-branch-list-p))
+
+(defstruct (node-catch (:include node))
+  "An exception-catching construct. Uses CATCH-BRANCH to represent branches"
+  (expr     (util:required 'expr)     :type node              :read-only t)
+  (branches (util:required 'branches) :type catch-branch-list :read-only t))
+
+(defstruct resumable-branch
+  "A branch of a resumable expression."
+  (pattern (util:required 'pattern) :type pattern :read-only t)
+  (body    (util:required 'body)    :type node    :read-only t))
+
+(defmethod make-load-form ((self resumable-branch) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
+(defun resumable-branch-list-p (xs)
+  (and (alexandria:proper-list-p xs)
+       (every #'resumable-branch-p xs)))
+
+(deftype resumable-branch-list ()
+  '(satisfies resumable-branch-list-p))
+
+(defstruct (node-resumable (:include node))
+  "A construct for continuing from a non-stack-unwinding transfer of control. 
+   Uses RESUMABLE-BRANCH to represent branches"
+  (expr     (util:required 'expr)     :type node                  :read-only t)
+  (branches (util:required 'branches) :type resumable-branch-list :read-only t))
+
 
 (defstruct (node-while (:include node))
   "A looping construct. Executes a body until an expression is false."
@@ -258,6 +333,14 @@ call to (break)."
   "A return statement, used for explicit returns in functions"
   (name (util:required 'name) :type symbol :read-only t)
   (expr (util:required 'expr) :type node   :read-only t))
+
+(defstruct (node-throw (:include node))
+  "A node that throws an exception, its argument."
+  (expr (util:required 'expr) :type node :read-only t))
+
+(defstruct (node-resume-to (:include node))
+  "A node that invokes a resumption, if any exists."
+  (expr (util:required 'expr) :type node :read-only t))
 
 (defstruct (node-block (:include node))
   "A return target, used for explicit returns in functions"
