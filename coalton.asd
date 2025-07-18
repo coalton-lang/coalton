@@ -266,48 +266,6 @@
                (:file "runtime-tests")
                (:module "typechecker"
                 :serial t
-                :components ((:file "map-tests")
-                             (:file "lisp-type-tests")))
-               (:file "environment-persist-tests")
-               (:file "coalton-tests")
-               (:file "slice-tests")
-               (:file "float-tests")
-               (:file "dual-tests")
-               (:file "quantize-tests")
-               (:file "hashtable-tests")
-               (:file "iterator-tests")
-               (:file "call-coalton-from-lisp")
-               (:file "vector-tests")
-               (:file "string-tests")
-               (:file "recursive-let-tests")
-               (:file "class-tests")
-               (:file "struct-tests")
-               (:file "list-tests")
-               (:file "lisparray-tests")
-               (:file "red-black-tests")
-               (:file "seq-tests")
-               (:file "pattern-matching-tests")
-               (:file "looping-native-tests")
-               (:file "monomorphizer-tests")
-               (:file "inliner-tests")
-               (:file "file-tests")
-               (:module "collections"
-                :serial t
-                :components ((:file "collection-tests")
-                             (:module "mutable"
-                              :serial t
-                              :components ((:file "vector-tests")))
-                             (:module "immutable"
-                              :serial t
-                              :components ((:file "list-tests")))))
-               (:file "entry-tests")
-               (:file "toplevel-tests")
-               (:file "type-inference-tests")
-               (:file "fundep-tests")
-               (:file "fundep-fib-test")
-               (:file "runtime-tests")
-               (:module "typechecker"
-                :serial t
                 :components ((:file "lisp-type-tests")))
                (:file "environment-persist-tests")
                (:file "coalton-tests")
