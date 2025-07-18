@@ -28,20 +28,20 @@
 
 (in-package #:coalton-impl/typechecker/define-instance)
 
-(defun expand-constraint (constraint env)
-  (declare (type tc:ty-predicate constraint)
+(defun expand-constraint (base-constraint env)
+  (declare (type tc:ty-predicate base-constraint)
            (type tc:environment env)
            (values tc:ty-predicate-list &optional))
 
-  (labels ((f (constraint env base)
+  (labels ((f (constraint env)
              (multiple-value-bind (inst subs) (tc:lookup-class-instance env constraint :no-error t)
                (if inst
-                   (mapcan (alexandria:rcurry #'f env base)
+                   (mapcan (alexandria:rcurry #'f env)
                            (mapcar (alexandria:curry #'tc:apply-substitution subs)
-                                   (remove-if (alexandria:curry #'tc:type-predicate= base)
+                                   (remove-if (alexandria:curry #'tc:type-predicate= base-constraint)
                                               (tc:ty-class-instance-constraints inst))))
                    (list constraint)))))
-    (f constraint env constraint)))
+    (f base-constraint env)))
 
 (defun expand-context (context env)
   (declare (type tc:ty-predicate-list context)
