@@ -422,3 +422,30 @@ error: Malformed derive attribute
    |
  3 |  (derive coalton-library/classes:Eq 1)
    |  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected class arguments
+
+================================================================================
+119 Derive recursive type
+================================================================================
+
+(package test-package)
+
+(derive coalton-library/classes:Eq)
+(define-type (Tree%% :a)
+  Leaf%%
+  (Node :a (Tree%% :a) (Tree%% :a)))
+
+
+================================================================================
+119 Derive mutually recursive types
+================================================================================
+
+(package test-package)
+
+(derive coalton-library/classes:Eq)
+(define-type AA
+  AA0
+  (AAn BB))
+(derive coalton-library/classes:Eq)
+(define-type BB
+  BB0
+  (BBn AA))
