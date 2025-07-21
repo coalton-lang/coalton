@@ -365,7 +365,7 @@ help: remove additional docstring
   --> test:5:0
    |
  5 |   (derive Quuxableness)
-   |   ^^^^^^^^^^^^^^^^^^^^^ Class QUUXABLENESS does not exist
+   |   ^^^^^^^^^^^^^^^^^^^^^ Deriver for class QUUXABLENESS is not implemented
  6 |   (define-struct Point
    |  _^
  7 | |   (x UFix)

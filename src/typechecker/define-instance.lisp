@@ -72,7 +72,7 @@ to write an instance with signature `(Eq A => Eq A)'."
             ;; Expand the constraints, perhaps it should be done in a
             ;; different stage but this works.
             (setf (tc:ty-class-instance-constraints instance)
-                   (expand-context (tc:ty-class-instance-constraints instance) env))
+                  (expand-context (tc:ty-class-instance-constraints instance) env))
          :collect instance)
 
    env))
