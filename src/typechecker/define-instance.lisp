@@ -30,6 +30,9 @@
 (in-package #:coalton-impl/typechecker/define-instance)
 
 (defun expand-constraint (base-constraint env)
+  "This was implemented as a hack to make `derive' work on recursive
+types.  It gets rid of recursive constraints in class instances, allowing you
+to write an instance with signature `(Eq A => Eq A)'."
   (declare (type tc:ty-predicate base-constraint)
            (type tc:environment env)
            (values tc:ty-predicate-list &optional))
@@ -190,9 +193,6 @@
         (loop :for method-name :in method-names
               :for method-codegen-sym :in method-codegen-syms :do
                 (setf env (tc:set-method-inline env method-name instance-codegen-sym method-codegen-sym)))
-
-        (setf (tc:ty-class-instance-constraints instance-entry)
-              (expand-context context env))
 
         (values instance-entry env)))))
 
