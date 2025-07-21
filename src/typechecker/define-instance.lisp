@@ -59,11 +59,15 @@
            (values tc:ty-class-instance-list tc:environment))
 
   (values
-   (loop :for instance :in instances
-         :collect (multiple-value-bind (instance env_)
-                      (define-instance-in-environment instance env)
-                    (setf env env_)
-                    instance))
+   (loop :for instance :in 
+           (loop :for instance :in instances
+                 :collect (multiple-value-bind (instance env_)
+                              (define-instance-in-environment instance env)
+                            (setf env env_)
+                            instance))
+         :do (setf (tc:ty-class-instance-constraints instance)
+                   (expand-context (tc:ty-class-instance-constraints instance) env))
+         :collect instance)
 
    env))
 
