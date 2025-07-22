@@ -38,7 +38,8 @@ to write an instance with signature `(Eq A => Eq A)'."
            (values tc:ty-predicate-list &optional))
 
   (labels ((f (constraint env)
-             (multiple-value-bind (inst subs) (tc:lookup-class-instance env constraint :no-error t)
+             (multiple-value-bind (inst subs)
+                 (tc:lookup-class-instance env constraint :no-error t)
                (if inst
                    (mapcan (a:rcurry #'f env)
                            (mapcar (a:curry #'tc:apply-substitution subs)
