@@ -1,6 +1,7 @@
 (defpackage #:coalton-library/derivers
   (:use #:cl)
   (:local-nicknames
+   (#:tc #:coalton-impl/typechecker)
    (#:classes #:coalton-library/classes)
    (#:parser #:coalton-impl/parser)
    (#:source #:coalton-impl/source)

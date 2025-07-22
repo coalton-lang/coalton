@@ -36,7 +36,7 @@
 
         (env *global-environment*))
 
-    (multiple-value-bind (type-definitions derivations instances env)
+    (multiple-value-bind (type-definitions instances env)
         (tc:toplevel-define-type (parser:program-types program)
                                  (parser:program-structs program)
                                  (parser:program-type-aliases program)
@@ -48,7 +48,11 @@
             (tc:toplevel-define-class (parser:program-classes program)
                                       env)
 
-          (let ((all-instances (append all-instances (tc:derive-class-instances derivations env)))) 
+          (let ((all-instances
+                  (append all-instances
+                          (tc:derive-class-instances (parser:program-types program)
+                                                     (parser:program-structs program)
+                                                     env)))) 
 
             (multiple-value-bind (ty-instances env)
                 (tc:toplevel-define-instance all-instances env)

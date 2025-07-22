@@ -9,10 +9,6 @@
    (#:env #:coalton-impl/typechecker/environment)
    (#:pred #:coalton-impl/typechecker/predicate))
   (:export
-   #:toplevel-derivation                 ;; STRUCT
-   #:make-toplevel-derivation            ;; CONSTRUCTOR
-   #:toplevel-derivation-list            ;; TYPE
-   #:derive-class-instance               ;; FUNCTION
    #:derive-class-instances              ;; FUNCTION
    #:derive-methods                      ;; GENERIC FUNCTION
    ))
@@ -34,7 +30,7 @@
   '(satisfies toplevel-derivation-list-p))
 
 (defun parser-definition-type-constraints (def class)
-  (declare (type (or parser:toplevel-define-struct parser:toplevel-define-type) def)
+  (declare (type parser-definition def)
            (type symbol class)
            (values parser:ty-predicate-list &optional))
 
@@ -49,7 +45,7 @@
                               (parser:type-definition-ctors def))))
 
 (defun parser-definition-type-signature (def)
-  (declare (type (or parser:toplevel-define-struct parser:toplevel-define-type) def)
+  (declare (type parser-definition def)
            (values parser:ty &optional))
 
   (labels ((apply-type-argument-list (ty args)
@@ -75,16 +71,35 @@
   (:documentation "User-defined methods for implementing derivers.
 EQL-specialize on symbol `class'."))
 
-(defun derive-class-instances (derivations env)
-  (declare (type toplevel-derivation-list derivations)
+(defun collect-derivations (types structs)
+  "Extract and construct `derivation' structs from type definitions."
+  (declare (type parser:toplevel-define-type-list types)
+           (type parser:toplevel-define-struct-list structs)
+           (values toplevel-derivation-list &optional))
+
+  (loop :for type :in (append types structs)
+        :for derive := (parser:type-definition-derive type)
+        :for classes := (and derive (parser:attribute-derive-classes derive))
+        :when classes :nconc (loop :for class :in (cst:raw classes)
+                                   :collect (make-toplevel-derivation
+                                             :type-definition type
+                                             :class class))))
+
+(defun derive-class-instances (types structs env)
+  "Entrypoint for deriver implementations.  Given a list of types and
+structs, extract derive information and produce a list of instance
+definitions."
+  (declare (type parser:toplevel-define-type-list types)
+           (type parser:toplevel-define-struct-list structs)
            (type tc:environment env)
            (values parser:toplevel-define-instance-list &optional))
 
-  (mapcar (alexandria:rcurry #'derive-class-instance env) derivations))
+  (mapcar (alexandria:rcurry #'derive-class-instance env)
+          (collect-derivations types structs)))
 
 (defun derive-class-instance (derivation env)
-  "Entrypoint for deriver implementations.  Given symbol `class' and
-parser type definition `def', produce a derived instance definition."
+  "Given symbol `class' and parser type definition `def', produce a
+derived instance definition."
   (declare (type toplevel-derivation derivation)
            (type tc:environment env)
            (values parser:toplevel-define-instance &optional))
