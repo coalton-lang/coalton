@@ -25,8 +25,6 @@
 
 (defvar *global-environment* (tc:make-default-environment))
 
-(defparameter *ty-instances* nil)
-
 (defun entry-point (program)
   (declare (type parser:program program))
 
