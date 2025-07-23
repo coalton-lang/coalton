@@ -80,10 +80,11 @@ EQL-specialize on symbol `class'."))
   (loop :for type :in (append types structs)
         :for derive := (parser:type-definition-derive type)
         :for classes := (and derive (parser:attribute-derive-classes derive))
-        :when classes :nconc (loop :for class :in (cst:raw classes)
-                                   :collect (make-toplevel-derivation
-                                             :type-definition type
-                                             :class class))))
+        :unless (null classes)
+          :nconc (loop :for class :in (cst:raw classes)
+                       :collect (make-toplevel-derivation
+                                 :type-definition type
+                                 :class class))))
 
 (defun derive-class-instances (types structs env)
   "Entrypoint for deriver implementations.  Given a list of types and
