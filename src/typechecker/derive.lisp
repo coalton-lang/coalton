@@ -15,12 +15,9 @@
 
 (in-package #:coalton-impl/typechecker/derive)
 
-(deftype parser-definition ()
-  '(or parser:toplevel-define-type parser:toplevel-define-struct))
-
 (defstruct toplevel-derivation
-  (type-definition (util:required 'type-definition) :type parser-definition :read-only t)
-  (class           (util:required 'class)           :type symbol            :read-only t))
+  (type-definition (util:required 'type-definition) :type parser:toplevel-define-type-or-struct :read-only t)
+  (class           (util:required 'class)           :type symbol                                :read-only t))
 
 (defun toplevel-derivation-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -30,7 +27,7 @@
   '(satisfies toplevel-derivation-list-p))
 
 (defun parser-definition-type-constraints (def class)
-  (declare (type parser-definition def)
+  (declare (type parser:toplevel-define-type-or-struct def)
            (type symbol class)
            (values parser:ty-predicate-list &optional))
 
@@ -45,7 +42,7 @@
                               (parser:type-definition-ctors def))))
 
 (defun parser-definition-type-signature (def)
-  (declare (type parser-definition def)
+  (declare (type parser:toplevel-define-type-or-struct def)
            (values parser:ty &optional))
 
   (labels ((apply-type-argument-list (ty args)
