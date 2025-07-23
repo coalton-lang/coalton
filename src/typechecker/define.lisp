@@ -366,7 +366,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                    (setf preds (append preds preds_))
                                    (setf accessors (append accessors accessors_))
                                    (setf subs subs_)
-                                   (setf fun-ty_ (tc:function-type-to fun-ty_))
+                                   (setf fun-ty_ (tc:apply-substitution subs (tc:function-type-to fun-ty_)))
 
                                    node_))
 
