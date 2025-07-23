@@ -152,17 +152,17 @@ of constraint predicates."
                                           method-names))
 
              (method-codegen-inline-p
-               (loop :with alist := ()
-                     :for method-name :in method-names
+               (loop :for method-name :in method-names
                      :for method-codegen-sym :in method-codegen-syms
                      :for method-def := (find method-name (parser:toplevel-define-instance-methods instance)
                                               :key (lambda (method-def)
                                                      (parser:node-variable-name
                                                       (parser:instance-method-definition-name method-def))))
-                     :for method-inline := (parser:instance-method-definition-inline method-def)
-                     ;; Convert from attribute inline to boolean
-                     :do (push (cons method-codegen-sym (if method-inline t nil)) alist)
-                     :finally (return alist)))
+                     :unless (null method-def)
+                       :collect (cons
+                                 method-codegen-sym
+                                 ;; Convert inline attribute to boolean.
+                                 (and (parser:instance-method-definition-inline method-def) t))))
 
              (instance-entry
                (tc:make-ty-class-instance
