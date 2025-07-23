@@ -30,22 +30,26 @@
 (in-package #:coalton-impl/typechecker/define-instance)
 
 (defun expand-constraint (base-constraint env)
-  "This was implemented as a hack to make `derive' work on recursive
-types.  It gets rid of recursive constraints in class instances, allowing you
-to write an instance with signature `(Eq A => Eq A)'."
+  "Traverse constraint predicates by looking up those entailed by
+the base constraint by instances in the environment.  Eliminate
+recursion by comparing these to the base constraint and return a list
+of constraint predicates."
   (declare (type tc:ty-predicate base-constraint)
            (type tc:environment env)
            (values tc:ty-predicate-list &optional))
 
+  ;; This was implemented as a hack to make `derive' work on recursive
+  ;; types.  Allows you to write an instance with signature
+  ;; `(Eq A => Eq A)'.
   (labels ((f (constraint env)
              (multiple-value-bind (inst subs)
                  (tc:lookup-class-instance env constraint :no-error t)
-               (if inst
-                   (mapcan (a:rcurry #'f env)
-                           (mapcar (a:curry #'tc:apply-substitution subs)
-                                   (remove-if (a:curry #'tc:type-predicate= base-constraint)
-                                              (tc:ty-class-instance-constraints inst))))
-                   (list constraint)))))
+               (if (null inst)
+                   (list constraint)
+                   (mapcan (lambda (pred) (f (tc:apply-substitution subs pred) env))
+                           (remove base-constraint
+                                   (tc:ty-class-instance-constraints inst)
+                                   :test #'tc:type-predicate=))))))
     (f base-constraint env)))
 
 (defun expand-context (context env)
